@@ -13,14 +13,11 @@ import { formatMoney } from "@/lib/payment-display";
 import type { PaymentRow, SaleMoney } from "@/lib/sale-money";
 import type { SaleSchedule } from "@/lib/payment-schedule";
 import { cn } from "@/lib/utils";
+import { billingDay, billingRange } from "@/lib/date-range";
 
 /** "Oct 30" this year, "Oct 30, 2025" otherwise. */
 export function shortDay(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
-  if (Number.isNaN(d.getTime())) return null;
-  const sameYear = d.getFullYear() === new Date().getFullYear();
-  return d.toLocaleDateString("en-CA", { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
+  return billingDay(iso);
 }
 
 const ordinal = (n: number) => {
@@ -69,8 +66,8 @@ function third(m: SaleMoney, money: (c: number) => string, endedLabel: string, s
   }
 }
 
-/** "Nov 27" or "Nov 27 – Jan 8". */
-const span = (a: string, b: string) => (a === b ? shortDay(a) : `${shortDay(a)} – ${shortDay(b)}`);
+/** "Nov 27", "Nov 27 – Dec 25", or "Nov 27, 2026 – Jan 8, 2027" across years. */
+const span = (a: string, b: string) => billingRange(a, b);
 
 /** The next thing that happens with this sale, in a sentence. */
 function nextSentence(m: SaleMoney, money: (c: number) => string, viaStripe: boolean, schedule?: SaleSchedule | null): string | null {
@@ -125,10 +122,9 @@ export function SaleCard({ raw, money: m, status, badges, sessions, payments, no
   const big = (c: number) => short(c, m.currency);
   const t = third(m, big, status.label, schedule);
   const sentence = nextSentence(m, money, viaStripe, schedule);
-  const start = shortDay(raw.term_start_date);
-  const end = shortDay(raw.term_end_date);
   const bought = shortDay(raw.purchased_at);
-  const when = start || end ? `${start ?? "?"} – ${end ?? "?"}` : null;
+  // "Jun 2, 2026 – Jun 2, 2027": a term across a new year names both years.
+  const when = billingRange(raw.term_start_date, raw.term_end_date);
   const granted = Number(sessions?.granted ?? 0);
   const used = Number(sessions?.used ?? 0);
   const booked = Number(sessions?.reserved ?? 0);

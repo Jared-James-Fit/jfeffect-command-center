@@ -5,8 +5,11 @@
  *   Training   · Package 4 · 7 done · 9 booked · 0 left · next session
  *   Paying off · Package 3 · $0 of $672 paid · next payment, and how
  *
+ *   Coaching   · Online Coaching — Legacy · paid in full · Jun 2, 2026 – Jun 2, 2027
+ *
  * then what's left to pay against what's been trained but not paid for, and
- * anything overdue. The package being trained and the package being paid
+ * anything overdue. A client on online coaching alone (a paid term, or a
+ * subscription) gets only the Coaching row (coaching-plan.ts). The package being trained and the package being paid
  * are found separately (package-status.ts); the words come from one place
  * (package-view.ts), so the Summary, Sessions and Billing tabs never differ.
  * Nothing here changes anything.
@@ -22,6 +25,7 @@ import { shortDay } from "@/lib/session-credit";
 import { fmtWallClock } from "@/lib/schedule-time";
 import { dueWords, packageGlance } from "@/lib/package-view";
 import type { ClientPayments } from "@/lib/payment-schedule";
+import { termDate, termRange, timeLeftWords, type CoachingPlan } from "@/lib/coaching-plan";
 import { cn } from "@/lib/utils";
 
 export type NextSession = { session_date: string; start_time: string } | null;
@@ -37,8 +41,10 @@ export function sessionWhen(s: { session_date: string; start_time: string }, tod
 }
 
 /** Loads what it needs (the shared payments read, and the next session unless it's given). */
-export function ClientPackageSnapshot({ clientId, nextSession, onOpenSessions, onOpenBilling, hideWhenEmpty, money = true, className }: {
+export function ClientPackageSnapshot({ clientId, nextSession, onOpenSessions, onOpenBilling, hideWhenEmpty, money = true, coaching = true, className }: {
   clientId: string;
+  /** The Coaching row (a paid term or a subscription); off on the Sessions tab, which is training only. */
+  coaching?: boolean;
   /** The money line at its foot (outstanding, unpaid training, overdue); off where the page shows the money itself. */
   money?: boolean;
   /** The next booked session, when the caller already has it (undefined: read it here). */
@@ -69,7 +75,7 @@ export function ClientPackageSnapshot({ clientId, nextSession, onOpenSessions, o
   if (!payments) {
     return hideWhenEmpty ? null : <div className={cn("h-40 animate-pulse rounded-2xl bg-muted", className)} aria-busy="true" />;
   }
-  if (hideWhenEmpty && payments.packages.length === 0) return null;
+  if (hideWhenEmpty && payments.packages.length === 0 && payments.coaching.length === 0) return null;
   return (
     <PackageSnapshot
       p={payments}
@@ -78,15 +84,17 @@ export function ClientPackageSnapshot({ clientId, nextSession, onOpenSessions, o
       onOpenSessions={onOpenSessions}
       onOpenBilling={onOpenBilling}
       showMoney={money}
+      showCoaching={coaching}
       className={className}
     />
   );
 }
 
 /** The view itself: pure over the payments model, checked with fixture data. */
-export function PackageSnapshot({ p, today, nextSession, onOpenSessions, onOpenBilling, showMoney = true, className }: {
+export function PackageSnapshot({ p, today, nextSession, onOpenSessions, onOpenBilling, showMoney = true, showCoaching = true, className }: {
   p: ClientPayments;
   showMoney?: boolean;
+  showCoaching?: boolean;
   today: string;
   nextSession: NextSession;
   onOpenSessions?: () => void;
@@ -97,9 +105,13 @@ export function PackageSnapshot({ p, today, nextSession, onOpenSessions, onOpenB
   const g = packageGlance(p);
   const t = g.training;
   const pay = g.paying;
+  const plans = showCoaching ? p.coaching : [];
+  // On online coaching alone, the Training / Paying off rows have nothing to say.
+  const sessionRows = p.packages.length > 0 || t.kind === "past" || plans.length === 0;
 
   return (
     <section className={cn("overflow-hidden rounded-2xl border border-border bg-card", className)} aria-label="Packages at a glance" data-package-snapshot>
+      {sessionRows && (<>
       <GlanceRow
         label="Training"
         onClick={onOpenSessions}
@@ -181,6 +193,14 @@ export function PackageSnapshot({ p, today, nextSession, onOpenSessions, onOpenB
           <Sub>Nothing billed yet.</Sub>
         )}
       </GlanceRow>
+      </>)}
+
+      {plans.map((plan, i) => (
+        <div key={plan.saleId}>
+          {(sessionRows || i > 0) && <div className="mx-3 h-px bg-border" />}
+          <CoachingRow plan={plan} today={today} money={money} onClick={onOpenBilling} />
+        </div>
+      ))}
 
       {showMoney && (p.outstandingCents > 0 || p.unpaidDeliveredCents > 0 || p.overdueCents > 0) && (
         <dl className="grid grid-cols-3 divide-x divide-border border-t border-border" data-glance-money>
@@ -190,6 +210,58 @@ export function PackageSnapshot({ p, today, nextSession, onOpenSessions, onOpenB
         </dl>
       )}
     </section>
+  );
+}
+
+/** What they're on that isn't a session package: how it's paid, and when it renews or ends. */
+function CoachingRow({ plan, today, money, onClick }: { plan: CoachingPlan; today: string; money: (c: number) => string; onClick?: () => void }) {
+  const left = timeLeftWords(plan, today);
+  const year = Number(today.slice(0, 4));
+  const range = termRange(plan.start, plan.end, year);
+  const right =
+    plan.state === "past_due" ? <StatusText tone="error">{plan.kind === "subscription" ? "Payment failed" : "Payment due"}</StatusText>
+    : plan.kind === "subscription" ? plan.state === "cancelling" ? <StatusText tone="attention">Ending</StatusText> : null
+    : plan.state === "left" ? <StatusText tone="attention">{money(plan.leftCents)} left to pay</StatusText>
+    : plan.timing === "ended" ? null
+    : <StatusText tone="done">Paid in full</StatusText>;
+  const aside =
+    plan.kind === "subscription" ? <span className="text-[13px] tabular-nums"><span className="font-semibold">{money(plan.cents)}</span> <span className="text-muted-foreground">a {plan.per ?? "period"}</span></span>
+    : plan.timing === "no_dates" ? <span className="text-[13px] text-warning">No dates set</span>
+    : plan.timing === "upcoming" && plan.start ? <span className="text-[13px] text-muted-foreground">Starts {termDate(plan.start, year)}</span>
+    : left ? <span className={cn("text-[13px] tabular-nums", plan.timing === "ending_soon" || plan.timing === "ended" ? "text-warning" : "text-muted-foreground")} data-time-left>{left}</span>
+    : null;
+
+  return (
+    <GlanceRow label="Coaching" onClick={onClick} right={right} data-glance="coaching" data-coaching-timing={plan.timing}>
+      <TitleLine title={plan.name} aside={aside} />
+      {plan.kind === "term" && plan.elapsed != null && plan.timing !== "upcoming" && (
+        <SegmentBar
+          parts={[{ value: Math.round(plan.elapsed * 1000), tone: "booked" }]}
+          total={1000}
+          label={`${Math.round(plan.elapsed * 100)}% of ${range ?? "the term"} gone by`}
+        />
+      )}
+      {plan.kind === "subscription" ? (
+        <Sub>
+          {plan.state === "cancelling"
+            ? <>Ends <span className="text-foreground">{plan.end ? shortDay(plan.end) : "at the end of this period"}</span> · no more charges</>
+            : plan.state === "past_due"
+              ? "The card didn't go through. Stripe tries again on its own."
+              : plan.next
+                ? <>Next charge <span className="text-foreground">{shortDay(plan.next)}</span>{plan.auto ? " · auto-pay" : ""}</>
+                : "Renews every " + (plan.per ?? "period")}
+        </Sub>
+      ) : plan.timing === "no_dates" ? (
+        <Sub>{plan.duration ? `${plan.duration.toLowerCase()} · ` : ""}{money(plan.paidCents)} paid</Sub>
+      ) : (
+        <>
+          <Sub><span className="text-foreground">{range}</span>{plan.duration ? ` · ${plan.duration.toLowerCase()}` : ""} · {money(plan.cents)}</Sub>
+          {(plan.timing === "ending_soon" || plan.timing === "ended") && (
+            <Sub>{plan.timing === "ended" ? "Nothing runs after it. Sell the next one to keep them going." : "Sell the next one before it ends."}</Sub>
+          )}
+        </>
+      )}
+    </GlanceRow>
   );
 }
 

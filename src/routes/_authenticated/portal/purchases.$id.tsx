@@ -15,6 +15,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { resolvePaymentShareLink } from "@/lib/payment-share.functions";
 import { sanitizeShareUrl } from "@/lib/payment-share-link";
 import { useCoachingAgreement } from "@/components/coaching-agreement/agreement-context";
+import { billingDay } from "@/lib/date-range";
 
 export const Route = createFileRoute("/_authenticated/portal/purchases/$id")({ component: ClientPurchase });
 
@@ -164,8 +165,8 @@ function ClientPurchase() {
           ) : null}
 
           <Card className="border-border bg-card p-6 grid gap-4 sm:grid-cols-2">
-            <Field label="Service start" v={r.term_start_date} />
-            <Field label="Service end" v={r.term_end_date} />
+            <Field label="Service start" v={billingDay(r.term_start_date, { year: "always" })} />
+            <Field label="Service end" v={billingDay(r.term_end_date, { year: "always" })} />
             <Field label="Term" v={r.term_duration_text} />
             <Field label="Location" v={r.location} />
           </Card>

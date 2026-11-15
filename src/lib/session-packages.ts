@@ -17,6 +17,7 @@ import { latestPackage } from "@/lib/client-owed";
 import { billingPeriod, saleMoney, withTax, type MoneyLedgerRow, type MoneySale, type SaleMoney } from "@/lib/sale-money";
 import type { SessionBalanceRow } from "@/lib/sessions-inventory";
 import { pickTrainingNow, trainingStatus, type TrainingStatus } from "@/lib/package-status";
+import { billingRange } from "@/lib/date-range";
 
 export type PackageLedgerEvent = {
   id: string;
@@ -400,18 +401,9 @@ export function buildSessionPackages(input: {
   };
 }
 
-/** "Aug 10 – Sep 4" (the year only when it isn't this year). */
+/** "Aug 10 – Sep 4", "Dec 20, 2026 – Jan 8, 2027" across years (date-range.ts). */
 export function dayRange(from: string | null, to: string | null, thisYear = new Date().getFullYear()): string | null {
-  const fmt = (iso: string | null) => {
-    if (!iso) return null;
-    const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
-    if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleDateString("en-CA", { month: "short", day: "numeric", ...(d.getFullYear() === thisYear ? {} : { year: "numeric" }) });
-  };
-  const a = fmt(from);
-  const b = fmt(to);
-  if (a && b) return a === b ? a : `${a} – ${b}`;
-  return a ?? b;
+  return billingRange(from ? from.slice(0, 10) : null, to ? to.slice(0, 10) : null, { thisYear });
 }
 
 /** The one thing to do next on a client's sessions (the Sessions tab's one red button). */

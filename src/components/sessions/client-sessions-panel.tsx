@@ -362,6 +362,7 @@ export function SessionsTrackerBody({
           nextSession={upcoming[0] ?? null}
           onOpenBilling={onOpenBilling}
           showMoney={false}
+          showCoaching={false}
         />
       ) : (
         <div className="h-40 animate-pulse rounded-2xl bg-muted" aria-busy="true" />

@@ -23,6 +23,7 @@
  */
 import { buildBillingSummary, clientTaxRate, type BillingSessionEvent, type RenewalLine, type UnbilledLine } from "@/lib/client-billing-summary";
 import { addPeriod, autoPayPlan, type AutoPay, type PackageSale } from "@/lib/session-packages";
+import { coachingPlans, type CoachingPlan } from "@/lib/coaching-plan";
 import { billingPeriod, saleMoney, type MoneyLedgerRow, type SaleMoney, type SaleState } from "@/lib/sale-money";
 import type { SessionBalanceRow } from "@/lib/sessions-inventory";
 import {
@@ -39,6 +40,8 @@ import {
 
 export type ScheduleSale = PackageSale & {
   first_payment_date?: string | null;
+  term_duration_text?: string | null;
+  service_start_date?: string | null;
   purchased_at?: string | null;
   /** The package's own number in the client's account (stored once, never changes). */
   package_number?: number | null;
@@ -200,6 +203,8 @@ export type ClientPayments = {
   trainingNowId: string | null;
   /** Per payment stream, the package its next payment goes to; earliest first. */
   payingNow: PayingNow<Installment>[];
+  /** What they're on that isn't a session package: a paid term or a subscription (coaching-plan.ts). */
+  coaching: CoachingPlan[];
 };
 
 const n = (v: unknown) => Number(v ?? 0) || 0;
@@ -521,5 +526,6 @@ export function buildClientPayments(input: {
     notBilledDeliveredCents,
     trainingNowId,
     payingNow: paying,
+    coaching: coachingPlans(sales, moneyOf, today),
   };
 }

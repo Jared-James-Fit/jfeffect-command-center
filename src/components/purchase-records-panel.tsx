@@ -28,6 +28,7 @@ import { DateField } from "@/components/ui/date-field";
 import { SendPaymentRequestDialog } from "@/components/send-payment-request-dialog";
 import { differenceInDays, format, parseISO } from "date-fns";
 import { resolvePaymentDisplay, formatMoney } from "@/lib/payment-display";
+import { billingDay } from "@/lib/date-range";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -69,8 +70,8 @@ export async function downloadPurchasePdf(r: any, clientName?: string | null) {
       ["Payment status", r.payment_status ?? "—"],
       ["Amount", `${r.currency ?? "CAD"} ${Number(r.full_payable_amount ?? 0).toLocaleString()}`],
       ["", ""],
-      ["Service start date", r.term_start_date ?? "Not set"],
-      ["Service end date", r.term_end_date ?? "Not set"],
+      ["Service start date", billingDay(r.term_start_date, { year: "always" }) ?? "Not set"],
+      ["Service end date", billingDay(r.term_end_date, { year: "always" }) ?? "Not set"],
       ["Term", r.term_duration_text ?? (r.term_length_snapshot ? `${r.term_length_snapshot} ${r.term_unit_snapshot ?? ""}` : "—")],
       ["", ""],
       ["Service status", r.service_status ?? "—"],
@@ -401,13 +402,13 @@ export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
                     <span>
                       <span className="text-muted-foreground">Start: </span>
                       <span className={r.term_start_date ? "font-medium" : "text-muted-foreground italic"}>
-                        {r.term_start_date ? new Date(r.term_start_date).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" }) : "Not set"}
+                        {billingDay(r.term_start_date, { year: "always" }) ?? "Not set"}
                       </span>
                     </span>
                     <span>
                       <span className="text-muted-foreground">End / Renewal: </span>
                       <span className={r.term_end_date ? "font-medium" : "text-muted-foreground italic"}>
-                        {r.term_end_date ? new Date(r.term_end_date).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" }) : "Not set"}
+                        {billingDay(r.term_end_date, { year: "always" }) ?? "Not set"}
                       </span>
                     </span>
                     {r.term_duration_text && <span className="text-muted-foreground">{r.term_duration_text}</span>}

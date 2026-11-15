@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import { billingDay } from "@/lib/date-range";
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   if (value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0)) return null;
@@ -52,8 +53,8 @@ export function OfferDetailDialog({ offer, onClose, onAssign, onEdit }: {
           <Row label="Number of payments" value={offer.number_of_payments} />
           <Row label="Payment amount" value={offer.payment_amount != null ? `${offer.currency ?? "USD"} ${Number(offer.payment_amount).toLocaleString()}` : null} />
           <Row label="Term duration" value={offer.term_duration ? `${offer.term_duration} ${offer.term_duration_unit ?? ""}`.trim() : offer.access_length} />
-          <Row label="Start date" value={offer.term_start_date ?? offer.commitment_start_date ?? offer.payment_start_date} />
-          <Row label="End date" value={offer.term_end_date ?? offer.commitment_end_date ?? offer.final_payment_date ?? offer.expiration_date} />
+          <Row label="Start date" value={billingDay(offer.term_start_date ?? offer.commitment_start_date ?? offer.payment_start_date, { year: "always" })} />
+          <Row label="End date" value={billingDay(offer.term_end_date ?? offer.commitment_end_date ?? offer.final_payment_date ?? offer.expiration_date, { year: "always" })} />
           <Row label="Sessions included" value={offer.sessions_included} />
           <Row label="Session length" value={offer.session_length_minutes ? `${offer.session_length_minutes} min` : null} />
           <Row label="Location" value={offer.location} />

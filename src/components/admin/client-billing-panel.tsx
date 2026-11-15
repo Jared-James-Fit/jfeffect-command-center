@@ -41,6 +41,7 @@ import { addPeriod } from "@/lib/session-packages";
 import { paymentPlans, type PaymentPlan } from "@/lib/package-view";
 import { saleLabels, type ClientPayments, type SaleSchedule } from "@/lib/payment-schedule";
 import { cn } from "@/lib/utils";
+import { billingRange } from "@/lib/date-range";
 
 export { payDay };
 
@@ -98,7 +99,7 @@ export function ClientBillingPanel({ clientId, onOpenSessions }: { clientId: str
       )}
       {payments && data && (
         <>
-          {payments.packages.length > 0 && <ClientPackageSnapshot clientId={clientId} onOpenSessions={onOpenSessions} money={false} />}
+          {(payments.packages.length > 0 || payments.coaching.length > 0) && <ClientPackageSnapshot clientId={clientId} onOpenSessions={onOpenSessions} money={false} />}
           <BillingOverview
             p={payments}
             ledger={data.ledger ?? []}
@@ -185,15 +186,19 @@ export function BillingOverview({ p, ledger, labels, isAdmin, clientId, renewing
   const history = useMemo(() => salePayments(ledger), [ledger]);
   const needsDates = p.balances.filter((b) => b.how === "none");
   const ended = p.recurring.filter((r) => r.state === "cancelling");
+  // A paid coaching term the app can't place in time (its end and time left are the glance's).
+  const undated = p.coaching.filter((c) => c.kind === "term" && c.timing === "no_dates");
   const plans = useMemo(() => paymentPlans(p.balances), [p.balances]);
   const dueAuto = p.upcoming.some((i) => (i.state === "due_today" || i.state === "unconfirmed") && i.auto);
   const somethingOwed = p.outstandingCents > 0 || p.unpaidDeliveredCents > 0;
+  // On online coaching alone the glance above already says it's paid (in full, or renewing).
+  const coachingOnly = p.packages.length === 0 && p.coaching.length > 0;
 
   return (
     <>
       {somethingOwed ? (
         <OwedSection p={p} money={money} dueAuto={dueAuto} />
-      ) : (
+      ) : coachingOnly ? null : (
         <section className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-3" data-billing-totals>
           <span className="text-[15px] font-semibold">{p.paidCents > 0 ? "Paid up" : "Nothing billed yet"}</span>
           {p.paidCents > 0 && <span className="text-[13px] tabular-nums text-muted-foreground">Paid so far <span className="font-semibold text-foreground" data-paid>{money(p.paidCents)}</span></span>}
@@ -216,7 +221,7 @@ export function BillingOverview({ p, ledger, labels, isAdmin, clientId, renewing
 
       {plans.length > 0 && <PaymentPlans plans={plans} p={p} money={money} isAdmin={isAdmin} onRecord={onRecord} />}
 
-      {(p.notBilled || needsDates.length > 0 || ended.length > 0) ? (
+      {(p.notBilled || needsDates.length > 0 || ended.length > 0 || undated.length > 0) ? (
         <section className="space-y-2" data-billing-attention>
           {p.notBilled && (
             <AttentionRow
@@ -248,6 +253,18 @@ export function BillingOverview({ p, ledger, labels, isAdmin, clientId, renewing
           {ended.map((r) => (
             <AttentionRow key={r.saleId} tone="neutral" title={`${r.name} ends ${payDay(r.next)}`} text="No more charges after that." />
           ))}
+          {undated.map((c) => (
+            <div key={c.saleId} data-coaching-no-dates>
+              <AttentionRow
+                title={`${c.name} has no start or end date`}
+                text={`Paid${c.duration ? ` for ${c.duration.toLowerCase()}` : ""}. Set when it started so the app knows when it ends.`}
+                action={isAdmin && onEditDates ? (
+                  <Button size="sm" variant="outline" className="h-10" onClick={() => onEditDates(c.saleId)}><CalendarClock className="mr-1.5 h-4 w-4" /> Set dates</Button>
+                ) : null}
+              />
+            </div>
+          ))}
+
         </section>
       ) : null}
 
@@ -414,7 +431,7 @@ function PaymentPlans({ plans, p, money, isAdmin, onRecord }: {
                 <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold", i === 0 ? "bg-foreground text-background" : "bg-muted text-muted-foreground")}>{i + 1}</span>
                 <div className="min-w-0 flex-1">
                   <div className="text-[14px]">{st.label}<span className="text-muted-foreground"> · {st.payments} payment{st.payments === 1 ? "" : "s"}</span></div>
-                  <div className="text-[12px] text-muted-foreground">{st.payments > 1 ? `${payDay(st.first)} – ${payDay(st.last)}` : payDay(st.first)}</div>
+                  <div className="text-[12px] text-muted-foreground">{st.payments > 1 ? billingRange(st.first, st.last) : payDay(st.first)}</div>
                 </div>
                 <span className="shrink-0 text-[14px] font-semibold tabular-nums">{money(st.cents)}</span>
               </li>
