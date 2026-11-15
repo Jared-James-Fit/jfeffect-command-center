@@ -85,6 +85,17 @@ export async function updateTask(id: string, patch: Partial<Pick<TaskRow, "title
   if (error) throw error;
 }
 
+/** Put a task back exactly as it was (Undo after it was moved or deleted): same id, people and dates. */
+export async function restoreTask(t: TaskRow): Promise<void> {
+  const { error } = await (supabase.from("tasks") as any).insert({
+    id: t.id, title: t.title, notes: t.notes, quadrant: t.quadrant, status: t.status, priority: t.priority,
+    due_at: t.due_at, created_by: t.created_by, assignees: t.owner_user_id ? [] : taskPeople(t),
+    completed_at: t.completed_at, completed_by: t.completed_by, position: t.position, scope: t.scope,
+    owner_user_id: t.owner_user_id, created_at: t.created_at,
+  });
+  if (error) throw error;
+}
+
 export async function toggleTaskDone(id: string, done: boolean): Promise<void> {
   const me = await getMyCoachId();
   const { error } = await (supabase.from("tasks") as any).update({

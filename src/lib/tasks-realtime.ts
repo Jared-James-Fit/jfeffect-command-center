@@ -26,7 +26,8 @@ export function watchTasksRealtime(opts: {
   client: ChannelClient;
   name: string;
   table: string;
-  filter: string;
+  /** Row filter ("scope=eq.admin"); none for a table whose RLS already narrows it. */
+  filter?: string;
   /** Called for every change event, and once after each (re)subscribe. */
   onChange: () => void;
   doc?: Pick<Document, "addEventListener" | "removeEventListener" | "visibilityState">;
@@ -54,7 +55,7 @@ export function watchTasksRealtime(opts: {
       .channel(`${opts.name}-${mine}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: opts.table, filter: opts.filter },
+        { event: "*", schema: "public", table: opts.table, ...(opts.filter ? { filter: opts.filter } : {}) },
         () => opts.onChange(),
       )
       .subscribe((status) => {
