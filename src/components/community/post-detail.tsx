@@ -143,11 +143,14 @@ function Detail({
     if (!hold.justReleased()) doubleTap(e);
   };
 
+  // a workout with no picture opens on its own card (WorkoutHero), which already says its time, sets and volume:
+  // the tiles under it add only what it doesn't (with a picture, the tiles say them all)
+  const heroStats = !!s && !auto && !(post.kind === "note" && !photo) && !post.media_type;
   const tiles = s
     ? [
-        formatWorkoutDuration(s.duration_min) && { label: "Time", value: formatWorkoutDuration(s.duration_min)! },
-        s.working_sets > 0 && { label: "Sets", value: String(s.working_sets) },
-        s.tonnage_kg > 0 && { label: "Volume", value: formatTonnage(s.tonnage_kg, unit) },
+        !heroStats && formatWorkoutDuration(s.duration_min) && { label: "Time", value: formatWorkoutDuration(s.duration_min)! },
+        !heroStats && s.working_sets > 0 && { label: "Sets", value: String(s.working_sets) },
+        !heroStats && s.tonnage_kg > 0 && { label: "Volume", value: formatTonnage(s.tonnage_kg, unit) },
         s.pr_count > 0 && { label: s.pr_count === 1 ? "PR" : "PRs", value: String(s.pr_count), gold: true },
         (s.month_sessions ?? 0) > 0 && { label: "This month", value: `#${s.month_sessions}` },
       ].filter(Boolean) as { label: string; value: string; gold?: boolean }[]
@@ -220,7 +223,7 @@ function Detail({
       )}
 
       {tiles.length > 0 && (
-        <div className="grid grid-cols-3 gap-2 px-4 pt-4">
+        <div className={cn("grid gap-2 px-4 pt-4", tiles.length <= 2 ? "grid-cols-2" : "grid-cols-3")} data-workout-tiles>
           {tiles.map((t) => (
             <div key={t.label} className="rounded-2xl border border-border/70 bg-card px-3 py-2.5">
               <div className={cn("font-display truncate uppercase leading-none", t.value.length > 7 ? "text-[19px]" : "text-[24px]", t.gold && "text-amber-600 dark:text-amber-400")}>{t.value}</div>

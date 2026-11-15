@@ -348,7 +348,7 @@ export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShar
   const subtitle = workoutSubtitle(stats);
   const big = size === "detail";
   return (
-    <div className={cn("relative overflow-hidden bg-muted px-5 text-foreground", big ? "py-7" : "py-5")} data-workout-hero={pr ? "pr" : "done"}>
+    <div className={cn("@container relative overflow-hidden bg-muted px-5 text-foreground", big ? "py-7" : "py-5")} data-workout-hero={pr ? "pr" : "done"}>
       <span data-workout-completed className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.16em] text-success">
         <CheckCircle2 className="h-3 w-3" /> Workout completed
       </span>
@@ -365,14 +365,16 @@ export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShar
             )}
             <span className="truncate text-[12px] font-semibold text-muted-foreground">{lift.name}</span>
           </div>
-          <div className={cn("font-display uppercase leading-none", big ? "text-[54px]" : "text-[42px]", pr && "text-warning")}>{formatTopSet(lift.detail, unit)}</div>
+          <div className={cn("font-display uppercase leading-none", big ? "text-[54px] @max-[16rem]:text-[44px]" : "text-[42px]", pr && "text-warning")}>{formatTopSet(lift.detail, unit)}</div>
         </div>
       )}
       {nums.length > 0 && (
-        <div className={cn("mt-4 grid gap-2 border-t border-border pt-3", nums.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
+        // three numbers sit at their own widths across the card (a step smaller on a narrow one, and a line of their own before
+        // anything's cut), so a long volume ("17,902 LB") shows whole instead of "17,902 …"
+        <div className={cn("mt-4 gap-2 border-t border-border pt-3", nums.length === 3 ? "flex flex-wrap justify-between gap-x-3 gap-y-3" : "grid grid-cols-2")} data-workout-nums>
           {nums.map((n) => (
             <div key={n.label} className="min-w-0">
-              <div className={cn("font-display truncate uppercase leading-none", big ? "text-[30px]" : "text-[24px]")}>{n.value}</div>
+              <div className={cn("font-display truncate uppercase leading-none", big ? "text-[30px] @max-[16rem]:text-[24px]" : "text-[24px] @max-[15rem]:text-[20px]")}>{n.value}</div>
               <div className="mt-1 truncate text-[9px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{n.label}</div>
             </div>
           ))}
@@ -550,6 +552,14 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         return;
       }
     }
+    // a workout's card on its own screen: a tap opens the whole workout, once it's clear this wasn't the first of two taps
+    if (s && (e.target as Element | null)?.closest?.("[data-workout-open]")) {
+      singleTimer.current = window.setTimeout(() => {
+        singleTimer.current = null;
+        onOpen(post);
+      }, 300);
+      return;
+    }
     // a clip: full screen (or sound on / off), once it's clear this wasn't the first of two taps
     const clip = (e.target as Element | null)?.closest?.("[data-inline-video]");
     if (!clip) return;
@@ -646,15 +656,20 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
                     <NoteExtras post={post} unit={unit} className="mx-4" />
                   </>
                 ) : s && post.auto ? (
-                  <PulseHero post={post} stats={s} unit={unit} />
+                  <>
+                    <PulseHero post={post} stats={s} unit={unit} />
+                    <ViewWorkoutRow post={post} onOpen={() => onOpen(post)} hint={!!openHint} />
+                  </>
                 ) : s ? (
-                  <WorkoutHero stats={s} unit={unit} />
+                  // the workout is the way in: a tap anywhere on it opens the whole workout (onHeroTap), its last row says so
+                  <WorkoutOpenCard post={post} onOpen={() => onOpen(post)} hint={!!openHint}>
+                    <WorkoutHero stats={s} unit={unit} />
+                  </WorkoutOpenCard>
                 ) : post.locked_in_at ? (
                   <LockInHero post={post} />
                 ) : (
                   <div className="px-1 text-sm text-muted-foreground">Workout was reopened, numbers will be back once it's finished.</div>
                 )}
-                {!isNote && s && <ViewWorkoutRow post={post} onOpen={() => onOpen(post)} hint={!!openHint} />}
               </div>
             </div>
           )}
@@ -692,11 +707,13 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
               trailing={!post.is_mine && onOpenAuthor ? <InlineFollow userId={post.author.user_id} name={post.author.name} /> : null}
             />
             {visual && s && (
-              <button type="button" onClick={() => onOpen(post)} className="flex max-w-full items-center gap-1.5 text-left text-[13px] font-semibold" data-page-workout>
+              // the tap reaches 6px above and below the line (the gap to the lines around it), so it's finger-sized without moving anything
+              <button type="button" onClick={() => onOpen(post)} className="relative flex max-w-full items-center gap-1.5 text-left text-[13px] font-semibold after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']" data-page-workout>
                 <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
                 <span className="truncate">{workoutHeadline(s)}</span>
                 {lift?.pr && <span className="shrink-0 rounded-full bg-warning/20 px-1.5 text-[11px] font-bold text-warning">{SCOPE_WORD[lift.pr]}</span>}
                 <span className="shrink-0 text-muted-foreground">· View workout</span>
+                <ChevronRight className="-ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
               </button>
             )}
             {visual && !s && post.locked_in_at && (
@@ -878,6 +895,50 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
 }
 
 export const PostCard = memo(PostCardInner);
+
+/**
+ * A workout on its own screen of the feed: the workout card is the way in.
+ * A tap anywhere on it opens the whole workout (onHeroTap waits out the
+ * double-tap window, so two taps still ❤️), and its last row says so,
+ * "View workout · Every exercise ›" (or how many PRs, when there's more than
+ * the one the card shows), a button of its own that opens at once.
+ * The first time someone sees the feed it carries the "Tap to see the whole
+ * workout" tip until they open one (remembered on the account).
+ */
+function WorkoutOpenCard({ post, onOpen, hint, children }: { post: CommunityPost; onOpen: () => void; hint: boolean; children: React.ReactNode }) {
+  const prs = post.stats?.pr_count ?? 0;
+  return (
+    <div className={cn("relative", hint && "z-[1]")}>
+      {hint && (
+        <div className="pointer-events-none absolute -top-10 left-1/2 z-10 -translate-x-1/2 animate-bounce" aria-hidden>
+          <div className="relative whitespace-nowrap rounded-full bg-primary px-3 py-1.5 text-[12px] font-bold text-primary-foreground shadow-lg">
+            👇 Tap to see the whole workout
+            <span className="absolute left-1/2 top-full -mt-1 h-2 w-2 -translate-x-1/2 rotate-45 bg-primary" />
+          </div>
+        </div>
+      )}
+      <div data-workout-open className={cn("cursor-pointer overflow-hidden rounded-2xl bg-muted", hint && "ring-2 ring-primary")}>
+        {children}
+        <button
+          type="button"
+          // its own tap opens at once (the card around it waits out a double tap)
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen();
+          }}
+          className={cn("flex h-11 w-full items-center justify-between gap-2 border-t border-border px-5 text-left transition-colors active:bg-foreground/5", hint && "bg-primary/10")}
+          data-view-workout
+        >
+          <span className="shrink-0 whitespace-nowrap text-[13px] font-semibold">View workout</span>
+          <span className="flex min-w-0 items-center gap-1 text-[12px] text-muted-foreground">
+            <span className="truncate">{prs > 1 ? `${prs} PRs` : "Every exercise"}</span>
+            <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /**
  * "View full workout ›" under a workout. The first time someone sees the feed it pulses with
