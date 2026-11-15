@@ -50,6 +50,9 @@ export interface PlannedLoadView {
   label: string;
   /** "400 lb" once there's a weight */
   value: string | null;
+  /** that weight as a number (what one tap fills the open sets with), in `unit` */
+  load: number | null;
+  unit: LoadUnit;
   /** what it waits on ("After your top set"), shown muted in place of the value */
   waiting: string | null;
   /** the ⓘ, a line each */
@@ -100,12 +103,12 @@ export function plannedLoadView(i: PlannedLoadInput): PlannedLoadView | null {
       why.push(`${fmtPct(pct)}% of your top set (${fmtLoad(i.linked.value)} ${i.linked.unit}) ${workedOut(exact, i.planned, i.unit)}.`);
     } else {
       waiting = "After your top set";
-      why.push(`Your coach set these at ${fmtPct(pct)}% of today's top set. Log the top set and the weight fills in.`);
+      why.push(`Your coach set these at ${fmtPct(pct)}% of today's top set. Log the top set and the weight shows here.`);
     }
   } else {
     // a % of a max: there's always a reference here (no max on file keeps the % line instead)
     const of = MAX_NAMES[String(i.basis)] ?? "max";
-    if (i.pending) return { label, value: null, waiting: null, why: [`Your coach set these at ${fmtPct(pct)}% of your ${of}.`], capped: false };
+    if (i.pending) return { label, value: null, load: null, unit: i.unit, waiting: null, why: [`Your coach set these at ${fmtPct(pct)}% of your ${of}.`], capped: false };
     if (!i.reference || i.planned == null) return null;
     const exact = (convert(i.reference.value, i.reference.unit, i.unit) * pct) / 100;
     why.push(`${fmtPct(pct)}% of your ${of} (${i.reference.lift} ${fmtLoad(i.reference.value)} ${i.reference.unit}) ${workedOut(exact, i.planned, i.unit)}.`);
@@ -120,6 +123,6 @@ export function plannedLoadView(i: PlannedLoadInput): PlannedLoadView | null {
         : `RPE ${cap} is a cap: if a set goes over it, the next one comes down.`,
     );
   }
-  why.push("Type your own weight in any set and it stays.");
-  return { label, value, waiting, why, capped };
+  if (value != null) why.push("Tap the weight to fill your open sets, or type your own.");
+  return { label, value, load: value != null ? i.open : null, unit: i.unit, waiting, why, capped };
 }

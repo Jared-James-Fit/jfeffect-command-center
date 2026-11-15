@@ -18,7 +18,7 @@ describe("suggestions: a switch on every exercise card, one state for the workou
   it("lives in each card that can suggest, not at the top of the workout", () => {
     // the chip turns them on (in Suggested's half of the strip); once on, Suggested's explanation and the card's ⋯ turn them off
     // (a coach's % has its planned weight there instead: PlannedLoadCell)
-    expect(wdv).toMatch(/const right = plannedView\s*\? \(done \|\| readonly \? null : <PlannedLoadCell view=\{plannedView\} \/>\)\s*: canSuggest && !readonly && !showSuggestionCard/);
+    expect(wdv).toMatch(/const right = plannedView\s*\? \(done \|\| readonly \? null : <PlannedLoadCell view=\{plannedView\} onApply=\{[^}]+\} \/>\)\s*: canSuggest && !readonly && !showSuggestionCard/);
     expect(wdv).toContain("<LoadSuggestionsChip highlight={!!suggestNudge} />");
     expect(wdv).toContain('{showSuggestionCard ? "Turn off weight suggestions" : "Suggest weights"}');
     const card = readFileSync("src/components/workout-day/load-suggestion-card.tsx", "utf8");

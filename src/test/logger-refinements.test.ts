@@ -143,13 +143,12 @@ describe("one red per screen", () => {
   });
 });
 
-describe("a weight the plan filled in reads as the plan", () => {
-  it("faded, and the set isn't a draft until it's logged or changed", () => {
+describe("an untouched set is empty until they act", () => {
+  it("no weight is put in for them (the blue box), and a set holding only the plan isn't a draft", () => {
     const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
-    expect(wdv).toContain("const loadIsPlanned = !isConfirmed && !bw && load !== \"\" && plannedFillRef.current != null && load === plannedFillRef.current;");
-    expect(wdv).toContain("const hasAnyEntry = (load.length > 0 && !loadIsPlanned) ||");
-    expect(wdv).toContain("planned={loadIsPlanned}");
-    expect(read("src/components/workout-day/weight-value-input.tsx")).toContain('planned ? "text-muted-foreground/80" : "text-foreground"');
+    expect(wdv).toContain("const hasAnyEntry = load.length > 0 || bw || repsOwn || rpeOwn || caloriesEdited || distanceEdited;");
+    expect(wdv).not.toContain("loadIsPlanned");
+    expect(read("src/components/workout-day/weight-value-input.tsx")).not.toContain("planned");
   });
 });
 

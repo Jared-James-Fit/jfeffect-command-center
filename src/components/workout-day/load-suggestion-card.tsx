@@ -61,7 +61,6 @@ export function LoadSuggestionCard({
   /** Puts a weight in every open set as a draft (never logs one); resolves to how many it filled. Null: nothing to fill. */
   onApply?: ((load: number) => Promise<number>) | null;
 }) {
-  const [busy, setBusy] = useState(false);
   if (model.status === "calibrating" || !hint) {
     // Suggest is on but there's no number yet: say when there will be one, and why in the info.
     const why = model.historySessions === 0 ? "No logs of this lift yet" : "No recent logs of this lift with an RPE";
@@ -97,18 +96,6 @@ export function LoadSuggestionCard({
   const why = <SuggestionWhyBody hint={hint} model={model} warmup={warmup} picks={picks} rpe={plan.rpe} canApply={!!onApply} {...parts} />;
   if (onApply) {
     // One tap fills every open set's weight (a range fills its middle); the ⓘ beside it explains.
-    const fill = async () => {
-      if (busy) return;
-      setBusy(true);
-      try {
-        const n = await onApply(hint.target);
-        if (n > 0) toast.success(`${fmtNum(hint.target)} ${hint.unit} in ${n} set${n === 1 ? "" : "s"}. Tap each set's number as you finish it`);
-      } catch {
-        toast.error("Couldn't fill your sets. Try again");
-      } finally {
-        setBusy(false);
-      }
-    };
     return (
       <div className={REF_CELL} data-testid="load-suggestion" data-picks={picks ? "" : undefined}>
         <span className={cn(REF_LABEL, "justify-between")}>
@@ -116,40 +103,17 @@ export function LoadSuggestionCard({
             {badge?.live && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success" aria-hidden="true" />}
             Suggested
           </span>
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                aria-label="How Suggested is worked out"
-                data-testid="load-suggestion-info"
-                className="-my-2 -mr-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground active:bg-muted"
-              >
-                <Info className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent side="top" align="end" className="w-72 text-xs leading-relaxed" data-testid="load-guide">
-              {why}
-            </PopoverContent>
-          </Popover>
+          <InfoButton label="How Suggested is worked out" testId="load-suggestion-info">{why}</InfoButton>
         </span>
         <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-          {/* The weight is the fill button: a blue chip, the same blue as the empty weight boxes it fills. */}
-          <button
-            type="button"
-            onClick={() => void fill()}
-            disabled={busy}
-            aria-label={`Suggested ${shown} ${hint.unit}${planText}${note}. Fill your open sets with ${fmtNum(hint.target)} ${hint.unit}`}
-            title="Tap to fill your open sets"
-            data-testid="load-apply"
-            className={cn(
-              "inline-flex min-h-9 max-w-full items-center gap-1 whitespace-nowrap rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-1 font-semibold leading-tight tabular-nums text-foreground transition active:scale-[0.97] active:bg-blue-500/20 disabled:opacity-60",
-              // a range ("187.5–197.5 kg") stays on one line on a phone
-              picks ? "text-[13px]" : "text-sm",
-            )}
-          >
-            <ArrowDownToLine className="h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
-            <span data-testid="load-target">{shown}{"\u00a0"}{hint.unit}</span>
-          </button>
+          <FillChip
+            load={hint.target}
+            unit={hint.unit}
+            shown={shown}
+            small={!!picks}
+            ariaLabel={`Suggested ${shown} ${hint.unit}${planText}${note}. Fill your open sets with ${fmtNum(hint.target)} ${hint.unit}`}
+            onApply={onApply}
+          />
           {showPlan && <span className="text-[13px] tabular-nums text-muted-foreground">{planText.trim()}</span>}
         </span>
       </div>
@@ -177,12 +141,110 @@ export function LoadSuggestionCard({
 }
 
 /**
- * The right half when the coach planned the load as a % (planned-load.ts): what
- * the % is of, the weight it means today (already in the open sets' boxes, faded
- * as planned, so there's nothing to fill), or what it waits on; the ⓘ says how
- * it's worked out and that the RPE is its cap.
+ * The weight as a blue chip with a fill-down arrow, the same blue as the empty
+ * weight boxes it fills: one tap puts it in every open set as a draft (never a
+ * logged set; a set is logged when its number is tapped). Suggested and a
+ * coach's planned % both use it.
  */
-export function PlannedLoadCell({ view }: { view: PlannedLoadView }) {
+function FillChip({ load, unit, shown, small = false, ariaLabel, onApply }: {
+  load: number;
+  unit: string;
+  /** what the chip reads: the weight, or a range ("187.5–197.5") */
+  shown: string;
+  /** a range stays on one line on a phone */
+  small?: boolean;
+  ariaLabel: string;
+  onApply: (load: number) => Promise<number>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const fill = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const n = await onApply(load);
+      if (n > 0) toast.success(`${fmtNum(load)} ${unit} in ${n} set${n === 1 ? "" : "s"}. Tap each set's number as you finish it`);
+    } catch {
+      toast.error("Couldn't fill your sets. Try again");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={() => void fill()}
+      disabled={busy}
+      aria-label={ariaLabel}
+      title="Tap to fill your open sets"
+      data-testid="load-apply"
+      className={cn(
+        "inline-flex min-h-9 max-w-full items-center gap-1 whitespace-nowrap rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-1 font-semibold leading-tight tabular-nums text-foreground transition active:scale-[0.97] active:bg-blue-500/20 disabled:opacity-60",
+        small ? "text-[13px]" : "text-sm",
+      )}
+    >
+      <ArrowDownToLine className="h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+      <span data-testid="load-target">{shown}{"\u00a0"}{unit}</span>
+    </button>
+  );
+}
+
+/** The ⓘ beside a half's label: its own button, opening what's behind the number. */
+function InfoButton({ label, testId, children }: { label: string; testId: string; children: ReactNode }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          data-testid={testId}
+          className="-my-2 -mr-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground active:bg-muted"
+        >
+          <Info className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="top" align="end" className="w-72 text-xs leading-relaxed" data-testid="load-guide">
+        {children}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * The right half when the coach planned the load as a % (planned-load.ts): what
+ * the % is of, and the weight it means today as the same blue chip as Suggested
+ * (one tap fills the open sets; the boxes stay empty until then), or what it
+ * waits on ("After your top set"). The ⓘ says how it's worked out and that the
+ * RPE is its cap.
+ */
+export function PlannedLoadCell({ view, onApply = null }: {
+  view: PlannedLoadView;
+  /** Puts the weight in every open set as a draft; null when there's nothing to fill. */
+  onApply?: ((load: number) => Promise<number>) | null;
+}) {
+  const why = (
+    <div className="space-y-1.5 text-foreground" data-testid="load-planned-why">
+      {view.why.map((line) => <p key={line}>{line}</p>)}
+    </div>
+  );
+  if (onApply && view.load != null && view.value) {
+    return (
+      <div className={REF_CELL} data-testid="load-planned">
+        <span className={cn(REF_LABEL, "justify-between")}>
+          <span className="truncate">{view.label}</span>
+          <InfoButton label="How this weight is worked out" testId="load-planned-info">{why}</InfoButton>
+        </span>
+        <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5" data-capped={view.capped ? "" : undefined}>
+          <FillChip
+            load={view.load}
+            unit={view.unit}
+            shown={fmtNum(view.load)}
+            ariaLabel={`${view.label}: ${view.value}. Fill your open sets with ${view.value}`}
+            onApply={onApply}
+          />
+        </span>
+      </div>
+    );
+  }
   return (
     <SuggestionPopover
       label={`${view.label}: ${view.value ?? view.waiting ?? "loading"}. How it's worked out`}
@@ -203,9 +265,7 @@ export function PlannedLoadCell({ view }: { view: PlannedLoadView }) {
         </>
       }
     >
-      <div className="space-y-1.5 text-foreground" data-testid="load-planned-why">
-        {view.why.map((line) => <p key={line}>{line}</p>)}
-      </div>
+      {why}
     </SuggestionPopover>
   );
 }
