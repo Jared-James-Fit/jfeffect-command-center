@@ -6,7 +6,9 @@
  *   team works together. Private tasks (tasks.owner_user_id) are enforced by
  *   the database, so nobody else ever sees them, "view as" included.
  * - Quick Notes sit above both, private to the person, and can be sent to
- *   either board (see quick-notes.tsx).
+ *   either board or shared with teammates as Team notes (see quick-notes.tsx,
+ *   team-notes.tsx). A team task can go back to being private (Remove from
+ *   team) or become a team note for the same people.
  * - List view groups tasks by category. Matrix view is a 2×2 overview: each
  *   quadrant shows a short preview and opens into its full list.
  * - Tapping a task opens it: title, notes, category, who it's for, who sees it.
@@ -30,13 +32,14 @@ import {
 import {
   Plus, MoreHorizontal, Trash2, Settings2, RotateCcw, Users, Check, Lock,
   Search, ListChecks, LayoutGrid, ChevronRight, ChevronDown, CheckCheck, ArrowRightLeft, Maximize2, UserRound,
+  Undo2, StickyNote,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import {
   QUADRANTS, fetchTasks, createTask, toggleTaskDone, fetchTeamMembers, splitTasks, firstName,
-  updateTask, deleteTask, bulkSetTaskStatus, bulkMoveTasks, bulkAssignTasks, bulkDeleteTasksByIds,
+  updateTask, deleteTask, restoreTask, bulkSetTaskStatus, bulkMoveTasks, bulkAssignTasks, bulkDeleteTasksByIds,
   taskPeople, othersOn, sendToTeamPeople, togglePerson, newlyOn, peopleLabel,
   type TaskRow, type TaskQuadrant, type TaskScope, type TeamMember,
 } from "@/lib/tasks";
@@ -46,6 +49,7 @@ import { TaskSwipeRow } from "@/components/tasks/task-swipe-row";
 import { cn } from "@/lib/utils";
 import { QuickNotesPanel } from "@/components/tasks/quick-notes";
 import { watchTasksRealtime } from "@/lib/tasks-realtime";
+import { TEAM_NOTES_KEY, deleteTeamNote, groupLabel, insertTeamNote, saveRememberedGroup, type TeamNote } from "@/lib/team-notes";
 
 // ---------- Quadrant customization (color + labels), persisted to localStorage ----------
 type QuadStyle = { color: string; title: string; subtitle: string };
@@ -169,6 +173,7 @@ export function TasksPage({
   );
 
   const memberById = useMemo(() => new Map(teamMembers.map((m) => [m.user_id, m])), [teamMembers]);
+  const nameOfId = useCallback((u: string) => memberById.get(u)?.full_name || "Teammate", [memberById]);
   /** Who's on a task, by name ("Me" for you), in the order they were added. */
   const namesOf = useCallback(
     (t: TaskRow, opts?: { others?: boolean }): string[] =>
@@ -327,10 +332,63 @@ export function TasksPage({
     announce([t.id], people);
     toast.success(m && m.user_id !== me ? `Shared with ${firstName(m.full_name)}` : "On the team board");
   };
-  /** Team board → my private tasks (nobody else on it any more). */
+  /** Remove from team: back to my private tasks, nobody else on it any more (Undo puts everyone back). */
   const makePrivate = async (t: TaskRow) => {
     if (!me) return;
-    if (await patchOne(t, { owner_user_id: me, assignees: [] })) toast.success("Moved to your private tasks");
+    const before = taskPeople(t);
+    if (!(await patchOne(t, { owner_user_id: me, assignees: [] }))) return;
+    const others = before.filter((u) => u !== me);
+    toast.success("Removed from the team", {
+      description: others.length
+        ? `Only you have it now. ${groupLabel(others.map(nameOfId))} no longer ${others.length > 1 ? "see" : "sees"} it.`
+        : "It's in your private tasks now.",
+      action: { label: "Undo", onClick: () => void patchOne({ ...t, owner_user_id: me, assignees: [] }, { owner_user_id: null, assignees: before }) },
+    });
+  };
+  /**
+   * A shared task that's really a note (plans, ideas): a team note for the same
+   * people, under Team notes. Undo puts the task back as it was.
+   */
+  const toTeamNote = async (t: TaskRow) => {
+    if (!me) return;
+    const members = [...new Set([me, ...taskPeople(t)])];
+    let note: TeamNote;
+    try {
+      note = await insertTeamNote({ members, title: t.title, body: t.notes ?? "" });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't make it a team note.");
+      return;
+    }
+    patchLocal((rows) => rows.filter((r) => r.id !== t.id));
+    if (detailId === t.id) setDetailId(null);
+    try {
+      await deleteTask(t.id);
+    } catch (e: any) {
+      await deleteTeamNote(note.id).catch(() => {});
+      refresh();
+      toast.error(e?.message ?? "Couldn't move it. The task is still here.");
+      return;
+    }
+    qc.setQueryData<TeamNote[]>(TEAM_NOTES_KEY, (prev) => [note, ...(prev ?? []).filter((n) => n.id !== note.id)]);
+    const others = members.filter((u) => u !== me);
+    saveRememberedGroup(me, others);
+    refresh();
+    toast.success(`Moved to Team notes${others.length ? ` · ${groupLabel(others.map(nameOfId))}` : ""}`, {
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          try {
+            await restoreTask(t);
+            qc.setQueryData<TeamNote[]>(TEAM_NOTES_KEY, (prev) => (prev ?? []).filter((n) => n.id !== note.id));
+            await deleteTeamNote(note.id).catch(() => {});
+          } catch (e: any) {
+            toast.error(e?.message ?? "Couldn't bring the task back. It's still in Team notes.");
+          }
+          refresh();
+          qc.invalidateQueries({ queryKey: TEAM_NOTES_KEY });
+        },
+      },
+    });
   };
 
   // ---- bulk actions ----
@@ -389,7 +447,7 @@ export function TasksPage({
   const rowProps: RowProps = {
     selectMode, selected, toggleSelected, quadStyles, teamMembers, me, board, namesOf,
     onComplete: completeOne, onDelete: deleteOne, onPatch: patchOne, onTogglePerson: togglePersonOne,
-    onShare: shareOne, onMakePrivate: makePrivate, onOpen: (t) => setDetailId(t.id), isMobile,
+    onShare: shareOne, onMakePrivate: makePrivate, onToTeamNote: toTeamNote, onOpen: (t) => setDetailId(t.id), isMobile,
   };
 
   const detailTask = detailId ? tasks.find((t) => t.id === detailId) ?? null : null;
@@ -470,8 +528,10 @@ export function TasksPage({
           quadStyles={quadStyles}
           teamMembers={teamMembers}
           onCreateTask={async (input) => {
-            // sent to someone: shared with them, like a task sent to the team
-            const people = input.team ? sendToTeamPeople(me, input.assignee?.user_id ?? null) : [];
+            // sent to people: shared with them (and me), like a task sent to the team; nobody = the board
+            const people = input.team && input.people?.length
+              ? [...new Set([me, ...input.people].filter((u): u is string => !!u))]
+              : [];
             const id = await createTask({
               title: input.title, notes: input.notes, quadrant: input.quadrant, scope,
               owner_user_id: input.team ? null : me, assignees: people,
@@ -766,6 +826,7 @@ export function TasksPage({
         onDelete={(t) => setConfirmDelete({ ids: [t.id], label: `“${t.title}”` })}
         onShare={shareOne}
         onMakePrivate={makePrivate}
+        onToTeamNote={toTeamNote}
       />
 
       <Dialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
@@ -810,6 +871,7 @@ type RowProps = {
   onTogglePerson: (t: TaskRow, userId: string) => void;
   onShare: (t: TaskRow, m: TeamMember | null) => void;
   onMakePrivate: (t: TaskRow) => void;
+  onToTeamNote: (t: TaskRow) => void;
   onOpen: (t: TaskRow) => void;
   isMobile: boolean;
 };
@@ -952,6 +1014,16 @@ function TaskRowItem({ task, showQuadrant = true, ...p }: { task: TaskRow; showQ
                   ))}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+            )}
+            {!personal && (
+              <DropdownMenuItem onClick={() => p.onMakePrivate(task)} data-task-remove-from-team>
+                <Undo2 className="mr-2 h-4 w-4" />Remove from team
+              </DropdownMenuItem>
+            )}
+            {!personal && others.length > 0 && (
+              <DropdownMenuItem onClick={() => p.onToTeamNote(task)}>
+                <StickyNote className="mr-2 h-4 w-4" />Move to team notes
+              </DropdownMenuItem>
             )}
             <DropdownMenuItem onClick={() => p.onComplete(task, !isDone)}>
               {isDone ? <><RotateCcw className="mr-2 h-4 w-4" />Restore</> : <><Check className="mr-2 h-4 w-4" />Complete</>}
@@ -1148,7 +1220,7 @@ function QuadrantCustomizer({ style, onChange, onReset }: { style: QuadStyle; on
 
 /** A task opened in full: edit title and notes, category, who it's for, who sees it. */
 function TaskDetailSheet({
-  task, quadStyles, teamMembers, me, namesOf, onClose, onPatch, onTogglePerson, onComplete, onDelete, onShare, onMakePrivate,
+  task, quadStyles, teamMembers, me, namesOf, onClose, onPatch, onTogglePerson, onComplete, onDelete, onShare, onMakePrivate, onToTeamNote,
 }: {
   task: TaskRow | null;
   quadStyles: Record<TaskQuadrant, QuadStyle>;
@@ -1162,6 +1234,7 @@ function TaskDetailSheet({
   onDelete: (t: TaskRow) => void;
   onShare: (t: TaskRow, m: TeamMember | null) => void;
   onMakePrivate: (t: TaskRow) => void;
+  onToTeamNote: (t: TaskRow) => void;
 }) {
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
@@ -1324,13 +1397,24 @@ function TaskDetailSheet({
                         ? `In My tasks for ${peopleLabel(names)}. Tap a name to add or take them off.`
                         : "In your My tasks. Tap a name to share it."}
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => onMakePrivate(task)}
-                    className="inline-flex items-center gap-1 pt-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
-                  >
-                    <Lock className="h-3 w-3" />Make it my private task
-                  </button>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => { commitText(); onMakePrivate(task); }}
+                      className="inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                    >
+                      <Undo2 className="h-3.5 w-3.5" />Remove from team
+                    </button>
+                    {others.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => { commitText(); onToTeamNote({ ...task, title: title.trim() || task.title, notes: notes.trim() ? notes : null }); }}
+                        className="inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                      >
+                        <StickyNote className="h-3.5 w-3.5" />Move to team notes
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 

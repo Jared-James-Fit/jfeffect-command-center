@@ -12,10 +12,11 @@
  * - Private to the person: notes live in the database under their account
  *   (see useNotes), so they follow them across devices and nobody else, not
  *   even the owner's "view as", ever sees them.
- * - Send anywhere: one tap on a quadrant tile files the note in My tasks
- *   (private); "Send to team…" puts it on the team board, optionally assigned
- *   to a teammate. Either way the note moves to Recently Deleted, with Undo
- *   that removes the task and restores the note.
+ * - Share with team: one tap on a group shared with before ("Fionna") makes
+ *   it a team note for those people, listed under Quick notes by group (see
+ *   team-notes.tsx); "Choose people…" picks anyone, as a team note or a task.
+ *   One tap on a quadrant tile files it in My tasks (private). Either way the
+ *   note moves to Recently Deleted, with Undo that puts everything back.
  * - Delete (swipe left, row menu, editor menu, bulk) moves a note to
  *   Recently Deleted with an Undo toast. Trashed notes are restorable for
  *   30 days, then purged on the next load. Trash is just a `deletedAt`
@@ -33,22 +34,31 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-  DropdownMenuSeparator, DropdownMenuLabel,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
-  MoreHorizontal, Trash2, ChevronDown, ChevronLeft, Copy, Check, Pencil, CheckSquare, Files, SquarePen,
+  MoreHorizontal, Trash2, ChevronDown, Copy, CheckSquare, Files, SquarePen,
   RotateCcw, ArrowRightLeft, UserRound, UserRoundPlus, ExternalLink, Link2Off, Users, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { QUADRANTS, firstName, type TaskQuadrant, type TeamMember } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { TaskSwipeRow } from "@/components/tasks/task-swipe-row";
-import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { useOpenClientProfile } from "@/lib/open-client-profile";
 import { fetchLinkedCopies, pushQuickNote, setQuickNoteRemoved, unlinkQuickNote } from "@/lib/client-file-notes";
 import { ClientLinkDialog } from "@/components/tasks/client-link-dialog";
 import { deleteQuickNotes, fetchMyQuickNotes, noteSignature, upsertQuickNotes } from "@/lib/quick-notes-db";
+import { MenuLabel, NoteEditor, RowMenu, copyText, useIsDesktop, useMounted, type SaveState } from "@/components/tasks/note-editor";
+import { TeamPeopleDialog } from "@/components/tasks/team-people-dialog";
+import { TeamNotesSection, announceTeamNotes } from "@/components/tasks/team-notes";
+import { hasText, noteHeading, noteMatches, notePreview, noteToTask, sortByRecent } from "@/lib/note-text";
+import {
+  deleteTeamNote, groupLabel, insertTeamNote, othersIn, readRememberedGroups, saveRememberedGroup, shareTargets, useTeamNotes,
+} from "@/lib/team-notes";
+
+// Shared with Team notes; still exported from here for the tests and older imports.
+export { noteHeading, noteMatches, notePreview, noteToTask, sortByRecent };
+export type { SaveState };
 
 /** `deletedAt` set ⇒ the note is in Recently Deleted. */
 export type Note = {
@@ -57,11 +67,10 @@ export type Note = {
   clientId?: string; clientName?: string;
 };
 type QuadStyle = { color: string; title: string; subtitle: string };
-/** Where a note goes: My tasks (private) or the team board, optionally assigned. */
-export type NoteDestination = { quadrant: TaskQuadrant; team: boolean; assignee?: TeamMember | null };
+/** Where a note goes as a task: My tasks (private) or the team board, for whoever's picked (never me). */
+export type NoteDestination = { quadrant: TaskQuadrant; team: boolean; people?: string[] };
 /** What a note becomes in the matrix. */
 export type NoteTaskInput = { title: string; notes: string | null } & NoteDestination;
-export type SaveState = "idle" | "saving" | "saved" | "error";
 
 const newId = () =>
   (typeof crypto !== "undefined" && "randomUUID" in crypto) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
@@ -333,108 +342,6 @@ export function trashDaysLeft(deletedAt: number, now: number) {
   return Math.max(1, Math.ceil((deletedAt + TRASH_DAYS * DAY_MS - now) / DAY_MS));
 }
 
-const lines = (s: string) => s.split("\n").map((l) => l.trim()).filter(Boolean);
-
-export function noteHeading(n: Pick<Note, "title" | "body">) {
-  return n.title.trim() || lines(n.body)[0] || "Untitled note";
-}
-export function notePreview(n: Pick<Note, "title" | "body">) {
-  const ls = lines(n.body);
-  return (n.title.trim() ? ls[0] : ls[1]) ?? "";
-}
-/**
- * Task fields for a note: its title (or first line) becomes the task title
- * and the rest of the text rides along as the task notes. Null when empty.
- */
-export function noteToTask(n: Pick<Note, "title" | "body">): { title: string; notes: string | null } | null {
-  const bodyLines = n.body.split("\n");
-  const firstIdx = bodyLines.findIndex((l) => l.trim());
-  const title = (n.title.trim() || (firstIdx >= 0 ? bodyLines[firstIdx].trim() : "")).slice(0, 200);
-  if (!title) return null;
-  const rest = n.title.trim() ? n.body : bodyLines.slice(firstIdx + 1).join("\n");
-  return { title, notes: rest.trim() ? rest.trim() : null };
-}
-
-/** Most recently edited first, like Apple Notes. */
-export function sortByRecent<T extends Pick<Note, "updatedAt">>(notes: T[]): T[] {
-  return [...notes].sort((a, b) => b.updatedAt - a.updatedAt);
-}
-export function noteMatches(n: Pick<Note, "title" | "body">, q: string) {
-  const s = q.trim().toLowerCase();
-  return !s || `${n.title}\n${n.body}`.toLowerCase().includes(s);
-}
-
-async function copyText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.setAttribute("readonly", "");
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand("copy");
-      ta.remove();
-      return ok;
-    } catch {
-      return false;
-    }
-  }
-}
-
-function useMounted() {
-  const [m, setM] = useState(false);
-  useEffect(() => setM(true), []);
-  return m;
-}
-
-function useIsDesktop() {
-  const [d, setD] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px)");
-    const on = () => setD(mq.matches);
-    on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
-  return d;
-}
-
-/**
- * A row's ••• menu, opened on tap for touch input. Radix opens on
- * pointerdown, so a swipe or scroll that starts on ••• would pop it open.
- * Mouse and keyboard keep Radix's default behavior.
- */
-function RowMenu({ label, children }: { label: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const touchDown = useRef(false);
-  return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost" size="icon" className="h-9 w-9 shrink-0 text-muted-foreground" aria-label={label}
-          onPointerDown={(e) => {
-            touchDown.current = e.pointerType !== "mouse";
-            // Radix skips its open-on-pointerdown when the event is defaulted.
-            if (touchDown.current) e.preventDefault();
-          }}
-          onClick={() => {
-            if (touchDown.current) setOpen(true);
-            touchDown.current = false;
-          }}
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">{children}</DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 // ---------------------------------------------------------------- panel
 
 /** Rows shown before "Show all" — keeps the panel short at the top of the page. */
@@ -481,9 +388,26 @@ function NotesPanel({
   const openClient = useOpenClientProfile();
   /** Note whose client is being picked. */
   const [linkFor, setLinkFor] = useState<string | null>(null);
-  /** Notes being sent to the team board (dialog open while set). */
+  /** Notes being shared with the team (the people sheet is open while set). */
   const [teamSend, setTeamSend] = useState<Note[] | null>(null);
   const [collapsed, setCollapsed] = usePersistedFlag(`${storageKey}-collapsed`, false);
+  const [teamCollapsed, setTeamCollapsed] = usePersistedFlag(`${storageKey}-team-collapsed`, false);
+  const team = useTeamNotes(!!userId);
+  /** Groups shared with last on this device, newest first. */
+  const [remembered, setRemembered] = useState<string[][]>([]);
+  useEffect(() => { setRemembered(readRememberedGroups(userId)); }, [userId]);
+  const teamIds = useMemo(() => teamMembers.map((m) => m.user_id), [teamMembers]);
+  const hasTeam = teamIds.some((u) => u !== userId);
+  /** One-tap groups to share with, the last one used first. */
+  const targets = useMemo(
+    () => shareTargets({ remembered, notes: team.notes, teamIds, me: userId, limit: 3 }),
+    [remembered, team.notes, teamIds, userId],
+  );
+  const nameOf = useCallback(
+    (u: string) => teamMembers.find((m) => m.user_id === u)?.full_name || "Teammate",
+    [teamMembers],
+  );
+  const labelOf = useCallback((people: string[]) => groupLabel(people.map(nameOf)), [nameOf]);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
@@ -571,8 +495,9 @@ function NotesPanel({
     const results = await Promise.allSettled(movable.map((m) => onCreateTask(m.task)));
     const movedIds = movable.filter((_, i) => results[i].status === "fulfilled").map((m) => m.note.id);
     const taskIds = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+    const people = dest.people ?? [];
     const where = dest.team
-      ? `Team · ${quadStyles[dest.quadrant].title}${dest.assignee ? ` · ${firstName(dest.assignee.full_name)}` : ""}`
+      ? `Team · ${quadStyles[dest.quadrant].title}${people.length ? ` · ${labelOf(people)}` : ""}`
       : `My tasks · ${quadStyles[dest.quadrant].title}`;
     if (movedIds.length) {
       // The note goes to Recently Deleted (not gone) so Undo can bring it back.
@@ -592,12 +517,78 @@ function NotesPanel({
     if (failed) toast.error(failed > 1 ? `${failed} notes couldn't be moved. They're still here.` : "Couldn't move the note. It's still here.");
   };
 
-  /** 2×2 quadrant tiles (My tasks), laid out like the matrix, plus "Send to team…". */
+  /**
+   * Share as a team note for these people (never me: I'm always on it). The
+   * note goes to Recently Deleted (not gone) so Undo can bring it back.
+   */
+  const shareToTeam = async (list: Note[], people: string[]) => {
+    if (!userId) return;
+    const sharable = list.filter(hasText);
+    if (!sharable.length) { toast.error("Write something first, then share it."); return; }
+    const members = [userId, ...people.filter((u) => u !== userId)];
+    const results = await Promise.allSettled(
+      sharable.map((n) => insertTeamNote({ members, title: n.title, body: n.body })),
+    );
+    const rows = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+    const sharedIds = sharable.filter((_, i) => results[i].status === "fulfilled").map((n) => n.id);
+    if (rows.length) {
+      team.patch((prev) => [...rows, ...prev.filter((r) => !rows.some((x) => x.id === r.id))]);
+      trashNotes(sharedIds, { quiet: true });
+      saveRememberedGroup(userId, people);
+      setRemembered(readRememberedGroups(userId));
+      setTeamCollapsed(false);
+      announceTeamNotes(rows.map((r) => r.id), people, userId);
+      const who = labelOf(othersIn(rows[0].members, userId));
+      toast.success(rows.length > 1 ? `${rows.length} notes shared with ${who}` : `Shared with ${who}`, {
+        description: "It's under Team notes.",
+        action: {
+          label: "Undo",
+          onClick: () => {
+            restoreNotes(sharedIds);
+            team.patch((prev) => prev.filter((r) => !rows.some((x) => x.id === r.id)));
+            Promise.all(rows.map((r) => deleteTeamNote(r.id))).catch(() => {
+              team.refresh();
+              toast.error("Note restored, but it's still in Team notes. Delete it there.");
+            });
+          },
+        },
+      });
+    }
+    const failed = sharable.length - rows.length;
+    if (failed) toast.error(failed > 1 ? `${failed} notes couldn't be shared. They're still here.` : "Couldn't share the note. It's still here.");
+  };
+
+  /** Into my own Quick notes (a team note taken back): resolves to its id. */
+  const addQuickNote = useCallback((t: { title: string; body: string }) => {
+    const n: Note = { id: newId(), title: t.title, body: t.body, updatedAt: Date.now() };
+    setNotes((arr) => [n, ...arr]);
+    setCollapsed(false);
+    window.setTimeout(flush, 0);
+    return n.id;
+  }, [setNotes, setCollapsed, flush]);
+  const dropQuickNote = useCallback((id: string) => setNotes((arr) => arr.filter((n) => n.id !== id)), [setNotes]);
+
+  /**
+   * A note's way out: share it with a group shared with before (one tap), or
+   * pick people (a team note or a task); or file it in My tasks (2×2 tiles).
+   */
   const moveGrid = (list: () => Note[]) => (
     <>
-      <DropdownMenuLabel className="pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-        Move to my tasks
-      </DropdownMenuLabel>
+      {hasTeam && (
+        <>
+          <MenuLabel>Share with team</MenuLabel>
+          {targets.map((g) => (
+            <DropdownMenuItem key={g.join(",")} onClick={() => void shareToTeam(list(), g)} data-share-group>
+              <Users className="mr-2 h-4 w-4" /><span className="truncate">{labelOf(g)}</span>
+            </DropdownMenuItem>
+          ))}
+        </>
+      )}
+      <DropdownMenuItem onClick={() => setTeamSend(list())}>
+        <UserRoundPlus className="mr-2 h-4 w-4" />{hasTeam ? "Choose people…" : "Send to team…"}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <MenuLabel>Move to my tasks</MenuLabel>
       <div className="grid grid-cols-2 gap-1 px-1 pb-1">
         {QUADRANTS.map((q) => {
           const st = quadStyles[q.key];
@@ -617,9 +608,6 @@ function NotesPanel({
           );
         })}
       </div>
-      <DropdownMenuItem onClick={() => setTeamSend(list())}>
-        <Users className="mr-2 h-4 w-4" />Send to team…
-      </DropdownMenuItem>
     </>
   );
 
@@ -650,9 +638,7 @@ function NotesPanel({
   const clientMenu = (n: Note) =>
     n.clientId ? (
       <>
-        <DropdownMenuLabel className="truncate pb-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-          On {(n.clientName ?? "client").split(" ")[0]}&apos;s file · synced
-        </DropdownMenuLabel>
+        <MenuLabel>On {(n.clientName ?? "client").split(" ")[0]}&apos;s file · synced</MenuLabel>
         <DropdownMenuItem onClick={() => openClientFile(n)}><ExternalLink className="mr-2 h-4 w-4" />Open client file</DropdownMenuItem>
         <DropdownMenuItem onClick={() => setLinkFor(n.id)}><UserRound className="mr-2 h-4 w-4" />Change client…</DropdownMenuItem>
         <DropdownMenuItem onClick={() => void unlinkNote(n)}><Link2Off className="mr-2 h-4 w-4" />Stop syncing</DropdownMenuItem>
@@ -661,8 +647,32 @@ function NotesPanel({
       <DropdownMenuItem onClick={() => setLinkFor(n.id)}><UserRoundPlus className="mr-2 h-4 w-4" />Save to client file…</DropdownMenuItem>
     );
   const linkTarget = notes.find((n) => n.id === linkFor) ?? null;
+  /** Under the title: the client file this note syncs to, or a way to pick one. */
+  const clientChip = (n: Note) =>
+    n.clientId ? (
+      <button
+        type="button"
+        onClick={() => openClientFile(n)}
+        className="mb-2 inline-flex w-fit max-w-full shrink-0 items-center gap-1 rounded-full bg-primary/12 px-2.5 py-1 text-[12px] font-semibold text-primary active:opacity-70"
+        title="Open client file"
+      >
+        <UserRound className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{n.clientName ?? "Client"}</span>
+        <span className="shrink-0 font-normal text-primary/70">· synced to client file</span>
+      </button>
+    ) : (
+      <button
+        type="button"
+        onClick={() => setLinkFor(n.id)}
+        className="mb-2 inline-flex w-fit shrink-0 items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-[12px] font-medium text-muted-foreground hover:text-foreground active:opacity-70"
+      >
+        <UserRoundPlus className="h-3.5 w-3.5" /> Save to client file
+      </button>
+    );
+  const shareLabel = teamSend ? (teamSend.length > 1 ? `${teamSend.length} notes` : teamSend[0] ? noteHeading(teamSend[0]) : "") : "";
 
   return (
+    <>
     <section aria-label="Quick Notes">
       {/* Section header */}
       <div className="flex items-center gap-1 px-1">
@@ -861,23 +871,27 @@ function NotesPanel({
           onClose={closeEditor}
           onDuplicate={() => { const c = duplicate(openNote); setOpenId(c.id); }}
           onDelete={() => trashNotes([openNote.id])}
-          moveGrid={moveGrid(() => [openNote])}
-          clientMenu={clientMenu(openNote)}
-          onPickClient={() => setLinkFor(openNote.id)}
-          onOpenClient={() => openClientFile(openNote)}
+          menu={<>{moveGrid(() => [openNote])}<DropdownMenuSeparator />{clientMenu(openNote)}</>}
+          chip={clientChip(openNote)}
         />
       )}
 
-      <SendToTeamDialog
-        notes={teamSend}
-        quadStyles={quadStyles}
+      <TeamPeopleDialog
+        open={!!teamSend}
+        title="Share with team"
+        description={shareLabel}
         teamMembers={teamMembers}
-        userId={userId}
+        me={userId}
+        initial={targets[0] ?? []}
+        groups={targets}
+        taskStyles={quadStyles}
+        confirmLabel="Share"
         onClose={() => setTeamSend(null)}
-        onSend={(dest) => {
+        onConfirm={({ people, kind, quadrant }) => {
           const list = teamSend ?? [];
           setTeamSend(null);
-          void moveToMatrix(list, dest);
+          if (kind === "note") void shareToTeam(list, people);
+          else void moveToMatrix(list, { quadrant, team: true, people });
         }}
       />
 
@@ -948,284 +962,17 @@ function NotesPanel({
         </DialogContent>
       </Dialog>
     </section>
-  );
-}
 
-// ---------------------------------------------------------------- send to team
-
-/** Pick a quadrant and (optionally) a teammate, then put the note(s) on the team board. */
-function SendToTeamDialog({
-  notes, quadStyles, teamMembers, userId, onClose, onSend,
-}: {
-  notes: Note[] | null;
-  quadStyles: Record<TaskQuadrant, QuadStyle>;
-  teamMembers: TeamMember[];
-  userId: string | null;
-  onClose: () => void;
-  onSend: (dest: NoteDestination) => void;
-}) {
-  const [quadrant, setQuadrant] = useState<TaskQuadrant>("do");
-  const [assignee, setAssignee] = useState<string | null>(null);
-  useEffect(() => { if (notes) { setQuadrant("do"); setAssignee(null); } }, [notes]);
-  const count = notes?.length ?? 0;
-  const label = count > 1 ? `${count} notes` : notes?.[0] ? noteHeading(notes[0]) : "";
-  return (
-    <Dialog open={!!notes} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="z-[90] max-w-sm gap-4">
-        <DialogHeader>
-          <DialogTitle>Send to team</DialogTitle>
-          <DialogDescription className="truncate">{label}</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-1.5">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Category</div>
-          <div className="grid grid-cols-2 gap-1.5">
-            {QUADRANTS.map((q) => {
-              const st = quadStyles[q.key];
-              const on = quadrant === q.key;
-              return (
-                <button
-                  key={q.key}
-                  type="button"
-                  onClick={() => setQuadrant(q.key)}
-                  aria-pressed={on}
-                  className={cn("min-h-10 rounded-md border px-1.5 text-xs font-bold transition-shadow", on && "ring-2 ring-offset-1 ring-offset-background")}
-                  style={{
-                    color: st.color,
-                    borderColor: `color-mix(in srgb, ${st.color} 45%, transparent)`,
-                    backgroundColor: `color-mix(in srgb, ${st.color} ${on ? 22 : 10}%, transparent)`,
-                    ...(on ? { ["--tw-ring-color" as string]: st.color } : {}),
-                  }}
-                >
-                  {st.title}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Assign to</div>
-          <div className="flex flex-wrap gap-1.5">
-            {[{ user_id: null as string | null, full_name: "Unassigned" }, ...teamMembers].map((m) => {
-              const on = assignee === m.user_id;
-              return (
-                <button
-                  key={m.user_id ?? "none"}
-                  type="button"
-                  onClick={() => setAssignee(m.user_id)}
-                  aria-pressed={on}
-                  className={cn(
-                    "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
-                    on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {m.user_id && m.user_id === userId ? "Me" : m.user_id ? firstName(m.full_name) : m.full_name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <DialogFooter className="flex-row justify-end gap-2">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button
-            onClick={() => onSend({ quadrant, team: true, assignee: teamMembers.find((m) => m.user_id === assignee) ?? null })}
-          >
-            <Users className="mr-1.5 h-4 w-4" />Send
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ---------------------------------------------------------------- editor
-
-function NoteEditor({
-  note, saveState, onChange, onClose, onDuplicate, onDelete, moveGrid, clientMenu, onPickClient, onOpenClient,
-}: {
-  note: Note;
-  saveState: SaveState;
-  onChange: (patch: Partial<Note>) => void;
-  onClose: () => void;
-  onDuplicate: () => void;
-  onDelete: () => void;
-  moveGrid: React.ReactNode;
-  clientMenu: React.ReactNode;
-  onPickClient: () => void;
-  onOpenClient: () => void;
-}) {
-  const isDesktop = useIsDesktop();
-  const box = useVisualViewportBox(!isDesktop);
-  const titleRef = useRef<HTMLInputElement>(null);
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
-  const [copied, setCopied] = useState(false);
-  const isNew = !note.title && !note.body;
-
-  // Lock the page behind the editor; Escape closes on desktop.
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
-  }, [onClose]);
-
-  // When the keyboard opens/closes the editor resizes — keep the caret line
-  // in view so typing near the bottom of a long note never hides under it.
-  useEffect(() => {
-    const ta = bodyRef.current;
-    if (!ta || document.activeElement !== ta) return;
-    const end = ta.selectionEnd ?? 0;
-    const lineHeight = 28;
-    // Height of the text before the caret, measured with an off-screen clone.
-    const probe = document.createElement("textarea");
-    const cs = getComputedStyle(ta);
-    probe.style.cssText = `position:absolute;visibility:hidden;left:-9999px;top:0;height:0;overflow:hidden;width:${ta.clientWidth}px;font:${cs.font};line-height:${cs.lineHeight};padding:${cs.padding};white-space:pre-wrap;word-wrap:break-word;letter-spacing:${cs.letterSpacing}`;
-    probe.value = ta.value.slice(0, end);
-    document.body.appendChild(probe);
-    const caretY = probe.scrollHeight;
-    probe.remove();
-    if (caretY > ta.scrollTop + ta.clientHeight - lineHeight || caretY < ta.scrollTop + lineHeight) {
-      ta.scrollTop = Math.max(0, caretY - ta.clientHeight + lineHeight * 2);
-    }
-  }, [box?.height]);
-
-  useEffect(() => {
-    if (isNew) titleRef.current?.focus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const copy = async () => {
-    const ok = await copyText(note.body || note.title);
-    if (ok) {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    } else {
-      toast.error("Couldn't copy — select the text instead");
-    }
-  };
-
-  const status =
-    saveState === "saving" ? "Saving…" : saveState === "error" ? "Couldn't save" : saveState === "saved" ? "Saved" : "";
-
-  const mobileStyle: React.CSSProperties | undefined = !isDesktop && box
-    ? { top: box.top, height: box.height }
-    : undefined;
-
-  const words = note.body.trim() ? note.body.trim().split(/\s+/).length : 0;
-
-  return createPortal(
-    <div className="fixed inset-0 z-[80]" role="dialog" aria-modal="true" aria-label="Edit note">
-      {/* Desktop backdrop */}
-      <div className="absolute inset-0 hidden bg-black/40 backdrop-blur-[2px] md:block" onClick={onClose} />
-      <div
-        className={cn(
-          "absolute inset-x-0 flex flex-col bg-background text-foreground",
-          "md:inset-auto md:left-1/2 md:top-1/2 md:h-[min(88vh,960px)] md:w-[min(92vw,820px)] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:bg-card md:shadow-2xl md:ring-1 md:ring-border",
-          !mobileStyle && "top-0 h-[100dvh]",
-        )}
-        style={mobileStyle}
-      >
-        {/* Toolbar */}
-        <div
-          className="flex shrink-0 items-center gap-1 border-b border-border/70 px-1.5 pb-1.5 md:px-3 md:pt-2"
-          style={{ paddingTop: isDesktop ? undefined : "calc(env(safe-area-inset-top) + 0.375rem)" }}
-        >
-          <Button variant="ghost" className="h-10 gap-0.5 px-2 text-[15px] font-medium text-primary hover:text-primary" onClick={onClose}>
-            <ChevronLeft className="h-5 w-5" />Quick Notes
-          </Button>
-          <span
-            className={cn(
-              "ml-1 truncate text-[11px] text-muted-foreground transition-opacity duration-300",
-              saveState === "error" && "text-destructive",
-              !status && "opacity-0",
-            )}
-            aria-live="polite"
-          >
-            {status}
-          </span>
-          <div className="ml-auto flex items-center">
-            <Button
-              variant="ghost"
-              className={cn("h-10 gap-1.5 px-2.5 text-sm font-medium", copied && "text-emerald-600 dark:text-emerald-400")}
-              onClick={copy}
-              disabled={!note.body && !note.title}
-            >
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              {copied ? "Copied" : "Copy"}
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="More note actions">
-                  <MoreHorizontal className="h-5 w-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="z-[85] w-60">
-                {moveGrid}
-                <DropdownMenuSeparator />
-                {clientMenu}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => window.setTimeout(() => { titleRef.current?.focus(); titleRef.current?.select(); }, 50)}>
-                  <Pencil className="mr-2 h-4 w-4" />Rename
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onDuplicate}><Files className="mr-2 h-4 w-4" />Duplicate</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive" onClick={onDelete}>
-                  <Trash2 className="mr-2 h-4 w-4" />Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button variant="ghost" className="h-10 px-2.5 text-[15px] font-semibold text-primary hover:text-primary" onClick={onClose}>
-              Done
-            </Button>
-          </div>
-        </div>
-
-        {/* Title + body */}
-        <div className="flex min-h-0 flex-1 flex-col px-4 md:px-8">
-          <input
-            ref={titleRef}
-            value={note.title}
-            onChange={(e) => onChange({ title: e.target.value })}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); bodyRef.current?.focus(); } }}
-            placeholder="Title"
-            enterKeyHint="next"
-            className="w-full shrink-0 bg-transparent pb-2 pt-4 text-[22px] font-bold leading-tight tracking-tight outline-none placeholder:text-muted-foreground/50"
-          />
-          {note.clientId ? (
-            <button
-              type="button"
-              onClick={onOpenClient}
-              className="mb-2 inline-flex w-fit max-w-full shrink-0 items-center gap-1 rounded-full bg-primary/12 px-2.5 py-1 text-[12px] font-semibold text-primary active:opacity-70"
-              title="Open client file"
-            >
-              <UserRound className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{note.clientName ?? "Client"}</span>
-              <span className="shrink-0 font-normal text-primary/70">· synced to client file</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onPickClient}
-              className="mb-2 inline-flex w-fit shrink-0 items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-[12px] font-medium text-muted-foreground hover:text-foreground active:opacity-70"
-            >
-              <UserRoundPlus className="h-3.5 w-3.5" /> Save to client file
-            </button>
-          )}
-          <div className="h-px shrink-0 bg-border/70" />
-          <textarea
-            ref={bodyRef}
-            value={note.body}
-            onChange={(e) => onChange({ body: e.target.value })}
-            placeholder="Start writing…"
-            className="min-h-0 w-full flex-1 resize-none overflow-y-auto overscroll-contain bg-transparent pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 text-[16px] leading-7 outline-none placeholder:text-muted-foreground/50 [scrollbar-gutter:stable]"
-            spellCheck
-          />
-        </div>
-        <div className="hidden shrink-0 px-8 pb-3 text-right text-[11px] text-muted-foreground md:block">
-          {words.toLocaleString()} {words === 1 ? "word" : "words"}
-        </div>
-      </div>
-    </div>,
-    document.body,
+    <TeamNotesSection
+      me={userId}
+      teamMembers={teamMembers}
+      search={search}
+      targets={targets}
+      collapsed={teamCollapsed}
+      onToggleCollapsed={() => setTeamCollapsed(!teamCollapsed)}
+      toQuickNotes={addQuickNote}
+      dropQuickNote={dropQuickNote}
+    />
+    </>
   );
 }
