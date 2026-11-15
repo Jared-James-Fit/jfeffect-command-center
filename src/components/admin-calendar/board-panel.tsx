@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Filter, Calendar as CalIcon, SlidersHorizontal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarBoard, visibleRange, type VisibleRange } from "@/components/calendar/calendar-board";
+import { CalendarBoard, visibleRange, type ViewMode, type VisibleRange } from "@/components/calendar/calendar-board";
+import { useCalendarPrefs } from "@/lib/calendar-prefs";
 import { useAdminCalendarSources, useGoogleCalendarStatus, KIND_META, type CalendarKind, type CalendarItem } from "@/lib/calendar-sources";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { SessionActionsSheet, type ActionSession } from "@/components/schedule/session-actions-sheet";
@@ -13,21 +14,18 @@ import { ChangeRequestsCard } from "@/components/schedule/change-requests-card";
 import { cn } from "@/lib/utils";
 
 const ALL_KINDS: CalendarKind[] = ["event", "important_date", "appointment", "pt_session"];
-const GOOGLE_TOGGLE_KEY = "admin.calendar.includeGoogle";
-
-function readGooglePref(): boolean {
-  try {
-    return typeof window !== "undefined" && window.localStorage.getItem(GOOGLE_TOGGLE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
 
 export function AdminCalendarBoardPanel({ initialDate }: { initialDate?: string | null } = {}) {
   const [clientId, setClientId] = useState<string>("all");
   const [kinds, setKinds] = useState<Set<CalendarKind>>(() => new Set(ALL_KINDS));
-  // Default: coaching app only. Google is one tap away and the choice sticks.
-  const [includeGoogle, setIncludeGoogle] = useState<boolean>(readGooglePref);
+  // The view and Coaching / + Google are remembered on the coach's account
+  // (every device). Default: Month, coaching only.
+  const { prefs, setPrefs } = useCalendarPrefs();
+  const includeGoogle = prefs.includeGoogle ?? false;
+  // A day tapped on the dashboard opens Day view on it for this visit only;
+  // picking a view from the tabs is what gets remembered.
+  const [dayOverride, setDayOverride] = useState<boolean>(!!initialDate);
+  const view: ViewMode = dayOverride ? "day" : prefs.boardView ?? "month";
   const [booking, setBooking] = useState<{ date: string } | null>(null);
   const [editing, setEditing] = useState<any>(null);
   const [acting, setActing] = useState<{ session: ActionSession; clientName: string | null } | null>(null);
@@ -35,18 +33,17 @@ export function AdminCalendarBoardPanel({ initialDate }: { initialDate?: string 
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Days the board is drawing; Google loads for those months. Starts on the
   // board's own default (this month) so the first load is the right one.
-  const [visible, setVisible] = useState<VisibleRange>(() => visibleRange("month", new Date()));
+  const [visible, setVisible] = useState<VisibleRange>(() => visibleRange(view, new Date()));
 
   const { data: gcalStatus } = useGoogleCalendarStatus();
   const googleConnected = !!gcalStatus?.connected;
 
   function chooseSource(google: boolean) {
-    setIncludeGoogle(google);
-    try {
-      window.localStorage.setItem(GOOGLE_TOGGLE_KEY, google ? "1" : "0");
-    } catch {
-      /* private mode: the choice just won't persist */
-    }
+    setPrefs({ includeGoogle: google });
+  }
+  function chooseView(v: ViewMode) {
+    setDayOverride(false);
+    setPrefs({ boardView: v });
   }
 
   const filters = useMemo(() => {
@@ -189,7 +186,7 @@ export function AdminCalendarBoardPanel({ initialDate }: { initialDate?: string 
 
   return (
     <>
-      {/* The calendar first: a day tapped on the dashboard opens on that day; the rest opens on the month. */}
+      {/* The calendar first: a day tapped on the dashboard opens on that day; otherwise the coach's last view, on today. */}
       <div className="p-3 sm:p-6 md:p-8 space-y-4">
         <ChangeRequestsCard onEdit={openEditor} />
         <section aria-label="Calendar">
@@ -197,7 +194,8 @@ export function AdminCalendarBoardPanel({ initialDate }: { initialDate?: string 
             items={items}
             isLoading={isLoading}
             initialDate={initialDate}
-            initialView={initialDate ? "day" : "month"}
+            view={view}
+            onViewChange={chooseView}
             showClientName
             toolbar={toolbar}
             onCreate={(date) => setBooking({ date })}

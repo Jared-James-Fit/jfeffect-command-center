@@ -121,10 +121,19 @@ export function AgendaHeader({ today, link, right }: { today: string; link?: Age
  * and a dot per thing on the day (up to 3). Each day opens the full calendar
  * on that day.
  */
-export function AgendaWeek({ today, dots, link }: { today: string; dots: (day: string) => string[]; link?: ((day: string) => AgendaLink) | null }) {
+export function AgendaWeek({
+  today, dots, link, anchor,
+}: {
+  today: string;
+  dots: (day: string) => string[];
+  link?: ((day: string) => AgendaLink) | null;
+  /** A day in the week to show (default: this week). */
+  anchor?: string;
+}) {
+  const days = weekDays(anchor ?? today);
   return (
-    <div className="mt-2.5 grid grid-cols-7 gap-0.5" role="list" aria-label="This week">
-      {weekDays(today).map((d) => {
+    <div className="mt-2.5 grid grid-cols-7 gap-0.5" role="list" aria-label={days.includes(today) ? "This week" : "Week"}>
+      {days.map((d) => {
         const date = new Date(`${d}T00:00:00`);
         const isToday = d === today;
         const past = d < today;
