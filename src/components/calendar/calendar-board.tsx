@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ChevronLeft, ChevronRight, Calendar as CalIcon, ExternalLink, MapPin, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KIND_FAMILY, KIND_META, ctaLabel, placeLabel, scheduleTitle, type CalendarItem, type CalendarKind, type KindFamily } from "@/lib/calendar-sources";
 import { compactTimeRange, compareInstants, durationLabel } from "@/lib/schedule-time";
+import { chipParts, itemDetailLines, personName, rowLines } from "@/lib/calendar-labels";
 import { CalendarEmptyState } from "./empty-state";
 
 export type ViewMode = "month" | "week" | "day" | "upcoming";
@@ -75,9 +77,15 @@ export function CalendarBoard({
   views = ["month", "week", "day", "upcoming"],
   initialDate,
   initialView,
+  view: viewProp,
+  onViewChange,
 }: {
   /** Which views to offer (first one is the default). */
   views?: ViewMode[];
+  /** Controlled view (the page remembers the coach's choice); otherwise the board keeps its own. */
+  view?: ViewMode;
+  /** Called when they pick a view from the tabs. */
+  onViewChange?: (view: ViewMode) => void;
   /** The view to open on, when not the first of `views` (a day tapped elsewhere opens on that day). */
   initialView?: ViewMode;
   /** yyyy-mm-dd to open on (a day tapped on Home); default today. */
@@ -96,7 +104,12 @@ export function CalendarBoard({
   /** The days on screen (yyyy-mm-dd, inclusive), so a source can load just those. */
   onRangeChange?: (range: VisibleRange) => void;
 }) {
-  const [view, setView] = useState<ViewMode>(() => (initialView && views.includes(initialView) ? initialView : views[0] ?? "month"));
+  const [innerView, setInnerView] = useState<ViewMode>(() => (initialView && views.includes(initialView) ? initialView : views[0] ?? "month"));
+  const view: ViewMode = viewProp && views.includes(viewProp) ? viewProp : innerView;
+  const setView = (v: ViewMode) => {
+    if (!viewProp) setInnerView(v);
+    onViewChange?.(v);
+  };
   const [cursor, setCursor] = useState<Date>(() => parseDay(initialDate) ?? startOfDay(new Date()));
   // Month view: the tapped day, listed under the grid (today, or the day they came for, until they tap).
   const [picked, setPicked] = useState<Date>(() => parseDay(initialDate) ?? startOfDay(new Date()));
@@ -203,7 +216,7 @@ export function CalendarBoard({
         <>
       {view === "month" && (
         <>
-          <MonthGrid cursor={cursor} itemsByDate={itemsByDate} onSelectItem={setSelected} picked={picked} onSelectDay={setPicked} />
+          <MonthGrid cursor={cursor} itemsByDate={itemsByDate} onSelectItem={setSelected} picked={picked} onSelectDay={setPicked} showClientName={showClientName} />
           {/* The tapped day, in full: titles never have to fit a 45px cell. */}
           <section className="space-y-2" aria-live="polite">
             <h3 className="px-1 text-xs font-bold text-muted-foreground">{fmtFullDate(picked).replace(/,? \d{4}$/, "")}</h3>
@@ -212,7 +225,7 @@ export function CalendarBoard({
         </>
       )}
       {view === "week" && (
-        <WeekGrid cursor={cursor} itemsByDate={itemsByDate} onSelectItem={setSelected} onCreate={onCreate} />
+        <WeekGrid cursor={cursor} itemsByDate={itemsByDate} onSelectItem={setSelected} onCreate={onCreate} showClientName={showClientName} />
       )}
       {view === "day" && (
         <DayList date={cursor} items={itemsByDate.get(isoDate(cursor)) ?? []} onSelectItem={setSelected} showClientName={showClientName} emptyHint={emptyHint} onCreate={onCreate} />
@@ -260,17 +273,20 @@ function LegendRow({ items }: { items: CalendarItem[] }) {
 
 /**
  * The month at a glance. On phones each day shows up to three dots in the
- * items' colour families (titles can't fit 45px; the tapped day is listed in
- * full underneath); wider screens keep the title chips.
+ * items' colour families (nothing readable fits 45px; the tapped day is
+ * listed in full underneath). Wider screens show a chip per item with its
+ * start time and who it's with ("10a Nicolas G."), the full details on
+ * hover: a month of "1:1 Training" chips said nothing about who or when.
  */
 function MonthGrid({
-  cursor, itemsByDate, onSelectItem, onSelectDay, picked,
+  cursor, itemsByDate, onSelectItem, onSelectDay, picked, showClientName = false,
 }: {
   cursor: Date;
   itemsByDate: Map<string, CalendarItem[]>;
   onSelectItem: (i: CalendarItem) => void;
   onSelectDay: (d: Date) => void;
   picked: Date;
+  showClientName?: boolean;
 }) {
   const monthStart = startOfMonth(cursor);
   const gridStart = startOfWeek(monthStart);
@@ -282,6 +298,7 @@ function MonthGrid({
   for (let i = 0; i < totalCells; i++) cells.push(addDays(gridStart, i));
 
   return (
+    <TooltipProvider delayDuration={120} skipDelayDuration={60}>
     <Card className="border-border bg-card overflow-hidden">
       <div className="grid grid-cols-7 border-b border-border bg-background/40">
         {WEEKDAY_LABELS.map((d) => (
@@ -305,7 +322,8 @@ function MonthGrid({
               aria-pressed={isPicked}
               aria-label={`${d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}${dayItems.length ? `, ${dayItems.length} item${dayItems.length === 1 ? "" : "s"}` : ""}`}
               className={cn(
-                "min-h-[52px] sm:min-h-[96px] border-b border-r border-border p-1 text-left align-top transition-colors",
+                // A column from the top: a button centres its content, so day numbers sat at different heights.
+                "flex min-h-[52px] flex-col items-stretch justify-start border-b border-r border-border p-1 text-left transition-colors sm:min-h-[96px]",
                 !inMonth && "bg-background/30 text-muted-foreground/60",
                 isPicked && "bg-secondary/70",
               )}
@@ -328,20 +346,37 @@ function MonthGrid({
                 </div>
               )}
               <div className="mt-1 hidden space-y-0.5 sm:block">
-                {visible.map((it) => (
-                  <div
-                    key={it.id}
-                    onClick={(e) => { e.stopPropagation(); onSelectItem(it); }}
-                    className={cn(
-                      "truncate rounded px-1.5 py-0.5 text-[10px] sm:text-[11px] font-medium border",
-                      KIND_META[it.kind].chip,
-                    )}
-                  >
-                    {scheduleTitle(it)}
-                  </div>
-                ))}
+                {visible.map((it) => {
+                  const { time, label } = chipParts(it, showClientName);
+                  const lines = itemDetailLines(it, showClientName);
+                  return (
+                    <Tooltip key={it.id}>
+                      <TooltipTrigger asChild>
+                        <div
+                          role="button"
+                          tabIndex={-1}
+                          aria-label={lines.join(", ")}
+                          onClick={(e) => { e.stopPropagation(); onSelectItem(it); }}
+                          className={cn(
+                            "flex min-w-0 items-baseline gap-1 rounded border px-1.5 py-0.5 text-[11px] leading-tight",
+                            KIND_META[it.kind].chip,
+                            (it.status === "Cancelled" || it.status === "Missed") && "line-through opacity-60",
+                          )}
+                        >
+                          {time && <span className="shrink-0 tabular-nums opacity-75">{time}</span>}
+                          <span className="min-w-0 truncate font-semibold">{label}</span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="start" className="max-w-[260px] space-y-0.5 border border-border bg-popover py-2 text-popover-foreground shadow-lg">
+                        {lines.map((line, i) => (
+                          <div key={i} className={i === 0 ? "text-[13px] font-semibold" : "text-xs text-muted-foreground"}>{line}</div>
+                        ))}
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                })}
                 {extra > 0 && (
-                  <div className="text-[10px] text-muted-foreground">+{extra} more</div>
+                  <div className="px-1 text-[10px] font-semibold text-muted-foreground">+{extra} more</div>
                 )}
               </div>
             </button>
@@ -349,16 +384,18 @@ function MonthGrid({
         })}
       </div>
     </Card>
+    </TooltipProvider>
   );
 }
 
 function WeekGrid({
-  cursor, itemsByDate, onSelectItem, onCreate,
+  cursor, itemsByDate, onSelectItem, onCreate, showClientName = false,
 }: {
   cursor: Date;
   itemsByDate: Map<string, CalendarItem[]>;
   onSelectItem: (i: CalendarItem) => void;
   onCreate?: (dateISO: string) => void;
+  showClientName?: boolean;
 }) {
   const ws = startOfWeek(cursor);
   const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
@@ -399,7 +436,7 @@ function WeekGrid({
                       className={cn("w-full rounded px-2 py-1 text-left text-[11px] border", KIND_META[it.kind].chip)}
                     >
                       <span className="block truncate">
-                        {it.startsAt ? `${compactTimeRange(it.startsAt, it.endsAt)} · ` : ""}{showNameFirst(it)}
+                        {it.startsAt ? `${compactTimeRange(it.startsAt, it.endsAt)} · ` : ""}{showNameFirst(it, showClientName)}
                       </span>
                       {placeLabel(it.location) && (
                         <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] opacity-75">
@@ -468,9 +505,10 @@ function DayList({
   );
 }
 
-/** Week chips are tiny: lead with the client's name when there is one. */
-function showNameFirst(it: CalendarItem): string {
-  return it.kind === "pt_session" && it.clientName ? `${it.clientName.split(" ")[0]} · ${it.title}` : scheduleTitle(it);
+/** Week chips are tiny: lead with who it's with (coach views), then what. */
+function showNameFirst(it: CalendarItem, withPerson: boolean): string {
+  const who = withPerson ? personName(it) : null;
+  return who ? `${who} · ${scheduleTitle(it)}` : scheduleTitle(it);
 }
 
 function UpcomingList({
@@ -522,15 +560,14 @@ function UpcomingList({
   );
 }
 
-/** One item: a line of its colour family, the title (two lines, never cut to one), then when / what. */
+/**
+ * One item: a line of its colour family, then who it's with as the title on
+ * coach views ("Colten Murray", then "12–1 PM · 1:1 Training · 800 Vaughan
+ * Ave"), else the item's own title and when / what.
+ */
 function ItemRow({ item, onClick, showClientName }: { item: CalendarItem; onClick: () => void; showClientName?: boolean }) {
-  const when = item.startsAt ? compactTimeRange(item.startsAt, item.endsAt) : null;
-  const meta = [
-    when,
-    KIND_META[item.kind].label,
-    item.status && item.status !== "Scheduled" ? item.status : null,
-    showClientName ? item.clientName : null,
-  ].filter(Boolean).join(" · ");
+  const { title, meta } = rowLines(item, !!showClientName);
+  const withPerson = !!showClientName && !!personName(item);
   return (
     <li>
       <button
@@ -540,9 +577,9 @@ function ItemRow({ item, onClick, showClientName }: { item: CalendarItem; onClic
       >
         <span aria-hidden className={cn("w-[3px] shrink-0 rounded-full", KIND_META[item.kind].dot)} />
         <span className="min-w-0 flex-1">
-          <span className="line-clamp-2 text-sm font-semibold leading-snug">{scheduleTitle(item)}</span>
+          <span className={cn("line-clamp-2 text-sm font-semibold leading-snug", item.status === "Cancelled" && "text-muted-foreground line-through")}>{title}</span>
           <span className="mt-0.5 block truncate text-xs text-muted-foreground">{meta}</span>
-          {item.subtitle && <span className="block truncate text-xs text-muted-foreground/80">{item.subtitle}</span>}
+          {!withPerson && item.subtitle && <span className="block truncate text-xs text-muted-foreground/80">{item.subtitle}</span>}
         </span>
         <ChevronRight className="h-4 w-4 shrink-0 self-center text-muted-foreground/60" />
       </button>

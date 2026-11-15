@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarPlus, ChevronRight } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { SessionActionsSheet, type ActionSession } from "@/components/schedule/session-actions-sheet";
@@ -12,15 +12,18 @@ import {
   AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaEmpty, AgendaFooter, AgendaHeader, AgendaLoading, AgendaToday, AgendaWeek,
   AgendaNext, AgendaNextRow, AgendaRow, FAMILY_ACCENT, hasEnded, NowLine, nowLineIndex, shortDay, startLabel, useNow,
 } from "@/components/schedule/agenda";
-import { weekDays } from "@/components/calendar/week-strip";
 import { cn } from "@/lib/utils";
 import { listenChannel } from "@/lib/realtime-channel";
+import { useCalendarPrefs, type HomeView } from "@/lib/calendar-prefs";
+import { dayTag, homeRange, isCurrentPeriod, monthGridDays, monthStart, periodLabel, shiftAnchor } from "@/lib/home-calendar";
 
-// Same switch as the Calendar page, so "Coaching | + Google" is one choice everywhere.
-const GOOGLE_PREF_KEY = "admin.calendar.includeGoogle";
-/** Days ahead the card looks, and how many of those rows it shows. */
-const AHEAD_DAYS = 7;
+/** How many "Coming up" rows the Day view shows. */
 const UPCOMING_ROWS = 4;
+const VIEWS: Array<{ id: HomeView; label: string }> = [
+  { id: "day", label: "Day" },
+  { id: "week", label: "Week" },
+  { id: "month", label: "Month" },
+];
 
 type Session = ActionSession & { client: { full_name: string | null } | null };
 
@@ -59,13 +62,6 @@ function joinDetail(...parts: Array<string | null | undefined | false>): string 
   const s = parts.filter(Boolean).join(" · ");
   return s || null;
 }
-function readGooglePref() {
-  try {
-    return window.localStorage.getItem(GOOGLE_PREF_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
 
 const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
   Completed: { label: "Done", cls: "bg-emerald-500/15 text-emerald-500" },
@@ -94,12 +90,16 @@ function byTime(a: Row, b: Row) {
 }
 
 /**
- * The coach's Home calendar card, in the same look as every other Home: a
- * date tile and "Calendar", this week's days (each opens the Calendar board
- * there), today on a time column with a Now line, then the next few bookings,
- * then "Book a session" and "Open calendar". Tap a session to move / mark done / cancel
- * it. Sits at the top of "Today" because it's the one thing on the dashboard
- * that's tied to the clock.
+ * The coach's Home calendar card, in the same look as every other Home, with
+ * three views (the choice remembered on their account, with Coaching /
+ * + Google, `useCalendarPrefs`):
+ *   Day: this week's days (each opens the Calendar there), today on a time
+ *     column with a Now line, then the next few bookings.
+ *   Week: the week's strip, then every booking that week, a line each:
+ *     day, time and who ("10 AM Nicolas Galli · 1:1 Training").
+ *   Month: the month's days with a dot per booking; tap a day for its list.
+ * Week and Month step back and forward. Then "Book a session" and "Open
+ * calendar". Tap a session to move / mark done / cancel it.
  */
 export function DashboardScheduleCard() {
   const qc = useQueryClient();
@@ -108,28 +108,47 @@ export function DashboardScheduleCard() {
   const [acting, setActing] = useState<Session | null>(null);
   const [booking, setBooking] = useState<string | null>(null);
   const [editing, setEditing] = useState<any>(null);
-  const [withGoogle, setWithGoogle] = useState<boolean>(() => (typeof window === "undefined" ? false : readGooglePref()));
+  const { prefs, setPrefs } = useCalendarPrefs();
+  const view: HomeView = prefs.homeView ?? "day";
+  const withGoogle = prefs.includeGoogle ?? false;
+  // A day in the week / month on screen, and the month view's tapped day.
+  const [anchor, setAnchor] = useState<string>(today);
+  const [picked, setPicked] = useState<string>(today);
   const { data: gcal } = useGoogleCalendarStatus();
   const googleOn = withGoogle && !!gcal?.connected;
   const nowMs = useNow();
 
-  // Today and the week ahead.
-  // From this Monday (the week strip shows the whole week) to a week ahead.
-  const weekStart = weekDays(today)[0];
-  const lastDay = addDaysISO(today, AHEAD_DAYS);
-  const windowStart = new Date(`${weekStart}T00:00:00`).toISOString();
-  const windowEnd = new Date(`${addDaysISO(lastDay, 1)}T00:00:00`).toISOString();
+  // What the view needs: Day = this Monday (its strip) to a week ahead (Coming up).
+  const range = useMemo(() => homeRange(view, anchor, today), [view, anchor, today]);
+  const windowStart = new Date(`${range.from}T00:00:00`).toISOString();
+  const windowEnd = new Date(`${addDaysISO(range.to, 1)}T00:00:00`).toISOString();
+  const lastDay = range.to;
+
+  const chooseView = (v: HomeView) => {
+    setPrefs({ homeView: v });
+    setAnchor(today);
+    setPicked(today);
+  };
+  const step = (dir: -1 | 1) => {
+    const next = shiftAnchor(view, anchor, dir);
+    setAnchor(next);
+    if (view === "month") setPicked(next.slice(0, 7) === today.slice(0, 7) ? today : monthStart(next));
+  };
+  const backToToday = () => {
+    setAnchor(today);
+    setPicked(today);
+  };
 
   const { data: sessions = [], isLoading } = useQuery<Session[]>({
-    queryKey: ["dash-schedule-sessions", today],
+    queryKey: ["dash-schedule-sessions", range.from, range.to],
     placeholderData: (prev) => prev,
     staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pt_sessions")
         .select("id, client_id, title, session_type, session_date, start_time, end_time, timezone, location, status, uses_credit, google_event_id, client:clients(full_name)")
-        .gte("session_date", weekStart)
-        .lte("session_date", lastDay)
+        .gte("session_date", range.from)
+        .lte("session_date", range.to)
         .neq("status", "Rescheduled")
         .order("session_date")
         .order("start_time");
@@ -139,7 +158,7 @@ export function DashboardScheduleCard() {
   });
 
   const { data: appts = [] } = useQuery<any[]>({
-    queryKey: ["dash-schedule-appts", today],
+    queryKey: ["dash-schedule-appts", range.from, range.to],
     placeholderData: (prev) => prev,
     staleTime: 60_000,
     queryFn: async () => {
@@ -154,29 +173,29 @@ export function DashboardScheduleCard() {
   });
 
   const { data: events = [] } = useQuery<any[]>({
-    queryKey: ["dash-schedule-events", today],
+    queryKey: ["dash-schedule-events", range.from, range.to],
     placeholderData: (prev) => prev,
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data } = await (supabase.from("events") as any)
         .select("id, name, event_date, start_time, end_time, status")
         .in("status", ["Active", "Draft"])
-        .gte("event_date", weekStart)
-        .lte("event_date", lastDay);
+        .gte("event_date", range.from)
+        .lte("event_date", range.to);
       return (data ?? []) as any[];
     },
   });
 
   const { data: googleEvents = [] } = useQuery<any[]>({
-    queryKey: ["dash-schedule-google", today],
+    queryKey: ["dash-schedule-google", range.from, range.to],
     placeholderData: (prev) => prev,
     enabled: googleOn,
     staleTime: 5 * 60_000,
     queryFn: () => listGoogleEventsRange({ data: { timeMin: windowStart, timeMax: windowEnd } }) as Promise<any[]>,
   });
 
-  // Nothing booked this week: still say when the next session is.
-  const nothingAhead = !isLoading && !sessions.some((s) => s.status === "Scheduled" && s.session_date > today);
+  // Nothing booked this week: still say when the next session is (Day view).
+  const nothingAhead = view === "day" && !isLoading && !sessions.some((s) => s.status === "Scheduled" && s.session_date > today);
   const { data: nextSession } = useQuery<Session | null>({
     queryKey: ["dash-schedule-next", lastDay],
     enabled: nothingAhead,
@@ -267,6 +286,12 @@ export function DashboardScheduleCard() {
 
   const todayRows = useMemo(() => rows.filter((r) => r.date === today).sort(byTime), [rows, today]);
   const nowIndex = useMemo(() => nowLineIndex(todayRows, nowMs), [todayRows, nowMs]);
+  const pickedRows = useMemo(() => rows.filter((r) => r.date === picked).sort(byTime), [rows, picked]);
+  // Week view: the week's bookings in order (Cancelled stays, crossed out).
+  const weekRows = useMemo(
+    () => (view === "week" ? rows.filter((r) => r.date >= range.from && r.date <= range.to).sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b)) : []),
+    [rows, view, range.from, range.to],
+  );
   // Coming up: the next few live bookings after today (the next one further out when the week is empty).
   const upcoming = useMemo(() => {
     const ahead = rows
@@ -277,15 +302,45 @@ export function DashboardScheduleCard() {
     return ahead;
   }, [rows, today, nextSession]);
 
-  const toggleGoogle = () => {
-    const next = !withGoogle;
-    setWithGoogle(next);
-    try {
-      window.localStorage.setItem(GOOGLE_PREF_KEY, next ? "1" : "0");
-    } catch {
-      /* keeps working for this visit */
-    }
-  };
+  const toggleGoogle = () => setPrefs({ includeGoogle: !withGoogle });
+
+  /** A day's bookings on the time column (Day: today with the Now line; Month: the tapped day). */
+  const dayList = (list: Row[], withNow: boolean, empty: string) =>
+    isLoading && !sessions.length ? (
+      <AgendaLoading />
+    ) : list.length === 0 ? (
+      <AgendaEmpty>{empty}</AgendaEmpty>
+    ) : (
+      <ol aria-label={withNow ? "Today" : dayTag(picked, today)}>
+        {list.map((r, i) => (
+          <li key={r.key} className="min-w-0">
+            {withNow && i === nowIndex && <NowLine />}
+            <RowOpen row={r} onSession={setActing} className={cn(AGENDA_ROW, hasEnded(r.startsAt, r.endsAt, nowMs) && "opacity-55")}>
+              <AgendaRow
+                time={r.startsAt ? startLabel(r.startsAt) : "All day"}
+                timed={!!r.startsAt}
+                accent={FAMILY_ACCENT[r.family]}
+                title={r.title}
+                quiet={r.family === "google"}
+                struck={r.status === "Cancelled"}
+                sub={joinDetail(r.startsAt ? compactTimeRange(r.startsAt, r.endsAt) : null, r.detail)}
+                trailing={
+                  r.status && STATUS_CHIP[r.status] ? (
+                    <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", STATUS_CHIP[r.status].cls)}>{STATUS_CHIP[r.status].label}</span>
+                  ) : null
+                }
+                chevron
+              />
+            </RowOpen>
+          </li>
+        ))}
+        {withNow && nowIndex === list.length && (
+          <li aria-hidden>
+            <NowLine />
+          </li>
+        )}
+      </ol>
+    );
 
   const { data: bookingClients = [] } = useQuery({
     queryKey: ["clients-min"],
@@ -313,68 +368,92 @@ export function DashboardScheduleCard() {
           ) : null
         }
       />
-      <AgendaWeek
-        today={today}
-        dots={(d) => dotsByDay.get(d) ?? []}
-        link={(d) => ({ to: "/admin/calendar", search: { tab: "board", date: d } })}
+      <ViewBar
+        view={view}
+        onView={chooseView}
+        label={view === "day" ? null : periodLabel(view, anchor, today)}
+        onStep={step}
+        onToday={isCurrentPeriod(view, anchor, today) ? null : backToToday}
       />
 
-      <AgendaToday>
-        {isLoading && !sessions.length ? (
-          <AgendaLoading />
-        ) : todayRows.length === 0 ? (
-          <AgendaEmpty>Nothing booked today.</AgendaEmpty>
-        ) : (
-          <ol aria-label="Today">
-            {todayRows.map((r, i) => (
+      {view === "day" && (
+        <>
+          <AgendaWeek
+            today={today}
+            dots={(d) => dotsByDay.get(d) ?? []}
+            link={(d) => ({ to: "/admin/calendar", search: { tab: "board", date: d } })}
+          />
+          <AgendaToday>{dayList(todayRows, true, "Nothing booked today.")}</AgendaToday>
+          <AgendaNext show={upcoming.length > 0}>
+            {upcoming.map((r, i) => (
               <li key={r.key} className="min-w-0">
-                {i === nowIndex && <NowLine />}
-                <RowOpen row={r} onSession={setActing} className={cn(AGENDA_ROW, hasEnded(r.startsAt, r.endsAt, nowMs) && "opacity-55")}>
-                  <AgendaRow
-                    time={r.startsAt ? startLabel(r.startsAt) : "All day"}
-                    timed={!!r.startsAt}
+                <RowOpen row={r} onSession={setActing} className={AGENDA_ROW}>
+                  <AgendaNextRow
+                    dayText={i === 0 || upcoming[i - 1].date !== r.date ? shortDay(r.date, today) : ""}
                     accent={FAMILY_ACCENT[r.family]}
+                    time={r.startsAt ? startLabel(r.startsAt) : null}
                     title={r.title}
                     quiet={r.family === "google"}
-                    struck={r.status === "Cancelled"}
-                    sub={joinDetail(r.startsAt ? compactTimeRange(r.startsAt, r.endsAt) : null, r.detail)}
-                    trailing={
-                      r.status && STATUS_CHIP[r.status] ? (
-                        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", STATUS_CHIP[r.status].cls)}>{STATUS_CHIP[r.status].label}</span>
-                      ) : null
-                    }
-                    chevron
                   />
                 </RowOpen>
               </li>
             ))}
-            {nowIndex === todayRows.length && (
-              <li aria-hidden>
-                <NowLine />
-              </li>
-            )}
-          </ol>
-        )}
-      </AgendaToday>
+          </AgendaNext>
+        </>
+      )}
 
-      <AgendaNext show={upcoming.length > 0}>
-        {upcoming.map((r, i) => (
-          <li key={r.key} className="min-w-0">
-            <RowOpen row={r} onSession={setActing} className={AGENDA_ROW}>
-              <AgendaNextRow
-                dayText={i === 0 || upcoming[i - 1].date !== r.date ? shortDay(r.date, today) : ""}
-                accent={FAMILY_ACCENT[r.family]}
-                time={r.startsAt ? startLabel(r.startsAt) : null}
-                title={r.title}
-                quiet={r.family === "google"}
-              />
-            </RowOpen>
-          </li>
-        ))}
-      </AgendaNext>
+      {view === "week" && (
+        <>
+          <AgendaWeek
+            today={today}
+            anchor={anchor}
+            dots={(d) => dotsByDay.get(d) ?? []}
+            link={(d) => ({ to: "/admin/calendar", search: { tab: "board", date: d } })}
+          />
+          <AgendaToday>
+            {isLoading && !sessions.length ? (
+              <AgendaLoading />
+            ) : weekRows.length === 0 ? (
+              <AgendaEmpty>Nothing booked this week.</AgendaEmpty>
+            ) : (
+              <ol aria-label="This week">
+                {weekRows.map((r, i) => {
+                  const firstOfDay = i === 0 || weekRows[i - 1].date !== r.date;
+                  return (
+                    <li key={r.key} className={cn("min-w-0", firstOfDay && i > 0 && "mt-1 border-t border-border/40 pt-1")}>
+                      <RowOpen row={r} onSession={setActing} className={cn(AGENDA_ROW, hasEnded(r.startsAt, r.endsAt, nowMs) && "opacity-55")}>
+                        <AgendaNextRow
+                          dayText={firstOfDay ? dayTag(r.date, today) : ""}
+                          accent={FAMILY_ACCENT[r.family]}
+                          time={r.startsAt ? startLabel(r.startsAt) : "All day"}
+                          title={<span className={cn(r.status === "Cancelled" && "text-muted-foreground line-through")}>{r.title}</span>}
+                          quiet={r.family === "google"}
+                          suffix={whatOf(r) ? <span className="font-normal text-muted-foreground"> · {whatOf(r)}</span> : null}
+                        />
+                      </RowOpen>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </AgendaToday>
+        </>
+      )}
+
+      {view === "month" && (
+        <>
+          <MiniMonth anchor={anchor} today={today} picked={picked} onPick={setPicked} dots={(d) => dotsByDay.get(d) ?? []} />
+          <AgendaToday>
+            <p className="px-0.5 pb-0.5 text-[11px] font-semibold text-muted-foreground">
+              {picked === today ? "Today" : new Date(`${picked}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+            </p>
+            {dayList(pickedRows, picked === today, "Nothing booked.")}
+          </AgendaToday>
+        </>
+      )}
 
       <AgendaFooter>
-        <button type="button" onClick={() => setBooking(today)} className={AGENDA_ACTION}>
+        <button type="button" onClick={() => setBooking(view === "month" && picked >= today ? picked : today)} className={AGENDA_ACTION}>
           <CalendarPlus className="h-4 w-4" /> Book a session
         </button>
         <Link to="/admin/calendar" search={{ tab: "board" } as any} className={AGENDA_LINK}>
@@ -433,5 +512,115 @@ function RowOpen({ row, onSession, className, children }: { row: Row; onSession:
     <a href={o.href} target="_blank" rel="noreferrer" className={className}>
       {children}
     </a>
+  );
+}
+
+/** What a booking is, for the Week view's one line ("1:1 Training"): the detail's first part. */
+function whatOf(r: Row): string | null {
+  if (r.family === "google") return null;
+  return r.detail ? r.detail.split(" · ")[0] : null;
+}
+
+/**
+ * Day · Week · Month (neutral, like every in-card switch: red is the card's
+ * one action), and for Week / Month the period with ‹ › and Today.
+ */
+function ViewBar({
+  view, onView, label, onStep, onToday,
+}: {
+  view: HomeView;
+  onView: (v: HomeView) => void;
+  label: string | null;
+  onStep: (dir: -1 | 1) => void;
+  onToday: (() => void) | null;
+}) {
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <div className="inline-flex h-8 shrink-0 rounded-full border border-border bg-background/60 p-0.5 text-xs font-semibold" role="radiogroup" aria-label="Calendar view">
+        {VIEWS.map((v) => (
+          <button
+            key={v.id}
+            type="button"
+            role="radio"
+            aria-checked={view === v.id}
+            onClick={() => onView(v.id)}
+            className={cn("rounded-full px-3", view === v.id ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground")}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
+      {label && (
+        <div className="ml-auto flex min-w-0 items-center gap-0.5">
+          {onToday && (
+            <button type="button" onClick={onToday} className="mr-1 shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground">
+              Today
+            </button>
+          )}
+          <button type="button" onClick={() => onStep(-1)} aria-label="Previous" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary/60 hover:text-foreground">
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="min-w-0 truncate text-center text-xs font-semibold tabular-nums">{label}</span>
+          <button type="button" onClick={() => onStep(1)} aria-label="Next" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary/60 hover:text-foreground">
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The month as whole weeks: the date, today filled, the tapped day ringed, a dot per booking (up to 3). */
+function MiniMonth({
+  anchor, today, picked, onPick, dots,
+}: {
+  anchor: string;
+  today: string;
+  picked: string;
+  onPick: (d: string) => void;
+  dots: (d: string) => string[];
+}) {
+  const days = monthGridDays(anchor);
+  const month = anchor.slice(0, 7);
+  return (
+    <div className="mt-2.5" role="group" aria-label="Month">
+      <div className="grid grid-cols-7 pb-0.5 text-center text-[11px] font-medium text-muted-foreground" aria-hidden>
+        {days.slice(0, 7).map((d) => (
+          <span key={d}>{new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: "narrow" })}</span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-y-0.5">
+        {days.map((d) => {
+          const inMonth = d.slice(0, 7) === month;
+          const isToday = d === today;
+          const isPicked = d === picked;
+          const marks = dots(d);
+          return (
+            <button
+              key={d}
+              type="button"
+              onClick={() => onPick(d)}
+              aria-pressed={isPicked}
+              aria-label={`${new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}${isToday ? " (today)" : ""}${marks.length ? `, ${marks.length} booked` : ""}`}
+              className={cn("flex min-h-[44px] flex-col items-center justify-start gap-0.5 rounded-lg pt-0.5 transition active:bg-secondary/50", !inMonth && "opacity-40")}
+            >
+              <span
+                className={cn(
+                  "grid h-7 w-7 place-items-center rounded-full text-[13px] font-semibold tabular-nums",
+                  isToday ? "bg-foreground text-background" : isPicked ? "ring-1 ring-foreground/60" : d < today ? "text-muted-foreground" : "text-foreground",
+                )}
+              >
+                {Number(d.slice(8))}
+              </span>
+              <span className="flex h-1.5 items-center gap-0.5" aria-hidden>
+                {marks.slice(0, 3).map((cls, i) => (
+                  <span key={i} className={cn("h-1.5 w-1.5 rounded-full", cls, d < today && "opacity-50")} />
+                ))}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

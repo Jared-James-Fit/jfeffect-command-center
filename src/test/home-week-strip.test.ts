@@ -77,7 +77,7 @@ describe("every Home leads with its schedule", () => {
     expect(src).toContain("<PtSessionDialog");
     expect(src).toContain("Book a session");
     expect(src).toContain("Open calendar");
-    expect(src).toContain("GOOGLE_PREF_KEY");
+    expect(src).toContain("const toggleGoogle = () => setPrefs({ includeGoogle: !withGoogle });");
     expect(src).toContain('table: "pt_sessions"');
   });
 });
