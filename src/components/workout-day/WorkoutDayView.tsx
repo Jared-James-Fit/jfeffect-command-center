@@ -4514,8 +4514,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       )}
       {/* Under the prescription, what it's read against, in one quiet strip:
           Last time on the left (it IS the History button: icon, chevron, press
-          state) and today's Suggested on the right (a tap explains it; the
-          weight itself goes in the set boxes). With suggestions off, the Suggest
+          state) and today's Suggested on the right (one tap fills every open
+          set's weight as a draft; its ⓘ explains it). With suggestions off, the Suggest
           switch takes Suggested's place; a finished card says "Next time" there. */}
       {(exerciseId || name) && (() => {
         const done = openSetCount === 0 && workedToday;
@@ -4524,7 +4524,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           : showSuggestionCard && loadModel && loadPlan
             ? done
               ? <LoadSuggestionsDone next={loadHint} plan={loadPlan} />
-              : <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} picks={loadPicks} showPlan={!rxSaysPlan} />
+              : <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} picks={loadPicks} showPlan={!rxSaysPlan} onApply={!readonly && clientId && openSetCount > 0 ? fillLoadOnOpenSets : null} />
             : null;
         return (
           <>

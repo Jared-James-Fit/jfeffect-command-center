@@ -41,13 +41,14 @@ describe("suggested: a weight to choose from only where the lifter chooses by fe
     expect(picks(h, {}, false)).toBeNull();
     expect(picks(h, {}, true, false)).toBeNull();
   });
-  it("the card shows it (a range to pick within, said in its explanation), never writes a set, and a coach's load never reaches it", () => {
+  it("one tap fills the open sets as drafts (a range fills its middle, no weight buttons), and a coach's load never reaches it", () => {
     const card = read("src/components/workout-day/load-suggestion-card.tsx");
-    expect(card).not.toContain('data-testid="load-apply"');
+    // one tap fills the open sets (a range fills its middle); never a row of weight buttons
+    expect(card).toContain('data-testid="load-apply"');
     expect(card).not.toContain('data-testid="load-pick"');
     expect(card).toContain("Pick within");
     const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
-    expect(wdv).toContain("picks={loadPicks} showPlan={!rxSaysPlan}");
+    expect(wdv).toContain("picks={loadPicks} showPlan={!rxSaysPlan} onApply={!readonly && clientId && openSetCount > 0 ? fillLoadOnOpenSets : null}");
     expect(wdv).toContain("mainLift: rangeLift(family, name, exercise?.equipment), effortPrescribed: rpeTarget != null || rirTarget != null");
     expect(wdv).toContain("firstOfLift: firstHeavySet, loggedHere: workedToday,");
     // the warm-up card's "use for all sets" still writes drafts: completed_at stays null, logged sets are skipped

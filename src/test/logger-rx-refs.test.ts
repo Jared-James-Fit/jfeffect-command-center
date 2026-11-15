@@ -40,17 +40,29 @@ describe("the card's top: name, role, the prescription, then Last / Suggested", 
     expect(wdv.split("<PreviousLiftChip").length).toBe(2);
   });
 
-  it("Suggested is read, never a picker: a tap opens how it's worked out, nothing fills the sets", () => {
-    const html = render({});
-    expect(html).toContain(">Suggested<");
-    expect(html).toContain('data-testid="load-suggestion"');
-    expect(html).toContain("How it&#x27;s worked out");
-    expect(html).toContain('<span data-testid="load-target">250 lb</span>');
-    expect(html).not.toContain("load-apply");
+  it("one tap on Suggested fills the open sets (no weight buttons); its ⓘ is its own button", () => {
+    const html = render({ onApply: async () => 1 });
+    expect(html).toContain("Tap to fill your open sets");
+    expect(html).toContain("border-blue-500/40 bg-blue-500/10");
+    expect(html).toContain('data-testid="load-apply"');
+    expect(html).toContain("Fill your open sets with 250 lb");
+    expect(html).toContain('data-testid="load-suggestion-info"');
+    expect(html).toMatch(/data-testid="load-target">250[\s\u00a0]lb<\/span>/);
     expect(html).not.toContain("load-pick");
-    const ranged = render({ picks: { low: 240, high: 260, loads: [240, 250, 260] } });
+    // a range fills its middle: no row of weights to choose from
+    const ranged = render({ onApply: async () => 1, picks: { low: 240, high: 260, loads: [240, 250, 260] } });
     expect(ranged).toContain("240–260 lb");
     expect(ranged).not.toContain("load-pick");
+    // nothing to fill (read-only, every set logged): the whole half opens the explanation
+    const readOnly = render({});
+    expect(readOnly).not.toContain("load-apply");
+    expect(readOnly).toContain("How it&#x27;s worked out");
+    expect(wdv).toContain("onApply={!readonly && clientId && openSetCount > 0 ? fillLoadOnOpenSets : null}");
+  });
+
+  it("an empty weight box is blue: where the weight goes", () => {
+    const input = readFileSync("src/components/workout-day/weight-value-input.tsx", "utf8");
+    expect(input).toContain('? "border-blue-500/40 bg-blue-500/10 text-muted-foreground"');
   });
 
   it("says the reps and RPE only when the prescription above doesn't", () => {
