@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
-const { LoadSuggestionsChip, LoadSuggestionsNudge, LoadSuggestionsDone, nextTimeWhy } = await import("@/components/workout-day/load-suggestion-card");
+const { LoadSuggestionsChip, LoadSuggestionsNudge, LoadSuggestionsDone, LoadSuggestionsDoneNote, nextTimeWhy } = await import("@/components/workout-day/load-suggestion-card");
 const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
 
 describe("suggestions: a switch on every exercise card, one state for the workout, off by default", () => {
@@ -16,31 +16,34 @@ describe("suggestions: a switch on every exercise card, one state for the workou
   });
 
   it("lives in each card that can suggest, not at the top of the workout", () => {
-    // the chip turns them on; once on, the line's ⓘ and the card's ⋯ turn them off
-    expect(wdv).toContain("{canSuggest && !readonly && !showSuggestionCard && <LoadSuggestionsChip highlight={!!suggestNudge} />}");
+    // the chip turns them on (in Suggested's half of the strip); once on, Suggested's explanation and the card's ⋯ turn them off
+    expect(wdv).toContain("const right = canSuggest && !readonly && !showSuggestionCard");
+    expect(wdv).toContain("<LoadSuggestionsChip highlight={!!suggestNudge} />");
     expect(wdv).toContain('{showSuggestionCard ? "Turn off weight suggestions" : "Suggest weights"}');
     const card = readFileSync("src/components/workout-day/load-suggestion-card.tsx", "utf8");
     expect(card).toContain('data-testid="load-suggestions-off"');
     expect(card).toContain('data-testid="load-range"');
     expect(wdv).not.toContain("LoadSuggestionsToggle");
-    expect(wdv).toContain("{showSuggestionCard && loadModel && loadPlan && (");
+    expect(wdv).toContain(": showSuggestionCard && loadModel && loadPlan");
     expect(wdv).not.toContain("suggested={!readonly && !isConfirmed && isNextSet");
   });
 
   it("a finished card shows how today ran instead of a stale range", () => {
-    expect(wdv).toContain("openSetCount === 0 && workedToday");
-    expect(renderToStaticMarkup(createElement(LoadSuggestionsDone, { own: 1.034 }))).toContain("3% above your usual");
-    expect(renderToStaticMarkup(createElement(LoadSuggestionsDone, { own: 0.995 }))).toContain("right on your usual");
+    expect(wdv).toContain("const done = openSetCount === 0 && workedToday;");
+    expect(renderToStaticMarkup(createElement(LoadSuggestionsDoneNote, { own: 1.034 }))).toContain("3% above your usual");
+    expect(renderToStaticMarkup(createElement(LoadSuggestionsDoneNote, { own: 0.995 }))).toContain("right on your usual");
     // Never blank while Suggest is on: done, plus where to start next time.
-    const bare = renderToStaticMarkup(createElement(LoadSuggestionsDone, { own: null }));
+    const bare = renderToStaticMarkup(createElement(LoadSuggestionsDoneNote, { own: null }));
     expect(bare).toContain("All sets in");
     expect(bare).not.toContain("your usual");
     const next = renderToStaticMarkup(createElement(LoadSuggestionsDone, {
       own: null, next: { low: 47.5, high: 52.5, target: 50, unit: "lb" }, plan: { reps: 15, rpe: 9.5 },
     }));
-    expect(next).toMatch(/Next time: .*50(<!-- -->)? (<!-- -->)?lb/);
-    expect(next).toMatch(/15(<!-- -->)? @ RPE (<!-- -->)?9.5/);
-    expect(wdv).toContain("<LoadSuggestionsDone own={dayRead?.own ?? null} next={loadHint} plan={loadPlan} today={todayRead} />");
+    expect(next).toContain(">Next time<");
+    expect(next).toMatch(/50(<!-- -->)? (<!-- -->)?lb/);
+    expect(next).toMatch(/15(<!-- -->)? @ (<!-- -->)?9.5/);
+    expect(wdv).toContain("<LoadSuggestionsDone next={loadHint} plan={loadPlan} />");
+    expect(wdv).toContain("<LoadSuggestionsDoneNote own={dayRead?.own ?? null} next={loadHint} plan={loadPlan} today={todayRead} />");
   });
 
   it("says why next time's number moved: the change and how the sets felt vs the plan", () => {
@@ -51,7 +54,7 @@ describe("suggestions: a switch on every exercise card, one state for the workou
     expect(nextTimeWhy(next(230), { load: 235, rpe: 6 }, plan)).toBe("−5 lb · felt harder than planned (RPE 6 vs 5)");
     expect(nextTimeWhy(next(235), { load: 235, rpe: 4.33 }, plan)).toBe("Same weight · felt a bit easier than planned (RPE 4.5 vs 5)");
     expect(nextTimeWhy(next(240), { load: 235, rpe: null }, plan)).toBe("+5 lb");
-    const html = renderToStaticMarkup(createElement(LoadSuggestionsDone, { own: null, next: next(240), plan, today: { load: 235, rpe: 4 } }));
+    const html = renderToStaticMarkup(createElement(LoadSuggestionsDoneNote, { own: null, next: next(240), plan, today: { load: 235, rpe: 4 } }));
     expect(html).toContain('data-testid="load-next-why"');
   });
 

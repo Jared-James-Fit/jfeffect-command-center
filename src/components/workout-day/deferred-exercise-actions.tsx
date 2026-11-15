@@ -66,6 +66,8 @@ export function DeferredExerciseHistorySheet(props: {
   exerciseName: string;
   displayUnit?: "kg" | "lb";
   currentDayIndex?: number | null;
+  /** The workout it's opened from: left out of the list, its split marked. */
+  currentDayId?: string | null;
   /** The viewer may fix a past day's sets in the sheet. */
   editable?: boolean;
   onClose: () => void;
@@ -91,6 +93,8 @@ export function DeferredExerciseHistoryButton({
   exerciseName: string;
   displayUnit?: "kg" | "lb";
   currentDayIndex?: number | null;
+  /** The workout it's opened from: left out of the list, its split marked. */
+  currentDayId?: string | null;
   className?: string;
   editable?: boolean;
 }) {

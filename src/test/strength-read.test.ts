@@ -73,11 +73,12 @@ describe("the screens read strength the same way", () => {
 });
 
 describe("history reads like a coach's log", () => {
-  it("a day is one line of shorthand and opens to its sets; the date leads", () => {
+  it("a session leads with its date, then its workout, then what was lifted, and opens to its sets", () => {
     const sheet = read("src/components/exercise-history-sheet.tsx");
     expect(sheet).toContain("data-history-day-summary");
-    expect(sheet).toContain("{openDays.has(dayKey) && (");
-    expect(sheet).toContain('format(d, "EEE, MMM d, yyyy")');
+    expect(sheet).toContain("const isOpen = openDays.has(dayKey);");
+    expect(sheet).toContain('"EEE, MMM d" : "EEE, MMM d, yyyy"');
+    expect(sheet.indexOf("data-history-session-workout")).toBeLessThan(sheet.indexOf("groups.slice(0, 3)"));
   });
   it("the suggestion's ⓘ is two lines with the working-out folded", () => {
     const card = read("src/components/workout-day/load-suggestion-card.tsx");

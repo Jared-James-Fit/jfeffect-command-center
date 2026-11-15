@@ -85,7 +85,8 @@ import { planRestore, setPayload, snapshotOf, type CardSet, type CardSnapshot } 
 import { matchPreviousWeekSlots, type SlotRow } from "@/lib/previous-week-slot";
 import { LastWeekSwapChip, type LastWeekSwap } from "@/components/workout-day/last-week-swap";
 import { useCardHistory, type CardHistoryAction } from "@/components/workout-day/use-card-history";
-import { LoadGuide, LoadSuggestionCard, LoadSuggestionsChip, LoadSuggestionsDone, LoadSuggestionsNudge, REF_TEXT } from "@/components/workout-day/load-suggestion-card";
+import { LoadSuggestionCard, LoadSuggestionsChip, LoadSuggestionsDone, LoadSuggestionsDoneNote, LoadSuggestionsNudge, REF_BAR, REF_CELL, REF_DIVIDER, REF_LABEL, REF_TAP, REF_VALUE } from "@/components/workout-day/load-suggestion-card";
+import { lastTimeLoad } from "@/lib/workouts/exercise-history";
 import { effortRange, loggedRpe, setGuidance } from "@/lib/workouts/plan-vs-actual";
 import { dismissSuggestionsNudgeForNow, suggestionsNudgeDismissed, useShowLoadSuggestions, LOAD_SUGGESTIONS_TRIED_KEY } from "@/lib/load-suggestion-visibility";
 import { TypedValueInput } from "@/components/workout-day/typed-value-input";
@@ -108,7 +109,6 @@ import { setPrItems } from "@/lib/set-pr-items";
 import { SetVideoCell, useRowHasSetVideos } from "@/components/workout-day/set-video-cell";
 import { setVideoLabel } from "@/lib/set-videos/label";
 import {
-  DeferredExerciseHistoryButton,
   DeferredQuickSwapSheet,
   DeferredExerciseHistorySheet,
   useIdleActionPreload,
@@ -119,7 +119,6 @@ import { WorkoutAddExercise } from "@/components/workout-day/workout-add-exercis
 import { addExerciseToWorkout, listRemovedExercises, reorderWorkoutExercises, removeExerciseFromWorkout, restoreExerciseToWorkout } from "@/lib/quick-swap.functions";
 import { convertWeight } from "@/lib/progress-metrics";
 import {
-  formatPreviousLiftLoad,
   selectPreviousLifts,
   formatPreviousTimed,
   matchHistoryLogs,
@@ -170,7 +169,7 @@ import { formatClockSeconds, formatDuration } from "@/lib/duration";
 import {
   getTimerTarget, setTimerTarget, getRowInputs, setRowInputs, getVelocityDefault, setVelocityDefault, type RowInputOverrides,
 } from "@/lib/log-as-override";
-import { Timer, Heart } from "lucide-react";
+import { Timer, Heart, History as HistoryIcon, ChevronRight } from "lucide-react";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
 import {
   summarizeCompleteness,
@@ -3349,50 +3348,13 @@ function DayCoachNotes({ day }: { day: { notes?: string | null; notes_client_vis
   );
 }
 
-/** "today", "yesterday", "4d", else "Nov 3": the chip shares its row with the Suggest switch. */
+/** When "Last time" was, short enough to sit beside its label on a phone: "today", "yesterday", "3d", else "Nov 3". */
 function lastTimeWhen(occurredAt: string | null): string {
   if (!occurredAt) return "";
   const d = new Date(occurredAt);
   const days = Math.round((Date.now() - d.getTime()) / 86400000);
-  return days <= 0 ? "today" : days === 1 ? "yesterday" : days < 14 ? `${days}d` : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return days <= 0 ? "today" : days === 1 ? "yesterday" : days < 7 ? `${days}d` : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
-
-/**
- * "Last time" for an exercise done for time: a cardio session's time,
- * calories and effort ("20:30 · 162 kcal · RPE 5.5"), a hold's longest set.
- * The same chip as a lift's, and it opens the same History.
- */
-function PreviousTimedChip({ data, className, onOpen, fallback }: {
-  data: PreviousLift;
-  className?: string;
-  onOpen?: () => void;
-  fallback?: ReactNode;
-}) {
-  const text = data.timed ? formatPreviousTimed(data.timed, formatClockSeconds, (m) => formatDistance(m, readDistanceUnit())) : "";
-  if (!text) return <>{fallback}</>;
-  const when = lastTimeWhen(data.occurredAt);
-  const body = <>Last: <span className="tabular-nums">{text}</span></>;
-  if (!onOpen) {
-    return <span className={cn(LAST_TIME_TEXT, className)} data-last-time-timed={data.timed?.kind}>{body}</span>;
-  }
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      data-testid="last-time-history"
-      data-last-time-timed={data.timed?.kind}
-      aria-label={`Last time: ${text}${when ? `, ${when}` : ""}. Open history`}
-      title={`Your last session of this exercise${when ? `, ${when}` : ""}. Tap for its history`}
-      className={cn(LAST_TIME_TEXT, LAST_TIME_TAP, className)}
-    >
-      <span className="truncate">{body}</span>
-    </button>
-  );
-}
-
-/** "Last: 425 × 4 @ 6", left of Suggested under the prescription; the whole of it opens History & progress. */
-const LAST_TIME_TEXT = cn(REF_TEXT, "min-w-0 max-w-full truncate text-muted-foreground");
-const LAST_TIME_TAP = "-my-1 inline-flex min-h-9 items-center rounded-md text-left transition-colors hover:text-foreground active:bg-muted";
 
 /** " @ 7" from a logged RPE, " · 2 RIR" from a logged RIR, else nothing. */
 function lastTimeEffort(data: { rpe?: string | number | null; rir?: string | number | null }): string {
@@ -3404,56 +3366,57 @@ function lastTimeEffort(data: { rpe?: string | number | null; rir?: string | num
   return "";
 }
 
-/**
- * Compact "Last time" chip — shows the top set (heaviest × reps) the client
- * logged the last time they trained this exercise on a *different* day.
- * Intentionally small so it doesn't outshine the coach's prescribed load,
- * but explicit ("Last time" label + date) so the client can't mistake it
- * for today's target.
- */
-function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = null }: {
-  data: PreviousLift | null;
-  displayUnit: "kg" | "lb";
-  className?: string;
-  /** Tapping it opens this exercise's History (it is the History button). */
-  onOpen?: () => void;
-  /** Shown instead when there is no last time to show. */
-  fallback?: ReactNode;
-}) {
-  if (!data) return <>{fallback}</>;
-  if (data.timed) return <PreviousTimedChip data={data} className={className} onOpen={onOpen} fallback={fallback} />;
-  // A 0-load logged set is a bodyweight set — surface it as "BW × reps".
-  // Assisted sets keep their load type so "50 lb" can never be mistaken for
-  // weight the athlete actually lifted.
-  const rawLoad = formatPreviousLiftLoad(data, displayUnit);
+/** What "Last time" says: "55 lb × 12 @ 8" (with its unit), "Bodyweight × 12", "40 lb assist × 8", a timed session's time. */
+function lastTimeText(data: PreviousLift, displayUnit: "kg" | "lb"): string | null {
+  if (data.timed) return formatPreviousTimed(data.timed, formatClockSeconds, (m) => formatDistance(m, readDistanceUnit())) || null;
+  const load = lastTimeLoad(data, displayUnit);
   const loadStr =
     data.loadType === "bodyweight"
       ? "Bodyweight"
       : data.loadType === "assisted"
-        ? (rawLoad ? `${rawLoad} assistance` : "")
-        : (rawLoad ?? (data.enteredValue === 0 || data.normalizedLb === 0 ? "BW" : ""));
+        ? (load ? `${load} assist` : "Assisted")
+        : (load ?? (data.enteredValue === 0 || data.normalizedLb === 0 ? "Bodyweight" : ""));
   const repsStr = data.reps != null ? ` × ${data.reps}` : "";
-  if (!loadStr && !repsStr) return <>{fallback}</>;
-  // How hard it was matters as much as the weight in an RPE program: 192.5 × 4 @ 7.
-  const effortStr = lastTimeEffort(data);
-  const when = lastTimeWhen(data.occurredAt);
-  // The card says its unit once, top right: "Last: 425 × 4 @ 6" (a load in
-  // another unit, or assistance, keeps its words).
-  const shownLoad = data.loadType === "external" || !data.loadType ? loadStr.replace(new RegExp(` ${displayUnit}$`), "") : loadStr;
-  const body = <>Last: <span className="tabular-nums">{shownLoad}{repsStr}{effortStr}</span></>;
-  if (!onOpen) {
-    return <span className={cn(LAST_TIME_TEXT, className)} title={`Your top set the last time you trained this exercise${when ? `, ${when}` : ""}`}>{body}</span>;
-  }
+  if (!loadStr && !repsStr) return null;
+  return `${loadStr}${repsStr}${lastTimeEffort(data)}`;
+}
+
+/**
+ * The left half of the card's reference row: "Last time", the top set of the
+ * last session of this exercise with its unit ("55 lb × 12 @ 8"), and the
+ * button into its history: a history icon, a chevron, a press state. With
+ * nothing logged yet it still opens the history ("None yet").
+ */
+function PreviousLiftChip({ data, displayUnit, onOpen }: {
+  data: PreviousLift | null;
+  displayUnit: "kg" | "lb";
+  /** Tapping it opens this exercise's History (it is the History button). */
+  onOpen?: () => void;
+}) {
+  const text = data ? lastTimeText(data, displayUnit) : null;
+  const when = data && text ? lastTimeWhen(data.occurredAt) : "";
+  const inner = (
+    <>
+      <span className={REF_LABEL}>
+        <HistoryIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <span className="truncate">Last time{when ? ` · ${when}` : ""}</span>
+        {onOpen && <ChevronRight className="-mr-1 ml-auto h-4 w-4 shrink-0" aria-hidden="true" />}
+      </span>
+      {text
+        ? <span className={REF_VALUE} data-last-time-timed={data?.timed?.kind}>{text}</span>
+        : <span className="text-[13px] leading-snug text-muted-foreground">None yet</span>}
+    </>
+  );
+  if (!onOpen) return <div className={REF_CELL}>{inner}</div>;
   return (
     <button
       type="button"
       onClick={onOpen}
       data-testid="last-time-history"
-      aria-label={`Last time: ${loadStr}${repsStr}${effortStr}${when ? `, ${when}` : ""}. Open history and progress`}
-      title={`Your top set the last time you trained this exercise${when ? `, ${when}` : ""}. Tap for history and progress`}
-      className={cn(LAST_TIME_TEXT, LAST_TIME_TAP, className)}
+      aria-label={text ? `Last time: ${text}${when ? `, ${when}` : ""}. Open history and progress` : "Last time: none yet. Open history and progress"}
+      className={cn(REF_CELL, REF_TAP)}
     >
-      <span className="truncate">{body}</span>
+      {inner}
     </button>
   );
 }
@@ -4545,49 +4508,41 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         })}
         {row.tempo && <span className="ml-2 text-sm font-normal tracking-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
-      {/* How the suggestion under it is worked out, while there's one to explain. */}
-      {showSuggestionCard && loadModel && loadPlan && !(openSetCount === 0 && workedToday) && (
-        <LoadGuide hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} picks={loadPicks} canApply={!readonly && !!clientId && openSetCount > 0} />
-      )}
       </div>
       {pctLine && (
         <p className="mt-0.5 text-xs text-muted-foreground" data-pct-line>{pctLine}</p>
       )}
-      {/* Under the prescription, as what it's read against: "Last: 425 × 4 @ 6"
-          on the left (it IS the History button; with nothing to show, a plain
-          History chip stands in) and "Suggested: 410–430 lb" on the right (a tap
-          puts it in the open sets), one line when they fit and two when they
-          don't. With suggestions off, the Suggest switch takes Suggested's place;
-          a finished card says "Next time" there. */}
-      {(exerciseId || name) && (
-        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-0.5" data-rx-refs>
-          <PreviousLiftChip
-            data={previousLift}
-            displayUnit={activeUnit}
-            onOpen={clientId ? () => setHistoryOpen(true) : undefined}
-            fallback={clientId ? (
-              <DeferredExerciseHistoryButton
-                clientId={clientId}
-                exerciseId={exerciseId}
-                exerciseName={name}
+      {/* Under the prescription, what it's read against, in one quiet strip:
+          Last time on the left (it IS the History button: icon, chevron, press
+          state) and today's Suggested on the right (a tap explains it; the
+          weight itself goes in the set boxes). With suggestions off, the Suggest
+          switch takes Suggested's place; a finished card says "Next time" there. */}
+      {(exerciseId || name) && (() => {
+        const done = openSetCount === 0 && workedToday;
+        const right = canSuggest && !readonly && !showSuggestionCard
+          ? <div className={cn(REF_CELL, "items-start")}><LoadSuggestionsChip highlight={!!suggestNudge} /></div>
+          : showSuggestionCard && loadModel && loadPlan
+            ? done
+              ? <LoadSuggestionsDone next={loadHint} plan={loadPlan} />
+              : <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} picks={loadPicks} showPlan={!rxSaysPlan} />
+            : null;
+        return (
+          <>
+            <div className={REF_BAR} data-rx-refs>
+              <PreviousLiftChip
+                data={previousLift}
                 displayUnit={activeUnit}
-                currentDayIndex={dayIndex}
-                editable={!readonly}
-                className="w-auto h-8 rounded-full px-2.5 text-xs"
+                onOpen={clientId ? () => setHistoryOpen(true) : undefined}
               />
-            ) : null}
-          />
-          {canSuggest && !readonly && !showSuggestionCard && <LoadSuggestionsChip highlight={!!suggestNudge} />}
-          {/* Off by default; the Suggest chip on any card turns it on for every
-              card. Live: it recalculates on every set saved (this card's sets,
-              then the same lift's other cards — see dayRead). */}
-          {showSuggestionCard && loadModel && loadPlan && (
-            openSetCount === 0 && workedToday
-              ? <LoadSuggestionsDone own={dayRead?.own ?? null} next={loadHint} plan={loadPlan} today={todayRead} />
-              : <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} picks={loadPicks} onApply={!readonly && clientId && openSetCount > 0 ? fillLoadOnOpenSets : null} showPlan={!rxSaysPlan} />
-          )}
-        </div>
-      )}
+              {right && <span aria-hidden="true" className={REF_DIVIDER} />}
+              {right}
+            </div>
+            {showSuggestionCard && loadModel && loadPlan && done && (
+              <LoadSuggestionsDoneNote own={dayRead?.own ?? null} next={loadHint} plan={loadPlan} today={todayRead} />
+            )}
+          </>
+        );
+      })()}
       {historyOpen && clientId && (
         <DeferredExerciseHistorySheet
           clientId={clientId}
@@ -4595,6 +4550,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           exerciseName={name}
           displayUnit={activeUnit}
           currentDayIndex={dayIndex}
+          currentDayId={dayId}
           // Fix a past day's sets right here, without leaving the workout.
           editable={!readonly}
           onClose={() => setHistoryOpen(false)}

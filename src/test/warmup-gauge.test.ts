@@ -43,12 +43,13 @@ describe("suggestion card with the warm-up row", () => {
     const html = render({ suggested: null }, { ...model, status: "calibrating", historySessions: 0 }, null);
     expect(html).toContain('data-testid="load-suggestion-pending"');
     expect(html).toContain("No logs of this lift yet");
-    expect(html).toContain("log your last warm-up below and it sets today&#x27;s weight.");
+    // the cell says when a number comes; the why is one tap away
+    expect(html).toContain("After your warm-up");
   });
   it("no warm-up offered: the first logged set unlocks live suggestions", () => {
     const html = render(null, { ...model, status: "calibrating", historySessions: 3 }, null);
     expect(html).toContain("No recent logs of this lift with an RPE");
-    expect(html).toContain("log your first set with an RPE and the rest get a live suggestion.");
+    expect(html).toContain("After your first set");
   });
   it("an early estimate says so", () => {
     expect(render(null, { ...model, early: true, historySessions: 1 })).toContain("Early estimate");

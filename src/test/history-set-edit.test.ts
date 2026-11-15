@@ -57,7 +57,8 @@ describe("the sheet edits in place, from inside the workout", () => {
   const view = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
 
   it("each day has Edit, and Save writes only changed sets, checked by RLS", () => {
-    expect(sheet).toContain("{editable && editingKey !== dayKey && (");
+    // Edit sets sits inside an opened session, under its sets
+    expect(sheet).toContain("{editable && !editing && (");
     expect(sheet).toContain('await sb.from("pl_row_results").update(w.patch).eq("id", w.id).select("id");');
     expect(sheet).toContain("if (!data?.length) throw new Error(\"You can't change this set\");");
     expect(sheet).toContain("HISTORY_EDIT_QUERY_KEYS.map((queryKey) => queryClient.invalidateQueries({ queryKey: [...queryKey] }))");
@@ -69,6 +70,7 @@ describe("the sheet edits in place, from inside the workout", () => {
   });
 
   it("the workout's History opens editable unless the card is read-only", () => {
-    expect(view.match(/editable=\{!readonly\}/g)?.length).toBe(2);
+    // one History sheet per card now (Last time is its only way in on the card)
+    expect(view.match(/editable=\{!readonly\}/g)?.length).toBe(1);
   });
 });

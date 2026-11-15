@@ -104,9 +104,9 @@ describe("the chip: small, in the badge row, last week's sets on tap", () => {
 
 describe("card buttons: fewer, clearer", () => {
   const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
-  it("Last time is the History button; a separate History chip only stands in when there's no last time", () => {
+  it("Last time is the History button, with nothing logged yet too (\"None yet\" opens it the same way)", () => {
     expect(wdv).toContain("onOpen={clientId ? () => setHistoryOpen(true) : undefined}");
-    expect(wdv).toContain("fallback={clientId ? (");
+    expect(wdv).toContain('"Last time: none yet. Open history and progress"');
     expect(wdv).toContain("<DeferredExerciseHistorySheet");
   });
 });

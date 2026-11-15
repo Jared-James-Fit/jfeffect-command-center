@@ -57,8 +57,8 @@ describe("phone-first logger card", () => {
   });
   it("never shows a second warm-up prompt above the table (the W row owns it)", () => {
     const card = readFileSync("src/components/workout-day/load-suggestion-card.tsx", "utf8");
-    // it points at the W row ("log your last warm-up below") instead of a second prompt
-    expect(card).toContain('"log your last warm-up below and it sets today\'s weight."');
+    // it points at the W row (Suggested says "After your warm-up") instead of a second prompt
+    expect(card).toContain('"After your warm-up"');
     expect(card).not.toContain("Log your last warm-up for a first suggestion");
   });
 });

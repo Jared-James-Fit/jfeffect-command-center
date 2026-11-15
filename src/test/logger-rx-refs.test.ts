@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-const { LoadGuide, LoadSuggestionCard, LoadSuggestionsDone, REF_TEXT } = await import("@/components/workout-day/load-suggestion-card");
+const { LoadSuggestionCard, LoadSuggestionsDone, LoadSuggestionsDoneNote, REF_BAR, REF_CELL } = await import("@/components/workout-day/load-suggestion-card");
 const { ExerciseActionRow } = await import("@/components/workout-day/exercise-action-row");
 const { restWords } = await import("@/components/workout-day/RestTimerButton");
 
@@ -22,55 +22,56 @@ describe("the card's top: name, role, the prescription, then Last / Suggested", 
     expect(wdv).not.toContain("<UnitToggle");
   });
 
-  it("the prescription is the card's one big line, with the Load guide beside it", () => {
+  it("the prescription is the card's one big line, nothing beside it (Suggested carries its own ⓘ)", () => {
     expect(wdv).toMatch(/runRow \|\| cardioRow \? "text-lg" : "text-2xl"\)\} data-run-rx=\{runRow \|\| undefined\} data-rx>/);
     const rx = wdv.slice(wdv.indexOf("data-rx>"), wdv.indexOf("data-rx-refs"));
-    expect(rx).toContain("<LoadGuide hint={loadHint}");
+    expect(rx).not.toContain("<LoadGuide");
   });
 
-  it("Last and Suggested share one line under it (two when they don't fit), each once on the card", () => {
-    const refs = wdv.slice(wdv.indexOf("data-rx-refs>") - 140, wdv.indexOf("data-rx-refs>") + 2400);
-    expect(refs).toContain("flex-wrap");
-    expect(refs).toContain("justify-between");
+  it("Last time and Suggested are two halves of one quiet strip under it, each once on the card", () => {
+    const refs = wdv.slice(wdv.indexOf("data-rx-refs>") - 140, wdv.indexOf("data-rx-refs>") + 1200);
+    expect(refs).toContain("<div className={REF_BAR} data-rx-refs>");
     expect(refs).toContain("<PreviousLiftChip");
-    expect(refs).toContain("<LoadSuggestionCard");
-    expect(refs).toContain("<LoadSuggestionsDone");
+    expect(refs).toContain("<span aria-hidden=\"true\" className={REF_DIVIDER} />");
+    expect(REF_BAR).toContain("rounded-xl bg-muted/50");
+    expect(REF_BAR).not.toContain("border");
+    expect(REF_CELL).toContain("min-h-[52px]");
     expect(wdv.split("<LoadSuggestionCard ").length).toBe(2);
     expect(wdv.split("<PreviousLiftChip").length).toBe(2);
-    expect(wdv).toContain("const body = <>Last: <span className=\"tabular-nums\">{shownLoad}{repsStr}{effortStr}</span></>;");
   });
 
-  it("Suggested is the tap that fills the sets (a range opens its weights), never a box", () => {
-    const html = render({ onApply: async () => 1 });
-    expect(html).toContain("Suggested: ");
-    expect(html).toContain('data-testid="load-apply"');
-    expect(html).toContain('aria-label="Suggested 250 lb. Put it in your sets"');
-    expect(html).toContain(REF_TEXT);
-    expect(html).not.toContain("rounded-lg border");
-    expect(render({ onApply: async () => 1, picks: { low: 240, high: 260, loads: [240, 250, 260] } })).toContain("Choose a weight for your sets");
-    expect(render({})).not.toContain('data-testid="load-apply"');
+  it("Suggested is read, never a picker: a tap opens how it's worked out, nothing fills the sets", () => {
+    const html = render({});
+    expect(html).toContain(">Suggested<");
+    expect(html).toContain('data-testid="load-suggestion"');
+    expect(html).toContain("How it&#x27;s worked out");
+    expect(html).toContain('<span data-testid="load-target">250 lb</span>');
+    expect(html).not.toContain("load-apply");
+    expect(html).not.toContain("load-pick");
+    const ranged = render({ picks: { low: 240, high: 260, loads: [240, 250, 260] } });
+    expect(ranged).toContain("240–260 lb");
+    expect(ranged).not.toContain("load-pick");
   });
 
   it("says the reps and RPE only when the prescription above doesn't", () => {
-    expect(render({})).toContain("× ");
+    expect(render({})).toContain("× 5 @ 6");
     expect(render({ showPlan: false })).not.toContain("× ");
     expect(wdv).toContain("const rxSaysPlan = !!loadPlan && repTarget.exact === loadPlan.reps && rpeTarget?.exact === loadPlan.rpe;");
     expect(wdv).toContain("showPlan={!rxSaysPlan}");
   });
 
-  it("how live it is lives in the Load guide, never on the line", () => {
-    expect(render({ onApply: async () => 1 }, )).not.toContain('data-testid="load-badge"');
-    const guide = renderToStaticMarkup(createElement(LoadGuide, { hint, model, plan }));
-    expect(guide).toContain("Load guide");
-    expect(renderToStaticMarkup(createElement(LoadGuide, { hint: null, model, plan }))).toBe("");
+  it("how live it is: a dot on the label when live, the words in the explanation", () => {
+    expect(render({})).not.toContain("bg-success");
+    expect(render({ model: { ...model, source: "today" } })).toContain("bg-success");
   });
 
-  it("a finished card says Next time where Suggested was, and why under it", () => {
-    const html = renderToStaticMarkup(createElement(LoadSuggestionsDone, { own: 1.034, next: { low: 270, high: 290, target: 280, unit: "lb" }, plan }));
-    expect(html).toContain("Next time: ");
-    expect(html).toContain("All sets in");
-    expect(html).toContain(" · ran ");
-    expect(html).toContain("basis-full");
+  it("a finished card says Next time where Suggested was, and why under the strip", () => {
+    const cell = renderToStaticMarkup(createElement(LoadSuggestionsDone, { next: { low: 270, high: 290, target: 280, unit: "lb" }, plan }));
+    expect(cell).toContain(">Next time<");
+    expect(cell).toContain("280 lb");
+    const note = renderToStaticMarkup(createElement(LoadSuggestionsDoneNote, { own: 1.034, next: { low: 270, high: 290, target: 280, unit: "lb" }, plan }));
+    expect(note).toContain("All sets in");
+    expect(note).toContain(" · ran ");
   });
 });
 
