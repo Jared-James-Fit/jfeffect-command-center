@@ -395,7 +395,8 @@ export function WeightValueInput({
               loadType === "bodyweight" && "text-[10px] font-semibold uppercase tracking-tight",
               loadType === "assisted" && "border-amber-500/50 bg-amber-500/10",
               isEmpty
-                ? "border-border/60 bg-muted/40 text-muted-foreground/60"
+                // an empty weight box is blue: where the weight goes (Fill or a tap puts it in)
+                ? "border-blue-500/40 bg-blue-500/10 text-muted-foreground"
                 : cn("border-border/60 bg-muted/40", planned ? "text-muted-foreground/80" : "text-foreground"),
               !disabled && "cursor-pointer hover:bg-muted/60",
             )}

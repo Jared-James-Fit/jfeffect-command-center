@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
-import { Check, Info, Target, X } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { toast } from "sonner";
+import { ArrowDownToLine, Check, Info, Target, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useShowLoadSuggestions } from "@/lib/load-suggestion-visibility";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -12,10 +13,11 @@ function fmtNum(n: number): string {
 /**
  * The load suggestion on an exercise card: the right half of the card's
  * reference row under the prescription (ExerciseBlock's data-rx-refs), beside
- * "Last time" on the left. It's read, never a picker: the weight goes in the
- * set's own weight box, and a tap on Suggested opens how it's worked out (the
- * range, the "audible", the why, the off switch). Nothing here ever writes a
- * weight into a set.
+ * "Last time" on the left. One tap on it puts the weight in every open set as a
+ * draft (Fill: never a logged set, nothing logged until a set's number is
+ * tapped); its ⓘ opens how it's worked out (the range, the "audible", the why,
+ * the off switch). No weight buttons: a range fills its middle and the set boxes
+ * take any other weight.
  */
 
 /** The reference row and its halves: one quiet strip, never a card. */
@@ -42,6 +44,7 @@ export function LoadSuggestionCard({
   fromName = null,
   picks = null,
   showPlan = true,
+  onApply = null,
 }: {
   hint: LoadSuggestion | null;
   model: LoadModel;
@@ -54,7 +57,10 @@ export function LoadSuggestionCard({
   picks?: { low: number; high: number; loads: number[] } | null;
   /** Say "× 5 @ 6" after the weight: only when the prescription right above it doesn't already (a range of reps or RPE, or RIR). */
   showPlan?: boolean;
+  /** Puts a weight in every open set as a draft (never logs one); resolves to how many it filled. Null: nothing to fill. */
+  onApply?: ((load: number) => Promise<number>) | null;
 }) {
+  const [busy, setBusy] = useState(false);
   if (model.status === "calibrating" || !hint) {
     // Suggest is on but there's no number yet: say when there will be one, and why in the info.
     const why = model.historySessions === 0 ? "No logs of this lift yet" : "No recent logs of this lift with an RPE";
@@ -81,6 +87,73 @@ export function LoadSuggestionCard({
   const { badge, shown } = parts;
   const note = badge ? ` (${badge.text})` : "";
   const planText = showPlan ? ` × ${plan.reps} @ ${fmtNum(plan.rpe)}` : "";
+  const value = (
+    <span className={REF_VALUE}>
+      <span data-testid="load-target">{shown} {hint.unit}</span>
+      {showPlan && <span className="font-normal text-muted-foreground">{planText}</span>}
+    </span>
+  );
+  const why = <SuggestionWhyBody hint={hint} model={model} warmup={warmup} picks={picks} rpe={plan.rpe} canApply={!!onApply} {...parts} />;
+  if (onApply) {
+    // One tap fills every open set's weight (a range fills its middle); the ⓘ beside it explains.
+    const fill = async () => {
+      if (busy) return;
+      setBusy(true);
+      try {
+        const n = await onApply(hint.target);
+        if (n > 0) toast.success(`${fmtNum(hint.target)} ${hint.unit} in ${n} set${n === 1 ? "" : "s"}. Tap each set's number as you finish it`);
+      } catch {
+        toast.error("Couldn't fill your sets. Try again");
+      } finally {
+        setBusy(false);
+      }
+    };
+    return (
+      <div className={REF_CELL} data-testid="load-suggestion" data-picks={picks ? "" : undefined}>
+        <span className={cn(REF_LABEL, "justify-between")}>
+          <span className="flex min-w-0 items-center gap-1">
+            {badge?.live && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success" aria-hidden="true" />}
+            Suggested
+          </span>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label="How Suggested is worked out"
+                data-testid="load-suggestion-info"
+                className="-my-2 -mr-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground active:bg-muted"
+              >
+                <Info className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent side="top" align="end" className="w-72 text-xs leading-relaxed" data-testid="load-guide">
+              {why}
+            </PopoverContent>
+          </Popover>
+        </span>
+        <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          {/* The weight is the fill button: a blue chip, the same blue as the empty weight boxes it fills. */}
+          <button
+            type="button"
+            onClick={() => void fill()}
+            disabled={busy}
+            aria-label={`Suggested ${shown} ${hint.unit}${planText}${note}. Fill your open sets with ${fmtNum(hint.target)} ${hint.unit}`}
+            title="Tap to fill your open sets"
+            data-testid="load-apply"
+            className={cn(
+              "inline-flex min-h-9 max-w-full items-center gap-1 whitespace-nowrap rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-1 font-semibold leading-tight tabular-nums text-foreground transition active:scale-[0.97] active:bg-blue-500/20 disabled:opacity-60",
+              // a range ("187.5–197.5 kg") stays on one line on a phone
+              picks ? "text-[13px]" : "text-sm",
+            )}
+          >
+            <ArrowDownToLine className="h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+            <span data-testid="load-target">{shown}{"\u00a0"}{hint.unit}</span>
+          </button>
+          {showPlan && <span className="text-[13px] tabular-nums text-muted-foreground">{planText.trim()}</span>}
+        </span>
+      </div>
+    );
+  }
   return (
     <SuggestionPopover
       label={`Suggested ${shown} ${hint.unit}${planText}${note}. How it's worked out`}
@@ -93,14 +166,11 @@ export function LoadSuggestionCard({
             Suggested
             <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           </span>
-          <span className={REF_VALUE}>
-            <span data-testid="load-target">{shown} {hint.unit}</span>
-            {showPlan && <span className="font-normal text-muted-foreground">{planText}</span>}
-          </span>
+          {value}
         </>
       }
     >
-      <SuggestionWhyBody hint={hint} model={model} warmup={warmup} picks={picks} rpe={plan.rpe} {...parts} />
+      {why}
     </SuggestionPopover>
   );
 }
@@ -193,7 +263,7 @@ function suggestionParts({ hint, model, fromName, picks }: {
 }
 
 /** What's behind the number: how live it is, the range, the fast / slow call, how it's worked out, the off switch. */
-function SuggestionWhyBody({ hint, why, model, warmup, audible, range, picks, rpe, badge }: {
+function SuggestionWhyBody({ hint, why, model, warmup, audible, range, picks, rpe, badge, canApply = false }: {
   hint: LoadSuggestion;
   why: string;
   model: LoadModel;
@@ -204,6 +274,7 @@ function SuggestionWhyBody({ hint, why, model, warmup, audible, range, picks, rp
   rpe: number;
   badge: { text: string; live: boolean } | null;
   shown?: string;
+  canApply?: boolean;
 }) {
   return (
     <>
@@ -229,7 +300,11 @@ function SuggestionWhyBody({ hint, why, model, warmup, audible, range, picks, rp
         <p className="mt-1 text-muted-foreground" data-testid="load-audible">
           Bar flying? +{fmtNum(audible)} {hint.unit} next set. Slow? −{fmtNum(audible)}. Pain? Stop and tell your coach.
         </p>
-        <p className="mt-1 text-muted-foreground">Put the weight you choose in each set's weight box. Nothing is logged until you tap a set's number.</p>
+        <p className="mt-1 text-muted-foreground">
+          {canApply
+            ? `Tap Suggested to fill your open sets with ${fmtNum(hint.target)} ${hint.unit}, or type another weight in a set's box. Nothing is logged until you tap a set's number.`
+            : "Put the weight you choose in each set's weight box. Nothing is logged until you tap a set's number."}
+        </p>
         <details className="group mt-1.5 border-t border-border pt-1.5" data-testid="load-why">
           <summary className="flex cursor-pointer list-none items-center justify-between py-1 font-semibold text-foreground [&::-webkit-details-marker]:hidden">
             How it's worked out
