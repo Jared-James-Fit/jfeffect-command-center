@@ -252,6 +252,7 @@ describe("last time on a timed card (cardio, holds)", () => {
     const src = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
     expect(src).toContain("is_bodyweight, load_type, completed_duration_seconds, actual_calories,");
     expect(src).toContain('timed: isTimedCardio(name) ? "cardio" : timedRow ? "hold" : null');
-    expect(src).toContain("<PreviousTimedChip");
+    // a timed card's Last time reads its session's time (lastTimeText), in the same history button
+    expect(src).toContain("if (data.timed) return formatPreviousTimed(data.timed, formatClockSeconds");
   });
 });

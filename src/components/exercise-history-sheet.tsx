@@ -3,11 +3,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { ExerciseRecordsForClient } from "@/components/records/training-records";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { History, CheckCircle2, Circle, StickyNote, Pencil, Loader2, ChevronDown } from "lucide-react";
+import { History, CheckCircle2, Circle, StickyNote, Pencil, Loader2, ChevronDown, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { matchingHistoryExerciseIds } from "@/lib/workout-previous-lift";
@@ -28,6 +26,17 @@ import { cardioClock, cardioHistorySummary, isCardioHistory } from "@/lib/cardio
 import { formatDistance, formatPace, isRunningExercise, paceSeconds, readDistanceUnit } from "@/lib/running/run-log";
 import { LiftProgressCard, type LiftHistory } from "@/components/analytics/lift-progress-card";
 import { liftHistoryFromRows } from "@/lib/analytics/exercise-progress";
+import {
+  dayRefOf,
+  historySetOf,
+  progressSince,
+  relativeDay,
+  sameSplit,
+  sessionGroups,
+  setText,
+  workoutName,
+  type HistoryDayRef,
+} from "@/lib/workouts/exercise-history";
 
 const sb = supabase as any;
 
@@ -75,6 +84,7 @@ export function ExerciseHistorySheet({
   displayUnit = "kg",
   excludePartial = false,
   currentDayIndex,
+  currentDayId = null,
   editable = false,
 }: {
   open: boolean;
@@ -85,12 +95,17 @@ export function ExerciseHistorySheet({
   displayUnit?: "kg" | "lb";
   /** When true, hide sets without a completed_at timestamp. */
   excludePartial?: boolean;
-  /** Program day index of the workout the history was opened from. When present, matching days are highlighted. */
+  /** Program day index of the workout the history was opened from (kept for older callers; currentDayId decides). */
   currentDayIndex?: number | null;
+  /** The workout the history was opened from: it's left out of the list (it's on screen), and its split is marked. */
+  currentDayId?: string | null;
   /** The viewer may fix a past day's sets here (their own, or a client they coach). */
   editable?: boolean;
 }) {
-  const [showPartial, setShowPartial] = useState(!excludePartial);
+  // What was lifted: finished sets only, unless asked (a set filled in but never
+  // finished isn't something they lifted).
+  const [showPartial, setShowPartial] = useState(false);
+  void excludePartial;
   // One day in edit mode at a time; drafts keyed by set id.
   const [editingKey, setEditingKey] = useState<string | null>(null);
   // A day reads as one line of coach shorthand; its set table opens on a tap.
@@ -105,7 +120,10 @@ export function ExerciseHistorySheet({
   const [cardioDrafts, setCardioDrafts] = useState<Record<string, CardioDraft>>({});
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const [days, setDays] = useState<number | null>(null);
+  // Sessions shown before "Show older sessions".
+  const [shown, setShown] = useState(10);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [onlySplit, setOnlySplit] = useState(false);
   const queryClient = useQueryClient();
 
   // Realtime: refetch when this client's logged sets or day completions
@@ -153,47 +171,64 @@ export function ExerciseHistorySheet({
     },
   });
 
-  const { data: rows = [], isLoading, isFetching } = useQuery({
-    queryKey: ["exercise-history", clientId, exerciseId ?? null, exerciseName, identityIds.join(","), days],
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ["exercise-history", clientId, exerciseId ?? null, exerciseName, identityIds.join(",")],
     enabled: !!clientId && (!!exerciseId || !!exerciseName) && open,
     staleTime: 2 * 60_000,   // cache for 2 min — avoids re-fetch on every open
     gcTime: 10 * 60_000,
     retry: 1,
     queryFn: async () => {
-      let q = sb
-        .from("pl_row_results")
-        .select(`
-          id, set_index, completed_at, updated_at, created_at,
-          actual_reps, actual_rpe, actual_rpe_num, actual_rir, mean_concentric_velocity_mps,
-          completed_duration_seconds, actual_calories, actual_distance_m, actual_distance_unit,
-          entered_value, entered_unit, normalized_kg, normalized_lb,
-          actual_load, actual_load_unit, load_type, is_bodyweight,
-          pl_exercise_rows!inner(
-            id, exercise_id, exercise_name_override, sort_order,
-            pl_days!inner(id, day_index, title, scheduled_date, pl_weeks!inner(id, week_index, pl_blocks!inner(id, name)))
-          )
-        `)
-        .eq("client_id", clientId)
-        .order("updated_at", { ascending: false })
-        .limit(500);
       // Match by canonical exercise identity when we have one; otherwise fall
       // back to the row's custom name override so custom-named exercises
       // (no exercise_id) still show a training history.
       const ids = identityIds.length ? identityIds : exerciseId ? [exerciseId] : [];
-      if (ids.length) {
-        q = q.in("pl_exercise_rows.exercise_id", ids);
-      } else if (exerciseName) {
-        q = q.eq("pl_exercise_rows.exercise_name_override", exerciseName);
+      // Read whole, page by page: a long history is never cut off silently.
+      const PAGE = 1000;
+      const out: any[] = [];
+      for (let from = 0; from < 10 * PAGE; from += PAGE) {
+        let q = sb
+          .from("pl_row_results")
+          .select(`
+            id, set_index, completed_at, updated_at, created_at,
+            actual_reps, actual_rpe, actual_rpe_num, actual_rir, mean_concentric_velocity_mps,
+            completed_duration_seconds, actual_calories, actual_distance_m, actual_distance_unit,
+            entered_value, entered_unit, normalized_kg, normalized_lb,
+            actual_load, actual_load_unit, load_type, is_bodyweight,
+            pl_exercise_rows!inner(
+              id, exercise_id, exercise_name_override, sort_order,
+              pl_days!inner(id, day_index, title, subtitle, source_day_id, scheduled_date, pl_weeks!inner(id, week_index, pl_blocks!inner(id, name, prep_id)))
+            )
+          `)
+          .eq("client_id", clientId)
+          .order("updated_at", { ascending: false })
+          .order("id", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (ids.length) q = q.in("pl_exercise_rows.exercise_id", ids);
+        else if (exerciseName) q = q.eq("pl_exercise_rows.exercise_name_override", exerciseName);
+        const { data, error } = await q;
+        if (error) throw error;
+        out.push(...(data ?? []));
+        if (!data || data.length < PAGE) break;
       }
-      if (days) {
-        const cutoff = new Date(Date.now() - days * 86400000).toISOString();
-        q = q.gte("updated_at", cutoff);
-      }
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as any[];
+      return out;
     },
+  });
 
+  // The workout the sheet was opened from, by its stable ids (its block, its
+  // program, the day it was copied from), so the same split is marked by what
+  // it is, never by being day 2 of some other program's week.
+  const { data: currentRef = null } = useQuery({
+    queryKey: ["exercise-history-current-day", currentDayId],
+    enabled: open && !!currentDayId,
+    staleTime: 10 * 60_000,
+    queryFn: async (): Promise<HistoryDayRef | null> => {
+      const { data } = await sb
+        .from("pl_days")
+        .select("id, day_index, title, subtitle, source_day_id, pl_weeks!inner(pl_blocks!inner(id, prep_id))")
+        .eq("id", currentDayId)
+        .maybeSingle();
+      return data ? dayRefOf(data, data.pl_weeks?.pl_blocks) : null;
+    },
   });
 
   // Pull the canonical workout-completion timestamps for every day shown so
@@ -263,6 +298,8 @@ export function ExerciseHistorySheet({
       const w = d?.pl_weeks;
       const b = w?.pl_blocks;
       if (!d) continue;
+      // The workout it was opened from is on screen already: history is the ones before.
+      if (currentDayId && d.id === currentDayId) continue;
       const k = `${b?.id ?? "?"}-${w?.id ?? "?"}-${d.id}`;
       if (!byDay.has(k)) byDay.set(k, { day: d, week: w, block: b, sets: [] });
       byDay.get(k)!.sets.push(r);
@@ -272,16 +309,29 @@ export function ExerciseHistorySheet({
     const list = [...byDay.values()];
     list.sort((a, b) => resolveGroupDate(b) - resolveGroupDate(a));
     for (const g of list) g.sets.sort(historySetOrder);
-    return list;
-  }, [rows, showPartial, completionMap]);
+    return list.map((g) => {
+      const ref = dayRefOf(g.day, g.block);
+      return {
+        ...g,
+        key: `${g.block?.id ?? "?"}-${g.week?.id ?? "?"}-${g.day?.id}`,
+        at: resolveGroupDate(g),
+        name: workoutName(ref),
+        same: sameSplit(ref, currentRef),
+        hsets: g.sets.map(historySetOf),
+      };
+    });
+    // resolveGroupDate reads completionMap
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, showPartial, completionMap, currentDayId, currentRef]);
 
   // A treadmill walk or a bike is time, calories and effort, never load / reps / velocity.
   const cardio = useMemo(() => isCardioHistory(exerciseName, rows), [exerciseName, rows]);
   // This exercise's progress (the Analytics page's lift card, for one lift),
   // from the same sets the list below shows, in the range picked above.
   const progress = useMemo<LiftHistory | null>(
-    () => (cardio ? null : liftHistoryFromRows(rows as any[], exerciseName)),
-    [cardio, rows, exerciseName],
+    // the open workout is on screen, not history: left out here as in the list
+    () => (cardio ? null : liftHistoryFromRows((rows as any[]).filter((r) => { const id = r?.pl_exercise_rows?.pl_days?.id; return !!id && id !== currentDayId; }), exerciseName)),
+    [cardio, rows, exerciseName, currentDayId],
   );
   // A run reads by distance and pace instead of calories.
   const runHistory = useMemo(
@@ -296,36 +346,6 @@ export function ExerciseHistorySheet({
     // resolveGroupDate reads completionMap, which `grouped` already depends on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardio, grouped]);
-
-  /**
-   * A day's sets as coach shorthand, in the units they were logged in: identical
-   * sets in a row collapse, "190×4 @7 · 175×4×2 @6" (the unit once, after it).
-   */
-  const daySummary = (sets: any[]): { text: string; unit: string | null } => {
-    const groups: { load: string; unit: string; reps: number | null; count: number; rpes: number[] }[] = [];
-    for (const set of sets) {
-      const [load, unit = ""] = fmtLoad(set).split(" ");
-      const reps = set.actual_reps ?? null;
-      const rpe = set.actual_rpe != null && set.actual_rpe !== "" ? Number(set.actual_rpe) : NaN;
-      const last = groups[groups.length - 1];
-      if (last && last.load === load && last.unit === unit && last.reps === reps) {
-        last.count += 1;
-        if (Number.isFinite(rpe)) last.rpes.push(rpe);
-      } else groups.push({ load, unit, reps, count: 1, rpes: Number.isFinite(rpe) ? [rpe] : [] });
-    }
-    const units = new Set(groups.map((g) => g.unit).filter(Boolean));
-    const one = units.size === 1 ? [...units][0] : null;
-    const text = groups
-      .map((g) => {
-        const base = `${g.load}${one || !g.unit ? "" : ` ${g.unit}`}×${g.reps ?? "—"}${g.count > 1 ? `×${g.count}` : ""}`;
-        if (!g.rpes.length) return base;
-        const lo = Math.min(...g.rpes);
-        const hi = Math.max(...g.rpes);
-        return `${base} @${lo === hi ? lo : `${lo}–${hi}`}`;
-      })
-      .join(" · ");
-    return { text, unit: one };
-  };
 
   const fmtLoad = (r: any): string => {
     // Always show the load in the unit the client actually entered on
@@ -422,68 +442,70 @@ export function ExerciseHistorySheet({
     }
   };
 
+  // What's on screen: every session, or only the open workout's split when picked.
+  const splitCount = grouped.filter((g) => g.same).length;
+  const filterable = splitCount > 0 && splitCount < grouped.length;
+  const visible = filterable && onlySplit ? grouped.filter((g) => g.same) : grouped;
+  const currentName = currentRef ? workoutName(currentRef) : null;
+  const firstAt = grouped.length ? Math.min(...grouped.map((g) => g.at).filter((t) => t > 0)) : 0;
+  const thisYear = new Date().getFullYear();
+  // The one progress line: like with like, within one program (exercise-history.ts).
+  const progressLine = useMemo(
+    () => (cardio ? null : progressSince(
+      grouped.map((g) => ({ key: g.key, at: g.at, blockId: g.block?.id ?? null, programId: g.block?.prep_id ?? null, sets: g.hsets })),
+      displayUnit,
+    )),
+    [cardio, grouped, displayUnit],
+  );
+  // A cardio session in one line: its time, distance or calories, and the hardest RPE.
+  const cardioLine = (sets: any[]): string => {
+    const secs = sets.reduce((t, s) => t + (Number(s.completed_duration_seconds) > 0 ? Number(s.completed_duration_seconds) : 0), 0);
+    const meters = sets.reduce((t, s) => t + (Number(s.actual_distance_m) > 0 ? Number(s.actual_distance_m) : 0), 0);
+    const cals = sets.reduce((t, s) => t + (Number(s.actual_calories) > 0 ? Number(s.actual_calories) : 0), 0);
+    const rpes = sets.map((s) => Number(s.actual_rpe_num ?? s.actual_rpe)).filter((n) => Number.isFinite(n) && n > 0);
+    return [
+      secs > 0 ? cardioClock(secs) : null,
+      runHistory && meters > 0 ? formatDistance(meters, distanceUnit) : null,
+      !runHistory && cals > 0 ? `${cals} kcal` : null,
+      rpes.length ? `RPE ${Math.max(...rpes)}` : null,
+    ].filter(Boolean).join(" · ") || "—";
+  };
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-lg overflow-y-auto"
+        className="w-full overflow-y-auto sm:max-w-lg"
         style={{
           paddingTop: "calc(env(safe-area-inset-top) + 1.5rem)",
           paddingBottom: "calc(env(safe-area-inset-bottom) + 1rem)",
         }}
+        data-exercise-history
       >
         <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <History className="h-4 w-4" /> {exerciseName}
-          </SheetTitle>
-          <SheetDescription>
-            {cardio
-              ? "Every logged session across all blocks: how long, the calories and how hard it felt (RPE)."
-              : "Every set you've logged, across all blocks. Last time on your card is your best working set from the last session in the same role (top set or back-off)."}
+          <SheetTitle className="text-xl leading-tight">{exerciseName}</SheetTitle>
+          <SheetDescription className="text-[13px]">
+            {isLoading
+              ? "Loading your sessions…"
+              : grouped.length === 0
+                ? "No sessions yet"
+                : `${grouped.length} ${grouped.length === 1 ? "session" : "sessions"}${firstAt ? ` · since ${format(new Date(firstAt), new Date(firstAt).getFullYear() === thisYear ? "MMM d" : "MMM d, yyyy")}` : ""}`}
           </SheetDescription>
         </SheetHeader>
-        {!cardio && (
-          <div className="px-4 pt-2 sm:px-0">
-            <ExerciseRecordsForClient clientId={clientId} exerciseId={exerciseId} exerciseName={exerciseName} unit={displayUnit} />
-          </div>
-        )}
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          {[null, 30, 90, 180, 365].map((d) => (
-            <Button
-              key={String(d)}
-              size="sm"
-              variant={days === d ? "default" : "outline"}
-              className="h-7 px-2 text-[11px]"
-              onClick={() => setDays(d)}
-            >
-              {d == null ? "All time" : `${d}d`}
-            </Button>
-          ))}
-          <label className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={showPartial}
-              onChange={(e) => setShowPartial(e.target.checked)}
-              className="h-3.5 w-3.5"
-            />
-            Include partial
-          </label>
-        </div>
-
-        {progress && (
-          <div className="mt-3" data-history-progress>
-            <LiftProgressCard
-              single
-              history={[progress]}
-              displayUnit={displayUnit}
-              conv={(lb) => (displayUnit === "kg" ? lb / 2.2046226218 : lb)}
-            />
-          </div>
+        {progressLine && (
+          <p className="mt-3 flex items-start gap-2 text-sm leading-snug text-foreground" data-history-progress-line={progressLine.direction}>
+            {progressLine.direction === "up"
+              ? <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
+              : progressLine.direction === "down"
+                ? <TrendingDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                : <Minus className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+            <span>{progressLine.text}</span>
+          </p>
         )}
 
         {cardioSummary && cardioSummary.sessions > 0 && (
-          <div className="mt-3 rounded-xl border border-border p-3" data-cardio-history-summary>
+          <div className="mt-3 rounded-xl bg-muted/50 p-3" data-cardio-history-summary>
             <div className="grid grid-cols-4 gap-2 text-center">
               {[
                 { label: "Sessions", value: String(cardioSummary.sessions) },
@@ -507,7 +529,29 @@ export function ExerciseHistorySheet({
           </div>
         )}
 
-        <div className="mt-4 space-y-3">
+        {/* The open workout's split, one tap to see only it (only when there's both). */}
+        {filterable && (
+          <div className="mt-3 flex gap-1 rounded-lg bg-muted/60 p-1" role="group" aria-label="Which sessions" data-history-split-filter>
+            <button
+              type="button"
+              aria-pressed={!onlySplit}
+              onClick={() => setOnlySplit(false)}
+              className={cn("h-9 shrink-0 rounded-md px-3 text-[13px] font-medium transition-colors", !onlySplit ? "bg-background text-foreground" : "text-muted-foreground")}
+            >
+              All · {grouped.length}
+            </button>
+            <button
+              type="button"
+              aria-pressed={onlySplit}
+              onClick={() => setOnlySplit(true)}
+              className={cn("h-9 min-w-0 flex-1 truncate rounded-md px-3 text-[13px] font-medium transition-colors", onlySplit ? "bg-background text-foreground" : "text-muted-foreground")}
+            >
+              {currentName ?? "This workout"} · {splitCount}
+            </button>
+          </div>
+        )}
+
+        <div className="mt-3">
           {isLoading && (
             <div className="space-y-2">
               {[1, 2, 3].map((i) => (
@@ -516,69 +560,73 @@ export function ExerciseHistorySheet({
             </div>
           )}
           {!isLoading && grouped.length === 0 && (
-            <Card className="p-6 text-center">
-              <div className="text-2xl mb-2">🏋️</div>
-              <div className="text-sm font-semibold mb-1">No history yet</div>
-              <div className="text-xs text-muted-foreground">
+            <div className="rounded-xl bg-muted/50 p-5 text-center" data-history-empty>
+              <div className="text-sm font-semibold">No sessions yet</div>
+              <div className="mt-1 text-xs text-muted-foreground">
                 {cardio
-                  ? "Nothing logged for this cardio yet. Log a session and it will show here next time."
-                  : "This is your first time logging this exercise. Complete a set and it will appear here next time."}
+                  ? "Log a session and it will show here next time."
+                  : "Finish a set of this exercise and it will show here next time."}
               </div>
-            </Card>
+            </div>
           )}
-          {grouped.map((g) => {
-            const dayKey = `${g.block?.id}-${g.week?.id}-${g.day?.id}`;
-            const isSameTrainingDay = currentDayIndex != null && g.day?.day_index != null && g.day.day_index === currentDayIndex;
-            return (
-            <Card key={dayKey} className={cn("p-3", isSameTrainingDay && "border-l-4 border-l-primary/40")}>
-              {/* The date leads (what people scan by), then where it sat in the program
-                  on its own line, so a long block name never squeezes the date out. */}
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-foreground">
-                  {(() => {
-                    // Prefer the day's scheduled training date (what the
-                    // client is meant to see on the calendar), then the
-                    // workout completion timestamp, then the earliest set's
-                    // created_at as a last resort. Parse YYYY-MM-DD dates
-                    // as local calendar dates so JUN 30 doesn't slide to
-                    // JUN 29 in negative UTC offsets.
-                    const scheduled: string | null = g.day?.scheduled_date ?? null;
-                    if (scheduled) {
-                      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(scheduled);
-                      if (m) {
-                        const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-                        return format(d, "EEE, MMM d, yyyy");
-                      }
-                    }
-                    const completionTs = completionMap.get(g.day?.id);
-                    const earliestCreated = g.sets
-                      .map((s: any) => s.created_at)
-                      .filter(Boolean)
-                      .sort()[0];
-                    const ts = completionTs ?? earliestCreated ?? g.sets[0]?.completed_at ?? g.sets[0]?.updated_at;
-                    return ts ? format(new Date(ts), "EEE, MMM d, yyyy") : "—";
-                  })()}
-                  {isSameTrainingDay && (
-                    <Badge variant="outline" className="shrink-0 text-[10px] font-medium" title="The same day of the program as this workout">Same day</Badge>
-                  )}
-                </div>
-                {editable && editingKey !== dayKey && (
+          <ul className="space-y-1">
+            {visible.slice(0, shown).map((g) => {
+              const dayKey = g.key;
+              const isOpen = openDays.has(dayKey);
+              const editing = editingKey === dayKey;
+              const rel = g.at ? relativeDay(g.at) : null;
+              const groups = cardio ? [] : sessionGroups(g.hsets, displayUnit);
+              const hasVelocity = g.sets.some((s: any) => s.mean_concentric_velocity_mps != null);
+              return (
+                <li
+                  key={dayKey}
+                  className={cn("rounded-xl px-3 py-2.5", g.same && "bg-muted/60")}
+                  data-history-session
+                  data-same-split={g.same || undefined}
+                >
                   <button
                     type="button"
-                    onClick={() => startEdit(dayKey, g.sets)}
-                    disabled={saving}
-                    data-history-edit
-                    aria-label={`Edit this day's ${exerciseName} sets`}
-                    className="-my-2 inline-flex h-9 shrink-0 items-center gap-1 rounded-lg px-2 text-[12px] font-semibold text-foreground active:bg-secondary disabled:opacity-40"
+                    onClick={() => toggleDay(dayKey)}
+                    aria-expanded={isOpen}
+                    data-history-day-summary
+                    className="flex w-full items-start gap-2 text-left"
                   >
-                    <Pencil className="h-3.5 w-3.5" /> Edit
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="text-[15px] font-semibold text-foreground">
+                          {g.at ? format(new Date(g.at), new Date(g.at).getFullYear() === thisYear ? "EEE, MMM d" : "EEE, MMM d, yyyy") : "—"}
+                        </span>
+                        {rel && <span className="text-xs text-muted-foreground">{rel}</span>}
+                      </span>
+                      <span className="mt-0.5 block text-[13px] leading-snug text-muted-foreground" data-history-session-workout>
+                        {g.same && (
+                          <span className="mr-1.5 inline-flex h-5 items-center rounded-full bg-background px-1.5 align-[1px] text-[11px] font-medium text-foreground" data-same-split-tag>
+                            Same split
+                          </span>
+                        )}
+                        <span className={g.same ? "font-medium text-foreground" : undefined}>{g.name}</span>
+                        {g.block?.name ? ` · ${g.block.name}` : ""}
+                        {g.week?.week_index ? ` · Week ${g.week.week_index}` : ""}
+                      </span>
+                      {cardio ? (
+                        <span className="mt-1.5 block text-[15px] font-semibold tabular-nums text-foreground">{cardioLine(g.sets)}</span>
+                      ) : (
+                        <span className="mt-1.5 block space-y-0.5">
+                          {groups.slice(0, 3).map((x, i) => (
+                            <span key={i} className="block text-[15px] tabular-nums text-foreground">
+                              <span className="font-semibold">{x.text}</span>
+                              {x.count > 1 && <span className="text-muted-foreground"> · {x.count} sets</span>}
+                            </span>
+                          ))}
+                          {groups.length > 3 && <span className="block text-xs text-muted-foreground">+{groups.length - 3} more</span>}
+                        </span>
+                      )}
+                    </span>
+                    <ChevronDown className={cn("mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-180")} aria-hidden="true" />
                   </button>
-                )}
-              </div>
-              <div className="mb-1 truncate text-[11px] text-muted-foreground">
-                {g.block?.name ?? "Block"} · Week {g.week?.week_index ?? "?"} · {g.day?.title || `Day ${g.day?.day_index ?? ""}`}
-              </div>
-              {editingKey === dayKey && cardio ? (
+                  {(isOpen || editing) && (
+                    <div className="mt-2.5">
+                      {editing && cardio ? (
                 <div data-history-editor data-history-editor-cardio>
                   <div className="overflow-hidden rounded-md border border-border">
                     <div className="grid grid-cols-[24px_minmax(0,1fr)_72px_56px] gap-2 border-b border-border bg-muted/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -647,7 +695,7 @@ export function ExerciseHistorySheet({
                     </Button>
                   </div>
                 </div>
-              ) : editingKey === dayKey ? (
+                      ) : editing ? (
                 <div data-history-editor>
                   <div className="overflow-hidden rounded-md border border-border">
                     <div className="grid grid-cols-[24px_minmax(0,1fr)_56px_56px] gap-2 border-b border-border bg-muted/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -719,7 +767,7 @@ export function ExerciseHistorySheet({
                     </Button>
                   </div>
                 </div>
-              ) : cardio ? (
+                      ) : cardio ? (
               <div className="overflow-hidden rounded-md border border-border" data-history-cardio>
                 <div className={cn(
                   "grid gap-1.5 border-b border-border bg-muted/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground",
@@ -759,91 +807,111 @@ export function ExerciseHistorySheet({
                   </div>
                 ))}
               </div>
-              ) : (
-              <>
-              {(() => {
-                const sum = daySummary(g.sets);
-                const open = openDays.has(dayKey);
-                return (
-                  <button
-                    type="button"
-                    onClick={() => toggleDay(dayKey)}
-                    aria-expanded={open}
-                    data-history-day-summary
-                    className="-mx-1 flex min-h-10 w-[calc(100%+0.5rem)] items-center gap-2 rounded-lg px-1 text-left active:bg-secondary/60"
-                  >
-                    <span className="min-w-0 flex-1 text-sm font-semibold tabular-nums">
-                      {sum.text}
-                      {sum.unit && <span className="ml-1 text-xs font-normal text-muted-foreground">{sum.unit}</span>}
-                    </span>
-                    <span className="shrink-0 text-[11px] text-muted-foreground">
-                      {g.sets.length} {g.sets.length === 1 ? "set" : "sets"}
-                    </span>
-                    <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} aria-hidden="true" />
-                  </button>
-                );
-              })()}
-              {openDays.has(dayKey) && (
-              <div className="mt-1.5 overflow-hidden rounded-md border border-border" data-history-day-sets>
-                <div className="grid grid-cols-[30px_minmax(64px,1fr)_40px_40px_48px_20px] gap-1.5 border-b border-border bg-muted/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                  <span>Set</span>
-                  <span>Load</span>
-                  <span>Reps</span>
-                  <span>RPE</span>
-                  <span title="Mean concentric velocity">Vel</span>
-                  <span></span>
-                </div>
-                {g.sets.map((s: any, i: number) => (
-                  <div
-                    key={s.id}
-                    className={cn(
-                      "grid grid-cols-[30px_minmax(64px,1fr)_40px_40px_48px_20px] items-center gap-1.5 border-t border-border/60 px-2 py-1.5 text-xs",
-                      s.completed_at && "bg-green-500/5",
-                    )}
-                  >
-                    <span className="font-mono text-muted-foreground">{i + 1}</span>
-                    <span className="font-medium tabular-nums">
-                      {fmtLoad(s)}
-                      {(() => {
-                        // Secondary annotation: show the converted value in
-                        // the caller's `displayUnit` when it differs from
-                        // the entered unit, so a coach viewing in lb still
-                        // sees a kg equivalent alongside a kg entry.
-                        const enteredUnit =
-                          s.entered_unit === "kg" || s.entered_unit === "lb"
-                            ? s.entered_unit
-                            : s.actual_load_unit === "kg" || s.actual_load_unit === "lb"
-                              ? s.actual_load_unit
+                      ) : (
+                        <div className="space-y-1.5" data-history-day-sets>
+                          {g.sets.map((s: any, i: number) => {
+                            const h = g.hsets[i];
+                            const converted = h.loadType !== "bodyweight" && h.enteredUnit && h.enteredUnit !== displayUnit
+                              ? (() => {
+                                  const v = displayUnit === "kg" ? h.kg : h.lb;
+                                  if (v == null) return null;
+                                  return `≈ ${Math.round(Number(v) * 2) / 2} ${displayUnit}`;
+                                })()
                               : null;
-                        if (!enteredUnit || enteredUnit === displayUnit) return null;
-                        const conv = displayUnit === "kg" ? s.normalized_kg : s.normalized_lb;
-                        if (conv == null) return null;
-                        const n = Number(conv);
-                        const rounded = Math.abs(n - Math.round(n)) < 0.05 ? Math.round(n) : Number(n.toFixed(1));
-                        return (
-                          <span className="ml-1 text-[10px] text-muted-foreground">
-                            (≈ {rounded} {displayUnit})
-                          </span>
-                        );
-                      })()}
-                    </span>
-                    <span className="tabular-nums">{s.actual_reps ?? "—"}</span>
-                    <span className="tabular-nums">{s.actual_rpe ?? "—"}</span>
-                    <span className="tabular-nums">{s.mean_concentric_velocity_mps != null ? Number(s.mean_concentric_velocity_mps).toFixed(2) : "—"}</span>
-                    <span className="text-right">
-                      {s.completed_at
-                        ? <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-green-500" />
-                        : <Circle className="ml-auto h-3.5 w-3.5 text-muted-foreground/60" />}
-                    </span>
-                  </div>
-                ))}
+                            return (
+                              <div key={s.id} className="flex items-center gap-3 text-sm tabular-nums">
+                                <span className="w-11 shrink-0 text-xs text-muted-foreground">Set {i + 1}</span>
+                                <span className="min-w-0 flex-1 text-foreground">
+                                  {setText(h, displayUnit)}
+                                  {converted && <span className="ml-1.5 text-xs text-muted-foreground">({converted})</span>}
+                                </span>
+                                {hasVelocity && (
+                                  <span className="shrink-0 text-xs text-muted-foreground">
+                                    {s.mean_concentric_velocity_mps != null ? `${Number(s.mean_concentric_velocity_mps).toFixed(2)} m/s` : ""}
+                                  </span>
+                                )}
+                                {s.completed_at
+                                  ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-label="Finished" />
+                                  : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/60" aria-label="Not finished" />}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {editable && !editing && (
+                        <div className="mt-2 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(dayKey, g.sets)}
+                            disabled={saving}
+                            data-history-edit
+                            aria-label={`Edit this day's ${exerciseName} sets`}
+                            className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-[13px] font-semibold text-foreground active:bg-secondary disabled:opacity-40"
+                          >
+                            <Pencil className="h-3.5 w-3.5" /> Edit sets
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {visible.length > shown && (
+            <Button type="button" variant="outline" className="mt-2 h-10 w-full" onClick={() => setShown((n) => n + 20)} data-history-more>
+              Show older sessions ({visible.length - shown})
+            </Button>
+          )}
+        </div>
+
+        {/* Deeper analytics, on demand: the chart, best sets and rep records. */}
+        {!cardio && grouped.length > 0 && (
+          <section className="mt-4 border-t border-border pt-2">
+            <button
+              type="button"
+              onClick={() => setMoreOpen((v) => !v)}
+              aria-expanded={moreOpen}
+              data-history-progress-toggle
+              className="flex min-h-12 w-full items-center gap-2 text-left"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-semibold text-foreground">Progress and records</span>
+                <span className="block text-xs text-muted-foreground">Chart, best sets and rep records</span>
+              </span>
+              <ChevronDown className={cn("h-5 w-5 shrink-0 text-muted-foreground transition-transform", moreOpen && "rotate-180")} aria-hidden="true" />
+            </button>
+            {moreOpen && (
+              <div className="mt-1 space-y-3" data-history-progress>
+                {progress && (
+                  <LiftProgressCard
+                    single
+                    history={[progress]}
+                    displayUnit={displayUnit}
+                    conv={(lb) => (displayUnit === "kg" ? lb / 2.2046226218 : lb)}
+                  />
+                )}
+                <ExerciseRecordsForClient clientId={clientId} exerciseId={exerciseId} exerciseName={exerciseName} unit={displayUnit} />
               </div>
-              )}
-              </>
-              )}
-            </Card>
-          );
-        })}
+            )}
+          </section>
+        )}
+
+        <div className="mt-4 space-y-1 border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">
+          {!cardio && (
+            <p data-last-time-explained>
+              "Last time" on your workout card is the heaviest set from your most recent session of this exercise, in the same role when it has one (top set or back-off).
+            </p>
+          )}
+          <label className="inline-flex min-h-10 items-center gap-2">
+            <input
+              type="checkbox"
+              checked={showPartial}
+              onChange={(e) => setShowPartial(e.target.checked)}
+              className="h-4 w-4"
+            />
+            Show sets that weren't finished
+          </label>
         </div>
       </SheetContent>
     </Sheet>

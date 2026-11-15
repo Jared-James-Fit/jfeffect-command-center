@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import type { BuiltProgram, Strategy } from "@/lib/program-intel/generator-schemas";
 import { fmtRx, rxForWeek } from "@/lib/program-intel/program-view";
+import { withoutFixedLoads } from "@/lib/program-intel/loading";
 import { BRAIN_LABEL } from "@/lib/program-intel/types";
 import { addDays, assignChecks, mondayOnOrAfter, weekOf } from "@/lib/program-intel/horizon";
 import type { IntelJob } from "../use-program-intel";
@@ -149,8 +150,8 @@ export function ProgramWeeks({ program, sessions, unmatched }: { program: BuiltP
                       </div>
                       <div className="mt-0.5 text-[11px] text-muted-foreground">
                         {[e.rest_seconds != null ? `rest ${Math.floor(e.rest_seconds / 60)}:${String(e.rest_seconds % 60).padStart(2, "0")}` : null, e.tempo ? `tempo ${e.tempo}` : null].filter(Boolean).join(" · ")}
-                        {rx.notes ? <div>{rx.notes}</div> : null}
-                        {e.progression ? <div>Progress: {e.progression}</div> : null}
+                        {withoutFixedLoads(rx.notes) ? <div>{withoutFixedLoads(rx.notes)}</div> : null}
+                        {withoutFixedLoads(e.progression) ? <div>Progress: {withoutFixedLoads(e.progression)}</div> : null}
                         {e.substitutions?.length ? <div>Swap: {e.substitutions.map((s) => s.exercise_name).join(" or ")}</div> : null}
                       </div>
                     </li>

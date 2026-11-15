@@ -7,6 +7,7 @@ export default function DeferredExerciseHistorySheet({
   exerciseName,
   displayUnit,
   currentDayIndex,
+  currentDayId,
   editable,
   onClose,
 }: {
@@ -15,6 +16,8 @@ export default function DeferredExerciseHistorySheet({
   exerciseName: string;
   displayUnit?: "kg" | "lb";
   currentDayIndex?: number | null;
+  /** The workout it's opened from: left out of the list, its split marked. */
+  currentDayId?: string | null;
   editable?: boolean;
   onClose: () => void;
 }) {
@@ -32,6 +35,7 @@ export default function DeferredExerciseHistorySheet({
       exerciseName={exerciseName}
       displayUnit={displayUnit}
       currentDayIndex={currentDayIndex}
+      currentDayId={currentDayId}
       editable={editable}
     />
   );

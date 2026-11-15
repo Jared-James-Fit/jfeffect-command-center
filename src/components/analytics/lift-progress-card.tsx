@@ -249,11 +249,27 @@ export function LiftProgressCard({
     return { sets, reps, tonnage, avgEffort: effortN ? effortSum / effortN : null };
   }, [sessions]);
 
-  const trend = useMemo(
-    () => strengthTrend(sessions.filter((s) => estOf(s) != null).map((s) => ({ date: s.date, value: estOf(s)! }))),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // The trend reads only sets that can show a max (strength-read.ts). With fewer
+  // than three such sessions it says it's too early, never a % from every set
+  // read as all-out: that compared a 40 lb × 8 primary set with 55 lb × 12
+  // accessory sets in another gym and called it "Up 51.9%".
+  const trend = useMemo<ReturnType<typeof strengthTrend>>(
+    () => comparable
+      ? strengthTrend(sessions.filter((s) => s.strength != null).map((s) => ({ date: s.date, value: s.strength! })))
+      : { kind: "unclear", sessions: sessions.filter((s) => s.strength != null).length, days: 0, reason: "few" },
     [sessions, comparable],
   );
+  // The latest hard session well under the recent best: said, so "Up" never hides a lighter day.
+  const latestLighter = useMemo(() => {
+    if (trend.kind === "unclear") return false;
+    const latest = [...sessions].reverse().find((s) => s.strength != null);
+    return !!latest && latest.strength! < trend.last * 0.95;
+  }, [sessions, trend]);
+  // A squat, bench or deadlift (or a variation) reads by its estimated max; anything
+  // else by the weight and reps actually lifted (an estimated max from a 12-rep
+  // belt squat says little, and machines differ from gym to gym).
+  const mainLift = !!liftFamily(activeEx);
+  const latestSession = sessions.length ? sessions[sessions.length - 1] : null;
   const maxes = useMemo(() => repMaxes(series?.points ?? []).slice(0, 6), [series]);
   const effortChange = useMemo(() => sameLoadEffortChange(sessions), [sessions]);
   const velocityInsight = useVelocityInsight(series?.points ?? [], activeEx, displayUnit, conv);
@@ -316,7 +332,7 @@ export function LiftProgressCard({
         <>
           <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
             <span className="min-w-0 truncate" data-lift-bests>
-              {bestEst && estOf(bestEst) != null && (
+              {mainLift && bestEst && estOf(bestEst) != null && (
                 <>
                   Best est. max{" "}
                   <span className="font-bold text-foreground">
@@ -326,7 +342,7 @@ export function LiftProgressCard({
               )}
               {heaviestLift && (
                 <>
-                  {bestEst && estOf(bestEst) != null ? " · " : ""}Heaviest{" "}
+                  {mainLift && bestEst && estOf(bestEst) != null ? " · " : ""}Heaviest{" "}
                   <span className="font-bold text-foreground">
                     {fmtLoad(heaviestLift.load)} × {heaviestLift.reps}
                   </span>
@@ -490,18 +506,30 @@ export function LiftProgressCard({
           )}
 
           <div className="grid grid-cols-2 gap-2">
-            <Tile
-              label="Strength"
-              value={trendWords(trend)}
-              sub={
-                trend.kind === "unclear"
-                  ? trend.reason === "few"
-                    ? "Needs 4+ hard sessions"
-                    : "Needs 3+ weeks"
-                  : `Best recent vs earlier sessions`
-              }
-              tone={trend.kind === "up" ? "up" : trend.kind === "down" ? "down" : undefined}
-            />
+            {mainLift ? (
+              <Tile
+                label="Strength"
+                value={trendWords(trend)}
+                sub={
+                  trend.kind === "unclear"
+                    ? trend.reason === "few"
+                      ? "Needs 4+ hard sessions"
+                      : "Needs 3+ weeks"
+                    : latestLighter
+                      ? "Best recent vs earlier · latest session lighter"
+                      : "Best recent vs earlier sessions"
+                }
+                tone={trend.kind === "up" ? "up" : trend.kind === "down" ? "down" : undefined}
+              />
+            ) : (
+              <Tile
+                label="Last top set"
+                value={latestSession ? `${fmtLoad(latestSession.heaviest.load)} × ${latestSession.heaviest.reps}` : "—"}
+                sub={heaviestLift && latestSession && heaviestLift !== latestSession.heaviest
+                  ? `Heaviest: ${fmtLoad(heaviestLift.load)} × ${heaviestLift.reps}`
+                  : latestSession ? format(parseISO(latestSession.key), "MMM d") : undefined}
+              />
+            )}
             <Tile
               label="Sets · Reps"
               value={`${totals.sets} · ${totals.reps}`}

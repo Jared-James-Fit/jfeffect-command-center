@@ -155,23 +155,35 @@ export function RecentRecordsList({ data, unit, limit = 8 }: { data: RecentRecor
 /** Exercise history: ALL-TIME BESTS per rep count + current program/block bests. */
 export function ExerciseRecordsPanel({ data, unit }: { data: ExerciseRecords; unit: "kg" | "lb" }) {
   if (!data.rep_bests.length) return null;
+  // A column only when it says something the one before it doesn't: in a first
+  // program the all-time, program and block bests are the same weights, and
+  // three equal columns read as three different records.
+  const same = (a: { load_kg: number } | null, b: { load_kg: number } | null) =>
+    (!a && !b) || (!!a && !!b && Math.abs(a.load_kg - b.load_kg) < 0.05);
+  const showProgram = !!data.current_program && data.rep_bests.some((b) => !same(b.program, b.atpr));
+  const showBlock = !!data.current_block && data.rep_bests.some((b) => !same(b.block, showProgram ? b.program : b.atpr));
+  const cols = 2 + (showProgram ? 1 : 0) + (showBlock ? 1 : 0);
   return (
-    <section className="rounded-xl border border-border bg-card p-3">
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1">
-        <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Rep records</div>
-        <div className="text-[10px] text-muted-foreground">ATPR = all-time · Program / Block = current</div>
+    <section className="rounded-xl bg-muted/40 p-3" data-exercise-records>
+      <div className="mb-2">
+        <div className="text-sm font-semibold text-foreground">Best weight for each rep count</div>
+        <div className="text-xs text-muted-foreground">
+          {showProgram || showBlock
+            ? `All-time, then ${[showProgram && "this program", showBlock && "this block"].filter(Boolean).join(" and ")} when it differs`
+            : "All-time"}
+        </div>
       </div>
-      <div className="grid grid-cols-[auto_1fr_1fr_1fr] gap-x-3 gap-y-1 text-xs">
-        <div className="text-[10px] font-bold uppercase text-muted-foreground">Reps</div>
-        <div className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400">ATPR</div>
-        <div className="truncate text-[10px] font-bold uppercase text-violet-600 dark:text-violet-300" title={data.current_program ?? ""}>Program</div>
-        <div className="truncate text-[10px] font-bold uppercase text-sky-600 dark:text-sky-300" title={data.current_block ?? ""}>Block</div>
+      <div className={cn("grid gap-x-3 gap-y-1 text-sm", cols === 2 ? "grid-cols-[auto_1fr]" : cols === 3 ? "grid-cols-[auto_1fr_1fr]" : "grid-cols-[auto_1fr_1fr_1fr]")}>
+        <div className="text-xs text-muted-foreground">Reps</div>
+        <div className="text-xs text-muted-foreground">All-time</div>
+        {showProgram && <div className="truncate text-xs text-muted-foreground" title={data.current_program ?? ""}>This program</div>}
+        {showBlock && <div className="truncate text-xs text-muted-foreground" title={data.current_block ?? ""}>This block</div>}
         {data.rep_bests.map((b) => (
           <div key={b.reps} className="contents">
-            <div className="font-bold tabular-nums">{b.reps}</div>
-            <div className="font-bold tabular-nums">{b.atpr ? formatLoad(b.atpr.load_kg, unit) : "—"}</div>
-            <div className="tabular-nums">{b.program ? formatLoad(b.program.load_kg, unit) : "—"}</div>
-            <div className="tabular-nums">{b.block ? formatLoad(b.block.load_kg, unit) : "—"}</div>
+            <div className="tabular-nums text-muted-foreground">{b.reps}</div>
+            <div className="font-semibold tabular-nums">{b.atpr ? formatLoad(b.atpr.load_kg, unit) : "—"}</div>
+            {showProgram && <div className="tabular-nums">{b.program ? formatLoad(b.program.load_kg, unit) : "—"}</div>}
+            {showBlock && <div className="tabular-nums">{b.block ? formatLoad(b.block.load_kg, unit) : "—"}</div>}
           </div>
         ))}
       </div>
