@@ -372,11 +372,26 @@ async function loadLogo(): Promise<string | null> {
   }
 }
 
-export async function downloadMealPlanPdf(data: MealPlanPdfData) {
-  const doc = generateMealPlanPdf(data, await loadLogo());
+function mealPlanFileName(data: MealPlanPdfData): string {
   const safeName = (data.client_name || "meal-plan")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
-  doc.save(`${safeName || "meal-plan"}-jf-effect-nutrition-plan.pdf`);
+  return `${safeName || "meal-plan"}-jf-effect-nutrition-plan.pdf`;
+}
+
+export async function downloadMealPlanPdf(data: MealPlanPdfData) {
+  const doc = generateMealPlanPdf(data, await loadLogo());
+  doc.save(mealPlanFileName(data));
+}
+
+/**
+ * The same PDF as a File, for the phone's share sheet (saveFiles): jsPDF's
+ * save() does nothing in the iPhone app's web view, so the client's Meal Plan
+ * PDF tile hands this over instead (Save to Files, Print, Messages…).
+ */
+export async function mealPlanPdfFile(data: MealPlanPdfData): Promise<File> {
+  const doc = generateMealPlanPdf(data, await loadLogo());
+  const blob = doc.output("blob");
+  return new File([blob], mealPlanFileName(data), { type: "application/pdf" });
 }

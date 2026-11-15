@@ -10,7 +10,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServiceTier } from "@/lib/service-tier";
 import { MemberNutritionPage } from "@/components/nutrition/member-nutrition-page";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { format } from "date-fns";
@@ -31,6 +31,7 @@ import { usePortalUserId, useClientImpersonation } from "@/lib/client-impersonat
 import { todayLocalISO } from "@/lib/today";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { toast } from "sonner";
+import { saveFiles } from "@/lib/file-share";
 import {
   DAY_TYPE_LABEL,
   resolveClientNutritionDay,
@@ -50,6 +51,9 @@ import { SupplementList } from "@/components/nutrition/supplements-ui";
 import { readPlanSupplements } from "@/lib/nutrition-targets/supplements";
 import { RecentAdherenceWidget } from "@/components/nutrition/RecentAdherenceWidget";
 import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
+import { FoodLogPlanProvider, type FoodLogPlan } from "@/components/nutrition/food-log-context";
+import { planMealsFromNotes } from "@/lib/food-log-plan";
+import type { DayTarget, PlanMeal } from "@/lib/food-log";
 
 export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")({
   component: PortalNutritionByTier,
@@ -117,7 +121,7 @@ function PortalNutrition() {
   const planArrived = useArrivalClass(planQ.isLoading);
 
   const plan = (planQ.data ?? null) as any | null;
-  const days: any[] = Array.isArray(plan?.days) ? plan.days : [];
+  const days: any[] = useMemo(() => (Array.isArray(plan?.days) ? plan.days : []), [plan]);
 
   const resolution = useMemo(
     () =>
@@ -153,35 +157,102 @@ function PortalNutrition() {
     .filter((candidate) => typeof candidate.id === "string" && String(candidate.day_label ?? "").trim().length > 0)
     .map((candidate) => ({ id: candidate.id as string, title: String(candidate.day_label).trim() }));
 
+  // The food log's view of the plan: each date's plan day (today's is the one
+  // on screen, so a day picked by hand counts), its targets and its meals.
+  const preferredHighDays = ctxQ.data?.preferredHighDays ?? null;
+  const foodLogPlan = useMemo<FoodLogPlan | null>(() => {
+    if (!plan || days.length === 0) return null;
+    const dayCache = new Map<string, any | null>();
+    const dayFor = (dateISO: string): any | null => {
+      if (dateISO === todayISO) return day;
+      if (dayCache.has(dateISO)) return dayCache.get(dateISO);
+      const res = resolveClientNutritionDay({
+        dateISO,
+        overrides: schedule?.overrides ?? null,
+        preferredHighDays,
+        workoutDates: schedule?.workoutDates ?? null,
+        scheduleKnown: !!schedule,
+      });
+      const sel = resolvePlanDaySelection(days, { dayType: res.dayType, baseType: res.baseType, weekday: weekdayForISO(dateISO) }, null);
+      const found = sel.selectedPlanDayId ? days.find((candidate) => candidate.id === sel.selectedPlanDayId) ?? null : null;
+      dayCache.set(dateISO, found);
+      return found;
+    };
+    const num = (v: unknown) => {
+      const x = typeof v === "number" ? v : parseFloat(String(v ?? ""));
+      return Number.isFinite(x) && x > 0 ? x : null;
+    };
+    const mealCache = new Map<string, PlanMeal[]>();
+    return {
+      targetFor: (dateISO: string): DayTarget | null => {
+        const pd = dayFor(dateISO);
+        if (!pd) return null;
+        const t: DayTarget = { calories: num(pd.calories), protein: num(pd.protein), carbs: num(pd.carbs), fat: num(pd.fats), label: pd.day_label ?? null };
+        return t.calories || t.protein ? t : null;
+      },
+      mealsFor: (dateISO: string): PlanMeal[] => {
+        const pd = dayFor(dateISO);
+        const key = String(pd?.id ?? "");
+        if (!pd) return [];
+        if (!mealCache.has(key)) mealCache.set(key, planMealsFromNotes(pd.notes));
+        return mealCache.get(key)!;
+      },
+      supplements: readPlanSupplements(plan?.supplements ?? null).items.map((x) => x.name),
+    };
+  }, [plan, days, day, todayISO, schedule, preferredHighDays]);
+
   const [downloading, setDownloading] = useState(false);
+  // The PDF made for this version of the plan, so a second tap (when the phone
+  // wouldn't open the share sheet from the first) hands it over at once.
+  const preparedPdf = useRef<{ key: string; file: File } | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [suppsOpen, setSuppsOpen] = useState(false);
   const supplements = readPlanSupplements(plan?.supplements ?? null);
   const [disclaimerOpen, setDisclaimerOpen] = useState(false);
   const weighingRules = plan?.food_weighing_rules ? String(plan.food_weighing_rules).trim() : "";
+  const pdfKey = `${plan?.id ?? ""}:${plan?.updated_at ?? ""}:${days.length}`;
   const handleDownload = async () => {
     if (!plan) return;
-    setDownloading(true);
-    try {
-      const { downloadMealPlanPdf } = await import("@/lib/nutrition-targets/meal-plan-pdf");
-      await downloadMealPlanPdf({
-        client_name: plan.client_name ?? null,
-        coach_name: plan.coach_name ?? null,
-        updated_at: plan.updated_at ?? null,
-        start_date: plan.start_date ?? null,
-        phase: plan.phase ?? null,
-        goal: plan.goal ?? null,
-        structure: plan.structure ?? null,
-        water: plan.water ?? null,
-        client_notes: plan.client_notes ?? null,
-        food_weighing_rules: plan.food_weighing_rules ?? null,
-        days: days as any[],
+    let file = preparedPdf.current?.key === pdfKey ? preparedPdf.current.file : null;
+    if (!file) {
+      setDownloading(true);
+      try {
+        const { mealPlanPdfFile } = await import("@/lib/nutrition-targets/meal-plan-pdf");
+        file = await mealPlanPdfFile({
+          client_name: plan.client_name ?? null,
+          coach_name: plan.coach_name ?? null,
+          updated_at: plan.updated_at ?? null,
+          start_date: plan.start_date ?? null,
+          phase: plan.phase ?? null,
+          goal: plan.goal ?? null,
+          structure: plan.structure ?? null,
+          water: plan.water ?? null,
+          client_notes: plan.client_notes ?? null,
+          food_weighing_rules: plan.food_weighing_rules ?? null,
+          days: days as any[],
+        });
+        preparedPdf.current = { key: pdfKey, file };
+      } catch (err) {
+        console.error("Failed to generate meal plan PDF", err);
+        toast.error("Could not make the PDF. Please try again.");
+        return;
+      } finally {
+        setDownloading(false);
+      }
+    }
+    // the share sheet on a phone (Save to Files, Print), a download on a computer
+    const outcome = await saveFiles([file]);
+    if (outcome === "again") {
+      const ready = file;
+      toast("Your meal plan PDF is ready", {
+        description: "Tap Save to keep it or share it.",
+        duration: 20_000,
+        action: { label: "Save", onClick: () => void saveFiles([ready]) },
       });
-    } catch (err) {
-      console.error("Failed to generate meal plan PDF", err);
-      toast.error("Could not generate PDF. Please try again.");
-    } finally {
-      setDownloading(false);
+    } else if (outcome === "saved") {
+      toast.success("Meal plan PDF downloaded");
+    } else if (outcome === "failed") {
+      toast.error("Couldn't save the PDF. Please try again.");
     }
   };
 
@@ -193,7 +264,7 @@ function PortalNutrition() {
     : null;
 
   return (
-    <>
+    <FoodLogPlanProvider value={foodLogPlan}>
       <PageHeader title="Nutrition" />
 
       <div className="space-y-4 px-4 pb-[max(6rem,env(safe-area-inset-bottom))] pt-4 md:px-6">
@@ -324,6 +395,8 @@ function PortalNutrition() {
           <NutritionToolsCard
             viewer="client"
             hasCoachApprovedTargets={!!plan}
+            // a coach's plan sets the targets: a self-calculated estimate beside it only confuses
+            showCalculator={!plan}
             tiles={
               <>
                 <LogFoodToolButton />
@@ -389,6 +462,6 @@ function PortalNutrition() {
           <p>{NUTRITION_DISCLAIMER}</p>
         </NutritionInfoSheet>
       </div>
-    </>
+    </FoodLogPlanProvider>
   );
 }

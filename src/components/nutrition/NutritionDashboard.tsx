@@ -4,7 +4,6 @@ import { Card } from "@/components/ui/card";
 import { HelpCircle, Calculator, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { RecipeProfile } from "./RecipeBrowser";
 import { CookbookEntryCard } from "./CookbookSheet";
 import { ensureWaterTarget, formatWater } from "@/lib/water";
 import { WaterTargetDialog } from "@/components/progress/water-target-dialog";
@@ -41,7 +40,6 @@ export function NutritionDashboard({
   targets,
   recipesAnchorId = "recipes",
   children,
-  profile,
   hasCoachApprovedTargets,
 }: {
   viewer: "member" | "client";
@@ -50,7 +48,6 @@ export function NutritionDashboard({
   targets?: NutritionTargets;
   recipesAnchorId?: string;
   children?: ReactNode;
-  profile?: RecipeProfile;
   hasCoachApprovedTargets?: boolean;
 }) {
   return (
@@ -86,7 +83,12 @@ export function NutritionDashboard({
       <QuickActions viewer={viewer} hasCoachApprovedTargets={hasCoachApprovedTargets} />
       {children}
       <SectionErrorBoundary label="Daily nutrition">
-        <DailyNutritionPanel />
+        <section aria-labelledby="food-log-title">
+          <h2 id="food-log-title" className="mb-2 text-base font-semibold">
+            Food log
+          </h2>
+          <DailyNutritionPanel />
+        </section>
       </SectionErrorBoundary>
       <div id={recipesAnchorId} className="scroll-mt-20">
         <SectionErrorBoundary label="Cookbook">

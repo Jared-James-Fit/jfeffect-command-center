@@ -37,9 +37,9 @@ describe("/m is only a redirect now (plus the Fillout landing)", () => {
       .filter((f) => !f.startsWith(join("src", "test")) && !f.startsWith(join("src", "routes", "_authenticated", "m")) && !f.endsWith("routeTree.gen.ts"))
       .filter((f) => /\bto[=:]\s*["'`]\/m(\/|["'`])|href=\{?`\/m\//.test(read(f)));
     expect(offenders).toEqual([]);
-    // members' recipes open in the portal
-    expect(read("src/components/nutrition/CookbookContent.tsx")).toContain('const detailPath = "/portal/recipes/$recipeId";');
-    expect(read("src/components/nutrition/RecipeBrowser.tsx")).toContain('const detailPath = "/portal/recipes/$recipeId";');
+    // members' recipes open in the Cookbook itself (a shared link at /portal/recipes/$recipeId)
+    expect(read("src/components/nutrition/CookbookContent.tsx")).not.toMatch(/["'`]\/m\//);
+    expect(read("src/routes/_authenticated/portal/recipes.$recipeId.tsx")).toContain('createFileRoute("/_authenticated/portal/recipes/$recipeId")');
   });
 });
 

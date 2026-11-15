@@ -1,240 +1,266 @@
 /**
- * Cookbook body — code-split so the recipe library and its query only load
- * when the client actually opens the Cookbook.
+ * Cookbook body, code-split so the recipes and their read only load when the
+ * Cookbook is opened. One read of every published recipe (a short curated
+ * list), then search, a row of meal types and Cutting / Bulking, all on the
+ * phone. A recipe opens right here (the sheet's Back returns to the list
+ * where it was), never as a page that leaves Nutrition.
  */
 
 import { useMemo, useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { Card } from "@/components/ui/card";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { ChefHat, Clock, Flame, Beef, Loader2, SlidersHorizontal } from "lucide-react";
+import { Apple, Boxes, ChefHat, ChevronRight, Coffee, IceCreamCone, Search, UtensilsCrossed, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { listCookbookRecipes } from "@/lib/recipes";
 import {
-  COOKBOOK_CATEGORIES,
-  COOKBOOK_FILTERS,
-  COOKBOOK_METHODS,
-  COOKBOOK_PAGE_SIZE,
-  buildCookbookQuerySpec,
-  listCookbookPage,
-  recipeMethodBadge,
-  type CookbookCategory,
-  type CookbookMethod,
-  type Recipe,
-} from "@/lib/recipes";
-import { getRecipeCardMeta } from "@/lib/recipe-meta";
+  COOKBOOK_GOALS,
+  COOKBOOK_GROUPS,
+  cookbookEntry,
+  filterCookbook,
+  type CookbookEntry,
+  type CookbookGoal,
+  type CookbookGroup,
+} from "@/lib/cookbook/view";
+import { CookbookRecipeView, RecipeDisclaimer } from "./CookbookRecipe";
 import type { CookbookViewer } from "./CookbookSheet";
 
-export default function CookbookContent({ viewer }: { viewer: CookbookViewer }) {
+export const COOKBOOK_QUERY_KEY = ["cookbook-recipes"] as const;
+
+export default function CookbookContent({
+  recipeId,
+  onOpenRecipe,
+}: {
+  viewer: CookbookViewer;
+  recipeId: string | null;
+  onOpenRecipe: (id: string) => void;
+}) {
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState<CookbookCategory>("Recommended");
-  const [method, setMethod] = useState<CookbookMethod>("easiest");
-  const [filters, setFilters] = useState<string[]>([]);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [group, setGroup] = useState<CookbookGroup>("all");
+  const [goal, setGoal] = useState<CookbookGoal>("any");
 
-  // Searching looks through every recipe, not just the selected method.
-  const searching = search.trim().length > 0;
-  const effectiveMethod: CookbookMethod = searching ? "all" : method;
-
-  const q = useInfiniteQuery({
-    queryKey: ["cookbook", category, effectiveMethod, filters, search.trim()],
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) =>
-      listCookbookPage(
-        buildCookbookQuerySpec({
-          category,
-          method: effectiveMethod,
-          filters,
-          search,
-          page: pageParam as number,
-          pageSize: COOKBOOK_PAGE_SIZE,
-        }),
-      ),
-    getNextPageParam: (last, all) => (last.hasMore ? all.length : undefined),
-    staleTime: 60_000,
+  const q = useQuery({
+    queryKey: COOKBOOK_QUERY_KEY,
+    queryFn: listCookbookRecipes,
+    staleTime: 5 * 60_000,
   });
-
-  const rows: Recipe[] = useMemo(
-    () => (q.data?.pages ?? []).flatMap((p) => p.rows),
-    [q.data],
-  );
-
-  const detailPath = "/portal/recipes/$recipeId";
-
-  const toggle = (v: string) =>
-    setFilters((cur) => (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]));
+  const entries = useMemo(() => (q.data ?? []).map(cookbookEntry), [q.data]);
+  const shown = useMemo(() => filterCookbook(entries, { group, goal, search }), [entries, group, goal, search]);
+  const open = recipeId ? entries.find((e) => e.id === recipeId) ?? null : null;
+  const plain = group === "all" && goal === "any" && !search.trim();
 
   return (
-    <div className="mt-4 space-y-4">
-      <div className="flex items-center gap-2">
-        <Input
-          placeholder="Search recipes…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="h-11 flex-1"
-        />
-        <Button
-          variant="outline"
-          className="h-11 shrink-0"
-          onClick={() => setFiltersOpen((v) => !v)}
-          aria-expanded={filtersOpen}
-        >
-          <SlidersHorizontal className="mr-1.5 h-4 w-4" />
-          Filters
-          {filters.length > 0 && (
-            <Badge variant="secondary" className="ml-1.5 text-[10px]">{filters.length}</Badge>
+    <div className="mt-3">
+      {recipeId && (
+        <div className="pb-6">
+          {open ? (
+            <CookbookRecipeView entry={open} />
+          ) : q.isLoading ? (
+            <ListSkeleton />
+          ) : (
+            <p className="py-10 text-center text-sm text-muted-foreground">This recipe isn't in the cookbook any more.</p>
           )}
-        </Button>
-      </div>
-
-      {filtersOpen && (
-        <div className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-secondary/20 p-2 sm:grid-cols-3">
-          {COOKBOOK_FILTERS.map((f) => (
-            <Button
-              key={f.value}
-              size="sm"
-              variant={filters.includes(f.value) ? "default" : "outline"}
-              className="h-10 justify-start text-[12px]"
-              onClick={() => toggle(f.value)}
-            >
-              {f.label}
-            </Button>
-          ))}
         </div>
       )}
 
-      <div>
-        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-          How do you want to make it?
-        </div>
-        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
-          {COOKBOOK_METHODS.map((m) => (
+      {/* the list stays mounted under an open recipe, so Back finds it as it was */}
+      <div className={cn("space-y-3", recipeId && "hidden")}>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input
+            placeholder="Search recipes or ingredients"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-11 pl-9 pr-10"
+            inputMode="search"
+            aria-label="Search recipes"
+          />
+          {search && (
             <button
-              key={m.value}
               type="button"
-              onClick={() => setMethod(m.value)}
-              aria-pressed={!searching && m.value === method}
-              className={cn(
-                "shrink-0 rounded-lg border px-3 py-2 text-[12px] font-bold transition",
-                !searching && m.value === method
-                  ? "border-primary bg-primary/15 text-primary"
-                  : "border-border bg-card text-muted-foreground hover:text-foreground",
-              )}
+              onClick={() => setSearch("")}
+              aria-label="Clear search"
+              className="absolute right-1 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-md text-muted-foreground"
             >
-              {m.label}
+              <X className="h-4 w-4" />
             </button>
-          ))}
-        </div>
-        {!searching && method === "easiest" && (
-          <div className="mt-1 text-[11px] text-muted-foreground">
-            Store-bought, no-cook, microwave &amp; air fryer meals — fastest first.
-          </div>
-        )}
-        {searching && (
-          <div className="mt-1 text-[11px] text-muted-foreground">Searching all recipes.</div>
-        )}
-      </div>
-
-      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
-        {COOKBOOK_CATEGORIES.map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => setCategory(c)}
-            className={cn(
-              "shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider transition",
-              c === category
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
-
-      {q.isLoading ? (
-        <div className="flex items-center justify-center py-12 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-        </div>
-      ) : rows.length === 0 ? (
-        <Card className="space-y-3 p-6 text-center text-sm text-muted-foreground">
-          <div>No recipes match yet.</div>
-          {effectiveMethod !== "all" && (
-            <Button variant="outline" size="sm" onClick={() => setMethod("all")}>Show all recipes</Button>
           )}
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {rows.map((r) => (
-            <CookbookCard key={r.id} recipe={r} to={detailPath} />
-          ))}
         </div>
-      )}
 
-      {q.hasNextPage && (
-        <Button
-          variant="outline"
-          className="h-11 w-full"
-          onClick={() => q.fetchNextPage()}
-          disabled={q.isFetchingNextPage}
-        >
-          {q.isFetchingNextPage ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          Load more
-        </Button>
-      )}
+        <ChipRow label="Meal">
+          {COOKBOOK_GROUPS.map((g) => (
+            <Chip key={g.value} on={group === g.value} onClick={() => setGroup(g.value)}>
+              {g.label}
+            </Chip>
+          ))}
+        </ChipRow>
+        <ChipRow label="Goal">
+          {COOKBOOK_GOALS.map((g) => (
+            <Chip key={g.value} on={goal === g.value} onClick={() => setGoal(goal === g.value ? "any" : g.value)}>
+              {g.label}
+            </Chip>
+          ))}
+          {goal !== "any" && (
+            <span className="self-center pl-1 text-xs text-muted-foreground">
+              {goal === "cutting" ? "Leanest, most protein first" : "Biggest first"}
+            </span>
+          )}
+        </ChipRow>
+
+        {q.isLoading ? (
+          <ListSkeleton />
+        ) : q.isError ? (
+          <div className="rounded-xl border border-border p-4 text-sm">
+            <div className="font-semibold">Couldn't load the cookbook</div>
+            <div className="mt-0.5 text-muted-foreground">Check your connection and try again.</div>
+            <Button variant="outline" className="mt-3 h-10" onClick={() => void q.refetch()}>
+              Try again
+            </Button>
+          </div>
+        ) : shown.length === 0 ? (
+          <div className="space-y-3 rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+            <div>No recipes match.</div>
+            <Button
+              variant="outline"
+              className="h-10"
+              onClick={() => {
+                setSearch("");
+                setGroup("all");
+                setGoal("any");
+              }}
+            >
+              Show every recipe
+            </Button>
+          </div>
+        ) : plain ? (
+          <Sections entries={shown} onOpen={onOpenRecipe} />
+        ) : (
+          <>
+            <p className="text-xs text-muted-foreground">
+              {shown.length} {shown.length === 1 ? "recipe" : "recipes"}
+            </p>
+            <RecipeList entries={shown} onOpen={onOpenRecipe} />
+          </>
+        )}
+
+        <RecipeDisclaimer className="mt-4" />
+      </div>
     </div>
   );
 }
 
-function CookbookCard({ recipe, to }: { recipe: Recipe; to: string }) {
-  const meta = getRecipeCardMeta(recipe);
-  const badge = recipeMethodBadge(recipe.tags);
+function ChipRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <Link
-      to={to as any}
-      params={{ recipeId: recipe.id } as any}
-      className="block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-      aria-label={`View recipe: ${recipe.title}`}
+    <div role="group" aria-label={label} className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]">
+      {children}
+    </div>
+  );
+}
+
+function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      className={cn(
+        "h-10 shrink-0 rounded-full border px-4 text-sm font-medium transition",
+        on ? "border-foreground bg-foreground text-background" : "border-border bg-background text-foreground hover:bg-muted",
+      )}
     >
-      <Card className="flex items-center gap-3 overflow-hidden p-3 transition hover:border-primary/40 active:scale-[0.99]">
-        {recipe.image_url ? (
-          <img
-            src={recipe.image_url}
-            alt={recipe.title}
-            loading="lazy"
-            className="h-16 w-16 shrink-0 rounded-md object-cover"
-          />
-        ) : (
-          <div className="grid h-16 w-16 shrink-0 place-items-center rounded-md bg-secondary text-muted-foreground">
-            <ChefHat className="h-5 w-5" />
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-bold leading-snug">{recipe.title}</div>
-          <div className="mt-0.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-            <span>{recipe.category}</span>
-            {badge && (
-              <span className="rounded-full bg-primary/15 px-1.5 py-0.5 font-bold normal-case tracking-normal text-primary">
-                {badge}
+      {children}
+    </button>
+  );
+}
+
+const SECTION_OF: Record<string, { title: string; order: number }> = {
+  Breakfast: { title: "Breakfast", order: 0 },
+  Lunch: { title: "Meals", order: 1 },
+  Dinner: { title: "Meals", order: 1 },
+  Snack: { title: "Snacks", order: 2 },
+  Custom: { title: "Snacks", order: 2 },
+  Dessert: { title: "Sweet", order: 3 },
+  "Meal Prep": { title: "Meal prep", order: 4 },
+};
+
+function Sections({ entries, onOpen }: { entries: CookbookEntry[]; onOpen: (id: string) => void }) {
+  const groups = new Map<string, CookbookEntry[]>();
+  for (const e of entries) {
+    const title = SECTION_OF[e.category]?.title ?? "More";
+    groups.set(title, [...(groups.get(title) ?? []), e]);
+  }
+  const order = (t: string) => Object.values(SECTION_OF).find((s) => s.title === t)?.order ?? 9;
+  return (
+    <div className="space-y-5 pt-1">
+      {[...groups.entries()]
+        .sort((a, b) => order(a[0]) - order(b[0]))
+        .map(([title, list]) => (
+          <section key={title}>
+            <h3 className="mb-1.5 text-sm font-semibold text-muted-foreground">
+              {title} <span className="font-normal">· {list.length}</span>
+            </h3>
+            <RecipeList entries={list} onOpen={onOpen} />
+          </section>
+        ))}
+    </div>
+  );
+}
+
+const ICON_OF: Record<string, typeof ChefHat> = {
+  Breakfast: Coffee,
+  Lunch: UtensilsCrossed,
+  Dinner: UtensilsCrossed,
+  Snack: Apple,
+  Custom: Apple,
+  Dessert: IceCreamCone,
+  "Meal Prep": Boxes,
+};
+
+function RecipeList({ entries, onOpen }: { entries: CookbookEntry[]; onOpen: (id: string) => void }) {
+  return (
+    <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+      {entries.map((e) => {
+        const Icon = ICON_OF[e.category] ?? ChefHat;
+        const line = [
+          e.calories != null ? `${Math.round(e.calories)} kcal` : null,
+          e.protein != null ? `${Math.round(e.protein)} g protein` : null,
+          e.prepMinutes != null ? `${e.prepMinutes} min` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        return (
+          <li key={e.id}>
+            <button
+              type="button"
+              onClick={() => onOpen(e.id)}
+              className="flex min-h-[60px] w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-muted/50 active:bg-muted"
+              data-cookbook-row
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground" aria-hidden>
+                <Icon className="h-[18px] w-[18px]" />
               </span>
-            )}
-          </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground tabular-nums">
-            {meta.calories != null && (
-              <span className="inline-flex items-center gap-1"><Flame className="h-3 w-3" />{meta.calories} kcal</span>
-            )}
-            {meta.protein != null && (
-              <span className="inline-flex items-center gap-1"><Beef className="h-3 w-3" />{meta.protein}g</span>
-            )}
-            {meta.prepMinutes != null && (
-              <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{meta.prepMinutes} min</span>
-            )}
-          </div>
-        </div>
-      </Card>
-    </Link>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[15px] font-semibold leading-tight">{e.title}</span>
+                <span className="mt-0.5 block truncate text-xs text-muted-foreground tabular-nums">
+                  {line}
+                  {e.servings > 1 ? ` · ${e.servings} servings` : ""}
+                </span>
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function ListSkeleton() {
+  return (
+    <div className="space-y-2" aria-label="Loading recipes">
+      {[0, 1, 2, 3, 4].map((i) => (
+        <div key={i} className="h-[60px] animate-pulse rounded-xl bg-muted" />
+      ))}
+    </div>
   );
 }

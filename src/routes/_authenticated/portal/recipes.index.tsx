@@ -1,92 +1,11 @@
-import { usePovFn } from "@/lib/client-pov-args";
-import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
-import { PageHeader } from "@/components/app-shell";
-import { supabase } from "@/integrations/supabase/client";
-import { usePortalUserId } from "@/lib/client-impersonation";
-import { RecipeBrowser } from "@/components/nutrition/RecipeBrowser";
-import { MemberMealPlanPanel } from "@/components/nutrition/MemberMealPlanPanel";
-import { MacroTargetsChart } from "@/components/nutrition/MacroTargetsChart";
-import { getActiveMemberTargets } from "@/lib/nutrition-targets/member-targets.functions";
-import { Card } from "@/components/ui/card";
-import { Target } from "lucide-react";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+// Removed page: its address only redirects, so old links never 404. The old
+// recipe list (a second copy of the Nutrition page with a recipe browser under
+// it, and a member's meal plan panel even for coaching clients) is the
+// Cookbook in Nutrition now; `?cookbook=1` opens it.
 export const Route = createFileRoute("/_authenticated/portal/recipes/")({
-  component: PortalRecipes,
+  beforeLoad: () => {
+    throw redirect({ to: "/portal/nutrition-targets", search: { cookbook: "1" } as never, replace: true });
+  },
 });
-
-function PortalRecipes() {
-  const portalUserId = usePortalUserId();
-  const { data: client } = useQuery({
-    queryKey: ["my-client-recipes", portalUserId],
-    enabled: !!portalUserId,
-    queryFn: async () =>
-      (
-        await supabase
-          .from("clients")
-          .select("goals, goals_tags, food_restrictions, dietary_preferences, food_dislikes, cooking_skill")
-          .eq("user_id", portalUserId!)
-          .maybeSingle()
-      ).data,
-  });
-  const c = client as any;
-  const goalsTags: string[] = Array.isArray(c?.goals_tags) ? c.goals_tags : [];
-  const goals: string[] = goalsTags.length
-    ? goalsTags
-    : c?.goals
-    ? [String(c.goals)]
-    : [];
-
-  const getTargetsFn = usePovFn(useServerFn(getActiveMemberTargets));
-  const targetsQ = useQuery({
-    queryKey: ["portal-recipes-targets", portalUserId],
-    queryFn: () => getTargetsFn({}),
-    staleTime: 60_000,
-  });
-  const t = targetsQ.data as any;
-  const profile = {
-    goals,
-    foodRestrictions: Array.isArray(c?.food_restrictions) ? c.food_restrictions : [],
-    dietaryPreferences: Array.isArray(c?.dietary_preferences) ? c.dietary_preferences : [],
-    foodDislikes: Array.isArray(c?.food_dislikes) ? c.food_dislikes : [],
-    proteinTarget: t?.protein_g ?? null,
-    calorieTarget: t?.calories ?? null,
-    maxPrepMinutes: null as number | null,
-    cookingSkill: (c?.cooking_skill as any) ?? null,
-  };
-
-  return (
-    <>
-      <PageHeader title="Nutrition" subtitle="Your meal plan, targets, and recipes." />
-      <MemberMealPlanPanel />
-      {t && (
-        <div className="px-4 md:px-6 pt-4">
-          <Card className="p-4 md:p-5 space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
-                <Target className="h-4 w-4" />
-              </div>
-              <div>
-                <div className="text-sm font-semibold">Your Targets</div>
-                <div className="text-[11px] text-muted-foreground">
-                  {t.source === "coach" ? "Set by your coach" : t.source === "manual" ? "Manually set" : "Calculated"}
-                </div>
-              </div>
-            </div>
-            <MacroTargetsChart
-              calories={t.calories}
-              protein={t.protein_g}
-              carbs={t.carbs_g}
-              fats={t.fat_g}
-            />
-          </Card>
-        </div>
-      )}
-      <div className="p-4 pb-28 md:p-6 md:pb-12">
-        <div className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">Recipes</div>
-        <RecipeBrowser viewer="client" userId={portalUserId ?? undefined} goals={goals} profile={profile} />
-      </div>
-    </>
-  );
-}
