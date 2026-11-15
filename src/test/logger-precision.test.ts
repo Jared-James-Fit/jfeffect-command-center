@@ -48,7 +48,8 @@ describe("suggested: a weight to choose from only where the lifter chooses by fe
     expect(card).toContain("Pick within");
     const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
     expect(wdv).toContain("picks={loadPicks} onApply={!readonly && clientId && openSetCount > 0 ? fillLoadOnOpenSets : null}");
-    expect(wdv).toContain("mainLift: isMainLiftFamily(family), effortPrescribed: rpeTarget != null || rirTarget != null");
+    expect(wdv).toContain("mainLift: rangeLift(family, name, exercise?.equipment), effortPrescribed: rpeTarget != null || rirTarget != null");
+    expect(wdv).toContain("firstOfLift: firstHeavySet, loggedHere: workedToday,");
     // fillLoadOnOpenSets writes drafts: completed_at stays null, logged sets are skipped
     const fill = wdv.slice(wdv.indexOf("const fillLoadOnOpenSets"), wdv.indexOf("const fillLoadOnOpenSets") + 1500);
     expect(fill).toContain("if (ex?.completed_at) continue;");

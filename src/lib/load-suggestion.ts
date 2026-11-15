@@ -71,7 +71,15 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 //      so read as logged they pulled a fresh top set down: 425 lb × 4 @ 6 then
 //      2 × 405 × 4 @ 6 suggested 410–430 for the same 4 @ 6 the next week (now
 //      about 430). Once a set is logged today, and for the day read across cards
-//      (todayVsUsual), history is read as logged, as before.
+//      (todayVsUsual), history is read as logged, as before. So is a BACK-OFF
+//      card's own (a later card of the exercise today, backoffCards): until its
+//      top set carries (note 9) its number is a back-off's, not a fresh top set's.
+//      Backtested Nov 15 2026 on 147 back-off cards with nothing carried (10
+//      athletes): read as top sets they came out +2.6% heavy, 39.5% over 5% too
+//      heavy; read as logged −1.5%, 27.2%, within 5% 34.0% → 36.7%, fewer
+//      too-heavy suggestions in both halves of the time range and for 6 athletes
+//      with 5+ cards (none got more); top-set cards keep note 11 (6.25% off
+//      read as top sets vs 7.70% as logged on the same days).
 // Back-off history (note 11), backtested Nov 15 2026 on 674 real first sets of
 // a squat / bench / deadlift-family session (19 athletes, Jun–Nov 2026),
 // predicted from history alone at the reps and RPE logged: competition lifts
@@ -734,8 +742,10 @@ export function suggestSetLoad(
 
 /**
  * The in-session "audible": how much to change the next set when the bar moves
- * clearly faster or slower than planned. ~2.5% (about half an RPE on the chart),
- * rounded to a loadable plate step and never less than one step.
+ * clearly faster or slower than planned. ~2.5% rounded to a loadable plate
+ * step and never less than one step (3.3% on average once rounded): a little
+ * under one RPE on the chart, where one rep in reserve is worth 3–4.5% at 1–8
+ * reps.
  */
 export function audibleStep(target: number, unit: "kg" | "lb"): number {
   const step = loadStep(unit, target);
@@ -744,31 +754,50 @@ export function audibleStep(target: number, unit: "kg" | "lb"): number {
 
 /**
  * When the suggestion is a weight to choose from rather than one number: the
- * first working set of a squat, bench or deadlift (or a variation of one) that's
- * prescribed by effort, read from enough history, before anything today has
- * said how the day is going. That's the call a lifter makes from their
- * warm-ups, so the card offers the loads one "audible" either side of the
- * estimate (about ±2.5%, the same step the ⓘ says to move by when the bar is
- * flying or slow), never wider than the model's own calibrated range.
+ * day's first heavy set of a barbell squat, bench or deadlift (the competition
+ * lift or a barbell variation, `rangeLift`) that's prescribed by effort, read
+ * from enough history, on the lift's first card today with nothing of it logged
+ * anywhere yet (`firstHeavyCards`, pick-range.ts). That's the call a lifter makes
+ * from their warm-ups, so the card offers the loads one "audible" either side of
+ * the estimate (the same step the ⓘ says to move by when the bar is flying or
+ * slow), never wider than the model's own calibrated range.
  *
- * Everything else stays one number: once a set is logged today (the engine has
- * read the day), after a logged final warm-up (it already tuned the number), a
- * back-off read from today's top set, an early estimate from thin history (a
- * range would claim a precision it doesn't have), and accessories, whose loads
- * jump by the stack or the dumbbell and progress from last time. A coach's load
- * (a % of a max, a fixed weight, a top-set back-off) never reaches the engine.
+ * Why one audible, not the model's spread: backtested Nov 15 2026 on 316 cold
+ * first sets of the competition lifts (11 athletes) and 354 of variations (16),
+ * the honest cold uncertainty is wide (the middle half of real loads ran −4% to
+ * +10% of the estimate), and the model's own spread barely varies case to case
+ * (at its 5% floor two times in three), so it can't size a range per lift. A
+ * range that wide is no choice at all; one audible either side (±3.3% on average
+ * once rounded to plates, a little under one RPE either side of the target)
+ * held as many real first sets as an exact ±1 RPE band on the chart (37% vs
+ * 36%), so the step stays: the loads between a day an RPE easier and an RPE
+ * harder than usual, the swing a lifter can actually feel in their warm-ups.
+ *
+ * Everything else stays one number: a set logged on this card today, rated or
+ * not (`loggedHere`), a logged final warm-up (it already tuned the number), a
+ * back-off or variation on a later card of the lift (`firstOfLift`), an early
+ * estimate from thin history (a range would claim a precision it doesn't have),
+ * and accessories, including a dumbbell, machine or band lift of a main lift's
+ * family, whose loads jump by the stack or the dumbbell and progress from last
+ * time. A coach's load (a % of a max, a fixed weight, a top-set back-off) never
+ * reaches the engine.
  */
 export const PICK_RANGE_MAX_LOADS = 7;
 export function suggestionPicks(input: {
   hint: LoadSuggestion;
   model: Pick<LoadModel, "source" | "early" | "carried" | "warmup" | "today">;
-  /** The exercise is a competition lift or a variation of one (squat / bench / deadlift family). */
+  /** A barbell squat, bench or deadlift: the competition lift or a barbell variation (rangeLift, pick-range.ts). */
   mainLift: boolean;
   /** The prescription names an RPE or RIR (planningTarget otherwise assumes RPE 8). */
   effortPrescribed: boolean;
+  /** The lift's first card today, with no set of it logged on another card (firstHeavyCards). */
+  firstOfLift?: boolean;
+  /** A working set is already logged on this card today, rated or not. */
+  loggedHere?: boolean;
 }): { low: number; high: number; loads: number[] } | null {
   const { hint, model } = input;
   if (!input.mainLift || !input.effortPrescribed) return null;
+  if (input.firstOfLift === false || input.loggedHere) return null;
   if (model.source !== "history" || model.early || model.carried || model.warmup || model.today.length) return null;
   const swing = audibleStep(hint.target, hint.unit);
   const down = Math.min(swing, hint.target - hint.low);

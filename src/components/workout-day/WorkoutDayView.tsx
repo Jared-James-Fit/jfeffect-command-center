@@ -70,6 +70,7 @@ import { pushWorkoutNote } from "@/lib/workout-notes";
 import { writeSetEditAudit } from "@/lib/logged-set-audit";
 import { saveExerciseUnitPref, type WUnit } from "@/lib/exercise-unit-prefs";
 import { isMainLiftFamily, resolveWorkoutRowUnits } from "@/lib/workout-unit-resolution";
+import { backoffCards, firstHeavyCards, rangeLift } from "@/lib/workouts/pick-range";
 import {
   convertLoad,
   displayLoadInUnit,
@@ -1064,6 +1065,20 @@ function WorkoutDay({
     }
     return later;
   }, [rows]);
+
+  // The cards that hold the day's first heavy set of a barbell squat, bench or
+  // deadlift: only there is a suggestion a few weights to choose from by how the
+  // warm-ups move (pick-range.ts). Later cards of the lift, and every card once
+  // the lift has a set logged elsewhere, read one number.
+  const firstHeavyRowIds = useMemo(() => {
+    const logged = new Set<string>();
+    for (const x of results as any[]) {
+      if (x.completed_at && resolveLoadType(x.load_type, x.is_bodyweight) === "external") logged.add(x.row_id);
+    }
+    return firstHeavyCards(rows as any[], logged);
+  }, [rows, results]);
+  // A later card of the same exercise today: its back-offs (pick-range.ts).
+  const backoffRowIds = useMemo(() => backoffCards(rows as any[]), [rows]);
 
   // Bodyweight (smoothed) — strength scales with it, so past sets are adjusted
   // for any change since they were lifted. See load-suggestion.ts.
@@ -2877,6 +2892,8 @@ function WorkoutDay({
                     clientId={client?.id}
                     previousLift={previousLiftByRow.get(r.id) ?? null}
                       warmedUp={warmedUpRowIds.has(r.id)}
+                      firstHeavySet={firstHeavyRowIds.has(r.id)}
+                      followsSameExercise={backoffRowIds.has(r.id)}
                       lastWeekSwap={lastWeekSwapByRow.get(r.id) ?? null}
                       dayRead={dayReadByRow.get(r.id) ?? null}
                       backoffsFollow={(rows as any[]).slice(rowIndex + 1).some((o) => {
@@ -3441,7 +3458,7 @@ function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = nul
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -3945,8 +3962,12 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     return buildLoadModel({
       history: loadHistory, today, unit: activeUnit, readiness, warmup: warmupForModel, bodyweightKg,
       dayFactor: dayRead?.factor ?? null, carryToday, lift: liftKind,
+      // A back-off card reads its own past back-offs as logged, never as the
+      // top set they imply (that's for a fresh first set): until today's top
+      // set carries (it's rated), its number is a back-off's (note 11).
+      backoffs: followsSameExercise ? "as_logged" : undefined,
     });
-  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness, warmupForModel?.load, warmupForModel?.reps, warmupForModel?.rpe, bodyweightKg, dayRead, liftKind]);
+  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness, warmupForModel?.load, warmupForModel?.reps, warmupForModel?.rpe, bodyweightKg, dayRead, liftKind, followsSameExercise]);
   // Every card that can suggest gets the on/off chip (one switch for the whole
   // workout). Doesn't wait for history so the chip never pops in late.
   const canSuggest = !hideWeight && !coachOwnsLoad && rowLoadType === "external" && !!loadPlan;
@@ -3962,9 +3983,13 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   // how the warm-ups move (suggestionPicks); everything else stays one number.
   const loadPicks = useMemo(
     () => (loadHint && loadModel
-      ? suggestionPicks({ hint: loadHint, model: loadModel, mainLift: isMainLiftFamily(family), effortPrescribed: rpeTarget != null || rirTarget != null })
+      ? suggestionPicks({
+          hint: loadHint, model: loadModel,
+          mainLift: rangeLift(family, name, exercise?.equipment), effortPrescribed: rpeTarget != null || rirTarget != null,
+          firstOfLift: firstHeavySet, loggedHere: workedToday,
+        })
       : null),
-    [loadHint, loadModel, family, rpeTarget, rirTarget],
+    [loadHint, loadModel, family, name, exercise?.equipment, rpeTarget, rirTarget, firstHeavySet, workedToday],
   );
   // "Last warm-up" row at the top of the set table (compound lifts, before the
   // first working set): says what to warm up to, then reads how it felt to set
