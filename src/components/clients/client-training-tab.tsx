@@ -41,6 +41,8 @@ import { blockNameParts } from "@/lib/training-roadmap";
 import { todayISO, formatRange, type ScheduleBlock } from "@/lib/block-schedule-model";
 import { useClientTrainingSchedule, clientTrainingScheduleKey } from "@/lib/use-client-training-schedule";
 import { trainingRoadmap, trainingAlerts, type TrainingAlert } from "@/lib/training-tab";
+import { gapParts } from "@/lib/program-gaps";
+import { useProgramGaps } from "@/components/program-gaps/use-program-gaps";
 import { WEEK_DAYS, SHORT_DAY, type WeekDay } from "@/lib/training-schedule";
 import { TrainingReportSheet } from "@/components/workouts/training-report-sheet";
 import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
@@ -74,17 +76,19 @@ type ClientRow = {
 
 /** Element id of the schedule card; /admin/clients/$id/schedule lands here. */
 export const TRAINING_SCHEDULE_ANCHOR = "schedule";
-/** Element id of Athlete setup (training days): "Place them" goes there when no days are set. */
-const ATHLETE_SETUP_ANCHOR = "athlete-setup";
+/** Element id of Athlete setup (training days, maxes): "Place them" goes there when no days are set. */
+export const ATHLETE_SETUP_ANCHOR = "athlete-setup";
 
 export function ClientTrainingTab({ clientId, client }: { clientId: string; client: ClientRow | null }) {
   const name = (client?.full_name as string | null) ?? null;
   const hash = useRouterState({ select: (r) => r.location.hash });
-  // "Manage Schedule" and old /schedule links open the tab on the calendar.
+  // "Manage Schedule" and old /schedule links open the tab on the calendar;
+  // Missing program data's "Add maxes" / "Set days" open it on Athlete setup.
   useEffect(() => {
-    if (hash.replace(/^#/, "") !== TRAINING_SCHEDULE_ANCHOR) return;
+    const id = hash.replace(/^#/, "");
+    if (id !== TRAINING_SCHEDULE_ANCHOR && id !== ATHLETE_SETUP_ANCHOR) return;
     const t = window.setTimeout(() => {
-      document.getElementById(TRAINING_SCHEDULE_ANCHOR)?.scrollIntoView({ block: "start" });
+      document.getElementById(id)?.scrollIntoView({ block: "start" });
     }, 400);
     return () => window.clearTimeout(t);
   }, [hash]);
@@ -134,6 +138,13 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
     () => trainingAlerts({ blocks, roadmap, unscheduled: data?.unscheduled ?? [], today, trainingDays }),
     [blocks, roadmap, data?.unscheduled, today, trainingDays],
   );
+  // what their upcoming workouts are missing (Missing program data); dates and
+  // training days are this card's own alerts and Athlete setup's
+  const { byClient: gapsByClient } = useProgramGaps({ clientId });
+  const gapLine = useMemo(() => {
+    const g = gapsByClient.get(clientId);
+    return g ? gapParts(g, { schedule: false }).join(" · ") : "";
+  }, [gapsByClient, clientId]);
   const current = roadmap.current;
   // What "Edit program" opens: the running block, else the next one, else a built one.
   const focus = current ?? roadmap.live[0] ?? roadmap.drafts[0] ?? null;
@@ -295,8 +306,17 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
           </>
         )}
 
-        {alerts.length > 0 && (
+        {(alerts.length > 0 || gapLine) && (
           <ul className="mt-3 space-y-2" data-training-alerts>
+            {gapLine && (
+              <li className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200" data-training-gaps>
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span className="min-w-0 flex-1">{gapLine}</span>
+                <Button asChild size="sm" variant="outline" className="h-9 shrink-0 border-amber-500/50 bg-background/60 px-3 text-xs">
+                  <Link to="/admin/program-gaps" search={{ client: clientId } as any}>Review</Link>
+                </Button>
+              </li>
+            )}
             {alerts.map((a, i) => {
               const action = alertAction(a);
               return (

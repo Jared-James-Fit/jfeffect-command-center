@@ -1,5 +1,6 @@
 import { Link, redirect, useNavigate } from "@tanstack/react-router";
 import { LeadsInboxRow } from "@/components/leads/leads-inbox-row";
+import { useProgramGaps } from "@/components/program-gaps/use-program-gaps";
 import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { useEffect, useMemo, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
@@ -150,7 +151,7 @@ function SignalLine({ tags }: { tags: SignalTag[] }) {
 // name, blue dot, the line under it), so they aren't filters; the Messages
 // tab's badge and the Inbox chip count new messages only (messagesBadge). Inbox is "everything"; Archived is the way back to archived
 // chats. Every chip but Inbox shows only while something's in it.
-const FILTERS = ["Inbox", "Weekly", "Nutrition", "To Review", "Overdue", "Pain", "Media", "Sessions", "Archived"] as const;
+const FILTERS = ["Inbox", "Weekly", "Nutrition", "To Review", "Overdue", "Pain", "Media", "Sessions", "Program", "Archived"] as const;
 type Filter = typeof FILTERS[number];
 const FILTER_LABEL: Partial<Record<Filter, string>> = {
   Weekly: "Weekly check-ins",
@@ -160,6 +161,7 @@ const FILTER_LABEL: Partial<Record<Filter, string>> = {
   Pain: "Pain flagged",
   Media: "Photos & videos",
   Sessions: "Session requests",
+  Program: "Program data",
 };
 const ONLY_WHEN_ANY = new Set<Filter>(FILTERS.filter((f) => f !== "Inbox"));
 
@@ -168,7 +170,7 @@ const ONLY_WHEN_ANY = new Set<Filter>(FILTERS.filter((f) => f !== "Inbox"));
  * Archived doesn't, so a number only ever means "this is waiting on you".
  */
 const FILTER_BADGE: Partial<Record<Filter, "urgent" | "warn" | "info">> = {
-  Weekly: "info", Nutrition: "info", "To Review": "info", Overdue: "warn", Pain: "urgent", Media: "info", Sessions: "info",
+  Weekly: "info", Nutrition: "info", "To Review": "info", Overdue: "warn", Pain: "urgent", Media: "info", Sessions: "info", Program: "warn",
 };
 const BADGE_STYLE = {
   urgent: "bg-red-500 text-white",
@@ -196,7 +198,7 @@ type FilterRow = {
 function inFilter(it: FilterRow, filter: Filter): boolean {
   const status = it.state?.status ?? "open";
   switch (filter) {
-    case "Weekly": case "Nutrition": case "To Review": case "Overdue": case "Media": case "Pain": case "Sessions":
+    case "Weekly": case "Nutrition": case "To Review": case "Overdue": case "Media": case "Pain": case "Sessions": case "Program":
       return status !== "archived" && matchesSignal(it.signals, filter as SignalFilter);
     case "Archived": return status === "archived";
     default: return status !== "archived" && (it.workflow.state !== "done" || !!it.last || !!it.liftReview);
@@ -594,6 +596,8 @@ export function MessagesInbox({
   }, [lastMessages, mediaReactions, clients]);
   const painByClient = useMemo(() => painWaitingByClient(lastMessages as any), [lastMessages]);
   const reviewByClient = useMemo(() => reviewItemsByClient(toReviewRows, formTitles(lastMessages as any)), [toReviewRows, lastMessages]);
+  // what their upcoming workouts are missing (the Program data filter, the row's line, the Brief)
+  const programGaps = useProgramGaps({ enabled: role === "admin" || role === "coach" });
   const sessionRequestsByClient = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of sessionRequestRows) m.set(r.client_id, (m.get(r.client_id) ?? 0) + 1);
@@ -630,6 +634,7 @@ export function MessagesInbox({
       media: mediaByClient.get(c.id) ?? [],
       pain: painByClient.get(c.id) ?? [],
       sessionRequests: sessionRequestsByClient.get(c.id) ?? 0,
+      program: programGaps.byClient.get(c.id) ?? null,
     };
     const tags = signalTags(signals, {
       followUp: workflow.state === "waiting_on_client" && status.waiting === "overdue",
@@ -637,7 +642,7 @@ export function MessagesInbox({
     });
     return { client: c, state, last, unread, liftReview, workflow, signals, tags, ...status };
   }), [clients, stateMap, lastByClient, unreadByClient, liftReviewsByClient, inboxByClient, requestsByClient,
-    reviewByClient, mediaByClient, painByClient, sessionRequestsByClient]);
+    reviewByClient, mediaByClient, painByClient, sessionRequestsByClient, programGaps.byClient]);
 
   const conversations = useMemo(() => {
     const items = allRows
@@ -967,6 +972,16 @@ export function MessagesInbox({
                 <span className={formFilterSummary.overdue ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}>{formFilterSummary.overdue} overdue</span>
               </span>
               <span className="shrink-0">Every week in the tracker ›</span>
+            </Link>
+          )}
+          {filter === "Program" && (
+            <Link
+              to="/admin/program-gaps"
+              data-program-gaps-strip
+              className="mt-1 flex items-center justify-between gap-2 rounded-lg bg-secondary/50 px-3 py-2 text-[13px] font-semibold text-foreground hover:bg-secondary"
+            >
+              <span className="min-w-0 truncate">Every client's missing program data, with fixes</span>
+              <span aria-hidden>›</span>
             </Link>
           )}
           {filter === "Overdue" && (

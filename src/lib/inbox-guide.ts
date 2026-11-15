@@ -5,7 +5,7 @@
  */
 
 export type InboxFilterKey =
-  | "Inbox" | "Weekly" | "Nutrition" | "To Review" | "Overdue" | "Pain" | "Media" | "Sessions" | "Archived";
+  | "Inbox" | "Weekly" | "Nutrition" | "To Review" | "Overdue" | "Pain" | "Media" | "Sessions" | "Program" | "Archived";
 
 /** What a filter shows, one sentence each. */
 export const FILTER_HELP: Record<Exclude<InboxFilterKey, "Inbox">, string> = {
@@ -16,6 +16,7 @@ export const FILTER_HELP: Record<Exclude<InboxFilterKey, "Inbox">, string> = {
   Pain: "A client said something hurt after a workout. Worth a check-in.",
   Media: "Photos and videos a client sent in the last 2 weeks that you haven't replied to or reacted to.",
   Sessions: "A client asked for a session and is waiting on your answer.",
+  Program: "A client's upcoming workouts are missing something they need to follow them: an RPE, RIR or weight, a max a % reads, a date, or training days. Amber when it's this week.",
   Archived: "Chats you archived, and members' Support chats you marked Done. One comes back to the Inbox when they write.",
 };
 

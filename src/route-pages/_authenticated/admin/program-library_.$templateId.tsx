@@ -86,6 +86,7 @@ import { ProgramStatusBadge } from "@/components/programs/program-status-badge";
 import { MembershipListingSheet } from "@/components/programs/membership-listing-sheet";
 import { useAuth } from "@/lib/auth";
 import { AddExtraDayDialog } from "@/components/add-extra-day-dialog";
+import { takeBlockEditorWeek } from "@/lib/block-editor-focus";
 import { getRouteApi as __getRouteApi } from "@tanstack/react-router";
 const Route = __getRouteApi("/_authenticated/admin/program-library_/$templateId");
 
@@ -1560,6 +1561,18 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
     if (activeIdx >= weeksData.length) _setActiveIdx(weeksData.length - 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weeksData.length]);
+  // A link that knows which week needs work (Missing program data's "Open")
+  // opens on it, one week at a time, without changing the saved view.
+  useEffect(() => {
+    if (weeksData.length === 0) return;
+    const want = takeBlockEditorWeek();
+    if (want == null) return;
+    const i = weeksData.findIndex((w: any, idx: number) => Number(w?.week_index ?? idx + 1) === want);
+    if (i < 0) return;
+    _setView("week");
+    _setActiveIdx(i);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeksData.length > 0]);
   const { clientId: ctxClientId, blockId: ctxBlockId } = useClientMaxesCtx();
   const weekStats = useMemo(() => weeksData.map((w: any) => {
     const days = w.days || [];

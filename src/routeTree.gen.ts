@@ -107,6 +107,7 @@ import { Route as AuthenticatedAdminPaymentLinksRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin/payments'
 import { Route as AuthenticatedAdminPopupsRouteImport } from './routes/_authenticated/admin/popups'
 import { Route as AuthenticatedAdminProgramAssignRouteImport } from './routes/_authenticated/admin/program-assign'
+import { Route as AuthenticatedAdminProgramGapsRouteImport } from './routes/_authenticated/admin/program-gaps'
 import { Route as AuthenticatedAdminProgramLibraryRouteImport } from './routes/_authenticated/admin/program-library'
 import { Route as AuthenticatedAdminProgramSubmissionsRouteImport } from './routes/_authenticated/admin/program-submissions'
 import { Route as AuthenticatedAdminProgrammingRouteImport } from './routes/_authenticated/admin/programming'
@@ -835,6 +836,12 @@ const AuthenticatedAdminProgramAssignRoute =
   AuthenticatedAdminProgramAssignRouteImport.update({
     id: '/program-assign',
     path: '/program-assign',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminProgramGapsRoute =
+  AuthenticatedAdminProgramGapsRouteImport.update({
+    id: '/program-gaps',
+    path: '/program-gaps',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminProgramLibraryRoute =
@@ -2058,6 +2065,7 @@ export interface FileRoutesByFullPath {
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/admin/program-assign': typeof AuthenticatedAdminProgramAssignRouteWithChildren
+  '/admin/program-gaps': typeof AuthenticatedAdminProgramGapsRoute
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/admin/program-submissions': typeof AuthenticatedAdminProgramSubmissionsRoute
   '/admin/programming': typeof AuthenticatedAdminProgrammingRoute
@@ -2343,6 +2351,7 @@ export interface FileRoutesByTo {
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/admin/program-assign': typeof AuthenticatedAdminProgramAssignRouteWithChildren
+  '/admin/program-gaps': typeof AuthenticatedAdminProgramGapsRoute
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/admin/program-submissions': typeof AuthenticatedAdminProgramSubmissionsRoute
   '/admin/programming': typeof AuthenticatedAdminProgrammingRoute
@@ -2634,6 +2643,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/_authenticated/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/_authenticated/admin/program-assign': typeof AuthenticatedAdminProgramAssignRouteWithChildren
+  '/_authenticated/admin/program-gaps': typeof AuthenticatedAdminProgramGapsRoute
   '/_authenticated/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/_authenticated/admin/program-submissions': typeof AuthenticatedAdminProgramSubmissionsRoute
   '/_authenticated/admin/programming': typeof AuthenticatedAdminProgrammingRoute
@@ -2925,6 +2935,7 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/popups'
     | '/admin/program-assign'
+    | '/admin/program-gaps'
     | '/admin/program-library'
     | '/admin/program-submissions'
     | '/admin/programming'
@@ -3210,6 +3221,7 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/popups'
     | '/admin/program-assign'
+    | '/admin/program-gaps'
     | '/admin/program-library'
     | '/admin/program-submissions'
     | '/admin/programming'
@@ -3500,6 +3512,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/payments'
     | '/_authenticated/admin/popups'
     | '/_authenticated/admin/program-assign'
+    | '/_authenticated/admin/program-gaps'
     | '/_authenticated/admin/program-library'
     | '/_authenticated/admin/program-submissions'
     | '/_authenticated/admin/programming'
@@ -4470,6 +4483,13 @@ declare module '@tanstack/react-router' {
       path: '/program-assign'
       fullPath: '/admin/program-assign'
       preLoaderRoute: typeof AuthenticatedAdminProgramAssignRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/program-gaps': {
+      id: '/_authenticated/admin/program-gaps'
+      path: '/program-gaps'
+      fullPath: '/admin/program-gaps'
+      preLoaderRoute: typeof AuthenticatedAdminProgramGapsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/program-library': {
@@ -6016,6 +6036,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
   AuthenticatedAdminPopupsRoute: typeof AuthenticatedAdminPopupsRoute
   AuthenticatedAdminProgramAssignRoute: typeof AuthenticatedAdminProgramAssignRouteWithChildren
+  AuthenticatedAdminProgramGapsRoute: typeof AuthenticatedAdminProgramGapsRoute
   AuthenticatedAdminProgramLibraryRoute: typeof AuthenticatedAdminProgramLibraryRoute
   AuthenticatedAdminProgramSubmissionsRoute: typeof AuthenticatedAdminProgramSubmissionsRoute
   AuthenticatedAdminProgrammingRoute: typeof AuthenticatedAdminProgrammingRoute
@@ -6154,6 +6175,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminPopupsRoute: AuthenticatedAdminPopupsRoute,
     AuthenticatedAdminProgramAssignRoute:
       AuthenticatedAdminProgramAssignRouteWithChildren,
+    AuthenticatedAdminProgramGapsRoute: AuthenticatedAdminProgramGapsRoute,
     AuthenticatedAdminProgramLibraryRoute:
       AuthenticatedAdminProgramLibraryRoute,
     AuthenticatedAdminProgramSubmissionsRoute:
