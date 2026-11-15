@@ -32,6 +32,9 @@ export type PreviousLiftLog = {
   bodyweightKg?: number | null;
   /** Role of the card it was logged on, when the program named one. */
   purposeLabel?: string | null;
+  /** The card (exercise row) it was logged on and that card's place in the workout. */
+  rowId?: string | null;
+  rowOrder?: number | null;
   /** A timed set's logged time and calories (cardio, holds). */
   durationSeconds?: number | null;
   calories?: number | null;

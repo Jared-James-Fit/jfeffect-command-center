@@ -227,6 +227,9 @@ function SuggestionWhy({ hint, why, model, warmup, audible, range, picks, rpe, c
             {Math.abs((model.bodyweightScale ?? 1) - 1) >= 0.01 &&
               ` Adjusted ${model.bodyweightScale > 1 ? "up" : "down"} ${Math.abs(Math.round((model.bodyweightScale - 1) * 1000) / 10)}% for your bodyweight change (strength doesn't move one-for-one with bodyweight, so it's about two thirds of the change).`}
             {!picks && range && <> A good day lands anywhere in <span className="tabular-nums">{range} {hint.unit}</span>.</>}
+            {(model.backoffsAsTopSet ?? 0) > 0 && (
+              <span data-testid="load-backoff-history"> Past back-offs count about {Math.round(BACKOFF_FATIGUE * 100)}% heavier, since they're done after the top set.</span>
+            )}
           </p>
           {model.carriedTop && (() => {
             // The math behind a back-off, the way a coach would say it.
