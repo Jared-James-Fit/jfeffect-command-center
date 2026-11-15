@@ -152,6 +152,11 @@ export interface ExerciseTag {
   variation_type?: string | null;
   counts_toward_volume?: boolean | null;
   volume_multiplier?: number | string | null;
+  /** what the library carries when no variation type is tagged (variationTypeOf) */
+  is_competition_lift?: boolean | null;
+  competition_lift_type?: string | null;
+  exercise_category?: string | null;
+  movement_family?: string | null;
 }
 
 export interface PlannedRow {
@@ -175,12 +180,35 @@ function toNumber(v: number | string | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+const ISOLATION_PATTERNS = new Set(["arms", "delts", "hamstring_curl", "knee_extension", "core"]);
+const COMPOUND_PATTERNS = new Set(["squat", "hip_hinge", "horizontal_push", "horizontal_pull", "vertical_push", "vertical_pull", "glutes"]);
+const COMP_FAMILIES = new Set(["squat", "bench", "deadlift"]);
+
+/**
+ * An exercise's variation type: its own tag when the library has one, else
+ * read from what the library does carry (no exercise had a variation type or
+ * multiplier, so every program read "0 effective"): a competition lift, a
+ * squat / bench / deadlift variation (`movement_family`), an isolation or a
+ * compound pattern, conditioning, else an accessory.
+ */
+export function variationTypeOf(ex: ExerciseTag): VariationType {
+  const stored = String(ex.variation_type ?? "") as VariationType;
+  if ((VARIATION_TYPES as readonly string[]).includes(stored)) return stored;
+  const pattern = String(ex.primary_movement_pattern ?? "").toLowerCase();
+  if (pattern === "conditioning") return "conditioning";
+  if (ex.is_competition_lift || ex.competition_lift_type || ex.exercise_category === "competition") return "competition";
+  if (COMP_FAMILIES.has(String(ex.movement_family ?? "").toLowerCase())) return "close_variation";
+  if (ISOLATION_PATTERNS.has(pattern)) return "isolation";
+  if (COMPOUND_PATTERNS.has(pattern)) return "secondary_compound";
+  return "accessory";
+}
+
 function effectiveMultiplier(ex: ExerciseTag | undefined): number {
   if (!ex) return 0;
   if (ex.counts_toward_volume === false) return 0;
   const stored = toNumber(ex.volume_multiplier ?? null);
   if (stored > 0) return stored;
-  return multiplierForVariation(ex.variation_type);
+  return multiplierForVariation(variationTypeOf(ex));
 }
 
 export interface VolumeBucket {

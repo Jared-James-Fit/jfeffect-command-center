@@ -7,6 +7,7 @@ import { OVERDUE_HOURS } from "@/lib/inbox-waiting";
 import type { ClientRequests } from "@/lib/inbox-requests";
 import { KIND_LABEL, classifyKind, type RequestKind } from "@/lib/form-requests";
 import { painLine, type WorkoutNotePain } from "@/lib/workout-notes";
+import { gapBriefLines, gapTagLabel, type ClientProgramGaps } from "@/lib/program-gaps";
 
 /** Photos, videos and pain notes older than this stop waiting (a stale backlog isn't a to-do). */
 export const WAITING_WINDOW_DAYS = 14;
@@ -40,6 +41,8 @@ export type ClientSignals = {
   media: MediaWaiting[];
   pain: PainWaiting[];
   sessionRequests: number;
+  /** What their upcoming workouts are missing (program-gaps.ts); null or absent when nothing is. */
+  program?: ClientProgramGaps | null;
 };
 
 const CHECKIN_TITLE: Record<string, string> = { weekly_checkin: "Weekly check-in" };
@@ -168,7 +171,7 @@ export function splitRequests(req: ClientRequests | undefined, now = Date.now())
 
 /* ------------------------------ filters ------------------------------ */
 
-export type SignalFilter = "Weekly" | "Nutrition" | "To Review" | "Overdue" | "Media" | "Pain" | "Sessions";
+export type SignalFilter = "Weekly" | "Nutrition" | "To Review" | "Overdue" | "Media" | "Pain" | "Sessions" | "Program";
 
 /** The two forms with a filter of their own: everything waiting on one, filled in (to review) or overdue. */
 export const FORM_FILTER_KIND = { Weekly: "weekly_checkin", Nutrition: "nutrition_update" } as const satisfies Record<string, RequestKind>;
@@ -193,6 +196,7 @@ export function matchesSignal(s: ClientSignals | undefined, f: SignalFilter): bo
     case "Media": return s.media.length > 0;
     case "Pain": return s.pain.length > 0;
     case "Sessions": return s.sessionRequests > 0;
+    case "Program": return !!s.program;
   }
 }
 
@@ -200,7 +204,7 @@ export function matchesSignal(s: ClientSignals | undefined, f: SignalFilter): bo
 
 /** strong = bold, uncoloured (Needs reply: on most rows, so red stays for pain). */
 export type SignalTone = "urgent" | "strong" | "warn" | "info" | "muted";
-export type SignalTag = { key: "reply" | "pain" | "overdue" | "review" | "media" | "session" | "followup" | "priority"; label: string; tone: SignalTone };
+export type SignalTag = { key: "reply" | "pain" | "overdue" | "review" | "media" | "session" | "program" | "followup" | "priority"; label: string; tone: SignalTone };
 
 function mediaLabel(items: MediaWaiting[]): string {
   const photos = items.reduce((n, m) => n + m.photos, 0);
@@ -234,6 +238,8 @@ export function signalTags(
   }
   if (s?.media.length) tags.push({ key: "media", label: mediaLabel(s.media), tone: "info" });
   if (s?.sessionRequests) tags.push({ key: "session", label: n(s.sessionRequests, "Session request", "session requests"), tone: "info" });
+  // their upcoming workouts are missing something: amber when one is this week
+  if (s?.program) tags.push({ key: "program", label: gapTagLabel(s.program), tone: s.program.dueSoon ? "warn" : "info" });
   if (extra.followUp) tags.push({ key: "followup", label: "Follow up", tone: "warn" });
   if (extra.priority && extra.priority !== "Normal") tags.push({ key: "priority", label: extra.priority, tone: "warn" });
   return tags;
@@ -258,7 +264,7 @@ export function formKindTags(tags: SignalTag[], s: ClientSignals | undefined, ki
 /** How many things a client has waiting on the coach (the Brief's count). */
 export function waitingCount(s: ClientSignals | undefined): number {
   if (!s) return 0;
-  return (s.needsReply ? 1 : 0) + s.toReview.length + s.overdue.length + s.media.length + s.pain.length + s.sessionRequests;
+  return (s.needsReply ? 1 : 0) + s.toReview.length + s.overdue.length + s.media.length + s.pain.length + s.sessionRequests + (s.program ? 1 : 0);
 }
 
 /* ------------------------------ for the AI ------------------------------ */
@@ -281,6 +287,7 @@ export function briefWaitingLines(s: ClientSignals | undefined, extra: { waiting
   for (const p of s.pending) lines.push(`${p.title} sent ${day(p.since)}, not filled yet`);
   for (const m of s.media) lines.push(`Sent ${[m.videos && `${m.videos} video(s)`, m.photos && `${m.photos} photo(s)`, m.files && `${m.files} file(s)`].filter(Boolean).join(", ")} on ${day(m.at)}, no reaction or reply yet`);
   if (s.sessionRequests) lines.push(`${s.sessionRequests} session request${s.sessionRequests === 1 ? "" : "s"} waiting for an answer`);
+  lines.push(...gapBriefLines(s.program));
   if (extra.waitingOnClientSince) lines.push(`Jared wrote last, on ${day(extra.waitingOnClientSince)}, and is waiting on the client`);
   return lines.slice(0, 20).map((l) => l.slice(0, 200));
 }

@@ -107,6 +107,7 @@ import { Route as AuthenticatedAdminPaymentLinksRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin/payments'
 import { Route as AuthenticatedAdminPopupsRouteImport } from './routes/_authenticated/admin/popups'
 import { Route as AuthenticatedAdminProgramAssignRouteImport } from './routes/_authenticated/admin/program-assign'
+import { Route as AuthenticatedAdminProgramGapsRouteImport } from './routes/_authenticated/admin/program-gaps'
 import { Route as AuthenticatedAdminProgramLibraryRouteImport } from './routes/_authenticated/admin/program-library'
 import { Route as AuthenticatedAdminProgramSubmissionsRouteImport } from './routes/_authenticated/admin/program-submissions'
 import { Route as AuthenticatedAdminProgrammingRouteImport } from './routes/_authenticated/admin/programming'
@@ -264,6 +265,7 @@ import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/pu
 import { Route as ApiPublicHooksPaymentReminderSmsRouteImport } from './routes/api/public/hooks/payment-reminder-sms'
 import { Route as ApiPublicHooksPostPicturesTickRouteImport } from './routes/api/public/hooks/post-pictures-tick'
 import { Route as ApiPublicHooksProgramAiTickRouteImport } from './routes/api/public/hooks/program-ai-tick'
+import { Route as ApiPublicHooksProgramGapsTickRouteImport } from './routes/api/public/hooks/program-gaps-tick'
 import { Route as ApiPublicHooksProgramIntelTickRouteImport } from './routes/api/public/hooks/program-intel-tick'
 import { Route as ApiPublicHooksProgressArchiveTickRouteImport } from './routes/api/public/hooks/progress-archive-tick'
 import { Route as ApiPublicHooksScheduleSyncRouteImport } from './routes/api/public/hooks/schedule-sync'
@@ -835,6 +837,12 @@ const AuthenticatedAdminProgramAssignRoute =
   AuthenticatedAdminProgramAssignRouteImport.update({
     id: '/program-assign',
     path: '/program-assign',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminProgramGapsRoute =
+  AuthenticatedAdminProgramGapsRouteImport.update({
+    id: '/program-gaps',
+    path: '/program-gaps',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminProgramLibraryRoute =
@@ -1763,6 +1771,12 @@ const ApiPublicHooksProgramAiTickRoute =
     path: '/api/public/hooks/program-ai-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksProgramGapsTickRoute =
+  ApiPublicHooksProgramGapsTickRouteImport.update({
+    id: '/api/public/hooks/program-gaps-tick',
+    path: '/api/public/hooks/program-gaps-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksProgramIntelTickRoute =
   ApiPublicHooksProgramIntelTickRouteImport.update({
     id: '/api/public/hooks/program-intel-tick',
@@ -2058,6 +2072,7 @@ export interface FileRoutesByFullPath {
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/admin/program-assign': typeof AuthenticatedAdminProgramAssignRouteWithChildren
+  '/admin/program-gaps': typeof AuthenticatedAdminProgramGapsRoute
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/admin/program-submissions': typeof AuthenticatedAdminProgramSubmissionsRoute
   '/admin/programming': typeof AuthenticatedAdminProgrammingRoute
@@ -2197,6 +2212,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
+  '/api/public/hooks/program-gaps-tick': typeof ApiPublicHooksProgramGapsTickRoute
   '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/schedule-sync': typeof ApiPublicHooksScheduleSyncRoute
@@ -2343,6 +2359,7 @@ export interface FileRoutesByTo {
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/admin/program-assign': typeof AuthenticatedAdminProgramAssignRouteWithChildren
+  '/admin/program-gaps': typeof AuthenticatedAdminProgramGapsRoute
   '/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/admin/program-submissions': typeof AuthenticatedAdminProgramSubmissionsRoute
   '/admin/programming': typeof AuthenticatedAdminProgrammingRoute
@@ -2482,6 +2499,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
+  '/api/public/hooks/program-gaps-tick': typeof ApiPublicHooksProgramGapsTickRoute
   '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/schedule-sync': typeof ApiPublicHooksScheduleSyncRoute
@@ -2634,6 +2652,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/_authenticated/admin/popups': typeof AuthenticatedAdminPopupsRoute
   '/_authenticated/admin/program-assign': typeof AuthenticatedAdminProgramAssignRouteWithChildren
+  '/_authenticated/admin/program-gaps': typeof AuthenticatedAdminProgramGapsRoute
   '/_authenticated/admin/program-library': typeof AuthenticatedAdminProgramLibraryRoute
   '/_authenticated/admin/program-submissions': typeof AuthenticatedAdminProgramSubmissionsRoute
   '/_authenticated/admin/programming': typeof AuthenticatedAdminProgrammingRoute
@@ -2773,6 +2792,7 @@ export interface FileRoutesById {
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
+  '/api/public/hooks/program-gaps-tick': typeof ApiPublicHooksProgramGapsTickRoute
   '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/schedule-sync': typeof ApiPublicHooksScheduleSyncRoute
@@ -2925,6 +2945,7 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/popups'
     | '/admin/program-assign'
+    | '/admin/program-gaps'
     | '/admin/program-library'
     | '/admin/program-submissions'
     | '/admin/programming'
@@ -3064,6 +3085,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
+    | '/api/public/hooks/program-gaps-tick'
     | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/schedule-sync'
@@ -3210,6 +3232,7 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/popups'
     | '/admin/program-assign'
+    | '/admin/program-gaps'
     | '/admin/program-library'
     | '/admin/program-submissions'
     | '/admin/programming'
@@ -3349,6 +3372,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
+    | '/api/public/hooks/program-gaps-tick'
     | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/schedule-sync'
@@ -3500,6 +3524,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/payments'
     | '/_authenticated/admin/popups'
     | '/_authenticated/admin/program-assign'
+    | '/_authenticated/admin/program-gaps'
     | '/_authenticated/admin/program-library'
     | '/_authenticated/admin/program-submissions'
     | '/_authenticated/admin/programming'
@@ -3639,6 +3664,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
+    | '/api/public/hooks/program-gaps-tick'
     | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/schedule-sync'
@@ -3762,6 +3788,7 @@ export interface RootRouteChildren {
   ApiPublicHooksPaymentReminderSmsRoute: typeof ApiPublicHooksPaymentReminderSmsRoute
   ApiPublicHooksPostPicturesTickRoute: typeof ApiPublicHooksPostPicturesTickRoute
   ApiPublicHooksProgramAiTickRoute: typeof ApiPublicHooksProgramAiTickRoute
+  ApiPublicHooksProgramGapsTickRoute: typeof ApiPublicHooksProgramGapsTickRoute
   ApiPublicHooksProgramIntelTickRoute: typeof ApiPublicHooksProgramIntelTickRoute
   ApiPublicHooksProgressArchiveTickRoute: typeof ApiPublicHooksProgressArchiveTickRoute
   ApiPublicHooksScheduleSyncRoute: typeof ApiPublicHooksScheduleSyncRoute
@@ -4470,6 +4497,13 @@ declare module '@tanstack/react-router' {
       path: '/program-assign'
       fullPath: '/admin/program-assign'
       preLoaderRoute: typeof AuthenticatedAdminProgramAssignRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/program-gaps': {
+      id: '/_authenticated/admin/program-gaps'
+      path: '/program-gaps'
+      fullPath: '/admin/program-gaps'
+      preLoaderRoute: typeof AuthenticatedAdminProgramGapsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/program-library': {
@@ -5571,6 +5605,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksProgramAiTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/program-gaps-tick': {
+      id: '/api/public/hooks/program-gaps-tick'
+      path: '/api/public/hooks/program-gaps-tick'
+      fullPath: '/api/public/hooks/program-gaps-tick'
+      preLoaderRoute: typeof ApiPublicHooksProgramGapsTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/program-intel-tick': {
       id: '/api/public/hooks/program-intel-tick'
       path: '/api/public/hooks/program-intel-tick'
@@ -6016,6 +6057,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
   AuthenticatedAdminPopupsRoute: typeof AuthenticatedAdminPopupsRoute
   AuthenticatedAdminProgramAssignRoute: typeof AuthenticatedAdminProgramAssignRouteWithChildren
+  AuthenticatedAdminProgramGapsRoute: typeof AuthenticatedAdminProgramGapsRoute
   AuthenticatedAdminProgramLibraryRoute: typeof AuthenticatedAdminProgramLibraryRoute
   AuthenticatedAdminProgramSubmissionsRoute: typeof AuthenticatedAdminProgramSubmissionsRoute
   AuthenticatedAdminProgrammingRoute: typeof AuthenticatedAdminProgrammingRoute
@@ -6154,6 +6196,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminPopupsRoute: AuthenticatedAdminPopupsRoute,
     AuthenticatedAdminProgramAssignRoute:
       AuthenticatedAdminProgramAssignRouteWithChildren,
+    AuthenticatedAdminProgramGapsRoute: AuthenticatedAdminProgramGapsRoute,
     AuthenticatedAdminProgramLibraryRoute:
       AuthenticatedAdminProgramLibraryRoute,
     AuthenticatedAdminProgramSubmissionsRoute:
@@ -6523,6 +6566,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksPaymentReminderSmsRoute: ApiPublicHooksPaymentReminderSmsRoute,
   ApiPublicHooksPostPicturesTickRoute: ApiPublicHooksPostPicturesTickRoute,
   ApiPublicHooksProgramAiTickRoute: ApiPublicHooksProgramAiTickRoute,
+  ApiPublicHooksProgramGapsTickRoute: ApiPublicHooksProgramGapsTickRoute,
   ApiPublicHooksProgramIntelTickRoute: ApiPublicHooksProgramIntelTickRoute,
   ApiPublicHooksProgressArchiveTickRoute:
     ApiPublicHooksProgressArchiveTickRoute,

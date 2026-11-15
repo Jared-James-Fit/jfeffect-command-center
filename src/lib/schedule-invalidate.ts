@@ -35,5 +35,7 @@ export function invalidateScheduleQueries(
     void qc.invalidateQueries({ queryKey: ["pl-block-prog"] });
     void qc.invalidateQueries({ queryKey: ["pl-block-sched"] });
     void qc.invalidateQueries({ queryKey: ["resolved-client-days"] });
+    // Missing program data (program-gaps.ts): an edit can fill a gap in
+    void qc.invalidateQueries({ queryKey: ["program-gaps"] });
   }
 }

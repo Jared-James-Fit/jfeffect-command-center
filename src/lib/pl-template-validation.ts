@@ -16,17 +16,30 @@ export type RowProblem =
   | "sets"       // sets blank
   | "reps"       // reps blank
   | "duration"   // duration blank (time-mode)
-  | "intensity"; // none of RPE / RIR / suggested load set
+  | "intensity"  // none of RPE / RIR / suggested load set
+  | "percent";   // a % with nothing to take it of (no max, top set or typed load)
 
-const ROW_LABEL: Record<RowProblem, string> = {
+export const ROW_LABEL: Record<RowProblem, string> = {
   exercise: "exercise name",
   sets: "sets",
   reps: "reps",
   duration: "duration",
   intensity: "RPE, RIR, or suggested load",
+  percent: "what its % is of",
 };
 
-function rowProblems(row: any): RowProblem[] {
+/** The % bases the app can work a load out from (load-reference.ts, the logger's top-set read). */
+export const READABLE_PCT_BASES = new Set(["training_max", "1rm", "est_1rm", "top_set", "prev_set"]);
+
+/**
+ * What a prescription row still needs before an athlete can follow it: one
+ * rule for the builder's "Still needs filling in", Assign's check and the
+ * coach's Missing program data (program-gaps.ts). A timed row (a cardio
+ * walk, a hold, a run) is prescribed by its time: an RPE is welcome but never
+ * required. A % only counts as an intensity when the app can work a weight
+ * out from it; a "manual" % with no typed weight shows the athlete nothing.
+ */
+export function rowProblems(row: any): RowProblem[] {
   const issues: RowProblem[] = [];
   const hasExercise =
     (row?.exercise_id != null && row.exercise_id !== "") ||
@@ -42,13 +55,18 @@ function rowProblems(row: any): RowProblem[] {
   } else {
     if (typeof row?.reps_text !== "string" || row.reps_text.trim().length === 0) issues.push("reps");
   }
-  const hasRpe = row?.rpe != null && row.rpe !== "";
-  const hasRir = row?.rir != null && row.rir !== "";
-  const hasPct = row?.percentage != null && row.percentage !== "" &&
-    row?.percentage_basis && row.percentage_basis !== "none";
+  const hasRpe = row?.rpe != null && String(row.rpe).trim() !== "";
+  const hasRir = row?.rir != null && String(row.rir).trim() !== "";
+  const pctTyped = row?.percentage != null && String(row.percentage).trim() !== "";
+  const hasPct = pctTyped && READABLE_PCT_BASES.has(String(row?.percentage_basis ?? ""));
   const hasManualLoad = (row?.load_kg != null && row.load_kg !== "") ||
     (row?.load_lb != null && row.load_lb !== "");
-  if (!hasRpe && !hasRir && !hasPct && !hasManualLoad) issues.push("intensity");
+  // nothing to pick a weight by: say "what its % is of" when a % is typed the
+  // app can't read ("manual" with no weight), else what's missing in general
+  if (!isTime && !hasRpe && !hasRir && !hasPct && !hasManualLoad) {
+    const basis = String(row?.percentage_basis ?? "");
+    issues.push(pctTyped && basis !== "" && basis !== "none" ? "percent" : "intensity");
+  }
   return issues;
 }
 

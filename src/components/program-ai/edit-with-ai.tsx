@@ -92,7 +92,8 @@ export function EditWithAiButton({ target, title, onApplied, beforeOpen, classNa
   );
 }
 
-export function EditWithAiSheet({ open, onOpenChange, target, title, onApplied }: { open: boolean; onOpenChange: (v: boolean) => void; target: ProgramAiTarget; title: string; onApplied?: () => void | Promise<void> }) {
+/** `initialText`: what the box starts with (Missing program data's "Fill in with AI"); the coach still sends it and reviews the changes. */
+export function EditWithAiSheet({ open, onOpenChange, target, title, onApplied, initialText }: { open: boolean; onOpenChange: (v: boolean) => void; target: ProgramAiTarget; title: string; onApplied?: () => void | Promise<void>; initialText?: string }) {
   const [tab, setTab] = useState<Tab>("chat");
   const clientId = target.kind === "client" ? target.clientId : null;
   return (
@@ -122,7 +123,7 @@ export function EditWithAiSheet({ open, onOpenChange, target, title, onApplied }
             ))}
           </div>
         </div>
-        {tab === "chat" && <ChatPanel target={target} onApplied={onApplied} />}
+        {tab === "chat" && <ChatPanel target={target} onApplied={onApplied} initialText={initialText} />}
         {tab === "rules" && <RulesPanel clientId={clientId} />}
         {tab === "history" && <HistoryPanel target={target} onChanged={onApplied} />}
       </SheetContent>
@@ -162,7 +163,7 @@ function AthleteGaps({ clientId }: { clientId: string }) {
 // ---------------------------------------------------------------------------
 // The conversation
 
-function ChatPanel({ target, onApplied }: { target: ProgramAiTarget; onApplied?: () => void | Promise<void> }) {
+function ChatPanel({ target, onApplied, initialText }: { target: ProgramAiTarget; onApplied?: () => void | Promise<void>; initialText?: string }) {
   const qc = useQueryClient();
   const ask = useServerFn(askProgramAiFn);
   const getThread = useServerFn(programAiThreadFn);
@@ -173,7 +174,7 @@ function ChatPanel({ target, onApplied }: { target: ProgramAiTarget; onApplied?:
   const saveRule = useServerFn(saveProgramRuleFn);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [resumed, setResumed] = useState(false);
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText ?? "");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [asNew, setAsNew] = useState(false);
   const [newName, setNewName] = useState("");

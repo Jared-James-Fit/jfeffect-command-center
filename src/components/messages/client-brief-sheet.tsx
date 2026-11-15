@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import {
-  AlertTriangle, CalendarClock, Check, ChevronRight, ClipboardCheck, Clock, Hourglass, Image as ImageIcon,
+  AlertTriangle, CalendarClock, Check, ChevronRight, ClipboardCheck, Clock, Dumbbell, Hourglass, Image as ImageIcon,
   MessageCircle, RefreshCw, Sparkles,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -13,6 +13,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { getClientBriefAi, type ClientBriefAi } from "@/lib/client-brief.functions";
 import { briefWaitingLines, waitingCount, type ClientSignals } from "@/lib/inbox-brief";
+import { gapDetail } from "@/lib/program-gaps";
 
 export type BriefClient = {
   id: string;
@@ -181,6 +182,16 @@ export function ClientBriefSheet({
                 onClick={go}
               />
             ) : null}
+            {s?.program && (
+              <BriefRow
+                tone={s.program.dueSoon ? "warn" : "info"}
+                icon={<Dumbbell className="h-4 w-4" />}
+                title="Missing program data"
+                detail={gapDetail(s.program)}
+                to="/admin/program-gaps"
+                search={{ client: client.id }}
+              />
+            )}
             {s?.pending.map((p, i) => (
               <BriefRow key={`p${i}`} tone="muted" icon={<Hourglass className="h-4 w-4" />} title={`${p.title} sent`} detail={`${ago(p.since)}, not filled in yet`} onClick={go} />
             ))}
@@ -239,13 +250,15 @@ function replyReason(s: ClientSignals): string | null {
   return d;
 }
 
-function BriefRow({ tone, icon, title, detail, onClick, to }: {
+function BriefRow({ tone, icon, title, detail, onClick, to, search }: {
   tone: keyof typeof TONE;
   icon: ReactNode;
   title: string;
   detail?: string;
   onClick?: () => void;
   to?: string;
+  /** the link's search (default: the Forms tracker's Requests tab) */
+  search?: Record<string, unknown>;
 }) {
   const body = (
     <>
@@ -259,7 +272,7 @@ function BriefRow({ tone, icon, title, detail, onClick, to }: {
   );
   const cls = "flex w-full items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-2.5 text-left transition hover:bg-secondary/50 active:scale-[0.99]";
   if (to) {
-    return <Link to={to as any} search={{ tab: "requests" } as any} className={cls} data-brief-row>{body}</Link>;
+    return <Link to={to as any} search={(search ?? { tab: "requests" }) as any} className={cls} data-brief-row>{body}</Link>;
   }
   return <button type="button" onClick={onClick} className={cls} data-brief-row>{body}</button>;
 }

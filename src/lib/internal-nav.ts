@@ -95,6 +95,9 @@ const REGISTRY: Entry[] = [
   // New coaching applications with the AI's read and a text to send (pinned in Messages, on Home).
   { to: "/admin/leads", label: "Coaching leads", icon: UserPlus, group: "Messages", searchOnly: true,
     visibleTo: ["admin"], keywords: ["leads", "applications", "prospects", "new clients", "sales", "follow up"] },
+  // Clients' upcoming workouts missing a prescription, a max, a date or training days (Messages → Program data).
+  { to: "/admin/program-gaps", label: "Missing program data", icon: Dumbbell, group: "Messages", searchOnly: true,
+    visibleTo: ["admin", "coach"], keywords: ["program gaps", "missing", "rpe", "rir", "prescription", "maxes", "incomplete program"] },
 
   // ── CLIENTS ──────────────────────────────────────────────────────────
   { to: "/admin/clients", label: "Clients", icon: Contact, group: "Clients",

@@ -23,6 +23,7 @@ export type AppEvent =
   | "chat_reported"
   | "session_requested"
   | "lead_ready"
+  | "program_gaps_due"
   | "health_updated"
   | "support_message"
   | "account_deactivated"
@@ -124,6 +125,15 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     title: (n) => `New coaching application: ${n}`,
     body: () => "Your read on them and a text to send are ready. Tap to copy it.",
     url: (_id, applicationId) => (applicationId ? `/admin/leads?id=${applicationId}` : "/admin/leads"), rateMinutes: 60,
+  },
+  // A workout in the next few days is missing what the client needs to follow
+  // it (program-gaps.ts: no RPE / RIR / weight, a max a % reads): the morning
+  // program-gaps-tick, at most once a client a day. Opens Missing program data.
+  program_gaps_due: {
+    to: "staff", category: "workouts",
+    title: (n) => `${n}'s program is missing something`,
+    body: () => "A workout in the next few days can't be followed yet. Tap to fill it in.",
+    url: (id) => `/admin/program-gaps?client=${id}`, rateMinutes: 20 * 60,
   },
   // Account lifecycle (lifecycle.server.ts): who changed, never what they owe
   // (the figures are in the staff-only note in their chat and on their page).

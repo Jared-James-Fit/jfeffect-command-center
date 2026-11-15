@@ -168,7 +168,7 @@ describe("weekly check-ins and Nutrition Updates have their own filters", () => 
 describe("the coach inbox", () => {
   const route = read("src/route-pages/_authenticated/admin/messages.tsx");
   it("filters only what the rows can't already show: forms first, every chip but Inbox only while something's in it", () => {
-    expect(route).toContain('const FILTERS = ["Inbox", "Weekly", "Nutrition", "To Review", "Overdue", "Pain", "Media", "Sessions", "Archived"] as const;');
+    expect(route).toContain('const FILTERS = ["Inbox", "Weekly", "Nutrition", "To Review", "Overdue", "Pain", "Media", "Sessions", "Program", "Archived"] as const;');
     for (const gone of ['"Needs Response"', 'case "Unread"', '"Follow Up"', 'case "Priority"', '"Waiting on Client"', 'case "Done"']) expect(route).not.toContain(gone);
     expect(route).toContain('const ONLY_WHEN_ANY = new Set<Filter>(FILTERS.filter((f) => f !== "Inbox"));');
     expect(route).toContain('FILTERS.filter((f) => !ONLY_WHEN_ANY.has(f) || (filterCounts[f] ?? 0) > 0 || filter === f)');
