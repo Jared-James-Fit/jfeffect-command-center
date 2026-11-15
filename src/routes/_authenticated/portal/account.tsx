@@ -29,7 +29,7 @@ import {
   Smartphone,
   Sparkles,
   Target,
-  Trash2,
+  PauseCircle,
   User,
   Watch,
 } from "lucide-react";
@@ -40,7 +40,7 @@ import { isNative } from "@/platform";
 import { healthStoreProvider } from "@/platform/health";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { DeleteAccountButton } from "@/components/account/delete-account";
+import { DeactivateAccountPanel, DeleteAccountPanel, useLifecycleStatus } from "@/components/account/account-lifecycle";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SOCIAL_FIELDS, SOCIAL_PLATFORMS } from "@/lib/social-handles";
@@ -90,7 +90,7 @@ type SectionId =
   | "legal"
   | "billing"
   | "ai-credits"
-  | "delete-account";
+  | "deactivate";
 
 const SECTION_ALIASES: Record<string, SectionId> = {
   units: "units",
@@ -117,7 +117,12 @@ const SECTION_ALIASES: Record<string, SectionId> = {
   "ai-credits": "ai-credits",
   credits: "ai-credits",
   ai: "ai-credits",
-  "delete-account": "delete-account",
+  // Delete lives in Privacy & data (Apple and Google ask for it in the app)
+  "delete-account": "legal",
+  delete: "legal",
+  "privacy-data": "legal",
+  deactivate: "deactivate",
+  "deactivate-account": "deactivate",
 };
 
 function accountSectionFromHash(hash: string | null | undefined): SectionId | null {
@@ -203,6 +208,11 @@ function AccountPage() {
   // Coaching clients' billing, from the same read as My Purchases (members' is the Membership page).
   const billing = useMyBilling(tier === "coaching" && !isNative() ? client?.id : undefined);
   const billingRow = accountBillingSummary(billing.view?.mine.summary ?? null, billing.view?.money);
+  const lifecycle = useLifecycleStatus();
+  const deactivatesOn = lifecycle.data?.deactivation?.state === "scheduled" ? lifecycle.data.deactivation.at : null;
+  const deactivateSummary = deactivatesOn
+    ? { text: `On ${billingDay(String(deactivatesOn).slice(0, 10))}`, warn: true }
+    : null;
 
   const buildPatch = (current: any) => {
     const updatedFields = PROFILE_FIELDS.filter((f) => current[f] !== client?.[f]);
@@ -566,15 +576,20 @@ function AccountPage() {
               </SectionErrorBoundary>
             </SettingsSection>
 
-            {/* Legal status/consents come from the signed-in session, so in coach
-                "View as client" they'd be the coach's, not the client's. */}
-            {!isImpersonating && (
-              <SettingsSection id="legal" icon={ShieldCheck} title="Privacy & legal">
+            {/* Privacy & data: the legal documents and consents, then Delete my
+                account (Apple and Google ask for it in the app). Legal status
+                comes from the signed-in session, so in coach "View as client"
+                it'd be the coach's, not the client's: left out there. */}
+            <SettingsSection id="legal" icon={ShieldCheck} title="Privacy & data">
+              {!isImpersonating && (
                 <SectionErrorBoundary label="Legal & Safety">
                   <ClientLegalSafety bare />
                 </SectionErrorBoundary>
-              </SettingsSection>
-            )}
+              )}
+              <div className={cn(!isImpersonating && "mt-5 border-t border-border pt-5")} id="delete-account">
+                <DeleteAccountPanel />
+              </div>
+            </SettingsSection>
 
             {/* ── AI credits: the month's free ones and any bought (never for staff, who are unlimited) ── */}
             {aiCredits.data && !aiCredits.data.unlimited && (
@@ -604,9 +619,11 @@ function AccountPage() {
               </SettingsSection>
             )}
 
-            {/* ── Delete Account (Apple / Google require it in the app): 30 days in Recently deleted first ── */}
-            <SettingsSection id="delete-account" icon={Trash2} title="Delete account" destructive>
-              <DeleteAccountButton />
+            {/* ── Deactivate: a break, nothing deleted (the easy one to find; Delete is in Privacy & data) ── */}
+            <SettingsSection id="deactivate" icon={PauseCircle} title="Deactivate account" summary={deactivateSummary}>
+              <SectionErrorBoundary label="Deactivate account">
+                <DeactivateAccountPanel />
+              </SectionErrorBoundary>
             </SettingsSection>
           </SettingsGroup>
         </Accordion>

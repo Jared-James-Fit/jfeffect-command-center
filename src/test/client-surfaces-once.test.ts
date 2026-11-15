@@ -74,7 +74,11 @@ describe("client Account: a short settings list", () => {
   it("sections are rows that open in place; no sticky jump bar", () => {
     expect(account).toContain('<Accordion type="multiple" value={open} onValueChange={setOpen}');
     expect(account).not.toContain('aria-label="Account sections"');
-    expect(account).toContain('<SettingsSection id="delete-account" icon={Trash2} title="Delete account" destructive>');
+    // Deactivate is its own row; Delete is in Privacy & data (Apple and Google ask for it in the app)
+    expect(account).toContain('<SettingsSection id="deactivate" icon={PauseCircle} title="Deactivate account" summary={deactivateSummary}>');
+    expect(account).toContain('<SettingsSection id="legal" icon={ShieldCheck} title="Privacy & data">');
+    expect(account).toContain("<DeleteAccountPanel />");
+    expect(account).toContain('"delete-account": "legal",');
   });
   it("a link to a section opens it (the legal notice's #legal, the old anchors)", () => {
     expect(account).toContain('legal: "legal",');

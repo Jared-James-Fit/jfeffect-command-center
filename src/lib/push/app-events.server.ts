@@ -25,6 +25,11 @@ export type AppEvent =
   | "lead_ready"
   | "health_updated"
   | "support_message"
+  | "account_deactivated"
+  | "account_deactivation_scheduled"
+  | "account_reactivated"
+  | "account_deletion_requested"
+  | "account_deletion_withdrawn"
   // → client
   | "agreement_requested"
   | "checkin_requested"
@@ -119,6 +124,38 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     title: (n) => `New coaching application: ${n}`,
     body: () => "Your read on them and a text to send are ready. Tap to copy it.",
     url: (_id, applicationId) => (applicationId ? `/admin/leads?id=${applicationId}` : "/admin/leads"), rateMinutes: 60,
+  },
+  // Account lifecycle (lifecycle.server.ts): who changed, never what they owe
+  // (the figures are in the staff-only note in their chat and on their page).
+  account_deactivated: {
+    to: "staff", category: "messages",
+    title: (n) => `${n}'s account is deactivated`,
+    body: () => "Tap to see what it means for their billing and sessions.",
+    url: (id) => `/admin/clients/${id}`, rateMinutes: 60,
+  },
+  account_deactivation_scheduled: {
+    to: "staff", category: "messages",
+    title: (n) => `${n}'s account deactivates soon`,
+    body: () => "It happens when the month they've paid for runs out. Tap to see it.",
+    url: (id) => `/admin/clients/${id}`, rateMinutes: 60,
+  },
+  account_reactivated: {
+    to: "staff", category: "messages",
+    title: (n) => `${n}'s account is active again`,
+    body: () => "Nothing restarted or was charged. Tap to see where they stand.",
+    url: (id) => `/admin/clients/${id}`, rateMinutes: 60,
+  },
+  account_deletion_requested: {
+    to: "staff", category: "messages",
+    title: (n) => `${n}'s account is in Recently deleted`,
+    body: () => "It's deleted for good in 30 days unless it's restored. Tap to see it.",
+    url: (id) => `/admin/clients/${id}`, rateMinutes: 60,
+  },
+  account_deletion_withdrawn: {
+    to: "staff", category: "messages",
+    title: (n) => `${n} restored their account`,
+    body: () => "They took back their deletion request. Tap to see it.",
+    url: (id) => `/admin/clients/${id}`, rateMinutes: 60,
   },
   // A client added or changed an injury, condition, medication or supplement in their app.
   health_updated: {

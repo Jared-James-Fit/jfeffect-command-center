@@ -35,13 +35,22 @@ export const deleteAdminMember = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    const { supabase } = context as any;
+    const { supabase, userId } = context as any;
+    // Every recurring charge stops first (lifecycle.server.ts); Stripe refusing stops the delete.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: member } = await supabaseAdmin.from("app_members").select("user_id").eq("id", data.memberId).maybeSingle();
+    const { data: own } = member?.user_id
+      ? await supabaseAdmin.from("clients").select("id").eq("user_id", member.user_id).order("created_at").limit(1).maybeSingle()
+      : { data: null };
+    const { staffDeletion } = await import("@/lib/lifecycle.server");
+    const step = await staffDeletion(supabase, supabaseAdmin as any, userId, (own as any)?.id ?? null);
     const { data: res, error } = await supabase.rpc("account_delete_by_admin", {
       _client_id: null,
       _member_id: data.memberId,
       _reason: data.reason ?? null,
     });
     if (error) throw new Error(error.message);
+    await step.after(res);
     return {
       success: true,
       kept: false as const,

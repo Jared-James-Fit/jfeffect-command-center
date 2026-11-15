@@ -3,11 +3,12 @@
  * (20270226090000_account_recently_deleted.sql moved it to the bin and held
  * it; account-deletions-purge calls this once a day while anything is due).
  *
- * The same rules an admin delete always followed: chats are never deleted, so
- * a client or member with chat history stays as a deactivated record (portal
- * and access off) and their login is closed (banned) instead of deleted; one
- * with none is deleted, login included. Whatever happens is written on the
- * row (`result`), and a row that fails is retried the next day.
+ * The person's own data always goes. Chats are never deleted and money,
+ * session and legal records are kept (tax and contract records), so a client
+ * with any of them stays as an anonymized record and their login is closed
+ * (banned, email released) instead of deleted; one with none is deleted,
+ * login included. Whatever happens is written on the row (`result`), and a
+ * row that fails is retried the next day.
  */
 
 type Admin = any;
@@ -54,9 +55,50 @@ export type PurgeOutcome = {
   client?: "deleted" | "kept";
   member?: "deleted" | "kept";
   login?: "deleted" | "closed";
+  /** What the person's own data came to: rows by table, and files. */
+  removed?: Record<string, number>;
+  files?: number;
+  /** Tables that wouldn't clear (retried the next day, at most 3 tries). */
+  failed?: Record<string, string>;
 };
 
-/** Delete one account from the bin for good. */
+/** Money, session or legal records: the business keeps them (tax and contract records), so the record stays, anonymized. */
+export async function hasBusinessRecords(admin: Admin, clientId: string | null): Promise<boolean> {
+  if (!clientId) return false;
+  const tables = ["payment_ledger", "session_ledger_events", "purchase_records", "client_account_credits", "na_packages", "service_conversions"];
+  const results = await Promise.all(tables.map((t) => admin.from(t).select("id").eq("client_id", clientId).limit(1)));
+  return results.some((r: any) => !r.error && (r.data?.length ?? 0) > 0);
+}
+
+/** The person's own files: photo, progress photos and videos, lift videos, Crew media, plan PDFs. Chat attachments and signed agreements stay. */
+const PERSONAL_BUCKETS = ["avatars", "progress-media", "lift-videos", "community-media", "nutrition-plans", "nutrition-submissions", "form-uploads"];
+
+async function removeFolder(admin: Admin, bucket: string, folder: string): Promise<number> {
+  let removed = 0;
+  for (let round = 0; round < 20; round++) {
+    const { data, error } = await admin.storage.from(bucket).list(folder, { limit: 100 });
+    if (error || !data?.length) break;
+    const files = data.filter((f: any) => f.id).map((f: any) => `${folder}/${f.name}`);
+    const dirs = data.filter((f: any) => !f.id).map((f: any) => `${folder}/${f.name}`);
+    for (const d of dirs) removed += await removeFolder(admin, bucket, d);
+    if (!files.length) break;
+    const { error: rmErr } = await admin.storage.from(bucket).remove(files);
+    if (rmErr) break;
+    removed += files.length;
+    if (data.length < 100) break;
+  }
+  return removed;
+}
+
+/**
+ * Delete one account from the bin for good. The person's own data always
+ * goes (_account_purge_personal: training, nutrition, health, progress,
+ * forms, Crew, preferences; their files too). The record itself goes as well
+ * unless the business must keep it: money or session records (tax and
+ * contract records) or a chat with the coach (kept as a record, the coach's
+ * rule). A kept record keeps only the name the money is under, and a kept
+ * login is closed with its email released, so they can sign up again.
+ */
 export async function purgeAccount(admin: Admin, row: DueRow): Promise<PurgeOutcome> {
   const out: PurgeOutcome = {};
   const keepChats = await hasChatHistory(admin, {
@@ -64,32 +106,53 @@ export async function purgeAccount(admin: Admin, row: DueRow): Promise<PurgeOutc
     memberId: row.member_id,
     userId: row.user_id,
   });
+  const keepRecord = keepChats || (await hasBusinessRecords(admin, row.client_id));
+
+  // The person's own data, whatever happens to the record.
+  if (row.client_id || row.user_id) {
+    const { data: res, error } = await admin.rpc("_account_purge_personal", {
+      _client: row.client_id,
+      _user: row.user_id,
+    });
+    if (error) throw new Error(error.message);
+    out.removed = (res as any)?.deleted ?? {};
+    const failed = (res as any)?.failed ?? {};
+    if (Object.keys(failed).length) {
+      out.failed = failed;
+      // try again tomorrow; after 3 tries it completes with what wouldn't clear on the row
+      if (row.attempts < 2) throw new Error(`Couldn't clear: ${Object.keys(failed).join(", ")}`);
+    }
+  }
+  let files = 0;
+  for (const id of [row.user_id, row.client_id].filter(Boolean) as string[]) {
+    for (const b of PERSONAL_BUCKETS) files += await removeFolder(admin, b, id);
+  }
+  out.files = files;
 
   if (row.client_id) {
-    const deactivate = async () => {
+    const keep = async () => {
       const { error } = await admin
         .from("clients")
         .update({
-          status: "Deactivated",
+          status: "Deleted",
           archived: true,
           portal_access_disabled: true,
-          deactivated_at: new Date().toISOString(),
-          deactivation_reason: "Account deleted (chat history kept)",
+          deactivation_reason: "Account deleted (business records kept)",
         })
         .eq("id", row.client_id);
       if (error) throw new Error(error.message);
       out.client = "kept";
     };
-    if (keepChats) await deactivate();
+    if (keepRecord) await keep();
     else {
       const { error } = await admin.from("clients").delete().eq("id", row.client_id);
-      if (error) await deactivate();
+      if (error) await keep();
       else out.client = "deleted";
     }
   }
 
   if (row.member_id) {
-    const deactivate = async () => {
+    const keep = async () => {
       const { error } = await admin
         .from("app_members")
         .update({ status: "Deactivated", manual_access_disabled: true })
@@ -98,10 +161,10 @@ export async function purgeAccount(admin: Admin, row: DueRow): Promise<PurgeOutc
       await admin.from("member_access").update({ active: false }).eq("member_id", row.member_id);
       out.member = "kept";
     };
-    if (keepChats) await deactivate();
+    if (keepChats) await keep();
     else {
       const { error } = await admin.from("app_members").delete().eq("id", row.member_id);
-      if (error) await deactivate();
+      if (error) await keep();
       else out.member = "deleted";
     }
   }
@@ -113,8 +176,12 @@ export async function purgeAccount(admin: Admin, row: DueRow): Promise<PurgeOutc
       : await admin.auth.admin.deleteUser(row.user_id);
     if (!error || /not[_ ]found/i.test(String(error.message))) out.login = "deleted";
     else {
+      // closed for good, and the email freed so the person can join again one day
       const { error: banErr } = await admin.auth.admin.updateUserById(row.user_id, {
         ban_duration: "876000h",
+        email: `deleted-${row.user_id}@deleted.invalid`,
+        email_confirm: true,
+        user_metadata: {},
       });
       if (banErr) throw new Error(banErr.message);
       out.login = "closed";

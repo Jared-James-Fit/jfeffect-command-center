@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPasswordReset, setNeedsAdminHelp, setClientPassword } from "@/lib/clients.functions";
 import { sendAuthLinkBySms } from "@/lib/sms-links.functions";
-import { deactivateClient, reactivateClient, DEACTIVATION_REASONS } from "@/lib/client-deactivation.functions";
+import { ClientLifecycleBanner, ClientLifecycleSheet } from "@/components/account/account-lifecycle";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
@@ -44,7 +44,7 @@ import { ClientCalendarSyncStatus } from "@/components/admin/client-calendar-syn
 import { ManualCheckInReviewComposer } from "@/components/manual-check-in-review-composer";
 import { ClientCheckInConversations } from "@/components/client-check-in-conversations";
 import { Send } from "lucide-react";
-import { FolderOpen, Eye } from "lucide-react";
+import { FolderOpen, Eye, PauseCircle, Power } from "lucide-react";
 import { useEnterClientPov, clientWorkoutHref } from "@/components/clients/use-enter-client-pov";
 import { Checkbox } from "@/components/ui/checkbox";
 import { listForms as listNativeForms, type NfForm } from "@/lib/native-forms";
@@ -205,14 +205,8 @@ export function ClientProfileWorkspace({
   const [pwValue, setPwValue] = useState("");
   const [pwSaving, setPwSaving] = useState(false);
   const needsHelpFn = useServerFn(setNeedsAdminHelp);
-  const deactivateFn = useServerFn(deactivateClient);
-  const reactivateFn = useServerFn(reactivateClient);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
-  const [deactivateReason, setDeactivateReason] = useState<string>("Coaching ended");
-  const [deactivateNote, setDeactivateNote] = useState<string>("");
-  const [deactivateDisablePortal, setDeactivateDisablePortal] = useState<boolean>(true);
   const [reactivateOpen, setReactivateOpen] = useState(false);
-  const [reactivateRestorePortal, setReactivateRestorePortal] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const { data } = useQuery({
@@ -549,10 +543,10 @@ export function ClientProfileWorkspace({
         )}
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Lifecycle</DropdownMenuLabel>
-        {form.status === "Deactivated" ? (
-          <DropdownMenuItem onSelect={() => setReactivateOpen(true)}><Eye className="mr-2 h-4 w-4" />Reactivate</DropdownMenuItem>
+        {form.status === "Deactivated" || form.deactivate_at ? (
+          <DropdownMenuItem onSelect={() => setReactivateOpen(true)}><Power className="mr-2 h-4 w-4" />{form.status === "Deactivated" ? "Reactivate" : "Cancel the deactivation"}</DropdownMenuItem>
         ) : (
-          <DropdownMenuItem onSelect={() => setDeactivateOpen(true)}><Eye className="mr-2 h-4 w-4" />Deactivate</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setDeactivateOpen(true)}><PauseCircle className="mr-2 h-4 w-4" />Deactivate</DropdownMenuItem>
         )}
         <DropdownMenuItem onSelect={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</DropdownMenuItem>
         <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteStep(1)}>
@@ -633,19 +627,16 @@ export function ClientProfileWorkspace({
         The profile-shell "Actions" grid was removed — Message, POV and More
         live in the client header, Assign Program lives in the Training tab.
       */}
-      {form.status === "Deactivated" && (
-        <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
-          <div className="font-semibold text-warning">Account Deactivated</div>
-          <div className="text-muted-foreground">
-            {form.deactivated_at ? `Deactivated ${new Date(form.deactivated_at).toLocaleDateString()}` : "Deactivated"}
-            {form.deactivation_reason ? ` · ${form.deactivation_reason}` : ""}
-            {form.portal_access_disabled ? " · Portal access disabled" : " · Portal access still enabled"}
-          </div>
-          {form.deactivation_note && (
-            <div className="mt-1 text-xs text-muted-foreground italic">Note: {form.deactivation_note}</div>
-          )}
-        </div>
-      )}
+      <ClientLifecycleBanner
+        clientId={id}
+        status={form.status}
+        deactivatedAt={form.deactivated_at}
+        deactivateAt={form.deactivate_at}
+        reason={form.deactivation_reason}
+        note={form.deactivation_note}
+        source={form.deactivation_source}
+        onReactivate={() => setReactivateOpen(true)}
+      />
       {/*
         The workspace nav MUST stay directly under the client header.
         Previously this Tabs root was `flex flex-col` with the nav at `order-1`
@@ -1337,86 +1328,8 @@ export function ClientProfileWorkspace({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={deactivateOpen} onOpenChange={setDeactivateOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Deactivate this client?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Their account and history will be preserved, but they will no longer appear as an active client.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Reason (optional)</Label>
-              <Select value={deactivateReason} onValueChange={setDeactivateReason}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {DEACTIVATION_REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Internal note (admin only)</Label>
-              <Textarea value={deactivateNote} onChange={(e) => setDeactivateNote(e.target.value)} rows={3} />
-            </div>
-            <div className="flex items-center justify-between rounded-md border p-3">
-              <div>
-                <div className="text-sm font-medium">Disable client portal access</div>
-                <div className="text-xs text-muted-foreground">Recommended for ended coaching.</div>
-              </div>
-              <Switch checked={deactivateDisablePortal} onCheckedChange={setDeactivateDisablePortal} />
-            </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <ActionButton
-              loadingLabel="Deactivating…"
-              successLabel="Deactivated"
-              successToast="Client deactivated"
-              onAction={async () => {
-                await deactivateFn({ data: {
-                  clientId: id,
-                  reason: deactivateReason || undefined,
-                  note: deactivateNote || undefined,
-                  disablePortalAccess: deactivateDisablePortal,
-                }});
-                setDeactivateOpen(false);
-                qc.invalidateQueries({ queryKey: ["client", id] });
-                qc.invalidateQueries({ queryKey: ["clients"] });
-              }}
-            >Deactivate Client</ActionButton>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={reactivateOpen} onOpenChange={setReactivateOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reactivate this client?</AlertDialogTitle>
-            <AlertDialogDescription>They will return to your Active Clients list.</AlertDialogDescription>
-          </AlertDialogHeader>
-          {form.portal_access_disabled && (
-            <div className="flex items-center justify-between rounded-md border p-3">
-              <div className="text-sm font-medium">Restore client portal access</div>
-              <Switch checked={reactivateRestorePortal} onCheckedChange={setReactivateRestorePortal} />
-            </div>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <ActionButton
-              loadingLabel="Reactivating…"
-              successLabel="Reactivated"
-              successToast="Client reactivated"
-              onAction={async () => {
-                await reactivateFn({ data: { clientId: id, restorePortalAccess: reactivateRestorePortal } });
-                setReactivateOpen(false);
-                qc.invalidateQueries({ queryKey: ["client", id] });
-                qc.invalidateQueries({ queryKey: ["clients"] });
-              }}
-            >Reactivate</ActionButton>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {deactivateOpen && <ClientLifecycleSheet clientId={id} kind="deactivate" open={deactivateOpen} onOpenChange={setDeactivateOpen} />}
+      {reactivateOpen && <ClientLifecycleSheet clientId={id} kind="reactivate" open={reactivateOpen} onOpenChange={setReactivateOpen} />}
     </>
   );
 }

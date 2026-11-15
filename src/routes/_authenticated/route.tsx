@@ -10,7 +10,7 @@ import { MemberProfileOverlayMount } from "@/components/members/member-profile-o
 import { ThemeAnnouncementGate } from "@/components/whats-new/theme-announcement";
 import { ThemeAccountSync } from "@/lib/theme-account-sync";
 import { CoachingAgreementProvider } from "@/components/coaching-agreement/agreement-provider";
-import { AccountDeletionGate } from "@/components/account/delete-account";
+import { AccountLifecycleGate } from "@/components/account/account-lifecycle";
 import { SetVideoResume } from "@/lib/set-videos/resume";
 
 // Module-level warm session: once the guard has validated a user this app
@@ -174,7 +174,7 @@ function AuthenticatedLayout() {
       {/* a set video iOS cut off mid-upload carries on by itself */}
       <SetVideoResume />
       {/* an account in Recently deleted: Restore (or Contact support) over everything */}
-      <AccountDeletionGate />
+      <AccountLifecycleGate />
     </CoachingAgreementProvider>
   );
 }
