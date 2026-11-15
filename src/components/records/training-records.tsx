@@ -108,8 +108,8 @@ export function recordsHeadline(records: WorkoutRecords | null | undefined): str
   if (!records) return null;
   const reps = [...(records.records ?? []), ...(records.load_records ?? [])];
   const atprs = reps.filter((r) => r.atpr).length + (records.tonnage?.atpr ? 1 : 0);
-  if (atprs > 1) return `${atprs} NEW ATPRs!`;
-  if (atprs === 1) return "NEW ATPR!";
+  if (atprs > 1) return `${atprs} NEW ALL-TIME PRs!`;
+  if (atprs === 1) return "NEW ALL-TIME PR!";
   if (reps.some((r) => r.program_pr) || records.tonnage?.program_pr) return "NEW PROGRAM PR!";
   if (reps.some((r) => r.block_pr) || records.tonnage?.block_pr) return "NEW BLOCK PR!";
   return null;

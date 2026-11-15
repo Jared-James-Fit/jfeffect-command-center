@@ -8,6 +8,8 @@
  * drawing a fake "drop" after every top set.
  */
 
+import { comparableE1rm } from "@/lib/analytics/strength-read";
+
 export type LiftSetInput = {
   id: string;
   row_id?: string | null;
@@ -35,6 +37,12 @@ export type LiftSession<T extends LiftSetInput = LiftSetInput> = {
   /** Heaviest load (ties → more reps). */
   heaviest: T;
   e1rm: number;
+  /**
+   * The session's estimated max from the sets that can show one (strength-read.ts:
+   * RPE 7+ / RIR ≤ 3, ≤ 10 reps, read with its effort); null when none could. The
+   * number to compare session to session; `e1rm` reads every set as all-out.
+   */
+  strength: number | null;
   tonnage: number;
   setCount: number;
   reps: number;
@@ -116,7 +124,10 @@ export function groupLiftSessions<T extends LiftSetInput>(points: T[]): LiftSess
     const sources = new Set<"RPE" | "RIR">();
     let velocity: number | null = null;
     let velocityLoad = -1;
+    let strength: number | null = null;
     for (const s of sets) {
+      const c = comparableE1rm(s);
+      if (c != null && (strength == null || c > strength)) strength = c;
       if (s.est_1rm > top.est_1rm || (s.est_1rm === top.est_1rm && s.load > top.load)) top = s;
       if (s.load > heaviest.load || (s.load === heaviest.load && s.reps > heaviest.reps))
         heaviest = s;
@@ -142,6 +153,7 @@ export function groupLiftSessions<T extends LiftSetInput>(points: T[]): LiftSess
       top,
       heaviest,
       e1rm: top.est_1rm,
+      strength,
       tonnage,
       setCount: sets.length,
       reps,

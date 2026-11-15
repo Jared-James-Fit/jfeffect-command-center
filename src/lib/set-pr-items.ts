@@ -20,7 +20,7 @@ export type SetPrItem = {
 
 type ServerRecord = Pick<RepRecord, "reps" | "load_kg" | "atpr" | "program_pr" | "block_pr" | "prev_all_kg" | "prev_program_kg" | "prev_block_kg">;
 
-const SCOPE_WORDS: Record<RecordScope, string> = { atpr: "ATPR", program_pr: "program PR", block_pr: "block PR" };
+const SCOPE_WORDS: Record<RecordScope, string> = { atpr: "all-time PR", program_pr: "program PR", block_pr: "block PR" };
 
 function previousFor(r: ServerRecord, scope: RecordScope): number | null {
   const v = scope === "atpr" ? r.prev_all_kg : scope === "program_pr" ? r.prev_program_kg : r.prev_block_kg;
@@ -63,7 +63,7 @@ export function setPrItems(input: {
     items.push({
       key: "local",
       scope: "atpr",
-      title: `${localPr.reps}-rep ATPR`,
+      title: `${localPr.reps}-rep all-time PR`,
       detail: assisted
         ? `${num(localPr.amount)} ${localPr.unit} less assistance than your best`
         : `+${num(localPr.amount)} ${localPr.unit} over your previous best`,

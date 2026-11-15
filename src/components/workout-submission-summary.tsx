@@ -151,7 +151,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   const hasAchievement = prList.length > 0 || recordCount > 0 || summary.score >= 90 || summary.completionPct === 100;
   const headline =
     recordHeadline ? recordHeadline
-    : prList.length > 0 ? (prList.length === 1 ? "NEW ATPR!" : `${prList.length} NEW ATPRs!`)
+    : prList.length > 0 ? (prList.length === 1 ? "NEW ALL-TIME PR!" : `${prList.length} NEW ALL-TIME PRs!`)
     // the score counts what was done, not how hard it ran: no cheering over a plan that ran hot
     : summary.plan?.lines.some((l) => l.kind === "harder" || l.kind === "short") ? "Workout done"
     : summary.score >= 90 ? "Crushed it!"

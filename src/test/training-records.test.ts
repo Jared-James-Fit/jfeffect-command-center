@@ -7,7 +7,7 @@ const rec = (o: Partial<{ atpr: boolean; program_pr: boolean; block_pr: boolean;
 
 describe("record terminology", () => {
   it("never produces a bare PR and prioritises ATPR > PROGRAM > BLOCK", () => {
-    expect(repRecordLabel(rec({ atpr: true, program_pr: true, block_pr: true }))).toBe("5-REP ATPR");
+    expect(repRecordLabel(rec({ atpr: true, program_pr: true, block_pr: true }))).toBe("5-REP ALL-TIME PR");
     expect(repRecordLabel(rec({ program_pr: true, block_pr: true, reps: 3 }))).toBe("3-REP PROGRAM PR");
     expect(repRecordLabel(rec({ block_pr: true, reps: 12 }))).toBe("12-REP BLOCK PR");
     expect(repRecordLabel(rec({}))).toBeNull();
@@ -16,14 +16,14 @@ describe("record terminology", () => {
     expect(topScope(rec({ block_pr: true }))).toBe("block_pr");
   });
   it("labels tonnage records with their scope", () => {
-    expect(tonnageRecordLabel({ atpr: true, program_pr: true, block_pr: true })).toBe("WORKOUT TONNAGE ATPR");
+    expect(tonnageRecordLabel({ atpr: true, program_pr: true, block_pr: true })).toBe("WORKOUT TONNAGE ALL-TIME PR");
     expect(tonnageRecordLabel({ atpr: false, program_pr: false, block_pr: true })).toBe("BLOCK TONNAGE PR");
     expect(tonnageRecordLabel({ atpr: false, program_pr: false, block_pr: false })).toBeNull();
   });
   it("headline says ATPR only for all-time records", () => {
     const base = { workout_key: "k", tonnage_kg: 1000, exercise_tonnage: [], tonnage: { atpr: false, program_pr: false, block_pr: false } };
     expect(recordsHeadline({ ...base, records: [{ ...rec({ block_pr: true }), set_id: "1", exercise_id: null, exercise_key: "x", exercise_name: "Squat", load_kg: 100 }] })).toBe("NEW BLOCK PR!");
-    expect(recordsHeadline({ ...base, records: [{ ...rec({ atpr: true, block_pr: true }), set_id: "1", exercise_id: null, exercise_key: "x", exercise_name: "Squat", load_kg: 100 }] })).toBe("NEW ATPR!");
+    expect(recordsHeadline({ ...base, records: [{ ...rec({ atpr: true, block_pr: true }), set_id: "1", exercise_id: null, exercise_key: "x", exercise_name: "Squat", load_kg: 100 }] })).toBe("NEW ALL-TIME PR!");
     expect(recordsHeadline({ ...base, records: [] })).toBeNull();
   });
 });
@@ -67,7 +67,7 @@ describe("tonnage = qualifying completed weight × reps", () => {
 describe("weight records (heaviest ever, any reps)", () => {
   it("labels by scope and never says a bare PR", async () => {
     const { weightRecordLabel } = await import("@/lib/training-records");
-    expect(weightRecordLabel({ atpr: true, program_pr: false, block_pr: true })).toBe("WEIGHT ATPR");
+    expect(weightRecordLabel({ atpr: true, program_pr: false, block_pr: true })).toBe("WEIGHT ALL-TIME PR");
     expect(weightRecordLabel({ atpr: false, program_pr: true, block_pr: true })).toBe("WEIGHT PROGRAM PR");
     expect(weightRecordLabel({ atpr: false, program_pr: false, block_pr: true })).toBe("WEIGHT BLOCK PR");
     expect(weightRecordLabel({ atpr: false, program_pr: false, block_pr: false })).toBeNull();
