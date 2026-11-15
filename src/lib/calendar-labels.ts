@@ -74,3 +74,15 @@ export function rowLines(item: CalendarItem, withPerson: boolean): { title: stri
     meta: [when, KIND_META[item.kind].label, status, withPerson && item.kind !== "google_event" ? item.clientName : null].filter(Boolean).join(" · "),
   };
 }
+
+/**
+ * A timeline block's words: who in bold ("Nicolas Galli"), the first name for
+ * a narrow week column, then what and where ("1:1 Training · 800 Vaughan
+ * Ave"); an item that isn't with someone is its own title.
+ */
+export function blockLabels(item: CalendarItem, withPerson: boolean): { title: string; short: string; detail: string | null } {
+  const who = withPerson ? personName(item) : null;
+  const what = scheduleTitle(item);
+  const detail = [who ? what : null, placeLabel(item.location)].filter(Boolean).join(" · ") || null;
+  return { title: who ?? what, short: who ? who.split(/\s+/)[0] : what, detail };
+}

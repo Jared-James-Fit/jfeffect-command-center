@@ -10,8 +10,11 @@ import { ChevronLeft, ChevronRight, Calendar as CalIcon, ExternalLink, MapPin, P
 import { cn } from "@/lib/utils";
 import { KIND_FAMILY, KIND_META, ctaLabel, placeLabel, scheduleTitle, type CalendarItem, type CalendarKind, type KindFamily } from "@/lib/calendar-sources";
 import { compactTimeRange, compareInstants, durationLabel } from "@/lib/schedule-time";
-import { chipParts, itemDetailLines, personName, rowLines } from "@/lib/calendar-labels";
+import { blockLabels, chipParts, itemDetailLines, personName, rowLines } from "@/lib/calendar-labels";
+import { useNow } from "@/components/schedule/agenda";
 import { CalendarEmptyState } from "./empty-state";
+import { TimeGrid, type TimeGridEntry } from "./time-grid";
+import { monthChipOrder } from "@/lib/calendar-timeline";
 
 export type ViewMode = "month" | "week" | "day" | "upcoming";
 const VIEW_LABEL: Record<ViewMode, string> = { month: "Month", week: "Week", day: "Day", upcoming: "List" };
@@ -79,7 +82,14 @@ export function CalendarBoard({
   initialView,
   view: viewProp,
   onViewChange,
+  timeline = false,
 }: {
+  /**
+   * The coach's calendar, Google's way: Day and Week are timelines (each
+   * booking a block at its time, free time empty, a tap on empty time books
+   * there), and a month day shows who's booked and opens that day.
+   */
+  timeline?: boolean;
   /** Which views to offer (first one is the default). */
   views?: ViewMode[];
   /** Controlled view (the page remembers the coach's choice); otherwise the board keeps its own. */
@@ -95,8 +105,8 @@ export function CalendarBoard({
   showClientName?: boolean;
   toolbar?: React.ReactNode;
   emptyHint?: string;
-  /** Shows "+ Book" on days; called with yyyy-mm-dd. */
-  onCreate?: (dateISO: string) => void;
+  /** Shows "+ Book" on days; called with yyyy-mm-dd (and "HH:MM" from a tapped slot on a timeline). */
+  onCreate?: (dateISO: string, time?: string) => void;
   /** Take over the tap on an item (return true to skip the default detail sheet). */
   onItemSelect?: (item: CalendarItem) => boolean | void;
   /** Extra buttons inside the default detail sheet for an item. */
@@ -126,6 +136,31 @@ export function CalendarBoard({
   };
 
   const isEmpty = !isLoading && items.length === 0;
+  const nowMs = useNow();
+  // "Today" scrolls the timeline back to now, even when the period didn't change.
+  const [jump, setJump] = useState(0);
+  const entries = useMemo<TimeGridEntry<CalendarItem>[]>(
+    () =>
+      timeline
+        ? items.map((it) => ({
+            key: it.id,
+            date: it.date,
+            startsAt: it.startsAt ?? null,
+            endsAt: it.endsAt ?? null,
+            ...blockLabels(it, showClientName),
+            family: KIND_FAMILY[it.kind],
+            status: it.status ?? null,
+            ref: it,
+          }))
+        : [],
+    [items, showClientName, timeline],
+  );
+  /** A day tapped in Month or Week: that day on the timeline. */
+  const openDay = (d: Date) => {
+    setCursor(startOfDay(d));
+    setPicked(startOfDay(d));
+    setView("day");
+  };
 
   const itemsByDate = useMemo(() => {
     const m = new Map<string, CalendarItem[]>();
@@ -181,7 +216,7 @@ export function CalendarBoard({
               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => shift(-1)} aria-label="Previous">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setCursor(startOfDay(new Date())); setPicked(startOfDay(new Date())); }}>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setCursor(startOfDay(new Date())); setPicked(startOfDay(new Date())); setJump((j) => j + 1); }}>
                 Today
               </Button>
               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => shift(1)} aria-label="Next">
@@ -214,7 +249,25 @@ export function CalendarBoard({
         />
       ) : (
         <>
-      {view === "month" && (
+      {timeline && (view === "week" || view === "day") && (
+        <TimeGrid
+          days={view === "day" ? [isoDate(cursor)] : Array.from({ length: 7 }, (_, i) => isoDate(addDays(startOfWeek(cursor), i)))}
+          entries={entries}
+          today={isoDate(new Date())}
+          nowMs={nowMs}
+          onOpen={setSelected}
+          onSlot={onCreate ? (d, time) => onCreate(d, time) : undefined}
+          onDay={view === "week" ? (d) => openDay(parseDay(d) ?? cursor) : undefined}
+          hourHeight={52}
+          heightClass="h-[max(24rem,calc(100svh-24rem))] sm:h-[max(28rem,calc(100svh-19rem))]"
+          scrollKey={`${view}:${jump}`}
+          label={headerLabel}
+        />
+      )}
+      {timeline && view === "month" && (
+        <MonthGrid cursor={cursor} itemsByDate={itemsByDate} onSelectItem={setSelected} picked={picked} onSelectDay={openDay} showClientName={showClientName} names />
+      )}
+      {!timeline && view === "month" && (
         <>
           <MonthGrid cursor={cursor} itemsByDate={itemsByDate} onSelectItem={setSelected} picked={picked} onSelectDay={setPicked} showClientName={showClientName} />
           {/* The tapped day, in full: titles never have to fit a 45px cell. */}
@@ -224,10 +277,10 @@ export function CalendarBoard({
           </section>
         </>
       )}
-      {view === "week" && (
+      {!timeline && view === "week" && (
         <WeekGrid cursor={cursor} itemsByDate={itemsByDate} onSelectItem={setSelected} onCreate={onCreate} showClientName={showClientName} />
       )}
-      {view === "day" && (
+      {!timeline && view === "day" && (
         <DayList date={cursor} items={itemsByDate.get(isoDate(cursor)) ?? []} onSelectItem={setSelected} showClientName={showClientName} emptyHint={emptyHint} onCreate={onCreate} />
       )}
       {view === "upcoming" && (
@@ -279,8 +332,10 @@ function LegendRow({ items }: { items: CalendarItem[] }) {
  * hover: a month of "1:1 Training" chips said nothing about who or when.
  */
 function MonthGrid({
-  cursor, itemsByDate, onSelectItem, onSelectDay, picked, showClientName = false,
+  cursor, itemsByDate, onSelectItem, onSelectDay, picked, showClientName = false, names = false,
 }: {
+  /** The coach's month: phones show who's booked (not dots), and a tapped day opens it (no list under the grid). */
+  names?: boolean;
   cursor: Date;
   itemsByDate: Map<string, CalendarItem[]>;
   onSelectItem: (i: CalendarItem) => void;
@@ -311,7 +366,8 @@ function MonthGrid({
           const inMonth = d.getMonth() === cursor.getMonth();
           const isToday = dIso === today;
           const dayItems = itemsByDate.get(dIso) ?? [];
-          const visible = dayItems.slice(0, 3);
+          // The coach's month: who's booked first, so Google never pushes a session into "+N".
+          const visible = (names ? [...dayItems].sort((a, b) => monthChipOrder({ ...a, family: KIND_FAMILY[a.kind] }, { ...b, family: KIND_FAMILY[b.kind] })) : dayItems).slice(0, 3);
           const extra = dayItems.length - visible.length;
           const isPicked = dIso === isoDate(picked);
           return (
@@ -325,19 +381,37 @@ function MonthGrid({
                 // A column from the top: a button centres its content, so day numbers sat at different heights.
                 "flex min-h-[52px] flex-col items-stretch justify-start border-b border-r border-border p-1 text-left transition-colors sm:min-h-[96px]",
                 !inMonth && "bg-background/30 text-muted-foreground/60",
-                isPicked && "bg-secondary/70",
+                names ? "min-h-[64px] transition hover:bg-secondary/40 active:bg-secondary/60" : isPicked && "bg-secondary/70",
               )}
             >
               <div className="flex items-center justify-between">
                 <span className={cn(
                   "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold tabular-nums",
-                  isToday ? "bg-primary text-primary-foreground" : isPicked ? "ring-1 ring-primary/70" : "text-foreground/80",
+                  isToday ? (names ? "bg-foreground text-background" : "bg-primary text-primary-foreground") : isPicked && !names ? "ring-1 ring-primary/70" : "text-foreground/80",
                 )}>
                   {d.getDate()}
                 </span>
               </div>
+              {/* phones, the coach's month: who's booked, a line each (the day opens on a tap) */}
+              {names && dayItems.length > 0 && (
+                <div className="mt-0.5 space-y-px sm:hidden" aria-hidden>
+                  {visible.map((it) => (
+                    <span
+                      key={it.id}
+                      className={cn(
+                        "block truncate rounded-sm border-l-2 px-0.5 text-[9px] font-semibold leading-[13px]",
+                        KIND_META[it.kind].chip,
+                        (it.status === "Cancelled" || it.status === "Missed") && "line-through opacity-60",
+                      )}
+                    >
+                      {blockLabels(it, showClientName).short}
+                    </span>
+                  ))}
+                  {extra > 0 && <span className="block px-0.5 text-[9px] font-semibold leading-3 text-muted-foreground">+{extra}</span>}
+                </div>
+              )}
               {/* phones: dots */}
-              {dayItems.length > 0 && (
+              {!names && dayItems.length > 0 && (
                 <div className="mt-1 flex items-center gap-0.5 px-0.5 sm:hidden" aria-hidden>
                   {visible.map((it) => (
                     <span key={it.id} className={cn("h-1.5 w-1.5 rounded-full", KIND_META[it.kind].dot)} />

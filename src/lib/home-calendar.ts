@@ -36,7 +36,10 @@ export function monthGridDays(day: string): string[] {
   return out;
 }
 
-/** The days a view needs loaded. Day: this week (its strip) through a week ahead (Coming up). */
+/**
+ * The days a view needs loaded. Day: the shown day's week (its strip) and this
+ * week through a week ahead (Coming up).
+ */
 export function homeRange(view: HomeView, anchor: string, today: string): { from: string; to: string } {
   if (view === "week") {
     const days = weekDays(anchor);
@@ -46,26 +49,39 @@ export function homeRange(view: HomeView, anchor: string, today: string): { from
     const days = monthGridDays(anchor);
     return { from: days[0], to: days[days.length - 1] };
   }
-  return { from: weekDays(today)[0], to: addDaysISO(today, AHEAD_DAYS) };
+  const shown = weekDays(anchor);
+  const ahead = addDaysISO(today, AHEAD_DAYS);
+  const thisWeek = weekDays(today)[0];
+  return { from: shown[0] < thisWeek ? shown[0] : thisWeek, to: shown[6] > ahead ? shown[6] : ahead };
 }
 
-/** Move the Week or Month view one step. */
+/** Move the view one step: a day, a week or a month. */
 export function shiftAnchor(view: HomeView, anchor: string, step: -1 | 1): string {
   if (view === "week") return addDaysISO(anchor, 7 * step);
   if (view === "month") return monthStart(addMonthsISO(monthStart(anchor), step));
-  return anchor;
+  return addDaysISO(anchor, step);
 }
 
 /** Whether the view is showing the period today falls in (so "Today" isn't needed). */
 export function isCurrentPeriod(view: HomeView, anchor: string, today: string): boolean {
   if (view === "week") return weekDays(anchor).includes(today);
   if (view === "month") return anchor.slice(0, 7) === today.slice(0, 7);
-  return true;
+  return anchor === today;
 }
 
-/** "Nov 9 – 15", "Nov 30 – Dec 6", "November" ("November 2027" when not this year). */
+/**
+ * "Today", "Tomorrow", "Wed, Nov 18" for a day; "Nov 9 – 15", "Nov 30 – Dec 6"
+ * for a week; "November" ("November 2027" when not this year) for a month.
+ */
 export function periodLabel(view: HomeView, anchor: string, today: string): string {
   const fmt = (d: string, o: Intl.DateTimeFormatOptions) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, o);
+  if (view === "day") {
+    if (anchor === today) return "Today";
+    if (anchor === addDaysISO(today, 1)) return "Tomorrow";
+    if (anchor === addDaysISO(today, -1)) return "Yesterday";
+    const sameYear = anchor.slice(0, 4) === today.slice(0, 4);
+    return fmt(anchor, sameYear ? { weekday: "short", month: "short", day: "numeric" } : { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  }
   if (view === "month") {
     const sameYear = anchor.slice(0, 4) === today.slice(0, 4);
     return fmt(monthStart(anchor), sameYear ? { month: "long" } : { month: "long", year: "numeric" });

@@ -122,13 +122,17 @@ export function AgendaHeader({ today, link, right }: { today: string; link?: Age
  * on that day.
  */
 export function AgendaWeek({
-  today, dots, link, anchor,
+  today, dots, link, anchor, selected, onSelect,
 }: {
   today: string;
   dots: (day: string) => string[];
   link?: ((day: string) => AgendaLink) | null;
   /** A day in the week to show (default: this week). */
   anchor?: string;
+  /** The day shown under the strip (ringed, unless it's today). */
+  selected?: string;
+  /** Pick a day in place instead of opening the calendar. */
+  onSelect?: (day: string) => void;
 }) {
   const days = weekDays(anchor ?? today);
   return (
@@ -138,16 +142,18 @@ export function AgendaWeek({
         const isToday = d === today;
         const past = d < today;
         const marks = dots(d);
-        const to = link?.(d);
-        const Cell: any = to ? Link : "div";
+        const to = onSelect ? undefined : link?.(d);
+        const Cell: any = onSelect ? "button" : to ? Link : "div";
+        const isSelected = selected === d;
         return (
           <Cell
             key={d}
             role="listitem"
+            {...(onSelect ? { type: "button", onClick: () => onSelect(d), "aria-pressed": isSelected } : {})}
             {...(to ? { to: to.to, search: to.search } : {})}
             aria-label={`${date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}${isToday ? " (today)" : ""}${marks.length ? `, ${marks.length} scheduled` : ""}`}
             aria-current={isToday ? "date" : undefined}
-            className={cn("flex min-h-[56px] min-w-0 flex-col items-center justify-start gap-1 rounded-lg pt-1", to && "transition active:bg-secondary/50")}
+            className={cn("flex min-h-[56px] min-w-0 flex-col items-center justify-start gap-1 rounded-lg pt-1", (to || onSelect) && "transition active:bg-secondary/50")}
           >
             <span className={cn("text-[11px] font-medium", isToday ? "text-foreground" : "text-muted-foreground")}>
               {date.toLocaleDateString(undefined, { weekday: "short" })}
@@ -155,7 +161,7 @@ export function AgendaWeek({
             <span
               className={cn(
                 "grid h-8 w-8 place-items-center rounded-full text-[15px] font-semibold tabular-nums",
-                isToday ? "bg-foreground text-background" : past ? "text-muted-foreground" : "text-foreground",
+                isToday ? "bg-foreground text-background" : isSelected ? "text-foreground ring-1 ring-foreground/60" : past ? "text-muted-foreground" : "text-foreground",
               )}
             >
               {date.getDate()}

@@ -12,13 +12,15 @@ describe("the coach's Calendar tab is the calendar first", () => {
     expect(panel).not.toContain("PageHeader");
   });
 
-  it("a day tapped on the dashboard opens on that day; Open calendar opens the coach's last view (Month at first) on the Calendar tab", () => {
+  it("a ?date link opens on that day; Open calendar opens the coach's last view (the week's timeline at first, the day's on a phone) on the Calendar tab", () => {
     expect(panel).toContain("const [dayOverride, setDayOverride] = useState<boolean>(!!initialDate);");
-    expect(panel).toContain('const view: ViewMode = dayOverride ? "day" : prefs.boardView ?? "month";');
+    expect(panel).toContain('const view: ViewMode = dayOverride ? "day" : prefs.boardView ?? fallbackView;');
+    expect(panel).toContain("const [fallbackView] = useState<ViewMode>(() => defaultTimelineView());");
     expect(panel).toContain("onViewChange={chooseView}");
     expect(board).toMatch(/useState<ViewMode>\(\(\) => \(initialView && views\.includes\(initialView\)/);
     expect(board).toContain("const view: ViewMode = viewProp && views.includes(viewProp) ? viewProp : innerView;");
-    expect(dash).toContain('link={(d) => ({ to: "/admin/calendar", search: { tab: "board", date: d } })}');
+    // The Home card's week strip shows a day in the card itself (its timeline), and Open calendar opens the page.
+    expect(dash).toContain("<AgendaWeek today={today} anchor={anchor} selected={anchor} onSelect={setAnchor}");
     expect(dash).toContain('<Link to="/admin/calendar" search={{ tab: "board" } as any} className={AGENDA_LINK}>');
   });
 

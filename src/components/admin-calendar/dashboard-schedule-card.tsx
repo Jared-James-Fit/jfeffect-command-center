@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,13 +9,17 @@ import { placeLabel, useGoogleCalendarStatus, type KindFamily } from "@/lib/cale
 import { listGoogleEventsRange } from "@/lib/google-cal.functions";
 import { addDaysISO, compactTimeRange, compareInstants, deviceTodayISO } from "@/lib/schedule-time";
 import {
-  AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaEmpty, AgendaFooter, AgendaHeader, AgendaLoading, AgendaToday, AgendaWeek,
-  AgendaNext, AgendaNextRow, AgendaRow, FAMILY_ACCENT, hasEnded, NowLine, nowLineIndex, shortDay, startLabel, useNow,
+  AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaFooter, AgendaHeader, AgendaWeek,
+  AgendaNext, AgendaNextRow, FAMILY_ACCENT, shortDay, startLabel, useNow,
 } from "@/components/schedule/agenda";
+import { TimeGrid, type TimeGridEntry } from "@/components/calendar/time-grid";
+import { monthChipOrder } from "@/lib/calendar-timeline";
 import { cn } from "@/lib/utils";
 import { listenChannel } from "@/lib/realtime-channel";
 import { useCalendarPrefs, type HomeView } from "@/lib/calendar-prefs";
-import { dayTag, homeRange, isCurrentPeriod, monthGridDays, monthStart, periodLabel, shiftAnchor } from "@/lib/home-calendar";
+import { homeRange, isCurrentPeriod, monthGridDays, periodLabel, shiftAnchor } from "@/lib/home-calendar";
+import { weekDays } from "@/components/calendar/week-strip";
+import { chipTime } from "@/lib/calendar-labels";
 
 /** How many "Coming up" rows the Day view shows. */
 const UPCOMING_ROWS = 4;
@@ -63,12 +67,6 @@ function joinDetail(...parts: Array<string | null | undefined | false>): string 
   return s || null;
 }
 
-const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
-  Completed: { label: "Done", cls: "bg-emerald-500/15 text-emerald-500" },
-  Missed: { label: "No-show", cls: "bg-destructive/15 text-destructive" },
-  Cancelled: { label: "Cancelled", cls: "bg-secondary text-muted-foreground" },
-};
-
 function sessionRow(s: Session): Row {
   const startsAt = wallToIso(s.session_date, s.start_time);
   return {
@@ -90,30 +88,37 @@ function byTime(a: Row, b: Row) {
 }
 
 /**
- * The coach's Home calendar card, in the same look as every other Home, with
- * three views (the choice remembered on their account, with Coaching /
+ * The coach's Home calendar card, in the same look as every other Home, read
+ * the way Google Calendar reads: bookings are blocks on a timeline, so when
+ * each one starts and ends and where the free time is shows at a glance.
+ * Three views (the choice remembered on their account, with Coaching /
  * + Google, `useCalendarPrefs`):
- *   Day: this week's days (each opens the Calendar there), today on a time
- *     column with a Now line, then the next few bookings.
- *   Week: the week's strip, then every booking that week, a line each:
- *     day, time and who ("10 AM Nicolas Galli · 1:1 Training").
- *   Month: the month's days with a dot per booking; tap a day for its list.
- * Week and Month step back and forward. Then "Book a session" and "Open
- * calendar". Tap a session to move / mark done / cancel it.
+ *   Day: the day's week (tap a day to show it), the day as a timeline opening
+ *     near now, with a Now line, then the next few bookings.
+ *   Week: the week as a timeline, a column per day (tap a day's name for it).
+ *   Month: who's booked on each day (first names); tap a day for its timeline.
+ * Each view steps back and forward with Today to come back. A tap on empty
+ * time books there; a tap on a session moves / marks done / cancels it. Then
+ * "Book a session" and "Open calendar".
  */
 export function DashboardScheduleCard() {
   const qc = useQueryClient();
   const channelId = useId();
   const today = deviceTodayISO();
   const [acting, setActing] = useState<Session | null>(null);
-  const [booking, setBooking] = useState<string | null>(null);
+  const [booking, setBooking] = useState<{ date: string; time?: string } | null>(null);
   const [editing, setEditing] = useState<any>(null);
+  const navigate = useNavigate();
   const { prefs, setPrefs } = useCalendarPrefs();
-  const view: HomeView = prefs.homeView ?? "day";
+  const savedView: HomeView = prefs.homeView ?? "day";
+  // A day tapped in Week or Month opens on its own for this visit; the tabs are what's remembered.
+  const [dayFocus, setDayFocus] = useState(false);
+  const view: HomeView = dayFocus ? "day" : savedView;
   const withGoogle = prefs.includeGoogle ?? false;
-  // A day in the week / month on screen, and the month view's tapped day.
+  // The day shown (Day), or a day in the week / month on screen.
   const [anchor, setAnchor] = useState<string>(today);
-  const [picked, setPicked] = useState<string>(today);
+  // "Today" scrolls the timeline back to now even when the day didn't change.
+  const [jump, setJump] = useState(0);
   const { data: gcal } = useGoogleCalendarStatus();
   const googleOn = withGoogle && !!gcal?.connected;
   const nowMs = useNow();
@@ -125,18 +130,18 @@ export function DashboardScheduleCard() {
   const lastDay = range.to;
 
   const chooseView = (v: HomeView) => {
+    setDayFocus(false);
     setPrefs({ homeView: v });
     setAnchor(today);
-    setPicked(today);
   };
-  const step = (dir: -1 | 1) => {
-    const next = shiftAnchor(view, anchor, dir);
-    setAnchor(next);
-    if (view === "month") setPicked(next.slice(0, 7) === today.slice(0, 7) ? today : monthStart(next));
-  };
+  const step = (dir: -1 | 1) => setAnchor((a) => shiftAnchor(view, a, dir));
   const backToToday = () => {
     setAnchor(today);
-    setPicked(today);
+    setJump((j) => j + 1);
+  };
+  const openDay = (d: string) => {
+    setAnchor(d);
+    if (savedView !== "day") setDayFocus(true);
   };
 
   const { data: sessions = [], isLoading } = useQuery<Session[]>({
@@ -284,14 +289,41 @@ export function DashboardScheduleCard() {
     return out;
   }, [rows]);
 
-  const todayRows = useMemo(() => rows.filter((r) => r.date === today).sort(byTime), [rows, today]);
-  const nowIndex = useMemo(() => nowLineIndex(todayRows, nowMs), [todayRows, nowMs]);
-  const pickedRows = useMemo(() => rows.filter((r) => r.date === picked).sort(byTime), [rows, picked]);
-  // Week view: the week's bookings in order (Cancelled stays, crossed out).
-  const weekRows = useMemo(
-    () => (view === "week" ? rows.filter((r) => r.date >= range.from && r.date <= range.to).sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b)) : []),
-    [rows, view, range.from, range.to],
+  // The timeline's blocks: who in bold, then what and where.
+  const entries = useMemo<TimeGridEntry<Row>[]>(
+    () =>
+      rows.map((r) => ({
+        key: r.key,
+        date: r.date,
+        startsAt: r.startsAt,
+        endsAt: r.endsAt,
+        title: r.title,
+        short: r.family === "people" ? r.title.split(/\s+/)[0] : r.title,
+        detail: r.detail,
+        family: r.family,
+        status: r.status ?? null,
+        ref: r,
+      })),
+    [rows],
   );
+  // Month: who's booked each day, sessions first then in time order (cancelled ones left out).
+  const namesByDay = useMemo(() => {
+    const m = new Map<string, Row[]>();
+    for (const r of rows) {
+      if (r.status === "Cancelled") continue;
+      m.set(r.date, [...(m.get(r.date) ?? []), r]);
+    }
+    for (const list of m.values()) list.sort(monthChipOrder);
+    return m;
+  }, [rows]);
+  /** A block opens what it is: the session sheet, its page, or Google. */
+  const openRow = (r: Row) => {
+    const o = r.open;
+    if (o.kind === "session") setActing(o.s);
+    else if (o.kind === "link") void navigate({ to: o.to as any, params: o.params as any, search: o.search as any });
+    else if (o.href) window.open(o.href, "_blank", "noopener,noreferrer");
+  };
+  const bookAt = (date: string, time?: string) => setBooking({ date, time });
   // Coming up: the next few live bookings after today (the next one further out when the week is empty).
   const upcoming = useMemo(() => {
     const ahead = rows
@@ -303,44 +335,6 @@ export function DashboardScheduleCard() {
   }, [rows, today, nextSession]);
 
   const toggleGoogle = () => setPrefs({ includeGoogle: !withGoogle });
-
-  /** A day's bookings on the time column (Day: today with the Now line; Month: the tapped day). */
-  const dayList = (list: Row[], withNow: boolean, empty: string) =>
-    isLoading && !sessions.length ? (
-      <AgendaLoading />
-    ) : list.length === 0 ? (
-      <AgendaEmpty>{empty}</AgendaEmpty>
-    ) : (
-      <ol aria-label={withNow ? "Today" : dayTag(picked, today)}>
-        {list.map((r, i) => (
-          <li key={r.key} className="min-w-0">
-            {withNow && i === nowIndex && <NowLine />}
-            <RowOpen row={r} onSession={setActing} className={cn(AGENDA_ROW, hasEnded(r.startsAt, r.endsAt, nowMs) && "opacity-55")}>
-              <AgendaRow
-                time={r.startsAt ? startLabel(r.startsAt) : "All day"}
-                timed={!!r.startsAt}
-                accent={FAMILY_ACCENT[r.family]}
-                title={r.title}
-                quiet={r.family === "google"}
-                struck={r.status === "Cancelled"}
-                sub={joinDetail(r.startsAt ? compactTimeRange(r.startsAt, r.endsAt) : null, r.detail)}
-                trailing={
-                  r.status && STATUS_CHIP[r.status] ? (
-                    <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", STATUS_CHIP[r.status].cls)}>{STATUS_CHIP[r.status].label}</span>
-                  ) : null
-                }
-                chevron
-              />
-            </RowOpen>
-          </li>
-        ))}
-        {withNow && nowIndex === list.length && (
-          <li aria-hidden>
-            <NowLine />
-          </li>
-        )}
-      </ol>
-    );
 
   const { data: bookingClients = [] } = useQuery({
     queryKey: ["clients-min"],
@@ -371,19 +365,29 @@ export function DashboardScheduleCard() {
       <ViewBar
         view={view}
         onView={chooseView}
-        label={view === "day" ? null : periodLabel(view, anchor, today)}
+        label={periodLabel(view, anchor, today)}
         onStep={step}
         onToday={isCurrentPeriod(view, anchor, today) ? null : backToToday}
       />
 
       {view === "day" && (
         <>
-          <AgendaWeek
-            today={today}
-            dots={(d) => dotsByDay.get(d) ?? []}
-            link={(d) => ({ to: "/admin/calendar", search: { tab: "board", date: d } })}
-          />
-          <AgendaToday>{dayList(todayRows, true, "Nothing booked today.")}</AgendaToday>
+          <AgendaWeek today={today} anchor={anchor} selected={anchor} onSelect={setAnchor} dots={(d) => dotsByDay.get(d) ?? []} />
+          <div className="mt-1">
+            <TimeGrid
+              days={[anchor]}
+              entries={entries}
+              today={today}
+              nowMs={nowMs}
+              onOpen={openRow}
+              onSlot={bookAt}
+              compact
+              hourHeight={44}
+              heightClass="h-[min(24rem,52svh)] md:h-[min(34rem,58svh)]"
+              scrollKey={`day:${jump}`}
+              label={anchor === today ? "Today" : periodLabel("day", anchor, today)}
+            />
+          </div>
           <AgendaNext show={upcoming.length > 0}>
             {upcoming.map((r, i) => (
               <li key={r.key} className="min-w-0">
@@ -403,57 +407,30 @@ export function DashboardScheduleCard() {
       )}
 
       {view === "week" && (
-        <>
-          <AgendaWeek
+        <div className="mt-2.5">
+          <TimeGrid
+            days={weekDays(anchor)}
+            entries={entries}
             today={today}
-            anchor={anchor}
-            dots={(d) => dotsByDay.get(d) ?? []}
-            link={(d) => ({ to: "/admin/calendar", search: { tab: "board", date: d } })}
+            nowMs={nowMs}
+            onOpen={openRow}
+            onSlot={bookAt}
+            onDay={openDay}
+            compact
+            hourHeight={44}
+            heightClass="h-[min(28rem,60svh)] md:h-[min(38rem,62svh)]"
+            scrollKey={`week:${jump}`}
+            label={periodLabel("week", anchor, today)}
           />
-          <AgendaToday>
-            {isLoading && !sessions.length ? (
-              <AgendaLoading />
-            ) : weekRows.length === 0 ? (
-              <AgendaEmpty>Nothing booked this week.</AgendaEmpty>
-            ) : (
-              <ol aria-label="This week">
-                {weekRows.map((r, i) => {
-                  const firstOfDay = i === 0 || weekRows[i - 1].date !== r.date;
-                  return (
-                    <li key={r.key} className={cn("min-w-0", firstOfDay && i > 0 && "mt-1 border-t border-border/40 pt-1")}>
-                      <RowOpen row={r} onSession={setActing} className={cn(AGENDA_ROW, hasEnded(r.startsAt, r.endsAt, nowMs) && "opacity-55")}>
-                        <AgendaNextRow
-                          dayText={firstOfDay ? dayTag(r.date, today) : ""}
-                          accent={FAMILY_ACCENT[r.family]}
-                          time={r.startsAt ? startLabel(r.startsAt) : "All day"}
-                          title={<span className={cn(r.status === "Cancelled" && "text-muted-foreground line-through")}>{r.title}</span>}
-                          quiet={r.family === "google"}
-                          suffix={whatOf(r) ? <span className="font-normal text-muted-foreground"> · {whatOf(r)}</span> : null}
-                        />
-                      </RowOpen>
-                    </li>
-                  );
-                })}
-              </ol>
-            )}
-          </AgendaToday>
-        </>
+        </div>
       )}
 
       {view === "month" && (
-        <>
-          <MiniMonth anchor={anchor} today={today} picked={picked} onPick={setPicked} dots={(d) => dotsByDay.get(d) ?? []} />
-          <AgendaToday>
-            <p className="px-0.5 pb-0.5 text-[11px] font-semibold text-muted-foreground">
-              {picked === today ? "Today" : new Date(`${picked}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
-            </p>
-            {dayList(pickedRows, picked === today, "Nothing booked.")}
-          </AgendaToday>
-        </>
+        <MiniMonth anchor={anchor} today={today} onPick={openDay} names={(d) => namesByDay.get(d) ?? []} />
       )}
 
       <AgendaFooter>
-        <button type="button" onClick={() => setBooking(view === "month" && picked >= today ? picked : today)} className={AGENDA_ACTION}>
+        <button type="button" onClick={() => bookAt(view === "day" && anchor >= today ? anchor : today)} className={AGENDA_ACTION}>
           <CalendarPlus className="h-4 w-4" /> Book a session
         </button>
         <Link to="/admin/calendar" search={{ tab: "board" } as any} className={AGENDA_LINK}>
@@ -485,7 +462,8 @@ export function DashboardScheduleCard() {
         clients={bookingClients as any}
         initial={editing ?? undefined}
         clientId={editing?.client_id}
-        initialDate={booking}
+        initialDate={booking?.date ?? null}
+        initialTime={booking?.time ?? null}
       />
     </AgendaCard>
   );
@@ -515,12 +493,6 @@ function RowOpen({ row, onSession, className, children }: { row: Row; onSession:
   );
 }
 
-/** What a booking is, for the Week view's one line ("1:1 Training"): the detail's first part. */
-function whatOf(r: Row): string | null {
-  if (r.family === "google") return null;
-  return r.detail ? r.detail.split(" · ")[0] : null;
-}
-
 /**
  * Day · Week · Month (neutral, like every in-card switch: red is the card's
  * one action), and for Week / Month the period with ‹ › and Today.
@@ -530,7 +502,7 @@ function ViewBar({
 }: {
   view: HomeView;
   onView: (v: HomeView) => void;
-  label: string | null;
+  label: string;
   onStep: (dir: -1 | 1) => void;
   onToday: (() => void) | null;
 }) {
@@ -550,7 +522,7 @@ function ViewBar({
           </button>
         ))}
       </div>
-      {label && (
+      {(
         <div className="ml-auto flex min-w-0 items-center gap-0.5">
           {onToday && (
             <button type="button" onClick={onToday} className="mr-1 shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground">
@@ -570,15 +542,18 @@ function ViewBar({
   );
 }
 
-/** The month as whole weeks: the date, today filled, the tapped day ringed, a dot per booking (up to 3). */
+/**
+ * The month as whole weeks: each day's date (today filled) and who's booked,
+ * a first name a line in time order (up to 3, then "+N"), so a glance says
+ * who and how busy without a tap. A day opens its timeline.
+ */
 function MiniMonth({
-  anchor, today, picked, onPick, dots,
+  anchor, today, onPick, names,
 }: {
   anchor: string;
   today: string;
-  picked: string;
   onPick: (d: string) => void;
-  dots: (d: string) => string[];
+  names: (d: string) => Row[];
 }) {
   const days = monthGridDays(anchor);
   const month = anchor.slice(0, 7);
@@ -589,34 +564,46 @@ function MiniMonth({
           <span key={d}>{new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: "narrow" })}</span>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-y-0.5">
+      <div className="grid grid-cols-7 border-t border-border/60">
         {days.map((d) => {
           const inMonth = d.slice(0, 7) === month;
           const isToday = d === today;
-          const isPicked = d === picked;
-          const marks = dots(d);
+          const list = names(d);
+          const shown = list.slice(0, 3);
           return (
             <button
               key={d}
               type="button"
               onClick={() => onPick(d)}
-              aria-pressed={isPicked}
-              aria-label={`${new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}${isToday ? " (today)" : ""}${marks.length ? `, ${marks.length} booked` : ""}`}
-              className={cn("flex min-h-[44px] flex-col items-center justify-start gap-0.5 rounded-lg pt-0.5 transition active:bg-secondary/50", !inMonth && "opacity-40")}
+              aria-label={`${new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}${isToday ? " (today)" : ""}${list.length ? `: ${list.map((r) => `${r.startsAt ? startLabel(r.startsAt) + " " : ""}${r.title}`).join(", ")}` : ""}`}
+              className={cn(
+                "flex min-h-[68px] min-w-0 flex-col items-stretch justify-start gap-px border-b border-border/60 px-px pb-1 pt-0.5 transition hover:bg-secondary/40 active:bg-secondary/60",
+                !inMonth && "opacity-40",
+              )}
             >
               <span
                 className={cn(
-                  "grid h-7 w-7 place-items-center rounded-full text-[13px] font-semibold tabular-nums",
-                  isToday ? "bg-foreground text-background" : isPicked ? "ring-1 ring-foreground/60" : d < today ? "text-muted-foreground" : "text-foreground",
+                  "mx-auto grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold tabular-nums",
+                  isToday ? "bg-foreground text-background" : d < today ? "text-muted-foreground" : "text-foreground",
                 )}
               >
                 {Number(d.slice(8))}
               </span>
-              <span className="flex h-1.5 items-center gap-0.5" aria-hidden>
-                {marks.slice(0, 3).map((cls, i) => (
-                  <span key={i} className={cn("h-1.5 w-1.5 rounded-full", cls, d < today && "opacity-50")} />
-                ))}
-              </span>
+              {shown.map((r) => (
+                <span
+                  key={r.key}
+                  aria-hidden
+                  className={cn(
+                    "block truncate rounded-sm border-l-2 px-0.5 text-left text-[9px] font-semibold leading-[13px] text-foreground sm:text-[10px] sm:leading-[14px]",
+                    MONTH_CHIP[r.family],
+                    d < today && "opacity-55",
+                  )}
+                >
+                  <span className="hidden font-normal tabular-nums text-foreground/70 sm:inline">{r.startsAt ? `${chipTime(r.startsAt)} ` : ""}</span>
+                  {r.family === "people" ? r.title.split(/\s+/)[0] : r.title}
+                </span>
+              ))}
+              {list.length > shown.length && <span aria-hidden className="px-0.5 text-left text-[9px] font-semibold leading-3 text-muted-foreground">+{list.length - shown.length}</span>}
             </button>
           );
         })}
@@ -624,3 +611,11 @@ function MiniMonth({
     </div>
   );
 }
+
+/** A month chip per family: the timeline blocks' colours, smaller. */
+const MONTH_CHIP: Record<KindFamily, string> = {
+  people: "border-violet-500 bg-violet-500/15",
+  coach: "border-amber-500 bg-amber-500/15",
+  training: "border-foreground/50 bg-foreground/[0.07]",
+  google: "border-muted-foreground/40 bg-muted text-foreground/75",
+};
