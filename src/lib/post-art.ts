@@ -4,9 +4,12 @@
  * memory for the visit and in the browser's Cache Storage for the next
  * ones, keyed by what's on it (a new caption or a new week's numbers make a
  * new picture; POST_ART_VERSION repaints everything after a change to the
- * cards' look). One paint at a time, in the order asked, a beat apart, so a
- * fast scroll never stacks them up or holds a frame. The same File is what
- * Save image and Share to Instagram send.
+ * cards' look). One paint at a time, a beat apart, and the feed's only while
+ * the screen is still (no finger down, no scroll for STILL_MS), nearest the
+ * screen first: painting a card holds the phone's main thread, and an iPhone
+ * that's busy while a swipe lands leaves the rest of that post unpainted
+ * (black) until it's free. The same File is what Save image and Share to
+ * Instagram send (those ask `urgent`: painted at once, whatever the screen).
  *
  * Small on purpose (no painters here): the grid and Home's shelf read it.
  */
@@ -169,19 +172,155 @@ function keepStored(key: string, blob: Blob) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Waiting for a still screen                                         */
+/* ------------------------------------------------------------------ */
+
+/** How long the screen has to be still (no finger down, no scroll) before the feed paints a card. */
+export const STILL_MS = 250;
+/** A finger "down" this long with nothing moving is a lost touchend (a system gesture took it): not a finger. */
+const FINGER_STALE_MS = 4000;
+
+let lastMove = Number.NEGATIVE_INFINITY;
+let fingers = 0;
+let watching = false;
+
+const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+
+/** Listen (once, passively) for what moves the screen: a scroll anywhere, a wheel, a finger. */
+function watchMotion() {
+  if (watching || typeof window === "undefined") return;
+  watching = true;
+  const moved = () => {
+    lastMove = now();
+  };
+  const touch = (e: TouchEvent) => {
+    fingers = e.touches.length;
+    lastMove = now();
+  };
+  const opts = { passive: true, capture: true } as const;
+  window.addEventListener("scroll", moved, opts);
+  window.addEventListener("wheel", moved, opts);
+  window.addEventListener("touchstart", touch, opts);
+  window.addEventListener("touchmove", moved, opts);
+  window.addEventListener("touchend", touch, opts);
+  window.addEventListener("touchcancel", touch, opts);
+}
+
+/** Whether nothing is moving the screen and it's showing: no finger down and STILL_MS since the last scroll or touch (`at`, `last`: ms). */
+export function stillScreen(at: number, last: number, down: number, hidden: boolean): boolean {
+  if (hidden) return false;
+  if (down > 0 && at - last < FINGER_STALE_MS) return false;
+  return at - last >= STILL_MS;
+}
+
+function screenIsStill(): boolean {
+  watchMotion();
+  return stillScreen(now(), lastMove, fingers, typeof document !== "undefined" && document.hidden);
+}
+
+/** When to look again while the screen is moving: once it may have settled. */
+function retryIn(): number {
+  if (fingers > 0 || (typeof document !== "undefined" && document.hidden)) return 120;
+  return Math.max(16, STILL_MS - (now() - lastMove));
+}
+
+/** Resolves once the screen has been still for STILL_MS. */
+export function whenStill(): Promise<void> {
+  watchMotion();
+  return new Promise((done) => {
+    const check = () => {
+      if (screenIsStill()) return done();
+      setTimeout(check, retryIn());
+    };
+    check();
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /*  Painting                                                           */
 /* ------------------------------------------------------------------ */
 
-let chain: Promise<unknown> = Promise.resolve();
+type Waiting = {
+  /** Asked for by a tap (Save image, Share to Instagram): painted next, whatever the screen is doing. */
+  urgent: boolean;
+  /** How far its picture is from the screen, in px (0 on it); read when it's time to pick. */
+  rank?: () => number;
+  run: () => void;
+};
 
-/** One paint at a time, a frame apart. */
-function queue<T>(job: () => Promise<T>): Promise<T> {
-  const run = chain.then(
-    () => new Promise<void>((r) => setTimeout(r, 16)).then(job),
-    () => job(),
-  );
-  chain = run.catch(() => undefined);
-  return run;
+/**
+ * Which waiting paint goes next: anything asked for by a tap first (in the
+ * order asked); else, only while the screen is still, the one nearest the
+ * screen (the order asked breaks a tie). -1: nothing yet.
+ */
+export function nextPaint(list: readonly Pick<Waiting, "urgent" | "rank">[], still: boolean): number {
+  const urgent = list.findIndex((w) => w.urgent);
+  if (urgent >= 0) return urgent;
+  if (!still || !list.length) return -1;
+  let best = 0;
+  let bestRank = Number.POSITIVE_INFINITY;
+  list.forEach((w, i) => {
+    let r = Number.POSITIVE_INFINITY;
+    try {
+      r = w.rank ? w.rank() : Number.POSITIVE_INFINITY;
+    } catch {
+      // its picture is gone from the page: last
+    }
+    if (!(r >= 0)) r = Number.POSITIVE_INFINITY;
+    if (r < bestRank) {
+      bestRank = r;
+      best = i;
+    }
+  });
+  return best;
+}
+
+const waiting: Waiting[] = [];
+const waitingByKey = new Map<string, Waiting>();
+let running = false;
+let tick: ReturnType<typeof setTimeout> | null = null;
+
+/** One paint at a time, a frame apart; the feed's wait for a still screen. */
+function pump() {
+  if (running || tick !== null || !waiting.length) return;
+  tick = setTimeout(() => {
+    tick = null;
+    if (running || !waiting.length) return;
+    const i = nextPaint(waiting, screenIsStill());
+    if (i < 0) {
+      // the screen is moving: look again once it may have settled
+      tick = setTimeout(() => {
+        tick = null;
+        pump();
+      }, retryIn());
+      return;
+    }
+    const [job] = waiting.splice(i, 1);
+    running = true;
+    job.run();
+  }, 16);
+}
+
+function schedule<T>(key: string, job: () => Promise<T>, opts: PaintOptions): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const entry: Waiting = {
+      urgent: !opts.whenStill,
+      rank: opts.rank,
+      run: () => {
+        waitingByKey.delete(key);
+        Promise.resolve()
+          .then(job)
+          .then(resolve, reject)
+          .finally(() => {
+            running = false;
+            pump();
+          });
+      },
+    };
+    waiting.push(entry);
+    waitingByKey.set(key, entry);
+    pump();
+  });
 }
 
 const pending = new Map<string, Promise<PostArt | null>>();
@@ -193,19 +332,34 @@ export function findPostArt(key: string, name: string): Promise<PostArt | null> 
   return readStored(key).then((blob) => (blob ? peekPostArt(key) ?? toArt(key, blob, name) : null));
 }
 
+export type PaintOptions = {
+  /** The feed's own paint: only while the screen is still (no finger down, no scroll). Off: right away (a tap asked). */
+  whenStill?: boolean;
+  /** How far its picture is from the screen (px, 0 on it): the nearest is painted first. */
+  rank?: () => number;
+};
+
 /**
  * The picture: from memory, the phone's store, or painted (`paint`, queued).
- * Asked twice at once, it's made once. null when painting failed.
+ * Asked twice at once, it's made once; asked by a tap while the feed's paint
+ * of it waits for a still screen, it goes next. null when painting failed.
  */
-export function loadPostArt(key: string, name: string, paint: () => Promise<Blob | null>): Promise<PostArt | null> {
+export function loadPostArt(key: string, name: string, paint: () => Promise<Blob | null>, opts: PaintOptions = {}): Promise<PostArt | null> {
   const hit = peekPostArt(key);
   if (hit) return Promise.resolve(hit);
   const inflight = pending.get(key);
-  if (inflight) return inflight;
+  if (inflight) {
+    const queued = waitingByKey.get(key);
+    if (queued && !opts.whenStill) {
+      queued.urgent = true;
+      pump();
+    }
+    return inflight;
+  }
   const job = (async () => {
     const stored = await readStored(key);
     if (stored) return peekPostArt(key) ?? toArt(key, stored, name);
-    const blob = await queue(paint).catch(() => null);
+    const blob = await schedule(key, paint, opts).catch(() => null);
     if (!blob) return null;
     keepStored(key, blob);
     return toArt(key, blob, name);
@@ -220,5 +374,11 @@ export function resetPostArt() {
   memory.clear();
   pending.clear();
   storeOpen = null;
-  chain = Promise.resolve();
+  waiting.length = 0;
+  waitingByKey.clear();
+  running = false;
+  if (tick !== null) clearTimeout(tick);
+  tick = null;
+  lastMove = Number.NEGATIVE_INFINITY;
+  fingers = 0;
 }
