@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { suggestionPicks, type LoadSuggestion } from "@/lib/load-suggestion";
 import { selectPreviousLifts, type PreviousLiftLog } from "@/lib/workout-previous-lift";
 import { focusNames, isBackoffRow } from "@/lib/workouts/focus-names";
+import { noteLead } from "@/lib/workouts/note-lead";
 
 const read = (p: string) => readFileSync(p, "utf8");
 
@@ -120,6 +121,18 @@ describe("a quieter card", () => {
     const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
     expect(wdv).toContain('open ? "whitespace-pre-wrap break-words" : "line-clamp-1 break-words"');
     expect(wdv).not.toContain("Read notes");
+  });
+  it("a note too long for the line shows its first sentence, never \"….\" after a period", () => {
+    expect(noteLead("Top set — log weight, reps, RPE (velocity optional). Load is RPE-driven: no fixed kg. Rest 5–7 min."))
+      .toBe("Top set — log weight, reps, RPE (velocity optional)");
+    expect(noteLead("Brace hard: big breath\nRest 3 min")).toBe("Brace hard: big breath");
+    expect(noteLead("Did it move? Go up 5 lb next week.")).toBe("Did it move?");
+    // a single sentence has no lead: the line cuts it
+    expect(noteLead("Heavy but clean. ")).toBeNull();
+    expect(noteLead("Use 2.5 kg jumps, e.g. pause on the chest for one count and press")).toBeNull();
+    const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
+    expect(wdv).toContain("const lead = clipped && !open ? noteLead(notes) : null;");
+    expect(wdv).toContain("{lead ?? notes}");
   });
   it("the last warm-up prompt is a quiet suggestion; logged warm-ups keep their orange W", () => {
     const w = read("src/components/workout-day/final-warmup-input.tsx");
