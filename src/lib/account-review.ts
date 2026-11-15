@@ -207,7 +207,7 @@ export function accountReview(input: {
           key: `plan:${s.id}`,
           tone: "stop",
           title: `${Your} payment plan stops`,
-          body: `No more automatic charges.${p.outstandingCents > 0 ? ` What's left (${money(p.outstandingCents)}) is still owed.` : ""}`,
+          body: `No more automatic charges.${p.outstandingCents > 0 ? " What's left is still owed." : ""}`,
         });
       } else if (!autoPay) {
         autoPay = action(s);

@@ -112,14 +112,15 @@ function BottomSheet({
     <Sheet open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
       <SheetContent
         side="bottom"
+        hideCloseButton
         className="flex max-h-[92dvh] flex-col gap-0 rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[520px]"
       >
-        <SheetHeader className="px-5 pb-2 pt-5 text-left">
+        <SheetHeader className="min-h-0 shrink-0 space-y-1 px-5 pb-3 pt-5 text-left">
           <SheetTitle className="text-[18px]">{title}</SheetTitle>
           {description ? <SheetDescription className="text-[14px]">{description}</SheetDescription> : null}
         </SheetHeader>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-4">{children}</div>
-        <div className="space-y-2 border-t border-border px-5 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3">{footer}</div>
+        <div className="shrink-0 space-y-2 border-t border-border px-5 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3">{footer}</div>
       </SheetContent>
     </Sheet>
   );
@@ -759,7 +760,7 @@ export function AccountHistory({ clientId, defaultOpen = false }: { clientId: st
           ) : (
             rows.map((row) => (
               <li key={row.id} className="flex items-baseline gap-3 px-3.5 py-2.5 text-sm">
-                <span className="w-24 shrink-0 text-muted-foreground">{billingDay(row.at) ?? ""}</span>
+                <span className="w-16 shrink-0 text-muted-foreground">{billingDay(row.at) ?? ""}</span>
                 <span className="min-w-0">
                   <span className="font-medium">{row.what}</span>
                   {row.who ? <span className="text-muted-foreground"> {row.who}</span> : null}
@@ -817,6 +818,55 @@ export function ClientLifecycleBanner({
         </Button>
       </div>
       <AccountHistory clientId={clientId} />
+    </div>
+  );
+}
+
+/**
+ * A JF member's page: their own (self-serve) record's lifecycle, the same
+ * banner, sheets and history as a coaching client's.
+ */
+export function MemberLifecycle({ userId }: { userId: string | null | undefined }) {
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [reactivateOpen, setReactivateOpen] = useState(false);
+  const q = useQuery({
+    queryKey: ["client", "by-user", userId ?? ""],
+    enabled: !!userId,
+    staleTime: 30_000,
+    queryFn: async () =>
+      (
+        await (supabase as any)
+          .from("clients")
+          .select("id, status, deactivated_at, deactivate_at, deactivation_reason, deactivation_note, deactivation_source")
+          .eq("user_id", userId)
+          .order("created_at")
+          .limit(1)
+          .maybeSingle()
+      ).data as any,
+  });
+  const c = q.data;
+  if (!c || c.status === "Deleted") return null;
+  const off = c.status === "Deactivated" || !!c.deactivate_at;
+  return (
+    <div className="mb-4" data-member-lifecycle>
+      {off ? (
+        <ClientLifecycleBanner
+          clientId={c.id}
+          status={c.status}
+          deactivatedAt={c.deactivated_at}
+          deactivateAt={c.deactivate_at}
+          reason={c.deactivation_reason}
+          note={c.deactivation_note}
+          source={c.deactivation_source}
+          onReactivate={() => setReactivateOpen(true)}
+        />
+      ) : (
+        <Button variant="outline" size="sm" className="h-9" onClick={() => setDeactivateOpen(true)} data-member-deactivate>
+          <PauseCircle className="mr-1.5 h-4 w-4" aria-hidden /> Deactivate account
+        </Button>
+      )}
+      {deactivateOpen && <ClientLifecycleSheet clientId={c.id} kind="deactivate" open={deactivateOpen} onOpenChange={setDeactivateOpen} />}
+      {reactivateOpen && <ClientLifecycleSheet clientId={c.id} kind="reactivate" open={reactivateOpen} onOpenChange={setReactivateOpen} />}
     </div>
   );
 }

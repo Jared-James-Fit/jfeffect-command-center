@@ -544,3 +544,14 @@ BEGIN
   RETURN NEW;
 END;
 $function$;
+
+-- ---------------------------------------------------------------------------
+-- Accounts deactivated before this (two, by a coach, "Coaching ended") are
+-- archived like every deactivation now, so no job reaches them, with what
+-- reactivating puts back. Applied once by hand on Nov 15, 2026; a no-op after.
+-- ---------------------------------------------------------------------------
+UPDATE public.clients
+   SET archived = true,
+       deactivation_source = coalesce(deactivation_source, 'staff'),
+       deactivation_prior = coalesce(deactivation_prior, jsonb_build_object('status', 'Active', 'archived', archived, 'portal_access_disabled', false))
+ WHERE status = 'Deactivated' AND (archived = false OR deactivation_source IS NULL);

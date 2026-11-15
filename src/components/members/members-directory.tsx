@@ -32,6 +32,9 @@ type Member = {
   current_period_end?: string | null;
   trial_end_at?: string | null;
   cancel_at?: string | null;
+  /** Their own record is deactivated (lifecycle.functions.ts). */
+  deactivated?: boolean;
+  deactivates_at?: string | null;
 };
 
 const BILLING_ISSUE = ["Past Due", "Payment Failed"];
@@ -44,7 +47,7 @@ const FILTERS: Array<{ key: string; label: string; test: (m: Member) => boolean 
   { key: "app", label: "App", test: (m) => m.account_type === "app_member" && m.status !== "Archived" },
   { key: "program", label: "Program-only", test: (m) => m.account_type === "program_only" && m.status !== "Archived" },
   { key: "setup", label: "Not set up", test: (m) => !m.user_id && m.status !== "Archived" },
-  { key: "deactivated", label: "Deactivated", test: (m) => m.status === "Deactivated" },
+  { key: "deactivated", label: "Deactivated", test: (m) => m.status === "Deactivated" || !!m.deactivated },
   { key: "archived", label: "Archived", test: (m) => m.status === "Archived" },
 ];
 
@@ -59,6 +62,8 @@ const initials = (m: Member) =>
 
 function statusLine(m: Member): { text: string; warn: boolean } {
   const type = (ACCOUNT_TYPES as Record<string, { label: string }>)[m.account_type]?.label ?? m.account_type;
+  if (m.deactivated) return { text: `${type} · Deactivated`, warn: false };
+  if (m.deactivates_at) return { text: `${type} · Deactivates soon`, warn: true };
   if (m.status !== "Active") return { text: `${type} · ${m.status}`, warn: false };
   if (m.account_type === "jf_member" && m.subscription_status) {
     return { text: `${type} · ${m.subscription_status}`, warn: BILLING_ISSUE.includes(m.subscription_status) };

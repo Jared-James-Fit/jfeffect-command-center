@@ -132,7 +132,8 @@ describe("deactivating with a session package on auto-pay (Marc)", () => {
     const r = marcReview({ who: "staff", stopAutoPay: true });
     expect(r.stop.map((s) => s.saleId)).toEqual(["p2"]);
     expect(r.autoPay).toBeNull();
-    expect(r.lines.find((l) => l.key === "plan:p2")!.body).toBe("No more automatic charges. What's left ($1,344.00) is still owed.".replace("$1,344.00", fmt(r.facts.outstandingCents)));
+    expect(r.lines.find((l) => l.key === "plan:p2")!.body).toBe("No more automatic charges. What's left is still owed.");
+    expect(r.lines.find((l) => l.key === "owed")!.title).toBe(`Marc still owes ${fmt(r.facts.outstandingCents)}`);
     expect(r.lines.find((l) => l.key === "owed")!.body).toContain("Deactivating doesn't clear it.");
   });
 

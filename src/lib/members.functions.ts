@@ -82,7 +82,18 @@ export const listMembers = createServerFn({ method: "GET" })
     if (clientErr) throw new Error(clientErr.message);
     const members = withoutCoachingClients(rows ?? [], clientRows ?? []);
     const inBin = new Set(((binned ?? []) as Array<{ member_id: string | null }>).map((b) => b.member_id).filter(Boolean));
-    const listed = members.filter((m: any) => !inBin.has(m.id));
+    // A member who deactivated (or whose account was) shows under Deactivated: their own record says so.
+    const userIds = members.map((m: any) => m.user_id).filter(Boolean);
+    const { data: own } = userIds.length
+      ? await supabaseAdmin.from("clients").select("user_id, status, deactivate_at").in("user_id", userIds)
+      : { data: [] as any[] };
+    const off = new Map(((own ?? []) as any[]).map((c) => [c.user_id, c]));
+    const listed = members
+      .filter((m: any) => !inBin.has(m.id))
+      .map((m: any) => {
+        const c = off.get(m.user_id);
+        return c?.status === "Deactivated" ? { ...m, deactivated: true } : c?.deactivate_at ? { ...m, deactivates_at: c.deactivate_at } : m;
+      });
     return { members: viewOnly ? listed.map(withoutCredentials) : listed };
   });
 
