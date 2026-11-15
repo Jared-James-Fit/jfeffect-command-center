@@ -25,11 +25,11 @@ describe("the database never deletes a chat with an account", () => {
 describe("the app's delete buttons keep chats", () => {
   // Delete client / Delete member wait 30 days in Recently deleted first
   // (recently-deleted.test.ts); the purge on day 30 keeps chats the same way.
-  it("day 30 deactivates a client with chat history (portal off) and closes the login", () => {
+  it("day 30 keeps a client with chat history as a record (portal off) and closes the login", () => {
     const fn = read("src/lib/account-deletion.server.ts");
-    expect(fn).toContain('deactivation_reason: "Account deleted (chat history kept)"');
+    expect(fn).toContain('deactivation_reason: "Account deleted (business records kept)"');
     expect(fn).toContain('admin.from("messages").select("id").eq("client_id", ids.clientId).limit(1)');
-    expect(fn).toMatch(/updateUserById\(row\.user_id, \{\s*ban_duration: "876000h",?\s*\}\)/);
+    expect(fn).toMatch(/updateUserById\(row\.user_id, \{\s*ban_duration: "876000h",/);
   });
   it("day 30 deactivates a member with any chat history (access off, chats kept)", () => {
     const fn = read("src/lib/account-deletion.server.ts");

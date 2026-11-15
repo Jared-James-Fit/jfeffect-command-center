@@ -75,60 +75,71 @@ export const getMyBilling = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ClientId.parse(d))
   .handler(async ({ data, context }): Promise<MyBilling> => {
     const { supabase } = context as any;
-    // The caller's own login: a client sees only their own record, a coach their clients', an admin anyone's.
-    const { data: client, error: cErr } = await supabase.from("clients").select("id").eq("id", data.client_id).maybeSingle();
-    if (cErr) throw new Error(cErr.message);
-    if (!client) throw new Error("Not found");
-
-    const [salesRes, ledger, events, balanceRes, sessions] = await Promise.all([
-      supabase
-        .from("purchase_records")
-        .select("*")
-        .eq("client_id", data.client_id)
-        .is("archived_at", null)
-        .order("purchased_at", { ascending: false }),
-      fetchAllPages((from, to) =>
-        supabase
-          .from("payment_ledger")
-          .select(LEDGER_COLUMNS)
-          .eq("client_id", data.client_id)
-          .eq("voided", false)
-          .order("transaction_date", { ascending: false })
-          .order("id", { ascending: true })
-          .range(from, to),
-      ),
-      fetchAllPages((from, to) =>
-        supabase
-          .from("session_ledger_events")
-          .select(EVENT_COLUMNS)
-          .eq("client_id", data.client_id)
-          .order("created_at", { ascending: true })
-          .order("id", { ascending: true })
-          .range(from, to),
-      ),
-      supabase.rpc("session_balance", { _client_id: data.client_id }, { get: true }),
-      // What the client's own calendar shows: sessions marked for them.
-      fetchAllPages((from, to) =>
-        supabase
-          .from("pt_sessions")
-          .select(SESSION_COLUMNS)
-          .eq("client_id", data.client_id)
-          .eq("visible_to_client", true)
-          .order("session_date", { ascending: false })
-          .order("start_time", { ascending: false })
-          .range(from, to),
-      ),
-    ]);
-    if (salesRes.error) throw new Error(salesRes.error.message);
-
-    return {
-      sales: ((salesRes.data ?? []) as Record<string, unknown>[]).map(safeSale),
-      ledger: (ledger as Record<string, unknown>[]).map(safePayment),
-      session_events: events as Record<string, unknown>[],
-      session_balance: (balanceRes.data ?? []) as Record<string, unknown>[],
-      sessions: sessions as Record<string, unknown>[],
-    };
+    return readClientBilling(supabase, data.client_id);
   });
+
+/**
+ * One client's billing, read with whatever login `db` carries (the caller's
+ * own: the database decides who may see it) and made safe for a client
+ * screen. My Purchases and the account review (lifecycle.server.ts) share it.
+ */
+export async function readClientBilling(db: any, clientId: string): Promise<MyBilling> {
+  const supabase = db;
+  // The caller's own login: a client sees only their own record, a coach their clients', an admin anyone's.
+  const { data: client, error: cErr } = await supabase.from("clients").select("id").eq("id", clientId).maybeSingle();
+  if (cErr) throw new Error(cErr.message);
+  if (!client) throw new Error("Not found");
+  const data = { client_id: clientId };
+
+  const [salesRes, ledger, events, balanceRes, sessions] = await Promise.all([
+    supabase
+      .from("purchase_records")
+      .select("*")
+      .eq("client_id", data.client_id)
+      .is("archived_at", null)
+      .order("purchased_at", { ascending: false }),
+    fetchAllPages((from, to) =>
+      supabase
+        .from("payment_ledger")
+        .select(LEDGER_COLUMNS)
+        .eq("client_id", data.client_id)
+        .eq("voided", false)
+        .order("transaction_date", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase
+        .from("session_ledger_events")
+        .select(EVENT_COLUMNS)
+        .eq("client_id", data.client_id)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    supabase.rpc("session_balance", { _client_id: data.client_id }, { get: true }),
+    // What the client's own calendar shows: sessions marked for them.
+    fetchAllPages((from, to) =>
+      supabase
+        .from("pt_sessions")
+        .select(SESSION_COLUMNS)
+        .eq("client_id", data.client_id)
+        .eq("visible_to_client", true)
+        .order("session_date", { ascending: false })
+        .order("start_time", { ascending: false })
+        .range(from, to),
+    ),
+  ]);
+  if (salesRes.error) throw new Error(salesRes.error.message);
+
+  return {
+    sales: ((salesRes.data ?? []) as Record<string, unknown>[]).map(safeSale),
+    ledger: (ledger as Record<string, unknown>[]).map(safePayment),
+    session_events: events as Record<string, unknown>[],
+    session_balance: (balanceRes.data ?? []) as Record<string, unknown>[],
+    sessions: sessions as Record<string, unknown>[],
+  };
+}
 
 const LedgerId = z.object({ ledger_id: z.string().uuid() });
 

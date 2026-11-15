@@ -13,6 +13,7 @@ import { adminUpdateMemberSetup } from "@/lib/member-setup.functions";
 import { setPovFlag } from "@/components/pov-quick-toggle";
 import { useNavigate } from "@tanstack/react-router";
 import { PageHeader } from "@/components/app-shell";
+import { MemberLifecycle } from "@/components/account/account-lifecycle";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -296,6 +297,7 @@ export function MemberProfileWorkspace({
       )}
 
       <div className={embedded ? "p-4 md:p-6" : ""}>
+        <MemberLifecycle userId={member.user_id} />
         {/* Membership Action Center (embedded only — non-embedded route keeps existing top cards) */}
         {embedded && <WorkspaceActionCenter actions={memberActions} />}
         {/* Membership Alerts */}

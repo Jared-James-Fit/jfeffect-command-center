@@ -92,11 +92,11 @@ describe("no account is deleted on the spot", () => {
     );
   });
 
-  it("only day 30 deletes, keeping chats: a record with chat history is deactivated and its login closed", () => {
+  it("only day 30 deletes, keeping chats and business records: the record stays (anonymized) and its login is closed", () => {
     const purge = readFileSync("src/lib/account-deletion.server.ts", "utf8");
     expect(purge).toContain('.lte("purge_after", new Date().toISOString())');
-    expect(purge).toMatch(/updateUserById\(row\.user_id, \{\s*ban_duration: "876000h",?\s*\}\)/);
-    expect(purge).toContain("if (keepChats) await deactivate();");
+    expect(purge).toMatch(/updateUserById\(row\.user_id, \{\s*ban_duration: "876000h",/);
+    expect(purge).toContain("if (keepRecord) await keep();");
     expect(sql).toContain("'account-deletions-purge',");
   });
 
@@ -109,8 +109,8 @@ describe("no account is deleted on the spot", () => {
     expect(sql).toContain(
       "WHERE user_id = v_uid AND status = 'pending' AND source = 'self' LIMIT 1;",
     );
-    const gate = readFileSync("src/components/account/delete-account.tsx", "utf8");
-    expect(gate).toContain('{data.source === "self" ? (');
+    const gate = readFileSync("src/components/account/account-lifecycle.tsx", "utf8");
+    expect(gate).toContain('deletion.source === "self" ? (');
   });
 
   it("team logins are never binned from here", () => {
