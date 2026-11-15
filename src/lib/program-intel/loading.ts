@@ -12,6 +12,13 @@
  *   no such max for falls back to their logged e1RM when there is one, else to
  *   the RPE that load means for those reps; a % of the top set with no top set
  *   of the same exercise before it becomes RPE. What changed is listed.
+ * - withoutFixedLoads: a note or progression rule never carries a weight to
+ *   lift ("Start ~430lb.", "Use 50lb DBs."): written once at generation, it
+ *   goes stale with the first logged set and can't follow a corrected one
+ *   (Nicolas's "Start ~430lb" came from a 205 lb deadlift stored as kg). The
+ *   logger shows the last session and a suggestion from the logs, live.
+ *   Steps ("add 5 lb") and relative cues ("a little under last block's top
+ *   set") stay.
  */
 import { percentOf1RM } from "@/lib/load-suggestion";
 import { E1RM_MIN_SESSIONS, E1RM_WINDOW_DAYS, isCompetitionMaxName, isLiftFamily, type LiftFamily } from "@/lib/workouts/load-reference";
@@ -62,6 +69,28 @@ export function rpeForPercent(pct: number, reps: string | null | undefined): str
   return String(Math.round(rpe * 2) / 2);
 }
 
+// "Start ~430lb", "Start with 145lb (last block's top set)", "Use 50lb DBs", "start at 20 kg";
+// never a step ("add 5lb") or a weight relative to another ("start ~5 kg under …").
+const FIXED_LOAD = /\b(?:start(?:ing)?(?:\s+(?:weight|load))?|begin|use|try|aim for|work up to)\b(?:\s+(?:with|at|around|about|near|on))?\s*(?:~|≈|about\s+|around\s+)?\s*\d+(?:\.\d+)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?\s*(?:lbs?|kgs?|pounds?|kilos?)\b(?!\s*(?:under|over|below|above|lighter|heavier|less|more|off|from|than)\b)(?:\s*(?:DBs?|dumbbells?|KBs?|kettlebells?|plates?|per hand|each(?:\s+(?:hand|side))?)\b)?(?:\s*\([^)]*\))?/gi;
+
+/** A note without the fixed weight it names; null when nothing else is left. */
+export function withoutFixedLoads(text: string | null | undefined): string | null {
+  if (text == null) return null;
+  const out: string[] = [];
+  for (const sentence of String(text).trim().split(/(?<=[.!?])\s+/)) {
+    if (!sentence.match(FIXED_LOAD)) { out.push(sentence); continue; }
+    const rest = sentence
+      .replace(FIXED_LOAD, "")
+      .replace(/^[\s,;:]*(?:and\s+|then\s+)?/i, "")
+      .replace(/[\s,;:]*(?:\band\b)?\s*([.!?]*)$/i, "$1")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (/[A-Za-z0-9]/.test(rest)) out.push(rest.charAt(0).toUpperCase() + rest.slice(1));
+  }
+  const joined = out.join(" ").trim();
+  return joined || null;
+}
+
 type Rx = { percentage?: number | null; percentage_of?: LoadingBasis | null; rpe?: string | null; rir?: string | null; reps?: string | null };
 
 /** One prescription's load checked against what's on file; null = keep it as written. */
@@ -106,6 +135,12 @@ export function withLoadingGuard(
       const fam = isLiftFamily(famRaw) ? famRaw : null;
       const topSetBefore = d.exercises.slice(0, i).some((p) => (ex.exercise_id ? p.exercise_id === ex.exercise_id : p.exercise_name === ex.exercise_name));
       let next: BuiltExercise = ex;
+      const notes = withoutFixedLoads(ex.notes);
+      const progression = withoutFixedLoads(ex.progression);
+      if ((notes ?? "") !== (ex.notes ?? "").trim() || (progression ?? "") !== (ex.progression ?? "").trim()) {
+        next = { ...next, notes, progression: progression ?? "" } as BuiltExercise;
+        changed.push(`${ex.exercise_name} (${d.title}): the weight in its note taken out (the app suggests it from their logs)`);
+      }
       if (ex.percentage != null) {
         const basis = (ex.percentage_of ?? "e1rm") as LoadingBasis;
         const res = checkRx(ex, basis, fam, refs, topSetBefore, ex.reps);
@@ -115,7 +150,8 @@ export function withLoadingGuard(
         }
       }
       if (next.weeks?.length) {
-        const weeks = next.weeks.map((w) => {
+        const weeks = next.weeks.map((w0) => {
+          const w = w0.notes == null ? w0 : { ...w0, notes: withoutFixedLoads(w0.notes) ?? undefined };
           if (w.percentage == null) return w;
           // the week's own basis, else the one the exercise was written with (never a patched one)
           const basis = ((w as Rx).percentage_of ?? ex.percentage_of ?? "e1rm") as LoadingBasis;
