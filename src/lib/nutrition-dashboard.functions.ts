@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { PovInput, resolvePovUserId, type PovArgs } from "@/lib/client-pov.server";
+import { plausibleDay, plausibleWeekStart } from "@/lib/food-log";
 
 const povShape = PovInput.shape;
 
@@ -81,16 +82,39 @@ async function loadMember(supabase: any, userId: string) {
 }
 
 function dayBoundsUTC(dateISO: string) {
-  // dateISO: YYYY-MM-DD (treat as local-ish midnight to midnight UTC bucket)
+  // dateISO: YYYY-MM-DD, as a UTC day: only for older app builds that don't send their own day
   const start = new Date(`${dateISO}T00:00:00.000Z`);
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+/**
+ * The person's own day (local midnight to midnight, sent by the phone) when
+ * it's a plausible day, else the UTC fallback. A UTC day filed every evening
+ * meal under tomorrow (8 PM in Winnipeg is 01:00 UTC).
+ */
+function dayBounds(dateISO: string, dayStart?: string, dayEnd?: string) {
+  if (dayStart && dayEnd && plausibleDay(dayStart, dayEnd)) {
+    return { start: new Date(dayStart).toISOString(), end: new Date(dayEnd).toISOString() };
+  }
+  return dayBoundsUTC(dateISO);
+}
+
+const DayWindow = z.object({
+  dayStart: z.string().datetime({ offset: true }).optional(),
+  dayEnd: z.string().datetime({ offset: true }).optional(),
+});
+
 // =================== Dashboard read =====================================
 export const getNutritionDashboard = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).extend(povShape).parse(d))
+  .inputValidator((d) =>
+    z
+      .object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), weekStart: z.string().datetime({ offset: true }).optional() })
+      .extend(DayWindow.shape)
+      .extend(povShape)
+      .parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = await nutritionCtx(context, data);
     const member = await loadMember(supabase, userId);
@@ -107,8 +131,11 @@ export const getNutritionDashboard = createServerFn({ method: "POST" })
       };
     }
 
-    const { start, end } = dayBoundsUTC(data.date);
-    const weekStart = new Date(new Date(start).getTime() - 6 * 24 * 60 * 60 * 1000).toISOString();
+    const { start, end } = dayBounds(data.date, data.dayStart, data.dayEnd);
+    const weekStart =
+      data.weekStart && plausibleWeekStart(data.weekStart, start)
+        ? new Date(data.weekStart).toISOString()
+        : new Date(new Date(start).getTime() - 6 * 24 * 60 * 60 * 1000).toISOString();
 
     const [
       { data: targetRow },
@@ -230,10 +257,10 @@ export const updateMeal = createServerFn({ method: "POST" })
     z.object({
       id: z.string().uuid(),
       name: z.string().trim().min(1).max(120),
-      calories: z.number().int().min(0),
-      protein_g: z.number().min(0),
-      carbs_g: z.number().min(0),
-      fat_g: z.number().min(0),
+      calories: z.number().int().min(0).max(10000),
+      protein_g: z.number().min(0).max(1000),
+      carbs_g: z.number().min(0).max(1000),
+      fat_g: z.number().min(0).max(1000),
     }).extend(povShape).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -361,12 +388,16 @@ export const logSupplement = createServerFn({ method: "POST" })
 export const undoSupplementLog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
-    z.object({ supplement_id: z.string().uuid().nullable().optional(), supplement_name: z.string() }).extend(povShape).parse(d),
+    z
+      .object({ supplement_id: z.string().uuid().nullable().optional(), supplement_name: z.string() })
+      .extend(DayWindow.shape)
+      .extend(povShape)
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = await nutritionCtx(context, data);
-    // Delete most recent log today matching supplement
-    const { start, end } = dayBoundsUTC(new Date().toISOString().slice(0, 10));
+    // Delete the most recent log today (the person's day) matching the supplement
+    const { start, end } = dayBounds(new Date().toISOString().slice(0, 10), data.dayStart, data.dayEnd);
     let q = supabase
       .from("member_supplement_logs")
       .select("id")

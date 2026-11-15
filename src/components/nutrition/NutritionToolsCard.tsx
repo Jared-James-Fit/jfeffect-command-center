@@ -1,7 +1,8 @@
 /**
  * "Nutrition Tools" for the client Nutrition page: an always-visible grid of
  * compact one-tap tiles (icon + name: log food, meal plan PDF, cookbook,
- * calculator, help) so nothing hides behind a collapsed drawer. All read-only entry points, and
+ * help, and the calculator only for a client with no coach plan yet) so
+ * nothing hides behind a collapsed drawer. All read-only entry points, and
  * each appears once on the page (no second Log Food or PDF button elsewhere).
  */
 
@@ -17,11 +18,14 @@ export { ToolTile, ToolRow } from "./tool-tile";
 export function NutritionToolsCard({
   viewer,
   hasCoachApprovedTargets,
+  showCalculator = true,
   tiles,
   footer,
 }: {
   viewer: "member" | "client";
   hasCoachApprovedTargets?: boolean;
+  /** Off for a coaching client whose coach set their plan (the coach owns the targets). */
+  showCalculator?: boolean;
   /** Page-specific tiles shown first (log food, PDFs). */
   tiles?: ReactNode;
   /** Shown under the grid (e.g. adherence trend). */
@@ -39,16 +43,18 @@ export function NutritionToolsCard({
       {/* an odd tile out on a phone takes the whole row instead of leaving a hole */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 [&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:col-span-1">
         {tiles}
-        <ToolTile icon={Calculator} title="Macro Calculator" onClick={() => setCalcOpen(true)} />
+        {showCalculator && <ToolTile icon={Calculator} title="Macro Calculator" onClick={() => setCalcOpen(true)} />}
         <ToolTile icon={HelpCircle} title="Nutrition Help" onClick={() => setHelpOpen(true)} />
       </div>
       {footer && <div className="mt-3 empty:hidden">{footer}</div>}
-      <MacroCalculatorDialog
-        open={calcOpen}
-        onOpenChange={setCalcOpen}
-        viewer={viewer}
-        hasCoachApprovedTargets={hasCoachApprovedTargets}
-      />
+      {showCalculator && (
+        <MacroCalculatorDialog
+          open={calcOpen}
+          onOpenChange={setCalcOpen}
+          viewer={viewer}
+          hasCoachApprovedTargets={hasCoachApprovedTargets}
+        />
+      )}
       <NutritionHelpSheet open={helpOpen} onOpenChange={setHelpOpen} viewer={viewer} />
     </Card>
   );

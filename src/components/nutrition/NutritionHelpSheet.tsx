@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Search, ArrowLeft, X } from "lucide-react";
+import { MessageCircle, Search, ArrowLeft } from "lucide-react";
 import { NUTRITION_FAQS, NUTRITION_RESOURCES } from "@/content/nutrition-help";
 
 export function NutritionHelpSheet({
@@ -32,24 +32,18 @@ export function NutritionHelpSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="h-[92vh] overflow-y-auto p-0" hideCloseButton>
         <div className="sticky top-0 z-10 bg-background border-b">
-          <SheetHeader className="p-4 pr-14">
-            <div className="flex items-center gap-2">
+          <SheetHeader className="p-4">
+            <div className="flex items-center gap-3">
               <SheetClose
                 aria-label="Back"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-secondary/40 hover:bg-secondary"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <ArrowLeft className="h-4 w-4" />
               </SheetClose>
-              <div className="flex-1 text-left">
+              <div className="min-w-0 flex-1 text-left">
                 <SheetTitle>Nutrition Help</SheetTitle>
-                <SheetDescription>FAQs, guides, and food-logging help.</SheetDescription>
+                <SheetDescription>Answers to the common questions, and short guides.</SheetDescription>
               </div>
-              <SheetClose
-                aria-label="Close"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-secondary"
-              >
-                <X className="h-4 w-4" />
-              </SheetClose>
             </div>
           </SheetHeader>
           <div className="px-4 pb-3">
@@ -109,12 +103,12 @@ export function NutritionHelpSheet({
           </Tabs>
 
           {viewer === "client" && (
-            <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+            <div className="rounded-xl border border-border bg-muted/40 p-4">
               <div className="text-sm font-bold mb-1">Need more help?</div>
               <div className="text-xs text-muted-foreground mb-3">
                 Contact your coach with the dates, food logs, or progress info you'd like reviewed.
               </div>
-              <Button asChild size="sm" className="gap-1.5">
+              <Button asChild size="sm" variant="outline" className="h-10 gap-1.5">
                 <Link to="/portal/messages" onClick={() => onOpenChange(false)}>
                   <MessageCircle className="h-4 w-4" /> Contact Coach
                 </Link>

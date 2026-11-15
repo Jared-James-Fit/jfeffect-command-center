@@ -1,41 +1,67 @@
 /**
- * Cookbook — client-facing recipe browser.
+ * Cookbook: the recipe list and a recipe, inside one full-height sheet over
+ * Nutrition. Back on a recipe returns to the list where it was; Back on the
+ * list closes the sheet. The recipes load only once it's opened.
  *
- * Replaces the always-mounted recipe feed on the Nutrition page with a small
- * entry card. The recipe library is fetched ONLY once the Cookbook is opened,
- * in batches of 12 with "Load more". Read-only: recipe permissions and data
- * are untouched (RLS + Published filter as before).
+ * `/portal/nutrition-targets?cookbook=1` opens it (where /portal/recipes now
+ * lands), `?recipe=<id>` opens it on that recipe.
  */
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { ToolRow, ToolTile } from "./tool-tile";
-import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { BookOpen, ChefHat, ChevronLeft, Loader2 } from "lucide-react";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { BookOpen, ChevronLeft, Loader2 } from "lucide-react";
 
 export type CookbookViewer = "member" | "client";
+
+/** `?cookbook=1` / `?recipe=<id>` on the Nutrition page: open the Cookbook (once), then tidy the address. */
+function useCookbookLink(open: (recipeId: string | null) => void) {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const recipe = url.searchParams.get("recipe");
+    if (!url.searchParams.has("cookbook") && !recipe) return;
+    open(recipe && /^[0-9a-f-]{36}$/i.test(recipe) ? recipe : null);
+    url.searchParams.delete("cookbook");
+    url.searchParams.delete("recipe");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    // once, on the first render of the page
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
+
+function useCookbookState() {
+  const [open, setOpen] = useState(false);
+  const [startRecipe, setStartRecipe] = useState<string | null>(null);
+  useCookbookLink((recipe) => {
+    setStartRecipe(recipe);
+    setOpen(true);
+  });
+  return { open, setOpen, startRecipe };
+}
 
 /**
  * The Cookbook as a plain tool row (the member's Nutrition page). Loads nothing
  * by itself. "Open Cookbook" is the label the Try it Thursday post names.
  */
 export function CookbookEntryCard({ viewer }: { viewer: CookbookViewer }) {
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, startRecipe } = useCookbookState();
   return (
     <>
-      <ToolRow icon={BookOpen} title="Open Cookbook" hint="Easy meals: air fryer, microwave, no-cook & store-bought" onClick={() => setOpen(true)} />
-      {open && <CookbookSheet viewer={viewer} open={open} onOpenChange={setOpen} />}
+      <ToolRow icon={BookOpen} title="Open Cookbook" hint="Simple high-protein meals, most in 10 minutes" onClick={() => setOpen(true)} />
+      {open && <CookbookSheet viewer={viewer} open={open} onOpenChange={setOpen} startRecipe={startRecipe} />}
     </>
   );
 }
 
 /** The Cookbook as one of Nutrition Tools' tiles (the client's Nutrition page). */
 export function CookbookToolTile({ viewer }: { viewer: CookbookViewer }) {
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, startRecipe } = useCookbookState();
   return (
     <>
       <ToolTile icon={BookOpen} title="Open Cookbook" onClick={() => setOpen(true)} />
-      {open && <CookbookSheet viewer={viewer} open={open} onOpenChange={setOpen} />}
+      {open && <CookbookSheet viewer={viewer} open={open} onOpenChange={setOpen} startRecipe={startRecipe} />}
     </>
   );
 }
@@ -46,30 +72,57 @@ export function CookbookSheet({
   viewer,
   open,
   onOpenChange,
+  startRecipe = null,
 }: {
   viewer: CookbookViewer;
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  startRecipe?: string | null;
 }) {
+  const [recipeId, setRecipeId] = useState<string | null>(startRecipe);
+  const scroller = useRef<HTMLDivElement | null>(null);
+  const listTop = useRef(0);
+
+  const openRecipe = (id: string) => {
+    listTop.current = scroller.current?.scrollTop ?? 0;
+    setRecipeId(id);
+    requestAnimationFrame(() => scroller.current?.scrollTo({ top: 0 }));
+  };
+  const back = () => {
+    if (!recipeId) {
+      onOpenChange(false);
+      return;
+    }
+    setRecipeId(null);
+    requestAnimationFrame(() => scroller.current?.scrollTo({ top: listTop.current }));
+  };
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
+        ref={scroller}
         side="bottom"
         hideCloseButton
-        className="h-[100dvh] max-w-3xl overflow-y-auto pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:h-[92vh] sm:mx-auto sm:rounded-t-2xl sm:pt-6"
+        onEscapeKeyDown={(e) => {
+          // Escape on a recipe goes back to the list first
+          if (recipeId) {
+            e.preventDefault();
+            back();
+          }
+        }}
+        className="h-[100dvh] max-w-3xl overflow-y-auto px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-0 sm:mx-auto sm:h-[92vh] sm:rounded-t-2xl sm:px-6"
       >
-        <div className="flex min-h-12 items-center gap-3">
-          <SheetClose
-            aria-label="Back to nutrition"
-            className="inline-flex h-12 min-w-[92px] shrink-0 touch-manipulation items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-4 text-base font-semibold text-foreground shadow-sm transition active:scale-[0.98] hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        <div className="sticky top-0 z-10 -mx-4 flex items-center gap-3 border-b border-border bg-background px-4 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.75rem)] dark:bg-card sm:-mx-6 sm:px-6 sm:pt-4">
+          <button
+            type="button"
+            onClick={back}
+            aria-label={recipeId ? "Back to recipes" : "Back to nutrition"}
+            className="inline-flex h-10 shrink-0 items-center justify-center gap-1 rounded-lg border border-border bg-background px-3 text-sm font-semibold transition hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]"
           >
-            <ChevronLeft className="h-5 w-5" />
-            <span>Back</span>
-          </SheetClose>
-          <SheetTitle className="flex min-w-0 flex-1 items-center gap-2 text-2xl font-bold">
-            <ChefHat className="h-6 w-6 shrink-0 text-primary" />
-            <span className="truncate">Cookbook</span>
-          </SheetTitle>
+            <ChevronLeft className="h-4 w-4" />
+            {recipeId ? "Recipes" : "Back"}
+          </button>
+          <SheetTitle className="min-w-0 flex-1 truncate text-lg font-semibold">Cookbook</SheetTitle>
         </div>
         <Suspense
           fallback={
@@ -78,10 +131,9 @@ export function CookbookSheet({
             </div>
           }
         >
-          {open && <CookbookBody viewer={viewer} />}
+          {open && <CookbookBody viewer={viewer} recipeId={recipeId} onOpenRecipe={openRecipe} />}
         </Suspense>
       </SheetContent>
     </Sheet>
   );
 }
-
