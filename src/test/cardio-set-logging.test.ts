@@ -100,6 +100,6 @@ describe("the Time box says what's logged and what's only the target", () => {
 
   it("a row with no weight to log has no kg / lb switch", () => {
     const view = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
-    expect(view).toContain("{!readonly && onUnitChange && !hideWeight && (");
+    expect(view).toContain("{!readonly && onUnitChange && !hideWeight && <UnitSwitch unit={activeUnit} onChange={handleUnitToggle} />}");
   });
 });

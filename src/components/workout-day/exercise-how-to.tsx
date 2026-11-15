@@ -1,6 +1,6 @@
 import { Component, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Loader2, Play, RotateCcw } from "lucide-react";
+import { ArrowLeft, CirclePlay, Loader2, Play, RotateCcw } from "lucide-react";
 import { exerciseVideoSetGlobalQuery } from "@/hooks/use-exercise-video-set";
 import { exerciseGuideQuery, guideVideoUrl, type ExerciseGuide } from "@/lib/exercise-guide";
 import type { VideoSet } from "@/lib/exercise-video";
@@ -21,10 +21,13 @@ export function ExerciseHowToButton({
   exerciseId,
   fallbackName,
   className,
+  iconOnly = false,
 }: {
   exerciseId: string | null;
   fallbackName: string;
   className?: string;
+  /** The card's action row: the play icon alone, its words for screen readers. */
+  iconOnly?: boolean;
 }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -53,8 +56,10 @@ export function ExerciseHowToButton({
           setOpen(true);
         }}
         className={className ?? "h-7 rounded-full px-2.5 text-xs"}
+        title={iconOnly ? `How to do ${fallbackName}` : undefined}
       >
-        <Play className="mr-1 h-3 w-3 fill-current" /> How&nbsp;To
+        {iconOnly ? <CirclePlay aria-hidden="true" /> : <Play className="mr-1 h-3 w-3 fill-current" />}
+        <span className={iconOnly ? "sr-only" : undefined}>How&nbsp;To</span>
       </Button>
       {used && (
         <ExerciseHowToSheet open={open} onOpenChange={setOpen} exerciseId={exerciseId} fallbackName={fallbackName} />

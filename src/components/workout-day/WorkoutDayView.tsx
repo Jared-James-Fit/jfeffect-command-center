@@ -8,21 +8,18 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, Video, StickyNote, NotebookPen, Info, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, Target, LineChart } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { ExerciseOrderBadge } from "@/components/exercise-order-badge";
 import { formatDualLoad } from "@/lib/dual-load";
 import { resolveMovementFamily } from "@/lib/exercise-family";
 import {
   derivePurposeLabels,
   effectiveRestSeconds,
   resolveCategory,
-  purposeLabelBadgeClass,
   purposeLabelText,
   type ExerciseMeta,
 } from "@/lib/exercise-metadata";
@@ -87,7 +84,7 @@ import { planRestore, setPayload, snapshotOf, type CardSet, type CardSnapshot } 
 import { matchPreviousWeekSlots, type SlotRow } from "@/lib/previous-week-slot";
 import { LastWeekSwapChip, type LastWeekSwap } from "@/components/workout-day/last-week-swap";
 import { useCardHistory, type CardHistoryAction } from "@/components/workout-day/use-card-history";
-import { LoadSuggestionCard, LoadSuggestionsChip, LoadSuggestionsDone, LoadSuggestionsNudge, REF_LABEL, REF_ROW } from "@/components/workout-day/load-suggestion-card";
+import { LoadGuide, LoadSuggestionCard, LoadSuggestionsChip, LoadSuggestionsDone, LoadSuggestionsNudge, REF_TEXT } from "@/components/workout-day/load-suggestion-card";
 import { effortRange, loggedRpe, setGuidance } from "@/lib/workouts/plan-vs-actual";
 import { dismissSuggestionsNudgeForNow, suggestionsNudgeDismissed, useShowLoadSuggestions, LOAD_SUGGESTIONS_TRIED_KEY } from "@/lib/load-suggestion-visibility";
 import { TypedValueInput } from "@/components/workout-day/typed-value-input";
@@ -99,7 +96,7 @@ import { offersLastWarmup, pickFinalWarmup, warmupInUnit } from "@/lib/final-war
 import { enqueueOfflineWrite, registerQueueHandler, supersedeOfflineWrite } from "@/lib/workout-offline-queue";
 import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
-import { RestTimerButton } from "@/components/workout-day/RestTimerButton";
+import { RestTimer } from "@/components/workout-day/RestTimerButton";
 import { SwipeToReveal } from "@/components/workout-day/swipe-to-reveal";
 import { ExerciseActionRow } from "@/components/workout-day/exercise-action-row";
 import { CardMenuItem, CardMenuSeparator } from "@/components/workout-day/card-menu";
@@ -3357,17 +3354,9 @@ function PreviousTimedChip({ data, className, onOpen, fallback }: {
   const text = data.timed ? formatPreviousTimed(data.timed, formatClockSeconds, (m) => formatDistance(m, readDistanceUnit())) : "";
   if (!text) return <>{fallback}</>;
   const when = lastTimeWhen(data.occurredAt);
-  const body = (
-    <>
-      <span className={REF_LABEL}>Last time</span>
-      <span className="min-w-0 truncate text-sm font-medium tabular-nums text-foreground">
-        {text}
-        {when && <span className="font-normal text-muted-foreground"> · {when}</span>}
-      </span>
-    </>
-  );
+  const body = <>Last: <span className="tabular-nums">{text}</span></>;
   if (!onOpen) {
-    return <div className={cn(REF_ROW, "px-1", className)} data-last-time-timed={data.timed?.kind}>{body}</div>;
+    return <span className={cn(LAST_TIME_TEXT, className)} data-last-time-timed={data.timed?.kind}>{body}</span>;
   }
   return (
     <button
@@ -3376,17 +3365,17 @@ function PreviousTimedChip({ data, className, onOpen, fallback }: {
       data-testid="last-time-history"
       data-last-time-timed={data.timed?.kind}
       aria-label={`Last time: ${text}${when ? `, ${when}` : ""}. Open history`}
-      title="Your last session of this exercise. Tap for its history"
-      className={cn(LAST_TIME_BUTTON, className)}
+      title={`Your last session of this exercise${when ? `, ${when}` : ""}. Tap for its history`}
+      className={cn(LAST_TIME_TEXT, LAST_TIME_TAP, className)}
     >
-      {body}
-      <LineChart className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span className="truncate">{body}</span>
     </button>
   );
 }
 
-/** "Last time" is a plain line under the prescription that opens History & progress. */
-const LAST_TIME_BUTTON = cn(REF_ROW, "flex-1 rounded-md px-1 text-left transition-colors hover:bg-muted/60 active:bg-muted");
+/** "Last: 425 × 4 @ 6", left of Suggested under the prescription; the whole of it opens History & progress. */
+const LAST_TIME_TEXT = cn(REF_TEXT, "min-w-0 max-w-full truncate text-muted-foreground");
+const LAST_TIME_TAP = "-my-1 inline-flex min-h-9 items-center rounded-md text-left transition-colors hover:text-foreground active:bg-muted";
 
 /** " @ 7" from a logged RPE, " · 2 RIR" from a logged RIR, else nothing. */
 function lastTimeEffort(data: { rpe?: string | number | null; rir?: string | number | null }): string {
@@ -3431,18 +3420,12 @@ function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = nul
   // How hard it was matters as much as the weight in an RPE program: 192.5 × 4 @ 7.
   const effortStr = lastTimeEffort(data);
   const when = lastTimeWhen(data.occurredAt);
-  const body = (
-    <>
-      <span className={REF_LABEL}>Last time</span>
-      {/* the date goes first on a narrow phone, never the numbers */}
-      <span className="min-w-0 truncate text-sm font-medium tabular-nums text-foreground">
-        {loadStr}{repsStr}{effortStr}
-        {when && <span className="font-normal text-muted-foreground"> · {when}</span>}
-      </span>
-    </>
-  );
+  // The card says its unit once, top right: "Last: 425 × 4 @ 6" (a load in
+  // another unit, or assistance, keeps its words).
+  const shownLoad = data.loadType === "external" || !data.loadType ? loadStr.replace(new RegExp(` ${displayUnit}$`), "") : loadStr;
+  const body = <>Last: <span className="tabular-nums">{shownLoad}{repsStr}{effortStr}</span></>;
   if (!onOpen) {
-    return <div className={cn(REF_ROW, "px-1", className)} title="Your top set the last time you trained this exercise">{body}</div>;
+    return <span className={cn(LAST_TIME_TEXT, className)} title={`Your top set the last time you trained this exercise${when ? `, ${when}` : ""}`}>{body}</span>;
   }
   return (
     <button
@@ -3450,11 +3433,10 @@ function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = nul
       onClick={onOpen}
       data-testid="last-time-history"
       aria-label={`Last time: ${loadStr}${repsStr}${effortStr}${when ? `, ${when}` : ""}. Open history and progress`}
-      title="Your top set the last time you trained this exercise. Tap for history and progress"
-      className={cn(LAST_TIME_BUTTON, className)}
+      title={`Your top set the last time you trained this exercise${when ? `, ${when}` : ""}. Tap for history and progress`}
+      className={cn(LAST_TIME_TEXT, LAST_TIME_TAP, className)}
     >
-      {body}
-      <LineChart className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span className="truncate">{body}</span>
     </button>
   );
 }
@@ -4499,34 +4481,22 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         "workout-card-surface relative scroll-mt-24 overflow-hidden p-3.5 transition-[colors,box-shadow] hover:border-builder-card-border-strong sm:p-5",
       )}
     >
-      {/* Row 1 — name + unit toggle */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 flex-1 items-start gap-2">
-          {position != null && <ExerciseOrderBadge position={position} family={family} tone="neutral" className="mt-px" />}
-          <div className="min-w-0 flex-1 text-base font-bold leading-snug break-words">{name}</div>
-        </div>
+      {/* The name, with the card's unit as one quiet word top right ("LB", tap
+          for the other); its role in the day under it in plain words. The
+          order lives in Focus's "Exercise N of M" and the list's own order. */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 text-xl font-bold leading-tight tracking-tight break-words" data-exercise-name>{name}</div>
         {/* No weight to log (a walk, a plank): no kg / lb switch either. */}
-        {!readonly && onUnitChange && !hideWeight && (
-          <div className="shrink-0">
-            <UnitToggle unit={activeUnit} onChange={handleUnitToggle} compact />
-          </div>
-        )}
+        {!readonly && onUnitChange && !hideWeight && <UnitSwitch unit={activeUnit} onChange={handleUnitToggle} />}
       </div>
-      {/* Row 2 — badges */}
-      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        <Badge variant="outline" className={cn("h-5 px-1.5 text-[11px] font-medium", purposeLabelBadgeClass(purposeLabel))}>
-          {purposeLabelText(purposeLabel || category)}
-        </Badge>
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-muted-foreground">
+        <span data-exercise-role>{purposeLabelText(purposeLabel || category)}</span>
         {lastWeekSwap && <LastWeekSwapChip swap={lastWeekSwap} unit={activeUnit} />}
-        {hasNote && (
-          <span title="You saved a note for this exercise" className="inline-flex h-5 items-center gap-1 rounded-full bg-muted px-1.5 text-[11px] font-medium text-muted-foreground">
-            <StickyNote className="h-2.5 w-2.5" /> Note
-          </span>
-        )}
       </div>
       {/* Standardized prescription line: Sets × Reps @ Weight | RPE (a run reads as a run:
           "3 × 8 min · 2 min easy jog between | RPE 6–7") */}
-      <div className="mt-1.5 text-base font-bold text-foreground leading-snug break-words" data-run-rx={runRow || undefined}>
+      <div className="mt-2.5 flex items-center justify-between gap-3">
+      <div className={cn("min-w-0 flex-1 font-bold leading-tight tracking-tight text-foreground break-words", runRow || cardioRow ? "text-lg" : "text-2xl")} data-run-rx={runRow || undefined} data-rx>
         {runRow || cardioRow ? runPrescription({
           run: runRow,
           sets: row.sets,
@@ -4548,37 +4518,41 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           measurementType: showTimer && !showReps ? "time" : "reps",
           durationSeconds: effectivePrescribedDurationSec,
         })}
-        {row.tempo && <span className="ml-2 text-sm font-normal text-muted-foreground">tempo {row.tempo}</span>}
+        {row.tempo && <span className="ml-2 text-sm font-normal tracking-normal text-muted-foreground">tempo {row.tempo}</span>}
+      </div>
+      {/* How the suggestion under it is worked out, while there's one to explain. */}
+      {showSuggestionCard && loadModel && loadPlan && !(openSetCount === 0 && workedToday) && (
+        <LoadGuide hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} picks={loadPicks} canApply={!readonly && !!clientId && openSetCount > 0} />
+      )}
       </div>
       {pctLine && (
         <p className="mt-0.5 text-xs text-muted-foreground" data-pct-line>{pctLine}</p>
       )}
-      {/* Under the prescription, as what it's for: Last time (it IS the History
-          button) and Suggested (Use puts it in the open sets), two plain lines
-          with their labels in one column. With no last time to show, a plain
-          History chip stands in; with suggestions off, the Suggest switch sits
-          beside Last time. */}
+      {/* Under the prescription, as what it's read against: "Last: 425 × 4 @ 6"
+          on the left (it IS the History button; with nothing to show, a plain
+          History chip stands in) and "Suggested: 410–430 lb" on the right (a tap
+          puts it in the open sets), one line when they fit and two when they
+          don't. With suggestions off, the Suggest switch takes Suggested's place;
+          a finished card says "Next time" there. */}
       {(exerciseId || name) && (
-        <div className="-mx-1 mt-0.5" data-rx-refs>
-          <div className="flex min-w-0 items-center gap-1">
-            <PreviousLiftChip
-              data={previousLift}
-              displayUnit={activeUnit}
-              onOpen={clientId ? () => setHistoryOpen(true) : undefined}
-              fallback={clientId ? (
-                <DeferredExerciseHistoryButton
-                  clientId={clientId}
-                  exerciseId={exerciseId}
-                  exerciseName={name}
-                  displayUnit={activeUnit}
-                  currentDayIndex={dayIndex}
-                  editable={!readonly}
-                  className="my-1 ml-1 w-auto h-8 rounded-full px-2.5 text-xs"
-                />
-              ) : null}
-            />
-            {canSuggest && !readonly && !showSuggestionCard && <LoadSuggestionsChip highlight={!!suggestNudge} />}
-          </div>
+        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-0.5" data-rx-refs>
+          <PreviousLiftChip
+            data={previousLift}
+            displayUnit={activeUnit}
+            onOpen={clientId ? () => setHistoryOpen(true) : undefined}
+            fallback={clientId ? (
+              <DeferredExerciseHistoryButton
+                clientId={clientId}
+                exerciseId={exerciseId}
+                exerciseName={name}
+                displayUnit={activeUnit}
+                currentDayIndex={dayIndex}
+                editable={!readonly}
+                className="w-auto h-8 rounded-full px-2.5 text-xs"
+              />
+            ) : null}
+          />
+          {canSuggest && !readonly && !showSuggestionCard && <LoadSuggestionsChip highlight={!!suggestNudge} />}
           {/* Off by default; the Suggest chip on any card turns it on for every
               card. Live: it recalculates on every set saved (this card's sets,
               then the same lift's other cards — see dayRead). */}
@@ -4636,168 +4610,174 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       {row.notes && <ExerciseNotesBlock notes={row.notes} />}
       {/* Logging actions: keep the common actions visible and quiet.
           Structural editing is isolated behind one compact reorder control. */}
-      <ExerciseActionRow
-        name={name}
-        howTo={hasGuide ? (
-          <ExerciseHowToButton
-            exerciseId={exerciseId}
-            fallbackName={name}
-            className="h-10 shrink-0 gap-0 rounded-full px-3 text-xs @max-[20rem]:h-9 @max-[20rem]:px-2.5"
-          />
-        ) : null}
-        hasNote={hasNote}
-        onOpenNote={() => setNotesOpen(true)}
-        moreMenu={(
-          <>
-            {/* Workout Tools, one tap each, over the workout (list or Focus) */}
-            {toolsActions && (
+      {/* Rest on the left ("Rest 5 min", the countdown while it runs), the timer
+          among the icons: one RestTimer for both, so its chime plays once. */}
+      <RestTimer
+        seconds={effectiveRest ?? null}
+        auto={!restIsExplicit}
+        scopeKey={dayId}
+        timerId={String(row.id ?? exerciseId ?? name)}
+        onStart={() => beginWorkoutSession(dayId)}
+      >
+        {(restParts) => (
+          <ExerciseActionRow
+            name={name}
+            howTo={hasGuide ? (
+              <ExerciseHowToButton
+                exerciseId={exerciseId}
+                fallbackName={name}
+                iconOnly
+                className="h-10 w-10 shrink-0 rounded-full border-0 bg-transparent p-0 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground dark:bg-transparent dark:hover:bg-muted [&_svg]:size-[22px]"
+              />
+            ) : null}
+            hasNote={hasNote}
+            onOpenNote={() => setNotesOpen(true)}
+            moreMenu={(
               <>
-                <CardToolsRow unit={activeUnit} />
-                <CardMenuSeparator />
-              </>
-            )}
-            {!readonly && clientId && (
-              <>
-                {/* Undo / Redo stay open so a few taps walk back several steps. */}
-                <div className="grid grid-cols-2 gap-1">
-                  <CardMenuItem
-                    data-testid="card-undo"
-                    disabled={!cardHistory.canUndo || cardHistory.busy}
-                    onSelect={(e) => { e.preventDefault(); void runCardHistory("undo"); }}
-                    aria-label={`Undo last change to ${name}`}
-                    className="h-10 justify-center rounded-lg font-semibold"
-                  >
-                    <Undo2 className="mr-1.5 h-4 w-4" /> Undo
-                  </CardMenuItem>
-                  <CardMenuItem
-                    data-testid="card-redo"
-                    disabled={!cardHistory.canRedo || cardHistory.busy}
-                    onSelect={(e) => { e.preventDefault(); void runCardHistory("redo"); }}
-                    aria-label={`Redo change to ${name}`}
-                    className="h-10 justify-center rounded-lg font-semibold"
-                  >
-                    <Redo2 className="mr-1.5 h-4 w-4" /> Redo
-                  </CardMenuItem>
-                </div>
-                <CardMenuItem
-                  data-testid="card-reset"
-                  disabled={!cardHistory.canReset || cardHistory.busy}
-                  onSelect={() => void runCardHistory("reset")}
-                  className="items-start rounded-lg py-2"
-                >
-                  <RotateCcw className="mr-2 mt-0.5 h-4 w-4 shrink-0" />
-                  <span className="flex flex-col leading-tight">
-                    <span>Reset exercise</span>
-                    <span className="text-[11px] text-muted-foreground">Clear everything logged here</span>
-                  </span>
-                </CardMenuItem>
-                <CardMenuSeparator />
-              </>
-            )}
-            <CardMenuItem onSelect={() => setSwapOpen(true)} className="rounded-lg">
-              <ArrowLeftRight className="mr-2 h-4 w-4" /> Swap exercise
-            </CardMenuItem>
-            {clientId && (
-              <CardMenuItem onSelect={() => setHistoryOpen(true)} className="rounded-lg" data-testid="card-history">
-                <LineChart className="mr-2 h-4 w-4" /> History & progress
-              </CardMenuItem>
-            )}
-            {canSuggest && !readonly && (
-              // One switch for every card (the line's ⓘ has it too).
-              <CardMenuItem onSelect={() => setShowSuggestionCard(!showSuggestionCard)} className="rounded-lg" data-testid="card-suggestions">
-                <Target className="mr-2 h-4 w-4" /> {showSuggestionCard ? "Turn off weight suggestions" : "Suggest weights"}
-              </CardMenuItem>
-            )}
-            {cues && (
-              <CardMenuItem onSelect={() => setCuesOpen((v) => !v)} className="rounded-lg">
-                {cuesOpen ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
-                {cuesOpen ? "Hide cues" : "Show cues"}
-              </CardMenuItem>
-            )}
-            <CardMenuItem onSelect={() => setHelpOpen(true)} className="rounded-lg">
-              <HelpCircle className="mr-2 h-4 w-4" /> Training help
-            </CardMenuItem>
-            {(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) && (
-              <>
-                <CardMenuSeparator />
-                <div className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  Exercise {movePosition} of {moveCount}
-                </div>
-                <div className="grid grid-cols-2 gap-1">
-                  <CardMenuItem disabled={!canMoveUp} onSelect={onMoveUp} aria-label="Move exercise up" className="h-10 justify-center rounded-lg">
-                    <ArrowUp className="mr-1.5 h-4 w-4" /> Up
-                  </CardMenuItem>
-                  <CardMenuItem disabled={!canMoveDown} onSelect={onMoveDown} aria-label="Move exercise down" className="h-10 justify-center rounded-lg">
-                    <ArrowDown className="mr-1.5 h-4 w-4" /> Down
-                  </CardMenuItem>
-                </div>
-                {(moveCount ?? 0) > 2 && (
+                {/* Workout Tools, one tap each, over the workout (list or Focus) */}
+                {toolsActions && (
                   <>
-                    <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Move to position</div>
-                    <div className="grid grid-cols-4 gap-1 p-1">
-                      {Array.from({ length: moveCount ?? 0 }, (_, i) => i + 1).map((position) => (
+                    <CardToolsRow unit={activeUnit} />
+                    <CardMenuSeparator />
+                  </>
+                )}
+                {!readonly && clientId && (
+                  <>
+                    {/* Undo / Redo stay open so a few taps walk back several steps. */}
+                    <div className="grid grid-cols-2 gap-1">
+                      <CardMenuItem
+                        data-testid="card-undo"
+                        disabled={!cardHistory.canUndo || cardHistory.busy}
+                        onSelect={(e) => { e.preventDefault(); void runCardHistory("undo"); }}
+                        aria-label={`Undo last change to ${name}`}
+                        className="h-10 justify-center rounded-lg font-semibold"
+                      >
+                        <Undo2 className="mr-1.5 h-4 w-4" /> Undo
+                      </CardMenuItem>
+                      <CardMenuItem
+                        data-testid="card-redo"
+                        disabled={!cardHistory.canRedo || cardHistory.busy}
+                        onSelect={(e) => { e.preventDefault(); void runCardHistory("redo"); }}
+                        aria-label={`Redo change to ${name}`}
+                        className="h-10 justify-center rounded-lg font-semibold"
+                      >
+                        <Redo2 className="mr-1.5 h-4 w-4" /> Redo
+                      </CardMenuItem>
+                    </div>
+                    <CardMenuItem
+                      data-testid="card-reset"
+                      disabled={!cardHistory.canReset || cardHistory.busy}
+                      onSelect={() => void runCardHistory("reset")}
+                      className="items-start rounded-lg py-2"
+                    >
+                      <RotateCcw className="mr-2 mt-0.5 h-4 w-4 shrink-0" />
+                      <span className="flex flex-col leading-tight">
+                        <span>Reset exercise</span>
+                        <span className="text-[11px] text-muted-foreground">Clear everything logged here</span>
+                      </span>
+                    </CardMenuItem>
+                    <CardMenuSeparator />
+                  </>
+                )}
+                <CardMenuItem onSelect={() => setSwapOpen(true)} className="rounded-lg">
+                  <ArrowLeftRight className="mr-2 h-4 w-4" /> Swap exercise
+                </CardMenuItem>
+                {clientId && (
+                  <CardMenuItem onSelect={() => setHistoryOpen(true)} className="rounded-lg" data-testid="card-history">
+                    <LineChart className="mr-2 h-4 w-4" /> History & progress
+                  </CardMenuItem>
+                )}
+                {canSuggest && !readonly && (
+                  // One switch for every card (the line's ⓘ has it too).
+                  <CardMenuItem onSelect={() => setShowSuggestionCard(!showSuggestionCard)} className="rounded-lg" data-testid="card-suggestions">
+                    <Target className="mr-2 h-4 w-4" /> {showSuggestionCard ? "Turn off weight suggestions" : "Suggest weights"}
+                  </CardMenuItem>
+                )}
+                {cues && (
+                  <CardMenuItem onSelect={() => setCuesOpen((v) => !v)} className="rounded-lg">
+                    {cuesOpen ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
+                    {cuesOpen ? "Hide cues" : "Show cues"}
+                  </CardMenuItem>
+                )}
+                <CardMenuItem onSelect={() => setHelpOpen(true)} className="rounded-lg">
+                  <HelpCircle className="mr-2 h-4 w-4" /> Training help
+                </CardMenuItem>
+                {(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) && (
+                  <>
+                    <CardMenuSeparator />
+                    <div className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Exercise {movePosition} of {moveCount}
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                      <CardMenuItem disabled={!canMoveUp} onSelect={onMoveUp} aria-label="Move exercise up" className="h-10 justify-center rounded-lg">
+                        <ArrowUp className="mr-1.5 h-4 w-4" /> Up
+                      </CardMenuItem>
+                      <CardMenuItem disabled={!canMoveDown} onSelect={onMoveDown} aria-label="Move exercise down" className="h-10 justify-center rounded-lg">
+                        <ArrowDown className="mr-1.5 h-4 w-4" /> Down
+                      </CardMenuItem>
+                    </div>
+                    {(moveCount ?? 0) > 2 && (
+                      <>
+                        <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Move to position</div>
+                        <div className="grid grid-cols-4 gap-1 p-1">
+                          {Array.from({ length: moveCount ?? 0 }, (_, i) => i + 1).map((position) => (
+                            <CardMenuItem
+                              key={position}
+                              disabled={position === movePosition}
+                              onSelect={() => onMoveTo?.(position)}
+                              className="h-10 justify-center rounded-lg p-0 font-semibold"
+                            >
+                              {position}
+                            </CardMenuItem>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+                {canRemoveSet && (
+                  <>
+                    {/* Remove one set (it used to be a − on every row): later sets
+                        move up, and its confirm says if it has logged numbers. */}
+                    <CardMenuSeparator />
+                    <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Remove a set (later sets move up)</div>
+                    <div className="grid grid-cols-5 gap-1 p-1" data-testid="card-remove-set">
+                      {Array.from({ length: setCount }, (_, i) => i + 1).map((n) => (
                         <CardMenuItem
-                          key={position}
-                          disabled={position === movePosition}
-                          onSelect={() => onMoveTo?.(position)}
-                          className="h-10 justify-center rounded-lg p-0 font-semibold"
+                          key={n}
+                          onSelect={() => void removeSet(n)}
+                          aria-label={`Remove set ${n} from ${name}`}
+                          className="h-10 justify-center rounded-lg border border-border p-0 font-semibold tabular-nums"
                         >
-                          {position}
+                          {n}
                         </CardMenuItem>
                       ))}
                     </div>
                   </>
                 )}
-              </>
-            )}
-            {canRemoveSet && (
-              <>
-                {/* Remove one set (it used to be a − on every row): later sets
-                    move up, and its confirm says if it has logged numbers. */}
-                <CardMenuSeparator />
-                <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Remove a set (later sets move up)</div>
-                <div className="grid grid-cols-5 gap-1 p-1" data-testid="card-remove-set">
-                  {Array.from({ length: setCount }, (_, i) => i + 1).map((n) => (
+                {onRemove && (
+                  <>
+                    <CardMenuSeparator />
                     <CardMenuItem
-                      key={n}
-                      onSelect={() => void removeSet(n)}
-                      aria-label={`Remove set ${n} from ${name}`}
-                      className="h-10 justify-center rounded-lg border border-border p-0 font-semibold tabular-nums"
+                      data-testid="card-remove"
+                      onSelect={onRemove}
+                      className="items-start rounded-lg py-2 text-destructive focus:bg-destructive/10 focus:text-destructive"
                     >
-                      {n}
+                      <Trash2 className="mr-2 mt-0.5 h-4 w-4 shrink-0" />
+                      <span className="flex flex-col leading-tight">
+                        <span className="font-semibold">Remove from this workout</span>
+                        <span className="text-[11px] text-muted-foreground">Only this workout. You can undo it.</span>
+                      </span>
                     </CardMenuItem>
-                  ))}
-                </div>
+                  </>
+                )}
               </>
             )}
-            {onRemove && (
-              <>
-                <CardMenuSeparator />
-                <CardMenuItem
-                  data-testid="card-remove"
-                  onSelect={onRemove}
-                  className="items-start rounded-lg py-2 text-destructive focus:bg-destructive/10 focus:text-destructive"
-                >
-                  <Trash2 className="mr-2 mt-0.5 h-4 w-4 shrink-0" />
-                  <span className="flex flex-col leading-tight">
-                    <span className="font-semibold">Remove from this workout</span>
-                    <span className="text-[11px] text-muted-foreground">Only this workout. You can undo it.</span>
-                  </span>
-                </CardMenuItem>
-              </>
-            )}
-          </>
-        )}
-        rest={(exerciseId || name) ? (
-          <RestTimerButton
-            seconds={effectiveRest ?? null}
-            auto={!restIsExplicit}
-            scopeKey={dayId}
-            timerId={String(row.id ?? exerciseId ?? name)}
-            onStart={() => beginWorkoutSession(dayId)}
+            rest={(exerciseId || name) ? restParts.button : null}
+            restLabel={(exerciseId || name) ? restParts.label : null}
           />
-        ) : null}
-      />
+        )}
+      </RestTimer>
       <DeferredQuickSwapSheet
         open={swapOpen}
         onOpenChange={setSwapOpen}
@@ -6930,34 +6910,21 @@ function SetRow({
 /* kg/lb toggle                                                                */
 /* -------------------------------------------------------------------------- */
 
-function UnitToggle({ unit, onChange, label, compact = false }: { unit: "kg" | "lb"; onChange: (u: "kg" | "lb") => void; label?: string; compact?: boolean }) {
+/** The card's unit as one quiet word top right ("LB"): a tap switches the card to the other unit, the same as KG / LB did. */
+function UnitSwitch({ unit, onChange }: { unit: "kg" | "lb"; onChange: (u: "kg" | "lb") => void }) {
+  const other = unit === "kg" ? "lb" : "kg";
+  const word = (u: "kg" | "lb") => (u === "kg" ? "kilograms" : "pounds");
   return (
-    <div className="inline-flex items-center gap-1.5">
-      {label && (
-        <span className="hidden sm:inline text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-          {label}
-        </span>
-      )}
-      <div className={cn("inline-flex items-center gap-0.5 overflow-hidden rounded-lg bg-muted p-0.5", compact ? "text-[11px]" : "text-xs")}
-           role="group"
-           aria-label={label ?? "Unit toggle"}>
-      {(["kg", "lb"] as const).map((u) => (
-        <button
-          key={u}
-          type="button"
-          onClick={() => unit !== u && onChange(u)}
-          aria-pressed={unit === u}
-          className={cn(
-            "rounded-md font-semibold uppercase transition-colors",
-            compact ? "px-2 py-1 min-w-[34px]" : "px-3 py-1.5",
-            unit === u ? "bg-background text-foreground shadow-sm dark:bg-[oklch(0.34_0.008_280)]" : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {u}
-        </button>
-      ))}
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={() => onChange(other)}
+      data-card-unit={unit}
+      aria-label={`Weights in ${word(unit)}. Switch to ${word(other)}`}
+      title={`Switch to ${word(other)}`}
+      className="-my-2 -mr-2 inline-flex h-10 min-w-10 shrink-0 items-center justify-center rounded-md px-2 text-sm font-medium uppercase text-muted-foreground transition-colors hover:text-foreground active:bg-muted"
+    >
+      {unit}
+    </button>
   );
 }
 
