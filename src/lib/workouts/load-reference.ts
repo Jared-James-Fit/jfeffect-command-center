@@ -171,3 +171,60 @@ export function capAdjustedLoad(p: {
   next = Math.min(next, last.load - p.step, p.planned ?? Number.POSITIVE_INFINITY);
   return next > 0 ? Math.round(next * 100) / 100 : null;
 }
+
+/** An RPE prescription as a range: "5-6" → 5..6, "6" → 6..6, "8–8.5" → 8..8.5. */
+export function rpeRange(rpe: string | number | null | undefined): { lo: number; hi: number } | null {
+  if (rpe == null) return null;
+  const nums = String(rpe).split(/\s*[-–]\s*/).map((s) => Number(s.replace(/[^0-9.]/g, ""))).filter((n) => Number.isFinite(n) && n >= 1 && n <= 10);
+  if (!nums.length) return null;
+  return { lo: Math.min(...nums), hi: Math.max(...nums) };
+}
+
+/** How far under the bottom of its range a top set has to be before back-offs go up: a clear point, not rating noise. */
+export const TOP_SET_EASY_BY = 1;
+
+/**
+ * How a % back-off moves with how today's top set actually went: the coach's %
+ * assumes the top set landed on its prescribed RPE.
+ *
+ * - Harder (over the top of its range): back-offs come down by what the RPE
+ *   chart says the miss means, before the first back-off rather than after it
+ *   (the cap beats the percentage), never above the coach's %.
+ * - A clear point easier (TOP_SET_EASY_BY under the bottom of its range):
+ *   up by half of one RPE's worth on the chart (about 1.5%, a plate step on
+ *   most lifts) and never more, however easy it was rated: the coach's "only
+ *   go up toward the top of the range if the top set moved well".
+ * - On plan, or unrated: null, the coach's %.
+ *
+ * Backtest (Nov 15 2026, 132 real top set → first back-off pairs, 8 athletes,
+ * the truth being the load at the back-off's own target read from what they
+ * logged): top set harder (11, 4 athletes) the plain % ran a median 5.2% heavy
+ * (55% more than 5% too heavy), this −0.3% (27%); easier (8, 3 athletes) the
+ * plain % ran 3.8% light, this 2.3% light; on plan (113) unchanged. RPE-only
+ * back-offs already read today's top set this way through the suggestion
+ * engine (carryToday, BACKOFF_FATIGUE); this is for the coach's % ones.
+ */
+export function topSetAdjustment(top: {
+  reps: number | null | undefined;
+  rpe: number | null | undefined;
+  target: string | number | null | undefined;
+}): { factor: number; dir: "down" | "up"; rpe: number; target: string } | null {
+  const range = rpeRange(top.target);
+  const reps = Number(top.reps);
+  const rpe = top.rpe == null ? NaN : Number(top.rpe);
+  if (!range || !(reps >= 1) || !Number.isFinite(rpe) || rpe < 1 || rpe > 10) return null;
+  const target = range.lo === range.hi ? String(range.hi) : `${range.lo}–${range.hi}`;
+  if (rpe > range.hi) {
+    const planned = percentOf1RM(reps, 10 - range.hi);
+    const actual = percentOf1RM(reps, 10 - rpe);
+    if (!planned || !actual) return null;
+    return { factor: planned / actual, dir: "down", rpe, target };
+  }
+  if (rpe <= range.lo - TOP_SET_EASY_BY) {
+    const atLo = percentOf1RM(reps, 10 - range.lo);
+    const pointUnder = percentOf1RM(reps, 10 - range.lo + 1);
+    if (!atLo || !pointUnder) return null;
+    return { factor: 1 + (atLo / pointUnder - 1) / 2, dir: "up", rpe, target };
+  }
+  return null;
+}

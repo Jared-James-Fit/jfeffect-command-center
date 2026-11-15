@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { plannedLoadView } from "@/lib/workouts/planned-load";
+import { rpeRange, topSetAdjustment } from "@/lib/workouts/load-reference";
 
 describe("a back-off at a % of today's top set (Jared's Monday squat: 2 × 4 @ 92.5% | RPE 6)", () => {
   const base = { percentage: "92.5", basis: "top_set", rpe: "6", unit: "lb" as const };
@@ -128,5 +129,67 @@ describe("the planned weight is the same blue fill chip as Suggested", () => {
     const before = renderToStaticMarkup(createElement(PlannedLoadCell, { view: waiting, onApply: async () => 2 }));
     expect(before).not.toContain("load-apply");
     expect(before).toContain("After your top set");
+  });
+});
+
+describe("a % back-off moves with how the top set went (topSetAdjustment)", () => {
+  // Jared's Monday: top set 1 × 4 @ RPE 6, back-offs 2 × 4 @ 92.5% (RPE cap 6); 92.5% of 435 lb = 402.4
+  const exact = 435 * 0.925;
+  const backoff = (rpe: number | null, target: string = "6") => {
+    const adj = topSetAdjustment({ reps: 4, rpe, target });
+    if (!adj) return Math.round(exact / 5) * 5;
+    const moved = exact * adj.factor;
+    return adj.dir === "down" ? Math.min(400, Math.floor(moved / 5) * 5) : Math.max(400, Math.round(moved / 5) * 5);
+  };
+
+  it("on plan (or unrated) it's the coach's %: 400 lb", () => {
+    expect(topSetAdjustment({ reps: 4, rpe: 6, target: "6" })).toBeNull();
+    expect(topSetAdjustment({ reps: 4, rpe: null, target: "6" })).toBeNull();
+    expect(topSetAdjustment({ reps: 4, rpe: 6, target: null })).toBeNull();
+    expect(backoff(6)).toBe(400);
+  });
+
+  it("harder than planned brings them down before the first back-off, by what the chart says", () => {
+    expect(backoff(6.5)).toBe(395);
+    expect(backoff(8)).toBe(375); // 4 @ 8 instead of @ 6: 0.786 / 0.837 of 402.4 = 377.9, rounded down
+    expect(backoff(10)).toBe(350);
+    const adj = topSetAdjustment({ reps: 4, rpe: 8, target: "6" })!;
+    expect(adj.dir).toBe("down");
+    expect(adj.factor).toBeCloseTo(0.786 / 0.837, 4);
+  });
+
+  it("a clear point easier nudges them up half an RPE's worth, never more", () => {
+    expect(backoff(5.5)).toBe(400); // half a point is rating noise
+    expect(backoff(5)).toBe(410); // 402.4 × 1.0158 = 408.7: 94.3%, inside the coach's 92.5–95%
+    expect(backoff(3)).toBe(410); // however easy it was rated
+    expect(topSetAdjustment({ reps: 4, rpe: 5, target: "6" })!.factor).toBeCloseTo(1 + (0.786 / 0.762 - 1) / 2, 5);
+  });
+
+  it("a range is read from its edges: over the top comes down, a point under the bottom goes up", () => {
+    expect(topSetAdjustment({ reps: 4, rpe: 6, target: "5-6" })).toBeNull();
+    expect(topSetAdjustment({ reps: 4, rpe: 4.5, target: "5–6" })).toBeNull();
+    expect(topSetAdjustment({ reps: 4, rpe: 6.5, target: "5-6" })!.dir).toBe("down");
+    expect(topSetAdjustment({ reps: 4, rpe: 4, target: "5-6" })!.dir).toBe("up");
+    expect(rpeRange("8–8.5")).toEqual({ lo: 8, hi: 8.5 });
+    expect(rpeRange("@6")).toEqual({ lo: 6, hi: 6 });
+    expect(rpeRange("")).toBeNull();
+  });
+
+  it("the ⓘ says why the weight isn't the plain %", () => {
+    const down = plannedLoadView({ percentage: 92.5, basis: "top_set", rpe: "6", unit: "lb", planned: 375, plain: 400, open: 375, linked: { value: 435, unit: "lb" }, adjust: { dir: "down", rpe: 8, target: "6" } })!;
+    expect(down.value).toBe("375 lb");
+    expect(down.capped).toBe(false);
+    expect(down.why[0]).toBe("92.5% of your top set (435 lb) is 402.4 lb, rounded to 400 lb.");
+    expect(down.why[1]).toBe("Your top set was RPE 8, over its 6, so back-offs start lighter: 375 lb.");
+    const up = plannedLoadView({ percentage: 92.5, basis: "top_set", rpe: "6", unit: "lb", planned: 410, plain: 400, open: 410, linked: { value: 435, unit: "lb" }, adjust: { dir: "up", rpe: 5, target: "6" } })!;
+    expect(up.why[1]).toBe("Your top set was RPE 5, a clear point under its 6, so back-offs start a little heavier: 410 lb.");
+  });
+
+  it("the card uses it for top-set back-offs only and says it once under the sets", () => {
+    const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+    expect(wdv).toContain("const adj = topSetAdjustment({ reps: topSetBasis.reps, rpe: topSetBasis.rpe, target: topSetBasis.target });");
+    expect(wdv).toContain("? Math.min(plain, Math.floor(moved / step) * step)");
+    expect(wdv).toContain("data-backoff-adjust={backoffPlan.adjust.dir}");
+    expect(wdv).toContain("{!capHeld && backoffPlan?.adjust && openSetCount > 0 && !readonly && (");
   });
 });

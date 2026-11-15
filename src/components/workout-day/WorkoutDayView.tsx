@@ -30,7 +30,7 @@ import { plannedLoadView, type PlannedLoadView } from "@/lib/workouts/planned-lo
 import { focusNames } from "@/lib/workouts/focus-names";
 import { noteLead } from "@/lib/workouts/note-lead";
 import { distanceInputValue, formatDistance, isRunningExercise, parseDistanceInput, readDistanceUnit, runPrescription, runSummaryLine, writeDistanceUnit, type DistanceUnit } from "@/lib/running/run-log";
-import { capAdjustedLoad, hasRpeCap, isMaxBasis, loggedE1rm, referenceFamily, rpeCapValue, type LiftFamily, type LoggedSet } from "@/lib/workouts/load-reference";
+import { capAdjustedLoad, hasRpeCap, isMaxBasis, loggedE1rm, referenceFamily, rpeCapValue, topSetAdjustment, type LiftFamily, type LoggedSet } from "@/lib/workouts/load-reference";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
@@ -266,6 +266,9 @@ function weightIncrement(unit: "kg" | "lb"): number {
 function fmtNum(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
+
+/** Today's logged top set a % back-off is worked out from, and how it went against its plan. */
+type TopSetBasis = { value: number; unit: "kg" | "lb"; reps?: number | null; rpe?: number | null; target?: string | null };
 
 /**
  * An open set's saved row holds something of the person's beyond the plan: a
@@ -1796,7 +1799,7 @@ function WorkoutDay({
   // Suggested and not lifted yet, which would plan the back-offs off a guess.
   // Resolve the nearest matching exercise above this row and feed its heaviest
   // logged load into the back-off card.
-  const topSetBasisForRow = (r: any, rowIndex: number): { value: number; unit: WUnit } | null => {
+  const topSetBasisForRow = (r: any, rowIndex: number): TopSetBasis | null => {
     if (r.percentage_basis !== "top_set" || !r.percentage) return null;
     const allRows = rows as any[];
     let source: any = null;
@@ -1817,7 +1820,14 @@ function WorkoutDay({
       .sort((a, b) => Number(b.actual_load) - Number(a.actual_load))[0];
     if (!numeric) return null;
     const sourceUnit: WUnit = numeric.actual_load_unit === "lb" ? "lb" : "kg";
-    return { value: Number(numeric.actual_load), unit: sourceUnit };
+    return {
+      value: Number(numeric.actual_load),
+      unit: sourceUnit,
+      // how it went against its plan moves the back-offs (topSetAdjustment)
+      reps: numeric.actual_reps != null ? Number(numeric.actual_reps) : null,
+      rpe: parseRpe(numeric.actual_rpe_num ?? numeric.actual_rpe),
+      target: source.rpe ?? null,
+    };
   };
 
   // Story view: one exercise at a time, full screen (workout-story.tsx). The
@@ -3442,7 +3452,7 @@ function PreviousLiftChip({ data, displayUnit, onOpen }: {
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: TopSetBasis | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -3785,15 +3795,27 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   // 1) coach manual_override exact load   2) computed % weight (rounded)
   // 3) raw load_kg/load_lb prescription   4) null (no safe suggestion).
   // This is "Suggested" only — it never auto-confirms a set.
-  const percentageBackoffWeight: number | null = useMemo(() => {
+  // The coach's % of the logged top set, moved by how that top set went against
+  // its prescribed RPE (topSetAdjustment: harder brings the back-offs down before
+  // the first one, a clear point easier nudges them up half an RPE's worth).
+  const backoffPlan = useMemo(() => {
     if (row.percentage_basis !== "top_set" || !topSetBasis || !row.percentage) return null;
     const baseInUnit = topSetBasis.unit === activeUnit
       ? topSetBasis.value
       : convertLoad(topSetBasis.value, topSetBasis.unit, activeUnit);
     const exact = baseInUnit * Number(row.percentage) / 100;
     const step = weightIncrement(activeUnit);
-    return Math.round(exact / step) * step;
-  }, [row.percentage_basis, row.percentage, topSetBasis?.value, topSetBasis?.unit, activeUnit]);
+    const plain = Math.round(exact / step) * step;
+    const adj = topSetAdjustment({ reps: topSetBasis.reps, rpe: topSetBasis.rpe, target: topSetBasis.target });
+    if (!adj) return { load: plain, plain, adjust: null };
+    const moved = exact * adj.factor;
+    // down rounds down and never above the plain %; up rounds to the nearest step
+    const load = adj.dir === "down"
+      ? Math.min(plain, Math.floor(moved / step) * step)
+      : Math.max(plain, Math.round(moved / step) * step);
+    return { load, plain, adjust: load !== plain ? adj : null };
+  }, [row.percentage_basis, row.percentage, topSetBasis?.value, topSetBasis?.unit, topSetBasis?.reps, topSetBasis?.rpe, topSetBasis?.target, activeUnit]);
+  const percentageBackoffWeight: number | null = backoffPlan?.load ?? null;
 
   const suggestedWeight: number | null = useMemo(() => {
     // A prescription is one physical load. If the program only stores that
@@ -3910,6 +3932,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       rpe: row.rpe,
       unit: activeUnit,
       planned: topSet ? percentageBackoffWeight : plannedFromMax ? suggestedWeight : null,
+      plain: topSet ? backoffPlan?.plain ?? null : null,
+      adjust: topSet ? backoffPlan?.adjust ?? null : null,
       open: openSetWeight,
       linked: topSetBasis,
       reference: ok
@@ -3919,7 +3943,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       capOver: capHeld?.over ?? null,
       pending: !topSet && maxesPending,
     });
-  }, [hideWeight, row.manual_override, rowLoadType, row.percentage_basis, row.percentage, row.rpe, maxBasedPct, computed, activeUnit, percentageBackoffWeight, plannedFromMax, suggestedWeight, openSetWeight, topSetBasis?.value, topSetBasis?.unit, capHeld?.over?.set, capHeld?.over?.rpe, maxesPending]);
+  }, [hideWeight, row.manual_override, rowLoadType, row.percentage_basis, row.percentage, row.rpe, maxBasedPct, computed, activeUnit, percentageBackoffWeight, backoffPlan?.plain, backoffPlan?.adjust, plannedFromMax, suggestedWeight, openSetWeight, topSetBasis?.value, topSetBasis?.unit, capHeld?.over?.set, capHeld?.over?.rpe, maxesPending]);
   const loadPlan = useMemo(
     () => planningTarget({ repTarget, rpeTarget, rirTarget }),
     [repTarget, rpeTarget, rirTarget],
@@ -5078,6 +5102,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             already hold it when untouched). Quiet, and only while sets are left. */}
         {runLine && (
           <p className="px-3 py-1.5 text-[12px] font-medium tabular-nums text-muted-foreground" data-run-summary>{runLine}</p>
+        )}
+        {!capHeld && backoffPlan?.adjust && openSetCount > 0 && !readonly && (
+          <p className="px-3 py-1.5 text-[12px] text-muted-foreground" data-backoff-adjust={backoffPlan.adjust.dir}>
+            Top set hit RPE {fmtNum(backoffPlan.adjust.rpe)}, {backoffPlan.adjust.dir === "down" ? "over" : "under"} its {backoffPlan.adjust.target} · back-offs {fmtNum(backoffPlan.load)} {activeUnit}
+          </p>
         )}
         {capHeld && openSetCount > 0 && !readonly && (
           <p className="px-3 py-1.5 text-[12px] text-muted-foreground" data-rpe-cap-next>

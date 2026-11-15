@@ -28,6 +28,10 @@ export interface PlannedLoadInput {
   unit: LoadUnit;
   /** the % worked out and rounded to a plate step, in `unit` (null while there's nothing to read yet) */
   planned: number | null;
+  /** a top-set back-off's plain % before how the top set went moved it (topSetAdjustment) */
+  plain?: number | null;
+  /** how the top set went moved it: its RPE against what it was prescribed */
+  adjust?: { dir: "down" | "up"; rpe: number; target: string } | null;
   /** what the open sets carry now: `planned`, or less after a set over the cap */
   open: number | null;
   /** today's logged top set (top_set rows), in its own unit */
@@ -100,7 +104,12 @@ export function plannedLoadView(i: PlannedLoadInput): PlannedLoadView | null {
   if (topSet) {
     if (i.linked && i.linked.value > 0 && i.planned != null) {
       const exact = (convert(i.linked.value, i.linked.unit, i.unit) * pct) / 100;
-      why.push(`${fmtPct(pct)}% of your top set (${fmtLoad(i.linked.value)} ${i.linked.unit}) ${workedOut(exact, i.planned, i.unit)}.`);
+      why.push(`${fmtPct(pct)}% of your top set (${fmtLoad(i.linked.value)} ${i.linked.unit}) ${workedOut(exact, i.plain ?? i.planned, i.unit)}.`);
+      if (i.adjust) {
+        why.push(i.adjust.dir === "down"
+          ? `Your top set was RPE ${fmtRpe(i.adjust.rpe)}, over its ${i.adjust.target}, so back-offs start lighter: ${fmtLoad(i.planned)} ${i.unit}.`
+          : `Your top set was RPE ${fmtRpe(i.adjust.rpe)}, a clear point under its ${i.adjust.target}, so back-offs start a little heavier: ${fmtLoad(i.planned)} ${i.unit}.`);
+      }
     } else {
       waiting = "After your top set";
       why.push(`Your coach set these at ${fmtPct(pct)}% of today's top set. Log the top set and the weight shows here.`);
