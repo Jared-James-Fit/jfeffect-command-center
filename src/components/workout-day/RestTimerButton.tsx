@@ -1,6 +1,6 @@
 import { playAppSound } from "@/lib/app-sounds";
-import { useEffect, useRef, useState } from "react";
-import { Pause, Play, RotateCcw, X } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Pause, Play, RotateCcw, Timer, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   clearRestTimer,
@@ -29,14 +29,7 @@ import {
  * exercise replaces the previous one, and other cards fall back to their
  * idle label.
  */
-export function RestTimerButton({
-  seconds,
-  auto = false,
-  className,
-  onStart,
-  scopeKey,
-  timerId,
-}: {
+type RestTimerProps = {
   seconds: number | null;
   /** True when the rest comes from the category default, not the program. */
   auto?: boolean;
@@ -47,7 +40,10 @@ export function RestTimerButton({
   scopeKey: string;
   /** Per-exercise-row key — identifies which card owns the active timer. */
   timerId: string;
-}) {
+};
+
+/** One card's rest timer: the store's state for this workout, the repaint while it runs, the buzz / chime at the end. */
+function useRestTimer({ seconds, onStart, scopeKey, timerId }: RestTimerProps) {
   const [state, setState] = useState<RestTimerState | null>(null);
   const [, forceTick] = useState(0);
   const vibratedRef = useRef<number | null>(null);
@@ -94,13 +90,62 @@ export function RestTimerButton({
   }, [mine, mine && restRemainingMs(mine)]);
 
   const disabled = !seconds || seconds <= 0;
-
   const start = () => {
     if (disabled) return;
     onStart?.();
     setState(startRestTimer(scopeKey, timerId, seconds as number));
   };
+  return { mine, disabled, start, setState };
+}
 
+/** "Rest 5 min", "Rest 2:30", "Rest 45 s": the prescribed rest in words, the card's action row. */
+export function restWords(seconds: number | null | undefined): string | null {
+  if (!seconds || seconds <= 0) return null;
+  const s = Math.round(seconds);
+  if (s < 60) return `Rest ${s} s`;
+  if (s % 60 === 0) return `Rest ${s / 60} min`;
+  return `Rest ${formatClock(s)}`;
+}
+
+/**
+ * The rest timer laid out across the card's action row: `label` on the left
+ * ("Rest 5 min", or the countdown with pause / restart / stop while it runs)
+ * and `button` among the row's icons (the timer: start it, or start it again).
+ * One state for both, so the chime plays once.
+ */
+export function RestTimer(props: RestTimerProps & { children: (parts: { label: ReactNode; button: ReactNode }) => ReactNode }) {
+  const { seconds, auto = false, scopeKey, children } = props;
+  const { mine, disabled, start, setState } = useRestTimer(props);
+  const words = restWords(seconds);
+  const clock = seconds && seconds > 0 ? formatClock(seconds) : null;
+  const label = mine
+    ? <RunningRest mine={mine} scopeKey={scopeKey} start={start} setState={setState} />
+    : words
+      ? <span className="truncate text-[15px] text-muted-foreground" title={auto ? "The usual rest for this kind of exercise" : undefined} data-rest-words>{words}</span>
+      : null;
+  const button = disabled ? null : (
+    <button
+      type="button"
+      onClick={start}
+      aria-label={mine ? "Restart rest timer" : `Start ${clock} ${auto ? "auto " : ""}rest timer`}
+      title={mine ? "Start the rest again" : "Start your rest"}
+      data-rest-start
+      className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground active:scale-95 [&_svg]:size-[22px]"
+    >
+      <Timer />
+      {mine && <span aria-hidden className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-foreground ring-2 ring-card" />}
+    </button>
+  );
+  return <>{children({ label, button })}</>;
+}
+
+/**
+ * The rest timer as one chip ("▶ 2:00", then the countdown), for anywhere
+ * that has no action row of its own.
+ */
+export function RestTimerButton(props: RestTimerProps) {
+  const { seconds, auto = false, className, scopeKey } = props;
+  const { mine, disabled, start, setState } = useRestTimer(props);
   // Compact by default ("▶ 2:00"); the "Rest" / "Auto rest" label only
   // appears when the surrounding @container (the card's action row) has room.
   const clock = seconds && seconds > 0 ? formatClock(seconds) : null;
@@ -126,6 +171,17 @@ export function RestTimerButton({
     );
   }
 
+  return <RunningRest mine={mine} scopeKey={scopeKey} start={start} setState={setState} className={className} />;
+}
+
+/** The countdown while it runs: pause / resume, the time, restart, stop; "Rest done" once it's over. */
+function RunningRest({ mine, scopeKey, start, setState, className }: {
+  mine: RestTimerState;
+  scopeKey: string;
+  start: () => void;
+  setState: (s: RestTimerState | null) => void;
+  className?: string;
+}) {
   const paused = mine.pausedRemainingMs != null;
   const finished = restFinished(mine);
   const display = finished ? "Rest done" : formatClock(restRemainingMs(mine) / 1000);
@@ -136,7 +192,7 @@ export function RestTimerButton({
         "inline-flex h-10 shrink-0 items-center gap-0 whitespace-nowrap rounded-full border px-1 ring-2 @max-[17rem]:h-9",
         finished
           ? "border-emerald-500/50 bg-emerald-500/10 ring-emerald-500/10"
-          : "border-primary/50 bg-primary/15 ring-primary/10",
+          : "border-border bg-secondary ring-transparent",
         className,
       )}
       role="group"
@@ -148,7 +204,7 @@ export function RestTimerButton({
           type="button"
           onClick={() => setState(paused ? resumeRestTimer(scopeKey) : pauseRestTimer(scopeKey))}
           aria-label={paused ? "Resume rest timer" : "Pause rest timer"}
-          className="inline-flex h-7 w-6 shrink-0 items-center justify-center rounded-full text-primary transition hover:bg-primary/15 active:scale-95"
+          className="inline-flex h-7 w-6 shrink-0 items-center justify-center rounded-full text-foreground transition hover:bg-foreground/10 active:scale-95"
         >
           {paused ? <Play className="h-3.5 w-3.5 fill-current" /> : <Pause className="h-3.5 w-3.5 fill-current" />}
         </button>
@@ -167,7 +223,7 @@ export function RestTimerButton({
         type="button"
         onClick={start}
         aria-label="Restart rest timer"
-        className="hidden h-7 w-7 shrink-0 @[24rem]:inline-flex items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/15 hover:text-foreground active:scale-95"
+        className="hidden h-7 w-7 shrink-0 @[24rem]:inline-flex items-center justify-center rounded-full text-muted-foreground transition hover:bg-foreground/10 hover:text-foreground active:scale-95"
       >
         <RotateCcw className="h-3 w-3" />
       </button>
@@ -175,7 +231,7 @@ export function RestTimerButton({
         type="button"
         onClick={() => { clearRestTimer(scopeKey); setState(null); }}
         aria-label={finished ? "Dismiss rest timer" : "Stop rest timer"}
-        className="inline-flex h-7 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/15 hover:text-foreground active:scale-95"
+        className="inline-flex h-7 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-foreground/10 hover:text-foreground active:scale-95"
       >
         <X className="h-3 w-3" />
       </button>
