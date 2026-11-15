@@ -19,9 +19,12 @@
 import { rowProblems, ROW_LABEL, type RowProblem } from "@/lib/pl-template-validation";
 import { buildMaxIndex, computeRowLoad, type ClientMaxRow } from "@/lib/pl-maxes";
 import { referenceFamily, type LiftFamily } from "@/lib/workouts/load-reference";
+import { percentOf1RM } from "@/lib/load-suggestion";
 
 /** A gap this many days out (or sooner) is due soon: amber on the inbox, first on the list. */
 export const SOON_DAYS = 7;
+/** The coach's morning push (`program_gaps_due`): a gap on a workout this many days out or sooner. */
+export const ALERT_DAYS = 3;
 
 export type ProgramGapsData = {
   clients: Array<{ id: string; name: string | null; first_name: string | null; photo: string | null; training_days: string[] | null; today: string; no_training_days: boolean }>;
@@ -35,9 +38,11 @@ export type ProgramGapsData = {
     competition_lift_type: string | null; exercise_family: string | null;
   }>;
   maxes: ClientMaxRow[];
+  /** days with a workout from two live programs (absent from older reads) */
+  doubled?: Array<{ client_id: string; date: string; block_ids: string[] }>;
 };
 
-export const EMPTY_PROGRAM_GAPS: ProgramGapsData = { clients: [], blocks: [], days: [], rows: [], maxes: [] };
+export const EMPTY_PROGRAM_GAPS: ProgramGapsData = { clients: [], blocks: [], days: [], rows: [], maxes: [], doubled: [] };
 
 export type GapItem = { rowId: string; exercise: string; problems: RowProblem[] };
 export type GapWorkout = {
@@ -62,8 +67,12 @@ export type MissingMax = {
   firstDate: string | null;
   /** rows with no RPE or RIR either: the athlete sees nothing to go by */
   nothingElse: number;
+  /** the sets themselves, for "Use estimated max" (`estimatedMaxPlan`) */
+  rowRefs: Array<{ id: string; percentage: number; reps: string | null; hasEffort: boolean }>;
 };
 export type UndatedBlock = { blockId: string; blockName: string; count: number };
+/** Two live programs on the same days: which ones, on how many days, from when. */
+export type DoubledPrograms = { blockNames: string[]; days: number; firstDate: string };
 
 export type ClientProgramGaps = {
   clientId: string;
@@ -74,6 +83,8 @@ export type ClientProgramGaps = {
   workouts: GapWorkout[];
   maxes: MissingMax[];
   undated: UndatedBlock[];
+  /** a replaced program never ended: two workouts on the same days */
+  doubled: DoubledPrograms | null;
   noTrainingDays: boolean;
   /** the soonest dated workout anything here affects */
   firstDate: string | null;
@@ -156,8 +167,9 @@ export function buildProgramGaps(data: ProgramGapsData | null | undefined): Clie
       const miss = missingMaxFor(r, day.block_id, clientMaxes);
       if (miss) {
         const key = `${r.percentage_basis}:${miss.lift}`;
-        const m = maxes.get(key) ?? { basis: String(r.percentage_basis), lift: miss.lift, exercises: [], rows: 0, firstDate: null, nothingElse: 0 };
+        const m = maxes.get(key) ?? { basis: String(r.percentage_basis), lift: miss.lift, exercises: [], rows: 0, firstDate: null, nothingElse: 0, rowRefs: [] };
         m.rows += 1;
+        m.rowRefs.push({ id: r.id, percentage: Number(r.percentage), reps: r.reps_text, hasEffort: !(blank(r.rpe) && blank(r.rir)) });
         const ex = r.exercise ?? "";
         if (ex && !m.exercises.includes(ex)) m.exercises.push(ex);
         m.firstDate = minDate(m.firstDate, day.date);
@@ -172,15 +184,24 @@ export function buildProgramGaps(data: ProgramGapsData | null | undefined): Clie
       u.count += 1;
       undatedMap.set(day.block_id, u);
     }
+    const dbl = (d.doubled ?? []).filter((x) => x.client_id === c.id).sort((a, b) => a.date.localeCompare(b.date));
+    const doubled: DoubledPrograms | null = dbl.length
+      ? {
+          blockNames: [...new Set(dbl.flatMap((x) => x.block_ids))].map((id) => blocks.get(id)?.name ?? "A program"),
+          days: dbl.length,
+          firstDate: dbl[0].date,
+        }
+      : null;
     const workoutList = [...workouts.values()].sort(byDate);
     const maxList = [...maxes.values()].sort((a, b) => cmpDate(a.firstDate, b.firstDate) || b.rows - a.rows);
     const undated = [...undatedMap.values()];
     const noTrainingDays = !!c.no_training_days;
-    const count = workoutList.length + maxList.length + undated.length + (noTrainingDays ? 1 : 0);
+    const count = workoutList.length + maxList.length + undated.length + (noTrainingDays ? 1 : 0) + (doubled ? 1 : 0);
     if (!count) continue;
     let firstDate: string | null = null;
     for (const w of workoutList) firstDate = minDate(firstDate, w.date);
     for (const m of maxList) firstDate = minDate(firstDate, m.firstDate);
+    if (doubled) firstDate = minDate(firstDate, doubled.firstDate);
     const today = String(c.today ?? "").slice(0, 10);
     const dueSoon = noTrainingDays || undated.length > 0 || (!!firstDate && !!today && daysBetween(today, firstDate) <= SOON_DAYS);
     const name = (c.name ?? "").trim() || "Client";
@@ -193,6 +214,7 @@ export function buildProgramGaps(data: ProgramGapsData | null | undefined): Clie
       workouts: workoutList,
       maxes: maxList,
       undated,
+      doubled,
       noTrainingDays,
       firstDate,
       dueSoon,
@@ -247,6 +269,7 @@ export function gapParts(g: ClientProgramGaps, { schedule = true }: { schedule?:
   if (g.workouts.length) parts.push(`${plural(g.workouts.length, "workout")} missing a prescription`);
   for (const m of g.maxes) parts.push(`${MAX_BASIS_LABEL[m.basis] ?? "Max"} for ${m.lift} not on file`);
   if (!schedule) return parts;
+  if (g.doubled) parts.push(`Two programs on ${plural(g.doubled.days, "day")}`);
   const undated = g.undated.reduce((n, u) => n + u.count, 0);
   if (undated) parts.push(`${plural(undated, "workout")} with no date`);
   if (g.noTrainingDays) parts.push("No training days set");
@@ -277,6 +300,7 @@ export function gapBriefLines(g: ClientProgramGaps | null | undefined): string[]
   }
   if (g.workouts.length > 6) lines.push(`Program: ${g.workouts.length - 6} more upcoming workouts are missing a prescription`);
   for (const m of g.maxes) lines.push(`Program: ${m.rows} sets from ${m.firstDate ?? "an undated workout"} are a % of the ${m.lift} ${MAX_BASIS_LABEL[m.basis] ?? "max"}, and none is on file`);
+  if (g.doubled) lines.push(`Program: two programs (${g.doubled.blockNames.join(" and ")}) both have workouts on ${g.doubled.days} days from ${g.doubled.firstDate}`);
   for (const u of g.undated) lines.push(`Program: ${u.count} workouts in ${u.blockName} have no date`);
   if (g.noTrainingDays) lines.push("Program: no training days set while a program is live");
   return lines;
@@ -311,3 +335,43 @@ export function fillInstruction(g: ClientProgramGaps, blockId?: string | null): 
 
 /** Edit with AI's instruction limit (program-ai.functions.ts). */
 export const FILL_MAX = 4000;
+
+/**
+ * Who the coach's morning push is about: clients with a gap on a workout in
+ * the next ALERT_DAYS (today included), each with the key that keeps it to
+ * one push a client a day for as long as the gap is there.
+ */
+export function gapsToAlert(gaps: ClientProgramGaps[]): Array<{ clientId: string; sourceId: string }> {
+  return gaps
+    .filter((g) => g.firstDate && g.today && daysBetween(g.today, g.firstDate) >= 0 && daysBetween(g.today, g.firstDate) <= ALERT_DAYS)
+    .map((g) => ({ clientId: g.clientId, sourceId: `${g.today}:${g.firstDate}` }));
+}
+
+/**
+ * An RPE to cap a % set with, from the RPE chart: what the load means for the
+ * reps, plus 1.5 of room (a cap is the most it should feel like, never the
+ * target), between 5 and 9. "82% for 2" is about RPE 5.5, capped at 7.
+ */
+export function rpeCapFor(pct: number, reps: string | null | undefined): string {
+  const r = Math.max(1, Number(String(reps ?? "").match(/\d+/)?.[0] ?? 5));
+  let best = { rir: 6, gap: Infinity };
+  for (let rir = 0; rir <= 8; rir += 0.5) {
+    const f = percentOf1RM(r, rir);
+    if (f == null) continue;
+    const gap = Math.abs(f * 100 - pct);
+    if (gap < best.gap) best = { rir, gap };
+  }
+  const cap = Math.min(9, Math.max(5, 10 - best.rir + 1.5));
+  return String(Math.round(cap * 2) / 2);
+}
+
+/**
+ * "Use estimated max" on a max that isn't on file: each set that reads it
+ * reads their estimated max instead (their logged sets, the logger's
+ * loggedE1rm), keeping its %, with an RPE cap when it has no RPE or RIR of
+ * its own (`rpeCapFor`). The same rule as the generator's loading guard for a
+ * 1RM % with no max.
+ */
+export function estimatedMaxPlan(maxes: MissingMax[]): Array<{ id: string; rpe: string | null }> {
+  return maxes.flatMap((m) => m.rowRefs.map((r) => ({ id: r.id, rpe: r.hasEffort ? null : rpeCapFor(r.percentage, r.reps) })));
+}

@@ -9,7 +9,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarX2, Check, ChevronRight, Dumbbell, Gauge, Wand2 } from "lucide-react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { CalendarX2, Check, ChevronRight, Dumbbell, Gauge, Layers, Wand2 } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -19,9 +21,10 @@ import { EditWithAiSheet } from "@/components/program-ai/edit-with-ai";
 import { cn } from "@/lib/utils";
 import { focusBlockEditorWeek } from "@/lib/block-editor-focus";
 import {
-  fillInstruction, gapDateLabel, MAX_BASIS_LABEL, problemsLabel, whenLabel,
+  estimatedMaxPlan, fillInstruction, gapDateLabel, MAX_BASIS_LABEL, problemsLabel, whenLabel,
   type ClientProgramGaps,
 } from "@/lib/program-gaps";
+import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
 import { PROGRAM_GAPS_KEY, useProgramGaps } from "@/components/program-gaps/use-program-gaps";
 
 /** Athlete setup on the client's Training tab (client-training-tab.tsx): training days and maxes. */
@@ -84,6 +87,25 @@ export function ProgramGapsPage({ focusClient }: { focusClient?: string }) {
 
 function ClientGapsCard({ g, focused, onAi }: { g: ClientProgramGaps; focused: boolean; onAi: () => void }) {
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [usingEstimate, setUsingEstimate] = useState(false);
+  // Every set that reads a max nobody entered reads their estimated max (from
+  // their logged sets) instead, with an RPE cap: program_gaps_use_estimated_max.
+  const applyEstimatedMax = async () => {
+    setUsingEstimate(true);
+    try {
+      const { data, error } = await (supabase as any).rpc("program_gaps_use_estimated_max", { _client: g.clientId, _rows: estimatedMaxPlan(g.maxes) });
+      if (error) throw error;
+      toast.success(`${Number(data ?? 0)} set${Number(data) === 1 ? "" : "s"} now read ${g.firstName}'s estimated max`, {
+        description: "Worked out from their logged sets, with an RPE cap. Add a tested max any time and switch back in the editor.",
+      });
+      invalidateScheduleQueries(qc, { clientId: g.clientId });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't change those sets");
+    } finally {
+      setUsingEstimate(false);
+    }
+  };
   const [allWorkouts, setAllWorkouts] = useState(focused);
   const when = whenLabel(g.today, g.firstDate);
   const shown = allWorkouts ? g.workouts : g.workouts.slice(0, FIRST_WORKOUTS);
@@ -169,6 +191,9 @@ function ClientGapsCard({ g, focused, onAi }: { g: ClientProgramGaps; focused: b
           title="Maxes not on file"
           action={<Button asChild size="sm" variant="outline" className="h-9"><Link {...training} hash={ATHLETE_SETUP}>Add maxes</Link></Button>}
         >
+          <p className="mb-2 text-[13px] text-muted-foreground">
+            Add a tested max, or have these sets read {g.firstName}'s estimated max from their logged sets.
+          </p>
           <ul className="space-y-2">
             {g.maxes.map((m) => (
               <li key={`${m.basis}:${m.lift}`} className="text-[13px]" data-program-gaps-max>
@@ -181,6 +206,22 @@ function ClientGapsCard({ g, focused, onAi }: { g: ClientProgramGaps; focused: b
               </li>
             ))}
           </ul>
+          <Button size="sm" variant="secondary" className="mt-2 h-9" disabled={usingEstimate} onClick={() => void applyEstimatedMax()} data-program-gaps-estimate>
+            {usingEstimate ? "Changing…" : "Use estimated max"}
+          </Button>
+        </GapSection>
+      )}
+
+      {g.doubled && (
+        <GapSection
+          icon={<Layers className="h-4 w-4" />}
+          title="Two programs on the same days"
+          action={<Button asChild size="sm" variant="outline" className="h-9"><Link {...training}>Review</Link></Button>}
+        >
+          <p className="text-[13px] text-muted-foreground" data-program-gaps-doubled>
+            {g.doubled.blockNames.join(" and ")} both have a workout on {g.doubled.days} day{g.doubled.days === 1 ? "" : "s"} from {gapDateLabel(g.doubled.firstDate)}.
+            End the one {g.firstName} isn't training (its ⋯ → Delete program; one with logged workouts is archived, never lost).
+          </p>
         </GapSection>
       )}
 

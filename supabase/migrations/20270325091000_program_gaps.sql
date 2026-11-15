@@ -14,9 +14,12 @@
 --   * days: the workouts those rows are on, and the live workouts with no date;
 --   * maxes: the active maxes of clients with a % of a max, for the logger's
 --     own lookup (computeRowLoad: its own max by name, else its lift's);
+--   * doubled: days with a workout from two live programs (a replaced program
+--     that was never ended);
 --   * clients: who has any of it, with their training days (none set on a
 --     live program is its own gap).
--- Read-only; never names anything a client can't already see.
+-- Read-only; never names anything a client can't already see. The service
+-- role (the morning push, program-gaps.server.ts) reads it as an admin.
 
 CREATE OR REPLACE FUNCTION public.program_gaps(_client uuid DEFAULT NULL)
 RETURNS jsonb
@@ -27,13 +30,15 @@ SET search_path = public
 AS $$
 DECLARE
   v_uid uuid := auth.uid();
+  -- the server (program-gaps-tick's morning push) reads every coaching client
+  v_service boolean := coalesce(auth.role(), '') = 'service_role';
   v_admin boolean;
   v_out jsonb;
 BEGIN
-  IF v_uid IS NULL THEN
+  IF v_uid IS NULL AND NOT v_service THEN
     RAISE EXCEPTION 'not signed in' USING ERRCODE = '42501';
   END IF;
-  v_admin := public.has_role(v_uid, 'admin');
+  v_admin := v_service OR public.has_role(v_uid, 'admin');
   IF NOT v_admin AND NOT public.has_role(v_uid, 'coach') THEN
     RAISE EXCEPTION 'not allowed' USING ERRCODE = '42501';
   END IF;
@@ -98,6 +103,14 @@ BEGIN
   max_clients AS (
     SELECT DISTINCT client_id FROM rw WHERE percentage IS NOT NULL AND percentage_basis IN ('training_max', '1rm')
   ),
+  -- two live programs with a workout on the same day (a replaced program never ended)
+  doubled AS (
+    SELECT dy.client_id, dy.scheduled_date, array_agg(DISTINCT dy.block_id) AS block_ids
+      FROM dy
+     WHERE dy.scheduled_date IS NOT NULL
+     GROUP BY dy.client_id, dy.scheduled_date
+    HAVING count(DISTINCT dy.block_id) > 1
+  ),
   no_days AS (
     SELECT cl.id FROM cl
      WHERE coalesce(array_length(cl.committed_training_days, 1), 0) = 0
@@ -106,6 +119,7 @@ BEGIN
   who AS (
     SELECT client_id AS id FROM days_out
     UNION SELECT id FROM no_days
+    UNION SELECT client_id FROM doubled
   )
   SELECT jsonb_build_object(
     'clients', coalesce((
@@ -116,7 +130,11 @@ BEGIN
         FROM cl WHERE cl.id IN (SELECT id FROM who)), '[]'::jsonb),
     'blocks', coalesce((
       SELECT jsonb_agg(jsonb_build_object('id', bl.id, 'client_id', bl.client_id, 'name', bl.name, 'start_date', bl.start_date))
-        FROM bl WHERE bl.id IN (SELECT block_id FROM days_out)), '[]'::jsonb),
+        FROM bl WHERE bl.id IN (SELECT block_id FROM days_out)
+           OR bl.id IN (SELECT unnest(block_ids) FROM doubled)), '[]'::jsonb),
+    'doubled', coalesce((
+      SELECT jsonb_agg(jsonb_build_object('client_id', x.client_id, 'date', x.scheduled_date, 'block_ids', to_jsonb(x.block_ids)))
+        FROM doubled x), '[]'::jsonb),
     'days', coalesce((
       SELECT jsonb_agg(jsonb_build_object(
                'id', d.id, 'block_id', d.block_id, 'client_id', d.client_id, 'week_index', d.week_index,
@@ -142,4 +160,71 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.program_gaps(uuid) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.program_gaps(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.program_gaps(uuid) TO authenticated, service_role;
+
+-- "Use estimated max" (Missing program data, estimatedMaxPlan in
+-- program-gaps.ts): the sets that read a training max or 1RM nobody entered
+-- read the client's estimated max instead (est_1rm: worked out from their
+-- logged sets by the logger), keeping the %, with the RPE cap the app worked
+-- out for a set that has no RPE or RIR. The caller's own coaching client (an
+-- admin: any), only workouts nothing has touched, each row backed up first in
+-- program_loading_update_backup. Returns how many sets changed.
+CREATE OR REPLACE FUNCTION public.program_gaps_use_estimated_max(_client uuid, _rows jsonb)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_today date;
+  n integer := 0;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'not signed in' USING ERRCODE = '42501';
+  END IF;
+  IF NOT (public.has_role(v_uid, 'admin') OR _client IN (SELECT public.coached_client_ids())) THEN
+    RAISE EXCEPTION 'not allowed' USING ERRCODE = '42501';
+  END IF;
+  IF jsonb_typeof(_rows) IS DISTINCT FROM 'array' OR jsonb_array_length(_rows) > 500 THEN
+    RAISE EXCEPTION 'rows must be a list of up to 500' USING ERRCODE = '22023';
+  END IF;
+  SELECT public.pt_local_today(coalesce(nullif(c.timezone, ''), 'America/Winnipeg')) INTO v_today
+    FROM public.clients c WHERE c.id = _client;
+
+  WITH pick AS (
+    SELECT r.id,
+           CASE WHEN x.rpe ~ '^[0-9]{1,2}(\.5)?$' AND x.rpe::numeric BETWEEN 1 AND 10 THEN x.rpe END AS rpe
+      FROM jsonb_to_recordset(_rows) AS x(id uuid, rpe text)
+      JOIN public.pl_exercise_rows r ON r.id = x.id
+      JOIN public.pl_days d ON d.id = r.day_id
+      JOIN public.pl_weeks w ON w.id = d.week_id
+      JOIN public.pl_blocks b ON b.id = w.block_id
+     WHERE b.client_id = _client
+       AND NOT b.archived
+       AND r.percentage IS NOT NULL
+       AND r.percentage_basis IN ('training_max', '1rm')
+       AND NOT public.pl_day_touched(d.id, d.scheduled_date, v_today)
+  ),
+  saved AS (
+    INSERT INTO public.program_loading_update_backup (source_table, row_id, row_data)
+    SELECT 'pl_exercise_rows', r.id::text, to_jsonb(r) FROM public.pl_exercise_rows r JOIN pick p ON p.id = r.id
+    RETURNING row_id
+  ),
+  done AS (
+    UPDATE public.pl_exercise_rows r
+       SET percentage_basis = 'est_1rm',
+           rpe = CASE WHEN nullif(btrim(r.rpe), '') IS NULL AND nullif(btrim(r.rir), '') IS NULL THEN p.rpe ELSE r.rpe END,
+           manual_override = false,
+           override_of_pct = NULL
+      FROM pick p
+     WHERE r.id = p.id
+    RETURNING r.id
+  )
+  SELECT count(*) INTO n FROM done;
+  RETURN n;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.program_gaps_use_estimated_max(uuid, jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.program_gaps_use_estimated_max(uuid, jsonb) TO authenticated;

@@ -9,6 +9,7 @@
 import { repRange, rpeRange, sum } from "./core";
 import { missingEquipment, stationOf, type EquipmentResolution } from "./equipment";
 import { lowValueReason } from "./exercise-standard";
+import { isTimedCardio } from "@/lib/timed-cardio";
 import type { BuiltBlock, BuiltExercise, BuiltProgram, Strategy } from "./generator-schemas";
 import { rxForWeek } from "./program-view";
 import type { Baseline, GenerationSetup } from "./recommend";
@@ -183,7 +184,10 @@ export function auditProgram(x: AuditInput): AuditResult {
   if (strategy.structure.blocks.length !== program.blocks.length) add("completeness", "failed", `The strategy has ${strategy.structure.blocks.length} blocks; ${program.blocks.length} were built.`);
   for (const { e, bi, d } of allEx) {
     const noIntensity = !e.rpe && !e.rir && e.percentage == null && !/amrap|max/i.test(e.reps) && !(e.weeks ?? []).some((w) => w.rpe || w.rir || w.percentage != null);
-    if (noIntensity) add("completeness", "review", `${e.exercise_name} (block ${bi + 1}, ${d.title}) has no effort target (RPE, RIR or %).`, bi, true);
+    // a set with nothing to pick a weight by is what Missing program data
+    // flags on a client's program: it goes back for repair (a timed hold or
+    // a walk is prescribed by its time)
+    if (noIntensity && !isTimedRx(e)) add("completeness", "failed", `${e.exercise_name} (block ${bi + 1}, ${d.title}) has no effort target (RPE, RIR or %).`, bi, true);
   }
 
   // Per-week measures.
@@ -502,4 +506,9 @@ export function unmatchedByBlock(blocks: BuiltBlock[], unmatched: string[]): Rec
     if (names.length) out[bi] = [...new Set(names)];
   });
   return out;
+}
+
+/** Prescribed by its time ("30s", "1 min", "0:45") or a walk / bike: an effort target is optional. */
+function isTimedRx(e: Pick<BuiltExercise, "exercise_name" | "reps">): boolean {
+  return isTimedCardio(e.exercise_name) || /\d\s*(?:s|sec|secs|seconds|min|mins|minutes)\b|\d:\d\d/i.test(String(e.reps ?? ""));
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { rowProblems, validateDay } from "@/lib/pl-template-validation";
 import {
-  buildProgramGaps, fillInstruction, FILL_MAX, gapBriefLines, gapDetail, gapParts, gapTagLabel, whenLabel,
+  buildProgramGaps, estimatedMaxPlan, fillInstruction, FILL_MAX, gapBriefLines, gapDetail, gapParts, gapsToAlert, gapTagLabel, rpeCapFor, whenLabel,
   type ProgramGapsData,
 } from "@/lib/program-gaps";
 import { matchesSignal, signalTags, waitingCount, briefWaitingLines, type ClientSignals } from "@/lib/inbox-brief";
@@ -86,7 +86,13 @@ describe("buildProgramGaps", () => {
   });
   it("a % of a 1RM nobody entered is one gap per lift, with the sets that show nothing", () => {
     expect(a.maxes).toEqual([
-      { basis: "1rm", lift: "Squat", exercises: ["Competition Squat", "2-Count Paused Squat"], rows: 2, firstDate: "2026-11-16", nothingElse: 1 },
+      {
+        basis: "1rm", lift: "Squat", exercises: ["Competition Squat", "2-Count Paused Squat"], rows: 2, firstDate: "2026-11-16", nothingElse: 1,
+        rowRefs: [
+          { id: "sq", percentage: 82, reps: "8", hasEffort: false },
+          { id: "ps", percentage: 60, reps: "8", hasEffort: true },
+        ],
+      },
     ]);
   });
   it("undated workouts and no training days are gaps too", () => {
@@ -148,5 +154,33 @@ describe("volume: effective sets without a variation tag", () => {
     );
     expect(v.totalRawSets).toBe(6);
     expect(v.totalEffectiveSets).toBeCloseTo(3 * 1 + 2 * 0.4 + 0, 5);
+  });
+});
+
+describe("keeping it from happening again", () => {
+  it("the morning push: a gap on a workout in the next 3 days, once a client a day", () => {
+    const gaps = buildProgramGaps(data());
+    expect(gapsToAlert(gaps)).toEqual([{ clientId: "a", sourceId: "2026-11-15:2026-11-16" }]);
+    const later = gaps.map((g) => ({ ...g, firstDate: "2026-11-25" }));
+    expect(gapsToAlert(later)).toEqual([]);
+  });
+  it("two live programs on the same days are a gap (a replaced program never ended)", () => {
+    const d = data();
+    d.blocks.push({ id: "old", client_id: "c", name: "Old Peak", start_date: "2026-11-02" });
+    d.doubled = [
+      { client_id: "c", date: "2026-11-18", block_ids: ["bc", "old"] },
+      { client_id: "c", date: "2026-11-16", block_ids: ["bc", "old"] },
+    ];
+    const c = buildProgramGaps(d).find((g) => g.clientId === "c")!;
+    expect(c.doubled).toEqual({ blockNames: ["Hybrid", "Old Peak"], days: 2, firstDate: "2026-11-16" });
+    expect(gapParts(c)).toEqual(["Two programs on 2 days"]);
+    expect(gapParts(c, { schedule: false })).toEqual([]);
+  });
+  it("Use estimated max keeps each %, capping only the sets with nothing to go by", () => {
+    expect(rpeCapFor(82, "2")).toBe("7");
+    expect(rpeCapFor(57.5, "1")).toBe("5");
+    expect(Number(rpeCapFor(95, "1"))).toBeGreaterThanOrEqual(9);
+    const a = buildProgramGaps(data()).find((g) => g.clientId === "a")!;
+    expect(estimatedMaxPlan(a.maxes)).toEqual([{ id: "sq", rpe: rpeCapFor(82, "8") }, { id: "ps", rpe: null }]);
   });
 });

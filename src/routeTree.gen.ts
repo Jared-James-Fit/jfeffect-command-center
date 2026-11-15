@@ -265,6 +265,7 @@ import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/pu
 import { Route as ApiPublicHooksPaymentReminderSmsRouteImport } from './routes/api/public/hooks/payment-reminder-sms'
 import { Route as ApiPublicHooksPostPicturesTickRouteImport } from './routes/api/public/hooks/post-pictures-tick'
 import { Route as ApiPublicHooksProgramAiTickRouteImport } from './routes/api/public/hooks/program-ai-tick'
+import { Route as ApiPublicHooksProgramGapsTickRouteImport } from './routes/api/public/hooks/program-gaps-tick'
 import { Route as ApiPublicHooksProgramIntelTickRouteImport } from './routes/api/public/hooks/program-intel-tick'
 import { Route as ApiPublicHooksProgressArchiveTickRouteImport } from './routes/api/public/hooks/progress-archive-tick'
 import { Route as ApiPublicHooksScheduleSyncRouteImport } from './routes/api/public/hooks/schedule-sync'
@@ -1770,6 +1771,12 @@ const ApiPublicHooksProgramAiTickRoute =
     path: '/api/public/hooks/program-ai-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksProgramGapsTickRoute =
+  ApiPublicHooksProgramGapsTickRouteImport.update({
+    id: '/api/public/hooks/program-gaps-tick',
+    path: '/api/public/hooks/program-gaps-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksProgramIntelTickRoute =
   ApiPublicHooksProgramIntelTickRouteImport.update({
     id: '/api/public/hooks/program-intel-tick',
@@ -2205,6 +2212,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
+  '/api/public/hooks/program-gaps-tick': typeof ApiPublicHooksProgramGapsTickRoute
   '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/schedule-sync': typeof ApiPublicHooksScheduleSyncRoute
@@ -2491,6 +2499,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
+  '/api/public/hooks/program-gaps-tick': typeof ApiPublicHooksProgramGapsTickRoute
   '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/schedule-sync': typeof ApiPublicHooksScheduleSyncRoute
@@ -2783,6 +2792,7 @@ export interface FileRoutesById {
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
+  '/api/public/hooks/program-gaps-tick': typeof ApiPublicHooksProgramGapsTickRoute
   '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/schedule-sync': typeof ApiPublicHooksScheduleSyncRoute
@@ -3075,6 +3085,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
+    | '/api/public/hooks/program-gaps-tick'
     | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/schedule-sync'
@@ -3361,6 +3372,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
+    | '/api/public/hooks/program-gaps-tick'
     | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/schedule-sync'
@@ -3652,6 +3664,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
+    | '/api/public/hooks/program-gaps-tick'
     | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/schedule-sync'
@@ -3775,6 +3788,7 @@ export interface RootRouteChildren {
   ApiPublicHooksPaymentReminderSmsRoute: typeof ApiPublicHooksPaymentReminderSmsRoute
   ApiPublicHooksPostPicturesTickRoute: typeof ApiPublicHooksPostPicturesTickRoute
   ApiPublicHooksProgramAiTickRoute: typeof ApiPublicHooksProgramAiTickRoute
+  ApiPublicHooksProgramGapsTickRoute: typeof ApiPublicHooksProgramGapsTickRoute
   ApiPublicHooksProgramIntelTickRoute: typeof ApiPublicHooksProgramIntelTickRoute
   ApiPublicHooksProgressArchiveTickRoute: typeof ApiPublicHooksProgressArchiveTickRoute
   ApiPublicHooksScheduleSyncRoute: typeof ApiPublicHooksScheduleSyncRoute
@@ -5591,6 +5605,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksProgramAiTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/program-gaps-tick': {
+      id: '/api/public/hooks/program-gaps-tick'
+      path: '/api/public/hooks/program-gaps-tick'
+      fullPath: '/api/public/hooks/program-gaps-tick'
+      preLoaderRoute: typeof ApiPublicHooksProgramGapsTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/program-intel-tick': {
       id: '/api/public/hooks/program-intel-tick'
       path: '/api/public/hooks/program-intel-tick'
@@ -6545,6 +6566,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksPaymentReminderSmsRoute: ApiPublicHooksPaymentReminderSmsRoute,
   ApiPublicHooksPostPicturesTickRoute: ApiPublicHooksPostPicturesTickRoute,
   ApiPublicHooksProgramAiTickRoute: ApiPublicHooksProgramAiTickRoute,
+  ApiPublicHooksProgramGapsTickRoute: ApiPublicHooksProgramGapsTickRoute,
   ApiPublicHooksProgramIntelTickRoute: ApiPublicHooksProgramIntelTickRoute,
   ApiPublicHooksProgressArchiveTickRoute:
     ApiPublicHooksProgressArchiveTickRoute,
