@@ -33,7 +33,7 @@ export function loadFieldLabel(loadType: LoadType, unit: LUnit): string {
 
 /** Short column header used inside the set grid. */
 export function loadColumnLabel(loadType: LoadType, unit: LUnit): string {
-  return `${loadType === "assisted" ? "Asst" : "Wt"} (${unit.toUpperCase()})`;
+  return `${loadType === "assisted" ? "Assist" : "Weight"} (${unit})`;
 }
 
 function trimNum(value: number): string {

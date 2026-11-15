@@ -130,14 +130,14 @@ export function SetTimerInput({
             // the set's other boxes are 44px on a phone; the timer matches them
             focusMode ? "h-12 text-base sm:h-10" : "h-11 sm:h-8",
             isConfirmed && completedSeconds != null
-              ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-600"
+              ? "border-success/50 bg-success/10 text-success"
               : running
                 ? "border-primary bg-primary/10 text-primary"
                 : paused
                   ? "border-amber-500/50 bg-amber-500/10 text-amber-600"
                   // Not logged yet: the target, drawn like a placeholder so it
                   // never reads as a time already done.
-                  : "border-dashed border-blue-500/40 bg-transparent text-muted-foreground",
+                  : "border-dashed border-border bg-transparent text-muted-foreground",
             !disabled && "cursor-pointer",
           )}
         >

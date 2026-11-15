@@ -17,7 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { toast } from "sonner";
 import { ExerciseOrderBadge } from "@/components/exercise-order-badge";
 import { formatDualLoad } from "@/lib/dual-load";
-import { familyStripeClass, resolveMovementFamily } from "@/lib/exercise-family";
+import { resolveMovementFamily } from "@/lib/exercise-family";
 import {
   derivePurposeLabels,
   effectiveRestSeconds,
@@ -3725,9 +3725,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         name: exercise.name ?? null,
       }
     : null;
-  // One colour rule for every screen: the exercise's movement family.
   const family = resolveMovementFamily(exMeta, row.movement_family);
-  const accent = familyStripeClass(exMeta, row.movement_family);
   const category = resolveCategory(exMeta);
   const effectiveRest = effectiveRestSeconds(
     { rest_seconds_override: row.rest_seconds_override, rest_seconds: row.rest_seconds },
@@ -4484,11 +4482,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       data-workout-exercise
       data-workout-row={row?.id}
       className={cn(
-        "workout-card-surface relative scroll-mt-24 overflow-hidden p-3.5 pl-4 transition-[colors,box-shadow] hover:border-builder-card-border-strong sm:p-5 sm:pl-6",
+        "workout-card-surface relative scroll-mt-24 overflow-hidden p-3.5 transition-[colors,box-shadow] hover:border-builder-card-border-strong sm:p-5",
       )}
     >
-      {/* Left stripe: inset top/bottom so it doesn't visually connect between cards */}
-      <div className={`absolute left-0 top-1.5 bottom-1.5 w-1.5 rounded-full opacity-90 ${accent}`} aria-hidden />
       {/* Row 1 — name + unit toggle */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
@@ -4884,8 +4880,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
         <div
           className={cn(
-            "grid items-center justify-items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground",
-            focusMode && "text-xs",
+            "grid items-center justify-items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2 py-1.5 text-xs font-medium text-muted-foreground",
+            focusMode && "text-[13px]",
           )}
           style={{ gridTemplateColumns: gridTemplate }}
         >
@@ -4956,7 +4952,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               title={`Distance in ${distanceUnit === "km" ? "kilometres" : "miles"}: tap for ${distanceUnit === "km" ? "miles" : "kilometres"}`}
               aria-label={`Distance in ${distanceUnit === "km" ? "kilometres" : "miles"}, tap to switch`}
               data-distance-unit={distanceUnit}
-              className="-my-1 inline-flex h-7 items-center justify-center rounded-md uppercase hover:bg-secondary hover:text-foreground"
+              className="-my-1 inline-flex h-7 items-center justify-center rounded-md hover:bg-secondary hover:text-foreground"
             >
               {distanceUnit === "km" ? "Km" : "Mi"}
             </button>
