@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, Video, StickyNote, NotebookPen, Info, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, ChevronRight, Target, LineChart } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, Video, StickyNote, NotebookPen, Info, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, Target, LineChart } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -87,7 +87,7 @@ import { planRestore, setPayload, snapshotOf, type CardSet, type CardSnapshot } 
 import { matchPreviousWeekSlots, type SlotRow } from "@/lib/previous-week-slot";
 import { LastWeekSwapChip, type LastWeekSwap } from "@/components/workout-day/last-week-swap";
 import { useCardHistory, type CardHistoryAction } from "@/components/workout-day/use-card-history";
-import { LoadSuggestionCard, LoadSuggestionsChip, LoadSuggestionsDone, LoadSuggestionsNudge } from "@/components/workout-day/load-suggestion-card";
+import { LoadSuggestionCard, LoadSuggestionsChip, LoadSuggestionsDone, LoadSuggestionsNudge, REF_LABEL, REF_ROW } from "@/components/workout-day/load-suggestion-card";
 import { effortRange, loggedRpe, setGuidance } from "@/lib/workouts/plan-vs-actual";
 import { dismissSuggestionsNudgeForNow, suggestionsNudgeDismissed, useShowLoadSuggestions, LOAD_SUGGESTIONS_TRIED_KEY } from "@/lib/load-suggestion-visibility";
 import { TypedValueInput } from "@/components/workout-day/typed-value-input";
@@ -3357,14 +3357,15 @@ function PreviousTimedChip({ data, className, onOpen, fallback }: {
   const when = lastTimeWhen(data.occurredAt);
   const body = (
     <>
-      <span className="shrink-0 text-muted-foreground">Last time</span>
-      <span className="min-w-0 truncate font-semibold tabular-nums text-foreground">{text}</span>
-      {when && <span className="shrink-0 text-muted-foreground">· {when}</span>}
+      <span className={REF_LABEL}>Last time</span>
+      <span className="min-w-0 truncate text-sm font-medium tabular-nums text-foreground">
+        {text}
+        {when && <span className="font-normal text-muted-foreground"> · {when}</span>}
+      </span>
     </>
   );
-  const chip = "inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-1 text-xs font-medium text-foreground";
   if (!onOpen) {
-    return <div className={cn(chip, className)} data-last-time-timed={data.timed?.kind}>{body}</div>;
+    return <div className={cn(REF_ROW, "px-1", className)} data-last-time-timed={data.timed?.kind}>{body}</div>;
   }
   return (
     <button
@@ -3373,13 +3374,17 @@ function PreviousTimedChip({ data, className, onOpen, fallback }: {
       data-testid="last-time-history"
       data-last-time-timed={data.timed?.kind}
       aria-label={`Last time: ${text}${when ? `, ${when}` : ""}. Open history`}
-      className={cn(chip, "h-8 transition hover:bg-muted active:scale-[0.97]", className)}
+      title="Your last session of this exercise. Tap for its history"
+      className={cn(LAST_TIME_BUTTON, className)}
     >
       {body}
-      <ChevronRight className="-mr-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <LineChart className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </button>
   );
 }
+
+/** "Last time" is a plain line under the prescription that opens History & progress. */
+const LAST_TIME_BUTTON = cn(REF_ROW, "flex-1 rounded-md px-1 text-left transition-colors hover:bg-muted/60 active:bg-muted");
 
 /** " @ 7" from a logged RPE, " · 2 RIR" from a logged RIR, else nothing. */
 function lastTimeEffort(data: { rpe?: string | number | null; rir?: string | number | null }): string {
@@ -3426,14 +3431,16 @@ function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = nul
   const when = lastTimeWhen(data.occurredAt);
   const body = (
     <>
-      <span className="text-muted-foreground">Last time</span>
-      <span className="font-semibold tabular-nums text-foreground">{loadStr}{repsStr}{effortStr}</span>
-      {when && <span className="text-muted-foreground">· {when}</span>}
+      <span className={REF_LABEL}>Last time</span>
+      {/* the date goes first on a narrow phone, never the numbers */}
+      <span className="min-w-0 truncate text-sm font-medium tabular-nums text-foreground">
+        {loadStr}{repsStr}{effortStr}
+        {when && <span className="font-normal text-muted-foreground"> · {when}</span>}
+      </span>
     </>
   );
-  const chip = "inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-1 text-xs font-medium text-foreground";
   if (!onOpen) {
-    return <div className={cn(chip, className)} title="Your top set the last time you trained this exercise">{body}</div>;
+    return <div className={cn(REF_ROW, "px-1", className)} title="Your top set the last time you trained this exercise">{body}</div>;
   }
   return (
     <button
@@ -3441,10 +3448,11 @@ function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = nul
       onClick={onOpen}
       data-testid="last-time-history"
       aria-label={`Last time: ${loadStr}${repsStr}${effortStr}${when ? `, ${when}` : ""}. Open history and progress`}
-      className={cn(chip, "h-8 transition hover:bg-muted active:scale-[0.97]", className)}
+      title="Your top set the last time you trained this exercise. Tap for history and progress"
+      className={cn(LAST_TIME_BUTTON, className)}
     >
       {body}
-      <LineChart className="ml-auto h-3.5 w-3.5 shrink-0 pl-0.5 text-muted-foreground" aria-hidden="true" />
+      <LineChart className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </button>
   );
 }
@@ -3911,6 +3919,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     () => planningTarget({ repTarget, rpeTarget, rirTarget }),
     [repTarget, rpeTarget, rirTarget],
   );
+  // The prescription right above Suggested already reads "× 5 | RPE 6": the
+  // suggestion says its reps and RPE only when the plan picked them from a range
+  // (or turned RIR into RPE).
+  const rxSaysPlan = !!loadPlan && repTarget.exact === loadPlan.reps && rpeTarget?.exact === loadPlan.rpe;
   // Optional final warm-up (squat / bench / deadlift and other loaded compound
   // lifts). It sharpens the FIRST working-set suggestion, so it is offered only
   // while no working set is logged yet today and only where the engine can
@@ -4539,31 +4551,40 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       {pctLine && (
         <p className="mt-0.5 text-xs text-muted-foreground" data-pct-line>{pctLine}</p>
       )}
-      {/* Reference row: "Last time" IS the History button (tap it for the
-          full history), so the row holds it and the Suggest switch on one line.
-          With no last time to show, a plain History chip stands in. */}
+      {/* Under the prescription, as what it's for: Last time (it IS the History
+          button) and Suggested (Use puts it in the open sets), two plain lines
+          with their labels in one column. With no last time to show, a plain
+          History chip stands in; with suggestions off, the Suggest switch sits
+          beside Last time. */}
       {(exerciseId || name) && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          <PreviousLiftChip
-            data={previousLift}
-            displayUnit={activeUnit}
-            // With a suggestion under it, the two read as one summary:
-            // Last time / Suggested, the same width, one above the other.
-            className={cn("mt-0", showSuggestionCard && loadModel && loadPlan && "h-9 w-full")}
-            onOpen={clientId ? () => setHistoryOpen(true) : undefined}
-            fallback={clientId ? (
-              <DeferredExerciseHistoryButton
-                clientId={clientId}
-                exerciseId={exerciseId}
-                exerciseName={name}
-                displayUnit={activeUnit}
-                currentDayIndex={dayIndex}
-                editable={!readonly}
-                className="w-auto h-8 rounded-full px-2.5 text-xs"
-              />
-            ) : null}
-          />
-          {canSuggest && !readonly && !showSuggestionCard && <LoadSuggestionsChip highlight={!!suggestNudge} />}
+        <div className="-mx-1 mt-0.5" data-rx-refs>
+          <div className="flex min-w-0 items-center gap-1">
+            <PreviousLiftChip
+              data={previousLift}
+              displayUnit={activeUnit}
+              onOpen={clientId ? () => setHistoryOpen(true) : undefined}
+              fallback={clientId ? (
+                <DeferredExerciseHistoryButton
+                  clientId={clientId}
+                  exerciseId={exerciseId}
+                  exerciseName={name}
+                  displayUnit={activeUnit}
+                  currentDayIndex={dayIndex}
+                  editable={!readonly}
+                  className="my-1 ml-1 w-auto h-8 rounded-full px-2.5 text-xs"
+                />
+              ) : null}
+            />
+            {canSuggest && !readonly && !showSuggestionCard && <LoadSuggestionsChip highlight={!!suggestNudge} />}
+          </div>
+          {/* Off by default; the Suggest chip on any card turns it on for every
+              card. Live: it recalculates on every set saved (this card's sets,
+              then the same lift's other cards — see dayRead). */}
+          {showSuggestionCard && loadModel && loadPlan && (
+            openSetCount === 0 && workedToday
+              ? <LoadSuggestionsDone own={dayRead?.own ?? null} next={loadHint} plan={loadPlan} today={todayRead} />
+              : <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} picks={loadPicks} onApply={!readonly && clientId && openSetCount > 0 ? fillLoadOnOpenSets : null} showPlan={!rxSaysPlan} />
+          )}
         </div>
       )}
       {historyOpen && clientId && (
@@ -4579,14 +4600,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         />
       )}
       {canSuggest && !readonly && suggestNudge && !showSuggestionCard && <LoadSuggestionsNudge onDismiss={suggestNudge} />}
-      {/* Off by default; the Suggest chip on any card turns it on for every
-          card. Live: it recalculates on every set saved (this card's sets,
-          then the same lift's other cards — see dayRead). */}
-      {showSuggestionCard && loadModel && loadPlan && (
-        openSetCount === 0 && workedToday
-          ? <LoadSuggestionsDone own={dayRead?.own ?? null} next={loadHint} plan={loadPlan} today={todayRead} />
-          : <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} picks={loadPicks} onApply={!readonly && clientId && openSetCount > 0 ? fillLoadOnOpenSets : null} />
-      )}
       {row.manual_override && (row.load_kg || row.load_lb) && (
         <SuggestedLoadBadge
           load={Number(
