@@ -133,10 +133,11 @@ describe("labels and the RPE cap", () => {
 
 describe("the athlete's workout card (source)", () => {
   const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
-  it("fills a planned % load into untouched weight cells, adopted as shown (no draft)", () => {
-    expect(wdv).toContain("autoFillSuggestedWeight={autoFillPlanned}");
-    expect(wdv).toContain("const plannedFillRef = useRef<string | null>");
-    expect(wdv).toMatch(/setLoadPaired\(next\);\s*adoptShownAsSaved\(true\);/);
+  it("a planned % load waits in the strip as a fill chip; untouched weight boxes stay empty", () => {
+    expect(wdv).not.toContain("autoFillSuggestedWeight");
+    expect(wdv).not.toContain("plannedFillRef");
+    expect(wdv).toContain("const [load, setLoad] = useState(existingDisplayLoad);");
+    expect(wdv).toContain("<PlannedLoadCell view={plannedView} onApply={clientId && openSetCount > 0 ? fillLoadOnOpenSets : null} />");
   });
   it("says where the weight came from once (the % line) and when a set went over its cap", () => {
     expect(wdv).toContain("data-pct-line");

@@ -3871,10 +3871,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   );
   // What an open set's weight cell starts at: the plan, or what the cap brought it down to.
   const openSetWeight = capHeld?.load ?? suggestedWeight;
-  // Planned loads fill the weight cell of a set nobody has touched yet.
-  const autoFillPlanned = !readonly && (
-    (row.percentage_basis === "top_set" && percentageBackoffWeight != null) || plannedFromMax
-  );
   // Where a planned weight came from, in a few characters: "70% TM", "65% Comp Squat TM", "92.5% of top set".
   // RPE-based load suggestion (history + today's sets + predicted readiness).
   // A coach's fixed load, top-set back-off or % of a max stays the only
@@ -4570,7 +4566,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       {(exerciseId || name) && (() => {
         const done = openSetCount === 0 && workedToday;
         const right = plannedView
-          ? (done || readonly ? null : <PlannedLoadCell view={plannedView} />)
+          ? (done || readonly ? null : <PlannedLoadCell view={plannedView} onApply={clientId && openSetCount > 0 ? fillLoadOnOpenSets : null} />)
           : canSuggest && !readonly && !showSuggestionCard
           ? <div className={cn(REF_CELL, "items-start")}><LoadSuggestionsChip highlight={!!suggestNudge} /></div>
           : showSuggestionCard && loadModel && loadPlan
@@ -5050,7 +5046,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               // While the warm-up form is setting today's weight, its answer is
               // the only suggestion on screen (no stale ghost in the set row).
               loadHint={warmupForm && warmupGauge ? null : loadHint}
-              autoFillSuggestedWeight={autoFillPlanned}
               lastTimeWeight={activeUnit === "kg" ? (previousLift?.normalizedKg ?? null) : (previousLift?.normalizedLb ?? null)}
               repTarget={repTarget}
               rpeTarget={rpeTarget}
@@ -5406,7 +5401,7 @@ const UNIT_PICK_WAIT_MS = 5000;
 
 function SetRow({
   rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
-  targetReps, targetRpe, targetRir, suggestedWeight, loadHint = null, autoFillSuggestedWeight = false, lastTimeWeight,
+  targetReps, targetRpe, targetRir, suggestedWeight, loadHint = null, lastTimeWeight,
   repTarget, rpeTarget, rirTarget,
   repMaxBests = null,
   assistedBests = null,
@@ -5460,7 +5455,6 @@ function SetRow({
   targetRpe?: string | null;
   targetRir?: string | null;
   suggestedWeight?: number | null;
-  autoFillSuggestedWeight?: boolean;
   lastTimeWeight?: number | null;
   repTarget?: RangeTarget;
   rpeTarget?: RangeTarget;
@@ -5531,8 +5525,9 @@ function SetRow({
     return fmtNum(rounded);
   };
   const existingDisplayLoad = fmtLoad(displayLoadInUnit(existing, unit));
-  const initialDisplayLoad = existingDisplayLoad || (autoFillSuggestedWeight && suggestedWeight != null ? fmtLoad(suggestedWeight) : "");
-  const [load, setLoad] = useState(initialDisplayLoad);
+  // A set nobody has touched starts empty (the blue box): the card's Suggested
+  // or planned weight is one tap away, never put in for them.
+  const [load, setLoad] = useState(existingDisplayLoad);
   // The unit `load` is written in. It changes in the same update as `load`, so
   // the saved pair is always physically consistent. Saving `load` with the
   // card's current `unit` instead let one render pair the old number with a
@@ -6194,36 +6189,6 @@ function SetRow({
     setAdoptTick((n) => n + 1);
   });
 
-  // A planned weight that arrives after this row mounted (a % of a max once the
-  // maxes load, a back-off once the top set is logged, the lighter weight an RPE
-  // cap brought it to) fills the weight cell while nobody has touched it: never a
-  // logged set or one with a saved weight, never over what they typed or a fill
-  // from the set above. Adopted as shown, so it's not a draft until they log it.
-  const plannedFillRef = useRef<string | null>(initialDisplayLoad && !existingDisplayLoad ? initialDisplayLoad : null);
-  useEffect(() => {
-    if (readonly || hideWeight || bw) return;
-    if (existing && (existing.completed_at || Number(displayLoadInUnit(existing, unit) ?? 0) > 0)) return;
-    if (focusedFieldRef.current === "load") return;
-    if (!autoFillSuggestedWeight || suggestedWeight == null) {
-      // The plan it came from is gone (the top set was cleared or un-logged):
-      // an untouched planned weight goes with it, never left behind as if it
-      // still meant something.
-      if (plannedFillRef.current != null && load === plannedFillRef.current) {
-        plannedFillRef.current = null;
-        setLoadPaired("");
-        adoptShownAsSaved(true);
-      }
-      return;
-    }
-    const next = fmtLoad(suggestedWeight);
-    if (load === next) { plannedFillRef.current = next; return; }
-    if (load !== "" && load !== plannedFillRef.current) return;
-    plannedFillRef.current = next;
-    setLoadPaired(next);
-    adoptShownAsSaved(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoFillSuggestedWeight, suggestedWeight, existing?.id, existing?.completed_at, unit, readonly, hideWeight]);
-
   // Canonical "commit now" signal for the inline weight cell.
   //
   // RACE FIX: onPick used to call `setTimeout(() => save.flush())`. React's
@@ -6331,14 +6296,11 @@ function SetRow({
   // hasAnyEntry only counts weight (the field the client must enter) and
   // manually-edited reps/RPE. Pre-filled prescription values do NOT count
   // as draft data — otherwise every unlogged set shows the amber border.
-  // A weight the plan filled in (plannedFillRef) is the plan, not their entry:
-  // it reads faded like the planned reps / RPE, and the row isn't a draft.
-  const loadIsPlanned = !isConfirmed && !bw && load !== "" && plannedFillRef.current != null && load === plannedFillRef.current;
   // Reps / RPE that still say what the plan says aren't theirs either: a set
   // holding only the plan (its weight cleared, say) is an untouched set, not a draft.
   const repsOwn = repsEdited && reps !== "" && reps !== prescribedRepsStr;
   const rpeOwn = rpeEdited && rpe !== "" && rpe !== prescribedRpeStr;
-  const hasAnyEntry = (load.length > 0 && !loadIsPlanned) || bw || repsOwn || rpeOwn || caloriesEdited || distanceEdited;
+  const hasAnyEntry = load.length > 0 || bw || repsOwn || rpeOwn || caloriesEdited || distanceEdited;
   const existingHolds = !!existing && !existing.completed_at && savedBeyondPlan(existing, prescribedRepsStr, prescribedRpeStr);
   const isDraft = !isConfirmed && (hasAnyEntry || existingHolds);
 
@@ -6865,7 +6827,6 @@ function SetRow({
       {!hideWeight && (
       <WeightValueInput
         value={load}
-        planned={loadIsPlanned}
         isBodyweight={bw}
         loadType={loadType}
         unit={unit}

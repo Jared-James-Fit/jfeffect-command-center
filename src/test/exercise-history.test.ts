@@ -159,7 +159,8 @@ describe("the card and the History sheet", () => {
     expect(wdv).toContain("const load = lastTimeLoad(data, displayUnit);");
     expect(wdv).not.toContain("<LoadGuide");
     expect(card).not.toContain("data-testid=\"load-pick\"");
-    expect(card).toContain("const n = await onApply(hint.target);");
+    expect(card).toContain("const n = await onApply(load);"); // the shared FillChip, Suggested's and the planned weight's
+    expect(card).toContain("load={hint.target}");
     expect(card).toContain("Tap Suggested to fill your open sets with");
   });
   it("the sheet leaves out the open workout, marks its split from stable ids and folds the analytics", () => {
