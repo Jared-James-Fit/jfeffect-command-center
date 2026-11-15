@@ -46,6 +46,9 @@ export type TimeGridEntry<T> = {
   ref: T;
 };
 
+/** Room left above the hour the grid opens on, for that hour's label. */
+const LABEL_ROOM_PX = 8;
+
 /** A block per colour family: a tint, a solid edge, the theme's own text (readable light and dark). */
 const BLOCK: Record<KindFamily, string> = {
   people: "border-violet-500 bg-violet-500/15 hover:bg-violet-500/25",
@@ -147,7 +150,8 @@ export function TimeGrid<T>({
     if (state.touched) return;
     const viewMin = Math.round((el.clientHeight - (header.current?.offsetHeight ?? 0)) / pxPerMin);
     const top = openingMinute({ nowMin: showsToday ? nowMin : null, firstStartMin: firstStart, lastEndMin: lastEnd, viewMin });
-    const next = Math.round(top * pxPerMin);
+    // A little above the opening line, so its hour label (centred on the line) isn't cut in half.
+    const next = Math.max(0, Math.round(top * pxPerMin) - LABEL_ROOM_PX);
     if (Math.abs(el.scrollTop - next) > 1) {
       state.byUs = true;
       el.scrollTop = next;

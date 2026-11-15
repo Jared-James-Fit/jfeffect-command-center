@@ -9,15 +9,15 @@ import { placeLabel, useGoogleCalendarStatus, type KindFamily } from "@/lib/cale
 import { listGoogleEventsRange } from "@/lib/google-cal.functions";
 import { addDaysISO, compactTimeRange, compareInstants, deviceTodayISO } from "@/lib/schedule-time";
 import {
-  AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaFooter, AgendaHeader, AgendaWeek,
-  AgendaNext, AgendaNextRow, FAMILY_ACCENT, shortDay, startLabel, useNow,
+  AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaEmpty, AgendaFooter, AgendaHeader, AgendaLoading, AgendaToday, AgendaWeek,
+  AgendaNext, AgendaNextRow, FAMILY_ACCENT, hasEnded, shortDay, startLabel, useNow,
 } from "@/components/schedule/agenda";
 import { TimeGrid, type TimeGridEntry } from "@/components/calendar/time-grid";
 import { monthChipOrder } from "@/lib/calendar-timeline";
 import { cn } from "@/lib/utils";
 import { listenChannel } from "@/lib/realtime-channel";
 import { useCalendarPrefs, type HomeView } from "@/lib/calendar-prefs";
-import { homeRange, isCurrentPeriod, monthGridDays, periodLabel, shiftAnchor } from "@/lib/home-calendar";
+import { comingUpFrom, dayTag, homeRange, isCurrentPeriod, monthGridDays, periodLabel, shiftAnchor } from "@/lib/home-calendar";
 import { weekDays } from "@/components/calendar/week-strip";
 import { chipTime } from "@/lib/calendar-labels";
 
@@ -27,6 +27,7 @@ const VIEWS: Array<{ id: HomeView; label: string }> = [
   { id: "day", label: "Day" },
   { id: "week", label: "Week" },
   { id: "month", label: "Month" },
+  { id: "list", label: "List" },
 ];
 
 type Session = ActionSession & { client: { full_name: string | null } | null };
@@ -87,16 +88,28 @@ function byTime(a: Row, b: Row) {
   return (a.startsAt ? 1 : 0) - (b.startsAt ? 1 : 0) || compareInstants(a.startsAt, b.startsAt) || a.title.localeCompare(b.title);
 }
 
+/** Crossed out in the List, as on the timeline: it isn't happening (or didn't). */
+const STRUCK = new Set(["Cancelled", "Missed"]);
+
+/** What a booking is, for the List's one line ("1:1 Training"): the detail's first part. */
+function whatOf(r: Row): string | null {
+  if (r.family === "google") return null;
+  return r.detail ? r.detail.split(" · ")[0] : null;
+}
+
 /**
  * The coach's Home calendar card, in the same look as every other Home, read
  * the way Google Calendar reads: bookings are blocks on a timeline, so when
  * each one starts and ends and where the free time is shows at a glance.
- * Three views (the choice remembered on their account, with Coaching /
+ * Four views (the choice remembered on their account, with Coaching /
  * + Google, `useCalendarPrefs`):
  *   Day: the day's week (tap a day to show it), the day as a timeline opening
- *     near now, with a Now line, then the next few bookings.
+ *     near now, with a Now line, then the next few bookings after it.
  *   Week: the week as a timeline, a column per day (tap a day's name for it).
  *   Month: who's booked on each day (first names); tap a day for its timeline.
+ *   List: the week's strip, then its bookings one line each, by day (time,
+ *     who, what): compact, for a quick look at who's in when; a day in the
+ *     strip opens its timeline.
  * Each view steps back and forward with Today to come back. A tap on empty
  * time books there; a tap on a session moves / marks done / cancels it. Then
  * "Book a session" and "Open calendar".
@@ -123,8 +136,10 @@ export function DashboardScheduleCard() {
   const googleOn = withGoogle && !!gcal?.connected;
   const nowMs = useNow();
 
-  // What the view needs: Day = this Monday (its strip) to a week ahead (Coming up).
+  // What the view needs: Day = this Monday (its strip) to a week past the day shown (Coming up).
   const range = useMemo(() => homeRange(view, anchor, today), [view, anchor, today]);
+  // Coming up starts after the day the timeline shows, so it never repeats it.
+  const aheadFrom = comingUpFrom(anchor, today);
   const windowStart = new Date(`${range.from}T00:00:00`).toISOString();
   const windowEnd = new Date(`${addDaysISO(range.to, 1)}T00:00:00`).toISOString();
   const lastDay = range.to;
@@ -199,8 +214,8 @@ export function DashboardScheduleCard() {
     queryFn: () => listGoogleEventsRange({ data: { timeMin: windowStart, timeMax: windowEnd } }) as Promise<any[]>,
   });
 
-  // Nothing booked this week: still say when the next session is (Day view).
-  const nothingAhead = view === "day" && !isLoading && !sessions.some((s) => s.status === "Scheduled" && s.session_date > today);
+  // Nothing booked in the week ahead: still say when the next session is (Day view).
+  const nothingAhead = view === "day" && !isLoading && !sessions.some((s) => s.status === "Scheduled" && s.session_date >= aheadFrom);
   const { data: nextSession } = useQuery<Session | null>({
     queryKey: ["dash-schedule-next", lastDay],
     enabled: nothingAhead,
@@ -324,15 +339,20 @@ export function DashboardScheduleCard() {
     else if (o.href) window.open(o.href, "_blank", "noopener,noreferrer");
   };
   const bookAt = (date: string, time?: string) => setBooking({ date, time });
-  // Coming up: the next few live bookings after today (the next one further out when the week is empty).
+  // Coming up: the next few live bookings after the day shown (the next session further out when there are none).
   const upcoming = useMemo(() => {
     const ahead = rows
-      .filter((r) => r.date > today && r.status !== "Cancelled" && r.status !== "Missed")
+      .filter((r) => r.date >= aheadFrom && !STRUCK.has(r.status ?? "") && !hasEnded(r.startsAt, r.endsAt, nowMs))
       .sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b))
       .slice(0, UPCOMING_ROWS);
     if (!ahead.some((r) => r.open.kind === "session") && nextSession && ahead.length < UPCOMING_ROWS) ahead.push(sessionRow(nextSession));
     return ahead;
-  }, [rows, today, nextSession]);
+  }, [rows, aheadFrom, nowMs, nextSession]);
+  // List: the week's bookings by day, in time order (cancelled ones stay, crossed out).
+  const listRows = useMemo(
+    () => (view === "list" ? rows.filter((r) => r.date >= range.from && r.date <= range.to).sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b)) : []),
+    [rows, view, range.from, range.to],
+  );
 
   const toggleGoogle = () => setPrefs({ includeGoogle: !withGoogle });
 
@@ -393,7 +413,7 @@ export function DashboardScheduleCard() {
               <li key={r.key} className="min-w-0">
                 <RowOpen row={r} onSession={setActing} className={AGENDA_ROW}>
                   <AgendaNextRow
-                    dayText={i === 0 || upcoming[i - 1].date !== r.date ? shortDay(r.date, today) : ""}
+                    dayText={i === 0 || upcoming[i - 1].date !== r.date ? (r.date === today ? "Today" : shortDay(r.date, today)) : ""}
                     accent={FAMILY_ACCENT[r.family]}
                     time={r.startsAt ? startLabel(r.startsAt) : null}
                     title={r.title}
@@ -427,6 +447,40 @@ export function DashboardScheduleCard() {
 
       {view === "month" && (
         <MiniMonth anchor={anchor} today={today} onPick={openDay} names={(d) => namesByDay.get(d) ?? []} />
+      )}
+
+      {view === "list" && (
+        <>
+          <AgendaWeek today={today} anchor={anchor} onSelect={openDay} dots={(d) => dotsByDay.get(d) ?? []} />
+          <AgendaToday>
+            {isLoading && !sessions.length ? (
+              <AgendaLoading />
+            ) : listRows.length === 0 ? (
+              <AgendaEmpty>{isCurrentPeriod("list", anchor, today) ? "Nothing booked this week." : "Nothing booked that week."}</AgendaEmpty>
+            ) : (
+              <ol aria-label={periodLabel("list", anchor, today)} data-home-list>
+                {listRows.map((r, i) => {
+                  const firstOfDay = i === 0 || listRows[i - 1].date !== r.date;
+                  const what = whatOf(r);
+                  return (
+                    <li key={r.key} className={cn("min-w-0", firstOfDay && i > 0 && "mt-1 border-t border-border/40 pt-1")}>
+                      <RowOpen row={r} onSession={setActing} className={cn(AGENDA_ROW, hasEnded(r.startsAt, r.endsAt, nowMs) && "opacity-55")}>
+                        <AgendaNextRow
+                          dayText={firstOfDay ? dayTag(r.date, today) : ""}
+                          accent={FAMILY_ACCENT[r.family]}
+                          time={r.startsAt ? startLabel(r.startsAt) : "All day"}
+                          title={<span className={cn(STRUCK.has(r.status ?? "") && "text-muted-foreground line-through")}>{r.title}</span>}
+                          quiet={r.family === "google"}
+                          suffix={what ? <span className="font-normal text-muted-foreground"> · {what}</span> : null}
+                        />
+                      </RowOpen>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </AgendaToday>
+        </>
       )}
 
       <AgendaFooter>
@@ -494,8 +548,10 @@ function RowOpen({ row, onSession, className, children }: { row: Row; onSession:
 }
 
 /**
- * Day · Week · Month (neutral, like every in-card switch: red is the card's
- * one action), and for Week / Month the period with ‹ › and Today.
+ * Day · Week · Month · List (neutral, like every in-card switch: red is the
+ * card's one action), then the period on screen with Today, ‹ ›. When both
+ * don't fit on one line (a phone) the period takes its own line under the
+ * switch, whole, never cut to "To…".
  */
 function ViewBar({
   view, onView, label, onStep, onToday,
@@ -507,7 +563,7 @@ function ViewBar({
   onToday: (() => void) | null;
 }) {
   return (
-    <div className="mt-2 flex items-center gap-2">
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
       <div className="inline-flex h-8 shrink-0 rounded-full border border-border bg-background/60 p-0.5 text-xs font-semibold" role="radiogroup" aria-label="Calendar view">
         {VIEWS.map((v) => (
           <button
@@ -516,28 +572,26 @@ function ViewBar({
             role="radio"
             aria-checked={view === v.id}
             onClick={() => onView(v.id)}
-            className={cn("rounded-full px-3", view === v.id ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground")}
+            className={cn("rounded-full px-2.5 sm:px-3", view === v.id ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground")}
           >
             {v.label}
           </button>
         ))}
       </div>
-      {(
-        <div className="ml-auto flex min-w-0 items-center gap-0.5">
-          {onToday && (
-            <button type="button" onClick={onToday} className="mr-1 shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground">
-              Today
-            </button>
-          )}
-          <button type="button" onClick={() => onStep(-1)} aria-label="Previous" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary/60 hover:text-foreground">
-            <ChevronLeft className="h-4 w-4" />
+      <div className="flex min-w-[12.5rem] flex-1 items-center gap-0.5" data-home-period>
+        <span className="mr-auto whitespace-nowrap text-[13px] font-semibold tabular-nums" aria-live="polite">{label}</span>
+        {onToday && (
+          <button type="button" onClick={onToday} className="mr-0.5 shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground">
+            Today
           </button>
-          <span className="min-w-0 truncate text-center text-xs font-semibold tabular-nums">{label}</span>
-          <button type="button" onClick={() => onStep(1)} aria-label="Next" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary/60 hover:text-foreground">
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+        )}
+        <button type="button" onClick={() => onStep(-1)} aria-label="Previous" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary/60 hover:text-foreground">
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <button type="button" onClick={() => onStep(1)} aria-label="Next" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary/60 hover:text-foreground">
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }

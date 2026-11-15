@@ -1,7 +1,7 @@
 /**
  * The coach's calendar choices, remembered on their account so they follow
  * them across phone and desktop: the Calendar page's view (Month / Week /
- * Day / List), the Home card's view (Day / Week / Month), and Coaching vs
+ * Day / List), the Home card's view (Day / Week / Month / List), and Coaching vs
  * + Google. A copy on the device makes the first paint right (no flash of
  * the default), and the account copy wins when it's newer (changed on the
  * other device). Whichever was changed last wins, as for the theme.
@@ -15,7 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 
 export type BoardView = "month" | "week" | "day" | "upcoming";
-export type HomeView = "day" | "week" | "month";
+export type HomeView = "day" | "week" | "month" | "list";
 
 export type CalendarPrefs = {
   boardView?: BoardView;
@@ -26,7 +26,7 @@ export type CalendarPrefs = {
 };
 
 const BOARD_VIEWS: BoardView[] = ["month", "week", "day", "upcoming"];
-const HOME_VIEWS: HomeView[] = ["day", "week", "month"];
+const HOME_VIEWS: HomeView[] = ["day", "week", "month", "list"];
 export const CALENDAR_PREFS_CACHE_KEY = "jf.calendar.prefs";
 /** Before this, only the Google switch was remembered, on the device. */
 export const LEGACY_GOOGLE_KEY = "admin.calendar.includeGoogle";

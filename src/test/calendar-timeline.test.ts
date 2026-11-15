@@ -9,7 +9,7 @@ import {
   slotTime,
   spanOnDay,
 } from "@/lib/calendar-timeline";
-import { homeRange, isCurrentPeriod, periodLabel, shiftAnchor } from "@/lib/home-calendar";
+import { comingUpFrom, homeRange, isCurrentPeriod, periodLabel, shiftAnchor } from "@/lib/home-calendar";
 import { blockLabels } from "@/lib/calendar-labels";
 
 /** A device-local instant (whatever zone the tests run in). */
@@ -195,10 +195,23 @@ describe("the Home card's Day view", () => {
     expect(periodLabel("day", "2026-11-20", "2026-11-16")).toMatch(/Fri.*Nov.*20/);
   });
 
-  it("loads the shown day's week as well as this week and the week ahead", () => {
-    expect(homeRange("day", "2026-11-18", "2026-11-18")).toEqual({ from: "2026-11-16", to: "2026-11-25" });
-    expect(homeRange("day", "2026-12-10", "2026-11-18")).toEqual({ from: "2026-11-16", to: "2026-12-13" });
-    expect(homeRange("day", "2026-11-02", "2026-11-18")).toEqual({ from: "2026-11-02", to: "2026-11-25" });
+  it("loads the shown day's week and a week of Coming up past it, the same for every day of the week", () => {
+    expect(homeRange("day", "2026-11-18", "2026-11-18")).toEqual({ from: "2026-11-16", to: "2026-11-30" });
+    // Stepping to Sunday loads nothing new, and Sunday's Coming up (Mon 23 – Mon 30) is in it.
+    expect(homeRange("day", "2026-11-22", "2026-11-18")).toEqual(homeRange("day", "2026-11-16", "2026-11-18"));
+    expect(homeRange("day", "2026-12-10", "2026-11-18")).toEqual({ from: "2026-12-07", to: "2026-12-21" });
+    // Looking back: that week's strip, and Coming up from today.
+    expect(homeRange("day", "2026-11-02", "2026-11-18")).toEqual({ from: "2026-11-02", to: "2026-11-30" });
+  });
+
+  it("Coming up starts after the day on screen, never repeating it, and from today when looking back", () => {
+    expect(comingUpFrom("2026-11-15", "2026-11-15")).toBe("2026-11-16");
+    // On "Tomorrow" (Mon 16), Coming up starts Tuesday: Monday is the timeline above it.
+    expect(comingUpFrom("2026-11-16", "2026-11-15")).toBe("2026-11-17");
+    expect(comingUpFrom("2026-11-14", "2026-11-15")).toBe("2026-11-15");
+    const card = readFileSync("src/components/admin-calendar/dashboard-schedule-card.tsx", "utf8");
+    expect(card).toContain("const aheadFrom = comingUpFrom(anchor, today);");
+    expect(card).toContain('.filter((r) => r.date >= aheadFrom && !STRUCK.has(r.status ?? "") && !hasEnded(r.startsAt, r.endsAt, nowMs))');
   });
 });
 
@@ -228,13 +241,13 @@ describe("the coach's calendars are timelines", () => {
     }
   });
 
-  it("the Home card's views are timelines and a month of names", () => {
+  it("the Home card's views are timelines, a month of names and the week as a list", () => {
     expect(card).toContain("<TimeGrid");
     expect(card).toContain("days={[anchor]}");
     expect(card).toContain("days={weekDays(anchor)}");
     expect(card).toContain("<MiniMonth anchor={anchor} today={today} onPick={openDay}");
     // Month says who, not dots.
-    expect(card).not.toContain("dots={(d) => dotsByDay.get(d) ?? []} />\n          <AgendaToday>");
+    expect(card).not.toMatch(/<MiniMonth[^>]*\bdots=/);
   });
 
   it("the Calendar page opens on the week's timeline (the day's on a phone) until a view is picked", async () => {
