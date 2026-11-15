@@ -96,7 +96,7 @@ export const getClientSchedule = createServerFn({ method: "GET" })
     const { data: days } = weekIds.length
       ? await supabase
           .from("pl_days")
-          .select("id, day_index, title, focus, scheduled_date, schedule_source, schedule_locked, week_id, archived")
+          .select("id, day_index, title, subtitle, focus, scheduled_date, schedule_source, schedule_locked, week_id, archived, is_optional")
           .in("week_id", weekIds)
           .eq("archived", false)
           .order("day_index")

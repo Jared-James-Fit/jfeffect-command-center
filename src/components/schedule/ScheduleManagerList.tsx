@@ -1,6 +1,9 @@
 /**
- * ScheduleManagerList — additive all-in-one list view of every workout in a
- * client's program, grouped Block → Week → Day. It is a read model over the
+ * ScheduleManagerList: the coach's Program view (and the athlete's Schedule
+ * Manager), every workout in the program grouped Block → Week, one line a
+ * workout (its mark, its date, its name, the status word only when it's
+ * news), the block being trained open and the rest folded to one line with
+ * how it went. It is a read model over the
  * exact same data the calendar uses (pl_days + pl_scheduled_workouts +
  * pl_day_completions) and reuses the same canonical merge rules:
  *
@@ -9,7 +12,7 @@
  *    pl_days.scheduled_date is NOT also surfaced (would double-count).
  *  - A day with a legacy scheduled_date and no instance renders once as a
  *    legacy row (instanceId: null) so the move sheet uses the dayId path.
- *  - A day with neither renders as "Missing Date".
+ *  - A day with neither renders as "No date".
  *  - Completions link instance-first via scheduled_workout_id; legacy
  *    completions (scheduled_workout_id IS NULL) attach to legacy rows only.
  *
@@ -19,11 +22,13 @@
  * in this file writes to the database.
  */
 import { useMemo, useState } from "react";
-import { format, parseISO, startOfToday } from "date-fns";
-import { AlertTriangle, CalendarPlus, Eye, PencilLine } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { addDays, format, startOfToday, startOfWeek } from "date-fns";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { WorkoutStatusMark } from "@/components/workouts/workout-status-mark";
+import {
+  coachMark, dateRange, isoDate, STATUS_TONE, STATUS_WORD, statusOfRow, workoutName, type CoachStatus,
+} from "@/lib/coach-schedule";
 
 export interface ScheduleManagerListProps {
   days: any[];
@@ -151,37 +156,34 @@ export function buildScheduleManagerRows(opts: {
   return { rows, total: (days ?? []).length, scheduledCount, missingCount };
 }
 
-type Filter = "all" | "missing" | "scheduled" | "completed";
+type Filter = "all" | "todo" | "done" | "missed" | "no_date";
 
-const FILTER_LABELS: Array<{ id: Filter; label: string }> = [
+// What needs the coach first, so a phone's narrow row cuts off Done, never Missed or No date.
+const FILTERS: Array<{ id: Filter; label: string }> = [
   { id: "all", label: "All" },
-  { id: "missing", label: "Missing Date" },
-  { id: "scheduled", label: "Scheduled" },
-  { id: "completed", label: "Completed" },
+  { id: "todo", label: "To do" },
+  { id: "missed", label: "Missed" },
+  { id: "no_date", label: "No date" },
+  { id: "done", label: "Done" },
 ];
 
-function StatusBadge({ status }: { status: ScheduleRowStatus }) {
-  switch (status) {
-    case "completed":
-      return <Badge variant="default">Completed</Badge>;
-    case "in_progress":
-      return (
-        <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
-          In Progress
-        </Badge>
-      );
-    case "missing":
-      return (
-        <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400">
-          Missing Date
-        </Badge>
-      );
-    case "past_due":
-      return <Badge variant="destructive">Past Due</Badge>;
-    default:
-      return <Badge variant="secondary">Scheduled</Badge>;
+function inFilter(status: CoachStatus, filter: Filter): boolean {
+  switch (filter) {
+    case "todo": return status === "today" || status === "upcoming" || status === "in_progress";
+    case "done": return status === "done";
+    case "missed": return status === "missed";
+    case "no_date": return status === "no_date";
+    default: return true;
   }
 }
+
+/** The status word on a Program row: never "Done" (the green check says it) or one still ahead. */
+function rowWord(status: CoachStatus): string {
+  if (status === "done" || status === "upcoming" || status === "no_date") return "";
+  return STATUS_WORD[status];
+}
+
+type Row = ScheduleManagerRow & { coach: CoachStatus };
 
 export function ScheduleManagerList({
   days,
@@ -193,12 +195,18 @@ export function ScheduleManagerList({
   onSelectDay,
 }: ScheduleManagerListProps) {
   const [filter, setFilter] = useState<Filter>("all");
+  // Blocks and weeks opened or closed by hand; the rest follow the default
+  // (the block being trained open, and in it every week but the ones done).
+  const [toggled, setToggled] = useState<Record<string, boolean>>({});
+  const [weekToggled, setWeekToggled] = useState<Record<string, boolean>>({});
   const todayISO = format(startOfToday(), "yyyy-MM-dd");
+  const thisWeekStart = format(startOfWeek(startOfToday(), { weekStartsOn: 1 }), "yyyy-MM-dd");
+  const thisWeekEnd = format(addDays(startOfWeek(startOfToday(), { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
 
   const weekById = useMemo(() => new Map((weeks ?? []).map((w: any) => [w.id, w])), [weeks]);
   const blockById = useMemo(() => new Map((blocks ?? []).map((b: any) => [b.id, b])), [blocks]);
 
-  const { rows, total, scheduledCount, missingCount } = useMemo(
+  const { rows, total } = useMemo(
     () =>
       buildScheduleManagerRows({
         days: days ?? [],
@@ -209,165 +217,201 @@ export function ScheduleManagerList({
     [days, scheduledInstances, completions, todayISO],
   );
 
-  const filtered = useMemo(() => {
-    switch (filter) {
-      case "missing":
-        return rows.filter((r) => r.status === "missing");
-      case "scheduled":
-        // "Has a date, not finished" — includes in-progress and past-due.
-        return rows.filter(
-          (r) => r.status === "scheduled" || r.status === "past_due" || r.status === "in_progress",
-        );
-      case "completed":
-        return rows.filter((r) => r.status === "completed");
-      default:
-        return rows;
-    }
-  }, [rows, filter]);
+  const all: Row[] = useMemo(() => rows.map((r) => ({ ...r, coach: statusOfRow(r, todayISO) })), [rows, todayISO]);
 
-  // Group filtered rows by block → week, preserving program order.
+  const counts = useMemo(() => {
+    const c: Record<Filter, number> = { all: all.length, todo: 0, done: 0, missed: 0, no_date: 0 };
+    for (const r of all) for (const f of ["todo", "done", "missed", "no_date"] as const) if (inFilter(r.coach, f)) c[f] += 1;
+    return c;
+  }, [all]);
+
+  // Every block in program order, its weeks and rows (all of them, so a
+  // folded block's line says how the whole block went).
   const grouped = useMemo(() => {
-    const out: Array<{ block: any; weeks: Array<{ week: any; rows: ScheduleManagerRow[] }> }> = [];
+    const out: Array<{ id: string; block: any; weeks: Array<{ id: string; week: any; rows: Row[] }> }> = [];
     const blockIdx = new Map<string, number>();
-    for (const row of filtered) {
+    for (const row of all) {
       const week: any = weekById.get(row.weekId);
       const blockId = week?.block_id ?? "unknown";
       let bi = blockIdx.get(blockId);
       if (bi == null) {
         bi = out.length;
         blockIdx.set(blockId, bi);
-        out.push({ block: blockById.get(blockId) ?? null, weeks: [] });
+        out.push({ id: blockId, block: blockById.get(blockId) ?? null, weeks: [] });
       }
       const bucket = out[bi];
-      let wk = bucket.weeks.find((w) => w.week?.id === row.weekId);
+      let wk = bucket.weeks.find((w) => w.id === row.weekId);
       if (!wk) {
-        wk = { week: week ?? null, rows: [] };
+        wk = { id: row.weekId, week: week ?? null, rows: [] };
         bucket.weeks.push(wk);
       }
       wk.rows.push(row);
     }
+    for (const g of out) {
+      g.weeks.sort((a, b) => (a.week?.week_index ?? 0) - (b.week?.week_index ?? 0));
+      for (const w of g.weeks) {
+        w.rows.sort((a, b) => {
+          if (a.date && b.date && a.date !== b.date) return a.date.localeCompare(b.date);
+          if (!!a.date !== !!b.date) return a.date ? -1 : 1;
+          return (a.day?.day_index ?? 0) - (b.day?.day_index ?? 0);
+        });
+      }
+    }
     return out;
-  }, [filtered, weekById, blockById]);
+  }, [all, weekById, blockById]);
+
+  // The block being trained: the one with a workout this week, else the
+  // first with something still to do, else the last.
+  const currentBlockId = useMemo(() => {
+    const thisWeek = grouped.find((g) => g.weeks.some((w) => w.rows.some((r) => r.date && r.date >= thisWeekStart && r.date <= thisWeekEnd)));
+    if (thisWeek) return thisWeek.id;
+    const todo = grouped.find((g) => g.weeks.some((w) => w.rows.some((r) => inFilter(r.coach, "todo") || r.coach === "no_date")));
+    return todo?.id ?? grouped[grouped.length - 1]?.id ?? null;
+  }, [grouped, thisWeekStart, thisWeekEnd]);
 
   if (total === 0) {
     return (
-      <div className="rounded-md border border-border/60 p-6 text-center text-sm text-muted-foreground">
+      <div className="rounded-lg border border-border/60 p-6 text-center text-sm text-muted-foreground">
         No workouts in this program yet.
       </div>
     );
   }
 
+  const filtering = filter !== "all";
+  const shown = grouped
+    .map((g) => ({ ...g, weeks: g.weeks.map((w) => ({ ...w, rows: w.rows.filter((r) => inFilter(r.coach, filter)) })).filter((w) => w.rows.length) }))
+    .filter((g) => g.weeks.length);
+
   return (
-    <div className="space-y-4">
-      {/* Top summary */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <div className="text-sm font-medium">
-          {total} workouts · {scheduledCount} scheduled ·{" "}
-          <span className={missingCount > 0 ? "text-amber-600 dark:text-amber-400 font-semibold" : ""}>
-            {missingCount} missing dates
-          </span>
-        </div>
-        <div className="flex flex-wrap gap-1.5 ml-auto">
-          {FILTER_LABELS.map((f) => (
-            <Button
-              key={f.id}
-              size="sm"
-              variant={filter === f.id ? "default" : "outline"}
-              className="h-7 px-2.5 text-xs"
-              onClick={() => setFilter(f.id)}
-            >
-              {f.id === "missing" && missingCount > 0 ? `${f.label} (${missingCount})` : f.label}
-            </Button>
-          ))}
-        </div>
+    <div className="space-y-3" data-schedule-program>
+      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]" role="group" aria-label="Show">
+        {FILTERS.filter((f) => f.id === "all" || f.id === filter || counts[f.id] > 0).map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            aria-pressed={filter === f.id}
+            onClick={() => setFilter(f.id)}
+            className={cn(
+              "inline-flex h-9 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[13px] font-medium transition-colors",
+              filter === f.id ? "border-foreground bg-foreground text-background" : "border-border text-foreground hover:bg-muted",
+            )}
+          >
+            {f.label}
+            <span className={cn("tabular-nums", filter === f.id ? "text-background/70" : "text-muted-foreground")}>{counts[f.id]}</span>
+            {f.id === "no_date" && filter !== f.id && <span className="h-1.5 w-1.5 rounded-full bg-warning" aria-hidden />}
+          </button>
+        ))}
       </div>
 
-      {missingCount > 0 && filter !== "completed" && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <span>
-            {missingCount} {missingCount === 1 ? "workout is" : "workouts are"} not scheduled and will
-            not appear on the client calendar.
-          </span>
+      {shown.length === 0 && (
+        <div className="rounded-lg border border-border/60 p-6 text-center text-sm text-muted-foreground">
+          Nothing here.
         </div>
       )}
 
-      {filtered.length === 0 && (
-        <div className="rounded-md border border-border/60 p-6 text-center text-sm text-muted-foreground">
-          {filter === "missing"
-            ? "Every workout has a date. Nothing missing."
-            : "No workouts match this filter."}
-        </div>
-      )}
-
-      {grouped.map((g, gi) => (
-        <div key={g.block?.id ?? `block-${gi}`} className="space-y-2">
-          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            {g.block?.name ?? `Block ${gi + 1}`}
-          </div>
-          {g.weeks.map((w, wi) => (
-            <div key={w.week?.id ?? `week-${wi}`} className="space-y-1.5">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/80 pl-1">
-                Week {w.week?.week_index ?? "—"}
-              </div>
-              <div className="space-y-1.5">
-                {w.rows.map((row) => {
-                  const title =
-                    row.day.title?.trim() || `Day ${row.day.day_index}`;
-                  const isCompleted = row.status === "completed";
-                  const buttonLabel = isCompleted
-                    ? "View"
-                    : row.status === "missing"
-                      ? "Schedule"
-                      : "Change Date";
-                  const ButtonIcon = isCompleted
-                    ? Eye
-                    : row.status === "missing"
-                      ? CalendarPlus
-                      : PencilLine;
-                  return (
-                    <div
-                      key={row.key}
-                      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border/60 bg-card px-3 py-2.5"
-                    >
-                      <div className="min-w-0 flex-1 basis-48">
-                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Day {row.day.day_index}
-                          {row.copyIndex != null ? ` · copy ${row.copyIndex}` : ""}
-                        </div>
-                        <div className="truncate text-sm font-semibold">{title}</div>
-                        <div
-                          className={cn(
-                            "text-xs",
-                            row.date ? "text-muted-foreground" : "font-medium text-amber-600 dark:text-amber-400",
-                          )}
+      <div className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/70">
+        {shown.map((g, gi) => {
+          const full = grouped.find((x) => x.id === g.id)!;
+          const blockRows = full.weeks.flatMap((w) => w.rows);
+          const done = blockRows.filter((r) => r.coach === "done").length;
+          const missed = blockRows.filter((r) => r.coach === "missed").length;
+          const dated = blockRows.filter((r) => r.date).map((r) => r.date!).sort();
+          const range = dated.length ? dateRange(dated[0], dated[dated.length - 1]) : null;
+          const isCurrent = g.id === currentBlockId;
+          const open = filtering || (toggled[g.id] ?? isCurrent);
+          const name = g.block?.name?.trim() || `Block ${gi + 1}`;
+          return (
+            <section key={g.id} data-schedule-block={g.id} data-open={open || undefined}>
+              <button
+                type="button"
+                aria-expanded={open}
+                disabled={filtering}
+                onClick={() => setToggled((t) => ({ ...t, [g.id]: !open }))}
+                className="flex min-h-[56px] w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/50 disabled:cursor-default disabled:hover:bg-transparent"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="truncate text-[15px] font-semibold">{name}</span>
+                    {isCurrent && <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold">Now</span>}
+                  </span>
+                  <span className="mt-0.5 block truncate text-xs text-muted-foreground tabular-nums">
+                    {[range, `${done} of ${blockRows.length} done`].filter(Boolean).join(" · ")}
+                    {missed > 0 && <span className={STATUS_TONE.missed}> · {missed} missed</span>}
+                  </span>
+                </span>
+                {!filtering && (open ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />)}
+              </button>
+              {open && (
+                <div className="space-y-1.5 px-3 pb-3">
+                  {g.weeks.map((w) => {
+                    const fullWeek = full.weeks.find((x) => x.id === w.id);
+                    const wkRows = fullWeek?.rows ?? w.rows;
+                    const wkDates = wkRows.filter((r) => r.date).map((r) => r.date!).sort();
+                    const isThisWeek = wkDates.some((d) => d >= thisWeekStart && d <= thisWeekEnd);
+                    const wkDone = wkRows.filter((r) => r.coach === "done").length;
+                    // A week that's behind them with every workout done (or an
+                    // optional one let go) folds to its line; anything missed stays open.
+                    const settled = !isThisWeek && wkRows.every((r) => r.coach === "done" || r.coach === "optional");
+                    const weekOpen = filtering || (weekToggled[w.id] ?? !settled);
+                    return (
+                      <div key={w.id} data-schedule-program-week={w.id} data-this-week={isThisWeek || undefined} data-open={weekOpen || undefined}>
+                        <button
+                          type="button"
+                          aria-expanded={weekOpen}
+                          disabled={filtering}
+                          onClick={() => setWeekToggled((t) => ({ ...t, [w.id]: !weekOpen }))}
+                          className={cn("flex min-h-[36px] w-full items-center justify-between gap-2 rounded-md px-1 text-left disabled:cursor-default", weekOpen && "pb-1")}
                         >
-                          {row.date
-                            ? `Scheduled: ${format(parseISO(row.date), "MMM d, yyyy")}`
-                            : "No date set"}
+                          <span className="min-w-0 truncate text-[13px] font-semibold">
+                            Week {w.week?.week_index ?? "—"}
+                            {wkDates.length > 0 && <span className="font-normal text-muted-foreground"> · {dateRange(wkDates[0], wkDates[wkDates.length - 1])}</span>}
+                            {isThisWeek && <span className="font-normal text-muted-foreground"> · This week</span>}
+                          </span>
+                          <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
+                            {settled && !weekOpen && <WorkoutStatusMark mark={{ kind: "done" }} />}
+                            {wkDone}/{wkRows.length}
+                            {!filtering && (weekOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />)}
+                          </span>
+                        </button>
+                        {weekOpen && (
+                        <div className={cn("divide-y divide-border/50 overflow-hidden rounded-lg border", isThisWeek ? "border-foreground/30" : "border-border/60")}>
+                          {w.rows.map((row) => {
+                            const word = rowWord(row.coach);
+                            const mark = coachMark(row.coach);
+                            return (
+                              <button
+                                key={row.key}
+                                type="button"
+                                disabled={!canEdit}
+                                onClick={() => onSelectDay({ dayId: row.dayId, instanceId: row.instanceId })}
+                                data-schedule-row={row.key}
+                                className="flex min-h-[44px] w-full items-center gap-2.5 bg-card px-3 py-2 text-left transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                <span className="grid w-4 shrink-0 place-items-center">{mark ? <WorkoutStatusMark mark={mark} /> : <span className="h-2.5 w-2.5 rounded-full border border-dashed border-warning" />}</span>
+                                <span className={cn("w-[52px] shrink-0 text-xs tabular-nums", row.date ? (row.date === todayISO ? "font-semibold text-foreground" : "text-muted-foreground") : "font-medium text-warning")}>
+                                  {row.date ? format(isoDate(row.date), "EEE d") : "No date"}
+                                </span>
+                                <span className={cn("min-w-0 flex-1 truncate text-[14px] font-medium", row.coach === "done" && "text-muted-foreground")}>
+                                  {workoutName(row.day)}
+                                  {row.copyIndex != null && <span className="font-normal text-muted-foreground"> · copy {row.copyIndex}</span>}
+                                  {row.day?.is_optional && <span className="font-normal text-muted-foreground"> · Optional</span>}
+                                </span>
+                                {word && <span className={cn("shrink-0 text-xs font-medium", STATUS_TONE[row.coach])}>{word}</span>}
+                                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                              </button>
+                            );
+                          })}
                         </div>
+                        )}
                       </div>
-                      <StatusBadge status={row.status} />
-                      <Button
-                        size="sm"
-                        variant={row.status === "missing" ? "default" : "outline"}
-                        className="h-8"
-                        disabled={!canEdit}
-                        onClick={() =>
-                          onSelectDay({ dayId: row.dayId, instanceId: row.instanceId })
-                        }
-                      >
-                        <ButtonIcon className="h-3.5 w-3.5 mr-1" />
-                        {buttonLabel}
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      ))}
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }

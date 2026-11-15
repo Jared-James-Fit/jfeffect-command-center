@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CalendarIcon, AlertTriangle, Loader2, RotateCcw, Replace, Eye, Trash2, Clock, CheckCircle2, Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarIcon, AlertTriangle, Loader2, RotateCcw, Replace, Eye, Trash2, Clock, CheckCircle2, Check, ChevronLeft, ChevronRight, PencilLine } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   moveWorkout,
@@ -32,6 +32,7 @@ import { detectScheduleConflicts } from "@/lib/schedule-conflicts";
 import { useMoveWorkout } from "@/lib/use-move-workout";
 import { scheduleQueryKeys } from "@/lib/workout-move";
 import { useClientImpersonation } from "@/lib/client-impersonation";
+import { focusBlockEditorWeek } from "@/lib/block-editor-focus";
 
 const WEEKDAY_TO_INT: Record<string, number> = {
   sun: 0, sunday: 0,
@@ -207,6 +208,13 @@ export function MoveWorkoutSheet({
     !!viewWorkoutAs.clientUserId &&
     !!dayId &&
     (isCompleted || inProgress);
+
+  const handleEditInProgram = () => {
+    if (!ctx?.block?.id) return;
+    focusBlockEditorWeek(ctx.week?.week_index ?? null);
+    onOpenChange(false);
+    void navigate({ to: "/admin/blocks/$blockId", params: { blockId: ctx.block.id } });
+  };
 
   const handleViewLogged = () => {
     if (!viewWorkoutAs || !viewWorkoutAs.clientUserId || !dayId) return;
@@ -462,7 +470,7 @@ export function MoveWorkoutSheet({
             <div className="font-semibold text-foreground">{title}</div>
             {ctx && (
               <div className="text-xs">
-                Block {ctx.block.name ? `· ${ctx.block.name}` : ""} · Week {ctx.week.week_index} · Day {ctx.day.day_index}
+                {ctx.block.name?.trim() || "Block"} · Week {ctx.week.week_index} · Day {ctx.day.day_index}
               </div>
             )}
             <div className="text-xs text-muted-foreground">
@@ -655,22 +663,38 @@ export function MoveWorkoutSheet({
               </div>
             </div>
           )}
-          {canViewLogged && (
-            <Button
-              variant="outline"
-              className="w-full justify-center gap-2"
-              onClick={handleViewLogged}
-            >
-              <Eye className="h-4 w-4" />
-              View what {viewWorkoutAs?.clientName?.split(" ")[0] ?? "they"} logged
-            </Button>
+          {(canViewLogged || (coachControls && ctx)) && (
+            <div className={cn("grid gap-2", canViewLogged && coachControls && ctx && "grid-cols-2")}>
+              {canViewLogged && (
+                <Button
+                  variant="outline"
+                  className="h-10 w-full justify-center gap-2"
+                  onClick={handleViewLogged}
+                >
+                  <Eye className="h-4 w-4" />
+                  <span className="truncate">View what {viewWorkoutAs?.clientName?.split(" ")[0] ?? "they"} logged</span>
+                </Button>
+              )}
+              {/* The coach's way into the workout itself: the block editor, on this week. */}
+              {coachControls && ctx && (
+                <Button
+                  variant="outline"
+                  className="h-10 w-full justify-center gap-2"
+                  data-edit-in-program
+                  onClick={handleEditInProgram}
+                >
+                  <PencilLine className="h-4 w-4" />
+                  Edit in program
+                </Button>
+              )}
+            </div>
           )}
 
           {/* Coach-only instance controls (change time / remove). */}
           {isInstanceMode && coachControls && ctx?.instance && (
             <div className="rounded-md border border-border p-3 space-y-2">
-              <div className="text-xs font-semibold uppercase text-muted-foreground">
-                Instance actions
+              <div className="text-xs font-semibold text-muted-foreground">
+                This date
               </div>
               <div className="flex items-end gap-2">
                 <div className="flex-1">
