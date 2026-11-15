@@ -1,23 +1,44 @@
-import { useMemo, useRef, useState } from "react";
+/**
+ * The coach's schedule calendar (the client's Training tab), in two views of
+ * the same chips (buildScheduleChips: one per scheduled instance, legacy
+ * days as a fallback):
+ *
+ *   week   the default: Mon–Sun, one row per day, each workout a full-width
+ *          row (its status mark, its name, the status word when it's news),
+ *          rest days one quiet line, "This week" with where it sits in the
+ *          program and "2 of 4 done · 1 missed";
+ *   month  the grid: on a phone a cell is its date and a mark per workout
+ *          (names don't fit in a seventh of a phone), on a wider screen a
+ *          line per workout; a tap on a day lists its workouts under the
+ *          grid, with the month's tally that doubles as the key.
+ *
+ * Every status, word and mark comes from coach-schedule.ts (the athlete's
+ * own rules). Drag a workout (press and hold on a touch screen) onto another
+ * day in either view; a tap opens it (the move sheet). Nothing here writes.
+ */
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  DndContext, useDraggable, useDroppable, PointerSensor, TouchSensor,
+  DndContext, useDraggable, useDroppable, MouseSensor, TouchSensor,
   useSensor, useSensors, DragOverlay, type DragEndEvent,
 } from "@dnd-kit/core";
 import {
-  startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, addMonths,
-  format, isSameDay, isSameMonth, isBefore, startOfToday, parseISO,
+  startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, addMonths, addWeeks,
+  format, isSameDay, isSameMonth,
 } from "date-fns";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, CheckCircle2, Clock, AlertCircle, GripVertical, Calendar as CalIcon, CalendarPlus, ChevronUp, ChevronDown } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, CalendarPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildScheduleChips } from "@/lib/schedule-calendar-chips";
+import { useIsMobileNow } from "@/hooks/use-mobile";
+import { WorkoutStatusMark } from "@/components/workouts/workout-status-mark";
+import {
+  coachMark, coachStatus, isoDate, STATUS_TONE, STATUS_WORD, tally, tallyLine, weekPlace, weekRange, weekTitle,
+  workoutName, type CoachStatus,
+} from "@/lib/coach-schedule";
 
 export type ScheduleDay = {
   id: string; day_index: number; title: string | null; subtitle?: string | null; focus: string | null;
   scheduled_date: string | null; schedule_source: string | null;
-  schedule_locked: boolean | null; week_id: string;
+  schedule_locked: boolean | null; week_id: string; is_optional?: boolean | null;
 };
 export type ScheduleWeek = { id: string; week_index: number; block_id: string };
 export type ScheduleBlock = { id: string; name: string | null; start_date: string | null; end_date: string | null; status?: string | null };
@@ -25,6 +46,7 @@ export type ScheduleCompletion = {
   day_id: string;
   completed_at: string | null;
   in_progress_at: string | null;
+  started_at?: string | null;
   scheduled_workout_id?: string | null;
 };
 export type ScheduledInstance = {
@@ -36,140 +58,167 @@ export type ScheduledInstance = {
   schedule_source?: string | null;
 };
 
-type Status = "completed" | "in-progress" | "overdue" | "rescheduled" | "scheduled" | "unscheduled";
-function statusOf(day: ScheduleDay, comp: ScheduleCompletion | null): Status {
-  if (comp?.completed_at) return "completed";
-  if (comp?.in_progress_at) return "in-progress";
-  if (!day.scheduled_date) return "unscheduled";
-  if (day.scheduled_date && isBefore(parseISO(day.scheduled_date), startOfToday())) return "overdue";
-  if (day.schedule_source === "manual") return "rescheduled";
-  return "scheduled";
-}
-function statusBadge(s: Status) {
-  switch (s) {
-    case "completed": return <Badge variant="secondary" className="gap-1"><CheckCircle2 className="h-3 w-3" /> Done</Badge>;
-    case "in-progress": return <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> In progress</Badge>;
-    case "overdue": return <Badge variant="destructive" className="gap-1"><AlertCircle className="h-3 w-3" /> Overdue</Badge>;
-    case "rescheduled": return <Badge variant="outline" className="gap-1"><CalIcon className="h-3 w-3" /> Moved</Badge>;
-    case "unscheduled": return <Badge variant="outline" className="gap-1"><CalendarPlus className="h-3 w-3" /> Unscheduled</Badge>;
-    default: return <Badge variant="outline">Scheduled</Badge>;
-  }
-}
+export type CalendarView = "week" | "month";
 
-/** Left-edge colour per status, so status reads at a glance even where the label is hidden. */
-function statusEdge(s: Status) {
-  switch (s) {
-    case "completed": return "border-l-success";
-    case "in-progress": return "border-l-warning";
-    case "overdue": return "border-l-destructive";
-    case "unscheduled": return "border-l-muted-foreground/40";
-    default: return "border-l-primary/70";
-  }
-}
-
-/** Icon-only status for narrow (phone) day cells, where a text badge can't fit. */
-function statusIcon(s: Status) {
-  const cls = "h-3 w-3 shrink-0";
-  switch (s) {
-    case "completed": return <CheckCircle2 className={cn(cls, "text-success")} aria-label="Done" />;
-    case "in-progress": return <Clock className={cn(cls, "text-warning")} aria-label="In progress" />;
-    case "overdue": return <AlertCircle className={cn(cls, "text-destructive")} aria-label="Overdue" />;
-    case "rescheduled": return <CalIcon className={cn(cls, "text-muted-foreground")} aria-label="Moved" />;
-    case "unscheduled": return <CalendarPlus className={cn(cls, "text-muted-foreground")} aria-label="Unscheduled" />;
-    default: return null;
-  }
-}
-
-function DayChip({ chipId, day, comp, week, blockName, draggable, canReorderUp, canReorderDown, onNudge }: {
+type Chip = {
   chipId: string;
-  day: ScheduleDay; comp: ScheduleCompletion | null;
-  week?: ScheduleWeek; blockName?: string | null; draggable: boolean;
-  canReorderUp?: boolean; canReorderDown?: boolean;
+  instanceId: string | null;
+  day: ScheduleDay;
+  scheduled_date: string;
+  comp: ScheduleCompletion | null;
+  status: CoachStatus;
+  name: string;
+  blockId: string | null;
+  weekIndex: number | null;
+};
+
+const ymd = (d: Date) => format(d, "yyyy-MM-dd");
+
+/** The status word beside a workout, never "Today" where the date already says it. */
+function wordFor(status: CoachStatus, dateShown: boolean): string {
+  if (status === "today" && dateShown) return "";
+  return STATUS_WORD[status];
+}
+
+/**
+ * One workout. `row`: full width, name and status (week view, the month's day
+ * list); `cell`: one line in a wide month cell; `dot`: just the mark, in a
+ * phone's month cell. Draggable unless it's done, and each is also a drop
+ * target so a drag can land "onto this workout" (same-day reorder).
+ */
+function DayChip({ chip, variant, draggable, canReorderUp, canReorderDown, onNudge, onOpen }: {
+  chip: Chip;
+  variant: "row" | "cell" | "dot";
+  draggable: boolean;
+  canReorderUp?: boolean;
+  canReorderDown?: boolean;
   onNudge?: (direction: -1 | 1) => void;
+  onOpen?: () => void;
 }) {
-  const id = chipId;
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id, disabled: !draggable,
-  });
-  // Each chip is ALSO a droppable so a drag can land "onto this chip" — the
-  // parent uses that to distinguish same-cell reorder from cross-date move.
-  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `chip:${chipId}`, disabled: !draggable });
-  const status = statusOf(day, comp);
-  const isCompleted = status === "completed";
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: chip.chipId, disabled: !draggable });
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `chip:${chip.chipId}`, disabled: !draggable });
+  const status = chip.status;
+  const done = status === "done";
+  const mark = <WorkoutStatusMark mark={coachMark(status)} />;
+  const ref = (el: HTMLElement | null) => { setNodeRef(el); setDropRef(el); };
+  const dragProps = draggable ? { ...listeners, ...attributes } : {};
+  const label = `${chip.name}${STATUS_WORD[status] ? `, ${STATUS_WORD[status]}` : ""}`;
+
+  if (variant === "dot") {
+    return (
+      <span
+        ref={ref}
+        {...dragProps}
+        aria-label={label}
+        title={label}
+        data-schedule-chip={chip.chipId}
+        className={cn("inline-grid h-4 w-4 select-none place-items-center rounded-full [-webkit-touch-callout:none]", isDragging && "opacity-40", isOver && "ring-2 ring-ring")}
+      >
+        {mark}
+      </span>
+    );
+  }
+
+  if (variant === "cell") {
+    return (
+      <button
+        type="button"
+        ref={ref}
+        {...dragProps}
+        onClick={onOpen}
+        title={label}
+        data-schedule-chip={chip.chipId}
+        className={cn(
+          "flex w-full min-w-0 items-center gap-1 rounded-md border border-border bg-card px-1.5 py-1 text-left text-[11px] leading-tight transition hover:bg-muted",
+          draggable && "cursor-grab select-none active:cursor-grabbing",
+          done && "text-muted-foreground",
+          isDragging && "opacity-40",
+          isOver && "ring-2 ring-ring",
+        )}
+      >
+        {mark}
+        <span className="min-w-0 flex-1 truncate font-medium">{chip.name}</span>
+      </button>
+    );
+  }
+
+  const word = wordFor(status, true);
   return (
     <div
-      ref={(el) => { setNodeRef(el); setDropRef(el); }}
+      ref={ref}
+      {...dragProps}
+      role="button"
+      tabIndex={0}
+      aria-label={label}
+      onClick={onOpen}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen?.(); } }}
+      data-schedule-chip={chip.chipId}
       className={cn(
-        "group min-w-0 overflow-hidden rounded-md border border-l-2 border-border bg-card p-1 text-[11px] leading-tight space-y-0.5 select-none sm:p-1.5",
-        statusEdge(status),
-        draggable && !isCompleted && "cursor-grab active:cursor-grabbing touch-none",
-        isDragging && "opacity-50",
-        isCompleted && "opacity-70",
-        isOver && "ring-2 ring-primary",
+        "group flex min-h-[44px] w-full items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2 text-left transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        draggable && "cursor-grab select-none [-webkit-touch-callout:none] active:cursor-grabbing",
+        isDragging && "opacity-40",
+        isOver && "ring-2 ring-ring",
       )}
-      {...(draggable && !isCompleted ? listeners : {})}
-      {...attributes}
     >
-      <div className="flex items-center gap-1">
-        {draggable && !isCompleted && <GripVertical className="hidden h-3 w-3 shrink-0 text-muted-foreground sm:block" />}
-        <span className="sm:hidden">{statusIcon(status)}</span>
-        <span className="min-w-0 font-medium truncate flex-1">
-          {day.title?.trim() || `Day ${day.day_index}`}
+      {mark}
+      <span className={cn("min-w-0 flex-1 truncate text-[14px] font-medium", done && "text-muted-foreground")}>
+        {chip.name}
+        {chip.day.is_optional && <span className="font-normal text-muted-foreground"> · Optional</span>}
+      </span>
+      {word && <span className={cn("shrink-0 text-xs font-medium", STATUS_TONE[status])}>{word}</span>}
+      {onNudge && !done && (canReorderUp || canReorderDown) && (
+        <span className="flex shrink-0 items-center">
+          <button
+            type="button"
+            aria-label="Move up"
+            disabled={!canReorderUp}
+            onClick={(e) => { e.stopPropagation(); onNudge(-1); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="grid h-8 w-7 place-items-center rounded hover:bg-secondary disabled:opacity-30"
+          >
+            <ChevronUp className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label="Move down"
+            disabled={!canReorderDown}
+            onClick={(e) => { e.stopPropagation(); onNudge(1); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="grid h-8 w-7 place-items-center rounded hover:bg-secondary disabled:opacity-30"
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </button>
         </span>
-        {onNudge && !isCompleted && (canReorderUp || canReorderDown) && (
-          <span className="flex items-center gap-0.5 opacity-70 group-hover:opacity-100">
-            <button
-              type="button"
-              aria-label="Move up"
-              disabled={!canReorderUp}
-              onClick={(e) => { e.stopPropagation(); onNudge(-1); }}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="rounded p-0.5 hover:bg-secondary disabled:opacity-30"
-            >
-              <ChevronUp className="h-3 w-3" />
-            </button>
-            <button
-              type="button"
-              aria-label="Move down"
-              disabled={!canReorderDown}
-              onClick={(e) => { e.stopPropagation(); onNudge(1); }}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="rounded p-0.5 hover:bg-secondary disabled:opacity-30"
-            >
-              <ChevronDown className="h-3 w-3" />
-            </button>
-          </span>
-        )}
-      </div>
-      <div className="hidden text-[10px] text-muted-foreground truncate sm:block">
-        {blockName ? `${blockName} · ` : ""}W{week?.week_index ?? "?"} · D{day.day_index}
-      </div>
-      <div className="hidden sm:block">{statusBadge(status)}</div>
+      )}
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
     </div>
   );
 }
 
-function DroppableCell({ date, children, dim }: { date: Date; children: React.ReactNode; dim: boolean }) {
-  const id = format(date, "yyyy-MM-dd");
+/** A day (or a month cell) a workout can be dropped on. */
+function DropDay({ date, className, children, onClick, selected }: {
+  date: Date; className?: string; children: React.ReactNode; onClick?: () => void; selected?: boolean;
+}) {
+  const id = ymd(date);
   const { setNodeRef, isOver } = useDroppable({ id });
-  const today = isSameDay(date, new Date());
   return (
     <div
       ref={setNodeRef}
       data-cell-date={id}
-      className={cn(
-        "min-h-[72px] min-w-0 border border-border/60 p-0.5 space-y-1 transition-colors sm:min-h-[110px] sm:p-1",
-        dim && "bg-muted/40 text-muted-foreground",
-        today && "bg-primary/5 ring-1 ring-primary/30",
-        isOver && "bg-primary/15 ring-2 ring-primary",
-      )}
+      data-selected={selected || undefined}
+      onClick={onClick}
+      className={cn(className, isOver && "bg-muted ring-2 ring-inset ring-ring")}
     >
-      <div className="text-[10px] font-semibold flex items-center justify-between">
-        <span>{format(date, "d")}</span>
-        {today && <span className="hidden text-primary uppercase tracking-wide text-[9px] sm:inline">Today</span>}
-      </div>
       {children}
     </div>
+  );
+}
+
+function DragHint({ phone }: { phone: boolean }) {
+  return (
+    <p className="mt-2 px-1 text-xs text-muted-foreground">
+      {phone ? "Tap a workout to open it, or press and hold to drag it to another day." : "Click a workout to open it, or drag it onto another day."}
+    </p>
   );
 }
 
@@ -179,13 +228,15 @@ export interface ScheduleCalendarProps {
   blocks: ScheduleBlock[];
   completions: ScheduleCompletion[];
   /**
-   * Slice 2c — when provided, the calendar renders one chip per
-   * scheduled instance and drag/select callbacks report the exact
-   * `instanceId`. `pl_days.scheduled_date` is used only as the legacy
-   * fallback for days with no matching instance.
+   * When provided, the calendar renders one chip per scheduled instance and
+   * drag/select callbacks report the exact `instanceId`.
+   * `pl_days.scheduled_date` is used only as the legacy fallback for days
+   * with no matching instance.
    */
   scheduledInstances?: ScheduledInstance[];
   canEdit: boolean;
+  /** Week (the default on the Training tab) or Month. */
+  view: CalendarView;
   /**
    * `instanceId` is set whenever the dragged chip corresponds to a
    * scheduled instance. Legacy chips (no instance) leave it null.
@@ -194,27 +245,35 @@ export interface ScheduleCalendarProps {
     target: { dayId: string; instanceId: string | null },
     targetDate: Date,
   ) => void;
-  /** Open the move sheet pre-filled with the workout but no target date. */
+  /** Open the workout's sheet (move, view what was logged, edit in the program). */
   onSelectDay?: (target: { dayId: string; instanceId: string | null }) => void;
   /**
-   * Slice 2d — persist same-day ordering. Fires when the user reorders
-   * within a date cell (drag-and-drop within-cell, or Move Up / Move
-   * Down on a chip). `orderedInstanceIds` is the FULL ordered list of
-   * scheduled-instance ids for that date. Legacy chips (no instance)
-   * cannot participate in reorder — they carry no instance id.
+   * Persist same-day ordering: a drag within a day or Move up / Move down on
+   * a workout. `orderedInstanceIds` is the FULL ordered list of scheduled
+   * instance ids for that date; legacy chips (no instance) can't be ordered.
    */
   onReorder?: (date: string, orderedInstanceIds: string[]) => void;
+  /** today, for tests (yyyy-mm-dd) */
+  todayISO?: string;
 }
 
 export function ScheduleCalendar(props: ScheduleCalendarProps) {
-  const { days, weeks, blocks, completions, scheduledInstances, canEdit, onMoveDay, onSelectDay, onReorder } = props;
-  const [view, setView] = useState<"month" | "list">("month");
-  const [cursor, setCursor] = useState<Date>(startOfMonth(new Date()));
+  const { days, weeks, blocks, completions, scheduledInstances, canEdit, view, onMoveDay, onSelectDay, onReorder } = props;
+  const todayIso = props.todayISO ?? ymd(new Date());
+  const today = isoDate(todayIso);
+  const phone = useIsMobileNow();
+  const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(today, { weekStartsOn: 1 }));
+  const [cursor, setCursor] = useState<Date>(() => startOfMonth(today));
+  const [selected, setSelected] = useState<string>(todayIso);
   const [dragId, setDragId] = useState<string | null>(null);
   const suppressNextSelectRef = useRef(false);
+  const thisWeekStart = startOfWeek(today, { weekStartsOn: 1 });
 
+  // A mouse drags at once; a finger (or a pencil) presses and holds first, so
+  // a swipe that starts on a workout still scrolls the page (dnd-kit's
+  // MouseSensor + TouchSensor: a PointerSensor would claim the touch too).
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
   );
 
@@ -226,38 +285,32 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
     [scheduledInstances],
   );
 
-  // Shared pure builder — tested in src/test/schedule-calendar-chips.test.ts
-  // for the "one chip per instance / drag ids = instance ids" invariants.
-  type Chip = {
-    chipId: string;
-    instanceId: string | null;
-    day: ScheduleDay;
-    scheduled_date: string;
-    comp: ScheduleCompletion | null;
-  };
+  // Shared pure builder (src/test/schedule-calendar-chips.test.ts: one chip
+  // per instance, drag ids = instance ids).
   const chips: Chip[] = useMemo(() => {
-    const raw = buildScheduleChips({
-      days,
-      instances: scheduledInstances ?? [],
-      completions,
-    });
+    const raw = buildScheduleChips({ days, instances: scheduledInstances ?? [], completions });
     const out: Chip[] = [];
     for (const r of raw) {
       const d = dayById.get(r.dayId);
       if (!d) continue;
+      const comp = (r.completion as ScheduleCompletion | null) ?? null;
+      const wk = weekMap.get(d.week_id);
       out.push({
         chipId: r.chipId,
         instanceId: r.instanceId,
         day: { ...d, scheduled_date: r.scheduledDate },
         scheduled_date: r.scheduledDate,
-        comp: (r.completion as ScheduleCompletion | null) ?? null,
+        comp,
+        status: coachStatus({ date: r.scheduledDate, completion: comp, optional: d.is_optional, todayISO: todayIso }),
+        name: workoutName(d),
+        blockId: wk?.block_id ?? null,
+        weekIndex: wk?.week_index ?? null,
       });
     }
     return out;
-  }, [days, dayById, scheduledInstances, completions]);
+  }, [days, dayById, weekMap, scheduledInstances, completions, todayIso]);
 
   const chipById = useMemo(() => new Map(chips.map((c) => [c.chipId, c])), [chips]);
-
   const byDate = useMemo(() => {
     const m = new Map<string, Chip[]>();
     for (const c of chips) {
@@ -268,26 +321,9 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
     return m;
   }, [chips]);
 
-  const monthStart = startOfMonth(cursor);
-  const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-  const gridEnd = endOfWeek(endOfMonth(cursor), { weekStartsOn: 1 });
-
-  const cells: Date[] = [];
-  for (let d = gridStart; d <= gridEnd; d = addDays(d, 1)) cells.push(d);
-
-  const upcoming = useMemo(() => {
-    const today = startOfToday();
-    return chips
-      .map((c) => ({ c, date: parseISO(c.scheduled_date) }))
-      .filter((x) => x.date >= today)
-      .sort((a, b) => a.date.getTime() - b.date.getTime())
-      .slice(0, 30);
-  }, [chips]);
-
   // Workouts still waiting for a date: never one already done, or one in a
   // block that's over (it would only put an old workout back on the calendar).
   const unscheduled = useMemo(() => {
-    const todayIso = format(new Date(), "yyyy-MM-dd");
     const done = new Set(completions.filter((c) => c.completed_at).map((c) => c.day_id));
     return days
       .filter((d) => {
@@ -297,23 +333,25 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
         return blk.status !== "Completed" && !(blk.end_date && blk.end_date < todayIso);
       })
       .sort((a, b) => a.day_index - b.day_index);
-  }, [days, daysWithInstance, completions, blockMap, weekMap]);
+  }, [days, daysWithInstance, completions, blockMap, weekMap, todayIso]);
+
+  // a month moved to on its own selects a day in it, so the list under it is never another month's
+  useEffect(() => {
+    if (isSameMonth(isoDate(selected), cursor)) return;
+    setSelected(isSameMonth(today, cursor) ? todayIso : ymd(cursor));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cursor]);
 
   const handleDragEnd = (e: DragEndEvent) => {
     setDragId(null);
-    // A successful drag must not also activate the card click handler and
-    // open the move sheet. Reset after the browser dispatches that click.
+    // A successful drag must not also open the workout on the click that ends it.
     suppressNextSelectRef.current = true;
     setTimeout(() => { suppressNextSelectRef.current = false; }, 0);
     if (!e.over || !e.active) return;
-    const chipId = String(e.active.id);
-    const chip = chipById.get(chipId);
+    const chip = chipById.get(String(e.active.id));
     if (!chip) return;
     const overId = String(e.over.id);
-    // Two drop-target kinds:
-    //   `<yyyy-MM-dd>`            → the whole date cell (cross-date move)
-    //   `chip:<chipId>`           → a specific chip within a cell
-    //                               (same-cell reorder or cross-date append)
+    // Two drop targets: `<yyyy-MM-dd>` (a day) and `chip:<chipId>` (a workout on a day).
     let targetDateStr: string;
     let anchorChipId: string | null = null;
     if (overId.startsWith("chip:")) {
@@ -325,37 +363,27 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
       targetDateStr = overId;
     }
     const sameDate = targetDateStr === chip.scheduled_date;
+    // Let go over itself, or on its own day: nothing to do.
+    if (anchorChipId === chip.chipId) return;
     if (sameDate && anchorChipId && chip.instanceId && onReorder) {
-      // Same-date reorder: build the new order by moving `chip` before
-      // the chip we dropped onto. Only chips that carry an instance id
-      // can be reordered — legacy chips are filtered out.
-      const dayChips = (byDate.get(targetDateStr) ?? []).filter(
-        (c) => c.instanceId,
-      );
+      // Same-date reorder: `chip` goes before the one it was dropped onto.
+      const dayChips = (byDate.get(targetDateStr) ?? []).filter((c) => c.instanceId);
       const without = dayChips.filter((c) => c.chipId !== chip.chipId);
       const anchorIdx = without.findIndex((c) => c.chipId === anchorChipId);
       const insertAt = anchorIdx < 0 ? without.length : anchorIdx;
-      const reordered = [
-        ...without.slice(0, insertAt),
-        chip,
-        ...without.slice(insertAt),
-      ];
-      onReorder(
-        targetDateStr,
-        reordered.map((c) => c.instanceId!).filter(Boolean),
-      );
+      const reordered = [...without.slice(0, insertAt), chip, ...without.slice(insertAt)];
+      const ids = reordered.map((c) => c.instanceId!).filter(Boolean);
+      if (ids.join() !== dayChips.map((c) => c.instanceId).join()) onReorder(targetDateStr, ids);
       return;
     }
-    if (sameDate) return; // legacy-chip same-date drop is a no-op
-    onMoveDay({ dayId: chip.day.id, instanceId: chip.instanceId }, parseISO(targetDateStr));
+    if (sameDate) return; // a legacy chip dropped on its own day does nothing
+    onMoveDay({ dayId: chip.day.id, instanceId: chip.instanceId }, isoDate(targetDateStr));
   };
 
   const handleReorderNudge = (chipId: string, direction: -1 | 1) => {
     const chip = chipById.get(chipId);
     if (!chip || !chip.instanceId || !onReorder) return;
-    const dayChips = (byDate.get(chip.scheduled_date) ?? []).filter(
-      (c) => c.instanceId,
-    );
+    const dayChips = (byDate.get(chip.scheduled_date) ?? []).filter((c) => c.instanceId);
     const idx = dayChips.findIndex((c) => c.chipId === chip.chipId);
     const next = idx + direction;
     if (idx < 0 || next < 0 || next >= dayChips.length) return;
@@ -364,7 +392,52 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
     onReorder(chip.scheduled_date, swapped.map((c) => c.instanceId!));
   };
 
+  const open = (chip: Chip) => {
+    if (suppressNextSelectRef.current) return;
+    onSelectDay?.({ dayId: chip.day.id, instanceId: chip.instanceId });
+  };
+
+  /** A day's workouts as full rows (the week view, the month's chosen day). */
+  const rows = (list: Chip[]) => {
+    const inst = list.filter((c) => c.instanceId);
+    return list.map((chip) => {
+      const i = chip.instanceId ? inst.findIndex((c) => c.chipId === chip.chipId) : -1;
+      const canReorder = canEdit && !!chip.instanceId && !!onReorder && inst.length > 1;
+      return (
+        <DayChip
+          key={chip.chipId}
+          chip={chip}
+          variant="row"
+          draggable={canEdit && !chip.comp?.completed_at}
+          canReorderUp={canReorder && i > 0}
+          canReorderDown={canReorder && i >= 0 && i < inst.length - 1}
+          onNudge={canReorder ? (dir) => handleReorderNudge(chip.chipId, dir) : undefined}
+          onOpen={() => open(chip)}
+        />
+      );
+    });
+  };
+
   const draggedChip = dragId ? chipById.get(dragId) ?? null : null;
+  const blockName = (id: string) => blockMap.get(id)?.name ?? null;
+
+  // ── week ──────────────────────────────────────────────────────────────
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const weekChips = weekDays.flatMap((d) => byDate.get(ymd(d)) ?? []);
+  const weekTally = tally(weekChips.map((c) => ({ date: c.scheduled_date, status: c.status })));
+  const weekLine = tallyLine(weekChips.map((c) => ({ date: c.scheduled_date, status: c.status })));
+  const place = weekPlace(weekChips.map((c) => ({ blockId: c.blockId, weekIndex: c.weekIndex, date: c.scheduled_date })), blockName);
+  const onThisWeek = isSameDay(weekStart, thisWeekStart);
+
+  // ── month ─────────────────────────────────────────────────────────────
+  const monthStart = startOfMonth(cursor);
+  const cells: Date[] = [];
+  for (let d = startOfWeek(monthStart, { weekStartsOn: 1 }); d <= endOfWeek(endOfMonth(cursor), { weekStartsOn: 1 }); d = addDays(d, 1)) cells.push(d);
+  const monthChips = chips.filter((c) => isSameMonth(isoDate(c.scheduled_date), cursor));
+  const monthTally = tally(monthChips.map((c) => ({ date: c.scheduled_date, status: c.status })));
+  const selectedList = byDate.get(selected) ?? [];
+
+  const navButton = "grid h-10 w-10 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground";
 
   return (
     <DndContext
@@ -379,142 +452,188 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
       }}
       onDragEnd={handleDragEnd}
     >
-      {unscheduled.length > 0 && (
-        <div className="mb-3 space-y-2 rounded-md border border-dashed border-border bg-secondary/20 p-2">
-          <div className="flex items-center gap-2 px-1 text-xs font-semibold uppercase text-muted-foreground">
-            <CalendarPlus className="h-3.5 w-3.5" /> Unscheduled workouts
+      {view === "week" ? (
+        <div data-schedule-week>
+          <div className="flex items-center justify-between gap-1">
+            <button type="button" className={navButton} aria-label="Previous week" onClick={() => setWeekStart(addWeeks(weekStart, -1))}>
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div className="min-w-0 text-center">
+              <div className="text-[15px] font-semibold">{weekTitle(weekStart, thisWeekStart)}</div>
+              <div className="text-xs text-muted-foreground tabular-nums">
+                {weekRange(weekStart)}
+                {!onThisWeek && (
+                  <button type="button" onClick={() => setWeekStart(thisWeekStart)} className="ml-2 font-semibold text-foreground underline-offset-2 hover:underline">
+                    This week
+                  </button>
+                )}
+              </div>
+            </div>
+            <button type="button" className={navButton} aria-label="Next week" onClick={() => setWeekStart(addWeeks(weekStart, 1))}>
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {unscheduled.map((d) => {
-              const wk = weekMap.get(d.week_id);
-              const blk = wk ? blockMap.get(wk.block_id) : null;
+          {(place || weekLine) && (
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-1 text-[13px]" data-schedule-week-summary>
+              <span className="min-w-0 truncate text-muted-foreground">{place}</span>
+              {weekLine && (
+                <span className="shrink-0 font-medium tabular-nums">
+                  {weekTally.done} of {weekTally.total} done
+                  {weekTally.missed > 0 && <span className={STATUS_TONE.missed}> · {weekTally.missed} missed</span>}
+                  {weekTally.inProgress > 0 && <span className="text-muted-foreground"> · {weekTally.inProgress} in progress</span>}
+                </span>
+              )}
+            </div>
+          )}
+          <div className="mt-2 divide-y divide-border/60">
+            {weekDays.map((d) => {
+              const iso = ymd(d);
+              const list = byDate.get(iso) ?? [];
+              const isToday = iso === todayIso;
               return (
-                <button
-                  key={d.id}
-                  type="button"
-                  disabled={!canEdit}
-                  onClick={() => onSelectDay?.({ dayId: d.id, instanceId: null })}
-                  className="flex items-center justify-between gap-3 rounded-md border border-border bg-card p-3 text-left text-sm transition hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium">{d.title?.trim() || `Day ${d.day_index}`}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {blk?.name ?? "Block"} · Week {wk?.week_index ?? "?"} · Day {d.day_index}
-                    </span>
-                  </span>
-                  <span className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-semibold">Pick date</span>
-                </button>
+                <DropDay key={iso} date={d} className="flex items-start gap-3 py-2">
+                  <div className="w-10 shrink-0 pt-0.5 text-center" aria-label={format(d, "EEEE, MMMM d")}>
+                    <div className={cn("text-[11px] font-medium", isToday ? "text-foreground" : "text-muted-foreground")}>{format(d, "EEE")}</div>
+                    <div className={cn("mx-auto mt-0.5 grid h-7 w-7 place-items-center rounded-full text-[14px] font-semibold tabular-nums", isToday && "bg-foreground text-background")}>
+                      {format(d, "d")}
+                    </div>
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1.5 self-center">
+                    {list.length ? rows(list) : <div className="py-1.5 text-[13px] text-muted-foreground">Rest</div>}
+                  </div>
+                </DropDay>
               );
             })}
+          </div>
+          {canEdit && <DragHint phone={phone} />}
+        </div>
+      ) : (
+        <div data-schedule-month>
+          {unscheduled.length > 0 && (
+            <div className="mb-3 rounded-lg border border-dashed border-border p-2" data-schedule-unscheduled>
+              <div className="flex items-center gap-2 px-1 pb-1.5 text-[13px] font-medium">
+                <CalendarPlus className="h-4 w-4 text-warning" />
+                {unscheduled.length} workout{unscheduled.length === 1 ? " has" : "s have"} no date
+              </div>
+              <div className="space-y-1.5">
+                {unscheduled.map((d) => {
+                  const wk = weekMap.get(d.week_id);
+                  const blk = wk ? blockMap.get(wk.block_id) : null;
+                  return (
+                    <button
+                      key={d.id}
+                      type="button"
+                      disabled={!canEdit}
+                      onClick={() => onSelectDay?.({ dayId: d.id, instanceId: null })}
+                      className="flex min-h-[44px] w-full items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 text-left transition hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[14px] font-medium">{workoutName(d)}</span>
+                        <span className="block truncate text-xs text-muted-foreground">{blk?.name ?? "Block"} · Week {wk?.week_index ?? "?"}</span>
+                      </span>
+                      <span className="shrink-0 text-xs font-semibold">Pick a date</span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="mb-2 flex items-center justify-between gap-1">
+            <button type="button" className={navButton} aria-label="Previous month" onClick={() => setCursor(addMonths(cursor, -1))}>
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div className="text-center">
+              <div className="text-[15px] font-semibold">{format(cursor, "MMMM yyyy")}</div>
+              {!isSameMonth(cursor, today) && (
+                <button type="button" onClick={() => setCursor(startOfMonth(today))} className="text-xs font-semibold text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+                  This month
+                </button>
+              )}
+            </div>
+            <button type="button" className={navButton} aria-label="Next month" onClick={() => setCursor(addMonths(cursor, 1))}>
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-7 pb-1 text-center text-[11px] font-medium text-muted-foreground">
+            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => <div key={d}>{phone ? d.slice(0, 1) : d}</div>)}
+          </div>
+          <div className="grid grid-cols-7 overflow-hidden rounded-lg border border-border/70">
+            {cells.map((date, i) => {
+              const iso = ymd(date);
+              const list = byDate.get(iso) ?? [];
+              const inMonth = isSameMonth(date, cursor);
+              const isToday = iso === todayIso;
+              const isSelected = iso === selected;
+              return (
+                <DropDay
+                  key={iso}
+                  date={date}
+                  selected={isSelected}
+                  onClick={() => { if (!suppressNextSelectRef.current) setSelected(iso); }}
+                  className={cn(
+                    "min-w-0 cursor-pointer space-y-1 border-border/50 p-1 transition-colors",
+                    i % 7 !== 0 && "border-l",
+                    i >= 7 && "border-t",
+                    phone ? "min-h-[52px]" : "min-h-[96px]",
+                    !inMonth && "bg-muted/40 text-muted-foreground",
+                    isSelected && "bg-muted",
+                  )}
+                >
+                  <div className={cn("grid h-6 w-6 place-items-center rounded-full text-[12px] font-semibold tabular-nums", isToday && "bg-foreground text-background", phone && "mx-auto")}>
+                    {format(date, "d")}
+                  </div>
+                  {phone ? (
+                    <div className="flex flex-wrap justify-center gap-0.5">
+                      {list.map((chip) => (
+                        <DayChip key={chip.chipId} chip={chip} variant="dot" draggable={canEdit && !chip.comp?.completed_at} />
+                      ))}
+                    </div>
+                  ) : (
+                    list.map((chip) => (
+                      <DayChip
+                        key={chip.chipId}
+                        chip={chip}
+                        variant="cell"
+                        draggable={canEdit && !chip.comp?.completed_at}
+                        onOpen={() => open(chip)}
+                      />
+                    ))
+                  )}
+                </DropDay>
+              );
+            })}
+          </div>
+
+          {monthTally.total > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[12px] text-muted-foreground" data-schedule-month-tally>
+              <span className="inline-flex items-center gap-1"><WorkoutStatusMark mark={coachMark("done")} /> {monthTally.done} done</span>
+              {monthTally.missed > 0 && <span className="inline-flex items-center gap-1"><WorkoutStatusMark mark={coachMark("missed")} /> {monthTally.missed} missed</span>}
+              {monthTally.inProgress > 0 && <span className="inline-flex items-center gap-1"><WorkoutStatusMark mark={coachMark("in_progress")} /> {monthTally.inProgress} in progress</span>}
+              {monthTally.optional > 0 && <span className="inline-flex items-center gap-1"><WorkoutStatusMark mark={coachMark("optional")} /> {monthTally.optional} optional skipped</span>}
+              {monthTally.ahead > 0 && <span className="inline-flex items-center gap-1"><WorkoutStatusMark mark={coachMark("upcoming")} /> {monthTally.ahead} ahead</span>}
+            </div>
+          )}
+
+          <div className="mt-3" data-schedule-selected-day>
+            <div className="px-1 pb-1.5 text-[13px] font-semibold">
+              {format(isoDate(selected), "EEEE, MMM d")}
+              {selected === todayIso && <span className="font-normal text-muted-foreground"> · Today</span>}
+            </div>
+            <div className="space-y-1.5">
+              {selectedList.length ? rows(selectedList) : <div className="px-1 text-[13px] text-muted-foreground">Rest</div>}
+            </div>
+            {canEdit && <DragHint phone={phone} />}
           </div>
         </div>
       )}
 
-      <Tabs value={view} onValueChange={(v) => setView(v as any)}>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <TabsList>
-            <TabsTrigger value="month">Month</TabsTrigger>
-            <TabsTrigger value="list">List</TabsTrigger>
-          </TabsList>
-          {view === "month" && (
-            <div className="flex min-w-0 items-center gap-1 sm:gap-2">
-              <Button size="sm" variant="outline" className="h-9 w-9 px-0" aria-label="Previous month" onClick={() => setCursor(addMonths(cursor, -1))}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="w-28 truncate text-center text-sm font-semibold sm:w-32">
-                {format(cursor, "MMMM yyyy")}
-              </div>
-              <Button size="sm" variant="outline" className="h-9 w-9 px-0" aria-label="Next month" onClick={() => setCursor(addMonths(cursor, 1))}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setCursor(startOfMonth(new Date()))}>
-                Today
-              </Button>
-            </div>
-          )}
-        </div>
-
-        <TabsContent value="month" className="mt-0">
-          <div className="grid grid-cols-7 text-[10px] font-medium text-muted-foreground mb-1">
-            {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => (
-              <div key={d} className="px-1">{d}</div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-0">
-            {cells.map((date) => {
-              const ymd = format(date, "yyyy-MM-dd");
-              const list = byDate.get(ymd) ?? [];
-              return (
-                <DroppableCell key={ymd} date={date} dim={!isSameMonth(date, cursor)}>
-                  {list.map((chip) => {
-                    const day = chip.day;
-                    const wk = weekMap.get(day.week_id);
-                    const blk = wk ? blockMap.get(wk.block_id) : null;
-                    const instChips = list.filter((c) => c.instanceId);
-                    const instIdx = chip.instanceId ? instChips.findIndex((c) => c.chipId === chip.chipId) : -1;
-                    const canReorder = canEdit && !!chip.instanceId && !!onReorder && instChips.length > 1;
-                    return (
-                      <div
-                        key={chip.chipId}
-                        onClick={() => {
-                          if (suppressNextSelectRef.current) return;
-                          onSelectDay?.({ dayId: day.id, instanceId: chip.instanceId });
-                        }}
-                      >
-                        <DayChip
-                          chipId={chip.chipId}
-                          day={day}
-                          week={wk}
-                          blockName={blk?.name ?? null}
-                          comp={chip.comp}
-                          draggable={canEdit && !chip.comp?.completed_at}
-                          canReorderUp={canReorder && instIdx > 0}
-                          canReorderDown={canReorder && instIdx >= 0 && instIdx < instChips.length - 1}
-                          onNudge={canReorder ? (dir) => handleReorderNudge(chip.chipId, dir) : undefined}
-                        />
-                      </div>
-                    );
-                  })}
-                </DroppableCell>
-              );
-            })}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="list" className="mt-0">
-          <div className="space-y-2">
-            {upcoming.length === 0 && (
-              <div className="text-sm text-muted-foreground text-center py-8">No upcoming workouts scheduled.</div>
-            )}
-            {upcoming.map(({ c: chip, date }) => {
-              const d = chip.day;
-              const wk = weekMap.get(d.week_id);
-              const blk = wk ? blockMap.get(wk.block_id) : null;
-              return (
-                <div
-                  key={chip.chipId}
-                  className="flex items-center justify-between gap-3 rounded-md border border-border bg-card p-3 cursor-pointer hover:bg-accent/40"
-                  onClick={() => onSelectDay?.({ dayId: d.id, instanceId: chip.instanceId })}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-muted-foreground">{format(date, "EEE, MMM d")}</div>
-                    <div className="font-medium truncate">{d.title?.trim() || `Day ${d.day_index}`}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {blk?.name ?? "Block"} · Week {wk?.week_index ?? "?"} · Day {d.day_index}
-                    </div>
-                  </div>
-                  {statusBadge(statusOf(d, chip.comp))}
-                </div>
-              );
-            })}
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      <DragOverlay>
+      <DragOverlay dropAnimation={null}>
         {draggedChip ? (
-          <div className="rounded-md border border-primary bg-card p-2 shadow-lg text-xs font-medium">
-            {draggedChip.day.title?.trim() || `Day ${draggedChip.day.day_index}`}
+          <div className="pointer-events-none rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium shadow-lg">
+            {draggedChip.name}
           </div>
         ) : null}
       </DragOverlay>

@@ -24,11 +24,25 @@ import { ScheduleWorkoutSheet } from "./ScheduleWorkoutSheet";
 export interface ScheduleManagerShellProps {
   clientId: string;
   /**
-   * "coach": the client's Training tab: one Schedule card (Calendar / Whole
-   * program, + Add workout, ⋯ Bulk move · History), no weekly editor (drag,
-   * Move and Bulk move cover it). "client": the athlete's own page, as before.
+   * "coach": the client's Training tab: one Schedule card (Week · Month ·
+   * Program, + Add workout, ⋯ Move several · Change history), no weekly
+   * editor (drag, Move and Move several cover it). "client": the athlete's
+   * own Move workouts page, as before.
    */
   mode: "client" | "coach";
+}
+
+type CoachView = "week" | "month" | "program";
+const COACH_VIEWS: ReadonlyArray<readonly [CoachView, string]> = [["week", "Week"], ["month", "Month"], ["program", "Program"]];
+const COACH_VIEW_KEY = "jf.coach-schedule.view";
+
+function readCoachView(): CoachView {
+  try {
+    const v = typeof window === "undefined" ? null : window.localStorage.getItem(COACH_VIEW_KEY);
+    return v === "month" || v === "program" ? v : "week";
+  } catch {
+    return "week";
+  }
 }
 
 export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellProps) {
@@ -50,9 +64,15 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
   const [historyOpen, setHistoryOpen] = useState(false);
   const [weeklyWeekId, setWeeklyWeekId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  // Additive view toggle: the existing calendar stays the default; the
-  // Schedule Manager list is a faster overview layer over the same data.
+  // The athlete's own page keeps Calendar / Schedule Manager.
   const [view, setView] = useState<"calendar" | "list">("calendar");
+  // The coach's: Week (this week, the default) · Month · Program (every
+  // workout, block by block), remembered on this device.
+  const [coachView, setCoachView] = useState<CoachView>(readCoachView);
+  const pickCoachView = (v: CoachView) => {
+    setCoachView(v);
+    try { window.localStorage.setItem(COACH_VIEW_KEY, v); } catch { /* private mode: it just isn't remembered */ }
+  };
 
   const reorderMutation = useMutation({
     mutationFn: async (args: { date: string; orderedInstanceIds: string[] }) =>
@@ -110,6 +130,7 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
 
   const sortedWeeks = [...(weeks as any[])].sort((a, b) => a.week_index - b.week_index);
   const coach = mode === "coach";
+  const showCalendar = coach ? coachView !== "program" : view === "calendar";
 
   return (
     <div className="space-y-6">
@@ -117,54 +138,48 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
       <Card>
         <CardContent className="p-3 sm:p-4">
           {coach ? (
-            <div className="mb-3 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <h2 className="text-base font-bold">Schedule</h2>
-                  <p className="text-xs text-muted-foreground">
-                    {view === "calendar" ? "Drag a workout to move it, or tap it." : "Every workout in the program, by week."}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <Button size="sm" variant="outline" className="h-10 gap-1 px-3" onClick={() => setAddOpen(true)} aria-label="Add a workout">
-                    <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Add workout</span>
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="icon" variant="outline" className="h-10 w-10" aria-label="More schedule tools">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        disabled={days.length === 0}
-                        onClick={() => { setBulkAnchor(days[0]?.id ?? null); setBulkOpen(true); }}
-                      >
-                        <ListChecks className="mr-2 h-4 w-4" /> Move several workouts
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setHistoryOpen(true)}>
-                        <HistoryIcon className="mr-2 h-4 w-4" /> Change history
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 rounded-lg border border-border bg-muted/30 p-1" role="tablist" aria-label="Schedule view">
-                {([["calendar", "Calendar", CalendarDays], ["list", "Whole program", ListTodo]] as const).map(([key, label, Icon]) => (
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="inline-flex rounded-lg bg-muted p-0.5" role="tablist" aria-label="Schedule view" data-schedule-view>
+                {COACH_VIEWS.map(([key, label]) => (
                   <button
                     key={key}
                     type="button"
                     role="tab"
-                    aria-selected={view === key}
-                    onClick={() => setView(key)}
+                    aria-selected={coachView === key}
+                    onClick={() => pickCoachView(key)}
                     className={cn(
-                      "inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-md text-xs font-semibold",
-                      view === key ? "bg-background shadow-sm" : "text-muted-foreground",
+                      "h-9 rounded-md px-3 text-[13px] font-semibold transition-colors",
+                      coachView === key
+                        ? "bg-background text-foreground shadow-sm dark:bg-[oklch(0.34_0.008_280)]"
+                        : "text-muted-foreground hover:text-foreground",
                     )}
                   >
-                    <Icon className="h-3.5 w-3.5" /> {label}
+                    {label}
                   </button>
                 ))}
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <Button size="sm" variant="outline" className="h-10 gap-1 px-3" onClick={() => setAddOpen(true)} aria-label="Add a workout">
+                  <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Add workout</span>
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="icon" variant="outline" className="h-10 w-10" aria-label="More schedule tools">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      disabled={days.length === 0}
+                      onClick={() => { setBulkAnchor(days[0]?.id ?? null); setBulkOpen(true); }}
+                    >
+                      <ListChecks className="mr-2 h-4 w-4" /> Move several workouts
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setHistoryOpen(true)}>
+                      <HistoryIcon className="mr-2 h-4 w-4" /> Change history
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           ) : (
@@ -205,7 +220,7 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
           </div>
           )}
 
-          {view === "calendar" ? (
+          {showCalendar ? (
             <ScheduleCalendar
               days={days}
               weeks={weeks}
@@ -213,6 +228,7 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
               completions={completions}
               scheduledInstances={scheduledInstances ?? []}
               canEdit
+              view={coach ? (coachView === "month" ? "month" : "week") : "month"}
               onMoveDay={handleMove}
               onSelectDay={handleSelectDay}
               onReorder={handleReorder}

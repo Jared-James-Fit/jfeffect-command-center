@@ -50,9 +50,9 @@ describe("client profile header is not cluttered", () => {
 
 describe("month calendar fits phone-width cells", () => {
   const cal = read("src/components/schedule/ScheduleCalendar.tsx");
-  it("shows an icon + coloured edge on phones and the text badge from sm up", () => {
-    expect(cal).toContain('<span className="sm:hidden">{statusIcon(status)}</span>');
-    expect(cal).toContain('<div className="hidden sm:block">{statusBadge(status)}</div>');
-    expect(cal).toContain("min-w-0 border border-border/60");
+  it("a phone's month cell is its date and a mark per workout; the day's workouts read under the grid", () => {
+    expect(cal).toContain('<DayChip key={chip.chipId} chip={chip} variant="dot"');
+    expect(cal).toContain("data-schedule-selected-day");
+    expect(cal).toContain('variant="cell"');
   });
 });
