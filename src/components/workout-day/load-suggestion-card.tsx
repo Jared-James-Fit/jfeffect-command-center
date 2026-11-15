@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { useShowLoadSuggestions } from "@/lib/load-suggestion-visibility";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { audibleStep, BACKOFF_FATIGUE, loadStep, roundToStep, type LoadModel, type LoadSuggestion } from "@/lib/load-suggestion";
+import type { PlannedLoadView } from "@/lib/workouts/planned-load";
 
 function fmtNum(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
@@ -171,6 +172,40 @@ export function LoadSuggestionCard({
       }
     >
       {why}
+    </SuggestionPopover>
+  );
+}
+
+/**
+ * The right half when the coach planned the load as a % (planned-load.ts): what
+ * the % is of, the weight it means today (already in the open sets' boxes, faded
+ * as planned, so there's nothing to fill), or what it waits on; the ⓘ says how
+ * it's worked out and that the RPE is its cap.
+ */
+export function PlannedLoadCell({ view }: { view: PlannedLoadView }) {
+  return (
+    <SuggestionPopover
+      label={`${view.label}: ${view.value ?? view.waiting ?? "loading"}. How it's worked out`}
+      testId="load-planned"
+      cell={
+        <>
+          <span className={REF_LABEL}>
+            <span className="truncate">{view.label}</span>
+            <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          </span>
+          {view.value ? (
+            <span className={REF_VALUE} data-testid="load-planned-value" data-capped={view.capped ? "" : undefined}>{view.value}</span>
+          ) : view.waiting ? (
+            <span className="text-[13px] leading-snug text-muted-foreground" data-load-planned-waiting>{view.waiting}</span>
+          ) : (
+            <span className="jf-skeleton block h-4 w-16 rounded bg-muted" aria-hidden="true" />
+          )}
+        </>
+      }
+    >
+      <div className="space-y-1.5 text-foreground" data-testid="load-planned-why">
+        {view.why.map((line) => <p key={line}>{line}</p>)}
+      </div>
     </SuggestionPopover>
   );
 }

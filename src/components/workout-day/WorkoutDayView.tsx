@@ -26,6 +26,7 @@ import {
 import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
 import { percentLoadLine, maxReference } from "@/lib/percent-load-line";
 import { withLivePercent } from "@/lib/workouts/backoff-basis";
+import { plannedLoadView, type PlannedLoadView } from "@/lib/workouts/planned-load";
 import { focusNames } from "@/lib/workouts/focus-names";
 import { noteLead } from "@/lib/workouts/note-lead";
 import { distanceInputValue, formatDistance, isRunningExercise, parseDistanceInput, readDistanceUnit, runPrescription, runSummaryLine, writeDistanceUnit, type DistanceUnit } from "@/lib/running/run-log";
@@ -85,7 +86,7 @@ import { planRestore, setPayload, snapshotOf, type CardSet, type CardSnapshot } 
 import { matchPreviousWeekSlots, type SlotRow } from "@/lib/previous-week-slot";
 import { LastWeekSwapChip, type LastWeekSwap } from "@/components/workout-day/last-week-swap";
 import { useCardHistory, type CardHistoryAction } from "@/components/workout-day/use-card-history";
-import { LoadSuggestionCard, LoadSuggestionsChip, LoadSuggestionsDone, LoadSuggestionsDoneNote, LoadSuggestionsNudge, REF_BAR, REF_CELL, REF_DIVIDER, REF_LABEL, REF_TAP, REF_VALUE } from "@/components/workout-day/load-suggestion-card";
+import { LoadSuggestionCard, PlannedLoadCell, LoadSuggestionsChip, LoadSuggestionsDone, LoadSuggestionsDoneNote, LoadSuggestionsNudge, REF_BAR, REF_CELL, REF_DIVIDER, REF_LABEL, REF_TAP, REF_VALUE } from "@/components/workout-day/load-suggestion-card";
 import { lastTimeLoad } from "@/lib/workouts/exercise-history";
 import { effortRange, loggedRpe, setGuidance } from "@/lib/workouts/plan-vs-actual";
 import { dismissSuggestionsNudgeForNow, suggestionsNudgeDismissed, useShowLoadSuggestions, LOAD_SUGGESTIONS_TRIED_KEY } from "@/lib/load-suggestion-visibility";
@@ -264,6 +265,22 @@ function weightIncrement(unit: "kg" | "lb"): number {
 
 function fmtNum(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
+}
+
+/**
+ * An open set's saved row holds something of the person's beyond the plan: a
+ * weight, bodyweight, a time, calories, a distance, a velocity, or reps / RPE
+ * other than prescribed. A row holding only the plan (a weight they cleared) is
+ * an untouched set, never an amber draft.
+ */
+function savedBeyondPlan(r: any, planReps: string, planRpe: string): boolean {
+  if (!r) return false;
+  if (r.actual_load != null && Number(r.actual_load) > 0) return true;
+  if (resolveLoadType(r.load_type, r.is_bodyweight) === "bodyweight") return true;
+  if (r.completed_duration_seconds != null || r.actual_calories != null || r.actual_distance_m != null || r.mean_concentric_velocity_mps != null) return true;
+  const reps = r.actual_reps != null ? String(r.actual_reps) : "";
+  const rpe = r.actual_rpe_num != null ? String(r.actual_rpe_num) : String(r.actual_rpe ?? "");
+  return (reps !== "" && reps !== planReps) || (rpe !== "" && rpe !== planRpe);
 }
 
 /**
@@ -1774,9 +1791,11 @@ function WorkoutDay({
     [rows],
   );
 
-  // Percentage backoffs based on a top set become useful only after the athlete
-  // actually enters that top-set load. Resolve the nearest matching exercise
-  // above this row and feed its logged load into the backoff card.
+  // A back-off at a % of today's top set follows the top set they LOGGED (its
+  // number tapped, or its numbers typed in): never a weight only filled in from
+  // Suggested and not lifted yet, which would plan the back-offs off a guess.
+  // Resolve the nearest matching exercise above this row and feed its heaviest
+  // logged load into the back-off card.
   const topSetBasisForRow = (r: any, rowIndex: number): { value: number; unit: WUnit } | null => {
     if (r.percentage_basis !== "top_set" || !r.percentage) return null;
     const allRows = rows as any[];
@@ -1794,7 +1813,7 @@ function WorkoutDay({
     if (!source) return null;
     const sourceResults = (results as any[]).filter((x) => x.row_id === source.id);
     const numeric = sourceResults
-      .filter((x) => x.actual_load != null && Number.isFinite(Number(x.actual_load)) && Number(x.actual_load) > 0)
+      .filter((x) => x.completed_at && x.actual_load != null && Number.isFinite(Number(x.actual_load)) && Number(x.actual_load) > 0)
       .sort((a, b) => Number(b.actual_load) - Number(a.actual_load))[0];
     if (!numeric) return null;
     const sourceUnit: WUnit = numeric.actual_load_unit === "lb" ? "lb" : "kg";
@@ -3378,7 +3397,9 @@ function lastTimeText(data: PreviousLift, displayUnit: "kg" | "lb"): string | nu
         : (load ?? (data.enteredValue === 0 || data.normalizedLb === 0 ? "Bodyweight" : ""));
   const repsStr = data.reps != null ? ` × ${data.reps}` : "";
   if (!loadStr && !repsStr) return null;
-  return `${loadStr}${repsStr}${lastTimeEffort(data)}`;
+  // A narrow half breaks only between the weight, "× 4" and "@ 6.5", never
+  // inside one ("182.5 kg × 4 @" / "6.5" read as a typo).
+  return `${loadStr}${repsStr}${lastTimeEffort(data)}`.replace(/ (?=(?:kg|lb|assist)\b)/g, "\u00a0").replace(/ ([×@·]) /g, " $1\u00a0");
 }
 
 /**
@@ -3879,6 +3900,30 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         : null,
     });
   }, [hideWeight, row.manual_override, row.percentage, row.percentage_basis, row.rpe, maxBasedPct, maxesPending, topSetBasis?.value, topSetBasis?.unit, computed]);
+  // The coach's % as today's weight, in the strip where an RPE card has
+  // Suggested (planned-load.ts): what it's of and the weight, or what it waits
+  // on. While it's there, the % line above says nothing twice.
+  const plannedView = useMemo<PlannedLoadView | null>(() => {
+    if (hideWeight || row.manual_override || rowLoadType !== "external") return null;
+    const topSet = row.percentage_basis === "top_set";
+    if (!topSet && !maxBasedPct) return null;
+    const ok = !topSet && computed?.status === "ok";
+    return plannedLoadView({
+      percentage: row.percentage,
+      basis: row.percentage_basis,
+      rpe: row.rpe,
+      unit: activeUnit,
+      planned: topSet ? percentageBackoffWeight : plannedFromMax ? suggestedWeight : null,
+      open: openSetWeight,
+      linked: topSetBasis,
+      reference: ok
+        ? maxReference(computed!.max ?? (computed!.refLift ? { lift: computed!.refLift, unit: computed!.unit } : null), computed!.base, computed!.unit)
+        : null,
+      label: ok ? computed!.label ?? null : null,
+      capOver: capHeld?.over ?? null,
+      pending: !topSet && maxesPending,
+    });
+  }, [hideWeight, row.manual_override, rowLoadType, row.percentage_basis, row.percentage, row.rpe, maxBasedPct, computed, activeUnit, percentageBackoffWeight, plannedFromMax, suggestedWeight, openSetWeight, topSetBasis?.value, topSetBasis?.unit, capHeld?.over?.set, capHeld?.over?.rpe, maxesPending]);
   const loadPlan = useMemo(
     () => planningTarget({ repTarget, rpeTarget, rirTarget }),
     [repTarget, rpeTarget, rirTarget],
@@ -4369,6 +4414,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     if (!clientId || readonly) return;
     fieldManualRef.current[field].add(fromSetIndex);
     if (value === "") return; // clearing a set clears only that set
+    // An RPE over the cap isn't carried down: the sets below are being made
+    // lighter (capHeld) precisely so they land at the cap, so the 7.5 that set 1
+    // was must never sit on set 2 as if it were what set 2 will be.
+    if (field === "rpe" && capValue != null && Number(value) > capValue) return;
     const states = Array.from({ length: setCount }, (_, i) => {
       const idx = i + 1;
       const ex = existingResults.find((x: any) => x.set_index === idx) as any;
@@ -4496,7 +4545,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         }) : formatPrescription({
           sets: row.sets,
           repsText: row.reps_text,
-          suggestedWeight,
+          // a % stays the coach's "@ 92.5%" here: the weight it means today is the strip's
+          suggestedWeight: percentageBackoffWeight != null || plannedFromMax ? null : suggestedWeight,
           unit: activeUnit,
           percentage: row.percentage,
           percentageBasis: row.percentage_basis,
@@ -4509,7 +4559,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         {row.tempo && <span className="ml-2 text-sm font-normal tracking-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
       </div>
-      {pctLine && (
+      {pctLine && !plannedView && (
         <p className="mt-0.5 text-xs text-muted-foreground" data-pct-line>{pctLine}</p>
       )}
       {/* Under the prescription, what it's read against, in one quiet strip:
@@ -4519,7 +4569,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           switch takes Suggested's place; a finished card says "Next time" there. */}
       {(exerciseId || name) && (() => {
         const done = openSetCount === 0 && workedToday;
-        const right = canSuggest && !readonly && !showSuggestionCard
+        const right = plannedView
+          ? (done || readonly ? null : <PlannedLoadCell view={plannedView} />)
+          : canSuggest && !readonly && !showSuggestionCard
           ? <div className={cn(REF_CELL, "items-start")}><LoadSuggestionsChip highlight={!!suggestNudge} /></div>
           : showSuggestionCard && loadModel && loadPlan
             ? done
@@ -5004,7 +5056,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               rpeTarget={rpeTarget}
               rirTarget={rirTarget}
               isNextSet={frontier === i + 1}
-              repeat={frontier === i + 1 ? repeatPrevious : null}
+              // never "Same as set 1" after a set over the RPE cap: the cap just made the next one lighter
+              repeat={frontier === i + 1 && !capHeld ? repeatPrevious : null}
               onApplyToRemaining={applyToRemaining}
               cascade={cascade}
               autoFilled={cascadeOriginRef.current.get(i + 1) === "auto"}
@@ -5033,7 +5086,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         )}
         {capHeld && openSetCount > 0 && !readonly && (
           <p className="px-3 py-1.5 text-[12px] text-muted-foreground" data-rpe-cap-next>
-            Set {capHeld.over.set} hit RPE {fmtNum(capHeld.over.rpe)}, over the cap of {fmtNum(capValue as number)} · next sets {formatDualLoad(capHeld.load, activeUnit)}
+            Set {capHeld.over.set} hit RPE {fmtNum(capHeld.over.rpe)}, over the RPE {fmtNum(capValue as number)} cap · next sets {fmtNum(capHeld.load)} {activeUnit}
           </p>
         )}
         {/* The latest set strayed from the plan: one quiet line, amber when it
@@ -5976,6 +6029,13 @@ function SetRow({
       })
         ? (existing?.completed_at ?? new Date().toISOString())
         : null;
+      // Nothing but the plan (no weight, reps / RPE as prescribed, nothing
+      // logged): there's nothing of theirs to keep. No row is made for it, and
+      // a draft left with only the plan (its weight cleared) goes back to
+      // empty, so the prescription is never stored as if they'd typed it.
+      const onlyPlan = !completedAt && !autoDuration && durationSec == null && !bw && !load && !velocity && !calories && !distance
+        && (!reps || reps === prescribedRepsStr) && (!rpe || rpe === prescribedRpeStr);
+      if (onlyPlan && !existing) return;
       if (autoDuration) {
         beginWorkoutSession(workoutId ?? null);
         setDurationSec(autoDuration);
@@ -5990,9 +6050,9 @@ function SetRow({
         entered_value: persistedLoad.value,
         entered_unit: persistedLoad.unit,
         is_bodyweight: bw,
-        actual_reps: repsNum,
-        actual_rpe: rpe || null,
-        actual_rpe_num: rpeNum,
+        actual_reps: onlyPlan ? null : repsNum,
+        actual_rpe: onlyPlan ? null : rpe || null,
+        actual_rpe_num: onlyPlan ? null : rpeNum,
         mean_concentric_velocity_mps: velocityNum,
         ...(showCalories ? { actual_calories: caloriesNum } : {}),
         ...distanceFields(distance, distUnit),
@@ -6141,9 +6201,20 @@ function SetRow({
   // from the set above. Adopted as shown, so it's not a draft until they log it.
   const plannedFillRef = useRef<string | null>(initialDisplayLoad && !existingDisplayLoad ? initialDisplayLoad : null);
   useEffect(() => {
-    if (!autoFillSuggestedWeight || suggestedWeight == null || readonly || hideWeight || bw) return;
+    if (readonly || hideWeight || bw) return;
     if (existing && (existing.completed_at || Number(displayLoadInUnit(existing, unit) ?? 0) > 0)) return;
     if (focusedFieldRef.current === "load") return;
+    if (!autoFillSuggestedWeight || suggestedWeight == null) {
+      // The plan it came from is gone (the top set was cleared or un-logged):
+      // an untouched planned weight goes with it, never left behind as if it
+      // still meant something.
+      if (plannedFillRef.current != null && load === plannedFillRef.current) {
+        plannedFillRef.current = null;
+        setLoadPaired("");
+        adoptShownAsSaved(true);
+      }
+      return;
+    }
     const next = fmtLoad(suggestedWeight);
     if (load === next) { plannedFillRef.current = next; return; }
     if (load !== "" && load !== plannedFillRef.current) return;
@@ -6263,8 +6334,13 @@ function SetRow({
   // A weight the plan filled in (plannedFillRef) is the plan, not their entry:
   // it reads faded like the planned reps / RPE, and the row isn't a draft.
   const loadIsPlanned = !isConfirmed && !bw && load !== "" && plannedFillRef.current != null && load === plannedFillRef.current;
-  const hasAnyEntry = (load.length > 0 && !loadIsPlanned) || bw || repsEdited || rpeEdited || caloriesEdited || distanceEdited;
-  const isDraft = !isConfirmed && (hasAnyEntry || (existing && !existing.completed_at));
+  // Reps / RPE that still say what the plan says aren't theirs either: a set
+  // holding only the plan (its weight cleared, say) is an untouched set, not a draft.
+  const repsOwn = repsEdited && reps !== "" && reps !== prescribedRepsStr;
+  const rpeOwn = rpeEdited && rpe !== "" && rpe !== prescribedRpeStr;
+  const hasAnyEntry = (load.length > 0 && !loadIsPlanned) || bw || repsOwn || rpeOwn || caloriesEdited || distanceEdited;
+  const existingHolds = !!existing && !existing.completed_at && savedBeyondPlan(existing, prescribedRepsStr, prescribedRpeStr);
+  const isDraft = !isConfirmed && (hasAnyEntry || existingHolds);
 
   const isAbortError = (err: unknown) => {
     const e = err as { code?: string; message?: string } | null | undefined;
@@ -6630,7 +6706,7 @@ function SetRow({
   };
 
   return (
-    <div className={cn(
+    <div data-set-row={isConfirmed ? "done" : isDraft ? "draft" : "open"} className={cn(
       "border-t border-builder-card-border/70 transition-colors",
       // done: a whisper of green (the number says it), no left bar shifting the row
       isConfirmed && "bg-success/[0.04]",

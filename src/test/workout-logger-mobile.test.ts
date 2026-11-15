@@ -47,7 +47,7 @@ describe("phone-first logger card", () => {
   });
   it("shows helper chips only on the next set to log", () => {
     expect(logger).toContain("isNextSet={frontier === i + 1}");
-    expect(logger).toContain("repeat={frontier === i + 1 ? repeatPrevious : null}");
+    expect(logger).toContain("repeat={frontier === i + 1 && !capHeld ? repeatPrevious : null}");
     expect(logger).not.toContain("Copy Previous (");
     expect(logger).not.toContain("Apply to remaining sets\n");
   });
