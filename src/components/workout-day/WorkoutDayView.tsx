@@ -30,6 +30,7 @@ import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
 import { percentLoadLine, maxReference } from "@/lib/percent-load-line";
 import { withLivePercent } from "@/lib/workouts/backoff-basis";
 import { focusNames } from "@/lib/workouts/focus-names";
+import { noteLead } from "@/lib/workouts/note-lead";
 import { distanceInputValue, formatDistance, isRunningExercise, parseDistanceInput, readDistanceUnit, runPrescription, runSummaryLine, writeDistanceUnit, type DistanceUnit } from "@/lib/running/run-log";
 import { capAdjustedLoad, hasRpeCap, isMaxBasis, loggedE1rm, referenceFamily, rpeCapValue, type LiftFamily, type LoggedSet } from "@/lib/workouts/load-reference";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
@@ -3257,23 +3258,28 @@ function UnsupportedExerciseCard({ row }: { row: any }) {
  * The coach's notes on an exercise, one quiet line: the first thing they say
  * (usually the cue that matters, "Top set: log weight, reps, RPE…"), and a tap
  * on the line opens the rest in place (rest periods, technique, the plan). A
- * note that fits shows whole and isn't a button. Used to be a wall of italic
- * text, then a bordered button that hid even a one-line cue.
+ * note that fits shows whole and isn't a button; one that doesn't shows its
+ * first sentence without the stop (`noteLead`), never the line cut with "…"
+ * right after a period. Used to be a wall of italic text, then a bordered
+ * button that hid even a one-line cue.
  */
 function ExerciseNotesBlock({ notes }: { notes: string }) {
   const [open, setOpen] = useState(false);
   const [clipped, setClipped] = useState(false);
-  const textRef = useRef<HTMLSpanElement>(null);
+  // Whether the whole note fits is measured on a hidden copy of it, so the
+  // line can show the first sentence without changing the answer.
+  const measureRef = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
-    const el = textRef.current;
-    if (!el || open) return;
+    const el = measureRef.current;
+    if (!el) return;
     const check = () => setClipped(el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1);
     check();
     if (typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(check);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [notes, open]);
+  }, [notes]);
+  const lead = clipped && !open ? noteLead(notes) : null;
   const canToggle = clipped || open;
   return (
     <button
@@ -3287,7 +3293,10 @@ function ExerciseNotesBlock({ notes }: { notes: string }) {
         canToggle ? "min-h-6" : "cursor-default",
       )}
     >
-      <span ref={textRef} className={cn("min-w-0 flex-1", open ? "whitespace-pre-wrap break-words" : "line-clamp-1 break-words")}>{notes}</span>
+      <span className="relative min-w-0 flex-1">
+        <span ref={measureRef} aria-hidden className="pointer-events-none invisible absolute inset-x-0 top-0 line-clamp-1 break-words">{notes}</span>
+        <span className={open ? "whitespace-pre-wrap break-words" : "line-clamp-1 break-words"} data-exercise-notes-text>{lead ?? notes}</span>
+      </span>
       {canToggle && <span className="shrink-0 font-medium text-foreground/80">{open ? "Less" : "More"}</span>}
     </button>
   );
