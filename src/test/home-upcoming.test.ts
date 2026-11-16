@@ -90,14 +90,14 @@ describe("client home upcoming summary", () => {
 
 describe("Home schedule card: today in full, then what's coming", () => {
   const src = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
-  it("is an agenda (today, then the next days), not a week strip", () => {
-    expect(src).toContain("buildHomeAgenda(items, { today, days: HOME_CALENDAR_DAYS, maxUpcoming: HOME_UPCOMING_ROWS, upcoming: isCalendarItem })");
-    expect(src).toContain("agenda.today.map(");
+  it("is an agenda (the day on screen, then the next days), not a week strip", () => {
+    expect(src).toContain("buildHomeAgenda(items, { today, day: anchor, nowMs, days: HOME_CALENDAR_DAYS, maxUpcoming: HOME_UPCOMING_ROWS, upcoming: isCalendarItem })");
+    expect(src).toContain("agenda.today.filter(");
     expect(src).toContain("agenda.upcoming.flatMap(");
     expect(src).not.toContain("<WeekStrip");
   });
-  it("reads as a timeline: time column, one colour line per item, a Now marker; no icon tiles or tinted cards", () => {
-    expect(src).toContain("<NowLine />");
+  it("reads as a timeline: time column, one colour line per item, a Now line on the day's timeline; no icon tiles or tinted cards", () => {
+    expect(src).toContain("<TimeGrid");
     expect(src).toContain("FAMILY_ACCENT[KIND_FAMILY[item.kind]]");
     expect(src).not.toContain("FamilyIcon");
     expect(src).not.toContain("bg-cyan-500/5");
@@ -113,9 +113,9 @@ describe("Home schedule card: today in full, then what's coming", () => {
     expect(src).not.toContain("Open calendar");
     expect(src).toContain('<AgendaHeader today={today} link={links ? { to: "/portal/calendar" } : null} />');
   });
-  it("reads as a calendar: Home's card header + this week's days, each opening the Calendar page", () => {
+  it("reads as a calendar: Home's card header (the Calendar page) + the week's days, a tap showing that day in place", () => {
     expect(src).toContain('<AgendaHeader today={today} link={links ? { to: "/portal/calendar" } : null} />');
-    expect(src).toContain('link={links ? (d) => ({ to: "/portal/calendar", search: { date: d } }) : null}');
+    expect(src).toContain("<AgendaWeek today={today} anchor={anchor} selected={anchor} onSelect={setAnchor}");
     const agenda = readFileSync("src/components/schedule/agenda.tsx", "utf8");
     expect(agenda).toContain("Calendar {link && <ChevronRight");
     expect(agenda).toContain("export function AgendaWeek(");

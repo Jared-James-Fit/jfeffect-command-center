@@ -78,11 +78,23 @@ export function rowLines(item: CalendarItem, withPerson: boolean): { title: stri
 /**
  * A timeline block's words: who in bold ("Nicolas Galli"), the first name for
  * a narrow week column, then what and where ("1:1 Training · 800 Vaughan
- * Ave"); an item that isn't with someone is its own title.
+ * Ave"); an item that isn't with someone is its own title. On a client's
+ * calendar (no person: every session is with their coach) a phone's narrow
+ * column and month cell say when it starts ("10:30a", `tiny`), since its
+ * title never fits there ("Trainin") and its colour already says what it is.
  */
-export function blockLabels(item: CalendarItem, withPerson: boolean): { title: string; short: string; detail: string | null } {
+export function blockLabels(item: CalendarItem, withPerson: boolean): { title: string; short: string; tiny: string | null; detail: string | null } {
   const who = withPerson ? personName(item) : null;
   const what = scheduleTitle(item);
   const detail = [who ? what : null, placeLabel(item.location)].filter(Boolean).join(" · ") || null;
-  return { title: who ?? what, short: who ? who.split(/\s+/)[0] : what, detail };
+  const tiny = !withPerson && item.startsAt ? chipTime(item.startsAt) || null : null;
+  return { title: who ?? what, short: who ? who.split(/\s+/)[0] : what, tiny, detail };
+}
+
+/** "Google Meet", "Zoom": how a call happens, when it's a call; a street address is left out (it's the same gym every time). */
+export function callLabel(location: string | null | undefined): string | null {
+  const loc = (location ?? "").trim();
+  if (!loc) return null;
+  if (/^https?:\/\//i.test(loc) || /^(google meet|zoom|teams|video link)$/i.test(loc)) return placeLabel(loc);
+  return null;
 }

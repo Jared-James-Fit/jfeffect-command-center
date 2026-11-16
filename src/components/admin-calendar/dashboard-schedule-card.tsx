@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarPlus, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { SessionActionsSheet, type ActionSession } from "@/components/schedule/session-actions-sheet";
@@ -9,26 +9,19 @@ import { placeLabel, useGoogleCalendarStatus, type KindFamily } from "@/lib/cale
 import { listGoogleEventsRange } from "@/lib/google-cal.functions";
 import { addDaysISO, compactTimeRange, compareInstants, deviceTodayISO } from "@/lib/schedule-time";
 import {
-  AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaEmpty, AgendaFooter, AgendaHeader, AgendaLoading, AgendaToday, AgendaWeek,
+  AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaFooter, AgendaHeader, AgendaWeek,
   AgendaNext, AgendaNextRow, FAMILY_ACCENT, hasEnded, shortDay, startLabel, useNow,
 } from "@/components/schedule/agenda";
+import { byDayThenTime, HomeMonth, HomeViewBar, HomeWeekList, STRUCK_STATUSES, type HomeEntry } from "@/components/schedule/home-calendar-views";
 import { TimeGrid, type TimeGridEntry } from "@/components/calendar/time-grid";
 import { monthChipOrder } from "@/lib/calendar-timeline";
-import { cn } from "@/lib/utils";
 import { listenChannel } from "@/lib/realtime-channel";
 import { useCalendarPrefs, type HomeView } from "@/lib/calendar-prefs";
-import { comingUpFrom, dayTag, homeRange, isCurrentPeriod, monthGridDays, periodLabel, shiftAnchor } from "@/lib/home-calendar";
+import { comingUpFrom, homeRange, isCurrentPeriod, periodLabel, shiftAnchor } from "@/lib/home-calendar";
 import { weekDays } from "@/components/calendar/week-strip";
-import { chipTime } from "@/lib/calendar-labels";
 
 /** How many "Coming up" rows the Day view shows. */
 const UPCOMING_ROWS = 4;
-const VIEWS: Array<{ id: HomeView; label: string }> = [
-  { id: "day", label: "Day" },
-  { id: "week", label: "Week" },
-  { id: "month", label: "Month" },
-  { id: "list", label: "List" },
-];
 
 type Session = ActionSession & { client: { full_name: string | null } | null };
 
@@ -87,9 +80,6 @@ function sessionRow(s: Session): Row {
 function byTime(a: Row, b: Row) {
   return (a.startsAt ? 1 : 0) - (b.startsAt ? 1 : 0) || compareInstants(a.startsAt, b.startsAt) || a.title.localeCompare(b.title);
 }
-
-/** Crossed out in the List, as on the timeline: it isn't happening (or didn't). */
-const STRUCK = new Set(["Cancelled", "Missed"]);
 
 /** What a booking is, for the List's one line ("1:1 Training"): the detail's first part. */
 function whatOf(r: Row): string | null {
@@ -321,16 +311,33 @@ export function DashboardScheduleCard() {
       })),
     [rows],
   );
+  // Month and List read the shared Home pieces: who in bold, what after it.
+  const homeEntries = useMemo<HomeEntry[]>(
+    () =>
+      rows.map((r) => ({
+        key: r.key,
+        date: r.date,
+        startsAt: r.startsAt,
+        endsAt: r.endsAt,
+        family: r.family,
+        title: r.title,
+        short: r.family === "people" ? r.title.split(/\s+/)[0] : r.title,
+        what: whatOf(r),
+        status: r.status ?? null,
+      })),
+    [rows],
+  );
+  const rowByKey = useMemo(() => new Map(rows.map((r) => [r.key, r])), [rows]);
   // Month: who's booked each day, sessions first then in time order (cancelled ones left out).
   const namesByDay = useMemo(() => {
-    const m = new Map<string, Row[]>();
-    for (const r of rows) {
+    const m = new Map<string, HomeEntry[]>();
+    for (const r of homeEntries) {
       if (r.status === "Cancelled") continue;
       m.set(r.date, [...(m.get(r.date) ?? []), r]);
     }
     for (const list of m.values()) list.sort(monthChipOrder);
     return m;
-  }, [rows]);
+  }, [homeEntries]);
   /** A block opens what it is: the session sheet, its page, or Google. */
   const openRow = (r: Row) => {
     const o = r.open;
@@ -342,7 +349,7 @@ export function DashboardScheduleCard() {
   // Coming up: the next few live bookings after the day shown (the next session further out when there are none).
   const upcoming = useMemo(() => {
     const ahead = rows
-      .filter((r) => r.date >= aheadFrom && !STRUCK.has(r.status ?? "") && !hasEnded(r.startsAt, r.endsAt, nowMs))
+      .filter((r) => r.date >= aheadFrom && !STRUCK_STATUSES.has(r.status ?? "") && !hasEnded(r.startsAt, r.endsAt, nowMs))
       .sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b))
       .slice(0, UPCOMING_ROWS);
     if (!ahead.some((r) => r.open.kind === "session") && nextSession && ahead.length < UPCOMING_ROWS) ahead.push(sessionRow(nextSession));
@@ -350,8 +357,8 @@ export function DashboardScheduleCard() {
   }, [rows, aheadFrom, nowMs, nextSession]);
   // List: the week's bookings by day, in time order (cancelled ones stay, crossed out).
   const listRows = useMemo(
-    () => (view === "list" ? rows.filter((r) => r.date >= range.from && r.date <= range.to).sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b)) : []),
-    [rows, view, range.from, range.to],
+    () => (view === "list" ? homeEntries.filter((r) => r.date >= range.from && r.date <= range.to).sort(byDayThenTime) : []),
+    [homeEntries, view, range.from, range.to],
   );
 
   const toggleGoogle = () => setPrefs({ includeGoogle: !withGoogle });
@@ -382,7 +389,7 @@ export function DashboardScheduleCard() {
           ) : null
         }
       />
-      <ViewBar
+      <HomeViewBar
         view={view}
         onView={chooseView}
         label={periodLabel(view, anchor, today)}
@@ -446,40 +453,25 @@ export function DashboardScheduleCard() {
       )}
 
       {view === "month" && (
-        <MiniMonth anchor={anchor} today={today} onPick={openDay} names={(d) => namesByDay.get(d) ?? []} />
+        <HomeMonth anchor={anchor} today={today} onPick={openDay} names={(d) => namesByDay.get(d) ?? []} />
       )}
 
       {view === "list" && (
         <>
           <AgendaWeek today={today} anchor={anchor} onSelect={openDay} dots={(d) => dotsByDay.get(d) ?? []} />
-          <AgendaToday>
-            {isLoading && !sessions.length ? (
-              <AgendaLoading />
-            ) : listRows.length === 0 ? (
-              <AgendaEmpty>{isCurrentPeriod("list", anchor, today) ? "Nothing booked this week." : "Nothing booked that week."}</AgendaEmpty>
-            ) : (
-              <ol aria-label={periodLabel("list", anchor, today)} data-home-list>
-                {listRows.map((r, i) => {
-                  const firstOfDay = i === 0 || listRows[i - 1].date !== r.date;
-                  const what = whatOf(r);
-                  return (
-                    <li key={r.key} className={cn("min-w-0", firstOfDay && i > 0 && "mt-1 border-t border-border/40 pt-1")}>
-                      <RowOpen row={r} onSession={setActing} className={cn(AGENDA_ROW, hasEnded(r.startsAt, r.endsAt, nowMs) && "opacity-55")}>
-                        <AgendaNextRow
-                          dayText={firstOfDay ? dayTag(r.date, today) : ""}
-                          accent={FAMILY_ACCENT[r.family]}
-                          time={r.startsAt ? startLabel(r.startsAt) : "All day"}
-                          title={<span className={cn(STRUCK.has(r.status ?? "") && "text-muted-foreground line-through")}>{r.title}</span>}
-                          quiet={r.family === "google"}
-                          suffix={what ? <span className="font-normal text-muted-foreground"> · {what}</span> : null}
-                        />
-                      </RowOpen>
-                    </li>
-                  );
-                })}
-              </ol>
+          <HomeWeekList
+            rows={listRows}
+            today={today}
+            nowMs={nowMs}
+            loading={isLoading && !sessions.length}
+            emptyText={isCurrentPeriod("list", anchor, today) ? "Nothing booked this week." : "Nothing booked that week."}
+            label={periodLabel("list", anchor, today)}
+            wrap={(e, className, line) => (
+              <RowOpen row={rowByKey.get(e.key)!} onSession={setActing} className={className}>
+                {line}
+              </RowOpen>
             )}
-          </AgendaToday>
+          />
         </>
       )}
 
@@ -546,130 +538,3 @@ function RowOpen({ row, onSession, className, children }: { row: Row; onSession:
     </a>
   );
 }
-
-/**
- * Day · Week · Month · List (neutral, like every in-card switch: red is the
- * card's one action), then the period on screen with Today, ‹ ›. When both
- * don't fit on one line (a phone) the period takes its own line under the
- * switch, whole, never cut to "To…".
- */
-function ViewBar({
-  view, onView, label, onStep, onToday,
-}: {
-  view: HomeView;
-  onView: (v: HomeView) => void;
-  label: string;
-  onStep: (dir: -1 | 1) => void;
-  onToday: (() => void) | null;
-}) {
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-      <div className="inline-flex h-8 shrink-0 rounded-full border border-border bg-background/60 p-0.5 text-xs font-semibold" role="radiogroup" aria-label="Calendar view">
-        {VIEWS.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            role="radio"
-            aria-checked={view === v.id}
-            onClick={() => onView(v.id)}
-            className={cn("rounded-full px-2.5 sm:px-3", view === v.id ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground")}
-          >
-            {v.label}
-          </button>
-        ))}
-      </div>
-      <div className="flex min-w-[12.5rem] flex-1 items-center gap-0.5" data-home-period>
-        <span className="mr-auto whitespace-nowrap text-[13px] font-semibold tabular-nums" aria-live="polite">{label}</span>
-        {onToday && (
-          <button type="button" onClick={onToday} className="mr-0.5 shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground">
-            Today
-          </button>
-        )}
-        <button type="button" onClick={() => onStep(-1)} aria-label="Previous" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary/60 hover:text-foreground">
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <button type="button" onClick={() => onStep(1)} aria-label="Next" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary/60 hover:text-foreground">
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * The month as whole weeks: each day's date (today filled) and who's booked,
- * a first name a line in time order (up to 3, then "+N"), so a glance says
- * who and how busy without a tap. A day opens its timeline.
- */
-function MiniMonth({
-  anchor, today, onPick, names,
-}: {
-  anchor: string;
-  today: string;
-  onPick: (d: string) => void;
-  names: (d: string) => Row[];
-}) {
-  const days = monthGridDays(anchor);
-  const month = anchor.slice(0, 7);
-  return (
-    <div className="mt-2.5" role="group" aria-label="Month">
-      <div className="grid grid-cols-7 pb-0.5 text-center text-[11px] font-medium text-muted-foreground" aria-hidden>
-        {days.slice(0, 7).map((d) => (
-          <span key={d}>{new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: "narrow" })}</span>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 border-t border-border/60">
-        {days.map((d) => {
-          const inMonth = d.slice(0, 7) === month;
-          const isToday = d === today;
-          const list = names(d);
-          const shown = list.slice(0, 3);
-          return (
-            <button
-              key={d}
-              type="button"
-              onClick={() => onPick(d)}
-              aria-label={`${new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}${isToday ? " (today)" : ""}${list.length ? `: ${list.map((r) => `${r.startsAt ? startLabel(r.startsAt) + " " : ""}${r.title}`).join(", ")}` : ""}`}
-              className={cn(
-                "flex min-h-[68px] min-w-0 flex-col items-stretch justify-start gap-px border-b border-border/60 px-px pb-1 pt-0.5 transition hover:bg-secondary/40 active:bg-secondary/60",
-                !inMonth && "opacity-40",
-              )}
-            >
-              <span
-                className={cn(
-                  "mx-auto grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold tabular-nums",
-                  isToday ? "bg-foreground text-background" : d < today ? "text-muted-foreground" : "text-foreground",
-                )}
-              >
-                {Number(d.slice(8))}
-              </span>
-              {shown.map((r) => (
-                <span
-                  key={r.key}
-                  aria-hidden
-                  className={cn(
-                    "block truncate rounded-sm border-l-2 px-0.5 text-left text-[9px] font-semibold leading-[13px] text-foreground sm:text-[10px] sm:leading-[14px]",
-                    MONTH_CHIP[r.family],
-                    d < today && "opacity-55",
-                  )}
-                >
-                  <span className="hidden font-normal tabular-nums text-foreground/70 sm:inline">{r.startsAt ? `${chipTime(r.startsAt)} ` : ""}</span>
-                  {r.family === "people" ? r.title.split(/\s+/)[0] : r.title}
-                </span>
-              ))}
-              {list.length > shown.length && <span aria-hidden className="px-0.5 text-left text-[9px] font-semibold leading-3 text-muted-foreground">+{list.length - shown.length}</span>}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/** A month chip per family: the timeline blocks' colours, smaller. */
-const MONTH_CHIP: Record<KindFamily, string> = {
-  people: "border-violet-500 bg-violet-500/15",
-  coach: "border-amber-500 bg-amber-500/15",
-  training: "border-foreground/50 bg-foreground/[0.07]",
-  google: "border-muted-foreground/40 bg-muted text-foreground/75",
-};

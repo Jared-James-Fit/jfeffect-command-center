@@ -7,15 +7,16 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, ChevronRight, Dumbbell, ExternalLink } from "lucide-react";
-import { CalendarBoard } from "@/components/calendar/calendar-board";
+import { CalendarBoard, type ViewMode } from "@/components/calendar/calendar-board";
 import { scheduleTitle, useClientCalendarSources, type CalendarItem } from "@/lib/calendar-sources";
 import { toLocalISO } from "@/lib/today";
 import { ClientSessionList } from "@/components/schedule/client-session-list";
 import { ClientSessionSheet } from "@/components/schedule/client-session-sheet";
 import { CalendarSyncCard } from "@/components/schedule/calendar-sync-card";
 import { ClientBookCard } from "@/components/schedule/client-book-card";
-import { MySessionRequests } from "@/components/schedule/request-session-sheet";
+import { MySessionRequests, RequestSessionSheet } from "@/components/schedule/request-session-sheet";
 import { useEntitlement } from "@/lib/service-tier";
+import { useCalendarPrefs } from "@/lib/calendar-prefs";
 import { listMyBookingTypes } from "@/lib/booking.functions";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { useServerFn } from "@tanstack/react-start";
@@ -28,14 +29,22 @@ import { useServerFn } from "@tanstack/react-start";
  * the calendar itself, so nobody has to scroll to find it:
  *   0. Today's workout (or Workouts on a rest day): the way in to training.
  *   1. The calendar: sessions, appointments, check-ins, coach events, key
- *      dates, Google (?date=yyyy-mm-dd opens on that day: a day tapped on Home).
- *      Tapping a session opens its quick view (ClientSessionSheet): details,
- *      Change time (a new time + why, for the coach to approve), Can't make it.
+ *      dates, Google, read like the coach's (Day and Week timelines, a month
+ *      of what's on each day, List: what's coming), the view remembered on
+ *      their account (?date=yyyy-mm-dd opens Day on that day). Tapping a
+ *      session opens its quick view (ClientSessionSheet): details, Change
+ *      time (a new time + why, for the coach to approve), Can't make it. A
+ *      coaching client's tap on empty time on a day ahead asks for a session
+ *      then.
  *   2. Sessions: "Request a session" (the coach approves it in chat), the
  *      booking types the coach opened to them, what's pending and booked
  *      (Change time / Can't make it on each).
  *   3. One-time phone calendar setup (Google, Apple, Outlook, any app).
  */
+/** A client's calendar is sparse (a few sessions a week at most), so it opens on List, what's coming, until they pick. */
+const CLIENT_VIEWS: ViewMode[] = ["day", "week", "month", "upcoming"];
+const CLIENT_DEFAULT_VIEW: ViewMode = "upcoming";
+
 export const Route = createFileRoute("/_authenticated/portal/calendar")({
   validateSearch: (s: Record<string, unknown>): { sync?: 1; date?: string } => ({
     ...(s.sync === 1 || s.sync === "1" ? { sync: 1 as const } : {}),
@@ -64,6 +73,17 @@ function CalendarPage() {
   const todaysWorkout = useMemo(() => items.find((i) => i.kind === "workout" && i.date === today) ?? null, [items, today]);
   // Tapping a session opens its quick view (details, Change time, Can't make it).
   const [openSession, setOpenSession] = useState<any>(null);
+  // Their view, remembered on their account (a coach previewing keeps his picks to the visit);
+  // a day tapped on Home opens Day on it for this visit.
+  const { prefs, setPrefs } = useCalendarPrefs({ local: isImpersonating });
+  const [dayOverride, setDayOverride] = useState<boolean>(!!date);
+  const view: ViewMode = dayOverride ? "day" : prefs.boardView ?? CLIENT_DEFAULT_VIEW;
+  const chooseView = (v: ViewMode) => {
+    setDayOverride(false);
+    setPrefs({ boardView: v });
+  };
+  // A tap on empty time on a day ahead asks for a session then (the coach approves it in chat).
+  const [asking, setAsking] = useState<{ date: string; time?: string } | null>(null);
   // In-app booking replaces the old per-client external booking link when it's set up.
   const pov = usePovArgs();
   const typesFn = usePovFn(useServerFn(listMyBookingTypes));
@@ -97,11 +117,18 @@ function CalendarPage() {
         <section aria-label="Calendar">
           <CalendarBoard
             key={date ?? "today"}
+            timeline
             items={calendarItems}
             isLoading={isLoading}
             initialDate={date ?? null}
             onRangeChange={(r) => setRange({ from: r.from, to: r.to })}
-            views={["month", "week", "upcoming"]}
+            views={CLIENT_VIEWS}
+            view={view}
+            onViewChange={chooseView}
+            onCreate={canRequest && client?.id ? (d, time) => setAsking({ date: d, time }) : undefined}
+            createButton={false}
+            canCreateOn={(d) => d > today}
+            slotVerb="Request a session"
             emptyHint="Sessions, appointments, check-ins and coach events show up here as they're booked."
             onItemSelect={(item) => {
               if (item.kind !== "pt_session" || !item.raw) return false;
@@ -123,6 +150,18 @@ function CalendarPage() {
         {client?.id && <CalendarSyncCard autoOpen={sync === 1 && !isImpersonating} />}
         {client?.id && (
           <ClientSessionSheet clientId={client.id} session={openSession} onClose={() => setOpenSession(null)} />
+        )}
+        {client?.id && canRequest && (
+          <RequestSessionSheet
+            open={!!asking}
+            onOpenChange={(o) => {
+              if (!o) setAsking(null);
+            }}
+            isPov={isImpersonating}
+            initialDate={asking?.date ?? null}
+            initialTime={asking?.time ?? null}
+            clientId={client.id}
+          />
         )}
 
         {client?.calendar_link && bookable.length === 0 && (

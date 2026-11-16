@@ -83,6 +83,9 @@ export function CalendarBoard({
   view: viewProp,
   onViewChange,
   timeline = false,
+  createButton = true,
+  canCreateOn,
+  slotVerb,
 }: {
   /**
    * The coach's calendar, Google's way: Day and Week are timelines (each
@@ -107,6 +110,12 @@ export function CalendarBoard({
   emptyHint?: string;
   /** Shows "+ Book" on days; called with yyyy-mm-dd (and "HH:MM" from a tapped slot on a timeline). */
   onCreate?: (dateISO: string, time?: string) => void;
+  /** The header's "+ Book" (off where the page has its own way to ask, a client's Calendar: a tap on empty time still asks). */
+  createButton?: boolean;
+  /** Which days a tap on empty time can ask for (default every day). */
+  canCreateOn?: (dateISO: string) => boolean;
+  /** What a tap on empty time does, for its label (the timeline's "Book at 3 PM"). */
+  slotVerb?: string;
   /** Take over the tap on an item (return true to skip the default detail sheet). */
   onItemSelect?: (item: CalendarItem) => boolean | void;
   /** Extra buttons inside the default detail sheet for an item. */
@@ -227,7 +236,7 @@ export function CalendarBoard({
 
           <div className="ml-auto flex items-center gap-2">
             <span className="text-sm font-semibold">{headerLabel}</span>
-            {onCreate && (
+            {onCreate && createButton && (
               <Button
                 size="sm"
                 className="h-8 bg-primary font-semibold"
@@ -257,6 +266,8 @@ export function CalendarBoard({
           nowMs={nowMs}
           onOpen={setSelected}
           onSlot={onCreate ? (d, time) => onCreate(d, time) : undefined}
+          canSlot={canCreateOn}
+          slotVerb={slotVerb}
           onDay={view === "week" ? (d) => openDay(parseDay(d) ?? cursor) : undefined}
           hourHeight={52}
           heightClass="h-[max(24rem,calc(100svh-24rem))] sm:h-[max(28rem,calc(100svh-19rem))]"
@@ -404,7 +415,10 @@ function MonthGrid({
                         (it.status === "Cancelled" || it.status === "Missed") && "line-through opacity-60",
                       )}
                     >
-                      {blockLabels(it, showClientName).short}
+                      {(() => {
+                        const l = blockLabels(it, showClientName);
+                        return l.tiny ?? l.short;
+                      })()}
                     </span>
                   ))}
                   {extra > 0 && <span className="block px-0.5 text-[9px] font-semibold leading-3 text-muted-foreground">+{extra}</span>}

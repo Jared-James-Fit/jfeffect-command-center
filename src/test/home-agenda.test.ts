@@ -43,4 +43,23 @@ describe("Home agenda", () => {
     expect(ids).not.toContain("past");
     expect(ids).not.toContain("far");
   });
+
+  it("a day picked in the strip is shown in full, and Coming up starts after it (never repeating it)", () => {
+    const a = buildHomeAgenda(items, { today, day: "2026-10-13" });
+    expect(a.today.map((i) => i.id)).toEqual(["tue", "tue-g"]);
+    const ids = a.upcoming.flatMap((d) => d.items.map((i) => i.id));
+    expect(ids).not.toContain("tue-g");
+    expect(ids[0]).toBe("thu");
+  });
+
+  it("looking back at a day before today, Coming up is what's still ahead today and after", () => {
+    // 1:30 PM on Oct 12: the 7 AM session is over, the noon lunch (an hour) is too, Tuesday's still ahead.
+    const nowMs = Date.parse("2026-10-12T13:30:00");
+    const a = buildHomeAgenda(items, { today, day: "2026-10-11", nowMs, upcoming: (i) => i.kind !== "workout" });
+    expect(a.today.map((i) => i.id)).toEqual(["past"]);
+    const ids = a.upcoming.flatMap((d) => d.items.map((i) => i.id));
+    expect(ids).not.toContain("pt");
+    expect(ids).not.toContain("gcal-lunch");
+    expect(ids[0]).toBe("tue-g");
+  });
 });

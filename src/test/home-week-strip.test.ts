@@ -64,13 +64,14 @@ describe("every Home leads with its schedule", () => {
       expect(src).toContain('from "@/components/schedule/agenda"');
       for (const piece of ["<AgendaCard>", "<AgendaHeader", "<AgendaNextRow", "<AgendaFooter>"]) expect(src).toContain(piece);
     }
-    // Today on a clock: the client's agenda marks "Now"; the coach's timeline draws its Now line in today's column.
-    expect(readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8")).toContain("<NowLine />");
+    // Today on a clock: every card's day is a timeline with its Now line in today's column
+    // (a client's untimed things, today's workout first, are rows above it).
+    expect(readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8")).toContain("<TimeGrid");
     expect(readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8")).toContain("<AgendaRow");
     expect(readFileSync("src/components/admin-calendar/dashboard-schedule-card.tsx", "utf8")).toContain("<TimeGrid");
     expect(readFileSync("src/components/calendar/time-grid.tsx", "utf8")).toContain('aria-label="Now"');
     const client = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
-    expect(client).toContain("buildHomeAgenda(items, { today, days: HOME_CALENDAR_DAYS, maxUpcoming: HOME_UPCOMING_ROWS, upcoming: isCalendarItem })");
+    expect(client).toContain("buildHomeAgenda(items, { today, day: anchor, nowMs, days: HOME_CALENDAR_DAYS, maxUpcoming: HOME_UPCOMING_ROWS, upcoming: isCalendarItem })");
   });
   it("the coach Home keeps its tools: session sheet, booking, Google toggle, live updates", () => {
     const src = readFileSync("src/components/admin-calendar/dashboard-schedule-card.tsx", "utf8");
