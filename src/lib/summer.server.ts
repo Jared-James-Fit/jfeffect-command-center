@@ -567,7 +567,17 @@ export async function answerSummer(
     const data = await books.loadBooksData(supabase);
     const currentYear = Number(businessToday().slice(0, 4));
     const year = input.year && data.years.includes(input.year) ? input.year : currentYear;
-    booksSection = ["BOOKS", buildSummerContext(data, year)].join("\n");
+    // Who owes what, read the way each client's Billing tab reads it (service role, after the books check above).
+    let owed = null;
+    try {
+      await books.assertBooksAccess({ supabase: input.own ?? supabase, userId } as any, "finance.read");
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { loadReceivables } = await import("@/lib/books/receivables.server");
+      owed = await loadReceivables(supabaseAdmin as any, businessToday());
+    } catch {
+      owed = null;
+    }
+    booksSection = ["BOOKS", buildSummerContext(data, year, owed)].join("\n");
   } else {
     booksSection = ["OPEN SALES", buildOpenSalesContext(await books.loadOpenSales(supabase))].join("\n");
   }

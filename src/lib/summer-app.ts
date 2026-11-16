@@ -43,8 +43,11 @@ export const CLIENT_TABS = ["summary", "training", "nutrition", "metrics", "docu
 
 /** Pages that are not in the route registry but matter for an assistant. */
 export const EXTRA_LINKS: LinkEntry[] = [
-  { label: "Taxes & Books", to: "/admin/sales?tab=taxes", keywords: ["tax", "gst", "expenses", "receipts", "accountant"] },
-  { label: "Transactions", to: "/admin/sales?tab=transactions", keywords: ["payments", "stripe"] },
+  { label: "Money overview", to: "/admin/sales?tab=overview", keywords: ["books", "profit", "revenue", "owed", "expenses", "dashboard"] },
+  { label: "Transactions", to: "/admin/sales?tab=transactions", keywords: ["payments", "expenses", "receipts", "ledger"] },
+  { label: "Taxes", to: "/admin/sales?tab=taxes", keywords: ["tax", "gst", "income tax", "cpp", "accountant"] },
+  { label: "Money reports", to: "/admin/sales?tab=reports", keywords: ["reports", "profit and loss", "export", "accountant"] },
+  { label: "Stripe activity", to: "/admin/sales?tab=stripe", keywords: ["stripe", "charges", "payouts"] },
   { label: "Messages inbox", to: "/admin/communication?tab=messages", keywords: ["chat", "inbox", "dm"] },
   { label: "Check-in reviews", to: "/admin/check-in-reviews", keywords: ["check-ins", "reviews", "submissions"] },
   { label: "Calendar", to: "/admin/calendar", keywords: ["appointments", "sessions", "bookings"] },

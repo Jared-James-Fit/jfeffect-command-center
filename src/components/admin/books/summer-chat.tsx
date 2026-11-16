@@ -45,7 +45,7 @@ const OWNER_STARTERS = [
   "How much should I have set aside for taxes right now?",
   "Which check-ins are waiting on me?",
   "What am I probably forgetting to deduct?",
-  "Open my Taxes & Books.",
+  "Open my money overview.",
 ];
 
 const TEAM_STARTERS = [
@@ -65,7 +65,7 @@ const FINANCE_STARTERS = [
   "What were this month's sales?",
   "Which expenses are missing a receipt?",
   "When is the next GST/HST payment due?",
-  "Open Taxes & Books.",
+  "Open the books.",
 ];
 
 /** Opens an in-app link from Cleo: router navigation, query string kept. */

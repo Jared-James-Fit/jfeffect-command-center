@@ -34,7 +34,7 @@ export const STAFF_ROLE_INFO: Record<StaffRoleKey, StaffRoleInfo> = {
     summary: "Bookkeeper. Sees everything, view-only; keeps the books.",
     can: [
       "See everything in the admin app, view-only",
-      "Taxes & Books: add and edit expenses, snap receipts, record tax payments",
+      "The books: add and edit expenses, snap receipts, record tax payments",
       "Record payments on a purchase (paid or partly paid)",
       "Send a client the payment link for a purchase",
       "Create, edit and pause discount codes",

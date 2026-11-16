@@ -3,6 +3,7 @@
  * out as compact plain text for the model. Pure, so it can be tested and so
  * the assistant reads exactly the numbers the dashboard shows.
  */
+import type { Receivables } from "@/lib/books/receivables";
 import { EXPENSE_CATEGORIES, expenseCategory } from "@/lib/business-expense-categories";
 import { ASSISTANT_NAME, type BooksData } from "@/lib/business-books";
 import { buildBooksSnapshot, expenseTaxView, fmtCad, type BooksSnapshot } from "@/lib/business-tax";
@@ -25,7 +26,7 @@ function snapshotFor(data: BooksData, year: number): BooksSnapshot {
   });
 }
 
-export function buildSummerContext(data: BooksData, year: number): string {
+export function buildSummerContext(data: BooksData, year: number, owed?: Receivables | null): string {
   const s = snapshotFor(data, year);
   const settings = s.settings;
   const lines: string[] = [];
@@ -140,9 +141,22 @@ export function buildSummerContext(data: BooksData, year: number): string {
   if (!yearPayments.length) push("- none recorded");
   push("");
 
-  push("OPEN SALES (assigned but not fully paid; not counted as revenue until paid)");
-  for (const o of data.openSales.slice(0, 50)) push(`- ${o.client ?? "?"} | ${o.offer ?? "?"} | ${o.status ?? "?"} | outstanding ${fmtCad(o.outstandingMinor)} | since ${o.createdOn ?? "?"}`);
-  if (!data.openSales.length) push("- none");
+  if (owed) {
+    // The same reading as each client's Billing tab: with GST, on schedule isn't overdue, unpaid links aren't owed.
+    push(`OWED BY CLIENTS as of ${owed.asOf} (with GST/HST; not revenue until paid): ${fmtCad(owed.outstandingCents)} total, ${fmtCad(owed.overdueCents)} overdue, ${fmtCad(owed.expected30Cents)} expected in the next 30 days`);
+    for (const l of owed.lines.slice(0, 50)) {
+      push(`- ${l.client} | ${l.label} | owes ${fmtCad(l.outstandingCents)}${l.overdueCents ? ` | ${fmtCad(l.overdueCents)} overdue since ${l.overdueSince}` : ""}${l.next ? ` | next ${fmtCad(l.next.cents)} on ${l.next.date}` : l.unscheduledCents ? " | no payment dates" : ""} | ${l.how === "auto_pay" ? "auto-pay" : l.how}`);
+    }
+    if (!owed.lines.length) push("- nobody owes anything");
+    if (owed.waiting.length) {
+      push("PAYMENT LINKS NOBODY HAS PAID (not owed, not revenue):");
+      for (const w of owed.waiting.slice(0, 20)) push(`- ${w.client} | ${w.name} | ${fmtCad(w.cents)} | since ${w.since ?? "?"}`);
+    }
+  } else {
+    push("OPEN SALES (assigned but not fully paid; not counted as revenue until paid)");
+    for (const o of data.openSales.slice(0, 50)) push(`- ${o.client ?? "?"} | ${o.offer ?? "?"} | ${o.status ?? "?"} | outstanding ${fmtCad(o.outstandingMinor)} | since ${o.createdOn ?? "?"}`);
+    if (!data.openSales.length) push("- none");
+  }
   push("");
 
   const otherYears = data.years.filter((y) => y !== year);
@@ -184,7 +198,7 @@ export function summerSystemPrompt(
         ]
       : [
           `You are talking with ${persona.userName ?? "a team admin"}, an admin on ${ownerName === "the owner" ? "the owner's" : `${ownerName}'s`} team (not the owner). You know the app (APP) and which sales are still unpaid (OPEN SALES), and you can look up anything about any client, the business's own documents and anything else in the app with your tools. Everything is live.`,
-          `PRIVATE: the books are not yours to share with them. You do not have revenue totals, expenses, receipts, GST/HST, income tax, CPP or the owner's income, and Taxes & Books is not available to them. If they ask, say kindly that it's private to ${ownerName} and suggest they ask ${ownerName === "the owner" ? "them" : ownerName}. Never guess those numbers.`,
+          `PRIVATE: the books are not yours to share with them. You do not have revenue totals, expenses, receipts, GST/HST, income tax, CPP or the owner's income, and the money pages (Sales → Overview, Transactions, Taxes, Reports) are not available to them. If they ask, say kindly that it's private to ${ownerName} and suggest they ask ${ownerName === "the owner" ? "them" : ownerName}. Never guess those numbers.`,
         ]),
     "",
     "How you work (these rules always win over style):",

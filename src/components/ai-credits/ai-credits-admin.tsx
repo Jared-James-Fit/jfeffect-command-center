@@ -94,7 +94,7 @@ export function AiCreditsAdminCard() {
                 " · ",
               )}
               . Each is a product in your Stripe account; Stripe Tax adds GST at checkout and the
-              sales show in Taxes & Books.
+              sales show under Sales → Overview and Transactions.
             </p>
           </div>
 

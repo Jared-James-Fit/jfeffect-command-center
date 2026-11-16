@@ -30,6 +30,22 @@ export const getBooksData = createServerFn({ method: "GET" })
     return loadBooksData(supabase);
   });
 
+/**
+ * What clients owe, read client by client from the Billing model (the same
+ * numbers each client's Billing tab shows, with tax). The service role reads
+ * clients and sales only after the books' own check, since the finance login
+ * can't read them under RLS.
+ */
+export const getReceivables = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { assertBooksAccess } = await import("@/lib/business-books.server");
+    await assertBooksAccess(context as any, "finance.read");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { loadReceivables } = await import("@/lib/books/receivables.server");
+    return loadReceivables(supabaseAdmin as any, businessToday());
+  });
+
 // ---------------------------------------------------------------------------
 // Expenses
 

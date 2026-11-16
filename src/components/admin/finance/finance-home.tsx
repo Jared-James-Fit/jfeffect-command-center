@@ -15,6 +15,7 @@ import { BOOKS_KEY, useSnapReceipts } from "@/components/admin/books/use-snap-re
 import { RecordPaymentDialog, type PaymentToRecord } from "./record-payment-dialog";
 import { PeriodBars, RankBars, shortCad, shortMonth } from "./finance-charts";
 import { CollectList, Kpi, PaymentLine, Section, useBooksData } from "./finance-ui";
+import { RECEIVABLES_KEY, owedRows, useReceivables } from "@/components/admin/money/use-receivables";
 import { MyCalendarCard } from "./my-calendar-card";
 
 function QuickAction({ icon: Icon, label, onClick, to, search, primary, busy }: {
@@ -51,6 +52,7 @@ export function FinanceHome() {
   const [sending, setSending] = useState<OpenSaleRow | null>(null);
   const today = businessToday();
   const { data, isLoading, error } = useBooksData();
+  const owed = useReceivables();
 
   const s = useMemo(() => {
     if (!data) return null;
@@ -96,12 +98,16 @@ export function FinanceHome() {
   })();
   const thisMonthSales = s.months.find((m) => m.month === month)?.salesMinor ?? 0;
   const lastMonthSales = s.months.find((m) => m.month === prevMonth)?.salesMinor ?? 0;
-  const open = [...data.openSales].sort((a, b) => b.outstandingMinor - a.outstandingMinor);
+  // What clients owe, as each client's Billing reads it (with GST; unpaid links aren't owed).
+  const open = owedRows(owed.data);
   const toCollect = open.reduce((sum, o) => sum + o.outstandingMinor, 0);
   const latest = [...data.revenue].sort((a, b) => b.date.localeCompare(a.date)).slice(0, HOME_LATEST);
   const toCheck = data.expenses.filter((e) => e.status === "needs_review").length;
   const gst = s.settings.gstRegistered;
-  const refresh = () => qc.invalidateQueries({ queryKey: BOOKS_KEY });
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: BOOKS_KEY });
+    void qc.invalidateQueries({ queryKey: RECEIVABLES_KEY });
+  };
   // January to now: empty future months would only flatten the chart.
   const monthBars = s.months
     .filter((m) => m.month <= month)
@@ -128,7 +134,7 @@ export function FinanceHome() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi label="Sales this month" value={fmtCad(thisMonthSales)} sub={`Last month ${shortCad(lastMonthSales)}`} tone="good" />
-        <Kpi label="To collect" value={fmtCad(toCollect)} sub={open.length ? `${open.length} unpaid` : "All paid up"} tone={toCollect > 0 ? "warn" : undefined} />
+        <Kpi label="Owed to you" value={owed.data ? fmtCad(toCollect) : "…"} sub={owed.data ? (owed.data.overdueCents > 0 ? `${shortCad(owed.data.overdueCents)} overdue` : open.length ? "Nothing overdue" : "All paid up") : "Reading balances"} tone={owed.data && owed.data.overdueCents > 0 ? "warn" : undefined} />
         <Kpi label="Set aside now" value={fmtCad(s.setAsideNowMinor)} sub={`GST ${shortCad(Math.max(0, s.gst.owingMinor))} + tax ${shortCad(Math.max(0, s.incomeTax.owingNowMinor))}`} />
         {gst
           ? <Kpi label="GST/HST owing" value={fmtCad(s.gst.owingMinor)} sub={`${shortCad(s.revenue.collectedMinor)} collected, ${shortCad(s.gst.paidMinor)} paid`} />
@@ -136,7 +142,7 @@ export function FinanceHome() {
       </div>
 
       {toCheck > 0 && (
-        <Link to={"/admin/finance/books" as any} search={{ tab: "expenses", filter: "review" } as any} className="flex items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+        <Link to={"/admin/finance/books" as any} search={{ view: "transactions", filter: "review" } as any} className="flex items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
           <Receipt className="h-5 w-5 shrink-0 text-amber-500" />
           <span className="min-w-0 flex-1"><strong>{toCheck} receipt{toCheck === 1 ? "" : "s"} to check.</strong> {ASSISTANT_NAME} couldn't read everything.</span>
           <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -150,7 +156,7 @@ export function FinanceHome() {
         </Section>
 
         <Section
-          title="Money to collect"
+          title="Owed to you"
           right={toCollect > 0 ? <span className="font-semibold text-amber-600 tabular-nums dark:text-amber-400">{fmtCad(toCollect)}</span> : undefined}
           footer={open.length > HOME_COLLECT ? { label: `View all ${open.length}`, to: "/admin/finance/payments" } : null}
           flush

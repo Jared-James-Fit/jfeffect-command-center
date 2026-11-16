@@ -1571,3 +1571,9 @@ html[data-holding] *:not(input):not(textarea):not([contenteditable="true"]) {
 @media (prefers-reduced-motion: reduce) {
   .jf-board-flash, .jf-live-dot, .jf-moment-in { animation: none; }
 }
+
+/* Money charts (Sales → Overview): money in, money out and profit, always these
+   three colours. The dataviz reference palette's first three slots, validated
+   (CVD ΔE ≥ 9.2) on the light card and stepped for the dark one. */
+:root { --money-in: #2a78d6; --money-out: #eb6834; --money-profit: #1baf7a; }
+.dark { --money-in: #3987e5; --money-out: #d95926; --money-profit: #199e70; }
