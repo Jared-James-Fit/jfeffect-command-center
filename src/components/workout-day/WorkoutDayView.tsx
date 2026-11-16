@@ -4007,14 +4007,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     () => (loadModel && loadPlan ? suggestSetLoad(loadModel, loadPlan) : null),
     [loadModel, loadPlan],
   );
-  // The weight an open set logs at with one tap on its number while its box is
-  // empty: what the strip's chip would fill (the coach's planned weight, else
-  // Suggested while it's on), shown in each empty box. Typing one replaces it.
-  const quickLoad: number | null =
-    readonly || hideWeight || rowLoadType !== "external" ? null
-    : plannedView ? (plannedView.load != null && plannedView.value ? plannedView.load : null)
-    : showSuggestionCard && canSuggest && loadHint && loadModel && loadModel.status !== "calibrating" ? loadHint.target
-    : null;
   // The first heavy set of a main lift, by feel: a few weights to choose from by
   // how the warm-ups move (suggestionPicks); everything else stays one number.
   const loadPicks = useMemo(
@@ -4027,6 +4019,15 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       : null),
     [loadHint, loadModel, family, name, exercise?.equipment, rpeTarget, rirTarget, firstHeavySet, workedToday],
   );
+  // The weight an open set logs at with one tap on its number while its box is
+  // empty: the one the strip shows (the coach's planned weight, else Suggested
+  // while it's on), never put in the box itself. A range is picked by feel, so
+  // it never logs on a tap: they type the weight they chose.
+  const quickLoad: number | null =
+    readonly || hideWeight || rowLoadType !== "external" ? null
+    : plannedView ? (plannedView.load != null && plannedView.value ? plannedView.load : null)
+    : showSuggestionCard && canSuggest && loadHint && loadModel && loadModel.status !== "calibrating" && !loadPicks ? loadHint.target
+    : null;
   // "Last warm-up" row at the top of the set table (compound lifts, before the
   // first working set): says what to warm up to, then reads how it felt to set
   // or tune the working weight. Opens the warm-up form pre-filled.
@@ -5495,7 +5496,7 @@ function SetRow({
   suggestedWeight?: number | null;
   /**
    * The weight one tap on this set's number logs while its box is empty (what
-   * Suggested or the coach's planned weight fills), shown in the box.
+   * Suggested or the coach's planned weight fills). Never shown in the box.
    */
   quickLoad?: number | null;
   lastTimeWeight?: number | null;
@@ -6378,9 +6379,9 @@ function SetRow({
     }
   };
 
-  // An empty weight box shows the weight Suggested (or the coach's plan) would
-  // fill: one tap on the set's number logs the set at it, so a set the athlete
-  // did as suggested is one tap, never a fill and then a tap.
+  // An empty weight box logs at the weight the strip shows (Suggested, or the
+  // coach's plan) with one tap on the set's number, so a set the athlete did as
+  // suggested is one tap, never a fill and then a tap. The box itself stays blank.
   const quickWeight =
     !isConfirmed && !bw && !hideWeight && loadType === "external" && load === "" && quickLoad != null && quickLoad > 0
       ? fmtLoad(quickLoad)
@@ -6765,8 +6766,8 @@ function SetRow({
             disabled={statusSaving}
             aria-pressed={isConfirmed}
             data-set-done={isConfirmed ? "true" : "false"}
-            title={statusError ? "Status failed to save — tap to retry" : isConfirmed ? "Mark set incomplete" : "Mark set complete"}
-            aria-label={statusError ? `Retry saving set ${setIndex} status` : isConfirmed ? `Mark set ${setIndex} incomplete` : `Mark set ${setIndex} complete`}
+            title={statusError ? "Status failed to save — tap to retry" : isConfirmed ? "Mark set incomplete" : quickWeight ? `Log this set at ${quickWeight} ${unit}` : "Mark set complete"}
+            aria-label={statusError ? `Retry saving set ${setIndex} status` : isConfirmed ? `Mark set ${setIndex} incomplete` : quickWeight ? `Log set ${setIndex} at ${quickWeight} ${unit}` : `Mark set ${setIndex} complete`}
             className={cn(
               "flex h-11 w-full items-center justify-center sm:h-9",
               statusSaving && "cursor-wait",
@@ -6891,9 +6892,8 @@ function SetRow({
             ? Number(displayLoadInUnit(prevExisting, unit))
             : null) ?? loadHint?.target ?? lastTimeWeight ?? suggestedWeight ?? null
         }
-        // An empty box shows the weight one tap on the set's number logs it at
-        // (Suggested, or the coach's planned weight); typing replaces it.
-        suggested={quickWeight != null ? Number(quickWeight) : null}
+        // The box stays empty until they act: the weight a tap on the set's
+        // number logs is the strip's (Suggested, or the coach's planned weight).
         disabled={readonly}
         focusMode={focusMode}
         canSwitchUnit={!!onSwitchUnit}
