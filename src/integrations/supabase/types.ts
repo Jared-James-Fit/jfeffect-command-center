@@ -17930,6 +17930,8 @@ export type Database = {
           division: string | null
           end_date: string | null
           event_date: string | null
+          event_day_tbd: boolean
+          event_end_date: string | null
           event_location: string | null
           event_name: string | null
           federation: string | null
@@ -17956,6 +17958,8 @@ export type Database = {
           division?: string | null
           end_date?: string | null
           event_date?: string | null
+          event_day_tbd?: boolean
+          event_end_date?: string | null
           event_location?: string | null
           event_name?: string | null
           federation?: string | null
@@ -17982,6 +17986,8 @@ export type Database = {
           division?: string | null
           end_date?: string | null
           event_date?: string | null
+          event_day_tbd?: boolean
+          event_end_date?: string | null
           event_location?: string | null
           event_name?: string | null
           federation?: string | null
@@ -26003,6 +26009,10 @@ export type Database = {
         }[]
       }
       pl_norm_exercise_name: { Args: { _name: string }; Returns: string }
+      pl_prep_set_meet_day: {
+        Args: { _apply?: boolean; _day: string; _prep: string }
+        Returns: Json
+      }
       pl_recompute_block_status: {
         Args: { _block_id: string }
         Returns: string

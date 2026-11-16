@@ -108,7 +108,7 @@ describe("program roadmap", () => {
     expect(r.currentBlockId).toBe("b");
     expect(r.programWeek).toBe(6);
     expect(r.totalWeeks).toBe(10);
-    expect(r.meet).toEqual({ name: "Nationals", date: "2026-03-14", daysOut: 32 });
+    expect(r.meet).toEqual({ name: "Nationals", date: "2026-03-14", daysOut: 32, endDate: null, dayTbd: false });
     const b = r.byBlock.b;
     expect(b.label).toBe("Strength Base");
     expect(b.weeks.map((w) => w.status)).toEqual(["completed", "current", "upcoming", "upcoming"]);
@@ -149,6 +149,16 @@ describe("one program at a time", () => {
     expect(r.currentBlockId).toBe("o1");
     expect(r.start).toBe("2026-09-27");
     expect(r.meet).toBeNull();
+  });
+
+  it("a meet that runs several days: counted from its first day, the lifting day TBD until confirmed, shown until its last day", () => {
+    const window = { ...base, preps: [...base.preps.filter((p: any) => p.id !== "off"), { id: "off", title: "Nationals Prep", status: "Active", event_name: "Nationals", event_date: "2026-10-12", event_end_date: "2026-10-17", event_day_tbd: true }] };
+    expect(buildProgramRoadmap(window)!.meet).toEqual({ name: "Nationals", date: "2026-10-12", daysOut: 4, endDate: "2026-10-17", dayTbd: true });
+    // inside the window it's still the meet (0 days out), not gone
+    expect(buildProgramRoadmap({ ...window, today: "2026-10-14" })!.meet).toMatchObject({ daysOut: 0, endDate: "2026-10-17" });
+    // a confirmed day: no longer TBD
+    const confirmed = { ...window, preps: window.preps.map((p: any) => (p.id === "off" ? { ...p, event_date: "2026-10-15", event_day_tbd: false } : p)) };
+    expect(buildProgramRoadmap(confirmed)!.meet).toMatchObject({ date: "2026-10-15", dayTbd: false });
   });
 
   it("lists every program, current first, active vs completed", () => {

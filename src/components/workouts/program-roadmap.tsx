@@ -77,7 +77,7 @@ export function useProgramRoadmap(
           .select("id, block_id, week_id, ai_label, ai_summary, ai_style, coach_label, coach_summary, hidden, generated_at, edited_at")
           .in("block_id", ids),
         prepIds.length
-          ? sb.from("pl_preps").select("id, title, status, archived, event_name, event_date").in("id", prepIds)
+          ? sb.from("pl_preps").select("id, title, status, archived, event_name, event_date, event_end_date, event_day_tbd").in("id", prepIds)
           : Promise.resolve({ data: [] }),
       ]);
       return {
@@ -107,6 +107,16 @@ const fmt = (iso: string | null, f = "MMM d") => {
   const d = parseLocalDate(iso);
   return d ? format(d, f) : null;
 };
+
+/** "Feb 8", or a meet that runs several days: "Feb 8 – 13 · lifting day TBD". */
+export function meetWhen(meet: { date: string; endDate?: string | null; dayTbd?: boolean }): string | null {
+  const start = fmt(meet.date);
+  if (!start) return null;
+  if (!meet.endDate) return start;
+  const sameMonth = meet.date.slice(0, 7) === meet.endDate.slice(0, 7);
+  const range = `${start} – ${fmt(meet.endDate, sameMonth ? "d" : "MMM d")}`;
+  return meet.dayTbd ? `${range} · lifting day TBD` : range;
+}
 
 function meetText(daysOut: number): string {
   if (daysOut <= 0) return "Meet day";
@@ -216,7 +226,7 @@ export function ProgramRoadmapCard({
             </div>
           )}
           {meet ? (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold text-foreground" title={[meet.name, fmt(meet.date)].filter(Boolean).join(" · ")}>
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold text-foreground" title={[meet.name, meetWhen(meet)].filter(Boolean).join(" · ")} data-meet-when={meetWhen(meet) ?? undefined}>
               <Flag className="h-3 w-3" /> {meetText(meet.daysOut)}
             </span>
           ) : roadmap.end && !allDone ? (

@@ -460,7 +460,12 @@ export type ProgramRoadmap = {
   totalWeeks: number;
   start: string | null;
   end: string | null;
-  meet: { name: string | null; date: string; daysOut: number } | null;
+  /**
+   * The meet: `date` is its first day (or the confirmed lifting day); a meet that
+   * runs several days has `endDate`, and `dayTbd` while the athlete's own
+   * lifting day in it isn't confirmed (the taper counts from `date`).
+   */
+  meet: { name: string | null; date: string; daysOut: number; endDate: string | null; dayTbd: boolean } | null;
 };
 
 type RBlock = {
@@ -491,6 +496,8 @@ type RPrep = {
   archived?: boolean | null;
   event_name?: string | null;
   event_date?: string | null;
+  event_end_date?: string | null;
+  event_day_tbd?: boolean | null;
 };
 
 /** Blocks with no program record that are more than this many days apart are separate programs. */
@@ -695,7 +702,10 @@ export function buildProgramRoadmap(input: {
 
   const prepId = program.id.startsWith("prep:") ? program.id.slice(5) : null;
   const m = prepId ? prepById.get(prepId) : undefined;
-  const meetDate = m?.event_date && m.event_date.slice(0, 10) >= today ? m.event_date.slice(0, 10) : null;
+  const meetStart = m?.event_date ? m.event_date.slice(0, 10) : null;
+  const meetEnd = m?.event_end_date && meetStart && m.event_end_date.slice(0, 10) > meetStart ? m.event_end_date.slice(0, 10) : null;
+  // a meet that runs several days stays on until its last day
+  const meetDate = meetStart && (meetEnd ?? meetStart) >= today ? meetStart : null;
 
   const byBlock: Record<string, RoadmapBlockView> = {};
   for (const { prep: _prep, ...rest } of views) byBlock[rest.id] = rest;
@@ -711,6 +721,14 @@ export function buildProgramRoadmap(input: {
     totalWeeks,
     start: program.start,
     end: program.end,
-    meet: meetDate ? { name: clean(m?.event_name), date: meetDate, daysOut: dayNum(meetDate) - dayNum(today) } : null,
+    meet: meetDate
+      ? {
+          name: clean(m?.event_name),
+          date: meetDate,
+          daysOut: Math.max(0, dayNum(meetDate) - dayNum(today)),
+          endDate: meetEnd,
+          dayTbd: !!m?.event_day_tbd && !!meetEnd,
+        }
+      : null,
   };
 }
