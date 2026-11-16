@@ -16,6 +16,7 @@ export function messagePreviewText(body: string | null | undefined, attachments:
   if (first?.kind === "community_post") return first.story ? (first.shared ? "Shared a story" : "Replied to a story") : "Shared a post";
   if (first?.kind === "form_request") return "📋 A form to fill in";
   if (first?.kind === "payment_request") return "💳 Payment request";
+  if (first?.kind === "auto_pay_setup") return "💳 Set up auto-pay";
   if (first?.kind === "signature_request") return "✍️ Something to sign";
   if (first?.kind === "recipe_share") return "🍽️ Shared a recipe";
   if (first?.kind === "nutrition_plan") return "🍽️ Your nutrition plan";

@@ -10,6 +10,7 @@ import { ChatSoundCard } from "@/components/chat-sound-card";
 import { GifThumb } from "@/components/gif-thumb";
 import { fallbackEmoji } from "@/lib/gif-fallback";
 import { PaymentRequestCard } from "@/components/payment-request-card";
+import { AutoPaySetupCard } from "@/components/billing/auto-pay-setup-card";
 import {
   FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, File as FileIcon, Download, ChevronDown, ChevronUp, Play, Pause, Gauge,
@@ -46,7 +47,7 @@ export type SharedAttachment = {
   width?: number;
   height?: number;
   peaks?: number[];
-  kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share" | "community_post" | "staff_invite";
+  kind?: "sound" | "gif" | "payment_request" | "auto_pay_setup" | "form_request" | "signature_request" | "recipe_share" | "community_post" | "staff_invite";
   fallback_emoji?: string;
   // community_post: the post it opens (a reply from the post's Message button)
   post_id?: string;
@@ -785,6 +786,9 @@ export function AttachmentView({
 }) {
   if (att.kind === "payment_request") {
     return <PaymentRequestCard att={att} mine={mine} />;
+  }
+  if (att.kind === "auto_pay_setup") {
+    return <AutoPaySetupCard att={att as any} staff={mine} />;
   }
   if (att.kind === "form_request") {
     return <FormRequestCard att={att} mine={mine} />;
