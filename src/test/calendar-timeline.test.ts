@@ -176,7 +176,24 @@ describe("the timeline's words", () => {
     expect(l.detail).toMatch(/^1:1 Training · 800 Vaughan Ave/);
     // A Google event is its own title, never "Google Calendar".
     const g = blockLabels({ id: "g", kind: "google_event", date: "2026-11-16", title: "Drive", clientName: "Google Calendar" }, true);
-    expect(g).toEqual({ title: "Drive", short: "Drive", detail: null });
+    expect(g).toEqual({ title: "Drive", short: "Drive", tiny: null, detail: null });
+  });
+
+  it("on a client's calendar a narrow column says when it starts (the title never fits), and a list line names a call, not the gym", async () => {
+    const { callLabel } = await import("@/lib/calendar-labels");
+    const item = {
+      id: "pt:1", kind: "pt_session" as const, date: "2026-11-16", title: "1:1 Training",
+      startsAt: new Date(2026, 10, 16, 10, 30).toISOString(), location: "800 Vaughan Ave Unit 404, Selkirk, Manitoba R1A 4R4, Canada",
+    };
+    const l = blockLabels(item, false);
+    expect(l.title).toBe("1:1 Training");
+    expect(l.tiny).toBe("10:30a");
+    // The coach's calendars keep the first name.
+    expect(blockLabels({ ...item, clientName: "Nicolas Galli" }, true).tiny).toBeNull();
+    expect(callLabel(item.location)).toBeNull();
+    expect(callLabel("https://meet.google.com/abc-defg-hij")).toBe("Google Meet");
+    expect(callLabel("Google Meet")).toBe("Google Meet");
+    expect(readFileSync("src/components/calendar/time-grid.tsx", "utf8")).toContain("{item.tiny ?? short}");
   });
 });
 
@@ -211,7 +228,9 @@ describe("the Home card's Day view", () => {
     expect(comingUpFrom("2026-11-14", "2026-11-15")).toBe("2026-11-15");
     const card = readFileSync("src/components/admin-calendar/dashboard-schedule-card.tsx", "utf8");
     expect(card).toContain("const aheadFrom = comingUpFrom(anchor, today);");
-    expect(card).toContain('.filter((r) => r.date >= aheadFrom && !STRUCK.has(r.status ?? "") && !hasEnded(r.startsAt, r.endsAt, nowMs))');
+    expect(card).toContain('.filter((r) => r.date >= aheadFrom && !STRUCK_STATUSES.has(r.status ?? "") && !hasEnded(r.startsAt, r.endsAt, nowMs))');
+    // A client's card: the same rule through buildHomeAgenda.
+    expect(readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8")).toContain("buildHomeAgenda(items, { today, day: anchor, nowMs, days: HOME_CALENDAR_DAYS, maxUpcoming: HOME_UPCOMING_ROWS, upcoming: isCalendarItem })");
   });
 });
 
@@ -221,17 +240,38 @@ describe("the coach's calendars are timelines", () => {
   const card = readFileSync("src/components/admin-calendar/dashboard-schedule-card.tsx", "utf8");
   const grid = readFileSync("src/components/calendar/time-grid.tsx", "utf8");
 
-  it("the Calendar page's Day and Week are a timeline, opt-in so the client calendar stays as it is", () => {
+  it("every Calendar page's Day and Week are a timeline: the coach's and a client's (Nov 16 2026: the same calendar for every account)", () => {
     expect(board).toContain("{timeline && (view === \"week\" || view === \"day\") && (");
     expect(panel).toMatch(/<CalendarBoard\s+timeline/);
-    expect(readFileSync("src/routes/_authenticated/portal/calendar.tsx", "utf8")).not.toMatch(/<CalendarBoard[^>]*\btimeline\b/);
+    const page = readFileSync("src/routes/_authenticated/portal/calendar.tsx", "utf8");
+    expect(page).toMatch(/<CalendarBoard[^>]*\btimeline\b/);
+    expect(page).toContain('const CLIENT_VIEWS: ViewMode[] = ["day", "week", "month", "upcoming"];');
+    // Sparse calendars open on what's coming until they pick; a day tapped on Home opens Day on it.
+    expect(page).toContain('const view: ViewMode = dayOverride ? "day" : prefs.boardView ?? CLIENT_DEFAULT_VIEW;');
+    expect(page).toContain('const CLIENT_DEFAULT_VIEW: ViewMode = "upcoming";');
+  });
+
+  it("a client's tap on empty time on a day ahead asks for a session then; no second request button", () => {
+    const page = readFileSync("src/routes/_authenticated/portal/calendar.tsx", "utf8");
+    expect(page).toContain("onCreate={canRequest && client?.id ? (d, time) => setAsking({ date: d, time }) : undefined}");
+    expect(page).toContain("createButton={false}");
+    expect(page).toContain("canCreateOn={(d) => d > today}");
+    expect(page).toContain("initialTime={asking?.time ?? null}");
+    expect(board).toContain("{onCreate && createButton && (");
+    expect(grid).toContain("const slot = onSlot && (!canSlot || canSlot(d)) ? onSlot : undefined;");
+    expect(grid).toContain("aria-label={`${slotVerb} at ${minuteClock(ghost.min)}`}");
+    const client = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
+    expect(client).toContain("const requestAt = links && canRequest ? (date: string, time: string) => setRequesting({ date, time }) : undefined;");
+    expect(client).toContain("const canAsk = (d: string) => d > today;");
+    const sheet = readFileSync("src/components/schedule/request-session-sheet.tsx", "utf8");
+    expect(sheet).toContain('setTime(initialTime && /^\\d{2}:\\d{2}$/.test(initialTime) ? initialTime : "09:00")');
   });
 
   it("a tap on empty time opens the booking form at that time; a finger shows the slot first", () => {
     expect(panel).toContain("onCreate={(date, time) => setBooking({ date, time })}");
     expect(panel).toContain("initialTime={booking?.time ?? null}");
     expect(card).toContain("initialTime={booking?.time ?? null}");
-    expect(grid).toContain('if (lastPointer.current === "mouse") onSlot(d, slotTime(min));');
+    expect(grid).toContain('if (lastPointer.current === "mouse") slot(d, slotTime(min));');
     expect(grid).toContain("else setPending({ day: d, min });");
   });
 
@@ -241,13 +281,19 @@ describe("the coach's calendars are timelines", () => {
     }
   });
 
-  it("the Home card's views are timelines, a month of names and the week as a list", () => {
-    expect(card).toContain("<TimeGrid");
-    expect(card).toContain("days={[anchor]}");
-    expect(card).toContain("days={weekDays(anchor)}");
-    expect(card).toContain("<MiniMonth anchor={anchor} today={today} onPick={openDay}");
-    // Month says who, not dots.
-    expect(card).not.toMatch(/<MiniMonth[^>]*\bdots=/);
+  it("every Home card's views are timelines, a month of names and the week as a list", () => {
+    const client = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
+    for (const src of [card, client]) {
+      expect(src).toContain("<TimeGrid");
+      expect(src).toContain("days={[anchor]}");
+      expect(src).toContain("days={weekDays(anchor)}");
+      expect(src).toContain("<HomeMonth anchor={anchor} today={today} onPick={openDay}");
+      // Month says who / what, not dots.
+      expect(src).not.toMatch(/<HomeMonth[^>]*\bdots=/);
+    }
+    // A client's day: rows for what has no time (the workout with its Start), a timeline only for what does.
+    expect(client).toContain('const dayRows = useMemo(() => agenda.today.filter((i) => i.kind === "workout" || !i.startsAt), [agenda.today]);');
+    expect(client).toContain("{dayTimed.length > 0 && (");
   });
 
   it("the Calendar page opens on the week's timeline (the day's on a phone) until a view is picked", async () => {

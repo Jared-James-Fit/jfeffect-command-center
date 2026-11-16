@@ -2,7 +2,8 @@
  * The coach's calendar choices, remembered on their account so they follow
  * them across phone and desktop: the Calendar page's view (Month / Week /
  * Day / List), the Home card's view (Day / Week / Month / List), and Coaching vs
- * + Google. A copy on the device makes the first paint right (no flash of
+ * + Google. Every account has its own (a client's Calendar page and Home card
+ * read the same two choices as the coach's). A copy on the device makes the first paint right (no flash of
  * the default), and the account copy wins when it's newer (changed on the
  * other device). Whichever was changed last wins, as for the theme.
  *
@@ -10,6 +11,7 @@
  * new row there would carry a default theme and could flip someone's dark
  * mode on their next launch.
  */
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -106,9 +108,18 @@ async function saveToAccount(userId: string, prefs: CalendarPrefs): Promise<void
 
 /**
  * One shared copy per account (React Query), so the Home card and the
- * Calendar page always agree, even mid-visit.
+ * Calendar page always agree, even mid-visit. `local`: a coach previewing a
+ * client's calendar picks views for that visit only; they're never saved to
+ * his account (or the client's).
  */
-export function useCalendarPrefs(): { prefs: CalendarPrefs; setPrefs: (patch: Omit<CalendarPrefs, "updatedAt">) => void } {
+export function useCalendarPrefs(opts: { local?: boolean } = {}): { prefs: CalendarPrefs; setPrefs: (patch: Omit<CalendarPrefs, "updatedAt">) => void } {
+  const [visit, setVisit] = useState<CalendarPrefs>({});
+  const saved = useSavedCalendarPrefs(!opts.local);
+  if (opts.local) return { prefs: visit, setPrefs: (patch) => setVisit((v) => ({ ...v, ...patch })) };
+  return saved;
+}
+
+function useSavedCalendarPrefs(enabled: boolean): { prefs: CalendarPrefs; setPrefs: (patch: Omit<CalendarPrefs, "updatedAt">) => void } {
   const { user } = useAuth();
   const userId = user?.id ?? null;
   const qc = useQueryClient();
@@ -116,7 +127,7 @@ export function useCalendarPrefs(): { prefs: CalendarPrefs; setPrefs: (patch: Om
 
   const { data } = useQuery<CalendarPrefs>({
     queryKey: key,
-    enabled: !!userId,
+    enabled: !!userId && enabled,
     initialData: () => readCachedPrefs(userId),
     initialDataUpdatedAt: 0,
     staleTime: 5 * 60_000,

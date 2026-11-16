@@ -39,6 +39,8 @@ export type TimeGridEntry<T> = {
   title: string;
   /** For a narrow column ("Nicolas"). */
   short?: string | null;
+  /** A phone's week column, when it differs from `short`: a client's "10:30a" (their title never fits there). */
+  tiny?: string | null;
   /** What and where, after the time. */
   detail?: string | null;
   family: KindFamily;
@@ -66,6 +68,8 @@ export function TimeGrid<T>({
   nowMs,
   onOpen,
   onSlot,
+  canSlot,
+  slotVerb = "Book",
   onDay,
   hourHeight = 48,
   heightClass,
@@ -81,6 +85,10 @@ export function TimeGrid<T>({
   onOpen: (ref: T) => void;
   /** Book on an empty slot ("HH:MM" on a half hour). */
   onSlot?: (day: string, time: string) => void;
+  /** Which days take a tap on empty time (default every day shown): a client can only ask for a day ahead. */
+  canSlot?: (day: string) => boolean;
+  /** What a tap on empty time does, for its label: "Book" (the coach), "Request a session" (a client). */
+  slotVerb?: string;
   /** A day's name was tapped (open that day). */
   onDay?: (day: string) => void;
   hourHeight?: number;
@@ -241,12 +249,13 @@ export function TimeGrid<T>({
           {days.map((d) => {
             const placed = timedByDay.get(d) ?? [];
             const isNowColumn = d === nowDay;
+            const slot = onSlot && (!canSlot || canSlot(d)) ? onSlot : undefined;
             const ghost = pending?.day === d ? pending : hover?.day === d ? hover : null;
             return (
               <div
                 key={d}
                 role="presentation"
-                className={cn("relative border-l border-border/60", onSlot && "cursor-pointer")}
+                className={cn("relative border-l border-border/60", slot && "cursor-pointer")}
                 style={{
                   backgroundImage: "linear-gradient(to bottom, var(--border) 1px, transparent 1px)",
                   backgroundSize: `100% ${hourHeight}px`,
@@ -255,7 +264,7 @@ export function TimeGrid<T>({
                   lastPointer.current = e.pointerType;
                 }}
                 onPointerMove={(e) => {
-                  if (!onSlot || e.pointerType !== "mouse" || e.target !== e.currentTarget) {
+                  if (!slot || e.pointerType !== "mouse" || e.target !== e.currentTarget) {
                     if (hover) setHover(null);
                     return;
                   }
@@ -264,10 +273,10 @@ export function TimeGrid<T>({
                 }}
                 onPointerLeave={() => setHover(null)}
                 onClick={(e) => {
-                  if (!onSlot || e.target !== e.currentTarget) return;
+                  if (!slot || e.target !== e.currentTarget) return;
                   const min = slotStart(minuteAt(e));
                   // A finger shows the slot first; a second tap on it books (a stray tap never opens the form).
-                  if (lastPointer.current === "mouse") onSlot(d, slotTime(min));
+                  if (lastPointer.current === "mouse") slot(d, slotTime(min));
                   else setPending({ day: d, min });
                 }}
               >
@@ -275,13 +284,13 @@ export function TimeGrid<T>({
                   <Block key={p.item.key} placed={p} pxPerMin={pxPerMin} compact={compact} ended={isEnded(p, d, nowDay, nowMin)} onOpen={onOpen} />
                 ))}
 
-                {ghost && onSlot && (
+                {ghost && slot && (
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       setPending(null);
-                      onSlot(d, slotTime(ghost.min));
+                      slot(d, slotTime(ghost.min));
                     }}
                     className={cn(
                       "absolute inset-x-0.5 z-10 flex items-start gap-0.5 overflow-hidden rounded-md border border-dashed border-foreground/40 bg-foreground/[0.06] px-1 py-0.5 text-left font-semibold text-foreground",
@@ -289,7 +298,7 @@ export function TimeGrid<T>({
                       hover && !pending && "pointer-events-none",
                     )}
                     style={{ top: ghost.min * pxPerMin, height: SLOT_MIN * pxPerMin }}
-                    aria-label={`Book at ${minuteClock(ghost.min)}`}
+                    aria-label={`${slotVerb} at ${minuteClock(ghost.min)}`}
                   >
                     <Plus className="mt-px h-3 w-3 shrink-0" />
                     <span className="truncate tabular-nums">{minuteClock(ghost.min)}</span>
@@ -406,7 +415,7 @@ function Block<T>({
     >
       {/* A phone's week column: the first name, small. */}
       <span className="block @[4.5rem]:hidden">
-        <Lines n={fit} className={cn("text-[9px] font-semibold tracking-tight", strike)}>{short}</Lines>
+        <Lines n={fit} className={cn("text-[9px] font-semibold tracking-tight", strike)}>{item.tiny ?? short}</Lines>
       </span>
       {/* A narrow column: the first name and when it starts. */}
       <span className="hidden @[4.5rem]:block @[6.5rem]:hidden">

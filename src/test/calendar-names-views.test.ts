@@ -184,12 +184,18 @@ describe("the Home card's Day / Week / Month / List", () => {
     expect(dayTag("2026-11-17", "2026-11-18")).toMatch(/^Tue 17$/);
   });
 
-  it("List is the week's bookings one line each, by day, under the week's strip", async () => {
-    const dash = readFileSync("src/components/admin-calendar/dashboard-schedule-card.tsx", "utf8");
-    expect(dash).toContain('{ id: "list", label: "List" }');
-    expect(dash).toContain("<AgendaWeek today={today} anchor={anchor} onSelect={openDay} dots={(d) => dotsByDay.get(d) ?? []} />");
-    expect(dash).toContain("dayText={firstOfDay ? dayTag(r.date, today) : \"\"}");
-    expect(dash).toContain("data-home-list");
+  it("List is the week's bookings one line each, by day, under the week's strip (every account's card)", async () => {
+    const shared = readFileSync("src/components/schedule/home-calendar-views.tsx", "utf8");
+    expect(shared).toContain('{ id: "list", label: "List" }');
+    expect(shared).toContain("dayText={firstOfDay ? dayTag(r.date, today) : \"\"}");
+    expect(shared).toContain("data-home-list");
+    for (const f of ["src/components/admin-calendar/dashboard-schedule-card.tsx", "src/components/home/upcoming-schedule-card.tsx"]) {
+      const card = readFileSync(f, "utf8");
+      expect(card, f).toContain("<AgendaWeek today={today} anchor={anchor} onSelect={openDay} dots={(d) => dotsByDay.get(d) ?? []} />");
+      expect(card, f).toContain("<HomeWeekList");
+      expect(card, f).toContain("<HomeViewBar");
+      expect(card, f).toContain("<HomeMonth anchor={anchor} today={today} onPick={openDay}");
+    }
     // Remembered like the other tabs; an older value or junk falls back to nothing.
     const { sanitizePrefs } = await import("@/lib/calendar-prefs");
     expect(sanitizePrefs({ homeView: "list" })).toEqual({ homeView: "list" });
@@ -197,22 +203,28 @@ describe("the Home card's Day / Week / Month / List", () => {
   });
 
   it("the period is never cut short: it takes its own line when the switch leaves no room", () => {
-    const dash = readFileSync("src/components/admin-calendar/dashboard-schedule-card.tsx", "utf8");
+    const dash = readFileSync("src/components/schedule/home-calendar-views.tsx", "utf8");
     expect(dash).toContain('<div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">');
     expect(dash).toContain('<span className="mr-auto whitespace-nowrap text-[13px] font-semibold tabular-nums" aria-live="polite">{label}</span>');
     expect(dash).not.toMatch(/truncate text-center text-xs font-semibold tabular-nums">\{label\}/);
   });
 
-  it("the card and the Calendar page share one remembered choice", () => {
+  it("the card and the Calendar page share one remembered choice, for the coach and every client", () => {
     const dash = readFileSync("src/components/admin-calendar/dashboard-schedule-card.tsx", "utf8");
     const panel = readFileSync("src/components/admin-calendar/board-panel.tsx", "utf8");
+    const client = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
+    const page = readFileSync("src/routes/_authenticated/portal/calendar.tsx", "utf8");
     for (const src of [dash, panel]) expect(src).toContain("useCalendarPrefs()");
-    expect(dash).toContain('const savedView: HomeView = prefs.homeView ?? "day";');
-    // A day tapped in Week or Month opens for the visit; only the tabs are remembered.
-    expect(dash).toContain('const view: HomeView = dayFocus ? "day" : savedView;');
-    expect(dash).toContain('aria-label="Calendar view"');
-    expect(panel).not.toContain("localStorage");
-    expect(dash).not.toContain("localStorage");
+    // A coach previewing a client picks views for that visit only, never saved to anyone's account.
+    expect(client).toContain("const { prefs, setPrefs } = useCalendarPrefs({ local: previewing });");
+    expect(page).toContain("const { prefs, setPrefs } = useCalendarPrefs({ local: isImpersonating });");
+    for (const src of [dash, client]) {
+      expect(src).toContain('const savedView: HomeView = prefs.homeView ?? "day";');
+      // A day tapped in Week or Month opens for the visit; only the tabs are remembered.
+      expect(src).toContain('const view: HomeView = dayFocus ? "day" : savedView;');
+    }
+    expect(readFileSync("src/components/schedule/home-calendar-views.tsx", "utf8")).toContain('aria-label="Calendar view"');
+    for (const src of [dash, panel, client, page]) expect(src).not.toContain("localStorage");
   });
 
   it("the month grid's chips show time and who, with the details on hover", () => {

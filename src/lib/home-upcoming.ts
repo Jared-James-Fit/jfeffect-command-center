@@ -1,5 +1,13 @@
 import type { CalendarItem } from "@/lib/calendar-sources";
 import { compareInstants } from "@/lib/schedule-time";
+import { comingUpFrom } from "@/lib/home-calendar";
+
+/** Ended (timed items only); no end = an hour. The Home cards' own reading (agenda.tsx). */
+function hasEnded(startsAt: string | null | undefined, endsAt: string | null | undefined, nowMs: number): boolean {
+  if (!startsAt) return false;
+  const end = Date.parse(endsAt ?? "") || Date.parse(startsAt) + 60 * 60 * 1000;
+  return end < nowMs;
+}
 
 /**
  * Client Home schedule summary.
@@ -89,6 +97,7 @@ export function selectHomeUpcoming(
 // Cardio rides on training days (shown with the workout), so it's left out.
 
 export type HomeAgenda = {
+  /** The day on screen (today unless another was picked), in full. */
   today: CalendarItem[];
   /** The next days with something on them, in order, rows capped across all days. */
   upcoming: Array<{ date: string; items: CalendarItem[] }>;
@@ -115,6 +124,10 @@ export function buildHomeAgenda(
   items: CalendarItem[] | null | undefined,
   options: {
     today: string;
+    /** The day on screen (a day picked in the week strip); default today. */
+    day?: string;
+    /** Looking back at a day before today: what's ended today isn't coming up. */
+    nowMs?: number;
     days?: number;
     maxUpcoming?: number;
     /** Which items belong in the coming-up list (today always shows everything). */
@@ -122,7 +135,11 @@ export function buildHomeAgenda(
   },
 ): HomeAgenda {
   const { today } = options;
-  const horizon = addDaysIso(today, options.days ?? HOME_AGENDA_DAYS);
+  const day = options.day ?? today;
+  // Coming up runs after the day on screen, never repeating it, and from today when looking back.
+  const from = comingUpFrom(day, today);
+  const horizon = addDaysIso(from, (options.days ?? HOME_AGENDA_DAYS) - 1);
+  const nowMs = options.nowMs ?? Date.now();
   const max = options.maxUpcoming ?? HOME_AGENDA_MAX_UPCOMING;
   const seen = new Set<string>();
   const live = (items ?? []).filter((i) => {
@@ -132,11 +149,12 @@ export function buildHomeAgenda(
     return true;
   });
 
-  const todayItems = live.filter((i) => i.date === today).sort(agendaOrder);
+  const todayItems = live.filter((i) => i.date === day).sort(agendaOrder);
   const byDay = new Map<string, CalendarItem[]>();
   for (const i of live) {
-    if (i.date <= today || i.date > horizon) continue;
+    if (i.date < from || i.date > horizon) continue;
     if (options.upcoming && !options.upcoming(i)) continue;
+    if (i.status === "Missed" || (i.date === today && hasEnded(i.startsAt, i.endsAt, nowMs))) continue;
     byDay.set(i.date, [...(byDay.get(i.date) ?? []), i]);
   }
   const upcoming: HomeAgenda["upcoming"] = [];

@@ -34,11 +34,13 @@ type BookedLite = { id: string; session_date: string; start_time: string; end_ti
  * instead of one of them, so the coach's Approve moves that session (and its
  * credit) rather than booking a second.
  */
-export function RequestSessionSheet({ open, onOpenChange, isPov = false, initialDate, clientId }: {
+export function RequestSessionSheet({ open, onOpenChange, isPov = false, initialDate, initialTime, clientId }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   isPov?: boolean;
   initialDate?: string | null;
+  /** "HH:MM" from a tap on an empty time on their calendar's timeline. */
+  initialTime?: string | null;
   /** The client's own id: offers "instead of" their booked sessions near the day picked. */
   clientId?: string | null;
 }) {
@@ -75,10 +77,10 @@ export function RequestSessionSheet({ open, onOpenChange, isPov = false, initial
 
   useEffect(() => {
     if (!open) return;
-    setType("training"); setMinutes(60); setTime("09:00"); setAnyTime(false); setAlt(""); setNote(""); setMoreOpen(false); setReplaces(null);
+    setType("training"); setMinutes(60); setTime(initialTime && /^\d{2}:\d{2}$/.test(initialTime) ? initialTime : "09:00"); setAnyTime(false); setAlt(""); setNote(""); setMoreOpen(false); setReplaces(null);
     const today = localISO(0);
     setDate(initialDate && initialDate > today ? initialDate : localISO(1));
-  }, [open, initialDate]);
+  }, [open, initialDate, initialTime]);
 
   const pickType = (t: SessionRequestType) => {
     setType(t);
