@@ -9,14 +9,17 @@ const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8"
 describe("a set done as suggested is one tap on its number", () => {
   it("the card works out the weight a tap logs: the coach's planned weight, else Suggested while it's on", () => {
     expect(wdv).toContain(": plannedView ? (plannedView.load != null && plannedView.value ? plannedView.load : null)");
-    expect(wdv).toContain(': showSuggestionCard && canSuggest && loadHint && loadModel && loadModel.status !== "calibrating" ? loadHint.target');
+    // a range is picked by feel: it never logs on a tap
+    expect(wdv).toContain(': showSuggestionCard && canSuggest && loadHint && loadModel && loadModel.status !== "calibrating" && !loadPicks ? loadHint.target');
     // never while the warm-up form is setting today's weight
     expect(wdv).toContain("quickLoad={warmupForm && warmupGauge ? null : quickLoad}");
   });
 
-  it("an empty weight box shows it, and the set's number logs the set at it", () => {
+  it("the weight box stays blank, and the set's number logs the set at the strip's weight", () => {
     expect(wdv).toContain('!isConfirmed && !bw && !hideWeight && loadType === "external" && load === "" && quickLoad != null && quickLoad > 0');
-    expect(wdv).toContain("suggested={quickWeight != null ? Number(quickWeight) : null}");
+    // no number in the box: the coach wants them blank until the athlete acts
+    expect(wdv).not.toContain("suggested={quickWeight");
+    expect(wdv).toContain("Log set ${setIndex} at ${quickWeight} ${unit}");
     expect(wdv).toContain("const quick = nextCompletedAt ? quickWeight : null;");
     expect(wdv).toContain("quick ? persistedLoadForDisplayValue(quick, unit, existing) : persistedLoadForDisplayValue(load, loadUnit, existing)");
     expect(wdv).toContain("load: bw ? 0 : quick ?? load,");
