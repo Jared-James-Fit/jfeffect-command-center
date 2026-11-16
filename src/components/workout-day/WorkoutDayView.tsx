@@ -4007,6 +4007,14 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     () => (loadModel && loadPlan ? suggestSetLoad(loadModel, loadPlan) : null),
     [loadModel, loadPlan],
   );
+  // The weight an open set logs at with one tap on its number while its box is
+  // empty: what the strip's chip would fill (the coach's planned weight, else
+  // Suggested while it's on), shown in each empty box. Typing one replaces it.
+  const quickLoad: number | null =
+    readonly || hideWeight || rowLoadType !== "external" ? null
+    : plannedView ? (plannedView.load != null && plannedView.value ? plannedView.load : null)
+    : showSuggestionCard && canSuggest && loadHint && loadModel && loadModel.status !== "calibrating" ? loadHint.target
+    : null;
   // The first heavy set of a main lift, by feel: a few weights to choose from by
   // how the warm-ups move (suggestionPicks); everything else stays one number.
   const loadPicks = useMemo(
@@ -5070,6 +5078,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               // While the warm-up form is setting today's weight, its answer is
               // the only suggestion on screen (no stale ghost in the set row).
               loadHint={warmupForm && warmupGauge ? null : loadHint}
+              quickLoad={warmupForm && warmupGauge ? null : quickLoad}
               lastTimeWeight={activeUnit === "kg" ? (previousLift?.normalizedKg ?? null) : (previousLift?.normalizedLb ?? null)}
               repTarget={repTarget}
               rpeTarget={rpeTarget}
@@ -5430,7 +5439,7 @@ const UNIT_PICK_WAIT_MS = 5000;
 
 function SetRow({
   rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
-  targetReps, targetRpe, targetRir, suggestedWeight, loadHint = null, lastTimeWeight,
+  targetReps, targetRpe, targetRir, suggestedWeight, loadHint = null, quickLoad = null, lastTimeWeight,
   repTarget, rpeTarget, rirTarget,
   repMaxBests = null,
   assistedBests = null,
@@ -5484,6 +5493,11 @@ function SetRow({
   targetRpe?: string | null;
   targetRir?: string | null;
   suggestedWeight?: number | null;
+  /**
+   * The weight one tap on this set's number logs while its box is empty (what
+   * Suggested or the coach's planned weight fills), shown in the box.
+   */
+  quickLoad?: number | null;
   lastTimeWeight?: number | null;
   repTarget?: RangeTarget;
   rpeTarget?: RangeTarget;
@@ -6364,20 +6378,29 @@ function SetRow({
     }
   };
 
+  // An empty weight box shows the weight Suggested (or the coach's plan) would
+  // fill: one tap on the set's number logs the set at it, so a set the athlete
+  // did as suggested is one tap, never a fill and then a tap.
+  const quickWeight =
+    !isConfirmed && !bw && !hideWeight && loadType === "external" && load === "" && quickLoad != null && quickLoad > 0
+      ? fmtLoad(quickLoad)
+      : null;
+
   const saveCompletionStatus = async () => {
     if (readonly || !clientId || statusSaving) return;
     const nextCompletedAt = isConfirmed ? null : new Date().toISOString();
     const repsNum = reps ? parseInt(reps, 10) : null;
     const rpeNum = rpe ? Number(rpe) : null;
+    const quick = nextCompletedAt ? quickWeight : null;
     const persistedLoad = bw
       ? { value: 0, unit }
-      : persistedLoadForDisplayValue(load, loadUnit, existing);
+      : quick ? persistedLoadForDisplayValue(quick, unit, existing) : persistedLoadForDisplayValue(load, loadUnit, existing);
     const currentHasRequiredValues = isSetLogComplete({
       requireReps: showReps,
       requireTime: showTimer,
       hideWeight,
       loadType,
-      load: bw ? 0 : load,
+      load: bw ? 0 : quick ?? load,
       reps: repsNum,
       durationSeconds: durationSec,
     });
@@ -6434,6 +6457,8 @@ function SetRow({
       }
       await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();
+      // the weight it logged at came back from the server: it's saved, not a new edit
+      if (quick) adoptShownAsSaved(true);
       if (nextCompletedAt) onSetCompleted?.(setIndex);
     } catch (err: any) {
       const message = err?.message ?? "Set status failed to save";
@@ -6866,8 +6891,9 @@ function SetRow({
             ? Number(displayLoadInUnit(prevExisting, unit))
             : null) ?? loadHint?.target ?? lastTimeWeight ?? suggestedWeight ?? null
         }
-        // No faded target in the weight cell: an empty cell reads as empty.
-        // Today's suggestion lives behind "Show suggestions" (and the warm-up card).
+        // An empty box shows the weight one tap on the set's number logs it at
+        // (Suggested, or the coach's planned weight); typing replaces it.
+        suggested={quickWeight != null ? Number(quickWeight) : null}
         disabled={readonly}
         focusMode={focusMode}
         canSwitchUnit={!!onSwitchUnit}

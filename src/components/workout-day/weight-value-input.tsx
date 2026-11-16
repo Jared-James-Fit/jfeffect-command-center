@@ -72,9 +72,10 @@ export function WeightValueInput({
   /** Prescribed / Last Time / previous best reference value (display only). */
   referenceWeight?: number | null;
   /**
-   * Today's suggested load for the next set to log. Shown faded in the empty
-   * cell (and as the placeholder while typing); keyboard Done on a blank draft
-   * uses it. Typing anything replaces it — it is never saved on its own.
+   * The weight this set logs at with one tap on its number (Suggested, or the
+   * coach's % weight). Shown in the empty cell (and as the placeholder
+   * while typing); keyboard Done on a blank draft uses it. Typing anything
+   * replaces it — it is never saved on its own.
    */
   suggested?: number | null;
 }) {
@@ -395,7 +396,8 @@ export function WeightValueInput({
             )}
           >
             {ghost != null ? (
-              <span className="inline-flex items-center gap-1 tabular-nums text-muted-foreground/80" data-testid="weight-suggested">
+              // the weight a tap on the set's number logs: the Suggested chip's blue
+              <span className="inline-flex items-center gap-1 font-semibold tabular-nums text-blue-700/80 dark:text-blue-300/90" data-testid="weight-suggested">
                 <Target className="h-3 w-3 shrink-0" aria-hidden="true" />
                 {ghost}
               </span>
