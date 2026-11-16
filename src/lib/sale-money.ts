@@ -33,6 +33,12 @@ export type MoneyLedgerRow = {
   receipt_url?: string | null;
   hosted_invoice_url?: string | null;
   invoice_pdf_url?: string | null;
+  /** Staff reads only (never the client's): where it went, its reference and its proof. */
+  client_id?: string | null;
+  external_reference?: string | null;
+  deposit_account_id?: string | null;
+  proof_path?: string | null;
+  created_at?: string | null;
 };
 
 export type SaleKind = "one_time" | "plan" | "subscription" | "free";
@@ -229,6 +235,14 @@ export type PaymentRow = {
   receiptUrl: string | null;
   /** The sale it was paid on. */
   saleId: string | null;
+  /** Recorded by hand (an e-transfer, cash…) rather than by Stripe. */
+  byHand: boolean;
+  /** The raw method (etransfer, stripe…), for the detail sheet's words. */
+  methodKey: string | null;
+  reference: string | null;
+  depositAccountId: string | null;
+  proofPath: string | null;
+  clientId: string | null;
 };
 
 /** A sale's money in and out, newest first, without the bookkeeping rows. */
@@ -248,6 +262,12 @@ export function salePayments(ledger: MoneyLedgerRow[]): PaymentRow[] {
         canVoid: !l.voided && !refund && l.source === "manual",
         receiptUrl: l.receipt_url ?? l.hosted_invoice_url ?? l.invoice_pdf_url ?? null,
         saleId: l.purchase_id ?? null,
+        byHand: l.source === "manual",
+        methodKey: l.method ?? null,
+        reference: l.external_reference ?? null,
+        depositAccountId: l.deposit_account_id ?? null,
+        proofPath: l.proof_path ?? null,
+        clientId: l.client_id ?? null,
       };
     })
     .sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? "")));

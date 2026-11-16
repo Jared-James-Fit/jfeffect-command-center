@@ -17,7 +17,7 @@ export const OVERDUE_HOURS = 48;
 type Att = { kind?: string | null; type?: string | null } | null | undefined;
 
 /** Attachments that ask the client to DO something. */
-const REQUEST_KINDS = new Set(["checkin_request", "form_request", "signature_request", "payment_request"]);
+const REQUEST_KINDS = new Set(["checkin_request", "form_request", "signature_request", "payment_request", "auto_pay_setup"]);
 
 const ASK_WORDS =
   /\b(let me know|lmk|send me|send over|please|can you|could you|would you|will you|do you|did you|are you|have you|reply|respond|confirm|get back to me|update me|tell me)\b/i;

@@ -42,6 +42,8 @@ import { paymentPlans, type PaymentPlan } from "@/lib/package-view";
 import { saleLabels, type ClientPayments, type SaleSchedule } from "@/lib/payment-schedule";
 import { cn } from "@/lib/utils";
 import { billingRange } from "@/lib/date-range";
+import { clientTaxRate } from "@/lib/client-billing-summary";
+import { AutoPaySheet, PendingAutoPayRow, usePendingAutoPay } from "@/components/billing/auto-pay-sheet";
 
 export { payDay };
 
@@ -53,6 +55,7 @@ export function ClientBillingPanel({ clientId, onOpenSessions }: { clientId: str
   const [recording, setRecording] = useState<string | null>(null);
   const [dating, setDating] = useState<string | null>(null);
   const [termOf, setTermOf] = useState<string | null>(null);
+  const [autoPayFor, setAutoPayFor] = useState<{ saleId: string | null } | null>(null);
 
   const invalidate = () => {
     for (const key of [["client-billing", clientId], ["client-purchases", clientId], ["pt-balance", clientId], ["pt-pack-purchases", clientId], ["pt-client-ledger", clientId], ["pt-payment-ledger", clientId]]) {
@@ -112,8 +115,20 @@ export function ClientBillingPanel({ clientId, onOpenSessions }: { clientId: str
             onSetDates={setDating}
             onEditDates={setTermOf}
             onRenew={(id) => renew.mutate(id)}
+            sales={sales}
+            onAutoPay={isAdmin ? (saleId) => setAutoPayFor({ saleId: saleId ?? null }) : undefined}
           />
         </>
+      )}
+      {autoPayFor && payments && (
+        <AutoPaySheet
+          clientId={clientId}
+          p={payments}
+          sales={sales}
+          open
+          preferSaleId={autoPayFor.saleId}
+          onOpenChange={(o) => { if (!o) setAutoPayFor(null); }}
+        />
       )}
 
       {recordingSale && payments && (
@@ -169,7 +184,10 @@ function RecordButton({ balances, onPick }: { balances: SaleSchedule[]; onPick: 
  * The overview under the glance. Pure view over the payments model, so it can
  * be checked with fixture data (Marc's real records are the reference).
  */
-export function BillingOverview({ p, ledger, labels, isAdmin, clientId, renewing, onOpenSessions, onRecord, onSetDates, onEditDates, onRenew }: {
+export function BillingOverview({ p, ledger, labels, isAdmin, clientId, renewing, onOpenSessions, onRecord, onSetDates, onEditDates, onRenew, sales = [], onAutoPay }: {
+  sales?: any[];
+  /** Open Auto-pay (change, set up on a package, stop). */
+  onAutoPay?: (saleId?: string) => void;
   p: ClientPayments;
   ledger: any[];
   labels: Map<string, string>;
@@ -193,6 +211,8 @@ export function BillingOverview({ p, ledger, labels, isAdmin, clientId, renewing
   const somethingOwed = p.outstandingCents > 0 || p.unpaidDeliveredCents > 0;
   // On online coaching alone the glance above already says it's paid (in full, or renewing).
   const coachingOnly = p.packages.length === 0 && p.coaching.length > 0;
+  const pending = usePendingAutoPay(clientId);
+  const rate = useMemo(() => clientTaxRate(sales as any), [sales]);
 
   return (
     <>
@@ -219,7 +239,11 @@ export function BillingOverview({ p, ledger, labels, isAdmin, clientId, renewing
         </section>
       )}
 
-      {plans.length > 0 && <PaymentPlans plans={plans} p={p} money={money} isAdmin={isAdmin} onRecord={onRecord} />}
+      {pending.data && clientId && (
+        <PendingAutoPayRow clientId={clientId} change={pending.data} money={money} rate={rate} labels={labels} isAdmin={isAdmin} />
+      )}
+
+      {plans.length > 0 && <PaymentPlans plans={plans} p={p} money={money} isAdmin={isAdmin} onRecord={onRecord} onAutoPay={onAutoPay} />}
 
       {(p.notBilled || needsDates.length > 0 || ended.length > 0 || undated.length > 0) ? (
         <section className="space-y-2" data-billing-attention>
@@ -239,16 +263,22 @@ export function BillingOverview({ p, ledger, labels, isAdmin, clientId, renewing
             />
           )}
           {needsDates.map((b) => (
-            <AttentionRow
-              key={b.saleId}
-              title={`${b.label}: ${money(b.unscheduledCents)} with no payment dates`}
-              text={b.canSetDates ? "Not overdue: nothing says when it's due. Set the dates, or record a payment when it comes in." : "Not overdue: nothing collects it. Send a payment link or record a payment when it comes in."}
-              action={isAdmin ? (
-                b.canSetDates
-                  ? <Button size="sm" variant="outline" className="h-10" onClick={() => onSetDates(b.saleId)}><CalendarClock className="mr-1.5 h-4 w-4" /> Set dates</Button>
-                  : <Button size="sm" variant="outline" className="h-10" onClick={() => onRecord(b.saleId)}>Record</Button>
-              ) : null}
-            />
+            <div key={b.saleId} data-no-payment-method={b.saleId}>
+              <AttentionRow
+                title={`${b.label}: no payment method for ${money(b.unscheduledCents)}`}
+                text="Not overdue: nothing collects it and nothing says when it's due. Set up auto-pay, or set dates and record what they pay you."
+                action={isAdmin ? (
+                  <div className="flex flex-wrap gap-2">
+                    {onAutoPay && !pending.data && (
+                      <Button size="sm" variant="outline" className="h-10" onClick={() => onAutoPay(b.saleId)}><Repeat className="mr-1.5 h-4 w-4" /> Set up auto-pay</Button>
+                    )}
+                    {b.canSetDates
+                      ? <Button size="sm" variant="outline" className="h-10" onClick={() => onSetDates(b.saleId)}><CalendarClock className="mr-1.5 h-4 w-4" /> Set dates</Button>
+                      : <Button size="sm" variant="outline" className="h-10" onClick={() => onRecord(b.saleId)}>Record</Button>}
+                  </div>
+                ) : null}
+              />
+            </div>
           ))}
           {ended.map((r) => (
             <AttentionRow key={r.saleId} tone="neutral" title={`${r.name} ends ${payDay(r.next)}`} text="No more charges after that." />
@@ -404,12 +434,13 @@ function OwedSection({ p, money, dueAuto }: { p: ClientPayments; money: (c: numb
 }
 
 /** Each way money comes in, and which packages it pays, in order, on the real dates. */
-function PaymentPlans({ plans, p, money, isAdmin, onRecord }: {
+function PaymentPlans({ plans, p, money, isAdmin, onRecord, onAutoPay }: {
   plans: PaymentPlan[];
   p: ClientPayments;
   money: (c: number) => string;
   isAdmin: boolean;
   onRecord: (saleId: string) => void;
+  onAutoPay?: (saleId?: string) => void;
 }) {
   const [dates, setDates] = useState(false);
   const per = p.autoPay?.per ?? null;
@@ -418,12 +449,17 @@ function PaymentPlans({ plans, p, money, isAdmin, onRecord }: {
       <h4 className="px-0.5 text-[15px] font-semibold">{plans.length === 1 ? "Payment plan" : "Payment plans"}</h4>
       {plans.map((plan) => (
         <div key={plan.key} className={cn("rounded-xl border p-3", plan.late ? "border-destructive/40" : "border-border")} data-payment-plan={plan.how}>
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-            <span className="text-[14px] font-semibold">
-              {plan.how === "auto_pay" ? "Auto-pay" : plan.how === "stripe" ? "Stripe plan" : "Collected by you"}
-              <span className="font-normal text-muted-foreground"> · {money(plan.eachCents)}{plan.how === "auto_pay" && per ? ` every ${per}` : " a payment"}</span>
-            </span>
-            {plan.ends && <span className="text-[13px] text-muted-foreground">Ends {payDay(plan.ends)}</span>}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[14px] font-semibold">
+                {plan.how === "auto_pay" ? "Auto-pay" : plan.how === "stripe" ? "Stripe plan" : "Collected by you"}
+                <span className="font-normal text-muted-foreground"> · {money(plan.eachCents)}{plan.how === "auto_pay" && per ? ` every ${per}` : " a payment"}</span>
+              </div>
+              {plan.ends && <div className="text-[13px] text-muted-foreground">Ends {payDay(plan.ends)}</div>}
+            </div>
+            {isAdmin && onAutoPay && plan.how === "auto_pay" && (
+              <Button size="sm" variant="outline" className="h-9 shrink-0" onClick={() => onAutoPay()} data-manage-auto-pay>Manage</Button>
+            )}
           </div>
           <ol className="mt-2 space-y-1.5">
             {plan.steps.map((st, i) => (

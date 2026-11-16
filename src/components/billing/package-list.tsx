@@ -14,7 +14,10 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, Check, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import { CalendarClock, Check, ChevronDown, ChevronRight, ExternalLink, Paperclip } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { PaymentDetailSheet, useDepositAccounts } from "@/components/billing/payment-proof";
+import { depositLabel } from "@/lib/payment-proof";
 import { Button } from "@/components/ui/button";
 import { StatusChip } from "@/components/nutrition/nutrition-ui";
 import {
@@ -97,33 +100,61 @@ export function InstallmentRow({ i, money, action, inPackage }: { i: Installment
 
 export function PaymentHistory({ rows, labels, money, limit = 8 }: { rows: PaymentRow[]; labels: Map<string, string>; money: (c: number) => string; limit?: number }) {
   const [all, setAll] = useState(false);
+  const [open, setOpen] = useState<string | null>(null);
+  const { role } = useAuth();
+  const { data: accounts = [] } = useDepositAccounts();
   const shown = all ? rows : rows.slice(0, limit);
+  const opened = rows.find((r) => r.id === open) ?? null;
   return (
     <>
       <ul className="divide-y divide-border">
-        {shown.map((r) => (
-          <li key={r.id} className={cn("flex items-center justify-between gap-3 py-1.5", r.voided && "text-muted-foreground")} data-payment={r.kind}>
-            <div className="min-w-0">
-              <div className={cn("text-[14px] tabular-nums", r.voided && "line-through")}>{payDay(r.date) || "No date"}</div>
-              <div className="text-[12px] text-muted-foreground">
-                {(r.saleId && labels.get(r.saleId)) || "Payment"} · {r.voided ? "Voided" : r.kind === "refund" ? "Refund" : r.method ?? "Payment"}
-                {r.receiptUrl && !r.voided && <> · <a href={r.receiptUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">Receipt</a></>}
-              </div>
-            </div>
-            <div className="shrink-0 text-right">
-              <div className={cn("text-[14px] font-semibold tabular-nums", r.voided && "line-through", r.kind === "refund" && !r.voided && "text-destructive")}>
-                {r.kind === "refund" ? "−" : ""}{money(r.cents)}
-              </div>
-              {!r.voided && r.kind === "payment" && <div className="text-[12px] text-muted-foreground tabular-nums">{r.taxCents > 0 ? `incl. ${money(r.taxCents)} tax` : "no tax"}</div>}
-            </div>
-          </li>
-        ))}
+        {shown.map((r) => {
+          const into = r.byHand ? depositLabel(accounts.find((a) => a.id === r.depositAccountId)) : null;
+          return (
+            <li key={r.id} data-payment={r.kind}>
+              <button
+                type="button"
+                onClick={() => setOpen(r.id)}
+                className={cn("flex w-full items-center justify-between gap-3 py-2 text-left", r.voided && "text-muted-foreground")}
+                data-payment-row={r.id}
+              >
+                <div className="min-w-0">
+                  <div className={cn("text-[14px] tabular-nums", r.voided && "line-through")}>{payDay(r.date) || "No date"}</div>
+                  <div className="truncate text-[12px] text-muted-foreground">
+                    {(r.saleId && labels.get(r.saleId)) || "Payment"} · {r.voided ? "Voided" : r.kind === "refund" ? "Refund" : r.method ?? "Payment"}
+                    {into && !r.voided ? ` · ${into}` : ""}
+                    {r.receiptUrl && !r.voided ? " · Receipt" : ""}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2 text-right">
+                  {r.proofPath && !r.voided ? <Paperclip className="h-3.5 w-3.5 text-muted-foreground" aria-label="Proof attached" /> : null}
+                  <div>
+                    <div className={cn("text-[14px] font-semibold tabular-nums", r.voided && "line-through", r.kind === "refund" && !r.voided && "text-destructive")}>
+                      {r.kind === "refund" ? "−" : ""}{money(r.cents)}
+                    </div>
+                    {!r.voided && r.kind === "payment" && <div className="text-[12px] text-muted-foreground tabular-nums">{r.taxCents > 0 ? `incl. ${money(r.taxCents)} tax` : "no tax"}</div>}
+                  </div>
+                </div>
+              </button>
+            </li>
+          );
+        })}
       </ul>
       {rows.length > limit && (
         <button type="button" onClick={() => setAll((v) => !v)} className="flex min-h-10 w-full items-center justify-center gap-1 text-[13px] text-muted-foreground">
           {all ? "Show fewer" : `Show all ${rows.length}`}
           <ChevronDown className={cn("h-4 w-4 transition-transform", all && "rotate-180")} />
         </button>
+      )}
+      {opened && (
+        <PaymentDetailSheet
+          row={opened}
+          label={(opened.saleId && labels.get(opened.saleId)) || null}
+          money={money}
+          open
+          onOpenChange={(o) => !o && setOpen(null)}
+          canEdit={role === "admin" && !opened.voided}
+        />
       )}
     </>
   );

@@ -86,6 +86,7 @@ export function messageAction(attachments: AttachmentLike[] | null | undefined, 
   if (kinds.has("form_request")) return `sent${you} a form to fill out`;
   if (kinds.has("signature_request")) return `sent${you} something to sign`;
   if (kinds.has("payment_request")) return `sent${you} a payment request`;
+  if (kinds.has("auto_pay_setup")) return `sent${you} an auto-pay setup link`;
   if (kinds.has("recipe_share")) return `shared a recipe`;
   if (kinds.has("community_post")) return `sent${you} a post`;
   if (kinds.has("staff_invite")) return `sent${you} a team account invite`;

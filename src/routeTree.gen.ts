@@ -41,6 +41,7 @@ import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authen
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
 import { Route as AthletesHandleRouteImport } from './routes/athletes.$handle'
+import { Route as AutopayTokenRouteImport } from './routes/autopay.$token'
 import { Route as BookRouteImport } from './routes/book.'
 import { Route as BookSlugRouteImport } from './routes/book.$slug'
 import { Route as ChallengesIndexRouteImport } from './routes/challenges.index'
@@ -249,6 +250,7 @@ import { Route as ApiPublicHooksActionCentreTickRouteImport } from './routes/api
 import { Route as ApiPublicHooksAiBenchmarkRouteImport } from './routes/api/public/hooks/ai-benchmark'
 import { Route as ApiPublicHooksAiModelsCheckRouteImport } from './routes/api/public/hooks/ai-models-check'
 import { Route as ApiPublicHooksAppointmentRemindersRouteImport } from './routes/api/public/hooks/appointment-reminders'
+import { Route as ApiPublicHooksAutoPaySendRouteImport } from './routes/api/public/hooks/auto-pay-send'
 import { Route as ApiPublicHooksBirthdayNotificationsRouteImport } from './routes/api/public/hooks/birthday-notifications'
 import { Route as ApiPublicHooksCleanupPendingSignupsRouteImport } from './routes/api/public/hooks/cleanup-pending-signups'
 import { Route as ApiPublicHooksCleoAttachmentsSweepRouteImport } from './routes/api/public/hooks/cleo-attachments-sweep'
@@ -262,6 +264,7 @@ import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as ApiPublicHooksNutritionPlansTickRouteImport } from './routes/api/public/hooks/nutrition-plans-tick'
 import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/public/hooks/nutrition-tick'
+import { Route as ApiPublicHooksPaymentProofImportRouteImport } from './routes/api/public/hooks/payment-proof-import'
 import { Route as ApiPublicHooksPaymentReminderSmsRouteImport } from './routes/api/public/hooks/payment-reminder-sms'
 import { Route as ApiPublicHooksPostPicturesTickRouteImport } from './routes/api/public/hooks/post-pictures-tick'
 import { Route as ApiPublicHooksProgramAiTickRouteImport } from './routes/api/public/hooks/program-ai-tick'
@@ -459,6 +462,11 @@ const ApiDriveUploadRoute = ApiDriveUploadRouteImport.update({
 const AthletesHandleRoute = AthletesHandleRouteImport.update({
   id: '/athletes/$handle',
   path: '/athletes/$handle',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AutopayTokenRoute = AutopayTokenRouteImport.update({
+  id: '/autopay/$token',
+  path: '/autopay/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookRoute = BookRouteImport.update({
@@ -1676,6 +1684,12 @@ const ApiPublicHooksAppointmentRemindersRoute =
     path: '/api/public/hooks/appointment-reminders',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksAutoPaySendRoute =
+  ApiPublicHooksAutoPaySendRouteImport.update({
+    id: '/api/public/hooks/auto-pay-send',
+    path: '/api/public/hooks/auto-pay-send',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksBirthdayNotificationsRoute =
   ApiPublicHooksBirthdayNotificationsRouteImport.update({
     id: '/api/public/hooks/birthday-notifications',
@@ -1751,6 +1765,12 @@ const ApiPublicHooksNutritionTickRoute =
   ApiPublicHooksNutritionTickRouteImport.update({
     id: '/api/public/hooks/nutrition-tick',
     path: '/api/public/hooks/nutrition-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicHooksPaymentProofImportRoute =
+  ApiPublicHooksPaymentProofImportRouteImport.update({
+    id: '/api/public/hooks/payment-proof-import',
+    path: '/api/public/hooks/payment-proof-import',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicHooksPaymentReminderSmsRoute =
@@ -2008,6 +2028,7 @@ export interface FileRoutesByFullPath {
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/athletes/$handle': typeof AthletesHandleRoute
+  '/autopay/$token': typeof AutopayTokenRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
@@ -2196,6 +2217,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/ai-benchmark': typeof ApiPublicHooksAiBenchmarkRoute
   '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
+  '/api/public/hooks/auto-pay-send': typeof ApiPublicHooksAutoPaySendRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
@@ -2209,6 +2231,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
+  '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
@@ -2296,6 +2319,7 @@ export interface FileRoutesByTo {
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/athletes/$handle': typeof AthletesHandleRoute
+  '/autopay/$token': typeof AutopayTokenRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
@@ -2483,6 +2507,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/ai-benchmark': typeof ApiPublicHooksAiBenchmarkRoute
   '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
+  '/api/public/hooks/auto-pay-send': typeof ApiPublicHooksAutoPaySendRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
@@ -2496,6 +2521,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
+  '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
@@ -2588,6 +2614,7 @@ export interface FileRoutesById {
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/athletes/$handle': typeof AthletesHandleRoute
+  '/autopay/$token': typeof AutopayTokenRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
@@ -2776,6 +2803,7 @@ export interface FileRoutesById {
   '/api/public/hooks/ai-benchmark': typeof ApiPublicHooksAiBenchmarkRoute
   '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
+  '/api/public/hooks/auto-pay-send': typeof ApiPublicHooksAutoPaySendRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
@@ -2789,6 +2817,7 @@ export interface FileRoutesById {
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
+  '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
@@ -2881,6 +2910,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/api/drive-upload'
     | '/athletes/$handle'
+    | '/autopay/$token'
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
@@ -3069,6 +3099,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/ai-benchmark'
     | '/api/public/hooks/ai-models-check'
     | '/api/public/hooks/appointment-reminders'
+    | '/api/public/hooks/auto-pay-send'
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
@@ -3082,6 +3113,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/nutrition-plans-tick'
     | '/api/public/hooks/nutrition-tick'
+    | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
@@ -3169,6 +3201,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/api/drive-upload'
     | '/athletes/$handle'
+    | '/autopay/$token'
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
@@ -3356,6 +3389,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/ai-benchmark'
     | '/api/public/hooks/ai-models-check'
     | '/api/public/hooks/appointment-reminders'
+    | '/api/public/hooks/auto-pay-send'
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
@@ -3369,6 +3403,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/nutrition-plans-tick'
     | '/api/public/hooks/nutrition-tick'
+    | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
@@ -3460,6 +3495,7 @@ export interface FileRouteTypes {
     | '/_authenticated/notifications'
     | '/api/drive-upload'
     | '/athletes/$handle'
+    | '/autopay/$token'
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
@@ -3648,6 +3684,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/ai-benchmark'
     | '/api/public/hooks/ai-models-check'
     | '/api/public/hooks/appointment-reminders'
+    | '/api/public/hooks/auto-pay-send'
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
@@ -3661,6 +3698,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/nutrition-plans-tick'
     | '/api/public/hooks/nutrition-tick'
+    | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
@@ -3747,6 +3785,7 @@ export interface RootRouteChildren {
   BookRoute: typeof BookRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   AthletesHandleRoute: typeof AthletesHandleRoute
+  AutopayTokenRoute: typeof AutopayTokenRoute
   BookSlugRoute: typeof BookSlugRoute
   CoachingApplyRoute: typeof CoachingApplyRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
@@ -3772,6 +3811,7 @@ export interface RootRouteChildren {
   ApiPublicHooksAiBenchmarkRoute: typeof ApiPublicHooksAiBenchmarkRoute
   ApiPublicHooksAiModelsCheckRoute: typeof ApiPublicHooksAiModelsCheckRoute
   ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
+  ApiPublicHooksAutoPaySendRoute: typeof ApiPublicHooksAutoPaySendRoute
   ApiPublicHooksBirthdayNotificationsRoute: typeof ApiPublicHooksBirthdayNotificationsRoute
   ApiPublicHooksCleanupPendingSignupsRoute: typeof ApiPublicHooksCleanupPendingSignupsRoute
   ApiPublicHooksCleoAttachmentsSweepRoute: typeof ApiPublicHooksCleoAttachmentsSweepRoute
@@ -3785,6 +3825,7 @@ export interface RootRouteChildren {
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
   ApiPublicHooksNutritionPlansTickRoute: typeof ApiPublicHooksNutritionPlansTickRoute
   ApiPublicHooksNutritionTickRoute: typeof ApiPublicHooksNutritionTickRoute
+  ApiPublicHooksPaymentProofImportRoute: typeof ApiPublicHooksPaymentProofImportRoute
   ApiPublicHooksPaymentReminderSmsRoute: typeof ApiPublicHooksPaymentReminderSmsRoute
   ApiPublicHooksPostPicturesTickRoute: typeof ApiPublicHooksPostPicturesTickRoute
   ApiPublicHooksProgramAiTickRoute: typeof ApiPublicHooksProgramAiTickRoute
@@ -4035,6 +4076,13 @@ declare module '@tanstack/react-router' {
       path: '/athletes/$handle'
       fullPath: '/athletes/$handle'
       preLoaderRoute: typeof AthletesHandleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/autopay/$token': {
+      id: '/autopay/$token'
+      path: '/autopay/$token'
+      fullPath: '/autopay/$token'
+      preLoaderRoute: typeof AutopayTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/book/': {
@@ -5493,6 +5541,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksAppointmentRemindersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/auto-pay-send': {
+      id: '/api/public/hooks/auto-pay-send'
+      path: '/api/public/hooks/auto-pay-send'
+      fullPath: '/api/public/hooks/auto-pay-send'
+      preLoaderRoute: typeof ApiPublicHooksAutoPaySendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/birthday-notifications': {
       id: '/api/public/hooks/birthday-notifications'
       path: '/api/public/hooks/birthday-notifications'
@@ -5582,6 +5637,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/nutrition-tick'
       fullPath: '/api/public/hooks/nutrition-tick'
       preLoaderRoute: typeof ApiPublicHooksNutritionTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/payment-proof-import': {
+      id: '/api/public/hooks/payment-proof-import'
+      path: '/api/public/hooks/payment-proof-import'
+      fullPath: '/api/public/hooks/payment-proof-import'
+      preLoaderRoute: typeof ApiPublicHooksPaymentProofImportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/payment-reminder-sms': {
@@ -6519,6 +6581,7 @@ const rootRouteChildren: RootRouteChildren = {
   BookRoute: BookRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   AthletesHandleRoute: AthletesHandleRoute,
+  AutopayTokenRoute: AutopayTokenRoute,
   BookSlugRoute: BookSlugRoute,
   CoachingApplyRoute: CoachingApplyRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
@@ -6546,6 +6609,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksAiModelsCheckRoute: ApiPublicHooksAiModelsCheckRoute,
   ApiPublicHooksAppointmentRemindersRoute:
     ApiPublicHooksAppointmentRemindersRoute,
+  ApiPublicHooksAutoPaySendRoute: ApiPublicHooksAutoPaySendRoute,
   ApiPublicHooksBirthdayNotificationsRoute:
     ApiPublicHooksBirthdayNotificationsRoute,
   ApiPublicHooksCleanupPendingSignupsRoute:
@@ -6563,6 +6627,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
   ApiPublicHooksNutritionPlansTickRoute: ApiPublicHooksNutritionPlansTickRoute,
   ApiPublicHooksNutritionTickRoute: ApiPublicHooksNutritionTickRoute,
+  ApiPublicHooksPaymentProofImportRoute: ApiPublicHooksPaymentProofImportRoute,
   ApiPublicHooksPaymentReminderSmsRoute: ApiPublicHooksPaymentReminderSmsRoute,
   ApiPublicHooksPostPicturesTickRoute: ApiPublicHooksPostPicturesTickRoute,
   ApiPublicHooksProgramAiTickRoute: ApiPublicHooksProgramAiTickRoute,

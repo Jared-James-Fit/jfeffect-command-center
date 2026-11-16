@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertAdminView } from "@/lib/permissions.server";
+import { proofPathOk } from "@/lib/payment-proof";
 
 async function assertAdmin(supabase: any, userId: string) {
   const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
@@ -49,6 +50,10 @@ const RecordPayment = z.object({
   stripe_payment_intent_id: z.string().max(200).optional().nullable(),
   internal_note: z.string().max(2000).optional().nullable(),
   client_note: z.string().max(2000).optional().nullable(),
+  /** The business account it went into (an e-transfer, cheque or deposit). */
+  deposit_account_id: z.string().uuid().optional().nullable(),
+  /** A screenshot or photo already uploaded to payment-proofs under this client's folder. */
+  proof_path: z.string().max(300).optional().nullable(),
 });
 
 export const recordPayment = createServerFn({ method: "POST" })
@@ -63,6 +68,7 @@ export const recordPayment = createServerFn({ method: "POST" })
       .eq("id", data.purchase_id)
       .single();
     if (prErr || !pr) throw new Error("Purchase not found");
+    if (!proofPathOk(data.proof_path, pr.client_id)) throw new Error("That proof file isn't in this client's folder.");
 
     // A double tap or a retry records it once: the same payment by hand in the last few minutes is this one.
     const dup = await findRecentDuplicatePayment(supabase, data);
@@ -83,6 +89,9 @@ export const recordPayment = createServerFn({ method: "POST" })
         stripe_payment_intent_id: data.stripe_payment_intent_id ?? null,
         internal_note: data.internal_note ?? null,
         client_note: data.client_note ?? null,
+        deposit_account_id: data.deposit_account_id ?? null,
+        proof_path: data.proof_path ?? null,
+        proof_uploaded_at: data.proof_path ? new Date().toISOString() : null,
         source: "manual",
         created_by: userId,
       })
@@ -137,6 +146,50 @@ async function findRecentDuplicatePayment(supabase: any, data: z.infer<typeof Re
   const { data: rows } = await q;
   return (rows ?? [])[0] ?? null;
 }
+
+// -------- Proof on a payment recorded by hand --------
+// A screenshot of the e-transfer or a photo of the cheque, uploaded by the
+// admin to payment-proofs/<client>/… first. Only payments recorded by hand
+// take one (a Stripe payment has Stripe's own receipt). Replacing a proof
+// keeps nothing of the old one on the payment, and the audit says so.
+const AttachProof = z.object({
+  ledger_id: z.string().uuid(),
+  proof_path: z.string().max(300).nullable(),
+  deposit_account_id: z.string().uuid().optional().nullable(),
+});
+
+export const attachPaymentProof = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => AttachProof.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const { data: row, error } = await supabase
+      .from("payment_ledger")
+      .select("id, client_id, source, voided, proof_path, deposit_account_id")
+      .eq("id", data.ledger_id)
+      .single();
+    if (error || !row) throw new Error("Payment not found");
+    if (row.source !== "manual") throw new Error("Only a payment recorded by hand takes a proof. Stripe payments have Stripe's receipt.");
+    if (!proofPathOk(data.proof_path, row.client_id)) throw new Error("That proof file isn't in this client's folder.");
+    const patch: Record<string, unknown> = {
+      proof_path: data.proof_path,
+      proof_uploaded_at: data.proof_path ? new Date().toISOString() : null,
+    };
+    if (data.deposit_account_id !== undefined) patch.deposit_account_id = data.deposit_account_id;
+    const { error: uErr } = await supabase.from("payment_ledger").update(patch).eq("id", row.id);
+    if (uErr) throw new Error(uErr.message);
+    await logAudit(supabase, {
+      clientId: row.client_id,
+      actorUserId: userId,
+      action: data.proof_path ? "payment_proof_attached" : "payment_proof_removed",
+      recordType: "payment_ledger",
+      recordId: row.id,
+      before: { proof_path: row.proof_path, deposit_account_id: row.deposit_account_id },
+      after: patch,
+    });
+    return { ok: true };
+  });
 
 // -------- Void/reverse a previous ledger row --------
 const VoidLedger = z.object({

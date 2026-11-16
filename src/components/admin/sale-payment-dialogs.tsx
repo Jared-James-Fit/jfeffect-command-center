@@ -17,6 +17,8 @@ import { DateField } from "@/components/ui/date-field";
 import { todayLocalISO } from "@/lib/today";
 import { formatMoney } from "@/lib/payment-display";
 import { grantSessionsManually, recordPayment, recordRefund, voidLedgerRow } from "@/lib/billing.functions";
+import { DepositAccountPicker, ProofPicker } from "@/components/billing/payment-proof";
+import { needsAccount } from "@/lib/payment-proof";
 import type { PaymentRow, SaleMoney } from "@/lib/sale-money";
 
 /** Ways money comes in by hand (Stripe payments arrive on their own). */
@@ -38,7 +40,7 @@ const toCents = (text: string) => {
   return Number.isFinite(v) && v > 0 ? Math.round(v * 100) : 0;
 };
 
-type SaleRef = { id: string; offer_name?: string | null; currency?: string | null; stripe_subscription_id?: string | null };
+type SaleRef = { id: string; client_id?: string | null; offer_name?: string | null; currency?: string | null; stripe_subscription_id?: string | null };
 
 function MethodPicker({ value, onChange }: { value: Method; onChange: (m: Method) => void }) {
   return (
@@ -63,6 +65,8 @@ export function RecordPaymentDialog({ sale, money, open, onOpenChange, onDone }:
   const [method, setMethod] = useState<Method>("etransfer");
   const [date, setDate] = useState(todayLocalISO());
   const [note, setNote] = useState("");
+  const [account, setAccount] = useState<string | null>(null);
+  const [proof, setProof] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -71,7 +75,10 @@ export function RecordPaymentDialog({ sale, money, open, onOpenChange, onDone }:
     setMethod("etransfer");
     setDate(todayLocalISO());
     setNote("");
+    setAccount(null);
+    setProof(null);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const landsInAccount = needsAccount(method);
 
   const rate = money.rate ?? DEFAULT_RATE;
   const cents = toCents(amount);
@@ -83,6 +90,8 @@ export function RecordPaymentDialog({ sale, money, open, onOpenChange, onDone }:
     mutationFn: () => fn({ data: {
       purchase_id: sale.id, method, amount_minor: cents, tax_minor: tax, currency,
       transaction_date: date, external_reference: note.trim() || undefined,
+      deposit_account_id: landsInAccount ? account : null,
+      proof_path: proof,
     } }),
     onSuccess: (res: any) => {
       const amount = formatMoney(cents / 100, currency);
@@ -98,7 +107,7 @@ export function RecordPaymentDialog({ sale, money, open, onOpenChange, onDone }:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-h-[92dvh] max-w-md overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Record a payment</DialogTitle>
           <DialogDescription>{sale.offer_name ?? "Sale"}</DialogDescription>
@@ -130,10 +139,22 @@ export function RecordPaymentDialog({ sale, money, open, onOpenChange, onDone }:
             <Label htmlFor="pay-date">Date received</Label>
             <DateField id="pay-date" value={date} onChange={setDate} max={todayLocalISO()} className="h-11" />
           </div>
+          {landsInAccount && (
+            <div className="space-y-1.5">
+              <Label>Paid into</Label>
+              <DepositAccountPicker value={account} onChange={setAccount} />
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="pay-note">Reference (optional)</Label>
-            <Input id="pay-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="E-transfer confirmation #" className="h-11" />
+            <Input id="pay-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder={method === "cheque" ? "Cheque #" : "E-transfer confirmation #"} className="h-11" />
           </div>
+          {sale.client_id && (
+            <div className="space-y-1.5">
+              <Label>Proof (optional)</Label>
+              <ProofPicker clientId={sale.client_id} value={proof} onChange={setProof} date={date} />
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button className="h-11 w-full sm:w-auto" onClick={() => m.mutate()} disabled={cents <= 0 || !date || m.isPending}>

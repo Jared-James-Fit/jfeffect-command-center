@@ -595,6 +595,19 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 // Sync stripe_customer_id to clients table for portal access
                 await syncClientStripeCustomerId(supabase, obj.customer ?? null, purchase.client_id ?? null);
 
+                // A new auto-pay the coach sent (auto-pay.functions.ts): the package takes its
+                // schedule and the auto-pay it replaces is cancelled, so it's never charged twice.
+                if (obj.mode === "subscription" && obj.metadata?.auto_pay_change_id) {
+                  const { completeAutoPayChange } = await import("@/lib/auto-pay.server");
+                  const done = await completeAutoPayChange(supabase, {
+                    changeId: String(obj.metadata.auto_pay_change_id),
+                    saleId: purchase.id,
+                    subscriptionId: typeof obj.subscription === "string" ? obj.subscription : obj.subscription?.id ?? null,
+                    sessionId: obj.id,
+                  });
+                  console.info("[stripe-webhook] auto-pay change", { session: obj.id, purchase: purchase.id, ...(done ?? {}) });
+                }
+
                 if (obj.payment_status === "paid") {
                   await provisionMemberFromPurchase(supabase, { ...purchase, stripe_customer_id: obj.customer ?? purchase.stripe_customer_id });
                   // Create payment_ledger row for this payment (idempotent via external_reference)
