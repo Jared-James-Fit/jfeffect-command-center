@@ -6753,7 +6753,8 @@ function SetRow({
           <SetNumberBadge setIndex={setIndex} done={isConfirmed} focusMode={focusMode} />
         )}
       </div>
-      {/* Fast tap reps selector — smart chips from the prescription, custom entry inside */}
+      {/* Reps start filled in from the prescription, at full strength like a typed
+          value: they fill in only the weight, and a tap types over a rep or RPE. */}
       {showReps && (
       <TypedValueInput
         value={reps}
@@ -6762,7 +6763,6 @@ function SetRow({
         ariaLabel={`Set ${setIndex} reps`}
         disabled={readonly}
         focusMode={focusMode}
-        planned={!isConfirmed && !repsEdited}
       />
       )}
       {/* Timer — just another set input, same size/aesthetic as the others */}
@@ -6835,7 +6835,6 @@ function SetRow({
           ariaLabel={`Set ${setIndex} ${showRir ? "RIR" : "RPE"}`}
           disabled={readonly}
           focusMode={focusMode}
-          planned={!isConfirmed && !rpeEdited}
       />
       {showVelocity && (
         <Input
