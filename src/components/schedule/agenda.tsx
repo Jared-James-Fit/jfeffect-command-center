@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, Check, ChevronRight } from "lucide-react";
+import { CalendarDays, Check, ChevronRight, List } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { weekDays } from "@/components/calendar/week-strip";
 import type { KindFamily } from "@/lib/calendar-sources";
@@ -122,7 +122,7 @@ export function AgendaHeader({ today, link, right }: { today: string; link?: Age
  * on that day.
  */
 export function AgendaWeek({
-  today, dots, link, anchor, selected, onSelect,
+  today, dots, link, anchor, selected, onSelect, weekSelected, onSelectWeek,
 }: {
   today: string;
   dots: (day: string) => string[];
@@ -133,10 +133,14 @@ export function AgendaWeek({
   selected?: string;
   /** Pick a day in place instead of opening the calendar. */
   onSelect?: (day: string) => void;
+  /** The whole week is what's shown under the strip (its spot ringed). */
+  weekSelected?: boolean;
+  /** Offer a last spot after Sunday that shows the whole week (the List's). */
+  onSelectWeek?: () => void;
 }) {
   const days = weekDays(anchor ?? today);
   return (
-    <div className="mt-2.5 grid grid-cols-7 gap-0.5" role="list" aria-label={days.includes(today) ? "This week" : "Week"}>
+    <div className={cn("mt-2.5 grid gap-0.5", onSelectWeek ? "grid-cols-8" : "grid-cols-7")} role="list" aria-label={days.includes(today) ? "This week" : "Week"}>
       {days.map((d) => {
         const date = new Date(`${d}T00:00:00`);
         const isToday = d === today;
@@ -174,6 +178,28 @@ export function AgendaWeek({
           </Cell>
         );
       })}
+      {onSelectWeek && (
+        <button
+          type="button"
+          role="listitem"
+          onClick={onSelectWeek}
+          aria-pressed={!!weekSelected}
+          aria-label="The whole week"
+          data-week-spot
+          className="relative flex min-h-[56px] min-w-0 flex-col items-center justify-start gap-1 rounded-lg pt-1 transition before:absolute before:bottom-3 before:left-0 before:top-3 before:w-px before:bg-border/70 active:bg-secondary/50"
+        >
+          <span className={cn("text-[11px] font-medium", weekSelected ? "text-foreground" : "text-muted-foreground")}>Week</span>
+          <span
+            className={cn(
+              "grid h-8 w-8 place-items-center rounded-full",
+              weekSelected ? "text-foreground ring-1 ring-foreground/60" : "text-muted-foreground",
+            )}
+          >
+            <List className="h-4 w-4" />
+          </span>
+          <span className="h-1.5" aria-hidden />
+        </button>
+      )}
     </div>
   );
 }

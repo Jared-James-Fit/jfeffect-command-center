@@ -39,6 +39,8 @@ export type HomeEntry = {
   /** After the title on the List's line: what it is, or where. */
   what: string | null;
   status?: string | null;
+  /** The List's time before the title when it isn't the start ("All day"); null = none (a workout). */
+  timeText?: string | null;
 };
 
 /** Crossed out in a list or a month, as on the timeline: it isn't happening (or didn't). */
@@ -225,7 +227,7 @@ export function HomeWeekList({
                   <AgendaNextRow
                     dayText={firstOfDay ? dayTag(r.date, today) : ""}
                     accent={FAMILY_ACCENT[r.family]}
-                    time={r.startsAt ? startLabel(r.startsAt) : "All day"}
+                    time={r.timeText !== undefined ? r.timeText : r.startsAt ? startLabel(r.startsAt) : "All day"}
                     title={<span className={cn(STRUCK_STATUSES.has(r.status ?? "") && "text-muted-foreground line-through")}>{r.title}</span>}
                     quiet={r.family === "google"}
                     suffix={r.what ? <span className="font-normal text-muted-foreground"> · {r.what}</span> : null}

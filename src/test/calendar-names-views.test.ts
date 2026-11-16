@@ -165,7 +165,8 @@ describe("the Home card's Day / Week / Month / List", () => {
   it("each view loads just its days", () => {
     expect(homeRange("day", "2026-11-18", "2026-11-18")).toEqual({ from: "2026-11-16", to: "2026-11-30" });
     expect(homeRange("week", "2026-11-18", "2026-11-18")).toEqual({ from: "2026-11-16", to: "2026-11-22" });
-    expect(homeRange("list", "2026-11-18", "2026-11-18")).toEqual({ from: "2026-11-16", to: "2026-11-22" });
+    // List loads like Day (its week and Coming up past it), so its day and its week never load again.
+    expect(homeRange("list", "2026-11-18", "2026-11-18")).toEqual(homeRange("day", "2026-11-18", "2026-11-18"));
     expect(homeRange("month", "2026-11-18", "2026-11-18")).toEqual({ from: "2026-10-26", to: "2026-12-06" });
   });
 
@@ -184,14 +185,52 @@ describe("the Home card's Day / Week / Month / List", () => {
     expect(dayTag("2026-11-17", "2026-11-18")).toMatch(/^Tue 17$/);
   });
 
-  it("the coach's List is the week's bookings one line each, by day, under the week's strip", async () => {
+  it("List is one day at a time, or the whole week from the Week spot after Sunday, moving and labelled by what it shows", async () => {
+    const { listPeriod } = await import("@/lib/home-calendar");
+    expect(listPeriod("list", undefined)).toBe("day");
+    expect(listPeriod("list", "day")).toBe("day");
+    expect(listPeriod("list", "week")).toBe("week");
+    expect(listPeriod("month", "week")).toBe("month");
+    // A day: "Today", a day a step. The week: "Nov 16 – 22", a week a step.
+    expect(periodLabel(listPeriod("list", "day"), "2026-11-18", "2026-11-18")).toBe("Today");
+    expect(shiftAnchor(listPeriod("list", "day"), "2026-11-18", 1)).toBe("2026-11-19");
+    expect(shiftAnchor(listPeriod("list", "week"), "2026-11-18", 1)).toBe("2026-11-25");
+    const strip = readFileSync("src/components/schedule/agenda.tsx", "utf8");
+    expect(strip).toContain('{onSelectWeek && (');
+    expect(strip).toContain('aria-pressed={!!weekSelected}');
+    for (const f of ["src/components/admin-calendar/dashboard-schedule-card.tsx", "src/components/home/upcoming-schedule-card.tsx"]) {
+      const card = readFileSync(f, "utf8");
+      const list = card.slice(card.indexOf('{view === "list" && ('));
+      // The strip: a day ringed while it's what's shown, else the Week spot.
+      expect(list, f).toContain("selected={listWeek ? undefined : anchor}");
+      expect(list, f).toContain("onSelect={showListDay}");
+      expect(list, f).toContain("weekSelected={listWeek}");
+      expect(list, f).toContain("onSelectWeek={showListWeek}");
+      expect(list, f).toContain("{listWeek ? (");
+      expect(list, f).toContain("<HomeWeekList");
+      expect(list, f).toContain("{comingUp}");
+      expect(list, f).not.toContain("<TimeGrid");
+      // Tapping a day goes back to that day; remembered on the account.
+      expect(card, f).toContain('if (listWeek) setPrefs({ listScope: "day" });');
+      expect(card, f).toContain('const showListWeek = () => setPrefs({ listScope: "week" });');
+      expect(card, f).toContain("const period: HomeView = listPeriod(view, prefs.listScope);");
+      expect(card, f).toContain("label={periodLabel(period, anchor, today)}");
+    }
+    const { sanitizePrefs } = await import("@/lib/calendar-prefs");
+    expect(sanitizePrefs({ listScope: "week" })).toEqual({ listScope: "week" });
+    expect(sanitizePrefs({ listScope: "month" })).toEqual({});
+  });
+
+  it("the coach's List week is the week's bookings one line each, by day; his List day is the day's bookings on a time column", async () => {
     const shared = readFileSync("src/components/schedule/home-calendar-views.tsx", "utf8");
     expect(shared).toContain('{ id: "list", label: "List" }');
     expect(shared).toContain("dayText={firstOfDay ? dayTag(r.date, today) : \"\"}");
     expect(shared).toContain("data-home-list");
     const dash = readFileSync("src/components/admin-calendar/dashboard-schedule-card.tsx", "utf8");
-    expect(dash).toContain("<AgendaWeek today={today} anchor={anchor} onSelect={openDay} dots={(d) => dotsByDay.get(d) ?? []} />");
     expect(dash).toContain("<HomeWeekList");
+    expect(dash).toContain("data-home-day-list");
+    expect(dash).toContain("{i === nowIndex && <NowLine />}");
+    expect(dash).toContain('<AgendaEmpty>{anchor === today ? "Nothing booked today." : "Nothing booked."}</AgendaEmpty>');
     for (const f of ["src/components/admin-calendar/dashboard-schedule-card.tsx", "src/components/home/upcoming-schedule-card.tsx"]) {
       const card = readFileSync(f, "utf8");
       expect(card, f).toContain("<HomeViewBar");
@@ -206,13 +245,14 @@ describe("the Home card's Day / Week / Month / List", () => {
   it("a client's List is the card they've always had: the strip, the day in full on a time column with its Now line and today's Start, then Coming up", () => {
     const client = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
     const list = client.slice(client.indexOf('{view === "list" && ('), client.indexOf("{/* The action, in words"));
-    // A day in the strip shows in place, staying on List.
-    expect(list).toContain("<AgendaWeek today={today} anchor={anchor} selected={anchor} onSelect={setAnchor} dots={(d) => dotsByDay.get(d) ?? []} />");
     expect(list).toContain("agenda.today.map((item, i) => (");
     expect(list).toContain("{i === nowIndex && <NowLine />}");
     expect(list).toContain("<TodayRow item={item} links={links} today={today}");
     expect(list).toContain("{comingUp}");
     expect(list).not.toContain("<TimeGrid");
+    // Its week: every day's rows, a workout by its name with no time.
+    expect(client).toContain("homeAgendaDays(items, weekDays(anchor))");
+    expect(client).toContain('return { ...entry, timeText: null, what: item.raw && workoutAction(item.raw).done ? "Done" : null };');
     expect(client).toContain('const emptyDay = anchor === today ? "Nothing scheduled today. A good day to recover." : "Nothing scheduled.";');
     // The Now line only runs through today.
     expect(client).toContain("const nowIndex = useMemo(() => (anchor === today ? nowLineIndex(agenda.today, nowMs) : -1)");

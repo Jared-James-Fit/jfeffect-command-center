@@ -120,6 +120,29 @@ function agendaOrder(a: CalendarItem, b: CalendarItem): number {
   return rank(a) - rank(b) || compareInstants(a.startsAt, b.startsAt) || a.title.localeCompare(b.title);
 }
 
+/** What a day on the Home card lists: no cardio (it rides with the workout), nothing cancelled, each once. */
+function agendaItems(items: CalendarItem[] | null | undefined): CalendarItem[] {
+  const seen = new Set<string>();
+  return (items ?? []).filter((i) => {
+    if (!i || i.kind === "cardio" || i.status === "Cancelled") return false;
+    if (seen.has(i.id)) return false;
+    seen.add(i.id);
+    return true;
+  });
+}
+
+/**
+ * A week's days, each the same rows its day shows (`buildHomeAgenda`'s
+ * `today`): the List's whole week is every day of it, one after another.
+ * Days with nothing on them are left out.
+ */
+export function homeAgendaDays(items: CalendarItem[] | null | undefined, days: string[]): Array<{ date: string; items: CalendarItem[] }> {
+  const live = agendaItems(items);
+  return days
+    .map((date) => ({ date, items: live.filter((i) => i.date === date).sort(agendaOrder) }))
+    .filter((d) => d.items.length > 0);
+}
+
 export function buildHomeAgenda(
   items: CalendarItem[] | null | undefined,
   options: {
@@ -141,13 +164,7 @@ export function buildHomeAgenda(
   const horizon = addDaysIso(from, (options.days ?? HOME_AGENDA_DAYS) - 1);
   const nowMs = options.nowMs ?? Date.now();
   const max = options.maxUpcoming ?? HOME_AGENDA_MAX_UPCOMING;
-  const seen = new Set<string>();
-  const live = (items ?? []).filter((i) => {
-    if (!i || i.kind === "cardio" || i.status === "Cancelled") return false;
-    if (seen.has(i.id)) return false;
-    seen.add(i.id);
-    return true;
-  });
+  const live = agendaItems(items);
 
   const todayItems = live.filter((i) => i.date === day).sort(agendaOrder);
   const byDay = new Map<string, CalendarItem[]>();
