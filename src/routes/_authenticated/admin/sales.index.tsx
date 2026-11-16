@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
@@ -8,51 +8,64 @@ import { PaymentLinksPage } from "@/route-pages/_authenticated/admin/payment-lin
 import { DiscountCodesPage } from "@/route-pages/_authenticated/admin/discount-codes";
 import { AdminTransactionsPage } from "@/route-pages/_authenticated/admin/transactions";
 import { BillingSourcesPage } from "@/route-pages/_authenticated/admin/billing-sources";
-import { TaxesBooksPage } from "@/components/admin/books/taxes-books-page";
+import { MoneyWorkspace } from "@/components/admin/money/money-workspace";
+import type { MoneyView } from "@/components/admin/money/money-context";
+import type { CompareMode } from "@/lib/books/period";
 import { useIsBusinessOwner } from "@/lib/business-owner";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import { Package, Receipt, Ticket, Settings2, LayoutTemplate, Landmark } from "lucide-react";
+  Activity, BarChart3, FileText, Landmark, LayoutTemplate, ListOrdered, Package, Settings2, Ticket,
+} from "lucide-react";
 
 /**
- * Canonical Sales information architecture.
- *
- * One navigation layer only: Products / Transactions / Taxes & Books /
- * Discount Codes / Settings. Pipeline moved to CRM, Promotions folded into Discount Codes,
- * Overview folded into Transactions. Sales Pages stays reachable by deep
- * link (media managers) but is no longer a primary Sales section.
+ * Sales: the business's money first (Overview, Transactions, Taxes, Reports:
+ * the books, private to the business owner and the finance login), then what
+ * it sells (Products, Discount codes, Stripe activity, Settings). One menu: a
+ * rail on a computer, a row of words on a phone.
  */
-type SectionKey = "products" | "transactions" | "taxes" | "discount-codes" | "settings" | "sales-pages";
+type SectionKey =
+  | MoneyView
+  | "products"
+  | "discount-codes"
+  | "stripe"
+  | "settings"
+  | "sales-pages";
+
+const MONEY_KEYS: MoneyView[] = ["overview", "transactions", "taxes", "reports"];
 
 const SECTIONS: {
   value: SectionKey;
   label: string;
   icon: typeof Package;
   roles: Array<"admin" | "coach" | "media_manager">;
-  primary: boolean;
+  /** The books: the business owner's (and the finance login's). */
+  books?: boolean;
+  group: "money" | "selling" | "hidden";
 }[] = [
-  { value: "products", label: "Products", icon: Package, roles: ["admin"], primary: true },
-  { value: "transactions", label: "Transactions", icon: Receipt, roles: ["admin"], primary: true },
-  { value: "taxes", label: "Taxes & Books", icon: Landmark, roles: ["admin"], primary: true },
-  { value: "discount-codes", label: "Discount Codes", icon: Ticket, roles: ["admin"], primary: true },
-  { value: "settings", label: "Settings", icon: Settings2, roles: ["admin"], primary: true },
-  { value: "sales-pages", label: "Sales Pages", icon: LayoutTemplate, roles: ["admin", "media_manager"], primary: false },
+  { value: "overview", label: "Overview", icon: BarChart3, roles: ["admin"], books: true, group: "money" },
+  { value: "transactions", label: "Transactions", icon: ListOrdered, roles: ["admin"], books: true, group: "money" },
+  { value: "taxes", label: "Taxes", icon: Landmark, roles: ["admin"], books: true, group: "money" },
+  { value: "reports", label: "Reports", icon: FileText, roles: ["admin"], books: true, group: "money" },
+  { value: "products", label: "Products", icon: Package, roles: ["admin"], group: "selling" },
+  { value: "discount-codes", label: "Discount codes", icon: Ticket, roles: ["admin"], group: "selling" },
+  { value: "stripe", label: "Stripe activity", icon: Activity, roles: ["admin"], group: "selling" },
+  { value: "settings", label: "Settings", icon: Settings2, roles: ["admin"], group: "selling" },
+  { value: "sales-pages", label: "Sales pages", icon: LayoutTemplate, roles: ["admin", "media_manager"], group: "hidden" },
 ];
 
 const LAST_TAB_KEY = "jf-admin-sales-last-tab";
 
-/** Legacy `?tab=` / `?sub=` values → canonical section. */
+/** Old `?tab=` / `?sub=` values → today's sections. */
 function normalizeSection(tab: unknown, sub: unknown): SectionKey | "redirect:crm" | null {
   const t = typeof tab === "string" ? tab : "";
   const s = typeof sub === "string" ? sub : "";
   if (SECTIONS.some((x) => x.value === t)) return t as SectionKey;
   if (t === "pipeline") return "redirect:crm";
   if (t === "promotions") return "discount-codes";
-  if (t === "books" || t === "tax") return "taxes";
-  if (t === "sales-pages") return "sales-pages";
+  if (t === "books") return "overview";
+  if (t === "tax") return "taxes";
   if (t === "products-payments") {
-    if (s === "transactions" || s === "payments" || s === "purchases" || s === "overview") return "transactions";
+    if (s === "overview") return "overview";
+    if (s === "transactions" || s === "payments" || s === "purchases") return "transactions";
     if (s === "discount-codes") return "discount-codes";
     if (s === "settings") return "settings";
     return "products";
@@ -60,115 +73,127 @@ function normalizeSection(tab: unknown, sub: unknown): SectionKey | "redirect:cr
   return null;
 }
 
-type Search = { tab: SectionKey | "pipeline"; sub?: string };
+type Search = { tab: SectionKey | "pipeline"; sub?: string; p?: string; cmp?: CompareMode };
+
+const COMPARES: CompareMode[] = ["previous", "last_year", "none"];
 
 export const Route = createFileRoute("/_authenticated/admin/sales/")({
   validateSearch: (raw: Record<string, unknown>): Search => {
     const sub = typeof raw?.sub === "string" ? (raw.sub as string) : undefined;
+    const p = typeof raw?.p === "string" ? (raw.p as string) : undefined;
+    const cmp = COMPARES.includes(raw?.cmp as CompareMode) ? (raw.cmp as CompareMode) : undefined;
     const resolved = normalizeSection(raw?.tab, sub);
     if (resolved === "redirect:crm") return { tab: "pipeline", sub };
-    if (resolved) return { tab: resolved, sub };
+    if (resolved) return { tab: resolved, sub, p, cmp };
     if (typeof raw?.tab === "undefined" && typeof window !== "undefined") {
       try {
         const stored = normalizeSection(window.localStorage.getItem(LAST_TAB_KEY), undefined);
-        if (stored && stored !== "redirect:crm") return { tab: stored, sub };
+        if (stored && stored !== "redirect:crm") return { tab: stored, sub, p, cmp };
       } catch {}
     }
-    return { tab: "products", sub };
+    return { tab: "overview", sub, p, cmp };
   },
   component: SalesWorkspace,
 });
 
 function SalesWorkspace() {
-  const { tab, sub } = Route.useSearch();
+  const { tab, sub, p, cmp } = Route.useSearch();
   const navigate = useNavigate();
   const { role, viewOnly } = useAuth();
 
-  // Pipeline now lives in CRM — bounce legacy deep links there.
+  // Pipeline now lives in CRM: bounce old deep links there.
   useEffect(() => {
     if (tab === "pipeline") navigate({ to: "/admin/crm", replace: true });
   }, [tab, navigate]);
 
-  // Taxes & Books is the business owner's (and the finance login's), not every admin's.
   const isOwner = useIsBusinessOwner();
+  const seesBooks = isOwner === true || viewOnly;
   const visible = useMemo(() => {
     const r = (role ?? "admin") as "admin" | "coach" | "media_manager";
-    return SECTIONS.filter((s) => s.roles.includes(r) && (s.value !== "taxes" || isOwner === true || viewOnly));
-  }, [role, isOwner, viewOnly]);
+    return SECTIONS.filter((s) => s.roles.includes(r) && (!s.books || seesBooks));
+  }, [role, seesBooks]);
 
-  const primary = visible.filter((s) => s.primary);
-  const active: SectionKey =
-    visible.some((s) => s.value === tab) ? (tab as SectionKey) : (visible[0]?.value ?? "products");
+  // Without the books, Transactions is the Stripe account's activity (as it was).
+  const asked = (tab === "transactions" && isOwner === false && !viewOnly ? "stripe" : tab) as SectionKey;
+  const active: SectionKey = visible.some((s) => s.value === asked) ? asked : (visible[0]?.value ?? "products");
 
   useEffect(() => {
     try { window.localStorage.setItem(LAST_TAB_KEY, active); } catch {}
   }, [active]);
 
   const setSection = (next: SectionKey) => {
-    navigate({ to: "/admin/sales", search: { tab: next } as any, replace: false });
+    navigate({ to: "/admin/sales", search: (s: any) => ({ tab: next, p: s.p, cmp: s.cmp }) as any, replace: false });
   };
 
-  const navItems = primary.length ? primary : visible;
-  const activeLabel = visible.find((s) => s.value === active)?.label ?? "Products";
+  const navItems = visible.filter((s) => s.group !== "hidden");
+  const isMoney = (MONEY_KEYS as string[]).includes(active);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <PageHeader
-        title="Sales"
-        subtitle="Products, transactions, taxes and books, discount codes and checkout settings."
-      />
+      <PageHeader title="Sales" />
 
-      {/* Mobile / tablet portrait: single section picker, full-width workspace */}
-      <div className="border-b border-border bg-background/60 px-4 py-2 lg:hidden">
-        <Select value={active} onValueChange={(v) => setSection(v as SectionKey)}>
-          <SelectTrigger className="h-10 w-full text-sm font-semibold" aria-label="Sales section">
-            <SelectValue>{activeLabel}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {visible.map((s) => (
-              <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {/* Phone / tablet portrait: one row of words, the one you're on underlined and kept in view. */}
+      <SectionRow items={navItems} active={active} onPick={setSection} />
 
-      {/* Desktop / tablet landscape: local left rail + independent workspace */}
       <div className="flex min-h-0 flex-1 lg:overflow-hidden">
         <nav
           data-sales-rail
-          className="hidden w-48 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border bg-card/40 p-2 lg:flex xl:w-56"
+          className="hidden w-48 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border p-2 lg:flex xl:w-56"
           aria-label="Sales sections"
         >
-          <div className="px-2 pb-1 pt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            Sales
-          </div>
-          {navItems.map((s) => {
-            const Icon = s.icon;
-            const isActive = s.value === active;
+          {(["money", "selling"] as const).map((g) => {
+            const items = navItems.filter((s) => s.group === g);
+            if (!items.length) return null;
             return (
-              <button
-                key={s.value}
-                type="button"
-                onClick={() => setSection(s.value)}
-                aria-current={isActive ? "page" : undefined}
-                className={cn(
-                  "flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-primary/10 text-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{s.label}</span>
-              </button>
+              <div key={g} className="mb-2">
+                <div className="px-2.5 pb-1 pt-2 text-[12px] font-medium text-muted-foreground">{g === "money" ? "Money" : "Selling"}</div>
+                {items.map((s) => {
+                  const Icon = s.icon;
+                  const on = s.value === active;
+                  return (
+                    <button
+                      key={s.value}
+                      type="button"
+                      onClick={() => setSection(s.value)}
+                      aria-current={on ? "page" : undefined}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[14px] transition-colors",
+                        on ? "bg-secondary font-semibold text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{s.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>
 
         <div className="min-w-0 flex-1 lg:overflow-y-auto">
+          {isMoney && (
+            <MoneyWorkspace
+              view={active as MoneyView}
+              periodCode={p}
+              compare={cmp ?? "previous"}
+              mode={viewOnly ? "finance" : "owner"}
+              onState={(patch) =>
+                navigate({
+                  to: "/admin/sales",
+                  search: (s: any) => ({
+                    tab: patch.view ?? s.tab,
+                    p: patch.p ?? s.p,
+                    cmp: patch.cmp ?? s.cmp,
+                  }) as any,
+                  // A new period replaces the page in history; a new view is a step Back can undo.
+                  replace: !patch.view,
+                })
+              }
+            />
+          )}
           {active === "products" && <PaymentLinksPage embedded />}
-          {active === "transactions" && <AdminTransactionsPage embedded />}
-          {active === "taxes" && <TaxesBooksPage mode={viewOnly ? "finance" : "owner"} />}
+          {active === "stripe" && <AdminTransactionsPage embedded />}
           {active === "discount-codes" && <DiscountCodesPage embedded />}
           {active === "settings" && <BillingSourcesPage />}
           {active === "sales-pages" && (
@@ -179,5 +204,41 @@ function SalesWorkspace() {
         </div>
       </div>
     </div>
+  );
+}
+
+function SectionRow({ items, active, onPick }: { items: typeof SECTIONS; active: SectionKey; onPick: (k: SectionKey) => void }) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const row = rowRef.current;
+    const el = row?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!row || !el || row.scrollWidth <= row.clientWidth) return;
+    row.scrollTo({ left: Math.max(0, el.offsetLeft - (row.clientWidth - el.offsetWidth) / 2), behavior: "smooth" });
+  }, [active]);
+  return (
+    <nav aria-label="Sales sections" className="border-b border-border px-2 lg:hidden" data-sales-row>
+      <div ref={rowRef} className="-mb-px flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {items.map((s, i) => {
+          const on = s.value === active;
+          const groupStart = i > 0 && items[i - 1].group !== s.group;
+          return (
+            <button
+              key={s.value}
+              type="button"
+              onClick={() => onPick(s.value)}
+              aria-current={on ? "page" : undefined}
+              className={cn(
+                "relative flex h-11 shrink-0 items-center whitespace-nowrap px-3 text-[15px]",
+                on ? "font-semibold text-foreground" : "text-muted-foreground",
+                groupStart && "ml-2 border-l border-border pl-5",
+              )}
+            >
+              {s.label}
+              <span aria-hidden className={cn("absolute bottom-0 h-0.5 rounded-full", groupStart ? "left-5 right-3" : "inset-x-3", on ? "bg-foreground" : "bg-transparent")} />
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }

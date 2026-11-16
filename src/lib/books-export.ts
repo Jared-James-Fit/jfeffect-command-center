@@ -11,12 +11,12 @@ import { expenseTaxView, fmtCad, type BooksSnapshot } from "@/lib/business-tax";
 const money = (minor: number) => fmtCad(minor);
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
-async function loadPdf() {
+export async function loadPdf() {
   const [{ jsPDF }, autoTableMod] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
   return { jsPDF, autoTable: (autoTableMod as any).default ?? (autoTableMod as any).autoTable };
 }
 
-function slug(s: string) {
+export function slug(s: string) {
   return s.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase();
 }
 
@@ -84,7 +84,7 @@ function businessLine(s: BooksSnapshot) {
   return parts.join("  ·  ");
 }
 
-export async function downloadYearEndPdf(s: BooksSnapshot, data: BooksData) {
+export async function yearEndPdfFile(s: BooksSnapshot, data: BooksData): Promise<File> {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const status = s.inProgress ? `Year to date as of ${s.asOf} (year still open)` : `Full year, final as of ${s.asOf}`;
@@ -240,10 +240,10 @@ export async function downloadYearEndPdf(s: BooksSnapshot, data: BooksData) {
   autoTable(doc, { ...TABLE, startY: y, head: [["Item", "Detail"]], body: notes, columnStyles: { 0: { cellWidth: 170 } } });
 
   footer(doc, s);
-  doc.save(`${slug(s.settings.businessName)}-${s.year}-year-end-package.pdf`);
+  return pdfFile(doc, `${slug(s.settings.businessName)}-${s.year}-year-end-package.pdf`);
 }
 
-export async function downloadGstWorksheetPdf(s: BooksSnapshot) {
+export async function gstWorksheetPdfFile(s: BooksSnapshot): Promise<File> {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   let y = header(doc, `${s.year} GST/HST Return Worksheet`, `${businessLine(s)}. Generated ${new Date().toLocaleDateString("en-CA")}.`, s);
@@ -286,7 +286,7 @@ export async function downloadGstWorksheetPdf(s: BooksSnapshot) {
   doc.setTextColor(110);
   doc.text("ITCs are claimed only for expenses with a receipt showing the GST/HST. PST/RST is not claimable and is not included.", 40, y, { maxWidth: 530 });
   footer(doc, s);
-  doc.save(`${slug(s.settings.businessName)}-${s.year}-gst-hst-worksheet.pdf`);
+  return pdfFile(doc, `${slug(s.settings.businessName)}-${s.year}-gst-hst-worksheet.pdf`);
 }
 
 async function blobToDataUrl(blob: Blob): Promise<string> {
@@ -308,12 +308,12 @@ async function imageSize(dataUrl: string): Promise<{ w: number; h: number }> {
 }
 
 /** One receipt per page with its bookkeeping line on top. */
-export async function downloadReceiptsPdf(
+export async function receiptsPdfFile(
   s: BooksSnapshot,
   expenses: ExpenseRow[],
   getSignedUrl: (path: string) => Promise<string | null>,
   onProgress?: (done: number, total: number) => void,
-) {
+): Promise<File | null> {
   const { jsPDF } = await loadPdf();
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const W = doc.internal.pageSize.getWidth();
@@ -362,31 +362,28 @@ export async function downloadReceiptsPdf(
       doc.setTextColor(0);
     }
   }
+  if (!withReceipts.length) return null;
   footer(doc, s);
-  doc.save(`${slug(s.settings.businessName)}-${s.year}-receipts.pdf`);
-  return withReceipts.length;
+  return pdfFile(doc, `${slug(s.settings.businessName)}-${s.year}-receipts.pdf`);
 }
 
-function csvCell(v: unknown): string {
+export function csvCell(v: unknown): string {
   const s = v == null ? "" : String(v);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-function downloadText(filename: string, text: string, type = "text/csv;charset=utf-8") {
-  const blob = new Blob([text], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+/** A CSV as a file to hand to the share sheet or download (saveFiles). The BOM keeps Excel on UTF-8. */
+export function textFile(filename: string, text: string, type = "text/csv;charset=utf-8"): File {
+  return new File(["\ufeff" + text], filename, { type });
+}
+
+export function pdfFile(doc: any, filename: string): File {
+  return new File([doc.output("blob")], filename, { type: "application/pdf" });
 }
 
 const dollars = (minor: number) => (minor / 100).toFixed(2);
 
-export function downloadRevenueCsv(s: BooksSnapshot, data: BooksData) {
+export function revenueCsvFile(s: BooksSnapshot, data: BooksData): File {
   const rows = data.revenue.filter((r) => r.date.startsWith(String(s.year)));
   const lines = [
     ["date", "type", "client", "product", "method", "gross", "gst_hst", "net", "currency", "gst_estimated", "source", "reference"].join(","),
@@ -397,10 +394,10 @@ export function downloadRevenueCsv(s: BooksSnapshot, data: BooksData) {
         .join(",");
     }),
   ];
-  downloadText(`${slug(s.settings.businessName)}-${s.year}-revenue.csv`, lines.join("\n"));
+  return textFile(`${slug(s.settings.businessName)}-${s.year}-revenue.csv`, lines.join("\n"));
 }
 
-export function downloadExpensesCsv(s: BooksSnapshot, data: BooksData) {
+export function expensesCsvFile(s: BooksSnapshot, data: BooksData): File {
   const rows = data.expenses.filter((e) => e.expense_date.startsWith(String(s.year))).sort((a, b) => a.expense_date.localeCompare(b.expense_date));
   const lines = [
     ["date", "vendor", "description", "category", "t2125_line", "amount", "gst_hst", "business_use_pct", "deductible", "cca", "itc", "currency", "payment_method", "receipt", "status", "source", "notes"].join(","),
@@ -413,5 +410,47 @@ export function downloadExpensesCsv(s: BooksSnapshot, data: BooksData) {
       ].map(csvCell).join(",");
     }),
   ];
-  downloadText(`${slug(s.settings.businessName)}-${s.year}-expenses.csv`, lines.join("\n"));
+  return textFile(`${slug(s.settings.businessName)}-${s.year}-expenses.csv`, lines.join("\n"));
+}
+
+/** A period's profit and loss as a one-page PDF (the same rows as the screen and the CSV). */
+export async function statementPdfFile(opts: {
+  businessName: string;
+  title: string;
+  periodLabel: string;
+  vsLabel: string | null;
+  rows: Array<{ label: string; minor: number | null; prevMinor?: number | null; strong?: boolean; indent?: boolean; note?: string }>;
+  footnote: string;
+}): Promise<File> {
+  const { jsPDF, autoTable } = await loadPdf();
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.text(opts.businessName, 40, 48);
+  doc.setFontSize(13);
+  doc.text(`${opts.title}: ${opts.periodLabel}`, 40, 68);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(110);
+  doc.text(`Cash basis (money counted the day it moved). Generated ${new Date().toLocaleDateString("en-CA")}.`, 40, 84);
+  doc.setTextColor(0);
+  const cell = (m: number | null | undefined) => (m == null ? "" : money(m));
+  autoTable(doc, {
+    ...TABLE,
+    startY: 100,
+    head: [opts.vsLabel ? ["", opts.periodLabel, opts.vsLabel] : ["", opts.periodLabel]],
+    body: opts.rows.map((r) => {
+      const label = `${r.indent ? "    " : ""}${r.label}${r.note ? `\n${r.indent ? "    " : ""}${r.note}` : ""}`;
+      return opts.vsLabel ? [label, cell(r.minor), cell(r.prevMinor)] : [label, cell(r.minor)];
+    }),
+    columnStyles: { 1: { halign: "right" }, 2: { halign: "right" } },
+    didParseCell: (d: any) => {
+      const row = opts.rows[d.row.index];
+      if (d.section === "body" && row?.strong) d.cell.styles.fontStyle = "bold";
+    },
+  });
+  doc.setFontSize(8);
+  doc.setTextColor(110);
+  doc.text(doc.splitTextToSize(opts.footnote, doc.internal.pageSize.getWidth() - 80), 40, after(doc));
+  return pdfFile(doc, `${slug(opts.businessName)}-${slug(opts.title)}-${slug(opts.periodLabel)}.pdf`);
 }

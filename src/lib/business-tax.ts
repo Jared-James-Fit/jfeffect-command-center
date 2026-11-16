@@ -193,10 +193,9 @@ export function expenseTaxView(e: ExpenseEntry, gstRegistered = true): ExpenseTa
   const use = Math.min(100, Math.max(0, e.businessUsePct)) / 100;
   if (cat.kind === "excluded") return { deductibleMinor: 0, ccaMinor: 0, itcMinor: 0, businessCostMinor: 0 };
   const itcMinor = gstRegistered ? round(e.taxMinor * use * cat.itcPct) : 0;
-  // A GST registrant claims the tax back as an ITC, so it is not also a cost.
-  // Without registration the tax is part of the cost.
-  const preTax = gstRegistered ? e.amountMinor - e.taxMinor : e.amountMinor;
-  const businessCostMinor = round(preTax * use);
+  // The GST/HST claimed back as an ITC isn't also a cost; whatever can't be
+  // claimed (the other half on a meal, all of it without registration) is.
+  const businessCostMinor = Math.max(0, round(e.amountMinor * use) - itcMinor);
   if (cat.kind === "capital") {
     return { deductibleMinor: 0, ccaMinor: round(businessCostMinor * (cat.ccaRate ?? 0)), itcMinor, businessCostMinor };
   }

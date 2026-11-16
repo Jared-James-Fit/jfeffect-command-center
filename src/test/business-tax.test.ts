@@ -28,7 +28,9 @@ describe("expenseTaxView", () => {
 
   it("halves meals for both the deduction and the ITC", () => {
     const v = expenseTaxView(exp("a", "2026-03-01", 10500, 500, "meals"));
-    expect(v.deductibleMinor).toBe(5000);
+    // Half the GST comes back as an ITC; the half that can't is part of the meal's cost: (105 − 2.50) × 50%.
+    expect(v.businessCostMinor).toBe(10250);
+    expect(v.deductibleMinor).toBe(5125);
     expect(v.itcMinor).toBe(250);
   });
 

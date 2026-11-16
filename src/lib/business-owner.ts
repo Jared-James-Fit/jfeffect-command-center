@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 
-export const OWNER_ONLY_PATHS = ["/admin/sales?tab=taxes"];
+export const OWNER_ONLY_PATHS = ["/admin/sales?tab=overview", "/admin/sales?tab=taxes", "/admin/sales?tab=reports"];
 
 export function useIsBusinessOwner(): boolean | undefined {
   const { user, role } = useAuth();

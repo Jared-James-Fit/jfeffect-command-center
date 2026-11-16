@@ -12,8 +12,9 @@ import { businessToday } from "@/lib/billing-schedule";
 import { SendPaymentRequestDialog } from "@/components/send-payment-request-dialog";
 import { BOOKS_KEY } from "@/components/admin/books/use-snap-receipts";
 import { RecordPaymentDialog, type PaymentToRecord } from "./record-payment-dialog";
-import { daysBetween, longMonth, methodLabel, PeriodBars, RankBars, shortCad, shortDay } from "./finance-charts";
+import { longMonth, methodLabel, PeriodBars, RankBars, shortCad, shortDay } from "./finance-charts";
 import { CollectList, Kpi, PaymentLine, Section, useBooksData } from "./finance-ui";
+import { RECEIVABLES_KEY, owedRows, useReceivables } from "@/components/admin/money/use-receivables";
 
 const WEEKS = 12;
 const COLLECT_PREVIEW = 5;
@@ -38,6 +39,7 @@ export function FinancePayments() {
   const qc = useQueryClient();
   const today = businessToday();
   const { data, isLoading, error } = useBooksData();
+  const owed = useReceivables();
   const [recording, setRecording] = useState<PaymentToRecord | null>(null);
   const [sending, setSending] = useState<OpenSaleRow | null>(null);
   const [allOpen, setAllOpen] = useState(false);
@@ -77,16 +79,9 @@ export function FinancePayments() {
   const sum = (list: typeof rows) => list.reduce((t, r) => t + r.grossMinor, 0);
   const monthIn = payments.filter((r) => r.date.startsWith(month));
 
-  const open = [...data.openSales].sort((a, b) => b.outstandingMinor - a.outstandingMinor);
+  // What clients owe, as each client's Billing reads it (with GST; unpaid links aren't owed).
+  const open = owedRows(owed.data);
   const toCollect = open.reduce((t, o) => t + o.outstandingMinor, 0);
-  const ages = { fresh: 0, month: 0, old: 0, undated: 0 };
-  for (const o of open) {
-    if (!o.createdOn) { ages.undated += o.outstandingMinor; continue; }
-    const d = daysBetween(o.createdOn, today);
-    if (d < 30) ages.fresh += o.outstandingMinor;
-    else if (d <= 60) ages.month += o.outstandingMinor;
-    else ages.old += o.outstandingMinor;
-  }
 
   // Money received per week (refunds shown in the list, not netted here).
   const thisWeek = mondayOf(today);
@@ -118,7 +113,10 @@ export function FinancePayments() {
     monthTotals.set(k, (monthTotals.get(k) ?? 0) + (r.kind === "refund" ? -r.grossMinor : r.grossMinor));
   }
   const visible = filtered.slice(0, limit);
-  const refresh = () => qc.invalidateQueries({ queryKey: BOOKS_KEY });
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: BOOKS_KEY });
+    void qc.invalidateQueries({ queryKey: RECEIVABLES_KEY });
+  };
 
   return (
     <div className="space-y-5 p-4 md:p-6">
@@ -134,7 +132,7 @@ export function FinancePayments() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi label="In this month" value={fmtCad(sum(monthIn))} sub={`${monthIn.length} payment${monthIn.length === 1 ? "" : "s"}`} tone="good" />
-        <Kpi label="To collect" value={fmtCad(toCollect)} sub={open.length ? `${open.length} unpaid` : "All paid up"} tone={toCollect > 0 ? "warn" : undefined} />
+        <Kpi label="Owed to you" value={owed.data ? fmtCad(toCollect) : "…"} sub={owed.data ? (owed.data.overdueCents > 0 ? `${shortCad(owed.data.overdueCents)} overdue` : open.length ? "Nothing overdue" : "All paid up") : "Reading balances"} tone={owed.data && owed.data.overdueCents > 0 ? "warn" : undefined} />
         <Kpi label={`In ${year}`} value={fmtCad(sum(payments))} sub={`${payments.length} payments`} />
         <Kpi label={`Refunds ${year}`} value={fmtCad(sum(refunds))} sub={refunds.length ? `${refunds.length} refund${refunds.length === 1 ? "" : "s"}` : "None"} />
       </div>
@@ -154,7 +152,7 @@ export function FinancePayments() {
       </div>
 
       <Section
-        title="Money to collect"
+        title="Owed to you"
         right={toCollect > 0 ? <span className="font-semibold text-amber-600 tabular-nums dark:text-amber-400">{fmtCad(toCollect)}</span> : undefined}
         footer={open.length > COLLECT_PREVIEW
           ? { label: allOpen ? "Show fewer" : `Show all ${open.length}`, onClick: () => setAllOpen((v) => !v) }
@@ -164,10 +162,9 @@ export function FinancePayments() {
         {open.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-4 pb-3">
             {[
-              { label: "Under 30 days", v: ages.fresh },
-              { label: "30–60 days", v: ages.month },
-              { label: "Over 60 days", v: ages.old, warn: true },
-              { label: "No date", v: ages.undated },
+              { label: "Overdue", v: owed.data?.overdueCents ?? 0, warn: true },
+              { label: "Due in 30 days", v: owed.data?.expected30Cents ?? 0 },
+              { label: "No payment dates", v: owed.data?.unscheduledCents ?? 0 },
             ].filter((a) => a.v > 0).map((a) => (
               <span
                 key={a.label}
