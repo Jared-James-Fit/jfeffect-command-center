@@ -97,20 +97,22 @@ describe("History & progress: the Analytics lift card, for one exercise", () => 
   });
 });
 
-describe("what's planned reads faded until it's logged", () => {
-  it("a prescribed reps / RPE value is faded and says it's planned", () => {
-    const html = renderToStaticMarkup(createElement(TypedValueInput, { value: "4", kind: "reps", onCommit: () => {}, ariaLabel: "Set 1 reps", planned: true }));
-    expect(html).toContain("text-muted-foreground/80");
-    expect(html).toContain("Set 1 reps, planned 4");
-    expect(html).toContain("data-planned");
-    const logged = renderToStaticMarkup(createElement(TypedValueInput, { value: "4", kind: "reps", onCommit: () => {}, ariaLabel: "Set 1 reps" }));
-    expect(logged).toContain("text-foreground");
-    expect(logged).not.toContain("data-planned");
+describe("the plan's reps and RPE are filled in, ready to log with just a weight", () => {
+  it("a reps / RPE box shows its value at full strength, never faded or labelled planned", () => {
+    const html = renderToStaticMarkup(createElement(TypedValueInput, { value: "5", kind: "reps", onCommit: () => {}, ariaLabel: "Set 2 reps" }));
+    expect(html).toContain("text-foreground");
+    expect(html).not.toContain("text-muted-foreground/80");
+    expect(html).not.toContain("data-planned");
+    expect(html).toContain('aria-label="Set 2 reps"');
+    const typed = read("src/components/workout-day/typed-value-input.tsx");
+    expect(typed).not.toContain("planned");
   });
-  it("a set's reps and RPE are planned until the set is logged or typed", () => {
+  it("every open set starts with the prescription's reps and RPE, and a set holding only them is never a draft", () => {
     const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
-    expect(wdv).toContain("planned={!isConfirmed && !repsEdited}");
-    expect(wdv).toContain("planned={!isConfirmed && !rpeEdited}");
+    expect(wdv).toContain("const [reps, setReps] = useState(existing?.actual_reps?.toString() ?? prescribedRepsStr);");
+    expect(wdv).toContain("(existing?.actual_rpe ?? prescribedRpeStr)");
+    expect(wdv).not.toContain("planned={!isConfirmed");
+    expect(wdv).toContain("const hasAnyEntry = load.length > 0 || bw || repsOwn || rpeOwn");
   });
 });
 
