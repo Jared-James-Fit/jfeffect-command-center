@@ -9,21 +9,21 @@ import { KIND_FAMILY, KIND_META, placeLabel, scheduleTitle, useClientCalendarSou
 import { buildHomeAgenda } from "@/lib/home-upcoming";
 import { getWorkoutStatus } from "@/lib/workout-status";
 import { blockNameParts } from "@/lib/training-roadmap";
-import { compactTimeRange } from "@/lib/schedule-time";
+import { addDaysISO, compactTimeRange } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
 import { useEntitlement } from "@/lib/service-tier";
 import { useCalendarPrefs, type HomeView } from "@/lib/calendar-prefs";
-import { homeRange, isCurrentPeriod, periodLabel, shiftAnchor } from "@/lib/home-calendar";
+import { comingUpFrom, homeRange, isCurrentPeriod, periodLabel, shiftAnchor } from "@/lib/home-calendar";
 import { blockLabels, callLabel } from "@/lib/calendar-labels";
 import { monthChipOrder } from "@/lib/calendar-timeline";
 import { weekDays } from "@/components/calendar/week-strip";
 import { TimeGrid, type TimeGridEntry } from "@/components/calendar/time-grid";
-import { byDayThenTime, HomeMonth, HomeViewBar, HomeWeekList, type HomeEntry } from "@/components/schedule/home-calendar-views";
+import { HomeMonth, HomeViewBar, type HomeEntry } from "@/components/schedule/home-calendar-views";
 import { RequestSessionSheet } from "@/components/schedule/request-session-sheet";
 import { ClientSessionSheet, type ClientSession } from "@/components/schedule/client-session-sheet";
 import {
   ActionPill, AGENDA_ACTION, AGENDA_ROW, AgendaCard, AgendaEmpty, AgendaFooter, AgendaHeader, AgendaLoading, AgendaToday, AgendaWeek,
-  AgendaNext, AgendaNextRow, AgendaRow, FAMILY_ACCENT, hasEnded, shortDay, startLabel, useNow,
+  AgendaNext, AgendaNextRow, AgendaRow, FAMILY_ACCENT, hasEnded, NowLine, nowLineIndex, shortDay, startLabel, useNow,
 } from "@/components/schedule/agenda";
 /** Rows in "coming up" on Home; the rest is on the Calendar page. */
 const HOME_UPCOMING_ROWS = 3;
@@ -134,16 +134,18 @@ function entryOf(item: CalendarItem): HomeEntry {
  * Client Home: their calendar card, in the look every account shares
  * (schedule/agenda.tsx) and with the same four views as the coach's
  * (home-calendar-views.tsx), their choice remembered on their account:
- *   Day (the default): the week's days with a dot per appointment (tap one
- *     to show it here), that day's workout as the way in (today's says its
- *     week and offers Start / Continue / Done) and anything all day, its
- *     bookings on a timeline when it has any (a day with nothing at a time
- *     shows no empty hours), then the next few appointments after it.
+ *   List (the default, the card clients have always had): the week's days
+ *     with a dot per appointment (tap one to show it here), that day in full
+ *     on a time column (its workout first, today's saying its week and
+ *     offering Start / Continue / Done; a Now line through today), then the
+ *     next few appointments after it.
+ *   Day: the same strip and the day's workout as rows, its bookings on a
+ *     timeline when it has any (a day with nothing at a time shows no empty
+ *     hours), then the next few appointments.
  *   Week: the week's bookings on a timeline (tap a day's name for it).
  *   Month: what's on each day; a day opens it.
- *   List: the week's strip, then its bookings one line each, by day.
  * The calendar is for appointments and organizing the week: workouts are the
- * Workouts schedule's, so only the day's own workout shows (on Day). A tap on
+ * Workouts schedule's, so only the day's own workout shows (List, Day). A tap on
  * empty time on a day ahead asks for a session there (coaching clients), a
  * session opens its quick view, and the footer asks for (or books) one. The
  * full calendar is the header's one link.
@@ -157,8 +159,9 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   const previewing = !!pov.viewAsClientId;
   // Their own view, remembered on their account; a coach previewing keeps his picks to the visit.
   const { prefs, setPrefs } = useCalendarPrefs({ local: previewing });
-  const savedView: HomeView = prefs.homeView ?? "day";
-  // A day tapped in Week, Month or List opens on its own for this visit; the tabs are what's remembered.
+  // List until they pick: a client's day is a workout and a session at most, and List reads it at a glance.
+  const savedView: HomeView = prefs.homeView ?? "list";
+  // A day tapped in Week or Month opens on its own for this visit; the tabs are what's remembered.
   const [dayFocus, setDayFocus] = useState(false);
   const view: HomeView = dayFocus ? "day" : savedView;
   const today = isoToday();
@@ -167,7 +170,13 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   // "Today" scrolls the timeline back to now even when the day didn't change.
   const [jump, setJump] = useState(0);
   const range = useMemo(() => homeRange(view, anchor, today), [view, anchor, today]);
-  const { items, isLoading } = useClientCalendarSources(clientId, { googleRange: range });
+  // Their own Google for the days on screen, and as far as Coming up looks on Day and List.
+  const googleRange = useMemo(() => {
+    if (view === "week" || view === "month") return range;
+    const ahead = addDaysISO(comingUpFrom(anchor, today), HOME_CALENDAR_DAYS);
+    return { from: range.from, to: ahead > range.to ? ahead : range.to };
+  }, [view, range, anchor, today]);
+  const { items, isLoading } = useClientCalendarSources(clientId, { googleRange });
   // "Book" shows when the coach has opened booking types to this client.
   const typesFn = usePovFn(useServerFn(listMyBookingTypes));
   const { data: bookable = [] } = useQuery({
@@ -205,6 +214,8 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
     () => buildHomeAgenda(items, { today, day: anchor, nowMs, days: HOME_CALENDAR_DAYS, maxUpcoming: HOME_UPCOMING_ROWS, upcoming: isCalendarItem }),
     [items, today, anchor, nowMs],
   );
+  // List: the day on a time column, a Now line through today.
+  const nowIndex = useMemo(() => (anchor === today ? nowLineIndex(agenda.today, nowMs) : -1), [agenda.today, anchor, today, nowMs]);
   // Day: rows for what has no time (the workout, anything all day), a timeline for what does.
   const dayRows = useMemo(() => agenda.today.filter((i) => i.kind === "workout" || !i.startsAt), [agenda.today]);
   const calendarItems = useMemo(() => (items ?? []).filter((i) => !!i && isCalendarItem(i)), [items]);
@@ -223,7 +234,6 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
     [calendarItems],
   );
   const dayTimed = useMemo(() => entries.filter((e) => e.date === anchor && !!e.startsAt), [entries, anchor]);
-  const itemById = useMemo(() => new Map(calendarItems.map((i) => [i.id, i])), [calendarItems]);
   const homeEntries = useMemo(() => calendarItems.map(entryOf), [calendarItems]);
   // Month: what's on each day, sessions first then in time order (cancelled ones left out).
   const namesByDay = useMemo(() => {
@@ -235,10 +245,6 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
     for (const list of m.values()) list.sort(monthChipOrder);
     return m;
   }, [homeEntries]);
-  const listRows = useMemo(
-    () => (view === "list" ? homeEntries.filter((e) => e.date >= range.from && e.date <= range.to).sort(byDayThenTime) : []),
-    [homeEntries, view, range.from, range.to],
-  );
   const singleBook = bookable.length === 1 && !pov.viewAsClientId ? bookable[0] : null;
   // A dot per appointment / date on each day of the week strip (not workouts).
   const dotsByDay = useMemo(() => {
@@ -266,6 +272,28 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   const canAsk = (d: string) => d > today;
   const loading = isLoading && !items?.length;
   const dayLabel = periodLabel("day", anchor, today);
+  const emptyDay = anchor === today ? "Nothing scheduled today. A good day to recover." : "Nothing scheduled.";
+  // Next: the next few things after the day shown; the full calendar is one tap away.
+  // Nothing coming up says nothing: no row of its own (the week's dots and the Calendar say it).
+  const comingUp = (
+    <AgendaNext show={agenda.upcoming.length > 0}>
+      {agenda.upcoming.flatMap((day) =>
+        day.items.map((item, i) => (
+          <li key={item.id} className="min-w-0">
+            <RowLink item={item} links={links} className={AGENDA_ROW}>
+              <AgendaNextRow
+                dayText={i === 0 ? (day.date === today ? "Today" : shortDay(day.date, today)) : ""}
+                accent={FAMILY_ACCENT[KIND_FAMILY[item.kind]]}
+                time={item.startsAt ? startLabel(item.startsAt) : null}
+                title={scheduleTitle(item)}
+                quiet={item.kind === "google_event"}
+              />
+            </RowLink>
+          </li>
+        )),
+      )}
+    </AgendaNext>
+  );
 
   return (
     <OpenSession.Provider value={setOpenSession}>
@@ -320,31 +348,13 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
                 )}
                 {dayRows.length === 0 && dayTimed.length === 0 && (
                   <AgendaToday>
-                    <AgendaEmpty>{anchor === today ? "Nothing scheduled today. A good day to recover." : "Nothing scheduled."}</AgendaEmpty>
+                    <AgendaEmpty>{emptyDay}</AgendaEmpty>
                   </AgendaToday>
                 )}
               </>
             )}
 
-            {/* Next: the next few things after the day shown; the full calendar is one tap away. */}
-            <AgendaNext show={agenda.upcoming.length > 0}>
-              {agenda.upcoming.flatMap((day) =>
-                day.items.map((item, i) => (
-                  <li key={item.id} className="min-w-0">
-                    <RowLink item={item} links={links} className={AGENDA_ROW}>
-                      <AgendaNextRow
-                        dayText={i === 0 ? (day.date === today ? "Today" : shortDay(day.date, today)) : ""}
-                        accent={FAMILY_ACCENT[KIND_FAMILY[item.kind]]}
-                        time={item.startsAt ? startLabel(item.startsAt) : null}
-                        title={scheduleTitle(item)}
-                        quiet={item.kind === "google_event"}
-                      />
-                    </RowLink>
-                  </li>
-                )),
-              )}
-            </AgendaNext>
-            {/* Nothing coming up says nothing: no row of its own (the week's dots and the Calendar say it). */}
+            {comingUp}
           </>
         )}
 
@@ -375,20 +385,29 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
 
         {view === "list" && (
           <>
-            <AgendaWeek today={today} anchor={anchor} onSelect={openDay} dots={(d) => dotsByDay.get(d) ?? []} />
-            <HomeWeekList
-              rows={listRows}
-              today={today}
-              nowMs={nowMs}
-              loading={loading}
-              emptyText={isCurrentPeriod("list", anchor, today) ? "Nothing booked this week." : "Nothing booked that week."}
-              label={periodLabel("list", anchor, today)}
-              wrap={(e, className, line) => (
-                <RowLink item={itemById.get(e.key)!} links={links} className={className}>
-                  {line}
-                </RowLink>
+            <AgendaWeek today={today} anchor={anchor} selected={anchor} onSelect={setAnchor} dots={(d) => dotsByDay.get(d) ?? []} />
+            <AgendaToday>
+              {loading ? (
+                <AgendaLoading />
+              ) : agenda.today.length === 0 ? (
+                <AgendaEmpty>{emptyDay}</AgendaEmpty>
+              ) : (
+                <ol aria-label={dayLabel} data-home-agenda>
+                  {agenda.today.map((item, i) => (
+                    <li key={item.id} className="min-w-0">
+                      {i === nowIndex && <NowLine />}
+                      <TodayRow item={item} links={links} today={today} past={hasEnded(item.startsAt, item.endsAt, nowMs)} />
+                    </li>
+                  ))}
+                  {nowIndex === agenda.today.length && (
+                    <li aria-hidden>
+                      <NowLine />
+                    </li>
+                  )}
+                </ol>
               )}
-            />
+            </AgendaToday>
+            {comingUp}
           </>
         )}
 

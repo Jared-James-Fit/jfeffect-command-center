@@ -184,15 +184,16 @@ describe("the Home card's Day / Week / Month / List", () => {
     expect(dayTag("2026-11-17", "2026-11-18")).toMatch(/^Tue 17$/);
   });
 
-  it("List is the week's bookings one line each, by day, under the week's strip (every account's card)", async () => {
+  it("the coach's List is the week's bookings one line each, by day, under the week's strip", async () => {
     const shared = readFileSync("src/components/schedule/home-calendar-views.tsx", "utf8");
     expect(shared).toContain('{ id: "list", label: "List" }');
     expect(shared).toContain("dayText={firstOfDay ? dayTag(r.date, today) : \"\"}");
     expect(shared).toContain("data-home-list");
+    const dash = readFileSync("src/components/admin-calendar/dashboard-schedule-card.tsx", "utf8");
+    expect(dash).toContain("<AgendaWeek today={today} anchor={anchor} onSelect={openDay} dots={(d) => dotsByDay.get(d) ?? []} />");
+    expect(dash).toContain("<HomeWeekList");
     for (const f of ["src/components/admin-calendar/dashboard-schedule-card.tsx", "src/components/home/upcoming-schedule-card.tsx"]) {
       const card = readFileSync(f, "utf8");
-      expect(card, f).toContain("<AgendaWeek today={today} anchor={anchor} onSelect={openDay} dots={(d) => dotsByDay.get(d) ?? []} />");
-      expect(card, f).toContain("<HomeWeekList");
       expect(card, f).toContain("<HomeViewBar");
       expect(card, f).toContain("<HomeMonth anchor={anchor} today={today} onPick={openDay}");
     }
@@ -200,6 +201,21 @@ describe("the Home card's Day / Week / Month / List", () => {
     const { sanitizePrefs } = await import("@/lib/calendar-prefs");
     expect(sanitizePrefs({ homeView: "list" })).toEqual({ homeView: "list" });
     expect(sanitizePrefs({ homeView: "agenda" })).toEqual({});
+  });
+
+  it("a client's List is the card they've always had: the strip, the day in full on a time column with its Now line and today's Start, then Coming up", () => {
+    const client = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
+    const list = client.slice(client.indexOf('{view === "list" && ('), client.indexOf("{/* The action, in words"));
+    // A day in the strip shows in place, staying on List.
+    expect(list).toContain("<AgendaWeek today={today} anchor={anchor} selected={anchor} onSelect={setAnchor} dots={(d) => dotsByDay.get(d) ?? []} />");
+    expect(list).toContain("agenda.today.map((item, i) => (");
+    expect(list).toContain("{i === nowIndex && <NowLine />}");
+    expect(list).toContain("<TodayRow item={item} links={links} today={today}");
+    expect(list).toContain("{comingUp}");
+    expect(list).not.toContain("<TimeGrid");
+    expect(client).toContain('const emptyDay = anchor === today ? "Nothing scheduled today. A good day to recover." : "Nothing scheduled.";');
+    // The Now line only runs through today.
+    expect(client).toContain("const nowIndex = useMemo(() => (anchor === today ? nowLineIndex(agenda.today, nowMs) : -1)");
   });
 
   it("the period is never cut short: it takes its own line when the switch leaves no room", () => {
@@ -219,10 +235,12 @@ describe("the Home card's Day / Week / Month / List", () => {
     expect(client).toContain("const { prefs, setPrefs } = useCalendarPrefs({ local: previewing });");
     expect(page).toContain("const { prefs, setPrefs } = useCalendarPrefs({ local: isImpersonating });");
     for (const src of [dash, client]) {
-      expect(src).toContain('const savedView: HomeView = prefs.homeView ?? "day";');
       // A day tapped in Week or Month opens for the visit; only the tabs are remembered.
       expect(src).toContain('const view: HomeView = dayFocus ? "day" : savedView;');
     }
+    // The coach opens on Day; a client on List, the card they've always had.
+    expect(dash).toContain('const savedView: HomeView = prefs.homeView ?? "day";');
+    expect(client).toContain('const savedView: HomeView = prefs.homeView ?? "list";');
     expect(readFileSync("src/components/schedule/home-calendar-views.tsx", "utf8")).toContain('aria-label="Calendar view"');
     for (const src of [dash, panel, client, page]) expect(src).not.toContain("localStorage");
   });
