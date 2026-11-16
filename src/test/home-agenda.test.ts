@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildHomeAgenda } from "@/lib/home-upcoming";
+import { buildHomeAgenda, homeAgendaDays } from "@/lib/home-upcoming";
 import type { CalendarItem } from "@/lib/calendar-sources";
 
 const it_ = (id: string, kind: CalendarItem["kind"], date: string, startsAt: string | null = null, extra: Partial<CalendarItem> = {}): CalendarItem => ({
@@ -61,5 +61,15 @@ describe("Home agenda", () => {
     expect(ids).not.toContain("pt");
     expect(ids).not.toContain("gcal-lunch");
     expect(ids[0]).toBe("tue-g");
+  });
+
+  it("the List's week is each day's own rows, in day order, empty days left out", () => {
+    const week = ["2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"];
+    const days = homeAgendaDays(items, week);
+    expect(days.map((d) => d.date)).toEqual(["2026-10-12", "2026-10-13", "2026-10-15", "2026-10-16"]);
+    // The same rows the day shows: workout first, then by time; no cardio or cancelled.
+    expect(days[0].items.map((i) => i.id)).toEqual(buildHomeAgenda(items, { today }).today.map((i) => i.id));
+    expect(days[2].items.map((i) => i.id)).toEqual(["thu", "thu-appt"]);
+    expect(homeAgendaDays(items, ["2026-10-19"])).toEqual([]);
   });
 });

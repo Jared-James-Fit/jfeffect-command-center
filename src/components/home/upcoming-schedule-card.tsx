@@ -6,19 +6,19 @@ import { CalendarPlus } from "lucide-react";
 import { listMyBookingTypes } from "@/lib/booking.functions";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { KIND_FAMILY, KIND_META, placeLabel, scheduleTitle, useClientCalendarSources, type CalendarItem } from "@/lib/calendar-sources";
-import { buildHomeAgenda } from "@/lib/home-upcoming";
+import { buildHomeAgenda, homeAgendaDays } from "@/lib/home-upcoming";
 import { getWorkoutStatus } from "@/lib/workout-status";
 import { blockNameParts } from "@/lib/training-roadmap";
 import { addDaysISO, compactTimeRange } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
 import { useEntitlement } from "@/lib/service-tier";
 import { useCalendarPrefs, type HomeView } from "@/lib/calendar-prefs";
-import { comingUpFrom, homeRange, isCurrentPeriod, periodLabel, shiftAnchor } from "@/lib/home-calendar";
+import { comingUpFrom, homeRange, isCurrentPeriod, listPeriod, periodLabel, shiftAnchor } from "@/lib/home-calendar";
 import { blockLabels, callLabel } from "@/lib/calendar-labels";
 import { monthChipOrder } from "@/lib/calendar-timeline";
 import { weekDays } from "@/components/calendar/week-strip";
 import { TimeGrid, type TimeGridEntry } from "@/components/calendar/time-grid";
-import { HomeMonth, HomeViewBar, type HomeEntry } from "@/components/schedule/home-calendar-views";
+import { byDayThenTime, HomeMonth, HomeViewBar, HomeWeekList, type HomeEntry } from "@/components/schedule/home-calendar-views";
 import { RequestSessionSheet } from "@/components/schedule/request-session-sheet";
 import { ClientSessionSheet, type ClientSession } from "@/components/schedule/client-session-sheet";
 import {
@@ -131,14 +131,26 @@ function entryOf(item: CalendarItem): HomeEntry {
 }
 
 /**
+ * A line in the List's week: a workout by its name (no time: it's any time
+ * that day; "Done" after it once it is), anything else as `entryOf` reads it.
+ */
+function weekEntryOf(item: CalendarItem): HomeEntry {
+  const entry = entryOf(item);
+  if (item.kind !== "workout") return entry;
+  return { ...entry, timeText: null, what: item.raw && workoutAction(item.raw).done ? "Done" : null };
+}
+
+/**
  * Client Home: their calendar card, in the look every account shares
  * (schedule/agenda.tsx) and with the same four views as the coach's
  * (home-calendar-views.tsx), their choice remembered on their account:
  *   List (the default, the card clients have always had): the week's days
- *     with a dot per appointment (tap one to show it here), that day in full
- *     on a time column (its workout first, today's saying its week and
- *     offering Start / Continue / Done; a Now line through today), then the
- *     next few appointments after it.
+ *     with a dot per appointment and a Week spot after Sunday. A day (today
+ *     to start) in full on a time column (its workout first, today's saying
+ *     its week and offering Start / Continue / Done; a Now line through
+ *     today), then the next few appointments after it; Week lists every day
+ *     of the week one line each (its workout, its appointments). Tapping a
+ *     day goes back to that day. Day or Week is remembered.
  *   Day: the same strip and the day's workout as rows, its bookings on a
  *     timeline when it has any (a day with nothing at a time shows no empty
  *     hours), then the next few appointments.
@@ -164,6 +176,10 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   // A day tapped in Week or Month opens on its own for this visit; the tabs are what's remembered.
   const [dayFocus, setDayFocus] = useState(false);
   const view: HomeView = dayFocus ? "day" : savedView;
+  // List: one day at a time (the default), or the whole week.
+  const listWeek = view === "list" && prefs.listScope === "week";
+  // What the period label, ‹ › and Today follow: List by its day, or by its week.
+  const period: HomeView = listPeriod(view, prefs.listScope);
   const today = isoToday();
   // The day shown (Day), or a day in the week / month on screen.
   const [anchor, setAnchor] = useState<string>(today);
@@ -198,7 +214,7 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
     setPrefs({ homeView: v });
     setAnchor(today);
   };
-  const step = (dir: -1 | 1) => setAnchor((a) => shiftAnchor(view, a, dir));
+  const step = (dir: -1 | 1) => setAnchor((a) => shiftAnchor(period, a, dir));
   const backToToday = () => {
     setAnchor(today);
     setJump((j) => j + 1);
@@ -207,6 +223,12 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
     setAnchor(d);
     if (savedView !== "day") setDayFocus(true);
   };
+  // List: a day in the strip shows that day; the Week spot the whole week.
+  const showListDay = (d: string) => {
+    setAnchor(d);
+    if (listWeek) setPrefs({ listScope: "day" });
+  };
+  const showListWeek = () => setPrefs({ listScope: "week" });
 
   // The day on screen in full (its workout is the way in to it), then the next
   // few appointments and dates after it: the workout schedule lives on Workouts.
@@ -218,6 +240,13 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   const nowIndex = useMemo(() => (anchor === today ? nowLineIndex(agenda.today, nowMs) : -1), [agenda.today, anchor, today, nowMs]);
   // Day: rows for what has no time (the workout, anything all day), a timeline for what does.
   const dayRows = useMemo(() => agenda.today.filter((i) => i.kind === "workout" || !i.startsAt), [agenda.today]);
+  // List's week: every day of it, the same rows each day shows, one line each.
+  const weekItems = useMemo(
+    () => (listWeek ? homeAgendaDays(items, weekDays(anchor)).flatMap((d) => d.items) : []),
+    [items, listWeek, anchor],
+  );
+  const weekItemByKey = useMemo(() => new Map(weekItems.map((it) => [it.id, it])), [weekItems]);
+  const weekRows = useMemo(() => weekItems.map(weekEntryOf).sort(byDayThenTime), [weekItems]);
   const calendarItems = useMemo(() => (items ?? []).filter((i) => !!i && isCalendarItem(i)), [items]);
   const entries = useMemo<TimeGridEntry<CalendarItem>[]>(
     () =>
@@ -302,9 +331,9 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
         <HomeViewBar
           view={view}
           onView={chooseView}
-          label={periodLabel(view, anchor, today)}
+          label={periodLabel(period, anchor, today)}
           onStep={step}
-          onToday={isCurrentPeriod(view, anchor, today) ? null : backToToday}
+          onToday={isCurrentPeriod(period, anchor, today) ? null : backToToday}
         />
 
         {view === "day" && (
@@ -385,29 +414,55 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
 
         {view === "list" && (
           <>
-            <AgendaWeek today={today} anchor={anchor} selected={anchor} onSelect={setAnchor} dots={(d) => dotsByDay.get(d) ?? []} />
-            <AgendaToday>
-              {loading ? (
-                <AgendaLoading />
-              ) : agenda.today.length === 0 ? (
-                <AgendaEmpty>{emptyDay}</AgendaEmpty>
-              ) : (
-                <ol aria-label={dayLabel} data-home-agenda>
-                  {agenda.today.map((item, i) => (
-                    <li key={item.id} className="min-w-0">
-                      {i === nowIndex && <NowLine />}
-                      <TodayRow item={item} links={links} today={today} past={hasEnded(item.startsAt, item.endsAt, nowMs)} />
-                    </li>
-                  ))}
-                  {nowIndex === agenda.today.length && (
-                    <li aria-hidden>
-                      <NowLine />
-                    </li>
+            <AgendaWeek
+              today={today}
+              anchor={anchor}
+              selected={listWeek ? undefined : anchor}
+              onSelect={showListDay}
+              weekSelected={listWeek}
+              onSelectWeek={showListWeek}
+              dots={(d) => dotsByDay.get(d) ?? []}
+            />
+            {listWeek ? (
+              <HomeWeekList
+                rows={weekRows}
+                today={today}
+                nowMs={nowMs}
+                loading={loading}
+                emptyText={isCurrentPeriod("week", anchor, today) ? "Nothing scheduled this week." : "Nothing scheduled that week."}
+                label={periodLabel("week", anchor, today)}
+                wrap={(e, className, line) => (
+                  <RowLink item={weekItemByKey.get(e.key)!} links={links} className={className}>
+                    {line}
+                  </RowLink>
+                )}
+              />
+            ) : (
+              <>
+                <AgendaToday>
+                  {loading ? (
+                    <AgendaLoading />
+                  ) : agenda.today.length === 0 ? (
+                    <AgendaEmpty>{emptyDay}</AgendaEmpty>
+                  ) : (
+                    <ol aria-label={dayLabel} data-home-agenda>
+                      {agenda.today.map((item, i) => (
+                        <li key={item.id} className="min-w-0">
+                          {i === nowIndex && <NowLine />}
+                          <TodayRow item={item} links={links} today={today} past={hasEnded(item.startsAt, item.endsAt, nowMs)} />
+                        </li>
+                      ))}
+                      {nowIndex === agenda.today.length && (
+                        <li aria-hidden>
+                          <NowLine />
+                        </li>
+                      )}
+                    </ol>
                   )}
-                </ol>
-              )}
-            </AgendaToday>
-            {comingUp}
+                </AgendaToday>
+                {comingUp}
+              </>
+            )}
           </>
         )}
 
@@ -428,7 +483,7 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
                 <CalendarPlus className="h-4 w-4" /> Book a session
               </Link>
             ) : (
-              <button type="button" onClick={() => setRequesting({ date: view === "day" && anchor > today ? anchor : today })} className={AGENDA_ACTION}>
+              <button type="button" onClick={() => setRequesting({ date: period === "day" && anchor > today ? anchor : today })} className={AGENDA_ACTION}>
                 <CalendarPlus className="h-4 w-4" /> Request a session
               </button>
             )}

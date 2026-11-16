@@ -18,10 +18,14 @@ import { useAuth } from "@/lib/auth";
 
 export type BoardView = "month" | "week" | "day" | "upcoming";
 export type HomeView = "day" | "week" | "month" | "list";
+/** What the Home card's List shows: one day (the default) or that day's whole week. */
+export type ListScope = "day" | "week";
 
 export type CalendarPrefs = {
   boardView?: BoardView;
   homeView?: HomeView;
+  /** List: one day at a time, or the week. */
+  listScope?: ListScope;
   includeGoogle?: boolean;
   /** When these were last changed (ISO), to pick the newer of device and account. */
   updatedAt?: string;
@@ -41,6 +45,7 @@ export function sanitizePrefs(raw: unknown): CalendarPrefs {
   const out: CalendarPrefs = {};
   if (BOARD_VIEWS.includes(r.boardView as BoardView)) out.boardView = r.boardView as BoardView;
   if (HOME_VIEWS.includes(r.homeView as HomeView)) out.homeView = r.homeView as HomeView;
+  if (r.listScope === "day" || r.listScope === "week") out.listScope = r.listScope;
   if (typeof r.includeGoogle === "boolean") out.includeGoogle = r.includeGoogle;
   if (typeof r.updatedAt === "string" && !Number.isNaN(Date.parse(r.updatedAt))) out.updatedAt = r.updatedAt;
   return out;
