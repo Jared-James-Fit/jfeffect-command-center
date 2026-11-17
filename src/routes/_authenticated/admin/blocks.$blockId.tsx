@@ -92,6 +92,8 @@ const ROW_FIELDS = [
   // entered in the inactive mode so flipping back restores it.
   "measurement_type","duration_seconds","tracking_type",
   "reps_text_backup","duration_seconds_backup",
+  // an optional exercise: skipping it never counts against the workout
+  "is_optional",
 ] as const;
 
 function treeToPayload(tree: any) {
@@ -332,6 +334,7 @@ async function applyPayloadDiff(blockId: string, originalTree: any, current: any
         const desired: any = { sort_order: k };
         for (const f of ROW_FIELDS) desired[f] = cr[f] ?? null;
         if (!desired.time_profile) desired.time_profile = "accessory_compound";
+        desired.is_optional = !!desired.is_optional; // NOT NULL in the database
 
         if (cr._dbId) {
           const orr = odRows.find((o) => o._dbId === cr._dbId);

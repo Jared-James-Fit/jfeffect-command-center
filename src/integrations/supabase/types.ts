@@ -17789,6 +17789,7 @@ export type Database = {
           exercise_name_override: string | null
           id: string
           intensity_techniques: string[]
+          is_optional: boolean
           load_kg: number | null
           load_lb: number | null
           load_unit: string | null
@@ -17828,6 +17829,7 @@ export type Database = {
           exercise_name_override?: string | null
           id?: string
           intensity_techniques?: string[]
+          is_optional?: boolean
           load_kg?: number | null
           load_lb?: number | null
           load_unit?: string | null
@@ -17867,6 +17869,7 @@ export type Database = {
           exercise_name_override?: string | null
           id?: string
           intensity_techniques?: string[]
+          is_optional?: boolean
           load_kg?: number | null
           load_lb?: number | null
           load_unit?: string | null
@@ -26010,7 +26013,7 @@ export type Database = {
       }
       pl_norm_exercise_name: { Args: { _name: string }; Returns: string }
       pl_prep_set_meet_day: {
-        Args: { _apply?: boolean; _day: string; _prep: string }
+        Args: { _apply?: boolean; _day: string; _moves?: Json; _prep: string }
         Returns: Json
       }
       pl_recompute_block_status: {

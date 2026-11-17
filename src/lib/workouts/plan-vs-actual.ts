@@ -12,7 +12,9 @@
  *     the recap's average EASIER_BY under it.
  *   - short: fewer reps than the bottom of the prescribed reps.
  * A set is a working set when it's logged (reps or a time) and not marked a
- * warm-up; a row with nothing logged is "not logged", never "missed".
+ * warm-up; a row with nothing logged is "not logged", never "missed". An
+ * optional row (pl_exercise_rows.is_optional) counts only what was logged on
+ * it: left out, it isn't "not logged"; cut short, it isn't "fewer".
  */
 import { parseRpe, percentOf1RM } from "@/lib/load-suggestion";
 import { parseRepTarget } from "@/lib/set-input-cascade";
@@ -163,6 +165,7 @@ export type PlanRow = {
   rpe?: string | number | null;
   rir?: string | number | null;
   skipped?: boolean | null;
+  is_optional?: boolean | null;
   measurement_type?: string | null;
   tracking_type?: string | null;
   exercises?: { name?: string | null } | null;
@@ -219,8 +222,11 @@ export function planCheck(rows: PlanRow[], results: PlanResult[]): PlanCheck {
 
   for (const row of rows) {
     if (row.skipped) continue;
-    const planned = Math.max(0, Number(row.sets ?? 0));
     const done = byRow.get(row.id) ?? [];
+    if (row.is_optional && done.length === 0) continue;
+    const prescribed = Math.max(0, Number(row.sets ?? 0));
+    // an optional row is planned only as far as it was done
+    const planned = row.is_optional ? Math.min(prescribed, done.length) : prescribed;
     setsPlanned += planned;
     setsDone += Math.min(done.length, planned || done.length);
     const name = displayExerciseName(row as any);

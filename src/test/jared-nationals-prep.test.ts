@@ -39,7 +39,7 @@ describe("Jared's 2027 Nationals prep: the coach's final audit", () => {
     expect(BLOCKS.flatMap((b) => b.weeks)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   });
 
-  it("times the final heavy exposures and the primer from the Feb 8 anchor", () => {
+  it("as written (placeholders until the lifting day is confirmed): the final heavy exposures and the primer from the Feb 8 anchor", () => {
     const out = (iso: string) =>
       Math.round(
         (Date.parse(`${MEET.windowStart}T00:00:00Z`) - Date.parse(`${iso}T00:00:00Z`)) / 86_400_000,

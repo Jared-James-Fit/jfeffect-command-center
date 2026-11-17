@@ -173,8 +173,8 @@ function rowStatements(): string {
 
 const dayCount = () => WEEKS.reduce((a, w) => a + w.days.length, 0);
 
-const PREP_TITLE = "Jared McIntyre — 2027 Canadian Nationals Prep";
-const PREP_NOTES = [
+export const PREP_TITLE = "Jared McIntyre — 2027 Canadian Nationals Prep";
+export const PREP_NOTES = [
   `${MEET.name}, ${MEET.location}. Window Feb 8–13 2027, lifting day TBD: Feb 8 is the conservative anchor; when the day is confirmed run public.pl_prep_set_meet_day(prep, day) (preview first, then with _apply => true) to move the Week 11–12 sessions with it. Weeks 1–10 stay.`,
   "Nationals weight class: needs confirmation (66 kg or 74 kg). Bodyweight was 66.3 kg on Sep 20 and 76.3 kg on Nov 14 (trend up ~0.7 kg a week since late Oct). 74 kg: stop the gain now, ~2.5 kg to lose by weigh-in, no extra workload needed. 66 kg: ~10 kg, a separate targeted plan.",
   "Training Maxes: squat 235 kg and bench 150 kg (Sep 20 2026 meet, block-scoped, held for the block); conventional deadlift set after the Week 1 calibration single (Sat Nov 21). Reviewed after Weeks 4 and 8 from trends, never from one session.",
@@ -182,7 +182,7 @@ const PREP_NOTES = [
   `Changes from the written program (Nov 16 2026):\n${PREP_CHANGES.map((c) => `- ${c}`).join("\n")}`,
 ].join("\n\n");
 
-const TEMPLATE_NOTES = [
+export const TEMPLATE_NOTES = [
   "Weekly order: MON Primary Squat + Bench/Triceps Overload; TUE Low-Fatigue Development + optional paused conventional pull; WED rest; THU Secondary Squat + Primary Competition Bench; FRI rest; SAT Primary Competition Deadlift + Secondary Bench; SUN rest.",
   "Blocks 1–2 are the off-season weeks trained Sep 27 – Nov 14 2026. Blocks 3–6 are the 12-week 2027 Nationals prep: Base (W1–4, W4 fatigue reduction), Strength (W5–8, W8 fatigue reduction), Peak (W9–11), Taper (W12).",
   "Loading: top singles by RPE; back-offs and competition-related secondaries as a % of the Training Max with the RPE as the cap (the cap beats the %); accessories by RPE with double progression, 1 hard set (2 for lats, side and rear delts).",

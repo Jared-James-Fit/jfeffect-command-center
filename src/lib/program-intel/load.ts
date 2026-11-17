@@ -174,7 +174,7 @@ export async function loadIntelRecords(
   const rows = await fetchByIds<any>(dayIds, (ids, f, t) =>
     sb
       .from("pl_exercise_rows")
-      .select("id, day_id, sort_order, exercise_id, exercise_name_override, sets, reps_text, rpe, rir, percentage, percentage_basis, load_kg, load_lb, load_unit, tempo, rest_seconds, notes, purpose_label, measurement_type, duration_seconds, intensity_techniques, progression_method")
+      .select("id, day_id, sort_order, exercise_id, exercise_name_override, sets, reps_text, rpe, rir, percentage, percentage_basis, load_kg, load_lb, load_unit, tempo, rest_seconds, notes, purpose_label, measurement_type, duration_seconds, intensity_techniques, progression_method, is_optional")
       .in("day_id", ids)
       .order("sort_order")
       .range(f, t),

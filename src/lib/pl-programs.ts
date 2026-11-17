@@ -603,6 +603,7 @@ export function buildCopiedExerciseRowPayload(r: Record<string, any>, dayId: str
     purpose_label: r.purpose_label ?? null,
     movement_family: r.movement_family ?? null,
     card_color: r.card_color ?? null,
+    is_optional: !!r.is_optional,
   };
 }
 
@@ -1596,6 +1597,7 @@ async function insertRow(dayId: string, sortOrder: number, r: any) {
     duration_seconds: r.duration_seconds ?? null,
     reps_text_backup: r.reps_text_backup ?? null,
     duration_seconds_backup: r.duration_seconds_backup ?? null,
+    is_optional: !!r.is_optional,
   });
 }
 
@@ -1648,6 +1650,7 @@ export async function saveBlockAsTemplate(blockId: string, name: string, style: 
         duration_seconds: r.duration_seconds ?? null,
         reps_text_backup: r.reps_text_backup ?? null,
         duration_seconds_backup: r.duration_seconds_backup ?? null,
+        ...(r.is_optional ? { is_optional: true } : {}),
       })),
     })),
   }));

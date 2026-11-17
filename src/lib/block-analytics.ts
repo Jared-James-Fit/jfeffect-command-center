@@ -204,7 +204,13 @@ export async function getBlockAnalytics(blockId: string): Promise<BlockAnalytics
 
   // Summary
   const completedSets = sets.filter((s) => s.completed);
-  const totalSets = (rows as any[]).reduce((acc, r) => acc + (r.sets ?? 0), 0);
+  // an optional exercise (pl_exercise_rows.is_optional) counts only the sets done on it
+  const doneOnRow = new Map<string, number>();
+  for (const s of completedSets) doneOnRow.set(s.row_id, (doneOnRow.get(s.row_id) ?? 0) + 1);
+  const totalSets = (rows as any[]).reduce(
+    (acc, r) => acc + (r.is_optional ? Math.min(r.sets ?? 0, doneOnRow.get(r.id) ?? 0) : (r.sets ?? 0)),
+    0,
+  );
   const totalVolume = completedSets.reduce((acc, s) => acc + ((s.weight ?? 0) * (s.reps ?? 0)), 0);
   const rpes = completedSets.map((s) => s.rpe).filter((x): x is number => x != null);
   const avgRpe = rpes.length ? Math.round((rpes.reduce((a, b) => a + b, 0) / rpes.length) * 10) / 10 : null;

@@ -10,10 +10,18 @@ import { isLoadValueEntered } from "@/lib/set-completion";
  * sets) and it holds a value (an old blank row stamped done doesn't count).
  * An exercise is done when each of its sets on screen (1…sets) is done, or
  * when it's skipped; an extra set logged on one exercise never makes up for a
- * missing one on another.
+ * missing one on another. An optional exercise (pl_exercise_rows.is_optional)
+ * counts only once a set of it is logged: left alone, it's out of the totals
+ * and never holds up the finish review; started, its logged sets count and it
+ * turns done with every set, like any other.
  */
 
-export type ProgressRow = { id: string | number; sets?: number | string | null; skipped?: boolean | null };
+export type ProgressRow = {
+  id: string | number;
+  sets?: number | string | null;
+  skipped?: boolean | null;
+  is_optional?: boolean | null;
+};
 export type ProgressResult = {
   row_id: string | number;
   set_index?: number | null;
@@ -68,6 +76,12 @@ export function workoutSetProgress(rows: ProgressRow[], results: ProgressResult[
     const logged = done.get(id);
     let n = 0;
     for (let i = 1; i <= need; i++) if (logged?.has(i)) n++;
+    if (row.is_optional && n < need) {
+      // optional and not finished: only what's logged counts, and it never holds up "all done"
+      setsTotal += n;
+      setsDone += n;
+      continue;
+    }
     setsTotal += need;
     setsDone += n;
     exercisesTotal++;

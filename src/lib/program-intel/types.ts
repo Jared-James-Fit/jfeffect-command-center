@@ -168,6 +168,8 @@ export type RawRow = {
   duration_seconds: number | null;
   intensity_techniques: string[] | null;
   progression_method: string | null;
+  /** The coach made it optional: left out, it's never skipped work (core.ts drops it). */
+  is_optional?: boolean | null;
 };
 
 /** pl_exercise_blocks: a row's set structure (top set, back-offs, ...) when the coach used one. */

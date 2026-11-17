@@ -33,6 +33,8 @@ export type RowSnap = {
   notes: string | null;
   timeProfile: string;
   purposeLabel: string | null;
+  /** pl_exercise_rows.is_optional: skipping it never counts against the athlete. */
+  optional?: boolean;
   measurementType: string;
   trackingType: string;
   durationSeconds: number | null;

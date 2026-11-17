@@ -2219,6 +2219,7 @@ function WorkoutDay({
       rowId: String(r.id),
       prescribedSets: Math.max(1, Number(r.sets) || 1),
       skipped: !!r.skipped,
+      optional: !!r.is_optional,
       metricKind: ((
         r?.tracking_type === "time" ||
         r?.measurement_type === "time" ||
@@ -2612,6 +2613,7 @@ function WorkoutDay({
           rowId: String(r.id),
           prescribedSets: Math.max(1, Number(r.sets) || 1),
           skipped: !!r.skipped,
+          optional: !!r.is_optional,
           metricKind: (detectTimed(r) ? "timed" : "load_reps") as RowMetricKind,
         }));
       const logged: LoggedSetSpec[] = (results as any[]).map((x: any) => ({
@@ -4548,6 +4550,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       </div>
       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-muted-foreground">
         <span data-exercise-role>{purposeLabelText(purposeLabel || category)}</span>
+        {/* optional (pl_exercise_rows.is_optional): skipping it never counts against the workout */}
+        {row?.is_optional && !/optional/i.test(String(purposeLabel ?? "")) && <span data-exercise-optional>· Optional</span>}
         {lastWeekSwap && <LastWeekSwapChip swap={lastWeekSwap} unit={activeUnit} />}
       </div>
       {/* Standardized prescription line: Sets × Reps @ Weight | RPE (a run reads as a run:

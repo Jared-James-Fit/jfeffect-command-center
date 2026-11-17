@@ -60,7 +60,7 @@ export function programText(snap: ProgramSnapshot, ctx: EngineCtx): string {
         out.push(`${head}${mins ? ` · ~${mins} min` : ""}`);
         for (const r of d.rows) {
           const tag = r.cardio ? "[cardio plan: not editable]" : r.exerciseId ? `[${codeOf.get(r.exerciseId) ?? "?"}]` : "[not a library exercise]";
-          out.push(`      ${r.ref.slice(d.ref.length)} ${tag} ${r.name} · ${rxLine(r)}${r.purposeLabel ? ` · ${r.purposeLabel}` : ""}`);
+          out.push(`      ${r.ref.slice(d.ref.length)} ${tag} ${r.name} · ${rxLine(r)}${r.purposeLabel ? ` · ${r.purposeLabel}` : ""}${r.optional && !/optional/i.test(r.purposeLabel ?? "") ? " · optional" : ""}`);
         }
       }
     }

@@ -12,6 +12,8 @@ export type SummaryRow = {
   exercise_name_override?: string | null;
   /** Row was explicitly marked as skipped. Doesn't count against completion. */
   skipped?: boolean | null;
+  /** Optional (pl_exercise_rows.is_optional): only what's logged on it counts, never "missed". */
+  is_optional?: boolean | null;
   /** Present for timed exercises (planks, holds, cardio). */
   measurement_type?: string | null;
   tracking_type?: string | null;
@@ -101,8 +103,6 @@ export function computeWorkoutSummary(
   for (const row of rows) {
     // Explicitly skipped rows don't count for or against the score.
     if (row.skipped) continue;
-    const sets = Math.max(0, Number(row.sets ?? 0));
-    prescribedSets += sets;
     // A set counts as completed if it has reps logged OR duration logged
     // (timed exercises like planks/holds/cardio don't populate actual_reps).
     const rs = (byRow.get(row.id) ?? []).filter(
@@ -110,6 +110,10 @@ export function computeWorkoutSummary(
         (Number(r.actual_reps ?? 0) > 0) ||
         (Number(r.completed_duration_seconds ?? 0) > 0),
     );
+    // an optional exercise left out is neither prescribed nor missed
+    if (row.is_optional && rs.length === 0) continue;
+    const sets = Math.max(0, Number(row.sets ?? 0));
+    prescribedSets += row.is_optional ? Math.min(sets, rs.length) : sets;
     if (rs.length > 0) {
       exercisesCompleted += 1;
       for (const r of rs) {
@@ -141,7 +145,9 @@ export function computeWorkoutSummary(
   score = Math.max(0, Math.min(100, Math.round(score)));
 
   const totalLiftedRounded = Math.round(totalLifted);
-  const consideredRows = rows.filter((r) => !r.skipped).length;
+  const consideredRows = rows.filter((r) => !r.skipped && !(r.is_optional && !(byRow.get(r.id) ?? []).some(
+    (x) => Number(x.actual_reps ?? 0) > 0 || Number(x.completed_duration_seconds ?? 0) > 0,
+  ))).length;
 
   return {
     displayUnit,

@@ -3436,7 +3436,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           className="-mx-1 inline-flex min-h-8 items-center gap-1 rounded-md px-1 text-xs text-muted-foreground hover:text-foreground"
         >
           {moreOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-          More{!moreOpen && (row.purpose_label || row.movement_family) ? <span className="text-foreground/70"> · set by hand</span> : null}
+          More{!moreOpen && row.is_optional ? <span className="text-foreground/70"> · optional</span> : !moreOpen && (row.purpose_label || row.movement_family) ? <span className="text-foreground/70"> · set by hand</span> : null}
         </button>
         {moreOpen && (
           <div className="mt-1.5 grid gap-2 @xl/row:grid-cols-3">
@@ -3521,6 +3521,14 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                   </div>
                 </PopoverContent>
               </Popover>
+            </RowField>
+            {/* Optional (pl_exercise_rows.is_optional): only what's logged on it ever counts,
+                so skipping it never lowers the workout's completion, adherence or analytics. */}
+            <RowField label="Optional">
+              <label className={cn("flex cursor-pointer items-center justify-between gap-2 px-2.5 text-sm", h, inputCls)} data-row-optional>
+                <span className="truncate text-muted-foreground">Skipping it never counts against them</span>
+                <Switch checked={!!row.is_optional} onCheckedChange={(v) => setRow({ ...row, is_optional: v })} aria-label="Optional exercise" />
+              </label>
             </RowField>
             <RowField label="Exercise type (rest and timing)">
               <Select value={row.time_profile ?? "accessory_compound"} onValueChange={(v) => setRow({ ...row, time_profile: v })}>

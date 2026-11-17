@@ -223,6 +223,7 @@ const EXERCISE_ROW_CLONE_FIELDS = [
   "purpose_label",
   "card_color",
   "movement_family",
+  "is_optional",
   "manual_override",
   "override_of_pct",
   "estimated_seconds",

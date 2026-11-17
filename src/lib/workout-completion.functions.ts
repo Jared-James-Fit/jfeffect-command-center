@@ -404,6 +404,7 @@ const RequiredRowSchema = z.object({
   prescribedSets: z.number().int().nullable().optional(),
   metricKind: z.enum(["load_reps", "bodyweight", "timed", "distance", "rpe_only"]),
   skipped: z.boolean().optional(),
+  optional: z.boolean().optional(),
 });
 
 /* -------------------------------------------------------------------------- */

@@ -8,7 +8,10 @@
  * "Required sets" are the sets prescribed by the template (or 1 per
  * exercise when no prescribed count exists). "Meaningfully logged" means
  * at least one quantitative field is populated relative to the metric
- * type. Explicitly skipped exercises do NOT count against the user.
+ * type. Explicitly skipped exercises do NOT count against the user, and
+ * neither does an optional exercise (pl_exercise_rows.is_optional): it counts
+ * only the sets actually logged on it, so leaving it out never lowers a
+ * workout's logging percentage or asks to confirm missing logs.
  */
 
 export type LoggingQuality =
@@ -33,6 +36,8 @@ export interface RequiredRowSpec {
   metricKind: RowMetricKind;
   /** Row was explicitly marked as skipped. Doesn't count as missing. */
   skipped?: boolean;
+  /** The coach made it optional (pl_exercise_rows.is_optional): only its logged sets count. */
+  optional?: boolean;
 }
 
 export interface LoggedSetSpec {
@@ -81,13 +86,36 @@ export function isSetMeaningfullyLogged(set: LoggedSetSpec, kind: RowMetricKind)
   }
 }
 
+const prescribedOf = (r: RequiredRowSpec) => Math.max(1, Number(r.prescribedSets) || 1);
+
+/** Required sets with nothing logged: optional rows add none (see `requiredSetsWith`). */
 export function countRequiredSets(rows: RequiredRowSpec[]): number {
   let total = 0;
   for (const r of rows) {
-    if (r.skipped) continue;
-    total += Math.max(1, Number(r.prescribedSets) || 1);
+    if (r.skipped || r.optional) continue;
+    total += prescribedOf(r);
   }
   return total;
+}
+
+/** Required sets given what's logged: an optional row requires only the sets logged on it, up to its prescription. */
+export function requiredSetsWith(rows: RequiredRowSpec[], sets: LoggedSetSpec[]): number {
+  const loggedOn = loggedSetsByRow(rows, sets);
+  let total = 0;
+  for (const r of rows) {
+    if (r.skipped) continue;
+    total += r.optional ? Math.min(prescribedOf(r), loggedOn.get(r.rowId) ?? 0) : prescribedOf(r);
+  }
+  return total;
+}
+
+function loggedSetsByRow(rows: RequiredRowSpec[], sets: LoggedSetSpec[]): Map<string, number> {
+  const kindByRow = new Map(rows.map((r) => [r.rowId, r.metricKind] as const));
+  const out = new Map<string, number>();
+  for (const s of sets) {
+    if (isSetMeaningfullyLogged(s, kindByRow.get(s.rowId) ?? "load_reps")) out.set(s.rowId, (out.get(s.rowId) ?? 0) + 1);
+  }
+  return out;
 }
 
 export function countLoggedSets(
@@ -123,7 +151,7 @@ export function summarizeCompleteness(
   rows: RequiredRowSpec[],
   sets: LoggedSetSpec[],
 ): CompletenessSummary {
-  const requiredSets = countRequiredSets(rows);
+  const requiredSets = requiredSetsWith(rows, sets);
   const loggedSets = countLoggedSets(rows, sets);
   const skippedExercises = countSkippedExercises(rows);
   const loggingPercentage =

@@ -274,7 +274,11 @@ export function buildGraph(rec: IntelRecords): Graph {
           dayIndex: d.day_index,
           date,
           status,
-          rows: rows.map((r) => compareRow(r, lines.get(r.id) ?? [], setBlocksByRow.get(r.id) ?? [], exercise.get(r.exercise_id ?? ""), status, warmupsByRow.get(r.id) ?? 0, notesByRow.get(r.id) ?? [])),
+          // an optional exercise (pl_exercise_rows.is_optional) on a workout that's due counts only
+          // once a set of it is done: left out, it's never skipped work (still ahead, it's the plan)
+          rows: rows
+            .filter((r) => !r.is_optional || status === "upcoming" || status === "unscheduled" || (lines.get(r.id) ?? []).some((x) => x.done))
+            .map((r) => compareRow(r, lines.get(r.id) ?? [], setBlocksByRow.get(r.id) ?? [], exercise.get(r.exercise_id ?? ""), status, warmupsByRow.get(r.id) ?? 0, notesByRow.get(r.id) ?? [])),
           durationMin: completion?.actual_duration_min ?? null,
           sessionRating: completion?.session_rating ?? null,
           clientNotes: completion?.client_notes?.trim() || null,
@@ -317,7 +321,9 @@ function compareRow(
   const loadKg = toNum(row.load_kg) ?? (toNum(row.load_lb) != null ? round((toNum(row.load_lb) as number) / LB_PER_KG, 2) : null);
   const working = sets.filter((s) => s.working);
   const doneSets = sets.filter((s) => s.done);
-  const prescribed = prescribedSetCount(row, setBlocks);
+  const written = prescribedSetCount(row, setBlocks);
+  // an optional exercise is prescribed only as far as it was done: cut short, it isn't "partial"
+  const prescribed = row.is_optional && written != null ? Math.min(written, doneSets.length) : written;
   const repsHit = repR ? working.filter((s) => (s.reps ?? 0) >= repR[0]).length : null;
   const rpes = working.map((s) => s.rpe).filter((n): n is number => n != null);
   const rpeDelta = rpeR && rpes.length ? round((mean(rpes) as number) - (rpeR[0] + rpeR[1]) / 2, 2) : null;

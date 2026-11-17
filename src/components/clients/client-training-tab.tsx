@@ -45,6 +45,7 @@ import { gapParts } from "@/lib/program-gaps";
 import { useProgramGaps } from "@/components/program-gaps/use-program-gaps";
 import { WEEK_DAYS, SHORT_DAY, type WeekDay } from "@/lib/training-schedule";
 import { TrainingReportSheet } from "@/components/workouts/training-report-sheet";
+import { PrepReviewList } from "@/components/clients/prep-review";
 import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
 import { AssignProgramDialog } from "@/components/clients/assign-program-dialog";
 import { WorkoutArchiveDialog } from "@/components/clients/workout-archive-dialog";
@@ -333,6 +334,8 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
             })}
           </ul>
         )}
+        {/* a meet prep: the lifting day to confirm and each lift's Training Max, only when there's something to say */}
+        {!isLoading && focus && <PrepReviewList clientId={clientId} clientName={clientName} />}
 
         {empty ? (
           <div className="mt-3 space-y-3">

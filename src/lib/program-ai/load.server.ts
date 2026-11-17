@@ -81,6 +81,7 @@ function rowSnap(r: any, ref: string, name: string): RowSnap {
     notes: r.notes ?? null,
     timeProfile: r.time_profile ?? "accessory_compound",
     purposeLabel: r.purpose_label ?? null,
+    optional: !!r.is_optional,
     measurementType: r.measurement_type ?? "reps",
     trackingType: r.tracking_type ?? "reps_weight",
     durationSeconds: r.duration_seconds ?? null,
