@@ -228,6 +228,16 @@ export function RequestsTab({ initialKind }: { initialKind?: RequestKind } = {})
             {overdueOpen > 0 && <span className="ml-2 text-orange-600 dark:text-orange-400">· {overdueOpen} overdue</span>}
           </div>
           <div className="text-xs text-muted-foreground">Every form and check-in you've sent, by week. Overdue = 48h+.</div>
+          <details className="mt-1 text-xs text-muted-foreground" data-requests-coordination>
+            <summary className="cursor-pointer font-medium text-foreground">How requests are coordinated</summary>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+              <li>One recurring form: the weekly check-in, out Friday at 7am in each client's own time.</li>
+              <li>It adds only what that week needs: a weight-making question near a meet, photos and measurements when due (skipped when already on file), a weigh-in only when none was logged. Each check-in shows what it added and why.</li>
+              <li>The monthly Nutrition Update goes out the same morning as the month's last check-in, never as a second form that week.</li>
+              <li>One reminder: the 8am morning push covers everything waiting and stops once it's answered.</li>
+              <li>A check-in you send by hand counts as that week's; you're warned first if one is already out or about to go.</li>
+            </ul>
+          </details>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", isFetching && "animate-spin")} /> Refresh
@@ -548,7 +558,7 @@ function RequestPreview({ request, onClose }: { request: OutstandingRequest | nu
                   {(q.type === "multi" || q.type === "single") &&
                     (q.options ?? []).map((o) => <span key={o} className="rounded-full border border-border px-2 py-0.5">{o}</span>)}
                   {q.type === "text" && <span className="text-muted-foreground">Free text answer</span>}
-                  {q.showWhen && <span className="text-muted-foreground">Only asked if “Pain / injury” is ticked</span>}
+                  {q.askedIf && <span className="text-muted-foreground">Only asked if “{q.askedIf}” is ticked</span>}
                 </div>
               </li>
             ))}

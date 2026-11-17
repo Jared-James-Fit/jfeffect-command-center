@@ -64,10 +64,12 @@ describe("the Crew feed leads with what's new to you", () => {
   });
 
   it("the Crew screen scrolls the ranked feed; the story rail keeps the crew's last day in time order", () => {
-    expect(queries).toContain('queryKey: [...communityKeys.feed(null), "ranked"] as const');
-    expect(queries).toContain("{ _limit: FIRST_FEED_PAGE, _seen_before: feedAnchor() }");
+    expect(queries).toContain(': ([...communityKeys.feed(null), "ranked"] as const),');
+    expect(queries).toContain("{ _limit: FIRST_FEED_PAGE, _seen_before: feedAnchor(), ...only }");
     expect(screen).toContain("const ownPosts = useMemo(() => rankedPosts.filter(inFeed), [rankedPosts]);");
-    expect(screen).toMatch(/<StoryRail\s+posts=\{posts\}/);
+    // the Following tab's rail is the people you follow (railPosts); Crew's is the crew's last day
+    expect(screen).toMatch(/<StoryRail\s+posts=\{railPosts\}/);
+    expect(screen).toContain("following ? posts.filter((p) => inFollowingFeed(p, followingIds)) : posts");
     expect(screen).toContain("{i === caughtUp && (");
     expect(screen).toContain("!hasNextPage && feedPosts.length > 1 && caughtUp === null");
   });

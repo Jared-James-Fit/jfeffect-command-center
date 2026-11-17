@@ -1,6 +1,7 @@
 import { CompetitionPlanSummary } from "@/components/forms/competition-plan-summary";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useNavigate } from "@tanstack/react-router";
 import type { FormPresentation, FormHistoryGroup as FormHistoryGroupData } from "@/lib/form-message-presentation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -31,6 +32,7 @@ import { playAppSound } from "@/lib/app-sounds";
 import { weekChip } from "@/lib/program-context";
 import {
   analyzeMessengerCheckin,
+  getCheckinPlan,
   getMessengerCheckin,
   submitMessengerCheckin,
   type MessengerCheckinTaskType,
@@ -41,6 +43,12 @@ import { ChecklistAnswers, ReadinessSummary, meetSummary, useFormReadiness } fro
 import { readinessLine } from "@/lib/form-checklist";
 import { MEET_CHECKLIST_FORM_TYPE, type MeetFacts } from "@/lib/meet-checklist";
 import { answeredQuestions, type FormAnswerRow, type FormQuestionRow } from "@/lib/form-answer-text";
+import { DIGESTION_SYMPTOMS, DIGESTION_TIMINGS } from "@/lib/weight-management/digestion";
+import type { CheckinExtra, CheckinPlan } from "@/lib/checkin-coordination/plan";
+import { addPlanSteps } from "@/lib/checkin-coordination/steps";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
+import { useAuth } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
 
 type Role = "admin" | "client";
 
@@ -48,12 +56,28 @@ type Q = {
   key: string;
   prompt: string;
   helper?: string;
-  type: "rating" | "single" | "multi" | "text";
+  type: "rating" | "single" | "multi" | "text" | "action";
   options?: string[];
+  /** For an "action" step: the progress entry it opens (the same dialogs as the Progress page). */
+  action?: "photo" | "measure" | "weight";
   /** Word under each 1–5 rating button. */
   scale?: [string, string, string, string, string];
   optional?: boolean;
   showWhen?: (answers: Record<string, any>) => boolean;
+  /** The flag that brings it up, for the coach's preview. */
+  askedIf?: string;
+};
+
+const flagged = (flag: string) => (a: Record<string, any>) => Array.isArray(a.recovery_flags) && a.recovery_flags.includes(flag);
+const CARDIO_ISSUES = ["Missed sessions", "Legs tired for lifting", "Too easy", "Too hard", "Joint pain", "No time"] as const;
+const WATER_ISSUES = ["Hard to drink enough", "Bathroom too often", "Cramps or headaches", "Forgot to log it"] as const;
+/** A flag's follow-up answers, cleared when the flag is. */
+const FOLLOW_UPS: Record<string, string[]> = {
+  "Pain / injury": ["pain_details"],
+  "Digestion / bloating": ["digestion_symptoms", "digestion_timing", "digestion_severity"],
+  "Hunger / appetite": ["hunger_level"],
+  Cardio: ["cardio_issue"],
+  "Water / hydration": ["water_issue"],
 };
 
 const WEEKLY: Q[] = [
@@ -101,6 +125,61 @@ const WEEKLY: Q[] = [
     helper: "e.g. “Left knee hurts on squats and lunges.”",
     type: "text",
     showWhen: (a) => Array.isArray(a.recovery_flags) && a.recovery_flags.includes("Pain / injury"),
+    askedIf: "Pain / injury",
+  },
+  // Follow-ups only for what they flagged, so the check-in stays a minute long for
+  // everyone who's fine. Read week over week by weight-management/digestion.ts.
+  {
+    key: "digestion_symptoms",
+    prompt: "What's going on with digestion?",
+    helper: "Tap everything that applies.",
+    type: "multi",
+    options: [...DIGESTION_SYMPTOMS],
+    showWhen: flagged("Digestion / bloating"),
+    askedIf: "Digestion / bloating",
+  },
+  {
+    key: "digestion_timing",
+    prompt: "When is it worst?",
+    type: "single",
+    options: [...DIGESTION_TIMINGS],
+    showWhen: flagged("Digestion / bloating"),
+    askedIf: "Digestion / bloating",
+  },
+  {
+    key: "digestion_severity",
+    prompt: "How bad has it been?",
+    helper: "1 = barely noticeable · 5 = it's getting in the way of your day.",
+    type: "rating",
+    scale: ["Barely", "Mild", "Noticeable", "Bad", "Severe"],
+    showWhen: flagged("Digestion / bloating"),
+    askedIf: "Digestion / bloating",
+  },
+  {
+    key: "hunger_level",
+    prompt: "How hungry have you been?",
+    helper: "1 = rarely hungry · 5 = hungry all the time.",
+    type: "rating",
+    scale: ["Rarely", "A little", "Manageable", "Often", "Always"],
+    showWhen: flagged("Hunger / appetite"),
+    askedIf: "Hunger / appetite",
+  },
+  {
+    key: "cardio_issue",
+    prompt: "What happened with cardio?",
+    helper: "Tap everything that applies.",
+    type: "multi",
+    options: [...CARDIO_ISSUES],
+    showWhen: flagged("Cardio"),
+    askedIf: "Cardio",
+  },
+  {
+    key: "water_issue",
+    prompt: "What's getting in the way with water?",
+    type: "single",
+    options: [...WATER_ISSUES],
+    showWhen: flagged("Water / hydration"),
+    askedIf: "Water / hydration",
   },
   {
     key: "win",
@@ -129,6 +208,11 @@ const WEEKLY: Q[] = [
 export const WEEKLY_CHECKIN_QUESTIONS = WEEKLY;
 export type CheckinQuestion = Q;
 
+/** This week's check-in: the weekly questions plus only what its plan adds (checkin-coordination/steps.ts). */
+export function withPlanSteps(base: Q[], plan: CheckinPlan | null): Q[] {
+  return addPlanSteps(base, plan) as Q[];
+}
+
 const LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = {
   weekly_checkin: {
     week_rating: "Overall week",
@@ -136,6 +220,16 @@ const LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = {
     nutrition_rating: "Nutrition",
     recovery_flags: "Recovery / issues",
     pain_details: "Pain / injury",
+    digestion_symptoms: "Digestion",
+    digestion_timing: "Digestion: when",
+    digestion_severity: "Digestion: how bad",
+    hunger_level: "Hunger",
+    cardio_issue: "Cardio",
+    water_issue: "Water",
+    weight_making: "Making weight",
+    bodyweight_logged: "Weighed in",
+    photos_added: "Progress photos",
+    measurements_added: "Measurements",
     win: "Biggest win",
     help: "Help / changes",
     next_week_goal: "Next-week goal",
@@ -162,6 +256,8 @@ export function durationFor(_taskType: MessengerCheckinTaskType) {
 }
 
 function displayAnswer(v: unknown) {
+  if (v === true) return "Done, saved to their progress";
+  if (v === false) return "Skipped";
   if (Array.isArray(v)) return v.join(", ");
   if (typeof v === "number") return `${v}/5`;
   return String(v ?? "—");
@@ -315,15 +411,52 @@ function CheckinWizard({
 }) {
   const qc = useQueryClient();
   const submit = useServerFn(submitMessengerCheckin);
+  const navigate = useNavigate();
   const analyze = useServerFn(analyzeMessengerCheckin);
   const [answers, setAnswers] = useState<Record<string, any>>(initialAnswers);
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
+  // This week's plan (what it adds and why), worked out once on the server and kept on the check-in.
+  const readPlan = useServerFn(getCheckinPlan);
+  const planQ = useQuery({
+    queryKey: ["checkin-plan", submissionId],
+    queryFn: () => readPlan({ data: { submissionId } }),
+    enabled: open && taskType === "weekly_checkin",
+    staleTime: 5 * 60_000,
+  });
+  const plan = (planQ.data?.plan ?? null) as CheckinPlan | null;
+  const nutritionWaiting = !!plan?.extras.some((e) => e.key === "nutrition_update");
   const visible = useMemo(
-    () => taskQuestions(taskType).filter((q) => !q.showWhen || q.showWhen(answers)),
-    [taskType, answers],
+    () => withPlanSteps(taskQuestions(taskType), plan).filter((q) => !q.showWhen || q.showWhen(answers)),
+    [taskType, answers, plan],
   );
+  const [progressAction, setProgressAction] = useState<null | { key: string; action: "photo" | "measure" | "weight" }>(null);
+  const { user } = useAuth();
+  const progressCtxQ = useQuery({
+    queryKey: ["checkin-progress-ctx", clientId],
+    enabled: !!progressAction && !!user?.id,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data } = await supabase.from("clients").select("id, preferred_weight_unit, assigned_coach_id").eq("id", clientId).maybeSingle();
+      return data as { id: string; preferred_weight_unit: string | null; assigned_coach_id: string | null } | null;
+    },
+  });
+  /** After the entry closes: did it actually land in their records today? */
+  async function afterProgressAction(key: string, action: "photo" | "measure" | "weight") {
+    setProgressAction(null);
+    if (!user?.id) return;
+    const since = new Date(Date.now() - 2 * 3600_000).toISOString();
+    const table = action === "photo" ? "progress_submissions" : action === "measure" ? "progress_measurements" : "progress_bodyweight";
+    const { count } = await (supabase as any).from(table).select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", since);
+    if ((count ?? 0) > 0) {
+      setAnswer(true, true);
+      void qc.invalidateQueries({ queryKey: ["checkin-plan", submissionId] });
+    } else {
+      toast("Nothing saved. You can add it later from Progress.");
+    }
+    void key;
+  }
   const q = visible[Math.min(step, Math.max(0, visible.length - 1))];
   const current = q ? answers[q.key] : undefined;
   const isLast = step >= visible.length - 1;
@@ -337,10 +470,10 @@ function CheckinWizard({
     setAnswers((prev) => {
       let next = { ...prev, [q.key]: value };
       if (q.key === "recovery_flags" && Array.isArray(value)) {
-        if (value.includes("All good") && value.length > 1) {
-          next = { ...next, recovery_flags: ["All good"], pain_details: undefined };
-        } else if (!value.includes("Pain / injury")) {
-          next = { ...next, pain_details: undefined };
+        if (value.includes("All good") && value.length > 1) next = { ...next, recovery_flags: ["All good"] };
+        const flags: string[] = next.recovery_flags ?? [];
+        for (const [flag, keys] of Object.entries(FOLLOW_UPS)) {
+          if (!flags.includes(flag)) for (const k of keys) next = { ...next, [k]: undefined };
         }
       }
       return next;
@@ -358,7 +491,11 @@ function CheckinWizard({
       // Close right away — refresh and the AI recap happen in the background.
       onOpenChange(false);
       setStep(0);
-      toast.success("Sent to your coach ✅");
+      // Photos go in the progress library (one place, never uploaded twice); offered, never required.
+      toast.success("Sent to your coach ✅", {
+        action: { label: "Add progress photos", onClick: () => void navigate({ to: "/portal/progress", search: { action: "photo" } as never }) },
+        duration: 8000,
+      });
       void qc.invalidateQueries({ queryKey: ["messenger-checkin", submissionId] });
       void qc.invalidateQueries({ queryKey: ["messages", clientId, "client"] });
       void qc.invalidateQueries({ queryKey: ["action-centre", clientId] });
@@ -510,6 +647,21 @@ function CheckinWizard({
                 );
               })()}
 
+              {q.type === "action" && q.action && (
+                <div className="mt-6 space-y-3" data-checkin-action={q.action}>
+                  {current === true ? (
+                    <div className="flex items-center gap-2 rounded-2xl border border-success/40 px-4 py-3 text-sm font-semibold text-success">
+                      <CheckCircle2 className="h-4 w-4" /> Saved
+                    </div>
+                  ) : (
+                    <Button type="button" variant="outline" className="h-12 w-full rounded-2xl text-base" onClick={() => setProgressAction({ key: q.key, action: q.action! })}>
+                      {q.action === "photo" ? "Add photos" : q.action === "measure" ? "Add measurements" : "Log weight"}
+                    </Button>
+                  )}
+                  <p className="text-center text-xs text-muted-foreground">Optional. Tap Next to skip.</p>
+                </div>
+              )}
+
               {q.type === "text" && (
                 <Textarea
                   autoFocus
@@ -521,6 +673,12 @@ function CheckinWizard({
                 />
               )}
             </div>
+
+            {isLast && nutritionWaiting && (
+              <p className="mt-4 rounded-2xl bg-muted/60 px-4 py-3 text-xs text-muted-foreground" data-checkin-nutrition-waiting>
+                Your Nutrition Update is waiting too. It's the next card in your chat, and this is the only reminder.
+              </p>
+            )}
 
             <div className="mt-5 flex gap-2">
               {step > 0 && (
@@ -557,7 +715,61 @@ function CheckinWizard({
           </div>
         </div>
       </SheetContent>
+      {/* The Progress page's own entry, over the check-in: saved to the same records, never uploaded twice. */}
+      {progressAction && user?.id && progressCtxQ.data && (
+        <Suspense fallback={null}>
+          <ProgressSectionLazy
+            actionOnly
+            initialAction={progressAction.action}
+            onActionClose={() => void afterProgressAction(progressAction.key, progressAction.action)}
+            ctx={{
+              userId: user.id,
+              ownerType: "client",
+              clientId: progressCtxQ.data.id,
+              memberId: null,
+              assignedCoachId: progressCtxQ.data.assigned_coach_id ?? null,
+              viewerRole: "owner",
+              preferredWeightUnit: (progressCtxQ.data.preferred_weight_unit as "kg" | "lb" | null) ?? "lb",
+              canRequestReview: true,
+            }}
+          />
+        </Suspense>
+      )}
     </Sheet>
+  );
+}
+
+const ProgressSectionLazy = lazyWithRetry(() => import("@/components/progress/progress-section").then((m) => ({ default: m.ProgressSection })));
+
+const EXTRA_LABEL: Record<CheckinExtra, string> = {
+  bodyweight: "Weigh-in",
+  weight_making: "Making weight",
+  photos: "Progress photos",
+  measurements: "Measurements",
+  nutrition_update: "Nutrition Update",
+};
+
+/** What this week's check-in added and what it left out, and why (the plan kept on the check-in). */
+function CheckinPlanNote({ plan }: { plan: CheckinPlan | null }) {
+  if (!plan || (!plan.extras.length && !plan.skipped.length)) return null;
+  return (
+    <details className="rounded-xl border border-border bg-muted/20 px-3 py-2" data-checkin-plan>
+      <summary className="cursor-pointer text-xs font-semibold">
+        This week's check-in{plan.extras.length ? `: also asked for ${plan.extras.map((e) => EXTRA_LABEL[e.key].toLowerCase()).join(", ")}` : ""}
+      </summary>
+      <ul className="mt-2 space-y-1 text-xs">
+        {plan.extras.map((e) => (
+          <li key={`a-${e.key}`}>
+            <span className="font-medium">{EXTRA_LABEL[e.key]}:</span> {e.reason}
+          </li>
+        ))}
+        {plan.skipped.map((e) => (
+          <li key={`s-${e.key}`} className="text-muted-foreground">
+            <span className="font-medium">Not asked, {EXTRA_LABEL[e.key].toLowerCase()}:</span> {e.reason}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
@@ -721,6 +933,8 @@ export function MessengerCheckinSubmissionCard({
             empty="None"
             danger={(analysis.red_flags ?? []).length > 0}
           />
+
+          <CheckinPlanNote plan={(data as any).plan ?? null} />
 
           <details className="rounded-xl border border-border bg-muted/20 px-3 py-2">
             <summary className="cursor-pointer text-xs font-semibold">All answers</summary>

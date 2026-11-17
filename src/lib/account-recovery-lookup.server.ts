@@ -38,7 +38,7 @@ function lastTen(digits: string): string {
 /**
  * The login with exactly this email, or null (never a prefix, wildcard or near
  * match). auth_user_id_for_email reads auth.users; until that migration is in
- * (20270402090000_security_hardening.sql) it falls back to the login's
+ * (20270402093000_security_hardening.sql) it falls back to the login's
  * profiles row, matched exactly (profiles.email follows the login's email).
  */
 export async function loginForEmail(db: RecoveryDb, email: string): Promise<string | null> {

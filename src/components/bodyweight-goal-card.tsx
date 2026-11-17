@@ -31,6 +31,7 @@ export function BodyweightGoalCard({ clientId, goal, series, displayUnit, canEdi
   const [value, setValue] = useState<string>(goal?.value != null ? String(goal.value) : "");
   const [valueMax, setValueMax] = useState<string>(goal?.value_max != null ? String(goal.value_max) : "");
   const [unit, setUnit] = useState<WeightUnit>(goal?.unit ?? displayUnit);
+  const [date, setDate] = useState<string>(goal?.date ?? "");
 
   useEffect(() => {
     if (!editing) {
@@ -38,6 +39,7 @@ export function BodyweightGoalCard({ clientId, goal, series, displayUnit, canEdi
       setValue(goal?.value != null ? String(goal.value) : "");
       setValueMax(goal?.value_max != null ? String(goal.value_max) : "");
       setUnit(goal?.unit ?? displayUnit);
+      setDate(goal?.date ?? "");
     }
   }, [goal, displayUnit, editing]);
 
@@ -48,6 +50,7 @@ export function BodyweightGoalCard({ clientId, goal, series, displayUnit, canEdi
       bodyweight_goal_value_max: number | null;
       bodyweight_goal_unit: WeightUnit | null;
       bodyweight_goal_set_at: string | null;
+      bodyweight_goal_date: string | null;
     }>) => {
       const { error } = await supabase
         .from("clients")
@@ -58,6 +61,7 @@ export function BodyweightGoalCard({ clientId, goal, series, displayUnit, canEdi
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["client-bodyweight-goal", clientId] });
       qc.invalidateQueries({ queryKey: ["client", clientId] });
+      qc.invalidateQueries({ queryKey: ["weight-management", clientId] });
     },
   });
 
@@ -79,6 +83,7 @@ export function BodyweightGoalCard({ clientId, goal, series, displayUnit, canEdi
       bodyweight_goal_value_max: vMax,
       bodyweight_goal_unit: unit,
       bodyweight_goal_set_at: new Date().toISOString(),
+      bodyweight_goal_date: type === "maintain" ? null : date || null,
     });
     toast.success("Goal saved.");
     setEditing(false);
@@ -92,6 +97,7 @@ export function BodyweightGoalCard({ clientId, goal, series, displayUnit, canEdi
       bodyweight_goal_value_max: null,
       bodyweight_goal_unit: null,
       bodyweight_goal_set_at: null,
+      bodyweight_goal_date: null,
     });
     toast.success("Goal removed.");
     setEditing(false);
@@ -166,6 +172,12 @@ export function BodyweightGoalCard({ clientId, goal, series, displayUnit, canEdi
                 value={value} onChange={(e) => setValue(e.target.value)}
               />
             </div>
+            {type !== "maintain" && (
+              <div>
+                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">By (optional)</Label>
+                <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              </div>
+            )}
             {type === "maintain" && (
               <div>
                 <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">High end</Label>
@@ -236,6 +248,7 @@ export function BodyweightGoalCard({ clientId, goal, series, displayUnit, canEdi
             {goal.type === "maintain" && goal.value_max != null
               ? ` · ${goal.value}–${goal.value_max} ${goal.unit}`
               : ""}
+            {goal.date ? ` · by ${new Date(`${goal.date}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}` : ""}
           </div>
         </div>
       )}

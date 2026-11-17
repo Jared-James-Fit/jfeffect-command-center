@@ -103,7 +103,7 @@ export const acceptMembershipAgreement = createServerFn({ method: "POST" })
     const { getRequestMeta } = await import("@/lib/coaching-agreement.server");
     const meta = await getRequestMeta();
     // Only the server writes acceptance records (the database stamps the time
-    // and the published text; 20270402090000_security_hardening.sql).
+    // and the published text; 20270402093000_security_hardening.sql).
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await (supabaseAdmin as any).from("legal_acceptances").insert({
       user_id: userId,

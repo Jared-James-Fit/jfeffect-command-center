@@ -76,7 +76,8 @@ export const sendNutritionRequestFn = createServerFn({ method: "POST" })
     const { notifyAppEvent } = await import("@/lib/push/app-events.server");
     await notifyAppEvent(sb, "nutrition_requested", {
       clientId: data.clientId,
-      sourceId: `${formId}:${Date.now()}`,
+      // one push per client per day for this form, however many times it's sent
+      sourceId: `${formId}:${data.clientId}:${new Date().toISOString().slice(0, 10)}`,
       actorUserId: context.userId,
     });
     return { ok: true };

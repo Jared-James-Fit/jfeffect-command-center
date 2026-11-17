@@ -312,7 +312,7 @@ export async function runPlan(
         previous = await loadPreviousPlan(sb, sub, qas).catch(() => null);
         if (previous) await sb.from("nutrition_ai_plans").update({ previous_plan: previous }).eq("submission_id", submissionId);
       }
-      const [coach, basics, history, program, cardioRows, trainingDays, athlete, food, meet] = await Promise.all([
+      const [coach, basics, history, program, cardioRows, trainingDays, athlete, food, meet, weight] = await Promise.all([
         coachSettings(sb, sub.client_id),
         loadClientBasics(sb, sub.client_id),
         // Never let a history lookup block the plan.
@@ -329,6 +329,8 @@ export async function runPlan(
         loadFoodContext(sb, sub.client_id),
         // powerlifter / next meet and its weight class, for the supplement advice
         loadMeetInfo(sb, sub.client_id),
+        // the weight-management read (trajectory, the goal's pace, cardio, water, digestion), never blocking the plan
+        loadWeightText(sb, sub.client_id),
       ]);
       const selected = phaseOverride ?? coach.phase;
       const workoutMeals = workoutMealsOverride ?? coach.workoutMeals ?? "auto";
@@ -348,7 +350,7 @@ export async function runPlan(
         flags: food.flags,
       });
       progress.targetsPrompt = targetsUserPrompt(basics, qas, selected, programContextText(program, { readout: false }), previousPlanText(previous), currentCardioText(cardioRows, { trainingDays }), {
-        athlete: athlete?.text ?? null,
+        athlete: [athlete?.text, weight].filter(Boolean).join("\n\n") || null,
         safety: safetyNotes([...qas, ...healthQAs(food.health)]),
         foodNotes: food.text,
         supplements: supplementsForAi(adviseSupplements(supplementIn)),
@@ -800,6 +802,20 @@ export async function loadNutritionAthlete(sb: any, clientId: string): Promise<{
     return { text: nutritionAthleteText(intel.ctx, intel.development) };
   })();
   const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 30_000));
+  return Promise.race([read, timeout]).catch(() => null);
+}
+
+/**
+ * The weight-management read as the targets AI sees it (weight-management/assessment.ts): the
+ * engine's numbers and its recommendation, so the plan follows them. Null in 20 s or on any error.
+ */
+export async function loadWeightText(sb: any, clientId: string): Promise<string | null> {
+  const read = (async () => {
+    const [{ loadWeightManagement }, { assessmentText }] = await Promise.all([import("@/lib/weight-management/load.server"), import("@/lib/weight-management/assessment")]);
+    const loaded = await loadWeightManagement(sb, clientId);
+    return assessmentText(loaded.assessment);
+  })();
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 20_000));
   return Promise.race([read, timeout]).catch(() => null);
 }
 

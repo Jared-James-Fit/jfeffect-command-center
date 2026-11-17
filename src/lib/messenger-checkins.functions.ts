@@ -28,6 +28,12 @@ const ANSWER_LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = 
     nutrition_rating: "Nutrition consistency rating (1–5)",
     recovery_flags: "Recovery / issues",
     pain_details: "Pain / injury details",
+    digestion_symptoms: "Digestion: what's going on",
+    digestion_timing: "Digestion: when",
+    digestion_severity: "Digestion: how bad (1–5)",
+    hunger_level: "Hunger (1–5)",
+    cardio_issue: "Cardio: what happened",
+    water_issue: "Water: what's getting in the way",
     win: "Biggest win",
     help: "Help or changes needed",
     next_week_goal: "Main goal for next week",
@@ -632,6 +638,7 @@ async function generateAnalysis(
   contextSnapshot: Record<string, unknown>,
   clientId?: string | null,
   programText = "",
+  weightText = "",
 ): Promise<MessengerCheckinAnalysis> {
   const fallback = fallbackAnalysis(taskType, answers as any);
   try {
@@ -660,6 +667,9 @@ async function generateAnalysis(
       globalCfg?.brand_voice ? `BRAND VOICE: ${globalCfg.brand_voice}` : "",
       globalCfg?.tone ? `TONE: ${globalCfg.tone}` : "",
       programText ? PROGRAM_CONTEXT_RULES : "",
+      weightText
+        ? "WEIGHT MANAGEMENT is computed from their records: use its numbers for bodyweight, cardio, water and digestion, never your own. Don't promise a calorie, cardio or water change: say the coach is looking at it (every change needs the coach's OK). Never suggest dehydration, water loading, sodium tricks or a crash cut. Digestion it flags for a doctor goes in red_flags."
+        : "",
       voice,
       "Return ONLY JSON matching:",
       '{"summary":string,"wins":string[],"focus":string[],"goals":string[],"red_flags":string[],"coach_notes":string[],"suggested_response":string,"urgency":"low"|"normal"|"high"|"urgent"}',
@@ -677,6 +687,7 @@ async function generateAnalysis(
       JSON.stringify(appContext),
       "",
       ...(programText ? ["PROGRAM CONTEXT:", programText, ""] : []),
+      ...(weightText ? [weightText, ""] : []),
       "Produce a coach-facing recap and suggested reply.",
     ].join("\n");
 
@@ -767,7 +778,27 @@ export const submitMessengerCheckin = createServerFn({ method: "POST" })
       })
       .eq("id", row.id);
 
-    if (occurrence && !["completed", "skipped"].includes(occurrence.status)) {
+    // A check-in sent by hand counts as this week's: it completes the open weekly occurrence
+    // due within 3 days either side, so the automated one never follows it.
+    let weekOccurrence = occurrence;
+    if (!weekOccurrence && taskType === "weekly_checkin") {
+      const { data: cl } = await sb.from("clients").select("timezone").eq("id", row.client_id).maybeSingle();
+      const today = localDateInTimeZone(cl?.timezone || "America/Winnipeg");
+      const { data: open } = await sb
+        .from("client_task_occurrences")
+        .select("*")
+        .eq("client_id", row.client_id)
+        .eq("task_type", "weekly_checkin")
+        .not("status", "in", "(completed,skipped)")
+        .gte("due_local_date", isoDateAdd(today, -3))
+        .lte("due_local_date", isoDateAdd(today, 3))
+        .order("due_local_date", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      weekOccurrence = open ?? null;
+    }
+    if (weekOccurrence && !["completed", "skipped"].includes(weekOccurrence.status)) {
+      const occurrence = weekOccurrence;
       await sb
         .from("client_task_occurrences")
         .update({
@@ -779,7 +810,7 @@ export const submitMessengerCheckin = createServerFn({ method: "POST" })
             messenger_checkin_id: row.id,
           },
         })
-        .eq("id", row.occurrence_id);
+        .eq("id", occurrence.id);
       try {
         // Seed from just after this occurrence's due time, not from "now".
         // Otherwise an early Friday submission can recreate another check-in
@@ -891,7 +922,17 @@ export const analyzeMessengerCheckin = createServerFn({ method: "POST" })
     const periodStart = (contextSnapshot as any).checkin_period_start as string | undefined;
     const program = await loadProgramContext(sb, row.client_id, periodStart ? isoDateAdd(periodStart, 3) : null);
     const snapshot = { ...contextSnapshot, program: publicProgramContext(program) };
-    const analysis = await generateAnalysis(sb, taskType, row.answers ?? {}, snapshot, row.client_id, programContextText(program));
+    // Weight management: the deterministic read of their trajectory, cardio, water and
+    // digestion, recorded once for the coach (weight_management_reviews, pushed only
+    // when it needs them) and handed to the recap so it never contradicts the numbers.
+    let weightText = "";
+    if (taskType === "weekly_checkin") {
+      const { recordCheckinReview } = await import("@/lib/weight-management/reviews.server");
+      const { assessmentText } = await import("@/lib/weight-management/assessment");
+      const loaded = await recordCheckinReview(sb, row.client_id, row.id);
+      if (loaded) weightText = assessmentText(loaded.assessment);
+    }
+    const analysis = await generateAnalysis(sb, taskType, row.answers ?? {}, snapshot, row.client_id, programContextText(program), weightText);
     await sb
       .from("messenger_checkins")
       .update({
@@ -908,4 +949,67 @@ export const analyzeMessengerCheckin = createServerFn({ method: "POST" })
         .upsert({ client_id: row.client_id, priority: "Important" }, { onConflict: "client_id" });
     }
     return { status: "ready" as const };
+  });
+
+
+/**
+ * The check-in's plan (what this week adds, and what it skipped and why):
+ * worked out once from their records and kept on the check-in
+ * (checkin-coordination/plan.ts). The client and their coach both read it.
+ */
+export const getCheckinPlan = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { submissionId: string }) => z.object({ submissionId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const sb = await adminClient();
+    const { data: row } = await sb.from("messenger_checkins").select("id, client_id, status, plan, created_at, occurrence_id, task_type").eq("id", data.submissionId).maybeSingle();
+    if (!row) throw new Error("Check-in not found.");
+    await resolveClientAccess(context.supabase, context.userId, row.client_id);
+    if (row.task_type !== "weekly_checkin") return { plan: null };
+    const { ensureCheckinPlan } = await import("@/lib/checkin-coordination/plan.server");
+    return { plan: await ensureCheckinPlan(sb, row) };
+  });
+
+/**
+ * What's already out for a client, for the coach's send dialog: an open weekly
+ * check-in, when the next automated one goes, and a Nutrition Update still
+ * waiting. The dialog warns; sending by hand is always the coach's call.
+ */
+export const getRequestStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => z.object({ clientId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const actor = await resolveClientAccess(context.supabase, context.userId, data.clientId);
+    if (actor === "client") throw new Error("Coach access required.");
+    const sb = await adminClient();
+    const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    const [{ data: pending }, { data: occ }, { NUTRITION_REQUEST_FORM_ID }] = await Promise.all([
+      sb.from("messenger_checkins").select("created_at").eq("client_id", data.clientId).eq("task_type", "weekly_checkin").eq("status", "pending").gte("created_at", since).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      sb.from("client_task_occurrences").select("id, due_local_date").eq("client_id", data.clientId).eq("task_type", "weekly_checkin").not("status", "in", "(completed,skipped)").order("due_local_date", { ascending: true }).limit(1).maybeSingle(),
+      import("@/lib/nutrition-request"),
+    ]);
+    let nextAutomated: string | null = null;
+    if (occ?.due_local_date) {
+      const { data: carded } = await sb.from("messenger_checkins").select("id").eq("occurrence_id", occ.id).maybeSingle();
+      // the card goes out 2 days before it's due (Friday for a Sunday check-in)
+      if (!carded) nextAutomated = isoDateAdd(String(occ.due_local_date).slice(0, 10), -2);
+    }
+    const { data: asked } = await sb
+      .from("messages")
+      .select("created_at")
+      .eq("client_id", data.clientId)
+      .gte("created_at", new Date(Date.now() - 14 * 86_400_000).toISOString())
+      .contains("attachments", [{ kind: "form_request", form_id: NUTRITION_REQUEST_FORM_ID }])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    let nutritionPending: string | null = null;
+    if (asked?.created_at) {
+      const { data: answered } = await sb.from("nf_submissions").select("id").eq("client_id", data.clientId).eq("form_id", NUTRITION_REQUEST_FORM_ID).neq("status", "in_progress").gte("submitted_at", asked.created_at).limit(1);
+      if (!(answered ?? []).length) nutritionPending = String(asked.created_at).slice(0, 10);
+    }
+    return {
+      today: localDateInTimeZone("America/Winnipeg"),
+      status: { weekly: { pendingSince: pending?.created_at ? String(pending.created_at).slice(0, 10) : null, nextAutomated }, nutrition: { pendingSince: nutritionPending } },
+    };
   });

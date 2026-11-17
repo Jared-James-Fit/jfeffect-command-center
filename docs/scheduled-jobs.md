@@ -14,7 +14,9 @@ Exception: `payment-reminder-sms` uses its own Vault secret (`payment_reminder_h
 | lift-archive-tick-2m | every 2 min | lift-archive-tick |
 | media-archive-nightly | 03:15 | media-archive (no-op while auto-archive is off) |
 | nutrition-status-tick | 08:00 | nutrition-tick |
-| meet-checklist-reminders | 14:11 UTC daily (9:11 Winnipeg) | meet-checklist-reminders (push only: 2 weeks out if the meet checklist isn't sent, 2–3 days out while something's open, the day before for must-haves) |
+| messenger-checkin-reminders | every 15 min | SQL only: `run_messenger_checkin_automation()` seeds each coaching client's next weekly check-in and sends the card 2 days before it's due (Friday) from 7am in the client's own time; one card per 4 days, a check-in sent by hand included; archived, deactivated and non-coaching clients skipped; one run at a time (advisory lock). Its only reminder is the 8am digest line (checkin-coordination/plan.ts) |
+| nutrition-update-monthly | :07, :22, :37, :52 | SQL only: `enqueue_monthly_nutrition_updates()` sends the Nutrition Update the same morning as the month's last weekly check-in (its last 7 days), else the last Monday; never within 14 days of another request or a submission, never for a plan marked not needed; one run at a time |
+| meet-checklist-reminders | 14:11 UTC daily (9:11 Winnipeg) | meet-checklist-reminders (push only, each client's own calendar day: 2 weeks out if the meet checklist isn't sent, 2–3 days out while something's open, the day before for must-haves) |
 | sms-unread-reminders | every 10 min | sms-reminders |
 | payment-setup-reminders / payment-reminder-sms | :07/:37, :12/:42 | see payment-links-and-reminders.md |
 | scheduled-jobs-health | :23/:53 | SQL only (below) |

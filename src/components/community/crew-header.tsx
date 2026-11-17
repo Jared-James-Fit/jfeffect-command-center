@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, ChevronDown, ChevronLeft } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /** The bar's height under the status bar: 48px, Instagram's. */
@@ -128,67 +127,51 @@ export function BarTitle({ children }: { children: ReactNode }) {
   return <h1 className="truncate text-[16px] font-bold tracking-tight">{children}</h1>;
 }
 
+export type CrewFeedTab = "crew" | "following";
+
+const FEED_TABS: readonly (readonly [CrewFeedTab, string])[] = [
+  ["crew", "Crew"],
+  ["following", "Following"],
+];
+
 /**
- * The brand in the middle of Crew's bar: the JF mark and the name. With people
- * you follow, it's also the feed's filter (Instagram's ⌄): All or Following,
- * and the name says which you're on.
+ * The feed's two looks in the middle of Crew's bar, TikTok's Following / For
+ * You: Crew (everyone, where the feed always opens) and Following (people you
+ * follow and what they repost). The one you're on is full strength with a
+ * short line under it; a tap on it again goes back to the top. Over the paged
+ * feed the words get the icons' soft shadow (styles.css).
  */
-export function CrewBrand({ following, canFilter, onFilter, onTop }: {
-  following: boolean;
-  canFilter: boolean;
-  onFilter: (f: "all" | "following") => void;
-  /** Tapping the name without a menu: back to the top of the feed. */
-  onTop: () => void;
-}) {
-  const mark = (
-    <>
-      <img src="/logo.png" alt="" aria-hidden className="h-[26px] w-[26px] shrink-0 rounded-[7px] object-cover max-[359px]:h-[22px] max-[359px]:w-[22px] max-[359px]:rounded-[6px]" />
-      {/* italic letters lean past their box: a little room on the right so the T isn't clipped */}
-      {/* the name, or (filtered) plain "Following", Instagram's title for it */}
-      <span
-        className={cn(
-          "truncate pr-[3px] leading-[1.1]",
-          following ? "text-[18px] font-extrabold tracking-[-0.02em] max-[359px]:text-[16px]" : "text-[19px] font-bold uppercase italic tracking-[-0.035em] max-[359px]:text-[16px]",
-        )}
-        data-crew-brand-name
-      >
-        {following ? "Following" : "JF Effect"}
-      </span>
-    </>
-  );
-  if (!canFilter) {
-    return (
-      <button type="button" onClick={onTop} className="flex min-w-0 items-center gap-2 active:opacity-70 max-[359px]:gap-1.5" aria-label="JF Effect Crew" data-crew-brand>
-        {mark}
-      </button>
-    );
-  }
+export function CrewFeedTabs({ tab, onPick }: { tab: CrewFeedTab; onPick: (t: CrewFeedTab) => void }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button type="button" className="flex min-w-0 items-center gap-2 active:opacity-70 max-[359px]:gap-1.5" aria-label={following ? "Showing people you follow. Change feed" : "Showing the whole crew. Change feed"} data-crew-brand data-crew-filter>
-          {mark}
-          <ChevronDown className="-ml-0.5 h-4 w-4 shrink-0 text-muted-foreground max-[359px]:-ml-1 max-[359px]:h-3.5 max-[359px]:w-3.5" strokeWidth={2.4} />
-        </button>
-      </DropdownMenuTrigger>
-      {/* no focus ring left on the name after picking (a tap, not a keyboard) */}
-      <DropdownMenuContent align="center" sideOffset={6} className="min-w-[210px] rounded-xl" onCloseAutoFocus={(e) => e.preventDefault()}>
-        {([
-          ["all", "The whole crew", "Everyone's posts"],
-          ["following", "Following", "Just people you follow"],
-        ] as const).map(([k, title, sub]) => {
-          const on = k === "following" ? following : !following;
-          return (
-            <DropdownMenuItem key={k} onSelect={() => onFilter(k)} className="gap-3 py-2.5" data-crew-filter-option={k}>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[14px] font-semibold">{title}</span>
-                <span className="block text-[12px] text-muted-foreground">{sub}</span>
-              </span>
-              {on && <Check className="h-4 w-4 shrink-0 text-primary" strokeWidth={2.6} />}
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div role="tablist" aria-label="Feed" className="flex items-center gap-5 max-[359px]:gap-3.5" data-crew-feed-tabs>
+      {FEED_TABS.map(([k, label]) => {
+        const on = tab === k;
+        return (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={on}
+            onClick={() => onPick(k)}
+            // both bold, so picking one never shifts the other; the one you're off is quieter
+            className={cn(
+              "relative h-10 px-0.5 text-[17px] font-bold leading-none tracking-[-0.01em] transition-colors active:opacity-70 max-[359px]:text-[15.5px]",
+              on ? "text-foreground" : "text-foreground/55",
+            )}
+            data-crew-feed-tab={k}
+            data-on={on ? "" : undefined}
+          >
+            {label}
+            <span
+              aria-hidden
+              className={cn(
+                "absolute bottom-[3px] left-1/2 h-[2.5px] w-5 -translate-x-1/2 rounded-full bg-foreground transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none",
+                on ? "scale-x-100 opacity-100" : "scale-x-0 opacity-0",
+              )}
+            />
+          </button>
+        );
+      })}
+    </div>
   );
 }

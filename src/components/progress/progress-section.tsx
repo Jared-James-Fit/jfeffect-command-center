@@ -36,6 +36,7 @@ import {
 } from "@/lib/progress";
 import { format, parseISO } from "date-fns";
 import { WaterTrackerCard } from "./water-tracker-card";
+import { PhotoCompareDialog } from "./photo-compare";
 import { convertWeight, type ProgressMetric } from "@/lib/progress-metrics";
 import { compressImage } from "@/lib/image-compress";
 import { useVideoTrimmer } from "@/components/video-trimmer";
@@ -229,7 +230,7 @@ export function ProgressSection({
       {videoDialog && <VideoSubmissionDialog ctx={ctx} open={videoDialog} onOpenChange={setVideoDialog} />}
       {weightDialog && <BodyweightDialog ctx={ctx} open={weightDialog} onOpenChange={setWeightDialog} />}
       {measureDialog && <MeasurementDialog ctx={ctx} open={measureDialog} onOpenChange={setMeasureDialog} />}
-      {compareDialog && <ComparisonDialog ctx={ctx} open={compareDialog} onOpenChange={setCompareDialog} />}
+      {compareDialog && <PhotoCompareDialog userId={ctx.userId} unit={ctx.preferredWeightUnit ?? "lb"} open={compareDialog} onOpenChange={setCompareDialog} />}
       {detailId && <SubmissionDetailDialog ctx={ctx} submissionId={detailId} onClose={() => setDetailId(null)} />}
     </div>
   );
@@ -1798,87 +1799,6 @@ function MeasurementDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; 
         <DialogFooter><Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-// ============== Comparison ==============
-
-function ComparisonDialog({ ctx, open, onOpenChange }: { ctx: ProgressContext; open: boolean; onOpenChange: (b: boolean) => void }) {
-  const { data: subs = [] } = useQuery({
-    queryKey: ["progress-subs-photo", ctx.userId],
-    queryFn: () => listSubmissions({ userId: ctx.userId, type: "photo" }),
-    staleTime: 60_000,
-  });
-  const [aId, setA] = useState<string | null>(null);
-  const [bId, setB] = useState<string | null>(null);
-  const [angle, setAngle] = useState<ProgressAngle>("front");
-
-  useEffect(() => {
-    if (!aId && subs.length >= 2) { setA(subs[subs.length - 1].id); setB(subs[0].id); }
-    else if (!aId && subs.length === 1) { setA(subs[0].id); setB(subs[0].id); }
-  }, [subs, aId]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Compare Progress</DialogTitle></DialogHeader>
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <SubmissionPicker label="Starting date" value={aId} onChange={setA} subs={subs} />
-          <SubmissionPicker label="Comparison date" value={bId} onChange={setB} subs={subs} />
-        </div>
-        <div className="grid grid-cols-4 gap-1 mb-3">
-          {PHOTO_ANGLES.map((a) => (
-            <Button key={a} size="sm" variant={angle === a ? "default" : "outline"} onClick={() => setAngle(a)}>
-              {ANGLE_LABEL[a]}
-            </Button>
-          ))}
-        </div>
-        {aId && bId && (
-          <div className="grid grid-cols-2 gap-3">
-            <ComparePane subId={aId} angle={angle} />
-            <ComparePane subId={bId} angle={angle} />
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function SubmissionPicker({ label, value, onChange, subs }: {
-  label: string; value: string | null; onChange: (id: string) => void; subs: ProgressSubmission[];
-}) {
-  return (
-    <div>
-      <Label className="text-xs">{label}</Label>
-      <Select value={value ?? ""} onValueChange={onChange}>
-        <SelectTrigger><SelectValue placeholder="Pick a check-in" /></SelectTrigger>
-        <SelectContent>
-          {subs.map((s) => <SelectItem key={s.id} value={s.id}>{fmtDate(s.submission_date)} — {s.check_in_label || "Photos"}</SelectItem>)}
-        </SelectContent>
-      </Select>
-    </div>
-  );
-}
-
-function ComparePane({ subId, angle }: { subId: string; angle: ProgressAngle }) {
-  const { data: sub } = useQuery({ queryKey: ["progress-sub", subId], queryFn: () => getSubmission(subId), staleTime: 60_000 });
-  const { data: media = [] } = useQuery({ queryKey: ["progress-media", subId], queryFn: () => listMediaForSubmission(subId), staleTime: 60 * 60 * 1000 });
-  const m = media.find((mm) => mm.angle === angle);
-  const { data: url } = useQuery({
-    queryKey: ["sig", m?.storage_path],
-    enabled: !!m?.storage_path,
-    queryFn: () => getSignedMediaUrl(m!.storage_path!),
-    staleTime: 60 * 60 * 1000,
-  });
-  return (
-    <div>
-      <div className="aspect-square bg-muted rounded overflow-hidden">
-        {url ? <img loading="lazy" src={url} alt={angle} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No {ANGLE_LABEL[angle]} photo</div>}
-      </div>
-      <p className="text-xs text-muted-foreground mt-1">
-        {sub ? fmtDate(sub.submission_date) : ""} {sub?.bodyweight ? `· ${sub.bodyweight} ${sub.weight_unit}` : ""}
-      </p>
-    </div>
   );
 }
 

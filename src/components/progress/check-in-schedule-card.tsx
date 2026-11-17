@@ -47,8 +47,8 @@ type Row = {
 export function CheckInScheduleCard({
   userId,
   readOnly = false,
-  title = "Check-in cadence",
-  subtitle = "How often each progress check-in is expected.",
+  title = "Asked in their weekly check-in",
+  subtitle = "Photos and measurements switched on here become a step in their weekly check-in when they're due, and are skipped when they're already on file. Bodyweight is always read from their log. Never a separate form or reminder.",
 }: {
   userId: string;
   readOnly?: boolean;
@@ -166,7 +166,7 @@ function ScheduleRow({
             checked={enabled}
             onCheckedChange={setEnabled}
             disabled={readOnly || frequency === "none"}
-            aria-label={`Enable ${label} reminders`}
+            aria-label={`Ask for ${label.toLowerCase()} in their weekly check-in`}
           />
         </div>
       </div>

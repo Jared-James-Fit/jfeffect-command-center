@@ -134,6 +134,11 @@ export function WaterTrackerCard({
             <div className="text-xs text-muted-foreground">{summary.pct}%</div>
           </div>
           <Progress value={summary.pct} className="h-2" />
+          {target?.training_extra_ml ? (
+            <div className="text-xs text-muted-foreground" data-water-training-extra>
+              +{formatWater(target.training_extra_ml, "L")} on training days, to cover what you sweat
+            </div>
+          ) : null}
           {entries.length > 0 && <button type="button" onClick={() => setHistoryOpen(true)} className="min-h-10 w-full text-left text-xs font-medium text-muted-foreground hover:text-foreground">Today: {entries.length} {entries.length === 1 ? "drink" : "drinks"} logged · View times & history ›</button>}
         </div>
 

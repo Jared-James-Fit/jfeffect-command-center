@@ -289,7 +289,7 @@ export const resendFormRequestsFn = createServerFn({ method: "POST" })
         } else {
           const { data: old } = await sb
             .from("messages")
-            .select("id, body, attachments, message_type")
+            .select("id, body, attachments, message_type, is_automated")
             .eq("id", it.messageId)
             .eq("client_id", it.clientId)
             .maybeSingle();
@@ -301,6 +301,8 @@ export const resendFormRequestsFn = createServerFn({ method: "POST" })
             body: old.body,
             attachments: old.attachments,
             message_type: old.message_type ?? "Form",
+            // a resend is the same request: an automated one stays automated (reminded by the digest, never texted)
+            is_automated: !!old.is_automated,
             is_internal_note: false,
             delivery_status: "sent",
             sent_at: new Date().toISOString(),
@@ -311,7 +313,8 @@ export const resendFormRequestsFn = createServerFn({ method: "POST" })
           if (it.formId === NUTRITION_REQUEST_FORM_ID) {
             await notifyAppEvent(sb, "nutrition_requested", {
               clientId: it.clientId,
-              sourceId: `${it.formId}:${Date.now()}`,
+              // one push per client per day for this form, however many times it's sent
+              sourceId: `${it.formId}:${it.clientId}:${new Date().toISOString().slice(0, 10)}`,
               actorUserId: context.userId,
             });
           }
