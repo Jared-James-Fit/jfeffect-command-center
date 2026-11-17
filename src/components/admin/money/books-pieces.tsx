@@ -16,7 +16,8 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ASSISTANT_NAME, minorToInput, parseMoneyToMinor, toTaxSettings, type BooksData, type TaxPaymentRow } from "@/lib/business-books";
-import { fmtCad } from "@/lib/business-tax";
+import { fmtCad, gstNumberProblem } from "@/lib/business-tax";
+import { cn } from "@/lib/utils";
 import { businessToday } from "@/lib/billing-schedule";
 import { addTaxPayment, deleteTaxPayment, getSummerProfile, saveTaxSettings } from "@/lib/business-books.functions";
 import { useBooksMode } from "@/components/admin/books/books-mode";
@@ -172,7 +173,9 @@ function TaxSettingsForm({ data, onSaved }: { data: BooksData; onSaved: () => vo
     notes: data.settings?.notes ?? "",
   });
   const [busy, setBusy] = useState(false);
+  const gstProblem = form.gst_registered ? gstNumberProblem(form.gst_number) : null;
   const submit = async () => {
+    if (gstProblem?.hard) return void toast.error(gstProblem.message);
     const other = parseMoneyToMinor(form.other_income || "0");
     if (other == null) return void toast.error("Other income must be a number");
     setBusy(true);
@@ -229,7 +232,8 @@ function TaxSettingsForm({ data, onSaved }: { data: BooksData; onSaved: () => vo
           <>
             <div className="space-y-1.5">
               <Label>GST/HST number</Label>
-              <Input value={form.gst_number} onChange={(e) => setForm({ ...form, gst_number: e.target.value.toUpperCase() })} placeholder="123456789RT0001" />
+              <Input value={form.gst_number} onChange={(e) => setForm({ ...form, gst_number: e.target.value.toUpperCase() })} placeholder="123456789RT0001" autoCapitalize="characters" data-gst-number />
+              {gstProblem ? <p className={cn("text-xs", gstProblem.hard ? "text-destructive" : "text-muted-foreground")}>{gstProblem.message}</p> : null}
             </div>
             <div className="space-y-1.5">
               <Label>Filing frequency</Label>

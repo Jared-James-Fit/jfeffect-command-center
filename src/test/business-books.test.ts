@@ -88,6 +88,8 @@ describe("Cleo context", () => {
     taxPayments: [],
     openSales: [{ id: "o", client: "Reece", offer: "Hybrid", status: "Unpaid", outstandingMinor: 40000, createdOn: "2026-10-01" }],
     years: [],
+    otherIncome: [],
+    recurring: [],
   };
   data.years = booksYears(data);
 

@@ -1,7 +1,8 @@
 /**
  * Transactions: every dollar in and out in the period, in one list. Money in
- * comes from client payments (the payment ledger, never edited here), money
- * out from expenses (edit, attach a receipt), and payments to CRA. Filters
+ * comes from client payments (the payment ledger, never edited here) and other
+ * income (business_other_income, edited here), money out from expenses (edit,
+ * attach a receipt; a repeating bill's link back to it), and payments to CRA. Filters
  * fit what's shown: services for money in, categories for money out. The
  * totals line is always the sum of the rows on screen.
  */
@@ -9,7 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, Paperclip, Search, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Paperclip, Repeat, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,6 +18,8 @@ import { cn } from "@/lib/utils";
 import { EXPENSE_CATEGORIES, expenseCategory } from "@/lib/business-expense-categories";
 import { deleteTaxPayment, markExpensesReviewed } from "@/lib/business-books.functions";
 import { receiptSignedUrl } from "@/lib/receipt-upload";
+import { NO_TAX_REASONS } from "@/lib/business-books";
+import { rhythmWords } from "@/components/admin/books/recurring-bills";
 import { billingDay } from "@/lib/date-range";
 import { elapsed } from "@/lib/books/period";
 import {
@@ -195,7 +198,7 @@ function LedgerRow({ r, open, onToggle }: { r: LedgerEntry; open: boolean; onTog
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5">
             <span className="truncate text-[14px] font-medium">{r.who}</span>
-            {r.expense?.receipt_path ? <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Receipt attached" /> : null}
+            {r.expense?.receipt_path || r.revenue?.other?.proof_path ? <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Receipt attached" /> : null}
           </div>
           <div className="truncate text-[12px] text-muted-foreground">
             {r.what}{r.method ? ` · ${methodWord(r.method)}` : ""}
@@ -223,6 +226,8 @@ function LedgerRow({ r, open, onToggle }: { r: LedgerEntry; open: boolean; onTog
 
 function RowDetail({ r }: { r: LedgerEntry }) {
   const m = useMoney();
+  const bill = r.expense?.recurring_id ? (m.data.recurring ?? []).find((b) => b.id === r.expense!.recurring_id) ?? null : null;
+  const other = r.revenue?.other ?? null;
   const delTax = useServerFn(deleteTaxPayment);
   const lines: Array<[string, string]> = [["Date", billingDay(r.date, { year: "always" }) ?? r.date]];
   if (r.kind === "in" || r.kind === "refund") {
@@ -230,6 +235,11 @@ function RowDetail({ r }: { r: LedgerEntry }) {
     if (m.settings.gstRegistered) lines.push(["GST/HST in it", money(Math.abs(r.taxMinor)) + (r.flags.includes("tax_estimated") ? " (worked out from the payment it refunds)" : "")]);
     lines.push(["Sales (before GST/HST)", money(Math.abs(r.netMinor))]);
     if (r.detail) lines.push(["For", r.detail]);
+    const other = r.revenue?.other;
+    if (other && !Number(other.tax_minor) && other.no_tax_reason) {
+      lines.push(["No GST/HST", NO_TAX_REASONS.find((x) => x.key === other.no_tax_reason)?.label ?? other.no_tax_reason]);
+    }
+    if (other?.notes) lines.push(["Notes", other.notes]);
   } else if (r.kind === "out" && r.expense) {
     const cat = expenseCategory(r.expense.category);
     lines.push(["Paid", money(Math.abs(r.amountMinor))]);
@@ -238,6 +248,7 @@ function RowDetail({ r }: { r: LedgerEntry }) {
     lines.push(["Category", `${cat.label}${cat.t2125Line ? ` · T2125 line ${cat.t2125Line}` : ""}`]);
     if (r.detail) lines.push(["What", r.detail]);
     if (r.expense.notes) lines.push(["Notes", r.expense.notes]);
+    if (bill) lines.push(["Repeats", `${rhythmWords(bill.every, bill.day_of_month, bill.next_on)}${bill.active ? `, next ${billingDay(bill.next_on)}` : " (stopped)"}`]);
   } else if (r.kind === "tax" && r.taxPayment) {
     lines.push(["Paid to CRA", money(Math.abs(r.amountMinor))]);
     if (r.detail) lines.push(["For", r.detail]);
@@ -270,6 +281,22 @@ function RowDetail({ r }: { r: LedgerEntry }) {
             ) : null}
           </>
         ) : null}
+        {bill ? (
+          <Button size="sm" variant="ghost" className="h-9" onClick={() => m.openBill(bill)}><Repeat className="mr-1.5 h-3.5 w-3.5" /> The repeating bill</Button>
+        ) : null}
+        {other ? (
+          <>
+            <Button size="sm" variant="outline" className="h-9" onClick={() => m.openOtherIncome(other)}>
+              {r.flags.includes("no_gst") ? "Edit · say why no GST/HST" : "Edit"}
+            </Button>
+            {other.proof_path ? (
+              <Button size="sm" variant="ghost" className="h-9" onClick={async () => {
+                const url = await receiptSignedUrl(other.proof_path!, 600);
+                if (url) window.open(url, "_blank", "noopener,noreferrer");
+              }}><Paperclip className="mr-1.5 h-3.5 w-3.5" /> View proof</Button>
+            ) : null}
+          </>
+        ) : null}
         {(r.kind === "in" || r.kind === "refund") && m.mode === "owner" && r.revenue?.clientId ? (
           <Button size="sm" variant="outline" className="h-9" asChild>
             <Link to="/admin/clients/$id" params={{ id: r.revenue.clientId }} search={{ tab: "billing" } as any}>Client's billing <ChevronRight className="ml-0.5 h-3.5 w-3.5" /></Link>
@@ -287,7 +314,7 @@ function RowDetail({ r }: { r: LedgerEntry }) {
           }}>Delete record</Button>
         ) : null}
       </div>
-      {(r.kind === "in" || r.kind === "refund") ? (
+      {(r.kind === "in" || r.kind === "refund") && !other ? (
         <p className="mt-2 text-[12px] text-muted-foreground">Payments are corrected where they were recorded (the client's Billing tab, or Stripe), never here, so the books always match them.</p>
       ) : null}
     </div>

@@ -135,7 +135,7 @@ export function PaymentLine({ r }: { r: RevenueRow }) {
     <li className="flex items-center gap-3 px-4 py-2.5">
       <span className="w-12 shrink-0 text-xs tabular-nums text-muted-foreground">{shortDay(r.date)}</span>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{r.clientName ?? "Client"}</div>
+        <div className="truncate text-sm font-medium">{r.clientName ?? (r.source === "other" ? "Other income" : r.source === "membership" ? "Member" : "Client")}</div>
         <div className="truncate text-xs text-muted-foreground">
           {refund ? "Refund" : r.product ?? "Payment"} · {methodLabel(r.method)}
         </div>

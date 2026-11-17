@@ -4,7 +4,7 @@
  * period; the months around it; where the money came from and went.
  */
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, CalendarClock, CheckCircle2, ChevronRight, Info, Landmark, Repeat, Users } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, ChevronRight, Info, Landmark, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { changeOf, monthlySeries, recurringExpenses } from "@/lib/books/money-view";
@@ -12,6 +12,7 @@ import { bookedIn } from "@/lib/books/receivables";
 import { chartMonths, elapsed, monthPeriod } from "@/lib/books/period";
 import { billingDay } from "@/lib/date-range";
 import { MoneyChart } from "./money-chart";
+import { RecurringBillsList } from "@/components/admin/books/recurring-bills";
 import { useMoney } from "./money-context";
 import { Line, MoneyCard, RankList, Stat, money, pctWord, shortMoney } from "./money-ui";
 
@@ -26,7 +27,7 @@ export function MoneyOverview() {
   const sold = bookedIn(r, seen);
   const years = seen.start.slice(0, 4) === seen.end.slice(0, 4) ? seen.end.slice(0, 4) : `${seen.start.slice(0, 4)} and ${seen.end.slice(0, 4)}`;
   const gstReg = settings.gstRegistered;
-  const recurring = recurringExpenses(m.data.expenses, today);
+  const recurring = recurringExpenses(m.data.expenses, today, m.data.recurring ?? []);
 
   return (
     <div className="space-y-4" data-money-overview>
@@ -152,20 +153,7 @@ export function MoneyOverview() {
             total={f.spent.minor}
             onPick={(key) => m.go("transactions", { type: "out", group: key })}
           />
-          {recurring.length ? (
-            <div className="mt-4 border-t border-border pt-3" data-money-recurring>
-              <div className="mb-2 flex items-center gap-1.5 text-[13px] text-muted-foreground"><Repeat className="h-3.5 w-3.5" /> Every month</div>
-              <ul className="space-y-1.5">
-                {recurring.slice(0, 4).map((x) => (
-                  <li key={x.key} className="flex justify-between gap-3 text-[14px]">
-                    <span className="min-w-0 truncate">{x.vendor} <span className="text-[12px] text-muted-foreground">· {x.category}</span></span>
-                    <span className="shrink-0 tabular-nums">{money(x.minor)}<span className="text-[12px] text-muted-foreground">/mo</span></span>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-1.5 text-[12px] text-muted-foreground">About {money(recurring.reduce((t, x) => t + x.yearlyMinor, 0))} a year at this pace.</p>
-            </div>
-          ) : null}
+          <RecurringBillsList bills={m.data.recurring ?? []} detected={recurring} onOpen={m.openBill} money={money} today={today} />
         </MoneyCard>
       </div>
 
@@ -245,6 +233,7 @@ function OwedCard() {
 
 const ISSUE_TO: Record<string, { attention?: boolean; type?: "in" | "out"; flagNote?: string }> = {
   "needs-review": { type: "out", attention: true },
+  "recurring-to-check": { type: "out", attention: true },
   uncategorized: { type: "out", attention: true },
   "no-receipt": { type: "out", attention: true },
   "zero-tax-revenue": { type: "in", attention: true },

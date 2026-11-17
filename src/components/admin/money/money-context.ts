@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
-import type { BooksData, ExpenseRow, RevenueRow } from "@/lib/business-books";
+import type { BooksData, ExpenseRow, OtherIncomeRow, RevenueRow } from "@/lib/business-books";
+import type { BillDraft } from "@/components/admin/books/recurring-bills";
 import type { BooksSnapshot, ExpenseEntry, TaxSettings } from "@/lib/business-tax";
 import type { CompareMode, Period } from "@/lib/books/period";
 import type { LedgerFilter, MoneyFigures } from "@/lib/books/money-view";
@@ -38,6 +39,10 @@ export type MoneyCtx = {
   /** What the Transactions view opens with (set by a tap elsewhere). */
   ledgerPreset: Partial<LedgerFilter> | null;
   openExpense: (row: ExpenseRow | "new") => void;
+  /** Record or edit income that isn't a client's. */
+  openOtherIncome: (row: OtherIncomeRow | "new") => void;
+  /** Set up, edit, stop or restart a repeating bill (null = a new one). */
+  openBill: (draft: BillDraft) => void;
   snapReceipt: () => void;
   snapping: boolean;
   snapLabel: string;

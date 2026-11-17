@@ -107,6 +107,7 @@ export function ExpenseDialog({
 
   const ai = expense?.ai_summary ?? null;
   const fromStripe = expense?.source === "stripe_fees";
+  const fromRepeat = expense?.source === "recurring";
   const cat = form.category ? expenseCategory(form.category) : null;
 
   const attach = async (file: File | undefined) => {
@@ -184,11 +185,13 @@ export function ExpenseDialog({
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
       <DialogContent className="max-h-[92dvh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{expense ? (expense.status === "needs_review" ? "Check this receipt" : "Edit expense") : "Add expense"}</DialogTitle>
+          <DialogTitle>{expense ? (expense.status === "needs_review" ? (fromRepeat ? "Check this bill" : "Check this receipt") : "Edit expense") : "Add expense"}</DialogTitle>
           <DialogDescription>
             {fromStripe
               ? "Synced from Stripe. Amounts refresh on each sync; your category and business-use % are kept."
-              : "Total paid includes tax. GST/HST is the part you claim back, so leave PST out of it."}
+              : fromRepeat
+                ? "Added on its day by a repeating bill. Check it matches the bill (amounts change), attach the receipt, then save."
+                : "Total paid includes tax. GST/HST is the part you claim back, so leave PST out of it."}
           </DialogDescription>
         </DialogHeader>
 
