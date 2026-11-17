@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Plus, ClipboardList, FileSignature, UtensilsCrossed, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
-import { bulkAssignNativeFormToClients } from "@/lib/native-forms.functions";
+import { FormPickerSheet } from "@/components/forms/form-picker-sheet";
 import { createAgreement } from "@/lib/agreements.functions";
 import { shareRecipeWithClients } from "@/lib/chat-requests.functions";
 
@@ -49,6 +49,7 @@ export function ChatSendMenu({
   hideTrigger,
   externalOpen,
   onExternalOpenChange,
+  clientName,
 }: {
   /** Clients the request will target. For group chats: all client members. */
   clientIds: string[];
@@ -59,6 +60,8 @@ export function ChatSendMenu({
   hideTrigger?: boolean;
   externalOpen?: { form?: boolean; sig?: boolean; recipe?: boolean };
   onExternalOpenChange?: (key: "form" | "sig" | "recipe", v: boolean) => void;
+  /** One client's first name, for "Copy for Marc" in the form picker. */
+  clientName?: string | null;
 }) {
   const [formOpenInt, setFormOpenInt] = useState(false);
   const [sigOpenInt, setSigOpenInt] = useState(false);
@@ -114,9 +117,11 @@ export function ChatSendMenu({
       </DropdownMenu>
       )}
 
-      <FormPickerDialog
+      {/* The coach's form library: search, favorites, recent, make or copy a form in place. */}
+      <FormPickerSheet
         open={formOpen} onOpenChange={setFormOpen}
         clientIds={clientIds}
+        clientName={clientName}
         onAttach={onAttach}
       />
       <SignaturePickerDialog
@@ -130,147 +135,6 @@ export function ChatSendMenu({
         onAttach={onAttach}
       />
     </>
-  );
-}
-
-/* ------------------------------ Form picker ------------------------------ */
-
-function FormPickerDialog({
-  open, onOpenChange, clientIds, onAttach,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  clientIds: string[];
-  onAttach: (att: ChatSendAttachment, body: string) => void | Promise<void>;
-}) {
-  const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string>("");
-  const [note, setNote] = useState("");
-  const [sending, setSending] = useState(false);
-  const assign = useServerFn(bulkAssignNativeFormToClients);
-  const qc = useQueryClient();
-
-  const { data: forms = [], isLoading } = useQuery({
-    queryKey: ["chat-send-forms"],
-    enabled: open,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("nf_forms")
-        .select("id, title, description, active, archived, kind, external_url")
-        .eq("archived", false)
-        .order("title");
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return forms;
-    return (forms as any[]).filter((f) =>
-      (f.title ?? "").toLowerCase().includes(q) || (f.description ?? "").toLowerCase().includes(q),
-    );
-  }, [forms, search]);
-
-  async function handleSend() {
-    if (!selectedId) return;
-    setSending(true);
-    try {
-      await assign({ data: { formId: selectedId, clientIds } });
-      const form = (forms as any[]).find((f) => f.id === selectedId);
-      // Refresh the admin "Shared with" lists so the new share appears immediately.
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["nf-assignments", selectedId] }),
-        qc.invalidateQueries({ queryKey: ["nf-forms"] }),
-        qc.invalidateQueries({ queryKey: ["nf-forms-for-client"] }),
-      ]);
-      await onAttach(
-        {
-          kind: "form_request",
-          type: "link",
-          // Always route through the portal page so the client's identity
-          // (client_id / first_name / last_name / email) gets appended to
-          // Fillout URLs via buildFilloutUrl(). Sending the raw external_url
-          // skips that and leaves the form blank for the client.
-          url: `/portal/check-ins/${selectedId}`,
-          form_id: selectedId,
-          assignment_client_ids: clientIds,
-          request_title: form?.title ?? "Form",
-          request_note: note || undefined,
-        },
-        note || `Shared a form: ${form?.title ?? "Form"}`,
-      );
-      onOpenChange(false);
-      setSelectedId("");
-      setNote("");
-      toast.success(`Form shared with ${clientIds.length} ${clientIds.length === 1 ? "client" : "clients"}`);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to send form");
-    } finally {
-      setSending(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Share a form</DialogTitle>
-          <DialogDescription>
-            Grants {clientIds.length} {clientIds.length === 1 ? "client" : "clients"} access and drops a live status card in chat. Tracked under the form's "Shared with" tab.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search forms & check-ins…"
-              className="pl-9 h-11 text-base"
-            />
-          </div>
-          <div className="max-h-[55vh] min-h-[180px] overflow-y-auto rounded-md border">
-            {isLoading && <div className="p-3 text-sm text-muted-foreground">Loading…</div>}
-            {!isLoading && filtered.length === 0 && (
-              <div className="p-3 text-sm text-muted-foreground">No forms found.</div>
-            )}
-            {filtered.map((f: any) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setSelectedId(f.id)}
-                className={`flex w-full items-start gap-3 border-b border-border/60 px-3 py-3 text-left text-sm last:border-b-0 hover:bg-accent/40 ${selectedId === f.id ? "bg-accent/60" : ""}`}
-              >
-                <ClipboardList className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <div className="truncate font-medium">{f.title}</div>
-                    {f.kind === "external" && (
-                      <span className="shrink-0 rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">External</span>
-                    )}
-                    {!f.active && (
-                      <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">Draft</span>
-                    )}
-                  </div>
-                  {f.description && <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{f.description}</div>}
-                </div>
-              </button>
-            ))}
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Note (optional)</Label>
-            <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a short note…" />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSend} disabled={!selectedId || sending}>
-            {sending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />} Send form
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 

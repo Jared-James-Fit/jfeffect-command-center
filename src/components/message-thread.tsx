@@ -1286,6 +1286,16 @@ export function MessageThread({
           qc.invalidateQueries({ queryKey: ["message-reactions", clientId] });
         }
       })
+      // A form the client is filling in, sends or updates (a checklist they keep packing):
+      // its card says where it stands without a refresh.
+      .on("postgres_changes", { event: "*", schema: "public", table: "nf_submissions", filter: `client_id=eq.${clientId}` }, (payload: any) => {
+        const subId = payload.new?.id ?? payload.old?.id;
+        qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "chat-form-request-status" && q.queryKey[2] === clientId });
+        if (subId) {
+          qc.invalidateQueries({ queryKey: ["form-readiness", subId] });
+          qc.invalidateQueries({ queryKey: ["chat-form-answers", subId] });
+        }
+      })
       .subscribe(onRealtimeRejoin(resyncThread));
     return () => { supabase.removeChannel(ch); };
   }, [clientId, role, qc, resyncThread]);
@@ -1801,10 +1811,26 @@ export function MessageThread({
     }
   };
 
-  const doSend = async (opts?: { body?: string; extraAttachments?: MessageAttachment[]; returnMessage?: boolean; withDrafts?: boolean; povConfirmed?: boolean }) => {
+  const doSend = async (opts?: {
+    body?: string;
+    extraAttachments?: MessageAttachment[];
+    returnMessage?: boolean;
+    withDrafts?: boolean;
+    povConfirmed?: boolean;
+    /**
+     * A card sent from the + menu (a form, a booking link): it goes on its own,
+     * never as an internal note or a reply, and whatever the coach was typing
+     * stays in the composer.
+     */
+    standalone?: boolean;
+    messageType?: string;
+  }) => {
     if (!user) return null;
+    const standalone = !!opts?.standalone;
     const text = (opts?.body ?? body).trim();
-    const atts = [...attachments, ...(opts?.extraAttachments ?? [])];
+    const atts = standalone ? [...(opts?.extraAttachments ?? [])] : [...attachments, ...(opts?.extraAttachments ?? [])];
+    const sendType = (opts?.messageType ?? messageType) as typeof messageType;
+    const asNote = role === "admin" && !standalone ? internalNote : false;
     if (!text && atts.length === 0 && !(opts?.withDrafts && uploads.drafts.length)) return null;
     // View-as-client: ask first. Declining leaves the composer exactly as it was.
     if (!opts?.povConfirmed) {
@@ -1821,7 +1847,7 @@ export function MessageThread({
       size: d.file.size,
       mime: d.file.type,
     }));
-    const replyTarget = replyingTo && !replyingTo.deleted_at && !replyingTo.is_internal_note && !replyingTo.id.startsWith("optimistic-")
+    const replyTarget = !standalone && replyingTo && !replyingTo.deleted_at && !replyingTo.is_internal_note && !replyingTo.id.startsWith("optimistic-")
       ? replyingTo
       : null;
     const replyClip = replyTarget ? replyAtt : null;
@@ -1851,9 +1877,9 @@ export function MessageThread({
       sender_role: role,
       body: text,
       attachments: [...atts, ...draftPreviews, ...linkAtts],
-      message_type: messageType,
+      message_type: sendType,
       priority: role === "admin" ? priority : null,
-      is_internal_note: role === "admin" ? internalNote : false,
+      is_internal_note: asNote,
       read_by_admin_at: role === "admin" ? nowIso : null,
       read_by_client_at: role === "client" ? nowIso : null,
       created_at: nowIso,
@@ -1869,10 +1895,12 @@ export function MessageThread({
       if (role === "admin") qc.setQueryData<Message[] | undefined>(["last-messages"], fn);
     };
     if (belongsInInbox(optimistic)) patchInbox((prev) => (prev ? upsertRow(prev, optimistic) : prev));
-    setBody("");
-    setAttachments([]);
-    setReply(null);
-    setInternalNote(false);
+    if (!standalone) {
+      setBody("");
+      setAttachments([]);
+      setReply(null);
+      setInternalNote(false);
+    }
     broadcastTyping(true);
     const releaseDrafts = () => {
       // Give the swapped-in server row a moment to render before freeing blobs.
@@ -1910,8 +1938,8 @@ export function MessageThread({
         senderRole: role,
         body: text,
         attachments: [...atts, ...uploaded, ...linkAtts],
-        messageType,
-        isInternalNote: role === "admin" ? internalNote : false,
+        messageType: sendType,
+        isInternalNote: asNote,
         priority: role === "admin" ? priority : undefined,
         replyToMessageId: replyTarget?.id ?? null,
         replyPreview,
@@ -2814,6 +2842,7 @@ export function MessageThread({
               surface="dm"
               clientIds={[clientId]}
               defaultClientId={clientId}
+              clientName={peerName ? peerName.trim().split(/\s+/)[0] : null}
               disabled={sending}
               canSendGifs={canSendGifs}
               canSendSounds={canSendSounds}
@@ -2824,7 +2853,13 @@ export function MessageThread({
                 setBody((b) => (b ? `${b.replace(/\s+$/, "")} ${text}` : text))
               : undefined}
               onAttach={role === "admin" ? async (att, noteBody) => {
-                await doSend({ body: noteBody, extraAttachments: [att as unknown as MessageAttachment] });
+                // a request card goes on its own: the coach's typed message stays in the box
+                await doSend({
+                  body: noteBody,
+                  extraAttachments: [att as unknown as MessageAttachment],
+                  standalone: true,
+                  messageType: (att as any)?.kind === "form_request" ? "Form" : undefined,
+                });
               } : undefined}
               onPickGif={async (g) => {
                 if (!user) return;

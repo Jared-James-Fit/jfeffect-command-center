@@ -35,7 +35,8 @@ describe("a request card shows the answer sent after it, whenever the draft bega
 
   it("the card uses it, and no longer filters by when the draft was created", () => {
     const card = readFileSync("src/components/messages/messenger-checkin-card.tsx", "utf8");
-    expect(card).toContain("return requestCardSubmission(");
+    // (a form they keep updating, a meet checklist, shows its one copy: updatingCardSubmission)
+    expect(card).toContain("requestCardSubmission(subs, sentAt)");
     expect(card).not.toContain('q.gte("created_at"');
   });
 });

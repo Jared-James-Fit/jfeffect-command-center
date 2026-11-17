@@ -59,3 +59,13 @@ export function planMissing(plan: { status?: string | null; updated_at?: string 
   if (plan.status === "pending") return true;
   return plan.status === "generating" && !!plan.updated_at && now - Date.parse(plan.updated_at) > 3 * 60_000;
 }
+
+/**
+ * A form the athlete keeps updating (allow_updates: a meet checklist) is one
+ * copy across nudges: the card shows the newest copy, whatever it's in.
+ */
+export function updatingCardSubmission<S extends { created_at: string }>(subs: S[]): S | null {
+  let best: S | null = null;
+  for (const s of subs) if (!best || s.created_at > best.created_at) best = s;
+  return best;
+}

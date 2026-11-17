@@ -1,4 +1,5 @@
 import { adminDeleteCopy, deletedToast } from "@/lib/recently-deleted";
+import { ClientFormsOverview } from "@/components/forms/client-forms-overview";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -818,13 +819,19 @@ export function ClientProfileWorkspace({
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
-                <h3 className="text-base font-semibold">Check-ins &amp; forms</h3>
-                <p className="text-xs text-muted-foreground mt-1">Assign this client to forms from the unified form builder.</p>
+                <h3 className="text-base font-semibold">Forms</h3>
+                <p className="text-xs text-muted-foreground mt-1">What's out with them, what came back, and Send a form to their chat.</p>
               </div>
               {/* A check-in response is written from Check-in conversations, just below. */}
-              <Button asChild variant="outline" size="sm"><Link to="/admin/native-forms">Manage forms</Link></Button>
+              <Button asChild variant="outline" size="sm"><Link to="/admin/forms" search={{ tab: "builder" } as any}>Form library</Link></Button>
             </div>
-            <ClientNativeFormsAssignment clientId={id} />
+            <ClientFormsOverview clientId={id} firstName={(form as any).preferred_name || (form as any).first_name || String((form as any).full_name ?? "").split(" ")[0] || null} />
+            <details className="rounded-xl border border-border px-3 py-2">
+              <summary className="cursor-pointer text-[13px] font-semibold">Which forms they can open</summary>
+              <div className="pt-2">
+                <ClientNativeFormsAssignment clientId={id} />
+              </div>
+            </details>
             <div className="grid gap-3 md:grid-cols-2">
               <div>
                 <Label>Check-in due day</Label>

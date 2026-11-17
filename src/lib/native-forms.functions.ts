@@ -143,10 +143,10 @@ export const replaceNativeFormAssignments = createServerFn({ method: "POST" })
       const access = await getAssignmentAccess(context.userId, clientIds);
 
       if (access.isAdmin) {
-        const { error: deleteError } = await access.supabaseAdmin
-          .from("nf_assignments")
-          .delete()
-          .eq("form_id", data.formId);
+        // Only the clients taken off: everyone kept keeps their row as it was.
+        let del = access.supabaseAdmin.from("nf_assignments").delete().eq("form_id", data.formId);
+        if (clientIds.length) del = del.not("client_id", "in", `(${clientIds.join(",")})`);
+        const { error: deleteError } = await del;
         if (deleteError) throw new Error(deleteError.message);
       } else {
         const coachId = access.coachId;
@@ -157,7 +157,7 @@ export const replaceNativeFormAssignments = createServerFn({ method: "POST" })
           .eq("assigned_coach_id", coachId)
           .eq("archived", false);
         if (clientsError) throw new Error(clientsError.message);
-        const coachClientIds = (coachClients ?? []).map((client: any) => client.id);
+        const coachClientIds = (coachClients ?? []).map((client: any) => client.id).filter((id: string) => !clientIds.includes(id));
         if (coachClientIds.length > 0) {
           const { error: deleteError } = await access.supabaseAdmin
             .from("nf_assignments")
@@ -172,7 +172,7 @@ export const replaceNativeFormAssignments = createServerFn({ method: "POST" })
         const rows = clientIds.map((clientId) => ({ form_id: data.formId, client_id: clientId }));
         const { error: insertError } = await access.supabaseAdmin
           .from("nf_assignments")
-          .upsert(rows, { onConflict: "form_id,client_id" });
+          .upsert(rows, { onConflict: "form_id,client_id", ignoreDuplicates: true });
         if (insertError) throw new Error(insertError.message);
       }
 
@@ -190,17 +190,30 @@ export const replaceClientNativeFormAssignments = createServerFn({ method: "POST
       const formIds = Array.from(new Set(data.formIds));
       const access = await getAssignmentAccess(context.userId, [data.clientId]);
 
-      const { error: deleteError } = await access.supabaseAdmin
+      // Only what changed: a form still on keeps its row (when it was asked for,
+      // what it was sent with), so saving this list never reopens or resets one.
+      const { data: existing, error: readError } = await access.supabaseAdmin
         .from("nf_assignments")
-        .delete()
+        .select("form_id")
         .eq("client_id", data.clientId);
-      if (deleteError) throw new Error(deleteError.message);
+      if (readError) throw new Error(readError.message);
+      const had = new Set(((existing ?? []) as Array<{ form_id: string }>).map((r) => r.form_id));
+      const drop = [...had].filter((id) => !formIds.includes(id));
+      if (drop.length) {
+        const { error: deleteError } = await access.supabaseAdmin
+          .from("nf_assignments")
+          .delete()
+          .eq("client_id", data.clientId)
+          .in("form_id", drop);
+        if (deleteError) throw new Error(deleteError.message);
+      }
 
-      if (formIds.length > 0) {
-        const rows = formIds.map((formId) => ({ form_id: formId, client_id: data.clientId }));
+      const add = formIds.filter((id) => !had.has(id));
+      if (add.length > 0) {
+        const rows = add.map((formId) => ({ form_id: formId, client_id: data.clientId }));
         const { error: insertError } = await access.supabaseAdmin
           .from("nf_assignments")
-          .upsert(rows, { onConflict: "form_id,client_id" });
+          .upsert(rows, { onConflict: "form_id,client_id", ignoreDuplicates: true });
         if (insertError) throw new Error(insertError.message);
       }
 
@@ -262,4 +275,157 @@ export const deleteNativeForms = createServerFn({ method: "POST" })
     } catch (error: any) {
       return { ok: false, count: 0, error: error?.message ?? "Forms could not be deleted." };
     }
+  });
+const SendSchema = z.object({
+  formId: z.string().uuid(),
+  clientIds: z.array(z.string().uuid()).min(1).max(1000),
+  /** The meet a checklist is for (picked when sending). */
+  meet: z
+    .object({
+      name: z.string().trim().max(120).nullable().optional(),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+      weight_class: z.string().trim().max(60).nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+  /** Meet-day reminders for this send (on by default where the form has them). */
+  reminders: z.boolean().optional(),
+});
+
+/**
+ * Send a form from the chat (or a client's profile): the form must be one the
+ * sender can see in their library (read as them), the clients theirs. Each
+ * assignment remembers who sent it and when (Recently sent), and what it was
+ * sent with (the meet, reminders). A form the athlete keeps updating starts a
+ * fresh copy only when it's sent for a different meet, or the last copy is
+ * over 45 days old; otherwise it's a nudge to the same one.
+ */
+export const sendNativeFormFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => SendSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const clientIds = Array.from(new Set(data.clientIds));
+    const { supabaseAdmin } = await getAssignmentAccess(context.userId, clientIds);
+    const { data: form, error: formErr } = await (context.supabase as any)
+      .from("nf_forms")
+      .select("id, title, active, archived, allow_updates, form_type")
+      .eq("id", data.formId)
+      .maybeSingle();
+    if (formErr) throw new Error(formErr.message);
+    if (!form || form.archived) throw new Error("That form isn't in your library.");
+    const admin = supabaseAdmin as any;
+    // A draft is switched on when it's sent: a client can't open an inactive form.
+    if (!form.active) {
+      const { error } = await admin.from("nf_forms").update({ active: true }).eq("id", form.id);
+      if (error) throw new Error(error.message);
+    }
+
+    const now = new Date().toISOString();
+    const meet = data.meet && (data.meet.name || data.meet.date) ? { name: data.meet.name ?? null, date: data.meet.date ?? null, weight_class: data.meet.weight_class ?? null } : null;
+    const [{ data: existing }, { data: lastSubs }, { data: qs }] = await Promise.all([
+      admin.from("nf_assignments").select("client_id, settings").eq("form_id", form.id).in("client_id", clientIds),
+      form.allow_updates
+        ? admin.from("nf_submissions").select("id, client_id, status, created_at").eq("form_id", form.id).in("client_id", clientIds).order("created_at", { ascending: false })
+        : Promise.resolve({ data: [] }),
+      form.allow_updates ? admin.from("nf_questions").select("id, validation").eq("form_id", form.id) : Promise.resolve({ data: [] }),
+    ]);
+    const settingsBy = new Map<string, Record<string, unknown>>(((existing ?? []) as any[]).map((r) => [r.client_id, (r.settings ?? {}) as Record<string, unknown>]));
+    const latestBy = new Map<string, any>();
+    for (const sub of (lastSubs ?? []) as any[]) if (!latestBy.has(sub.client_id)) latestBy.set(sub.client_id, sub);
+
+    let fresh = 0;
+    const rows = [];
+    for (const clientId of clientIds) {
+      const settings: Record<string, unknown> = { ...(settingsBy.get(clientId) ?? {}) };
+      if (meet) settings.meet = meet;
+      if (typeof data.reminders === "boolean") settings.reminders = data.reminders;
+      const last = latestBy.get(clientId);
+      if (form.allow_updates && last && last.status !== "in_progress") {
+        let newCopy = Date.now() - Date.parse(last.created_at) > 45 * 86_400_000;
+        if (meet) {
+          const { meetFacts } = await import("@/lib/meet-checklist");
+          const { data: answers } = await admin.from("nf_answers").select("question_id, value_text, value_number, value_json").eq("submission_id", last.id);
+          const byQ: Record<string, any> = {};
+          for (const a of (answers ?? []) as any[]) byQ[a.question_id] = a;
+          const facts = meetFacts((qs ?? []) as any[], byQ);
+          const sameDate = !meet.date || !facts.meetDate || facts.meetDate === meet.date;
+          const sameName = !meet.name || !facts.meetName || facts.meetName.trim().toLowerCase() === meet.name.trim().toLowerCase();
+          newCopy = !(sameDate && sameName);
+        }
+        if (newCopy) {
+          settings.new_copy_since = now;
+          fresh++;
+        }
+      }
+      rows.push({ form_id: form.id, client_id: clientId, last_sent_by: context.userId, last_sent_at: now, settings });
+    }
+    const { error } = await admin.from("nf_assignments").upsert(rows, { onConflict: "form_id,client_id" });
+    if (error) throw new Error(error.message);
+    return { ok: true, count: rows.length, freshCopies: fresh, title: form.title as string };
+  });
+
+/**
+ * "Draft with AI": a coach describes the form, a model writes the questions
+ * (route `form_draft`, the OpenAI key), and code reads them (parseFormDraft)
+ * into a draft saved as the coach (their own form, inactive, never sent).
+ * Coach-only AI, so it isn't metered with AI credits.
+ */
+export const draftFormWithAiFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ prompt: z.string().trim().min(8).max(2000), category: z.string().trim().max(60).optional() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const db = context.supabase as any;
+    const [{ data: isAdmin }, { data: coach }] = await Promise.all([
+      db.rpc("has_role", { _user_id: context.userId, _role: "admin" }),
+      db.from("coaches").select("id").eq("user_id", context.userId).eq("archived", false).maybeSingle(),
+    ]);
+    if (!isAdmin && !coach) throw new Error("Only coaches can make forms.");
+    const [{ callModelNow }, { resolveRoute }, { FORM_DRAFT_SYSTEM, parseFormDraft }] = await Promise.all([
+      import("@/lib/ai/model-client.server"),
+      import("@/lib/ai/routing"),
+      import("@/lib/form-draft"),
+    ]);
+    const route = resolveRoute("form_draft");
+    let draft: ReturnType<typeof parseFormDraft> = null;
+    let lastError = "no answer";
+    for (const model of route.models) {
+      try {
+        const reply = await callModelNow(model, {
+          system: FORM_DRAFT_SYSTEM,
+          prompt: data.prompt,
+          effort: route.effort,
+          maxOutputTokens: route.maxOutputTokens,
+          timeoutMs: 45_000,
+        });
+        draft = parseFormDraft(reply.text);
+        if (draft) break;
+        lastError = "the answer wasn't a form";
+      } catch (e: any) {
+        lastError = e?.message ?? lastError;
+        console.error("[form-draft] model failed", { model, message: lastError });
+      }
+    }
+    if (!draft) throw new Error(`The AI couldn't draft that form (${lastError}). Try describing it another way, or start blank.`);
+    const { data: form, error } = await db
+      .from("nf_forms")
+      .insert({
+        title: draft.title,
+        description: draft.description,
+        category: data.category || draft.category,
+        form_type: "check_in",
+        recurrence: "none",
+        active: false,
+        kind: "native",
+        visibility: "selected",
+      })
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    const rows = draft.questions.map((q, i) => ({ ...q, form_id: form.id, order_index: i }));
+    const { error: qErr } = await db.from("nf_questions").insert(rows);
+    if (qErr) {
+      await db.from("nf_forms").delete().eq("id", form.id);
+      throw new Error(qErr.message);
+    }
+    return { formId: form.id as string, questions: rows.length };
   });

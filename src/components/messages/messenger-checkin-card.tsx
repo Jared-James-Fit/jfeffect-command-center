@@ -36,7 +36,10 @@ import {
   type MessengerCheckinTaskType,
 } from "@/lib/messenger-checkins.functions";
 import { generateNutritionPlanFn } from "@/lib/nutrition-ai-plans.functions";
-import { planMissing, requestCardSubmission } from "@/lib/form-request-state";
+import { planMissing, requestCardSubmission, updatingCardSubmission } from "@/lib/form-request-state";
+import { ChecklistAnswers, ReadinessSummary, meetSummary, useFormReadiness } from "@/components/forms/readiness-view";
+import { readinessLine } from "@/lib/form-checklist";
+import { MEET_CHECKLIST_FORM_TYPE, type MeetFacts } from "@/lib/meet-checklist";
 import { answeredQuestions, type FormAnswerRow, type FormQuestionRow } from "@/lib/form-answer-text";
 
 type Role = "admin" | "client";
@@ -1073,27 +1076,40 @@ export function FormRequestChatCard({
 }) {
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
-  const { data: sub, isLoading } = useQuery({
+  const { data: status, isLoading } = useQuery({
     queryKey: ["chat-form-request-status", formId, clientId, sentAt ?? null],
     staleTime: 15_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { supabase } = await import("@/integrations/supabase/client");
-      const { data } = await (supabase as any)
-        .from("nf_submissions")
-        .select("id, status, submitted_at, created_at")
-        .eq("form_id", formId)
-        .eq("client_id", clientId)
-        .order("created_at", { ascending: false })
-        .limit(12);
-      // The answer to THIS request is one sent after it, whenever its draft
-      // was started (requestCardSubmission); else a draft being filled in.
-      return requestCardSubmission(
-        (data ?? []) as Array<{ id: string; status: string; submitted_at: string | null; created_at: string }>,
-        sentAt,
-      );
+      const db = supabase as any;
+      const [{ data }, { data: form }, { data: asg }] = await Promise.all([
+        db
+          .from("nf_submissions")
+          .select("id, status, submitted_at, created_at, answers_updated_at")
+          .eq("form_id", formId)
+          .eq("client_id", clientId)
+          .order("created_at", { ascending: false })
+          .limit(12),
+        db.from("nf_forms").select("form_type, allow_updates").eq("id", formId).maybeSingle(),
+        db.from("nf_assignments").select("settings").eq("form_id", formId).eq("client_id", clientId).maybeSingle(),
+      ]);
+      const subs = (data ?? []) as Array<{ id: string; status: string; submitted_at: string | null; created_at: string; answers_updated_at: string | null }>;
+      const keepsUpdating = !!form?.allow_updates;
+      return {
+        // The answer to THIS request is one sent after it, whenever its draft
+        // was started (requestCardSubmission); else a draft being filled in. A
+        // form they keep updating is one copy across nudges.
+        sub: keepsUpdating ? updatingCardSubmission(subs) : requestCardSubmission(subs, sentAt),
+        keepsUpdating,
+        isMeet: form?.form_type === MEET_CHECKLIST_FORM_TYPE,
+        sentMeet: ((asg?.settings as any)?.meet ?? null) as { name?: string | null; date?: string | null } | null,
+      };
     },
   });
+  const sub = status?.sub ?? null;
+  const keepsUpdating = !!status?.keepsUpdating;
+  const { data: ready } = useFormReadiness(sub?.id, formId, { enabled: keepsUpdating || !!status?.isMeet });
   const done = !!sub && sub.status !== "in_progress";
   const started = !!sub && sub.status === "in_progress";
   const isNutrition = formId === NUTRITION_FORM_ID;
@@ -1113,10 +1129,17 @@ export function FormRequestChatCard({
             <div className={cn("mt-0.5 text-xs", FORM_MUTED)}>
               {isLoading
                 ? "Loading…"
-                : done
-                  ? sub?.submitted_at ? `Submitted ${fmtDateTime(sub.submitted_at)}` : "Submitted"
-                  : started ? "In progress" : isNutrition ? "About 3–4 minutes" : "A few minutes"}
+                : ready && (done || started)
+                  ? readinessLine(ready.readiness)
+                  : done
+                    ? sub?.submitted_at ? `Submitted ${fmtDateTime(sub.submitted_at)}` : "Submitted"
+                    : started ? "In progress" : isNutrition ? "About 3–4 minutes" : status?.isMeet ? "Not started" : "A few minutes"}
             </div>
+            {(meetLineFor(ready?.facts ?? null) ?? sentMeetLine(status?.sentMeet)) && (
+              <div className={cn("mt-0.5 text-xs font-medium", FORM_MUTED)} data-card-meet>
+                Competition: {meetLineFor(ready?.facts ?? null) ?? sentMeetLine(status?.sentMeet)}
+              </div>
+            )}
           </div>
         </div>
         {note && !done && <div className={cn("mt-2 text-xs", FORM_MUTED)}>{note}</div>}
@@ -1125,7 +1148,7 @@ export function FormRequestChatCard({
             className="mt-3 h-10 w-full bg-blue-600 font-semibold text-white hover:bg-blue-700"
             onClick={() => setOpen(true)}
           >
-            {started ? "Continue" : isNutrition ? "Start nutrition update" : "Start form"} <ChevronRight className="ml-1 h-4 w-4" />
+            {started ? "Continue" : isNutrition ? "Start nutrition update" : status?.isMeet ? "Start checklist" : "Start form"} <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         )}
         {!isLoading && !done && role === "admin" && (
@@ -1133,7 +1156,19 @@ export function FormRequestChatCard({
             {started ? "Client is filling it out" : "Waiting for client"}
           </div>
         )}
-        {done && role === "admin" && sub && (
+        {done && role === "admin" && sub && ready && (keepsUpdating || status?.isMeet) && (
+          <div className="mt-3 space-y-2 rounded-xl bg-white/70 p-3 text-foreground dark:bg-blue-900/40" data-card-readiness>
+            <ReadinessSummary data={ready} />
+            <ChecklistAnswers data={ready} />
+            <a
+              href={`/admin/clients/${clientId}?tab=documents`}
+              className="flex h-10 w-full items-center justify-center rounded-md border border-blue-600/25 text-sm font-semibold text-blue-700 dark:border-blue-300/25 dark:text-blue-100"
+            >
+              Open in their profile <ChevronRight className="ml-1 h-4 w-4" />
+            </a>
+          </div>
+        )}
+        {done && role === "admin" && sub && !(keepsUpdating || status?.isMeet) && (
           <SubmittedFormAnswers
             submissionId={sub.id}
             formId={formId}
@@ -1141,10 +1176,19 @@ export function FormRequestChatCard({
             isNutrition={isNutrition}
           />
         )}
-        {done && role === "client" && (
+        {done && role === "client" && !keepsUpdating && (
           <div className="mt-3 rounded-xl bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-700">
             ✓ Sent to your coach{isNutrition ? " — your new plan is on the way" : ""}
           </div>
+        )}
+        {done && role === "client" && keepsUpdating && (
+          <Button
+            className="mt-3 h-10 w-full bg-blue-600 font-semibold text-white hover:bg-blue-700"
+            onClick={() => setOpen(true)}
+            data-card-update
+          >
+            {ready && ready.readiness.issues.some((i) => i.kind === "need") ? "Update checklist · still to sort" : "Update checklist"} <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
         )}
       </div>
       {role === "client" && open && (
@@ -1154,7 +1198,10 @@ export function FormRequestChatCard({
           open={open}
           onOpenChange={(v) => {
             setOpen(v);
-            if (!v) qc.invalidateQueries({ queryKey: ["chat-form-request-status", formId] });
+            if (!v) {
+              qc.invalidateQueries({ queryKey: ["chat-form-request-status", formId] });
+              qc.invalidateQueries({ queryKey: ["form-readiness"] });
+            }
           }}
         />
       )}
@@ -1163,6 +1210,14 @@ export function FormRequestChatCard({
 }
 
 const NUTRITION_FORM_ID = "b7a1f0c2-5d3e-4c8a-9f21-6e0d4a1b2c3d";
+
+function meetLineFor(f: MeetFacts | null): string | null {
+  return meetSummary(f);
+}
+function sentMeetLine(m: { name?: string | null; date?: string | null } | null | undefined): string | null {
+  if (!m || (!m.name && !m.date)) return null;
+  return meetSummary({ meetName: m.name ?? null, meetDate: m.date ?? null } as MeetFacts);
+}
 
 /** How many answers show before "Show all". */
 const ANSWERS_PREVIEW = 6;

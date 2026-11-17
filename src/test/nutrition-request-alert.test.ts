@@ -37,7 +37,8 @@ describe("a sent Nutrition Update Request reaches the coach", () => {
     expect(sentSinceAsked({ submitted_at: "2026-10-19T00:10:42Z", created_at: "2026-10-19T00:08:26Z" }, { ...asked, updated_at: "2026-11-16T15:00:00Z" })).toBe(false);
     // a form nobody asked for keeps opening fresh
     expect(sentSinceAsked({ submitted_at: "2026-10-19T00:10:42Z", created_at: "2026-10-19T00:08:26Z" }, null)).toBe(false);
-    expect(read("src/lib/native-forms.ts")).toContain('if (last && last.status !== "in_progress" && sentSinceAsked(last, asked)) return last as NfSubmission;');
+    // (a form they keep updating, a meet checklist, stays one copy until it's sent for something new)
+    expect(read("src/lib/native-forms.ts")).toContain('} else if (sentSinceAsked(last, asked)) return last as NfSubmission;');
   });
 
   it("the coach's panel shows the request they answered, not a blank form opened after it, and writes a missing plan", () => {

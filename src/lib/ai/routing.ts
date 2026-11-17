@@ -15,7 +15,7 @@
  */
 import type { Effort } from "./model-client.server";
 
-export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate";
+export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft";
 export type Route = {
   /** Tried in order. */
   models: string[];
@@ -69,6 +69,11 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
    * (callModelNow), and read by code before it's shown (parseMealEstimate).
    */
   meal_estimate: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "low", maxOutputTokens: 2_000, strongOnly: false },
+  /**
+   * A coach's "Draft with AI" form (form-draft.ts): a list of questions from what they asked for,
+   * read by code (parseFormDraft) and saved as a draft only the coach sees until they send it.
+   */
+  form_draft: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "low", maxOutputTokens: 8_000, strongOnly: false },
 };
 
 /**

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ChecklistSection, UnitNumberInput } from "@/components/forms/checklist-input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -48,11 +49,14 @@ export function NativeFormPreviewDialog({
         id: `preview-${q.id}`,
         submission_id: "preview",
         question_id: q.id,
-        value_text: typeof raw === "string" ? raw : raw == null ? null : String(raw),
+        // lists (checkboxes, a checklist) and a number in its unit read like the real form's answers
+        value_text: typeof raw === "string" && q.question_type !== "number" && q.question_type !== "rating" ? raw : typeof raw === "number" ? String(raw) : null,
         value_number: q.question_type === "number" || q.question_type === "rating"
-          ? raw === "" || raw == null ? null : Number(raw)
+          ? raw && typeof raw === "object" && !Array.isArray(raw)
+            ? raw.value === "" ? null : Number(raw.value)
+            : raw === "" || raw == null ? null : Number(raw)
           : null,
-        value_json: Array.isArray(raw) ? raw : null,
+        value_json: Array.isArray(raw) ? raw : raw && typeof raw === "object" && typeof raw.unit === "string" ? { unit: raw.unit } : null,
       };
     }
     return m;
@@ -113,7 +117,10 @@ export function NativeFormPreviewDialog({
             {visible
               .filter((q) => shouldShowQuestion(q, answersMap))
               .map((q, idx) =>
-                q.question_type === "info" ? (
+                q.question_type === "checklist" ? (
+                  // the athlete's own checklist rows, on preview answers (nothing saved)
+                  <ChecklistSection key={q.id} q={q} value={values[q.id]} answers={answersMap} readOnly={false} onChange={(v) => setVal(q.id, v)} />
+                ) : q.question_type === "info" ? (
                   <div key={q.id} className="px-1 pt-2">
                     <p className="text-base font-semibold">{q.label}</p>
                     {q.help_text && <p className="mt-1 text-xs text-muted-foreground">{q.help_text}</p>}
@@ -215,7 +222,11 @@ function PreviewInput({
   }
   if (q.question_type === "short_text") return <Input value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
   if (q.question_type === "long_text") return <Textarea rows={4} value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
-  if (q.question_type === "number") return <Input type="number" value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
+  if (q.question_type === "number" && Array.isArray(v.units) && v.units.length) {
+    const cur = value && typeof value === "object" ? value : { value: value ?? "", unit: v.units[0] };
+    return <UnitNumberInput value={cur} units={v.units} readOnly={false} onChange={(next) => onChange(next)} onDone={() => {}} />;
+  }
+  if (q.question_type === "number") return <Input type="text" inputMode="decimal" value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
   if (q.question_type === "date") return <Input type="date" value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
   if (q.question_type === "rating") {
     const n = Number(value) || 0;
