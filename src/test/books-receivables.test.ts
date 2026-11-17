@@ -60,3 +60,26 @@ describe("receivables", () => {
     expect(nov.rows[0].service).toBe("personal_training");
   });
 });
+
+describe("recording a payment against what's owed (the finance desk)", () => {
+  it("carries the client's own tax rate and next payment from Billing", async () => {
+    const { owedRows } = await import("@/components/admin/money/use-receivables");
+    const { recordMoneyFor } = await import("@/components/admin/finance/record-payment-dialog");
+    expect(r.lines[0].rate).toBeCloseTo(0.05, 4);
+    const [row] = owedRows(r);
+    expect(row).toMatchObject({ id: r.lines[0].saleId, clientId: "marc", outstandingMinor: 67200, viaStripe: true });
+    expect(row.nextCents).toBe(r.lines[0].next?.cents);
+    // The dialog suggests the next payment, tax split at Marc's own rate.
+    const money = recordMoneyFor(row);
+    expect(money.next?.cents).toBe(row.nextCents);
+    expect(money.rate).toBeCloseTo(0.05, 4);
+  });
+
+  it("splits the GST/HST out of an amount that includes it", async () => {
+    const { taxInside } = await import("@/lib/sale-money");
+    expect(taxInside(67200, 0.05)).toBe(3200);
+    expect(taxInside(14690, 0.13)).toBe(1690);
+    expect(taxInside(10000, null)).toBe(0);
+    expect(taxInside(10000, 0)).toBe(0);
+  });
+});

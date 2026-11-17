@@ -31,7 +31,8 @@ export const VIEW_ONLY_MESSAGE = "View only: your login can look but can't chang
  */
 export const ADMIN_VIEW_HEADER = "x-jf-admin-view";
 
-/** Payment statuses a payments.record login may set: money in, or still owed. */
-export const RECORDABLE_PAYMENT_STATUSES = [
-  "Paid", "Partially Paid", "Payment Plan Active", "Pending Payment", "Overdue", "Failed", "Manual Payment Needed",
-] as const;
+/**
+ * payments.record lets a login record money that came in (recordPayment, a payment row the
+ * database adds up), never set a sale's status or total by hand; refunds, voids and comps stay
+ * the owner's.
+ */

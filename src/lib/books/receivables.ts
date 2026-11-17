@@ -24,6 +24,8 @@ export type ReceivableLine = {
   next: { date: string; cents: number } | null;
   /** The oldest date a payment on it was missed, when it's overdue. */
   overdueSince: string | null;
+  /** The client's GST/HST rate as Billing reads it (null when no payment shows it yet). */
+  rate: number | null;
 };
 
 export type WaitingLine = { clientId: string; client: string; saleId: string; name: string; cents: number; since: string | null };
@@ -91,6 +93,7 @@ export function receivablesFrom(clients: ClientBillingRead[], today: string): Re
         how: b.how,
         next: next ? { date: next.date, cents: next.cents } : null,
         overdueSince: overdue.length ? overdue.map((i) => i.date).sort()[0] : null,
+        rate: p.money.get(b.saleId)?.rate ?? null,
       });
     }
     // A failing subscription: its missed charge is overdue, though nothing else is owed on it.
@@ -103,6 +106,7 @@ export function receivablesFrom(clients: ClientBillingRead[], today: string): Re
       lines.push({
         clientId: c.clientId, client: c.client, saleId: i.saleId, label: i.label, outstandingCents: cents, overdueCents: cents,
         dueNowCents: 0, scheduledCents: 0, unscheduledCents: 0, how: "subscription", next: null, overdueSince: same.map((x) => x.date).sort()[0],
+        rate: p.money.get(i.saleId)?.rate ?? null,
       });
     }
     for (const i of p.upcoming) {

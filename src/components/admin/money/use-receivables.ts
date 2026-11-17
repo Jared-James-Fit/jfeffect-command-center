@@ -21,5 +21,9 @@ export function owedRows(r: Receivables | null | undefined): OpenSaleRow[] {
     status: l.overdueCents > 0 ? "Overdue" : l.how === "auto_pay" ? "On auto-pay" : l.unscheduledCents > 0 ? "No payment dates" : "On schedule",
     outstandingMinor: l.outstandingCents,
     createdOn: l.overdueSince,
+    clientId: l.clientId,
+    rate: l.rate,
+    nextCents: l.next?.cents ?? null,
+    viaStripe: l.how === "auto_pay" || l.how === "stripe" || l.how === "subscription",
   }));
 }

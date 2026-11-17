@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { viewOnlyFetch, setAdminView } from "@/lib/admin-view";
-import { ADMIN_VIEW_HEADER, PERMISSIONS, VIEW_ONLY_MESSAGE, RECORDABLE_PAYMENT_STATUSES } from "@/lib/permissions";
+import { ADMIN_VIEW_HEADER, PERMISSIONS, VIEW_ONLY_MESSAGE } from "@/lib/permissions";
 import { assertAdminOr, withoutCredentials } from "@/lib/permissions.server";
 
 const read = (p: string) => readFileSync(p, "utf8");
@@ -138,9 +138,20 @@ describe("finance login on the server", () => {
     expect(withoutCredentials({ id: "m1", email: "a@b.c", setup_token: "secret", setup_token_expires_at: "x" })).toEqual({ id: "m1", email: "a@b.c" });
   });
 
-  it("records money in or owed, never refunds or cancellations", () => {
-    expect(RECORDABLE_PAYMENT_STATUSES).toContain("Paid");
-    for (const s of ["Refunded", "Cancelled", "Expired", "Draft"]) expect(RECORDABLE_PAYMENT_STATUSES as readonly string[]).not.toContain(s);
+  it("records money that came in as a payment row, never a status or a typed total", () => {
+    const billing = readFileSync("src/lib/billing.functions.ts", "utf8");
+    const record = billing.slice(billing.indexOf("export const recordPayment"), billing.indexOf("async function findRecentDuplicatePayment"));
+    expect(record).toContain('assertAdminOr(context as any, "payments.record")');
+    expect(record).toContain('.from("payment_ledger")');
+    // Refunds and voids stay the owner's.
+    for (const fn of ["export const recordRefund", "export const voidLedgerRow"]) {
+      const body = billing.slice(billing.indexOf(fn), billing.indexOf("export const", billing.indexOf(fn) + 10));
+      expect(body, fn).not.toContain("payments.record");
+    }
+    const dialog = readFileSync("src/components/admin/finance/record-payment-dialog.tsx", "utf8");
+    expect(dialog).toContain("sale-payment-dialogs");
+    expect(dialog).not.toMatch(/payment_status|amount_paid/);
+    expect(readFileSync("src/lib/payments.functions.ts", "utf8")).not.toContain("updatePurchasePayment =");
   });
 });
 

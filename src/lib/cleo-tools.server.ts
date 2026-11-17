@@ -537,7 +537,7 @@ export function cleoReadTools(ctx: ToolCtx) {
           `${clientName(c)} purchases (prices and "outstanding" are before tax; "paid" includes tax):`,
           ...list.map((p) => {
             const left = p.amount_outstanding_cents != null ? dollars(Number(p.amount_outstanding_cents)) : "?";
-            return `- ${p.offer_name ?? "Purchase"} (purchase id ${p.id}) | ${p.payment_status ?? "?"} | total ${money(p.full_payable_amount)} | paid ${money(p.amount_paid)} | outstanding ${left} | bought ${String(p.purchased_at ?? "?").slice(0, 10)}${p.next_billing_date ? ` | next billing ${p.next_billing_date}` : ""}`;
+            return `- ${p.offer_name ?? "Purchase"} (purchase id ${p.id}) | ${p.payment_status ?? "?"} | total ${money(p.full_payable_amount)} | paid ${p.amount_paid_cents != null ? dollars(Number(p.amount_paid_cents)) : money(p.amount_paid)} | outstanding ${left} | bought ${String(p.purchased_at ?? "?").slice(0, 10)}${p.next_billing_date ? ` | next billing ${p.next_billing_date}` : ""}`;
           }),
           `Owes in total: ${withTax}${dollars(owed.totalCents)} before tax (${dollars(owed.salesCents)} left on purchases${owed.renewal && owed.renewal.count > 0
             ? `, plus a renewal: ${owed.unbilledSessions} sessions trained past their last package started their next ${owed.renewal.count > 1 ? `${owed.renewal.count} packages` : owed.renewal.size} ("${owed.renewal.name}", ${dollars(owed.renewal.priceCents)} each). Packages renew in their own size; never bill sessions one by one`
