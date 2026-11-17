@@ -47,6 +47,7 @@ export default function SetVideoSheet({
   jobs,
   canAdd,
   onAdd,
+  onPickFile,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -58,7 +59,10 @@ export default function SetVideoSheet({
   videos: SetVideo[];
   jobs: SetVideoJob[];
   canAdd: boolean;
+  /** Film another (the app's camera). */
   onAdd: () => void;
+  /** Pick a file from the phone (a clip that has to be picked again). */
+  onPickFile?: () => void;
 }) {
   const { user, role } = useAuth();
   const staff = role === "admin" || role === "coach";
@@ -194,7 +198,7 @@ export default function SetVideoSheet({
                       className="h-10"
                       onClick={() => {
                         void uploader().then((m) => m.cancelSetVideo(j.id));
-                        onAdd();
+                        (onPickFile ?? onAdd)();
                       }}
                     >
                       Pick the video again

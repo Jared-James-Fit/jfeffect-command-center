@@ -4,6 +4,7 @@
 
 import { displayExerciseName } from "@/lib/exercise-display-name";
 import { planCheck, type PlanCheck } from "@/lib/workouts/plan-vs-actual";
+import { isPlanCardioRow } from "@/lib/workouts/workout-cardio";
 
 export type SummaryRow = {
   id: string;
@@ -12,6 +13,8 @@ export type SummaryRow = {
   exercise_name_override?: string | null;
   /** Row was explicitly marked as skipped. Doesn't count against completion. */
   skipped?: boolean | null;
+  /** The day's cardio (the cardio plan's row): done any time that day, so not logged yet is never missed. */
+  cardio_target_id?: string | null;
   /** Present for timed exercises (planks, holds, cardio). */
   measurement_type?: string | null;
   tracking_type?: string | null;
@@ -101,8 +104,6 @@ export function computeWorkoutSummary(
   for (const row of rows) {
     // Explicitly skipped rows don't count for or against the score.
     if (row.skipped) continue;
-    const sets = Math.max(0, Number(row.sets ?? 0));
-    prescribedSets += sets;
     // A set counts as completed if it has reps logged OR duration logged
     // (timed exercises like planks/holds/cardio don't populate actual_reps).
     const rs = (byRow.get(row.id) ?? []).filter(
@@ -110,6 +111,10 @@ export function computeWorkoutSummary(
         (Number(r.actual_reps ?? 0) > 0) ||
         (Number(r.completed_duration_seconds ?? 0) > 0),
     );
+    // The day's cardio is done before, after or later that day: not logged yet isn't missed.
+    if (isPlanCardioRow(row) && rs.length === 0) continue;
+    const sets = Math.max(0, Number(row.sets ?? 0));
+    prescribedSets += sets;
     if (rs.length > 0) {
       exercisesCompleted += 1;
       for (const r of rs) {

@@ -86,3 +86,50 @@ describe("the logger shows the cardio under its own heading", () => {
     expect(day).toContain('data-progress-cardio={liftProgress.cardioDone ? "done" : "open"}');
   });
 });
+
+describe("cardio is done when it suits them: before, during, after or later that day", () => {
+  it("logging it never starts the workout, its clock or in progress", () => {
+    expect(day).toContain("onChange={cardioRow ? refreshCardio : refresh}");
+    expect(day).toContain("startsWorkout={!cardioRow}");
+    // every place a set starts the session clock checks it; the one left is the page's own (refresh's, the lifts')
+    const unguarded = day.split("\n").filter((l) => l.includes("beginWorkoutSession(") && !l.includes("startsWorkout") && !l.includes("import"));
+    expect(unguarded).toEqual(["    beginWorkoutSession(dayId);"]);
+    const refreshCardioBody = day.slice(day.indexOf("const refreshCardio = () => {"), day.indexOf("};", day.indexOf("const refreshCardio = () => {")));
+    expect(refreshCardioBody).not.toContain("markInProgress");
+    expect(refreshCardioBody).not.toContain("beginSessionOnAction");
+  });
+
+  it("the ring, the review and the finish read the lifting, so the review never waits on cardio", () => {
+    expect(day).toContain("const autoFinishReady = liftLogged.allDone;");
+    expect(day).toContain("setsDone: liftLogged.setsDone,");
+    expect(day).toContain(".filter((r: any) => !r?.skipped && !isPlanCardioRow(r))");
+    expect(day).toContain("(rows as any[]).filter((r: any) => !isPlanCardioRow(r)).map((r: any) => ({");
+  });
+
+  it("the recap and Vs the plan never call cardio not done yet 'missed'; logged, it counts", async () => {
+    const { computeWorkoutSummary } = await import("@/lib/workout-summary");
+    const rows = [
+      { id: "a", sets: 1, exercises: { name: "Squat" } },
+      { id: "w", sets: 1, cardio_target_id: "t", exercises: { name: "Treadmill Walk" } },
+    ];
+    const squat = { row_id: "a", actual_load: 100, actual_reps: 5, actual_load_unit: "kg" as const, actual_rpe: 8, completed_at: "2026-11-17T18:00:00Z" };
+    const before = computeWorkoutSummary(rows as any, [squat] as any, { displayUnit: "kg" });
+    expect(before.missedExercises).toEqual([]);
+    expect(before.completionPct).toBe(100);
+    expect(before.plan?.notLogged).toBe(0);
+    const walk = { row_id: "w", actual_load: null, actual_reps: null, actual_load_unit: null, actual_rpe: 5, completed_at: "2026-11-17T18:30:00Z", completed_duration_seconds: 600 };
+    const after = computeWorkoutSummary(rows as any, [squat, walk] as any, { displayUnit: "kg" });
+    expect(after.exercisesCompleted).toBe(2);
+  });
+
+  it("the Workouts page: cardio is its own line on the day card, and never makes the workout in progress", () => {
+    const programs = read("src/lib/pl-programs.ts");
+    expect(programs).toContain("cardio_target_id, duration_seconds");
+    expect(programs).toContain("if (cardioRowIds.has(String(rr.row_id))) {");
+    expect(programs).toContain("const lifts = (rowsByDay.get(dayId) ?? []).filter((r: any) => !isPlanCardioRow(r));");
+    const card = read("src/components/workouts/WorkoutsExperience.tsx");
+    expect(card).toContain('data-day-cardio={item.cardio.done ? "done" : "open"}');
+    expect(card).toContain("search={{ focus: item.cardio.rowId,");
+    expect(day).toContain("Before, after or later in the day");
+  });
+});

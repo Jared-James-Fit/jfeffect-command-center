@@ -14,6 +14,11 @@ export type WorkoutItem = {
   /** The full logged-vs-prescribed numbers behind progress_pct (saves each card its own request). */
   progress?: import("@/lib/workout-progress").WorkoutProgress;
   /**
+   * The day's cardio (the cardio plan's row), its own thing done any time that
+   * day: never part of the workout's progress or "in progress" (workout-cardio.ts).
+   */
+  cardio?: { rowId: string; minutes: number | null; done: boolean } | null;
+  /**
    * Pre-resolved estimated duration (minutes) for this day, computed at
    * item build time in getClientWorkouts (coach override → day estimate →
    * block estimate → computed from prescribed rows). List surfaces prefer

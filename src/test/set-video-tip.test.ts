@@ -55,9 +55,9 @@ describe("the point-out in the set row", () => {
     expect(cell).toContain("if (was || !done) return;");
     expect(readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8")).toContain("done={!!existing?.id && isConfirmed}");
   });
-  it("Film this set opens the phone's picker from that tap", () => {
+  it("Film this set opens the app's camera from that tap (iOS's Take Video films 480 × 360)", () => {
     expect(cell).toMatch(/Film this set/);
-    expect(cell).toMatch(/setTipOpen\(false\);\s*\/\/ the phone's picker opens from this tap\s*openPicker\(\);/);
+    expect(cell).toMatch(/setTipOpen\(false\);\s*openCamera\(\);/);
   });
   it("never to a coach viewing as the client, and kept on the account, not the phone", () => {
     expect(tip).toContain("const on = enabled && !viewingAsClient && !!userId && !!clientId;");

@@ -167,6 +167,8 @@ export type PlanRow = {
   tracking_type?: string | null;
   exercises?: { name?: string | null } | null;
   exercise_name_override?: string | null;
+  /** The day's cardio (the cardio plan's row): done any time that day, never "not logged" here. */
+  cardio_target_id?: string | null;
 };
 
 export type PlanResult = {
@@ -221,6 +223,7 @@ export function planCheck(rows: PlanRow[], results: PlanResult[]): PlanCheck {
     if (row.skipped) continue;
     const planned = Math.max(0, Number(row.sets ?? 0));
     const done = byRow.get(row.id) ?? [];
+    if (row.cardio_target_id && done.length === 0) continue;
     setsPlanned += planned;
     setsDone += Math.min(done.length, planned || done.length);
     const name = displayExerciseName(row as any);

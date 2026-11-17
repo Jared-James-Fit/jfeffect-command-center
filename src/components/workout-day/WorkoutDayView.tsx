@@ -2023,6 +2023,14 @@ function WorkoutDay({
     beginSessionOnAction();
     markInProgress();
   };
+  // The day's cardio, logged before, during or after the lifting (or later
+  // that day): its sets save like any other, but never start the workout, its
+  // clock or "in progress" (workout-cardio.ts). The Workouts card shows it done.
+  const refreshCardio = () => {
+    qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
+    qc.invalidateQueries({ queryKey: ["exercise-history"] });
+    qc.invalidateQueries({ queryKey: ["my-workouts"], refetchType: "none" });
+  };
 
 
   // Quick "Workout Complete" sheet state. The long review flow has been removed.
@@ -2233,7 +2241,8 @@ function WorkoutDay({
       displayUnit,
       hasNote: false,
     });
-    const requiredRows: RequiredRowSpec[] = (rows as any[]).map((r: any) => ({
+    // The lifting: the day's cardio may come later that day and never counts as a missed log.
+    const requiredRows: RequiredRowSpec[] = (rows as any[]).filter((r: any) => !isPlanCardioRow(r)).map((r: any) => ({
       rowId: String(r.id),
       prescribedSets: Math.max(1, Number(r.sets) || 1),
       skipped: !!r.skipped,
@@ -2391,10 +2400,16 @@ function WorkoutDay({
   // review can't pop early (an extra set on one exercise standing in for a
   // missing one on another) or never (bodyweight, reps-only, weight-only sets).
   const loggedProgress = useMemo(() => workoutSetProgress(rows as any[], results as any[]), [rows, results]);
+  // The lifting alone: the day's cardio is done before, during or after it (or
+  // later that day), so the ring and the review never wait on it (workout-cardio.ts).
+  const liftLogged = useMemo(
+    () => (liftRows > 0 && liftRows < (rows as any[]).length ? workoutSetProgress((rows as any[]).slice(0, liftRows), results as any[]) : loggedProgress),
+    [rows, results, liftRows, loggedProgress],
+  );
   // When every set is logged, there's no extra "Finish Workout" tap: the review
   // opens as the athlete's last step and saving it finishes the workout.
   // The workout remains amber/in-progress until that review is submitted.
-  const autoFinishReady = loggedProgress.allDone;
+  const autoFinishReady = liftLogged.allDone;
 
   const online = useOnlineStatus();
   const { dismissRestTimer } = useRestTimer();
@@ -2652,7 +2667,7 @@ function WorkoutDay({
         return /\b(sec(onds?)?|min(utes?)?)\b/i.test(String(r?.reps_text ?? ""));
       };
       const required: RequiredRowSpec[] = (rows as any[])
-        .filter((r: any) => !r?.skipped)
+        .filter((r: any) => !r?.skipped && !isPlanCardioRow(r))
         .map((r: any) => ({
           rowId: String(r.id),
           prescribedSets: Math.max(1, Number(r.sets) || 1),
@@ -2673,10 +2688,11 @@ function WorkoutDay({
       // story view's bars and the ring, the same reading as the finish review.
       return {
         summary: sum,
-        exercisesDone: loggedProgress.exercisesDone,
-        exercisesTotal: loggedProgress.exercisesTotal,
-        setsDone: loggedProgress.setsDone,
-        setsTotal: loggedProgress.setsTotal,
+        // the ring and the % are the lifting; every card's done (the Focus bars, cardio included) is per row
+        exercisesDone: liftLogged.exercisesDone,
+        exercisesTotal: liftLogged.exercisesTotal,
+        setsDone: liftLogged.setsDone,
+        setsTotal: liftLogged.setsTotal,
         doneRowIds: loggedProgress.doneRowIds,
       };
     } catch {
@@ -2976,7 +2992,7 @@ function WorkoutDay({
                 <div className="flex items-center gap-2 px-1 pt-3 lg:col-span-2" data-cardio-section>
                   <Heart className="h-4 w-4 text-muted-foreground" aria-hidden />
                   <h2 className="text-base font-semibold">Cardio</h2>
-                  <span className="text-xs text-muted-foreground">Logging it checks off today's cardio</span>
+                  <span className="text-xs text-muted-foreground">Before, after or later in the day</span>
                 </div>
               )}
               <div
@@ -3028,7 +3044,8 @@ function WorkoutDay({
                     unit={unitForRow(r)}
                     onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? r.exercise_id ?? null, r.id, u)}
                     focusMode={storyOpen}
-                    onChange={refresh}
+                    onChange={cardioRow ? refreshCardio : refresh}
+                    startsWorkout={!cardioRow}
                     onNoteChange={refreshNotes}
                     purposeLabel={purposeLabelById.get(r.id) ?? null}
                     swapContext={swapContextForRow(adapter, dayId, r.id)}
@@ -3544,7 +3561,7 @@ function PreviousLiftChip({ data, displayUnit, onOpen }: {
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: TopSetBasis | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, startsWorkout = true, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; /** Logging here starts the workout's clock (false: the day's cardio, done any time). */ startsWorkout?: boolean; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: TopSetBasis | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -4466,7 +4483,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     const token = ++cascadeTokenRef.current;
     setCascade({ token, targets, ...payload });
     // 2) Batch persistence through the canonical row-results path.
-    beginWorkoutSession(dayId);
+    if (startsWorkout) beginWorkoutSession(dayId);
     const loadNum = bodyweight ? 0 : Number(payload.load);
     const srcReps = payload.reps ? parseInt(payload.reps, 10) : null;
     const srcRpe = payload.rpe || null;
@@ -4591,7 +4608,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
 
   const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType }) => {
     if (!clientId) return;
-    beginWorkoutSession(dayId);
+    if (startsWorkout) beginWorkoutSession(dayId);
     const fillLoadType: LoadType = payload.loadType ?? "external";
     const loadNum = payload.load ? Number(payload.load) : null;
     const repsNum = payload.reps ? parseInt(payload.reps, 10) : null;
@@ -4780,7 +4797,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         auto={!restIsExplicit}
         scopeKey={dayId}
         timerId={String(row.id ?? exerciseId ?? name)}
-        onStart={() => beginWorkoutSession(dayId)}
+        onStart={() => { if (startsWorkout) beginWorkoutSession(dayId); }}
       >
         {(restParts) => (
           <ExerciseActionRow
@@ -5181,6 +5198,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               key={i}
               rowId={row.id}
               workoutId={dayId}
+              startsWorkout={startsWorkout}
               exerciseId={exerciseId ?? null}
               exerciseName={name}
               clientId={clientId}
@@ -5572,7 +5590,7 @@ const UNIT_PICK_WAIT_MS = 5000;
 type SetRowHandle = { logAt: (load: number) => Promise<number>; editWeight: () => void };
 
 function SetRow({
-  rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
+  rowId, workoutId, startsWorkout = true, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
   targetReps, targetRpe, targetRir, suggestedWeight, loadHint = null, quickLoad = null, lastTimeWeight,
   repTarget, rpeTarget, rirTarget,
   repMaxBests = null,
@@ -5601,6 +5619,8 @@ function SetRow({
   onSwitchUnit?: (u: "kg" | "lb") => void;
   rowId: string;
   workoutId?: string | null;
+  /** Logging starts the workout's clock (false: the day's cardio, done any time that day). */
+  startsWorkout?: boolean;
   exerciseId?: string | null;
   exerciseName?: string | null;
   clientId: string | undefined;
@@ -6174,8 +6194,8 @@ function SetRow({
       if (readonly) return;
       if (!clientId) return;
       if (!load && !reps && !rpe && !velocity && !calories && !distance && !bw && !existing) return;
-      // Auto-start the Workout Session clock on the first meaningful log.
-      beginWorkoutSession(workoutId ?? null);
+      // Auto-start the Workout Session clock on the first meaningful log (never the day's cardio).
+      if (startsWorkout) beginWorkoutSession(workoutId ?? null);
       // Validate numerics; silently skip persistence for invalid values (input stays).
       const displayLoadNum = bw ? 0 : load ? Number(load) : null;
       const repsNum = reps ? parseInt(reps, 10) : null;
@@ -6213,7 +6233,7 @@ function SetRow({
         && (!reps || reps === prescribedRepsStr) && (!rpe || rpe === prescribedRpeStr);
       if (onlyPlan && !existing) return;
       if (autoDuration) {
-        beginWorkoutSession(workoutId ?? null);
+        if (startsWorkout) beginWorkoutSession(workoutId ?? null);
         setDurationSec(autoDuration);
       }
       const payload = withMemberWorkoutIndexes({
@@ -6569,7 +6589,7 @@ function SetRow({
       toast.error(isTimeKind ? "Enter a time first" : hideWeight ? "Enter reps before marking complete" : "Enter reps and weight before marking complete (use 0 for bodyweight)");
       return 0;
     }
-    if (nextCompletedAt) beginWorkoutSession(workoutId ?? null);
+    if (nextCompletedAt && startsWorkout) beginWorkoutSession(workoutId ?? null);
     let payload: Record<string, any> = {
         load_type: loadType,
         row_id: rowId,
@@ -6808,7 +6828,7 @@ function SetRow({
   }) => {
     // Allow saving even when prescribedSec is null (e.g. reps_text-detected time exercises)
     if (readonly || !clientId) return;
-    beginWorkoutSession(workoutId ?? null);
+    if (startsWorkout) beginWorkoutSession(workoutId ?? null);
     const nowIso = opts.completedAt ?? new Date().toISOString();
     setDurationSec(completedSeconds);
     const repsNumNow = reps ? parseInt(reps, 10) : null;

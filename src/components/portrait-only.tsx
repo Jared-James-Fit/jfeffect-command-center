@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Smartphone } from "lucide-react";
 import { lockPortrait, phoneOnItsSide, readOrientation } from "@/lib/portrait-only";
+import { CAMERA_OPEN_EVENT, isCameraOpen } from "@/lib/camera/camera-presence";
 
 /**
  * Phones stay upright: on mount (and on coming back) it asks the browser to
@@ -12,6 +13,25 @@ import { lockPortrait, phoneOnItsSide, readOrientation } from "@/lib/portrait-on
  */
 export function PortraitOnly() {
   const [sideways, setSideways] = useState(false);
+  // The app's own camera is up: the phone may go on its side to film, and the
+  // lock is let go (Android) until it closes (camera-presence.ts).
+  const [camera, setCamera] = useState(false);
+  useEffect(() => {
+    const onCamera = () => {
+      const now = isCameraOpen();
+      setCamera(now);
+      if (now) {
+        try {
+          (screen.orientation as { unlock?: () => void } | undefined)?.unlock?.();
+        } catch {
+          /* not lockable here */
+        }
+      } else void lockPortrait();
+    };
+    onCamera();
+    window.addEventListener(CAMERA_OPEN_EVENT, onCamera);
+    return () => window.removeEventListener(CAMERA_OPEN_EVENT, onCamera);
+  }, []);
   useEffect(() => {
     const check = () => {
       const r = readOrientation();
@@ -21,7 +41,7 @@ export function PortraitOnly() {
     // hold it upright where the browser lets us (and again on coming back: a lock can lapse in the background)
     void lockPortrait();
     const back = () => {
-      if (document.visibilityState === "visible") void lockPortrait();
+      if (document.visibilityState === "visible" && !isCameraOpen()) void lockPortrait();
     };
     const o = typeof screen !== "undefined" ? screen.orientation : undefined;
     o?.addEventListener?.("change", check);
@@ -35,7 +55,7 @@ export function PortraitOnly() {
       document.removeEventListener("visibilitychange", back);
     };
   }, []);
-  if (!sideways) return null;
+  if (!sideways || camera) return null;
   return (
     <div
       role="alert"
