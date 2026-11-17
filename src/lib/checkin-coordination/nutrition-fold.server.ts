@@ -10,7 +10,7 @@
 import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-request";
 import { answeredNutrition, foldNutritionAnswers, type FoldAnswer, type FoldQuestion } from "@/lib/checkin-coordination/nutrition-fold";
 import { loadNutritionSide } from "@/lib/checkin-coordination/plan.server";
-import type { PrefillProfile } from "@/lib/form-prefill";
+import { TRAINING_TIME_DAYS, TRAINING_TIME_RECENT, workoutStartHours, type PrefillProfile } from "@/lib/form-prefill";
 
 
 function localDay(tz: string | null | undefined): string {
@@ -45,11 +45,14 @@ export async function foldNutritionUpdate(
 
     // this week's weigh-in (the check-in asks for one when there's none): last month's weight is never carried
     const today = localDay(client.timezone);
-    const [{ data: bw }, { data: legacy }] = await Promise.all([
+    const since = new Date(Date.now() - TRAINING_TIME_DAYS * 86_400_000).toISOString();
+    const [{ data: bw }, { data: legacy }, { data: starts }] = await Promise.all([
       client.user_id
         ? admin.from("progress_bodyweight").select("logged_date, weight_value, weight_unit").eq("user_id", client.user_id).order("logged_date", { ascending: false }).limit(1).maybeSingle()
         : Promise.resolve({ data: null }),
       admin.from("progress_metrics").select("entry_date, bodyweight, bodyweight_unit").eq("client_id", row.client_id).not("bodyweight", "is", null).order("entry_date", { ascending: false }).limit(1).maybeSingle(),
+      // when they actually train: "What time do you usually train?" reads their workouts, as the form does
+      admin.from("pl_day_completions").select("training_started_at, started_at").eq("client_id", row.client_id).not("completed_at", "is", null).gte("completed_at", since).order("completed_at", { ascending: false }).limit(TRAINING_TIME_RECENT),
     ]);
     const a = bw?.weight_value != null ? { date: String(bw.logged_date).slice(0, 10), value: Number(bw.weight_value), unit: bw.weight_unit === "kg" ? "kg" : "lb" } : null;
     const b = legacy?.bodyweight != null ? { date: String(legacy.entry_date).slice(0, 10), value: Number(legacy.bodyweight), unit: legacy.bodyweight_unit === "kg" ? "kg" : "lb" } : null;
@@ -61,6 +64,8 @@ export async function foldNutritionUpdate(
       preferred_height_unit: client.preferred_height_unit ?? null,
       has_nutrition_plan: true,
       bodyweight: latest && fresh ? { value: latest.value, unit: latest.unit as "kg" | "lb", date: latest.date, fresh: true } : null,
+      training_days: Array.isArray(client.committed_training_days) ? client.committed_training_days : null,
+      training_starts: workoutStartHours(starts ?? [], client.timezone),
     };
     const days = Array.isArray(client.committed_training_days) ? client.committed_training_days.length : null;
 
