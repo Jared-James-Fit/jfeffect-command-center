@@ -168,6 +168,12 @@ export function CommunityScreen({
   const [reel, setReel] = useState<ReelStart | null>(null);
   const openReel = useCallback((post: CommunityPost, path: string) => setReel({ postId: post.id, path }), []);
   const [detailId, setDetailId] = useState<string | null>(() => postFromHash());
+  // where the post's page opens: on the workout itself from the feed's View workout, else at its top
+  // (kept with the post it was for, and dropped whenever the page closes, however it closes)
+  const [detailAt, setDetailAt] = useState<{ id: string; at: "workout" } | null>(null);
+  useEffect(() => {
+    if (!detailId) setDetailAt(null);
+  }, [detailId]);
   const [jumpTo, setJumpTo] = useState<string | null>(() => atFromHash());
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -231,8 +237,14 @@ export function CommunityScreen({
       : null;
   const openPost = useCallback((post: CommunityPost) => {
     if (post.kind !== "note") markHint(OPEN_HINT);
+    setDetailAt(null);
     setDetailId(post.id);
   }, [markHint]);
+  // a feed post's View workout: the page opens on the workout, past the picture they were just watching
+  const openWorkout = useCallback((post: CommunityPost) => {
+    openPost(post);
+    setDetailAt({ id: post.id, at: "workout" });
+  }, [openPost]);
   const { data: urls } = usePostMediaUrls(scope.kind === "feed" ? feedPosts : []);
 
   // Seeing the feed clears the "new posts" badge (server-side, every device). Only the
@@ -781,7 +793,7 @@ export function CommunityScreen({
                   thumbUrl={urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null}
                   unit={unit}
                   viewerIsStaff={viewerIsStaff}
-                  onOpen={openPost}
+                  onOpen={openWorkout}
                   onOpenComments={openCommentsSheet}
                   onOpenCaption={openCaptionSheet}
                   sheetOpen={sheet?.post.id === p.id}
@@ -854,7 +866,7 @@ export function CommunityScreen({
               thumbUrl={urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null}
               unit={unit}
               viewerIsStaff={viewerIsStaff}
-              onOpen={openPost}
+              onOpen={openWorkout}
               onOpenComments={setCommentsFor}
               onOpenAuthor={openAuthor}
               doubleTapHint={p.id === hintId}
@@ -900,7 +912,7 @@ export function CommunityScreen({
       {paging && <PostSheet post={sheetPost} at={sheet?.at ?? "caption"} viewerIsStaff={viewerIsStaff} onClose={() => setSheet(null)} onOpenAuthor={openAuthor} />}
       {/* answering a question response on your story (never while viewing as a client) */}
       {!previewOnly && <StoryReplyHost unit={unit} />}
-      <PostDetailDialog postId={detailId} unit={unit} viewerIsStaff={viewerIsStaff} onClose={closeDetail} onOpenAuthor={openAuthor} />
+      <PostDetailDialog postId={detailId} unit={unit} viewerIsStaff={viewerIsStaff} onClose={closeDetail} onOpenAuthor={openAuthor} at={detailAt?.id === detailId ? detailAt.at : undefined} />
     </div>
     {/* outside the page that slides, so they stay put */}
     <SwipeBack enabled={canSwipeBack} target={rootRef} onBack={swipeBack} onUsed={onSwipeUsed} />

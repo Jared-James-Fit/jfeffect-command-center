@@ -1027,6 +1027,27 @@ export function formatExerciseBest(e: CommunityExercise, unit: "kg" | "lb"): str
   return `${e.sets} ${e.sets === 1 ? "set" : "sets"}`;
 }
 
+/**
+ * An exercise's best set on the workout page: the viewer's unit first, the
+ * other unit under it, smaller ("455 lb × 1" over "206.5 kg"), so a lifter
+ * who thinks in the other unit reads it without converting. A set with no
+ * load (reps, a hold) has no second line. Presentation only: the stored kg
+ * is never changed.
+ */
+export function exerciseBestLines(e: CommunityExercise, unit: "kg" | "lb"): { main: string; other: string | null } {
+  const main = formatExerciseBest(e, unit);
+  if (e.best_load_kg != null && e.best_reps != null && e.best_load_kg > 0) {
+    return { main, other: formatLoad(e.best_load_kg, unit === "lb" ? "kg" : "lb") };
+  }
+  return { main, other: null };
+}
+
+/** "9th workout this month": what the old "#9 This month" tile counted, said in words. */
+export function monthWorkoutLine(s: Pick<WorkoutShareStats, "month_sessions">): string | null {
+  const n = s.month_sessions ?? 0;
+  return n >= 1 ? `${ordinal(n)} workout this month` : null;
+}
+
 /** "Session 12 this month" — only once it means something (2+). */
 export function sessionLine(s: Pick<WorkoutShareStats, "month_sessions">): string | null {
   const n = s.month_sessions ?? 0;
@@ -1839,10 +1860,11 @@ export type WorkoutWin = {
   detail: string | null;
 };
 
-const ordinal = (n: number) => {
+/** 1st, 2nd, 3rd, 4th … 11th, 12th, 13th, 21st. */
+function ordinal(n: number): string {
   const v = n % 100;
   return `${n}${v >= 11 && v <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
-};
+}
 /** The session counts that read as a milestone this month. */
 export const MONTH_MILESTONES = [5, 10, 15, 20, 25, 30];
 

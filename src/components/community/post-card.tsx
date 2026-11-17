@@ -713,51 +713,10 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
               onOpenPerson={onOpenAuthor}
               trailing={!post.is_mine && onOpenAuthor ? <InlineFollow userId={post.author.user_id} name={post.author.name} /> : null}
             />
-            {visual && s && (
-              // the workout this came from: context, so a quiet line (the way in is the pill under the set)
-              // (a long name wraps to a second line on a small phone rather than being cut)
-              <div className="flex min-w-0 items-start gap-1.5 text-[13px] font-semibold leading-snug text-foreground/90" data-page-workout-name>
-                <CheckCircle2 className="mt-[0.15em] h-3.5 w-3.5 shrink-0 text-success" aria-hidden />
-                <span className="line-clamp-2 break-words">{workoutHeadline(s)}</span>
-              </div>
-            )}
-            {slideSet && (
-              // the set on screen (a workout film's clip): the exercise, then which set and what was lifted;
-              // each swipe its own, never the first clip's on every slide (a photo or a clip with no set says nothing)
-              <div className="min-w-0" data-page-set>
-                <div className="line-clamp-2 break-words text-[15px] font-semibold leading-snug">{slideSet.title}</div>
-                {slideSet.detail && <div className="truncate text-[13px] leading-snug tabular-nums text-foreground/80">{slideSet.detail}</div>}
-              </div>
-            )}
-            {visual && s && (
-              // its PRs and the way in, as pills: 28px to see, 44px to tap (the tap reaches 8px above and below);
-              // the theme's dark grey, so they read on black and over a bright clip alike
-              <button
-                type="button"
-                onClick={() => onOpen(post)}
-                className="relative flex max-w-full items-center gap-1.5 text-left transition-opacity active:opacity-70 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
-                data-page-workout
-              >
-                {prLabel && (
-                  <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-secondary/80 px-2.5 text-[12px] font-bold text-warning" data-page-prs>
-                    <Trophy className="h-3.5 w-3.5" aria-hidden />
-                    {prLabel}
-                  </span>
-                )}
-                <span className="inline-flex h-7 shrink-0 items-center gap-0.5 rounded-full bg-secondary/80 pl-3 pr-2 text-[12px] font-semibold text-foreground">
-                  View workout
-                  <ChevronRight className="h-3.5 w-3.5" aria-hidden />
-                </span>
-              </button>
-            )}
-            {visual && !s && post.locked_in_at && (
-              <button type="button" onClick={() => onOpen(post)} className="flex items-center gap-2 text-left text-[13px] font-semibold">
-                Locked in {isTrainingNow(post) ? <TrainingNowPill /> : <span className="text-muted-foreground">{lockInTimeLabel(post.locked_in_at)}</span>}
-              </button>
-            )}
             {onOpenCaption ? (
-              // Reels': two lines and "… more"; a tap opens the whole caption with the comments under it.
-              // Our own film caption ("Glutes + Legs · 3 sets on film") isn't repeated under the workout's line
+              // their own words come first under the name (Reels': two lines and "… more"; a tap opens the whole
+              // caption with the comments under it). Our own film captions ("Glutes + Legs · 3 sets on film", the
+              // summary of its sets) aren't their words, and the workout's context below already says them
               post.caption?.trim() &&
               (auto || !isNote || visual) &&
               !(visual && s && isOwnFilmCaption(post.caption, [s.workout_name, s.workout_title])) &&
@@ -770,6 +729,50 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
               post.caption && (!isNote || visual) && <FeedCaption name={post.author.name} caption={post.caption} mentions={post.mentions} onOpenPerson={onOpenAuthor} className="px-0 pt-0" />
             )}
             {(!isNote || visual) && !auto && <PostExtras post={post} />}
+            {(slideSet || (visual && s)) && (
+              // the workout's context, one quiet group under their own words (their caption leads, the clip is the show):
+              // the set on screen, then the workout as a small chip that opens it
+              <div className="space-y-1.5 pt-0.5" data-page-workout-context>
+                {slideSet && (
+                  // the set on screen (a workout film's clip): the exercise, then which set and what was lifted;
+                  // each swipe its own, never the first clip's on every slide (a photo or a clip with no set says nothing)
+                  <div className="min-w-0 leading-snug" data-page-set>
+                    <div className="line-clamp-2 break-words text-[14px] font-medium">{slideSet.title}</div>
+                    {slideSet.detail && <div className="truncate text-[13px] tabular-nums text-foreground/70">{slideSet.detail}</div>}
+                  </div>
+                )}
+                {visual && s && (
+                  // the workout, and the way into it: one small chip (its PRs first, in amber), 28px to see and 44px to tap
+                  // (the tap reaches 8px above and below); the theme's dark grey, so it reads on black and over a bright clip
+                  <button
+                    type="button"
+                    onClick={() => onOpen(post)}
+                    aria-label={`View workout: ${workoutHeadline(s)}${prLabel ? `, ${prLabel}` : ""}`}
+                    className="relative inline-flex h-7 max-w-full items-center gap-1.5 rounded-md bg-secondary/70 pl-2 pr-1.5 text-[12px] leading-none text-foreground transition-opacity active:opacity-70 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
+                    data-page-workout
+                  >
+                    {prLabel ? (
+                      <>
+                        <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-warning" data-page-prs>
+                          <Trophy className="h-3.5 w-3.5" aria-hidden />
+                          {prLabel}
+                        </span>
+                        <span className="shrink-0 opacity-40" aria-hidden>·</span>
+                      </>
+                    ) : (
+                      <Dumbbell className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
+                    )}
+                    <span className="min-w-0 truncate font-medium">{workoutHeadline(s)}</span>
+                    <ChevronRight className="-ml-0.5 h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+                  </button>
+                )}
+              </div>
+            )}
+            {visual && !s && post.locked_in_at && (
+              <button type="button" onClick={() => onOpen(post)} className="flex items-center gap-2 text-left text-[13px] font-semibold">
+                Locked in {isTrainingNow(post) ? <TrainingNowPill /> : <span className="text-muted-foreground">{lockInTimeLabel(post.locked_in_at)}</span>}
+              </button>
+            )}
             {/* one line, never two: the views, then the coach's ❤️ or reply, and a coach's own score (every line here is room the picture loses) */}
             {((post.views?.count ?? 0) > 0 || post.coach_reactions.length > 0 || post.coach_commented || viewerIsStaff) && (
               <div className="flex min-w-0 items-center gap-2 [&_[data-post-views]]:mx-0 [&_[data-post-views]]:mb-0 [&_[data-post-views]]:shrink-0" data-page-meta>

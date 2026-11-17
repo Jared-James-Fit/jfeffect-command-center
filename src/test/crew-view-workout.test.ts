@@ -28,13 +28,14 @@ describe("View workout in Crew: the workout card is the way in (Nov 15 2026)", (
     expect(card).toContain("e.stopPropagation();\n            onOpen();");
   });
 
-  it("a film post's way in is a View workout pill (its PRs beside it), 28px to see and 44px to tap (Nov 17 2026)", () => {
-    expect(card).toContain("after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']\"\n                data-page-workout");
-    expect(card).toContain('<span className="inline-flex h-7 shrink-0 items-center gap-0.5 rounded-full bg-secondary/80 pl-3 pr-2 text-[12px] font-semibold text-foreground">\n                  View workout');
+  it("a picture or film post's way in is one small chip under the set, its PRs first, never a pill row competing with the caption (Nov 17 2026)", () => {
+    expect(card).toContain("after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']\"\n                    data-page-workout");
+    expect(card).toContain('className="relative inline-flex h-7 max-w-full items-center gap-1.5 rounded-md bg-secondary/70 pl-2 pr-1.5 text-[12px] leading-none text-foreground');
+    expect(card).toContain('aria-label={`View workout: ${workoutHeadline(s)}${prLabel ? `, ${prLabel}` : ""}`}');
     expect(card).toContain("data-page-prs");
-    // the workout's name is its own quiet line above the set, never squeezed beside "View workout"
-    expect(card).toContain("data-page-workout-name");
-    expect(card).not.toContain('<span className="shrink-0 text-muted-foreground">· View workout</span>');
+    // the workout's name lives in the chip; no separate name line, no "View workout" pill
+    expect(card).not.toContain("data-page-workout-name");
+    expect(card).not.toContain("View workout\n                  <ChevronRight");
   });
 
   it("the card's numbers show whole: their own widths, a step smaller on a narrow card, a line of their own before anything's cut", () => {
@@ -44,15 +45,36 @@ describe("View workout in Crew: the workout card is the way in (Nov 15 2026)", (
     expect(card).toContain('big ? "text-[54px] @max-[16rem]:text-[44px]" : "text-[42px]"');
   });
 
-  it("the workout page doesn't repeat the card: under it only what it doesn't say (PRs, This month); a picture's page keeps every tile", () => {
+  it("the workout page reads as a summary: plain type, one quiet row of numbers, the exercises with their best set (Nov 17 2026)", () => {
     const detail = read("src/components/community/post-detail.tsx");
-    expect(detail).toContain('const heroStats = !!s && !auto && !(post.kind === "note" && !photo) && !post.media_type;');
-    for (const label of ["Time", "Sets", "Volume"]) expect(detail).toMatch(new RegExp(`!heroStats && [^\\n]+label: "${label}"`));
-    expect(detail).toContain('s.pr_count > 0 && { label: s.pr_count === 1 ? "PR" : "PRs"');
-    expect(detail).toContain('(s.month_sessions ?? 0) > 0 && { label: "This month"');
-    expect(detail).toContain('tiles.length <= 2 ? "grid-cols-2" : "grid-cols-3"');
+    // no condensed display face, no tile grid, no caps labels anywhere on the page
+    expect(detail).not.toContain("font-display");
+    expect(detail).not.toContain("data-workout-tiles");
+    expect(detail).not.toContain("uppercase");
+    expect(detail).not.toContain("<WorkoutHero");
+    expect(detail).toContain('<h2 className="break-words text-[20px] font-semibold leading-tight tracking-[-0.01em]">{workoutHeadline(s)}</h2>');
+    expect(detail).toContain("const meta = [workoutSubtitle(s), monthWorkoutLine(s)].filter(Boolean).join(\" · \");");
+    expect(detail).toContain('<dl className="mt-4 flex flex-wrap gap-x-4 gap-y-3 min-[375px]:gap-x-6" data-workout-stats>');
+    for (const label of ['"Time"', '"Working sets"', '"Volume"', '"PRs"']) expect(detail).toContain(label);
+    // each exercise: its name, its working sets and record, its best set in the viewer's unit over the other
+    expect(detail).toContain("const best = exerciseBestLines(e, unit);");
+    expect(detail).toContain("{best.other && <div");
+    expect(detail).toContain("data-exercise-pr");
+    // a workout with no picture: its summary is what two taps ❤️
+    expect(detail).toContain("heroTap={post.media_type ? undefined : onHeroTap}");
     // the exercises, the reactions and the comments are still all there
     expect(detail).toContain("post.exercises.map((e, i) =>");
     expect(detail).toContain("<CommentThread post={post} viewerIsStaff={viewerIsStaff} inline onOpenAuthor={onOpenAuthor} />");
+  });
+
+  it("View workout from the feed opens the page on the workout, past the picture; a profile or a link opens at the top", () => {
+    const detail = read("src/components/community/post-detail.tsx");
+    expect(detail).toContain('if (jumped.current || at !== "workout" || !post.media_type || !el || !box) return;');
+    const screen = read("src/components/community/community-screen.tsx");
+    expect(screen.match(/onOpen=\{openWorkout\}/g)?.length).toBe(2);
+    expect(screen).toContain('setDetailAt({ id: post.id, at: "workout" });');
+    expect(screen).toContain("at={detailAt?.id === detailId ? detailAt.at : undefined}");
+    // closing the page however it closes forgets where it opened
+    expect(screen).toContain("if (!detailId) setDetailAt(null);");
   });
 });
