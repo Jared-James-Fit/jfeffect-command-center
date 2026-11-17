@@ -28,6 +28,12 @@ const ANSWER_LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = 
     nutrition_rating: "Nutrition consistency rating (1–5)",
     recovery_flags: "Recovery / issues",
     pain_details: "Pain / injury details",
+    digestion_symptoms: "Digestion: what's going on",
+    digestion_timing: "Digestion: when",
+    digestion_severity: "Digestion: how bad (1–5)",
+    hunger_level: "Hunger (1–5)",
+    cardio_issue: "Cardio: what happened",
+    water_issue: "Water: what's getting in the way",
     win: "Biggest win",
     help: "Help or changes needed",
     next_week_goal: "Main goal for next week",
@@ -632,6 +638,7 @@ async function generateAnalysis(
   contextSnapshot: Record<string, unknown>,
   clientId?: string | null,
   programText = "",
+  weightText = "",
 ): Promise<MessengerCheckinAnalysis> {
   const fallback = fallbackAnalysis(taskType, answers as any);
   try {
@@ -660,6 +667,9 @@ async function generateAnalysis(
       globalCfg?.brand_voice ? `BRAND VOICE: ${globalCfg.brand_voice}` : "",
       globalCfg?.tone ? `TONE: ${globalCfg.tone}` : "",
       programText ? PROGRAM_CONTEXT_RULES : "",
+      weightText
+        ? "WEIGHT MANAGEMENT is computed from their records: use its numbers for bodyweight, cardio, water and digestion, never your own. Don't promise a calorie, cardio or water change: say the coach is looking at it (every change needs the coach's OK). Never suggest dehydration, water loading, sodium tricks or a crash cut. Digestion it flags for a doctor goes in red_flags."
+        : "",
       voice,
       "Return ONLY JSON matching:",
       '{"summary":string,"wins":string[],"focus":string[],"goals":string[],"red_flags":string[],"coach_notes":string[],"suggested_response":string,"urgency":"low"|"normal"|"high"|"urgent"}',
@@ -677,6 +687,7 @@ async function generateAnalysis(
       JSON.stringify(appContext),
       "",
       ...(programText ? ["PROGRAM CONTEXT:", programText, ""] : []),
+      ...(weightText ? [weightText, ""] : []),
       "Produce a coach-facing recap and suggested reply.",
     ].join("\n");
 
@@ -891,7 +902,17 @@ export const analyzeMessengerCheckin = createServerFn({ method: "POST" })
     const periodStart = (contextSnapshot as any).checkin_period_start as string | undefined;
     const program = await loadProgramContext(sb, row.client_id, periodStart ? isoDateAdd(periodStart, 3) : null);
     const snapshot = { ...contextSnapshot, program: publicProgramContext(program) };
-    const analysis = await generateAnalysis(sb, taskType, row.answers ?? {}, snapshot, row.client_id, programContextText(program));
+    // Weight management: the deterministic read of their trajectory, cardio, water and
+    // digestion, recorded once for the coach (weight_management_reviews, pushed only
+    // when it needs them) and handed to the recap so it never contradicts the numbers.
+    let weightText = "";
+    if (taskType === "weekly_checkin") {
+      const { recordCheckinReview } = await import("@/lib/weight-management/reviews.server");
+      const { assessmentText } = await import("@/lib/weight-management/assessment");
+      const loaded = await recordCheckinReview(sb, row.client_id, row.id);
+      if (loaded) weightText = assessmentText(loaded.assessment);
+    }
+    const analysis = await generateAnalysis(sb, taskType, row.answers ?? {}, snapshot, row.client_id, programContextText(program), weightText);
     await sb
       .from("messenger_checkins")
       .update({

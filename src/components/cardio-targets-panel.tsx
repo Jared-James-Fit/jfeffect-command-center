@@ -78,6 +78,7 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
     const { error } = await supabase.from("cardio_targets").delete().eq("id", t.id);
     if (error) return toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["cardio-targets", clientId] });
+    qc.invalidateQueries({ queryKey: ["weight-management", clientId] });
     qc.invalidateQueries({ queryKey: ["cal-client-cardio", clientId] });
     qc.invalidateQueries({ queryKey: ["client-cardio-resolved", clientId] });
     qc.invalidateQueries({ queryKey: ["week-sched-data"] });
@@ -89,6 +90,7 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
     const { error } = await supabase.from("cardio_targets").insert({ ...rest, status: "Active" });
     if (error) return toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["cardio-targets", clientId] });
+    qc.invalidateQueries({ queryKey: ["weight-management", clientId] });
     qc.invalidateQueries({ queryKey: ["cal-client-cardio", clientId] });
     qc.invalidateQueries({ queryKey: ["client-cardio-resolved", clientId] });
     qc.invalidateQueries({ queryKey: ["week-sched-data"] });

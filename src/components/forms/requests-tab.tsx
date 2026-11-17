@@ -548,7 +548,7 @@ function RequestPreview({ request, onClose }: { request: OutstandingRequest | nu
                   {(q.type === "multi" || q.type === "single") &&
                     (q.options ?? []).map((o) => <span key={o} className="rounded-full border border-border px-2 py-0.5">{o}</span>)}
                   {q.type === "text" && <span className="text-muted-foreground">Free text answer</span>}
-                  {q.showWhen && <span className="text-muted-foreground">Only asked if “Pain / injury” is ticked</span>}
+                  {q.askedIf && <span className="text-muted-foreground">Only asked if “{q.askedIf}” is ticked</span>}
                 </div>
               </li>
             ))}

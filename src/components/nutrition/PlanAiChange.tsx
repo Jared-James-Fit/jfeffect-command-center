@@ -6,7 +6,7 @@
  * meals) before one tap puts it on the plan, with Undo. Nothing reaches the
  * client until then.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { AlertTriangle, Loader2, Sparkles, Undo2 } from "lucide-react";
@@ -23,6 +23,7 @@ import {
   undoPlanEditFn,
 } from "@/lib/nutrition-ai-plans.functions";
 import { REVISE_MAX_CHARS } from "@/lib/nutrition-ai-prompts";
+import { PLAN_AI_PREFILL_EVENT } from "@/lib/weight-management/handoff";
 import {
   editChangesNothing,
   planAsMealPlanText,
@@ -80,6 +81,21 @@ export function PlanAiChange({
   const discard = useServerFn(discardPlanEditFn);
   const [text, setText] = useState("");
   const key = ["nutrition-plan-edit", plan.id];
+  const boxRef = useRef<HTMLDivElement | null>(null);
+
+  // A change the weight-management card recommends lands here, in the box, for the
+  // coach to read, send and review like any other (never applied on its own).
+  useEffect(() => {
+    const onPrefill = (e: Event) => {
+      const d = (e as CustomEvent<{ clientId: string; text: string }>).detail;
+      if (!d || d.clientId !== clientId || !d.text) return;
+      setText(d.text.slice(0, REVISE_MAX_CHARS));
+      boxRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => boxRef.current?.querySelector("textarea")?.focus(), 350);
+    };
+    window.addEventListener(PLAN_AI_PREFILL_EVENT, onPrefill);
+    return () => window.removeEventListener(PLAN_AI_PREFILL_EVENT, onPrefill);
+  }, [clientId]);
 
   // the client's food on file (the Food & diet card's read): an allergen on the changed plan is flagged
   const readFood = useServerFn(getFoodHistoryFn);
@@ -208,7 +224,7 @@ export function PlanAiChange({
     Date.now() - new Date(edit.applied_at).getTime() < UNDO_FOR_MS;
 
   return (
-    <div className="space-y-3 rounded-xl border border-border p-3" data-plan-ai-change>
+    <div ref={boxRef} className="space-y-3 rounded-xl border border-border p-3" data-plan-ai-change>
       <div className="flex items-center gap-2">
         <Sparkles className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         <span className="text-[15px] font-medium">Change it with AI</span>

@@ -1,6 +1,7 @@
 import { CompetitionPlanSummary } from "@/components/forms/competition-plan-summary";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useNavigate } from "@tanstack/react-router";
 import type { FormPresentation, FormHistoryGroup as FormHistoryGroupData } from "@/lib/form-message-presentation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -41,6 +42,7 @@ import { ChecklistAnswers, ReadinessSummary, meetSummary, useFormReadiness } fro
 import { readinessLine } from "@/lib/form-checklist";
 import { MEET_CHECKLIST_FORM_TYPE, type MeetFacts } from "@/lib/meet-checklist";
 import { answeredQuestions, type FormAnswerRow, type FormQuestionRow } from "@/lib/form-answer-text";
+import { DIGESTION_SYMPTOMS, DIGESTION_TIMINGS } from "@/lib/weight-management/digestion";
 
 type Role = "admin" | "client";
 
@@ -54,6 +56,20 @@ type Q = {
   scale?: [string, string, string, string, string];
   optional?: boolean;
   showWhen?: (answers: Record<string, any>) => boolean;
+  /** The flag that brings it up, for the coach's preview. */
+  askedIf?: string;
+};
+
+const flagged = (flag: string) => (a: Record<string, any>) => Array.isArray(a.recovery_flags) && a.recovery_flags.includes(flag);
+const CARDIO_ISSUES = ["Missed sessions", "Legs tired for lifting", "Too easy", "Too hard", "Joint pain", "No time"] as const;
+const WATER_ISSUES = ["Hard to drink enough", "Bathroom too often", "Cramps or headaches", "Forgot to log it"] as const;
+/** A flag's follow-up answers, cleared when the flag is. */
+const FOLLOW_UPS: Record<string, string[]> = {
+  "Pain / injury": ["pain_details"],
+  "Digestion / bloating": ["digestion_symptoms", "digestion_timing", "digestion_severity"],
+  "Hunger / appetite": ["hunger_level"],
+  Cardio: ["cardio_issue"],
+  "Water / hydration": ["water_issue"],
 };
 
 const WEEKLY: Q[] = [
@@ -101,6 +117,61 @@ const WEEKLY: Q[] = [
     helper: "e.g. “Left knee hurts on squats and lunges.”",
     type: "text",
     showWhen: (a) => Array.isArray(a.recovery_flags) && a.recovery_flags.includes("Pain / injury"),
+    askedIf: "Pain / injury",
+  },
+  // Follow-ups only for what they flagged, so the check-in stays a minute long for
+  // everyone who's fine. Read week over week by weight-management/digestion.ts.
+  {
+    key: "digestion_symptoms",
+    prompt: "What's going on with digestion?",
+    helper: "Tap everything that applies.",
+    type: "multi",
+    options: [...DIGESTION_SYMPTOMS],
+    showWhen: flagged("Digestion / bloating"),
+    askedIf: "Digestion / bloating",
+  },
+  {
+    key: "digestion_timing",
+    prompt: "When is it worst?",
+    type: "single",
+    options: [...DIGESTION_TIMINGS],
+    showWhen: flagged("Digestion / bloating"),
+    askedIf: "Digestion / bloating",
+  },
+  {
+    key: "digestion_severity",
+    prompt: "How bad has it been?",
+    helper: "1 = barely noticeable · 5 = it's getting in the way of your day.",
+    type: "rating",
+    scale: ["Barely", "Mild", "Noticeable", "Bad", "Severe"],
+    showWhen: flagged("Digestion / bloating"),
+    askedIf: "Digestion / bloating",
+  },
+  {
+    key: "hunger_level",
+    prompt: "How hungry have you been?",
+    helper: "1 = rarely hungry · 5 = hungry all the time.",
+    type: "rating",
+    scale: ["Rarely", "A little", "Manageable", "Often", "Always"],
+    showWhen: flagged("Hunger / appetite"),
+    askedIf: "Hunger / appetite",
+  },
+  {
+    key: "cardio_issue",
+    prompt: "What happened with cardio?",
+    helper: "Tap everything that applies.",
+    type: "multi",
+    options: [...CARDIO_ISSUES],
+    showWhen: flagged("Cardio"),
+    askedIf: "Cardio",
+  },
+  {
+    key: "water_issue",
+    prompt: "What's getting in the way with water?",
+    type: "single",
+    options: [...WATER_ISSUES],
+    showWhen: flagged("Water / hydration"),
+    askedIf: "Water / hydration",
   },
   {
     key: "win",
@@ -136,6 +207,12 @@ const LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = {
     nutrition_rating: "Nutrition",
     recovery_flags: "Recovery / issues",
     pain_details: "Pain / injury",
+    digestion_symptoms: "Digestion",
+    digestion_timing: "Digestion: when",
+    digestion_severity: "Digestion: how bad",
+    hunger_level: "Hunger",
+    cardio_issue: "Cardio",
+    water_issue: "Water",
     win: "Biggest win",
     help: "Help / changes",
     next_week_goal: "Next-week goal",
@@ -315,6 +392,7 @@ function CheckinWizard({
 }) {
   const qc = useQueryClient();
   const submit = useServerFn(submitMessengerCheckin);
+  const navigate = useNavigate();
   const analyze = useServerFn(analyzeMessengerCheckin);
   const [answers, setAnswers] = useState<Record<string, any>>(initialAnswers);
   const [step, setStep] = useState(0);
@@ -337,10 +415,10 @@ function CheckinWizard({
     setAnswers((prev) => {
       let next = { ...prev, [q.key]: value };
       if (q.key === "recovery_flags" && Array.isArray(value)) {
-        if (value.includes("All good") && value.length > 1) {
-          next = { ...next, recovery_flags: ["All good"], pain_details: undefined };
-        } else if (!value.includes("Pain / injury")) {
-          next = { ...next, pain_details: undefined };
+        if (value.includes("All good") && value.length > 1) next = { ...next, recovery_flags: ["All good"] };
+        const flags: string[] = next.recovery_flags ?? [];
+        for (const [flag, keys] of Object.entries(FOLLOW_UPS)) {
+          if (!flags.includes(flag)) for (const k of keys) next = { ...next, [k]: undefined };
         }
       }
       return next;
@@ -358,7 +436,11 @@ function CheckinWizard({
       // Close right away — refresh and the AI recap happen in the background.
       onOpenChange(false);
       setStep(0);
-      toast.success("Sent to your coach ✅");
+      // Photos go in the progress library (one place, never uploaded twice); offered, never required.
+      toast.success("Sent to your coach ✅", {
+        action: { label: "Add progress photos", onClick: () => void navigate({ to: "/portal/progress", search: { action: "photo" } as never }) },
+        duration: 8000,
+      });
       void qc.invalidateQueries({ queryKey: ["messenger-checkin", submissionId] });
       void qc.invalidateQueries({ queryKey: ["messages", clientId, "client"] });
       void qc.invalidateQueries({ queryKey: ["action-centre", clientId] });

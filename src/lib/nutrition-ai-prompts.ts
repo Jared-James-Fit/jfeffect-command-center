@@ -72,7 +72,9 @@ STEPS + CARDIO
 
 - DAILY STEPS TARGETS = the day's total steps, a number only (e.g. 10,000)
 - CARDIO SESSIONS = that day type's planned cardio, written exactly as "<minutes> min <type> · ~<kcal> kcal" (e.g. "25 min incline walk · ~150 kcal"), or "none"
-- start from CURRENT CARDIO when it's given and keep their cardio type
+- start from CURRENT CARDIO when it's given and keep their cardio type; new cardio is a treadmill walk ("incline walk") unless the coach chose another type
+- WEIGHT MANAGEMENT (in ATHLETE, when given) is computed from their records: its trend, the pace the goal needs, the projection and its recommendation are facts. Follow its recommendation (hold when it says hold; change calories and cardio by about what it proposes, one change at a time) unless a COACH-SELECTED PHASE or the coach's instructions say otherwise, and never add cardio and cut calories hard in the same update
+- never plan dehydration, water loading, sodium manipulation or a crash cut to make a weight class or a show: the plan gets them there in a normal, fed and hydrated state, and a gap that can't be closed safely goes under Flags for the coach
 - fat loss: 8,000–12,000 steps, cardio 15–30 min low intensity / zone 2 most days. when fat loss stalls with good adherence, add 5–10 min of cardio or 1,000–2,000 daily steps alongside a smaller calorie cut, never only more cardio
 - muscle gain: 7,000–10,000 steps, cardio 10–20 min easy 2–3 days a week for health, never enough to eat the surplus
 - recomp / maintenance / performance: 8,000–10,000 steps, cardio 15–25 min easy a few days a week

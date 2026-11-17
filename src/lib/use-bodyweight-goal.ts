@@ -9,7 +9,7 @@ export function useBodyweightGoal(clientId: string | undefined) {
     queryFn: async (): Promise<BodyweightGoal | null> => {
       const { data, error } = await supabase
         .from("clients")
-        .select("bodyweight_goal_type, bodyweight_goal_value, bodyweight_goal_value_max, bodyweight_goal_unit")
+        .select("bodyweight_goal_type, bodyweight_goal_value, bodyweight_goal_value_max, bodyweight_goal_unit, bodyweight_goal_date")
         .eq("id", clientId!)
         .maybeSingle();
       if (error) throw error;
@@ -19,6 +19,7 @@ export function useBodyweightGoal(clientId: string | undefined) {
         value: Number(data.bodyweight_goal_value),
         value_max: data.bodyweight_goal_value_max != null ? Number(data.bodyweight_goal_value_max) : null,
         unit: (data.bodyweight_goal_unit as WeightUnit) ?? "lb",
+        date: (data as { bodyweight_goal_date?: string | null }).bodyweight_goal_date ?? null,
       };
     },
   });
