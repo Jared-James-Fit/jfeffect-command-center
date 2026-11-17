@@ -19,7 +19,7 @@ import { formatMoney } from "@/lib/payment-display";
 import { grantSessionsManually, recordPayment, recordRefund, voidLedgerRow } from "@/lib/billing.functions";
 import { DepositAccountPicker, ProofPicker } from "@/components/billing/payment-proof";
 import { needsAccount } from "@/lib/payment-proof";
-import type { PaymentRow, SaleMoney } from "@/lib/sale-money";
+import { taxInside, type PaymentRow, type SaleMoney } from "@/lib/sale-money";
 
 /** Ways money comes in by hand (Stripe payments arrive on their own). */
 const METHODS = [
@@ -32,8 +32,14 @@ const METHODS = [
 ] as const;
 type Method = (typeof METHODS)[number]["value"];
 
-/** Alberta's GST, when no payment shows the client's rate yet. */
+/** GST, when no payment shows the client's rate yet. */
 const DEFAULT_RATE = 0.05;
+
+/** "GST" at 5%, "HST" above it (Ontario 13%, the Atlantic provinces 15%). */
+export const taxWord = (rate: number) => (rate > 0.0501 ? "HST" : "GST");
+
+/** What recording a payment needs to know about the sale (a SaleMoney fits). */
+export type RecordMoney = Pick<SaleMoney, "next" | "leftCents" | "kind" | "priceCents" | "currency" | "rate">;
 
 const toCents = (text: string) => {
   const v = Number(text.replace(/[$,\s]/g, ""));
@@ -54,8 +60,12 @@ function MethodPicker({ value, onChange }: { value: Method; onChange: (m: Method
   );
 }
 
-export function RecordPaymentDialog({ sale, money, open, onOpenChange, onDone }: {
-  sale: SaleRef; money: SaleMoney; open: boolean; onOpenChange: (open: boolean) => void; onDone: () => void;
+export function RecordPaymentDialog({ sale, money, open, onOpenChange, onDone, proof: allowProof = true, description }: {
+  sale: SaleRef; money: RecordMoney; open: boolean; onOpenChange: (open: boolean) => void; onDone: () => void;
+  /** Offer a proof upload (the payment-proofs bucket is the owner's; the finance login's admin attaches one later). */
+  proof?: boolean;
+  /** The line under the title (defaults to the sale's name). */
+  description?: string;
 }) {
   const fn = useServerFn(recordPayment);
   const currency = sale.currency ?? money.currency ?? "CAD";
@@ -82,7 +92,7 @@ export function RecordPaymentDialog({ sale, money, open, onOpenChange, onDone }:
 
   const rate = money.rate ?? DEFAULT_RATE;
   const cents = toCents(amount);
-  const tax = hasTax ? Math.round((cents * rate) / (1 + rate)) : 0;
+  const tax = hasTax ? taxInside(cents, rate) : 0;
   const pct = `${Math.round(rate * 1000) / 10}%`;
   const viaStripe = !!sale.stripe_subscription_id || money.kind === "subscription";
 
@@ -110,7 +120,7 @@ export function RecordPaymentDialog({ sale, money, open, onOpenChange, onDone }:
       <DialogContent className="max-h-[92dvh] max-w-md overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Record a payment</DialogTitle>
-          <DialogDescription>{sale.offer_name ?? "Sale"}</DialogDescription>
+          <DialogDescription>{description ?? sale.offer_name ?? "Sale"}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           {viaStripe && (
@@ -123,7 +133,7 @@ export function RecordPaymentDialog({ sale, money, open, onOpenChange, onDone }:
             <Input id="pay-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="h-12 text-lg tabular-nums" />
             <label className="flex items-center gap-2 pt-1 text-sm">
               <Checkbox checked={hasTax} onCheckedChange={(v) => setHasTax(!!v)} />
-              Includes {pct} GST
+              Includes {pct} {taxWord(rate)}
             </label>
             {cents > 0 && (
               <p className="text-xs text-muted-foreground tabular-nums">
@@ -149,7 +159,7 @@ export function RecordPaymentDialog({ sale, money, open, onOpenChange, onDone }:
             <Label htmlFor="pay-note">Reference (optional)</Label>
             <Input id="pay-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder={method === "cheque" ? "Cheque #" : "E-transfer confirmation #"} className="h-11" />
           </div>
-          {sale.client_id && (
+          {sale.client_id && allowProof && (
             <div className="space-y-1.5">
               <Label>Proof (optional)</Label>
               <ProofPicker clientId={sale.client_id} value={proof} onChange={setProof} date={date} />

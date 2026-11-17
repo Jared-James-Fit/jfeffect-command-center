@@ -7,8 +7,7 @@
  * the business owner approves (see 20261101090000_cleo_actions.sql).
  */
 import { z } from "zod";
-import { RECORDABLE_PAYMENT_STATUSES, type Permission } from "@/lib/permissions";
-import { PAYMENT_STATUS_DETAILED } from "@/lib/offers";
+import type { Permission } from "@/lib/permissions";
 import { WEEKDAYS, rxSchema } from "@/lib/cleo-program";
 
 export type ActionPermission = Permission | "admin";
@@ -19,6 +18,9 @@ export const CLEO_APPOINTMENT_TYPES = [
   "Consultation", "In-Person Session", "Assessment", "Nutrition Review",
   "Program Review", "Custom",
 ] as const;
+
+/** Ways money comes in by hand (Stripe payments record themselves). */
+export const CLEO_PAYMENT_METHODS = ["etransfer", "cash", "cheque", "debit", "credit_card", "bank_transfer", "other"] as const;
 
 const uuid = z.string().uuid();
 const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD");
@@ -53,11 +55,13 @@ export const CLEO_ACTION_PARAMS = {
     body: z.string().trim().min(1).max(4000),
   }),
   mark_check_ins_reviewed: z.object({ client_id: uuid }),
-  update_payment_status: z.object({
+  record_payment: z.object({
     purchase_id: uuid,
-    payment_status: z.enum(PAYMENT_STATUS_DETAILED),
-    amount_paid: z.number().nonnegative().max(1_000_000).optional().describe("Total paid so far in dollars, if it changed."),
-    note: z.string().trim().max(500).optional(),
+    amount: z.number().positive().max(1_000_000).describe("Dollars received in this one payment, as the client sent them (tax included)."),
+    method: z.enum(CLEO_PAYMENT_METHODS),
+    date: ymd.optional().describe("The day it was received; today if left out."),
+    includes_tax: z.boolean().default(true).describe("False only when this payment had no GST/HST in it."),
+    reference: z.string().trim().max(200).optional().describe("E-transfer confirmation or cheque number."),
   }),
   send_payment_link: z.object({ purchase_id: uuid, via: z.enum(["email", "sms"]) }),
   book_appointment: z.object({
@@ -172,7 +176,7 @@ export const CLEO_ACTION_INFO: Record<CleoActionKind, { title: string; tool: str
   schedule_message: { title: "Schedule a message", tool: "Schedule a message to a client's coach thread for a date and time (business time zone)." },
   add_client_note: { title: "Add a coach note", tool: "Add a note to a client's file (staff only; the client never sees it)." },
   mark_check_ins_reviewed: { title: "Mark check-ins reviewed", tool: "Close everything waiting for review for one client (check-ins, forms, Review Due)." },
-  update_payment_status: { title: "Update a payment", tool: "Change a purchase's payment status (e.g. mark it Paid or Partially Paid). Purchase ids come from the purchases lookup." },
+  record_payment: { title: "Record a payment", tool: "Record one payment a client made another way than Stripe (an e-transfer, cash, a cheque) on one of their purchases: the amount received, tax included, how and when. It's added to their Billing, the books and GST/HST like any payment; what's paid and owed follow from it (there is no setting a status or a total by hand). Purchase ids come from the purchases lookup. Never for a card payment through Stripe: those record themselves." },
   send_payment_link: { title: "Send a payment link", tool: "Send a client the payment link for an existing purchase by email or text." },
   book_appointment: { title: "Book an appointment", tool: "Book an appointment on the calendar (business time zone), optionally with a client and a video call." },
   assign_program_template: { title: "Assign a program", tool: "Put a client on a program template from the library, starting on a date. Its workouts land on their committed training days." },
@@ -195,9 +199,9 @@ export function actionPermission(kind: CleoActionKind, params: any): ActionPermi
       return "tasks.manage";
     case "send_payment_link":
       return "payments.request";
-    case "update_payment_status":
-      // payments.record covers money in or still owed; a refund, cancellation or comp is the owner's call.
-      return (RECORDABLE_PAYMENT_STATUSES as readonly string[]).includes(params?.payment_status) ? "payments.record" : "admin";
+    case "record_payment":
+      // payments.record covers money that came in; a refund, cancellation or comp is the owner's call.
+      return "payments.record";
     default:
       return "admin";
   }

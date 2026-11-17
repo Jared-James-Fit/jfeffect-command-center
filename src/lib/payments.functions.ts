@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertAdminOr } from "@/lib/permissions.server";
-import { RECORDABLE_PAYMENT_STATUSES, VIEW_ONLY_MESSAGE } from "@/lib/permissions";
+
 
 async function assertAdmin(supabase: any, userId: string) {
   const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
@@ -10,52 +10,9 @@ async function assertAdmin(supabase: any, userId: string) {
   if (!roles.includes("admin")) throw new Error("Forbidden: admin only");
 }
 
-const UpdatePayment = z.object({
-  id: z.string().uuid(),
-  payment_status: z.string().min(1).max(60),
-  amount_paid: z.number().nonnegative().optional(),
-  stripe_receipt_url: z.string().url().max(2000).optional().nullable(),
-  note: z.string().max(2000).optional().nullable(),
-});
-
-export const updatePurchasePayment = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => UpdatePayment.parse(d))
-  .handler(async ({ data, context }) => {
-    let { supabase } = context as any;
-    const { userId } = context as any;
-    // The admin, or a payments.record login (finance): it records money in or
-    // still owed, never a refund, cancellation or comp.
-    const { viewOnly } = await assertAdminOr(context as any, "payments.record");
-    if (viewOnly) {
-      if (!(RECORDABLE_PAYMENT_STATUSES as readonly string[]).includes(data.payment_status)) {
-        throw new Error(`${VIEW_ONLY_MESSAGE} (only ${RECORDABLE_PAYMENT_STATUSES.join(", ")})`);
-      }
-      supabase = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
-    }
-    const patch: any = {
-      payment_status: data.payment_status,
-      last_payment_update_source: "manual",
-      last_payment_update_at: new Date().toISOString(),
-    };
-    if (data.amount_paid !== undefined) patch.amount_paid = data.amount_paid;
-    if (data.stripe_receipt_url !== undefined) patch.stripe_receipt_url = data.stripe_receipt_url;
-    if (data.payment_status === "Paid") {
-      patch.paid_at = new Date().toISOString();
-    }
-    const { error } = await supabase.from("purchase_records").update(patch).eq("id", data.id);
-    if (error) throw new Error(error.message);
-    if (data.note) {
-      await supabase.from("client_activity_log").insert({
-        client_id: (await supabase.from("purchase_records").select("client_id").eq("id", data.id).single()).data?.client_id,
-        actor_user_id: userId,
-        actor_role: viewOnly ? "finance" : "admin",
-        action: "purchase_payment_updated_manually",
-        details: { purchase_id: data.id, status: data.payment_status, note: data.note },
-      });
-    }
-    return { ok: true };
-  });
+// There is no "set the payment status / amount paid" call: money on a sale only changes through
+// payment rows (recordPayment, recordRefund, voidLedgerRow in billing.functions.ts), which the
+// database adds up (recompute_purchase_totals).
 
 const UpdateService = z.object({
   id: z.string().uuid(),

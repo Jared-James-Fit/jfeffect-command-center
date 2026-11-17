@@ -13,6 +13,8 @@
  *   can't run something twice.
  */
 import { BUSINESS_TZ, businessToday } from "@/lib/billing-schedule";
+import { clientTaxRate } from "@/lib/client-billing-summary";
+import { taxInside } from "@/lib/sale-money";
 import { wallTimeToUtc } from "@/lib/schedule-time";
 import {
   CLEO_ACTION_INFO, CLEO_ACTION_PARAMS, actionPermission, isCleoActionKind, isStale, routeFor,
@@ -65,6 +67,23 @@ async function purchase(db: any, id: string) {
   return { ...data, client: data.client_id ? await client(db, data.client_id) : null };
 }
 
+/** A payment Cleo records: its cents and the GST/HST inside them, at the client's own rate (5% before any payment shows it). */
+async function cleoPayment(db: any, p: any) {
+  const pr = await purchase(db, p.purchase_id);
+  const cents = Math.round(Number(p.amount) * 100);
+  let rate: number | null = null;
+  if (p.includes_tax !== false && pr.client_id) {
+    const { data: sales } = await db.from("purchase_records").select("archived_at, amount_tax_paid_cents, amount_paid_cents").eq("client_id", pr.client_id);
+    rate = clientTaxRate((sales ?? []) as any) ?? 0.05;
+  }
+  const date = p.date ?? businessToday();
+  return { pr, cents, tax: taxInside(cents, rate), rate, date };
+}
+
+const METHOD_WORDS: Record<string, string> = {
+  etransfer: "e-transfer", cash: "cash", cheque: "cheque", debit: "debit", credit_card: "card", bank_transfer: "bank transfer", other: "another way",
+};
+
 function money(n: number): string {
   return `$${n.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -101,9 +120,11 @@ export async function describeAction(db: any, kind: CleoActionKind, p: any): Pro
       return `Add a note to ${clientLabel(await client(db, p.client_id))}'s file:\n${p.title}\n${p.body}`;
     case "mark_check_ins_reviewed":
       return `Mark everything waiting from ${clientLabel(await client(db, p.client_id))} as reviewed.`;
-    case "update_payment_status": {
-      const pr = await purchase(db, p.purchase_id);
-      return `Set ${clientLabel(pr.client)}'s ${pr.offer_name ?? "purchase"} from ${pr.payment_status ?? "?"} to ${p.payment_status}${p.amount_paid != null ? `, paid so far ${money(p.amount_paid)}` : ""}.${p.note ? `\nNote: ${p.note}` : ""}`;
+    case "record_payment": {
+      const { pr, cents, tax, rate, date } = await cleoPayment(db, p);
+      if (date > businessToday()) throw new Error("That date hasn't happened yet.");
+      const taxLine = tax > 0 ? ` (${money(tax / 100)} ${rate && rate > 0.0501 ? "HST" : "GST"} in it)` : " (no GST/HST in it)";
+      return `Record ${money(cents / 100)} from ${clientLabel(pr.client)} by ${METHOD_WORDS[p.method] ?? p.method} on ${date} for ${pr.offer_name ?? "their purchase"}${taxLine}.${p.reference ? `\nReference: ${p.reference}` : ""}`;
     }
     case "send_payment_link": {
       const pr = await purchase(db, p.purchase_id);
@@ -148,7 +169,7 @@ export async function actionLink(db: any, kind: CleoActionKind, p: any): Promise
         return client(p.client_id, "notes", "Open their notes");
       case "mark_check_ins_reviewed":
         return client(p.client_id, "summary", "Open their profile");
-      case "update_payment_status":
+      case "record_payment":
       case "send_payment_link": {
         const { data } = await db.from("purchase_records").select("client_id").eq("id", p.purchase_id).maybeSingle();
         return client(data?.client_id, "purchases", "Open their purchases");
@@ -288,12 +309,17 @@ async function execute(actor: ActorCtx, kind: CleoActionKind, raw: unknown): Pro
       const n = Number(data ?? 0);
       return n ? `Marked ${n} item${n === 1 ? "" : "s"} reviewed.` : "Nothing was waiting.";
     }
-    case "update_payment_status": {
-      const { updatePurchasePayment } = await import("@/lib/payments.functions");
-      await updatePurchasePayment({
-        data: { id: p.purchase_id, payment_status: p.payment_status, amount_paid: p.amount_paid, note: p.note ? `${p.note} (via Cleo)` : "Updated via Cleo" },
+    case "record_payment": {
+      const { cents, tax, date } = await cleoPayment(actor.db, p);
+      const { recordPayment } = await import("@/lib/billing.functions");
+      const res: any = await recordPayment({
+        data: {
+          purchase_id: p.purchase_id, amount_minor: cents, tax_minor: tax, method: p.method, currency: "CAD",
+          transaction_date: date, external_reference: p.reference ?? null, internal_note: "Recorded via Cleo",
+        },
       });
-      return `Payment set to ${p.payment_status}.`;
+      if (res?.duplicate) return `${money(cents / 100)} was already recorded a moment ago, so it wasn't added twice.`;
+      return `${money(cents / 100)} recorded.${res?.autoPay?.ended ? " Nothing is owed now, so auto-pay stops at the end of this period." : ""}`;
     }
     case "send_payment_link": {
       if (p.via === "email") {

@@ -92,6 +92,9 @@ const WAITING = new Set(["pending", "pending payment", "payment link sent", "unp
 
 export const withTax = (cents: number, rate: number | null) => Math.round(cents * (1 + (rate ?? 0)));
 
+/** The GST/HST inside an amount that includes it ($105 at 5% holds $5). */
+export const taxInside = (cents: number, rate: number | null) => (rate && rate > 0 ? Math.round((cents * rate) / (1 + rate)) : 0);
+
 /** Tax as a share of the price, from what was paid on this sale. */
 export function saleTaxRate(s: { amount_paid_cents?: number | null; amount_tax_paid_cents?: number | null }): number | null {
   const tax = n(s.amount_tax_paid_cents);

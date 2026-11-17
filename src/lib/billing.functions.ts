@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { assertAdminView } from "@/lib/permissions.server";
+import { assertAdminOr, assertAdminView } from "@/lib/permissions.server";
 import { proofPathOk } from "@/lib/payment-proof";
 
 async function assertAdmin(supabase: any, userId: string) {
@@ -13,6 +13,7 @@ async function assertAdmin(supabase: any, userId: string) {
 async function logAudit(supabase: any, opts: {
   clientId?: string | null;
   actorUserId: string;
+  actorRole?: "admin" | "finance";
   action: string;
   recordType: string;
   recordId?: string | null;
@@ -23,7 +24,7 @@ async function logAudit(supabase: any, opts: {
   await supabase.from("financial_audit_events").insert({
     client_id: opts.clientId ?? null,
     actor_user_id: opts.actorUserId,
-    actor_role: "admin",
+    actor_role: opts.actorRole ?? "admin",
     action: opts.action,
     record_type: opts.recordType,
     record_id: opts.recordId ?? null,
@@ -60,8 +61,15 @@ export const recordPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => RecordPayment.parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    // The admin, or a payments.record login (finance): it records money that came in, through the
+    // same payment row as the admin's, so Billing, the books and GST all see it. The finance login
+    // writes as the server once its permission is checked (payment_ledger takes inserts from admins
+    // only), and never attaches a proof (that bucket is the owner's; an admin adds one later).
+    const { viewOnly } = await assertAdminOr(context as any, "payments.record");
+    const supabase = viewOnly ? (await import("@/integrations/supabase/client.server")).supabaseAdmin : (context as any).supabase;
+    const actorRole = viewOnly ? ("finance" as const) : ("admin" as const);
+    if (viewOnly && data.proof_path) throw new Error("A proof is added by the business owner. Record the payment without it.");
     const { data: pr, error: prErr } = await supabase
       .from("purchase_records")
       .select("id, client_id, currency, amount_outstanding_cents, contract_value_cents, amount_paid_cents")
@@ -102,6 +110,7 @@ export const recordPayment = createServerFn({ method: "POST" })
     await logAudit(supabase, {
       clientId: pr.client_id,
       actorUserId: userId,
+      actorRole,
       action: "payment_recorded",
       recordType: "payment_ledger",
       recordId: inserted.id,
@@ -117,6 +126,7 @@ export const recordPayment = createServerFn({ method: "POST" })
       await logAudit(supabase, {
         clientId: pr.client_id,
         actorUserId: userId,
+        actorRole,
         action: "auto_pay_ended_paid_up",
         recordType: "purchase_records",
         recordId: (autoPay as any).saleId ?? null,

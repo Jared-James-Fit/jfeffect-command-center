@@ -74,6 +74,11 @@ export type OpenSaleRow = {
   status: string | null;
   outstandingMinor: number;
   createdOn: string | null;
+  /** For recording a payment against it (from the Billing model). */
+  clientId?: string | null;
+  rate?: number | null;
+  nextCents?: number | null;
+  viaStripe?: boolean;
 };
 
 export type BooksData = {

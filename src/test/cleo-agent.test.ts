@@ -128,8 +128,7 @@ describe("Cleo actions: who can do what", () => {
   it("the finance login runs what's in its role and asks the owner for the rest", () => {
     expect(routeFor(actionPermission("create_task", {}), finance)).toBe("run");
     expect(routeFor(actionPermission("send_payment_link", {}), finance)).toBe("run");
-    expect(routeFor(actionPermission("update_payment_status", { payment_status: "Paid" }), finance)).toBe("run");
-    expect(routeFor(actionPermission("update_payment_status", { payment_status: "Refunded" }), finance)).toBe("ask_owner");
+    expect(routeFor(actionPermission("record_payment", {}), finance)).toBe("run");
     expect(routeFor(actionPermission("send_message", {}), finance)).toBe("ask_owner");
     expect(routeFor(actionPermission("book_appointment", {}), finance)).toBe("ask_owner");
   });
@@ -143,7 +142,11 @@ describe("Cleo actions: who can do what", () => {
     expect(CLEO_ACTION_PARAMS.send_message.safeParse({ client_id: id, body: "Nice work today." }).success).toBe(true);
     expect(CLEO_ACTION_PARAMS.send_message.safeParse({ client_id: "nope", body: "x" }).success).toBe(false);
     expect(CLEO_ACTION_PARAMS.schedule_message.safeParse({ client_id: id, body: "x", date: "2026-10-12", time: "9am" }).success).toBe(false);
-    expect(CLEO_ACTION_PARAMS.update_payment_status.safeParse({ purchase_id: id, payment_status: "Totally Paid" }).success).toBe(false);
+    // A payment is money in, never a status or a typed total: an amount, how and when.
+    expect(CLEO_ACTION_PARAMS.record_payment.parse({ purchase_id: id, amount: 672, method: "etransfer" })).toMatchObject({ includes_tax: true });
+    expect(CLEO_ACTION_PARAMS.record_payment.safeParse({ purchase_id: id, amount: 0, method: "etransfer" }).success).toBe(false);
+    expect(CLEO_ACTION_PARAMS.record_payment.safeParse({ purchase_id: id, amount: 50, method: "stripe" }).success).toBe(false);
+    expect((CLEO_ACTION_PARAMS as any).update_payment_status).toBeUndefined();
     expect(CLEO_ACTION_PARAMS.book_appointment.parse({ title: "Form check", appointment_type: "Coaching Call", date: "2026-10-12", time: "15:00" })).toMatchObject({ duration_minutes: 60, video_call: false });
   });
 
