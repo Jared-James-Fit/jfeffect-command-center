@@ -241,8 +241,9 @@ export function buildTrajectory(x: { weighIns: WeighIn[]; today: string; goal?: 
   }
 
   const status = ((): TrajectoryStatus => {
-    if (satisfies(current.kg, goal) && (!projected || satisfies(projected.kg, goal))) return "reached";
-    if (!trend) return "not_enough_data";
+    // a weigh-in from weeks ago says nothing about today: never "reached" on a stale reading
+    if (!stale && satisfies(current.kg, goal) && (!projected || satisfies(projected.kg, goal))) return "reached";
+    if (!trend || stale) return "not_enough_data";
     const toward = goal.kind === "around" ? Math.sign(gapKg) : goal.kind === "at_most" ? -1 : 1;
     const moving = trend.clear ? Math.sign(trend.kgPerWeek) : 0;
     if (moving !== 0 && moving !== toward) return "wrong_way";

@@ -37,13 +37,20 @@ describe("digest copy", () => {
   });
 });
 
+/**
+ * A person writing (Support each way) or a client sending in their monthly
+ * Nutrition Update is answered by a person, so a burst is one push per 10
+ * minutes; everything else is at most one an hour per client.
+ */
+const QUICK_EVENTS = new Set(["support_message", "support_reply", "nutrition_submitted"]);
+
 describe("app events", () => {
   it("keep lockscreen copy content-free", () => {
-    for (const spec of Object.values(APP_EVENTS)) {
+    for (const [key, spec] of Object.entries(APP_EVENTS)) {
       const body = spec.body("Coach Jared");
       expect(body.length).toBeLessThan(90);
       expect(body).not.toMatch(/\d+\s*(g|kcal|cal|lbs?|kg)\b/i);
-      expect(spec.rateMinutes).toBeGreaterThanOrEqual(60);
+      expect(spec.rateMinutes, key).toBeGreaterThanOrEqual(QUICK_EVENTS.has(key) ? 10 : 60);
     }
   });
 });

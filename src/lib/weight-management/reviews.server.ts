@@ -16,7 +16,9 @@ import type { TreadmillSession } from "@/lib/weight-management/treadmill";
 /** A review the coach should look at: a change to approve, or something to look into. */
 export function needsCoach(a: Assessment): boolean {
   const r = a.recommendation;
-  return r.material || r.verdict === "investigate" || r.verdict === "reconsider_target";
+  // a weight-class meet within 4 weeks with no usable weigh-ins: the coach hears it now, not at the meet
+  const classMeetBlind = r.verdict === "need_data" && a.goal?.source === "meet" && a.meetWeeksOut != null && a.meetWeeksOut <= 4;
+  return r.material || r.verdict === "investigate" || r.verdict === "reconsider_target" || classMeetBlind;
 }
 
 /** The read as stored: everything but the weekly path (it's rebuilt on screen). */
