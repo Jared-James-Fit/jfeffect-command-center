@@ -87,7 +87,7 @@ describe("the workout card (source)", () => {
   });
   it("its weight boxes stay empty until a tap on the planned weight fills them", () => {
     expect(wdv).not.toContain("autoFillSuggestedWeight");
-    expect(wdv).toContain("<PlannedLoadCell view={plannedView} onApply={clientId && openSetCount > 0 ? fillLoadOnOpenSets : null} />");
+    expect(wdv).toContain("<PlannedLoadCell view={plannedView} onApply={clientId && openSetCount > 0 ? logOpenSetsAt : null} />");
   });
   it("the prescription keeps the coach's %, the strip says the weight, the % line steps aside", () => {
     expect(wdv).toContain("suggestedWeight: percentageBackoffWeight != null || plannedFromMax ? null : suggestedWeight,");
@@ -119,7 +119,7 @@ describe("the planned weight is the same blue fill chip as Suggested", () => {
     const chip = renderToStaticMarkup(createElement(PlannedLoadCell, { view: ready, onApply: async () => 2 }));
     expect(chip).toContain('data-testid="load-apply"');
     expect(chip).toContain("border-blue-500/40 bg-blue-500/10");
-    expect(chip).toContain("Fill your open sets with 400 lb");
+    expect(chip).toContain("Log your open sets at 400 lb");
     expect(chip).toContain('data-testid="load-planned-info"');
     // nothing to fill (read-only, every set logged): the value, the whole half opens the explanation
     const plain = renderToStaticMarkup(createElement(PlannedLoadCell, { view: ready }));

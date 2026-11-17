@@ -137,7 +137,7 @@ describe("the athlete's workout card (source)", () => {
     expect(wdv).not.toContain("autoFillSuggestedWeight");
     expect(wdv).not.toContain("plannedFillRef");
     expect(wdv).toContain("const [load, setLoad] = useState(existingDisplayLoad);");
-    expect(wdv).toContain("<PlannedLoadCell view={plannedView} onApply={clientId && openSetCount > 0 ? fillLoadOnOpenSets : null} />");
+    expect(wdv).toContain("<PlannedLoadCell view={plannedView} onApply={clientId && openSetCount > 0 ? logOpenSetsAt : null} />");
   });
   it("says where the weight came from once (the % line) and when a set went over its cap", () => {
     expect(wdv).toContain("data-pct-line");

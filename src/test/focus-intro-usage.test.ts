@@ -21,7 +21,8 @@ describe("Focus intro: once per launch until they try it", () => {
   it("only for a workout being logged by the athlete, with 2+ exercises, in the list", () => {
     const day = read("src/components/workout-day/WorkoutDayView.tsx");
     expect(day).toContain("!storyOpen && !readonly && !isImpersonating && rowsLoaded && (rows as any[]).length >= 2 &&");
-    expect(day).toContain("!completionPending && !completion?.completed_at,");
+    // and never on a visit "Fastest way to log" is showing or showed (one intro at a time)
+    expect(day).toContain("!completionPending && !completion?.completed_at && !quickLogDue && !quickLogOpen && !quickLogShownHere,");
     expect(day).toContain('<FocusIntro onTry={() => chooseWorkoutView("story")} onDismiss={focusIntro.dismiss} />');
   });
   it("the launch state lives in the module (a reload starts over) and the switch stamps tried_at", () => {

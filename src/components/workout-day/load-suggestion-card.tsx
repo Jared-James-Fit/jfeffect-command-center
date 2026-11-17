@@ -14,11 +14,11 @@ function fmtNum(n: number): string {
 /**
  * The load suggestion on an exercise card: the right half of the card's
  * reference row under the prescription (ExerciseBlock's data-rx-refs), beside
- * "Last time" on the left. One tap on it puts the weight in every open set as a
- * draft (Fill: never a logged set, nothing logged until a set's number is
- * tapped); its ⓘ opens how it's worked out (the range, the "audible", the why,
- * the off switch). No weight buttons: a range fills its middle and the set boxes
- * take any other weight.
+ * "Last time" on the left. One tap on it logs the first open set at the weight
+ * and the untouched sets below fill in with it and log too, the same as a tap on
+ * set 1's number (a range is picked by feel: the tap opens the first open set's
+ * weight box instead); its ⓘ opens how it's worked out (the range, the
+ * "audible", the why, the off switch). No weight buttons.
  */
 
 /** The reference row and its halves: one quiet strip, never a card. */
@@ -58,7 +58,7 @@ export function LoadSuggestionCard({
   picks?: { low: number; high: number; loads: number[] } | null;
   /** Say "× 5 @ 6" after the weight: only when the prescription right above it doesn't already (a range of reps or RPE, or RIR). */
   showPlan?: boolean;
-  /** Puts a weight in every open set as a draft (never logs one); resolves to how many it filled. Null: nothing to fill. */
+  /** Logs the open sets at a weight (a range: opens the first open set's weight box); resolves to how many it logged. Null: nothing to log. */
   onApply?: ((load: number) => Promise<number>) | null;
 }) {
   if (model.status === "calibrating" || !hint) {
@@ -95,7 +95,7 @@ export function LoadSuggestionCard({
   );
   const why = <SuggestionWhyBody hint={hint} model={model} warmup={warmup} picks={picks} rpe={plan.rpe} canApply={!!onApply} {...parts} />;
   if (onApply) {
-    // One tap fills every open set's weight (a range fills its middle); the ⓘ beside it explains.
+    // One tap logs the open sets at it (a range opens set 1's weight box); the ⓘ beside it explains.
     return (
       <div className={REF_CELL} data-testid="load-suggestion" data-picks={picks ? "" : undefined}>
         <span className={cn(REF_LABEL, "justify-between")}>
@@ -111,7 +111,10 @@ export function LoadSuggestionCard({
             unit={hint.unit}
             shown={shown}
             small={!!picks}
-            ariaLabel={`Suggested ${shown} ${hint.unit}${planText}${note}. Fill your open sets with ${fmtNum(hint.target)} ${hint.unit}`}
+            ariaLabel={picks
+              ? `Suggested ${shown} ${hint.unit}${planText}${note}. Type the weight you pick in your first open set`
+              : `Suggested ${shown} ${hint.unit}${planText}${note}. Log your open sets at ${fmtNum(hint.target)} ${hint.unit}`}
+            title={picks ? "Pick your weight: tap to type it" : "Tap to log your sets at this weight"}
             onApply={onApply}
           />
           {showPlan && <span className="text-[13px] tabular-nums text-muted-foreground">{planText.trim()}</span>}
@@ -142,11 +145,11 @@ export function LoadSuggestionCard({
 
 /**
  * The weight as a blue chip with a fill-down arrow, the same blue as the empty
- * weight boxes it fills: one tap puts it in every open set as a draft (never a
- * logged set; a set is logged when its number is tapped). Suggested and a
- * coach's planned % both use it.
+ * weight boxes: one tap logs the first open set at it and the untouched sets
+ * below fill in and log too (the card says how many, with Undo). Suggested and
+ * a coach's planned % both use it.
  */
-function FillChip({ load, unit, shown, small = false, ariaLabel, onApply }: {
+function FillChip({ load, unit, shown, small = false, ariaLabel, title = "Tap to log your sets at this weight", onApply }: {
   load: number;
   unit: string;
   /** what the chip reads: the weight, or a range ("187.5–197.5") */
@@ -154,6 +157,7 @@ function FillChip({ load, unit, shown, small = false, ariaLabel, onApply }: {
   /** a range stays on one line on a phone */
   small?: boolean;
   ariaLabel: string;
+  title?: string;
   onApply: (load: number) => Promise<number>;
 }) {
   const [busy, setBusy] = useState(false);
@@ -161,10 +165,10 @@ function FillChip({ load, unit, shown, small = false, ariaLabel, onApply }: {
     if (busy) return;
     setBusy(true);
     try {
-      const n = await onApply(load);
-      if (n > 0) toast.success(`${fmtNum(load)} ${unit} in ${n} set${n === 1 ? "" : "s"}. Tap each set's number as you finish it`);
+      // runs inside the tap: a range opens the weight box with the keyboard up
+      await onApply(load);
     } catch {
-      toast.error("Couldn't fill your sets. Try again");
+      toast.error("Couldn't log your sets. Try again");
     } finally {
       setBusy(false);
     }
@@ -175,7 +179,7 @@ function FillChip({ load, unit, shown, small = false, ariaLabel, onApply }: {
       onClick={() => void fill()}
       disabled={busy}
       aria-label={ariaLabel}
-      title="Tap to fill your open sets"
+      title={title}
       data-testid="load-apply"
       className={cn(
         "inline-flex min-h-9 max-w-full items-center gap-1 whitespace-nowrap rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-1 font-semibold leading-tight tabular-nums text-foreground transition active:scale-[0.97] active:bg-blue-500/20 disabled:opacity-60",
@@ -212,13 +216,13 @@ function InfoButton({ label, testId, children }: { label: string; testId: string
 /**
  * The right half when the coach planned the load as a % (planned-load.ts): what
  * the % is of, and the weight it means today as the same blue chip as Suggested
- * (one tap fills the open sets; the boxes stay empty until then), or what it
+ * (one tap logs the open sets at it; the boxes stay empty until then), or what it
  * waits on ("After your top set"). The ⓘ says how it's worked out and that the
  * RPE is its cap.
  */
 export function PlannedLoadCell({ view, onApply = null }: {
   view: PlannedLoadView;
-  /** Puts the weight in every open set as a draft; null when there's nothing to fill. */
+  /** Logs the open sets at the weight; null when there's nothing to log. */
   onApply?: ((load: number) => Promise<number>) | null;
 }) {
   const why = (
@@ -238,7 +242,7 @@ export function PlannedLoadCell({ view, onApply = null }: {
             load={view.load}
             unit={view.unit}
             shown={fmtNum(view.load)}
-            ariaLabel={`${view.label}: ${view.value}. Fill your open sets with ${view.value}`}
+            ariaLabel={`${view.label}: ${view.value}. Log your open sets at ${view.value}`}
             onApply={onApply}
           />
         </span>
@@ -396,9 +400,9 @@ function SuggestionWhyBody({ hint, why, model, warmup, audible, range, picks, rp
           Bar flying? +{fmtNum(audible)} {hint.unit} next set. Slow? −{fmtNum(audible)}. Pain? Stop and tell your coach.
         </p>
         <p className="mt-1 text-muted-foreground">
-          {canApply
-            ? `Tap Suggested to fill your open sets with ${fmtNum(hint.target)} ${hint.unit}, or type another weight in a set's box. Nothing is logged until you tap a set's number.`
-            : "Put the weight you choose in each set's weight box. Nothing is logged until you tap a set's number."}
+          {canApply && !picks
+            ? `Tap Suggested (or set 1's number) and your sets log at ${fmtNum(hint.target)} ${hint.unit}. A set that went differently? Change its box.`
+            : "Type the weight you pick in set 1: the sets below fill in with it and log too. A set that went differently? Change its box."}
         </p>
         <details className="group mt-1.5 border-t border-border pt-1.5" data-testid="load-why">
           <summary className="flex cursor-pointer list-none items-center justify-between py-1 font-semibold text-foreground [&::-webkit-details-marker]:hidden">

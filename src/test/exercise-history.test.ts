@@ -153,15 +153,15 @@ describe("the card and the History sheet", () => {
   const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
   const card = readFileSync("src/components/workout-day/load-suggestion-card.tsx", "utf8");
   const sheet = readFileSync("src/components/exercise-history-sheet.tsx", "utf8");
-  it("Last time is a button into history: icon, chevron, its unit; Suggested fills the sets in one tap, never weight buttons", () => {
+  it("Last time is a button into history: icon, chevron, its unit; Suggested logs the sets in one tap, never weight buttons", () => {
     expect(wdv).toContain("<HistoryIcon className=\"h-3.5 w-3.5 shrink-0\" aria-hidden=\"true\" />");
     expect(wdv).toContain("<ChevronRight className=\"-mr-1 ml-auto h-4 w-4 shrink-0\" aria-hidden=\"true\" />");
     expect(wdv).toContain("const load = lastTimeLoad(data, displayUnit);");
     expect(wdv).not.toContain("<LoadGuide");
     expect(card).not.toContain("data-testid=\"load-pick\"");
-    expect(card).toContain("const n = await onApply(load);"); // the shared FillChip, Suggested's and the planned weight's
+    expect(card).toContain("await onApply(load);"); // the shared FillChip, Suggested's and the planned weight's
     expect(card).toContain("load={hint.target}");
-    expect(card).toContain("Tap Suggested to fill your open sets with");
+    expect(card).toContain("Tap Suggested (or set 1's number) and your sets log at");
   });
   it("the sheet leaves out the open workout, marks its split from stable ids and folds the analytics", () => {
     expect(wdv).toContain("currentDayId={dayId}");

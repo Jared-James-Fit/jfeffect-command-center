@@ -56,6 +56,7 @@ import { playAppSound } from "@/lib/app-sounds";
 import { haptic } from "@/platform/haptics";
 import { useWorkoutView } from "@/lib/use-workout-view";
 import { FocusIntro, FocusTips, useFocusIntro } from "@/components/workout-day/focus-intro";
+import { QuickLogTips } from "@/components/workout-day/quick-log-tips";
 import { FocusUsageTracker } from "@/lib/focus-usage";
 import { FocusClock, StoryChrome, WorkoutViewToggle, exerciseInView, pickStoryStart, runStoryTransition, slideCard, visibleCard, type StoryFinish } from "@/components/workout-day/workout-story";
 import {
@@ -107,7 +108,7 @@ import { setGridTemplate } from "@/components/workout-day/set-grid";
 import { SetNumberBadge } from "@/components/workout-day/set-number-badge";
 import { SetPrIndicator } from "@/components/workout-day/set-pr-indicator";
 import { setPrItems } from "@/lib/set-pr-items";
-import { SetVideoCell, useRowHasSetVideos } from "@/components/workout-day/set-video-cell";
+import { SetVideoCell, setVideosKey, useLooseWarmupClip, useRowHasSetVideos } from "@/components/workout-day/set-video-cell";
 import { setVideoLabel } from "@/lib/set-videos/label";
 import {
   DeferredQuickSwapSheet,
@@ -1833,9 +1834,15 @@ function WorkoutDay({
   // Story view: one exercise at a time, full screen (workout-story.tsx). The
   // account's saved choice opens it; it's the list's own cards laid out side by
   // side, so switching view never remounts a card or drops what's typed in it.
-  const { view: savedView, setView: saveWorkoutView, tried: focusTried, known: focusKnown, noteIntro, tipsSeen: focusTipsSeen, markTipsSeen } = useWorkoutView();
+  const { view: savedView, setView: saveWorkoutView, tried: focusTried, known: focusKnown, noteIntro, tipsSeen: focusTipsSeen, markTipsSeen, loggingTipsSeen, markLoggingTipsSeen } = useWorkoutView();
   // How Focus works: by itself once per account (the first time in Focus), and from its ? any time.
   const [focusTipsOpen, setFocusTipsOpen] = useState(false);
+  // "Fastest way to log" (quick-log-tips.tsx): by itself once per account, the
+  // first time they log their own workout, and from "Log faster" any time.
+  const [quickLogOpen, setQuickLogOpen] = useState(false);
+  // it showed on this visit: the Focus invite waits for another visit (one intro at a time)
+  const [quickLogShownHere, setQuickLogShownHere] = useState(false);
+  const quickLogVideo = useEntitlement("lift_review") && adapter?.kind !== "member";
   const [storyOpen, setStoryOpen] = useState(false);
   // Without view transitions: "in" story view's cards rising in, "back" the list fading in after it
   const [storyAnim, setStoryAnim] = useState<"in" | "back" | null>(null);
@@ -2561,9 +2568,36 @@ function WorkoutDay({
     openStory(false);
   }, [dayId, savedView, rowsLoaded, storyRowIds.length, client?.id, completionPending, completion?.completed_at, search.focus, search.review, search.recap, search.edit, storyOpen, openStory]);
 
+  // Their own unfinished workout, the first time since "Fastest way to log"
+  // shipped: it opens by itself once (never over another sheet, never for a
+  // coach viewing as them), before Focus's own tips.
+  const quickLogDue =
+    focusKnown && !loggingTipsSeen && !isImpersonating && !readonly && !!client?.id &&
+    rowsLoaded && (rows as any[]).length > 0 && !completionPending && !completion?.completed_at;
   useEffect(() => {
-    if (storyOpen && focusKnown && !focusTipsSeen && !isImpersonating) setFocusTipsOpen(true);
-  }, [storyOpen, focusKnown, focusTipsSeen, isImpersonating]);
+    if (!quickLogDue || quickLogOpen) return;
+    let tries = 0;
+    let t = 0;
+    const tryOpen = () => {
+      const busy =
+        !!document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]') ||
+        (document.activeElement instanceof HTMLElement && document.activeElement.matches("input, textarea, select"));
+      if (busy && ++tries < 30) { t = window.setTimeout(tryOpen, 1000); return; }
+      if (busy) return;
+      setQuickLogShownHere(true);
+      setQuickLogOpen(true);
+    };
+    t = window.setTimeout(tryOpen, 700);
+    return () => window.clearTimeout(t);
+  }, [quickLogDue, quickLogOpen]);
+  const closeQuickLog = useCallback(() => {
+    setQuickLogOpen(false);
+    if (!loggingTipsSeen && !isImpersonating) markLoggingTipsSeen();
+  }, [loggingTipsSeen, isImpersonating, markLoggingTipsSeen]);
+
+  useEffect(() => {
+    if (storyOpen && focusKnown && !focusTipsSeen && !isImpersonating && !quickLogDue && !quickLogOpen) setFocusTipsOpen(true);
+  }, [storyOpen, focusKnown, focusTipsSeen, isImpersonating, quickLogDue, quickLogOpen]);
   useEffect(() => {
     if (!storyOpen) setFocusTipsOpen(false);
   }, [storyOpen]);
@@ -2573,7 +2607,7 @@ function WorkoutDay({
     dayId,
     eligible:
       !storyOpen && !readonly && !isImpersonating && rowsLoaded && (rows as any[]).length >= 2 &&
-      !completionPending && !completion?.completed_at,
+      !completionPending && !completion?.completed_at && !quickLogDue && !quickLogOpen && !quickLogShownHere,
     tried: focusTried,
     known: focusKnown,
     noteIntro,
@@ -2819,6 +2853,19 @@ function WorkoutDay({
               exerciseRows={rows as any[]}
               className="h-10 rounded-full px-3.5 text-[13px]"
             />
+            {/* The fastest way to log, any time (it also opens by itself once). */}
+            {rowsLoaded && (rows as any[]).length > 0 && !completion?.completed_at && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setQuickLogOpen(true)}
+                data-testid="quick-log-tips-open"
+                className="h-10 gap-1.5 rounded-full px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
+              >
+                <Zap className="h-4 w-4" aria-hidden />
+                Log faster
+              </Button>
+            )}
             {/* List or Focus (one exercise at a time, full screen), saved on the account. */}
             {rowsLoaded && (rows as any[]).length > 0 && (
               <WorkoutViewToggle className="ml-auto" view={storyOpen ? "story" : "list"} onChange={chooseWorkoutView} hint={focusIntro.show} />
@@ -3074,8 +3121,14 @@ function WorkoutDay({
             setFocusTipsOpen(false);
             if (!focusTipsSeen && !isImpersonating) markTipsSeen();
           }}
+          onLoggingTips={() => {
+            setFocusTipsOpen(false);
+            if (!focusTipsSeen && !isImpersonating) markTipsSeen();
+            setQuickLogOpen(true);
+          }}
         />
       )}
+      {quickLogOpen && <QuickLogTips onClose={closeQuickLog} videoOn={quickLogVideo} unit={(rows as any[])[0] ? unitForRow((rows as any[])[0]) : unit} />}
 
       {client?.id && (quickFinishReviewOpen || quickFinishMounted || (!completion?.completed_at && autoFinishReady)) && (
         <WorkoutReviewEditor
@@ -3683,6 +3736,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const canRemoveSet = !readonly && adapter?.kind !== "member" && setCount > 1;
   const setVideosOn = useEntitlement("lift_review") && adapter?.kind !== "member" && !!clientId;
   const rowHasVideos = useRowHasSetVideos(dayId, row.id, setVideosOn);
+  const looseWarmupClip = useLooseWarmupClip(dayId, row.id, setVideosOn);
   const videoColumn = setVideosOn && (!readonly || rowHasVideos);
   const gridTemplate = setGridTemplate({ focusMode, showReps, showTimer, showDistance, showCalories, showVelocity, hideWeight, videoColumn });
   // The logging frontier: helper chips (suggested load, repeat previous set)
@@ -4023,7 +4077,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   // empty: the one the strip shows (the coach's planned weight, else Suggested
   // while it's on), never put in the box itself. A range is picked by feel, so
   // it never logs on a tap: they type the weight they chose.
-  const quickLoad: number | null =
+  const quickLoadFromStrip: number | null =
     readonly || hideWeight || rowLoadType !== "external" ? null
     : plannedView ? (plannedView.load != null && plannedView.value ? plannedView.load : null)
     : showSuggestionCard && canSuggest && loadHint && loadModel && loadModel.status !== "calibrating" && !loadPicks ? loadHint.target
@@ -4085,6 +4139,12 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   useEffect(() => () => toolsActions?.reportE1rm(row.id, null), [toolsActions, row.id]);
   const tunedWarmupId =
     warmupGauge && (loadModel?.source === "warmup" || loadModel?.source === "history_warmup") ? heaviestWarmupId : null;
+  // With Suggest off, a last warm-up logged before set 1 still sets today's
+  // weight: it's what set 1's tap logs, said under the warm-up (never in a box).
+  const warmupTodayLoad: number | null =
+    !readonly && !showSuggestionCard && !!tunedWarmupId && canSuggest && loadHint && loadModel &&
+    loadModel.status !== "calibrating" && !loadPicks ? loadHint.target : null;
+  const quickLoad: number | null = quickLoadFromStrip ?? warmupTodayLoad;
 
   // Warm-up → working weight: what the card will suggest once this warm-up is
   // saved, computed by the same engine (only while it can still tune: before
@@ -4152,41 +4212,30 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   }, [readonly, timedRow, existingResults, hideWeight, activeUnit, repTarget, row.rpe, row.rir, openSetCount, backoffsFollow, coachOwnsLoad, loadHint?.target, capHeld, showSuggestionCard, loadModel, loadPlan]);
   // Put one weight into every open set as a draft (never a confirmed set);
   // each set keeps its own reps / RPE.
-  const fillLoadOnOpenSets = async (load: number): Promise<number> => {
-    if (!clientId || !(load > 0)) return 0;
-    beginWorkoutSession(dayId);
-    const tasks: Array<Promise<any>> = [];
+  // Each set row's own handle: the strip's chip logs through the exact path a
+  // tap on a set's number takes (and a range opens the set's weight box).
+  const setRowHandlesRef = useRef(new Map<number, SetRowHandle>());
+  const registerSetRow = useCallback((i: number, h: SetRowHandle | null) => {
+    if (h) setRowHandlesRef.current.set(i, h);
+    else setRowHandlesRef.current.delete(i);
+  }, []);
+  /**
+   * The chip (Suggested, or the coach's planned weight): logs the first open
+   * set at it and the untouched sets below with it, like a tap on that set's
+   * number. A range is picked by feel: it opens that set's weight box instead
+   * (called inside the tap, so the keyboard comes up).
+   */
+  const logOpenSetsAt = async (load: number): Promise<number> => {
+    let first: number | null = null;
     for (let i = 1; i <= setCount; i++) {
       const ex = existingResults.find((x: any) => x.set_index === i) as any;
-      if (ex?.completed_at) continue;
-      const body: Record<string, any> = withMemberWorkoutIndexes({
-        row_id: row.id,
-        client_id: clientId,
-        set_index: i,
-        actual_load: load,
-        actual_load_unit: activeUnit,
-        entered_value: load,
-        entered_unit: activeUnit,
-        actual_reps: ex?.actual_reps ?? null,
-        actual_rpe: ex?.actual_rpe ?? null,
-        actual_rpe_num: ex?.actual_rpe_num ?? null,
-        load_type: "external",
-        is_bodyweight: false,
-        completed_at: null,
-      }, adapter, dayId);
-      if (adapter) tasks.push(adapter.upsertPlRowResultRaw(body, ex?.id ?? null));
-      else if (ex?.id) tasks.push(sb.from("pl_row_results").update(body).eq("id", ex.id));
-      else tasks.push(sb.from("pl_row_results").upsert(body, { onConflict: "client_id,row_id,set_index" }));
+      if (!ex?.completed_at) { first = i; break; }
     }
-    if (!tasks.length) return 0;
-    await Promise.all(tasks);
-    onChange();
-    await qc.refetchQueries({ queryKey: ["pl-day-results", dayId] });
-    setFillSnapshot({ load: String(load), reps: "", rpe: "", unit: activeUnit, loadType: "external", includeFirst: true });
-    setFillToken((t) => t + 1);
-    return tasks.length;
+    const h = first != null ? setRowHandlesRef.current.get(first) : null;
+    if (!h) return 0;
+    if (loadPicks) { h.editWeight(); return 0; }
+    return h.logAt(load);
   };
-
   // "Apply to remaining" — runs from a completed SetRow, pushes Draft values
   // into all later un-completed sets of this same exercise. Never overwrites
   // a confirmed (completed_at != null) set.
@@ -4355,13 +4404,14 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const cascadeFromSet = async (
     fromSetIndex: number,
     payload: { load: string; loadType: LoadType; unit: "kg" | "lb"; reps: string; rpe: string },
-  ) => {
-    if (!clientId || readonly) return;
+    opts?: { announce?: boolean },
+  ): Promise<number> => {
+    if (!clientId || readonly) return 0;
     // The edited set is always a manual source from now on.
     cascadeOriginRef.current.set(fromSetIndex, "manual");
     const bodyweight = payload.loadType === "bodyweight";
     // Clearing a set clears only that set — never the rest of the workout.
-    if (!bodyweight && payload.load === "") return;
+    if (!bodyweight && payload.load === "") return 0;
     const states: CascadeSetState[] = Array.from({ length: setCount }, (_, i) => {
       const idx = i + 1;
       const ex = existingResults.find((x: any) => x.set_index === idx) as any;
@@ -4371,7 +4421,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       return { index: idx, origin, hasValue, locked: !!ex?.completed_at && origin !== "auto" };
     });
     const targets = planCascade(fromSetIndex, states);
-    if (!targets.length) return;
+    if (!targets.length) return 0;
     for (const t of targets) cascadeOriginRef.current.set(t, "auto");
     // 1) Optimistic local state — every affected row updates in one pass.
     const token = ++cascadeTokenRef.current;
@@ -4428,7 +4478,18 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       await qc.refetchQueries({ queryKey: ["pl-day-results", dayId] });
     } catch {
       toast.error("Some sets didn’t save — check your connection");
+      return 0;
     }
+    // One tap logged several sets (a set's number, or the chip): say so, with
+    // Undo for a tap that wasn't meant. A typed weight is deliberate: no toast.
+    if (opts?.announce) {
+      toast.success(`${targets.length + 1} sets logged at ${payload.load} ${payload.unit}`, {
+        description: "Change any set that went differently.",
+        duration: 4000,
+        action: { label: "Undo", onClick: () => void runCardHistory("undo") },
+      });
+    }
+    return targets.length;
   };
 
   // ── Reps / RPE fill-down ──────────────────────────────────────────────
@@ -4599,13 +4660,13 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       {(exerciseId || name) && (() => {
         const done = openSetCount === 0 && workedToday;
         const right = plannedView
-          ? (done || readonly ? null : <PlannedLoadCell view={plannedView} onApply={clientId && openSetCount > 0 ? fillLoadOnOpenSets : null} />)
+          ? (done || readonly ? null : <PlannedLoadCell view={plannedView} onApply={clientId && openSetCount > 0 ? logOpenSetsAt : null} />)
           : canSuggest && !readonly && !showSuggestionCard
           ? <div className={cn(REF_CELL, "items-start")}><LoadSuggestionsChip highlight={!!suggestNudge} /></div>
           : showSuggestionCard && loadModel && loadPlan
             ? done
               ? <LoadSuggestionsDone next={loadHint} plan={loadPlan} />
-              : <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} picks={loadPicks} showPlan={!rxSaysPlan} onApply={!readonly && clientId && openSetCount > 0 ? fillLoadOnOpenSets : null} />
+              : <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} picks={loadPicks} showPlan={!rxSaysPlan} onApply={!readonly && clientId && openSetCount > 0 ? logOpenSetsAt : null} />
             : null;
         return (
           <>
@@ -5025,7 +5086,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             </span>
           )}
         </div>
-        {(warmupSets.length > 0 || (warmupAllowed && (!!warmupForm || !!warmupPrompt))) && (
+        {(warmupSets.length > 0 || (warmupAllowed && (!!warmupForm || !!warmupPrompt || looseWarmupClip))) && (
           <WarmupRows
             sets={warmupSets}
             unit={activeUnit}
@@ -5033,15 +5094,43 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             form={warmupAllowed ? warmupForm : null}
             canEdit={warmupAllowed}
             onFormChange={setWarmupForm}
-            onSave={saveWarmup}
+            onSave={async (v) => {
+              await saveWarmup(v);
+              // a clip filmed on the open warm-up is tied to it as it saves: read it back
+              if (!v.id && looseWarmupClip) void qc.invalidateQueries({ queryKey: setVideosKey(dayId) });
+            }}
             onRemove={removeWarmup}
             prompt={warmupPrompt}
             seed={warmupGauge?.suggested ?? null}
             tunedId={tunedWarmupId}
             target={warmupGauge && loadPlan ? loadPlan : null}
             preview={warmupGauge ? previewWarmupTarget : null}
-            openSets={openSetCount}
-            onUseForAllSets={fillLoadOnOpenSets}
+            // the weight set 1's tap logs once this warm-up is in (Suggest off: it's said under the warm-up)
+            todayLoad={warmupTodayLoad}
+            // the open last warm-up lines up with the set table's columns
+            columns={{ focusMode, showReps, showTimer, showDistance, showCalories, showVelocity, videoColumn }}
+            effortKind={showRir ? "rir" : "rpe"}
+            looseClip={looseWarmupClip}
+            suggestOn={showSuggestionCard}
+            // open on a barbell squat, bench or deadlift; a one-line prompt elsewhere
+            openRow={rangeLift(family, name, exercise?.equipment)}
+            // a video for the coach on the warm-up, like a working set's (set 0)
+            video={videoColumn ? ({ warmupId, logged, label }) => (
+              <SetVideoCell
+                clientId={clientId}
+                rowId={row.id}
+                dayId={dayId}
+                dayTitle={dayTitle}
+                exerciseName={name}
+                setIndex={0}
+                resultId={warmupId}
+                logged={logged}
+                done={false}
+                readonly={readonly}
+                focusMode={focusMode}
+                label={label}
+              />
+            ) : null}
           />
         )}
         {Array.from({ length: setCount }).map((_, i) => {
@@ -5105,6 +5194,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               onSwitchUnit={!readonly && onUnitChange && !hideWeight ? handleUnitToggle : undefined}
               videoColumn={videoColumn}
               dayTitle={dayTitle}
+              registerHandle={registerSetRow}
             />
           );
         })}
@@ -5438,6 +5528,9 @@ function NoteHistoryItem({ note }: { note: any }) {
 /** How long a weight typed in the other unit waits for the card's KG / LB switch to render. */
 const UNIT_PICK_WAIT_MS = 5000;
 
+/** The card's way into one set row: the chip logs through the set's own number, a range opens its weight box. */
+type SetRowHandle = { logAt: (load: number) => Promise<number>; editWeight: () => void };
+
 function SetRow({
   rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
   targetReps, targetRpe, targetRir, suggestedWeight, loadHint = null, quickLoad = null, lastTimeWeight,
@@ -5459,6 +5552,7 @@ function SetRow({
   onTimerTargetChange,
   onTimerCascade,
   videoColumn = false,
+  registerHandle,
   dayTitle = "",
   onSwitchUnit,
 }: {
@@ -5543,7 +5637,8 @@ function SetRow({
   onCascadeFromSet?: (
     fromSetIndex: number,
     payload: { load: string; loadType: LoadType; unit: "kg" | "lb"; reps: string; rpe: string },
-  ) => void | Promise<void>;
+    opts?: { announce?: boolean },
+  ) => void | number | Promise<void | number>;
   readonly?: boolean;
   unit?: "kg" | "lb";
   hideWeight?: boolean;
@@ -5554,6 +5649,8 @@ function SetRow({
   videoColumn?: boolean;
   /** The workout's name, for the set video's chat card. */
   dayTitle?: string;
+  /** The card's way into this set: log it at a weight (the chip) or open its weight box (a range). */
+  registerHandle?: (setIndex: number, handle: SetRowHandle | null) => void;
 }) {
   const { user } = useAuth();
   const { isImpersonating, client: povClient } = useClientImpersonation();
@@ -6387,12 +6484,23 @@ function SetRow({
       ? fmtLoad(quickLoad)
       : null;
 
-  const saveCompletionStatus = async () => {
-    if (readonly || !clientId || statusSaving) return;
+  // Opens this set's weight box from a tap on its number (WeightValueInput editRef).
+  const weightEditRef = useRef<(() => void) | null>(null);
+  // Open, nothing to log at, and only the weight is missing: the number opens the weight box.
+  const weightOnlyMissing =
+    !isConfirmed && !hideWeight && !bw && loadType === "external" && load === "" && !quickWeight &&
+    (!showReps || !!reps) && !showTimer;
+  /**
+   * The set's number: done / not done. `weight` logs it at that weight (the
+   * strip's chip, through the same path); with none, at the strip's weight
+   * while the box is empty (quickWeight). Resolves to how many sets it logged.
+   */
+  const saveCompletionStatus = async (opts?: { weight?: string }): Promise<number> => {
+    if (readonly || !clientId || statusSaving) return 0;
     const nextCompletedAt = isConfirmed ? null : new Date().toISOString();
     const repsNum = reps ? parseInt(reps, 10) : null;
     const rpeNum = rpe ? Number(rpe) : null;
-    const quick = nextCompletedAt ? quickWeight : null;
+    const quick = nextCompletedAt && !bw && !hideWeight ? (opts?.weight ?? quickWeight) : null;
     const persistedLoad = bw
       ? { value: 0, unit }
       : quick ? persistedLoadForDisplayValue(quick, unit, existing) : persistedLoadForDisplayValue(load, loadUnit, existing);
@@ -6410,10 +6518,16 @@ function SetRow({
       // prescribed / adjusted target directly.
       if (isTimeKind && prescribedDurationSeconds && prescribedDurationSeconds > 0) {
         await saveTimeCompletion(prescribedDurationSeconds, { method: "prescribed_quick_confirm" });
-        return;
+        return 1;
+      }
+      // Only the weight is missing (a range to pick from, no suggestion yet):
+      // the tap opens the weight box, and typing it logs the set.
+      if (weightOnlyMissing && weightEditRef.current) {
+        weightEditRef.current();
+        return 0;
       }
       toast.error(isTimeKind ? "Enter a time first" : hideWeight ? "Enter reps before marking complete" : "Enter reps and weight before marking complete (use 0 for bodyweight)");
-      return;
+      return 0;
     }
     if (nextCompletedAt) beginWorkoutSession(workoutId ?? null);
     let payload: Record<string, any> = {
@@ -6456,19 +6570,41 @@ function SetRow({
           if (error) throw error;
         }));
       }
+      // Logged at a weight (the strip's, or the chip's): the untouched sets
+      // below fill in with it and log too, exactly as if it had been typed (one
+      // tap logs the exercise; a set that went differently is changed in its
+      // box). Written before the read-back, so the card changes in one step and
+      // one Undo takes it all back.
+      const below = quick
+        ? Number((await onCascadeFromSet?.(setIndex, { load: quick, loadType: "external", unit, reps, rpe }, { announce: true })) ?? 0)
+        : 0;
       await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();
       // the weight it logged at came back from the server: it's saved, not a new edit
       if (quick) adoptShownAsSaved(true);
       if (nextCompletedAt) onSetCompleted?.(setIndex);
+      return nextCompletedAt ? 1 + below : 0;
     } catch (err: any) {
       const message = err?.message ?? "Set status failed to save";
       setStatusError(message);
       toast.error("Set status didn’t save — tap the set number to retry");
+      return 0;
     } finally {
       setStatusSaving(false);
     }
   };
+  // The card's chip logs through this set's own number (its handle), and a
+  // range opens this set's weight box from the chip's tap.
+  const saveStatusRef = useRef(saveCompletionStatus);
+  saveStatusRef.current = saveCompletionStatus;
+  useEffect(() => {
+    if (!registerHandle || readonly) return;
+    registerHandle(setIndex, {
+      logAt: (w: number) => saveStatusRef.current({ weight: fmtLoad(w) }),
+      editWeight: () => weightEditRef.current?.(),
+    });
+    return () => registerHandle(setIndex, null);
+  }, [registerHandle, setIndex, readonly]);
 
   // Quick-fill helpers — these only update local state, never auto-confirm.
   const applySuggestedWeight = () => { if (suggestedWeight != null) setLoadPaired(fmtNum(suggestedWeight)); };
@@ -6766,8 +6902,8 @@ function SetRow({
             disabled={statusSaving}
             aria-pressed={isConfirmed}
             data-set-done={isConfirmed ? "true" : "false"}
-            title={statusError ? "Status failed to save — tap to retry" : isConfirmed ? "Mark set incomplete" : quickWeight ? `Log this set at ${quickWeight} ${unit}` : "Mark set complete"}
-            aria-label={statusError ? `Retry saving set ${setIndex} status` : isConfirmed ? `Mark set ${setIndex} incomplete` : quickWeight ? `Log set ${setIndex} at ${quickWeight} ${unit}` : `Mark set ${setIndex} complete`}
+            title={statusError ? "Status failed to save — tap to retry" : isConfirmed ? "Mark set incomplete" : quickWeight ? `Log this set at ${quickWeight} ${unit} (the sets below fill in with it)` : weightOnlyMissing ? "Type the weight: the set logs once it's in" : "Mark set complete"}
+            aria-label={statusError ? `Retry saving set ${setIndex} status` : isConfirmed ? `Mark set ${setIndex} incomplete` : quickWeight ? `Log set ${setIndex} at ${quickWeight} ${unit}` : weightOnlyMissing ? `Type set ${setIndex}'s weight` : `Mark set ${setIndex} complete`}
             className={cn(
               "flex h-11 w-full items-center justify-center sm:h-9",
               statusSaving && "cursor-wait",
@@ -6897,6 +7033,7 @@ function SetRow({
         disabled={readonly}
         focusMode={focusMode}
         canSwitchUnit={!!onSwitchUnit}
+        editRef={weightEditRef}
         onPick={(next) => {
           if (next.unit && next.unit !== unit && onSwitchUnit) {
             // Switch the card first; the unit effect saves the number once the

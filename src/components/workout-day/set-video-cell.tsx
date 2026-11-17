@@ -28,6 +28,7 @@ import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button";
 import { claimSetVideoTip, releaseSetVideoTip, setVideoTipCopy, useSetVideoTip } from "@/lib/set-videos/tip";
 import { looksFilmedInApp } from "@/lib/set-videos/phone-copy";
+import { setTitle, setWord } from "@/lib/set-videos/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,7 @@ import {
   jobsForSet,
   useSetVideoJobs,
   videoOnSet,
+  UNLINKED_SET_VIDEO_MS,
   type SetVideoJob,
 } from "@/lib/set-videos/jobs";
 
@@ -48,6 +50,8 @@ export type SetVideo = {
   id: string;
   row_id: string | null;
   result_id: string | null;
+  /** The warm-up it's on (pl_warmup_sets.id) when set_index is 0: the exercise's warm-up, never a working set. */
+  warmup_id?: string | null;
   set_index: number;
   exercise_name: string | null;
   label: string;
@@ -145,7 +149,7 @@ export function useSetVideosForDay(dayId: string, enabled: boolean) {
       const { data, error } = await (supabase as any)
         .from("pl_set_videos")
         .select(
-          "id, row_id, result_id, set_index, exercise_name, label, storage_path, thumbnail_path, duration_s, width, height, size_bytes, message_id, uploaded_by, created_at, feed_path, feed_width, feed_height, feed_duration_s, feed_size_bytes",
+          "id, row_id, result_id, warmup_id, set_index, exercise_name, label, storage_path, thumbnail_path, duration_s, width, height, size_bytes, message_id, uploaded_by, created_at, feed_path, feed_width, feed_height, feed_duration_s, feed_size_bytes",
         )
         .eq("day_id", dayId)
         .is("deleted_at", null)
@@ -183,6 +187,28 @@ export function useRowHasSetVideos(dayId: string, rowId: string, enabled: boolea
       enabled &&
       ((data ?? []).some((v) => v.row_id === rowId) ||
         jobs.some((j) => j.rowId === rowId && j.state !== "done")),
+    [data, jobs, rowId, enabled],
+  );
+}
+
+/**
+ * A clip filmed on an exercise's open last warm-up before the warm-up was
+ * saved (set 0, no warm-up yet): the open row stays so the clip has a place.
+ */
+export function useLooseWarmupClip(dayId: string, rowId: string, enabled: boolean): boolean {
+  const { data } = useSetVideosForDay(dayId, enabled);
+  const jobs = useSetVideoJobs();
+  return useMemo(
+    () =>
+      enabled &&
+      ((data ?? []).some(
+        (v) =>
+          v.row_id === rowId &&
+          v.set_index === 0 &&
+          !v.warmup_id &&
+          Date.now() - Date.parse(v.created_at) < UNLINKED_SET_VIDEO_MS,
+      ) ||
+        jobs.some((j) => j.rowId === rowId && j.setIndex === 0 && !j.resultId && j.state !== "done")),
     [data, jobs, rowId, enabled],
   );
 }
@@ -238,7 +264,9 @@ export function SetVideoCell(props: SetVideoCellProps) {
         (j): SetVideo => ({
           id: j.setVideoId!,
           row_id: j.rowId,
-          result_id: j.resultId,
+          // a warm-up's record is the warm-up's (warmup_id), never a working set's
+          result_id: j.setIndex === 0 ? null : j.resultId,
+          warmup_id: j.setIndex === 0 ? j.resultId : null,
           set_index: j.setIndex,
           exercise_name: j.exerciseName,
           label: j.label,
@@ -343,13 +371,13 @@ export function SetVideoCell(props: SetVideoCellProps) {
   let onTap: (() => void) | null = null;
   if (active) {
     const pct = Math.max(4, Math.min(100, active.progress));
-    label = `Set ${setIndex} video: ${jobStatusText(active)}`;
+    label = `${setTitle(setIndex)} video: ${jobStatusText(active)}`;
     onTap = openSheet;
     content = <ProgressRing pct={pct} className={size} />;
   } else if (failed) {
     label = failed.autoRetry
-      ? `Set ${setIndex} video: waiting for a connection`
-      : `Set ${setIndex} video didn't send. Open to try again`;
+      ? `${setTitle(setIndex)} video: waiting for a connection`
+      : `${setTitle(setIndex)} video didn't send. Open to try again`;
     onTap = openSheet;
     content = (
       <span
@@ -369,13 +397,13 @@ export function SetVideoCell(props: SetVideoCellProps) {
       </span>
     );
   } else if (videos.length) {
-    label = `Set ${setIndex} video${videos.length > 1 ? `s (${videos.length})` : ""}`;
+    label = `${setTitle(setIndex)} video${videos.length > 1 ? `s (${videos.length})` : ""}`;
     onTap = openSheet;
     content = (
       <PosterChip video={videos[videos.length - 1]} count={videos.length} className={size} />
     );
   } else if (canAdd) {
-    label = `Add a video of set ${setIndex} for your coach`;
+    label = `Add a video of ${setIndex === 0 ? "your warm-up" : setWord(setIndex)} for your coach`;
     onTap = () => {
       setTipOpen(false);
       openPicker();

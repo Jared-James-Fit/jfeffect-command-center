@@ -52,6 +52,8 @@ export function WeightValueInput({
   referenceWeight = null,
   suggested = null,
   canSwitchUnit = false,
+  plain = false,
+  editRef,
 }: {
   value: string;
   isBodyweight: boolean;
@@ -78,6 +80,16 @@ export function WeightValueInput({
    * replaces it — it is never saved on its own.
    */
   suggested?: number | null;
+  /**
+   * A plain weight box (the warm-up's): no load-type chevron and a neutral
+   * empty box, since it's optional and never bodyweight or assisted.
+   */
+  plain?: boolean;
+  /**
+   * Opens the box for typing from another tap (the set's number when there's
+   * no weight to log yet): called inside that tap so the phone raises the keyboard.
+   */
+  editRef?: { current: (() => void) | null };
 }) {
   /** Inline editing of the actual cell. */
   const [editing, setEditing] = useState(false);
@@ -130,6 +142,8 @@ export function WeightValueInput({
     setDraftType(type ?? (loadType === "assisted" ? "assisted" : "external"));
     setEditing(true);
   };
+
+  if (editRef) editRef.current = disabled ? null : () => startEditing();
 
   /** Abort without writing: the stored value survives. */
   const cancelEditing = () => {
@@ -384,13 +398,17 @@ export function WeightValueInput({
             aria-label={ghost != null ? `${ariaLabel}, suggested ${ghost} ${unit}` : ariaLabel}
             onClick={() => startEditing()}
             className={cn(
-              "flex w-full items-center justify-center whitespace-nowrap rounded-md border pl-2 pr-5 text-sm font-medium transition-colors",
+              "flex w-full items-center justify-center whitespace-nowrap rounded-md border text-sm font-medium transition-colors",
+              plain ? "px-2" : "pl-2 pr-5",
               cellHeight,
               loadType === "bodyweight" && "text-[10px] font-semibold uppercase tracking-tight",
               loadType === "assisted" && "border-amber-500/50 bg-amber-500/10",
               isEmpty
-                // an empty weight box is blue: where the weight goes (Fill or a tap puts it in)
-                ? "border-blue-500/40 bg-blue-500/10 text-muted-foreground"
+                // an empty weight box is blue: where the weight goes (Fill or a tap puts it in);
+                // a plain one (the optional warm-up) stays a neutral well
+                ? plain
+                  ? "border-border/60 bg-muted/40 text-muted-foreground/60"
+                  : "border-blue-500/40 bg-blue-500/10 text-muted-foreground"
                 : "border-border/60 bg-muted/40 text-foreground",
               !disabled && "cursor-pointer hover:bg-muted/60",
             )}
@@ -408,7 +426,7 @@ export function WeightValueInput({
         )}
         {/* Small secondary control — LOAD TYPE only (Weight / Bodyweight /
             Assisted) so it never interferes with tapping the numeric area. */}
-        {!disabled && (
+        {!disabled && !plain && (
           <button
             type="button"
             aria-label={`${ariaLabel} — change load type`}

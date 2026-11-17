@@ -47,7 +47,7 @@ import { verifyVideoUploadFn } from "@/lib/video-verify.functions";
 import { captureVideoPoster } from "@/lib/video-poster";
 import { chatUrlCache } from "@/hooks/use-chat-signed-urls";
 import { keepChatVideo } from "@/lib/chat-video-store";
-import { setVideoFileKey, setVideoStem } from "@/lib/set-videos/label";
+import { setTitle, setVideoFileKey, setVideoStem, setWord } from "@/lib/set-videos/label";
 import { probeVideo } from "@/lib/video-edit/probe";
 import {
   catchUpJobId,
@@ -262,7 +262,7 @@ export async function startSetVideo(
     toast.message(
       isActiveJob(dup)
         ? "That video is already on its way."
-        : `That video is already on set ${dup.setIndex}.`,
+        : `That video is already on ${setWord(dup.setIndex)}.`,
     );
     return { ok: false, reason: "duplicate" };
   }
@@ -304,7 +304,7 @@ export async function startSetVideo(
   if (sent) {
     dropSetVideoJob(id);
     toast.message(
-      `That video is already on ${sent.exercise ? `${sent.exercise}, ` : ""}set ${sent.setIndex}. Remove it there first to move it.`,
+      `That video is already on ${sent.exercise ? `${sent.exercise}, ` : ""}${setWord(sent.setIndex)}. Remove it there first to move it.`,
     );
     return { ok: false, reason: "duplicate" };
   }
@@ -412,7 +412,8 @@ async function runJob(id: string) {
       prepared = out.file;
       // went as it was (a 4K original): a 720p copy for Crew follows once the coach has it
       const feedPlan = feedCopyPlan(out.mode, picked.info, picked.trim, picked.canEncode);
-      if (feedPlan) feedSources.set(id, { video: picked, plan: feedPlan, sentBytes: prepared.size });
+      // a warm-up's clip is never in the film, so it needs no copy for Crew
+      if (feedPlan && job.setIndex > 0) feedSources.set(id, { video: picked, plan: feedPlan, sentBytes: prepared.size });
       const path = `${setVideoStem(job.clientId, id)}.${videoExt(prepared)}`;
       const mb = (n: number) => Math.round((n / 1048576) * 10) / 10;
       const transfer = {
@@ -537,7 +538,7 @@ async function runJob(id: string) {
     // a clip filmed in the app and not saved to the phone yet: a reload can fetch it from storage now
     linkFilmed(job.userId, id, res.id);
     if (!res.existed) {
-      toast.success(`Set ${job.setIndex} video sent to your coach`);
+      toast.success(`${setTitle(job.setIndex)} video sent to your coach`);
       if (res.message_id) void notifyCoach(res.message_id);
     }
   } catch (e) {

@@ -23,6 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { isActiveJob, jobStatusText, type SetVideoJob } from "@/lib/set-videos/jobs";
+import { setTitle, setWord } from "@/lib/set-videos/label";
 import { setVideosKey, type SetVideo } from "@/components/workout-day/set-video-cell";
 import { filmedFile, forgetFilmed, useUnsavedFilmed } from "@/lib/set-videos/phone-copy";
 import {
@@ -77,7 +78,7 @@ export default function SetVideoSheet({
     jobId: jobIdForSetVideo(v.id, unsaved),
     setVideoId: v.id,
     path: v.storage_path || null,
-    name: `${exerciseName} set ${setIndex}`,
+    name: `${exerciseName} ${setWord(setIndex)}`,
   });
 
   const openChat = () => {
@@ -122,10 +123,10 @@ export default function SetVideoSheet({
         <div className="flex items-start gap-3 px-4 pb-2 pt-3">
           <div className="min-w-0 flex-1">
             <SheetTitle className="truncate text-base font-semibold">
-              {exerciseName} · Set {setIndex}
+              {exerciseName} · {setTitle(setIndex)}
             </SheetTitle>
             <SheetDescription className="text-sm text-muted-foreground">
-              {label || "Set video"}
+              {label || (setIndex === 0 ? "Warm-up video" : "Set video")}
             </SheetDescription>
           </div>
           <button
@@ -204,8 +205,8 @@ export default function SetVideoSheet({
                       size="sm"
                       variant="outline"
                       className="h-10 gap-1.5"
-                      onPointerDown={() => warm([{ jobId: j.id, name: `${exerciseName} set ${setIndex}` }])}
-                      onClick={() => save([{ jobId: j.id, name: `${exerciseName} set ${setIndex}` }])}
+                      onPointerDown={() => warm([{ jobId: j.id, name: `${exerciseName} ${setWord(setIndex)}` }])}
+                      onClick={() => save([{ jobId: j.id, name: `${exerciseName} ${setWord(setIndex)}` }])}
                     >
                       <ArrowDownToLine className="h-4 w-4" /> {words.label}
                     </Button>
@@ -243,7 +244,7 @@ export default function SetVideoSheet({
                   cacheKey={v.storage_path}
                   path={v.storage_path}
                   size={v.size_bytes ?? undefined}
-                  name={`${exerciseName} set ${setIndex}`}
+                  name={`${exerciseName} ${setWord(setIndex)}`}
                   className="mx-auto w-[220px]"
                 />
                 <div className="flex items-center gap-2">
