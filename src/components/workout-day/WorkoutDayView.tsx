@@ -2401,15 +2401,20 @@ function WorkoutDay({
   // missing one on another) or never (bodyweight, reps-only, weight-only sets).
   const loggedProgress = useMemo(() => workoutSetProgress(rows as any[], results as any[]), [rows, results]);
   // The lifting alone: the day's cardio is done before, during or after it (or
-  // later that day), so the ring and the review never wait on it (workout-cardio.ts).
+  // later that day), so the ring and the Finish button never wait on it (workout-cardio.ts).
   const liftLogged = useMemo(
     () => (liftRows > 0 && liftRows < (rows as any[]).length ? workoutSetProgress((rows as any[]).slice(0, liftRows), results as any[]) : loggedProgress),
     [rows, results, liftRows, loggedProgress],
   );
-  // When every set is logged, there's no extra "Finish Workout" tap: the review
-  // opens as the athlete's last step and saving it finishes the workout.
-  // The workout remains amber/in-progress until that review is submitted.
-  const autoFinishReady = liftLogged.allDone;
+  // When every set is logged, the day's cardio too, there's no extra "Finish
+  // Workout" tap: the review opens as the athlete's last step and saving it
+  // finishes the workout. The workout remains amber/in-progress until that review
+  // is submitted. With the lifting done and the cardio still to come it
+  // never pops over the cardio (the next card, done right after or later that
+  // day): Finish is the review, one tap (`reviewReady`), and logging the cardio
+  // pops it like any last set.
+  const autoFinishReady = loggedProgress.allDone;
+  const reviewReady = liftLogged.allDone;
 
   const online = useOnlineStatus();
   const { dismissRestTimer } = useRestTimer();
@@ -2706,9 +2711,9 @@ function WorkoutDay({
     !readonly && !workoutBodyError && !completion?.completed_at && !rowsIsError && authReady && rowsLoaded && (rows as any[]).length > 0
       ? {
           kind: "finish",
-          review: autoFinishReady,
+          review: reviewReady,
           onFinish: async () => {
-            if (autoFinishReady) {
+            if (reviewReady) {
               setQuickFinishReviewOpen(true);
               return;
             }
@@ -3108,7 +3113,7 @@ function WorkoutDay({
              This was the root cause of the Nicolas Galli stuck-state bug. */}
         {!readonly && !workoutBodyError && !completion?.completed_at && !rowsIsError && authReady && rowsLoaded && (rows as any[]).length > 0 && (
           <Card className="p-4">
-            {autoFinishReady ? (
+            {reviewReady ? (
               <Button
                 className="h-11 w-full"
                 onClick={() => setQuickFinishReviewOpen(true)}
@@ -3186,7 +3191,7 @@ function WorkoutDay({
       )}
       {quickLogOpen && <QuickLogTips onClose={closeQuickLog} videoOn={quickLogVideo} unit={(rows as any[])[0] ? unitForRow((rows as any[])[0]) : unit} />}
 
-      {client?.id && (quickFinishReviewOpen || quickFinishMounted || (!completion?.completed_at && autoFinishReady)) && (
+      {client?.id && (quickFinishReviewOpen || quickFinishMounted || (!completion?.completed_at && reviewReady)) && (
         <WorkoutReviewEditor
           open={quickFinishReviewOpen}
           onOpenChange={setQuickFinishReviewOpen}
@@ -4784,7 +4789,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
         // the client's cardio plan, added after the lifting (program_cardio_sync): logging it here is the day's cardio.
         // The list says it once under its Cardio heading; Focus has no heading, so the card says it.
         <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-muted-foreground" data-cardio-plan-row>
-          <Heart className="h-3.5 w-3.5 shrink-0" aria-hidden /> Your cardio plan · logging it checks off today's cardio
+          <Heart className="h-3.5 w-3.5 shrink-0" aria-hidden /> Your cardio plan · now or later today
         </p>
       )}
       {row.notes && <ExerciseNotesBlock notes={row.notes} />}
