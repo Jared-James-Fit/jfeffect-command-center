@@ -94,7 +94,7 @@ describe("each clip's caption", () => {
     expect(isOwnFilmCaption("Leg day · 4 sets on film 🎥", names)).toBe(false);
     expect(isOwnFilmCaption(null, names)).toBe(false);
     const card = readFileSync("src/components/community/post-card.tsx", "utf8");
-    expect(card).toContain("!(visual && s && isOwnFilmCaption(post.caption, [s.workout_name, s.workout_title])) && (");
+    expect(card).toContain("!(visual && s && isOwnFilmCaption(post.caption, [s.workout_name, s.workout_title])) &&");
   });
 });
 
