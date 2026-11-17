@@ -23,6 +23,8 @@ import {
   lockInCameraCard,
   pickLockInSession,
   formatExerciseBest,
+  exerciseBestLines,
+  monthWorkoutLine,
   sessionLine,
   trainingSinceLabel,
   isTrainingNow,
@@ -292,10 +294,21 @@ describe("card fields from canonical stats", () => {
     expect(formatExerciseBest(ex({ max_seconds: 75 }), "kg")).toBe("1:15");
     expect(formatExerciseBest(ex({ max_seconds: 45 }), "kg")).toBe("45s");
     expect(formatExerciseBest(ex({ sets: 1 }), "kg")).toBe("1 set");
+    // the workout page: the viewer's unit first, the other under it; no second line without a load
+    expect(exerciseBestLines(ex({ best_load_kg: 206.384, best_reps: 1 }), "lb")).toEqual({ main: "455 lb × 1", other: "206.5 kg" });
+    expect(exerciseBestLines(ex({ best_load_kg: 206.384, best_reps: 1 }), "kg")).toEqual({ main: "206.5 kg × 1", other: "455 lb" });
+    expect(exerciseBestLines(ex({ max_reps: 12 }), "lb")).toEqual({ main: "12 reps", other: null });
+    expect(exerciseBestLines(ex({ max_seconds: 75 }), "kg")).toEqual({ main: "1:15", other: null });
   });
   it("only claims a session count once it means something", () => {
     expect(sessionLine({ month_sessions: 1 })).toBeNull();
     expect(sessionLine({ month_sessions: 12 })).toBe("Session 12 this month");
+    // the workout page says what the old "#9 This month" tile counted
+    expect(monthWorkoutLine({ month_sessions: 9 })).toBe("9th workout this month");
+    expect(monthWorkoutLine({ month_sessions: 1 })).toBe("1st workout this month");
+    expect(monthWorkoutLine({ month_sessions: 12 })).toBe("12th workout this month");
+    expect(monthWorkoutLine({ month_sessions: 22 })).toBe("22nd workout this month");
+    expect(monthWorkoutLine({ month_sessions: 0 })).toBeNull();
     expect(sessionLine({})).toBeNull();
   });
   it("builds every card field from one source", () => {
