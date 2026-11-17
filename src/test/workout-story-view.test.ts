@@ -40,7 +40,8 @@ describe("Focus: a tap never moves (swipe, ‹ / Next, the bars or arrow keys do
   });
   it("How Focus works: by itself once per account (again for anyone who saw an older version), and from the ? any time", () => {
     const day = read("src/components/workout-day/WorkoutDayView.tsx");
-    expect(day).toContain("if (storyOpen && focusKnown && !focusTipsSeen && !isImpersonating) setFocusTipsOpen(true);");
+    // after "Fastest way to log" when that's due or open (one intro at a time)
+    expect(day).toContain("if (storyOpen && focusKnown && !focusTipsSeen && !isImpersonating && !quickLogDue && !quickLogOpen) setFocusTipsOpen(true);");
     expect(day).toContain("onHelp={() => setFocusTipsOpen(true)}");
     expect(tipsSeenSince(null)).toBe(false);
     expect(tipsSeenSince("2026-10-17T12:00:00Z")).toBe(false); // the tap version

@@ -62,7 +62,9 @@ describe("the card's top: name, role, the prescription, then Last / Suggested", 
 
   it("an empty weight box is blue: where the weight goes", () => {
     const input = readFileSync("src/components/workout-day/weight-value-input.tsx", "utf8");
-    expect(input).toContain('? "border-blue-500/40 bg-blue-500/10 text-muted-foreground"');
+    expect(input).toContain(': "border-blue-500/40 bg-blue-500/10 text-muted-foreground"');
+    // the optional last warm-up's box (plain) stays a neutral well
+    expect(input).toContain('? "border-border/60 bg-muted/40 text-muted-foreground/60"');
   });
 
   it("says the reps and RPE only when the prescription above doesn't", () => {

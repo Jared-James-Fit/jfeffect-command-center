@@ -116,7 +116,7 @@ describe("one tap holds to the trimmer's rules", () => {
 describe("where it's offered", () => {
   it("a set video: a quick look titled with the set, then Send", () => {
     const flow = read("components/workout-day/set-video-flow.tsx");
-    expect(flow).toContain('offer: { suggestLift: true, title: `${start.exerciseName} · Set ${start.setIndex}`, doneLabel: "Send" }');
+    expect(flow).toContain('offer: { suggestLift: true, title: `${start.exerciseName} · ${setTitle(start.setIndex)}`, doneLabel: "Send" }');
     const up = read("lib/set-videos/uploader.ts");
     expect(up).toContain("pickVideo(input.file, CONTEXT, { trim: input.trim, offer: input.offer })");
     // backing out of the quick look leaves nothing on the set
