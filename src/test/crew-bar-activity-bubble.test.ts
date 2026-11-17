@@ -76,13 +76,15 @@ describe("Crew's one bar", () => {
   const screen = read("src/components/community/community-screen.tsx");
   const bar = read("src/components/community/crew-header.tsx");
 
-  it("is + and search · JF Effect · heart and you, with no second row of controls", () => {
+  it("is + and the trophy · Crew | Following · heart and you, with no second row of controls", () => {
     expect(screen).toContain('<CrewBar\n      label="Crew"');
     expect(screen).toContain('<BarButton label="Create a post" onClick={begin} data-crew-create>');
-    expect(screen).toContain("<CrewBrand");
+    expect(screen).toContain("<CrewFeedTabs");
+    expect(screen).not.toContain("<CrewBrand");
     expect(screen).not.toContain('aria-label="Crew view"');
     expect(screen).not.toContain('aria-label="Show posts from"');
-    expect(bar).toContain('{following ? "Following" : "JF Effect"}');
+    expect(bar).toContain('["crew", "Crew"],');
+    expect(bar).toContain('["following", "Following"],');
   });
 
   it("slides away reading down, back on any scroll up, fixed on phones with its room held", () => {

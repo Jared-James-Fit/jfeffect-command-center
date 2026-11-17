@@ -119,7 +119,7 @@ export function useCommunityFeed(authorUserId: string | null = null) {
  * story rail, Home's deck and profiles keep reading community_feed in time
  * order (useCommunityFeed).
  */
-export function useRankedFeed(enabled = true) {
+export function useRankedFeed(enabled = true, following: { follows: string } | null = null) {
   const pov = usePovViewer();
   const asClient = useCallback(
     (d: InfiniteData<CommunityFeedPage>) => ({ ...d, pages: d.pages.map((pg) => ({ ...pg, posts: pg.posts.map((p) => seenAs(p, pov)) })) }),
@@ -127,15 +127,21 @@ export function useRankedFeed(enabled = true) {
   );
   return useInfiniteQuery({
     select: pov === null ? undefined : asClient,
-    queryKey: [...communityKeys.feed(null), "ranked"] as const,
+    // Following (the Crew bar's tab) is the same feed narrowed on the server (`_following`), its own
+    // pages under the crew feed's key, read again when who you follow changes (`follows`)
+    queryKey: following
+      ? ([...communityKeys.feed(null), "ranked", "following", following.follows] as const)
+      : ([...communityKeys.feed(null), "ranked"] as const),
     enabled,
     initialPageParam: null as FeedCursor | null,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
     queryFn: async ({ pageParam }): Promise<CommunityFeedPage> => {
+      // the crew feed sends no `_following`, so it reads exactly as it always has
+      const only = following ? { _following: true } : {};
       const { data, error } = await db.rpc(
         "community_feed_ranked",
-        pageParam ? { _limit: FEED_PAGE_SIZE, _cursor: pageParam } : { _limit: FIRST_FEED_PAGE, _seen_before: feedAnchor() },
+        pageParam ? { _limit: FEED_PAGE_SIZE, _cursor: pageParam, ...only } : { _limit: FIRST_FEED_PAGE, _seen_before: feedAnchor(), ...only },
       );
       if (error) throw error;
       return (data ?? { posts: [], has_more: false }) as CommunityFeedPage;
