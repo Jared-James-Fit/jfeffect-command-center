@@ -28,6 +28,7 @@ import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button";
 import { claimSetVideoTip, releaseSetVideoTip, setVideoTipCopy, useSetVideoTip } from "@/lib/set-videos/tip";
 import { looksFilmedInApp } from "@/lib/set-videos/phone-copy";
+import { SET_RECORD_MAX_SECONDS, canFilmInApp } from "@/lib/camera/film-settings";
 import { setTitle, setWord } from "@/lib/set-videos/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -74,6 +75,7 @@ export type SetVideo = {
 
 type FlowComponent = (typeof import("@/components/workout-day/set-video-flow"))["default"];
 type SheetComponent = (typeof import("@/components/workout-day/set-video-sheet"))["default"];
+type CameraComponent = (typeof import("@/components/camera/film-camera"))["FilmCamera"];
 /**
  * The flow and the sheet load on demand and render only once loaded: never
  * through React.lazy, which suspends the workout or draws a "couldn't load"
@@ -82,6 +84,14 @@ type SheetComponent = (typeof import("@/components/workout-day/set-video-sheet")
  */
 let Flow: FlowComponent | null = null;
 let Sheet: SheetComponent | null = null;
+/** The app's own camera (iOS's "Take Video" films 480 × 360 with no settings): loaded with the rest. */
+let FilmCam: CameraComponent | null = null;
+const loadCamera = (): Promise<CameraComponent> =>
+  FilmCam
+    ? Promise.resolve(FilmCam)
+    : importWithRetry(() => import("@/components/camera/film-camera")).then(
+        (m) => (FilmCam = m.FilmCamera),
+      );
 const loadFlow = (): Promise<FlowComponent> =>
   Flow
     ? Promise.resolve(Flow)
@@ -117,6 +127,7 @@ function warmSetVideoCode() {
     Promise.all([
       loadFlow(),
       loadSheet(),
+      loadCamera(),
       import("@/lib/set-videos/uploader")
         .then(() => import("@/lib/video-edit/pick"))
         .then((m) => m.preloadVideoEngine()),
@@ -244,6 +255,7 @@ export function SetVideoCell(props: SetVideoCellProps) {
   const [picked, setPicked] = useState<{ file: File; key: number; filmedHere: boolean } | null>(null);
   const pickSeq = useRef(0);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const set = useMemo(() => ({ rowId, setIndex, resultId }), [rowId, setIndex, resultId]);
   const stored = useMemo(() => (data ?? []).filter((v) => videoOnSet(v, set)), [data, set]);
@@ -343,12 +355,31 @@ export function SetVideoCell(props: SetVideoCellProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [done]);
 
+  /** The phone's own picker (Photos / Files): from the camera's Library, or where the camera can't run. */
   const openPicker = () => {
     if (!canAdd) return;
     // the video code starts loading while the phone's picker is open
     void loadFlow().catch(() => {});
     void import("@/lib/video-edit/pick").then((m) => m.preloadVideoEngine()).catch(() => {});
     inputRef.current?.click();
+  };
+  /**
+   * Filming a set opens the app's own camera (1080p by default, the person's
+   * settings), never iOS's "Take Video", which records 480 × 360. A phone that
+   * can't film in a web page gets its own picker, from this same tap.
+   */
+  const openCamera = () => {
+    if (!canAdd) return;
+    if (!canFilmInApp()) return openPicker();
+    void loadFlow().catch(() => {});
+    void import("@/lib/video-edit/pick").then((m) => m.preloadVideoEngine()).catch(() => {});
+    // a sheet over the workout would hold the camera's taps (a modal), so it closes first
+    setSheetOpen(false);
+    if (FilmCam) return setCameraOpen(true);
+    loadCamera().then(
+      () => setCameraOpen(true),
+      () => toast.error(NO_CONNECTION),
+    );
   };
   const onPicked = (f: File) => {
     // straight from the camera (not in Photos): it's offered for the phone once it's on its way
@@ -406,7 +437,7 @@ export function SetVideoCell(props: SetVideoCellProps) {
     label = `Add a video of ${setIndex === 0 ? "your warm-up" : setWord(setIndex)} for your coach`;
     onTap = () => {
       setTipOpen(false);
-      openPicker();
+      openCamera();
     };
     content = (
       <span
@@ -472,8 +503,7 @@ export function SetVideoCell(props: SetVideoCellProps) {
                   className="h-10 gap-1.5 bg-foreground px-3.5 text-background hover:bg-foreground/90"
                   onClick={() => {
                     setTipOpen(false);
-                    // the phone's picker opens from this tap
-                    openPicker();
+                    openCamera();
                   }}
                 >
                   <Camera className="h-4 w-4" aria-hidden /> Film this set
@@ -534,7 +564,24 @@ export function SetVideoCell(props: SetVideoCellProps) {
           videos={stored}
           jobs={jobs as SetVideoJob[]}
           canAdd={canAdd}
-          onAdd={openPicker}
+          onAdd={openCamera}
+          onPickFile={openPicker}
+        />
+      )}
+      {cameraOpen && FilmCam && (
+        <FilmCam
+          title={`${props.exerciseName} · ${setTitle(setIndex)}`}
+          maxSeconds={SET_RECORD_MAX_SECONDS}
+          onClose={() => setCameraOpen(false)}
+          onLibrary={() => {
+            // the picker opens inside this tap (iOS needs it), then the camera lets go
+            openPicker();
+            setCameraOpen(false);
+          }}
+          onClip={(file) => {
+            setCameraOpen(false);
+            onPicked(file);
+          }}
         />
       )}
     </div>

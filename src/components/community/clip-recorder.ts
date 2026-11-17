@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { baseMediaType } from "@/lib/community";
 import { RECORD_MAX_SECONDS } from "@/lib/video-edit/limits";
+import { getMicStream } from "@/lib/audio-session";
+import { pickType, recorderBitrate, recorderTypes } from "@/lib/camera/film-settings";
 
 /** The longest clip the camera records (a story's length; longer clips come from the library and get trimmed). */
 export const MAX_RECORD_MS = RECORD_MAX_SECONDS * 1000;
@@ -36,7 +38,7 @@ export function canRecordClips(): boolean {
   return typeof window !== "undefined" && typeof (window as { MediaRecorder?: unknown }).MediaRecorder === "function" && !!pickRecorderType();
 }
 
-type Rec = { recorder: MediaRecorder; audio: MediaStream | null; startedAt: number; type: string };
+type Rec = { recorder: MediaRecorder; audio: MediaStream | null; restore: (() => void) | null; startedAt: number; type: string };
 
 /**
  * Hold the shutter to film (Instagram's camera): the live camera's picture and,
@@ -68,6 +70,7 @@ export function useClipRecorder({ getStream, onClip }: { getStream: () => MediaS
       if (r.recorder.state !== "inactive") r.recorder.stop();
     } catch {
       r.audio?.getTracks().forEach((t) => t.stop());
+      r.restore?.();
     }
     setStartedAt(null);
     setLocked(false);
@@ -77,43 +80,56 @@ export function useClipRecorder({ getStream, onClip }: { getStream: () => MediaS
   const start = useCallback(async () => {
     if (rec.current || starting.current) return;
     const stream = getStream();
-    const type = pickRecorderType();
-    if (!stream || !type) return;
+    if (!stream || !pickRecorderType()) return;
+    // Recorded as hard as the picture needs (film-settings.ts: ~10 Mbps for 1080p, a phone
+    // camera's own rate), in the H.264 level that fits it; it's shrunk for the feed later.
+    const vs = stream.getVideoTracks()[0]?.getSettings?.() ?? {};
+    const w = vs.width ?? 1440;
+    const h = vs.height ?? 1920;
+    const fps = vs.frameRate ?? 30;
+    const type = pickType(recorderTypes(w, h, fps), (t) => typeof MediaRecorder !== "undefined" && !!MediaRecorder.isTypeSupported?.(t)) ?? pickRecorderType()!;
     starting.current = true;
     released.current = false;
-    // The mic, for the clip's sound. A no (or no mic) still films, silently.
+    // The mic, for the clip's sound, with iOS's audio session switched to recording first
+    // (on "ambient" WebKit refuses the mic and the clip came out silent). A no still films, silently.
     let audio: MediaStream | null = null;
+    let restore: (() => void) | null = null;
     try {
-      audio = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const got = await getMicStream(true);
+      audio = got.stream;
+      restore = got.restore;
     } catch {
       audio = null;
     }
     starting.current = false;
     if (getStream() !== stream) {
       audio?.getTracks().forEach((t) => t.stop());
+      restore?.();
       return;
     }
     const mixed = new MediaStream([...stream.getVideoTracks(), ...(audio?.getAudioTracks() ?? [])]);
     let recorder: MediaRecorder;
     try {
-      recorder = new MediaRecorder(mixed, { mimeType: type, videoBitsPerSecond: 3_000_000 });
+      recorder = new MediaRecorder(mixed, { mimeType: type, videoBitsPerSecond: recorderBitrate(w, h, fps), audioBitsPerSecond: 128_000 });
     } catch {
       try {
         recorder = new MediaRecorder(mixed);
       } catch {
         audio?.getTracks().forEach((t) => t.stop());
+        restore?.();
         toast.error("This phone can't film here. Pick a clip from your library instead.");
         return;
       }
     }
     const chunks: Blob[] = [];
     const t0 = performance.now();
-    const entry: Rec & { keep?: boolean } = { recorder, audio, startedAt: t0, type };
+    const entry: Rec & { keep?: boolean } = { recorder, audio, restore, startedAt: t0, type };
     recorder.ondataavailable = (e) => {
       if (e.data && e.data.size > 0) chunks.push(e.data);
     };
     recorder.onstop = () => {
       audio?.getTracks().forEach((t) => t.stop());
+      restore?.();
       const took = performance.now() - t0;
       if (entry.keep === false || took < MIN_CLIP_MS || !chunks.length) return;
       const mime = baseMediaType(recorder.mimeType || type) || "video/mp4";
@@ -124,6 +140,7 @@ export function useClipRecorder({ getStream, onClip }: { getStream: () => MediaS
       recorder.start(500);
     } catch {
       audio?.getTracks().forEach((t) => t.stop());
+      restore?.();
       toast.error("Couldn't start filming. Try again, or pick a clip from your library.");
       return;
     }

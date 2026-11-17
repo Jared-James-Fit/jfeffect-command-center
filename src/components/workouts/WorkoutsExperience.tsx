@@ -11,7 +11,7 @@ import {
 import {
   Calendar as CalendarIcon, CalendarCheck, ChevronLeft, ChevronRight, ClipboardList, Clock,
   History, Loader2, Move, MoreVertical, Play, Pencil, Sun, Activity, Download,
-  RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot,
+  RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot, Heart, Check,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -1246,6 +1246,33 @@ function SelectedDayCard({
             {inlineOpen ? "Hide preview" : "Preview"}
           </Button>
         </div>
+        {/* The day's cardio, its own thing: done before, during or after the
+            lifting, or later in the day. One tap opens the workout on it
+            (?focus=, never Focus mode), and logging it doesn't start the
+            workout (workout-cardio.ts). */}
+        {item.cardio && (
+          <Link
+            to="/portal/workouts/$dayId"
+            params={{ dayId: item.day.id }}
+            search={{ focus: item.cardio.rowId, ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any}
+            className="mt-3 flex min-h-11 items-center gap-2.5 border-t border-border pt-3 text-sm"
+            data-day-cardio={item.cardio.done ? "done" : "open"}
+          >
+            <Heart className={cn("h-4 w-4 shrink-0", item.cardio.done ? "fill-current text-success" : "text-muted-foreground")} aria-hidden />
+            <span className="min-w-0 flex-1">
+              <span className="font-semibold">Cardio</span>
+              <span className="text-muted-foreground">
+                {item.cardio.minutes ? ` · ${item.cardio.minutes} min` : ""}
+                {!item.cardio.done && date && isSameDay(date, new Date()) ? " · any time today" : ""}
+              </span>
+            </span>
+            {item.cardio.done ? (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-success"><Check className="h-3.5 w-3.5" aria-hidden /> Done</span>
+            ) : !readonly ? (
+              <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-foreground">Log it <ChevronRight className="h-3.5 w-3.5" aria-hidden /></span>
+            ) : null}
+          </Link>
+        )}
         {inlineOpen && item.day?.id && (
           <div className="mt-3">
             <InlineWorkoutPreview

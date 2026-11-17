@@ -7,6 +7,7 @@ import { normalizeMuscle } from "@/lib/analytics/muscle-map";
 import { compareWorkoutItemsBySchedule } from "@/lib/workout-today";
 import { fetchAllPages } from "@/lib/supabase-paginate";
 import { inWorkoutOrder } from "@/lib/logged-set-order";
+import { isPlanCardioRow } from "@/lib/workouts/workout-cardio";
 
 // ---------- Types ----------
 export type PrepStatus = "Planned" | "Active" | "Completed" | "Archived";
@@ -1669,7 +1670,8 @@ type ProgramTree = {
 };
 
 const SCHEDULED_INSTANCE_COLUMNS = "id, client_id, source_day_id, scheduled_date, scheduled_time, order_index, schedule_source, note, created_at";
-const ESTIMATE_ROW_COLUMNS = "id, day_id, sets, rest_seconds, time_profile, estimated_seconds_override";
+// cardio_target_id / duration_seconds: the day's cardio is its own thing (workout-cardio.ts), done any time that day
+const ESTIMATE_ROW_COLUMNS = "id, day_id, sets, rest_seconds, time_profile, estimated_seconds_override, cardio_target_id, duration_seconds";
 const LOGGED_SET_COLUMNS = "row_id, actual_load, actual_load_unit, actual_reps, completed_duration_seconds";
 
 /** Drops a nested embed from a row, returning [row without it, the embed]. */
@@ -1834,21 +1836,35 @@ export async function getClientWorkouts(
   const scheduledInstances = tree.scheduledInstances.filter((s: any) => activeDayIds.has(s.source_day_id));
   const rowIdToDay = new Map<string, string>();
   const rowsByDay = new Map<string, RowForEstimate[]>();
+  // The day's cardio (the cardio plan's row) is done before, during or after the
+  // lifting, or later that day: logging it never makes the workout "in progress",
+  // and the workout's progress is its lifts (workout-cardio.ts).
+  const cardioRowIds = new Set<string>();
+  const cardioRowByDay = new Map<string, any>();
   for (const r of (exerciseRows ?? []) as any[]) {
     rowIdToDay.set(r.id, r.day_id);
     const list = rowsByDay.get(r.day_id) ?? [];
     list.push(r);
     rowsByDay.set(r.day_id, list);
+    if (isPlanCardioRow(r)) {
+      cardioRowIds.add(String(r.id));
+      if (!cardioRowByDay.has(r.day_id)) cardioRowByDay.set(r.day_id, r);
+    }
   }
   const rowResults = tree.rowResults.filter((rr: any) => rowIdToDay.has(rr.row_id));
   const completionIdSet = new Set<string>(completions.map((c: any) => c.id));
   const feedbacks = tree.feedbacks.filter((f: any) => completionIdSet.has(f.completion_id));
   const loggedSetsByDay = new Map<string, number>();
+  const cardioDoneRows = new Set<string>();
   for (const rr of (rowResults ?? []) as any[]) {
     const hasLoad = rr.actual_load != null && Number.isFinite(Number(rr.actual_load)) && Number(rr.actual_load) > 0;
     const hasReps = rr.actual_reps != null && Number.isFinite(Number(rr.actual_reps)) && Number(rr.actual_reps) > 0;
     const hasDuration = rr.completed_duration_seconds != null && Number.isFinite(Number(rr.completed_duration_seconds)) && Number(rr.completed_duration_seconds) > 0;
     if (!hasDuration && !(hasReps && hasLoad)) continue;
+    if (cardioRowIds.has(String(rr.row_id))) {
+      cardioDoneRows.add(String(rr.row_id));
+      continue;
+    }
     const dayId = rowIdToDay.get(rr.row_id);
     if (!dayId) continue;
     loggedSetsByDay.set(dayId, (loggedSetsByDay.get(dayId) ?? 0) + 1);
@@ -1903,7 +1919,7 @@ export async function getClientWorkouts(
   const resultsByDay = new Map<string, any[]>();
   for (const rr of (rowResults ?? []) as any[]) {
     const dayId = rowIdToDay.get(rr.row_id);
-    if (!dayId) continue;
+    if (!dayId || cardioRowIds.has(String(rr.row_id))) continue;
     const list = resultsByDay.get(dayId) ?? [];
     list.push(rr);
     resultsByDay.set(dayId, list);
@@ -1911,9 +1927,18 @@ export async function getClientWorkouts(
   for (const it of items) {
     const dayId = it.day?.id;
     if (!dayId) continue;
-    const prog = computeWorkoutProgress((rowsByDay.get(dayId) ?? []) as any[], (resultsByDay.get(dayId) ?? []) as any[]);
+    const lifts = (rowsByDay.get(dayId) ?? []).filter((r: any) => !isPlanCardioRow(r));
+    const prog = computeWorkoutProgress(lifts as any[], (resultsByDay.get(dayId) ?? []) as any[]);
     it.progress_pct = prog.pct;
     it.progress = prog;
+    const cardio = cardioRowByDay.get(dayId);
+    it.cardio = cardio
+      ? {
+          rowId: String(cardio.id),
+          minutes: Number(cardio.duration_seconds) > 0 ? Math.round(Number(cardio.duration_seconds) / 60) : null,
+          done: cardioDoneRows.has(String(cardio.id)),
+        }
+      : null;
   }
   // Scheduled chronology is the canonical client-facing order. The shared
   // comparator falls back to program order only for genuinely unscheduled days.
