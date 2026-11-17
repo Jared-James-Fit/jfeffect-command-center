@@ -11,6 +11,14 @@
 import { supabase } from "@/integrations/supabase/client";
 import { estimate1RM, isWorkingSet, type E1RMFormula } from "./e1rm";
 
+/** A logged set's load in kg, whatever unit it was typed in (the DB's kg mirror first). */
+const kgOf = (r: { normalized_kg?: unknown; actual_load?: unknown; actual_load_unit?: unknown }): number => {
+  const n = Number(r.normalized_kg);
+  if (r.normalized_kg != null && Number.isFinite(n)) return n;
+  const v = Number(r.actual_load) || 0;
+  return r.actual_load_unit === "lb" ? v / 2.2046226218 : v;
+};
+
 type CompletionSummary = {
   id: string;
   day_id: string;
@@ -26,12 +34,15 @@ export interface PlannedVsActualRow {
   plannedRepsText: string | null;
   plannedRepsMin: number | null;
   plannedRepsMax: number | null;
+  /** kg */
   plannedLoad: number | null;
   /** Programmed duration per set, seconds (time-mode only). */
   plannedDurationSeconds: number | null;
   actualSets: number;
   actualRepsTotal: number;
+  /** kg × reps */
   actualVolume: number;
+  /** kg */
   bestE1RM: number;
   /** Total logged duration across sets, seconds (time-mode only). */
   actualDurationTotalSeconds: number;
@@ -268,7 +279,7 @@ export async function getRecentPlannedVsActual(
   let resultsQuery = supabase
     .from("pl_row_results")
     .select(
-      "row_id, set_index, actual_load, actual_reps, actual_rpe, actual_rpe_num, is_working_set, completed_at, completed_duration_seconds",
+      "row_id, set_index, actual_load, actual_load_unit, normalized_kg, actual_reps, actual_rpe, actual_rpe_num, is_working_set, completed_at, completed_duration_seconds",
     )
     .eq("client_id", clientId)
     .in("row_id", rowIds);
@@ -317,7 +328,8 @@ export async function getRecentPlannedVsActual(
 
       const { min, max } = parseRepsText(row.reps_text);
       const plannedSets = row.sets != null ? Number(row.sets) : null;
-      const plannedLoad = row.load_lb ?? row.load_kg ?? null;
+      // kg, like every load in this read (a set logged in lb and one in kg are one scale)
+      const plannedLoad = row.load_kg != null ? Number(row.load_kg) : row.load_lb != null ? Number(row.load_lb) / 2.2046226218 : null;
       const plannedDurationSeconds =
         row.duration_seconds != null ? Number(row.duration_seconds) : null;
 
@@ -328,13 +340,13 @@ export async function getRecentPlannedVsActual(
       const actualVolume = isTime
         ? 0
         : working.reduce(
-            (s, r) => s + (Number(r.actual_load) || 0) * (Number(r.actual_reps) || 0),
+            (s, r) => s + kgOf(r) * (Number(r.actual_reps) || 0),
             0,
           );
       const bestE1RM = isTime
         ? 0
         : working.reduce((best, r) => {
-            const e = estimate1RM(Number(r.actual_load) || 0, Number(r.actual_reps) || 0, formula);
+            const e = estimate1RM(kgOf(r), Number(r.actual_reps) || 0, formula);
             return e > best ? e : best;
           }, 0);
       const actualDurationTotalSeconds = isTime

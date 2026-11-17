@@ -160,6 +160,8 @@ export type RawRow = {
   load_kg: number | null;
   load_lb: number | null;
   load_unit: string | null;
+  /** The coach's exact load over a % (load_kg / load_lb hold it). */
+  manual_override?: boolean | null;
   tempo: string | null;
   rest_seconds: number | null;
   notes: string | null;

@@ -117,7 +117,7 @@ async function logCall(admin: Db, editId: string, x: { label: string; model: str
 }
 
 /** The athlete as Program Intelligence reads them (the generator's brief, minus its setup sections). */
-async function athleteBrief(admin: Db, clientId: string): Promise<{ text: string; maxSessionMinutes: number | null; maxLifts: string[]; warnings: string[]; chars: number; signals: NonNullable<EngineCtx["signals"]>; missing: Array<{ field: string; why: string; where: string }> }> {
+async function athleteBrief(admin: Db, clientId: string): Promise<{ text: string; unit: "kg" | "lb"; maxSessionMinutes: number | null; maxLifts: string[]; warnings: string[]; chars: number; signals: NonNullable<EngineCtx["signals"]>; missing: Array<{ field: string; why: string; where: string }> }> {
   const rec = await loadIntelRecords(admin, clientId, { kind: "history" });
   const intel = buildGeneratorIntel(rec);
   const setup = intel.recommendation.setup;
@@ -135,7 +135,9 @@ async function athleteBrief(admin: Db, clientId: string): Promise<{ text: string
   // what the records say about each exercise: the editor warns when a change goes against it
   const signals: NonNullable<EngineCtx["signals"]> = new Map();
   for (const p of intel.development.progression) if (p.exerciseId) signals.set(p.exerciseId, { decision: p.decision, why: p.why, lastKg: p.lastKg, pain: p.pain });
-  return { text, maxSessionMinutes: setup.maxSessionMinutes ?? null, maxLifts, warnings: b.warnings, chars: text.length, signals, missing: intel.development.missing };
+  // the brief writes every load in this unit (context.ts), so the program it's read beside must too
+  const unit: "kg" | "lb" = rec.client.preferred_weight_unit === "kg" ? "kg" : "lb";
+  return { text, unit, maxSessionMinutes: setup.maxSessionMinutes ?? null, maxLifts, warnings: b.warnings, chars: text.length, signals, missing: intel.development.missing };
 }
 
 function ctxFrom(catalog: CatalogExercise[], extra: Map<string, CatalogExercise> = new Map()): EngineCtx {
@@ -202,6 +204,9 @@ export async function runProgramAiEdit(admin: Db, editId: string | null): Promis
         snap.maxSessionMinutes = a.maxSessionMinutes;
         snap.maxLifts = a.maxLifts;
       }
+      // a template personalized for someone reads in their unit: its "lb" default sat beside a
+      // brief in kg, so a load with no unit was read as lb for a kg lifter
+      if (snap.kind === "template") snap.unit = a.unit;
     }
 
     // 3. catalog, rules, the conversation

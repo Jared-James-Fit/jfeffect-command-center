@@ -19,7 +19,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import { rpcRead } from "@/lib/permissions.server";
 import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
-import { rxText, rxToRow, trainingDayDates, weekdayLabel, type Rx, type Weekday } from "@/lib/cleo-program";
+import { rxText, rxToRow, trainingDayDates, weekdayLabel, withLoadUnits, type Rx, type Weekday } from "@/lib/cleo-program";
 import { carryPlanDayRules } from "@/lib/client-nutrition-day";
 import { lowValueReason, EXERCISE_STANDARD } from "@/lib/program-intel/exercise-standard";
 import { coachingTemplates, isMembersProgram } from "@/lib/programs/library-view";
@@ -314,7 +314,46 @@ function longDate(iso: string): string {
   return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-CA", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" });
 }
 
+/** Any load in the params with no kg / lb on it. */
+function hasBareLoad(v: any): boolean {
+  if (Array.isArray(v)) return v.some(hasBareLoad);
+  if (!v || typeof v !== "object") return false;
+  if (typeof v.load === "number" && v.load_unit !== "kg" && v.load_unit !== "lb") return true;
+  return Object.values(v).some(hasBareLoad);
+}
+
+/**
+ * The same params with a unit on every load (withLoadUnits): the row's own
+ * unit when it already has a fixed load, else the athlete's. The approval card
+ * and the save both read the result, so what the coach approves is what's saved.
+ */
+async function withUnits(db: Db, kind: ProgramKind, p: any): Promise<any> {
+  if (!(kind === "build_program" || kind === "edit_program_day" || kind === "add_workout") || !hasBareLoad(p)) return p;
+  let clientId: string | null = p.client_id ?? null;
+  if (!clientId && p.day_id) {
+    const { data } = await db.from("pl_days").select("pl_weeks(pl_blocks(client_id))").eq("id", p.day_id).maybeSingle();
+    clientId = (data as any)?.pl_weeks?.pl_blocks?.client_id ?? null;
+  }
+  let fallback: "kg" | "lb" = "lb";
+  if (clientId) {
+    const { data } = await db.from("clients").select("preferred_weight_unit").eq("id", clientId).maybeSingle();
+    if ((data as any)?.preferred_weight_unit === "kg") fallback = "kg";
+  }
+  const rowIds = (Array.isArray(p.changes) ? p.changes : []).map((c: any) => c?.row_id).filter((x: unknown): x is string => typeof x === "string");
+  const rowUnits = new Map<string, "kg" | "lb">();
+  if (rowIds.length) {
+    const { data } = await db.from("pl_exercise_rows").select("id, load_unit, load_kg, load_lb").in("id", rowIds);
+    for (const r of (data ?? []) as any[]) {
+      const u = r.load_unit === "kg" || r.load_unit === "lb" ? r.load_unit
+        : r.load_kg != null && r.load_lb == null ? "kg" : r.load_lb != null && r.load_kg == null ? "lb" : null;
+      if (u && (r.load_kg != null || r.load_lb != null)) rowUnits.set(r.id, u);
+    }
+  }
+  return withLoadUnits(p, fallback, rowUnits);
+}
+
 export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, today: string): Promise<string> {
+  p = await withUnits(db, kind, p);
   switch (kind) {
     case "assign_program_template": {
       const c = await client(db, p.client_id);
@@ -511,6 +550,7 @@ async function insertRows(sb: Db, dayId: string, exercises: Array<Rx & { exercis
 
 export async function executeProgramAction(actor: { supabase: Db; userId: string }, kind: ProgramKind, p: any, today: string): Promise<string> {
   const sb = actor.supabase;
+  p = await withUnits(sb, kind, p);
   switch (kind) {
     case "assign_program_template": {
       const { applyTemplateToClientFn } = await import("@/lib/pl-programs.functions");

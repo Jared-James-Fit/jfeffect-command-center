@@ -248,7 +248,10 @@ function applyRx(row: RowSnap, p: RxPatch | undefined, unit: "kg" | "lb", issues
     row.percentageBasis = p.percentage_of;
   }
   if (p.load !== undefined) {
-    const u = p.load_unit ?? (row.loadUnit === "kg" || row.loadUnit === "lb" ? row.loadUnit : unit);
+    const own = row.loadUnit === "kg" || row.loadUnit === "lb" ? row.loadUnit : null;
+    const u = p.load_unit ?? own ?? unit;
+    // never a silent guess: the coach sees which unit a bare number was read in
+    if (p.load_unit === undefined) issues.push({ level: "warning", text: `${where}: ${p.load} came without kg or lb, so it reads as ${p.load} ${u}${own ? " (the unit this row is written in)" : " (their unit)"}. Check it's right.` });
     if (p.load > LOAD_CAP[u]) issues.push({ level: "error", text: `${where}: ${p.load} ${u} is over the app's ${LOAD_CAP[u]} ${u} limit.` });
     row.loadUnit = u;
     row.loadKg = u === "kg" ? p.load : null;
@@ -642,6 +645,38 @@ function changeChecks(snap: ProgramSnapshot, work: Work, ctx: EngineCtx, diffs: 
             }
           }
   }
+  // a fixed load that's about 2.2× off what they lift (or what the row said): kg and lb mixed up?
+  const mixups = new Set<string>();
+  for (const b of work.blocks)
+    for (const w of b.weeks)
+      for (const d of w.days)
+        for (const r of d.rows) {
+          const after = rowKg(r);
+          if (after == null || mixups.has(r.exerciseId ?? r.id)) continue;
+          const o = original.get(r.id);
+          const was = o && o.exerciseId === r.exerciseId ? rowKg(o) : null;
+          if (was != null && Math.abs(after - was) < 0.01) continue; // not changed here
+          const last = r.exerciseId ? ctx.signals?.get(r.exerciseId)?.lastKg ?? null : null;
+          const ref = last ?? was;
+          if (ref == null || !looksLikeUnitMixup(after, ref)) continue;
+          mixups.add(r.exerciseId ?? r.id);
+          const shown = r.loadUnit === "lb" ? `${r.loadLb} lb` : `${r.loadKg} kg`;
+          const refShown = r.loadUnit === "lb" ? `${Math.round(ref * 2.2046226218)} lb` : `${Math.round(ref * 10) / 10} kg`;
+          issues.push({
+            level: "warning",
+            text: `${r.name}: ${shown} is about ${after > ref ? (after / ref).toFixed(1) + "×" : "1/" + (ref / after).toFixed(1)} ${last != null ? "their last top set" : "what it was"} (${refShown}). Are kg and lb mixed up?`,
+          });
+        }
+}
+
+/**
+ * A fixed load about 2.2 times (or 1/2.2 of) what it's read against: the
+ * signature of a number meant in lb written as kg, or the other way round.
+ */
+export function looksLikeUnitMixup(loadKg: number, referenceKg: number): boolean {
+  if (!(loadKg > 0) || !(referenceKg > 0)) return false;
+  const r = loadKg / referenceKg;
+  return (r >= 1.8 && r <= 2.7) || (r <= 1 / 1.8 && r >= 1 / 2.7);
 }
 
 const top = (v: string | null) => {

@@ -71,7 +71,11 @@ export function effectiveMax(
   const src = row.source_lift ? allByLift.get(row.source_lift.toLowerCase()) : null;
   if (!src) return { one_rm: row.one_rm, training_max: row.training_max, estimated_1rm: row.estimated_1rm };
   const mod = row.variation_modifier != null ? Number(row.variation_modifier) / 100 : 1;
-  const apply = (v: number | null) => (v == null ? null : Number((v * mod).toFixed(2)));
+  // The source's numbers are in the source's unit; this row's are read in its
+  // own (computeRowLoad, the maxes panel). A 200 kg Competition Squat behind a
+  // Pause Squat kept in lb is 397 lb at 90%, never "180 lb".
+  const toRowUnit = (row.unit ?? "kg") === (src.unit ?? "kg") ? 1 : (row.unit === "lb" ? 2.2046226218 : 1 / 2.2046226218);
+  const apply = (v: number | null) => (v == null ? null : Number((v * mod * toRowUnit).toFixed(2)));
   return {
     one_rm: row.one_rm ?? apply(src.one_rm),
     training_max: row.training_max ?? apply(src.training_max),
@@ -264,7 +268,11 @@ export function computeRowLoad(opts: {
       : base * 2.20462262; // kg→lb
 
   const exact = (baseInUnit * percentage) / 100;
-  const step = row?.rounding_step ?? defaultRoundingStep(unit);
+  // A max's rounding step is in the max's own unit (5 on an lb max means 5 lb):
+  // read in the other unit it would round to 5 kg (11 lb) jumps, so 100% of a
+  // 600 lb max showed 595 lb. In another unit, round to that unit's plates.
+  const stepInUnit = row && (row.unit ?? "kg") === unit ? row.rounding_step : null;
+  const step = stepInUnit ?? defaultRoundingStep(unit);
   const load = roundLoadWithMode(exact, step, row?.rounding_mode ?? "nearest");
   const refLift = row?.lift ?? (opts.family ? `Competition ${opts.family === "bench" ? "Bench" : opts.family === "squat" ? "Squat" : "Deadlift"}` : null);
   const label = plannedLoadLabel({ percentage, basis, refLift, viaFamily });
