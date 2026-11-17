@@ -25,7 +25,7 @@ import { OPEN_DISCOVER_EVENT } from "@/lib/community-discover";
 import { CrewActivity } from "@/components/community/crew-activity";
 import { ActivityHeart } from "@/components/community/activity-heart";
 import { OPEN_ACTIVITY_EVENT } from "@/lib/crew-activity";
-import { BarBack, BarButton, BarTitle, CrewBar, CrewBrand, useBarHidden } from "@/components/community/crew-header";
+import { BarBack, BarButton, BarTitle, CrewBar, CrewFeedTabs, useBarHidden, type CrewFeedTab } from "@/components/community/crew-header";
 import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { openAppMore } from "@/lib/shell-events";
 import { bubbleFold, ease, FIRST_POST_RADIUS, FIRST_UNDER_MIN, setFeedPaging, storiesProgress, watchFeedViewport } from "@/lib/feed-paging";
@@ -39,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { SwipeBack, SwipeBackTip } from "@/components/swipe-back";
 import { CaughtUp, CaughtUpLine, FeedItem, NewPostsPill, useNewPosts } from "@/components/community/feed-motion";
 import { ActivitySpinner } from "@/components/activity-spinner";
+import { onNewVisit } from "@/lib/feed-anchor";
 import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 
 /**
@@ -180,13 +181,18 @@ export function CommunityScreen({
   const ranked = useRankedFeed();
   const rankedPosts = useMemo(() => uniquePosts(ranked.data?.pages.flatMap((p) => p.posts) ?? []), [ranked.data]);
   const ownPosts = useMemo(() => rankedPosts.filter(inFeed), [rankedPosts]);
-  // All (the whole crew, like a Strava club) or Following (just the people you follow, and you).
+  // Crew (the whole crew, like a Strava club) or Following (the people you follow, what they
+  // repost, and you), the tabs at the top (TikTok's). It always opens on Crew: a fresh screen,
+  // a new visit (back after 30 minutes, a tap on Crew, the New posts pill) puts it back there.
   const { data: follows } = useFollowState(!hideTabs);
   const followingIds = useMemo(() => new Set(follows?.following ?? []), [follows]);
-  const [only, setOnly] = useState<"all" | "following">("all");
-  const following = only === "following" && followingIds.size > 0;
+  const [feedTab, setFeedTab] = useState<CrewFeedTab>("crew");
+  useEffect(() => onNewVisit(() => setFeedTab("crew")), []);
+  const following = feedTab === "following";
+  // following nobody: nothing to show but the way to people to follow (never your own posts alone)
+  const followsNobody = following && followingIds.size === 0;
   const feedPosts = useMemo(
-    () => (following ? ownPosts.filter((p) => inFollowingFeed(p, followingIds)) : ownPosts),
+    () => (!following ? ownPosts : followingIds.size === 0 ? [] : ownPosts.filter((p) => inFollowingFeed(p, followingIds))),
     [following, ownPosts, followingIds],
   );
   // "You're all caught up" goes before the first post you'd already seen, when new ones came first
@@ -483,7 +489,8 @@ export function CommunityScreen({
   }, [readAhead, feed.isFetchingNextPage, feed.fetchNextPage]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const el = sentinel.current;
-    if (!el || !hasNextPage || scope.kind !== "feed") return;
+    // following nobody: no reading the whole crew's history for posts that can't be there
+    if (!el || !hasNextPage || scope.kind !== "feed" || followsNobody) return;
     const io = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting && !isFetchingNextPage) void fetchNextPage();
@@ -495,7 +502,7 @@ export function CommunityScreen({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, feedPosts.length, scope.kind, paging]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, feedPosts.length, scope.kind, paging, followsNobody]);
 
   // The first screen is the story rail and the first post: from where it starts to the bottom of the screen.
   const firstScreen = useRef<HTMLDivElement | null>(null);
@@ -580,14 +587,16 @@ export function CommunityScreen({
         </>
       }
       center={
-        <CrewBrand
-          following={following}
-          canFilter={!previewOnly && followingIds.size > 0}
-          onFilter={(f) => {
-            setOnly(f);
+        <CrewFeedTabs
+          tab={feedTab}
+          onPick={(t) => {
+            // the one you're on: back to its top (TikTok's)
+            if (t === feedTab) return window.scrollTo({ top: 0, behavior: "smooth" });
+            // a preview is the coach's own follows, never the client's
+            if (t === "following" && previewOnly) return void toast("Preview only. Their Following feed is theirs to see.");
+            setFeedTab(t);
             window.scrollTo({ top: 0 });
           }}
-          onTop={() => window.scrollTo({ top: 0, behavior: "smooth" })}
         />
       }
       right={
@@ -734,7 +743,7 @@ export function CommunityScreen({
           }
           empty={
             following && feedPosts.length === 0 ? (
-              <EmptyNote title="Nothing new from people you follow" body="Their posts land here. The whole crew is under All." action={<Button type="button" variant="outline" className="w-full" onClick={() => setOnly("all")}>Show all posts</Button>} />
+              <FollowingEmpty nobody={followsNobody} looking={!!hasNextPage} onFind={() => openDiscover("feed")} onCrew={() => setFeedTab("crew")} />
             ) : null
           }
           pages={feedPosts.flatMap((p, i) => {
@@ -813,9 +822,9 @@ export function CommunityScreen({
             addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} story /> : null}
             rankings={rankings}
           />
-          {/* All / Following lives in the name at the top (its ⌄), Instagram's way: no second row of chips here */}
+          {/* Crew / Following are the tabs at the top (TikTok's): no second row of chips here */}
           {following && feedPosts.length === 0 && (
-            <EmptyNote title="Nothing new from people you follow" body="Their posts land here. The whole crew is under All." action={<Button type="button" variant="outline" className="w-full" onClick={() => setOnly("all")}>Show all posts</Button>} />
+            <FollowingEmpty nobody={followsNobody} looking={!!hasNextPage} onFind={() => openDiscover("feed")} onCrew={() => setFeedTab("crew")} />
           )}
           {feedPosts.map((p, i) => (
             <Fragment key={p.id}>
@@ -1203,6 +1212,35 @@ function PostRow(props: {
     <PostCard
       {...props}
       onReact={(_p: CommunityPost, next: ReactionKey | null) => react.mutate(next, { onError: () => toast.error("Couldn't save that reaction") })}
+    />
+  );
+}
+
+/**
+ * Following with nothing to show: following nobody, the way to people to follow;
+ * else, while older pages are still being read for their posts, a spinner; else
+ * nothing from them yet, and the way back to Crew.
+ */
+function FollowingEmpty({ nobody, looking, onFind, onCrew }: { nobody: boolean; looking: boolean; onFind: () => void; onCrew: () => void }) {
+  if (nobody)
+    return (
+      <EmptyNote
+        title="Follow people to fill this feed"
+        body="Their posts, and what they repost, show up here. Crew is everyone."
+        action={<Button type="button" className="w-full" onClick={onFind} data-following-find>Find people to follow</Button>}
+      />
+    );
+  if (looking)
+    return (
+      <div className="grid place-items-center py-16 text-muted-foreground" role="status" aria-label="Looking for posts from people you follow" data-following-looking>
+        <ActivitySpinner size={28} />
+      </div>
+    );
+  return (
+    <EmptyNote
+      title="Nothing yet from people you follow"
+      body="Their posts land here as they share. Everyone's on Crew."
+      action={<Button type="button" variant="outline" className="w-full" onClick={onCrew} data-following-crew>Back to Crew</Button>}
     />
   );
 }

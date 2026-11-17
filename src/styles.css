@@ -1397,7 +1397,7 @@ html.feed-paging main { overflow-x: clip; }
       rgb(0 0 0 / 0) 100%
     );
   }
-  .crew-bar[data-overlay] :is(svg, [data-crew-brand-name]) { filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.45)); }
+  .crew-bar[data-overlay] :is(svg, [data-crew-feed-tab]) { filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.45)); }
 }
 /* a moment with nothing to show (no one to suggest) takes no screen */
 .feed-page:empty { display: none; }
