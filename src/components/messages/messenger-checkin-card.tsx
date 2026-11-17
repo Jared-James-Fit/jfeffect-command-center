@@ -48,9 +48,6 @@ import type { CheckinExtra, CheckinPlan } from "@/lib/checkin-coordination/plan"
 import { addPlanSteps } from "@/lib/checkin-coordination/steps";
 import { CHANGE_FOLLOW_UPS, NU } from "@/lib/checkin-coordination/nutrition-fold";
 import { MEAL_CHOICE } from "@/lib/nutrition-history";
-
-/** The Nutrition Update Request (nutrition-ai-prompts.ts NUTRITION_REQUEST_FORM_ID, kept here so the chat never loads the prompts). */
-const NUTRITION_FORM_ID = "b7a1f0c2-5d3e-4c8a-9f21-6e0d4a1b2c3d";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
