@@ -1,3 +1,4 @@
+import { CompetitionPlanSummary } from "@/components/forms/competition-plan-summary";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { FormPresentation, FormHistoryGroup as FormHistoryGroupData } from "@/lib/form-message-presentation";
@@ -1242,6 +1243,7 @@ function SubmittedFormAnswers({
 
   return (
     <div className="mt-3 space-y-3">
+      <CompetitionPlanSummary submissionId={submissionId} formId={formId} />
       {isLoading ? (
         <div className={cn("flex items-center gap-2 text-xs", FORM_MUTED)}>
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading answers…

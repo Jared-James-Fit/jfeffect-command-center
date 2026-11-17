@@ -66,6 +66,14 @@ export const notifyAppEventFn = createServerFn({ method: "POST" })
           const { startNutritionPlan } = await import("@/lib/nutrition-ai-plans.server");
           return startNutritionPlan(sb, data.id);
         }
+        // A Competition Calendar + Strategy form: kept as a structured plan for the coach to approve
+        // (it never changes a program by itself). A failure here never stops the coach hearing it's in.
+        try {
+          const { recordCompetitionPlan } = await import("@/lib/competition-plan.server");
+          await recordCompetitionPlan(db, data.id);
+        } catch (e) {
+          console.error("[competition plan] couldn't record", e);
+        }
         clientId = s.client_id;
         break;
       }

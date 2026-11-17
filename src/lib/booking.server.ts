@@ -23,7 +23,16 @@ import {
   type BusyInterval,
   type Slot,
 } from "@/lib/booking-slots";
-import { bookedLocation, locationLabel, type BookingType } from "@/lib/booking-types";
+import { bookedLocation, isTrainingSessionType, locationLabel, type BookingType } from "@/lib/booking-types";
+import {
+  isHardOpen,
+  planAvailability,
+  sanitizeAvailability,
+  type AvailabilityOverride,
+  type AvailabilityPlan,
+  type AvailabilitySettings,
+  type BusyItem,
+} from "@/lib/smart-availability";
 import { googleBusyForBooking } from "@/lib/session-conflicts";
 import {
   addDaysISO,
@@ -74,18 +83,149 @@ export async function loadBookingType(admin: Admin, slug: string): Promise<Booki
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(clean)) return null;
   const { data } = await admin.from("booking_cards").select("*").eq("slug", clean).maybeSingle();
   if (!data || !(data as any).is_active || !(data as any).online_enabled) return null;
-  const { data: hours } = await admin
-    .from("booking_card_hours" as any)
-    .select("day_of_week, start_time, end_time")
-    .eq("booking_card_id", (data as any).id);
+  const [{ data: hours }, settings] = await Promise.all([
+    admin
+      .from("booking_card_hours" as any)
+      .select("day_of_week, start_time, end_time")
+      .eq("booking_card_id", (data as any).id),
+    (data as any).follows_smart ? loadAvailabilitySettings(admin) : Promise.resolve(null),
+  ]);
+  const smart = !!settings?.confirmedAt;
   return {
     ...(data as any),
+    // A type that follows his availability is shown and worked out in his zone.
+    timezone: smart ? settings!.timezone : (data as any).timezone,
+    smart,
     hours: ((hours ?? []) as any[]).map((h) => ({
       day_of_week: Number(h.day_of_week),
       start_time: String(h.start_time).slice(0, 5),
       end_time: String(h.end_time).slice(0, 5),
     })),
   } as BookingType;
+}
+
+// ── Smart availability ───────────────────────────────────────────────────────
+
+/** The coach's availability settings (defaults when the row is missing or unreadable). */
+export async function loadAvailabilitySettings(admin: Admin): Promise<AvailabilitySettings> {
+  const { data } = await admin.from("booking_availability" as any).select("settings").eq("id", true).maybeSingle();
+  return sanitizeAvailability((data as any)?.settings ?? {});
+}
+
+/** His changes for single dates in [from, to]. */
+export async function loadAvailabilityOverrides(admin: Admin, from: string, to: string): Promise<AvailabilityOverride[]> {
+  const { data, error } = await admin
+    .from("booking_availability_overrides" as any)
+    .select("id, date, kind, start_time, end_time, note, created_at")
+    .gte("date", from)
+    .lte("date", to)
+    .order("created_at");
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as any[]).map((o) => ({
+    id: o.id,
+    date: String(o.date),
+    kind: o.kind,
+    start: o.start_time ? String(o.start_time).slice(0, 5) : null,
+    end: o.end_time ? String(o.end_time).slice(0, 5) : null,
+    note: o.note ?? null,
+    created_at: o.created_at ?? null,
+  }));
+}
+
+/** Monday of a yyyy-mm-dd week. */
+function mondayOf(date: string): string {
+  const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return addDaysISO(date, -((dow + 6) % 7));
+}
+
+/**
+ * Calls already booked in [from, to] (his zone): every live appointment and
+ * every session that isn't training. They count toward the daily and weekly
+ * call limits.
+ */
+export async function loadBookedCalls(
+  admin: Admin,
+  from: string,
+  to: string,
+  tz: string,
+): Promise<Array<{ start: number; end: number; typeId: string | null }>> {
+  const fromISO = wallTimeToUtc(from, "00:00", tz).toISOString();
+  const toISO = wallTimeToUtc(addDaysISO(to, 1), "00:00", tz).toISOString();
+  const [sessions, appts] = await Promise.all([
+    admin
+      .from("pt_sessions")
+      .select("starts_at, ends_at, session_type, booking_card_id")
+      .in("status", ["Scheduled", "Completed"])
+      .gte("starts_at", fromISO)
+      .lt("starts_at", toISO),
+    admin
+      .from("appointments")
+      .select("starts_at, ends_at, booking_card_id")
+      .in("status", ["Scheduled", "Completed"])
+      .gte("starts_at", fromISO)
+      .lt("starts_at", toISO),
+  ]);
+  for (const r of [sessions, appts]) if (r.error) throw new Error(r.error.message);
+  const out: Array<{ start: number; end: number; typeId: string | null }> = [];
+  for (const s of (sessions.data ?? []) as any[]) {
+    if (isTrainingSessionType(s.session_type)) continue;
+    out.push({ start: Date.parse(s.starts_at), end: Date.parse(s.ends_at), typeId: s.booking_card_id ?? null });
+  }
+  for (const a of (appts.data ?? []) as any[])
+    out.push({ start: Date.parse(a.starts_at), end: Date.parse(a.ends_at), typeId: a.booking_card_id ?? null });
+  return out.filter((c) => Number.isFinite(c.start) && Number.isFinite(c.end));
+}
+
+/**
+ * The smart plan for a type between two days in his zone: his settings and
+ * date changes, everything busy (Google read on every calendar, or nothing is
+ * offered), and the calls already booked across the whole weeks touched (for
+ * the weekly limit).
+ */
+export async function smartPlan(
+  admin: Admin,
+  type: BookingType,
+  from: string,
+  to: string,
+  now = new Date(),
+  settingsIn?: AvailabilitySettings,
+): Promise<AvailabilityPlan> {
+  const settings = settingsIn ?? (await loadAvailabilitySettings(admin));
+  const tz = settings.timezone;
+  const weekFrom = mondayOf(from);
+  const weekTo = addDaysISO(mondayOf(to), 6);
+  const fromMs = wallTimeToUtc(addDaysISO(from, -1), "00:00", tz).getTime();
+  const toMs = wallTimeToUtc(addDaysISO(to, 2), "00:00", tz).getTime();
+  const host = await bookingHost(admin);
+  const [busy, overrides, calls] = await Promise.all([
+    loadBusy(admin, fromMs, toMs, tz, host.id),
+    loadAvailabilityOverrides(admin, weekFrom, weekTo),
+    loadBookedCalls(admin, weekFrom, weekTo, tz),
+  ]);
+  const typeCallsPerDay: Record<string, number> = {};
+  for (const c of calls) {
+    if (c.typeId !== type.id) continue;
+    const d = localDateISO(new Date(c.start), tz);
+    typeCallsPerDay[d] = (typeCallsPerDay[d] ?? 0) + 1;
+  }
+  return planAvailability({
+    settings,
+    overrides,
+    type: {
+      durationMin: type.duration_minutes,
+      bufferMin: type.buffer_minutes ?? 0,
+      minNoticeHours: type.min_notice_hours ?? 0,
+      maxAdvanceDays: type.max_advance_days ?? 60,
+      maxPerDay: type.max_per_day ?? null,
+      hours: type.hours ?? [],
+    },
+    busy,
+    calls,
+    typeCallsPerDay,
+    from,
+    to,
+    now,
+  });
 }
 
 /** The coach whose Google calendars and name stand behind online bookings. */
@@ -129,12 +269,17 @@ async function googleBusy(
   fromISO: string,
   toISO: string,
   tz: string,
+  extraCalendars: string[] = [],
 ): Promise<BusyInterval[]> {
-  const { gcalListEvents, workspaceCalendarConfigured } = await import("@/lib/google-cal.server");
+  const { gcalListEvents, scheduleCalendarIds, workspaceCalendarConfigured } = await import("@/lib/google-cal.server");
   if (!workspaceCalendarConfigured()) return [];
   let events;
   try {
-    events = await gcalListEvents(hostCoachId, fromISO, toISO, undefined, { requireAll: true });
+    // The app's calendar and his main one always; any others he ticked only add busy time.
+    const ids = extraCalendars.length
+      ? Array.from(new Set([...(await scheduleCalendarIds(hostCoachId)), ...extraCalendars]))
+      : undefined;
+    events = await gcalListEvents(hostCoachId, fromISO, toISO, ids, { requireAll: true });
   } catch {
     // Never offer times we couldn't check: a "free" slot here could double-book.
     throw new BookingError(
@@ -155,7 +300,7 @@ export async function loadBusy(
   toMs: number,
   tz: string,
   hostCoachId: string | null,
-): Promise<BusyInterval[]> {
+): Promise<BusyItem[]> {
   const fromISO = new Date(fromMs).toISOString();
   const toISO = new Date(toMs).toISOString();
   const [sessions, appts, events, google] = await Promise.all([
@@ -179,22 +324,22 @@ export async function loadBusy(
       .not("end_time", "is", null)
       .gte("event_date", localDateISO(new Date(fromMs), tz))
       .lte("event_date", localDateISO(new Date(toMs), tz)),
-    googleBusy(hostCoachId, fromISO, toISO, tz),
+    loadAvailabilitySettings(admin).then((s) => googleBusy(hostCoachId, fromISO, toISO, tz, s.extraCalendars)),
   ]);
   // A query that failed must not read as "free".
   for (const r of [sessions, appts, events]) if (r.error) throw new Error(r.error.message);
-  const busy: BusyInterval[] = [];
+  const busy: BusyItem[] = [];
   for (const s of (sessions.data ?? []) as any[])
-    busy.push({ start: Date.parse(s.starts_at), end: Date.parse(s.ends_at) });
+    busy.push({ start: Date.parse(s.starts_at), end: Date.parse(s.ends_at), kind: "session" });
   for (const a of (appts.data ?? []) as any[])
-    busy.push({ start: Date.parse(a.starts_at), end: Date.parse(a.ends_at) });
+    busy.push({ start: Date.parse(a.starts_at), end: Date.parse(a.ends_at), kind: "appointment" });
   for (const e of (events.data ?? []) as any[]) {
     const zone = e.timezone || tz;
     const start = wallTimeToUtc(e.event_date, String(e.start_time).slice(0, 5), zone).getTime();
     const end = wallTimeToUtc(e.event_date, String(e.end_time).slice(0, 5), zone).getTime();
-    if (end > start) busy.push({ start, end });
+    if (end > start) busy.push({ start, end, kind: "event" });
   }
-  busy.push(...google);
+  busy.push(...google.map((g) => ({ ...g, kind: "google" as const })));
   return busy.filter((b) => Number.isFinite(b.start) && Number.isFinite(b.end) && b.end > b.start);
 }
 
@@ -240,6 +385,7 @@ export async function openSlots(
   to: string,
   now = new Date(),
 ): Promise<Slot[]> {
+  if (type.smart) return (await smartPlan(admin, type, from, to, now)).slots;
   const rules = rulesOf(type);
   const { first, last } = bookableDays(rules, now);
   const start = from > first ? from : first;
@@ -418,8 +564,9 @@ export async function createOnlineBooking(
     }
   }
 
-  // Hold the time (plus buffer), then check it's really open, then write.
-  const bufferMs = (type.buffer_minutes ?? 0) * 60_000;
+  // Hold the time (plus buffer, or his call gap for a smart type), then check it's really open, then write.
+  const gapMin = type.smart ? (await loadAvailabilitySettings(admin)).gapMin : 0;
+  const bufferMs = Math.max(type.buffer_minutes ?? 0, gapMin) * 60_000;
   const startMs = when.getTime();
   const claimId = await claimTime(
     admin,
@@ -430,7 +577,11 @@ export async function createOnlineBooking(
   let result: BookingResult;
   try {
     const day = localDateISO(when, tz);
-    const slot = isOpenSlot(await openSlots(admin, type, day, day, now), opts.startISO);
+    // A smart type re-checks the hard rules for that exact time (free, inside his boundaries,
+    // under the limits), not the smart picks, which can shift as the day fills.
+    const slot = type.smart
+      ? isHardOpen(await smartPlan(admin, type, day, day, now), opts.startISO, type.duration_minutes)
+      : isOpenSlot(await openSlots(admin, type, day, day, now), opts.startISO);
     if (!slot) throw new BookingError("taken", "That time was just taken. Pick another one.");
     const host = await bookingHost(admin);
     result = trustedClient

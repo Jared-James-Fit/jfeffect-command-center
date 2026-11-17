@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { sentSinceAsked } from "@/lib/form-request-state";
+import { answerAsText } from "@/lib/form-fields";
 import type { PickedVideo } from "@/lib/video-edit/pick";
 import { createVideoSend, videoErrorMessage } from "@/lib/video-edit/pipeline";
 
@@ -16,6 +17,9 @@ export const NF_QUESTION_TYPES = [
   "date",
   "file",
   "video",
+  "competitions",
+  "ranking",
+  "info",
 ] as const;
 export type NfQuestionType = (typeof NF_QUESTION_TYPES)[number];
 
@@ -30,7 +34,13 @@ export const NF_QUESTION_TYPE_LABEL: Record<NfQuestionType, string> = {
   date: "Date",
   file: "File upload",
   video: "Video upload",
+  competitions: "Competitions (meets)",
+  ranking: "Ranking (put in order)",
+  info: "Heading / info text",
 };
+
+/** Answered with a list (value_json), not words or a number. */
+export const NF_JSON_TYPES: ReadonlySet<NfQuestionType> = new Set(["multi_choice", "competitions", "ranking"]);
 
 export type NfRecurrence = "none" | "weekly" | "biweekly" | "monthly";
 export type NfSubmissionStatus = "in_progress" | "submitted" | "pending_review" | "reviewed";
@@ -752,10 +762,9 @@ export function shouldShowQuestion(q: NfQuestion, answers: Record<string, NfAnsw
   const cl = q.conditional_logic ?? {};
   const match = cl.match ?? "all";
   const evalRule = (r: NfConditionalRule): boolean => {
-    const ans = answers[r.question_id];
-    const raw = ans?.value_text ?? (ans?.value_number != null ? String(ans.value_number) : "")
-      ?? (Array.isArray(ans?.value_json) ? (ans!.value_json as any[]).join(",") : "");
-    const v = String(raw ?? "");
+    // Words, a number, or a list (checkboxes, meets, a ranking) as text: the list used to be skipped,
+    // so "show when the checkboxes contain …" never matched.
+    const v = answerAsText(answers[r.question_id]);
     switch (r.op) {
       case "equals": return v === String(r.value);
       case "not_equals": return v !== String(r.value);

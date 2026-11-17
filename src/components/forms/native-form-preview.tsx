@@ -11,6 +11,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Eye, Monitor, Smartphone, Upload } from "lucide-react";
 import { QuestionReferenceImage, getQuestionReferenceImage } from "@/components/forms/question-reference-image";
+import { GroupedChoice, MeetsInput, RankingInput } from "@/components/forms/form-field-inputs";
+import { meetItems } from "@/lib/form-fields";
 import {
   shouldShowQuestion,
   type NfForm,
@@ -110,7 +112,13 @@ export function NativeFormPreviewDialog({
             )}
             {visible
               .filter((q) => shouldShowQuestion(q, answersMap))
-              .map((q, idx) => (
+              .map((q, idx) =>
+                q.question_type === "info" ? (
+                  <div key={q.id} className="px-1 pt-2">
+                    <p className="text-base font-semibold">{q.label}</p>
+                    {q.help_text && <p className="mt-1 text-xs text-muted-foreground">{q.help_text}</p>}
+                  </div>
+                ) : (
                 <Card key={q.id} className="border-border bg-card p-4">
                   <Label className="text-base font-bold">
                     {idx + 1}. {q.label}
@@ -129,10 +137,12 @@ export function NativeFormPreviewDialog({
                         setFakeFiles((s) => ({ ...s, [q.id]: [...(s[q.id] ?? []), name] }))
                       }
                       files={fakeFiles[q.id] ?? []}
+                      sourceItems={typeof (q.validation as any)?.options_from === "string" ? meetItems(values[(q.validation as any).options_from]) : null}
                     />
                   </div>
                 </Card>
-              ))}
+                ),
+              )}
             {visible.length === 0 && (
               <Card className="border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
                 No questions yet — add some, then preview again.
@@ -171,14 +181,38 @@ function PreviewInput({
   onChange,
   onFakeFile,
   files,
+  sourceItems,
 }: {
   q: NfQuestion;
   value: any;
   onChange: (v: any) => void;
   onFakeFile: (name: string) => void;
   files: string[];
+  sourceItems?: Array<{ key: string; label: string }> | null;
 }) {
   const opts = (q.options ?? []) as string[];
+  const v = (q.validation ?? {}) as Record<string, any>;
+  if (q.question_type === "competitions") {
+    return <MeetsInput options={opts} noneLabel={typeof v.none_option === "string" ? v.none_option : null} value={value} readOnly={false} onChange={(next) => onChange(next)} />;
+  }
+  if (q.question_type === "ranking") {
+    return <RankingInput items={sourceItems ?? opts.map((o) => ({ key: o, label: o }))} value={value} readOnly={false} emptyText="Pick meets above first." onChange={onChange} />;
+  }
+  if ((q.question_type === "single_choice" || q.question_type === "dropdown") && sourceItems) {
+    return (
+      <RadioGroup value={value ?? ""} onValueChange={onChange}>
+        {sourceItems.map((o) => (
+          <div key={o.key} className="flex items-center gap-2">
+            <RadioGroupItem value={o.label} id={`prev-${q.id}-${o.key}`} />
+            <Label htmlFor={`prev-${q.id}-${o.key}`} className="font-normal">{o.label}</Label>
+          </div>
+        ))}
+      </RadioGroup>
+    );
+  }
+  if ((q.question_type === "single_choice" || q.question_type === "dropdown") && Array.isArray(v.group_prefixes) && v.group_prefixes.length) {
+    return <GroupedChoice options={opts} prefixes={v.group_prefixes} value={value ?? ""} sex={null} readOnly={false} onChange={onChange} />;
+  }
   if (q.question_type === "short_text") return <Input value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
   if (q.question_type === "long_text") return <Textarea rows={4} value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
   if (q.question_type === "number") return <Input type="number" value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;

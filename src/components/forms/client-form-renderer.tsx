@@ -42,6 +42,9 @@ import { playAppSound } from "@/lib/app-sounds";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { cn } from "@/lib/utils";
 import { choiceLayout, formProgress, numberIssue, numberRange, quickAnswers, quickExclusive, quickNumberLabel, quickPicked, toggleQuick } from "@/lib/form-quick";
+import { NF_JSON_TYPES } from "@/lib/native-forms";
+import { alignRanking, meetItems } from "@/lib/form-fields";
+import { AgeClassHint, GroupedChoice, MeetsInput, RankingInput } from "@/components/forms/form-field-inputs";
 
 export type ClientFormRendererProps = {
   /** Form to render. */
@@ -97,7 +100,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     queryFn: async () => {
       const wantsPlan = prefillQs.some((q) => questionPrefill(q) === "nutrition_plan");
       const [{ data }, plans] = await Promise.all([
-        supabase.from("clients").select("sex, height_cm, preferred_height_unit").eq("id", client!.id).maybeSingle(),
+        supabase.from("clients").select("sex, height_cm, preferred_height_unit, full_name, date_of_birth").eq("id", client!.id).maybeSingle(),
         wantsPlan
           ? (supabase as any)
               .from("nutrition_targets")
@@ -150,7 +153,13 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   }, [answersRaw]);
 
   const [local, setLocal] = useState<Record<string, any>>({});
+  // Start from the saved answers when they change, and only then: React can re-run this effect
+  // with the form's state kept (a part below it suspending after the first paint), and a reset
+  // then wiped answers just prefilled or typed.
+  const appliedAnswers = useRef<NfAnswer[] | null>(null);
   useEffect(() => {
+    if (appliedAnswers.current === answersRaw) return;
+    appliedAnswers.current = answersRaw;
     const base: Record<string, any> = {};
     for (const a of answersRaw) {
       base[a.question_id] = a.value_json ?? a.value_text ?? a.value_number ?? "";
@@ -170,7 +179,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     const payload: any = { submission_id: submission.id, question_id: q.id };
     if (q.question_type === "number" || q.question_type === "rating") {
       payload.value_number = raw === "" || raw == null || !Number.isFinite(Number(raw)) ? null : Number(raw);
-    } else if (q.question_type === "multi_choice") {
+    } else if (NF_JSON_TYPES.has(q.question_type)) {
       payload.value_json = raw ?? [];
     } else {
       payload.value_text = raw == null ? null : String(raw);
@@ -254,6 +263,44 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [submission, answersData, prefillProfile, prefillQs, answersMap]);
 
+  // "Start from their last answer" (validation.remember): a form sent again opens on what they said
+  // last time, so they only change what's different. Never over an answer already given.
+  const rememberQs = useMemo(() => questions.filter((q) => (q.validation as any)?.remember === true), [questions]);
+  const { data: lastAnswers } = useQuery({
+    queryKey: ["nf-last-answers", formId, client?.id, submission?.id],
+    enabled: !!client?.id && !!submission?.id && submission.status === "in_progress" && rememberQs.length > 0,
+    queryFn: async () => {
+      const { data: prev } = await supabase
+        .from("nf_submissions")
+        .select("id")
+        .eq("form_id", formId)
+        .eq("client_id", client!.id)
+        .neq("id", submission!.id)
+        .neq("status", "in_progress")
+        .order("submitted_at", { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle();
+      return prev ? listAnswers((prev as any).id) : [];
+    },
+  });
+  const [carried, setCarried] = useState(false);
+  useEffect(() => {
+    if (!submission || submission.status !== "in_progress" || !answersData || !lastAnswers?.length) return;
+    let any = false;
+    for (const q of rememberQs) {
+      if (answersMap[q.id] || seeded.current.has(q.id)) continue;
+      const prev = lastAnswers.find((a) => a.question_id === q.id);
+      if (!prev) continue;
+      const value = NF_JSON_TYPES.has(q.question_type) ? prev.value_json : q.question_type === "number" || q.question_type === "rating" ? prev.value_number : prev.value_text;
+      if (value == null || (Array.isArray(value) && !value.length) || value === "") continue;
+      seeded.current.add(q.id);
+      any = true;
+      void saveAnswer(q, value);
+    }
+    if (any) setCarried(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submission, answersData, lastAnswers, rememberQs, answersMap]);
+
   const [busyQ, setBusyQ] = useState<Record<string, "uploading" | "removing" | "replacing" | undefined>>({});
 
   // Warn before leaving while a file upload/replace is in flight — those are
@@ -320,10 +367,20 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     }
   }
 
+  /** Items a ranking or a choice draws from another question (the meets picked earlier). */
+  function sourceItems(q: NfQuestion) {
+    const from = (q.validation as any)?.options_from;
+    if (typeof from !== "string") return null;
+    return meetItems(local[from]);
+  }
+  function rankItemsFor(q: NfQuestion) {
+    return sourceItems(q) ?? ((q.options ?? []) as string[]).map((o) => ({ key: o, label: o }));
+  }
+
   async function handleSubmit() {
     if (!submission) return;
     const visible = questions.filter((q) => shouldShowQuestion(q, liveAnswers));
-    const missing = visible.filter((q) => q.required && !isAnswered(q, local[q.id], files));
+    const missing = visible.filter((q) => q.required && !(q.question_type === "ranking" ? rankItemsFor(q).length > 0 || isAnswered(q, local[q.id], files) : isAnswered(q, local[q.id], files)));
     const off = visible.filter((q) => q.question_type === "number" && numberIssue(q, local[q.id]));
     if (missing.length > 0 || off.length > 0) {
       // outline them and take them to the first one
@@ -338,6 +395,15 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
             : `Answer the ${missing.length} highlighted questions`
           : "Check the highlighted answer",
       );
+    }
+    // a ranking nobody moved is answered in the order it's shown
+    for (const q of visible) {
+      if (q.question_type !== "ranking") continue;
+      const list = alignRanking(local[q.id], rankItemsFor(q));
+      const stored = Array.isArray(local[q.id]) ? (local[q.id] as any[]) : [];
+      if (list.length && (stored.length !== list.length || list.some((l, i) => stored[i]?.key !== l.key || stored[i]?.label !== l.label))) {
+        void saveAnswer(q, list);
+      }
     }
     // typed answers still waiting to save go first
     await flushSaves();
@@ -446,7 +512,22 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
           </Card>
         )}
 
-        {shownQuestions.map((q, idx) => {
+        {carried && !readOnly && (
+          <p className="rounded-xl bg-muted px-3.5 py-2.5 text-[14px]" data-form-carried>
+            Your last answers are filled in. Change anything that's different now.
+          </p>
+        )}
+
+        {shownQuestions.map((q) => {
+          if (q.question_type === "info") {
+            return (
+              <section key={q.id} id={`q-${q.id}`} className="px-1 pt-2" data-form-question="info">
+                <h3 className="text-[19px] font-semibold leading-snug">{q.label}</h3>
+                {q.help_text && <p className="mt-1 whitespace-pre-wrap text-[14px] leading-snug text-muted-foreground">{q.help_text}</p>}
+              </section>
+            );
+          }
+          const idx = shownQuestions.filter((x) => x.question_type !== "info").indexOf(q);
           const issue = q.question_type === "number" ? numberIssue(q, local[q.id]) : null;
           const flag = flagged.has(q.id);
           return (
@@ -476,6 +557,8 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
                 <QuestionInput
                   q={q}
                   value={local[q.id]}
+                  sourceItems={sourceItems(q)}
+                  profile={prefillProfile ?? null}
                   files={files.filter((f) => f.question_id === q.id)}
                   readOnly={!!readOnly}
                   busy={busyQ[q.id]}
@@ -551,6 +634,8 @@ function isAnswered(q: NfQuestion, v: any, files: { question_id: string }[]): bo
 function QuestionInput({
   q,
   value,
+  sourceItems,
+  profile,
   files,
   readOnly,
   busy,
@@ -562,6 +647,9 @@ function QuestionInput({
 }: {
   q: NfQuestion;
   value: any;
+  /** A ranking's or choice's items from another question (the meets picked earlier). */
+  sourceItems?: Array<{ key: string; label: string }> | null;
+  profile?: { sex?: string | null; date_of_birth?: string | null } | null;
   files: any[];
   readOnly: boolean;
   busy?: "uploading" | "removing" | "replacing";
@@ -578,6 +666,38 @@ function QuestionInput({
   const exclusive = quickExclusive(q);
   // big enough for a thumb, 16px so iOS never zooms the page in
   const field = "h-12 rounded-xl px-3.5 text-[16px]";
+  const v = (q.validation ?? {}) as Record<string, any>;
+  if (q.question_type === "competitions") {
+    return (
+      <MeetsInput
+        options={opts}
+        noneLabel={typeof v.none_option === "string" ? v.none_option : null}
+        value={value}
+        readOnly={readOnly}
+        onChange={(next, typed) => onChange(next, typed)}
+      />
+    );
+  }
+  if (q.question_type === "ranking") {
+    const items = sourceItems ?? opts.map((o) => ({ key: o, label: o }));
+    return (
+      <RankingInput
+        items={items}
+        value={value}
+        readOnly={readOnly}
+        emptyText={sourceItems ? "Pick the meets you're considering above first." : "Nothing to put in order."}
+        onChange={(next) => onChange(next)}
+      />
+    );
+  }
+  if ((q.question_type === "single_choice" || q.question_type === "dropdown") && sourceItems) {
+    const labels = sourceItems.map((i) => i.label);
+    if (!labels.length) return <p className="rounded-xl bg-muted px-3.5 py-3 text-[14px] text-muted-foreground">Pick the meets you're considering above first.</p>;
+    return <ChoiceButtons options={labels} label={q.label} picked={(o) => value === o} readOnly={readOnly} onPick={(o) => onChange(value === o ? "" : o)} />;
+  }
+  if ((q.question_type === "single_choice" || q.question_type === "dropdown") && Array.isArray(v.group_prefixes) && v.group_prefixes.length) {
+    return <GroupedChoice options={opts} prefixes={v.group_prefixes} value={typeof value === "string" ? value : ""} sex={profile?.sex} readOnly={readOnly} onChange={(o) => onChange(o)} />;
+  }
   if (q.question_type === "short_text" || q.question_type === "long_text") {
     const text = typeof value === "string" ? value : value == null ? "" : String(value);
     const placeholder = quick.length ? "Or type your own…" : "Type your answer…";
@@ -667,6 +787,8 @@ function QuestionInput({
   if (q.question_type === "multi_choice") {
     const arr: string[] = Array.isArray(value) ? value : [];
     return (
+      <>
+      {v.prefill === "age_class" && !readOnly && <AgeClassHint options={opts} birthDate={profile?.date_of_birth} />}
       <ChoiceButtons
         multi
         options={opts}
@@ -675,6 +797,7 @@ function QuestionInput({
         readOnly={readOnly}
         onPick={(o) => onChange(arr.includes(o) ? arr.filter((x) => x !== o) : [...arr, o])}
       />
+      </>
     );
   }
   if (q.question_type === "file" || q.question_type === "video") {

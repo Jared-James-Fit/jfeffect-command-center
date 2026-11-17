@@ -21,7 +21,7 @@ import { createAgreement } from "@/lib/agreements.functions";
 import { shareRecipeWithClients } from "@/lib/chat-requests.functions";
 
 export type ChatSendAttachment = {
-  kind: "form_request" | "signature_request" | "recipe_share";
+  kind: "form_request" | "signature_request" | "recipe_share" | "booking_invite";
   type: "link";
   url: string;
   form_id?: string;
@@ -32,6 +32,13 @@ export type ChatSendAttachment = {
   agreement_client_map?: { client_id: string; agreement_id: string }[];
   request_title?: string;
   request_note?: string;
+  // booking_invite (messages/booking-invite.tsx)
+  booking_slug?: string;
+  booking_card_id?: string;
+  duration_min?: number;
+  where?: string;
+  client_id?: string;
+  sent_at?: string;
 };
 
 export function ChatSendMenu({

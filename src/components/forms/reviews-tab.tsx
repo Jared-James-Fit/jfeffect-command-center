@@ -1,3 +1,4 @@
+import { formAnswerText } from "@/lib/form-answer-text";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -578,9 +579,9 @@ function ReviewDetail({ reviewId, coaches, onDeleted }: { reviewId: string; coac
         {review.source_type === "native" ? (
           <div className="space-y-3 text-sm">
             {questions.length === 0 && <div className="text-muted-foreground">No questions found.</div>}
-            {questions.map((q: any) => {
+            {questions.filter((q: any) => q.question_type !== "info").map((q: any) => {
               const a = answers.find((x: any) => x.question_id === q.id);
-              const val = a?.value_text ?? a?.value_json ?? a?.value_number ?? a?.value_boolean ?? null;
+              const val = a ? formAnswerText(a) || null : null;
               return (
                 <div key={q.id}>
                   <div className="text-xs font-semibold text-muted-foreground">{q.label}</div>
