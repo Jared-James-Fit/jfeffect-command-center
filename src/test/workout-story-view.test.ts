@@ -255,7 +255,7 @@ describe("Focus view (stored as story): easy to read, sets by the thumb", () => 
     expect(read("src/components/app-shell.tsx")).toContain("const handleBack = usePageBack(backTo);");
   });
   it("the top bar leads with where you are; the clock is plain and hides once stopped", () => {
-    expect(story).toContain("Exercise {index + 1} of {count}");
+    expect(story).toContain("{focusPlaceLabel(index, count, cardioFrom ?? count)}");
     expect(story).toContain("if (!session || session.stoppedAt != null || isSessionAbandoned(session, now)) return null;");
     expect(story).toContain("border-b border-border/60 bg-background");
     expect(day).toContain("timer={!completion?.completed_at ? <FocusClock dayId={dayId} /> : undefined}");
@@ -264,7 +264,7 @@ describe("Focus view (stored as story): easy to read, sets by the thumb", () => 
     expect(css).not.toContain("data-story-fill");
     expect(day).not.toContain("data-focus-spacer");
     expect(day).not.toContain("data-story-fill");
-    expect(day).toContain("{canEditWorkoutStructure && !storyOpen && (");
+    expect(day).toContain("{canEditWorkoutStructure && !storyOpen && !cardioRow && (");
   });
   it("starts under the notch; the View as client banner steps aside while it's open (the red frame stays), no blank band", () => {
     expect(css).toContain(":root { --focus-top: env(safe-area-inset-top, 0px); }");
