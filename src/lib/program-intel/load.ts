@@ -308,6 +308,25 @@ export async function loadIntelRecords(
     },
     null,
   );
+  const competitionPlan = await optional<IntelRecords["competitionPlan"]>(
+    "competition plan",
+    async () => {
+      const { data, error } = await (sb as any)
+        .from("athlete_competition_plans")
+        .select("plan, status, reviewed_at, created_at")
+        .eq("client_id", clientId)
+        .neq("status", "dismissed")
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      const rows = (data ?? []) as any[];
+      const approved = rows.filter((r) => r.status === "approved").sort((a, b) => String(b.reviewed_at).localeCompare(String(a.reviewed_at)))[0];
+      const pending = rows.find((r) => r.status === "submitted" && (!approved || r.created_at > approved.created_at));
+      if (approved) return { plan: approved.plan, approvedAt: String(approved.reviewed_at ?? approved.created_at).slice(0, 10), pendingSince: pending ? String(pending.created_at).slice(0, 10) : null };
+      return pending ? { plan: null, approvedAt: null, pendingSince: String(pending.created_at).slice(0, 10) } : null;
+    },
+    null,
+  );
   // Check-ins and other forms the athlete sent while this training ran (and the 4 weeks before it), answers as text.
   const firstTrainingDate = [...blocks.map((b) => b.start_date).filter(Boolean)].sort()[0] as string | undefined;
   const checkinsFrom = addDaysIso(scope.from ?? firstTrainingDate ?? today, -28);
@@ -319,11 +338,13 @@ export async function loadIntelRecords(
       );
       if (!subs.length) return [];
       const formIds = [...new Set(subs.map((x) => x.form_id).filter(Boolean))] as string[];
-      const forms = await fetchByIds<any>(formIds, (ids, f, t) => sb.from("nf_forms").select("id, title").in("id", ids).range(f, t));
+      const forms = await fetchByIds<any>(formIds, (ids, f, t) => sb.from("nf_forms").select("id, title, form_type").in("id", ids).range(f, t));
+      // A competition strategy form reaches the AI only as the plan the coach approved (below), never as raw answers.
+      const competitionForms = new Set(forms.filter((x) => x.form_type === "competition_strategy").map((x) => x.id as string));
       const questions = await fetchByIds<any>(formIds, (ids, f, t) => sb.from("nf_questions").select("id, form_id, label, order_index, question_type").in("form_id", ids).range(f, t));
       const answers = await fetchByIds<any>(subs.map((x) => x.id), (ids, f, t) => sb.from("nf_answers").select("submission_id, question_id, value_text, value_number, value_json").in("submission_id", ids).range(f, t));
       const title = new Map(forms.map((x) => [x.id, x.title as string]));
-      return subs.map((x) => ({
+      return subs.filter((x) => !competitionForms.has(x.form_id)).map((x) => ({
         id: x.id,
         form: title.get(x.form_id) ?? null,
         submitted_at: x.submitted_at,
@@ -425,6 +446,7 @@ export async function loadIntelRecords(
     fileNotes,
     observations,
     checkins,
+    competitionPlan,
     profile,
     cardioTargets,
     cardioCompletions,

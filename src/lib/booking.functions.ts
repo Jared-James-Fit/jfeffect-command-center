@@ -50,7 +50,7 @@ function publicView(t: BookingType, hostName: string) {
     usesCredit: t.uses_credit,
     color: t.color,
     hostName,
-    hasHours: (t.hours ?? []).length > 0,
+    hasHours: !!t.smart || (t.hours ?? []).length > 0,
   };
 }
 export type PublicBookingType = ReturnType<typeof publicView>;

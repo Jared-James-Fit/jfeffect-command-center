@@ -30,6 +30,7 @@ import { keepChatVideo } from "@/lib/chat-video-store";
 import { compressImage } from "@/lib/image-compress";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 import { StaffInviteChatCard } from "@/components/staff-invite-chat-card";
+import { BookingInviteCard } from "@/components/messages/booking-invite";
 
 /* ------------------------------- Attachment Types (shared shape) ------------------------------- */
 
@@ -47,7 +48,7 @@ export type SharedAttachment = {
   width?: number;
   height?: number;
   peaks?: number[];
-  kind?: "sound" | "gif" | "payment_request" | "auto_pay_setup" | "form_request" | "signature_request" | "recipe_share" | "community_post" | "staff_invite";
+  kind?: "sound" | "gif" | "payment_request" | "auto_pay_setup" | "form_request" | "signature_request" | "recipe_share" | "community_post" | "staff_invite" | "booking_invite";
   fallback_emoji?: string;
   // community_post: the post it opens (a reply from the post's Message button)
   post_id?: string;
@@ -804,6 +805,9 @@ export function AttachmentView({
   }
   if (att.kind === "staff_invite") {
     return <StaffInviteChatCard att={att as any} mine={mine} />;
+  }
+  if (att.kind === "booking_invite") {
+    return <BookingInviteCard att={att as any} mine={mine} />;
   }
   if (att.kind === "sound") {
     return (

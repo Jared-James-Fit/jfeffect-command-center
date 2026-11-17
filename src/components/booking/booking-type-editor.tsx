@@ -91,6 +91,7 @@ function blank(): Form {
     max_per_day: null,
     collect_phone: true,
     collect_notes: true,
+    follows_smart: false,
     hours: [1, 2, 3, 4, 5].map((d) => ({ day_of_week: d, start_time: "09:00", end_time: "17:00" })),
   };
 }
@@ -289,7 +290,8 @@ export function BookingTypeEditor({
     const hours = normalizeHours(form.hours);
     if (form.online_enabled) {
       if (hoursBad) return toast.error("One of the hours ends before it starts.");
-      if (!hours.length)
+      // A type that follows his availability needs no hours of its own (its times come from his boundaries).
+      if (!hours.length && !form.follows_smart)
         return toast.error("Add at least one day of hours, or turn online booking off.");
     }
     setSaving(true);
@@ -325,6 +327,7 @@ export function BookingTypeEditor({
         max_per_day: form.max_per_day || null,
         collect_phone: form.collect_phone,
         collect_notes: form.collect_notes,
+        follows_smart: !!form.follows_smart,
       };
       const q = isEdit
         ? (supabase as any)
@@ -521,9 +524,20 @@ export function BookingTypeEditor({
                   </div>
                 </div>
 
+                <Row
+                  title="Follow your availability"
+                  hint={
+                    form.follows_smart
+                      ? "Times come from Calendar → Booking → Availability (your boundaries, protected time, call limits). The hours below are only used in Manual."
+                      : "Off: only the hours below, minus anything busy. Best for training sessions."
+                  }
+                  checked={!!form.follows_smart}
+                  onChange={(v) => set("follows_smart", v)}
+                />
+
                 <div className="space-y-1.5">
                   <div className="flex items-baseline justify-between gap-2">
-                    <Label>Your hours</Label>
+                    <Label>{form.follows_smart ? "Hours in Manual" : "Your hours"}</Label>
                     <span className="truncate text-[11px] text-muted-foreground">
                       {summarizeHours(form.hours)}
                     </span>

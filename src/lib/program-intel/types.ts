@@ -362,6 +362,11 @@ export type IntelRecords = {
   observations: RawObservation[];
   /** Submitted forms (check-ins) in the period, answers as text. */
   checkins?: RawCheckin[];
+  /**
+   * Their competition plan (athlete_competition_plans): the latest one the coach approved,
+   * and whether a newer one is waiting on him. Only an approved plan is planned around.
+   */
+  competitionPlan?: { plan: import("@/lib/competition-plan").CompetitionPlan; approvedAt: string; pendingSince: string | null } | { plan: null; approvedAt: null; pendingSince: string } | null;
   /** Program Intelligence settings the coach saved for this client. */
   profile?: RawIntelProfile | null;
   /** The client's cardio plan (cardio_targets) and the last weeks of its log. */

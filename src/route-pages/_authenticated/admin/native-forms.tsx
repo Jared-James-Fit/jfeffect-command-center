@@ -593,7 +593,13 @@ function QuestionRow({ q, formId, allQuestions, onMoveUp, onMoveDown }: { q: NfQ
     qc.invalidateQueries({ queryKey: ["nf-questions", formId] });
   }
 
-  const needsOptions = ["single_choice", "multi_choice", "dropdown"].includes(local.question_type);
+  const v0 = (local.validation ?? {}) as Record<string, unknown>;
+  const fromOther = typeof v0.options_from === "string" && !!v0.options_from;
+  const needsOptions = ["single_choice", "multi_choice", "dropdown", "competitions"].includes(local.question_type) || (local.question_type === "ranking" && !fromOther);
+  const answerable = local.question_type !== "info";
+  // Questions a choice or ranking can take its items from: the competitions asked earlier in the form.
+  const meetSources = allQuestions.filter((x) => x.question_type === "competitions" && x.id !== q.id);
+  const canTakeFrom = ["single_choice", "dropdown", "ranking"].includes(local.question_type) && meetSources.length > 0;
   // one-tap answers above a typed answer, and a number's sanity range (nf_questions.validation)
   const canQuick = ["short_text", "long_text", "number"].includes(local.question_type);
   const v = (local.validation ?? {}) as Record<string, unknown>;
@@ -633,12 +639,45 @@ function QuestionRow({ q, formId, allQuestions, onMoveUp, onMoveDown }: { q: NfQ
               </SelectContent>
             </Select>
           </div>
-          {needsOptions && (
+          <Input
+            placeholder={answerable ? "Help text under the question (optional)" : "Text under the heading (optional)"}
+            defaultValue={local.help_text ?? ""}
+            onBlur={(e) => {
+              const next = e.target.value.trim() || null;
+              if (next !== (local.help_text ?? null)) void save({ help_text: next });
+            }}
+          />
+          {canTakeFrom && (
+            <Select value={fromOther ? String(v0.options_from) : "__own"} onValueChange={(x) => saveValidation({ options_from: x === "__own" ? null : x })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__own">Its own options</SelectItem>
+                {meetSources.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>Meets picked in: {m.label.slice(0, 50)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {needsOptions && !(fromOther && local.question_type !== "ranking") && (
             <Input
-              placeholder="Options (comma-separated)"
+              placeholder={local.question_type === "competitions" ? "Meet levels (comma-separated)" : "Options (comma-separated)"}
               value={(local.options ?? []).join(", ")}
               onChange={(e) => setLocal({ ...local, options: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
               onBlur={() => save({ options: local.options })}
+            />
+          )}
+          {local.question_type === "competitions" && (
+            <Input
+              placeholder={'The "not competing" option, e.g. None, I\'m not competing (optional)'}
+              defaultValue={typeof v0.none_option === "string" ? v0.none_option : ""}
+              onBlur={(e) => saveValidation({ none_option: e.target.value.trim() || null })}
+            />
+          )}
+          {(local.question_type === "single_choice" || local.question_type === "dropdown") && !fromOther && (
+            <Input
+              placeholder="Show in groups by how options start, e.g. Men's, Women's (optional)"
+              defaultValue={Array.isArray(v0.group_prefixes) ? (v0.group_prefixes as string[]).join(", ") : ""}
+              onBlur={(e) => saveValidation({ group_prefixes: e.target.value.split(",").map((x) => x.trim()).filter(Boolean).map((x) => `${x} `) })}
             />
           )}
           {canQuick && (
@@ -660,10 +699,17 @@ function QuestionRow({ q, formId, allQuestions, onMoveUp, onMoveDown }: { q: NfQ
               <Input placeholder="Unit (lb, steps)" defaultValue={typeof v.unit === "string" ? v.unit : ""} onBlur={(e) => saveValidation({ unit: e.target.value.trim() || null })} />
             </div>
           )}
-          <div className="flex items-center gap-3 text-xs">
-            <label className="flex items-center gap-1">
-              <Checkbox checked={local.required} onCheckedChange={(v) => save({ required: !!v })} /> Required
-            </label>
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            {answerable && (
+              <label className="flex items-center gap-1">
+                <Checkbox checked={local.required} onCheckedChange={(v) => save({ required: !!v })} /> Required
+              </label>
+            )}
+            {answerable && local.question_type !== "file" && local.question_type !== "video" && (
+              <label className="flex items-center gap-1" title="When you send this form again, it opens on what they answered last time.">
+                <Checkbox checked={v0.remember === true} onCheckedChange={(x) => saveValidation({ remember: x ? true : null })} /> Start from their last answer
+              </label>
+            )}
             <Button variant="ghost" size="sm" onClick={async () => {
               await deleteQuestion(q.id);
               qc.invalidateQueries({ queryKey: ["nf-questions", formId] });

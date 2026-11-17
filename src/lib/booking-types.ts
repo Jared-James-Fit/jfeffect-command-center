@@ -35,6 +35,10 @@ export type BookingType = {
   max_per_day: number | null;
   collect_phone: boolean;
   collect_notes: boolean;
+  /** Online times come from the coach's smart availability (calls and meetings). */
+  follows_smart?: boolean;
+  /** Set by the server: follows it and he has confirmed his boundaries, so it's live. */
+  smart?: boolean;
   hours?: HoursWindow[];
 };
 
@@ -133,6 +137,7 @@ export const TYPE_TEMPLATES: Array<{
       color: "green",
       min_notice_hours: 12,
       buffer_minutes: 10,
+      follows_smart: true,
     },
   },
   {
@@ -149,6 +154,7 @@ export const TYPE_TEMPLATES: Array<{
       show_in_app: false,
       min_notice_hours: 4,
       buffer_minutes: 10,
+      follows_smart: true,
     },
   },
 ];

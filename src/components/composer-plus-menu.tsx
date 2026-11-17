@@ -5,8 +5,9 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Plus, Camera, Image as ImageIcon, FileText, Sparkles,
-  ClipboardList, FileSignature, UtensilsCrossed, Video, CalendarPlus,
+  ClipboardList, FileSignature, UtensilsCrossed, Video, CalendarPlus, CalendarClock, ListChecks,
 } from "lucide-react";
+import { BookingInvitePicker } from "@/components/messages/booking-invite";
 import { BookSessionFromChat, ChatBookingDialog } from "@/components/messages/book-session-from-chat";
 import { cn } from "@/lib/utils";
 import { preloadVideoEngine } from "@/lib/video-edit/pick";
@@ -71,6 +72,8 @@ export function ComposerPlusMenu({
   const [recipeOpen, setRecipeOpen] = useState(false);
   const [creatingMeet, setCreatingMeet] = useState(false);
   const [bookOpen, setBookOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const createMeet = useServerFn(createMeetLink);
 
   const isAdmin = role === "admin";
@@ -126,6 +129,25 @@ export function ComposerPlusMenu({
       hidden: !isAdmin || surface !== "dm" || !defaultClientId,
       tone: "primary",
       disabled: !defaultClientId,
+    },
+    {
+      key: "form",
+      section: "send",
+      label: "Send Form",
+      icon: <ListChecks className="h-6 w-6" />,
+      onClick: () => { setOpen(false); setFormOpen(true); },
+      hidden: !canSendRequests,
+      tone: "primary",
+      disabled: clientIds.length === 0,
+    },
+    {
+      key: "booking-link",
+      section: "send",
+      label: "Booking Link",
+      icon: <CalendarClock className="h-6 w-6" />,
+      onClick: () => { setOpen(false); setInviteOpen(true); },
+      hidden: !canBook || !onAttach,
+      tone: "primary",
     },
     {
       key: "sig",
@@ -275,11 +297,21 @@ export function ComposerPlusMenu({
           clientIds={clientIds}
           disabled={disabled}
           onAttach={onAttach}
-          externalOpen={{ form: false, sig: sigOpen, recipe: recipeOpen }}
+          externalOpen={{ form: formOpen, sig: sigOpen, recipe: recipeOpen }}
           onExternalOpenChange={(key, v) => {
-            if (key === "sig") setSigOpen(v);
+            if (key === "form") setFormOpen(v);
+            else if (key === "sig") setSigOpen(v);
             else if (key === "recipe") setRecipeOpen(v);
           }}
+        />
+      )}
+
+      {canBook && defaultClientId && onAttach && (
+        <BookingInvitePicker
+          open={inviteOpen}
+          onOpenChange={setInviteOpen}
+          clientId={defaultClientId}
+          onSend={(att, body) => onAttach(att as any, body)}
         />
       )}
     </>

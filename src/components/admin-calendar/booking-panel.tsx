@@ -47,6 +47,7 @@ import { BookingTypeEditor } from "@/components/booking/booking-type-editor";
 import { ShareBookingSheet, type ShareTarget } from "@/components/booking/share-booking-sheet";
 import { GoogleCalendarPage } from "@/route-pages/_authenticated/admin/google-calendar";
 import { GoogleSyncStatusCard } from "@/components/admin-calendar/google-sync-status";
+import { AvailabilityCard } from "@/components/booking/availability-panel";
 import { useGoogleCalendarStatus } from "@/lib/calendar-sources";
 import { cardAccent, fmtDuration } from "@/lib/booking-cards";
 import { summarizeHours, type HoursWindow } from "@/lib/booking-slots";
@@ -65,7 +66,7 @@ function statusOf(t: BookingType): Status {
   if (!t.is_active) return { label: "Off", tone: "border-border text-muted-foreground" };
   if (!t.online_enabled)
     return { label: "In-app only", tone: "border-border text-muted-foreground" };
-  if (!(t.hours ?? []).length)
+  if (!(t.hours ?? []).length && !t.follows_smart)
     return { label: "No hours set", tone: "border-amber-500/40 bg-amber-500/10 text-amber-500" };
   return {
     label: "Taking bookings",
@@ -112,7 +113,7 @@ export function AdminBookingPanel() {
   };
   const nextSortOrder = types.length ? Math.max(...types.map((t) => t.sort_order ?? 0)) + 10 : 10;
   const live = types.filter(
-    (t) => t.is_active && t.online_enabled && (t.hours ?? []).length,
+    (t) => t.is_active && t.online_enabled && ((t.hours ?? []).length || t.follows_smart),
   ).length;
 
   const patch = async (t: BookingType, values: Partial<BookingType>, ok: string) => {
@@ -202,6 +203,8 @@ export function AdminBookingPanel() {
             <Plus className="mr-1.5 h-4 w-4" /> New type
           </Button>
         </div>
+        <AvailabilityCard />
+
         {/* What keeps it from double-booking */}
         <button
           type="button"
@@ -308,7 +311,7 @@ export function AdminBookingPanel() {
                     {t.online_enabled && (
                       <div className="mt-2 space-y-0.5">
                         <div className="text-xs text-foreground/90">
-                          {summarizeHours(t.hours ?? [])}
+                          {t.follows_smart ? "Follows your availability" : summarizeHours(t.hours ?? [])}
                         </div>
                         {url && (
                           <div className="truncate font-mono text-[11px] text-muted-foreground">

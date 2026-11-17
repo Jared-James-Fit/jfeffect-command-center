@@ -5,6 +5,7 @@
  * before it. Every field says where it came from; a field nothing on file can
  * answer is null and listed as missing, never guessed. Deterministic.
  */
+import { planBriefText } from "@/lib/competition-plan";
 import { cardioPlanFromTargets, type CardioPlan } from "./cardio";
 import { healthProfileFromRecords } from "@/lib/health/health-load";
 import { entryLine, healthProfileForAi } from "@/lib/health/health-profile";
@@ -50,6 +51,9 @@ export type AthleteContext = {
   competition: {
     next: { name: string; date: string; weeksOut: number; federation: string | null; weightClass: string | null; division: string | null } | null;
     history: Array<{ date: string | null; name: string | null; squat: number | null; bench: number | null; deadlift: number | null; total: number | null; bodyweight: number | null }>;
+    /** Their competition plan as the brief reads it (approved by the coach), and a note when a newer one waits on him. */
+    plan?: string | null;
+    planPending?: string | null;
   };
   schedule: {
     committedDays: string[];
@@ -243,6 +247,10 @@ export function buildAthleteContext(x: {
         ? { name: nextMeet.event_name ?? nextMeet.title ?? "Meet", date: nextMeet.event_date, weeksOut: Math.round(daysBetween(today, nextMeet.event_date) / 7), federation: nextMeet.federation, weightClass: nextMeet.weight_class, division: nextMeet.division }
         : null,
       history: rec.meets.map((m) => ({ date: m.meet_date, name: m.meet_name, squat: m.squat_kg, bench: m.bench_kg, deadlift: m.deadlift_kg, total: m.total_kg, bodyweight: m.bodyweight_kg })),
+      plan: rec.competitionPlan?.plan ? planBriefText(rec.competitionPlan.plan, rec.competitionPlan.approvedAt, today) : null,
+      planPending: rec.competitionPlan?.pendingSince
+        ? `A newer competition plan was sent in ${rec.competitionPlan.pendingSince} and the coach hasn't approved it yet: don't plan around it.`
+        : null,
     },
     schedule: {
       committedDays: rec.client.committed_training_days ?? [],

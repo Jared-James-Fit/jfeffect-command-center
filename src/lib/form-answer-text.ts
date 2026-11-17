@@ -3,6 +3,7 @@
  * form order. Pure: shared by the Nutrition Update AI (server) and the coach's
  * chat card, so both read an answer the same way.
  */
+import { answerAsText } from "@/lib/form-fields";
 
 export type FormAnswerRow = {
   question_id: string;
@@ -23,18 +24,8 @@ export function formAnswerText(a: FormAnswerRow | null | undefined): string {
   if (a.value_text != null && String(a.value_text).trim()) return String(a.value_text);
   if (a.value_number != null && String(a.value_number).trim() !== "") return String(a.value_number);
   const j = a.value_json;
-  if (Array.isArray(j)) {
-    return j
-      .map((x) =>
-        typeof x === "string"
-          ? x
-          : ((x as { name?: string; label?: string })?.name ??
-            (x as { label?: string })?.label ??
-            ""),
-      )
-      .filter(Boolean)
-      .join(", ");
-  }
+  // Checkboxes, meets (by their own line), a ranking (in order): the same reading as follow-up questions.
+  if (Array.isArray(j)) return answerAsText({ value_json: j });
   if (j && typeof j === "object") return JSON.stringify(j);
   return j != null ? String(j) : "";
 }
@@ -46,7 +37,7 @@ export function answeredQuestions(
 ): Array<{ id: string; label: string; value: string }> {
   const byQ = new Map(answers.map((a) => [a.question_id, a]));
   return [...questions]
-    .filter((q) => q.question_type !== "file" && q.question_type !== "video")
+    .filter((q) => q.question_type !== "file" && q.question_type !== "video" && q.question_type !== "info")
     .sort((a, b) => (a.order_index ?? 9999) - (b.order_index ?? 9999))
     .map((q) => ({ id: q.id, label: q.label, value: formAnswerText(byQ.get(q.id)).trim() }))
     .filter((r) => r.value !== "");
