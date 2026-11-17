@@ -54,6 +54,21 @@ export function useCloseClientProfile() {
   }, [navigate]);
 }
 
+/** The open overlay's tab, kept in the address (replacing, so Back skips tab taps). */
+export function useSetOverlayClientTab() {
+  const navigate = useNavigate();
+  return useCallback(
+    (tab: string) => {
+      navigate({
+        to: ".",
+        search: (prev: Record<string, unknown>) => ({ ...prev, clientTab: tab }),
+        replace: true,
+      } as any);
+    },
+    [navigate],
+  );
+}
+
 export function useOverlayClientId(): { clientId?: string; clientTab?: string } {
   // Read raw location search to avoid depending on parent-route validateSearch typing.
   const search = useRouterState({

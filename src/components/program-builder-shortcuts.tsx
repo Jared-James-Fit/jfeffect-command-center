@@ -72,7 +72,6 @@ function buildShortcuts(mac: boolean): ShortcutGroup[] {
       items: [
         { label: "Open search", combos: [["/"], [mod, "K"]] },
         { label: "Close search", combos: [["Esc"]] },
-        { label: "Clear / reset search", combos: [[mod, shift, "Z"]] },
         { label: "Refresh results", combos: [["⌥", "R"]] },
       ],
     },
@@ -92,6 +91,17 @@ function buildShortcuts(mac: boolean): ShortcutGroup[] {
         { label: "Previous field", combos: [["Shift", "Enter"]] },
         { label: "Standard focus navigation", combos: [["Tab"], ["Shift", "Tab"]] },
         { label: "Close active menu / advanced", combos: [["Esc"]] },
+        { label: "Undo / redo", combos: [[mod, "Z"], [mod, shift, "Z"]] },
+      ],
+    },
+    {
+      heading: "Sheet view (a computer)",
+      items: [
+        { label: "Down / up a cell", combos: [["Enter"], ["Shift", "Enter"]] },
+        { label: "Select cells", combos: [["Shift", "↑↓←→"]] },
+        { label: "Fill the selection", combos: [[mod, "Enter"]] },
+        { label: "Fill down", combos: [[mod, "D"]] },
+        { label: "Copy / paste with Google Sheets", combos: [[mod, "C"], [mod, "V"]] },
       ],
     },
   ];
@@ -193,12 +203,7 @@ export function ProgramBuilderShortcutsButton({ className }: { className?: strin
         return;
       }
 
-      // Cmd/Ctrl + Shift + Z — clear / reset search
-      if (mod && !isAlt && e.shiftKey && (e.key === "z" || e.key === "Z")) {
-        e.preventDefault();
-        window.dispatchEvent(new CustomEvent("pb:clear-search"));
-        return;
-      }
+      // (Cmd/Ctrl + Shift + Z is the editor's redo; it used to clear the search too, both at once.)
 
       // Alt/Option + R — refresh
       if (isAlt && !mod && (e.key === "r" || e.key === "R" || e.key === "®")) {
@@ -264,10 +269,6 @@ export function ProgramBuilderShortcutsButton({ className }: { className?: strin
             <li className="flex items-center justify-between gap-2">
               <span>Close search</span>
               <KeyCombo keys={["Esc"]} />
-            </li>
-            <li className="flex items-center justify-between gap-2">
-              <span>Clear search</span>
-              <KeyCombo keys={[mod, shift, "Z"]} />
             </li>
             <li className="flex items-center justify-between gap-2">
               <span>Refresh results</span>

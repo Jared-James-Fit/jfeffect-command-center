@@ -66,7 +66,8 @@ export function BlockSwitcher({
   const doNavigate = async (blockId: string) => {
     setSwitching(blockId);
     try {
-      await navigate({ to: "/admin/blocks/$blockId", params: { blockId } });
+      // replaces this editor in history: ← still goes back to where the coach came from
+      await navigate({ to: "/admin/blocks/$blockId", params: { blockId }, replace: true });
     } finally {
       setSwitching(null);
     }

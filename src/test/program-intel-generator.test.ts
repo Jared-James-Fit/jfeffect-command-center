@@ -104,7 +104,7 @@ describe("Home-gym athlete (4-day strength + hypertrophy, the real test case)", 
   it("the brief carries the whole previous program set by set, the setup, the coach's changes and data quality", () => {
     const three = setupWith(intel, { daysPerWeek: 3, trainingDays: [] });
     const b = buildBrief(intel, { setup: three, edited: ["daysPerWeek"], conflicts: [], redistribution: redistribution(three, intel.recommendation.baseline) });
-    expect(b.sections.map((x) => x.key)).toEqual(["athlete", "development", "setup", "timeline", "cardio", "requirements", "quality", "previous", "patterns", "memory", "notes", "log", "earlier"]);
+    expect(b.sections.map((x) => x.key)).toEqual(["athlete", "development", "training_load", "setup", "timeline", "cardio", "requirements", "quality", "previous", "patterns", "memory", "notes", "log", "earlier"]);
     expect(b.text).toContain("Changed by the coach");
     expect(b.text).toContain("Days per week: the coach changed it");
     expect(b.text).toContain("4 → 3 days");
@@ -115,7 +115,7 @@ describe("Home-gym athlete (4-day strength + hypertrophy, the real test case)", 
   });
   it("building reads a compact brief: no set-by-set logs, but the measured exercises, load references and the last program's layout", () => {
     const b = buildBrief(intel, { setup: s, edited: [], conflicts: [], redistribution: null, exclude: ["log", "earlier"] });
-    expect(b.sections.map((x) => x.key)).toEqual(["athlete", "development", "setup", "timeline", "cardio", "requirements", "quality", "previous", "patterns", "memory", "notes"]);
+    expect(b.sections.map((x) => x.key)).toEqual(["athlete", "development", "training_load", "setup", "timeline", "cardio", "requirements", "quality", "previous", "patterns", "memory", "notes"]);
     expect(b.text).not.toContain("## Previous program: full log");
     expect(b.text).toContain("Load references (latest sets of each exercise)");
     expect(b.text).toContain("Station 2 — High cable");

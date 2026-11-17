@@ -6,12 +6,9 @@ import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { TrendingUp, Trophy, Dumbbell, Calendar, Flame, PieChart, Clock } from "lucide-react";
+import { TrendingUp, Trophy, Dumbbell, Calendar, Flame, PieChart, Clock, BarChart3 } from "lucide-react";
 import {
-  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell,
-} from "recharts";
-import {
-  getClientResults, buildExerciseHistory, weeklyMuscleVolume, recentPRs,
+  getClientResults, buildExerciseHistory, recentPRs,
 } from "@/lib/pl-programs";
 import { format } from "date-fns";
 import {
@@ -45,11 +42,13 @@ import { TrainingTimeCard } from "@/components/analytics/training-time-card";
 import { getClientAnalyticsSettings } from "@/lib/analytics/settings";
 import { isPrimaryProgramBlock } from "@/lib/at-home-backup";
 import { InfoTip } from "@/components/analytics/info-tip";
+import { InsightList, TrainingLoadSection } from "@/components/analytics/training-load-section";
+import { useTrainingLoad } from "@/lib/analytics/training-load.queries";
+import type { Insight } from "@/lib/analytics/training-load";
+import { cn } from "@/lib/utils";
 import {
   ANALYTICS_COLORS,
   fmtNum,
-  muscleColor,
-  shortMuscleLabel,
 } from "@/lib/analytics-format";
 
 export type Unit = "lb" | "kg";
@@ -78,7 +77,20 @@ export interface ClientAnalyticsDashboardProps {
   hideBodyweight?: boolean;
   /** Optional class on outer container. */
   className?: string;
+  /** The coach's view: programming detail (intensity spread, coach-only insights). */
+  coach?: boolean;
+  /** Which section opens first (a deep link), and a callback to keep it in the address. */
+  initialView?: AnalyticsView;
+  onViewChange?: (view: AnalyticsView) => void;
 }
+
+export type AnalyticsView = "overview" | "strength" | "volume" | "recovery";
+export const ANALYTICS_VIEWS: Array<[AnalyticsView, string]> = [
+  ["overview", "Overview"],
+  ["strength", "Strength"],
+  ["volume", "Volume"],
+  ["recovery", "Recovery"],
+];
 
 /**
  * Shared client analytics dashboard — identical numbers for coach and client.
@@ -97,6 +109,9 @@ export function ClientAnalyticsDashboard({
   canOpenLog = false,
   hideBodyweight = false,
   className,
+  coach = false,
+  initialView,
+  onViewChange,
 }: ClientAnalyticsDashboardProps) {
   const {
     data: clientBlocks = [],
@@ -140,6 +155,17 @@ export function ClientAnalyticsDashboard({
   };
 
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Overview · Strength · Volume · Recovery: one page, one section at a time.
+  // A #recovery link (the Workouts page's readiness card) opens Recovery.
+  const [view, setView] = useState<AnalyticsView>(() => {
+    if (typeof window !== "undefined" && window.location.hash === "#recovery") return "recovery";
+    return initialView && ANALYTICS_VIEWS.some(([v]) => v === initialView) ? initialView : "overview";
+  });
+  const changeView = (v: AnalyticsView) => {
+    setView(v);
+    onViewChange?.(v);
+  };
 
   // Soonest upcoming meet across this athlete's prep blocks.
   const nextMeetDate = useMemo(() => {
@@ -246,10 +272,6 @@ export function ClientAnalyticsDashboard({
     () => buildExerciseHistory(filteredResults as any),
     [filteredResults],
   );
-  const volume = useMemo(
-    () => weeklyMuscleVolume(filteredResults as any[], BIG_DAYS),
-    [filteredResults],
-  );
   const prs = useMemo(
     () => recentPRs(filteredResults as any[], BIG_DAYS),
     [filteredResults],
@@ -260,8 +282,6 @@ export function ClientAnalyticsDashboard({
     [displayUnit],
   );
 
-  const gridStroke = "color-mix(in oklab, var(--border) 60%, transparent)";
-  const axisColor = "var(--muted-foreground)";
 
   // Previous-block date range for the Recovery card comparison chip.
   const { prevBlockStart, prevBlockEnd } = useMemo(() => {
@@ -273,27 +293,23 @@ export function ClientAnalyticsDashboard({
     return { prevBlockStart: new Date(prev.start_date), prevBlockEnd: new Date(prev.end_date) };
   }, [activeBlockId, clientBlocks]);
 
-  const volumeData = useMemo(() => {
-    const merged = new Map<string, { muscle: string; sets: number; color: string; label: string }>();
-    for (const v of volume) {
-      const label = shortMuscleLabel(v.muscle);
-      const existing = merged.get(label);
-      if (existing) {
-        existing.sets += v.sets;
-      } else {
-        merged.set(label, { muscle: label, sets: v.sets, color: muscleColor(label), label });
-      }
-    }
-    return [...merged.values()].sort((a, b) => b.sets - a.sets);
-  }, [volume]);
-
-  const totalVolumeSets = useMemo(
-    () => volumeData.reduce((s, d) => s + d.sets, 0),
-    [volumeData],
+  // Volume & workload: the same read for the coach and the athlete (training-load.ts)
+  const trainingLoad = useTrainingLoad({
+    clientId,
+    results: results as any[],
+    start: filter.start,
+    end: filter.end,
+    blockId: activeBlockId,
+  });
+  const loadInsights = useMemo(
+    () => trainingLoad.load.insights.filter((i) => coach || i.audience === "both"),
+    [trainingLoad.load, coach],
   );
-  const otherVolume = useMemo(
-    () => volumeData.find((d) => d.muscle === "Other") ?? null,
-    [volumeData],
+  // Squat / bench / deadlift sections only for someone who trains them
+  // (or the coach, who reads the absence too).
+  const hasPowerlifting = useMemo(
+    () => trainingLoad.load.lifts.some((l) => l.competitionSets > 0) || (results as any[]).some((r: any) => r.is_competition_lift),
+    [trainingLoad.load, results],
   );
 
   const summary = useMemo(() => {
@@ -385,6 +401,15 @@ export function ClientAnalyticsDashboard({
           <AnalyticsEmptyPreview />
         ) : (
           <>
+            <AnalyticsTabs view={view} onChange={changeView} hasPowerlifting={hasPowerlifting} />
+
+            {view === "overview" && (
+              <div className="space-y-6" data-analytics-view="overview">
+            {loadInsights.length > 0 && (
+              <SectionErrorBoundary label="Coaching insights">
+                <TrainingLoadInsights insights={loadInsights} coach={coach} onOpenVolume={() => changeView("volume")} />
+              </SectionErrorBoundary>
+            )}
             <SectionErrorBoundary label="Performance Insights">
               <PerformanceInsights clientId={clientId} displayUnit={displayUnit} />
             </SectionErrorBoundary>
@@ -412,14 +437,16 @@ export function ClientAnalyticsDashboard({
               />
               <StatCard
                 icon={<Flame className="h-4 w-4" />}
-                label="Sets in range"
-                value={String(summary.setsInRange)}
+                label="Working sets"
+                value={String(trainingLoad.load.totals.sets)}
+                sublabel={trainingLoad.load.totals.sets ? `${trainingLoad.load.totals.setsPerWeek} a week` : undefined}
                 color={ANALYTICS_COLORS.red}
                 tip={
-                  <InfoTip label="About sets in range" title="Sets in range" align="start">
-                    All sets logged with a weight in this range (warm-ups
-                    included if they were logged). Bodyweight sets with no
-                    external load are not counted here.
+                  <InfoTip label="About working sets" title="Working sets" align="start">
+                    Logged sets with reps in this range, bodyweight sets
+                    included. Warm-ups are logged apart and never counted;
+                    stretches and conditioning are left out. The Volume tab
+                    breaks them down by week, muscle and day.
                   </InfoTip>
                 }
               />
@@ -456,6 +483,7 @@ export function ClientAnalyticsDashboard({
               />
             </section>
 
+            {hasPowerlifting && (
             <SectionErrorBoundary label="SBD total">
               <SbdSplitCard
                 clientId={clientId}
@@ -482,18 +510,12 @@ export function ClientAnalyticsDashboard({
                 }
               />
             </SectionErrorBoundary>
+            )}
+              </div>
+            )}
 
-            <SectionErrorBoundary label="Weight lifted">
-            <WeightLiftedCard
-              clientId={clientId}
-              displayUnit={displayUnit}
-              rangeStart={filter.start}
-              rangeEnd={filter.end}
-              rangeLabel={filter.label}
-              blockId={activeBlockId}
-            />
-            </SectionErrorBoundary>
-
+            {view === "strength" && (
+              <div className="space-y-6" data-analytics-view="strength">
             <section aria-label="Lift Progress">
               <SectionHeading
                 icon={<TrendingUp className="h-5 w-5" />}
@@ -550,103 +572,67 @@ export function ClientAnalyticsDashboard({
               )}
             </section>
 
-            <section aria-label="Volume by Muscle Group">
-              <SectionHeading
-                icon={<Dumbbell className="h-5 w-5" />}
-                title="Volume by Muscle"
-                meta={filter.label}
-                tip={
-                  <InfoTip label="About volume by muscle group" title="Volume by Muscle Group" align="start">
-                    Working sets per muscle group in this range, based on each
-                    exercise's muscle tag. Exercises without a tag land in
-                    Other — it is not a real muscle group.
-                  </InfoTip>
+            {(hasPowerlifting || coach) && (
+            <SectionErrorBoundary label="Powerlifting exposure">
+            <PowerliftingExposureSection
+              clientId={clientId}
+              filter={filter}
+              results={results as any[]}
+              displayUnit={displayUnit}
+              blockId={activeBlockId}
+              admin={coach}
+              navigateToBuilderHref={coach ? `/admin/clients/${clientId}?tab=training` : undefined}
+            />
+            </SectionErrorBoundary>
+            )}
+
+            <SectionErrorBoundary label="Predicted window">
+            <PredictedWindowCard
+              clientId={clientId}
+              currentBlockId={activeBlockId ?? resolvedCurrentBlockId}
+            />
+            </SectionErrorBoundary>
+              </div>
+            )}
+
+            {view === "volume" && (
+              <div className="space-y-6" data-analytics-view="volume">
+            <SectionErrorBoundary label="Volume and workload">
+              <TrainingLoadSection
+                load={trainingLoad.load}
+                coach={coach}
+                unit={displayUnit}
+                rangeLabel={filter.label}
+                planLoading={trainingLoad.planLoading}
+                planError={trainingLoad.planError}
+                hideInsights
+                header={
+                  <SectionHeading
+                    icon={<BarChart3 className="h-5 w-5" />}
+                    title="Volume & workload"
+                    meta={filter.label}
+                    tip={
+                      <InfoTip label="About volume and workload" title="Volume & workload" align="start">
+                        Working sets (never warm-ups) by week, muscle, movement and day, against what was written.
+                        A muscle gets a full set from exercises aimed at it and half a set from ones that help.
+                        "How these are counted" under the charts has every definition.
+                      </InfoTip>
+                    }
+                  />
                 }
               />
-              {volumeData.length === 0 ? (
-                <Card className="p-6 text-sm text-muted-foreground">
-                  No working sets logged in this period.
-                </Card>
-              ) : (
-                <Card className="border-border/80 bg-card p-4">
-                  <div style={{ height: Math.max(220, volumeData.length * 38) }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={volumeData}
-                        layout="vertical"
-                        margin={{ top: 4, right: 20, left: 4, bottom: 4 }}
-                        barCategoryGap="22%"
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
-                        <XAxis
-                          type="number"
-                          stroke={axisColor}
-                          fontSize={11}
-                          allowDecimals={false}
-                          tickMargin={4}
-                        />
-                        <YAxis
-                          type="category"
-                          dataKey="label"
-                          stroke={axisColor}
-                          fontSize={12}
-                          width={96}
-                          tick={{ fill: "var(--foreground)" }}
-                          interval={0}
-                        />
-                        <Tooltip
-                          cursor={{
-                            fill: "color-mix(in oklab, var(--foreground) 6%, transparent)",
-                          }}
-                          wrapperStyle={{ outline: "none" }}
-                          content={({ active, payload }) => {
-                            if (!active || !payload?.length) return null;
-                            const d: any = payload[0].payload;
-                            const pct = totalVolumeSets > 0
-                              ? Math.round((d.sets / totalVolumeSets) * 100)
-                              : 0;
-                            return (
-                              <div className="max-w-[220px] rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-xl">
-                                <div className="flex items-center gap-2 font-extrabold text-foreground">
-                                  <span
-                                    aria-hidden
-                                    className="h-2 w-2 rounded-full"
-                                    style={{ background: d.color }}
-                                  />
-                                  {d.muscle}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {d.sets} {d.sets === 1 ? "set" : "sets"} · {pct}% of total
-                                </div>
-                                {d.muscle === "Other" && (
-                                  <div className="mt-1 text-[11px] text-muted-foreground">
-                                    Exercises without a mapped muscle group.
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          }}
-                        />
-                        <Bar dataKey="sets" radius={[0, 6, 6, 0]}>
-                          {volumeData.map((d, i) => (
-                            <Cell key={i} fill={d.color} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  {otherVolume && (
-                    <p className="mt-3 text-[11px] text-muted-foreground">
-                      {otherVolume.sets} {otherVolume.sets === 1 ? "set" : "sets"}
-                      {totalVolumeSets > 0 &&
-                        ` (${Math.round((otherVolume.sets / totalVolumeSets) * 100)}%)`}{" "}
-                      in <span className="font-semibold">Other</span> — exercises without a
-                      muscle group tag. Tag exercises in the library to improve this chart.
-                    </p>
-                  )}
-                </Card>
-              )}
-            </section>
+            </SectionErrorBoundary>
+
+            <SectionErrorBoundary label="Weight lifted">
+            <WeightLiftedCard
+              clientId={clientId}
+              displayUnit={displayUnit}
+              rangeStart={filter.start}
+              rangeEnd={filter.end}
+              rangeLabel={filter.label}
+              blockId={activeBlockId}
+            />
+            </SectionErrorBoundary>
 
             <section aria-label="Planned vs Actual">
               <div className="mb-1 text-[11px] font-semibold text-muted-foreground">
@@ -661,16 +647,6 @@ export function ClientAnalyticsDashboard({
                 blockId={activeBlockId}
               />
             </section>
-
-            <SectionErrorBoundary label="Powerlifting exposure">
-            <PowerliftingExposureSection
-              clientId={clientId}
-              filter={filter}
-              results={results as any[]}
-              displayUnit={displayUnit}
-              blockId={activeBlockId}
-            />
-            </SectionErrorBoundary>
 
             <SectionErrorBoundary label="Training time">
               <TrainingTimeCard
@@ -702,7 +678,11 @@ export function ClientAnalyticsDashboard({
                 }
               />
             </SectionErrorBoundary>
+              </div>
+            )}
 
+            {view === "recovery" && (
+              <div className="space-y-6" data-analytics-view="recovery">
             <div
               id="recovery"
               className={`grid gap-4 scroll-mt-24 rounded-xl transition-shadow duration-500 ${
@@ -767,13 +747,8 @@ export function ClientAnalyticsDashboard({
               rangeEnd={filter.end}
             />
             </SectionErrorBoundary>
-
-            <SectionErrorBoundary label="Predicted window">
-            <PredictedWindowCard
-              clientId={clientId}
-              currentBlockId={activeBlockId ?? resolvedCurrentBlockId}
-            />
-            </SectionErrorBoundary>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -785,6 +760,59 @@ export function ClientAnalyticsDashboard({
         canOpenLog={canOpenLog}
       />
     </>
+  );
+}
+
+/**
+ * The page's sections as one neutral row: Overview (what stands out, the
+ * headline numbers), Strength (lifts, PRs), Volume (where the work went,
+ * against what was written) and Recovery. Squat · bench · deadlift detail
+ * only shows for someone who trains them.
+ */
+function AnalyticsTabs({ view, onChange }: { view: AnalyticsView; onChange: (v: AnalyticsView) => void; hasPowerlifting: boolean }) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Analytics sections"
+      className="flex gap-1 overflow-x-auto rounded-xl border border-border p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      data-analytics-tabs
+    >
+      {ANALYTICS_VIEWS.map(([v, label]) => (
+        <button
+          key={v}
+          type="button"
+          role="tab"
+          aria-selected={view === v}
+          onClick={() => onChange(v)}
+          className={cn(
+            "h-10 min-w-0 flex-1 shrink-0 rounded-lg px-3 text-sm font-medium transition-colors",
+            view === v ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          )}
+          data-analytics-tab={v}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Overview's "what stands out": the training-load insights (training-load-section.tsx's list). */
+function TrainingLoadInsights({ insights, coach, onOpenVolume }: { insights: Insight[]; coach: boolean; onOpenVolume: () => void }) {
+  return (
+    <section aria-label="Coaching insights">
+      <SectionHeading
+        icon={<TrendingUp className="h-5 w-5" />}
+        title={coach ? "Coaching insights" : "What stands out"}
+        tip={
+          <InfoTip label="About these insights" title={coach ? "Coaching insights" : "What stands out"} align="start">
+            Read from logged sets and the program, never a guess. Each says what's happening, how sure it is,
+            why it might be and whether anything needs to change. Often nothing does.
+          </InfoTip>
+        }
+      />
+      <InsightList insights={insights} coach={coach} onSeeNumbers={onOpenVolume} titled={false} />
+    </section>
   );
 }
 

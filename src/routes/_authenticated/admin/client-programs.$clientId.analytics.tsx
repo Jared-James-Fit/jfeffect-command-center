@@ -1,39 +1,30 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState, useCallback } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, TrendingUp, Trophy, Dumbbell } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell } from "recharts";
-import { getClientResults, buildExerciseHistory, weeklyMuscleVolume, recentPRs, resultsInWorkoutOrder } from "@/lib/pl-programs";
-import { format } from "date-fns";
-import { SearchableSelect, type SearchableOption } from "@/components/analytics/searchable-select";
-import { ANALYTICS_COLORS, exerciseColor, exerciseGroup, fmtNum, fmtDelta, muscleColor, shortMuscleLabel } from "@/lib/analytics-format";
-import { GraphDotDetail, type GraphDotPoint } from "@/components/analytics/graph-dot-detail";
 import {
-  AnalyticsFilterBar,
   defaultAnalyticsFilter,
   exactBlockFilter,
   type AnalyticsFilter,
 } from "@/components/analytics/analytics-filter-bar";
-import { BlockPickerSheet } from "@/components/analytics/block-picker-sheet";
-import {
-  type AnalyticsBlock,
-  hasOverlappingBlocks,
-  normalizeAnalyticsBlock,
-  resolveCurrentBlock,
-} from "@/lib/analytics/blocks";
-import { PowerliftingExposureSection } from "@/components/analytics/powerlifting-exposure-section";
-import { useEffect } from "react";
+import { type AnalyticsBlock, normalizeAnalyticsBlock } from "@/lib/analytics/blocks";
+import { ClientAnalyticsDashboard, ANALYTICS_VIEWS, type AnalyticsView } from "@/components/analytics/client-analytics-dashboard";
 import { isPrimaryProgramBlock } from "@/lib/at-home-backup";
+import { clientTrainingHref } from "@/lib/editor-back";
 
+/**
+ * The coach's Training Analytics for a client: the same dashboard the client
+ * sees (one set of numbers, one look), with the coach's extras on (coaching
+ * insights, intensity spread, programming detail). It used to be a separate,
+ * older page with its own charts that disagreed with the client's.
+ */
 const analyticsSearchSchema = z.object({
   filter: fallback(z.string(), "").default(""),
   blockId: fallback(z.string(), "").default(""),
+  view: fallback(z.string(), "").default(""),
 });
 
 export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId/analytics")({
@@ -46,15 +37,12 @@ function AnalyticsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const { data: client } = useQuery({
-    queryKey: ["client", clientId],
-    queryFn: async () => (await supabase.from("clients").select("id, full_name").eq("id", clientId).maybeSingle()).data,
+    queryKey: ["client-analytics-head", clientId],
+    staleTime: 60_000,
+    queryFn: async () =>
+      (await supabase.from("clients").select("id, full_name, preferred_weight_unit").eq("id", clientId).maybeSingle()).data,
   });
-  const {
-    data: clientBlocks = [],
-    isLoading: blocksLoading,
-    isError: blocksError,
-    refetch: refetchBlocks,
-  } = useQuery<AnalyticsBlock[]>({
+  const { data: clientBlocks = [] } = useQuery<AnalyticsBlock[]>({
     queryKey: ["pl-blocks-for-analytics", clientId],
     staleTime: 60_000,
     queryFn: async () => {
@@ -68,330 +56,54 @@ function AnalyticsPage() {
       return (data ?? []).filter(isPrimaryProgramBlock).map(normalizeAnalyticsBlock);
     },
   });
-  const resolvedCurrentBlockId = useMemo(
-    () => resolveCurrentBlock(clientBlocks)?.id ?? null,
-    [clientBlocks],
-  );
-  const overlapping = useMemo(() => hasOverlappingBlocks(clientBlocks), [clientBlocks]);
-  const isExactBlockUrl = search.filter === "exact_block" && !!search.blockId;
-  const requestedBlock = useMemo(
-    () => (isExactBlockUrl ? clientBlocks.find((b) => b.id === search.blockId) ?? null : null),
-    [clientBlocks, isExactBlockUrl, search.blockId],
-  );
-  const [analyticsFilter, setAnalyticsFilter] = useState<AnalyticsFilter | null>(null);
-  useEffect(() => {
-    if (analyticsFilter) return;
-    if (isExactBlockUrl && requestedBlock) {
-      setAnalyticsFilter(exactBlockFilter(requestedBlock, clientBlocks));
-    } else {
-      setAnalyticsFilter(defaultAnalyticsFilter(clientBlocks));
+  const initialFilter: AnalyticsFilter | null = useMemo(() => {
+    if (!clientBlocks.length) return null;
+    if (search.filter === "exact_block" && search.blockId) {
+      const block = clientBlocks.find((b) => b.id === search.blockId);
+      if (block) return exactBlockFilter(block, clientBlocks);
     }
-  }, [analyticsFilter, clientBlocks, isExactBlockUrl, requestedBlock]);
-  const filter = analyticsFilter ?? defaultAnalyticsFilter(clientBlocks);
-  const handleFilterChange = (next: AnalyticsFilter) => {
-    setAnalyticsFilter(next);
-    navigate({
-      search: (prev: any) => ({
-        ...prev,
-        filter: next.preset === "exact_block" ? "exact_block" : "",
-        blockId: next.preset === "exact_block" ? (next as any).blockId : "",
-      }),
-      replace: true,
-    });
-  };
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const activeBlockId =
-    filter.preset === "current_block" ||
-    filter.preset === "previous_block" ||
-    filter.preset === "exact_block"
-      ? ((filter as any).blockId as string)
-      : null;
-  const { data: results = [], isLoading } = useQuery({
-    queryKey: ["pl-results", clientId, activeBlockId],
-    queryFn: () => getClientResults(clientId, { blockId: activeBlockId ?? undefined }),
-  });
-  const selectedBlockId = activeBlockId;
-
-  const filteredResults = useMemo(() => {
-    const startMs = filter.start.getTime();
-    const endMs = filter.end.getTime();
-    // in the order they were done (a day's sets by row, then set number), so
-    // the per-set e1RM chart never jumps around within a day
-    return resultsInWorkoutOrder((results as any[]).filter((r: any) => {
-      if (!r.date) return false;
-      const t = new Date(r.date).getTime();
-      return t >= startMs && t <= endMs;
-    }));
-  }, [results, filter.start, filter.end]);
-  const BIG_DAYS = 365000;
-  const history = useMemo(() => buildExerciseHistory(filteredResults as any), [filteredResults]);
-  const volume = useMemo(() => weeklyMuscleVolume(filteredResults as any[], BIG_DAYS), [filteredResults]);
-  const prs = useMemo(() => recentPRs(filteredResults as any[], BIG_DAYS), [filteredResults]);
-  const [selectedEx, setSelectedEx] = useState<string>("");
-  const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
-  const activeEx = selectedEx || history[0]?.name || "";
-  const activeSeries = history.find((h) => h.name === activeEx);
-
-  const handleDotClick = useCallback((data: any) => {
-    if (!data || !data.activePayload?.[0]) return;
-    const d = data.activePayload[0].payload;
-    const idx = d.idx ?? 0;
-    const rawPoint = activeSeries?.points?.[idx];
-    if (!rawPoint) return;
-    setSelectedDot({
-      id: rawPoint.id,
-      row_id: rawPoint.row_id,
-      day_id: rawPoint.day_id ?? null,
-      date: rawPoint.date,
-      exercise_name: activeEx,
-      load: rawPoint.load,
-      reps: rawPoint.reps,
-      est_1rm: rawPoint.est_1rm,
-      rpe: rawPoint.rpe ?? null,
-      rir: rawPoint.rir ?? null,
-      exercise_note: rawPoint.exercise_note ?? null,
-      duration_seconds: rawPoint.duration_seconds ?? null,
-      set_index: rawPoint.set_index ?? idx,
-      displayUnit: "lb",
-      displayLoad: d.load,
-    });
-  }, [activeSeries, activeEx]);
-  const activeColor = exerciseColor(activeEx, activeSeries?.points?.[0]?.muscle_group);
-
-  const exerciseOptions: SearchableOption[] = useMemo(
-    () =>
-      history.map((h: any) => ({
-        value: h.name,
-        label: h.name,
-        group: exerciseGroup(h.name, h.points?.[0]?.category),
-        hint: `${fmtNum(h.pr?.est_1rm ?? 0)}`,
-        color: exerciseColor(h.name, h.points?.[0]?.muscle_group),
-      })),
-    [history],
-  );
-
-  const volumeData = useMemo(
-    () => {
-      // Merge raw muscle_group strings that collapse to the same short label
-      // (e.g. "Lats, upper back, biceps" and "Lats, upper back, rear delts, biceps" → "Lats").
-      const merged = new Map<string, { muscle: string; sets: number; color: string; label: string }>();
-      for (const v of volume) {
-        const label = shortMuscleLabel(v.muscle);
-        const existing = merged.get(label);
-        if (existing) {
-          existing.sets += v.sets;
-        } else {
-          merged.set(label, { muscle: label, sets: v.sets, color: muscleColor(label), label });
-        }
-      }
-      return [...merged.values()].sort((a, b) => b.sets - a.sets);
-    },
-    [volume],
-  );
-
-  const gridStroke = "color-mix(in oklab, var(--border) 60%, transparent)";
-  const axisColor = "var(--muted-foreground)";
+    return defaultAnalyticsFilter(clientBlocks);
+  }, [clientBlocks, search.filter, search.blockId]);
+  const initialView = ANALYTICS_VIEWS.some(([v]) => v === search.view) ? (search.view as AnalyticsView) : undefined;
 
   return (
     <>
-      <PageHeader title="Training Analytics" subtitle={client?.full_name ?? ""} />
-      <div className="p-6 md:p-8 space-y-6">
-        <Link to="/admin/client-programs/$clientId" params={{ clientId }} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="mr-1 h-4 w-4" /> Back to programs
-        </Link>
-
-        <AnalyticsFilterBar
-          blocks={clientBlocks}
-          value={filter}
-          onChange={handleFilterChange}
-          selectedBlockId={selectedBlockId}
-          resolvedCurrentBlockId={resolvedCurrentBlockId}
-          onOpenPicker={() => setPickerOpen(true)}
-        />
-
-        <BlockPickerSheet
-          open={pickerOpen}
-          onOpenChange={setPickerOpen}
-          blocks={clientBlocks}
-          selectedBlockId={selectedBlockId}
-          resolvedCurrentBlockId={resolvedCurrentBlockId}
-          isLoading={blocksLoading}
-          isError={blocksError}
-          onRetry={() => { void refetchBlocks(); }}
-          onSelect={(b) => handleFilterChange(exactBlockFilter(b, clientBlocks))}
-        />
-
-        {overlapping && (
-          <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-            This client has overlapping blocks. Exact block filtering prevents their analytics from being combined.
-          </div>
-        )}
-        {filter.preset === "exact_block" && !(filter as any).hasBlockDates && (
-          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
-            This block has not been scheduled yet.
-          </div>
-        )}
-
-        {isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : (
-          <>
-            {(results as any[]).length === 0 && (
-              <Card className="border-dashed border-border/70 bg-card/60 p-8 text-center">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Dumbbell className="h-7 w-7" />
-                </div>
-                <h2 className="mt-4 text-xl font-bold tracking-tight text-foreground">
-                  No logged sets yet
-                </h2>
-                <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                  Once this client logs a working set, their PRs, strength trends, and weekly volume will fill in automatically. The sections below are ready and waiting.
-                </p>
-              </Card>
-            )}
-            {(results as any[]).length > 0 && filteredResults.length === 0 && (
-              <Card className="border-dashed border-border/70 bg-card/60 p-6 text-center text-sm text-muted-foreground">
-                No training data logged in this period ({filter.label}).
-              </Card>
-            )}
-            <section>
-              <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                <Trophy className="h-4 w-4" /> Recent PRs
-              </h2>
-              <div className="mb-3 text-xs font-semibold text-muted-foreground">{filter.label}</div>
-              {prs.length === 0 ? <Card className="p-6 text-sm text-muted-foreground">No new PRs in this period.</Card> : (
-                <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-                  {prs.map((p: any) => {
-                    const color = exerciseColor(p.exercise_name, p.muscle_group);
-                    return (
-                      <Card key={p.id} className="p-4" style={{ borderLeft: `4px solid ${color}` }}>
-                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
-                          <div className="min-w-0 truncate font-bold">{p.exercise_name}</div>
-                          <Badge variant="outline" className="shrink-0 border-transparent" style={{ background: `color-mix(in oklab, ${ANALYTICS_COLORS.green} 18%, transparent)`, color: ANALYTICS_COLORS.green }}>
-                            {fmtDelta(p.delta, "")}
-                          </Badge>
-                        </div>
-                        <div className="mt-1 text-xs text-muted-foreground">{format(new Date(p.date), "MMM d, yyyy")}</div>
-                        <div className="mt-2 text-2xl font-bold">{fmtNum(p.est_1rm)} <span className="text-xs font-normal text-muted-foreground">est 1RM</span></div>
-                        <div className="mt-1 text-xs text-muted-foreground">{fmtNum(p.load)} × {p.reps} · prev best {fmtNum(p.prior_est)}</div>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-            <section>
-              <div className="mb-3 flex flex-wrap items-center gap-3">
-                <div>
-                  <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                    <TrendingUp className="h-4 w-4" /> Estimated 1RM Progress
-                  </h2>
-                  <div className="mt-0.5 text-xs font-semibold text-muted-foreground">{filter.label}</div>
-                </div>
-                <div className="w-full sm:w-72">
-                  <SearchableSelect
-                    options={exerciseOptions}
-                    value={activeEx}
-                    onChange={setSelectedEx}
-                    placeholder="Select exercise"
-                    searchPlaceholder="Search exercise…"
-                    triggerClassName="h-9"
-                    ariaLabel="Select exercise"
-                  />
-                </div>
-              </div>
-              {activeSeries ? (
-                <Card className="p-4">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
-                    <span>PR: <span className="font-bold text-foreground">{fmtNum(activeSeries.pr?.est_1rm)}</span> on {activeSeries.pr?.date && format(new Date(activeSeries.pr.date), "MMM d")}</span>
-                    <span>{activeSeries.points.length} logged sets</span>
-                  </div>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={activeSeries.points.map((p, i) => ({ idx: i, date: format(new Date(p.date), "MMM d"), est: Number(p.est_1rm.toFixed(1)), load: Number(p.load.toFixed(1)), reps: p.reps }))} margin={{ top: 8, right: 8, left: -10, bottom: 0 }} onClick={handleDotClick} style={{ cursor: "pointer" }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
-                        <XAxis dataKey="date" stroke={axisColor} fontSize={11} minTickGap={20} />
-                        <YAxis stroke={axisColor} fontSize={11} tickFormatter={(v) => fmtNum(v)} width={40} />
-                        <Tooltip
-                          wrapperStyle={{ outline: "none" }}
-                          content={({ active, payload }) => {
-                            if (!active || !payload?.length) return null;
-                            const d: any = payload[0].payload;
-                            return (
-                              <div className="rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-xl">
-                                <div className="text-xs font-bold uppercase text-muted-foreground">{d.date}</div>
-                                <div className="mt-1 font-extrabold text-foreground">{fmtNum(d.est)} <span className="text-xs font-medium text-muted-foreground">est 1RM</span></div>
-                                <div className="text-xs text-muted-foreground">{fmtNum(d.load)} × {d.reps}</div>
-                              </div>
-                            );
-                          }}
-                        />
-                        <Line type="monotone" dataKey="est" stroke={activeColor} strokeWidth={2.5} dot={{ r: 3, fill: activeColor, strokeWidth: 0 }} activeDot={{ r: 8, strokeWidth: 2, stroke: "var(--background)", fill: activeColor, cursor: "pointer" }} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </Card>
-              ) : (
-                <Card className="p-6 text-sm text-muted-foreground">
-                  Select an exercise once the client has logged sets to see their estimated 1RM trend.
-                </Card>
-              )}
-            </section>
-
-            <section>
-              <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                <Dumbbell className="h-4 w-4" /> Volume by Muscle Group
-              </h2>
-              <div className="mb-3 text-xs font-semibold text-muted-foreground">{filter.label}</div>
-              {volumeData.length === 0 ? <Card className="p-6 text-sm text-muted-foreground">No sets logged in this period.</Card> : (
-                <Card className="p-4">
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={volumeData} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
-                        <XAxis type="number" stroke={axisColor} fontSize={11} allowDecimals={false} />
-                        <YAxis type="category" dataKey="label" stroke={axisColor} fontSize={12} width={96} interval={0} tick={{ fill: "var(--foreground)" }} />
-                        <Tooltip
-                          wrapperStyle={{ outline: "none" }}
-                          content={({ active, payload }) => {
-                            if (!active || !payload?.length) return null;
-                            const d: any = payload[0].payload;
-                            return (
-                              <div className="rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-xl">
-                                <div className="flex items-center gap-2 font-extrabold text-foreground"><span aria-hidden className="h-2 w-2 rounded-full" style={{ background: d.color }} />{d.muscle}</div>
-                                <div className="text-xs text-muted-foreground">{d.sets} {d.sets === 1 ? "set" : "sets"}</div>
-                              </div>
-                            );
-                          }}
-                        />
-                        <Bar dataKey="sets" radius={[0, 6, 6, 0]}>
-                          {volumeData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </Card>
-              )}
-            </section>
-
-            <PowerliftingExposureSection
-              clientId={clientId}
-              filter={filter}
-              results={results as any[]}
-              admin
-              navigateToBuilderHref={`/admin/client-programs/${clientId}`}
-              blockId={activeBlockId}
-            />
-          </>
-        )}
-      </div>
-
-      {/* Graph dot detail bottom sheet — lazy-loaded on tap */}
-      <GraphDotDetail
-        point={selectedDot}
-        clientId={clientId}
-        onClose={() => setSelectedDot(null)}
-        canOpenLog={true}
+      <PageHeader
+        title="Training Analytics"
+        subtitle={client?.full_name ?? ""}
+        backTo={clientTrainingHref(clientId)}
+        backLabel="Training"
       />
+      <div className="p-4 pb-10 md:p-8">
+        <ClientAnalyticsDashboard
+          clientId={clientId}
+          preferredUnit={client?.preferred_weight_unit === "kg" ? "kg" : "lb"}
+          initialFilter={initialFilter}
+          coach
+          canOpenLog
+          initialView={initialView}
+          onViewChange={(v) => navigate({ search: (prev: any) => ({ ...prev, view: v === "overview" ? "" : v }), replace: true })}
+          onFilterChange={(next) =>
+            navigate({
+              search: (prev: any) => ({
+                ...prev,
+                filter: next.preset === "exact_block" ? "exact_block" : "",
+                blockId: next.preset === "exact_block" ? (next as any).blockId : "",
+              }),
+              replace: true,
+            })
+          }
+          viewAllPRsNode={
+            <Link
+              to="/admin/client-programs/$clientId/history"
+              params={{ clientId }}
+              className="inline-flex min-h-10 items-center text-xs font-semibold text-muted-foreground hover:text-foreground"
+            >
+              History
+            </Link>
+          }
+        />
+      </div>
     </>
   );
 }

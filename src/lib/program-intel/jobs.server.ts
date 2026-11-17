@@ -112,8 +112,12 @@ export async function runIntelJob(admin: Db, jobId: string | null): Promise<{ st
     // how they're developing (bodyweight-adjusted strength, training age, phase, progress / hold / back off)
     const { buildGeneratorIntel } = await import("./intelligence");
     const { developmentText } = await import("./athlete-development");
-    const dev = buildGeneratorIntel(rec, { brainOverride: job.brain as Brain }).development;
-    const markdown = `${reportToMarkdown(report, rec, { privacySafe: !!job.privacy_safe, reportId: job.id })}\n\n## Athlete development (computed from their records)\n${developmentText(dev, report.client.unit)}`;
+    const gi = buildGeneratorIntel(rec, { brainOverride: job.brain as Brain });
+    const dev = gi.development;
+    // the workload read the analytics page shows (training-load.ts)
+    const { trainingLoadBrief } = await import("./training-load-intel");
+    const load = trainingLoadBrief(gi.trainingLoad);
+    const markdown = `${reportToMarkdown(report, rec, { privacySafe: !!job.privacy_safe, reportId: job.id })}\n\n## Athlete development (computed from their records)\n${developmentText(dev, report.client.unit)}${load ? `\n\n## Training load (computed from their logged sets and the program)\n${load}` : ""}`;
     const { value, model } = await askJson<any>(admin, interpretSystemPrompt(job.brain), markdown, interpretReplySchema, 140_000);
     const rows = value.observations.map((o: any) => ({
       client_id: job.client_id,

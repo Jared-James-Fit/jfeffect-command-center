@@ -7,6 +7,7 @@
  * what the audit found.
  */
 import { DEVELOPMENT_RULES } from "./athlete-development";
+import { TRAINING_LOAD_RULES } from "./training-load-intel";
 import { EXERCISE_STANDARD } from "./exercise-standard";
 import { BLOCK_GUIDE, PROGRAMMING_METHOD } from "./methods";
 import { BRAIN_LABEL, type Brain } from "./types";
@@ -34,6 +35,7 @@ const PROGRAMMING_RULES = `Programming rules:
 - Continuity: this program follows the one before it. Keep the exercises and structures that progressed, start loads from where the last program finished (the load references), carry the previous roadmap forward (or say why it changed), and don't reset progressions; change only what the records say isn't working.
 
 ${DEVELOPMENT_RULES}
+${TRAINING_LOAD_RULES}
 
 ${EXERCISE_STANDARD}`;
 
