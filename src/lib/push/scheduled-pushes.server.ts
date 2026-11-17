@@ -3,6 +3,7 @@
 //   1. release pushes that were held during quiet hours
 //   2. one morning game plan per person (8am local, only if something's due)
 //   3. monthly recap ready (the 1st, 9am local, only if they played)
+import { digestLines, weighInDue } from "@/lib/checkin-coordination/plan";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CLIENT_VIEW_HOME } from "@/lib/client-home";
 import { deliverQueuedPushes, localDate, localHour, sendWebPushToUser } from "@/lib/push/push.server";
@@ -107,12 +108,35 @@ async function leagueParticipants(db: any, month: string): Promise<Set<string>> 
 }
 
 async function clientDigest(db: any, clientId: string, today: string) {
-  const [{ data: sched }, { data: pending }] = await Promise.all([
+  const { NUTRITION_REQUEST_FORM_ID } = await import("@/lib/nutrition-ai-prompts");
+  const since14 = new Date(Date.now() - 14 * 86_400_000).toISOString();
+  const [{ data: sched }, { data: pending }, { data: asked }, { data: meet }, { data: cl }] = await Promise.all([
     db.from("pl_scheduled_workouts").select("id, source_day_id").eq("client_id", clientId).eq("scheduled_date", today),
     db.from("messenger_checkins").select("id")
       .eq("client_id", clientId).eq("status", "pending")
       .gte("created_at", new Date(Date.now() - 4 * 86_400_000).toISOString()).limit(1),
+    // the Nutrition Update rides on the same push: one line, never its own reminder
+    db.from("messages").select("created_at").eq("client_id", clientId).gte("created_at", since14)
+      .contains("attachments", [{ kind: "form_request", form_id: NUTRITION_REQUEST_FORM_ID }])
+      .order("created_at", { ascending: false }).limit(1),
+    db.from("pl_preps").select("event_date, weight_class, archived").eq("client_id", clientId).gte("event_date", today).order("event_date").limit(1),
+    db.from("clients").select("user_id").eq("id", clientId).maybeSingle(),
   ]);
+  let nutritionPending = false;
+  const askedAt = (asked ?? [])[0]?.created_at as string | undefined;
+  if (askedAt) {
+    const { data: answered } = await db.from("nf_submissions").select("id").eq("client_id", clientId)
+      .eq("form_id", NUTRITION_REQUEST_FORM_ID).neq("status", "in_progress").gte("submitted_at", askedAt).limit(1);
+    nutritionPending = !(answered ?? []).length;
+  }
+  // meet week: a weigh-in line when nothing's been logged today or yesterday
+  let weighIn = false;
+  const m = ((meet ?? []) as any[]).find((p) => !p.archived) ?? null;
+  if (m && cl?.user_id) {
+    const { data: bw } = await db.from("progress_bodyweight").select("logged_date").eq("user_id", cl.user_id)
+      .order("logged_date", { ascending: false }).limit(1);
+    weighIn = weighInDue({ today, meetDate: m.event_date ?? null, weightClass: m.weight_class ?? null, lastWeighIn: (bw ?? [])[0]?.logged_date ?? null });
+  }
 
   let workoutLine: string | null = null;
   const schedRows = (sched ?? []) as any[];
@@ -127,13 +151,12 @@ async function clientDigest(db: any, clientId: string, today: string) {
       workoutLine = title ? `Today: ${title}` : "You've got a workout today";
     }
   }
-  const checkinLine = (pending ?? []).length ? "your check-in is waiting" : null;
-  const body = digestBody([workoutLine, checkinLine]);
+  const body = digestBody(digestLines({ workout: workoutLine, checkinPending: (pending ?? []).length > 0, nutritionPending, weighInDue: weighIn }));
   if (!body) return null;
   return {
     title: "Today's Game Plan 💪",
     body: body.charAt(0).toUpperCase() + body.slice(1),
-    url: workoutLine ? "/portal/workouts" : "/portal/messages",
+    url: workoutLine ? "/portal/workouts" : (pending ?? []).length || nutritionPending ? "/portal/messages" : weighIn ? "/portal/progress?action=weight" : "/portal/messages",
   };
 }
 

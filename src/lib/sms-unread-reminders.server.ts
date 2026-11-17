@@ -15,6 +15,7 @@
  * hours, and only between 9am and 8pm in the client's timezone. Payment
  * requests have their own timed text and are left out.
  */
+import { isNudgeable } from "@/lib/checkin-coordination/plan";
 import {
   inSmsSendWindow,
   pickAnchorMessages,
@@ -73,7 +74,9 @@ export async function runReminderSweep(admin: Db, deps?: UnreadNudgeDeps): Promi
   // Automatic schedule notes ("Moved your session to ...") ride on their own
   // texts (evening-before reminder, last-minute change text), so they never
   // earn a nudge.
-  const nudgeable = ((candidates ?? []) as any[]).filter((m) => !(m.is_automated && m.message_type === "Scheduling"));
+  // Automated check-in / form request cards are reminded by the morning digest, which stops the
+  // moment they're answered (checkin-coordination/plan.ts isNudgeable), so they never get a second nudge.
+  const nudgeable = ((candidates ?? []) as any[]).filter(isNudgeable);
   const sorted = [...enabledSteps].sort((a, b) => a.delay_minutes - b.delay_minutes);
 
   for (const msg of pickAnchorMessages(nudgeable)) {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ClipboardCheck, Loader2, Sparkles } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -21,9 +21,11 @@ import {
 import { cn } from "@/lib/utils";
 import { durationFor } from "@/components/messages/messenger-checkin-card";
 import {
+  getRequestStatus,
   sendMessengerCheckinRequest,
   type MessengerCheckinTaskType,
 } from "@/lib/messenger-checkins.functions";
+import { requestWarnings, type RequestStatus } from "@/lib/checkin-coordination/plan";
 
 export function MessengerCheckinRequestDialog({
   open,
@@ -42,6 +44,15 @@ export function MessengerCheckinRequestDialog({
   const [workoutMeals, setWorkoutMeals] = useState<WorkoutMealsMode>("auto");
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
+  // what's already out for them: the dialog warns, the coach decides
+  const readStatus = useServerFn(getRequestStatus);
+  const statusQ = useQuery({
+    queryKey: ["checkin-request-status", clientId],
+    enabled: open,
+    staleTime: 30_000,
+    queryFn: () => readStatus({ data: { clientId } }) as Promise<{ today: string; status: RequestStatus }>,
+  });
+  const warnings = statusQ.data ? requestWarnings(taskType, statusQ.data.status, statusQ.data.today) : [];
 
   async function handleSend() {
     setSending(true);
@@ -59,6 +70,7 @@ export function MessengerCheckinRequestDialog({
         });
       }
       await qc.invalidateQueries({ queryKey: ["messages", clientId, "admin"] });
+      void qc.invalidateQueries({ queryKey: ["checkin-request-status", clientId] });
       toast.success(
         taskType === "weekly_checkin" ? "Check-in sent" : "Nutrition update request sent",
       );
@@ -149,6 +161,14 @@ export function MessengerCheckinRequestDialog({
             className="resize-none"
           />
         </div>
+
+        {warnings.length > 0 && (
+          <ul className="space-y-1 rounded-xl border border-warning/40 px-3 py-2 text-xs text-warning" data-request-warnings>
+            {warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        )}
 
         <DialogFooter>
           <Button
