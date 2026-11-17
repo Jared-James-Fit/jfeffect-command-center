@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, Trash2, Copy, GripVertical, FileEdit, ChevronUp, ChevronDown, Archive, ExternalLink, Search, Eye, Send } from "lucide-react";
+import { Plus, Trash2, Copy, GripVertical, FileEdit, ChevronUp, ChevronDown, Archive, ExternalLink, Search, Eye, Send, Star, Inbox } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listForms, listFormLastUsed, upsertForm, duplicateForm, archiveForm,
@@ -33,6 +33,12 @@ import { ActionButton } from "@/components/action-button";
 import { NativeFormPreviewDialog } from "@/components/forms/native-form-preview";
 import { ConditionalLogicEditor } from "@/components/forms/conditional-logic-editor";
 import { FormVersionHistory } from "@/components/forms/form-version-history";
+import { AnswerSourceEditor, ChecklistItemsEditor, ReadinessFieldsEditor } from "@/components/forms/question-extras-editor";
+import { FormResponses } from "@/components/forms/form-responses";
+import { CATEGORY_SUGGESTIONS, categoryOf, libraryCategories, matchesSearch, ownerLabel, type LibraryForm } from "@/lib/form-library";
+import { FORM_LIBRARY_KEY, useFormFavorites, useFormLibraryStats, useToggleFavorite, type FormStats } from "@/lib/form-library.queries";
+import { NewFormFlow } from "@/components/forms/new-form-flow";
+import { useAuth } from "@/lib/auth";
 
 const EMPTY_ARRAY: any[] = [];
 
@@ -46,9 +52,16 @@ export function NativeFormsRedirect() {
 
 export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [editing, setEditing] = useState<NfForm | null>(null);
-  const [editTab, setEditTab] = useState<"settings" | "questions" | "shared">("settings");
+  const [editTab, setEditTab] = useState<EditorTab>("settings");
   const [creating, setCreating] = useState<NfKind | null>(null);
+  const [newNative, setNewNative] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<string>("all");
+  const { data: stats = new Map() } = useFormLibraryStats();
+  const { data: favorites = new Set<string>() } = useFormFavorites(user?.id);
+  const toggleFavorite = useToggleFavorite(user?.id);
   const deleteFormsFn = useServerFn(deleteNativeForms);
   const syncFilloutFn = useServerFn(syncFilloutForms);
   const [syncing, setSyncing] = useState(false);
@@ -74,7 +87,28 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
   const { data: lastUsed = new Map<string, string>() } = useQuery({ queryKey: ["nf-forms-last-used"], queryFn: listFormLastUsed, staleTime: 60_000 });
   // Forms in use first, most recently used on top; archived ones folded away at the bottom.
   const usedAt = (f: NfForm) => lastUsed.get(f.id) ?? f.created_at;
-  const liveForms = useMemo(() => forms.filter((f) => !f.archived).sort((a, b) => usedAt(b).localeCompare(usedAt(a))), [forms, lastUsed]);
+  const libraryShape = forms as unknown as LibraryForm[];
+  const categories = useMemo(() => libraryCategories(libraryShape), [forms]);
+  const hasOthers = forms.some((f) => f.owner_id && f.owner_id !== user?.id);
+  const liveForms = useMemo(
+    () =>
+      forms
+        .filter((f) => !f.archived)
+        .filter((f) => matchesSearch(f as unknown as LibraryForm, search))
+        .filter((f) =>
+          search.trim()
+            ? true
+            : filter === "favorites"
+              ? favorites.has(f.id)
+              : filter === "mine"
+                ? f.owner_id === user?.id
+                : filter.startsWith("cat:")
+                  ? categoryOf(f) === filter.slice(4)
+                  : true,
+        )
+        .sort((a, b) => Number(favorites.has(b.id)) - Number(favorites.has(a.id)) || usedAt(b).localeCompare(usedAt(a))),
+    [forms, lastUsed, search, filter, favorites, user?.id],
+  );
   const archivedForms = useMemo(() => forms.filter((f) => f.archived).sort((a, b) => (b.archived_at ?? b.updated_at).localeCompare(a.archived_at ?? a.updated_at)), [forms]);
   const [showArchived, setShowArchived] = useState(false);
   const formSelection = useBulkSelection(useMemo(() => forms.map((form) => form.id), [forms]));
@@ -98,6 +132,12 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
   }
 
   async function handleCreate(kind: NfKind) {
+    if (kind === "native") {
+      // blank, drafted with AI, or a copy of a template
+      setCreating(null);
+      setNewNative(true);
+      return;
+    }
     const id = await upsertForm({
       title: kind === "external" ? "Untitled External Form" : "Untitled Form",
       form_type: "check_in",
@@ -135,6 +175,34 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
       )}
       <div className="space-y-3 p-4 md:p-6">
         {forms.length > 0 && (
+          <div className="space-y-2" data-form-library-filters>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search forms" className="h-11 pl-9 text-[16px]" aria-label="Search forms" />
+            </div>
+            {!search.trim() && (
+              <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0">
+                {[
+                  { key: "all", label: "All" },
+                  { key: "favorites", label: `Favorites${favorites.size ? ` · ${favorites.size}` : ""}` },
+                  ...(hasOthers ? [{ key: "mine", label: "Mine" }] : []),
+                  ...categories.map((c) => ({ key: `cat:${c}`, label: c })),
+                ].map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => setFilter(c.key)}
+                    aria-pressed={filter === c.key}
+                    className={`h-9 shrink-0 rounded-full px-3.5 text-[14px] font-medium ${filter === c.key ? "bg-foreground text-background" : "bg-muted text-foreground"}`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {forms.length > 0 && (
           <Card className="border-border bg-card p-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
@@ -161,10 +229,18 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
             No forms yet. Create a Native form (built in-app) or an External form (Fillout, Typeform, Google Forms link).
           </Card>
         )}
+        {forms.length > 0 && liveForms.length === 0 && (
+          <p className="py-6 text-center text-[14px] text-muted-foreground">{search ? "No form matches that." : filter === "favorites" ? "Star a form to keep it here." : "Nothing here yet."}</p>
+        )}
         {liveForms.map((f) => (
           <FormRow
             key={f.id}
             form={f}
+            stats={stats.get(f.id) ?? null}
+            favorite={favorites.has(f.id)}
+            onToggleFavorite={(on) => toggleFavorite(f.id, on).catch((e: any) => toast.error(e?.message ?? "Couldn't save"))}
+            ownerTag={ownerLabel(f as unknown as LibraryForm, user?.id)}
+            onResponses={() => { setEditTab("responses"); setEditing(f); }}
             lastUsedAt={lastUsed.get(f.id) ?? null}
             selected={formSelection.isSelected(f.id)}
             onSelect={(checked) => formSelection.setOne(f.id, checked)}
@@ -191,6 +267,11 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
                   <FormRow
                     key={f.id}
                     form={f}
+                    stats={stats.get(f.id) ?? null}
+                    favorite={favorites.has(f.id)}
+                    onToggleFavorite={(on) => toggleFavorite(f.id, on).catch((e: any) => toast.error(e?.message ?? "Couldn't save"))}
+                    ownerTag={ownerLabel(f as unknown as LibraryForm, user?.id)}
+                    onResponses={() => { setEditTab("responses"); setEditing(f); }}
                     lastUsedAt={lastUsed.get(f.id) ?? null}
                     selected={formSelection.isSelected(f.id)}
                     onSelect={(checked) => formSelection.setOne(f.id, checked)}
@@ -209,6 +290,19 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
       )}
 
       <NewFormDialog open={!!creating} onPick={handleCreate} onClose={() => setCreating(null)} />
+      {newNative && (
+        <NewFormFlow
+          open
+          onClose={() => setNewNative(false)}
+          onCreated={(form) => {
+            setNewNative(false);
+            qc.invalidateQueries({ queryKey: ["nf-forms"] });
+            qc.invalidateQueries({ queryKey: FORM_LIBRARY_KEY });
+            setEditTab("questions");
+            setEditing(form);
+          }}
+        />
+      )}
     </>
   );
 }
@@ -237,6 +331,11 @@ function NewFormDialog({ open, onPick, onClose }: { open: boolean; onPick: (k: N
 
 function FormRow({
   form,
+  stats,
+  favorite,
+  onToggleFavorite,
+  ownerTag,
+  onResponses,
   lastUsedAt,
   selected,
   onSelect,
@@ -244,6 +343,12 @@ function FormRow({
   onSend,
 }: {
   form: NfForm;
+  /** From nf_form_library_stats: one read for the whole list. */
+  stats: FormStats | null;
+  favorite: boolean;
+  onToggleFavorite: (on: boolean) => void;
+  ownerTag: string | null;
+  onResponses: () => void;
   lastUsedAt: string | null;
   selected: boolean;
   onSelect: (checked: boolean) => void;
@@ -251,20 +356,23 @@ function FormRow({
   onSend: () => void;
 }) {
   const qc = useQueryClient();
+  // Only a preview loads the questions (the list's counts come from the stats).
+  const [preview, setPreview] = useState(false);
   const { data: questions = [] } = useQuery({
     queryKey: ["nf-questions", form.id],
     queryFn: () => listQuestions(form.id),
-    enabled: form.kind === "native",
+    enabled: form.kind === "native" && preview,
   });
-  const { data: assignments = [] } = useQuery({ queryKey: ["nf-assignments", form.id], queryFn: () => listAssignments(form.id) });
-  const [preview, setPreview] = useState(false);
 
-  const hasAudience = form.visibility === "all_active_clients" || assignments.length > 0;
-  const hasContent = form.kind === "external" ? !!form.external_url : questions.length > 0;
+  const sentCount = stats?.sent ?? 0;
+  const hasAudience = form.visibility === "all_active_clients" || sentCount > 0;
+  const hasContent = form.kind === "external" ? !!form.external_url : (stats?.questions ?? 1) > 0;
   const isActive = form.active && !form.archived && hasContent && hasAudience;
   const assignedCount = form.visibility === "all_active_clients"
     ? "Shared with all active clients"
-    : `Shared with ${assignments.length}`;
+    : sentCount
+      ? `Sent to ${sentCount} · ${stats?.done ?? 0} answered${stats?.waiting ? ` · ${stats.waiting} waiting` : ""}`
+      : "Not sent yet";
   const kindLabel = form.kind === "external" ? "External" : "Native";
 
   return (
@@ -273,9 +381,19 @@ function FormRow({
         <div className="flex min-w-0 items-start gap-3">
           <Checkbox checked={selected} onCheckedChange={(checked) => onSelect(checked === true)} aria-label={`Select ${form.title}`} />
           <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <div className="text-base font-bold">{form.title}</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onToggleFavorite(!favorite)}
+              aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
+              aria-pressed={favorite}
+              className="-m-1 grid h-8 w-8 place-items-center rounded-full text-muted-foreground"
+            >
+              <Star className={favorite ? "h-4 w-4 fill-warning text-warning" : "h-4 w-4"} />
+            </button>
+            <div className="text-base font-semibold">{form.title}</div>
             <Badge variant="outline" className="text-[10px]">{kindLabel}</Badge>
+            {ownerTag && <Badge variant="outline" className="text-[10px]">{ownerTag}</Badge>}
             {isActive ? (
               <Badge className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600">● Active</Badge>
             ) : form.archived ? (
@@ -285,7 +403,8 @@ function FormRow({
             )}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
-            {form.kind === "native" ? `${questions.length} questions` : (form.external_url ? "External link set" : "No URL yet")}
+            {categoryOf(form)}{" · "}
+            {form.kind === "native" ? `${stats?.questions ?? 0} questions` : (form.external_url ? "External link set" : "No URL yet")}
             {" · "}{assignedCount}{form.recurrence !== "none" ? ` · ${form.recurrence}` : ""}
             {" · "}{lastUsedAt ? `Last used ${new Date(lastUsedAt).toLocaleDateString([], { month: "short", day: "numeric", year: new Date(lastUsedAt).getFullYear() === new Date().getFullYear() ? undefined : "numeric" })}` : "Never used"}
           </div>
@@ -326,10 +445,16 @@ function FormRow({
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={onEdit}><FileEdit className="mr-1 h-4 w-4" /> Edit</Button>
+          <Button variant="outline" size="sm" onClick={onResponses}><Inbox className="mr-1 h-4 w-4" /> Responses</Button>
           <Button variant="outline" size="sm" onClick={async () => {
-            await duplicateForm(form.id);
-            qc.invalidateQueries({ queryKey: ["nf-forms"] });
-            toast.success("Duplicated");
+            try {
+              await duplicateForm(form.id);
+              qc.invalidateQueries({ queryKey: ["nf-forms"] });
+              qc.invalidateQueries({ queryKey: FORM_LIBRARY_KEY });
+              toast.success("Copied. The copy is yours to change.");
+            } catch (e: any) {
+              toast.error(e?.message ?? "Couldn't copy it");
+            }
           }}><Copy className="mr-1 h-4 w-4" /> Duplicate</Button>
           <Button variant="outline" size="sm" onClick={async () => {
             await archiveForm(form.id, !form.archived);
@@ -350,11 +475,25 @@ function FormRow({
   );
 }
 
-function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { form: NfForm; open: boolean; onClose: () => void; initialTab?: "settings" | "questions" | "shared" | "versions" }) {
+type EditorTab = "settings" | "questions" | "shared" | "versions" | "responses";
+
+export function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { form: NfForm; open: boolean; onClose: () => void; initialTab?: EditorTab }) {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [local, setLocal] = useState<NfForm>(form);
-  const [activeTab, setActiveTab] = useState<"settings" | "questions" | "shared" | "versions">(initialTab);
+  const [activeTab, setActiveTab] = useState<EditorTab>(initialTab);
   const [preview, setPreview] = useState(false);
+  // A team form or a colleague's is read-only here: a copy is theirs to change.
+  const { data: canEdit = true } = useQuery({
+    queryKey: ["nf-can-edit", form.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("nf_can_edit_form", { _form_id: form.id });
+      if (error) return true;
+      return !!data;
+    },
+    staleTime: 60_000,
+  });
+  const mine = !form.owner_id || form.owner_id === user?.id;
 
   const { data: questions = [] } = useQuery({
     queryKey: ["nf-questions", form.id],
@@ -384,10 +523,14 @@ function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { fo
       popup_end_time: local.popup_end_time ?? null,
       popup_start_date: local.popup_start_date ?? null,
       popup_end_date: local.popup_end_date ?? null,
+      category: local.category?.trim() || null,
+      allow_updates: !!local.allow_updates,
+      shared: !!local.shared,
     };
-    await upsertForm({ id: form.id, ...patch });
+    await upsertForm({ id: form.id, ...patch } as any);
     qc.invalidateQueries({ queryKey: ["nf-forms"] });
     qc.invalidateQueries({ queryKey: ["nf-forms-for-client"] });
+    qc.invalidateQueries({ queryKey: FORM_LIBRARY_KEY });
   }
 
   return (
@@ -409,12 +552,19 @@ function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { fo
           {form.kind === "native" && (
             <Button type="button" size="sm" variant={activeTab === "versions" ? "default" : "ghost"} onClick={() => setActiveTab("versions")}>Versions</Button>
           )}
+          <Button type="button" size="sm" variant={activeTab === "responses" ? "default" : "ghost"} onClick={() => setActiveTab("responses")}>Responses</Button>
           {form.kind === "native" && (
             <Button type="button" size="sm" variant="ghost" className="ml-auto" onClick={() => setPreview(true)}>
               <Eye className="mr-1 h-4 w-4" /> Preview
             </Button>
           )}
         </div>
+
+          {!canEdit && (
+            <p className="rounded-lg bg-muted px-3 py-2 text-[13px]" data-form-read-only>
+              {form.is_template ? "This is a team template." : "This is a team form."} You can send it, preview it and see its answers. To change it, make a copy from your library: the copy is yours.
+            </p>
+          )}
 
           {activeTab === "settings" && <div className="space-y-3">
             <div>
@@ -508,10 +658,35 @@ function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { fo
                 </Select>
               </div>
             </div>
+            <div>
+              <Label htmlFor="nf-category">Category</Label>
+              <Input id="nf-category" list="nf-category-list" value={local.category ?? ""} maxLength={60} placeholder="Custom Forms" onChange={(e) => setLocal({ ...local, category: e.target.value })} />
+              <datalist id="nf-category-list">
+                {CATEGORY_SUGGESTIONS.map((c) => <option key={c} value={c} />)}
+              </datalist>
+            </div>
             <div className="flex items-center gap-2">
               <Switch checked={local.active} onCheckedChange={(v) => setLocal({ ...local, active: v })} />
               <Label>Active (clients can submit)</Label>
             </div>
+            {local.kind === "native" && (
+              <div className="flex items-start gap-2">
+                <Switch checked={!!local.allow_updates} onCheckedChange={(v) => setLocal({ ...local, allow_updates: v })} />
+                <div>
+                  <Label>They can keep updating it after they send it</Label>
+                  <p className="text-xs text-muted-foreground">For checklists: they change an item as they sort it, without a new form. You see every change.</p>
+                </div>
+              </div>
+            )}
+            {mine && !form.is_template && (
+              <div className="flex items-start gap-2">
+                <Switch checked={!!local.shared} onCheckedChange={(v) => setLocal({ ...local, shared: v })} />
+                <div>
+                  <Label>Share with your team</Label>
+                  <p className="text-xs text-muted-foreground">Other coaches can send it and copy it. Only you can change it.</p>
+                </div>
+              </div>
+            )}
             <PopupConfigEditor local={local} setLocal={setLocal} />
             <div className="flex justify-end">
               <ActionButton onAction={saveSettings} loadingLabel="Saving…" successLabel="Saved" successToast="Form saved">
@@ -533,6 +708,8 @@ function FormEditorDialog({ form, open, onClose, initialTab = "settings" }: { fo
           {activeTab === "versions" && form.kind === "native" && (
             <FormVersionHistory formId={form.id} />
           )}
+
+          {activeTab === "responses" && <FormResponses formId={form.id} />}
       </DialogContent>
       {preview && form.kind === "native" && (
         <NativeFormPreviewDialog
@@ -614,6 +791,8 @@ function QuestionRow({ q, formId, allQuestions, onMoveUp, onMoveDown }: { q: NfQ
     // a stand-alone answer ("None") stays stand-alone while it's still there
     saveValidation({ quick: list, quick_exclusive: quickExclusive(q).filter((x) => list.includes(x)) });
   };
+  const formHasChecklist = allQuestions.some((x) => x.question_type === "checklist");
+  const areaKeys = [...new Set(allQuestions.map((x) => (x.validation as any)?.area).filter((a): a is string => typeof a === "string" && !!a))];
   const numberField = (key: "min" | "max") => {
     const raw = v[key];
     return raw == null ? "" : String(raw);
@@ -699,9 +878,16 @@ function QuestionRow({ q, formId, allQuestions, onMoveUp, onMoveDown }: { q: NfQ
               <Input placeholder="Unit (lb, steps)" defaultValue={typeof v.unit === "string" ? v.unit : ""} onBlur={(e) => saveValidation({ unit: e.target.value.trim() || null })} />
             </div>
           )}
+          {local.question_type === "checklist" && (
+            <ChecklistItemsEditor q={local} allQuestions={allQuestions} saveValidation={saveValidation} />
+          )}
+          {answerable && local.question_type !== "checklist" && <AnswerSourceEditor q={local} saveValidation={saveValidation} />}
+          {(local.question_type === "checklist" || (formHasChecklist && ["single_choice", "multi_choice", "dropdown", "number"].includes(local.question_type))) && (
+            <ReadinessFieldsEditor q={local} areas={areaKeys} saveValidation={saveValidation} />
+          )}
           <div className="flex flex-wrap items-center gap-3 text-xs">
             {answerable && (
-              <label className="flex items-center gap-1">
+              <label className="flex items-center gap-1" title={local.question_type === "checklist" ? "Every critical and important item needs marking before they can send it." : undefined}>
                 <Checkbox checked={local.required} onCheckedChange={(v) => save({ required: !!v })} /> Required
               </label>
             )}

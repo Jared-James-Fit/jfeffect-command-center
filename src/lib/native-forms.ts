@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { sentSinceAsked } from "@/lib/form-request-state";
-import { answerAsText } from "@/lib/form-fields";
+import { conditionsPass, remapQuestionRefs } from "@/lib/form-logic";
 import type { PickedVideo } from "@/lib/video-edit/pick";
 import { createVideoSend, videoErrorMessage } from "@/lib/video-edit/pipeline";
 
@@ -19,6 +19,7 @@ export const NF_QUESTION_TYPES = [
   "video",
   "competitions",
   "ranking",
+  "checklist",
   "info",
 ] as const;
 export type NfQuestionType = (typeof NF_QUESTION_TYPES)[number];
@@ -36,11 +37,12 @@ export const NF_QUESTION_TYPE_LABEL: Record<NfQuestionType, string> = {
   video: "Video upload",
   competitions: "Competitions (meets)",
   ranking: "Ranking (put in order)",
+  checklist: "Checklist (Ready · Still need · N/A)",
   info: "Heading / info text",
 };
 
 /** Answered with a list (value_json), not words or a number. */
-export const NF_JSON_TYPES: ReadonlySet<NfQuestionType> = new Set(["multi_choice", "competitions", "ranking"]);
+export const NF_JSON_TYPES: ReadonlySet<NfQuestionType> = new Set(["multi_choice", "competitions", "ranking", "checklist"]);
 
 export type NfRecurrence = "none" | "weekly" | "biweekly" | "monthly";
 export type NfSubmissionStatus = "in_progress" | "submitted" | "pending_review" | "reviewed";
@@ -77,6 +79,18 @@ export type NfForm = {
   popup_end_time?: string | null;
   popup_start_date?: string | null;
   popup_end_date?: string | null;
+  /** The login that made it; null = the organization's (form-library.ts). */
+  owner_id?: string | null;
+  /** A coach's form their colleagues can use too. */
+  shared?: boolean;
+  /** An organization template: never archived for going unused. */
+  is_template?: boolean;
+  /** The coach's own grouping in the library ("Powerlifting & Competitions"). */
+  category?: string | null;
+  /** The athlete can keep changing it after it's sent (a meet checklist). */
+  allow_updates?: boolean;
+  /** The form's own setup: readiness areas, reminders. */
+  settings?: Record<string, unknown> | null;
 };
 
 export type NfConditionalRule = {
@@ -186,27 +200,44 @@ export async function upsertForm(input: Partial<NfForm> & { id?: string }) {
 export async function duplicateForm(formId: string) {
   const form = await getForm(formId);
   if (!form) throw new Error("Form not found");
+  // A copy is its maker's own draft (the owner is set on insert): everything about
+  // the form comes with it but who it's sent to and whether it's a template.
   const newId = await upsertForm({
     title: `${form.title} (copy)`,
     description: form.description ?? undefined,
     form_type: form.form_type,
     recurrence: form.recurrence,
     recurrence_day: form.recurrence_day ?? undefined,
+    kind: form.kind,
+    external_url: form.external_url ?? undefined,
+    button_label: form.button_label ?? undefined,
+    open_style: form.open_style,
+    requires_client_identity: form.requires_client_identity,
+    category: form.category ?? undefined,
+    allow_updates: form.allow_updates ?? false,
+    settings: (form.settings ?? {}) as Record<string, unknown>,
     active: false,
   });
   const qs = await listQuestions(formId);
   if (qs.length) {
-    await db.from("nf_questions").insert(qs.map((q) => ({
-      form_id: newId,
-      order_index: q.order_index,
-      question_type: q.question_type,
-      label: q.label,
-      help_text: q.help_text,
-      required: q.required,
-      options: q.options,
-      validation: q.validation,
-      conditional_logic: q.conditional_logic,
-    })));
+    // New ids up front, so follow-up rules point at the copy's own questions.
+    const ids = new Map(qs.map((q) => [q.id, crypto.randomUUID()]));
+    const { error: qErr } = await db.from("nf_questions").insert(qs.map((q) => {
+      const r = remapQuestionRefs(q, ids);
+      return {
+        id: ids.get(q.id),
+        form_id: newId,
+        order_index: q.order_index,
+        question_type: q.question_type,
+        label: q.label,
+        help_text: q.help_text,
+        required: q.required,
+        options: q.options,
+        validation: r.validation,
+        conditional_logic: r.conditional_logic,
+      };
+    }));
+    if (qErr) throw qErr;
   }
   return newId;
 }
@@ -444,10 +475,17 @@ export async function getOrCreateCurrentSubmission(form: NfForm, clientId: strin
   if (!period) {
     const [{ data: lastRows }, { data: asked }] = await Promise.all([
       db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id", clientId).order("created_at", { ascending: false }).limit(1),
-      db.from("nf_assignments").select("created_at, updated_at").eq("form_id", form.id).eq("client_id", clientId).maybeSingle(),
+      db.from("nf_assignments").select("created_at, updated_at, settings").eq("form_id", form.id).eq("client_id", clientId).maybeSingle(),
     ]);
     const last = lastRows?.[0];
-    if (last && last.status !== "in_progress" && sentSinceAsked(last, asked)) return last as NfSubmission;
+    if (last && last.status !== "in_progress") {
+      // A form they keep updating (a meet checklist) stays the same copy when it's sent again
+      // (a nudge), until the coach sends it for something new (another meet: settings.new_copy_since).
+      if (form.allow_updates) {
+        const fresh = (asked as any)?.settings?.new_copy_since;
+        if (!fresh || String(last.created_at) >= String(fresh)) return last as NfSubmission;
+      } else if (sentSinceAsked(last, asked)) return last as NfSubmission;
+    }
   }
   let q = db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id", clientId);
   if (period) q = q.eq("period_start", period);
@@ -759,31 +797,8 @@ export function statusTone(s: NfSubmissionStatus | "not_started") {
 }
 
 export function shouldShowQuestion(q: NfQuestion, answers: Record<string, NfAnswer | undefined>): boolean {
-  const cl = q.conditional_logic ?? {};
-  const match = cl.match ?? "all";
-  const evalRule = (r: NfConditionalRule): boolean => {
-    // Words, a number, or a list (checkboxes, meets, a ranking) as text: the list used to be skipped,
-    // so "show when the checkboxes contain …" never matched.
-    const v = answerAsText(answers[r.question_id]);
-    switch (r.op) {
-      case "equals": return v === String(r.value);
-      case "not_equals": return v !== String(r.value);
-      case "contains": return v.toLowerCase().includes(String(r.value).toLowerCase());
-      case "not_contains": return !v.toLowerCase().includes(String(r.value).toLowerCase());
-      case "gt": return Number(v) > Number(r.value);
-      case "lt": return Number(v) < Number(r.value);
-      case "is_empty": return v.trim() === "";
-      case "is_not_empty": return v.trim() !== "";
-      default: return true;
-    }
-  };
-  const combine = (rules: NfConditionalRule[]) =>
-    match === "all" ? rules.every(evalRule) : rules.some(evalRule);
-  const showRules = cl.show_if ?? [];
-  const hideRules = cl.hide_if ?? [];
-  if (showRules.length > 0 && !combine(showRules)) return false;
-  if (hideRules.length > 0 && combine(hideRules)) return false;
-  return true;
+  // One reading for questions and checklist items (form-logic.ts).
+  return conditionsPass(q.conditional_logic as any, answers);
 }
 
 /* -------------------------- Versions -------------------------- */

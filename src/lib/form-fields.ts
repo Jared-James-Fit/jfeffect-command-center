@@ -124,8 +124,12 @@ export function moveRank(list: RankItem[], index: number, dir: -1 | 1): RankItem
 export function answerAsText(a: { value_text?: string | null; value_number?: number | null; value_json?: unknown } | null | undefined): string {
   if (!a) return "";
   if (a.value_text != null && a.value_text !== "") return a.value_text;
-  if (a.value_number != null) return String(a.value_number);
   const j = a.value_json;
+  // A number with its unit (a bodyweight in lb or kg keeps value_json {unit}).
+  if (a.value_number != null) {
+    const unit = j && typeof j === "object" && !Array.isArray(j) && typeof (j as any).unit === "string" ? (j as any).unit : null;
+    return unit ? `${a.value_number} ${unit}` : String(a.value_number);
+  }
   if (Array.isArray(j)) {
     return j
       .map((x) => {
@@ -133,6 +137,10 @@ export function answerAsText(a: { value_text?: string | null; value_number?: num
         if (x && typeof x === "object") {
           const o = x as Record<string, unknown>;
           if (o.none) return String(o.level ?? "");
+          // A checklist item: "Singlet: Ready".
+          if (typeof o.label === "string" && (o.state === "ready" || o.state === "need" || o.state === "na")) {
+            return `${o.label}: ${o.state === "ready" ? "Ready" : o.state === "need" ? "Still need" : "N/A"}`;
+          }
           if (typeof o.label === "string") return o.label;
           if (typeof o.level === "string") return meetLabel(o as unknown as MeetEntry);
         }

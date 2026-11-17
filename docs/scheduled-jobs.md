@@ -14,6 +14,7 @@ Exception: `payment-reminder-sms` uses its own Vault secret (`payment_reminder_h
 | lift-archive-tick-2m | every 2 min | lift-archive-tick |
 | media-archive-nightly | 03:15 | media-archive (no-op while auto-archive is off) |
 | nutrition-status-tick | 08:00 | nutrition-tick |
+| meet-checklist-reminders | 14:11 UTC daily (9:11 Winnipeg) | meet-checklist-reminders (push only: 2 weeks out if the meet checklist isn't sent, 2–3 days out while something's open, the day before for must-haves) |
 | sms-unread-reminders | every 10 min | sms-reminders |
 | payment-setup-reminders / payment-reminder-sms | :07/:37, :12/:42 | see payment-links-and-reminders.md |
 | scheduled-jobs-health | :23/:53 | SQL only (below) |

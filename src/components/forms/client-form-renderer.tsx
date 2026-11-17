@@ -45,6 +45,11 @@ import { choiceLayout, formProgress, numberIssue, numberRange, quickAnswers, qui
 import { NF_JSON_TYPES } from "@/lib/native-forms";
 import { alignRanking, meetItems } from "@/lib/form-fields";
 import { AgeClassHint, GroupedChoice, MeetsInput, RankingInput } from "@/components/forms/form-field-inputs";
+import { ChecklistSection, StillToSort, UnitNumberInput } from "@/components/forms/checklist-input";
+import { carriedChecklist, checklistAnswered, checklistItems, checklistStates, visibleItems } from "@/lib/form-checklist";
+import { bodyweightSuggestion, daysOutLabel, daysUntil, meetFacts, meetTimeline, currentStep, pickMeet, MEET_CHECKLIST_FORM_TYPE } from "@/lib/meet-checklist";
+import { COMPETITION_FORM_ID, competitionPlanFromAnswers } from "@/lib/competition-plan";
+import type { UnitValue } from "@/lib/form-prefill";
 
 export type ClientFormRendererProps = {
   /** Form to render. */
@@ -56,6 +61,18 @@ export type ClientFormRendererProps = {
 };
 
 const NO_ANSWERS: NfAnswer[] = [];
+
+/** A number asked in a unit (bodyweight in lb or kg): `validation.units`. */
+function questionUnits(q: NfQuestion): Array<"kg" | "lb"> | null {
+  const u = (q.validation as any)?.units;
+  if (!Array.isArray(u)) return null;
+  const ok = u.filter((x: unknown): x is "kg" | "lb" => x === "kg" || x === "lb");
+  return ok.length ? ok : null;
+}
+function isUnitValue(v: unknown): v is UnitValue {
+  return !!v && typeof v === "object" && !Array.isArray(v) && typeof (v as any).unit === "string" && "value" in (v as any);
+}
+const todayLocal = () => new Date().toLocaleDateString("en-CA");
 
 export function ClientFormRenderer({ formId, embedded = false, onClose }: ClientFormRendererProps) {
   const portalUserId = usePortalUserId();
@@ -72,7 +89,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     queryFn: async () => {
       const { data } = await supabase
         .from("clients")
-        .select("id, full_name, first_name, last_name, email")
+        .select("id, user_id, full_name, first_name, last_name, email")
         .eq("user_id", portalUserId!)
         .maybeSingle();
       return data;
@@ -95,10 +112,12 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   // Questions that start from the client's profile (e.g. sex, height).
   const prefillQs = useMemo(() => questions.filter((q) => questionPrefill(q)), [questions]);
   const { data: prefillProfile } = useQuery({
-    queryKey: ["form-prefill-profile", client?.id],
+    queryKey: ["form-prefill-profile", client?.id, formId],
     enabled: !!client?.id && prefillQs.length > 0,
     queryFn: async () => {
       const wantsPlan = prefillQs.some((q) => questionPrefill(q) === "nutrition_plan");
+      const keys = new Set(prefillQs.map((q) => questionPrefill(q)));
+      const wantsMeet = keys.has("meet_name") || keys.has("meet_date") || keys.has("meet_weight_class");
       const [{ data }, plans] = await Promise.all([
         supabase.from("clients").select("sex, height_cm, preferred_height_unit, full_name, date_of_birth").eq("id", client!.id).maybeSingle(),
         wantsPlan
@@ -114,7 +133,11 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
       const has_nutrition_plan = !plans || plans.error
         ? null
         : ((plans.data ?? []) as any[]).some((t) => (t.nutrition_target_days ?? []).length > 0);
-      return data ? { ...data, has_nutrition_plan } : data;
+      const [meet, bodyweight] = await Promise.all([
+        wantsMeet ? loadMeetGuess(client!.id, formId).catch(() => null) : Promise.resolve(null),
+        keys.has("bodyweight") ? loadLatestWeighIn(client!.id, (client as any)?.user_id ?? portalUserId).catch(() => null) : Promise.resolve(null),
+      ]);
+      return data ? { ...data, has_nutrition_plan, meet, bodyweight } : data;
     },
   });
 
@@ -162,12 +185,20 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     appliedAnswers.current = answersRaw;
     const base: Record<string, any> = {};
     for (const a of answersRaw) {
+      const j = a.value_json as any;
+      // a number kept with its unit (value_json {unit}) is { value, unit } on screen
+      if (j && typeof j === "object" && !Array.isArray(j) && typeof j.unit === "string") {
+        base[a.question_id] = { value: a.value_number == null ? "" : String(a.value_number), unit: j.unit === "kg" ? "kg" : "lb" };
+        continue;
+      }
       base[a.question_id] = a.value_json ?? a.value_text ?? a.value_number ?? "";
     }
     setLocal(base);
   }, [answersRaw]);
 
-  const readOnly = submission && submission.status !== "in_progress";
+  // A form the coach lets them keep updating (a meet checklist) stays open after it's sent.
+  const updating = !!submission && submission.status !== "in_progress" && !!form?.allow_updates;
+  const readOnly = !!submission && submission.status !== "in_progress" && !form?.allow_updates;
 
   // Typed answers save a beat after the last key (and when the box is left),
   // and each question's writes go one at a time, so an older keystroke can
@@ -177,7 +208,10 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   function writeAnswer(q: NfQuestion, raw: any): Promise<void> {
     if (!submission || readOnly) return Promise.resolve();
     const payload: any = { submission_id: submission.id, question_id: q.id };
-    if (q.question_type === "number" || q.question_type === "rating") {
+    if (isUnitValue(raw)) {
+      payload.value_number = raw.value === "" || !Number.isFinite(Number(raw.value)) ? null : Number(raw.value);
+      payload.value_json = { unit: raw.unit };
+    } else if (q.question_type === "number" || q.question_type === "rating") {
       payload.value_number = raw === "" || raw == null || !Number.isFinite(Number(raw)) ? null : Number(raw);
     } else if (NF_JSON_TYPES.has(q.question_type)) {
       payload.value_json = raw ?? [];
@@ -229,10 +263,16 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   );
   // questions Submit found unanswered (or out of range): outlined until they're answered
   const [flagged, setFlagged] = useState<Set<string>>(() => new Set());
+  // prefilled one-line answers (their name) the athlete chose to change
+  const [editingCompact, setEditingCompact] = useState<Set<string>>(() => new Set());
   // what's on screen now decides the follow-up questions, not just what was saved when it opened
   const liveAnswers = useMemo(() => {
     const m: Record<string, NfAnswer | undefined> = { ...answersMap };
     for (const [qid, v] of Object.entries(local)) {
+      if (isUnitValue(v)) {
+        m[qid] = { id: "", submission_id: submission?.id ?? "", question_id: qid, value_text: null, value_number: v.value === "" ? null : Number(v.value), value_json: { unit: v.unit } };
+        continue;
+      }
       m[qid] = {
         id: "",
         submission_id: submission?.id ?? "",
@@ -291,7 +331,10 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
       if (answersMap[q.id] || seeded.current.has(q.id)) continue;
       const prev = lastAnswers.find((a) => a.question_id === q.id);
       if (!prev) continue;
-      const value = NF_JSON_TYPES.has(q.question_type) ? prev.value_json : q.question_type === "number" || q.question_type === "rating" ? prev.value_number : prev.value_text;
+      // a checklist carries only what they don't use (N/A): packed last meet isn't packed for this one
+      const value = q.question_type === "checklist"
+        ? carriedChecklist(prev.value_json)
+        : NF_JSON_TYPES.has(q.question_type) ? prev.value_json : q.question_type === "number" || q.question_type === "rating" ? prev.value_number : prev.value_text;
       if (value == null || (Array.isArray(value) && !value.length) || value === "") continue;
       seeded.current.add(q.id);
       any = true;
@@ -377,10 +420,17 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     return sourceItems(q) ?? ((q.options ?? []) as string[]).map((o) => ({ key: o, label: o }));
   }
 
+  /** Answered as it's on screen: a checklist's must-haves marked, a ranking always (it's in order already). */
+  function answeredNow(q: NfQuestion): boolean {
+    if (q.question_type === "checklist") return checklistAnswered(visibleItems(checklistItems(q), liveAnswers), local[q.id], !!q.required);
+    if (q.question_type === "ranking") return rankItemsFor(q).length > 0 || isAnswered(q, local[q.id], files);
+    return isAnswered(q, local[q.id], files);
+  }
+
   async function handleSubmit() {
     if (!submission) return;
     const visible = questions.filter((q) => shouldShowQuestion(q, liveAnswers));
-    const missing = visible.filter((q) => q.required && !(q.question_type === "ranking" ? rankItemsFor(q).length > 0 || isAnswered(q, local[q.id], files) : isAnswered(q, local[q.id], files)));
+    const missing = visible.filter((q) => q.required && !answeredNow(q));
     const off = visible.filter((q) => q.question_type === "number" && numberIssue(q, local[q.id]));
     if (missing.length > 0 || off.length > 0) {
       // outline them and take them to the first one
@@ -476,7 +526,21 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   }
 
   const shownQuestions = questions.filter((q) => shouldShowQuestion(q, liveAnswers));
-  const progress = formProgress(shownQuestions.filter((q) => q.required).map((q) => ({ answered: isAnswered(q, local[q.id], files) })));
+  const checklists = shownQuestions.filter((q) => q.question_type === "checklist");
+  const progress = checklists.length
+    ? checklistTotals(checklists, local, liveAnswers)
+    : formProgress(shownQuestions.filter((q) => q.required).map((q) => ({ answered: answeredNow(q) })));
+  // Everything marked Still need, critical first: what's left to sort before the meet.
+  const stillToSort = checklists
+    .flatMap((q) => {
+      const states = checklistStates(local[q.id]);
+      return visibleItems(checklistItems(q), liveAnswers)
+        .filter((i) => states.get(i.key) === "need")
+        .map((i) => ({ questionId: q.id, label: i.label, critical: i.priority === "critical" }));
+    })
+    .sort((a, b) => Number(b.critical) - Number(a.critical));
+  const meet = form.form_type === MEET_CHECKLIST_FORM_TYPE ? meetFacts(questions, liveAnswers) : null;
+  const goTo = (id: string) => document.getElementById(`q-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
     <>
@@ -512,6 +576,9 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
           </Card>
         )}
 
+        {meet && <MeetLine name={meet.meetName} date={meet.meetDate} />}
+        {stillToSort.length > 0 && <StillToSort rows={stillToSort} onGo={goTo} />}
+
         {carried && !readOnly && (
           <p className="rounded-xl bg-muted px-3.5 py-2.5 text-[14px]" data-form-carried>
             Your last answers are filled in. Change anything that's different now.
@@ -527,7 +594,60 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
               </section>
             );
           }
-          const idx = shownQuestions.filter((x) => x.question_type !== "info").indexOf(q);
+          if (q.question_type === "checklist") {
+            return (
+              <ChecklistSection
+                key={q.id}
+                q={q}
+                value={local[q.id]}
+                answers={liveAnswers}
+                readOnly={!!readOnly}
+                flagged={flagged.has(q.id)}
+                onChange={(next) => saveAnswer(q, next)}
+              />
+            );
+          }
+          const units = q.question_type === "number" ? questionUnits(q) : null;
+          if (units) {
+            const cur: UnitValue = isUnitValue(local[q.id])
+              ? local[q.id]
+              : { value: local[q.id] == null || local[q.id] === "" ? "" : String(local[q.id]), unit: prefillProfile?.bodyweight?.unit ?? units[0] };
+            const bw = questionPrefill(q) === "bodyweight" ? prefillProfile?.bodyweight : null;
+            const hint = bw && !(cur.value !== "" && Number(cur.value) === bw.value && cur.unit === bw.unit)
+              ? {
+                  text: `Last weigh-in ${bw.value} ${bw.unit}, ${bw.ageDays === 0 ? "today" : bw.ageDays === 1 ? "yesterday" : new Date(`${bw.date}T00:00:00`).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}`,
+                  onUse: () => saveAnswer(q, { value: String(bw.value), unit: bw.unit }),
+                }
+              : null;
+            return (
+              <QuestionCard key={q.id} q={q} index={shownQuestions.filter((x) => x.question_type !== "info" && x.question_type !== "checklist").indexOf(q)} flagged={flagged.has(q.id)}>
+                <UnitNumberInput
+                  value={cur}
+                  units={units}
+                  readOnly={!!readOnly}
+                  onChange={(next, typed) => saveAnswer(q, next, { defer: typed })}
+                  onDone={() => void flushSaves(q.id)}
+                  hint={hint}
+                />
+              </QuestionCard>
+            );
+          }
+          if ((q.validation as any)?.compact && typeof local[q.id] === "string" && local[q.id].trim() && !editingCompact.has(q.id)) {
+            return (
+              <div key={q.id} id={`q-${q.id}`} className="flex min-h-[52px] items-center gap-3 rounded-2xl border border-border bg-card px-4 py-2.5" data-form-compact>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] text-muted-foreground">{q.label}</p>
+                  <p className="truncate text-[16px] font-semibold">{local[q.id]}</p>
+                </div>
+                {!readOnly && (
+                  <Button variant="ghost" className="h-10 px-3" onClick={() => setEditingCompact((s) => new Set(s).add(q.id))}>
+                    Edit
+                  </Button>
+                )}
+              </div>
+            );
+          }
+          const idx = shownQuestions.filter((x) => x.question_type !== "info" && x.question_type !== "checklist").indexOf(q);
           const issue = q.question_type === "number" ? numberIssue(q, local[q.id]) : null;
           const flag = flagged.has(q.id);
           return (
@@ -578,7 +698,35 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
           );
         })}
 
-        {!readOnly && (
+        {updating && (
+          <div
+            className={cn("sticky z-10 border-t border-border/70 bg-background/95 pt-3 backdrop-blur", embedded ? "px-1" : "-mx-4 px-4 md:mx-0 md:rounded-2xl md:border")}
+            style={{
+              bottom: embedded ? 0 : "calc(var(--bottom-nav-clearance, 0px) + env(safe-area-inset-bottom))",
+              paddingBottom: embedded ? "max(env(safe-area-inset-bottom), 0.75rem)" : "0.75rem",
+            }}
+            data-form-update-bar
+          >
+            <div className="mb-2 flex items-center justify-between gap-3 text-[13px]">
+              <span className="font-semibold tabular-nums">
+                {progress.total > 0 ? `${progress.done} of ${progress.total} ${checklists.length ? "checked" : "answered"}` : "Sent to your coach"}
+              </span>
+              <span className="text-muted-foreground">Changes save as you go</span>
+            </div>
+            <Button
+              className="h-14 w-full rounded-2xl text-[16px] font-semibold"
+              onClick={async () => {
+                await flushSaves();
+                qc.invalidateQueries({ queryKey: ["chat-form-request-status", formId] });
+                closeOrBack();
+              }}
+            >
+              <Check className="mr-2 h-5 w-5" /> Done
+            </Button>
+          </div>
+        )}
+
+        {!readOnly && !updating && (
           // Submit sits above the tab bar (or the sheet's bottom), full width for a thumb
           <div
             className={cn("sticky z-10 border-t border-border/70 bg-background/95 pt-3 backdrop-blur", embedded ? "px-1" : "-mx-4 px-4 md:mx-0 md:rounded-2xl md:border")}
@@ -592,7 +740,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
               <>
                 <div className="mb-1.5 flex items-center justify-between gap-3 text-[13px]">
                   <span className="font-semibold tabular-nums">
-                    {progress.done} of {progress.total} answered
+                    {progress.done} of {progress.total} {checklists.length ? "checked" : "answered"}
                   </span>
                   <span className="text-muted-foreground">Saves as you go</span>
                 </div>
@@ -623,9 +771,120 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   );
 }
 
+/** Across every checklist on screen: items marked of items shown. */
+function checklistTotals(qs: NfQuestion[], local: Record<string, any>, answers: Record<string, NfAnswer | undefined>) {
+  let done = 0;
+  let total = 0;
+  for (const q of qs) {
+    const items = visibleItems(checklistItems(q), answers);
+    const states = checklistStates(local[q.id]);
+    total += items.length;
+    done += items.filter((i) => states.has(i.key)).length;
+  }
+  return { done, total };
+}
+
+/** The meet the checklist is for, how far out it is, and what's due now. */
+function MeetLine({ name, date }: { name: string | null; date: string | null }) {
+  if (!name && !date) return null;
+  const today = todayLocal();
+  const days = daysUntil(date, today);
+  const step = currentStep(meetTimeline(date), today);
+  const when = date ? new Date(`${date}T00:00:00`).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric" }) : null;
+  return (
+    <div className="rounded-2xl border border-border bg-card px-4 py-3" data-meet-line>
+      <p className="text-[16px] font-semibold leading-snug">{name ?? "Your meet"}</p>
+      <p className="mt-0.5 text-[14px] text-muted-foreground">
+        {[when, days != null && days >= 0 ? daysOutLabel(days) : null].filter(Boolean).join(" · ")}
+        {step && days != null && days >= 0 ? ` · ${step.label}` : ""}
+      </p>
+    </div>
+  );
+}
+
+/** One question's card: its number, words and help, then the input. */
+function QuestionCard({ q, index, flagged, children }: { q: NfQuestion; index: number; flagged: boolean; children: React.ReactNode }) {
+  return (
+    <section
+      id={`q-${q.id}`}
+      className={cn("scroll-mt-24 rounded-2xl border bg-card p-4 transition-colors sm:p-5", flagged ? "border-destructive ring-2 ring-destructive/20" : "border-border")}
+      data-form-question={q.question_type}
+    >
+      <div className="flex items-start gap-3">
+        <span className="mt-px grid h-7 w-7 shrink-0 place-items-center rounded-full bg-muted text-[13px] font-bold tabular-nums text-muted-foreground" aria-hidden>
+          {index + 1}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[17px] font-bold leading-snug">
+            {q.label}
+            {q.required && <span className="ml-1 text-destructive">*</span>}
+          </h3>
+          {q.help_text && <p className="mt-1 text-[14px] leading-snug text-muted-foreground">{q.help_text}</p>}
+        </div>
+      </div>
+      <div className="mt-3.5">{children}</div>
+      {flagged && <p className="mt-2 text-[13px] font-semibold text-destructive">This one needs an answer</p>}
+    </section>
+  );
+}
+
+/**
+ * The meet a checklist is for, from what the athlete can see: the meet their
+ * coach sent it with (the assignment's settings), their next meet prep, or
+ * their own Competition Calendar answers (meet-checklist.ts pickMeet).
+ */
+async function loadMeetGuess(clientId: string, formId: string) {
+  const db = supabase as any;
+  const today = todayLocal();
+  const [{ data: assignment }, { data: preps }, { data: lastPlan }] = await Promise.all([
+    db.from("nf_assignments").select("settings").eq("form_id", formId).eq("client_id", clientId).maybeSingle(),
+    db.from("pl_preps").select("title, event_name, event_date, weight_class, status, archived").eq("client_id", clientId).gte("event_date", today).order("event_date").limit(5),
+    db
+      .from("nf_submissions")
+      .select("id")
+      .eq("form_id", COMPETITION_FORM_ID)
+      .eq("client_id", clientId)
+      .neq("status", "in_progress")
+      .order("submitted_at", { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  let plan = null as ReturnType<typeof competitionPlanFromAnswers> | null;
+  if (lastPlan?.id) {
+    const [{ data: qs }, answers] = await Promise.all([
+      db.from("nf_questions").select("id, validation").eq("form_id", COMPETITION_FORM_ID),
+      listAnswers(lastPlan.id),
+    ]);
+    if (qs?.length) plan = competitionPlanFromAnswers(qs, answers);
+  }
+  const sent = (assignment?.settings as any)?.meet ?? null;
+  return pickMeet({ sent, preps: preps ?? [], plan }, today);
+}
+
+/** Their latest weigh-in (the app's log, else the coach's older entries) in their bodyweight unit. */
+async function loadLatestWeighIn(clientId: string, userId: string | null | undefined) {
+  const db = supabase as any;
+  const [{ data: bw }, { data: legacy }, { data: pref }, { data: cl }] = await Promise.all([
+    userId
+      ? db.from("progress_bodyweight").select("logged_date, weight_value, weight_unit").eq("user_id", userId).order("logged_date", { ascending: false }).limit(1).maybeSingle()
+      : Promise.resolve({ data: null }),
+    db.from("progress_metrics").select("entry_date, bodyweight, bodyweight_unit").eq("client_id", clientId).not("bodyweight", "is", null).order("entry_date", { ascending: false }).limit(1).maybeSingle(),
+    userId ? db.from("bodyweight_unit_prefs").select("unit").eq("user_id", userId).maybeSingle() : Promise.resolve({ data: null }),
+    db.from("clients").select("preferred_weight_unit").eq("id", clientId).maybeSingle(),
+  ]);
+  const toKg = (v: number, u: string | null) => (u === "kg" ? v : v / 2.2046226);
+  const a = bw?.weight_value != null ? { date: String(bw.logged_date), kg: toKg(Number(bw.weight_value), bw.weight_unit), unit: bw.weight_unit } : null;
+  const b = legacy?.bodyweight != null ? { date: String(legacy.entry_date).slice(0, 10), kg: toKg(Number(legacy.bodyweight), legacy.bodyweight_unit ?? "lb"), unit: legacy.bodyweight_unit ?? "lb" } : null;
+  // the app's own log wins a tie
+  const latest = a && b ? (b.date > a.date ? b : a) : a ?? b;
+  const unit: "kg" | "lb" = pref?.unit === "kg" || pref?.unit === "lb" ? pref.unit : latest?.unit === "kg" ? "kg" : cl?.preferred_weight_unit === "kg" ? "kg" : "lb";
+  return bodyweightSuggestion(latest ? { date: latest.date, kg: latest.kg } : null, unit, todayLocal());
+}
+
 /** Answered: a file uploaded, something picked, or words typed (spaces don't count). */
 function isAnswered(q: NfQuestion, v: any, files: { question_id: string }[]): boolean {
   if (q.question_type === "file" || q.question_type === "video") return files.some((f) => f.question_id === q.id);
+  if (isUnitValue(v)) return v.value.trim() !== "" && Number.isFinite(Number(v.value));
   if (Array.isArray(v)) return v.length > 0;
   if (typeof v === "string") return v.trim() !== "";
   return v !== undefined && v !== null;
@@ -707,7 +966,19 @@ function QuestionInput({
           <QuickChips chips={quick} readOnly={readOnly} isOn={(c) => quickPicked(text, c)} onPick={(c) => onChange(toggleQuick(text, c, exclusive))} />
         )}
         {q.question_type === "short_text" ? (
-          <Input className={field} value={text} disabled={readOnly} placeholder={placeholder} enterKeyHint="done" onChange={(e) => onChange(e.target.value, true)} onBlur={onDone} />
+          <Input
+            className={field}
+            value={text}
+            disabled={readOnly}
+            placeholder={placeholder}
+            enterKeyHint="done"
+            // a phone or an email opens the right keyboard
+            type={v.input === "email" ? "email" : v.input === "tel" ? "tel" : "text"}
+            inputMode={v.input === "email" ? "email" : v.input === "tel" ? "tel" : undefined}
+            autoComplete={v.input === "email" ? "email" : v.input === "tel" ? "tel" : undefined}
+            onChange={(e) => onChange(e.target.value, true)}
+            onBlur={onDone}
+          />
         ) : (
           <Textarea
             rows={3}

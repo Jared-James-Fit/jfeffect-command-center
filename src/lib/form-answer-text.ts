@@ -22,8 +22,11 @@ export type FormQuestionRow = {
 export function formAnswerText(a: FormAnswerRow | null | undefined): string {
   if (!a) return "";
   if (a.value_text != null && String(a.value_text).trim()) return String(a.value_text);
-  if (a.value_number != null && String(a.value_number).trim() !== "") return String(a.value_number);
   const j = a.value_json;
+  if (a.value_number != null && String(a.value_number).trim() !== "") {
+    const unit = j && typeof j === "object" && !Array.isArray(j) && typeof (j as any).unit === "string" ? (j as any).unit : null;
+    return unit ? `${a.value_number} ${unit}` : String(a.value_number);
+  }
   // Checkboxes, meets (by their own line), a ranking (in order): the same reading as follow-up questions.
   if (Array.isArray(j)) return answerAsText({ value_json: j });
   if (j && typeof j === "object") return JSON.stringify(j);

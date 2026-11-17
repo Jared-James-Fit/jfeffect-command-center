@@ -47,6 +47,7 @@ export function ComposerPlusMenu({
   onPickSound,
   onAttach,
   onInsertText,
+  clientName,
 }: {
   role: "admin" | "client" | "member";
   surface: "dm" | "group";
@@ -64,6 +65,8 @@ export function ComposerPlusMenu({
   onAttach?: (att: ChatSendAttachment, body: string) => void | Promise<void>;
   /** Admin/coach-only — receives generated Google Meet URLs to append. */
   onInsertText?: (text: string) => void;
+  /** The client's first name (one client), for "Copy for Marc" in the form picker. */
+  clientName?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [gifOpen, setGifOpen] = useState(false);
@@ -297,6 +300,7 @@ export function ComposerPlusMenu({
           clientIds={clientIds}
           disabled={disabled}
           onAttach={onAttach}
+          clientName={clientName}
           externalOpen={{ form: formOpen, sig: sigOpen, recipe: recipeOpen }}
           onExternalOpenChange={(key, v) => {
             if (key === "form") setFormOpen(v);
