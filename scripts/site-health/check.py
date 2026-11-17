@@ -13,9 +13,11 @@ Standard library only, plus `dig` and `openssl` (both on GitHub's Ubuntu image).
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import ipaddress
 import json
 import os
+import shutil
 import socket
 import ssl
 import subprocess
@@ -32,8 +34,10 @@ RESOLVERS = ["1.1.1.1", "8.8.8.8", "9.9.9.9", "208.67.222.222"]
 # Certificates are renewed about 30 days before they run out; under this many
 # days left means renewal is failing and phones will start refusing the site.
 CERT_MIN_DAYS = 14
-# The domain registration: under this many days left, check that it renews.
-DOMAIN_MIN_DAYS = 30
+# The domain registration: a registrar's auto-renew can run as late as the
+# expiry date itself, so this only says so (WARN) and alerts (MIN) close to it.
+DOMAIN_WARN_DAYS = 45
+DOMAIN_MIN_DAYS = 14
 
 failures: list[str] = []
 warnings: list[str] = []
@@ -68,6 +72,14 @@ def is_ip(value: str) -> bool:
 def resolve(host: str) -> dict[str, set[str]]:
     """Every A / AAAA answer for `host`, keyed by who gave it."""
     answers: dict[str, set[str]] = {}
+    if not shutil.which("dig"):
+        # No dig: the system resolver only, rather than read "no address" off a missing tool.
+        warnings.append("dig isn't installed: checked the system resolver only.")
+        try:
+            answers["system"] = {a[4][0] for a in socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)}
+        except socket.gaierror:
+            answers["system"] = set()
+        return answers
     servers = list(RESOLVERS)
     # The domain's own nameservers too: the source of truth, ahead of any cache.
     for ns in dig(APEX, "NS", RESOLVERS[0]):
@@ -201,6 +213,8 @@ def check_domain() -> None:
     if expiry:
         when = dt.datetime.fromisoformat(expiry.replace("Z", "+00:00"))
         days = (when - dt.datetime.now(dt.timezone.utc)).days
+        if days < DOMAIN_WARN_DAYS:
+            warnings.append(f"{APEX} expires in {days} days ({when:%b %d, %Y}): check auto-renew is on at the registrar.")
         if days < DOMAIN_MIN_DAYS:
             failures.append(
                 f"**{APEX} expires in {days} days ({when:%b %d, %Y}).** Make sure it auto-renews at the "
@@ -216,6 +230,8 @@ def main() -> int:
         check_host(host, required=False)
     check_domain()
 
+    # Marks what's wrong, so an open alert issue gets a new comment only when it changes.
+    say(f"\n<!-- site-health:{hashlib.sha1(chr(10).join(failures).encode()).hexdigest()[:12]} -->")
     say("\n## Result")
     if failures:
         say("**Problems:**")
@@ -223,7 +239,7 @@ def main() -> int:
             say(f"- {f}")
     if warnings:
         say("**Worth a look:**")
-        for w in warnings:
+        for w in dict.fromkeys(warnings):
             say(f"- {w}")
     if not failures:
         say("All good: every address serves a valid certificate and the site loads.")

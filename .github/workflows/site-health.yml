@@ -50,9 +50,16 @@ jobs:
         run: |
           gh label create site-health --color B60205 --description "jfeffect.com health check" 2>/dev/null || true
           body="$(cat "$REPORT" 2>/dev/null || echo 'The check failed before it could write a report.')"$'\n\n'"Run: $RUN_URL"
+          marker="$(grep -o '<!-- site-health:[0-9a-f]* -->' "$REPORT" 2>/dev/null || true)"
           open="$(gh issue list --label site-health --state open --json number --jq '.[0].number')"
           if [ -n "$open" ]; then
-            gh issue comment "$open" --body "$body"
+            # Same problems as last time: don't comment every 3 hours.
+            last="$(gh issue view "$open" --json body,comments --jq '(.comments | last | .body) // .body')"
+            if [ -n "$marker" ] && printf '%s' "$last" | grep -qF "$marker"; then
+              echo "Unchanged since the last report on #$open."
+            else
+              gh issue comment "$open" --body "$body"
+            fi
           else
             gh issue create --label site-health --title "jfeffect.com: people may see \"This Connection Is Not Private\"" --body "$body"
           fi
