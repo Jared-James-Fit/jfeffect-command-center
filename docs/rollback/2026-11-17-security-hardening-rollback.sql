@@ -1,4 +1,4 @@
--- ROLLBACK for supabase/migrations/20270402093000_security_hardening.sql
+-- ROLLBACK for supabase/migrations/20270403093000_security_hardening.sql
 --
 -- NOT a migration: it lives outside supabase/migrations so it never runs by
 -- itself. Run one section at a time, only for the part that broke something,

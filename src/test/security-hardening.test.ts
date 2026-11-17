@@ -366,7 +366,7 @@ describe("authorization fixes", () => {
 });
 
 describe("the migration", () => {
-  const sql = read("supabase/migrations/20270402093000_security_hardening.sql");
+  const sql = read("supabase/migrations/20270403093000_security_hardening.sql");
   it("takes the worker and job functions away from signed-in users and visitors", () => {
     for (const fn of ["claim_scheduled_messages(text, integer, integer)", "finalize_message_send(uuid, text, text)", "consume_session_for_pt(uuid)", "crm_last_contacted_map(uuid[])", "xp_client_for_user(uuid)", "grant_sessions_due_today()"]) {
       expect(sql).toContain(`'public.${fn}'`);
