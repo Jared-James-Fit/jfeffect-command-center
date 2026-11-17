@@ -94,6 +94,8 @@ export interface BodyweightGoal {
   value: number;          // target (or range floor for maintain)
   value_max?: number | null; // range ceiling for maintain
   unit: WeightUnit;
+  /** The date it's for (YYYY-MM-DD), when there is one. */
+  date?: string | null;
 }
 
 export interface GoalProgress {

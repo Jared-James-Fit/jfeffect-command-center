@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/app-shell";
 import { ProgressSection, type ProgressInitialAction } from "@/components/progress/progress-section";
 
 /** Quick-add actions open just the add sheet over Home; everything else opens the full progress view. */
-const QUICK_ADD: ProgressInitialAction[] = ["photo", "video", "measure"];
+const QUICK_ADD: ProgressInitialAction[] = ["photo", "video", "measure", "weight"];
 const VIEW_TABS: ProgressInitialAction[] = ["bodyweight", "history"];
 
 export const Route = createFileRoute("/_authenticated/portal/progress")({

@@ -25,6 +25,7 @@ export type AppEvent =
   | "lead_ready"
   | "program_gaps_due"
   | "health_updated"
+  | "weight_review_ready"
   | "support_message"
   | "account_deactivated"
   | "account_deactivation_scheduled"
@@ -168,6 +169,15 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     url: (id) => `/admin/clients/${id}`, rateMinutes: 60,
   },
   // A client added or changed an injury, condition, medication or supplement in their app.
+  // A weekly check-in's weight-management read wants the coach: a nutrition or
+  // cardio change to approve, digestion to look into, or a target to rethink
+  // (weight-management/reviews.server.ts). Content-free; opens the card.
+  weight_review_ready: {
+    to: "staff", category: "check_ins",
+    title: (n) => `${n}'s weight plan needs a look`,
+    body: () => "Their check-in is in and there's a recommendation waiting for your OK. Tap to review it.",
+    url: (id) => `/admin/clients/${id}?tab=nutrition#weight`, rateMinutes: 12 * 60,
+  },
   health_updated: {
     to: "staff", category: "check_ins",
     title: (n) => `${n} updated their health info`,

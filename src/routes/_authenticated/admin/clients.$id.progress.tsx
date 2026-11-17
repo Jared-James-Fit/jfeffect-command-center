@@ -71,8 +71,8 @@ function AdminClientProgress() {
             userId={(client as any).user_id}
             readOnly={role !== "admin"}
             subtitle={role === "admin"
-              ? "Set how often this client is reminded for each check-in."
-              : "Cadence set by admin — read-only."}
+              ? "Photos and measurements switched on here become a step in their weekly check-in when due, skipped when already on file. Bodyweight is read from their log. Never a separate form or reminder."
+              : "Set by an admin. Read-only."}
           />
         </div>
       ) : null}

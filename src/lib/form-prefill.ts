@@ -52,7 +52,7 @@ export function questionPrefill(q: {
 
 /** The answer to pre-save for a question, or null to leave it blank. */
 export function prefillAnswer(
-  q: { validation?: Record<string, unknown> | null; options?: string[] | null },
+  q: { validation?: Record<string, unknown> | null; options?: string[] | null; label?: string | null },
   profile: PrefillProfile | null | undefined,
 ): string | UnitValue | null {
   const key = questionPrefill(q);
@@ -75,7 +75,17 @@ export function prefillAnswer(
   }
   if (key === "bodyweight") {
     const bw = profile.bodyweight;
-    return bw && bw.fresh ? { value: String(bw.value), unit: bw.unit } : null;
+    if (!bw || !bw.fresh) return null;
+    const units = q.validation?.units;
+    if (Array.isArray(units) && units.length) return { value: String(bw.value), unit: bw.unit };
+    // a plain number asked in one unit ("Current fasted bodyweight? (lbs)"): the weigh-in in that unit
+    const label = String(q.label ?? "");
+    const unit = q.validation?.unit;
+    const named: "kg" | "lb" | null = unit === "kg" || unit === "lb" ? unit : /\bkg\b/i.test(label) ? "kg" : /\b(lbs?|pounds)\b/i.test(label) ? "lb" : null;
+    if (!named) return { value: String(bw.value), unit: bw.unit };
+    const want = named;
+    const v = bw.unit === want ? bw.value : want === "lb" ? bw.value * 2.2046226218 : bw.value / 2.2046226218;
+    return String(Math.round(v * 10) / 10);
   }
   // Age and weight class only use the profile for a hint (classes overlap, and a planned class is theirs to say).
   if (key === "age_class" || key === "weight_class") return null;

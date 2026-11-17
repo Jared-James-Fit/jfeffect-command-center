@@ -80,6 +80,7 @@ const NutritionRequestPanel = lazyDefault(() => import("@/components/nutrition/N
 const NutritionTargetsPanel = lazyDefault(() => import("@/components/nutrition-targets-panel"), "NutritionTargetsPanel");
 const FoodNotesCard = lazyDefault(() => import("@/components/nutrition/FoodNotesCard"), "FoodNotesCard");
 const NutritionProgressCard = lazyDefault(() => import("@/components/nutrition/NutritionProgressCard"), "NutritionProgressCard");
+const WeightManagementCard = lazyDefault(() => import("@/components/weight-management/WeightManagementCard"), "WeightManagementCard");
 const CardioTargetsPanel = lazyDefault(() => import("@/components/cardio-targets-panel"), "CardioTargetsPanel");
 const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-metrics-panel"), "ProgressMetricsPanel");
 const ClientAnalyticsDashboard = lazyDefault(() => import("@/components/analytics/client-analytics-dashboard"), "ClientAnalyticsDashboard");
@@ -784,6 +785,7 @@ export function ClientProfileWorkspace({
             <NutritionRequestPanel clientId={id} />
             <FoodNotesCard clientId={id} className="md:col-span-1 md:self-start" />
             <NutritionTargetsPanel clientId={id} className="md:col-span-2" />
+            <WeightManagementCard clientId={id} className="md:col-span-3" />
             <NutritionProgressCard clientId={id} className="md:col-span-3" />
             <CardioTargetsPanel clientId={id} />
           </Suspense>

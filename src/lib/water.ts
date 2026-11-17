@@ -13,6 +13,8 @@ export type WaterTarget = {
   mode: "auto" | "custom";
   calc_bodyweight_kg: number | null;
   calc_formula_version: number;
+  /** How much more a training day is (set by the coach from weight management). */
+  training_extra_ml?: number | null;
   last_recalculated_at: string | null;
   set_by_user_id: string | null;
   created_at: string;

@@ -4241,6 +4241,7 @@ export type Database = {
           billing_source_notes: string | null
           billing_source_set_at: string | null
           billing_source_set_by: string | null
+          bodyweight_goal_date: string | null
           bodyweight_goal_set_at: string | null
           bodyweight_goal_type: string | null
           bodyweight_goal_unit: string | null
@@ -4431,6 +4432,7 @@ export type Database = {
           billing_source_notes?: string | null
           billing_source_set_at?: string | null
           billing_source_set_by?: string | null
+          bodyweight_goal_date?: string | null
           bodyweight_goal_set_at?: string | null
           bodyweight_goal_type?: string | null
           bodyweight_goal_unit?: string | null
@@ -4621,6 +4623,7 @@ export type Database = {
           billing_source_notes?: string | null
           billing_source_set_at?: string | null
           billing_source_set_by?: string | null
+          bodyweight_goal_date?: string | null
           bodyweight_goal_set_at?: string | null
           bodyweight_goal_type?: string | null
           bodyweight_goal_unit?: string | null
@@ -19692,6 +19695,7 @@ export type Database = {
           mode: string
           set_by_user_id: string | null
           suggested_ml: number
+          training_extra_ml: number | null
           target_source: string
           updated_at: string
           user_id: string
@@ -19705,6 +19709,7 @@ export type Database = {
           mode?: string
           set_by_user_id?: string | null
           suggested_ml?: number
+          training_extra_ml?: number | null
           target_source?: string
           updated_at?: string
           user_id: string
@@ -19718,6 +19723,7 @@ export type Database = {
           mode?: string
           set_by_user_id?: string | null
           suggested_ml?: number
+          training_extra_ml?: number | null
           target_source?: string
           updated_at?: string
           user_id?: string
@@ -23384,6 +23390,145 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "nf_submissions"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      weight_management_profiles: {
+        Row: {
+          client_id: string
+          climate: string | null
+          created_at: string
+          max_incline: number | null
+          max_session_minutes: number | null
+          meet_importance: string | null
+          notes: string | null
+          speed_unit: string | null
+          sweat_level: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          client_id: string
+          climate?: string | null
+          created_at?: string
+          max_incline?: number | null
+          max_session_minutes?: number | null
+          meet_importance?: string | null
+          notes?: string | null
+          speed_unit?: string | null
+          sweat_level?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          client_id?: string
+          climate?: string | null
+          created_at?: string
+          max_incline?: number | null
+          max_session_minutes?: number | null
+          meet_importance?: string | null
+          notes?: string | null
+          speed_unit?: string | null
+          sweat_level?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weight_management_profiles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weight_management_profiles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+        ]
+      }
+      weight_management_reviews: {
+        Row: {
+          applied: Json | null
+          assessment: Json
+          checkin_id: string | null
+          client_id: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          engine_version: number
+          hash: string
+          headline: string
+          id: string
+          material: boolean
+          notified_at: string | null
+          source: string
+          status: string
+          verdict: string
+        }
+        Insert: {
+          applied?: Json | null
+          assessment: Json
+          checkin_id?: string | null
+          client_id: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          engine_version?: number
+          hash: string
+          headline: string
+          id?: string
+          material?: boolean
+          notified_at?: string | null
+          source: string
+          status?: string
+          verdict: string
+        }
+        Update: {
+          applied?: Json | null
+          assessment?: Json
+          checkin_id?: string | null
+          client_id?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          engine_version?: number
+          hash?: string
+          headline?: string
+          id?: string
+          material?: boolean
+          notified_at?: string | null
+          source?: string
+          status?: string
+          verdict?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weight_management_reviews_checkin_id_fkey"
+            columns: ["checkin_id"]
+            isOneToOne: false
+            referencedRelation: "messenger_checkins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weight_management_reviews_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weight_management_reviews_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
           },
         ]
       }

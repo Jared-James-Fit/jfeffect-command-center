@@ -46,20 +46,28 @@ export function reminderFor(opts: { days: number | null; sent: boolean; readines
 
 export async function runMeetChecklistReminders(admin: Db, now = new Date()) {
   const out = { considered: 0, sent: 0, skipped: 0, errors: 0 };
-  const today = now.toLocaleDateString("en-CA", { timeZone: "America/Winnipeg" });
+  // each client's own calendar day (Winnipeg when none is on file)
+  const dayIn = (tz: string | null | undefined) => {
+    try {
+      return now.toLocaleDateString("en-CA", { timeZone: tz || "America/Winnipeg" });
+    } catch {
+      return now.toLocaleDateString("en-CA", { timeZone: "America/Winnipeg" });
+    }
+  };
   const { data: forms } = await admin.from("nf_forms").select("id, settings").eq("form_type", MEET_CHECKLIST_FORM_TYPE).eq("archived", false).eq("active", true);
   const live = ((forms ?? []) as any[]).filter((f) => (f.settings as any)?.reminders !== false);
   if (!live.length) return out;
   const { sendWebPushToUser } = await import("@/lib/push/push.server");
   for (const form of live) {
     const [{ data: asg }, { data: qs }] = await Promise.all([
-      admin.from("nf_assignments").select("client_id, settings, client:client_id(user_id, archived)").eq("form_id", form.id),
+      admin.from("nf_assignments").select("client_id, settings, client:client_id(user_id, archived, timezone)").eq("form_id", form.id),
       admin.from("nf_questions").select("id, label, question_type, required, options, validation, conditional_logic, order_index").eq("form_id", form.id).is("archived_at", null),
     ]);
     const questions = ((qs ?? []) as any[]).sort((a, b) => a.order_index - b.order_index);
     for (const a of (asg ?? []) as any[]) {
       if ((a.settings as any)?.reminders === false || a.client?.archived || !a.client?.user_id) continue;
       out.considered++;
+      const today = dayIn(a.client?.timezone);
       try {
         const { data: sub } = await admin
           .from("nf_submissions")
