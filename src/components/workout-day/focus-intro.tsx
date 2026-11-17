@@ -131,7 +131,7 @@ export function FocusIntro({ onTry, onDismiss }: { onTry: () => void; onDismiss:
  * everyone who learned an older version sees it once more) and any time
  * from the ? in Focus's top bar. A tap anywhere closes it.
  */
-export function FocusTips({ onClose }: { onClose: () => void }) {
+export function FocusTips({ onClose, onLoggingTips }: { onClose: () => void; /** Opens "Fastest way to log" (quick-log-tips.tsx). */ onLoggingTips?: () => void }) {
   return (
     <div
       role="dialog"
@@ -170,6 +170,16 @@ export function FocusTips({ onClose }: { onClose: () => void }) {
         >
           Got it
         </button>
+        {onLoggingTips && (
+          <button
+            type="button"
+            data-testid="focus-tips-logging"
+            onClick={onLoggingTips}
+            className="mt-1.5 h-10 w-full rounded-full text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            Fastest way to log a set
+          </button>
+        )}
       </div>
     </div>
   );

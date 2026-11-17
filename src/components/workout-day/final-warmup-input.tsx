@@ -4,8 +4,10 @@ import { Flame, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { describeWarmup, estimateOneRepMax, normalizeWarmupRow, repsLeftLabel, type WarmupSetRow, type WarmupUnit } from "@/lib/final-warmup";
+import { describeWarmup, estimateOneRepMax, normalizeWarmupRow, repsLeftLabel, warmupInUnit, type WarmupSetRow, type WarmupUnit } from "@/lib/final-warmup";
 import { WARMUP_MAX_REPS, type LoadSuggestion } from "@/lib/load-suggestion";
+import { TypedValueInput } from "@/components/workout-day/typed-value-input";
+import { WeightValueInput } from "@/components/workout-day/weight-value-input";
 
 const sb = supabase as any;
 const MAX_WARMUPS = 8;
@@ -131,13 +133,29 @@ export const WARMUP_FEELS: ReadonlyArray<{ rpe: number; label: string }> = [
   { rpe: 9, label: "Grind" },
 ];
 
+/** The set table's columns the warm-up rows line up with (set-grid.ts). */
+export type WarmupColumns = {
+  focusMode?: boolean;
+  showReps: boolean;
+  showTimer: boolean;
+  showDistance?: boolean;
+  showCalories: boolean;
+  showVelocity: boolean;
+  videoColumn: boolean;
+};
+
+/** The video cell at the end of a warm-up row (set-video-cell.tsx, set 0), drawn by the card. */
+export type WarmupVideoCell = (w: { warmupId: string | null; logged: boolean; label: string }) => React.ReactNode;
+
 /**
  * Warm-up sets as "W" rows at the top of an exercise's set table, above Set 1.
- * On a compound lift, before the first working set, one slim row says what to
- * work up to; tap it, tap how it felt, tap "Use" — today's weight is in every
- * open set (2–3 taps, no typing when the suggested warm-up was used). Logged
- * warm-ups stay as W rows; tap one to fix it. Never counted as work. The rough
- * 1RM lives in Workout Tools → e1RM (today's best set is one tap there), not here.
+ * On a compound lift, before the first working set, the last warm-up is an open
+ * row in the set table's own columns (reps · RPE · weight · video): nothing to
+ * expand, never required. Typing its weight saves it, and today's Suggested is
+ * tuned from it at once. Earlier warm-ups (and any once a working set is in)
+ * are slim W rows; tap one to fix it. Each can carry a video for the coach,
+ * like a working set. Never counted as work. The rough 1RM lives in Workout
+ * Tools → e1RM (today's best set is one tap there), not here.
  */
 export function WarmupRows({
   sets,
@@ -155,6 +173,12 @@ export function WarmupRows({
   preview = null,
   openSets = 0,
   onUseForAllSets = null,
+  columns = null,
+  effortKind = "rpe",
+  video = null,
+  looseClip = false,
+  suggestOn = true,
+  openRow = true,
 }: {
   sets: WarmupSetRow[];
   unit: WarmupUnit;
@@ -181,9 +205,33 @@ export function WarmupRows({
   openSets?: number;
   /** Put one weight into every open set as a draft; resolves to how many were filled. */
   onUseForAllSets?: ((load: number) => Promise<number>) | null;
+  /** The set table's columns: the open last warm-up lines up with them (null = the old one-line prompt). */
+  columns?: WarmupColumns | null;
+  /** The card's effort column: RPE, or RIR (stored as RPE = 10 − RIR). */
+  effortKind?: "rpe" | "rir";
+  /** A video cell per warm-up (a coaching client's, like their sets'). */
+  video?: WarmupVideoCell | null;
+  /** A clip was filmed on the open warm-up row before it was saved: keep the row so it's still there. */
+  looseClip?: boolean;
+  /** Suggested is on (the card's strip shows today's weight): the warm-up tunes it there. */
+  suggestOn?: boolean;
+  /**
+   * The last warm-up is an open row (a barbell squat, bench or deadlift, where
+   * the last warm-up really sets the day's weight); other compound lifts keep
+   * the one-line prompt, so a workout isn't a stack of open warm-up rows.
+   */
+  openRow?: boolean;
 }) {
   const formOpen = canEdit && !!form;
   const editingId = formOpen && form !== "new" ? form : null;
+  const videoOn = !!columns?.videoColumn && !!video;
+  // The open last warm-up: before the first working set (while it can tune
+  // today's weight) with at most the one warm-up it saved, or while a clip
+  // filmed on it waits for its weight. Never needed: the sets work without it.
+  const inline =
+    canEdit && !!columns?.showReps && !formOpen && (openRow || looseClip) &&
+    (sets.length === 0 ? !!prompt?.tunes || looseClip : sets.length === 1 && !!prompt?.tunes);
+  const inlineRow = inline ? (sets[0] ?? null) : null;
   const warmupForm = (editing: WarmupSetRow | null) => (
     <WarmupForm
       key={editing?.id ?? "new"}
@@ -205,7 +253,7 @@ export function WarmupRows({
       {sets.map((s) =>
         editingId === s.id ? (
           <div key={s.id}>{warmupForm(s)}</div>
-        ) : (
+        ) : inline && inlineRow?.id === s.id ? null : (
           <div
             key={s.id}
             className="grid items-center gap-1.5 border-t border-builder-card-border/70 bg-orange-500/[0.05] px-2 py-1"
@@ -219,7 +267,7 @@ export function WarmupRows({
               onClick={() => onFormChange(s.id)}
               aria-label={canEdit ? `Edit warm-up ${describeWarmup(s, unit)}` : undefined}
               className="flex min-h-9 min-w-0 items-center gap-1.5 rounded-md px-1 text-left text-sm transition enabled:active:bg-orange-500/10 disabled:cursor-default"
-              style={{ gridColumn: "2 / -1" }}
+              style={{ gridColumn: videoOn ? "2 / -2" : "2 / -1" }}
             >
               <span className="shrink-0 whitespace-nowrap font-bold tabular-nums text-foreground">
                 {warmupDisplay(s, unit)} {unit} × {s.reps}
@@ -234,11 +282,32 @@ export function WarmupRows({
               )}
               {canEdit && <Pencil className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />}
             </button>
+            {videoOn && video!({ warmupId: s.id, logged: true, label: describeWarmup(s, unit) })}
           </div>
         ),
       )}
       {formOpen && !editingId ? (
         warmupForm(null)
+      ) : inline ? (
+        <LastWarmupRow
+          key={inlineRow?.id ?? "new"}
+          existing={inlineRow}
+          unit={unit}
+          gridTemplate={gridTemplate}
+          columns={columns!}
+          effortKind={effortKind}
+          seed={seed}
+          tuned={!!inlineRow && tunedId === inlineRow.id}
+          canTune={!!prompt?.tunes}
+          suggestOn={suggestOn}
+          answer={inlineRow && prompt?.tunes && preview ? preview({ load: warmupInUnit(inlineRow, unit).load, reps: inlineRow.reps, rpe: inlineRow.rpe }) : null}
+          target={target}
+          openSets={openSets}
+          onUseForAllSets={onUseForAllSets}
+          onSave={onSave}
+          onOpenForm={inlineRow ? () => onFormChange(inlineRow.id) : null}
+          video={videoOn ? video : null}
+        />
       ) : (
         // The prompt is a suggestion, not a logged warm-up: quiet, no orange
         // (logged warm-ups keep their orange W so they never read as working sets).
@@ -265,6 +334,190 @@ export function WarmupRows({
           </button>
         )
       )}
+    </div>
+  );
+}
+
+/** A warm-up's effort as the card shows it: its RPE, or RIR (10 − RPE) on an RIR card. */
+export function warmupEffortText(rpe: number | null, kind: "rpe" | "rir"): string {
+  if (rpe == null) return "";
+  return fmt(kind === "rir" ? Math.max(0, 10 - rpe) : rpe);
+}
+
+/** The card's effort back to the warm-up's stored RPE (an RIR card's "3" is RPE 7). */
+export function warmupRpeFrom(text: string, kind: "rpe" | "rir"): number | null {
+  if (text.trim() === "") return null;
+  const n = Number(text);
+  if (!Number.isFinite(n)) return null;
+  return kind === "rir" ? Math.min(10, Math.max(1, 10 - n)) : n;
+}
+
+/**
+ * The last warm-up as an open row in the set table's own columns: reps (the
+ * suggested warm-up's, pre-filled like a set's), effort (RPE 7, "smooth", the
+ * engine's own assumption for a last warm-up, so leaving it is honest), the
+ * weight (empty, a neutral box: it's optional) and its video. Typing the weight
+ * saves it; reps or effort changed afterwards update it. The W opens the full
+ * warm-up form (feel taps, Use for all sets, Remove).
+ */
+function LastWarmupRow({
+  existing,
+  unit,
+  gridTemplate,
+  columns,
+  effortKind,
+  seed,
+  tuned,
+  canTune,
+  suggestOn,
+  answer,
+  target,
+  openSets,
+  onUseForAllSets,
+  onSave,
+  onOpenForm,
+  video,
+}: {
+  existing: WarmupSetRow | null;
+  unit: WarmupUnit;
+  gridTemplate: string;
+  columns: WarmupColumns;
+  effortKind: "rpe" | "rir";
+  seed: { load: number; reps: number } | null;
+  tuned: boolean;
+  canTune: boolean;
+  suggestOn: boolean;
+  /** Today's weight from this warm-up (the card's own engine), while it can still set it. */
+  answer: LoadSuggestion | null;
+  target: { reps: number; rpe: number } | null;
+  openSets: number;
+  onUseForAllSets: ((load: number) => Promise<number>) | null;
+  onSave: (v: WarmupSaveInput) => void | Promise<void>;
+  onOpenForm: (() => void) | null;
+  video: WarmupVideoCell | null;
+}) {
+  const [using, setUsing] = useState(false);
+  const useForAll = async () => {
+    if (!answer || !onUseForAllSets || using) return;
+    setUsing(true);
+    try {
+      const n = await onUseForAllSets(answer.target);
+      if (n > 0) toast.success(`${fmt(answer.target)} ${unit} in ${n} set${n === 1 ? "" : "s"} · tap each set's number as you finish it`);
+    } finally {
+      setUsing(false);
+    }
+  };
+  const [load, setLoad] = useState(existing ? String(warmupDisplay(existing, unit)) : "");
+  const [reps, setReps] = useState(existing ? String(existing.reps) : seed ? String(seed.reps) : "");
+  const [effort, setEffort] = useState(
+    existing ? warmupEffortText(existing.rpe, effortKind) : effortKind === "rir" ? "3" : "7",
+  );
+  // The suggested warm-up loads after the row: take its reps until they're typed or saved.
+  const repsTyped = useRef(!!existing);
+  useEffect(() => {
+    if (!repsTyped.current && seed?.reps) setReps(String(seed.reps));
+  }, [seed?.reps]);
+
+  const save = (next: { load?: string; reps?: string; effort?: string }) => {
+    const l = Number((next.load ?? load).replace(",", "."));
+    const r = Number(next.reps ?? reps);
+    if (!(l > 0) || !Number.isFinite(l) || !Number.isInteger(r) || r < 1 || r > WARMUP_MAX_REPS) return;
+    void onSave({ id: existing?.id, load: l, unit, reps: r, rpe: warmupRpeFrom(next.effort ?? effort, effortKind) });
+  };
+  const focusMode = !!columns.focusMode;
+  const labelText = existing ? describeWarmup(existing, unit) : "";
+  const blank = <div aria-hidden />;
+
+  return (
+    <div className="border-t border-builder-card-border/70" data-testid="warmup-open" data-warmup-saved={existing ? "true" : "false"}>
+      <div className="grid items-center gap-1.5 px-2 py-1.5" style={{ gridTemplateColumns: gridTemplate }}>
+        {onOpenForm ? (
+          <button
+            type="button"
+            onClick={onOpenForm}
+            aria-label="Warm-up options"
+            className="flex h-11 w-full items-center justify-center rounded-md sm:h-9"
+          >
+            <WBadge />
+          </button>
+        ) : (
+          <span className="text-center text-sm font-semibold text-muted-foreground" title="Last warm-up (optional)">W</span>
+        )}
+        <TypedValueInput
+          value={reps}
+          kind="reps"
+          onCommit={(v) => {
+            repsTyped.current = true;
+            setReps(v);
+            if (existing) save({ reps: v });
+          }}
+          ariaLabel="Last warm-up reps"
+          focusMode={focusMode}
+        />
+        {columns.showTimer && blank}
+        {columns.showDistance && blank}
+        {columns.showCalories && blank}
+        <TypedValueInput
+          value={effort}
+          kind={effortKind}
+          onCommit={(v) => {
+            setEffort(v);
+            if (existing) save({ effort: v });
+          }}
+          ariaLabel={`Last warm-up ${effortKind === "rir" ? "RIR" : "RPE"}`}
+          focusMode={focusMode}
+        />
+        {columns.showVelocity && blank}
+        <WeightValueInput
+          value={load}
+          isBodyweight={false}
+          unit={unit}
+          plain
+          focusMode={focusMode}
+          ariaLabel={`Last warm-up weight in ${unit}`}
+          onPick={(next) => {
+            if (next.load === "") return;
+            setLoad(next.load);
+            save({ load: next.load });
+          }}
+        />
+        {video ? video({ warmupId: existing?.id ?? null, logged: !!existing, label: labelText }) : null}
+      </div>
+      <p className="px-2 pb-1.5 pl-[42px] text-[12px] leading-snug text-muted-foreground" data-warmup-caption>
+        {existing && suggestOn && tuned ? (
+          <span className="font-medium text-success">✓ Suggested is tuned from this warm-up</span>
+        ) : existing && !suggestOn && answer && target ? (
+          // Suggested is off: today's weight is said here, one tap from every open set
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>
+              Today: about{" "}
+              <span className="font-semibold tabular-nums text-foreground" data-warmup-answer>{fmt(answer.target)} {unit}</span>
+              {` for ${target.reps} @ RPE ${fmt(target.rpe)}`}
+            </span>
+            {onUseForAllSets && openSets > 0 && (
+              <button
+                type="button"
+                onClick={() => void useForAll()}
+                disabled={using}
+                data-warmup-use
+                className="h-8 rounded-lg border border-border px-2.5 text-[12px] font-semibold text-foreground transition active:scale-[0.98] disabled:opacity-50"
+              >
+                Use for {openSets === 1 ? "set" : `${openSets} sets`}
+              </button>
+            )}
+          </span>
+        ) : existing ? (
+          "Last warm-up logged"
+        ) : canTune ? (
+          <>
+            Last warm-up · optional
+            {seed ? <span className="tabular-nums text-foreground">{` · about ${fmt(seed.load)} ${unit} × ${seed.reps}`}</span> : null}
+            {suggestOn ? " · tunes Suggested" : " · sets today's weight"}
+          </>
+        ) : (
+          "Last warm-up · optional"
+        )}
+      </p>
     </div>
   );
 }

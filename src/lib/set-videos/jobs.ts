@@ -110,15 +110,23 @@ export function isActiveJob(j: Pick<SetVideoJob, "state">): boolean {
  */
 export const UNLINKED_SET_VIDEO_MS = 18 * 60 * 60 * 1000;
 
+/**
+ * Which set: its exercise row, its number, and its record once it has one.
+ * Set 0 is the exercise's warm-up, and its record is the warm-up's own
+ * (pl_warmup_sets.id, a clip's warmup_id), never a working set's.
+ */
 export type SetRef = { rowId: string; setIndex: number; resultId: string | null };
 
 /** Is this stored clip on this set: its own record, or (filmed before the set was saved) its row and number. */
 export function videoOnSet(
-  v: { row_id: string | null; result_id: string | null; set_index: number; created_at: string },
+  v: { row_id: string | null; result_id: string | null; warmup_id?: string | null; set_index: number; created_at: string },
   set: SetRef,
   now = Date.now(),
 ): boolean {
-  if (v.result_id) return !!set.resultId && v.result_id === set.resultId;
+  // a warm-up's clip is only ever on a warm-up, a working set's only on a working set
+  if ((v.set_index === 0) !== (set.setIndex === 0)) return false;
+  const record = v.set_index === 0 ? (v.warmup_id ?? null) : v.result_id;
+  if (record) return !!set.resultId && record === set.resultId;
   return (
     v.row_id === set.rowId &&
     v.set_index === set.setIndex &&
@@ -129,6 +137,7 @@ export function videoOnSet(
 /** Is this upload for this set: its record when it had one, else its row and set number. */
 export function jobOnSet(j: Pick<SetVideoJob, "rowId" | "resultId" | "setIndex">, set: SetRef): boolean {
   if (j.rowId !== set.rowId) return false;
+  if ((j.setIndex === 0) !== (set.setIndex === 0)) return false;
   return j.resultId ? j.resultId === set.resultId : j.setIndex === set.setIndex;
 }
 

@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { useVideoTrimmer } from "@/components/video-trimmer";
 import type { StartSetVideo } from "@/lib/set-videos/uploader";
 import { getSetVideoJobs } from "@/lib/set-videos/jobs";
+import { setTitle } from "@/lib/set-videos/label";
 import { linkFilmed, noteFilmed } from "@/lib/set-videos/phone-copy";
 import { offerPhoneCopy } from "@/components/workout-day/set-video-phone-copy";
 import { isTouchDevice } from "@/lib/file-share";
@@ -35,7 +36,7 @@ export default function SetVideoFlow({
     if (begun.current) return;
     begun.current = true;
     void import("@/lib/set-videos/uploader")
-      .then((m) => m.startSetVideo({ ...start, file, trim, offer: { suggestLift: true, title: `${start.exerciseName} · Set ${start.setIndex}`, doneLabel: "Send" } }))
+      .then((m) => m.startSetVideo({ ...start, file, trim, offer: { suggestLift: true, title: `${start.exerciseName} · ${setTitle(start.setIndex)}`, doneLabel: "Send" } }))
       .then((res) => {
         // on its way: a clip filmed here is kept for the phone until it's saved there
         if (!res.ok || !res.id || !filmedHere || !isTouchDevice()) return;

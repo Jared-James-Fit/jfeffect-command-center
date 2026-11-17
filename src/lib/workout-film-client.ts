@@ -57,7 +57,7 @@ export function useWorkoutFilm(completionId: string | null | undefined, dayId: s
 
   const state = useMemo<WorkoutFilmState>(() => {
     const sent = (videos ?? []).filter((v) => !!v.result_id && (!userId || v.uploaded_by === userId));
-    const uploading = jobs.filter((j) => j.dayId === dayId && isActiveJob(j)).length;
+    const uploading = jobs.filter((j) => j.dayId === dayId && j.setIndex > 0 && isActiveJob(j)).length;
     // each clip as the film uses it: its 720p feed copy when it has one
     const { picked } = pickFilmClips(
       sent.map((v) => {

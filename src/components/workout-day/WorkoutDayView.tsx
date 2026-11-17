@@ -56,6 +56,7 @@ import { playAppSound } from "@/lib/app-sounds";
 import { haptic } from "@/platform/haptics";
 import { useWorkoutView } from "@/lib/use-workout-view";
 import { FocusIntro, FocusTips, useFocusIntro } from "@/components/workout-day/focus-intro";
+import { QuickLogTips } from "@/components/workout-day/quick-log-tips";
 import { FocusUsageTracker } from "@/lib/focus-usage";
 import { FocusClock, StoryChrome, WorkoutViewToggle, exerciseInView, pickStoryStart, runStoryTransition, slideCard, visibleCard, type StoryFinish } from "@/components/workout-day/workout-story";
 import {
@@ -107,7 +108,7 @@ import { setGridTemplate } from "@/components/workout-day/set-grid";
 import { SetNumberBadge } from "@/components/workout-day/set-number-badge";
 import { SetPrIndicator } from "@/components/workout-day/set-pr-indicator";
 import { setPrItems } from "@/lib/set-pr-items";
-import { SetVideoCell, useRowHasSetVideos } from "@/components/workout-day/set-video-cell";
+import { SetVideoCell, setVideosKey, useLooseWarmupClip, useRowHasSetVideos } from "@/components/workout-day/set-video-cell";
 import { setVideoLabel } from "@/lib/set-videos/label";
 import {
   DeferredQuickSwapSheet,
@@ -1833,9 +1834,15 @@ function WorkoutDay({
   // Story view: one exercise at a time, full screen (workout-story.tsx). The
   // account's saved choice opens it; it's the list's own cards laid out side by
   // side, so switching view never remounts a card or drops what's typed in it.
-  const { view: savedView, setView: saveWorkoutView, tried: focusTried, known: focusKnown, noteIntro, tipsSeen: focusTipsSeen, markTipsSeen } = useWorkoutView();
+  const { view: savedView, setView: saveWorkoutView, tried: focusTried, known: focusKnown, noteIntro, tipsSeen: focusTipsSeen, markTipsSeen, loggingTipsSeen, markLoggingTipsSeen } = useWorkoutView();
   // How Focus works: by itself once per account (the first time in Focus), and from its ? any time.
   const [focusTipsOpen, setFocusTipsOpen] = useState(false);
+  // "Fastest way to log" (quick-log-tips.tsx): by itself once per account, the
+  // first time they log their own workout, and from "Log faster" any time.
+  const [quickLogOpen, setQuickLogOpen] = useState(false);
+  // it showed on this visit: the Focus invite waits for another visit (one intro at a time)
+  const [quickLogShownHere, setQuickLogShownHere] = useState(false);
+  const quickLogVideo = useEntitlement("lift_review") && adapter?.kind !== "member";
   const [storyOpen, setStoryOpen] = useState(false);
   // Without view transitions: "in" story view's cards rising in, "back" the list fading in after it
   const [storyAnim, setStoryAnim] = useState<"in" | "back" | null>(null);
@@ -2561,9 +2568,36 @@ function WorkoutDay({
     openStory(false);
   }, [dayId, savedView, rowsLoaded, storyRowIds.length, client?.id, completionPending, completion?.completed_at, search.focus, search.review, search.recap, search.edit, storyOpen, openStory]);
 
+  // Their own unfinished workout, the first time since "Fastest way to log"
+  // shipped: it opens by itself once (never over another sheet, never for a
+  // coach viewing as them), before Focus's own tips.
+  const quickLogDue =
+    focusKnown && !loggingTipsSeen && !isImpersonating && !readonly && !!client?.id &&
+    rowsLoaded && (rows as any[]).length > 0 && !completionPending && !completion?.completed_at;
   useEffect(() => {
-    if (storyOpen && focusKnown && !focusTipsSeen && !isImpersonating) setFocusTipsOpen(true);
-  }, [storyOpen, focusKnown, focusTipsSeen, isImpersonating]);
+    if (!quickLogDue || quickLogOpen) return;
+    let tries = 0;
+    let t = 0;
+    const tryOpen = () => {
+      const busy =
+        !!document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]') ||
+        (document.activeElement instanceof HTMLElement && document.activeElement.matches("input, textarea, select"));
+      if (busy && ++tries < 30) { t = window.setTimeout(tryOpen, 1000); return; }
+      if (busy) return;
+      setQuickLogShownHere(true);
+      setQuickLogOpen(true);
+    };
+    t = window.setTimeout(tryOpen, 700);
+    return () => window.clearTimeout(t);
+  }, [quickLogDue, quickLogOpen]);
+  const closeQuickLog = useCallback(() => {
+    setQuickLogOpen(false);
+    if (!loggingTipsSeen && !isImpersonating) markLoggingTipsSeen();
+  }, [loggingTipsSeen, isImpersonating, markLoggingTipsSeen]);
+
+  useEffect(() => {
+    if (storyOpen && focusKnown && !focusTipsSeen && !isImpersonating && !quickLogDue && !quickLogOpen) setFocusTipsOpen(true);
+  }, [storyOpen, focusKnown, focusTipsSeen, isImpersonating, quickLogDue, quickLogOpen]);
   useEffect(() => {
     if (!storyOpen) setFocusTipsOpen(false);
   }, [storyOpen]);
@@ -2573,7 +2607,7 @@ function WorkoutDay({
     dayId,
     eligible:
       !storyOpen && !readonly && !isImpersonating && rowsLoaded && (rows as any[]).length >= 2 &&
-      !completionPending && !completion?.completed_at,
+      !completionPending && !completion?.completed_at && !quickLogDue && !quickLogOpen && !quickLogShownHere,
     tried: focusTried,
     known: focusKnown,
     noteIntro,
@@ -2819,6 +2853,19 @@ function WorkoutDay({
               exerciseRows={rows as any[]}
               className="h-10 rounded-full px-3.5 text-[13px]"
             />
+            {/* The fastest way to log, any time (it also opens by itself once). */}
+            {rowsLoaded && (rows as any[]).length > 0 && !completion?.completed_at && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setQuickLogOpen(true)}
+                data-testid="quick-log-tips-open"
+                className="h-10 gap-1.5 rounded-full px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
+              >
+                <Zap className="h-4 w-4" aria-hidden />
+                Log faster
+              </Button>
+            )}
             {/* List or Focus (one exercise at a time, full screen), saved on the account. */}
             {rowsLoaded && (rows as any[]).length > 0 && (
               <WorkoutViewToggle className="ml-auto" view={storyOpen ? "story" : "list"} onChange={chooseWorkoutView} hint={focusIntro.show} />
@@ -3074,8 +3121,14 @@ function WorkoutDay({
             setFocusTipsOpen(false);
             if (!focusTipsSeen && !isImpersonating) markTipsSeen();
           }}
+          onLoggingTips={() => {
+            setFocusTipsOpen(false);
+            if (!focusTipsSeen && !isImpersonating) markTipsSeen();
+            setQuickLogOpen(true);
+          }}
         />
       )}
+      {quickLogOpen && <QuickLogTips onClose={closeQuickLog} videoOn={quickLogVideo} unit={(rows as any[])[0] ? unitForRow((rows as any[])[0]) : unit} />}
 
       {client?.id && (quickFinishReviewOpen || quickFinishMounted || (!completion?.completed_at && autoFinishReady)) && (
         <WorkoutReviewEditor
@@ -3683,6 +3736,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const canRemoveSet = !readonly && adapter?.kind !== "member" && setCount > 1;
   const setVideosOn = useEntitlement("lift_review") && adapter?.kind !== "member" && !!clientId;
   const rowHasVideos = useRowHasSetVideos(dayId, row.id, setVideosOn);
+  const looseWarmupClip = useLooseWarmupClip(dayId, row.id, setVideosOn);
   const videoColumn = setVideosOn && (!readonly || rowHasVideos);
   const gridTemplate = setGridTemplate({ focusMode, showReps, showTimer, showDistance, showCalories, showVelocity, hideWeight, videoColumn });
   // The logging frontier: helper chips (suggested load, repeat previous set)
@@ -5025,7 +5079,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             </span>
           )}
         </div>
-        {(warmupSets.length > 0 || (warmupAllowed && (!!warmupForm || !!warmupPrompt))) && (
+        {(warmupSets.length > 0 || (warmupAllowed && (!!warmupForm || !!warmupPrompt || looseWarmupClip))) && (
           <WarmupRows
             sets={warmupSets}
             unit={activeUnit}
@@ -5033,7 +5087,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             form={warmupAllowed ? warmupForm : null}
             canEdit={warmupAllowed}
             onFormChange={setWarmupForm}
-            onSave={saveWarmup}
+            onSave={async (v) => {
+              await saveWarmup(v);
+              // a clip filmed on the open warm-up is tied to it as it saves: read it back
+              if (!v.id && looseWarmupClip) void qc.invalidateQueries({ queryKey: setVideosKey(dayId) });
+            }}
             onRemove={removeWarmup}
             prompt={warmupPrompt}
             seed={warmupGauge?.suggested ?? null}
@@ -5042,6 +5100,30 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             preview={warmupGauge ? previewWarmupTarget : null}
             openSets={openSetCount}
             onUseForAllSets={fillLoadOnOpenSets}
+            // the open last warm-up lines up with the set table's columns
+            columns={{ focusMode, showReps, showTimer, showDistance, showCalories, showVelocity, videoColumn }}
+            effortKind={showRir ? "rir" : "rpe"}
+            looseClip={looseWarmupClip}
+            suggestOn={showSuggestionCard}
+            // open on a barbell squat, bench or deadlift; a one-line prompt elsewhere
+            openRow={rangeLift(family, name, exercise?.equipment)}
+            // a video for the coach on the warm-up, like a working set's (set 0)
+            video={videoColumn ? ({ warmupId, logged, label }) => (
+              <SetVideoCell
+                clientId={clientId}
+                rowId={row.id}
+                dayId={dayId}
+                dayTitle={dayTitle}
+                exerciseName={name}
+                setIndex={0}
+                resultId={warmupId}
+                logged={logged}
+                done={false}
+                readonly={readonly}
+                focusMode={focusMode}
+                label={label}
+              />
+            ) : null}
           />
         )}
         {Array.from({ length: setCount }).map((_, i) => {
@@ -6387,6 +6469,12 @@ function SetRow({
       ? fmtLoad(quickLoad)
       : null;
 
+  // Opens this set's weight box from a tap on its number (WeightValueInput editRef).
+  const weightEditRef = useRef<(() => void) | null>(null);
+  // Open, nothing to log at, and only the weight is missing: the number opens the weight box.
+  const weightOnlyMissing =
+    !isConfirmed && !hideWeight && !bw && loadType === "external" && load === "" && !quickWeight &&
+    (!showReps || !!reps) && !showTimer;
   const saveCompletionStatus = async () => {
     if (readonly || !clientId || statusSaving) return;
     const nextCompletedAt = isConfirmed ? null : new Date().toISOString();
@@ -6410,6 +6498,12 @@ function SetRow({
       // prescribed / adjusted target directly.
       if (isTimeKind && prescribedDurationSeconds && prescribedDurationSeconds > 0) {
         await saveTimeCompletion(prescribedDurationSeconds, { method: "prescribed_quick_confirm" });
+        return;
+      }
+      // Only the weight is missing (a range to pick from, no suggestion yet):
+      // the tap opens the weight box, and typing it logs the set.
+      if (weightOnlyMissing && weightEditRef.current) {
+        weightEditRef.current();
         return;
       }
       toast.error(isTimeKind ? "Enter a time first" : hideWeight ? "Enter reps before marking complete" : "Enter reps and weight before marking complete (use 0 for bodyweight)");
@@ -6766,8 +6860,8 @@ function SetRow({
             disabled={statusSaving}
             aria-pressed={isConfirmed}
             data-set-done={isConfirmed ? "true" : "false"}
-            title={statusError ? "Status failed to save — tap to retry" : isConfirmed ? "Mark set incomplete" : quickWeight ? `Log this set at ${quickWeight} ${unit}` : "Mark set complete"}
-            aria-label={statusError ? `Retry saving set ${setIndex} status` : isConfirmed ? `Mark set ${setIndex} incomplete` : quickWeight ? `Log set ${setIndex} at ${quickWeight} ${unit}` : `Mark set ${setIndex} complete`}
+            title={statusError ? "Status failed to save — tap to retry" : isConfirmed ? "Mark set incomplete" : quickWeight ? `Log this set at ${quickWeight} ${unit}` : weightOnlyMissing ? "Type the weight: the set logs once it's in" : "Mark set complete"}
+            aria-label={statusError ? `Retry saving set ${setIndex} status` : isConfirmed ? `Mark set ${setIndex} incomplete` : quickWeight ? `Log set ${setIndex} at ${quickWeight} ${unit}` : weightOnlyMissing ? `Type set ${setIndex}'s weight` : `Mark set ${setIndex} complete`}
             className={cn(
               "flex h-11 w-full items-center justify-center sm:h-9",
               statusSaving && "cursor-wait",
@@ -6897,6 +6991,7 @@ function SetRow({
         disabled={readonly}
         focusMode={focusMode}
         canSwitchUnit={!!onSwitchUnit}
+        editRef={weightEditRef}
         onPick={(next) => {
           if (next.unit && next.unit !== unit && onSwitchUnit) {
             // Switch the card first; the unit effect saves the number once the

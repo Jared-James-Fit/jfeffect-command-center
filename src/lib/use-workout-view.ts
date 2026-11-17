@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth";
 /** How the workout logger shows a workout: every card in a list, or one exercise at a time full screen ("story" = Focus). */
 export type WorkoutView = "list" | "story";
 
-type Saved = { view: WorkoutView; tried: boolean; tipsSeen: boolean };
+type Saved = { view: WorkoutView; tried: boolean; tipsSeen: boolean; loggingTipsSeen?: boolean };
 
 const db = supabase as any;
 const isView = (v: unknown): v is WorkoutView => v === "list" || v === "story";
@@ -16,6 +16,8 @@ const triedKey = (userId: string) => `jf-workout-view-tried:${userId}`;
 // v3: the tips were rewritten for sideways swipes (a quick one moves, only a
 // slow drag deletes), so a phone's "seen" from an older version doesn't count
 const tipsKey = (userId: string) => `jf-focus-tips-v3:${userId}`;
+// "Fastest way to log" (quick-log-tips.tsx), seen on this phone
+const loggingTipsKey = (userId: string) => `jf-logging-tips-v1:${userId}`;
 
 /** "How Focus works" seen before this was an older version (taps, then swipe left to delete): it opens once more. */
 export const FOCUS_TIPS_SINCE = "2026-10-19T02:00:00Z";
@@ -85,10 +87,17 @@ export function useWorkoutView() {
     staleTime: 5 * 60_000,
     placeholderData: (): Saved | undefined => {
       const view = readCache(userId);
-      return view ? { view, tried: !!userId && ls(triedKey(userId)) === "1", tipsSeen: !!userId && ls(tipsKey(userId)) === "1" } : undefined;
+      return view
+        ? {
+            view,
+            tried: !!userId && ls(triedKey(userId)) === "1",
+            tipsSeen: !!userId && ls(tipsKey(userId)) === "1",
+            loggingTipsSeen: !!userId && ls(loggingTipsKey(userId)) === "1",
+          }
+        : undefined;
     },
     queryFn: async (): Promise<Saved> => {
-      const { data: row, error } = await db.from("workout_view_prefs").select("view, tried_at, focus_tips_at").eq("user_id", userId).maybeSingle();
+      const { data: row, error } = await db.from("workout_view_prefs").select("view, tried_at, focus_tips_at, logging_tips_at").eq("user_id", userId).maybeSingle();
       if (error) throw error;
       const unsaved = ls(dirtyKey(userId!)) === "1";
       const view = resolveWorkoutView(isView(row?.view) ? row.view : null, readCache(userId), unsaved);
@@ -98,7 +107,9 @@ export function useWorkoutView() {
       if (tried) lsSet(triedKey(userId!), "1");
       const tipsSeen = tipsSeenSince(row?.focus_tips_at) || ls(tipsKey(userId!)) === "1";
       if (tipsSeen) lsSet(tipsKey(userId!), "1");
-      return { view, tried, tipsSeen };
+      const loggingTipsSeen = !!row?.logging_tips_at || ls(loggingTipsKey(userId!)) === "1";
+      if (loggingTipsSeen) lsSet(loggingTipsKey(userId!), "1");
+      return { view, tried, tipsSeen, loggingTipsSeen };
     },
   });
 
@@ -108,7 +119,7 @@ export function useWorkoutView() {
       lsSet(cacheKey(userId), next);
       lsSet(dirtyKey(userId), "1");
       lsSet(triedKey(userId), "1");
-      qc.setQueryData(workoutViewKey(userId), (old: Saved | undefined) => ({ view: next, tried: true, tipsSeen: !!old?.tipsSeen }) satisfies Saved);
+      qc.setQueryData(workoutViewKey(userId), (old: Saved | undefined) => ({ view: next, tried: true, tipsSeen: !!old?.tipsSeen, loggingTipsSeen: !!old?.loggingTipsSeen }) satisfies Saved);
       void saveToAccount(userId, next);
     },
     [qc, userId],
@@ -122,6 +133,14 @@ export function useWorkoutView() {
     void db.rpc("workout_view_tips_seen").then(() => {}, () => {});
   }, [qc, userId]);
 
+  /** "Fastest way to log" was seen: it doesn't open by itself again, on any phone. */
+  const markLoggingTipsSeen = useCallback(() => {
+    if (!userId) return;
+    lsSet(loggingTipsKey(userId), "1");
+    qc.setQueryData(workoutViewKey(userId), (old: Saved | undefined) => (old ? { ...old, loggingTipsSeen: true } : old));
+    void db.rpc("workout_view_logging_tips_seen").then(() => {}, () => {});
+  }, [qc, userId]);
+
   /** The Focus intro was shown / closed with "Not now" (counts only; never changes the view). */
   const noteIntro = useCallback((event: "shown" | "dismissed") => {
     if (!userId) return;
@@ -132,9 +151,11 @@ export function useWorkoutView() {
     view: isView(data?.view) ? data!.view : ("list" as WorkoutView),
     tried: !!data?.tried,
     tipsSeen: !!data?.tipsSeen,
+    loggingTipsSeen: !!data?.loggingTipsSeen,
     known: isFetched && !isPlaceholderData,
     setView,
     noteIntro,
     markTipsSeen,
+    markLoggingTipsSeen,
   };
 }

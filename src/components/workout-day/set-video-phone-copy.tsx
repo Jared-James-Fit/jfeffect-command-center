@@ -19,6 +19,7 @@ import { isTouchDevice, saveFiles } from "@/lib/file-share";
 import { holdSaveFile, warmSave, type SaveItem } from "@/lib/save-media";
 import { useSaveMedia } from "@/components/messages/save-media";
 import { getSetVideoJobs } from "@/lib/set-videos/jobs";
+import { setWord } from "@/lib/set-videos/label";
 import { filmedFile, forgetFilmed, useUnsavedFilmed, type FilmedEntry } from "@/lib/set-videos/phone-copy";
 import { useSetVideosForDay, type SetVideo } from "@/components/workout-day/set-video-cell";
 
@@ -173,7 +174,7 @@ export function PhoneCopyReminder({ dayId, className }: { dayId: string | null |
             jobId: e.jobId,
             setVideoId: e.setVideoId,
             path: v?.storage_path ?? null,
-            name: `${v?.exercise_name ?? "Set"} set ${v?.set_index ?? ""}`.trim(),
+            name: `${v?.exercise_name ?? "Set"} ${v?.set_index != null ? setWord(v.set_index) : ""}`.trim(),
           },
         ];
       }),

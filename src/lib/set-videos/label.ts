@@ -59,12 +59,25 @@ export function setVideoLabel(v: SetVideoSetValues): string {
 }
 
 /**
+ * A set video's set in words. Set 0 is the exercise's warm-up (its clip is on
+ * a pl_warmup_sets row, warmup_id, never a working set's record).
+ */
+export function setWord(setIndex: number): string {
+  return setIndex === 0 ? "warm-up" : `set ${setIndex}`;
+}
+
+/** "Warm-up" / "Set 3". */
+export function setTitle(setIndex: number): string {
+  return setIndex === 0 ? "Warm-up" : `Set ${setIndex}`;
+}
+
+/**
  * The chat message, as set_video_attach writes it: "Bench Press · Top set ·
  * 100 kg × 5 @ RPE 8" (≤ 200 characters, no emoji). `set` is the set's name in
  * the workout (pl_day_set_names: "Top set", "Backoff 2"), or its number.
  */
 export function setVideoMessageBody(exercise: string, set: number | string, label: string): string {
-  const which = typeof set === "number" ? `Set ${set}` : set.trim() || "Set";
+  const which = typeof set === "number" ? setTitle(set) : set.trim() || "Set";
   const parts = [exercise.trim() || "Exercise", which, label.trim()].filter(Boolean);
   return parts.join(" · ").slice(0, 200);
 }
