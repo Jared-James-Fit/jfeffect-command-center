@@ -10,7 +10,7 @@
  * instead of guessing. Pure, tested.
  */
 import { readDigestion, type CheckinRow, type DigestionRead } from "@/lib/weight-management/digestion";
-import { decide, LIMITING_WORDS, type Recommendation } from "@/lib/weight-management/decision";
+import { decide, goalPlanConflict, LIMITING_WORDS, type Recommendation } from "@/lib/weight-management/decision";
 import { hydrationTarget, type Climate, type HydrationTarget, type SweatLevel } from "@/lib/weight-management/hydration";
 import { assessTarget, classLimitKg, plannedClassWeight, weighInTiming, type GoalContext, type Level, type PastPhase, type Sex, type TargetAssessment, type WeighIn as WeighInTiming } from "@/lib/weight-management/target";
 import { buildTrajectory, recentTrend, type GoalKind, type Trajectory, type WeighIn } from "@/lib/weight-management/trajectory";
@@ -264,7 +264,13 @@ export function buildAssessment(x: AssessmentInput): Assessment {
     recentAvgMl: x.water.daysLogged >= 4 ? x.water.avgMl : null,
   });
   const waist = waistChange(x.waist, x.today);
+  const goalVerb: Record<string, string> = { lose: "to get to", gain: "to gain to", maintain: "to hold", performance_cut: "to make" };
+  const conflict =
+    goal?.source === "goal" && x.goal?.type
+      ? goalPlanConflict(x.goal.type, x.plan.phase, `${goalVerb[x.goal.type] ?? "to reach"} ${fmtWeight(goal.kg, x.unit)}`)
+      : null;
   const recommendation = decide({
+    conflict,
     today: x.today,
     unit: x.unit,
     direction,

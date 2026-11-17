@@ -46,6 +46,8 @@ import { answeredQuestions, type FormAnswerRow, type FormQuestionRow } from "@/l
 import { DIGESTION_SYMPTOMS, DIGESTION_TIMINGS } from "@/lib/weight-management/digestion";
 import type { CheckinExtra, CheckinPlan } from "@/lib/checkin-coordination/plan";
 import { addPlanSteps } from "@/lib/checkin-coordination/steps";
+import { CHANGE_FOLLOW_UPS, NU } from "@/lib/checkin-coordination/nutrition-fold";
+import { MEAL_CHOICE } from "@/lib/nutrition-history";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -62,6 +64,8 @@ type Q = {
   action?: "photo" | "measure" | "weight";
   /** Word under each 1–5 rating button. */
   scale?: [string, string, string, string, string];
+  /** A multi's option that stands alone (defaults to "All good"). */
+  exclusive?: string;
   optional?: boolean;
   showWhen?: (answers: Record<string, any>) => boolean;
   /** The flag that brings it up, for the coach's preview. */
@@ -230,6 +234,16 @@ const LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = {
     bodyweight_logged: "Weighed in",
     photos_added: "Progress photos",
     measurements_added: "Measurements",
+    nu_meals: "Nutrition update: meals",
+    nu_swap: "Foods to change",
+    nu_changed: "Changed since last update",
+    nu_goal: "Goal now",
+    nu_goal_detail: "Goal details",
+    nu_allergies: "Allergies / diet",
+    nu_health: "Health / medications",
+    nu_supplements: "Supplements",
+    nu_activity: "Training / activity",
+    nu_free_meal: "Free meal",
     win: "Biggest win",
     help: "Help / changes",
     next_week_goal: "Next-week goal",
@@ -426,7 +440,8 @@ function CheckinWizard({
     staleTime: 5 * 60_000,
   });
   const plan = (planQ.data?.plan ?? null) as CheckinPlan | null;
-  const nutritionWaiting = !!plan?.extras.some((e) => e.key === "nutrition_update");
+  // a Nutrition Update they've never sent is the form itself; one they have is answered right here (inline)
+  const nutritionWaiting = !!plan?.extras.some((e) => e.key === "nutrition_update" && !e.inline);
   const visible = useMemo(
     () => withPlanSteps(taskQuestions(taskType), plan).filter((q) => !q.showWhen || q.showWhen(answers)),
     [taskType, answers, plan],
@@ -476,6 +491,13 @@ function CheckinWizard({
           if (!flags.includes(flag)) for (const k of keys) next = { ...next, [k]: undefined };
         }
       }
+      // the monthly nutrition section: a change unticked drops its answer, and so does a swap that isn't one any more
+      if (q.key === NU.changed && Array.isArray(value)) {
+        for (const [change, keys] of Object.entries(CHANGE_FOLLOW_UPS)) {
+          if (!value.includes(change)) for (const k of keys) next = { ...next, [k]: undefined };
+        }
+      }
+      if (q.key === NU.meals && value !== MEAL_CHOICE.swap) next = { ...next, [NU.swap]: undefined };
       return next;
     });
     if (autoAdvance) {
@@ -486,16 +508,22 @@ function CheckinWizard({
   async function finish() {
     setSaving(true);
     try {
-      await submit({ data: { submissionId, answers } });
+      const sent = (await submit({ data: { submissionId, answers } })) as { nutrition_submission_id?: string | null } | null;
       playAppSound("success");
       // Close right away — refresh and the AI recap happen in the background.
       onOpenChange(false);
       setStep(0);
-      // Photos go in the progress library (one place, never uploaded twice); offered, never required.
-      toast.success("Sent to your coach ✅", {
-        action: { label: "Add progress photos", onClick: () => void navigate({ to: "/portal/progress", search: { action: "photo" } as never }) },
-        duration: 8000,
-      });
+      if (sent?.nutrition_submission_id) {
+        // this month's Nutrition Update went with it: one submit, one confirmation
+        toast.success("Sent to your coach ✅ Your nutrition update is in too.", { duration: 6000 });
+        void qc.invalidateQueries({ queryKey: ["nf-submissions-for-client", clientId] });
+      } else {
+        // Photos go in the progress library (one place, never uploaded twice); offered, never required.
+        toast.success("Sent to your coach ✅", {
+          action: { label: "Add progress photos", onClick: () => void navigate({ to: "/portal/progress", search: { action: "photo" } as never }) },
+          duration: 8000,
+        });
+      }
       void qc.invalidateQueries({ queryKey: ["messenger-checkin", submissionId] });
       void qc.invalidateQueries({ queryKey: ["messages", clientId, "client"] });
       void qc.invalidateQueries({ queryKey: ["action-centre", clientId] });
@@ -509,11 +537,12 @@ function CheckinWizard({
 
   function toggleOption(option: string) {
     const arr: string[] = Array.isArray(current) ? current : [];
-    if (option === "All good") {
-      setAnswer(arr.includes("All good") ? [] : ["All good"]);
+    const solo = q?.exclusive ?? "All good";
+    if (option === solo) {
+      setAnswer(arr.includes(solo) ? [] : [solo]);
       return;
     }
-    const withoutAllGood = arr.filter((x) => x !== "All good");
+    const withoutAllGood = arr.filter((x) => x !== solo);
     setAnswer(
       withoutAllGood.includes(option)
         ? withoutAllGood.filter((x) => x !== option)
@@ -607,13 +636,14 @@ function CheckinWizard({
 
               {q.type === "multi" && (() => {
                 const picked: string[] = Array.isArray(current) ? current : [];
-                const flags = picked.filter((x) => x !== "All good");
+                const solo = q.exclusive ?? "All good";
+                const flags = picked.filter((x) => x !== solo);
                 return (
                   <div className="mt-6 space-y-2" data-no-doubletap>
                     <div className="grid grid-cols-2 gap-2">
                       {(q.options ?? []).map((o) => {
                         const selected = picked.includes(o);
-                        const isAllGood = o === "All good";
+                        const isAllGood = o === solo;
                         return (
                           <button
                             key={o}
@@ -631,7 +661,7 @@ function CheckinWizard({
                             )}
                           >
                             {selected && <CheckCircle2 className="h-4 w-4 shrink-0" />}
-                            {isAllGood ? "All good — nothing to flag" : o}
+                            {o === "All good" ? "All good — nothing to flag" : o}
                           </button>
                         );
                       })}
@@ -639,8 +669,8 @@ function CheckinWizard({
                     <p className="text-center text-xs text-muted-foreground">
                       {flags.length > 0
                         ? `${flags.length} selected · tap more to add`
-                        : picked.includes("All good")
-                          ? "Nothing to flag this week 👍"
+                        : picked.includes(solo)
+                          ? solo === "All good" ? "Nothing to flag this week 👍" : "Nothing else to update 👍"
                           : "Tap every one that applies"}
                     </p>
                   </div>
@@ -675,9 +705,14 @@ function CheckinWizard({
             </div>
 
             {isLast && nutritionWaiting && (
-              <p className="mt-4 rounded-2xl bg-muted/60 px-4 py-3 text-xs text-muted-foreground" data-checkin-nutrition-waiting>
-                Your Nutrition Update is waiting too. It's the next card in your chat, and this is the only reminder.
-              </p>
+              <button
+                type="button"
+                onClick={() => { onOpenChange(false); void navigate({ to: "/portal/check-ins/$formId", params: { formId: NUTRITION_FORM_ID } as never }); }}
+                className="mt-4 w-full rounded-2xl bg-muted/60 px-4 py-3 text-left text-xs text-muted-foreground"
+                data-checkin-nutrition-waiting
+              >
+                Your Nutrition Update is waiting too, and this is the only reminder. <span className="font-semibold text-foreground">Open it ›</span>
+              </button>
             )}
 
             <div className="mt-5 flex gap-2">
@@ -935,6 +970,15 @@ export function MessengerCheckinSubmissionCard({
           />
 
           <CheckinPlanNote plan={(data as any).plan ?? null} />
+          {(data as any).nutrition_submission_id && role === "admin" && (
+            <a
+              href={`/admin/clients/${(data as any).client_id}?tab=nutrition`}
+              className="block rounded-xl border border-border px-3 py-2 text-xs font-medium hover:bg-muted/40"
+              data-checkin-nutrition-folded
+            >
+              This month's Nutrition Update came in with this check-in. Its AI plan is on their Nutrition tab ›
+            </a>
+          )}
 
           <details className="rounded-xl border border-border bg-muted/20 px-3 py-2">
             <summary className="cursor-pointer text-xs font-semibold">All answers</summary>

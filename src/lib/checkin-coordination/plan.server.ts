@@ -7,6 +7,7 @@
  */
 import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts";
 import { planCheckin, type CheckinPlan, type PlanInput, type ProgressSchedule } from "@/lib/checkin-coordination/plan";
+import { foldGaps, foldOptions, type FoldQuestion } from "@/lib/checkin-coordination/nutrition-fold";
 
 async function safe<T>(run: () => PromiseLike<{ data: T | null; error?: unknown }>, fallback: T): Promise<T> {
   try {
@@ -19,16 +20,9 @@ async function safe<T>(run: () => PromiseLike<{ data: T | null; error?: unknown 
 
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
-export async function loadPlanInput(sb: any, clientId: string, due: string): Promise<PlanInput | null> {
-  const { data: c } = await sb.from("clients").select("id, user_id, bodyweight_goal_type, bodyweight_goal_date").eq("id", clientId).maybeSingle();
-  if (!c) return null;
-  const uid: string | null = c.user_id ?? null;
-  const [bw, preps, photos, tape, schedules, asked, answered] = await Promise.all([
-    uid ? safe<any[]>(() => sb.from("progress_bodyweight").select("logged_date").eq("user_id", uid).lte("logged_date", due).order("logged_date", { ascending: false }).limit(14), []) : Promise.resolve([]),
-    safe<any[]>(() => sb.from("pl_preps").select("event_name, title, event_date, weight_class, archived, status").eq("client_id", clientId).gte("event_date", due).order("event_date").limit(3), []),
-    uid ? safe<any[]>(() => sb.from("progress_submissions").select("submission_date").eq("user_id", uid).eq("submission_type", "photo").order("submission_date", { ascending: false }).limit(1), []) : Promise.resolve([]),
-    uid ? safe<any[]>(() => sb.from("progress_measurements").select("measured_date").eq("user_id", uid).order("measured_date", { ascending: false }).limit(1), []) : Promise.resolve([]),
-    uid ? safe<any[]>(() => sb.from("progress_check_in_schedules").select("kind, enabled, frequency, custom_days").eq("user_id", uid), []) : Promise.resolve([]),
+/** The Nutrition Update side of a check-in's plan: asked when, answered last when, and the form's options. */
+export async function loadNutritionSide(sb: any, clientId: string, due: string, foldedAt: string | null) {
+  const [asked, lastSub, questions] = await Promise.all([
     safe<any[]>(
       () =>
         sb
@@ -41,13 +35,45 @@ export async function loadPlanInput(sb: any, clientId: string, due: string): Pro
           .limit(1),
       [],
     ),
-    safe<any[]>(() => sb.from("nf_submissions").select("submitted_at").eq("client_id", clientId).eq("form_id", NUTRITION_REQUEST_FORM_ID).neq("status", "in_progress").gte("submitted_at", `${addDays(due, -14)}T00:00:00Z`).limit(1), []),
+    safe<any[]>(() => sb.from("nf_submissions").select("id, submitted_at").eq("client_id", clientId).eq("form_id", NUTRITION_REQUEST_FORM_ID).neq("status", "in_progress").not("submitted_at", "is", null).order("submitted_at", { ascending: false }).limit(1), []),
+    safe<FoldQuestion[]>(() => sb.from("nf_questions").select("id, label, question_type, options, validation, required").eq("form_id", NUTRITION_REQUEST_FORM_ID).is("archived_at", null), []),
+  ]);
+  // what their last one answered: it can carry this month's only when nothing required is missing
+  const lastAnswered = lastSub[0]?.id
+    ? await safe<any[]>(() => sb.from("nf_answers").select("question_id").eq("submission_id", lastSub[0].id), [])
+    : [];
+  const gaps = lastSub[0] ? foldGaps(questions, lastAnswered.map((a) => String(a.question_id))) : { foldable: false, askFreeMeal: false };
+  // asked: a request in their chat, or this month's folded into this very check-in
+  const askedAt = [asked[0]?.created_at, foldedAt].filter(Boolean).map(String).sort().pop() ?? null;
+  const lastAt: string | null = lastSub[0]?.submitted_at ?? null;
+  const answeredAfter = !!(askedAt && lastAt && String(lastAt) >= askedAt);
+  return {
+    nutritionPendingSince: askedAt && !answeredAfter ? askedAt.slice(0, 10) : null,
+    nutritionLastAnswered: lastAt && gaps.foldable ? String(lastAt).slice(0, 10) : null,
+    nutritionOptions: questions.length ? foldOptions(questions) : null,
+    nutritionAskFreeMeal: gaps.foldable && gaps.askFreeMeal,
+  };
+}
+
+export async function loadPlanInput(sb: any, clientId: string, due: string, foldedAt: string | null = null): Promise<PlanInput | null> {
+  const { data: c } = await sb.from("clients").select("id, user_id, bodyweight_goal_type, bodyweight_goal_date").eq("id", clientId).maybeSingle();
+  if (!c) return null;
+  const uid: string | null = c.user_id ?? null;
+  const [bw, preps, photos, tape, schedules, nutrition, plans] = await Promise.all([
+    uid ? safe<any[]>(() => sb.from("progress_bodyweight").select("logged_date").eq("user_id", uid).lte("logged_date", due).order("logged_date", { ascending: false }).limit(14), []) : Promise.resolve([]),
+    safe<any[]>(() => sb.from("pl_preps").select("event_name, title, event_date, weight_class, archived, status").eq("client_id", clientId).gte("event_date", due).order("event_date").limit(3), []),
+    uid ? safe<any[]>(() => sb.from("progress_submissions").select("submission_date").eq("user_id", uid).eq("submission_type", "photo").order("submission_date", { ascending: false }).limit(1), []) : Promise.resolve([]),
+    uid ? safe<any[]>(() => sb.from("progress_measurements").select("measured_date").eq("user_id", uid).order("measured_date", { ascending: false }).limit(1), []) : Promise.resolve([]),
+    uid ? safe<any[]>(() => sb.from("progress_check_in_schedules").select("kind, enabled, frequency, custom_days").eq("user_id", uid), []) : Promise.resolve([]),
+    loadNutritionSide(sb, clientId, due, foldedAt),
+    safe<any[]>(() => sb.from("nutrition_targets").select("phase, status, start_date").eq("client_id", clientId).neq("status", "Archived").order("start_date", { ascending: false }).limit(1), []),
   ]);
   const meet = preps.find((p) => !p.archived && !/cancel/i.test(String(p.status ?? ""))) ?? null;
-  const askedAt: string | null = asked[0]?.created_at ?? null;
-  const answeredAfter = askedAt && answered.some((s) => String(s.submitted_at) >= askedAt);
   return {
     due,
+    phase: plans[0]?.phase ?? null,
+    nutritionLastAnswered: nutrition.nutritionLastAnswered,
+    nutritionOptions: nutrition.nutritionOptions,
     lastWeighIn: bw[0]?.logged_date ?? null,
     weighInsLast7: bw.filter((b) => b.logged_date > addDays(due, -7)).length,
     meet: meet ? { date: String(meet.event_date).slice(0, 10), weightClass: meet.weight_class ?? null, name: meet.event_name || meet.title || null } : null,
@@ -55,7 +81,7 @@ export async function loadPlanInput(sb: any, clientId: string, due: string): Pro
     lastPhotos: photos[0]?.submission_date ? String(photos[0].submission_date).slice(0, 10) : null,
     lastMeasurements: tape[0]?.measured_date ? String(tape[0].measured_date).slice(0, 10) : null,
     schedules: schedules.map((s) => ({ kind: s.kind, enabled: !!s.enabled, frequency: s.frequency, customDays: s.custom_days ?? null })) as ProgressSchedule[],
-    nutritionPendingSince: askedAt && !answeredAfter ? askedAt.slice(0, 10) : null,
+    nutritionPendingSince: nutrition.nutritionPendingSince,
   };
 }
 
@@ -64,15 +90,20 @@ export async function loadPlanInput(sb: any, clientId: string, due: string): Pro
  * and stored (only on a pending check-in: a submitted one keeps what it asked).
  * `due` is the occurrence's local due date, else the day it was sent.
  */
-export async function ensureCheckinPlan(admin: any, row: { id: string; client_id: string; status: string; plan?: CheckinPlan | null; created_at: string; occurrence_id?: string | null }): Promise<CheckinPlan | null> {
-  if (row.plan && (row.plan as CheckinPlan).version) return row.plan as CheckinPlan;
+export async function ensureCheckinPlan(admin: any, row: { id: string; client_id: string; status: string; plan?: CheckinPlan | null; created_at: string; occurrence_id?: string | null; nutrition_requested_at?: string | null }): Promise<CheckinPlan | null> {
+  if (row.plan && (row.plan as CheckinPlan).version) {
+    // An open check-in keeps its steps, but this month's Nutrition Update can be folded in after it was
+    // first opened (the sender runs a few minutes after the card): the nutrition part is read again.
+    if (row.status !== "pending") return row.plan as CheckinPlan;
+    return refreshNutrition(admin, row, row.plan as CheckinPlan);
+  }
   if (row.status !== "pending") return null;
   let due = String(row.created_at).slice(0, 10);
   if (row.occurrence_id) {
     const { data: occ } = await admin.from("client_task_occurrences").select("due_local_date").eq("id", row.occurrence_id).maybeSingle();
     if (occ?.due_local_date) due = String(occ.due_local_date).slice(0, 10);
   }
-  const input = await loadPlanInput(admin, row.client_id, due);
+  const input = await loadPlanInput(admin, row.client_id, due, row.nutrition_requested_at ?? null);
   if (!input) return null;
   const plan = planCheckin(input);
   // first writer wins: a second device opening it at the same moment reads the stored one
@@ -80,4 +111,18 @@ export async function ensureCheckinPlan(admin: any, row: { id: string; client_id
   if (saved?.plan) return saved.plan as CheckinPlan;
   const { data: again } = await admin.from("messenger_checkins").select("plan").eq("id", row.id).maybeSingle();
   return (again?.plan as CheckinPlan | null) ?? plan;
+}
+
+/** The stored plan with its Nutrition Update part read again (added, made inline, or dropped once answered). */
+async function refreshNutrition(admin: any, row: { id: string; client_id: string; created_at: string; nutrition_requested_at?: string | null }, plan: CheckinPlan): Promise<CheckinPlan> {
+  const due = String(row.created_at).slice(0, 10);
+  const side = await loadNutritionSide(admin, row.client_id, due, row.nutrition_requested_at ?? null).catch(() => null);
+  if (!side) return plan;
+  const fresh = planCheckin({ due, lastWeighIn: due, weighInsLast7: 1, meet: null, goal: null, lastPhotos: null, lastMeasurements: null, schedules: [], ...side });
+  const next = fresh.extras.find((e) => e.key === "nutrition_update") ?? null;
+  const prev = plan.extras.find((e) => e.key === "nutrition_update") ?? null;
+  if (JSON.stringify(next) === JSON.stringify(prev)) return plan;
+  const updated: CheckinPlan = { ...plan, extras: [...plan.extras.filter((e) => e.key !== "nutrition_update"), ...(next ? [next] : [])] };
+  await admin.from("messenger_checkins").update({ plan: updated }).eq("id", row.id).eq("status", "pending");
+  return updated;
 }

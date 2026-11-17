@@ -233,7 +233,9 @@ export function RequestsTab({ initialKind }: { initialKind?: RequestKind } = {})
             <ul className="mt-1 list-disc space-y-0.5 pl-4">
               <li>One recurring form: the weekly check-in, out Friday at 7am in each client's own time.</li>
               <li>It adds only what that week needs: a weight-making question near a meet, photos and measurements when due (skipped when already on file), a weigh-in only when none was logged. Each check-in shows what it added and why.</li>
-              <li>The monthly Nutrition Update goes out the same morning as the month's last check-in, never as a second form that week.</li>
+              <li>The Nutrition Update goes out the week their plan is due its review (the plan's Next update due, else 4 weeks on fat loss, 6 on recomp or gain, 8 on maintenance), never within 3 weeks of their last one.</li>
+              <li>A client who's sent one before answers it inside that week's check-in: the meals and what changed, the rest carried from last time. Their first one is the full form, which opens on their last answers from then on.</li>
+              <li>Photos and measurements follow their goal unless you set a schedule on their Progress tab.</li>
               <li>One reminder: the 8am morning push covers everything waiting and stops once it's answered.</li>
               <li>A check-in you send by hand counts as that week's; you're warned first if one is already out or about to go.</li>
             </ul>
