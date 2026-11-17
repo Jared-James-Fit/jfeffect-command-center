@@ -7204,7 +7204,8 @@ function SetRow({
 /**
  * The card's unit top right as a small two-way switch, "kg | lb", the one in
  * use filled: both units on show is what says it can be changed (a lone "LB"
- * read as a label). A tap on the other one switches every card of the exercise
+ * read as a label; the filled one is neutral like a picked day, never the
+ * brand red). A tap on the other one switches every card of the exercise
  * and remembers it for that exercise; the toast has Undo.
  */
 function UnitSwitch({ unit, onChange }: { unit: "kg" | "lb"; onChange: (u: "kg" | "lb") => void }) {
@@ -7229,7 +7230,7 @@ function UnitSwitch({ unit, onChange }: { unit: "kg" | "lb"; onChange: (u: "kg" 
             onClick={() => { if (!on) onChange(u); }}
             className={cn(
               "inline-flex h-full min-w-[2.5rem] items-center justify-center rounded-md px-2 text-[13px] font-semibold transition-colors active:scale-[0.97]",
-              on ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+              on ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
             )}
           >
             {u}
