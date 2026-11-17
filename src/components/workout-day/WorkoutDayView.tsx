@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, Fragment, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
@@ -73,6 +73,7 @@ import { writeSetEditAudit } from "@/lib/logged-set-audit";
 import { saveExerciseUnitPref, type WUnit } from "@/lib/exercise-unit-prefs";
 import { isMainLiftFamily, resolveWorkoutRowUnits } from "@/lib/workout-unit-resolution";
 import { backoffCards, firstHeavyCards, rangeLift } from "@/lib/workouts/pick-range";
+import { cardioLast, focusPlaceLabel, isPlanCardioRow, liftAndCardioProgress, liftCount } from "@/lib/workouts/workout-cardio";
 import {
   convertLoad,
   displayLoadInUnit,
@@ -206,6 +207,9 @@ import { listenChannel } from "@/lib/realtime-channel";
 /* -------------------------------------------------------------------------- */
 
 type RangeTarget = { exact?: number; min?: number; max?: number };
+
+/** The rows before they load: one array, so memos keyed on it hold. */
+const NO_ROWS: any[] = [];
 
 function parseEffortTarget(text?: string | null): RangeTarget {
   if (!text) return {};
@@ -704,7 +708,7 @@ function WorkoutDay({
   const readonly = false;
 
   const {
-    data: rows = [],
+    data: rawRows,
     isSuccess: rowsLoaded,
     isFetching: rowsFetching,
     isError: rowsIsError,
@@ -743,6 +747,11 @@ function WorkoutDay({
       return r;
     },
   });
+  // The day's cardio (the client's cardio plan's row) is its own part of the
+  // workout, after the lifting: always last, under its own heading, never one
+  // of the exercises it's counted with (workout-cardio.ts).
+  const rows = useMemo(() => (rawRows ? cardioLast(rawRows as any[]) : NO_ROWS), [rawRows]);
+  const liftRows = useMemo(() => liftCount(rows as any[]), [rows]);
 
   useEffect(() => {
     // Empty state is now rendered inline (see WorkoutEmptyCard below) so we
@@ -759,7 +768,8 @@ function WorkoutDay({
 
   const addExerciseNow = async (
     exercise: { id: string; name: string },
-    insertAt = (rows as any[]).length,
+    // the end of the lifting: the day's cardio stays after it
+    insertAt = liftRows,
   ) => {
     if (!canEditWorkoutStructure) return;
     try {
@@ -835,7 +845,8 @@ function WorkoutDay({
     const ordered = (rows as any[]).map((row) => row.id as string);
     const from = ordered.indexOf(rowId);
     const to = from + direction;
-    if (from < 0 || to < 0 || to >= ordered.length) return;
+    // the lifts move among themselves; the day's cardio stays last
+    if (from < 0 || to < 0 || to >= liftRows || from >= liftRows) return;
     [ordered[from], ordered[to]] = [ordered[to], ordered[from]];
     qc.setQueryData(
       ["pl-day-rows", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
@@ -854,8 +865,8 @@ function WorkoutDay({
     if (!canEditWorkoutStructure) return;
     const current = (rows as any[]).map((row) => row.id as string);
     const from = current.indexOf(rowId);
-    const to = Math.max(0, Math.min(current.length - 1, position - 1));
-    if (from < 0 || from === to) return;
+    const to = Math.max(0, Math.min(liftRows - 1, position - 1));
+    if (from < 0 || from >= liftRows || from === to) return;
     const ordered = [...current];
     const [moved] = ordered.splice(from, 1);
     ordered.splice(to, 0, moved);
@@ -2713,7 +2724,9 @@ function WorkoutDay({
     statusSummary.exercisesTotal > 0 &&
     (!!completion?.started_at || !!completion?.in_progress_at || !!completion?.completed_at);
 
-  // Tiny header progress indicator (ring beside the Day title).
+  // Tiny header progress indicator (ring beside the Day title). It counts the
+  // lifts; the day's cardio is its own heart beside them (workout-cardio.ts).
+  const liftProgress = liftAndCardioProgress(rows as any[], statusSummary.doneRowIds);
   const progressPct = statusSummary.setsTotal > 0
     ? Math.min(100, Math.round((statusSummary.setsDone / statusSummary.setsTotal) * 100))
     : 0;
@@ -2737,10 +2750,20 @@ function WorkoutDay({
                 type="button"
                 onClick={scrollToFirstIncompleteExercise}
                 className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-secondary/60 px-2 py-0.5 text-[11px] font-bold tabular-nums text-muted-foreground transition-colors hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                aria-label={`Workout progress ${progressPct}%, ${statusSummary.exercisesDone} of ${statusSummary.exercisesTotal} exercises. Scroll to first incomplete exercise.`}
+                aria-label={`Workout progress ${progressPct}%, ${liftProgress.liftsDone} of ${liftProgress.liftsTotal} exercises${liftProgress.cardioTotal > 0 ? `, cardio ${liftProgress.cardioDone ? "done" : "not done yet"}` : ""}. Scroll to first incomplete exercise.`}
               >
                 <WorkoutProgressRing pct={progressPct} status={progressStatus} size={16} strokeWidth={3} />
-                {progressPct}% · {statusSummary.exercisesDone}/{statusSummary.exercisesTotal}
+                {progressPct}% · {liftProgress.liftsDone}/{liftProgress.liftsTotal}
+                {liftProgress.cardioTotal > 0 && (
+                  <span
+                    className={`inline-flex items-center ${liftProgress.cardioDone ? "text-success" : ""}`}
+                    data-progress-cardio={liftProgress.cardioDone ? "done" : "open"}
+                    aria-hidden
+                  >
+                    <span className="mr-1.5">·</span>
+                    <Heart className={`h-3 w-3 ${liftProgress.cardioDone ? "fill-current" : ""}`} />
+                  </span>
+                )}
                 {/* Workout time: the live clock rides in the same pill once the
                     workout has started (nothing until then), not a card of its own. */}
                 {statusBarVisible && !completion?.completed_at && (
@@ -2937,17 +2960,29 @@ function WorkoutDay({
                 ])}
               />
             ) : null}
-            {canEditWorkoutStructure && rowsLoaded && (rows as any[]).length === 0 && (
+            {canEditWorkoutStructure && rowsLoaded && liftRows === 0 && (
               <div className="lg:col-span-2">
                 <WorkoutAddExercise onAdd={(exercise) => addExerciseNow(exercise, 0)} disabled={rowsFetching} clientId={client?.id ?? null} />
               </div>
             )}
-            {(rows as any[]).map((r, rowIndex) => (
+            {(rows as any[]).map((r, rowIndex) => {
+              const cardioRow = isPlanCardioRow(r);
+              return (
+              <Fragment key={r.id}>
+              {/* The day's cardio is its own part of the workout, after the
+                  lifting (workout-cardio.ts). Focus is one card a screen, so
+                  there it's the card's own "Cardio" in the top bar instead. */}
+              {cardioRow && rowIndex === liftRows && !storyOpen && (
+                <div className="flex items-center gap-2 px-1 pt-3 lg:col-span-2" data-cardio-section>
+                  <Heart className="h-4 w-4 text-muted-foreground" aria-hidden />
+                  <h2 className="text-base font-semibold">Cardio</h2>
+                  <span className="text-xs text-muted-foreground">Logging it checks off today's cardio</span>
+                </div>
+              )}
               <div
-                key={r.id}
                 data-story-slide={r.id}
                 className="min-w-0"
-                aria-label={storyOpen ? `Exercise ${rowIndex + 1} of ${(rows as any[]).length}` : undefined}
+                aria-label={storyOpen ? focusPlaceLabel(rowIndex, (rows as any[]).length, liftRows) : undefined}
                 aria-roledescription={storyOpen ? "slide" : undefined}
               >
               <SwipeToReveal
@@ -2997,11 +3032,11 @@ function WorkoutDay({
                     onNoteChange={refreshNotes}
                     purposeLabel={purposeLabelById.get(r.id) ?? null}
                     swapContext={swapContextForRow(adapter, dayId, r.id)}
-                    canMoveUp={canEditWorkoutStructure && rowIndex > 0}
-                    canMoveDown={canEditWorkoutStructure && rowIndex < (rows as any[]).length - 1}
+                    canMoveUp={canEditWorkoutStructure && !cardioRow && rowIndex > 0}
+                    canMoveDown={canEditWorkoutStructure && !cardioRow && rowIndex < liftRows - 1}
                     position={rowIndex + 1}
-                      movePosition={canEditWorkoutStructure ? rowIndex + 1 : undefined}
-                    moveCount={canEditWorkoutStructure ? (rows as any[]).length : undefined}
+                      movePosition={canEditWorkoutStructure && !cardioRow ? rowIndex + 1 : undefined}
+                    moveCount={canEditWorkoutStructure && !cardioRow ? liftRows : undefined}
                     onMoveUp={() => void moveExerciseNow(r.id, -1)}
                     onMoveDown={() => void moveExerciseNow(r.id, 1)}
                     onMoveTo={(position) => void moveExerciseTo(r.id, position)}
@@ -3009,8 +3044,9 @@ function WorkoutDay({
                     onAddAfter={canEditWorkoutStructure && !readonly ? (exercise) => addExerciseNow(exercise, rowIndex + 1) : undefined}
                   />
                 )}
-                {/* Adding exercises lives in the list; Focus is for logging. */}
-                {canEditWorkoutStructure && !storyOpen && (
+                {/* Adding exercises lives in the list; Focus is for logging.
+                    New exercises go with the lifting, never after the cardio. */}
+                {canEditWorkoutStructure && !storyOpen && !cardioRow && (
                   <WorkoutAddExercise
                     subtle
                     clientId={client?.id ?? null}
@@ -3021,7 +3057,9 @@ function WorkoutDay({
               </div>
               </SwipeToReveal>
               </div>
-            ))}
+              </Fragment>
+              );
+            })}
           </div>
         </WorkoutLoadBoundary>
 
@@ -3102,6 +3140,7 @@ function WorkoutDay({
             sets: r.sets ?? null,
             reps: r.reps_text ?? null,
           })))}
+          cardioFrom={liftRows}
           done={(rows as any[]).map((r) => statusSummary.doneRowIds.has(String(r.id)))}
           listRef={storyListRef}
           initialIndex={Math.min(storyIndexRef.current, storyRowIds.length - 1)}
@@ -4724,10 +4763,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           Log the load used
         </div>
       )}
-      {(row as any).cardio_target_id && (
-        // the client's cardio plan, added after the lifting (program_cardio_sync): logging it here is the day's cardio
-        <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400" data-cardio-plan-row>
-          <Heart className="h-3.5 w-3.5 shrink-0" /> Your cardio plan · logging it here checks off today's cardio
+      {(row as any).cardio_target_id && focusMode && (
+        // the client's cardio plan, added after the lifting (program_cardio_sync): logging it here is the day's cardio.
+        // The list says it once under its Cardio heading; Focus has no heading, so the card says it.
+        <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-muted-foreground" data-cardio-plan-row>
+          <Heart className="h-3.5 w-3.5 shrink-0" aria-hidden /> Your cardio plan · logging it checks off today's cardio
         </p>
       )}
       {row.notes && <ExerciseNotesBlock notes={row.notes} />}

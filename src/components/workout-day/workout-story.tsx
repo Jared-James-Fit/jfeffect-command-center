@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefO
 import { flushSync } from "react-dom";
 import { ArrowLeft, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Loader2, LogOut, MessageCircle, RectangleVertical, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { focusPlaceLabel } from "@/lib/workouts/workout-cardio";
 import type { WorkoutView } from "@/lib/use-workout-view";
 import { formatElapsed, isSessionAbandoned, readWorkoutSession, sessionElapsedMs } from "@/components/workout-day/WorkoutTimer";
 
@@ -271,6 +272,7 @@ export type StoryFinish =
 /** Focus's top (progress bars, ← Workouts, ? and List, where you are) and bottom (‹ and Next ›) bars. */
 export function StoryChrome({
   names,
+  cardioFrom,
   done,
   listRef,
   initialIndex,
@@ -285,6 +287,8 @@ export function StoryChrome({
 }: {
   /** Exercise names in order. */
   names: string[];
+  /** Where the day's cardio starts (it's last): those cards say "Cardio", not "Exercise 9 of 9". */
+  cardioFrom?: number;
   /** Per exercise: every set logged. */
   done: boolean[];
   /** The list laid out side by side: the bars follow its scroll. */
@@ -717,7 +721,7 @@ export function StoryChrome({
             {/* where you are, whole on any phone; under it Done (it pops in once), the clock and the workout */}
             <div className="min-w-0 flex-1">
               <div data-testid="story-count" className="truncate text-[15px] font-bold leading-tight tabular-nums text-foreground">
-                Exercise {index + 1} of {count}
+                {focusPlaceLabel(index, count, cardioFrom ?? count)}
               </div>
               <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs font-medium leading-tight text-muted-foreground">
                 {currentDone && (
