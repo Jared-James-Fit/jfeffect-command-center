@@ -22,7 +22,7 @@ const render = (props: Record<string, unknown>) =>
 
 const preview = (w: { load: number; reps: number; rpe: number | null }) =>
   ({ low: Math.round(w.load * 1.5), high: Math.round(w.load * 1.6), target: Math.round(w.load * 1.55), unit: "kg" as const });
-const tuneProps = { target: { reps: 7, rpe: 4 }, preview, openSets: 3, onUseForAllSets: async () => 3 };
+const tuneProps = { target: { reps: 7, rpe: 4 }, preview };
 
 describe("warm-up rows in the set table", () => {
   it("before the first working set: one slim 'Last warm-up' row with what to work up to", () => {
@@ -56,7 +56,7 @@ describe("warm-up rows in the set table", () => {
     expect(render({ canEdit: false, prompt: { suggested: null, tunes: true } })).not.toContain("warmup-prompt");
   });
 
-  it("open: suggested warm-up pre-filled, four feel taps (Smooth by default), the answer and one Use button", () => {
+  it("open: suggested warm-up pre-filled, four feel taps (Smooth by default), the answer set 1's tap logs, one Save", () => {
     const html = render({ form: "new", seed: { load: 100, reps: 2 }, prompt: { suggested: { load: 100, reps: 2 }, tunes: true }, ...tuneProps });
     expect(html).toContain('value="100"');
     expect(html).toContain('value="2"');
@@ -65,8 +65,11 @@ describe("warm-up rows in the set table", () => {
     expect(html).toContain("Today: 7 reps @ RPE 4");
     expect(html).toMatch(/data-testid="warmup-target"[^>]*>155 kg</);
     expect(html).toContain("(150–160)");
-    expect(html).toContain("Use for 3 sets");
-    expect(html).toContain("Log warm-up only");
+    expect(html).toContain("save, then tap set 1 to log it");
+    expect(html).toContain('data-testid="warmup-save"');
+    // never a button that fills the sets with drafts
+    expect(html).not.toContain("Use for");
+    expect(html).not.toContain("warmup-use-all");
     // no mode tabs, no typed RPE, no e1RM in here
     expect(html).not.toContain("e1RM");
     expect(html).not.toContain('name="warmup-rpe"');
@@ -96,13 +99,11 @@ describe("warm-up rows in the set table", () => {
     expect(wdv).toContain("const model = buildLoadModel({ history: loadHistory, today: [], unit: activeUnit, readiness, warmup: w, bodyweightKg, lift: liftKind });");
   });
 
-  it("'use for all sets' fills only open sets with the weight, keeping each set's reps / RPE, as drafts", () => {
+  it("a logged warm-up's weight is what set 1's tap logs, Suggest on or off (never drafts in the boxes)", () => {
     const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
-    const fill = wdv.slice(wdv.indexOf("const fillLoadOnOpenSets"), wdv.indexOf("// \"Apply to remaining\""));
-    expect(fill).toContain("if (ex?.completed_at) continue;");
-    expect(fill).toContain("actual_reps: ex?.actual_reps ?? null,");
-    expect(fill).toContain("completed_at: null,");
-    expect(wdv).toContain("(setIndex !== 1 || forcedFill.includeFirst)");
+    expect(wdv).not.toContain("const fillLoadOnOpenSets");
+    expect(wdv).toContain("const quickLoad: number | null = quickLoadFromStrip ?? warmupTodayLoad;");
+    expect(wdv).toContain("todayLoad={warmupTodayLoad}");
   });
 });
 
@@ -134,11 +135,10 @@ describe("reset is always in the workout menu", () => {
 });
 
 describe("the warm-up answer adds up", () => {
-  it("a single open set reads 'Use'", () => {
-    const html = render({ form: "new", seed: { load: 100, reps: 2 }, prompt: { suggested: null, tunes: true }, ...tuneProps, openSets: 1 });
+  it("the answer is the weight, with no Use button", () => {
+    const html = render({ form: "new", seed: { load: 100, reps: 2 }, prompt: { suggested: null, tunes: true }, ...tuneProps });
     expect(html).toMatch(/data-testid="warmup-target"[^>]*>155 kg</);
-    expect(html).toContain(">Use<");
-    expect(html).not.toContain("for 1 set");
+    expect(html).not.toContain(">Use<");
   });
 
   it("the set row's ghost hides while the warm-up form is setting the weight", () => {

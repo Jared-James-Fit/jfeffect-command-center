@@ -40,12 +40,12 @@ describe("the card's top: name, role, the prescription, then Last / Suggested", 
     expect(wdv.split("<PreviousLiftChip").length).toBe(2);
   });
 
-  it("one tap on Suggested fills the open sets (no weight buttons); its ⓘ is its own button", () => {
+  it("one tap on Suggested logs the open sets (no weight buttons); its ⓘ is its own button", () => {
     const html = render({ onApply: async () => 1 });
-    expect(html).toContain("Tap to fill your open sets");
+    expect(html).toContain("Tap to log your sets at this weight");
     expect(html).toContain("border-blue-500/40 bg-blue-500/10");
     expect(html).toContain('data-testid="load-apply"');
-    expect(html).toContain("Fill your open sets with 250 lb");
+    expect(html).toContain("Log your open sets at 250 lb");
     expect(html).toContain('data-testid="load-suggestion-info"');
     expect(html).toMatch(/data-testid="load-target">250[\s\u00a0]lb<\/span>/);
     expect(html).not.toContain("load-pick");
@@ -57,7 +57,7 @@ describe("the card's top: name, role, the prescription, then Last / Suggested", 
     const readOnly = render({});
     expect(readOnly).not.toContain("load-apply");
     expect(readOnly).toContain("How it&#x27;s worked out");
-    expect(wdv).toContain("onApply={!readonly && clientId && openSetCount > 0 ? fillLoadOnOpenSets : null}");
+    expect(wdv).toContain("onApply={!readonly && clientId && openSetCount > 0 ? logOpenSetsAt : null}");
   });
 
   it("an empty weight box is blue: where the weight goes", () => {

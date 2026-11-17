@@ -20,7 +20,7 @@ describe("a set done as suggested is one tap on its number", () => {
     // no number in the box: the coach wants them blank until the athlete acts
     expect(wdv).not.toContain("suggested={quickWeight");
     expect(wdv).toContain("Log set ${setIndex} at ${quickWeight} ${unit}");
-    expect(wdv).toContain("const quick = nextCompletedAt ? quickWeight : null;");
+    expect(wdv).toContain("const quick = nextCompletedAt && !bw && !hideWeight ? (opts?.weight ?? quickWeight) : null;");
     expect(wdv).toContain("quick ? persistedLoadForDisplayValue(quick, unit, existing) : persistedLoadForDisplayValue(load, loadUnit, existing)");
     expect(wdv).toContain("load: bw ? 0 : quick ?? load,");
     // the weight that came back from the server isn't a new edit to save again

@@ -171,8 +171,7 @@ export function WarmupRows({
   tunedId = null,
   target = null,
   preview = null,
-  openSets = 0,
-  onUseForAllSets = null,
+  todayLoad = null,
   columns = null,
   effortKind = "rpe",
   video = null,
@@ -201,10 +200,11 @@ export function WarmupRows({
   target?: { reps: number; rpe: number } | null;
   /** The engine's suggestion if this warm-up were saved — same math as the card. */
   preview?: ((w: { load: number; reps: number; rpe: number | null }) => LoadSuggestion | null) | null;
-  /** Open (unconfirmed) working sets, for "use for all N sets". */
-  openSets?: number;
-  /** Put one weight into every open set as a draft; resolves to how many were filled. */
-  onUseForAllSets?: ((load: number) => Promise<number>) | null;
+  /**
+   * The weight set 1's tap logs from a logged last warm-up while Suggest is off
+   * (the card's own suggestion, never put in a box): said under the warm-up.
+   */
+  todayLoad?: number | null;
   /** The set table's columns: the open last warm-up lines up with them (null = the old one-line prompt). */
   columns?: WarmupColumns | null;
   /** The card's effort column: RPE, or RIR (stored as RPE = 10 − RIR). */
@@ -241,8 +241,6 @@ export function WarmupRows({
       seed={editing ? null : seed}
       target={target}
       preview={preview}
-      openSets={openSets}
-      onUseForAllSets={onUseForAllSets}
       onCancel={() => onFormChange(null)}
       onSave={async (v) => { onFormChange(null); await onSave(v); }}
       onRemove={editing ? async () => { onFormChange(null); await onRemove(editing.id); } : null}
@@ -300,10 +298,8 @@ export function WarmupRows({
           tuned={!!inlineRow && tunedId === inlineRow.id}
           canTune={!!prompt?.tunes}
           suggestOn={suggestOn}
-          answer={inlineRow && prompt?.tunes && preview ? preview({ load: warmupInUnit(inlineRow, unit).load, reps: inlineRow.reps, rpe: inlineRow.rpe }) : null}
+          todayLoad={todayLoad}
           target={target}
-          openSets={openSets}
-          onUseForAllSets={onUseForAllSets}
           onSave={onSave}
           onOpenForm={inlineRow ? () => onFormChange(inlineRow.id) : null}
           video={videoOn ? video : null}
@@ -370,10 +366,8 @@ function LastWarmupRow({
   tuned,
   canTune,
   suggestOn,
-  answer,
+  todayLoad,
   target,
-  openSets,
-  onUseForAllSets,
   onSave,
   onOpenForm,
   video,
@@ -387,26 +381,13 @@ function LastWarmupRow({
   tuned: boolean;
   canTune: boolean;
   suggestOn: boolean;
-  /** Today's weight from this warm-up (the card's own engine), while it can still set it. */
-  answer: LoadSuggestion | null;
+  /** Today's weight from this warm-up while Suggest is off: what set 1's tap logs. */
+  todayLoad: number | null;
   target: { reps: number; rpe: number } | null;
-  openSets: number;
-  onUseForAllSets: ((load: number) => Promise<number>) | null;
   onSave: (v: WarmupSaveInput) => void | Promise<void>;
   onOpenForm: (() => void) | null;
   video: WarmupVideoCell | null;
 }) {
-  const [using, setUsing] = useState(false);
-  const useForAll = async () => {
-    if (!answer || !onUseForAllSets || using) return;
-    setUsing(true);
-    try {
-      const n = await onUseForAllSets(answer.target);
-      if (n > 0) toast.success(`${fmt(answer.target)} ${unit} in ${n} set${n === 1 ? "" : "s"} · tap each set's number as you finish it`);
-    } finally {
-      setUsing(false);
-    }
-  };
   const [load, setLoad] = useState(existing ? String(warmupDisplay(existing, unit)) : "");
   const [reps, setReps] = useState(existing ? String(existing.reps) : seed ? String(seed.reps) : "");
   const [effort, setEffort] = useState(
@@ -486,25 +467,12 @@ function LastWarmupRow({
       <p className="px-2 pb-1.5 pl-[42px] text-[12px] leading-snug text-muted-foreground" data-warmup-caption>
         {existing && suggestOn && tuned ? (
           <span className="font-medium text-success">✓ Suggested is tuned from this warm-up</span>
-        ) : existing && !suggestOn && answer && target ? (
-          // Suggested is off: today's weight is said here, one tap from every open set
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span>
-              Today: about{" "}
-              <span className="font-semibold tabular-nums text-foreground" data-warmup-answer>{fmt(answer.target)} {unit}</span>
-              {` for ${target.reps} @ RPE ${fmt(target.rpe)}`}
-            </span>
-            {onUseForAllSets && openSets > 0 && (
-              <button
-                type="button"
-                onClick={() => void useForAll()}
-                disabled={using}
-                data-warmup-use
-                className="h-8 rounded-lg border border-border px-2.5 text-[12px] font-semibold text-foreground transition active:scale-[0.98] disabled:opacity-50"
-              >
-                Use for {openSets === 1 ? "set" : `${openSets} sets`}
-              </button>
-            )}
+        ) : existing && !suggestOn && todayLoad != null && target ? (
+          // Suggest is off: today's weight is said here, and set 1's tap logs it
+          <span>
+            Today:{" "}
+            <span className="font-semibold tabular-nums text-foreground" data-warmup-answer>{fmt(todayLoad)} {unit}</span>
+            {` × ${target.reps} @ RPE ${fmt(target.rpe)} · tap set 1 to log it`}
           </span>
         ) : existing ? (
           "Last warm-up logged"
@@ -533,9 +501,10 @@ function WBadge() {
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100));
 
 /**
- * The last warm-up, in the W row's own space: weight × reps (pre-filled with the
+ * A warm-up, in the W row's own space: weight × reps (pre-filled with the
  * suggested warm-up), four "how did it feel" taps, and — while it can still set
- * today's weight — the answer with one "Use" button that puts it in every open set.
+ * today's weight — the answer, which a tap on set 1's number logs once it's
+ * saved (no button that fills the sets with drafts).
  */
 function WarmupForm({
   editing,
@@ -544,8 +513,6 @@ function WarmupForm({
   seed,
   target,
   preview,
-  openSets,
-  onUseForAllSets,
   onCancel,
   onSave,
   onRemove,
@@ -556,8 +523,6 @@ function WarmupForm({
   seed: { load: number; reps: number } | null;
   target: { reps: number; rpe: number } | null;
   preview: ((w: { load: number; reps: number; rpe: number | null }) => LoadSuggestion | null) | null;
-  openSets: number;
-  onUseForAllSets: ((load: number) => Promise<number>) | null;
   onCancel: () => void;
   onSave: (v: WarmupSaveInput) => void | Promise<void>;
   onRemove: (() => void | Promise<void>) | null;
@@ -568,7 +533,6 @@ function WarmupForm({
   // A normal final warm-up is RPE 7 — the engine's own assumption — so leaving it is honest.
   const [rpe, setRpe] = useState<number | null>(editing ? editing.rpe : 7);
   const loadRef = useRef<HTMLInputElement | null>(null);
-  const [busy, setBusy] = useState(false);
 
   // Nothing to pre-fill: start on the weight.
   const blankNew = !editing && !seed;
@@ -585,17 +549,6 @@ function WarmupForm({
   const valid = loadNum > 0 && Number.isFinite(loadNum) && Number.isInteger(repsNum) && repsNum >= 1 && repsNum <= WARMUP_MAX_REPS;
   const hint = tuning && valid ? preview!({ load: loadNum, reps: repsNum, rpe }) : null;
   const saveWarmup = () => onSave({ id: editing?.id, load: loadNum, unit, reps: repsNum, rpe });
-  const useForAll = async () => {
-    if (!hint || !onUseForAllSets || busy) return;
-    setBusy(true);
-    try {
-      await saveWarmup();
-      const n = await onUseForAllSets(hint.target);
-      if (n > 0) toast.success(`${fmt(hint.target)} ${unit} in ${n} set${n === 1 ? "" : "s"} — tap each set's number as you finish it`);
-    } finally {
-      setBusy(false);
-    }
-  };
   const cell =
     "h-9 w-full rounded-md border border-input bg-background px-1 text-center text-base font-bold tabular-nums text-foreground placeholder:text-muted-foreground/40";
   const range = hint && hint.low !== hint.high ? `${fmt(hint.low)}–${fmt(hint.high)}` : null;
@@ -664,7 +617,7 @@ function WarmupForm({
         ))}
       </div>
 
-      {/* Row 3: the answer and one button. */}
+      {/* Row 3: the answer: what set 1's tap logs once this warm-up is in. */}
       {tuning ? (
         <div className="mt-1.5 flex items-center gap-2" aria-live="polite">
           <div className="min-w-0 flex-1 leading-tight">
@@ -676,17 +629,9 @@ function WarmupForm({
                 {hint ? `${fmt(hint.target)} ${unit}` : "—"}
               </span>
               {range && <span className="ml-1 text-[11px] tabular-nums text-muted-foreground">({range})</span>}
+              {hint && <span className="ml-1.5 text-[11px] text-muted-foreground">· save, then tap set 1 to log it</span>}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => void useForAll()}
-            disabled={!hint || busy || openSets === 0 || !onUseForAllSets}
-            className="h-10 shrink-0 rounded-md bg-primary px-3.5 text-sm font-bold text-primary-foreground transition active:scale-[0.98] disabled:opacity-40"
-            data-testid="warmup-use-all"
-          >
-            {openSets > 1 ? `Use for ${openSets} sets` : "Use"}
-          </button>
         </div>
       ) : null}
       <div className="mt-1 flex items-center justify-between gap-2 text-xs">
@@ -696,13 +641,11 @@ function WarmupForm({
         <button
           type="button"
           onClick={() => void saveWarmup()}
-          disabled={!valid || busy}
-          className={cn(
-            "h-8 font-semibold disabled:opacity-40",
-            tuning ? "text-muted-foreground underline-offset-2 hover:underline" : "rounded-md bg-primary px-4 text-primary-foreground",
-          )}
+          disabled={!valid}
+          data-testid="warmup-save"
+          className="h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition active:scale-[0.98] disabled:opacity-40"
         >
-          {tuning ? "Log warm-up only" : "Save warm-up"}
+          Save warm-up
         </button>
       </div>
     </div>
