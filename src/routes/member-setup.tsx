@@ -40,6 +40,7 @@ function MemberSetupPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password) return toast.error("Please enter a password");
+    if (password.length < 8) return toast.error("Use at least 8 characters");
     if (password !== confirm) return toast.error("Passwords don't match");
     setBusy(true);
     try {

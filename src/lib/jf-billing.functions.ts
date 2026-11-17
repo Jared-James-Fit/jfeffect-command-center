@@ -218,9 +218,17 @@ function normalizePhoneE164(raw: string): string | null {
   return normalizePhoneToE164(raw);
 }
 
+/** The paid sign-up is retired (JF Effect is free to join). Never turn it back on without fixing its login reuse and sign-in link. */
+const PAID_SIGNUP_ENABLED = false;
+const PAID_SIGNUP_RETIRED = "JF Effect is free to join now. Create your account at jfeffect.com/join.";
+
 export const createJfSignupCheckout = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => SignupInputWithCodes.parse(d))
   .handler(async ({ data }) => {
+    // Retired: JF Effect is free to join (/join). This reused any existing
+    // login with the typed email and, once a checkout finished, handed back a
+    // sign-in link for it, so it stays off (20270402090000_security_hardening.sql).
+    if (!PAID_SIGNUP_ENABLED) throw new Error(PAID_SIGNUP_RETIRED);
     const s = await loadSettings();
     if (!s.monthly_price_id) throw new Error("Membership pricing isn't configured yet. Please contact support.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -509,6 +517,9 @@ const CompleteInput = z.object({ session_id: z.string().min(5) });
 export const completeJfSignup = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => CompleteInput.parse(d))
   .handler(async ({ data }) => {
+    // Retired with createJfSignupCheckout: it returned a sign-in link for the
+    // checkout's email, whoever finished the checkout.
+    if (!PAID_SIGNUP_ENABLED) throw new Error(PAID_SIGNUP_RETIRED);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const s = await loadSettings();
 

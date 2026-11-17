@@ -6,7 +6,7 @@ import {
   clientBasicsLines,
   nutritionSubmissionSummary,
   targetsUserPrompt,
-} from "@/lib/nutrition-ai-prompts";
+} from "@/lib/nutrition-ai-prompts.server";
 
 const read = (p: string) => readFileSync(p, "utf8");
 const migration = read("supabase/migrations/20261008130000_athlete_sex_profile.sql");

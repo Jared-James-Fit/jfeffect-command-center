@@ -5,7 +5,7 @@ import { ClipboardCheck, Loader2, Sparkles } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { sendNutritionRequestFn } from "@/lib/nutrition-ai-plans.functions";
 import { NUTRITION_PHASES, PHASE_GOAL } from "@/lib/nutrition-cardio";
-import type { WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
+import type { WorkoutMealsMode } from "@/lib/nutrition-request";
 import { WorkoutMealsSelect } from "@/components/nutrition/WorkoutMealsSelect";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";

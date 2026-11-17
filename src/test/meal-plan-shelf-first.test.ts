@@ -4,7 +4,7 @@ import {
   MEAL_PLAN_PROMPT,
   mealPlanUserPrompt,
   mealPrepFixPrompt,
-} from "@/lib/nutrition-ai-prompts";
+} from "@/lib/nutrition-ai-prompts.server";
 import { freeMealRule } from "@/lib/nutrition-history";
 import {
   SHELF_FIRST_ADVICE,

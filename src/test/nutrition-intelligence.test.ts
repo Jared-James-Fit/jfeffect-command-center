@@ -66,7 +66,7 @@ import {
   type WeighIn,
 } from "@/lib/nutrition-targets/nutrition-intel";
 import { planResults, previousPlanText } from "@/lib/nutrition-history";
-import { TARGETS_PROMPT, targetsUserPrompt } from "@/lib/nutrition-ai-prompts";
+import { TARGETS_PROMPT, targetsUserPrompt } from "@/lib/nutrition-ai-prompts.server";
 import { DEFAULT_ROUTES, STRONG_MODELS, resolveRoute } from "@/lib/ai/routing";
 import { developmentText } from "@/lib/program-intel/athlete-development";
 import { nutritionAthleteText } from "@/lib/nutrition-targets/nutrition-athlete";

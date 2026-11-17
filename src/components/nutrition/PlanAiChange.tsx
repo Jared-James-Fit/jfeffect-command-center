@@ -22,7 +22,7 @@ import {
   getFoodHistoryFn,
   undoPlanEditFn,
 } from "@/lib/nutrition-ai-plans.functions";
-import { REVISE_MAX_CHARS } from "@/lib/nutrition-ai-prompts";
+import { REVISE_MAX_CHARS } from "@/lib/nutrition-request";
 import {
   editChangesNothing,
   planAsMealPlanText,

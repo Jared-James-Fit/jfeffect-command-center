@@ -20,7 +20,7 @@ import {
   type ClientBasics,
   type QA,
   type WorkoutMealsMode,
-} from "@/lib/nutrition-ai-prompts";
+} from "@/lib/nutrition-ai-prompts.server";
 import { phaseFromText } from "@/lib/nutrition-cardio";
 import { hardToFindFoods, introducedHardToFind, planMenus, prepDrift } from "@/lib/nutrition-targets/plan-foods";
 import { foodNotes, foodNotesForAi, type FoodNotes } from "@/lib/nutrition-targets/food-notes";
@@ -38,7 +38,7 @@ import { summarizeTrainingTimes, type TrainingPattern } from "@/lib/nutrition-ta
 import { resolveTiming } from "@/lib/analytics/training-time";
 import { programContextText } from "@/lib/program-context";
 import { formAnswerText as answerValue } from "@/lib/form-answer-text";
-import { answerFor } from "@/lib/nutrition-ai-prompts";
+import { answerFor } from "@/lib/nutrition-ai-prompts.server";
 import { currentCardioText } from "@/lib/nutrition-cardio-sync";
 import {
   pickPreviousPlan,

@@ -5,7 +5,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts";
+import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-request";
 import { nativeKind, type FormSubmission } from "@/lib/form-submissions";
 
 /** A year back: the list is small (a few hundred rows a year), so it loads whole and filters on the phone. */

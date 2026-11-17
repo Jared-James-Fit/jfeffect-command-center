@@ -16,7 +16,7 @@ import {
   reviseTargetsUserPrompt,
   revisionLooksRight,
   type QA,
-} from "@/lib/nutrition-ai-prompts";
+} from "@/lib/nutrition-ai-prompts.server";
 import { WaitingForModel, type CallState } from "@/lib/ai/staged-call.server";
 import { parseMealPlan } from "@/lib/nutrition-targets/meal-plan-parse";
 import { plainOrNull } from "@/lib/nutrition-targets/plain-paste";
