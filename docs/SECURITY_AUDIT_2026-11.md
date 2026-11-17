@@ -151,3 +151,17 @@ No measurable performance cost: the new checks are one indexed lookup each, the 
 - Keep the rules added to AGENTS.md: service-role code checks the caller; `*.server.ts` for anything valuable; worker SQL functions service-role only; public functions rate-limited.
 - Re-run the anonymous probe and the catalog checks in this report after any large change (they take minutes and touch no data).
 - Keep `security/findings.json` current with the Lovable scanner; it's wired into the test suite.
+
+## 10. Final pre-deploy verification (Nov 17 2026, PR #1038)
+
+- **Two bypasses found by an independent review and closed in this PR.**
+  - SMS recovery could still reach an attacker's phone. The attacker applies for coaching with the victim's email and their own phone *before* the victim joins, and the application record is linked to the victim's login when they sign up. Recovery now ignores a phone from a public application record no coach has taken on (`recoveryPhoneTrusted`). On production this changes nothing for 23 of the 24 logins with SMS recovery, and moves one converted applicant with no coach on their record to email-only.
+  - Staff "Text sign-in / reset link" built the link from the client record's editable email. It's now only for the record's own login, by that login's own email, and never a team login.
+- **Exploitation check (production, read-only).** Recovery texts ever sent: 3 (Jun 16, Sep 18, Oct 12), each to a phone on that person's own linked record, none for a team login. Retired checkout: 4 trials ever (Jun 11–15), 3 in Stripe test mode, 1 live member; none since and none on a team login. No live recovery or sign-in tokens. Team logins: admin 2 sessions, finance 1, all opened by password. No open staff or coach invites. Nothing indicates either hole was used, and nothing needs revoking.
+- **Migration against production.** Every function it recreates matches production byte for byte before the change. Every policy it replaces is production's current one. Every caller of a revoked function is a SECURITY DEFINER function or a cron job running as `postgres`. All 406 client messages in the coach chat over 60 days came from coaching clients. Re-run twice on the local stub, plus every role's behaviour, plus the rollback and a re-apply. #1034's and #1035's migrations are already live in production.
+- **Rollback.** `docs/rollback/2026-11-17-security-hardening-rollback.sql`, by section, tested.
+- **Still open, not blocking.**
+  - A coach-assigned planted lead's phone becomes trusted (the coach has dealt with the person).
+  - The public "new setup link" request can reset the password of the one confirmed non-staff login with no client record (the owner gets the email).
+  - Two unescaped email `ilike` lookups (nutrition dashboard, Stripe member provisioning).
+  - Program Intelligence method text, Cleo's tones, Athlete Insights topics, lesson tracks and the coach-voice default still ship in admin chunks (no credentials or client data).

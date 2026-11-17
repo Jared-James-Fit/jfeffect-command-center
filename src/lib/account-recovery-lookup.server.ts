@@ -36,6 +36,22 @@ function lastTen(digits: string): string {
 }
 
 /**
+ * Whether a phone on this client record can receive a recovery text. Not when
+ * the record came from the public coaching application (`applied_at`, written
+ * only by upsertApplicantClient) and no coach has taken it on: anyone can
+ * apply with someone else's email and their own phone, and that record is
+ * linked to the person's login when they later join (member_free_join,
+ * handle_new_user, claimUnlinkedLogin), so its phone was never shown to be
+ * theirs. Once a coach is assigned, the coach has dealt with the person.
+ * (Nov 17 2026: on production this leaves 23 of the 24 logins that had SMS
+ * recovery exactly as they were, and moves one converted applicant with no
+ * coach on their record to email-only recovery.)
+ */
+export function recoveryPhoneTrusted(row: { applied_at?: string | null; assigned_coach_id?: string | null }): boolean {
+  return !(row.applied_at && !row.assigned_coach_id);
+}
+
+/**
  * The login with exactly this email, or null (never a prefix, wildcard or near
  * match). auth_user_id_for_email reads auth.users; until that migration is in
  * (20270402093000_security_hardening.sql) it falls back to the login's
@@ -69,25 +85,30 @@ async function emailOfLogin(db: RecoveryDb, userId: string): Promise<string | nu
   }
 }
 
-/** The first phone saved on this login's own records (member, client, coach, profile). */
+/**
+ * The first phone saved on this login's own records (member, client, coach,
+ * profile); on client records, the first one recovery can trust
+ * (recoveryPhoneTrusted).
+ */
 export async function phoneOfLogin(db: RecoveryDb, userId: string): Promise<string | null> {
   const sources: Array<() => PromiseLike<{ data: any }>> = [
     () => db.from("app_members").select("phone").eq("user_id", userId).limit(1),
     () =>
       db
         .from("clients")
-        .select("phone")
+        .select("phone, applied_at, assigned_coach_id")
         .eq("user_id", userId)
         .order("archived", { ascending: true })
         .order("created_at", { ascending: true })
-        .limit(1),
+        .limit(10),
     () => db.from("coaches").select("phone").eq("user_id", userId).limit(1),
     () => db.from("profiles").select("phone").eq("id", userId).limit(1),
   ];
   for (const read of sources) {
     try {
       const { data } = await read();
-      const row = Array.isArray(data) ? data[0] : data;
+      const rows: any[] = Array.isArray(data) ? data : data ? [data] : [];
+      const row = rows.find((r) => recoveryPhoneTrusted(r) && normalizePhoneE164(r?.phone ?? null));
       const phone = normalizePhoneE164(row?.phone ?? null);
       if (phone) return phone;
     } catch {
@@ -117,7 +138,12 @@ export async function loginForPhone(db: RecoveryDb, phoneE164: string): Promise<
     }
   };
   const reads: Array<[() => PromiseLike<{ data: any }>, string?]> = [
-    [() => db.from("clients").select("user_id").eq("normalized_phone", digits).not("user_id", "is", null).limit(5)],
+    [
+      () =>
+        Promise.resolve(
+          db.from("clients").select("user_id, applied_at, assigned_coach_id").eq("normalized_phone", digits).not("user_id", "is", null).limit(5),
+        ).then((r: any) => ({ ...r, data: (r?.data ?? []).filter((row: any) => recoveryPhoneTrusted(row)) })),
+    ],
     [() => db.from("app_members").select("user_id, phone").ilike("phone", `%${ten}%`).not("user_id", "is", null).limit(5)],
     [() => db.from("coaches").select("user_id, phone").ilike("phone", `%${ten}%`).not("user_id", "is", null).limit(5)],
     [() => db.from("profiles").select("id, phone").ilike("phone", `%${ten}%`).limit(5), "id"],

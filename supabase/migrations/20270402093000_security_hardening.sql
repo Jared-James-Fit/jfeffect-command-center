@@ -71,6 +71,11 @@
 --    push him). A member's help goes through Support (member_support_*).
 --    Every client-sent message on file is from a coaching client.
 
+-- Policy changes take a brief exclusive lock on busy tables (messages,
+-- storage.objects). Give up after a few seconds rather than queue every chat
+-- write behind a long-running query; everything here is safe to run again.
+SET lock_timeout = '5s';
+
 -- ── 1. Worker and job functions: the server only ─────────────────────────────
 DO $$
 DECLARE
@@ -449,3 +454,5 @@ CREATE POLICY "Client send own messages"
          AND c.service_tier = 'coaching'
     )
   );
+
+RESET lock_timeout;

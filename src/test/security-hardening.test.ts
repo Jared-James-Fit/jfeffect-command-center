@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { isStaffLogin, loginForEmail, loginForPhone, lookupRecoveryTarget, phoneOfLogin, type RecoveryDb } from "@/lib/account-recovery-lookup.server";
+import { isStaffLogin, loginForEmail, loginForPhone, lookupRecoveryTarget, phoneOfLogin, recoveryPhoneTrusted, type RecoveryDb } from "@/lib/account-recovery-lookup.server";
 import { frameAncestorsFor, pageSecurityHeaders, withPageSecurityHeaders } from "@/lib/security-headers";
 import { allRatesOk, rateOk } from "@/lib/public-rate-limit.server";
 
@@ -135,6 +135,57 @@ describe("password recovery: only a phone on the login's own records", () => {
   it("phoneOfLogin reads member, client, coach, then profile rows of that login only", async () => {
     const db = fakeDb({ app_members: [], clients: [], coaches: [], profiles: [{ id: VICTIM, phone: "2045553333" }] });
     expect(await phoneOfLogin(db, VICTIM)).toBe("+12045553333");
+  });
+
+  // The variant: the attacker applies first, with the victim's email and their
+  // own phone; when the victim later joins, that application record is linked
+  // to the victim's login (member_free_join / handle_new_user / a setup claim).
+  const ATTACKER_PHONE = "+12045559999";
+  const planted = (extra: Record<string, unknown> = {}): Tables => ({
+    clients: [
+      { user_id: VICTIM, phone: ATTACKER_PHONE, normalized_phone: "12045559999", applied_at: "2026-11-01T00:00:00Z", assigned_coach_id: null, ...extra },
+    ],
+    app_members: [{ user_id: VICTIM, phone: null }],
+    coaches: [],
+    profiles: [],
+    user_roles: [{ user_id: VICTIM, role: "client" }],
+  });
+
+  it("never texts a phone from a public application nobody coaches, once linked to a login", async () => {
+    const db = fakeDb(planted(), { rpc });
+    expect(await phoneOfLogin(db, VICTIM)).toBeNull();
+    const t = await lookupRecoveryTarget(fakeDb(planted(), { rpc }), "victim@x.com", true);
+    expect(t).toEqual({ userId: VICTIM, email: "victim@x.com", phoneE164: null });
+  });
+
+  it("typing the planted phone finds nobody", async () => {
+    expect(await loginForPhone(fakeDb(planted()), ATTACKER_PHONE)).toBeNull();
+    expect((await lookupRecoveryTarget(fakeDb(planted(), { rpc }), ATTACKER_PHONE, false)).userId).toBeNull();
+  });
+
+  it("an applicant's phone counts once a coach has taken them on", async () => {
+    const t = planted({ assigned_coach_id: "c0ac0000-0000-0000-0000-000000000001" });
+    expect(await phoneOfLogin(fakeDb(t), VICTIM)).toBe(ATTACKER_PHONE);
+    expect(await loginForPhone(fakeDb(t), ATTACKER_PHONE)).toBe(VICTIM);
+  });
+
+  it("a later trusted record's phone is used past an untrusted one, and a coach-made record needs no coach", async () => {
+    const t = planted();
+    t.clients.push({ user_id: VICTIM, phone: "+12045551111", normalized_phone: "12045551111", applied_at: null, assigned_coach_id: null });
+    expect(await phoneOfLogin(fakeDb(t), VICTIM)).toBe("+12045551111");
+    expect(recoveryPhoneTrusted({ applied_at: null, assigned_coach_id: null })).toBe(true);
+    expect(recoveryPhoneTrusted({ applied_at: "2026-11-01", assigned_coach_id: null })).toBe(false);
+    expect(recoveryPhoneTrusted({ applied_at: "2026-11-01", assigned_coach_id: "x" })).toBe(true);
+  });
+
+  it("a texted sign-in or reset link is for the record's own login, by its own email, never a team login", () => {
+    const src = read("src/lib/sms-links.functions.ts");
+    const handler = src.slice(src.indexOf("export const sendAuthLinkBySms"));
+    expect(handler).toContain("if (!client.user_id) throw new Error(");
+    expect(handler).toContain("isStaffLogin(supabaseAdmin as any, client.user_id)");
+    expect(handler).toContain("auth.admin.getUserById(client.user_id)");
+    expect(handler).toContain("clientEmail: loginEmail,");
+    expect(handler).not.toContain("clientEmail: client.email");
   });
 
   it("a role lookup that fails counts as staff (email only)", async () => {
