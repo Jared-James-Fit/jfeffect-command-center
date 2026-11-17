@@ -1,0 +1,67 @@
+name: Site health (jfeffect.com)
+
+# Checks from a clean network that jfeffect.com serves a certificate phones
+# trust from every address DNS gives it, that the certificate and the domain
+# aren't about to run out, and that the home page loads
+# (scripts/site-health/check.py). A failed scheduled run opens a GitHub issue
+# labelled site-health (and GitHub emails the owner); the next passing run
+# closes it.
+on:
+  schedule:
+    - cron: '23 */3 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/site-health.yml'
+      - 'scripts/site-health/**'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: site-health
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: HTTPS, DNS and domain
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Make sure dig is there
+        run: command -v dig || (sudo apt-get update -qq && sudo apt-get install -y -qq dnsutils)
+
+      - name: Check jfeffect.com
+        id: check
+        env:
+          SITE_HEALTH_REPORT: ${{ runner.temp }}/site-health.md
+        run: python3 scripts/site-health/check.py
+
+      - name: Open or update the alert issue
+        if: failure() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPORT: ${{ runner.temp }}/site-health.md
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create site-health --color B60205 --description "jfeffect.com health check" 2>/dev/null || true
+          body="$(cat "$REPORT" 2>/dev/null || echo 'The check failed before it could write a report.')"$'\n\n'"Run: $RUN_URL"
+          open="$(gh issue list --label site-health --state open --json number --jq '.[0].number')"
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "$body"
+          else
+            gh issue create --label site-health --title "jfeffect.com: people may see \"This Connection Is Not Private\"" --body "$body"
+          fi
+
+      - name: Close the alert issue once it passes
+        if: success() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for n in $(gh issue list --label site-health --state open --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "Passing again: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          done
