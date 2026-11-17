@@ -73,7 +73,7 @@ export function ChecklistSection({
         data-checklist-header
       >
         <div className="min-w-0 flex-1">
-          <h3 className="text-[17px] font-semibold leading-snug">{q.label}</h3>
+          <h3 className="text-[16px] font-semibold leading-snug">{q.label}</h3>
           <p className="mt-0.5 text-[13px] text-muted-foreground tabular-nums">
             {p.marked} of {p.total}
             {p.need > 0 && <span className="font-semibold text-warning"> · {p.need} still {p.need === 1 ? "needed" : "needed"}</span>}

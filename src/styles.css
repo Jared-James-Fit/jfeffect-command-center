@@ -351,6 +351,12 @@ html[data-keyboard-open="true"] [data-hide-on-keyboard] {
   :root { --bottom-nav-clearance: var(--mobile-bar-top); }
 }
 
+/* A form's page ends at its last line (Submit and what it does), just clear of the tab bar:
+   the shell keeps 140px under every page for floating buttons a form never has. */
+@media (max-width: 767.98px) {
+  .form-page-end { margin-bottom: calc(var(--bottom-nav-clearance, 0px) - 140px - env(safe-area-inset-bottom)); }
+}
+
 /* The phone's tab bar (MobileBottomBar), TikTok's / Instagram's: edge to edge
    and flush with the bottom, a 50px row of tabs over the home indicator's room
    (the full safe area, 34pt on Face ID iPhones). Its top edge from the bottom of

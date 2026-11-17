@@ -59,7 +59,7 @@ describe("choices are buttons a thumb can't miss", () => {
     expect(formProgress([{ answered: true }, { answered: false }, { answered: true }])).toEqual({ done: 2, total: 3 });
   });
 
-  it("the form uses them: no dropdowns or tiny radios, 16px boxes, a full-width Submit above the tab bar", () => {
+  it("the form uses them: no dropdowns or tiny radios, 16px boxes, Submit at the end of the form", () => {
     const form = read("src/components/forms/client-form-renderer.tsx");
     expect(form).not.toContain("<SelectTrigger");
     expect(form).not.toContain("<RadioGroupItem");
@@ -67,8 +67,10 @@ describe("choices are buttons a thumb can't miss", () => {
     expect(form).toContain("<QuickChips");
     expect(form).toContain('const field = "h-12 rounded-xl px-3.5 text-[16px]";');
     expect(form).toContain('inputMode="decimal"');
-    expect(form).toContain('className="h-14 w-full rounded-2xl bg-primary text-[16px] font-semibold"');
-    expect(form).toContain('bottom: embedded ? 0 : "calc(var(--bottom-nav-clearance, 0px) + env(safe-area-inset-bottom))"');
+    // nothing fixed over the questions: Submit is the end of the questionnaire
+    expect(form).toContain('className="h-12 w-full rounded-xl bg-primary text-[16px] font-semibold"');
+    expect(form).not.toContain("--bottom-nav-clearance");
+    expect(form).not.toMatch(/className=\{?[^\n]*\bsticky\b/);
     // Submit takes them to what's missing (and a number that's off)
     expect(form).toContain('document.getElementById(`q-${first.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });');
   });

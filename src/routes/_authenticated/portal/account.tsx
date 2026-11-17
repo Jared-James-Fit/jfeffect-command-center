@@ -30,6 +30,7 @@ import {
   Sparkles,
   Target,
   PauseCircle,
+  Trophy,
   User,
   Watch,
 } from "lucide-react";
@@ -61,6 +62,7 @@ import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { PushNotificationCard } from "@/components/push/push-notification-card";
 import { WeightUnitCard } from "@/components/portal/weight-unit-card";
 import { MyHealthSection, myHealthSummary, useMyHealthItems } from "@/components/health/my-health-section";
+import { CompetitionProfileEditor, profileSummary, useCompetes, useCompetitionProfile } from "@/components/athlete/competition-profile";
 import { UserAvatar } from "@/components/user-avatar";
 import { billingDay } from "@/lib/date-range";
 import { useMyBilling } from "@/components/billing/use-my-billing";
@@ -82,6 +84,7 @@ type SectionId =
   | "notifications"
   | "coaching-agreement"
   | "health"
+  | "competition"
   | "basic-information"
   | "profile-picture"
   | "social-media"
@@ -101,6 +104,8 @@ const SECTION_ALIASES: Record<string, SectionId> = {
   agreement: "coaching-agreement",
   health: "health",
   injuries: "health",
+  competition: "competition",
+  "weight-class": "competition",
   medications: "health",
   "basic-information": "basic-information",
   basic: "basic-information",
@@ -153,6 +158,9 @@ function AccountPage() {
 
   // Health & injuries: a coaching client's (their coach plans around it).
   const { data: healthItems = [] } = useMyHealthItems(goalsOn ? client?.id : null, isImpersonating);
+  // the classes they compete in: only for someone who competes (a meet prep, a powerlifting goal, anything on file)
+  const competes = useCompetes(client?.id);
+  const { data: competition } = useCompetitionProfile(competes ? client?.id : null);
 
   // Fill the form once per account: a refetch (after a save, or coming back
   // to the app) must never overwrite what's being typed.
@@ -488,6 +496,20 @@ function AccountPage() {
               >
                 <SectionErrorBoundary label="Health & injuries">
                   <MyHealthSection clientId={client.id} preview={isImpersonating} />
+                </SectionErrorBoundary>
+              </SettingsSection>
+            )}
+
+            {/* Competition: the weight class and age classes their powerlifting forms start from. */}
+            {competes && client && (
+              <SettingsSection
+                id="competition"
+                icon={Trophy}
+                title="Competition"
+                summary={{ text: profileSummary(competition) ?? "Not set" }}
+              >
+                <SectionErrorBoundary label="Competition">
+                  <CompetitionProfileEditor clientId={client.id} as="client" preview={isImpersonating} />
                 </SectionErrorBoundary>
               </SettingsSection>
             )}

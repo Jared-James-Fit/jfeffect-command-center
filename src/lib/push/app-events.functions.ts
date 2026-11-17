@@ -61,6 +61,11 @@ export const notifyAppEventFn = createServerFn({ method: "POST" })
         // A Nutrition Update Request: the coach hears it's in right now, then
         // the AI targets and meal plan are written here (never on the phone,
         // which can close or miss a file after a publish), with "plan ready" after.
+        // What a powerlifting form says about their classes goes on their competition profile (only what it asked).
+        {
+          const { syncCompetitionProfile } = await import("@/lib/competition-profile.server");
+          await syncCompetitionProfile(db, data.id);
+        }
         if (s.form_id === NUTRITION_REQUEST_FORM_ID) {
           await notifyAppEvent(sb, "nutrition_submitted", { clientId: s.client_id, sourceId: data.id, actorUserId: userId });
           const { startNutritionPlan } = await import("@/lib/nutrition-ai-plans.server");
