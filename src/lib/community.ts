@@ -384,8 +384,18 @@ export function repostedLine(post: Pick<CommunityPost, "reposted_by" | "reposter
   return `${first} and ${rest} others reposted`;
 }
 
-/** Following: yours, the people you follow (or one of them is on it), and what they reposted. */
-export function inFollowingFeed(post: Pick<CommunityPost, "is_mine" | "author" | "collaborators" | "reposted_by" | "my_repost">, followingIds: ReadonlySet<string>): boolean {
+/**
+ * Following: people's own posts (never an automated one: a lesson, the daily
+ * series, Wins, a holiday, a birthday; those are Crew's), yours, the people you
+ * follow's (or one of them is on it), and what you or they reposted. The
+ * server reads the same rule (community_feed_ranked `_following`); the story
+ * rail on the Following tab reads this one.
+ */
+export function inFollowingFeed(
+  post: Pick<CommunityPost, "is_mine" | "author" | "collaborators" | "reposted_by" | "my_repost"> & Partial<Pick<CommunityPost, "series" | "series_data">>,
+  followingIds: ReadonlySet<string>,
+): boolean {
+  if (post.series || extraBirthday({ series: post.series ?? null, series_data: post.series_data ?? null })) return false;
   return post.is_mine
     || followingIds.has(post.author.user_id)
     || !!post.collaborators?.some((c) => followingIds.has(c.user_id))

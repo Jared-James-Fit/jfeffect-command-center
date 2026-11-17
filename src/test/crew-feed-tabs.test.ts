@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { onNewVisit, rollFeedAnchor } from "@/lib/feed-anchor";
+import { inFollowingFeed } from "@/lib/community";
 
 const read = (p: string) => readFileSync(p, "utf8");
 
@@ -14,6 +15,8 @@ describe("Crew · Following tabs", () => {
   const screen = read("src/components/community/community-screen.tsx");
   const bar = read("src/components/community/crew-header.tsx");
   const css = read("src/styles.css");
+  const queries = read("src/lib/community.queries.ts");
+  const sql = read("supabase/migrations/20270402090000_crew_following_feed.sql");
 
   it("are two tabs in the middle of Crew's bar, the one you're on underlined", () => {
     expect(bar).toContain('role="tablist" aria-label="Feed"');
@@ -45,18 +48,63 @@ describe("Crew · Following tabs", () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  it("Following is the people you follow; following nobody shows the way to people, never your own posts alone", () => {
+  it("Following is people's own posts from the ones you follow, read on the server; following nobody shows the way to people", () => {
     expect(screen).toContain("const followsNobody = following && followingIds.size === 0;");
     expect(screen).toContain(
-      "followingIds.size === 0 ? [] : ownPosts.filter((p) => inFollowingFeed(p, followingIds))",
+      "useRankedFeed(following && !followsNobody && !previewOnly, { follows: followKey })",
+    );
+    expect(screen).toContain("const activeFeed = following ? followingFeed : ranked;");
+    expect(screen).toContain(
+      "const { hasNextPage, isFetchingNextPage, fetchNextPage } = activeFeed;",
     );
     expect(screen).toContain('title="Follow people to fill this feed"');
-    // and never reads the whole crew's history looking for posts that can't be there
-    expect(screen).toContain(
-      'if (!el || !hasNextPage || scope.kind !== "feed" || followsNobody) return;',
+    expect(screen).toContain("looking={followingFeed.isPending} failed={followingFeed.isError}");
+    // the crew feed asks exactly as before; only Following sends `_following`
+    expect(queries).toContain("const only = following ? { _following: true } : {};");
+    expect(queries).toContain(
+      '[...communityKeys.feed(null), "ranked", "following", following.follows]',
     );
-    // still reading older pages for their posts: a spinner, not "nothing yet"
-    expect(screen).toContain("looking={!!hasNextPage}");
+  });
+
+  it("the server's rule: same feed, people's own posts only, the old signature dropped so PostgREST sees one function", () => {
+    expect(sql).toContain(
+      "DROP FUNCTION IF EXISTS public.community_feed_ranked(integer, jsonb, timestamptz);",
+    );
+    expect(sql).toContain("_following boolean DEFAULT false");
+    expect(sql).toContain("OR (p.series IS NULL AND p.series_data -> 'birthday' IS NULL");
+    expect(sql).toContain("OR p.id IN (SELECT post_id FROM followed_collabs)");
+    expect(sql).toContain("WHERE sr.user_id = v_me OR sr.user_id IN (SELECT id FROM followed)");
+    expect(sql).toContain(
+      "REVOKE ALL ON FUNCTION public.community_feed_ranked(integer, jsonb, timestamptz, boolean) FROM PUBLIC, anon;",
+    );
+    expect(sql).toContain(
+      "GRANT EXECUTE ON FUNCTION public.community_feed_ranked(integer, jsonb, timestamptz, boolean) TO authenticated, service_role;",
+    );
+  });
+
+  it("the app's mirror of it (the Following tab's story rail): never an automated post", () => {
+    const author = { user_id: "coach", name: "Jared", avatar_url: null, is_coach: true } as never;
+    const base = {
+      is_mine: false,
+      author,
+      collaborators: [],
+      reposted_by: null,
+      my_repost: null,
+      series: null,
+      series_data: null,
+    };
+    const follows = new Set(["coach"]);
+    expect(inFollowingFeed(base, follows)).toBe(true);
+    expect(inFollowingFeed({ ...base, series: "lesson" } as never, follows)).toBe(false);
+    expect(
+      inFollowingFeed({ ...base, series_data: { birthday: { name: "Amanda" } } } as never, follows),
+    ).toBe(false);
+    expect(
+      inFollowingFeed(
+        { ...base, author: { ...(author as object), user_id: "someone" } as never },
+        follows,
+      ),
+    ).toBe(false);
   });
 
   it("a tap on the tab you're on goes to its top; a preview never shows the coach's own follows", () => {

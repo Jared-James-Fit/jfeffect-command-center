@@ -181,9 +181,10 @@ export function CommunityScreen({
   const ranked = useRankedFeed();
   const rankedPosts = useMemo(() => uniquePosts(ranked.data?.pages.flatMap((p) => p.posts) ?? []), [ranked.data]);
   const ownPosts = useMemo(() => rankedPosts.filter(inFeed), [rankedPosts]);
-  // Crew (the whole crew, like a Strava club) or Following (the people you follow, what they
-  // repost, and you), the tabs at the top (TikTok's). It always opens on Crew: a fresh screen,
-  // a new visit (back after 30 minutes, a tap on Crew, the New posts pill) puts it back there.
+  // Crew (the whole crew, like a Strava club) or Following (people's own posts from the ones you
+  // follow, what they repost, and yours; the automated posts stay Crew's), the tabs at the top
+  // (TikTok's). It always opens on Crew: a fresh screen, a new visit (back after 30 minutes, a tap
+  // on Crew, the New posts pill) puts it back there.
   const { data: follows } = useFollowState(!hideTabs);
   const followingIds = useMemo(() => new Set(follows?.following ?? []), [follows]);
   const [feedTab, setFeedTab] = useState<CrewFeedTab>("crew");
@@ -191,10 +192,19 @@ export function CommunityScreen({
   const following = feedTab === "following";
   // following nobody: nothing to show but the way to people to follow (never your own posts alone)
   const followsNobody = following && followingIds.size === 0;
-  const feedPosts = useMemo(
-    () => (!following ? ownPosts : followingIds.size === 0 ? [] : ownPosts.filter((p) => inFollowingFeed(p, followingIds))),
-    [following, ownPosts, followingIds],
+  // Following is narrowed on the server (community_feed_ranked `_following`), so it pages through
+  // their posts only, never the whole crew's; read again when who you follow changes
+  const followKey = useMemo(() => [...followingIds].sort().join(","), [followingIds]);
+  const followingFeed = useRankedFeed(following && !followsNobody && !previewOnly, { follows: followKey });
+  const followingPosts = useMemo(
+    () => uniquePosts(followingFeed.data?.pages.flatMap((p) => p.posts) ?? []).filter(inFeed),
+    [followingFeed.data],
   );
+  // the one being scrolled: its pages, its "more", its loading
+  const activeFeed = following ? followingFeed : ranked;
+  const feedPosts = useMemo(() => (!following ? ownPosts : followsNobody ? [] : followingPosts), [following, ownPosts, followsNobody, followingPosts]);
+  // the stories on the Following tab: the people you follow and yours, like its posts
+  const railPosts = useMemo(() => (following ? posts.filter((p) => inFollowingFeed(p, followingIds)) : posts), [following, posts, followingIds]);
   // "You're all caught up" goes before the first post you'd already seen, when new ones came first
   const caughtUp = useMemo(() => caughtUpAt(feedPosts), [feedPosts]);
   // "Double-tap to like": a few seconds on the first post (a workout before a
@@ -481,7 +491,7 @@ export function CommunityScreen({
 
   // Infinite scroll on the feed.
   const sentinel = useRef<HTMLDivElement | null>(null);
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = ranked;
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = activeFeed;
   // The story rail's first page is small: on a busy day, read on until it holds the whole last day
   const readAhead = scope.kind === "feed" && feed.isSuccess && !feed.isError && storiesNeedMore(posts, !!feed.hasNextPage, feed.data?.pages.length ?? 0);
   useEffect(() => {
@@ -730,7 +740,7 @@ export function CommunityScreen({
           firstScreen={firstScreen}
           rail={
             <StoryRail
-              posts={posts}
+              posts={railPosts}
               unit={unit}
               viewerIsStaff={viewerIsStaff}
               onOpenPost={(id) => setDetailId(id)}
@@ -743,7 +753,7 @@ export function CommunityScreen({
           }
           empty={
             following && feedPosts.length === 0 ? (
-              <FollowingEmpty nobody={followsNobody} looking={!!hasNextPage} onFind={() => openDiscover("feed")} onCrew={() => setFeedTab("crew")} />
+              <FollowingEmpty nobody={followsNobody} looking={followingFeed.isPending} failed={followingFeed.isError} onRetry={() => void followingFeed.refetch()} onFind={() => openDiscover("feed")} onCrew={() => setFeedTab("crew")} />
             ) : null
           }
           pages={feedPosts.flatMap((p, i) => {
@@ -812,7 +822,7 @@ export function CommunityScreen({
         <>
           {/* the crew's last day, story-style; your own post bubble first */}
           <StoryRail
-            posts={posts}
+            posts={railPosts}
             unit={unit}
             viewerIsStaff={viewerIsStaff}
             onOpenPost={(id) => setDetailId(id)}
@@ -824,7 +834,7 @@ export function CommunityScreen({
           />
           {/* Crew / Following are the tabs at the top (TikTok's): no second row of chips here */}
           {following && feedPosts.length === 0 && (
-            <FollowingEmpty nobody={followsNobody} looking={!!hasNextPage} onFind={() => openDiscover("feed")} onCrew={() => setFeedTab("crew")} />
+            <FollowingEmpty nobody={followsNobody} looking={followingFeed.isPending} failed={followingFeed.isError} onRetry={() => void followingFeed.refetch()} onFind={() => openDiscover("feed")} onCrew={() => setFeedTab("crew")} />
           )}
           {feedPosts.map((p, i) => (
             <Fragment key={p.id}>
@@ -1218,16 +1228,31 @@ function PostRow(props: {
 
 /**
  * Following with nothing to show: following nobody, the way to people to follow;
- * else, while older pages are still being read for their posts, a spinner; else
- * nothing from them yet, and the way back to Crew.
+ * else, while it loads, a spinner; a load that failed, Try again; else nothing
+ * from them yet, and the way back to Crew.
  */
-function FollowingEmpty({ nobody, looking, onFind, onCrew }: { nobody: boolean; looking: boolean; onFind: () => void; onCrew: () => void }) {
+function FollowingEmpty({ nobody, looking, failed, onRetry, onFind, onCrew }: {
+  nobody: boolean;
+  looking: boolean;
+  failed: boolean;
+  onRetry: () => void;
+  onFind: () => void;
+  onCrew: () => void;
+}) {
   if (nobody)
     return (
       <EmptyNote
         title="Follow people to fill this feed"
         body="Their posts, and what they repost, show up here. Crew is everyone."
         action={<Button type="button" className="w-full" onClick={onFind} data-following-find>Find people to follow</Button>}
+      />
+    );
+  if (failed)
+    return (
+      <EmptyNote
+        title="Couldn't load Following"
+        body="Check your connection and try again. Everyone's posts are on Crew."
+        action={<Button type="button" variant="outline" className="w-full" onClick={onRetry} data-following-retry>Try again</Button>}
       />
     );
   if (looking)
