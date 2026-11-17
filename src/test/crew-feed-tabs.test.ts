@@ -16,7 +16,7 @@ describe("Crew · Following tabs", () => {
   const bar = read("src/components/community/crew-header.tsx");
   const css = read("src/styles.css");
   const queries = read("src/lib/community.queries.ts");
-  const sql = read("supabase/migrations/20270402090000_crew_following_feed.sql");
+  const sql = read("supabase/migrations/20270402092000_crew_following_feed.sql");
 
   it("are two tabs in the middle of Crew's bar, the one you're on underlined", () => {
     expect(bar).toContain('role="tablist" aria-label="Feed"');
