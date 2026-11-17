@@ -137,6 +137,15 @@ describe("the last warm-up is open on the card, and optional", () => {
   });
 });
 
+describe("one tap on set 1's number logs the exercise, like a typed weight", () => {
+  it("logged at the strip's weight, the untouched sets below fill in with it and log too", () => {
+    const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
+    expect(wdv).toContain('if (quick) void onCascadeFromSet?.(setIndex, { load: quick, loadType: "external", unit, reps, rpe });');
+    // a typed weight already does: the pick cascades downward
+    expect(wdv).toContain("// Manual change → cascade downward into eligible sets below.");
+  });
+});
+
 describe("a tap on a set's number with nothing to log at opens its weight box", () => {
   const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
   it("only the weight missing: the box opens inside the tap (the phone raises the keyboard)", () => {

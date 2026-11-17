@@ -4,7 +4,8 @@
  *   1. reps and RPE are already filled in from the program;
  *   2. typing set 1's weight logs the whole exercise (the sets below fill in
  *      with it and log too; change any set that went differently);
- *   3. or Suggest picks the weight, and one tap on a set's number logs it;
+ *   3. or Suggest picks the weight, and one tap on set 1's number logs the
+ *      exercise at it (the same fill-down as a typed weight);
  *   4. the last warm-up (optional) tunes today's weight;
  *   5. (a coaching client's) the camera sends a set or warm-up to the coach.
  * It opens by itself once per account, the first time someone logs their own
@@ -34,7 +35,7 @@ const STEPS: Step[] = [
   {
     key: "suggest",
     title: "Or let the app pick the weight",
-    body: "Turn on Suggest and it works out today's weight from your history. Tap a set's number to log it at that weight.",
+    body: "Turn on Suggest and it works out today's weight from your history. Tap set 1's number and the whole exercise logs at it.",
   },
   {
     key: "warmup",
@@ -240,7 +241,7 @@ function MockCard({ step, beat, unit, videoOn }: { step: StepKey; beat: number; 
   const setState = (k: number): { weight: string; done: boolean; focused: boolean } => {
     if (typedAll) return { weight: typed, done: true, focused: false };
     if (k === 1 && typing) return { weight: typed.slice(0, -1), done: false, focused: true };
-    if (k === 1 && tapped) return { weight: suggested, done: true, focused: false };
+    if (tapped) return { weight: suggested, done: true, focused: false };
     return { weight: "", done: false, focused: false };
   };
   const warmWeight = step === "warmup" && beat >= 1 ? (beat === 1 ? warm.slice(0, -1) : warm) : "";

@@ -6554,6 +6554,10 @@ function SetRow({
       onChange();
       // the weight it logged at came back from the server: it's saved, not a new edit
       if (quick) adoptShownAsSaved(true);
+      // Logged at the strip's weight: the untouched sets below fill in with it
+      // and log too, exactly as if that weight had been typed (the fastest way:
+      // one tap logs the exercise, and a set that went differently is changed).
+      if (quick) void onCascadeFromSet?.(setIndex, { load: quick, loadType: "external", unit, reps, rpe });
       if (nextCompletedAt) onSetCompleted?.(setIndex);
     } catch (err: any) {
       const message = err?.message ?? "Set status failed to save";
@@ -6860,7 +6864,7 @@ function SetRow({
             disabled={statusSaving}
             aria-pressed={isConfirmed}
             data-set-done={isConfirmed ? "true" : "false"}
-            title={statusError ? "Status failed to save — tap to retry" : isConfirmed ? "Mark set incomplete" : quickWeight ? `Log this set at ${quickWeight} ${unit}` : weightOnlyMissing ? "Type the weight: the set logs once it's in" : "Mark set complete"}
+            title={statusError ? "Status failed to save — tap to retry" : isConfirmed ? "Mark set incomplete" : quickWeight ? `Log this set at ${quickWeight} ${unit} (the sets below fill in with it)` : weightOnlyMissing ? "Type the weight: the set logs once it's in" : "Mark set complete"}
             aria-label={statusError ? `Retry saving set ${setIndex} status` : isConfirmed ? `Mark set ${setIndex} incomplete` : quickWeight ? `Log set ${setIndex} at ${quickWeight} ${unit}` : weightOnlyMissing ? `Type set ${setIndex}'s weight` : `Mark set ${setIndex} complete`}
             className={cn(
               "flex h-11 w-full items-center justify-center sm:h-9",
