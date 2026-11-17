@@ -37,8 +37,8 @@ describe("workout logger lifecycle", () => {
     const source = loggerSource();
 
     // every exercise's sets on screen, the same reading as the bars (finish-review-prompt.test.ts)
-    // the lifting's sets: the day's cardio is done whenever suits them (workout-cardio.ts)
-    expect(source).toContain("const autoFinishReady = liftLogged.allDone;");
+    // every set, the day's cardio too; with the cardio still to come Finish is the review (workout-cardio.ts)
+    expect(source).toContain("const autoFinishReady = loggedProgress.allDone;");
     expect(source).toContain("setQuickFinishReviewOpen(true)");
     expect(source).toContain('handleFinishWorkout("automatic", false)');
     expect(source).not.toContain('void handleFinishWorkout("automatic")');

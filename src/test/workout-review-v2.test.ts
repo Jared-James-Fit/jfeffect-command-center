@@ -92,7 +92,7 @@ describe("quick check-out (review v2)", () => {
     expect(editor).toContain("if (onViewScore && (!wasEdit || scoreAfterEdit))");
     expect(editor).toContain("onCloseAutoFocus={(e) => {");
     // The finish-by-review sheet stays mounted until it has closed.
-    expect(day).toContain("(quickFinishReviewOpen || quickFinishMounted || (!completion?.completed_at && autoFinishReady))");
+    expect(day).toContain("(quickFinishReviewOpen || quickFinishMounted || (!completion?.completed_at && reviewReady))");
     expect(day).not.toContain("requestAnimationFrame(() => requestAnimationFrame(() => setSummaryOpen(true)))");
     // One copy of the completed actions, so two review sheets can never stack.
     expect(day.match(/<CompletedWorkoutActions\s*\n/g)).toHaveLength(1);
