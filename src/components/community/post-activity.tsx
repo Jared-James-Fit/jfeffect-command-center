@@ -180,7 +180,7 @@ export function PostActivitySheet({ postId, start = "all", onClose, onOpenAuthor
   const people = data ? activityPeople(data.people, filter) : [];
   return (
     <Sheet open={!!postId} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" hideCloseButton className="flex max-h-[80dvh] flex-col gap-0 rounded-t-[22px] p-0 sm:mx-auto sm:max-w-[520px]" data-post-activity>
+      <SheetContent side="bottom" swipeToClose hideCloseButton className="flex max-h-[80dvh] flex-col gap-0 rounded-t-[22px] p-0 sm:mx-auto sm:max-w-[520px]" data-post-activity>
         <SheetHeader className="shrink-0 space-y-0 border-b border-border/60 px-4 pt-2 text-left">
           <span className="mx-auto mb-2 block h-1 w-9 rounded-full bg-muted-foreground/30" aria-hidden />
           <div className="flex items-center justify-between gap-3">

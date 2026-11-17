@@ -5,6 +5,7 @@ import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { cva, type VariantProps } from "class-variance-authority";
 import { ChevronLeft } from "lucide-react";
 
+import { useSwipeDownToClose } from "@/hooks/use-swipe-down-to-close";
 import { focusOverlayOnOpen } from "@/lib/overlay-focus";
 import { cn } from "@/lib/utils";
 
@@ -60,12 +61,31 @@ interface SheetContentProps
    * / Dynamic Island. Opt in to push the Back pill below the safe area.
    */
   safeTopClose?: boolean;
+  /**
+   * A bottom sheet with a grip: one swipe down closes it (Instagram's,
+   * useSwipeDownToClose). Off by default, since a sheet whose content is
+   * dragged itself (a press-and-hold reorder) would fight it.
+   */
+  swipeToClose?: boolean;
 }
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, hideCloseButton, safeTopClose, onOpenAutoFocus, ...props }, ref) => {
+>(({ side = "right", className, children, hideCloseButton, safeTopClose, swipeToClose, onOpenAutoFocus, ...props }, ref) => {
+  // swipe down to close: the sheet's own element, closed through Radix (a Close it holds) so onOpenChange runs as for ✕
+  const [node, setNode] = React.useState<HTMLDivElement | null>(null);
+  const dragClose = React.useRef<HTMLButtonElement | null>(null);
+  const setRefs = React.useCallback(
+    (n: HTMLDivElement | null) => {
+      setNode(n);
+      if (typeof ref === "function") ref(n);
+      else if (ref) ref.current = n;
+    },
+    [ref],
+  );
+  const swipes = !!swipeToClose && side === "bottom";
+  useSwipeDownToClose(swipes ? node : null, swipes, () => dragClose.current?.click());
   // Bottom sheets originate at the bottom of the viewport, so
   // `env(safe-area-inset-top)` would push the Back pill *down* into the
   // sheet's content. Only offset for sheets that actually touch the top
@@ -83,7 +103,7 @@ const SheetContent = React.forwardRef<
     <SheetPortal>
       <SheetOverlay />
       <SheetPrimitive.Content
-        ref={ref}
+        ref={setRefs}
         className={cn(sheetVariants({ side }), className)}
         onOpenAutoFocus={(e) => focusOverlayOnOpen(e, onOpenAutoFocus)}
         {...props}
@@ -102,6 +122,7 @@ const SheetContent = React.forwardRef<
           </SheetPrimitive.Close>
         )}
         {children}
+        {swipes && <SheetPrimitive.Close ref={dragClose} hidden tabIndex={-1} aria-hidden />}
       </SheetPrimitive.Content>
     </SheetPortal>
   );

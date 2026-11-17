@@ -248,7 +248,7 @@ export function AlbumPickerSheet({ post, open, onOpenChange }: { post: Pick<Comm
   };
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" hideCloseButton className="gap-0 rounded-t-[24px] p-0 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:mx-auto sm:max-w-[420px]" style={KEYBOARD_SAFE} data-album-picker>
+      <SheetContent side="bottom" swipeToClose hideCloseButton className="gap-0 rounded-t-[24px] p-0 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:mx-auto sm:max-w-[420px]" style={KEYBOARD_SAFE} data-album-picker>
         <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-muted-foreground/30" aria-hidden />
         <div className="flex items-center justify-between px-5 pb-2 pt-3">
           <SheetTitle className="text-[16px] font-bold">Save to album</SheetTitle>

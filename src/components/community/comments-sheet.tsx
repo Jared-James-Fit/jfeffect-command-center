@@ -54,7 +54,7 @@ export function CommentsSheet({ post, viewerIsStaff, onClose, onOpenAuthor }: {
 }) {
   return (
     <Sheet open={!!post} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" hideCloseButton className="flex h-[78dvh] max-h-[640px] flex-col gap-0 rounded-t-[24px] bg-card p-0 sm:mx-auto sm:max-w-[520px]">
+      <SheetContent side="bottom" swipeToClose hideCloseButton className="flex h-[78dvh] max-h-[640px] flex-col gap-0 rounded-t-[24px] bg-card p-0 sm:mx-auto sm:max-w-[520px]">
         {post && (
           <>
             <SheetHeader className="relative shrink-0 space-y-0 pb-2 pt-2 text-center">
