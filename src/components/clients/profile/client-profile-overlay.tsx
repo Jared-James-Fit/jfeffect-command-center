@@ -2,7 +2,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { ChevronLeft } from "lucide-react";
 import { Suspense, useEffect, useRef } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
-import { useOverlayClientId, useCloseClientProfile } from "@/lib/open-client-profile";
+import { useOverlayClientId, useCloseClientProfile, useSetOverlayClientTab } from "@/lib/open-client-profile";
 
 // Lazy-load the heavy workspace so it only ships when a client is opened.
 const ClientProfileWorkspace = lazyWithRetry(async () => {
@@ -33,6 +33,7 @@ function Skeleton() {
 export function ClientProfileOverlayMount() {
   const { clientId, clientTab } = useOverlayClientId();
   const close = useCloseClientProfile();
+  const setTab = useSetOverlayClientTab();
   const triggerRef = useRef<Element | null>(null);
 
   // Remember the element that opened the overlay so focus can be restored.
@@ -98,7 +99,7 @@ export function ClientProfileOverlayMount() {
             <span>Back</span>
           </DialogPrimitive.Close>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto" data-scroll-restoration-id="client-profile-overlay">
             <Suspense fallback={<Skeleton />}>
               {clientId ? (
                 <ClientProfileWorkspace
@@ -107,6 +108,9 @@ export function ClientProfileOverlayMount() {
                   initialTab={clientTab as any}
                   embedded
                   onClose={close}
+                  // the tab rides in the address, so coming back from the
+                  // program editor (or any page opened from a tab) lands on it
+                  onTabChange={setTab}
                 />
               ) : null}
             </Suspense>

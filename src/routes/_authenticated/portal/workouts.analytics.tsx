@@ -15,7 +15,7 @@ import {
   type AnalyticsBlock,
   normalizeAnalyticsBlock,
 } from "@/lib/analytics/blocks";
-import { ClientAnalyticsDashboard } from "@/components/analytics/client-analytics-dashboard";
+import { ClientAnalyticsDashboard, ANALYTICS_VIEWS, type AnalyticsView } from "@/components/analytics/client-analytics-dashboard";
 import { isPrimaryProgramBlock } from "@/lib/at-home-backup";
 
 /**
@@ -29,6 +29,7 @@ import { isPrimaryProgramBlock } from "@/lib/at-home-backup";
 const analyticsSearchSchema = z.object({
   filter: fallback(z.string(), "").default(""),
   blockId: fallback(z.string(), "").default(""),
+  view: fallback(z.string(), "").default(""),
 });
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/analytics")({
@@ -93,7 +94,7 @@ function PortalAnalytics() {
       {/* the same header (and back) as every other client page that opens from a tab */}
       <PageHeader
         title="Training Analytics"
-        subtitle="Your lifts, volume and PRs over time."
+        subtitle="Your lifts, volume and recovery over time."
         backTo="/portal/workouts"
         backLabel="Workouts"
       />
@@ -104,6 +105,8 @@ function PortalAnalytics() {
             preferredUnit={preferredUnit}
             initialFilter={initialFilter}
             onFilterChange={handleFilterChange}
+            initialView={ANALYTICS_VIEWS.some(([v]) => v === search.view) ? (search.view as AnalyticsView) : undefined}
+            onViewChange={(v) => navigate({ search: (prev: any) => ({ ...prev, view: v === "overview" ? "" : v }), replace: true })}
             viewAllPRsNode={
               <Link
                 to="/portal/workouts/prs"

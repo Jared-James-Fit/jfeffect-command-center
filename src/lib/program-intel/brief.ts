@@ -7,6 +7,7 @@
  * job's context and the inspector all say so (never silently cut).
  */
 import { horizonText } from "./horizon";
+import { trainingLoadBrief } from "./training-load-intel";
 import { developmentText } from "./athlete-development";
 import { cardioBriefLines } from "./cardio";
 import { fmtLoad, fmtSet } from "./core";
@@ -195,6 +196,9 @@ export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; e
   add("athlete", "Athlete", athleteSection(ctx));
   // how they're developing: the deterministic read every decision below should follow (see DEVELOPMENT_RULES)
   if (intel.development) add("development", "Athlete development (computed from their records)", developmentText(intel.development, ctx.unit));
+  // the workload the coach sees on the analytics page: where the work went and how it moved (see TRAINING_LOAD_RULES)
+  const loadText = trainingLoadBrief(intel.trainingLoad);
+  if (loadText) add("training_load", "Training load (computed from their logged sets and the program)", loadText);
   const rec = intel.recommendation.setup;
   const editedLines = x.edited.map((k) => `- ${FIELD_LABEL[k] ?? k}: the coach changed it${JSON.stringify(rec[k]) !== JSON.stringify(x.setup[k]) ? ` (recommended: ${String(JSON.stringify(rec[k])).slice(0, 200)})` : ""}`);
   add(

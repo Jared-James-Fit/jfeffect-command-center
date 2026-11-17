@@ -40,9 +40,9 @@ describe("analytics page order and headers", () => {
     const lift = dash.indexOf('aria-label="Lift Progress"');
     expect(lift).toBeGreaterThan(-1);
     expect(lift).toBeLessThan(dash.indexOf('aria-label="Recent ATPRs"'));
-    expect(dash.indexOf('aria-label="Volume by Muscle Group"')).toBeLessThan(
-      dash.indexOf('id="recovery"'),
-    );
+    const volume = dash.indexOf("<TrainingLoadSection");
+    expect(volume).toBeGreaterThan(-1);
+    expect(volume).toBeLessThan(dash.indexOf('id="recovery"'));
     expect(dash.indexOf('id="recovery"')).toBeLessThan(dash.indexOf('label="Sleep"'));
   });
 

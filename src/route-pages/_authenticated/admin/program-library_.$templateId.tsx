@@ -11,6 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
 import { AlertTriangle, ArrowLeft, Check, Dumbbell, X, MoreHorizontal, Smartphone, Search, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight, Video, VideoOff } from "lucide-react";
+import { useEditorBack } from "@/lib/editor-back";
+import { ProgramSheet } from "@/components/program-editor/program-sheet";
+import { Table2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
@@ -55,7 +58,7 @@ import { DurationInput } from "@/components/duration-input";
 import { ExerciseBlocksEditor } from "@/components/exercise-blocks-editor";
 import { useMultiBlockBuilderFlag } from "@/lib/admin-flags";
 import { Layers } from "lucide-react";
-import { createContext, useContext } from "react";
+import { createContext, useCallback, useContext } from "react";
 import { listClientMaxes, buildMaxIndex, computeRowLoad, type ClientMaxRow } from "@/lib/pl-maxes";
 import { hasRpeCap, isMaxBasis, plannedLoadLabel, referenceFamily } from "@/lib/workouts/load-reference";
 import { MaxEditorDialog } from "@/components/client-maxes-panel";
@@ -893,19 +896,29 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusT
 }) {
   const phone = useIsMobileNow();
   const kind = typeLabel ? typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1) : "Template";
+  // ← back to where the coach came from (the library with its search and
+  // scope as they left them), saving first; opened cold, the library.
+  const goBack = useEditorBack({
+    fallbackHref: "/admin/program-library",
+    beforeLeave: async () => {
+      if (dirty || autosave?.hasPending?.()) await save();
+    },
+  });
   return (
     <div className="space-y-3 px-2 pb-8 md:px-3">
       <BuilderHeader
         onToolbarEl={onToolbarEl}
         back={
-          <Link
-            to="/admin/program-library"
+          <button
+            type="button"
+            onClick={() => { void goBack(); }}
             className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="Back to the library"
-            title="Back to the library"
+            aria-label="Back"
+            title="Back"
+            data-editor-back
           >
             <ArrowLeft className="h-5 w-5" />
-          </Link>
+          </button>
         }
         title={<BuilderTitleInput value={meta.name ?? ""} onChange={onRename} placeholder="Template name" label="Template name" />}
         meta={
@@ -1044,7 +1057,9 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
           t.tagName === "TEXTAREA" ||
           t.tagName === "SELECT" ||
           t.isContentEditable);
-      if (inEditable) return;
+      // a Sheet cell nobody is typing in: Cmd/Ctrl+Z is the program's undo
+      const cleanSheetCell = !!t && t.hasAttribute("data-sheet-cell") && t.getAttribute("data-dirty") !== "1";
+      if (inEditable && !cleanSheetCell) return;
       if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
       else if (k === "." && e.shiftKey) { e.preventDefault(); setFullscreen((v) => !v); }
@@ -1526,35 +1541,37 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
   );
 }
 
+type EditorView = "block" | "week" | "sheet";
+
 export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact, dayScheduleStatus, onFixCalendarIssue }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void }) {
   // Persist the coach's editing position (active week + view mode) across
   // refreshes via localStorage so they return to exactly where they left off.
   const POS_KEY = "pb.block-editor.pos:v1";
-  const readPos = (): { view: "block" | "week"; activeIdx: number } => {
+  const readPos = (): { view: EditorView; activeIdx: number } => {
     if (typeof window === "undefined") return { view: "block", activeIdx: 0 };
     try {
       const raw = window.localStorage.getItem(POS_KEY);
       if (!raw) return { view: "block", activeIdx: 0 };
       const p = JSON.parse(raw);
       return {
-        view: p.view === "week" ? "week" : "block",
+        view: p.view === "week" ? "week" : p.view === "sheet" ? "sheet" : "block",
         activeIdx: Number.isFinite(p.activeIdx) ? p.activeIdx : 0,
       };
     } catch { return { view: "block", activeIdx: 0 }; }
   };
   const initialPos = readPos();
   const [activeIdx, _setActiveIdx] = useState(initialPos.activeIdx);
-  const [viewPref, _setView] = useState<"block" | "week">(initialPos.view);
-  // A phone shows one week at a time (side by side weeks don't fit); the
-  // desktop choice is kept as it was.
+  const [viewPref, _setView] = useState<EditorView>(initialPos.view);
+  // A phone shows one week at a time (side by side weeks and a sheet don't
+  // fit); the desktop choice is kept as it was.
   const phone = useBuilderPhone();
-  const view: "block" | "week" = phone ? "week" : viewPref;
-  const writePos = (next: { view: "block" | "week"; activeIdx: number }) => {
+  const view: EditorView = phone ? "week" : viewPref;
+  const writePos = (next: { view: EditorView; activeIdx: number }) => {
     if (typeof window === "undefined") return;
     try { window.localStorage.setItem(POS_KEY, JSON.stringify(next)); } catch {}
   };
   const setActiveIdx = (idx: number) => { _setActiveIdx(idx); writePos({ view: viewPref, activeIdx: idx }); };
-  const setView = (v: "block" | "week") => { _setView(v); writePos({ view: v, activeIdx }); };
+  const setView = (v: EditorView) => { _setView(v); writePos({ view: v, activeIdx }); };
   // Clamp activeIdx if weeks were removed since last visit.
   useEffect(() => {
     if (weeksData.length === 0) return;
@@ -1573,7 +1590,29 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
     _setActiveIdx(i);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weeksData.length > 0]);
-  const { clientId: ctxClientId, blockId: ctxBlockId } = useClientMaxesCtx();
+  const { clientId: ctxClientId, blockId: ctxBlockId, index: ctxMaxesIndex } = useClientMaxesCtx();
+  // The Sheet's "= 150 kg" beside a % (a client's block, with a max on file):
+  // the same computeRowLoad the card shows.
+  const exMetaById = useMemo(() => new Map((exercises ?? []).map((e: any) => [e.id, e])), [exercises]);
+  const sheetLoadHint = useCallback((row: any): string | null => {
+    if (!ctxClientId) return null;
+    if (!row?.percentage || !row?.percentage_basis || ["none", "manual"].includes(row.percentage_basis)) return null;
+    const meta: any = row.exercise_id ? exMetaById.get(row.exercise_id) : null;
+    const family = referenceFamily({ rowFamily: row.movement_family, competitionLiftType: meta?.competition_lift_type, movementFamily: meta?.movement_family });
+    const unit: "kg" | "lb" = row.load_unit === "lb" ? "lb" : "kg";
+    const out = computeRowLoad({
+      exerciseName: meta?.name ?? row.exercise_name_override,
+      basis: row.percentage_basis,
+      percentage: Number(row.percentage),
+      manualLoadKg: null,
+      manualLoadLb: null,
+      unit,
+      maxesIndex: ctxMaxesIndex,
+      family,
+      ownCompetition: !!family && String(meta?.competition_lift_type ?? "").toLowerCase() === family,
+    });
+    return out.status === "ok" && out.load != null ? `= ${out.load} ${out.unit}` : out.status === "no-max" ? "no max" : null;
+  }, [ctxClientId, ctxMaxesIndex, exMetaById]);
   const weekStats = useMemo(() => weeksData.map((w: any) => {
     const days = w.days || [];
     let rowCount = 0;
@@ -1708,7 +1747,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
     <div className="flex min-w-0 flex-1 items-center gap-1">
       {!phone && (
         <div role="tablist" aria-label="Layout" className="mr-1 inline-flex shrink-0 rounded-lg bg-muted p-0.5">
-          {([["week", "Week"], ["block", "Whole block"]] as const).map(([v, label]) => (
+          {([["week", "Week"], ["block", "Whole block"], ["sheet", "Sheet"]] as const).map(([v, label]) => (
             <button
               key={v}
               type="button"
@@ -1719,8 +1758,10 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                 "inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition-colors",
                 view === v ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
               )}
+              title={v === "sheet" ? "Edit like a spreadsheet: every exercise as a row of cells" : undefined}
+              data-editor-view={v}
             >
-              {v === "week" ? <CalendarRange className="h-3.5 w-3.5" /> : <LayoutGrid className="h-3.5 w-3.5" />} {label}
+              {v === "week" ? <CalendarRange className="h-3.5 w-3.5" /> : v === "block" ? <LayoutGrid className="h-3.5 w-3.5" /> : <Table2 className="h-3.5 w-3.5" />} {label}
             </button>
           ))}
         </div>
@@ -1779,7 +1820,26 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
         </div>
       )}
 
-      {view === "week" ? (
+      {view === "sheet" ? (
+        <ProgramSheet
+          weeksData={weeksData}
+          setWeeksData={setWeeksData}
+          activeIdx={Math.min(activeIdx, Math.max(0, weeksData.length - 1))}
+          exercises={exercises}
+          loadHint={sheetLoadHint}
+          renderPicker={(p) => (
+            <PhoneExercisePickerSheet
+              open={p.open}
+              onOpenChange={p.onOpenChange}
+              title={p.title}
+              exercises={exercises}
+              excludeId={p.excludeId}
+              onPick={p.onPick}
+              onCustomName={p.onCustomName}
+            />
+          )}
+        />
+      ) : view === "week" ? (
         weeksData[activeIdx] && (() => {
           const aw = weeksData[activeIdx];
           return (

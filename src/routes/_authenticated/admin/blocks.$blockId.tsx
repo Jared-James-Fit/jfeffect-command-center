@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, ArrowLeft, CalendarRange, Flame, Info, MessageSquare, MoreHorizontal, Save, Sparkles, User as UserIcon } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BarChart3, CalendarRange, Flame, Info, MessageSquare, MoreHorizontal, Save, Sparkles, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { BuilderHeader, BuilderNotice, BuilderSection, BuilderTitleInput } from "@/components/program-editor/builder-chrome";
@@ -40,6 +40,7 @@ import { usePersistentUndoStack } from "@/lib/persistent-undo";
 import { useScrollRestoration } from "@/lib/scroll-restore";
 import { BlockSwitcher } from "@/components/block-switcher";
 import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
+import { clientTrainingHref, useEditorBack } from "@/lib/editor-back";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({
   component: BlockEditor,
@@ -92,6 +93,10 @@ const ROW_FIELDS = [
   // entered in the inactive mode so flipping back restores it.
   "measurement_type","duration_seconds","tracking_type",
   "reps_text_backup","duration_seconds_backup",
+  // What the row's ⋯ More and rest controls set: its label (Primary Squat,
+  // Backoff…), its movement family and a rest set by hand. Left out, the
+  // builder showed every row as "auto" and dropped the coach's change on save.
+  "purpose_label","movement_family","rest_seconds_override",
 ] as const;
 
 function treeToPayload(tree: any) {
@@ -709,6 +714,16 @@ function BlockEditor() {
     if (!autosave.hasPending()) setDirty(false);
   };
 
+  // ← goes back to where the coach came from (their Training tab, Program
+  // data, a draft…), saving anything unsaved first; opened cold, the client's
+  // Training tab. Never the profile's Summary.
+  const goBack = useEditorBack({
+    fallbackHref: clientIdFromTree ? clientTrainingHref(clientIdFromTree) : null,
+    beforeLeave: async () => {
+      if (dirty || autosave.hasPending()) await save();
+    },
+  });
+
   // Restore the coach's vertical scroll for this block. Scoped per
   // user + block id, gated on hydration so the saved position is meaningful.
   useScrollRestoration({
@@ -792,14 +807,16 @@ function BlockEditor() {
       <BuilderHeader
         onToolbarEl={setToolbarEl}
         back={
-          <ClientNameLink
-            clientId={clientId}
+          <button
+            type="button"
+            onClick={() => { void goBack(); }}
             className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label={`Back to ${clientName}`}
-            title={`Back to ${clientName}`}
+            aria-label="Back"
+            title="Back"
+            data-editor-back
           >
             <ArrowLeft className="h-5 w-5" />
-          </ClientNameLink>
+          </button>
         }
         title={
           <BuilderTitleInput
@@ -871,6 +888,17 @@ function BlockEditor() {
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <ClientNameLink clientId={clientId} tab="messages"><MessageSquare className="mr-2 h-4 w-4" /> Messages</ClientNameLink>
+                </DropdownMenuItem>
+                {/* how this block is landing: volume against what's written, by week, muscle and day */}
+                <DropdownMenuItem asChild>
+                  <Link
+                    to="/admin/client-programs/$clientId/analytics"
+                    params={{ clientId }}
+                    search={{ filter: "exact_block", blockId, view: "volume" } as any}
+                    data-block-analytics
+                  >
+                    <BarChart3 className="mr-2 h-4 w-4" /> Training analytics
+                  </Link>
                 </DropdownMenuItem>
                 {!dirty && (
                   <>
