@@ -1,5 +1,5 @@
 import { CompetitionPlanSummary } from "@/components/forms/competition-plan-summary";
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import type { FormPresentation, FormHistoryGroup as FormHistoryGroupData } from "@/lib/form-message-presentation";
@@ -46,6 +46,7 @@ import { answeredQuestions, type FormAnswerRow, type FormQuestionRow } from "@/l
 import { DIGESTION_SYMPTOMS, DIGESTION_TIMINGS } from "@/lib/weight-management/digestion";
 import type { CheckinExtra, CheckinPlan } from "@/lib/checkin-coordination/plan";
 import { addPlanSteps } from "@/lib/checkin-coordination/steps";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -738,7 +739,7 @@ function CheckinWizard({
   );
 }
 
-const ProgressSectionLazy = lazy(() => import("@/components/progress/progress-section").then((m) => ({ default: m.ProgressSection })));
+const ProgressSectionLazy = lazyWithRetry(() => import("@/components/progress/progress-section").then((m) => ({ default: m.ProgressSection })));
 
 const EXTRA_LABEL: Record<CheckinExtra, string> = {
   bodyweight: "Weigh-in",

@@ -112,15 +112,20 @@ describe("unread-message nudge guard rails", () => {
     expect(row).toMatchObject({ message_id: "m1", reminder_step: 0, status: "skipped", blocked_reason: "push_delivered" });
   });
 
-  it("texts only for the coach's own words: an automated prompt the push can't reach is settled, not texted", async () => {
-    const { db, state } = makeDb({
-      messages: [{ id: "m1", client_id: "c1", created_at: ago(30), is_automated: true, message_type: "Check-In" }],
-      clients: { c1: CLIENT() },
-    });
-    const res = await run(db);
-    expect(res).toMatchObject({ processed: 0, texted: 0 });
-    expect(sendSms).not.toHaveBeenCalled();
-    expect(state.inserts.find((i) => i.table === "sms_log")!.row).toMatchObject({ blocked_reason: "automated_no_push" });
+  it("an automated check-in or form card is left to the morning digest: no nudge push, no text", async () => {
+    // Nov 17 2026 (checkin-coordination): the 8am digest is the card's one reminder and stops once it's
+    // answered; the nudge firing too made two reminders for one check-in.
+    for (const message_type of ["Check-In", "Form"]) {
+      const { db, state } = makeDb({
+        messages: [{ id: "m1", client_id: "c1", created_at: ago(30), is_automated: true, message_type }],
+        clients: { c1: CLIENT() },
+      });
+      const res = await run(db);
+      expect(res).toMatchObject({ processed: 0, pushed: 0, texted: 0 });
+      expect(sendSms).not.toHaveBeenCalled();
+      expect(sendPush).not.toHaveBeenCalled();
+      expect(state.inserts.find((i) => i.table === "sms_log")).toBeUndefined();
+    }
   });
 
   it("does not nudge outside 9am-8pm client time (and retries on a later run)", async () => {
