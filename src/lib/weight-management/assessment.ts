@@ -10,7 +10,7 @@
  * instead of guessing. Pure, tested.
  */
 import { readDigestion, type CheckinRow, type DigestionRead } from "@/lib/weight-management/digestion";
-import { decide, type Recommendation } from "@/lib/weight-management/decision";
+import { decide, LIMITING_WORDS, type Recommendation } from "@/lib/weight-management/decision";
 import { hydrationTarget, type Climate, type HydrationTarget, type SweatLevel } from "@/lib/weight-management/hydration";
 import { assessTarget, classLimitKg, plannedClassWeight, weighInTiming, type GoalContext, type Level, type PastPhase, type Sex, type TargetAssessment, type WeighIn as WeighInTiming } from "@/lib/weight-management/target";
 import { buildTrajectory, recentTrend, type GoalKind, type Trajectory, type WeighIn } from "@/lib/weight-management/trajectory";
@@ -232,7 +232,7 @@ export function buildAssessment(x: AssessmentInput): Assessment {
       ? assessTarget({ context, currentKg, targetKg: goal.kg, weeks: goal.date ? daysBetween(x.today, goal.date) / 7 : null, sex: x.sex, age: x.age, level: x.level, unit: x.unit, classLimitKg: goal.limitKg, past: x.pastPhases })
       : null;
   const checkins = readCheckins(x.checkins);
-  const digestion = readDigestion(x.checkins, x.plan.starts);
+  const digestion = readDigestion(x.checkins, x.plan.starts, x.water);
   const live = x.cardio.targets.filter((t) => (t.duration_minutes ?? 0) > 0);
   const modality = plannedModality(live);
   const current = sessionsFromExisting(live);
@@ -378,6 +378,7 @@ export function assessmentText(a: Assessment): string {
   const h = a.hydration;
   L.push(h.restricted ? "Water: a medical fluid limit is on file; their doctor sets it." : `Water: ${round((h.restMl ?? 0) / 1000, 1)} L plain water on days off, ${round((h.trainingMl ?? 0) / 1000, 1)} L on training days${h.electrolytes ? "; sodium on long or sweaty training days" : ""}. Never dehydration, water loading or sodium manipulation to change the scale.`);
   const r = a.recommendation;
+  L.push(`Is this client progressing while keeping muscle, strength and recovery? ${LIMITING_WORDS[r.limiting]}.`);
   L.push(`Recommendation (${r.evidence} evidence): ${r.headline}. ${r.reasons.slice(-2).join(" ")}`.trim());
   for (const act of r.actions) {
     if (act.kind === "nutrition") L.push(`- nutrition: ${act.instruction}`);

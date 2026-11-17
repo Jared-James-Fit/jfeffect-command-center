@@ -35,8 +35,42 @@ export type Action =
   | { kind: "target"; text: string }
   | { kind: "ask"; text: string };
 
+/**
+ * The one question every read answers: is this client progressing toward their goal while keeping
+ * muscle, strength, recovery and health? `none` = yes, leave it; otherwise the most likely thing
+ * holding them back (or what has to come first).
+ */
+export type LimitingFactor =
+  | "none"
+  | "data"
+  | "safety"
+  | "settling"
+  | "rate"
+  | "digestion"
+  | "adherence"
+  | "workload"
+  | "recovery"
+  | "target"
+  | "energy_balance";
+
+export const LIMITING_WORDS: Record<LimitingFactor, string> = {
+  none: "Progressing: leave it alone",
+  data: "Not enough data to judge yet",
+  safety: "A health concern comes first",
+  settling: "Too early to judge the new plan",
+  rate: "The rate is off: too fast or too slow for what it costs",
+  digestion: "Digestion is skewing the scale",
+  adherence: "Consistency, not the numbers",
+  workload: "Total workload is costing training",
+  recovery: "Recovery is limiting",
+  target: "The target or the date",
+  energy_balance: "Energy balance: a small change closes the gap",
+};
+
 export type Recommendation = {
   verdict: Verdict;
+  /** The core answer: what's holding them back, or nothing. */
+  limiting: LimitingFactor;
   headline: string;
   reasons: string[];
   evidence: Evidence;
@@ -116,7 +150,7 @@ export function decide(x: DecisionInput): Recommendation {
   const rates = ratesFor(x);
   const nearMeet = x.meetWeeksOut != null && x.meetWeeksOut <= 4;
   const review = nearMeet ? 7 : 14;
-  const rec = (r: Partial<Omit<Recommendation, "material">> & Pick<Recommendation, "verdict" | "headline">): Recommendation => {
+  const rec = (r: Partial<Omit<Recommendation, "material">> & Pick<Recommendation, "verdict" | "headline" | "limiting">): Recommendation => {
     const out = { reasons, evidence: "moderate" as Evidence, actions: [] as Action[], expected: null, reviewInDays: review, ...r };
     return { ...out, material: out.actions.some((a) => a.kind === "nutrition" || a.kind === "cardio") };
   };
@@ -125,12 +159,12 @@ export function decide(x: DecisionInput): Recommendation {
 
   // 1. safety
   if (x.digestion?.medical) {
-    return rec({ verdict: "investigate", headline: "Digestion needs a doctor's look first", evidence: "strong", actions: [{ kind: "medical", text: x.digestion.medical }, { kind: "digestion", suggestions: x.digestion.suggestions }], reviewInDays: 7 });
+    return rec({ limiting: "safety", verdict: "investigate", headline: "Digestion needs a doctor's look first", evidence: "strong", actions: [{ kind: "medical", text: x.digestion.medical }, { kind: "digestion", suggestions: x.digestion.suggestions }], reviewInDays: 7 });
   }
 
   // 2. enough data?
   if (!trend || t.status === "not_enough_data") {
-    return rec({
+    return rec({ limiting: "data",
       verdict: "need_data",
       headline: "Not enough weigh-ins to read a trend",
       evidence: "weak",
@@ -139,7 +173,7 @@ export function decide(x: DecisionInput): Recommendation {
     });
   }
   if (t.stale) {
-    return rec({ verdict: "need_data", headline: "No recent weigh-ins", evidence: "weak", actions: [{ kind: "ask", text: `No weigh-in since ${t.latest?.date}: ask for 4+ this week before changing anything.` }], reviewInDays: 7 });
+    return rec({ limiting: "data", verdict: "need_data", headline: "No recent weigh-ins", evidence: "weak", actions: [{ kind: "ask", text: `No weigh-in since ${t.latest?.date}: ask for 4+ this week before changing anything.` }], reviewInDays: 7 });
   }
 
   const losing = trend.clear && trend.kgPerWeek < 0;
@@ -156,16 +190,16 @@ export function decide(x: DecisionInput): Recommendation {
     if (cardioRecent && perfDown) {
       const s = stepTreadmill(x.cardio.plan, "down", { ...x.stepCtx, treadmill: x.cardio.treadmill });
       if (s.step.variable !== "none")
-        return rec({ verdict: "reduce_load", headline: "Ease the cardio back: losing fast and the lower lifts are dropping", evidence: "strong", actions: [{ kind: "cardio", direction: "down", step: s.step, plan: s.plan }], expected: s.step.weeklyNetKcal != null ? `About ${fmtRate(-s.step.weeklyNetKcal / KCAL_PER_KG, unit)} less loss, and fresher legs` : null });
+        return rec({ limiting: "workload", verdict: "reduce_load", headline: "Ease the cardio back: losing fast and the lower lifts are dropping", evidence: "strong", actions: [{ kind: "cardio", direction: "down", step: s.step, plan: s.plan }], expected: s.step.weeklyNetKcal != null ? `About ${fmtRate(-s.step.weeklyNetKcal / KCAL_PER_KG, unit)} less loss, and fresher legs` : null });
     }
     const add = Math.min(MAX_STEP_KCAL, Math.max(100, r25(((Math.abs(trend.kgPerWeek) - wantKg) * KCAL_PER_KG) / 7)));
-    return rec({ verdict: "adjust", headline: `Add about ${add} kcal a day: losing faster than needed`, evidence: trend.weighIns >= 10 ? "strong" : "moderate", actions: [nutritionAction(x, add)], expected: expectedFromKcal(add, unit) });
+    return rec({ limiting: "rate", verdict: "adjust", headline: `Add about ${add} kcal a day: losing faster than needed`, evidence: trend.weighIns >= 10 ? "strong" : "moderate", actions: [nutritionAction(x, add)], expected: expectedFromKcal(add, unit) });
   }
 
   // 4. a new plan settling
   if (x.plan.start && daysBetween(x.plan.start, x.today) < SETTLE_DAYS) {
     reasons.push(`The plan started ${daysBetween(x.plan.start, x.today)} days ago: the first two weeks move water and glycogen, so the scale can't be judged yet.`);
-    return rec({ verdict: "maintain", headline: "Hold the plan: it's still settling in", evidence: "weak", reviewInDays: SETTLE_DAYS - daysBetween(x.plan.start, x.today) + 1 });
+    return rec({ limiting: "settling", verdict: "maintain", headline: "Hold the plan: it's still settling in", evidence: "weak", reviewInDays: SETTLE_DAYS - daysBetween(x.plan.start, x.today) + 1 });
   }
 
   const offCourse = t.status === "behind" || t.status === "stalled" || t.status === "wrong_way";
@@ -173,13 +207,13 @@ export function decide(x: DecisionInput): Recommendation {
   // 5. the gut before the calories
   if (offCourse && x.digestion?.scaleEffect && (t.fluctuation?.direction === "above" || !trend.clear)) {
     reasons.push("Bloating or constipation this week can read 0.5–1.5 kg heavy on the scale and the tape.");
-    return rec({ verdict: "investigate", headline: "Sort the digestion before changing calories", evidence: "moderate", actions: [{ kind: "digestion", suggestions: x.digestion.suggestions }], reviewInDays: 7 });
+    return rec({ limiting: "digestion", verdict: "investigate", headline: "Sort the digestion before changing calories", evidence: "moderate", actions: [{ kind: "digestion", suggestions: x.digestion.suggestions }], reviewInDays: 7 });
   }
 
   // 6. consistency before numbers
   if (offCourse && x.adherence.avg != null && x.adherence.checkins >= 2 && x.adherence.avg < 4) {
     reasons.push(`Sticking to the plan: ${x.adherence.avg}/5 over the last ${x.adherence.checkins} check-ins. The numbers aren't the problem yet.`);
-    return rec({ verdict: "investigate", headline: "Consistency first: keep the numbers, fix what's getting in the way", evidence: "moderate", actions: [{ kind: "ask", text: "Ask which meals or days go off plan and what would make them easier (prep, eating out, a swap)." }] });
+    return rec({ limiting: "adherence", verdict: "investigate", headline: "Consistency first: keep the numbers, fix what's getting in the way", evidence: "moderate", actions: [{ kind: "ask", text: "Ask which meals or days go off plan and what would make them easier (prep, eating out, a swap)." }] });
   }
 
   // 7. cardio costing the lifts
@@ -187,14 +221,14 @@ export function decide(x: DecisionInput): Recommendation {
     const s = stepTreadmill(x.cardio.plan, "down", { ...x.stepCtx, treadmill: x.cardio.treadmill });
     if (s.step.variable !== "none") {
       reasons.push(`Cardio changed on ${x.cardio.lastChanged} and the lower lifts have dropped since.`);
-      return rec({ verdict: "reduce_load", headline: "Ease the cardio back: the squat and deadlift are paying for it", evidence: "moderate", actions: [{ kind: "cardio", direction: "down", step: s.step, plan: s.plan }], expected: "Fresher legs for heavy days; make up any energy with nutrition if loss slows" });
+      return rec({ limiting: "workload", verdict: "reduce_load", headline: "Ease the cardio back: the squat and deadlift are paying for it", evidence: "moderate", actions: [{ kind: "cardio", direction: "down", step: s.step, plan: s.plan }], expected: "Fresher legs for heavy days; make up any energy with nutrition if loss slows" });
     }
   }
 
   // 8. a target that can't be made safely
   if (x.target?.verdict === "too_fast") {
     reasons.push(x.target.message);
-    return rec({
+    return rec({ limiting: "target",
       verdict: "reconsider_target",
       headline: x.target.alternative ? `Reconsider the class: the ${x.target.alternative.label} class is the safer call` : "Reconsider the target or the date",
       evidence: "strong",
@@ -202,10 +236,17 @@ export function decide(x: DecisionInput): Recommendation {
     });
   }
 
+  // 8b. under-recovered and stalling: sleep and fatigue before a bigger deficit
+  const recoveryPoor = x.recovery.of >= 2 && (x.recovery.poorSleep >= 2 || x.recovery.lowEnergy >= 2);
+  if (offCourse && x.direction === "lose" && recoveryPoor && perfDown) {
+    reasons.push(`Sleep or energy flagged ${Math.max(x.recovery.poorSleep, x.recovery.lowEnergy)} of the last ${x.recovery.of} check-ins with the lower lifts down: a bigger deficit would cost more than it gains.`);
+    return rec({ limiting: "recovery", verdict: "investigate", headline: "Recovery first: hold the deficit, sort sleep and fatigue", evidence: "moderate", actions: [{ kind: "ask", text: "Ask about sleep (hours, how often they wake), stress and training fatigue this week before changing calories or cardio." }], reviewInDays: 7 });
+  }
+
   // 9. the scale lags a recomposition
   if (offCourse && x.direction === "lose" && x.waist && x.waist.changeCm <= -1 && x.waist.weeks >= 3 && !perfDown) {
     reasons.push(`Waist ${round(x.waist.changeCm, 1)} cm over ${x.waist.weeks} weeks with strength holding: the body is changing even if the scale isn't.`);
-    return rec({ verdict: "maintain", headline: "Hold the plan: waist down, strength holding", evidence: "moderate" });
+    return rec({ limiting: "none", verdict: "maintain", headline: "Hold the plan: waist down, strength holding", evidence: "moderate" });
   }
 
   // 10. off course: the smallest change that closes it
@@ -214,12 +255,12 @@ export function decide(x: DecisionInput): Recommendation {
     // wrong way is a reason to change anything, and then toward the slow end of the comfortable rate.
     if (!t.required && t.status !== "wrong_way" && !(trend.spanDays >= 21 && trend.weighIns >= 12 && !trend.clear)) {
       reasons.push("No date on the goal, so a slow week isn't a reason to change anything.");
-      return rec({ verdict: "maintain", headline: "Hold the plan: give it more weigh-ins", evidence: "weak", actions: [{ kind: "ask", text: "Keep weighing in 4+ mornings a week; it's judged again over 3+ weeks." }], reviewInDays: 7 });
+      return rec({ limiting: "data", verdict: "maintain", headline: "Hold the plan: give it more weigh-ins", evidence: "weak", actions: [{ kind: "ask", text: "Keep weighing in 4+ mornings a week; it's judged again over 3+ weeks." }], reviewInDays: 7 });
     }
     const enough = trend.weighIns >= 8 && trend.spanDays >= 14;
     if (!enough) {
       reasons.push("Too few weigh-ins over too short a time to act on.");
-      return rec({ verdict: "maintain", headline: "Hold for another week of weigh-ins", evidence: "weak", actions: [{ kind: "ask", text: "Weigh in 4+ mornings this week." }], reviewInDays: 7 });
+      return rec({ limiting: "data", verdict: "maintain", headline: "Hold for another week of weigh-ins", evidence: "weak", actions: [{ kind: "ask", text: "Weigh in 4+ mornings this week." }], reviewInDays: 7 });
     }
     const evidence: Evidence = trend.clear || (trend.weighIns >= 12 && trend.spanDays >= 21) ? "strong" : "moderate";
     // with no date, aim for the slow end of the comfortable rate, not the top of it
@@ -227,10 +268,10 @@ export function decide(x: DecisionInput): Recommendation {
     const needKg = t.required ? t.required.kgPerWeek : x.direction === "gain" ? noDatePace : -noDatePace;
     const actualKg = trend.clear ? trend.kgPerWeek : 0;
     const gapKcal = r25(((needKg - actualKg) * KCAL_PER_KG) / 7);
-    if (Math.abs(gapKcal) < MIN_CHANGE_KCAL) return rec({ verdict: "maintain", headline: "Hold: the gap is too small to change anything for", evidence });
+    if (Math.abs(gapKcal) < MIN_CHANGE_KCAL) return rec({ limiting: "none", verdict: "maintain", headline: "Hold: the gap is too small to change anything for", evidence });
     if (gapKcal > 0) {
       const add = Math.min(MAX_STEP_KCAL, Math.max(100, gapKcal));
-      return rec({ verdict: "adjust", headline: `Add about ${add} kcal a day`, evidence, actions: [nutritionAction(x, add)], expected: expectedFromKcal(add, unit) });
+      return rec({ limiting: "energy_balance", verdict: "adjust", headline: `Add about ${add} kcal a day`, evidence, actions: [nutritionAction(x, add)], expected: expectedFromKcal(add, unit) });
     }
     // a loss gap: nutrition first, never under the floor, then one cardio step for the rest
     const need = Math.abs(gapKcal);
@@ -246,24 +287,25 @@ export function decide(x: DecisionInput): Recommendation {
     if (cardioFirst) reasons.push("Hunger has been high, so part of it comes from cardio rather than food.");
     if (roomToFloor < need) reasons.push(`Calories are near the floor (${x.kcalFloor}): the rest has to come from activity.`);
     const left = need - fromFood;
-    if (left >= MIN_CHANGE_KCAL && !(x.powerlifter && nearMeet)) {
+    if (left >= MIN_CHANGE_KCAL && recoveryPoor) reasons.push("Sleep or energy has been poor, so no cardio is added on top.");
+    if (left >= MIN_CHANGE_KCAL && !(x.powerlifter && nearMeet) && !recoveryPoor) {
       const s = stepTreadmill(x.cardio.plan, "up", { ...x.stepCtx, treadmill: x.cardio.treadmill });
       if (s.step.variable !== "none") {
         actions.push({ kind: "cardio", direction: "up", step: s.step, plan: s.plan });
         expectedKcal += Math.round((s.step.weeklyNetKcal ?? 0) / 7);
       }
     }
-    if (!actions.length) return rec({ verdict: "reconsider_target", headline: "Nothing left to safely change: move the date or the target", evidence, actions: [{ kind: "target", text: "Calories are at the floor and cardio is at its ceiling." }] });
+    if (!actions.length) return rec({ limiting: "target", verdict: "reconsider_target", headline: "Nothing left to safely change: move the date or the target", evidence, actions: [{ kind: "target", text: "Calories are at the floor and cardio is at its ceiling." }] });
     const headline =
       actions.length === 2 ? `Take ${fromFood} kcal a day and add a little cardio` : fromFood > 0 ? `Take about ${fromFood} kcal a day` : "Add a little cardio";
-    return rec({ verdict: "adjust", headline, evidence, actions, expected: expectedFromKcal(-expectedKcal, unit) });
+    return rec({ limiting: "energy_balance", verdict: "adjust", headline, evidence, actions, expected: expectedFromKcal(-expectedKcal, unit) });
   }
 
   // 11. gaining too fast
   if (x.direction === "gain" && trend.clear && pct > rates.limit) {
     reasons.push(`Gaining ${fmtPct(pct)}/week is past the ${rates.limit}%/week that stays mostly muscle at their training age.`);
     const take = Math.min(MAX_STEP_KCAL, Math.max(100, r25(((trend.kgPerWeek - (rates.comfortable / 100) * trend.levelKg) * KCAL_PER_KG) / 7)));
-    return rec({ verdict: "adjust", headline: `Take about ${take} kcal a day: gaining faster than useful`, evidence: "moderate", actions: [nutritionAction(x, -take)], expected: expectedFromKcal(-take, unit) });
+    return rec({ limiting: "rate", verdict: "adjust", headline: `Take about ${take} kcal a day: gaining faster than useful`, evidence: "moderate", actions: [nutritionAction(x, -take)], expected: expectedFromKcal(-take, unit) });
   }
 
   // 12. ahead of schedule
@@ -271,9 +313,9 @@ export function decide(x: DecisionInput): Recommendation {
     reasons.push("Ahead of what the goal needs.");
     if (perfDown) {
       const add = 150;
-      return rec({ verdict: "adjust", headline: "Ahead of schedule and the lifts are dipping: add a little food back", evidence: "moderate", actions: [nutritionAction(x, add)], expected: expectedFromKcal(add, unit) });
+      return rec({ limiting: "rate", verdict: "adjust", headline: "Ahead of schedule and the lifts are dipping: add a little food back", evidence: "moderate", actions: [nutritionAction(x, add)], expected: expectedFromKcal(add, unit) });
     }
-    return rec({ verdict: "maintain", headline: "Hold the plan: ahead of schedule with training holding", evidence: "moderate" });
+    return rec({ limiting: "none", verdict: "maintain", headline: "Hold the plan: ahead of schedule with training holding", evidence: "moderate" });
   }
 
   if (t.status === "reached") {
@@ -281,10 +323,10 @@ export function decide(x: DecisionInput): Recommendation {
     if (t.goal?.kind === "at_most" && losing && t.projected && t.projected.highKg < t.goal.kg - trend.levelKg * 0.01) {
       const add = Math.min(MAX_STEP_KCAL, Math.max(100, r25((Math.abs(trend.kgPerWeek) * KCAL_PER_KG) / 7)));
       reasons.push(`Already under ${fmtWeight(t.goal.kg, unit)} and still losing: more food now goes into training, and they'll still make it.`);
-      return rec({ verdict: "adjust", headline: `Under the target and still losing: add about ${add} kcal a day`, evidence: "moderate", actions: [nutritionAction(x, add)], expected: expectedFromKcal(add, unit) });
+      return rec({ limiting: "rate", verdict: "adjust", headline: `Under the target and still losing: add about ${add} kcal a day`, evidence: "moderate", actions: [nutritionAction(x, add)], expected: expectedFromKcal(add, unit) });
     }
-    return rec({ verdict: "maintain", headline: "At the goal: hold it there", evidence: "strong" });
+    return rec({ limiting: "none", verdict: "maintain", headline: "At the goal: hold it there", evidence: "strong" });
   }
-  if (t.status === "no_target") return rec({ verdict: "maintain", headline: "Hold the plan", evidence: "weak", actions: [{ kind: "ask", text: "Set a target weight (and a date, for a meet or show) so the trajectory can be planned." }] });
-  return rec({ verdict: "maintain", headline: "On track: hold the plan", evidence: trend.clear ? "strong" : "moderate" });
+  if (t.status === "no_target") return rec({ limiting: "none", verdict: "maintain", headline: "Hold the plan", evidence: "weak", actions: [{ kind: "ask", text: "Set a target weight (and a date, for a meet or show) so the trajectory can be planned." }] });
+  return rec({ limiting: "none", verdict: "maintain", headline: "On track: hold the plan", evidence: trend.clear ? "strong" : "moderate" });
 }

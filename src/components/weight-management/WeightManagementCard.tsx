@@ -20,7 +20,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { CardHeader, MoreButton, Section, StatusChip, type ChipTone } from "@/components/nutrition/nutrition-ui";
 import { cn } from "@/lib/utils";
 import { CONTEXT_LABEL, type Assessment } from "@/lib/weight-management/assessment";
-import type { Action } from "@/lib/weight-management/decision";
+import { LIMITING_WORDS, type Action } from "@/lib/weight-management/decision";
 import { prefillPlanAiChange, weightKey } from "@/lib/weight-management/handoff";
 import type { TrajectoryStatus } from "@/lib/weight-management/trajectory";
 import { sessionLine, type TreadmillSession } from "@/lib/weight-management/treadmill";
@@ -291,6 +291,9 @@ function Recommendation({ clientId, view, onCardio }: { clientId: string; view: 
 
   return (
     <div className="space-y-3 rounded-xl border border-border p-3" data-weight-recommendation={r.verdict}>
+      <div className="text-xs font-medium text-muted-foreground" data-weight-limiting={r.limiting}>
+        {LIMITING_WORDS[r.limiting]}
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[15px] font-semibold">{r.headline}</span>
         {decided ? <StatusChip tone={decided.status === "approved" ? "done" : "neutral"}>{decided.status === "approved" ? "Done" : "Dismissed"}</StatusChip> : null}

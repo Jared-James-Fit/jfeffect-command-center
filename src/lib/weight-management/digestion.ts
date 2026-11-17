@@ -90,7 +90,7 @@ const SUGGEST: Record<string, string[]> = {
 };
 
 /** Read the last 6 weekly check-ins (any order), with the start dates of their nutrition plans. */
-export function readDigestion(rows: CheckinRow[], planStarts: string[] = []): DigestionRead {
+export function readDigestion(rows: CheckinRow[], planStarts: string[] = [], water: { avgMl: number | null; targetMl: number | null; daysLogged: number } | null = null): DigestionRead {
   const weeks = rows
     .filter((r) => r.date)
     .map(weeklyGut)
@@ -134,6 +134,9 @@ export function readDigestion(rows: CheckinRow[], planStarts: string[] = []): Di
   const suggestions: string[] = [];
   if (timing === "Training days") suggestions.push("Keep the pre-workout meal lower in fibre and fat, 60–120 min before training, with vegetables in the other meals");
   for (const s of symptoms) for (const line of SUGGEST[s.symptom] ?? []) if (!suggestions.includes(line)) suggestions.push(line);
+  // backed up and drinking well under the target: water before fibre (only from what they actually logged)
+  if (symptoms.some((x) => x.symptom === "Constipation") && water?.avgMl && water.targetMl && water.daysLogged >= 4 && water.avgMl < water.targetMl * 0.8)
+    suggestions.unshift(`They've logged about ${Math.round(water.avgMl / 100) / 10} L a day against a ${Math.round(water.targetMl / 100) / 10} L target: get water to the target before changing fibre`);
   if (afterPlanChange) suggestions.unshift(`It started within 2 weeks of the plan that began ${afterPlanChange}: the newest foods or a bigger food volume are the first thing to look at`);
 
   const scaleEffect = !!latest?.flagged && latest.symptoms.some((s) => s === "Bloating" || s === "Constipation");

@@ -595,6 +595,33 @@ describe("real records (regressions)", () => {
   });
 });
 
+describe("the core answer", () => {
+  it("names what's limiting, or nothing", () => {
+    expect(decide(input({ weighIns: series(35, 86, -0.5, 0.15), goal: { kg: 83, date: addDays(TODAY, 42), kind: "at_most" } })).limiting).toBe("none");
+    expect(decide(input({ weighIns: series(35, 86, 0, 0.4), adherence: { avg: 3, checkins: 3 } })).limiting).toBe("adherence");
+    expect(decide(input({ weighIns: [{ date: TODAY, kg: 86 }] })).limiting).toBe("data");
+    expect(decide(input({ weighIns: series(35, 86, -0.15, 0.15), goal: { kg: 82, date: addDays(TODAY, 56), kind: "at_most" } })).limiting).toBe("energy_balance");
+  });
+
+  it("under-recovered and stalling with the lifts down: recovery first, no bigger deficit", () => {
+    const r = decide(input({ weighIns: series(35, 86, 0, 0.3), goal: { kg: 82, date: addDays(TODAY, 56), kind: "at_most" }, recovery: { poorSleep: 2, lowEnergy: 1, stress: 0, hungerHigh: false, of: 3 }, performance: { lower: "down", detail: "Squat down 3%" }, cardio: { plan: { trainingDay: null, restDay: null }, treadmill: true, lastChanged: "2026-08-01", issues: [] } }));
+    expect(r).toMatchObject({ verdict: "investigate", limiting: "recovery", material: false });
+  });
+
+  it("under-recovered: a nutrition change, never cardio on top", () => {
+    const r = decide(input({ weighIns: series(35, 86, -0.1, 0.15), goal: { kg: 80, date: addDays(TODAY, 56), kind: "at_most" }, plan: { start: "2026-09-01", weeklyKcal: 1600 }, recovery: { poorSleep: 0, lowEnergy: 2, stress: 0, hungerHigh: false, of: 3 } }));
+    expect(r.actions.some((a) => a.kind === "cardio")).toBe(false);
+    expect(r.reasons.join(" ")).toMatch(/no cardio is added/);
+  });
+
+  it("constipated and drinking well under target: water before fibre", () => {
+    const d = readDigestion([{ date: TODAY, answers: { recovery_flags: ["Digestion / bloating"], digestion_symptoms: ["Constipation"] } }], [], { avgMl: 1500, targetMl: 3000, daysLogged: 10 });
+    expect(d.suggestions[0]).toMatch(/water to the target before changing fibre/);
+    const unlogged = readDigestion([{ date: TODAY, answers: { recovery_flags: ["Digestion / bloating"], digestion_symptoms: ["Constipation"] } }], [], { avgMl: 1500, targetMl: 3000, daysLogged: 1 });
+    expect(unlogged.suggestions.join(" ")).not.toMatch(/water to the target/);
+  });
+});
+
 describe("the whole assessment", () => {
   const raw = (o: Partial<AssessmentInput> = {}): AssessmentInput => ({
     today: TODAY,
