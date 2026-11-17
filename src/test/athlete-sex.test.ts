@@ -119,7 +119,8 @@ describe("one field, kept honest", () => {
 
   it("the form saves profile values as real answers and writes a changed sex back", () => {
     const r = read("src/components/forms/client-form-renderer.tsx");
-    expect(r).toContain("if (answersMap[q.id] || seeded.current.has(q.id)) continue;");
+    // never over an answer they already gave (one seeding rule, form-prefill.ts startingAnswer)
+    expect(r).toContain("answersMap[q.id] || seeded.current.has(q.id)) continue;");
     expect(r).toContain(".update({ sex: nextSex })");
   });
 

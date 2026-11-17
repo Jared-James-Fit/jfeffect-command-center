@@ -28,9 +28,13 @@ describe("View workout in Crew: the workout card is the way in (Nov 15 2026)", (
     expect(card).toContain("e.stopPropagation();\n            onOpen();");
   });
 
-  it("a film post's workout line is finger-sized without moving anything, with a chevron", () => {
-    expect(card).toContain("after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']\" data-page-workout");
-    expect(card).toContain('<ChevronRight className="-ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />');
+  it("a film post's way in is a View workout pill (its PRs beside it), 28px to see and 44px to tap (Nov 17 2026)", () => {
+    expect(card).toContain("after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']\"\n                data-page-workout");
+    expect(card).toContain('<span className="inline-flex h-7 shrink-0 items-center gap-0.5 rounded-full bg-secondary/80 pl-3 pr-2 text-[12px] font-semibold text-foreground">\n                  View workout');
+    expect(card).toContain("data-page-prs");
+    // the workout's name is its own quiet line above the set, never squeezed beside "View workout"
+    expect(card).toContain("data-page-workout-name");
+    expect(card).not.toContain('<span className="shrink-0 text-muted-foreground">· View workout</span>');
   });
 
   it("the card's numbers show whole: their own widths, a step smaller on a narrow card, a line of their own before anything's cut", () => {

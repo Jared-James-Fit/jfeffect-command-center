@@ -3,8 +3,11 @@ import { readFileSync } from "node:fs";
 import {
   digestLines,
   isNudgeable,
-  nutritionSendsToday,
+  nutritionReviewDue,
+  nutritionUpdateDecision,
   planCheckin,
+  progressDefault,
+  reviewWeeks,
   requestWarnings,
   scheduleDays,
   weighInDue,
@@ -41,9 +44,9 @@ describe("one weekly check-in, only what this client needs", () => {
     expect(keys(planCheckin(base({ lastWeighIn: null, weighInsLast7: 0 })))).toEqual(["bodyweight"]);
   });
 
-  it("a powerlifter making weight gets the weight-making question, plus photos and the tape every 4 weeks", () => {
-    const p = planCheckin(base({ meet: { date: "2027-01-10", weightClass: "83", name: "Provincials" } }));
-    expect(keys(p)).toEqual(["weight_making", "photos", "measurements"]);
+  it("a powerlifter making weight gets the weight-making question, and no photos or tape (a class is made on the scale)", () => {
+    const p = planCheckin(base({ meet: { date: "2027-01-10", weightClass: "83", name: "Provincials" }, phase: "Fat Loss" }));
+    expect(keys(p)).toEqual(["weight_making"]);
     expect(p.extras[0].reason).toBe("Provincials in 7 weeks, 83 class");
   });
 
@@ -72,10 +75,19 @@ describe("one weekly check-in, only what this client needs", () => {
     expect(scheduleDays({ frequency: "none", customDays: null })).toBeNull();
   });
 
-  it("a Nutrition Update waiting is pointed at from the check-in, not reminded again", () => {
+  it("a first Nutrition Update waiting is pointed at from the check-in (the full form), never reminded again", () => {
     const p = planCheckin(base({ nutritionPendingSince: "2026-11-16" }));
     expect(keys(p)).toEqual(["nutrition_update"]);
-    expect(p.extras[0].reason).toMatch(/no separate reminder/);
+    expect(p.extras[0].inline).toBe(false);
+    expect(p.extras[0].reason).toMatch(/their first one, so it's the full form/);
+  });
+
+  it("a client who's sent one before answers this month's inside the check-in", () => {
+    const p = planCheckin(base({ nutritionPendingSince: "2026-11-20", nutritionLastAnswered: "2026-10-26", nutritionOptions: { goal: ["Fat Loss"], freeMeal: ["Yes"] } }));
+    expect(p.extras[0]).toMatchObject({ key: "nutrition_update", inline: true, since: "2026-10-26", options: { goal: ["Fat Loss"], freeMeal: ["Yes"] } });
+    expect(p.extras[0].reason).toMatch(/answered in this check-in, only what changed since Oct 26/);
+    // answered after it was asked: nothing waiting
+    expect(keys(planCheckin(base({ nutritionPendingSince: null, nutritionLastAnswered: "2026-11-21" })))).toEqual([]);
   });
 
   it("the steps go where they belong, and only those", () => {
@@ -90,8 +102,6 @@ describe("one weekly check-in, only what this client needs", () => {
       "recovery_flags",
       "pain_details",
       "bodyweight_logged",
-      "photos_added",
-      "measurements_added",
       "win",
       "help",
       "next_week_goal",
@@ -135,16 +145,68 @@ describe("one reminder per outstanding thing", () => {
   });
 });
 
-describe("the monthly Nutrition Update goes with the weekly check-in", () => {
-  it("in the month's last 7 days, the morning that week's card goes out; never the week before", () => {
-    expect(nutritionSendsToday({ today: "2026-11-27", weeklyCardToday: true, weeklyCardDueThisWindow: true, lastMonday: "2026-11-30" })).toBe(true);
-    expect(nutritionSendsToday({ today: "2026-11-23", weeklyCardToday: false, weeklyCardDueThisWindow: true, lastMonday: "2026-11-23" })).toBe(false);
-    expect(nutritionSendsToday({ today: "2026-11-20", weeklyCardToday: true, weeklyCardDueThisWindow: false, lastMonday: "2026-11-30" })).toBe(false);
+describe("the Nutrition Update follows the plan's review, through the weekly check-in", () => {
+  it("the review is the coach's own Next update due, else the goal's rhythm from the later of the start and the last update", () => {
+    expect(nutritionReviewDue({ endDate: "2026-12-10", startDate: "2026-11-10", lastAnswered: "2026-11-08", phase: "Fat Loss" })).toBe("2026-12-10");
+    expect(nutritionReviewDue({ endDate: null, startDate: "2026-06-05", lastAnswered: null, phase: "Fat Loss" })).toBe("2026-07-03");
+    expect(nutritionReviewDue({ endDate: null, startDate: "2026-06-08", lastAnswered: "2026-10-01", phase: "Maintenance" })).toBe("2026-11-26");
+    expect(nutritionReviewDue({ endDate: null, startDate: null, lastAnswered: null, phase: null })).toBeNull();
+    expect([reviewWeeks("Fat Loss"), reviewWeeks("Recomp"), reviewWeeks("Muscle Gain"), reviewWeeks("Maintenance"), reviewWeeks(null)]).toEqual([4, 6, 6, 8, 4]);
   });
 
-  it("no weekly check-in in the window: the last Monday, as before", () => {
-    expect(nutritionSendsToday({ today: "2026-11-30", weeklyCardToday: false, weeklyCardDueThisWindow: false, lastMonday: "2026-11-30" })).toBe(true);
-    expect(nutritionSendsToday({ today: "2026-11-26", weeklyCardToday: false, weeklyCardDueThisWindow: false, lastMonday: "2026-11-30" })).toBe(false);
+  const at = (o: Partial<Parameters<typeof nutritionUpdateDecision>[0]> = {}) =>
+    nutritionUpdateDecision({ today: "2026-11-20", hour: 7, reviewDue: "2026-11-27", lastAnswered: "2026-10-26", lastAsked: "2026-10-25", weeklyCard: "open", weeklyCardComing: false, hasPrior: true, ...o });
+
+  it("in the week it's due, a client who's sent one before answers it inside the open check-in", () => {
+    expect(at()).toBe("fold");
+  });
+  it("a first one is the form itself, the same morning as the check-in card", () => {
+    expect(at({ hasPrior: false, lastAnswered: null })).toBe("standalone");
+  });
+  it("not before the review week, never within 3 weeks of the last update, never two requests within 25 days", () => {
+    expect(at({ reviewDue: "2026-12-10" })).toBe("wait");
+    expect(at({ lastAnswered: "2026-11-08" })).toBe("skip");
+    expect(at({ lastAsked: "2026-11-01" })).toBe("skip");
+    expect(at({ reviewDue: null })).toBe("skip");
+    expect(at({ hour: 6 })).toBe("wait");
+  });
+  it("Nov 10–12 plans with a 4-week review aren't asked again on Nov 27 (the month-end rule would have)", () => {
+    expect(at({ today: "2026-11-27", reviewDue: "2026-12-10", lastAnswered: "2026-11-08" })).toBe("wait");
+  });
+  it("the check-in already answered this week: the next card carries it, else the form", () => {
+    expect(at({ weeklyCard: "answered", weeklyCardComing: true })).toBe("wait");
+    expect(at({ weeklyCard: "answered", weeklyCardComing: false })).toBe("standalone");
+    expect(at({ weeklyCard: "answered", hasPrior: false, lastAnswered: null })).toBe("standalone");
+  });
+  it("no check-ins at all: the form on the day it's due, from 9am", () => {
+    expect(at({ weeklyCard: null, weeklyCardComing: true })).toBe("wait");
+    expect(at({ weeklyCard: null, today: "2026-11-24" })).toBe("wait");
+    expect(at({ weeklyCard: null, today: "2026-11-27", hour: 8 })).toBe("wait");
+    expect(at({ weeklyCard: null, today: "2026-11-27", hour: 9 })).toBe("standalone");
+  });
+});
+
+describe("photos and measurements: the coach's schedule, else the goal, never required", () => {
+  it("goal defaults", () => {
+    expect(progressDefault("photos", { phase: "Fat Loss", goalType: null, classMeet: false }).days).toBe(28);
+    expect(progressDefault("measurements", { phase: "Fat Loss", goalType: null, classMeet: false }).days).toBe(14);
+    expect(progressDefault("measurements", { phase: "Recomp", goalType: null, classMeet: false }).days).toBe(14);
+    expect(progressDefault("photos", { phase: "Muscle Gain", goalType: null, classMeet: false }).days).toBe(28);
+    expect(progressDefault("measurements", { phase: "Muscle Gain", goalType: null, classMeet: false }).days).toBe(28);
+    expect(progressDefault("photos", { phase: "Maintenance", goalType: null, classMeet: false }).days).toBeNull();
+    expect(progressDefault("photos", { phase: null, goalType: null, classMeet: false }).days).toBeNull();
+    expect(progressDefault("photos", { phase: null, goalType: "lose", classMeet: false }).days).toBe(28);
+    expect(progressDefault("photos", { phase: "Fat Loss", goalType: null, classMeet: true }).days).toBeNull();
+  });
+  it("a maintenance client is never asked; a fat loss one is, optionally, until they're on file", () => {
+    expect(keys(planCheckin(base({ phase: "Maintenance" })))).toEqual([]);
+    expect(keys(planCheckin(base({ phase: "Fat Loss" })))).toEqual(["photos", "measurements"]);
+  });
+  it("the coach's schedule wins both ways: switched on is theirs, No reminder is never", () => {
+    expect(keys(planCheckin(base({ phase: "Maintenance", schedules: [{ kind: "photos", enabled: true, frequency: "weekly", customDays: null }] })))).toEqual(["photos"]);
+    expect(keys(planCheckin(base({ phase: "Fat Loss", schedules: [{ kind: "photos", enabled: false, frequency: "none", customDays: null }] })))).toEqual(["measurements"]);
+    // switched off with a frequency still picked (July's rows): follows the goal
+    expect(keys(planCheckin(base({ phase: "Fat Loss", schedules: [{ kind: "photos", enabled: false, frequency: "weekly", customDays: null }] })))).toEqual(["photos", "measurements"]);
   });
 });
 
@@ -193,5 +255,128 @@ describe("delivery, wired", () => {
     expect(read("src/lib/sms-unread-reminders.server.ts")).toContain(".filter(isNudgeable)");
     expect(read("src/lib/meet-checklist-reminders.server.ts")).toContain("const today = dayIn(a.client?.timezone);");
     expect(read("src/lib/push/scheduled-pushes.server.ts")).toContain("digestLines({ workout: workoutLine");
+  });
+});
+
+describe("the monthly Nutrition Update inside the check-in", () => {
+  it("sits just before the open questions: meals, a swap only when swapping, what changed, each change's one follow-up", async () => {
+    const { nutritionSteps } = await import("@/lib/checkin-coordination/steps");
+    const weekly = ["week_rating", "nutrition_rating", "recovery_flags", "win", "help"].map((key) => ({ key }));
+    const plan = planCheckin(base({ nutritionPendingSince: "2026-11-20", nutritionLastAnswered: "2026-10-26" }));
+    const steps = addPlanSteps(weekly, plan) as Array<{ key: string; showWhen?: (a: Record<string, any>) => boolean }>;
+    expect(steps.map((s) => s.key)).toEqual([
+      "week_rating", "nutrition_rating", "recovery_flags",
+      "nu_meals", "nu_swap", "nu_changed", "nu_goal", "nu_goal_detail", "nu_allergies", "nu_health", "nu_supplements", "nu_activity", "nu_free_meal",
+      "win", "help",
+    ]);
+    const shown = (a: Record<string, any>) => steps.filter((s) => !s.showWhen || s.showWhen(a)).map((s) => s.key).filter((k) => k.startsWith("nu_"));
+    // nothing changed and keeping the meals: 2 screens
+    expect(shown({ nu_meals: "Keep my meals (just update the numbers)", nu_changed: ["Nothing else changed"] })).toEqual(["nu_meals", "nu_changed"]);
+    expect(shown({ nu_meals: "Swap some foods or meals", nu_changed: ["Health, injuries or meds"] })).toEqual(["nu_meals", "nu_swap", "nu_changed", "nu_health"]);
+    expect(nutritionSteps({ since: "2026-10-26" }).find((s) => s.key === "nu_changed")?.prompt).toBe("Anything changed since your last update (Oct 26)?");
+    // a first one is the form, not inline steps
+    const first = planCheckin(base({ nutritionPendingSince: "2026-11-20" }));
+    expect(addPlanSteps(weekly, first).map((s) => s.key).some((k) => k.startsWith("nu_"))).toBe(false);
+  });
+
+  it("is an ordinary Nutrition Update: last month's answers carried, records refreshed, only what changed rewritten", async () => {
+    const { foldNutritionAnswers, roleOf, withChange } = await import("@/lib/checkin-coordination/nutrition-fold");
+    // the production form's own labels
+    const labels: Record<string, string> = {
+      sex: "Sex", bw: "Current fasted bodyweight? (lbs)", height: "Height (ft)", goal: "Goal", bf: "Which body fat % range do you look closest to?",
+      detail: "Explain your goal with more details: is there a target bodyweight? timeframe? an event?", allergies: "Any allergies? list all and explain",
+      health: "Any health conditions, injuries or medications? List them, or write none.", supps: "What supplements do you take now? Name and dose, or write none.",
+      meals: "What should happen with the meals in your current plan?", swap: "Which foods or meals do you want changed, and what would you rather have?",
+      free: "Do you want a free meal on your High Day?", pick: "What's your go-to free meal?", days: "Training days per week", missed: "Anything i missed or need to know?",
+      agree: "I understand this plan uses exact measurements (grams/oz) for best results. I will weigh my food.",
+    };
+    const types: Record<string, string> = { sex: "dropdown", bw: "number", days: "number", goal: "dropdown", free: "single_choice", pick: "single_choice", meals: "single_choice", agree: "dropdown" };
+    const validation: Record<string, Record<string, unknown>> = { sex: { prefill: "sex" }, bw: { prefill: "bodyweight", unit: "lb" }, height: { prefill: "height" }, meals: { prefill: "nutrition_plan" } };
+    const questions = Object.entries(labels).map(([id, label]) => ({ id, label, question_type: types[id] ?? "long_text", options: id === "sex" ? ["Male", "Female", "Prefer not to say"] : null, validation: validation[id] ?? {} }));
+    expect(questions.map((q) => roleOf(q.label))).toEqual([null, null, null, "goal", "bodyFat", "goalDetail", "allergies", "health", "supplements", "meals", "swap", "freeMeal", "freeMealPick", "trainingDays", "missed", null]);
+    const t = (question_id: string, value_text: string) => ({ question_id, value_text, value_number: null, value_json: null });
+    const last = [
+      t("sex", "Male"), { question_id: "bw", value_text: null, value_number: 182, value_json: null }, t("height", "5 ft 10"), t("goal", "Fat Loss"), t("bf", "20–24%"),
+      t("detail", "185 by Christmas"), t("allergies", "None"), t("health", "Sore shoulder"), t("supps", "Creatine 5g"), t("meals", "Keep my meals (just update the numbers)"),
+      t("free", "Yes, give me a free meal on my High Day"), t("pick", "Pizza"), { question_id: "days", value_text: null, value_number: 3, value_json: null }, t("missed", "Busy month"), t("agree", "Yes, I understand and agree"),
+    ];
+    const fold = (checkin: Record<string, unknown>, fresh = true) =>
+      Object.fromEntries(
+        foldNutritionAnswers({
+          questions,
+          last,
+          profile: { sex: "male", height_cm: 178, preferred_height_unit: "imperial", has_nutrition_plan: true, bodyweight: fresh ? { value: 179.4, unit: "lb", date: "2026-11-20", fresh: true } : null },
+          trainingDays: 4,
+          checkin,
+          day: "2026-11-20",
+        }).map((r) => [r.question_id, r.value_text ?? r.value_number]),
+      );
+    const nothing = fold({ nu_meals: "Keep my meals (just update the numbers)", nu_changed: ["Nothing else changed"], help: "" });
+    expect(nothing).toMatchObject({ sex: "Male", bw: 179.4, goal: "Fat Loss", detail: "185 by Christmas", allergies: "None", health: "Sore shoulder", supps: "Creatine 5g", pick: "Pizza", days: 4, missed: "That's everything", agree: "Yes, I understand and agree" });
+    expect(nothing.swap).toBeUndefined();
+    const changed = fold({
+      nu_meals: "Swap some foods or meals", nu_swap: "No more tuna",
+      nu_changed: ["Goal or target", "Allergies or diet", "Health, injuries or meds", "Free meal"],
+      nu_goal: "Maintenance", nu_goal_detail: "Hold through the holidays", nu_allergies: "Lactose intolerant", nu_health: "Shoulder's fine now", nu_free_meal: "No free meal, just a planned High Day",
+      help: "Travelling Dec 20",
+    });
+    expect(changed).toMatchObject({ meals: "Swap some foods or meals", swap: "No more tuna", goal: "Maintenance", detail: "Hold through the holidays", allergies: "Lactose intolerant", health: "Sore shoulder\nUpdate Nov 20: Shoulder's fine now", free: "No free meal, just a planned High Day", missed: "Travelling Dec 20" });
+    expect(changed.pick).toBeUndefined();
+    // a follow-up typed and then unticked never lands
+    expect(fold({ nu_meals: "Keep my meals (just update the numbers)", nu_changed: ["Nothing else changed"], nu_goal: "Muscle Gain" }).goal).toBe("Fat Loss");
+    // last month's weight is never this month's
+    expect(fold({ nu_meals: "Keep my meals (just update the numbers)", nu_changed: ["Nothing else changed"] }, false).bw).toBeUndefined();
+    expect(withChange("None", "Peanuts", "Nov 20")).toBe("Peanuts");
+  });
+
+  it("stores answers the way the form does (the same JSON types)", async () => {
+    const { toRow } = await import("@/lib/checkin-coordination/nutrition-fold");
+    const { NF_JSON_TYPES } = await import("@/lib/native-forms");
+    expect([...NF_JSON_TYPES].sort()).toEqual(["checklist", "competitions", "multi_choice", "ranking"]);
+    expect(toRow({ id: "q", label: "x", question_type: "multi_choice" }, ["a"])).toMatchObject({ value_json: ["a"] });
+    expect(toRow({ id: "q", label: "x", question_type: "number" }, "182.5")).toMatchObject({ value_number: 182.5 });
+    expect(toRow({ id: "q", label: "x", question_type: "number" }, { value: "82.5", unit: "kg" })).toMatchObject({ value_number: 82.5, value_json: { unit: "kg" } });
+    expect(toRow({ id: "q", label: "x", question_type: "long_text" }, "")).toBeNull();
+  });
+});
+
+describe("the Nutrition Update sender in SQL mirrors the decision", () => {
+  const sql = readFileSync("supabase/migrations/20270403090000_nutrition_update_in_checkin.sql", "utf8");
+  it("review weeks and guards match plan.ts", () => {
+    expect(sql).toMatch(/'\(loss\|cut\)' THEN 4/);
+    expect(sql).toMatch(/'recomp' THEN 6/);
+    expect(sql).toMatch(/'\(gain\|bulk\|reverse\)' THEN 6/);
+    expect(sql).toMatch(/'\(maint\|perform\)' THEN 8/);
+    expect(sql).toMatch(/last_answered > local_date - 21/);
+    expect(sql).toMatch(/interval '25 days'/);
+    expect(sql).toMatch(/review_due > local_date \+ 7/);
+    // the retired cadence column is only ever mentioned in a comment, never read
+    expect(sql.split("\n").filter((l) => !l.trim().startsWith("--")).join("\n")).not.toMatch(/update_cadence/);
+  });
+});
+
+describe("carrying only when the last update can carry it", () => {
+  it("a required question never answered: the free meal is asked inline, anything else means the full form", async () => {
+    const { foldGaps } = await import("@/lib/checkin-coordination/nutrition-fold");
+    const q = (id: string, label: string, required = true, validation: Record<string, unknown> = {}) => ({ id, label, question_type: "single_choice", required, validation });
+    const qs = [
+      q("goal", "Goal"), q("free", "Do you want a free meal on your High Day?"), q("meals", "What should happen with the meals in your current plan?"),
+      q("bw", "Current fasted bodyweight? (lbs)", true, { prefill: "bodyweight" }), q("health", "Any health conditions, injuries or medications? List them, or write none.", false),
+      q("foods", "List all of your foods + preferences"),
+    ];
+    expect(foldGaps(qs, ["goal", "free", "foods"])).toEqual({ foldable: true, askFreeMeal: false });
+    // the free meal came to the form later: asked inline (a real client's Oct 25 update)
+    expect(foldGaps(qs, ["goal", "foods"])).toEqual({ foldable: true, askFreeMeal: true });
+    // their foods never answered: the full form, which opens on what they did say
+    expect(foldGaps(qs, ["goal", "free"]).foldable).toBe(false);
+    const { nutritionSteps } = await import("@/lib/checkin-coordination/steps");
+    const free = nutritionSteps({ askFreeMeal: true }).find((s) => s.key === "nu_free_meal")!;
+    expect(free.showWhen!({ nu_changed: ["Nothing else changed"] })).toBe(true);
+    expect(nutritionSteps({}).find((s) => s.key === "nu_free_meal")!.showWhen!({ nu_changed: ["Nothing else changed"] })).toBe(false);
+  });
+
+  it("the chat's copy of the form id is the prompts' one", async () => {
+    const { NUTRITION_REQUEST_FORM_ID } = await import("@/lib/nutrition-ai-prompts");
+    expect(readFileSync("src/components/messages/messenger-checkin-card.tsx", "utf8")).toContain(`const NUTRITION_FORM_ID = "${NUTRITION_REQUEST_FORM_ID}"`);
   });
 });

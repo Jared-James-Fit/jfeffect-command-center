@@ -98,7 +98,9 @@ describe("AI drafts are read by code, never trusted", () => {
     expect(d.title).toBe("Meet prep");
     expect(d.questions.map((q) => q.question_type)).toEqual(["info", "short_text", "single_choice", "number", "checklist"]);
     expect(d.questions[2].options).toEqual(["Yes", "No"]);
-    expect(d.questions[3].validation).toEqual({ unit: "lb" });
+    // a question the app can already answer starts from it (form-prefill.ts suggestPrefill)
+    expect(d.questions[3].validation).toEqual({ unit: "lb", prefill: "bodyweight" });
+    expect(d.questions[1].validation).toEqual({ prefill: "full_name" });
     expect((d.questions[4].validation.items as any[]).map((i) => [i.key, i.priority])).toEqual([["belt", "critical"], ["belt-2", "important"], ["chalk", "important"]]);
   });
   it("refuses an answer that isn't a form", () => {

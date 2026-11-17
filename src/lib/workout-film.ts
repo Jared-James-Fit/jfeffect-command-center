@@ -154,6 +154,28 @@ export function isOwnFilmCaption(caption: string | null | undefined, workoutTitl
   return !named || workoutTitles.some((t) => (t ?? "").trim() === named);
 }
 
+/**
+ * Whether a caption is only the film's own summary (the database's
+ * film_caption: "High Bar Squat 365 lb × 6 · 1ct Paused Bench 255 lb × 4",
+ * each part an exercise on the film with one of its sets' numbers before the
+ * "@", or the name alone on a post that hides weights), never their own words.
+ * On a post's screen each clip's set is already said under the name, so the
+ * summary would say it twice.
+ */
+export function isFilmSummary(caption: string | null | undefined, film: readonly Pick<FilmSlide, "exercise" | "label">[] | null | undefined): boolean {
+  const text = (caption ?? "").trim();
+  if (!text || !film?.length) return false;
+  const said = new Set<string>();
+  for (const f of film) {
+    const ex = (f.exercise ?? "").trim();
+    if (!ex || ex === "Set") continue;
+    said.add(ex);
+    const work = (f.label ?? "").replace(/\s*@.*$/, "").trim();
+    if (work) said.add(`${ex} ${work}`);
+  }
+  return text.split(" · ").every((part) => said.has(part.trim()));
+}
+
 /** Where a clip's copy lives in community-media (the athlete's own folder). */
 export function filmPaths(userId: string, completionId: string, setVideoId: string, sourcePath: string): { path: string; thumb: string } {
   const ext = (/\.([a-z0-9]{2,4})$/i.exec(sourcePath)?.[1] ?? "mp4").toLowerCase();

@@ -824,6 +824,13 @@ export const submitMessengerCheckin = createServerFn({ method: "POST" })
       }
     }
 
+    // This month's Nutrition Update answered inside the check-in: the form's submission, and its AI plan queued.
+    let nutritionSubmissionId: string | null = null;
+    if (taskType === "weekly_checkin") {
+      const { foldNutritionUpdate } = await import("@/lib/checkin-coordination/nutrition-fold.server");
+      nutritionSubmissionId = await foldNutritionUpdate(sb, row, data.answers as Record<string, unknown>);
+    }
+
     const meta = TASK_META[taskType];
     const { data: sentMessage } = await sb
       .from("messages")
@@ -880,6 +887,7 @@ export const submitMessengerCheckin = createServerFn({ method: "POST" })
       status: "completed",
       submitted_at: now,
       submission_message_id: sentMessage?.id ?? null,
+      nutrition_submission_id: nutritionSubmissionId,
     };
   });
 
@@ -962,7 +970,7 @@ export const getCheckinPlan = createServerFn({ method: "POST" })
   .inputValidator((d: { submissionId: string }) => z.object({ submissionId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const sb = await adminClient();
-    const { data: row } = await sb.from("messenger_checkins").select("id, client_id, status, plan, created_at, occurrence_id, task_type").eq("id", data.submissionId).maybeSingle();
+    const { data: row } = await sb.from("messenger_checkins").select("id, client_id, status, plan, created_at, occurrence_id, task_type, nutrition_requested_at").eq("id", data.submissionId).maybeSingle();
     if (!row) throw new Error("Check-in not found.");
     await resolveClientAccess(context.supabase, context.userId, row.client_id);
     if (row.task_type !== "weekly_checkin") return { plan: null };

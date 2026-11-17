@@ -6,6 +6,8 @@
  * before anyone sees it (never sent, never shared, never active by itself).
  */
 
+import { suggestPrefill } from "@/lib/form-prefill";
+
 export const DRAFT_TYPES = [
   "short_text",
   "long_text",
@@ -96,6 +98,9 @@ export function parseFormDraft(text: string): FormDraft | null {
       if (!items.length) continue;
       validation.items = items;
     }
+    // a question the app can already answer (their name, training days, weight class…) starts from it
+    const sync = suggestPrefill({ label, question_type: type, options });
+    if (sync) validation.prefill = sync;
     questions.push({
       question_type: type,
       label,

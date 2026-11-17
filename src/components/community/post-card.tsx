@@ -59,7 +59,7 @@ import { SharedCommentCard, openCommunityPost } from "@/components/community/sha
 import { CollaboratorsSheet } from "@/components/community/mentions";
 import { InlineFollow } from "@/components/community/follow-button";
 import { PageCaption } from "@/components/community/page-caption";
-import { isOwnFilmCaption } from "@/lib/workout-film";
+import { isFilmSummary, isOwnFilmCaption } from "@/lib/workout-film";
 import { POST_SHEET_HEIGHT } from "@/lib/post-sheet";
 import { RepostButton, RepostedHeader, SaveButton, useRepostNote } from "@/components/community/repost-save";
 
@@ -506,9 +506,16 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     document.documentElement.setAttribute("data-clip-held", "");
     return () => document.documentElement.removeAttribute("data-clip-held");
   }, [holding]);
+  // on a post's screen its words say which set the clip on screen is (a workout film's slide, postSlides);
+  // its carousel reports the slide, kept per post so another post's slide is never read
+  const [screenSlide, setScreenSlide] = useState<{ id: string; i: number }>({ id: post.id, i: 0 });
+  const slideSet = layout === "page" ? (postSlides(post)[screenSlide.id === post.id ? screenSlide.i : 0]?.caption ?? null) : null;
+  const showSlide = (i: number) => setScreenSlide((v) => (v.id === post.id && v.i === i ? v : { id: post.id, i }));
   const s = post.stats;
   const lift = s ? featuredLift(s) : null;
   const stats = s ? workoutStats(s, unit) : [];
+  // a workout's PRs as one pill: "3 PRs", else the one record's scope ("All-time PR")
+  const prLabel = !s ? null : s.pr_count > 1 ? `${s.pr_count} PRs` : lift?.pr ? SCOPE_WORD[lift.pr] : s.pr_count === 1 ? "PR" : null;
   const isNote = post.kind === "note";
   // the daily series, lessons, holidays, birthdays: a picture, then the words (Instagram's layout)
   const auto = isAutoPost(post);
@@ -644,7 +651,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
             ) : (
               // its own photos and clips: the screen is the canvas (TikTok's), PostMedia page;
               // its sheet open, a rounded card at its own shape above it (Instagram's)
-              <PostMedia post={post} thumbUrl={thumbUrl} page shrunk={sheetOpen} />
+              <PostMedia post={post} thumbUrl={thumbUrl} page shrunk={sheetOpen} onSlide={showSlide} />
             )
           ) : (
             // words, a workout, a lock in: centred, clear of the words and buttons around it (it scrolls when it's long)
@@ -694,7 +701,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
           style={{ paddingBottom: "var(--feed-words-bottom)" }}
           data-page-words
         >
-          <div ref={wordsRef} className={cn("mr-16 space-y-1.5 px-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]", !sheetOpen && !under && !holding && "pointer-events-auto")} data-page-words-body>
+          <div ref={wordsRef} className={cn("mr-16 space-y-1.5 px-3 [text-shadow:0_1px_3px_rgb(0_0_0/0.5)]", !sheetOpen && !under && !holding && "pointer-events-auto")} data-page-words-body>
             {note.bubble && <div data-note-over>{note.bubble}</div>}
             <RepostedHeader post={post} onOpenAuthor={onOpenAuthor} />
             <AuthorLine
@@ -707,13 +714,40 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
               trailing={!post.is_mine && onOpenAuthor ? <InlineFollow userId={post.author.user_id} name={post.author.name} /> : null}
             />
             {visual && s && (
-              // the tap reaches 6px above and below the line (the gap to the lines around it), so it's finger-sized without moving anything
-              <button type="button" onClick={() => onOpen(post)} className="relative flex max-w-full items-center gap-1.5 text-left text-[13px] font-semibold after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']" data-page-workout>
-                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
-                <span className="truncate">{workoutHeadline(s)}</span>
-                {lift?.pr && <span className="shrink-0 rounded-full bg-warning/20 px-1.5 text-[11px] font-bold text-warning">{SCOPE_WORD[lift.pr]}</span>}
-                <span className="shrink-0 text-muted-foreground">· View workout</span>
-                <ChevronRight className="-ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              // the workout this came from: context, so a quiet line (the way in is the pill under the set)
+              // (a long name wraps to a second line on a small phone rather than being cut)
+              <div className="flex min-w-0 items-start gap-1.5 text-[13px] font-semibold leading-snug text-foreground/90" data-page-workout-name>
+                <CheckCircle2 className="mt-[0.15em] h-3.5 w-3.5 shrink-0 text-success" aria-hidden />
+                <span className="line-clamp-2 break-words">{workoutHeadline(s)}</span>
+              </div>
+            )}
+            {slideSet && (
+              // the set on screen (a workout film's clip): the exercise, then which set and what was lifted;
+              // each swipe its own, never the first clip's on every slide (a photo or a clip with no set says nothing)
+              <div className="min-w-0" data-page-set>
+                <div className="line-clamp-2 break-words text-[15px] font-semibold leading-snug">{slideSet.title}</div>
+                {slideSet.detail && <div className="truncate text-[13px] leading-snug tabular-nums text-foreground/80">{slideSet.detail}</div>}
+              </div>
+            )}
+            {visual && s && (
+              // its PRs and the way in, as pills: 28px to see, 44px to tap (the tap reaches 8px above and below);
+              // the theme's dark grey, so they read on black and over a bright clip alike
+              <button
+                type="button"
+                onClick={() => onOpen(post)}
+                className="relative flex max-w-full items-center gap-1.5 text-left transition-opacity active:opacity-70 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
+                data-page-workout
+              >
+                {prLabel && (
+                  <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-secondary/80 px-2.5 text-[12px] font-bold text-warning" data-page-prs>
+                    <Trophy className="h-3.5 w-3.5" aria-hidden />
+                    {prLabel}
+                  </span>
+                )}
+                <span className="inline-flex h-7 shrink-0 items-center gap-0.5 rounded-full bg-secondary/80 pl-3 pr-2 text-[12px] font-semibold text-foreground">
+                  View workout
+                  <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+                </span>
               </button>
             )}
             {visual && !s && post.locked_in_at && (
@@ -726,7 +760,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
               // Our own film caption ("Glutes + Legs · 3 sets on film") isn't repeated under the workout's line
               post.caption?.trim() &&
               (auto || !isNote || visual) &&
-              !(visual && s && isOwnFilmCaption(post.caption, [s.workout_name, s.workout_title])) && (
+              !(visual && s && isOwnFilmCaption(post.caption, [s.workout_name, s.workout_title])) &&
+              !(visual && isFilmSummary(post.caption, post.film)) && (
                 <PageCaption text={post.caption} mentions={post.mentions} onOpen={() => onOpenCaption(post)} />
               )
             ) : auto ? (
@@ -1172,6 +1207,7 @@ export function PostMedia({
   ratio: fixed,
   page = false,
   shrunk = false,
+  onSlide,
 }: {
   post: CommunityPost;
   thumbUrl: string | null;
@@ -1179,6 +1215,8 @@ export function PostMedia({
   lead?: ReactNode;
   trail?: ReactNode;
   ratio?: number;
+  /** On a post's screen: which of its slides is on screen (its words say that slide's set). */
+  onSlide?: (i: number) => void;
   /**
    * On a post's own screen in the feed: the screen is the canvas (TikTok's).
    * Each slide fills it or sits whole across it with black above and below
@@ -1213,7 +1251,7 @@ export function PostMedia({
     return (
       <FitBox ratio={ratio} screen shrunk={shrunk}>
         {slides.length > 1 ? (
-          <PostCarousel slides={slides} coverUrl={thumbUrl} frame={frame} full={full} page screenRef={screenRef} fits={fits} shrunk={shrunk} />
+          <PostCarousel slides={slides} coverUrl={thumbUrl} frame={frame} full={full} page screenRef={screenRef} fits={fits} shrunk={shrunk} onSlide={onSlide} />
         ) : (
           <div ref={screenRef} className="absolute inset-0 overflow-hidden bg-black" data-screen-canvas data-fit={fits[0]}>
             {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page fit={fits[0]} shrunk={shrunk} /> : <div className="h-full w-full animate-pulse bg-muted" />}
@@ -1376,29 +1414,27 @@ function SlideMedia({
           {src ? <FadeImg src={src} position={position} whole={page} /> : <div className="h-full w-full animate-pulse bg-muted" />}
         </div>
       )}
-      {slide.caption && !shrunk && <SlideCaption caption={slide.caption} withDots={withDots} top={page} />}
+      {/* on a post's own screen its set is said in the words at the bottom (PostCard's data-page-set), never over the clip */}
+      {slide.caption && !shrunk && !page && <SlideCaption caption={slide.caption} withDots={withDots} />}
     </>
   );
 }
 
 /**
- * A workout film clip's own caption, on the clip: the exercise, then the set
- * and what was lifted. It moves with its slide (each swipe has its own), sits
- * on a soft scrim at the bottom, clear of the sound button and the dots, and
- * never takes a tap (double-tap ❤️ and the clip's sound still work).
+ * A workout film clip's own caption, on the clip (the card feed and a post's
+ * page): the exercise, then the set and what was lifted. It moves with its
+ * slide (each swipe has its own), sits on a soft scrim at the bottom, clear of
+ * the sound button and the dots, and never takes a tap (double-tap ❤️ and the
+ * clip's sound still work). On a post's own screen it's in the words instead.
  */
-function SlideCaption({ caption, withDots, top = false }: { caption: { title: string; detail: string }; withDots: boolean; top?: boolean }) {
+function SlideCaption({ caption, withDots }: { caption: { title: string; detail: string }; withDots: boolean }) {
   return (
     <div
       data-slide-caption
       className={cn(
-        "pointer-events-none absolute inset-x-0 pl-3.5 pr-14 text-white",
-        // on a post's own screen its words are at the bottom, so the set's sit at the top
-        top ? "top-0 bg-gradient-to-b from-black/65 via-black/25 to-transparent pb-10" : "bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent pt-12",
-        !top && (withDots ? "pb-7" : "pb-3"),
+        "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent pl-3.5 pr-14 pt-12 text-white",
+        withDots ? "pb-7" : "pb-3",
       )}
-      // on a post's screen, under Crew's bar
-      style={top ? { paddingTop: "calc(var(--feed-bar-room, 0px) + 0.75rem)" } : undefined}
     >
       <div className="truncate text-[15px] font-semibold leading-tight [text-shadow:0_1px_2px_rgb(0_0_0/0.45)]">{caption.title}</div>
       <div className="mt-0.5 truncate text-[13px] tabular-nums text-white/85">{caption.detail}</div>
@@ -1454,6 +1490,7 @@ function PostCarousel({
   screenRef,
   fits,
   shrunk = false,
+  onSlide,
 }: {
   slides: PostSlide[];
   coverUrl: string | null;
@@ -1467,6 +1504,8 @@ function PostCarousel({
   fits?: ("cover" | "contain")[];
   /** Its post's sheet open: a small card ("2/4" in its corner). */
   shrunk?: boolean;
+  /** Which of `slides` is on screen, as it changes (and on mounting): the post's words follow it. */
+  onSlide?: (i: number) => void;
 }) {
   const [index, setIndex] = useState(0);
   const [seen, setSeen] = useState(1);
@@ -1475,6 +1514,11 @@ function PostCarousel({
   // with a lead slide, the post's own slides start one along
   const off = lead ? 1 : 0;
   const count = slides.length + off + (trail ? 1 : 0);
+  const onSlideRef = useRef(onSlide);
+  onSlideRef.current = onSlide;
+  useLayoutEffect(() => {
+    onSlideRef.current?.(index - off);
+  }, [index, off]);
   const onScroll = () => {
     const el = track.current;
     if (!el || !el.clientWidth) return;

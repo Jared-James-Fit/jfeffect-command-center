@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { checklistItems, itemKey, PRIORITIES, PRIORITY_LABEL, type ChecklistItem, type Priority } from "@/lib/form-checklist";
 import type { NfQuestion } from "@/lib/native-forms";
+import { suggestPrefill } from "@/lib/form-prefill";
 
 type SaveValidation = (patch: Record<string, unknown>) => void;
 
@@ -187,12 +188,17 @@ export function ReadinessFieldsEditor({ q, areas, saveValidation }: { q: NfQuest
 
 const PREFILLS: Array<{ value: string; label: string; types: string[] }> = [
   { value: "full_name", label: "Their name", types: ["short_text"] },
+  { value: "sex", label: "Their sex", types: ["single_choice", "dropdown", "short_text"] },
+  { value: "height", label: "Their height", types: ["short_text"] },
+  { value: "bodyweight", label: "Their latest weigh-in", types: ["number"] },
+  { value: "training_days", label: "Their training schedule", types: ["number", "multi_choice"] },
+  { value: "training_time", label: "When their workouts start", types: ["single_choice", "dropdown"] },
+  { value: "goal", label: "Their goal (Goals & Setup)", types: ["single_choice", "dropdown"] },
+  { value: "age_class", label: "Age classes their birth year allows", types: ["multi_choice"] },
+  { value: "weight_class", label: "Their weight class (meet prep, else weigh-ins)", types: ["single_choice", "dropdown", "short_text"] },
   { value: "meet_name", label: "Their next meet's name", types: ["short_text"] },
   { value: "meet_date", label: "Their next meet's date", types: ["date"] },
   { value: "meet_weight_class", label: "Their weight class for the meet", types: ["single_choice", "dropdown", "short_text"] },
-  { value: "bodyweight", label: "Their latest weigh-in", types: ["number"] },
-  { value: "sex", label: "Their sex", types: ["single_choice", "dropdown", "short_text"] },
-  { value: "height", label: "Their height", types: ["short_text"] },
 ];
 
 /** Start from what's on their account (they can change it), and how a text box opens on a phone. */
@@ -200,6 +206,8 @@ export function AnswerSourceEditor({ q, saveValidation }: { q: NfQuestion; saveV
   const v = (q.validation ?? {}) as Record<string, unknown>;
   const options = PREFILLS.filter((p) => p.types.includes(q.question_type));
   const units = Array.isArray(v.units) && v.units.length > 0;
+  // what the question's words point at ("Training days per week" → their training schedule)
+  const suggested = typeof v.prefill === "string" ? null : options.find((p) => p.value === suggestPrefill(q)) ?? null;
   return (
     <div className="grid gap-2 text-xs sm:grid-cols-2">
       {options.length > 0 && (
@@ -213,6 +221,16 @@ export function AnswerSourceEditor({ q, saveValidation }: { q: NfQuestion; saveV
             </SelectContent>
           </Select>
         </div>
+      )}
+      {suggested && (
+        <button
+          type="button"
+          className="flex h-8 items-center gap-1.5 rounded-lg bg-muted px-2.5 text-left font-medium text-foreground hover:bg-muted/70 sm:col-span-2"
+          onClick={() => saveValidation({ prefill: suggested.value })}
+          data-prefill-suggestion
+        >
+          Fill this in from {suggested.label.charAt(0).toLowerCase() + suggested.label.slice(1)}? They can still change it.
+        </button>
       )}
       {q.question_type === "short_text" && (
         <div className="flex items-center gap-2">
