@@ -4,8 +4,6 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   alignRanking,
-  eligibleAgeClasses,
-  eligibleOptions,
   groupOptions,
   moveRank,
   readMeets,
@@ -250,15 +248,3 @@ export function GroupedChoice({
   );
 }
 
-/** "From your birth year you can lift Junior and Open in 2027." */
-export function AgeClassHint({ options, birthDate }: { options: string[]; birthDate: string | null | undefined }) {
-  const year = new Date().getMonth() >= 9 ? new Date().getFullYear() + 1 : new Date().getFullYear();
-  const now = eligibleOptions(options, eligibleAgeClasses(birthDate, year));
-  if (!now.length) return null;
-  const names = now.map((o) => o.replace(/\s*\(.*\)\s*$/, "").toLowerCase().replace(/(^|\s|-)\w/g, (c) => c.toUpperCase()));
-  return (
-    <p className="mb-2.5 text-[14px] text-muted-foreground" data-age-class-hint>
-      From your birth year you can lift {names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0]} in {year}. Pick every class you'll enter.
-    </p>
-  );
-}

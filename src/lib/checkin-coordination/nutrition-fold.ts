@@ -19,7 +19,7 @@
  */
 import { MEAL_CHOICE } from "@/lib/nutrition-history";
 import { isNoneAnswer } from "@/lib/nutrition-targets/food-notes";
-import { prefillAnswer, questionPrefill, type PrefillProfile } from "@/lib/form-prefill";
+import { prefillAnswer, questionPrefill, startingAnswer, type PrefillProfile } from "@/lib/form-prefill";
 
 /** The check-in's own keys for the monthly section (kept in messenger_checkins.answers, shown on the coach's card). */
 export const NU = {
@@ -187,12 +187,12 @@ export function foldNutritionAnswers(x: FoldInput): FoldAnswer[] {
   for (const q of x.questions) {
     const role = roleOf(q.label);
     let raw: unknown = rawOf(lastBy.get(q.id));
-    // from their records: sex, height, this week's weigh-in
+    // from their records (sex, height, this week's weigh-in, when they train), the form's own rule
     if (questionPrefill(q)) {
-      const fromRecords = prefillAnswer(q, x.profile);
-      if (fromRecords != null) raw = fromRecords;
+      const start = startingAnswer(q, x.profile, raw);
+      if (start) raw = start.value;
       // last month's weight is never this month's: no weigh-in this week leaves it to their log
-      else if (questionPrefill(q) === "bodyweight") raw = undefined;
+      if (questionPrefill(q) === "bodyweight" && prefillAnswer(q, x.profile) == null) raw = undefined;
     }
     switch (role) {
       case "meals":

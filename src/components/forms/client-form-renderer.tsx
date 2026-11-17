@@ -36,7 +36,7 @@ import {
 } from "@/lib/native-forms";
 import { buildFilloutUrl } from "@/lib/fillout";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
-import { prefillAnswer, questionPrefill } from "@/lib/form-prefill";
+import { prefillNote, questionPrefill, seasonYear, startingAnswer, TRAINING_TIME_DAYS, TRAINING_TIME_RECENT, workoutStartHours, type PrefillKey, type PrefillProfile } from "@/lib/form-prefill";
 import { sexFromAnswer } from "@/lib/athlete-sex";
 import { playAppSound } from "@/lib/app-sounds";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
@@ -44,7 +44,7 @@ import { cn } from "@/lib/utils";
 import { choiceLayout, formProgress, numberIssue, numberRange, quickAnswers, quickExclusive, quickNumberLabel, quickPicked, toggleQuick } from "@/lib/form-quick";
 import { NF_JSON_TYPES } from "@/lib/native-forms";
 import { alignRanking, meetItems } from "@/lib/form-fields";
-import { AgeClassHint, GroupedChoice, MeetsInput, RankingInput } from "@/components/forms/form-field-inputs";
+import { GroupedChoice, MeetsInput, RankingInput } from "@/components/forms/form-field-inputs";
 import { ChecklistSection, StillToSort, UnitNumberInput } from "@/components/forms/checklist-input";
 import { carriedChecklist, checklistAnswered, checklistItems, checklistStates, visibleItems } from "@/lib/form-checklist";
 import { bodyweightSuggestion, daysOutLabel, daysUntil, meetFacts, meetTimeline, currentStep, pickMeet, MEET_CHECKLIST_FORM_TYPE } from "@/lib/meet-checklist";
@@ -109,36 +109,13 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     enabled: !!form && form.kind !== "external",
   });
 
-  // Questions that start from the client's profile (e.g. sex, height).
+  // Questions that start from what the app already knows (form-prefill.ts): sex, height, their
+  // schedule, birth year, weigh-ins, when they train. Each source is read only when a question asks.
   const prefillQs = useMemo(() => questions.filter((q) => questionPrefill(q)), [questions]);
-  const { data: prefillProfile } = useQuery({
+  const { data: prefillProfile, isFetched: prefillFetched } = useQuery({
     queryKey: ["form-prefill-profile", client?.id, formId],
     enabled: !!client?.id && prefillQs.length > 0,
-    queryFn: async () => {
-      const wantsPlan = prefillQs.some((q) => questionPrefill(q) === "nutrition_plan");
-      const keys = new Set(prefillQs.map((q) => questionPrefill(q)));
-      const wantsMeet = keys.has("meet_name") || keys.has("meet_date") || keys.has("meet_weight_class");
-      const [{ data }, plans] = await Promise.all([
-        supabase.from("clients").select("sex, height_cm, preferred_height_unit, full_name, date_of_birth").eq("id", client!.id).maybeSingle(),
-        wantsPlan
-          ? (supabase as any)
-              .from("nutrition_targets")
-              .select("id, nutrition_target_days(id)")
-              .eq("client_id", client!.id)
-              .neq("status", "Archived")
-              .limit(5)
-          : Promise.resolve(null),
-      ]);
-      // Unknown (lookup failed) is null, so nothing gets pre-answered.
-      const has_nutrition_plan = !plans || plans.error
-        ? null
-        : ((plans.data ?? []) as any[]).some((t) => (t.nutrition_target_days ?? []).length > 0);
-      const [meet, bodyweight] = await Promise.all([
-        wantsMeet ? loadMeetGuess(client!.id, formId).catch(() => null) : Promise.resolve(null),
-        keys.has("bodyweight") ? loadLatestWeighIn(client!.id, (client as any)?.user_id ?? portalUserId).catch(() => null) : Promise.resolve(null),
-      ]);
-      return data ? { ...data, has_nutrition_plan, meet, bodyweight } : data;
-    },
+    queryFn: () => loadPrefillProfile(client!.id, (client as any)?.user_id ?? portalUserId, formId, new Set(prefillQs.map((q) => questionPrefill(q)!))),
   });
 
   const { data: submission } = useQuery({
@@ -285,28 +262,10 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     return m;
   }, [answersMap, local, submission?.id]);
 
-  // Save profile values as real answers the first time the form opens, so
-  // required checks, the coach and the AI all see them. Never overwrites an
-  // answer the client already gave.
-  const seeded = useRef(new Set<string>());
-  useEffect(() => {
-    if (!submission || submission.status !== "in_progress" || !answersData || !prefillProfile)
-      return;
-    for (const q of prefillQs) {
-      if (answersMap[q.id] || seeded.current.has(q.id)) continue;
-      const value = prefillAnswer(q, prefillProfile);
-      if (value == null) continue;
-      seeded.current.add(q.id);
-      void saveAnswer(q, value);
-    }
-    // saveAnswer is recreated each render; the inputs below decide when to seed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [submission, answersData, prefillProfile, prefillQs, answersMap]);
-
   // "Start from their last answer" (validation.remember): a form sent again opens on what they said
-  // last time, so they only change what's different. Never over an answer already given.
+  // last time, so they only change what's different.
   const rememberQs = useMemo(() => questions.filter((q) => (q.validation as any)?.remember === true), [questions]);
-  const { data: lastAnswers } = useQuery({
+  const { data: lastAnswers, isFetched: lastFetched } = useQuery({
     queryKey: ["nf-last-answers", formId, client?.id, submission?.id],
     enabled: !!client?.id && !!submission?.id && submission.status === "in_progress" && rememberQs.length > 0,
     queryFn: async () => {
@@ -323,26 +282,33 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
       return prev ? listAnswers((prev as any).id) : [];
     },
   });
+
+  // Save where each question starts as a real answer the first time the form opens, so required
+  // checks, the coach and the AI all see it: a fact the app keeps beats their last answer, a starting
+  // point only fills what they've never answered (startingAnswer). Waits for both reads, so which
+  // one lands first never decides; never over an answer they already gave.
+  const seeded = useRef(new Set<string>());
   const [carried, setCarried] = useState(false);
   useEffect(() => {
-    if (!submission || submission.status !== "in_progress" || !answersData || !lastAnswers?.length) return;
+    if (!submission || submission.status !== "in_progress" || !answersData) return;
+    if (prefillQs.length && !prefillFetched) return;
+    if (rememberQs.length && !lastFetched) return;
     let any = false;
-    for (const q of rememberQs) {
-      if (answersMap[q.id] || seeded.current.has(q.id)) continue;
-      const prev = lastAnswers.find((a) => a.question_id === q.id);
-      if (!prev) continue;
-      // a checklist carries only what they don't use (N/A): packed last meet isn't packed for this one
-      const value = q.question_type === "checklist"
-        ? carriedChecklist(prev.value_json)
-        : NF_JSON_TYPES.has(q.question_type) ? prev.value_json : q.question_type === "number" || q.question_type === "rating" ? prev.value_number : prev.value_text;
-      if (value == null || (Array.isArray(value) && !value.length) || value === "") continue;
+    for (const q of questions) {
+      const syncs = !!questionPrefill(q);
+      const remembers = (q.validation as any)?.remember === true;
+      if ((!syncs && !remembers) || answersMap[q.id] || seeded.current.has(q.id)) continue;
+      const prev = remembers ? lastAnswers?.find((a) => a.question_id === q.id) : undefined;
+      const start = startingAnswer(q, prefillProfile ?? null, prev ? rememberedValue(q, prev) : undefined);
+      if (!start) continue;
       seeded.current.add(q.id);
-      any = true;
-      void saveAnswer(q, value);
+      if (start.from === "last") any = true;
+      void saveAnswer(q, start.value);
     }
     if (any) setCarried(true);
+    // saveAnswer is recreated each render; the inputs below decide when to seed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [submission, answersData, lastAnswers, rememberQs, answersMap]);
+  }, [submission, answersData, prefillProfile, prefillFetched, lastAnswers, lastFetched, questions, prefillQs, rememberQs, answersMap]);
 
   const [busyQ, setBusyQ] = useState<Record<string, "uploading" | "removing" | "replacing" | undefined>>({});
 
@@ -650,6 +616,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
           const idx = shownQuestions.filter((x) => x.question_type !== "info" && x.question_type !== "checklist").indexOf(q);
           const issue = q.question_type === "number" ? numberIssue(q, local[q.id]) : null;
           const flag = flagged.has(q.id);
+          const note = readOnly ? null : prefillNote(q, prefillProfile ?? null, local[q.id]);
           return (
             <section
               key={q.id}
@@ -689,6 +656,12 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
                   onReplace={(fileId, file) => handleFileReplace(q, fileId, file)}
                 />
               </div>
+              {note && (
+                // filled in from what the app already knows; gone once they change it for this form
+                <p className="mt-2 text-[13px] leading-snug text-muted-foreground" data-form-prefilled>
+                  {note}
+                </p>
+              )}
               {issue ? (
                 <p className="mt-2 text-[13px] font-semibold text-amber-600 dark:text-amber-400" data-form-number-issue>{issue}</p>
               ) : (
@@ -859,6 +832,88 @@ async function loadMeetGuess(clientId: string, formId: string) {
   }
   const sent = (assignment?.settings as any)?.meet ?? null;
   return pickMeet({ sent, preps: preps ?? [], plan }, today);
+}
+
+/** Their last answer to a question as the form keeps it on screen (a checklist carries only its N/A items). */
+function rememberedValue(q: NfQuestion, prev: NfAnswer): unknown {
+  if (q.question_type === "checklist") return carriedChecklist(prev.value_json);
+  const j = prev.value_json as any;
+  if ((q.question_type === "number" || q.question_type === "rating") && j && typeof j === "object" && !Array.isArray(j) && typeof j.unit === "string") {
+    return prev.value_number == null ? null : { value: String(prev.value_number), unit: j.unit === "kg" ? "kg" : "lb" };
+  }
+  if (NF_JSON_TYPES.has(q.question_type)) return prev.value_json;
+  if (q.question_type === "number" || q.question_type === "rating") return prev.value_number;
+  return prev.value_text;
+}
+
+/**
+ * Everything the form's synced questions read (form-prefill.ts), each source only when a question
+ * asks for it, with the client's own login (RLS), so a coach previewing sees what the client would.
+ */
+async function loadPrefillProfile(clientId: string, userId: string | null | undefined, formId: string, keys: Set<PrefillKey>): Promise<PrefillProfile | null> {
+  const db = supabase as any;
+  const today = todayLocal();
+  const wants = (...k: PrefillKey[]) => k.some((x) => keys.has(x));
+  const since = new Date(Date.now() - TRAINING_TIME_DAYS * 86_400_000).toISOString();
+  const [{ data }, plans, goals, starts, prep] = await Promise.all([
+    db.from("clients").select("sex, height_cm, preferred_height_unit, full_name, date_of_birth, committed_training_days, timezone").eq("id", clientId).maybeSingle(),
+    wants("nutrition_plan")
+      ? db.from("nutrition_targets").select("id, nutrition_target_days(id)").eq("client_id", clientId).neq("status", "Archived").limit(5)
+      : Promise.resolve(null),
+    wants("goal") ? db.from("client_goals_setup").select("nutrition_goal, main_goal").eq("client_id", clientId).maybeSingle() : Promise.resolve(null),
+    wants("training_time")
+      ? db.from("pl_day_completions").select("training_started_at, started_at").eq("client_id", clientId).not("completed_at", "is", null).gte("completed_at", since).order("completed_at", { ascending: false }).limit(TRAINING_TIME_RECENT)
+      : Promise.resolve(null),
+    wants("weight_class")
+      ? db.from("pl_preps").select("weight_class, event_date, status, archived").eq("client_id", clientId).gte("event_date", today).not("weight_class", "is", null).order("event_date").limit(5)
+      : Promise.resolve(null),
+  ]);
+  if (!data) return null;
+  // Unknown (lookup failed) is null, so nothing gets pre-answered.
+  const has_nutrition_plan = !plans || plans.error ? null : ((plans.data ?? []) as any[]).some((t) => (t.nutrition_target_days ?? []).length > 0);
+  const [meet, bodyweight, recent] = await Promise.all([
+    wants("meet_name", "meet_date", "meet_weight_class") ? loadMeetGuess(clientId, formId).catch(() => null) : Promise.resolve(null),
+    wants("bodyweight") ? loadLatestWeighIn(clientId, userId).catch(() => null) : Promise.resolve(null),
+    wants("weight_class") ? loadRecentBodyweight(clientId, userId).catch(() => null) : Promise.resolve(null),
+  ]);
+  const nextPrep = ((prep?.data ?? []) as any[]).find((p) => !p.archived && p.status !== "Archived" && String(p.weight_class ?? "").trim());
+  return {
+    ...data,
+    has_nutrition_plan,
+    meet,
+    bodyweight,
+    training_days: Array.isArray(data.committed_training_days) ? data.committed_training_days : null,
+    goals: goals?.data ? { nutrition: goals.data.nutrition_goal ?? null, main: goals.data.main_goal ?? null } : null,
+    training_starts: starts?.data ? workoutStartHours(starts.data, data.timezone) : null,
+    prep_weight_class: nextPrep?.weight_class ?? null,
+    recent_bodyweight: recent,
+    season_year: seasonYear(),
+  };
+}
+
+/** Their bodyweight now for a weight class: the week up to their latest weigh-in (within 2 weeks), averaged, in their unit. */
+async function loadRecentBodyweight(clientId: string, userId: string | null | undefined): Promise<PrefillProfile["recent_bodyweight"]> {
+  const db = supabase as any;
+  const from = new Date(Date.now() - 21 * 86_400_000).toLocaleDateString("en-CA");
+  const [{ data: bw }, { data: legacy }, { data: pref }, { data: cl }] = await Promise.all([
+    userId ? db.from("progress_bodyweight").select("logged_date, weight_value, weight_unit").eq("user_id", userId).gte("logged_date", from).order("logged_date", { ascending: false }).limit(21) : Promise.resolve({ data: [] }),
+    db.from("progress_metrics").select("entry_date, bodyweight, bodyweight_unit").eq("client_id", clientId).not("bodyweight", "is", null).gte("entry_date", from).order("entry_date", { ascending: false }).limit(21),
+    userId ? db.from("bodyweight_unit_prefs").select("unit").eq("user_id", userId).maybeSingle() : Promise.resolve({ data: null }),
+    db.from("clients").select("preferred_weight_unit").eq("id", clientId).maybeSingle(),
+  ]);
+  const toKg = (v: number, u: string | null) => (u === "kg" ? v : v / 2.2046226218);
+  // one a day, the app's log winning a tie
+  const byDay = new Map<string, number>();
+  for (const r of (legacy ?? []) as any[]) byDay.set(String(r.entry_date).slice(0, 10), toKg(Number(r.bodyweight), r.bodyweight_unit ?? "lb"));
+  for (const r of (bw ?? []) as any[]) byDay.set(String(r.logged_date).slice(0, 10), toKg(Number(r.weight_value), r.weight_unit));
+  const days = [...byDay.entries()].filter(([, kg]) => Number.isFinite(kg) && kg > 0).sort((a, b) => b[0].localeCompare(a[0]));
+  if (!days.length) return null;
+  const latest = days[0][0];
+  if (Date.parse(`${todayLocal()}T00:00:00Z`) - Date.parse(`${latest}T00:00:00Z`) > 14 * 86_400_000) return null;
+  const week = days.filter(([d]) => Date.parse(`${latest}T00:00:00Z`) - Date.parse(`${d}T00:00:00Z`) < 7 * 86_400_000);
+  const kg = week.reduce((s, [, v]) => s + v, 0) / week.length;
+  const unit: "kg" | "lb" = pref?.unit === "kg" || pref?.unit === "lb" ? pref.unit : cl?.preferred_weight_unit === "kg" ? "kg" : "lb";
+  return { value: Math.round((unit === "kg" ? kg : kg * 2.2046226218) * 10) / 10, unit, count: week.length };
 }
 
 /** Their latest weigh-in (the app's log, else the coach's older entries) in their bodyweight unit. */
@@ -1059,7 +1114,6 @@ function QuestionInput({
     const arr: string[] = Array.isArray(value) ? value : [];
     return (
       <>
-      {v.prefill === "age_class" && !readOnly && <AgeClassHint options={opts} birthDate={profile?.date_of_birth} />}
       <ChoiceButtons
         multi
         options={opts}
