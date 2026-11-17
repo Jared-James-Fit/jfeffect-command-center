@@ -240,7 +240,8 @@ describe("coach builder: the phone layout", () => {
   });
 
   it("one week at a time on a phone, without changing the desktop choice", () => {
-    expect(editor).toContain('const view: "block" | "week" = phone ? "week" : viewPref;');
+    // a phone gets one week, never the whole block or the Sheet
+    expect(editor).toContain('const view: EditorView = phone ? "week" : viewPref;');
     expect(editor).toContain("writePos({ view: viewPref, activeIdx: idx })");
   });
 

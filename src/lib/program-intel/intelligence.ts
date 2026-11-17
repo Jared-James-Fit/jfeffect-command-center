@@ -8,6 +8,8 @@
  * coach saw (the data hash ties them together).
  */
 import { buildAthleteDevelopment, type AthleteDevelopment } from "./athlete-development";
+import type { TrainingLoad } from "@/lib/analytics/training-load";
+import { trainingLoadFromRecords } from "./training-load-intel";
 import { isAtHomeBackupReservedBlock } from "@/lib/at-home-backup";
 import { buildAthleteContext, type AthleteContext } from "./context";
 import { resolveEquipment, type EquipmentResolution } from "./equipment";
@@ -40,6 +42,8 @@ export type GeneratorIntel = {
   firstProgram: boolean;
   /** How they're developing: bodyweight-adjusted strength, training age, phase, progress / hold / back off per exercise, trends. */
   development: AthleteDevelopment;
+  /** Their workload over the last 12 weeks: volume by week, muscle, pattern, lift and day, against the program (training-load.ts). */
+  trainingLoad?: TrainingLoad | null;
 };
 
 /** Blocks that are a coach's draft nobody has seen yet (hidden and undated) never count as a program the athlete did (the loader leaves them out too). */
@@ -93,6 +97,13 @@ export function buildGeneratorIntel(rec: IntelRecords, opts: { brainOverride?: B
     : `${classification.reasons.slice(0, 4).join("; ")}.`;
   const recommendation = recommendSetup({ ctx, brain, brainWhy, prev, history, review, patterns, exercises });
   const development = buildAthleteDevelopment(rec, ctx, history);
+  // the same workload read the analytics page shows; never stops a run
+  let trainingLoad: TrainingLoad | null = null;
+  try {
+    trainingLoad = trainingLoadFromRecords(rec);
+  } catch {
+    trainingLoad = null;
+  }
   return {
     history,
     prev,
@@ -111,5 +122,6 @@ export function buildGeneratorIntel(rec: IntelRecords, opts: { brainOverride?: B
     dataHash: history.dataHash,
     firstProgram: history.coverage.loggedSets === 0,
     development,
+    trainingLoad,
   };
 }

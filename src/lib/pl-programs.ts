@@ -943,7 +943,7 @@ export async function getClientResults(
   // long-term client's OLDEST 1,000 sets, so this month, PRs and charts stalled.
   const data = await fetchAllPages((from, to) => sb
     .from("pl_row_results")
-    .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, mean_concentric_velocity_mps, is_bodyweight, load_type, notes, completed_at, completed_duration_seconds, row_id, pl_exercise_rows(exercise_id, exercise_name_override, day_id, sort_order, purpose_label, movement_family, exercises(name, muscle_group, primary_muscle_group, muscle_groups, secondary_muscle_groups, counts_toward_volume, category))")
+    .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, mean_concentric_velocity_mps, is_bodyweight, load_type, notes, completed_at, completed_duration_seconds, row_id, pl_exercise_rows(exercise_id, exercise_name_override, day_id, sort_order, purpose_label, movement_family, exercises(name, muscle_group, primary_muscle_group, muscle_groups, secondary_muscle_groups, counts_toward_volume, category, competition_lift_type, is_competition_lift, movement_family, primary_movement_pattern))")
     .eq("client_id", clientId)
     .not("actual_reps", "is", null)
     .not("completed_at", "is", null)
@@ -1009,6 +1009,11 @@ export async function getClientResults(
         secondary_muscles: (r.pl_exercise_rows?.exercises?.secondary_muscle_groups ?? []) as string[],
         counts_toward_volume: r.pl_exercise_rows?.exercises?.counts_toward_volume !== false,
         category: r.pl_exercise_rows?.exercises?.category ?? null,
+        // what training-load.ts reads a set's lift and movement pattern from
+        competition_lift_type: r.pl_exercise_rows?.exercises?.competition_lift_type ?? null,
+        is_competition_lift: r.pl_exercise_rows?.exercises?.is_competition_lift === true,
+        exercise_movement_family: r.pl_exercise_rows?.exercises?.movement_family ?? null,
+        primary_movement_pattern: r.pl_exercise_rows?.exercises?.primary_movement_pattern ?? null,
       };
     });
 

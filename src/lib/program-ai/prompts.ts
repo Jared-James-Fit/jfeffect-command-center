@@ -4,6 +4,7 @@
  * reply shape it may give (ops.ts checks it). Pure.
  */
 import { DEVELOPMENT_RULES } from "@/lib/program-intel/athlete-development";
+import { TRAINING_LOAD_RULES } from "@/lib/program-intel/training-load-intel";
 import { EXERCISE_STANDARD } from "@/lib/program-intel/exercise-standard";
 import { dayMinutes, dayName, lockReason, rxLine, type EngineCtx } from "./engine";
 import type { RuleKind } from "./ops";
@@ -91,6 +92,7 @@ HOW YOU THINK
 THE ATHLETE, NOT JUST THE NUMBERS
 - The "Athlete development" section is computed from their records: training age and rate of progress, strength against bodyweight and bodyweight phase, weight class, plateaus, adherence, fatigue, and progress / hold / back off for every exercise. Your prescriptions follow it; your analysis cites it (with its confidence).
 ${DEVELOPMENT_RULES}
+${TRAINING_LOAD_RULES}
 - If something that matters for this request isn't on file (it's listed under "Not on file"), say so in the analysis instead of assuming it.
 
 SCOPE: DO WHAT WAS ASKED, AND ONLY THAT

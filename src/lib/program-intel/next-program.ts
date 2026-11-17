@@ -6,6 +6,7 @@
  * coach assigns it. The interpret run's prompt lives here too.
  */
 import { DEVELOPMENT_RULES } from "./athlete-development";
+import { TRAINING_LOAD_RULES } from "./training-load-intel";
 import { z } from "zod";
 import { isTimedCardio } from "@/lib/timed-cardio";
 import { rxToRow } from "@/lib/cleo-program";
@@ -87,6 +88,7 @@ Rules:
 - Add questions for the coach about information the records are missing.
 - Read the "Athlete development" section as the measured read of who they are and how they develop (training age and rate, strength against bodyweight and bodyweight phase, weight class, plateaus, adherence, fatigue, and progress / hold / back off per exercise); interpret it, don't repeat it.
 ${DEVELOPMENT_RULES}
+${TRAINING_LOAD_RULES}
 Reply with ONE JSON object and nothing else:
 { "observations": [ { "statement": string, "category": "squat"|"bench"|"deadlift"|"volume"|"intensity"|"frequency"|"exercise"|"recovery"|"adherence"|"muscle"|"other", "evidence": [string] } ], "questions": [string] }`;
 }
