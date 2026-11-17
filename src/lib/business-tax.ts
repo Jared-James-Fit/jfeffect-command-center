@@ -25,11 +25,15 @@ export type RevenueEntry = {
   /** True when the GST/HST on a refund was derived pro rata from the original. */
   taxEstimated?: boolean;
   method: string | null;
-  source: "client" | "membership";
+  /** client = a client's payment (or an AI credit pack); membership = the app membership; other = income that isn't a client's (business_other_income). */
+  source: "client" | "membership" | "other";
+  /** Payer or client. */
   clientName: string | null;
   product: string | null;
   currency: string;
   stripe: boolean;
+  /** Other income only: why it carries no GST/HST (outside Canada, not taxable, not charged), so it isn't flagged. */
+  noTaxReason?: string | null;
 };
 
 export type ExpenseEntry = {
@@ -44,7 +48,8 @@ export type ExpenseEntry = {
   currency: string;
   hasReceipt: boolean;
   status: "needs_review" | "reviewed";
-  source: "manual" | "receipt" | "stripe_fees";
+  /** recurring = added on its day by a repeating bill the owner set up (business_recurring_expenses). */
+  source: "manual" | "receipt" | "stripe_fees" | "recurring";
 };
 
 export type TaxPaymentEntry = {
@@ -85,6 +90,14 @@ export const DEFAULT_TAX_SETTINGS: TaxSettings = {
 // ---------------------------------------------------------------------------
 // Rates (dollars). 2026: federal brackets indexed 2.0%, lowest rate 14%;
 // Manitoba brackets and basic personal amount frozen at 2024 levels.
+//
+// A new year goes in TAX_TABLES only once its numbers are published: CRA's
+// indexed federal brackets and basic personal amount (usually November), CPP's
+// YMPE and YAMPE (usually November), and Manitoba's brackets and basic
+// personal amount (its budget; frozen at 2024 levels since 2025). Never a
+// guess: until a year is here, taxTableFor gives the latest year's rates with
+// exact = false, every estimate says so (ratesExact), and the year's readiness
+// list asks the accountant to check (the "rates" issue).
 
 type Bracket = [upTo: number, rate: number];
 
@@ -115,12 +128,52 @@ const TAX_TABLES: TaxTable[] = [
   },
 ];
 
+/** The tax years whose published rates are in the app. */
+export const TAX_TABLE_YEARS: number[] = TAX_TABLES.map((t) => t.year);
+
 export function taxTableFor(year: number): { table: TaxTable; exact: boolean } {
   const exact = TAX_TABLES.find((t) => t.year === year);
   if (exact) return { table: exact, exact: true };
   const sorted = [...TAX_TABLES].sort((a, b) => a.year - b.year);
   const fallback = [...sorted].reverse().find((t) => t.year < year) ?? sorted[0];
   return { table: fallback, exact: false };
+}
+
+/**
+ * A GST/HST account number as CRA writes it: the 9-digit business number,
+ * "RT" and the 4-digit account ("123456789RT0001"). Spaces and dashes typed
+ * in are dropped. Null when there's nothing to save.
+ */
+export function normalizeGstNumber(text: string | null | undefined): string | null {
+  const t = (text ?? "").toUpperCase().replace(/[\s-]/g, "");
+  return t || null;
+}
+
+const luhnOk = (digits: string) => {
+  let sum = 0;
+  for (let i = 0; i < digits.length; i++) {
+    let d = Number(digits[digits.length - 1 - i]);
+    if (i % 2 === 1) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+  }
+  return sum % 10 === 0;
+};
+
+/**
+ * What's wrong with a GST/HST number, or null. `hard` problems stop it saving
+ * (it isn't one); a soft one (the business number's check digit doesn't add
+ * up) is only a "double-check", never a block.
+ */
+export function gstNumberProblem(text: string | null | undefined): { hard: boolean; message: string } | null {
+  const t = normalizeGstNumber(text);
+  if (!t) return null;
+  if (/^\d{9}$/.test(t)) return { hard: true, message: "Add the account part after the 9 digits, like RT0001. It's on your GST registration letter." };
+  if (!/^\d{9}RT\d{4}$/.test(t)) return { hard: true, message: "A GST/HST number is 9 digits, RT, then 4 digits (123456789RT0001)." };
+  if (!luhnOk(t.slice(0, 9))) return { hard: false, message: "Double-check the first 9 digits against your CRA letter: they don't add up like a business number usually does." };
+  return null;
 }
 
 /** GST Quick Method remittance rate for services supplied in a GST-only province. */
@@ -504,6 +557,18 @@ function inRange(date: string, start: string, end: string) {
   return date >= start && date <= end;
 }
 
+/**
+ * A payment that came in with no GST/HST and nothing saying why: a client's
+ * payment, or other income with no reason given. Memberships don't store
+ * their tax (their own note), and other income that says "outside Canada",
+ * "not taxable" or "not charged" has its answer.
+ */
+export function missingTaxReason(r: Pick<RevenueEntry, "source" | "noTaxReason">): boolean {
+  if (r.source === "client") return true;
+  if (r.source === "other") return !r.noTaxReason;
+  return false;
+}
+
 /** GST/HST rate a revenue row was charged at (0.05 GST, 0.13/0.15 HST). */
 function impliedRate(r: RevenueEntry): number {
   const net = r.grossMinor - r.taxMinor;
@@ -700,9 +765,13 @@ export function buildBooksSnapshot(input: {
 
   // Readiness -----------------------------------------------------------------
   const issues: ReadinessIssue[] = [];
-  const needsReview = expenses.filter((e) => e.status === "needs_review");
+  const needsReview = expenses.filter((e) => e.status === "needs_review" && e.source !== "recurring");
   if (needsReview.length) {
     issues.push({ id: "needs-review", severity: "warn", title: `${needsReview.length} receipt${needsReview.length === 1 ? "" : "s"} to confirm`, detail: "Cleo filed these but was not sure about something. Check the amount, GST and category.", count: needsReview.length, amountMinor: sumBy(needsReview, (e) => e.amountMinor) });
+  }
+  const repeats = expenses.filter((e) => e.status === "needs_review" && e.source === "recurring");
+  if (repeats.length) {
+    issues.push({ id: "recurring-to-check", severity: "warn", title: `${repeats.length} repeating bill${repeats.length === 1 ? "" : "s"} to check`, detail: "Added on their day by a repeating bill you set up. Check each one matches the bill (amounts change) and attach its receipt.", count: repeats.length, amountMinor: sumBy(repeats, (e) => e.amountMinor) });
   }
   const uncategorized = expenses.filter((e) => e.category === "uncategorized");
   if (uncategorized.length) {
@@ -712,7 +781,7 @@ export function buildBooksSnapshot(input: {
   if (noReceipt.length) {
     issues.push({ id: "no-receipt", severity: "warn", title: `${noReceipt.length} expense${noReceipt.length === 1 ? "" : "s"} without a receipt`, detail: "CRA can ask for receipts for 6 years, and GST can only be claimed back with one. Snap a photo or attach the PDF.", count: noReceipt.length, amountMinor: sumBy(noReceipt, (e) => e.amountMinor) });
   }
-  const zeroTax = paymentsIn.filter((r) => r.taxMinor === 0 && r.source === "client");
+  const zeroTax = paymentsIn.filter((r) => r.taxMinor === 0 && missingTaxReason(r));
   if (gstRegistered && zeroTax.length) {
     issues.push({ id: "zero-tax-revenue", severity: "warn", title: `${zeroTax.length} payment${zeroTax.length === 1 ? "" : "s"} with no GST/HST recorded`, detail: "Either tax was not charged (deposit, out-of-country client) or it was missed. Confirm each with your accountant: if GST was owed it is still owed.", count: zeroTax.length, amountMinor: sumBy(zeroTax, (r) => r.grossMinor) });
   }
@@ -727,6 +796,10 @@ export function buildBooksSnapshot(input: {
   const foreign = [...revenue.filter((r) => r.currency.toUpperCase() !== "CAD"), ...expenses.filter((e) => e.currency.toUpperCase() !== "CAD")];
   if (foreign.length) {
     issues.push({ id: "foreign-currency", severity: "warn", title: `${foreign.length} non-CAD amount${foreign.length === 1 ? "" : "s"}`, detail: "They are added as if they were CAD. Your accountant converts them at the Bank of Canada rate.", count: foreign.length });
+  }
+  const rates = taxTableFor(year);
+  if (!rates.exact) {
+    issues.push({ id: "rates", severity: "info", title: `${year} tax rates aren't in the app yet`, detail: `Income tax and CPP estimates for ${year} use ${rates.table.year}'s brackets, basic personal amounts and CPP limits until ${year}'s are published. Close enough to set money aside; your accountant uses the real ones.`, count: 1 });
   }
   if (gstRegistered && !settings.gstNumber) {
     issues.push({ id: "gst-number", severity: "info", title: "Add your GST/HST number", detail: "It goes on the year-end package and any receipts you issue. Settings tab.", count: 1 });
@@ -774,7 +847,8 @@ export function buildBooksSnapshot(input: {
       refundCount: refunds.length,
       byMethod: groupTop(revenue, (r) => r.method ?? "other", revenueNetMinor).map((g) => ({ method: g.k, salesMinor: g.value, count: g.count })),
       byProduct: groupTop(revenue, (r) => r.product ?? "Payment", revenueNetMinor).map((g) => ({ product: g.k, salesMinor: g.value, count: g.count })),
-      byClient: groupTop(revenue, (r) => r.clientName ?? "Unknown", revenueNetMinor).map((g) => ({ client: g.k, salesMinor: g.value, count: g.count })),
+      // Clients only: a sponsor or an affiliate payout isn't a client.
+      byClient: groupTop(revenue.filter((r) => r.source !== "other"), (r) => r.clientName ?? "Unknown", revenueNetMinor).map((g) => ({ client: g.k, salesMinor: g.value, count: g.count })),
     },
     expenses: {
       totalMinor: sumBy(expenses, (e) => e.amountMinor),

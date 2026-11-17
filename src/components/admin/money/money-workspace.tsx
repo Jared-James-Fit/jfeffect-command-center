@@ -10,13 +10,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Camera, ChevronDown, FilePlus2, Landmark, Loader2, Plus, Sparkles } from "lucide-react";
+import { Camera, ChevronDown, FilePlus2, HandCoins, Landmark, Loader2, Plus, Repeat, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { ASSISTANT_NAME, toExpenseEntry, toTaxPaymentEntry, toTaxSettings, type ExpenseRow } from "@/lib/business-books";
+import { ASSISTANT_NAME, toExpenseEntry, toTaxPaymentEntry, toTaxSettings, type ExpenseRow, type OtherIncomeRow } from "@/lib/business-books";
 import { buildBooksSnapshot, fmtCad } from "@/lib/business-tax";
 import { expenseCategory } from "@/lib/business-expense-categories";
 import { businessToday } from "@/lib/billing-schedule";
@@ -26,6 +26,8 @@ import { moneyFigures, periodTaxReserve, type LedgerFilter } from "@/lib/books/m
 import { RECEIVABLES_KEY, useReceivables } from "./use-receivables";
 import { useBooksData } from "@/components/admin/finance/finance-ui";
 import { ExpenseDialog } from "@/components/admin/books/expense-dialog";
+import { OtherIncomeDialog } from "@/components/admin/books/other-income-dialog";
+import { RecurringBillDialog, type BillDraft } from "@/components/admin/books/recurring-bills";
 import { BOOKS_KEY, useSnapReceipts } from "@/components/admin/books/use-snap-receipts";
 import { BooksModeContext, type BooksMode } from "@/components/admin/books/books-mode";
 import { openSummer } from "@/components/summer/summer-assistant";
@@ -60,6 +62,8 @@ export function MoneyWorkspace({ view, periodCode, compare = "previous", onState
   const [editing, setEditing] = useState<ExpenseRow | null>(null);
   const [adding, setAdding] = useState(false);
   const [taxPay, setTaxPay] = useState(false);
+  const [income, setIncome] = useState<OtherIncomeRow | "new" | null>(null);
+  const [bill, setBill] = useState<{ draft: BillDraft } | null>(null);
   const [ledgerPreset, setLedgerPreset] = useState<Partial<LedgerFilter> | null>(initialLedger ?? null);
 
   // A filter a tap elsewhere opened Transactions with stays only while Transactions is open.
@@ -146,6 +150,8 @@ export function MoneyWorkspace({ view, periodCode, compare = "previous", onState
     },
     ledgerPreset,
     openExpense: (row) => (row === "new" ? setAdding(true) : setEditing(row)),
+    openOtherIncome: (row) => setIncome(row),
+    openBill: (draft) => setBill({ draft }),
     snapReceipt: () => fileRef.current?.click(),
     snapping: scanning,
     snapLabel,
@@ -181,6 +187,9 @@ export function MoneyWorkspace({ view, periodCode, compare = "previous", onState
                 <DropdownMenuContent align="end" className="w-60">
                   <DropdownMenuItem onSelect={() => fileRef.current?.click()}><Camera className="mr-2 h-4 w-4" /> Snap a receipt</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setAdding(true)}><FilePlus2 className="mr-2 h-4 w-4" /> Add an expense by hand</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setBill({ draft: null })}><Repeat className="mr-2 h-4 w-4" /> Set up a repeating bill</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => setIncome("new")}><HandCoins className="mr-2 h-4 w-4" /> Record other income</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setTaxPay(true)}><Landmark className="mr-2 h-4 w-4" /> Record a payment to CRA</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -200,6 +209,20 @@ export function MoneyWorkspace({ view, periodCode, compare = "previous", onState
           expense={editing}
           open={!!editing || adding}
           onClose={() => { setEditing(null); setAdding(false); }}
+          onChanged={refresh}
+          gstRegistered={derived.settings.gstRegistered}
+        />
+        <OtherIncomeDialog
+          income={income === "new" ? null : income}
+          open={income !== null}
+          onClose={() => setIncome(null)}
+          onChanged={refresh}
+          gstRegistered={derived.settings.gstRegistered}
+        />
+        <RecurringBillDialog
+          draft={bill?.draft ?? null}
+          open={bill !== null}
+          onClose={() => setBill(null)}
           onChanged={refresh}
           gstRegistered={derived.settings.gstRegistered}
         />

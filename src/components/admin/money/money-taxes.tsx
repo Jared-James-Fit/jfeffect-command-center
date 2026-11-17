@@ -30,7 +30,7 @@ export function MoneyTaxes() {
   const seen = elapsed(m.period, m.today);
   const crossesYears = seen.start.slice(0, 4) !== seen.end.slice(0, 4);
   const capital = m.data.expenses.filter((e) => e.expense_date.startsWith(String(s.year)) && expenseCategory(e.category).kind === "capital");
-  const flags = s.issues.filter((i) => ["zero-tax-revenue", "refund-tax-estimated", "membership-no-tax", "foreign-currency", "gst-number", "no-receipt"].includes(i.id));
+  const flags = s.issues.filter((i) => ["rates", "zero-tax-revenue", "refund-tax-estimated", "membership-no-tax", "foreign-currency", "gst-number", "no-receipt"].includes(i.id));
   const notMb = s.settings.province !== "MB";
 
   return (

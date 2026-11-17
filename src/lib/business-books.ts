@@ -24,8 +24,10 @@ export type ExpenseRow = {
   receipt_path: string | null;
   receipt_mime: string | null;
   status: "needs_review" | "reviewed";
-  source: "manual" | "receipt" | "stripe_fees";
+  source: "manual" | "receipt" | "stripe_fees" | "recurring";
   external_key: string | null;
+  /** The repeating bill that added it (source "recurring"). */
+  recurring_id?: string | null;
   ai_summary: { confidence?: number; notes?: string | null; pst?: number | null; read?: boolean } | null;
   notes: string | null;
   created_at: string;
@@ -65,6 +67,74 @@ export type RevenueRow = RevenueEntry & {
   reference: string | null;
   /** The client the payment is from (client payments only), to open their Billing tab. */
   clientId?: string | null;
+  /** Other income: its record, to edit it from Transactions. */
+  other?: OtherIncomeRow;
+};
+
+/**
+ * Money the business earned that isn't a client's sale (business_other_income):
+ * a sponsorship, a workshop, a referral payout, a product sold outside the app.
+ * amount is what came in, GST/HST included; with none, `no_tax_reason` says why.
+ */
+export type OtherIncomeRow = {
+  id: string;
+  received_on: string;
+  payer: string | null;
+  description: string | null;
+  kind: OtherIncomeKind;
+  amount_minor: number;
+  tax_minor: number;
+  no_tax_reason: NoTaxReason | null;
+  currency: string;
+  method: string | null;
+  deposit_account_id: string | null;
+  reference: string | null;
+  proof_path: string | null;
+  proof_mime: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OtherIncomeKind = "sponsorship" | "workshop" | "product" | "referral" | "other";
+export const OTHER_INCOME_KINDS: Array<{ key: OtherIncomeKind; label: string; hint: string }> = [
+  { key: "sponsorship", label: "Sponsorship", hint: "A brand paying you to promote it" },
+  { key: "workshop", label: "Workshop", hint: "A class, clinic, seminar or talk paid outside a client's package" },
+  { key: "referral", label: "Referral", hint: "A referral commission or affiliate payout" },
+  { key: "product", label: "Product sale", hint: "Something sold outside the app (merch, a program, an ebook)" },
+  { key: "other", label: "Other", hint: "Any other business income" },
+];
+export const otherIncomeKindLabel = (k: string | null | undefined) => OTHER_INCOME_KINDS.find((x) => x.key === k)?.label ?? "Other income";
+
+export type NoTaxReason = "outside_canada" | "not_taxable" | "not_charged";
+export const NO_TAX_REASONS: Array<{ key: NoTaxReason; label: string; hint: string }> = [
+  { key: "outside_canada", label: "Paid from outside Canada", hint: "Services to a business or person outside Canada are usually zero-rated." },
+  { key: "not_taxable", label: "Not taxable", hint: "Exempt or not a taxable supply (your accountant can confirm)." },
+  { key: "not_charged", label: "I didn't charge it", hint: "If GST was owed, it's still owed: it's worked out of the amount." },
+];
+
+/**
+ * A bill that repeats (business_recurring_expenses): the app adds it to the
+ * books on its day as an expense to check, never as a confirmed one.
+ */
+export type RecurringExpenseRow = {
+  id: string;
+  vendor: string;
+  description: string | null;
+  category: string;
+  amount_minor: number;
+  tax_minor: number;
+  currency: string;
+  payment_method: string | null;
+  business_use_pct: number;
+  every: "month" | "year";
+  day_of_month: number;
+  next_on: string;
+  active: boolean;
+  last_added_on: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type OpenSaleRow = {
@@ -89,6 +159,10 @@ export type BooksData = {
   taxPayments: TaxPaymentRow[];
   openSales: OpenSaleRow[];
   years: number[];
+  /** Income that isn't a client's (also in `revenue`, as source "other"). */
+  otherIncome: OtherIncomeRow[];
+  /** Repeating bills set up on purpose. */
+  recurring: RecurringExpenseRow[];
 };
 
 export function toTaxSettings(row: TaxSettingsRow | null | undefined): TaxSettings {
@@ -211,7 +285,7 @@ export type CreditSaleRowIn = {
   client_name?: string | null;
 };
 
-export function normalizeRevenue(ledger: LedgerRowIn[], members: MemberLedgerRowIn[], creditSales: CreditSaleRowIn[] = []): RevenueRow[] {
+export function normalizeRevenue(ledger: LedgerRowIn[], members: MemberLedgerRowIn[], creditSales: CreditSaleRowIn[] = [], otherIncome: OtherIncomeRow[] = []): RevenueRow[] {
   const byId = new Map(ledger.map((r) => [r.id, r]));
   const out: RevenueRow[] = [];
 
@@ -301,6 +375,30 @@ export function normalizeRevenue(ledger: LedgerRowIn[], members: MemberLedgerRow
         taxEstimated: true,
       });
     }
+  }
+
+  for (const o of otherIncome) {
+    const gross = Math.abs(Number(o.amount_minor) || 0);
+    if (!gross) continue;
+    const tax = Math.min(Math.abs(Number(o.tax_minor) || 0), gross);
+    const what = otherIncomeKindLabel(o.kind);
+    out.push({
+      id: `other:${o.id}`,
+      date: String(o.received_on).slice(0, 10),
+      kind: "payment",
+      grossMinor: gross,
+      taxMinor: tax,
+      taxEstimated: false,
+      method: o.method,
+      source: "other",
+      clientName: o.payer?.trim() || null,
+      product: o.description?.trim() ? `${what} · ${o.description.trim()}` : what,
+      currency: (o.currency ?? "CAD").toUpperCase(),
+      stripe: false,
+      reference: o.reference ?? null,
+      noTaxReason: tax > 0 ? null : o.no_tax_reason,
+      other: o,
+    });
   }
 
   return out.sort((a, b) => a.date.localeCompare(b.date));

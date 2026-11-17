@@ -4,7 +4,7 @@
  * rows back. Payer and offer names come from books_labels() and open sales
  * from books_open_sales(): finance can't read client, member or purchase rows.
  */
-import type { BooksData, CreditSaleRowIn, ExpenseRow, LedgerRowIn, MemberLedgerRowIn, OpenSaleRow, TaxPaymentRow, TaxSettingsRow } from "@/lib/business-books";
+import type { BooksData, CreditSaleRowIn, ExpenseRow, LedgerRowIn, MemberLedgerRowIn, OpenSaleRow, OtherIncomeRow, RecurringExpenseRow, TaxPaymentRow, TaxSettingsRow } from "@/lib/business-books";
 import { booksYears, normalizeRevenue } from "@/lib/business-books";
 import { isExpenseCategoryKey } from "@/lib/business-expense-categories";
 import { businessToday } from "@/lib/billing-schedule";
@@ -109,7 +109,7 @@ async function loadBooksLabels(
 
 export async function loadBooksData(supabase: any): Promise<BooksData> {
   const asOf = businessToday();
-  const [settingsRes, ledgerRes, memberRes, expRes, payRes, openRes, creditRes] = await Promise.all([
+  const [settingsRes, ledgerRes, memberRes, expRes, payRes, openRes, creditRes, otherRes, recurringRes] = await Promise.all([
     supabase.from("business_tax_settings").select("*").maybeSingle(),
     supabase
       .from("payment_ledger")
@@ -131,6 +131,9 @@ export async function loadBooksData(supabase: any): Promise<BooksData> {
       .select("id, client_id, credits, amount_minor, tax_minor, total_minor, refunded_minor, refunded_at, currency, paid_at, stripe_mode, stripe_payment_intent_id, stripe_checkout_session_id")
       .order("paid_at", { ascending: true })
       .limit(10000),
+    // Income that isn't a client's, and the repeating bills set up on purpose.
+    supabase.from("business_other_income").select("*").order("received_on", { ascending: true }).limit(10000),
+    supabase.from("business_recurring_expenses").select("*").order("next_on", { ascending: true }).limit(500),
   ]);
 
   const settings = must(settingsRes, "tax settings") as TaxSettingsRow | null;
@@ -173,9 +176,22 @@ export async function loadBooksData(supabase: any): Promise<BooksData> {
     })
     .filter((o) => o.outstandingMinor > 0);
 
-  const revenue = normalizeRevenue(ledger ?? [], members, creditSales);
+  const otherIncome = ((must(otherRes, "other income") ?? []) as OtherIncomeRow[]).map((o) => ({
+    ...o,
+    amount_minor: Number(o.amount_minor),
+    tax_minor: Number(o.tax_minor),
+  }));
+  const recurring = ((must(recurringRes, "repeating bills") ?? []) as RecurringExpenseRow[]).map((r) => ({
+    ...r,
+    amount_minor: Number(r.amount_minor),
+    tax_minor: Number(r.tax_minor),
+    business_use_pct: Number(r.business_use_pct),
+    day_of_month: Number(r.day_of_month),
+  }));
+
+  const revenue = normalizeRevenue(ledger ?? [], members, creditSales, otherIncome);
   const partial = { asOf, revenue, expenses, taxPayments };
-  return { ...partial, settings, openSales, years: booksYears(partial) };
+  return { ...partial, settings, openSales, years: booksYears(partial), otherIncome, recurring };
 }
 
 // ---------------------------------------------------------------------------

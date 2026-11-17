@@ -6,7 +6,8 @@
  *
  * Definitions (cash basis: money is counted on the day it moved):
  *   Sales     payments received less refunds, GST/HST taken out. What the
- *             business earned from clients in the period.
+ *             business earned in the period: clients' payments, memberships,
+ *             AI credit packs and other income (business_other_income).
  *   Collected payments received with their GST/HST, before refunds: the money
  *             that actually came in.
  *   Spent     business expenses paid, GST/HST you claim back (ITCs) taken out,
@@ -20,10 +21,10 @@
  *   GST/HST net  GST/HST collected (net of refunds) − input tax credits on
  *             expenses. Positive: payable to CRA. Negative: a refund.
  */
-import type { ExpenseRow, RevenueRow, TaxPaymentRow } from "@/lib/business-books";
+import type { ExpenseRow, RecurringExpenseRow, RevenueRow, TaxPaymentRow } from "@/lib/business-books";
 import { toExpenseEntry } from "@/lib/business-books";
 import { expenseCategory } from "@/lib/business-expense-categories";
-import { estimateIncomeTax, expenseTaxView, revenueNetMinor, type ExpenseEntry, type RevenueEntry, type TaxSettings } from "@/lib/business-tax";
+import { estimateIncomeTax, expenseTaxView, missingTaxReason, revenueNetMinor, type ExpenseEntry, type RevenueEntry, type TaxSettings } from "@/lib/business-tax";
 import { addDays, monthsBetween } from "@/lib/books/period";
 
 export type Range = { start: string; end: string };
@@ -37,17 +38,19 @@ const taxSigned = (r: RevenueEntry) => (r.kind === "refund" ? -r.taxMinor : r.ta
 // offer type is unreliable: a personal training package was saved as
 // "Online Coaching").
 
-export type ServiceKey = "personal_training" | "coaching" | "membership" | "ai_credits" | "other";
+export type ServiceKey = "personal_training" | "coaching" | "membership" | "ai_credits" | "other_income" | "other";
 export const SERVICE_LABEL: Record<ServiceKey, string> = {
   personal_training: "Personal training",
   coaching: "Coaching",
   membership: "Membership",
   ai_credits: "AI credits",
+  other_income: "Other income",
   other: "Other",
 };
 
 export function serviceOf(r: Pick<RevenueEntry, "source" | "product">): ServiceKey {
   if (r.source === "membership") return "membership";
+  if (r.source === "other") return "other_income";
   const p = (r.product ?? "").toLowerCase();
   if (p.startsWith("ai credits")) return "ai_credits";
   if (/personal training|1:1|\bsession|\bpt\b/.test(p)) return "personal_training";
@@ -109,7 +112,7 @@ function group<T>(rows: T[], key: (r: T) => string, label: (k: string) => string
 }
 
 export const methodWord = (m: string | null) =>
-  !m ? "Other" : m === "etransfer" ? "E-transfer" : m === "stripe" ? "Card (Stripe)" : m.charAt(0).toUpperCase() + m.slice(1).replace(/_/g, " ");
+  !m ? "Other" : m === "etransfer" ? "E-transfer" : m === "stripe" ? "Card (Stripe)" : m === "paypal" ? "PayPal" : m.charAt(0).toUpperCase() + m.slice(1).replace(/_/g, " ");
 
 export function moneyFigures(input: { revenue: RevenueEntry[]; expenses: ExpenseEntry[]; settings: TaxSettings; range: Range }): MoneyFigures {
   const { range, settings } = input;
@@ -170,7 +173,8 @@ export function moneyFigures(input: { revenue: RevenueEntry[]; expenses: Expense
     byService: group(rev, (r) => serviceOf(r), (k) => SERVICE_LABEL[k as ServiceKey] ?? k, revenueNetMinor),
     byCategory,
     byMethod: group(rev, (r) => r.method ?? "other", methodWord, revenueNetMinor),
-    byClient: group(rev, (r) => r.clientName ?? "Unknown", (k) => k, revenueNetMinor),
+    // Clients only: a sponsor or an affiliate payout isn't a client.
+    byClient: group(rev.filter((r) => r.source !== "other"), (r) => r.clientName ?? "Unknown", (k) => k, revenueNetMinor),
   };
 }
 
@@ -289,7 +293,7 @@ export function ledgerEntries(input: { revenue: RevenueRow[]; expenses: ExpenseR
     const refund = r.kind === "refund";
     const sign = refund ? -1 : 1;
     const flags: LedgerFlag[] = [];
-    if (reg && !refund && r.taxMinor === 0 && r.source === "client") flags.push("no_gst");
+    if (reg && !refund && r.taxMinor === 0 && missingTaxReason(r)) flags.push("no_gst");
     if (r.taxEstimated) flags.push("tax_estimated");
     if (r.currency !== "CAD") flags.push("foreign");
     const service = serviceOf(r);
@@ -297,7 +301,7 @@ export function ledgerEntries(input: { revenue: RevenueRow[]; expenses: ExpenseR
       id: `in:${r.id}`,
       date: r.date,
       kind: refund ? "refund" : "in",
-      who: r.clientName ?? (r.source === "membership" ? "Member" : "Client"),
+      who: r.clientName ?? (r.source === "membership" ? "Member" : r.source === "other" ? "Other income" : "Client"),
       what: refund ? `Refund · ${SERVICE_LABEL[service]}` : SERVICE_LABEL[service],
       detail: r.product,
       group: service,
@@ -385,7 +389,7 @@ export function filterLedger(rows: LedgerEntry[], f: LedgerFilter): LedgerEntry[
     if (f.method && (r.method ?? "other").toLowerCase() !== f.method.toLowerCase()) return false;
     if (f.attention && !r.flags.some((x) => NEEDS_ATTENTION.includes(x))) return false;
     if (q) {
-      const hay = [r.who, r.what, r.detail, r.reference, methodWord(r.method), r.expense?.notes].join(" ").toLowerCase();
+      const hay = [r.who, r.what, r.detail, r.reference, methodWord(r.method), r.expense?.notes, r.revenue?.other?.notes].join(" ").toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -402,13 +406,21 @@ export function ledgerTotals(rows: LedgerEntry[]) {
 // ---------------------------------------------------------------------------
 // Recurring expenses, read from the books (no setup): the same vendor and
 // category paid in at least 3 of the last 6 months at about the same amount.
+// One that's already set up as a repeating bill (business_recurring_expenses)
+// isn't suggested again.
 
 export type RecurringExpense = {
   key: string;
   vendor: string;
+  /** The category's label. */
   category: string;
-  /** Typical amount (the median). */
+  categoryKey: string;
+  /** Typical amount (the median), GST/HST included. */
   minor: number;
+  /** The GST/HST on the most recent one. */
+  taxMinor: number;
+  businessUsePct: number;
+  paymentMethod: string | null;
   months: number;
   lastDate: string;
   /** About a month after the last one. */
@@ -417,13 +429,18 @@ export type RecurringExpense = {
   yearlyMinor: number;
 };
 
-export function recurringExpenses(expenses: ExpenseRow[], today: string): RecurringExpense[] {
+/** The key a repeating bill and an expense share: vendor (any case, trimmed) and category. */
+export const recurringKey = (vendor: string, category: string) => `${vendor.trim().toLowerCase()}|${category}`;
+
+export function recurringExpenses(expenses: ExpenseRow[], today: string, setUp: Array<Pick<RecurringExpenseRow, "vendor" | "category" | "active">> = []): RecurringExpense[] {
   const from = addDays(today, -186);
+  const taken = new Set(setUp.filter((t) => t.active).map((t) => recurringKey(t.vendor, t.category)));
   const groups = new Map<string, ExpenseRow[]>();
   for (const e of expenses) {
-    if (e.source === "stripe_fees" || e.expense_date < from || !e.vendor) continue;
+    if (e.source === "stripe_fees" || e.source === "recurring" || e.expense_date < from || !e.vendor) continue;
     if (expenseCategory(e.category).kind === "excluded") continue;
-    const key = `${e.vendor.trim().toLowerCase()}|${e.category}`;
+    const key = recurringKey(e.vendor, e.category);
+    if (taken.has(key)) continue;
     groups.set(key, [...(groups.get(key) ?? []), e]);
   }
   const out: RecurringExpense[] = [];
@@ -433,15 +450,19 @@ export function recurringExpenses(expenses: ExpenseRow[], today: string): Recurr
     const amounts = rows.map((r) => Number(r.amount_minor)).sort((a, b) => a - b);
     const median = amounts[Math.floor((amounts.length - 1) / 2)];
     if (!median || amounts.some((a) => Math.abs(a - median) > median * 0.3)) continue;
-    const last = rows.map((r) => r.expense_date).sort().at(-1)!;
+    const latest = [...rows].sort((a, b) => a.expense_date.localeCompare(b.expense_date)).at(-1)!;
     out.push({
       key,
-      vendor: rows[0].vendor!.trim(),
-      category: expenseCategory(rows[0].category).label,
+      vendor: latest.vendor!.trim(),
+      category: expenseCategory(latest.category).label,
+      categoryKey: latest.category,
       minor: median,
+      taxMinor: Number(latest.tax_minor) || 0,
+      businessUsePct: Number(latest.business_use_pct ?? 100),
+      paymentMethod: latest.payment_method ?? null,
       months: months.size,
-      lastDate: last,
-      nextAbout: addDays(last, 30),
+      lastDate: latest.expense_date,
+      nextAbout: addDays(latest.expense_date, 30),
       yearlyMinor: median * 12,
     });
   }
