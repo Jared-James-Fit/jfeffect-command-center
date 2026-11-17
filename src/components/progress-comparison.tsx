@@ -16,7 +16,7 @@ type Block = { id: string; name: string; start_date: string | null; end_date: st
 type Row = { id: string; day_id: string; exercise_id: string | null; exercise_name_override: string | null; sort_order: number };
 type Day = { id: string; week_id: string; day_index: number; title: string | null };
 type Week = { id: string; block_id: string; week_index: number };
-type Result = { row_id: string; set_index: number; actual_load: number | null; actual_load_unit: string | null; actual_reps: number | null; actual_rpe: string | null; notes: string | null; completed_at: string | null };
+export type Result = { row_id: string; set_index: number; actual_load: number | null; actual_load_unit: string | null; actual_reps: number | null; actual_rpe: string | null; notes: string | null; completed_at: string | null };
 type Completion = { day_id: string; completed_at: string | null };
 type Exercise = { id: string; name: string };
 
@@ -67,12 +67,27 @@ function rowExerciseName(r: Row, nameMap: Map<string, string>): string {
   return r.exercise_name_override ?? (r.exercise_id ? nameMap.get(r.exercise_id) ?? "Exercise" : "Exercise");
 }
 
-function bestSet(results: Result[]): Result | null {
+/** A set's load in kg, so a kg set and an lb set are compared as the same physical weight. */
+export function loadKg(r: Pick<Result, "actual_load" | "actual_load_unit">): number | null {
+  if (r.actual_load == null) return null;
+  return r.actual_load_unit === "lb" ? r.actual_load / 2.2046226218 : r.actual_load;
+}
+
+/** A's best minus B's, in A's unit (one decimal), whatever unit each was logged in. */
+export function bestSetDelta(a: Result | null, b: Result | null): number | null {
+  const ka = a ? loadKg(a) : null;
+  const kb = b ? loadKg(b) : null;
+  if (ka == null || kb == null) return null;
+  const inA = a!.actual_load_unit === "lb" ? 2.2046226218 : 1;
+  return Math.round((ka - kb) * inA * 10) / 10;
+}
+
+export function bestSet(results: Result[]): Result | null {
   if (results.length === 0) return null;
-  // Best by load, tiebreak by reps
+  // Best by load (as a physical weight: 140 kg beats 225 lb), tiebreak by reps
   return [...results].sort((a, b) => {
-    const la = a.actual_load ?? -1;
-    const lb = b.actual_load ?? -1;
+    const la = loadKg(a) ?? -1;
+    const lb = loadKg(b) ?? -1;
     if (lb !== la) return lb - la;
     return (b.actual_reps ?? 0) - (a.actual_reps ?? 0);
   })[0];
@@ -128,7 +143,7 @@ function blockSummary(data: BlockData) {
   const prs = [...byExercise.entries()]
     .map(([name, results]) => ({ name, best: bestSet(results) }))
     .filter((x) => x.best && x.best.actual_load != null)
-    .sort((a, b) => (b.best!.actual_load ?? 0) - (a.best!.actual_load ?? 0))
+    .sort((a, b) => (loadKg(b.best!) ?? 0) - (loadKg(a.best!) ?? 0))
     .slice(0, 3);
 
   return { totalWorkouts, completed, missed: totalWorkouts - completed, pct, prs };
@@ -328,8 +343,7 @@ function ExerciseView({ a, b, loadingA, loadingB }: { a: BlockData | null; b: Bl
   const bBest = bestSet(bResults);
   const recent = (d: BlockData | null, rs: Result[]) => latestSessionTop(rs, d?.rows ?? []);
 
-  const delta = aBest && bBest && aBest.actual_load != null && bBest.actual_load != null
-    ? aBest.actual_load - bBest.actual_load : null;
+  const delta = bestSetDelta(aBest, bBest);
 
   return (
     <div className="space-y-3">

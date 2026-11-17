@@ -14,7 +14,7 @@ export const rxSchema = z.object({
   reps: z.string().trim().min(1).max(30).optional().describe('Reps as written on the program: "5", "8-10", "AMRAP", "3x3 cluster".'),
   rpe: z.string().trim().max(10).optional().describe('Target RPE, e.g. "7" or "7-8". Use RPE or RIR, not both.'),
   rir: z.string().trim().max(10).optional().describe('Reps in reserve, e.g. "2" or "1-2".'),
-  load: z.number().positive().max(2000).optional().describe("A fixed load, in load_unit."),
+  load: z.number().positive().max(2000).optional().describe("A fixed load, in load_unit. Always give load_unit with it (the unit the program shows for that exercise)."),
   load_unit: z.enum(["kg", "lb"]).optional(),
   percentage: z.number().min(1).max(120).optional().describe("Load as % of the basis (only for lifts with a max on file)."),
   percentage_of: z.enum(["1rm", "training_max", "est_1rm"]).optional(),
@@ -23,6 +23,25 @@ export const rxSchema = z.object({
   notes: z.string().trim().max(500).optional().describe("Coaching cue the client sees on this exercise."),
 });
 export type Rx = z.infer<typeof rxSchema>;
+
+/**
+ * Every prescription in an action's params with a load but no load_unit gets
+ * one: the unit its row is already written in (`rowUnits`, by row id), else
+ * the athlete's (`fallback`). A bare number used to be saved as lb for
+ * everyone, so "make it 105" on a 100 kg row became 105 lb. Returns a copy.
+ */
+export function withLoadUnits<T>(params: T, fallback: "kg" | "lb", rowUnits: Map<string, "kg" | "lb"> = new Map()): T {
+  const walk = (v: any, inherited: "kg" | "lb"): any => {
+    if (Array.isArray(v)) return v.map((x) => walk(x, inherited));
+    if (!v || typeof v !== "object") return v;
+    const own = typeof v.row_id === "string" ? rowUnits.get(v.row_id) ?? inherited : inherited;
+    const out: Record<string, any> = {};
+    for (const [k, x] of Object.entries(v)) out[k] = walk(x, own);
+    if (typeof out.load === "number" && out.load_unit !== "kg" && out.load_unit !== "lb") out.load_unit = own;
+    return out;
+  };
+  return walk(params, fallback);
+}
 
 /** The pl_exercise_rows columns a prescription sets (only the fields given). */
 export function rxToRow(rx: Rx): Record<string, unknown> {

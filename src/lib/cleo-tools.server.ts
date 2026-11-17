@@ -421,7 +421,11 @@ export function cleoReadTools(ctx: ToolCtx) {
             const list = rows<any>(ex as any, "exercises").sort((a, b) => (a.sort_order ?? a.position ?? a.row_index ?? 0) - (b.sort_order ?? b.position ?? b.row_index ?? 0));
             lines.push(`Prescription for ${date} (${days.get(s.source_day_id)?.title ?? "workout"}):`);
             for (const r of list) {
-              const load = r.percentage ? `${r.percentage}%` : r.load_kg || r.load_lb ? `${r.load_unit === "kg" ? r.load_kg : r.load_lb ?? r.load_kg} ${r.load_unit ?? ""}`.trim() : "";
+              // a fixed load with the unit of the column it's in, never a kg number under an lb label
+              const fixed = r.load_unit === "kg" && r.load_kg != null ? `${r.load_kg} kg`
+                : r.load_unit === "lb" && r.load_lb != null ? `${r.load_lb} lb`
+                : r.load_kg != null ? `${r.load_kg} kg` : r.load_lb != null ? `${r.load_lb} lb` : "";
+              const load = r.percentage ? `${r.percentage}%` : fixed;
               lines.push(`- ${text(r.exercises?.name) ?? text(r.exercise_name_override) ?? "Exercise"}: ${r.sets ?? "?"} x ${r.reps_text ?? "?"}${r.rpe ? ` @RPE ${r.rpe}` : r.rir ? ` @${r.rir} RIR` : ""}${load ? ` | ${load}` : ""}${text(r.notes) ? ` | ${String(r.notes).slice(0, 120)}` : ""}`);
             }
           }

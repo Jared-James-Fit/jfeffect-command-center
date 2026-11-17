@@ -2903,7 +2903,9 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
     : !row.percentage_basis ? (hasExistingManualLoad ? "manual" : "none")
     : "pct";
   const suggestedOn = loadMode !== "none";
-  const rowUnit: "kg" | "lb" = row.load_unit === "lb" ? "lb" : "kg";
+  // A fixed load lives in one column, its unit's (like the sheet and Cleo); a row
+  // copied without load_unit says its unit by which column holds the number.
+  const rowUnit: "kg" | "lb" = row.load_unit === "lb" || (row.load_unit !== "kg" && row.load_lb != null && row.load_kg == null) ? "lb" : "kg";
   const setLoadMode = (mode: "pct" | "manual" | "none") => {
     if (mode === "manual") {
       setRow({ ...row, percentage_basis: "manual", percentage: null, manual_override: false });
@@ -2934,10 +2936,9 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   }, [clientId, exName, row.percentage, row.percentage_basis, row.load_kg, row.load_lb, rowUnit, maxesIndex, refFamily, ownCompetition]);
   const overrideCalculated = () => {
     if (!computed || computed.status !== "ok" || computed.load == null) return;
-    const patch: any = { ...row, manual_override: true, override_of_pct: row.percentage };
-    if (rowUnit === "kg") patch.load_kg = computed.load;
-    else patch.load_lb = computed.load;
-    setRow(patch);
+    // computed in this row's unit (computeRowLoad above): one column, the other cleared
+    const inUnit = computed.load;
+    setRow({ ...row, manual_override: true, override_of_pct: row.percentage, load_unit: rowUnit, load_kg: rowUnit === "kg" ? inUnit : null, load_lb: rowUnit === "lb" ? inUnit : null });
   };
   const clearOverride = () => {
     setRow({ ...row, manual_override: false, load_kg: null, load_lb: null });
@@ -3415,9 +3416,22 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                     inputMode="decimal"
                     placeholder={loadMode === "pct" ? "auto" : "weight"}
                     value={rowUnit === "kg" ? row.load_kg : row.load_lb}
-                    onCommit={(v) => setRow({ ...row, [rowUnit === "kg" ? "load_kg" : "load_lb"]: parseFloatOrNull(v) })}
+                    onCommit={(v) => {
+                      // one load, in one unit: the other column is cleared, never left holding an old number
+                      const n = parseFloatOrNull(v);
+                      setRow({ ...row, load_unit: rowUnit, load_kg: rowUnit === "kg" ? n : null, load_lb: rowUnit === "lb" ? n : null });
+                    }}
                   />
-                  <Select value={rowUnit} onValueChange={(v) => setRow({ ...row, load_unit: v })}>
+                  <Select
+                    value={rowUnit}
+                    onValueChange={(v) => {
+                      // the chip says what the number is in: "100" with lb picked is 100 lb (it was
+                      // left behind in the kg column, so kg athletes saw 100 kg and lb athletes nothing)
+                      const u = v === "lb" ? "lb" : "kg";
+                      const n = rowUnit === "kg" ? row.load_kg : row.load_lb;
+                      setRow({ ...row, load_unit: u, load_kg: u === "kg" ? n ?? null : null, load_lb: u === "lb" ? n ?? null : null });
+                    }}
+                  >
                     <SelectTrigger className={cn("w-[64px] px-2 font-medium", h, inputCls)} data-pb-field="unit" aria-label="Unit"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="kg">kg</SelectItem>

@@ -3912,13 +3912,15 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
       percentage: Number(row.percentage),
       manualLoadKg: row.load_kg ? Number(row.load_kg) : null,
       manualLoadLb: row.load_lb ? Number(row.load_lb) : null,
-      unit: "kg",
+      // worked out and rounded once, in the unit on the card: computed in kg and
+      // then rounded again in lb, a % of an lb max could land a plate step off
+      unit: activeUnit,
       maxesIndex: buildMaxIndex(maxes),
       family: refFamily,
       ownCompetition,
       loggedE1rmKg,
     });
-  }, [row.percentage, row.percentage_basis, row.load_kg, row.load_lb, name, maxes, refFamily, ownCompetition, loggedE1rmKg]);
+  }, [row.percentage, row.percentage_basis, row.load_kg, row.load_lb, name, maxes, refFamily, ownCompetition, loggedE1rmKg, activeUnit]);
   // The coach planned this load as a % (of a max, or of today's top set): it's the
   // weight in the cell, and the RPE beside it is a cap, not a target.
   const plannedFromMax = !row.manual_override && isMaxBasis(row.percentage_basis) && computed?.status === "ok" && computed.load != null;
@@ -3970,9 +3972,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     if (row.manual_override) return prescribedLoadInActiveUnit();
     if (percentageBackoffWeight != null) return percentageBackoffWeight;
     if (computed && computed.status === "ok" && computed.load != null) {
-      const inUnit = activeUnit === "kg" ? computed.load : computed.load * 2.2046226218;
+      // already rounded in the card's unit (computeRowLoad above)
+      if (computed.unit === activeUnit) return computed.load;
       const step = weightIncrement(activeUnit);
-      return Math.round(inUnit / step) * step;
+      return Math.round(convertLoad(computed.load, computed.unit, activeUnit) / step) * step;
     }
     return prescribedLoadInActiveUnit();
   }, [row.manual_override, row.load_kg, row.load_lb, percentageBackoffWeight, computed, activeUnit]);
