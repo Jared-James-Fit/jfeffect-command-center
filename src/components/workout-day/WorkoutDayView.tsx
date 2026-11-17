@@ -71,7 +71,10 @@ import { useEntitlement, useServiceTier } from "@/lib/service-tier";
 import { pushWorkoutNote } from "@/lib/workout-notes";
 import { writeSetEditAudit } from "@/lib/logged-set-audit";
 import { saveExerciseUnitPref, type WUnit } from "@/lib/exercise-unit-prefs";
-import { isMainLiftFamily, resolveWorkoutRowUnits } from "@/lib/workout-unit-resolution";
+import { athleteHabitUnit, isMainLiftFamily, readUnitHabitHint, resolveWorkoutRowUnits, writeUnitHabitHint } from "@/lib/workout-unit-resolution";
+
+/** As long as the copy the app saves on the phone (QUERY_PERSIST_MAX_AGE, 24h). */
+const UNIT_CACHE_MS = 24 * 60 * 60_000;
 import { backoffCards, firstHeavyCards, rangeLift } from "@/lib/workouts/pick-range";
 import { cardioLast, focusPlaceLabel, isPlanCardioRow, liftAndCardioProgress, liftCount } from "@/lib/workouts/workout-cardio";
 import {
@@ -1646,10 +1649,14 @@ function WorkoutDay({
     [rows],
   );
 
+  // Every read that decides a card's unit is kept for a day (UNIT_CACHE_MS, the
+  // copy the app saves on the phone), so the next open paints in the right unit
+  // instead of flipping once the logs arrive.
   const { data: prefRows = [] } = useQuery({
     queryKey: ["client-exercise-unit-prefs", adapter?.kind ?? "client", client?.id, exerciseIds.join(",")],
     enabled: secondaryHydrationReady && !!client?.id && exerciseIds.length > 0,
     staleTime: 60_000,
+    gcTime: UNIT_CACHE_MS,
     queryFn: async () => {
       // Route through the adapter so the member adapter can read its own
       // member_exercise_unit_prefs table (parity with client side).
@@ -1663,32 +1670,34 @@ function WorkoutDay({
     },
   });
 
+  // The newest loaded sets of each exercise in this workout (a set with no
+  // weight took whatever unit the card showed, so it says nothing). Enough rows
+  // that a lift trained a few weeks back isn't crowded out by today's others.
   const { data: historyRows = [] } = useQuery({
     queryKey: ["client-exercise-unit-history", client?.id, exerciseIds.join(",")],
     enabled: secondaryHydrationReady && !!client?.id && exerciseIds.length > 0,
     staleTime: 5 * 60_000,
+    gcTime: UNIT_CACHE_MS,
     queryFn: async () => (await sb
       .from("pl_row_results")
-      .select("actual_load_unit, pl_exercise_rows!inner(exercise_id)")
+      .select("actual_load_unit, actual_load, pl_exercise_rows!inner(exercise_id)")
       .eq("client_id", client!.id)
       .in("pl_exercise_rows.exercise_id", exerciseIds)
       .not("actual_load_unit", "is", null)
+      .gt("actual_load", 0)
       .order("created_at", { ascending: false })
-      // 50 is enough — we only need the most recent unit per exercise (not full history).
-      .limit(50)).data ?? [],
+      .limit(400)).data ?? [],
   });
 
-  // The unit the athlete uses for squat / bench / deadlift across every
-  // variation, so a lift they've never logged opens in that unit instead of
-  // the competition-lift kg default (see resolveWorkoutRowUnits).
-  const hasMainLiftRow = useMemo(
-    () => (rows as any[]).some((r) => isMainLiftFamily(r.exercises?.movement_family)),
-    [rows],
-  );
-  const { data: familyHistoryRows = [] } = useQuery({
+  // The athlete's latest loaded logs of anything: the unit they use for squat /
+  // bench / deadlift across every variation, and the unit nearly everything
+  // they log is in (their habit), so a lift they've never logged opens in it.
+  // Read on every workout, accessory days included (see resolveWorkoutRowUnits).
+  const { data: familyHistoryRows, isSuccess: familyHistoryLoaded } = useQuery({
     queryKey: ["client-lift-family-unit-history", client?.id],
-    enabled: secondaryHydrationReady && !!client?.id && hasMainLiftRow,
+    enabled: secondaryHydrationReady && !!client?.id,
     staleTime: 5 * 60_000,
+    gcTime: UNIT_CACHE_MS,
     queryFn: async () => (await sb
       .from("pl_row_results")
       .select("actual_load_unit, actual_load, pl_exercise_rows(exercises(movement_family))")
@@ -1698,6 +1707,13 @@ function WorkoutDay({
       .order("created_at", { ascending: false })
       .limit(150)).data ?? [],
   });
+  // The habit as last read on this phone, so the first paint of a workout
+  // already shows it while the logs load.
+  const habitHint = useMemo(() => readUnitHabitHint(client?.id), [client?.id]);
+  useEffect(() => {
+    if (!familyHistoryLoaded || !client?.id) return;
+    writeUnitHabitHint(client.id, athleteHabitUnit(familyHistoryRows as any[]));
+  }, [familyHistoryLoaded, familyHistoryRows, client?.id]);
 
   // Map exercise_id -> resolved unit, recomputed when inputs change.
   const [unitOverrides, setUnitOverrides] = useState<Record<string, WUnit>>({});
@@ -1707,12 +1723,13 @@ function WorkoutDay({
       rows: rows as any[],
       prefRows: prefRows as any[],
       historyRows: historyRows as any[],
-      familyHistoryRows: familyHistoryRows as any[],
-      // The athlete's own unit beats the competition-lift kg default (see resolveWorkoutRowUnits).
+      familyHistoryRows: familyHistoryLoaded ? (familyHistoryRows as any[]) : undefined,
+      habitHint,
+      // The account's unit, only once confirmed: used when the logs show no habit (see resolveWorkoutRowUnits).
       athleteChosenUnit: (client as any)?.weight_unit_confirmed_at ? (client as any)?.preferred_weight_unit ?? null : null,
       overrides: unitOverrides,
     }),
-    [rows, prefRows, historyRows, familyHistoryRows, unitOverrides, (client as any)?.preferred_weight_unit, (client as any)?.weight_unit_confirmed_at],
+    [rows, prefRows, historyRows, familyHistoryRows, familyHistoryLoaded, habitHint, unitOverrides, (client as any)?.preferred_weight_unit, (client as any)?.weight_unit_confirmed_at],
   );
 
   const setExerciseUnit = async (exerciseId: string | null, rowId: string, next: WUnit) => {
@@ -1754,7 +1771,7 @@ function WorkoutDay({
       }
     };
     // Undo lives on the confirmation itself — right where the change happened.
-    toast.success(`Switched to ${next.toUpperCase()}`, {
+    toast.success(`Now in ${next} for this exercise`, {
       duration: 5000,
       action: { label: "Undo", onClick: () => void restorePreviousUnit() },
     });
@@ -4669,9 +4686,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
         "workout-card-surface relative scroll-mt-24 overflow-hidden p-3.5 transition-[colors,box-shadow] hover:border-builder-card-border-strong sm:p-5",
       )}
     >
-      {/* The name, with the card's unit as one quiet word top right ("LB", tap
-          for the other); its role in the day under it in plain words. The
-          order lives in Focus's "Exercise N of M" and the list's own order. */}
+      {/* The name, with the card's unit top right as a small kg | lb switch;
+          its role in the day under it in plain words. The order lives in
+          Focus's "Exercise N of M" and the list's own order. */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1 text-xl font-bold leading-tight tracking-tight break-words" data-exercise-name>{name}</div>
         {/* No weight to log (a walk, a plank): no kg / lb switch either. */}
@@ -7184,21 +7201,42 @@ function SetRow({
 /* kg/lb toggle                                                                */
 /* -------------------------------------------------------------------------- */
 
-/** The card's unit as one quiet word top right ("LB"): a tap switches the card to the other unit, the same as KG / LB did. */
+/**
+ * The card's unit top right as a small two-way switch, "kg | lb", the one in
+ * use filled: both units on show is what says it can be changed (a lone "LB"
+ * read as a label). A tap on the other one switches every card of the exercise
+ * and remembers it for that exercise; the toast has Undo.
+ */
 function UnitSwitch({ unit, onChange }: { unit: "kg" | "lb"; onChange: (u: "kg" | "lb") => void }) {
-  const other = unit === "kg" ? "lb" : "kg";
   const word = (u: "kg" | "lb") => (u === "kg" ? "kilograms" : "pounds");
   return (
-    <button
-      type="button"
-      onClick={() => onChange(other)}
+    <div
+      role="radiogroup"
+      aria-label="Weight unit for this exercise"
       data-card-unit={unit}
-      aria-label={`Weights in ${word(unit)}. Switch to ${word(other)}`}
-      title={`Switch to ${word(other)}`}
-      className="-my-2 -mr-2 inline-flex h-10 min-w-10 shrink-0 items-center justify-center rounded-md px-2 text-sm font-medium uppercase text-muted-foreground transition-colors hover:text-foreground active:bg-muted"
+      className="-my-1.5 -mr-1 inline-flex h-10 shrink-0 items-center rounded-lg border border-border p-0.5"
     >
-      {unit}
-    </button>
+      {(["kg", "lb"] as const).map((u) => {
+        const on = u === unit;
+        return (
+          <button
+            key={u}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            aria-label={on ? `Weights in ${word(u)}` : `Switch to ${word(u)}`}
+            data-unit-option={u}
+            onClick={() => { if (!on) onChange(u); }}
+            className={cn(
+              "inline-flex h-full min-w-[2.5rem] items-center justify-center rounded-md px-2 text-[13px] font-semibold transition-colors active:scale-[0.97]",
+              on ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {u}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
