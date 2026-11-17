@@ -48,7 +48,7 @@ export function CheckInScheduleCard({
   userId,
   readOnly = false,
   title = "Asked in their weekly check-in",
-  subtitle = "Photos and measurements switched on here become a step in their weekly check-in when they're due, and are skipped when they're already on file. Bodyweight is always read from their log. Never a separate form or reminder.",
+  subtitle = "Photos and measurements are an optional step in their weekly check-in when they're due, skipped when already on file. Switched off, they follow the client's goal: photos every 4 weeks and the waist every 2 on a fat loss or recomp phase, both every 4 weeks on a muscle gain phase, neither for maintenance or a weight-class cut. Pick No reminder to never ask. Bodyweight is always read from their log.",
 }: {
   userId: string;
   readOnly?: boolean;
@@ -201,6 +201,11 @@ function ScheduleRow({
           </div>
         ) : null}
       </div>
+      {kind === "photos" || kind === "measurements" ? (
+        <div className="text-[11px] text-muted-foreground" data-schedule-mode>
+          {enabled && frequency !== "none" ? "Your schedule" : frequency === "none" && row ? "Never asked" : "Follows their goal"}
+        </div>
+      ) : null}
       {row?.last_completed_at ? (
         <div className="text-[11px] text-muted-foreground">
           Last completed {format(parseISO(row.last_completed_at), "MMM d, yyyy")}

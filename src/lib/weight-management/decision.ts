@@ -13,11 +13,19 @@ import type { DigestionRead } from "@/lib/weight-management/digestion";
 import { LOSS_RATES, GAIN_RATES, type GoalContext, type Level, type TargetAssessment } from "@/lib/weight-management/target";
 import type { Trajectory } from "@/lib/weight-management/trajectory";
 import { stepTreadmill, type CardioStep, type StepContext, type TreadmillSession } from "@/lib/weight-management/treadmill";
-import { daysBetween, fmtPct, fmtRate, fmtWeight, round, type WeightUnit } from "@/lib/weight-management/units";
+import { daysBetween, fmtDay, fmtPct, fmtRate, fmtWeight, round, type WeightUnit } from "@/lib/weight-management/units";
 
 export const KCAL_PER_KG = 7700;
 /** A new plan's first two weeks move water and glycogen, not tissue. */
-export const SETTLE_DAYS = 14;
+/**
+ * A new plan is judged on its own weigh-ins: its first week moves water and
+ * glycogen and is left out, then 3 weeks of them, so day 28. Until then the
+ * calories hold (only losing clearly too fast past its first 2 weeks moves
+ * them); the next Nutrition Update, which reads this, is the usual place they change.
+ */
+export const SETTLE_DAYS = 28;
+/** A new plan's water and glycogen weeks: no rate is read as "too fast" in them. */
+export const WATER_DAYS = 14;
 /** Smaller than this a day isn't worth a change. */
 export const MIN_CHANGE_KCAL = 75;
 export const MAX_STEP_KCAL = 250;
@@ -109,9 +117,31 @@ export type DecisionInput = {
   meetWeeksOut: number | null;
   powerlifter: boolean;
   stepCtx: StepContext;
+  /** The nutrition plan and the bodyweight goal point different ways (goalPlanConflict): which one is current is the coach's call. */
+  conflict?: string | null;
 };
 
 const r25 = (n: number) => Math.round(n / 25) * 25;
+
+/** A gut problem that keeps coming back: flagged in 2+ of the last 3 check-ins. */
+export function persistentGut(d: DigestionRead | null | undefined): boolean {
+  return !!d && d.weeks.slice(0, 3).filter((w) => w.flagged).length >= 2;
+}
+
+/**
+ * The goal and the plan disagree when one says lose and the other gain or
+ * hold (a goal set months ago, a plan changed since). A meet's weight class
+ * is never this: its date and class are the goal.
+ */
+export function goalPlanConflict(goalType: string | null | undefined, phase: string | null | undefined, goalWords: string): string | null {
+  const p = String(phase ?? "").toLowerCase();
+  const g = String(goalType ?? "");
+  if (!p || !g) return null;
+  const planIs = /loss|cut/.test(p) ? "lose" : /gain|bulk|reverse/.test(p) ? "gain" : /maint|perform/.test(p) ? "maintain" : null; // recomp fits losing or holding
+  const goalIs = g === "lose" || g === "performance_cut" ? "lose" : g === "gain" ? "gain" : g === "maintain" ? "maintain" : null;
+  if (!planIs || !goalIs || planIs === goalIs) return null;
+  return `Their nutrition plan is ${phase} but their bodyweight goal is ${goalWords}. Which one is current?`;
+}
 
 function ratesFor(x: DecisionInput) {
   if (x.target) return x.target.rates;
@@ -142,7 +172,29 @@ function nutritionAction(x: DecisionInput, kcalPerDay: number): Extract<Action, 
 const expectedFromKcal = (kcalPerDay: number, unit: WeightUnit) =>
   `Should move the trend about ${fmtRate((kcalPerDay * 7) / KCAL_PER_KG, unit)} (2–3 weeks to show)`;
 
+/**
+ * The one recommendation. A gut problem that keeps coming back is worth the
+ * coach's look even when the scale says hold (on track, or a new plan still
+ * settling): never a calorie change, just what to try.
+ */
 export function decide(x: DecisionInput): Recommendation {
+  const r = decideCore(x);
+  if (r.verdict === "maintain" && (r.limiting === "none" || r.limiting === "settling") && persistentGut(x.digestion)) {
+    const d = x.digestion!;
+    return {
+      ...r,
+      limiting: "digestion",
+      verdict: "investigate",
+      headline: "Calories can stay: look at the digestion",
+      reasons: [...r.reasons, `${d.summary ?? "Digestion flagged most weeks"}.`],
+      actions: [...r.actions, { kind: "digestion", suggestions: d.suggestions }],
+      material: false,
+    };
+  }
+  return r;
+}
+
+function decideCore(x: DecisionInput): Recommendation {
   const t = x.trajectory;
   const trend = t.trend;
   const reasons: string[] = [];
@@ -155,38 +207,50 @@ export function decide(x: DecisionInput): Recommendation {
     return { ...out, material: out.actions.some((a) => a.kind === "nutrition" || a.kind === "cardio") };
   };
   if (trend) reasons.push(`Trend ${fmtRate(trend.kgPerWeek, unit)} (${fmtPct(trend.pctPerWeek)}/week) over ${trend.weighIns} weigh-ins, ${trend.clear ? "a clear trend" : `within normal day-to-day scatter (±${fmtWeight(trend.noiseKg, unit)})`}.`);
-  if (t.required && t.goal) reasons.push(`The goal needs ${fmtRate(t.required.kgPerWeek, unit)} (${fmtPct(t.required.pctPerWeek)}/week) for ${t.required.weeksLeft} weeks.`);
+
+  // the plan and the goal pointing different ways is worth saying even while weigh-ins are missing
+  if (x.conflict) reasons.push(x.conflict);
 
   // 1. safety
   if (x.digestion?.medical) {
     return rec({ limiting: "safety", verdict: "investigate", headline: "Digestion needs a doctor's look first", evidence: "strong", actions: [{ kind: "medical", text: x.digestion.medical }, { kind: "digestion", suggestions: x.digestion.suggestions }], reviewInDays: 7 });
   }
 
-  // 2. enough data?
+  // 2. enough data? A weight-class meet close by says so: that's when the gap matters most.
+  const classMeetSoon = nearMeet && (x.context === "powerlifting_class" || x.context === "weight_class_sport");
+  const meetWords = classMeetSoon ? `Meet in ${Math.max(1, Math.round(x.meetWeeksOut!))} week${Math.round(x.meetWeeksOut!) === 1 ? "" : "s"}` : null;
   if (!trend || t.status === "not_enough_data") {
+    const since = t.latest?.date ? ` since ${fmtDay(t.latest.date)}` : "";
     return rec({ limiting: "data",
       verdict: "need_data",
-      headline: "Not enough weigh-ins to read a trend",
+      headline: meetWords ? `${meetWords}: not enough weigh-ins${t.stale ? since : ""}` : "Not enough weigh-ins to read a trend",
       evidence: "weak",
       actions: [{ kind: "ask", text: "Weigh in 4+ mornings a week (after the bathroom, before eating) so the trend can be read." }],
       reviewInDays: 7,
     });
   }
   if (t.stale) {
-    return rec({ limiting: "data", verdict: "need_data", headline: "No recent weigh-ins", evidence: "weak", actions: [{ kind: "ask", text: `No weigh-in since ${t.latest?.date}: ask for 4+ this week before changing anything.` }], reviewInDays: 7 });
+    return rec({ limiting: "data", verdict: "need_data", headline: meetWords ? `${meetWords}: no weigh-ins since ${fmtDay(t.latest!.date)}` : "No recent weigh-ins", evidence: "weak", actions: [{ kind: "ask", text: `No weigh-in since ${t.latest?.date}: ask for 4+ this week before changing anything.` }], reviewInDays: 7 });
   }
+  // the pace the goal needs, only once there's a trend to hold it against
+  if (t.required && t.goal) reasons.push(`The goal needs ${fmtRate(t.required.kgPerWeek, unit)} (${fmtPct(t.required.pctPerWeek)}/week) for ${t.required.weeksLeft} weeks.`);
 
   const losing = trend.clear && trend.kgPerWeek < 0;
   const pct = trend.pctPerWeek;
-  const cardioRecent = !!x.cardio.lastChanged && daysBetween(x.cardio.lastChanged, x.today) <= CARDIO_RECENT_DAYS;
+  // a rate is past a limit only by more than its own uncertainty: a hair over is noise, not a reason to change food
+  const sePct = trend.levelKg > 0 ? (trend.seKgPerWeek / trend.levelKg) * 100 : 0;
+  const pastBy = (rate: number, limit: number) => Math.abs(rate) - sePct > limit;
+  const planDays = x.plan.start ? daysBetween(x.plan.start, x.today) : null;
+  const waterWeeks = planDays != null && planDays >= 0 && planDays < WATER_DAYS;
+  const cardioRecent = !!x.cardio.lastChanged && daysBetween(x.cardio.lastChanged, x.today) >= 0 && daysBetween(x.cardio.lastChanged, x.today) <= CARDIO_RECENT_DAYS;
   const perfDown = x.performance.lower === "down";
   if (x.performance.detail) reasons.push(x.performance.detail);
 
-  // 3. losing too fast
-  if (x.direction !== "gain" && losing && (Math.abs(pct) > rates.limit || (perfDown && Math.abs(pct) > rates.comfortable))) {
+  // 3. losing too fast (never in a new plan's water weeks, when fast loss is mostly water)
+  if (x.direction !== "gain" && losing && !waterWeeks && (pastBy(pct, rates.limit) || (perfDown && pastBy(pct, rates.comfortable)))) {
     const want = t.required && t.required.kgPerWeek < 0 ? Math.max(Math.abs(t.required.pctPerWeek), rates.comfortable * 0.6) : rates.comfortable;
     const wantKg = (want / 100) * trend.levelKg;
-    reasons.push(`Losing ${fmtPct(pct)}/week is faster than ${perfDown ? "their training is handling" : `the ${rates.limit}%/week that protects strength and muscle`}.`);
+    reasons.push(`Losing ${fmtPct(pct)}/week is faster than ${perfDown ? "their training is handling" : x.context === "maintain" ? `a maintenance phase should drift (${rates.limit}%/week)` : `the ${rates.limit}%/week that protects strength and muscle`}.`);
     if (cardioRecent && perfDown) {
       const s = stepTreadmill(x.cardio.plan, "down", { ...x.stepCtx, treadmill: x.cardio.treadmill });
       if (s.step.variable !== "none")
@@ -196,10 +260,15 @@ export function decide(x: DecisionInput): Recommendation {
     return rec({ limiting: "rate", verdict: "adjust", headline: `Add about ${add} kcal a day: losing faster than needed`, evidence: trend.weighIns >= 10 ? "strong" : "moderate", actions: [nutritionAction(x, add)], expected: expectedFromKcal(add, unit) });
   }
 
+  // 3b. the plan and the goal point different ways: nothing moves until the coach says which is current
+  if (x.conflict) {
+    return rec({ limiting: "target", verdict: "investigate", headline: "Plan and goal disagree: confirm which is current", evidence: "moderate", actions: [{ kind: "ask", text: x.conflict }], reviewInDays: 7 });
+  }
+
   // 4. a new plan settling
-  if (x.plan.start && daysBetween(x.plan.start, x.today) < SETTLE_DAYS) {
-    reasons.push(`The plan started ${daysBetween(x.plan.start, x.today)} days ago: the first two weeks move water and glycogen, so the scale can't be judged yet.`);
-    return rec({ limiting: "settling", verdict: "maintain", headline: "Hold the plan: it's still settling in", evidence: "weak", reviewInDays: SETTLE_DAYS - daysBetween(x.plan.start, x.today) + 1 });
+  if (planDays != null && planDays >= 0 && planDays < SETTLE_DAYS) {
+    reasons.push(`The plan started ${planDays} day${planDays === 1 ? "" : "s"} ago. Its first week moves water and glycogen, so it's judged on its own weigh-ins from day ${SETTLE_DAYS}.`);
+    return rec({ limiting: "settling", verdict: "maintain", headline: "Hold the plan: it's still settling in", evidence: "weak", reviewInDays: Math.max(1, SETTLE_DAYS - planDays) });
   }
 
   const offCourse = t.status === "behind" || t.status === "stalled" || t.status === "wrong_way";
@@ -302,7 +371,7 @@ export function decide(x: DecisionInput): Recommendation {
   }
 
   // 11. gaining too fast
-  if (x.direction === "gain" && trend.clear && pct > rates.limit) {
+  if (x.direction === "gain" && trend.clear && pct > 0 && pastBy(pct, rates.limit)) {
     reasons.push(`Gaining ${fmtPct(pct)}/week is past the ${rates.limit}%/week that stays mostly muscle at their training age.`);
     const take = Math.min(MAX_STEP_KCAL, Math.max(100, r25(((trend.kgPerWeek - (rates.comfortable / 100) * trend.levelKg) * KCAL_PER_KG) / 7)));
     return rec({ limiting: "rate", verdict: "adjust", headline: `Take about ${take} kcal a day: gaining faster than useful`, evidence: "moderate", actions: [nutritionAction(x, -take)], expected: expectedFromKcal(-take, unit) });

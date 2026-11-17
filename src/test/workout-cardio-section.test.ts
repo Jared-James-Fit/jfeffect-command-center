@@ -99,8 +99,14 @@ describe("cardio is done when it suits them: before, during, after or later that
     expect(refreshCardioBody).not.toContain("beginSessionOnAction");
   });
 
-  it("the ring, the review and the finish read the lifting, so the review never waits on cardio", () => {
-    expect(day).toContain("const autoFinishReady = liftLogged.allDone;");
+  it("the review pops by itself only once the cardio's in too; with it still to come, Finish is the review in one tap", () => {
+    // never over the cardio card (it's the next thing, done right after or later that day)
+    expect(day).toContain("const autoFinishReady = loggedProgress.allDone;");
+    expect(day).toContain("allDone: autoFinishReady,");
+    expect(day).toContain("const reviewReady = liftLogged.allDone;");
+    expect(day).toContain("review: reviewReady,");
+    expect(day).toContain("{reviewReady ? (");
+    expect(day).toContain("Your cardio plan · now or later today");
     expect(day).toContain("setsDone: liftLogged.setsDone,");
     expect(day).toContain(".filter((r: any) => !r?.skipped && !isPlanCardioRow(r))");
     expect(day).toContain("(rows as any[]).filter((r: any) => !isPlanCardioRow(r)).map((r: any) => ({");
