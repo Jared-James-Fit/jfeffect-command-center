@@ -7,7 +7,8 @@ import { AutoPostCaption, CoachBadge } from "@/components/community/post-card";
 import { UserAvatar } from "@/components/user-avatar";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { isAutoPost, postTimeLabel, withHandles, type CommunityAuthor, type CommunityPost } from "@/lib/community";
-import { POST_SHEET_HEIGHT, sheetDragCloses, SHEET_DRAG_START_PX } from "@/lib/post-sheet";
+import { useSwipeDownToClose } from "@/hooks/use-swipe-down-to-close";
+import { POST_SHEET_HEIGHT } from "@/lib/post-sheet";
 
 /** Where the sheet opens: the caption at the top ("… more"), or scrolled to the comments (💬). */
 export type PostSheetAt = "caption" | "comments";
@@ -45,7 +46,8 @@ export function PostSheet({ post, at, viewerIsStaff, onClose, onOpenAuthor }: {
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const closeNow = useCallback(() => closeRef.current(), []);
-  useSheetDrag(node, open, closeNow);
+  // one swipe down closes it (the grip, the caption, or the comments once they're at the top; never the comment box)
+  useSwipeDownToClose(node, open, closeNow);
   // typing: the sheet fills what's on screen above the keyboard
   const vv = useVisualViewportBox(open);
   const item = post ? { post, at } : shown;
@@ -146,76 +148,3 @@ function PostSheetCaption({ post, onOpenAuthor }: { post: CommunityPost; onOpenA
   );
 }
 
-/**
- * One swipe down closes the sheet: a drag that starts on the grip or the
- * caption, or on the comments while they're at the top, moves the sheet with
- * the finger, and letting go far enough down (or with a flick) closes it,
- * else it springs back. A swipe up, or one that starts in the comments
- * further down, scrolls them as usual; the comment box is left alone.
- */
-function useSheetDrag(el: HTMLDivElement | null, active: boolean, close: () => void) {
-  useEffect(() => {
-    if (!active || !el) return;
-    let startY = 0;
-    let startT = 0;
-    let dy = 0;
-    let mode: "idle" | "maybe" | "drag" = "idle";
-    const settle = () => {
-      el.style.transition = "transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1)";
-      el.style.transform = "";
-    };
-    const onStart = (e: TouchEvent) => {
-      mode = "idle";
-      if (e.touches.length !== 1) return;
-      const t = e.target as Element | null;
-      if (t?.closest?.("textarea, input, [contenteditable='true']")) return;
-      const list = t?.closest?.("[data-sheet-scroll]") as HTMLElement | null;
-      if (list && list.scrollTop > 0) return;
-      startY = e.touches[0].clientY;
-      startT = e.timeStamp;
-      dy = 0;
-      mode = "maybe";
-    };
-    const onMove = (e: TouchEvent) => {
-      if (mode === "idle") return;
-      const d = e.touches[0].clientY - startY;
-      if (mode === "maybe") {
-        if (Math.abs(d) < SHEET_DRAG_START_PX) return;
-        // up: the comments scroll
-        if (d < 0) {
-          mode = "idle";
-          return;
-        }
-        mode = "drag";
-        el.style.transition = "none";
-      }
-      e.preventDefault();
-      dy = Math.max(0, d);
-      el.style.transform = `translate3d(0, ${dy}px, 0)`;
-    };
-    const onEnd = (e: TouchEvent) => {
-      if (mode !== "drag") {
-        mode = "idle";
-        return;
-      }
-      mode = "idle";
-      // closing slides it out from where the finger left it (the exit animation starts there)
-      if (sheetDragCloses({ dy, ms: e.timeStamp - startT, height: el.offsetHeight })) close();
-      else settle();
-    };
-    const onCancel = () => {
-      if (mode === "drag") settle();
-      mode = "idle";
-    };
-    el.addEventListener("touchstart", onStart, { passive: true });
-    el.addEventListener("touchmove", onMove, { passive: false });
-    el.addEventListener("touchend", onEnd);
-    el.addEventListener("touchcancel", onCancel);
-    return () => {
-      el.removeEventListener("touchstart", onStart);
-      el.removeEventListener("touchmove", onMove);
-      el.removeEventListener("touchend", onEnd);
-      el.removeEventListener("touchcancel", onCancel);
-    };
-  }, [el, active, close]);
-}

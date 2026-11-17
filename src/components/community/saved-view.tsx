@@ -219,7 +219,7 @@ function NameAlbumSheet({ open, onOpenChange, postIds, onCreated }: { open: bool
   }, [open]);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" hideCloseButton className={SHEET} style={KEYBOARD_SAFE} data-name-album>
+      <SheetContent side="bottom" swipeToClose hideCloseButton className={SHEET} style={KEYBOARD_SAFE} data-name-album>
         <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-muted-foreground/30" aria-hidden />
         <form
           className="px-5 pb-2 pt-3"
@@ -262,7 +262,7 @@ function MoveToAlbumSheet({ postIds, open, onOpenChange, onDone }: { postIds: st
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="bottom" hideCloseButton className={SHEET} data-move-to-album>
+        <SheetContent side="bottom" swipeToClose hideCloseButton className={SHEET} data-move-to-album>
           <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-muted-foreground/30" aria-hidden />
           <div className="flex items-center justify-between px-5 pb-2 pt-3">
             <SheetTitle className="text-[16px] font-bold">Add {postIds.length} to…</SheetTitle>
@@ -327,7 +327,7 @@ function AlbumMenuSheet({ album, open, onOpenChange, onDeleted }: { album: Saved
   }, [open, album.name]);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" hideCloseButton className={SHEET} style={KEYBOARD_SAFE} data-album-options>
+      <SheetContent side="bottom" swipeToClose hideCloseButton className={SHEET} style={KEYBOARD_SAFE} data-album-options>
         <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-muted-foreground/30" aria-hidden />
         <SheetTitle className="truncate px-5 pt-3 text-[16px] font-bold">{mode === "delete" ? `Delete ${album.name}?` : album.name}</SheetTitle>
         <SheetDescription className="px-5 pb-2 text-[12px] text-muted-foreground">
@@ -396,7 +396,7 @@ function AddFromSavedSheet({ album, unit, open, onOpenChange }: { album: SavedAl
   const ids = [...picked];
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" hideCloseButton className="flex max-h-[88dvh] flex-col gap-0 rounded-t-[24px] p-0 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:mx-auto sm:max-w-[520px]" data-add-from-saved-sheet>
+      <SheetContent side="bottom" swipeToClose hideCloseButton className="flex max-h-[88dvh] flex-col gap-0 rounded-t-[24px] p-0 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:mx-auto sm:max-w-[520px]" data-add-from-saved-sheet>
         <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-muted-foreground/30" aria-hidden />
         <div className="flex shrink-0 items-center justify-between gap-2 px-5 pb-2 pt-3">
           <div className="min-w-0">

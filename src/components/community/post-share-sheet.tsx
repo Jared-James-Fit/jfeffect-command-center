@@ -210,6 +210,7 @@ export function PostShareSheet({ post, open, onOpenChange, onStory, onInstagram 
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
+        swipeToClose
         hideCloseButton
         className="mx-auto flex h-[min(82svh,760px)] max-w-lg flex-col gap-0 rounded-t-[24px] p-0"
         style={{ bottom: lift, ...(maxH ? { maxHeight: maxH } : {}) }}
