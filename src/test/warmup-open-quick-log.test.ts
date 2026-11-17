@@ -45,7 +45,7 @@ describe("a warm-up's video is set 0, on the warm-up itself", () => {
   });
 
   it("the database takes set 0 as a warm-up, ties a clip filmed first, and never puts one in the film", () => {
-    const sql = read("supabase/migrations/20270328090000_warmup_videos.sql");
+    const sql = read("supabase/migrations/20270329090000_warmup_videos.sql");
     expect(sql).toContain("CHECK (set_index BETWEEN 0 AND 50)");
     expect(sql).toContain("(set_index = 0 AND result_id IS NULL) OR (set_index > 0 AND warmup_id IS NULL)");
     expect(sql).toContain("v_name := CASE WHEN _set_index = 0 THEN 'Warm-up' ELSE public.pl_set_name(_row_id, _set_index) END;");
@@ -176,6 +176,6 @@ describe("Fastest way to log", () => {
     const view = read("src/lib/use-workout-view.ts");
     expect(view).toContain('.select("view, tried_at, focus_tips_at, logging_tips_at")');
     expect(view).toContain('db.rpc("workout_view_logging_tips_seen")');
-    expect(read("supabase/migrations/20270328091000_quick_log_tips.sql")).toContain("SET logging_tips_at = now();");
+    expect(read("supabase/migrations/20270329091000_quick_log_tips.sql")).toContain("SET logging_tips_at = now();");
   });
 });
