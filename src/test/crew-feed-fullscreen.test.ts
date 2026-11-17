@@ -27,8 +27,8 @@ describe("every post fills the screen, TikTok's way", () => {
     expect(card).toContain("<FitBox ratio={0.8} page shrunk={sheetOpen}>");
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain('const between = controls === "top" && fit === "contain";');
-    // what sits at the top of a post (the set's caption, "2/4", the speaker) moves down under the bar
-    expect(card).toContain('style={top ? { paddingTop: "calc(var(--feed-bar-room, 0px) + 0.75rem)" } : undefined}');
+    // what sits at the top of a post ("2/4", the speaker) moves down under the bar; the set's caption is in the words now
+    expect(card).not.toContain("style={top ? { paddingTop:");
     expect(card).toContain('page ? "top-[calc(var(--feed-bar-room)+0.625rem)]" : "top-2.5"');
     // a post with its sheet open has nothing floating over it
     expect(css).toContain("[data-sheet-open] { --feed-bar-room: 0px; --feed-nav-room: 0px; --feed-words-room: 0px; }");

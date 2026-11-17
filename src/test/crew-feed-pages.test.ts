@@ -79,7 +79,7 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
     expect(card).toContain('if (layout === "page") {');
     // an automated post's 4:5 card fits the width; a post's own photos and clips are the screen (TikTok's)
     expect(card).toContain("<FitBox ratio={0.8} page shrunk={sheetOpen}>");
-    expect(card).toContain("<PostMedia post={post} thumbUrl={thumbUrl} page shrunk={sheetOpen} />");
+    expect(card).toContain("<PostMedia post={post} thumbUrl={thumbUrl} page shrunk={sheetOpen} onSlide={showSlide} />");
     expect(card).toContain("width: `min(100cqw, calc(100cqh * ${ratio}))`");
     expect(card).toContain(
       "<ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} unit={unit} column hidden={sheetOpen || under || holding} />",
@@ -99,10 +99,8 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain("box.addEventListener(CLIP_HOLD_EVENT, hold);");
     expect(inline).toContain("if (!visible || !active) setHoldPaused(false);");
-    // its set's caption and speaker sit at the top, clear of the words and buttons
-    expect(card).toContain(
-      "{slide.caption && !shrunk && <SlideCaption caption={slide.caption} withDots={withDots} top={page} />}",
-    );
+    // its speaker sits at the top, clear of the words and buttons; its set is said in the words (data-page-set), never over the clip
+    expect(card).toContain("{slide.caption && !shrunk && !page && <SlideCaption caption={slide.caption} withDots={withDots} />}");
     expect(inline).toContain('controls === "top" ? "top-[calc(var(--feed-bar-room,0px)+3rem)]" : "bottom-2.5"');
   });
 
