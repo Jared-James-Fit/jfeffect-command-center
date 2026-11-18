@@ -36,6 +36,7 @@ never hit the gateway's 524 or hold a request open).
 | `meal_estimate` (a member's or client's AI food log, metered by AI credits) | GPT-5-mini, GPT-5.5 | low |
 | `form_draft` (a coach's Draft with AI form) | GPT-5-mini, GPT-5.5 | low |
 | `coach_write` (the weekly check-in recap and suggested reply, AI drafts of a form reply, a lead's first text, the inbox Brief, My Voice's Try it) | GPT-5-mini, GPT-5.5 | low |
+| `assistant` (Cleo: chat and voice, live look-ups and the cards the person confirms) | GPT-5.5, GPT-5-mini | low |
 
 - `strategy`, `review`, `interpret`, `nutrition` are **strong only**: every model on the route is
   top tier. If none answers, the run stops with a message that says so. A coaching decision is
@@ -184,5 +185,48 @@ the request with `callModelNow`). A new member-facing AI feature gets a cost in 
   Cleo's nutrition look-up carries the weight-management read; Cleo's nutrition cards show the same
   "Check before publishing" list (`coachChecks`) as the Nutrition Update review.
 - Kept as it is, on purpose: Edit with AI's GPT-5-mini fallback (every proposal is the coach's to approve;
-  Astra as the fallback would time out more), and Cleo's own gateway chain (moving her tool calls and PDF parts to
-  the OpenAI key is a bigger change that needs its own test run).
+  Astra as the fallback would time out more). Cleo's own chain moved the same day (below).
+
+
+## Nov 18 2026: Cleo on the OpenAI key
+
+Cleo (summer.server.ts) answered on Lovable credits: GPT-5.5 through the gateway's chat completions, then
+Gemini Flash. Chat completions drop a reasoning model's thinking between tool calls, so every look-up started
+her thinking over. She is now the `assistant` route (cleo-model.server.ts):
+
+- The OpenAI key through the Responses API (`@ai-sdk/openai`), `store: false` with
+  `include: ["reasoning.encrypted_content"]`: her reasoning carries from one look-up to the next, and nothing is
+  stored at OpenAI. `promptCacheKey` per person, so a follow-up reads her instructions, the books, the app and the
+  chat so far from cache.
+- Her tools are `strict: false`. The Responses API makes every field of a strict tool required, and the first
+  benchmark filled a calf raise card's optional load and percentage with placeholders (0.0001 lb at 1% of 1RM).
+- Her context is read in parallel (the books, who owes what, the app, her voice and her role together, about
+  1 s), the stable parts first, and the time goes with the question so the system prompt stays cacheable.
+- Every answer logs its model, effort, timings, steps, tools and tokens (`[cleo] answered`), and the
+  `cleo-bench` hook (cron secret) runs her real answer path as the owner with given models and effort, saving
+  nothing and deleting any card.
+- Her schedule look-ups read the app's two ways a workout is dated (cleo-schedule.ts): she had read only the
+  schedule table, which most workouts aren't on, and said "nothing scheduled" for clients who were training.
+
+The live benchmark, two rounds on real data (seconds per answer; the same questions for every setting).
+Round 1, six questions from how she's been used: a bodyweight trend, a client's last three weeks, the coaching
+policy on ending coaching, adding an exercise to a workout, who owes money, tomorrow's calendar:
+
+| Model and effort | Average | Slowest (the program edit) | Notes |
+|---|---|---|---|
+| GPT-5.5 low | 11.0 s | 21 s | Right on every question but the edit card, whose placeholder load was the strict-tool problem (every setting had it) |
+| GPT-5.5 medium | 17.6 s | 49 s | A little more thorough on analysis; the edit took 9 steps fighting the same problem |
+| GPT-5-mini low | 11.7 s | 22 s | Not faster; drafted a message nobody asked for and asked a needless question on a clear edit |
+
+Round 2, after the strict-tool and schedule fixes (Nico's three weeks, the same edit, "who missed workouts
+this week and who should I check in with", "is Devin's weekly volume right for his goal"):
+
+| Model and effort | Nico | Edit | Missed | Volume | Notes |
+|---|---|---|---|---|---|
+| GPT-5.5 low | 15.7 s | 18.1 s | 8.6 s | 24.6 s | Clean edit card (3 x 15 @RPE 8, nothing else); the missed list matched the database exactly |
+| GPT-5.5 medium | 19.1 s | 13.0 s | 19.7 s | 31.9 s | Same quality; tied in pain flags and unread messages on "who to check in with" |
+
+GPT-5.5 at low effort is the default: as quick as the small model, as accurate as medium on these questions,
+and medium's extra depth cost 25-130% more time on most of them. A system prompt is about 18k tokens, and from
+the second step on 90% of it was read from cache.
+
