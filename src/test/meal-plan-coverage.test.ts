@@ -14,7 +14,6 @@ import { mealMacroNumbers } from "@/lib/nutrition-targets/meal-plan-reader";
 import { planMealsFromNotes } from "@/lib/food-log-plan";
 import {
   BRING_MEALS_TO_TARGETS,
-  clientCoverageLine,
   coachCoverageLine,
   dayCoverage,
   flexibleKcal,
@@ -112,10 +111,7 @@ describe("a regeneration for Devin's targets comes out aligned", () => {
       ["Non-Training Day", "covers", 2308, 189, 2300],
       ["High Day", "covers", 2697, 183, 2750],
     ]);
-    expect(clientCoverageLine(dayCoverage(parseMealPlan(saved)[0].notes, { calories: 2512, protein: 192 }))).toEqual({
-      tone: "ok",
-      text: "These meals cover your 2,512 kcal",
-    });
+    expect(coachCoverageLine(dayCoverage(parseMealPlan(saved)[0].notes, { calories: 2512, protein: 192 }))).toBeNull();
   });
 
   it("a model that never closes the gap: the plan is never presented as complete, and its targets aren't lowered", async () => {
@@ -128,7 +124,6 @@ describe("a regeneration for Devin's targets comes out aligned", () => {
     expect(n).toMatchObject({ calories: 2550, protein: 180, carbs: 300, fats: 70 });
     const c = dayCoverage(training.notes, { calories: n.calories, protein: n.protein });
     expect(coachCoverageLine(c)).toBe("The meals add up to 1,854 of 2,550 kcal (150 of 180 g protein): 696 kcal short");
-    expect(clientCoverageLine(c)?.tone).toBe("attention");
   });
 });
 
@@ -171,10 +166,6 @@ describe("Devin's plan: the meals are read, never the Daily Total line", () => {
     expect(dayCoverage(DEVIN_REST, R)).toMatchObject({ state: "short", gap: 430 });
     expect(dayCoverage(DEVIN_HIGH, H)).toMatchObject({ state: "short", gap: 655 });
     expect(coachCoverageLine(t)).toBe("The meals add up to 1,854 of 2,579 kcal (150 of 180 g protein): 725 kcal short");
-    expect(clientCoverageLine(t)).toEqual({
-      tone: "attention",
-      text: "These meals add up to 1,854 of your 2,579 kcal. Ask your coach how to cover the other 725.",
-    });
   });
 
   it("the generator's check names the gap even though the Daily Total copies the targets", () => {
@@ -191,9 +182,10 @@ describe("Devin's plan: the meals are read, never the Daily Total line", () => {
       ...planDayNumbers({ calories: d.calories ?? null, protein: d.protein ?? null, carbs: d.carbs ?? null, fats: d.fats ?? null, fibre: d.fibre ?? null, notes: d.notes }, aiTargetFor(targets, d.day_label)),
     }));
     expect(days.map((d) => [d.label, d.calories, d.protein, d.carbs, d.fats])).toEqual([
+      // calories are the targets' macros at 4 / 4 / 9: the AI listed 2,300 and 2,750 over macros of 2,290 and 2,760
       ["Training Day", 2550, 180, 300, 70],
-      ["Non-Training Day", 2300, 180, 235, 70],
-      ["High Day", 2750, 180, 330, 80],
+      ["Non-Training Day", 2290, 180, 235, 70],
+      ["High Day", 2760, 180, 330, 80],
     ]);
     // meals that cover their targets publish their own numbers, so the client's ring is exactly what they eat
     const covering = "Meal 1\n150 g cooked chicken breast\n\nApproximate macros:\n50 g protein\n150 g carbohydrates\n30 g fat\n\nMeal 2\nx\n\nApproximate macros:\n50 g protein\n150 g carbohydrates\n30 g fat";
@@ -260,9 +252,10 @@ describe("flexible calories, other meal counts and the day types", () => {
     expect(c).toMatchObject({ flexible: 725, gap: 0 });
     // the meals still owe 30 g of protein, so it's protein the client is told about
     expect(c.state).toBe("short");
-    expect(clientCoverageLine(c)?.text).toBe("These meals have 150 of your 180 g protein. Ask your coach how to cover the rest.");
+    expect(coachCoverageLine(c)).toBe("The meals have 150 of 180 g protein");
     const leaner = dayCoverage(notes, { calories: 2579, protein: 155 });
-    expect(clientCoverageLine(leaner)).toEqual({ tone: "ok", text: "These meals plus 725 flexible kcal cover your 2,579 kcal" });
+    expect(leaner.state).toBe("covers");
+    expect(coachCoverageLine(leaner)).toBeNull();
     // never a food in Meal 3, on either side
     expect(structureMealPlanDay(notes).meals[2].notes).toEqual([]);
     expect(structureMealPlanDay(notes).notes[0]).toBe("Flexible calories");
@@ -274,13 +267,12 @@ describe("flexible calories, other meal counts and the day types", () => {
     const meal = (n: number) => `Meal ${n}\n150 g cooked chicken breast\n200 g cooked white rice\n\nApproximate macros:\n40 g protein\n60 g carbohydrates\n12 g fat\n`;
     const five = [1, 2, 3, 4, 5].map(meal).join("\n");
     expect(dayCoverage(five, { calories: 2560, protein: 200 })).toMatchObject({ state: "covers", meals: { meals: 5, kcal: 2540 } });
-    expect(clientCoverageLine(dayCoverage(five, { calories: 2560, protein: 200 }))).toEqual({ tone: "ok", text: "These meals cover your 2,560 kcal" });
     const over = dayCoverage(five, { calories: 2000, protein: 150 });
     expect(over.state).toBe("over");
     expect(coachCoverageLine(over)).toBe("The meals add up to 2,540 of 2,000 kcal: 540 over");
     // no target or meals without macros: nothing is claimed
     expect(dayCoverage(five, null).state).toBe("unknown");
-    expect(clientCoverageLine(dayCoverage("Meal 1\n150 g chicken", { calories: 2000 }))).toBeNull();
+    expect(dayCoverage("Meal 1\n150 g chicken", { calories: 2000 }).state).toBe("unknown");
   });
 
   it("calories that aren't what the day's own macros add up to are named (Dwayne's 3,200 vs 3,020)", () => {
@@ -329,13 +321,15 @@ describe("Change it with AI reads the plan honestly and never lowers a day's tar
 });
 
 describe("what each side sees", () => {
-  it("the client's meal plan says whether the meals cover the day, on the coaching and the member page", () => {
-    const page = read("src/routes/_authenticated/portal/nutrition-targets.tsx");
-    expect(page).toContain("target={{ calories: day.calories, protein: day.protein, carbs: day.carbs, fats: day.fats }}");
-    expect(read("src/components/nutrition/MemberMealPlanPanel.tsx")).toContain("target={{ calories: active.calories");
+  it("the client's meal plan shows the meals as written, with no discrepancy line (coaching and member pages)", () => {
     const reader = read("src/components/nutrition/MealPlanReader.tsx");
-    expect(reader).toContain("clientCoverageLine(dayCoverage(text, target))");
-    expect(reader).toContain("data-meal-plan-coverage");
+    for (const gone of ["coverage", "dayCoverage", "Ask your coach", "These meals", "data-meal-plan-coverage"])
+      expect(reader, gone).not.toContain(gone);
+    expect(read("src/routes/_authenticated/portal/nutrition-targets.tsx")).toContain("<MealPlanReader text={String(day.notes)} water={plan.water ?? null} />");
+    expect(read("src/components/nutrition/MemberMealPlanPanel.tsx")).toContain("<MealPlanReader text={String(active.notes)} water={plan.water ?? null} />");
+    // nothing a client opens reads the coverage check
+    for (const f of ["src/components/nutrition/DailyNutritionPanel.tsx", "src/components/nutrition/TodaysIntakeCard.tsx", "src/routes/_authenticated/portal/nutrition-targets.tsx", "src/components/nutrition/food-log-context.tsx"])
+      expect(read(f), f).not.toMatch(/plan-coverage|coverageLine/);
   });
 
   it("the coach sees the gap on the plan and before publishing; the AI plan publishes the targets when its meals fall short", () => {

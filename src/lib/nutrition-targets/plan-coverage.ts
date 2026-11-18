@@ -1,7 +1,8 @@
 /**
  * Whether a plan day's meals cover its targets: the one reading for the
- * client's Meal plan card, the coach's plan view, the AI plan's review, what
- * gets published and the generator's checks. Pure.
+ * coach's plan view, the AI plan's review, the plan editor, what gets
+ * published and the generator's checks. Pure. Never shown to the client: their
+ * meal plan shows the meals as written, with no discrepancy line (Nov 18 2026).
  *
  * The meals are read as written (each meal's Approximate macros, 4 / 4 / 9,
  * through `structureMealPlanDay` and the shared macro reader), never from a
@@ -14,7 +15,7 @@
  * with a "Flexible calories" section (`FLEX_HEADING`), which counts.
  */
 import { structureMealPlanDay, FLEX_HEADING } from "@/lib/nutrition-targets/meal-plan-structure";
-import { macroKcal, readMacroLine } from "@/lib/nutrition-targets/macro-line";
+import { DAILY_TOTAL_HEADING, macroKcal, readDailyTotal, readMacroLine } from "@/lib/nutrition-targets/macro-line";
 
 /** Within this share of the day's calories, the meals cover it (the generator's ±5%). */
 export const COVER_KCAL_SHARE = 0.05;
@@ -132,36 +133,6 @@ export function coachCoverageLine(c: Coverage): string | null {
   return `The meals have ${Math.round(c.meals.protein)} of ${Math.round(c.meals.protein + c.proteinGap!)} g protein`;
 }
 
-/**
- * The client's line under their meals: whether the meals are the whole day.
- * "These meals cover your 2,579 kcal" (with any flexible calories counted), or
- * what's missing in plain words and who to ask. Null when it can't be told
- * (no target, or meals that don't say their macros).
- */
-export function clientCoverageLine(c: Coverage): { tone: "ok" | "attention"; text: string } | null {
-  if (!c.meals || c.target == null || c.state === "unknown") return null;
-  const target = kcal(c.target);
-  if (c.state === "covers")
-    return {
-      tone: "ok",
-      text: c.flexible
-        ? `These meals plus ${kcal(c.flexible)} flexible kcal cover your ${target} kcal`
-        : `These meals cover your ${target} kcal`,
-    };
-  const planned = c.meals.kcal + (c.flexible ?? 0);
-  if (c.state === "over")
-    return { tone: "attention", text: `These meals add up to ${kcal(planned)} kcal, more than your ${target} kcal target. Ask your coach which to follow.` };
-  if (c.gap! > c.target * COVER_KCAL_SHARE)
-    return {
-      tone: "attention",
-      text: `These meals add up to ${kcal(planned)} of your ${target} kcal. Ask your coach how to cover the other ${kcal(c.gap!)}.`,
-    };
-  return {
-    tone: "attention",
-    text: `These meals have ${Math.round(c.meals.protein)} of your ${Math.round(c.meals.protein + c.proteinGap!)} g protein. Ask your coach how to cover the rest.`,
-  };
-}
-
 /** What Change it with AI is asked when a day's meals don't cover its targets (the coach reads and sends it). */
 export const BRING_MEALS_TO_TARGETS =
   "Bring every day's meals up to that day's targets, keeping the targets as they are: each day's meals should add up to its calories within about 5% and its protein within 10 g. Keep the same meals and foods; make the containers bigger the meal-prep way (every container the same grams on every day) or add counted units, and write each meal's Approximate macros from its foods.";
@@ -189,9 +160,10 @@ export type DayNumbers = {
  * The numbers an AI-written day is published with. Its targets are the
  * coaching decision: when the meals cover them, the meals' own numbers (so
  * the client's ring is exactly what they eat, the meal-prep tolerance); when
- * they don't, the targets, so meals that fall short can never quietly lower
- * the targets (and the gap shows on both sides until it's fixed). With no
- * targets to read, the day's own numbers (its Daily Total, else its meals).
+ * they don't, the targets (calories from their macros at 4 / 4 / 9), so
+ * meals that fall short can never quietly lower the targets, and the coach
+ * sees the gap until it's fixed. With no targets to read, the day's own
+ * numbers (its Daily Total, else its meals).
  */
 export function planDayNumbers(day: DayNumbers & { notes?: string | null }, target: DayTarget | null | undefined): DayNumbers {
   const want = targetKcal(target);
@@ -205,8 +177,11 @@ export function planDayNumbers(day: DayNumbers & { notes?: string | null }, targ
       fats: Math.round(c.meals.fat),
       fibre: c.meals.fibre ?? day.fibre,
     };
+  // a day's calories are its macros at 4 / 4 / 9 (TARGETS_PROMPT's own rule): a calorie line the
+  // macros don't add up to is never published as its own number (Dwayne's 3,200 over macros of 3,020)
+  const fromMacros = macroKcal({ protein: target.protein, carbs: target.carbs, fat: target.fats });
   return {
-    calories: Math.round(want),
+    calories: Math.round(fromMacros ?? want),
     protein: target.protein ?? day.protein,
     carbs: target.carbs ?? day.carbs,
     fats: target.fats ?? day.fats,
@@ -245,21 +220,18 @@ export function withHonestTotals(text: string): string {
     const body = out.slice(from, to);
     const total = mealsTotal(body.join("\n"));
     if (!total) continue;
-    const at = body.findIndex((l) => /^\s*daily\s+total\b/i.test(l));
+    const at = body.findIndex((l) => DAILY_TOTAL_HEADING.test(l));
     if (at < 0) {
       let last = body.length;
       while (last > 0 && !body[last - 1].trim()) last--;
       out.splice(from + last, 0, "", "Daily Total", totalLine(total));
       continue;
     }
-    if (readMacroLine(body[at].replace(/^\s*daily\s+totals?\s*[:.-]?/i, ""))) {
-      out.splice(from + at, 1, "Daily Total", totalLine(total));
-      continue;
-    }
-    let next = at + 1;
-    while (next < body.length && !body[next].trim()) next++;
-    if (next < body.length && readMacroLine(body[next])) out[from + next] = totalLine(total);
-    else out.splice(from + at + 1, 0, totalLine(total));
+    // the whole total block (its heading, macro and calorie lines, however written) becomes two lines
+    const block = readDailyTotal(body, at);
+    let stop = block.end;
+    while (stop > at + 1 && !body[stop - 1].trim()) stop--;
+    out.splice(from + at, stop - at, "Daily Total", totalLine(total));
   }
   return out.join("\n");
 }

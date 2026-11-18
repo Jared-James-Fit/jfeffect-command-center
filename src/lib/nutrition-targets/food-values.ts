@@ -206,3 +206,51 @@ export function mealFoodLine(c: MealFoodCheck): string {
 export function mealFoodShort(c: MealFoodCheck): string {
   return `${c.title}'s foods come to about ${r(c.worked.kcal)} kcal and ${r(c.worked.protein)} g protein, not the ${r(c.stated.kcal)} kcal and ${r(c.stated.protein)} g its macros say`;
 }
+
+/** More than this of one weighed food in one meal is almost certainly a typo (5,000 g rice, 2 kg chicken). */
+export const MAX_SINGLE_FOOD_G = 1000;
+
+/** A weighed amount on a food line in grams (g, kg, ml, l, oz, lb), else null. */
+function weighedGrams(line: string): number | null {
+  const m = line.trim().match(AMOUNT);
+  if (!m) return null;
+  const qty = num(m[1]);
+  const unit = (m[2] ?? "").toLowerCase();
+  if (qty == null) return null;
+  const per: Record<string, number> = { g: 1, gram: 1, grams: 1, kg: 1000, ml: 1, l: 1000, oz: 28.35, lb: 453.6, lbs: 453.6 };
+  return per[unit] != null ? qty * per[unit] : null;
+}
+
+export type MealMath = {
+  title: string;
+  /** The meal's Approximate macros as written (calories at 4 / 4 / 9), or null when it doesn't say them. */
+  stated: FoodValues | null;
+  /** What its foods give (USDA values for the plain staples), or null when any food can't be read. */
+  worked: FoodValues | null;
+  /** Lines that couldn't be read as a staple (a free meal, a food outside the table). */
+  unread: string[];
+  /** Amounts that can't be right: none of a food, or more than `MAX_SINGLE_FOOD_G` of one. */
+  odd: string[];
+};
+
+/**
+ * Each meal on a day, as written and by its foods: the coach's "Show the math"
+ * on a plan (nothing here is shown to the client or written anywhere).
+ */
+export function mealMath(notes: string | null | undefined): MealMath[] {
+  return structureMealPlanDay(notes).meals.map((m) => {
+    const x = m.macros;
+    const stated =
+      x && x.protein != null && x.carbs != null && x.fat != null
+        ? { kcal: x.protein * 4 + x.carbs * 4 + x.fat * 9, protein: x.protein, carbs: x.carbs, fat: x.fat }
+        : null;
+    const lines = [...m.foods.map((f) => `${f.amount} ${f.name}`), ...m.notes];
+    const unread = lines.filter((l) => foodLineValues(l) === null);
+    const odd = lines.filter((l) => {
+      if (FREE.test(l)) return false;
+      const g = weighedGrams(l);
+      return g != null && (g <= 0 || g > MAX_SINGLE_FOOD_G);
+    });
+    return { title: m.title.split(" · ")[0], stated, worked: mealFoodValues(m), unread, odd };
+  });
+}

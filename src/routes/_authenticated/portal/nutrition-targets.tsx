@@ -299,11 +299,7 @@ function PortalNutrition() {
                 </div>
               </div>
               {day.notes && String(day.notes).trim() ? (
-                <MealPlanReader
-                  text={String(day.notes)}
-                  water={plan.water ?? null}
-                  target={{ calories: day.calories, protein: day.protein, carbs: day.carbs, fats: day.fats }}
-                />
+                <MealPlanReader text={String(day.notes)} water={plan.water ?? null} />
               ) : (
                 <div className="text-xs text-muted-foreground">
                   Your coach hasn't added meal details for this day yet.

@@ -63,3 +63,43 @@ export function macroKcal(m: { protein?: number | null; carbs?: number | null; f
   if (!m || m.protein == null || m.carbs == null || m.fat == null) return null;
   return m.protein * 4 + m.carbs * 4 + m.fat * 9;
 }
+
+/**
+ * A day's total heading, however it's written: "Daily Total", "Approximate
+ * Daily Total" (Dwayne's), "Day total", "Totals". Every reader stops a meal
+ * here, so a total's lines are never read as the last meal's macros.
+ */
+export const DAILY_TOTAL_HEADING = /^\s*(?:approx(?:imately|imate)?\.?\s+)?(?:(?:daily|day)\s*totals?|totals?)\b/i;
+
+/** "Approximately 3,020 calories from the listed macros": a total's own calorie line. */
+const CALORIE_LINE = /\b(k?cals?|calories)\b/i;
+
+/**
+ * The Daily Total starting at `lines[at]` (its heading): the macros on the
+ * heading's line and the macro / calorie lines under it, any way they're
+ * written, and where the block ends (the first line after it).
+ */
+export function readDailyTotal(lines: string[], at: number): { total: LineMacros | null; end: number } {
+  const total: LineMacros = {};
+  const add = (m: LineMacros | null) => {
+    for (const [k, v] of Object.entries(m ?? {})) if (total[k as keyof LineMacros] == null) total[k as keyof LineMacros] = v;
+  };
+  add(readMacroLine(lines[at].replace(DAILY_TOTAL_HEADING, "").replace(/^\s*[:.-]\s*/, "")));
+  let end = at + 1;
+  for (; end < lines.length; end++) {
+    const line = lines[end].trim();
+    if (!line) {
+      if (Object.keys(total).length) break;
+      continue;
+    }
+    const m = readMacroLine(line);
+    if (m) add(m);
+    else if (!CALORIE_LINE.test(line)) break;
+  }
+  return { total: Object.keys(total).length ? total : null, end };
+}
+
+/** True for a line that belongs to a total block (its macros or its calorie line). */
+export function isTotalLine(line: string): boolean {
+  return !!readMacroLine(line) || CALORIE_LINE.test(line);
+}

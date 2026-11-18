@@ -10,6 +10,7 @@
 import { normalizeDayLabel, type ClientNutritionDayType } from "@/lib/client-nutrition-day";
 import { planMenus } from "@/lib/nutrition-targets/plan-foods";
 import { dayCoverage, mealsTotal } from "@/lib/nutrition-targets/plan-coverage";
+import { DAILY_TOTAL_HEADING, readDailyTotal } from "@/lib/nutrition-targets/macro-line";
 
 const DAY = 86_400_000;
 const LB = 2.2046226;
@@ -389,17 +390,6 @@ export function coachNotesFlags(text: string | null | undefined): string | null 
 
 type Totals = { protein: number | null; carbs: number | null; fat: number | null };
 
-function readTotals(line: string): Totals {
-  const pick = (re: RegExp) => {
-    const m = line.match(re);
-    return m ? Number(m[1]) : null;
-  };
-  return {
-    protein: pick(/(\d+(?:\.\d+)?)\s*g?\s*protein/i),
-    carbs: pick(/(\d+(?:\.\d+)?)\s*g?\s*carb/i),
-    fat: pick(/(\d+(?:\.\d+)?)\s*g?\s*fat/i),
-  };
-}
 
 /**
  * Where a written meal plan doesn't hold together: a menu whose meals don't
@@ -415,9 +405,9 @@ export function planTotalsIssues(planText: string, targets: DayTargets[]): strin
   );
   for (const menu of planMenus(planText)) {
     const lines = menu.notes.split("\n").map((l) => l.trim());
-    const at = lines.findIndex((l) => /^daily total\b/i.test(l));
-    const totalLine = at >= 0 ? lines.slice(at, at + 3).join(" ") : "";
-    const total = readTotals(totalLine);
+    const at = lines.findIndex((l) => DAILY_TOTAL_HEADING.test(l));
+    const read = at >= 0 ? readDailyTotal(lines, at).total : null;
+    const total: Totals = { protein: read?.protein ?? null, carbs: read?.carbs ?? null, fat: read?.fat ?? null };
     // the meals' own macro blocks, summed (the shared reader: every way macros are written)
     const meals = mealsTotal(menu.notes);
     const totalKcal = macroKcal(total);
