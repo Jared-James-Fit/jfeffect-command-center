@@ -258,13 +258,13 @@ describe("AI prescriptions never guess kg or lb silently", () => {
   it("Cleo: a bare load takes its row's unit, else the athlete's, never a blanket lb", async () => {
     const { withLoadUnits, rxToRow } = await import("@/lib/cleo-program");
     const edit = withLoadUnits({ day_id: "d", changes: [{ op: "update", row_id: "r-kg", load: 105 }, { op: "add", exercise_id: "x", load: 60 }] }, "lb", new Map([["r-kg", "kg"]]));
-    expect(edit.changes[0].load_unit).toBe("kg");
-    expect(edit.changes[1].load_unit).toBe("lb");
+    expect((edit.changes[0] as any).load_unit).toBe("kg");
+    expect((edit.changes[1] as any).load_unit).toBe("lb");
     expect(rxToRow(edit.changes[0] as any)).toMatchObject({ load_unit: "kg", load_kg: 105, load_lb: null });
     // a kg athlete building a program: bare loads, weekly progression included, are kg
     const build = withLoadUnits({ client_id: "c", days: [{ exercises: [{ exercise_id: "x", load: 100, weeks: [{ week: 2, load: 102.5 }] }] }] }, "kg");
-    expect(build.days[0].exercises[0].load_unit).toBe("kg");
-    expect(build.days[0].exercises[0].weeks[0].load_unit).toBe("kg");
+    expect((build.days[0].exercises[0] as any).load_unit).toBe("kg");
+    expect((build.days[0].exercises[0].weeks[0] as any).load_unit).toBe("kg");
     // a unit the model gave is never replaced
     expect(withLoadUnits({ changes: [{ op: "update", row_id: "r-kg", load: 225, load_unit: "lb" }] }, "kg", new Map([["r-kg", "kg"]])).changes[0].load_unit).toBe("lb");
   });

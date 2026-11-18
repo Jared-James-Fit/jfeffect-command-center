@@ -11,7 +11,7 @@ import { calibrationFactor, estimateDay } from "@/lib/program-intel/session-time
 import { bodybuilder, homeGym, powerlifter, sparse, TODAY } from "./program-intel-scenarios";
 
 const setupWith = (intel: GeneratorIntel, patch: Partial<GenerationSetup>): GenerationSetup => ({ ...intel.recommendation.setup, ...patch });
-const lookup = (intel: GeneratorIntel) => (r: { id: string | null; name: string }) => (r.id ? intel.exercises.get(r.id) ?? null : null) ?? { name: r.name, equipment: null };
+const lookup = (intel: GeneratorIntel) => (r: { id: string | null; name: string }) => (r.id ? intel.exercises.get(r.id) : undefined) ?? { name: r.name, equipment: null };
 
 describe("Home-gym athlete (4-day strength + hypertrophy, the real test case)", () => {
   const intel = buildGeneratorIntel(homeGym());

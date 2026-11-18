@@ -138,7 +138,7 @@ describe("the library, rewritten plain and in his voice", () => {
 
   it("Thursday points to the screens as they are now", () => {
     const thursday = rows.filter((r) => r.patch.where);
-    const where = thursday.map((r) => r.patch.where.join(" › ")).join("\n");
+    const where = thursday.map((r) => r.patch.where!.join(" › ")).join("\n");
     expect(where).not.toMatch(/^Home › Performance League/m);
     expect(where).not.toMatch(/Community/);
     for (const r of rows)

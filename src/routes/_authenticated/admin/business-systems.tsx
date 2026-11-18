@@ -4,6 +4,6 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 // Operations was three links to placeholder pages and is gone.
 export const Route = createFileRoute("/_authenticated/admin/business-systems")({
   beforeLoad: () => {
-    throw redirect({ to: "/admin/team", replace: true });
+    throw redirect({ to: "/admin/team", search: { tab: "people" }, replace: true });
   },
 });

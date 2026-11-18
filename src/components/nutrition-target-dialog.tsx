@@ -196,7 +196,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     if (!form || initial || phasePicked || phaseFrom === "paste" || phaseFrom === "prefill" || !suggestFor) return;
     if (requestsQ.isLoading || contextQ.isLoading) return;
     const data = requestsQ.data as any;
-    const latest = data ? currentRequest(data.requests ?? [], data.requestedAt ?? null) : null;
+    const latest = data ? currentRequest((data.requests ?? []) as Array<{ status: string; submitted_at?: string | null; answers?: unknown; plan?: { phase?: string | null } | null }>, data.requestedAt ?? null) : null;
     const answered = latest && latest.status !== "in_progress" ? latest : null;
     const qas = (answered?.answers ?? []) as Array<{ label: string; value: string }>;
     const goalAnswer = qas.find((q) => /^goal\b/i.test(q.label.trim()))?.value ?? null;

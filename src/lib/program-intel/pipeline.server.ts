@@ -324,7 +324,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     if (pe) throw new Error(pe.message);
     if (!allowed) throw new Error("The coach who asked for this no longer coaches this client.");
     const { intel, rec, setup, edited } = await intelFor(admin, job);
-    const lookup = (r: { id: string | null; name: string }) => (r.id ? intel.exercises.get(r.id) ?? null : null) ?? (r.name ? { name: r.name, equipment: null } : null);
+    const lookup = (r: { id: string | null; name: string }) => (r.id ? intel.exercises.get(r.id) : undefined) ?? (r.name ? { name: r.name, equipment: null } : null);
     const conflicts = findConflicts(setup, intel.ctx, intel.recommendation.baseline, lookup, intel.recommendation.setup);
     const blockers = conflicts.filter((c) => c.severity === "blocker");
     if (blockers.length) throw new Error(`Resolve before generating: ${blockers.map((b) => b.title).join("; ")}`);

@@ -62,7 +62,7 @@ export async function loadQAs(sb: any, submissionId: string): Promise<{ sub: any
     sb.from("nf_questions").select("id, label, order_index, question_type").eq("form_id", sub.form_id).order("order_index"),
     sb.from("nf_answers").select("question_id, value_text, value_number, value_json").eq("submission_id", submissionId),
   ]);
-  const byQ = new Map((answers ?? []).map((a: any) => [a.question_id, a]));
+  const byQ = new Map<string, any>((answers ?? []).map((a: any) => [a.question_id, a]));
   const qas: QA[] = (questions ?? [])
     .filter((q: any) => q.question_type !== "file" && q.question_type !== "video")
     .map((q: any) => ({ label: q.label, value: byQ.has(q.id) ? answerValue(byQ.get(q.id)) : "" }));

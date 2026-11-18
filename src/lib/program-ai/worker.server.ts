@@ -121,7 +121,7 @@ async function athleteBrief(admin: Db, clientId: string): Promise<{ text: string
   const rec = await loadIntelRecords(admin, clientId, { kind: "history" });
   const intel = buildGeneratorIntel(rec);
   const setup = intel.recommendation.setup;
-  const lookup = (r: { id: string | null; name: string }) => (r.id ? intel.exercises.get(r.id) ?? null : null) ?? (r.name ? { name: r.name, equipment: null } : null);
+  const lookup = (r: { id: string | null; name: string }) => (r.id ? intel.exercises.get(r.id) : undefined) ?? (r.name ? { name: r.name, equipment: null } : null);
   let conflicts: any[] = [];
   try {
     conflicts = findConflicts(setup, intel.ctx, intel.recommendation.baseline, lookup, setup);

@@ -4,6 +4,6 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 // Broadcasts / announcements were never sent (0 ever) and are gone.
 export const Route = createFileRoute("/_authenticated/admin/broadcasts/$broadcastId")({
   beforeLoad: () => {
-    throw redirect({ to: "/admin/communication", replace: true });
+    throw redirect({ to: "/admin/communication", search: { tab: "messages" }, replace: true });
   },
 });

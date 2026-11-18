@@ -49,7 +49,7 @@ describe("nutrition plan history", () => {
     const p = reusePlanPayload(old, { start_date: "2026-11-02", end_date: "2026-12-02" }, "now");
     expect(p).toMatchObject({ status: "Active", start_date: "2026-11-02", end_date: "2026-12-02", phase: "Fat Loss", water: "3.5 L", last_updated_at: "now" });
     expect("id" in p || "created_at" in p || "nutrition_target_days" in p).toBe(false);
-    const days = copyPlanDays(old.nutrition_target_days);
+    const days = copyPlanDays(old.nutrition_target_days) as any[];
     expect(days.map((d) => [d.day_label, d.sort_order, "id" in d, "target_id" in d])).toEqual([["Training", 0, false, false], ["Rest", 1, false, false]]);
   });
 

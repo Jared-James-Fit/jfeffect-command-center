@@ -161,7 +161,7 @@ export const assignIntelDraftFn = createServerFn({ method: "POST" })
     }
     // Cardio: one plan. A plan proposed with this program becomes theirs only when they have none
     // (their nutrition plan replaces it later); then every upcoming workout gets the plan's session.
-    let cardio: { proposedPlanAdded: boolean; synced: unknown } = { proposedPlanAdded: false, synced: null };
+    let cardio: { proposedPlanAdded: boolean; synced: Record<string, any> | null } = { proposedPlanAdded: false, synced: null };
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const admin = supabaseAdmin as any;

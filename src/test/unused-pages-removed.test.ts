@@ -35,7 +35,7 @@ describe("pages nobody used are gone, and their old addresses never 404", () => 
   it("each old address only redirects to the closest live page", () => {
     for (const [file, to] of REDIRECTS) {
       const src = read(`src/routes/_authenticated/${file}`);
-      expect(src, file).toContain(`throw redirect({ to: "${to}", replace: true });`);
+      expect(src, file).toMatch(new RegExp(`throw redirect\\(\\{ to: "${to.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}",(?: search: \\{[^}]*\\},)? replace: true \\}\\);`));
       expect(src, file).not.toContain("component:");
     }
   });
@@ -118,7 +118,7 @@ describe("round 3: dead pages gone, live forms still open", () => {
   it("each old address only redirects", () => {
     for (const [file, to] of REDIRECTS_3) {
       const src = read(`src/routes/${file}`);
-      expect(src, file).toContain(`throw redirect({ to: "${to}", replace: true });`);
+      expect(src, file).toMatch(new RegExp(`throw redirect\\(\\{ to: "${to.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}",(?: search: \\{[^}]*\\},)? replace: true \\}\\);`));
       expect(src, file).not.toContain("component:");
     }
   });
