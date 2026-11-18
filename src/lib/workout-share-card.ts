@@ -67,7 +67,8 @@ export const TEMPLATE_LABEL: Record<ShareTemplate, string> = {
 
 export type ShareCardMedia = CanvasImageSource & { width?: number; height?: number };
 
-export type ShareCardExercise = { name: string; detail: string; pr: boolean };
+/** `alt`: the same load in the other unit ("206.5 kg" under "455 lb × 1"), smaller; null without a load. */
+export type ShareCardExercise = { name: string; detail: string; pr: boolean; alt?: string | null };
 
 export type ShareCardData = {
   format: ShareFormat;
@@ -76,8 +77,11 @@ export type ShareCardData = {
   athleteName: string | null;
   workoutTitle: string;
   dateLabel: string | null;
-  /** Featured lift, pre-formatted: `detail` = "220 kg × 3". `prLabel` set → it's a record. */
-  lift: { name: string; detail: string; prLabel: string | null } | null;
+  /**
+   * Featured lift, pre-formatted: `detail` = "220 kg × 3". `prLabel` set → it's a record.
+   * `alt` is its load in the other unit ("485 lb"), said smaller: never a stored value, only how it reads.
+   */
+  lift: { name: string; detail: string; prLabel: string | null; alt?: string | null } | null;
   stats: CardStat[];
   isPr: boolean;
   /** Top lifts for the stats card, pre-formatted, programmed order. */
@@ -399,7 +403,8 @@ function drawPr(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: La
   const nameLines = wrapLines(ctx, name, innerW, 2);
   const detailSize = detail ? fitDisplay(ctx, detail, innerW, L.story ? 230 : 190, 90) : 0;
   const prSize = L.story ? 250 : 200;
-  const heroH = prSize * 0.9 + 40 + 54 + 46 + nameLines.length * (nameSize + 6) + (detail ? detailSize * 0.95 + 20 : 0);
+  const alt = detail ? (lift?.alt ?? "").trim() : "";
+  const heroH = prSize * 0.9 + 40 + 54 + 46 + nameLines.length * (nameSize + 6) + (detail ? detailSize * 0.95 + 20 : 0) + (alt ? 70 : 0);
   const regionTop = L.top + 90;
   const regionBottom = L.bottom - 230;
   let y = regionTop + Math.max(0, (regionBottom - regionTop - heroH) * 0.42);
@@ -421,6 +426,12 @@ function drawPr(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: La
     ctx.fillStyle = INK;
     ctx.font = display(detailSize);
     ctx.fillText(detail, PAD - 4, y + detailSize * 0.92 + 10);
+    if (alt) {
+      // the other unit, quieter: a lifter who thinks in it reads it without converting
+      ctx.font = font(700, 44);
+      ctx.fillStyle = MUTED;
+      ctx.fillText(ellipsize(ctx, alt, innerW), PAD, y + detailSize * 0.95 + 20 + 52);
+    }
   }
 
   drawFooterStats(ctx, d, logo, L);
@@ -465,9 +476,21 @@ function drawPhoto(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L:
     ctx.font = font(700, 36);
     ctx.fillStyle = MUTED;
     ctx.fillText(ellipsize(ctx, d.lift.name, innerW), PAD, y - 78);
+    const liftAlt = (d.lift.alt ?? "").trim();
+    ctx.font = font(700, 36);
+    const altW = liftAlt ? ctx.measureText(liftAlt).width + 24 : 0;
     ctx.fillStyle = d.isPr ? gold(ctx, PAD, innerW * 0.6) : INK;
-    const s = fitDisplay(ctx, d.lift.detail.toUpperCase(), innerW, 84, 48);
-    ctx.fillText(d.lift.detail.toUpperCase(), PAD, y - 78 + 14 + s * 0.92);
+    const detailText = d.lift.detail.toUpperCase();
+    const s = fitDisplay(ctx, detailText, innerW - altW, 84, 48);
+    const base = y - 78 + 14 + s * 0.92;
+    ctx.fillText(detailText, PAD, base);
+    // the other unit beside it, quieter (left off only when the line has no room for it)
+    const dw = ctx.measureText(detailText).width;
+    if (liftAlt && dw + altW <= innerW) {
+      ctx.font = font(700, 36);
+      ctx.fillStyle = MUTED;
+      ctx.fillText(liftAlt, PAD + dw + 24, base);
+    }
     y -= 78 + 50;
   }
   ctx.fillStyle = INK;
@@ -912,36 +935,52 @@ function drawStats(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L:
     y += h + 70;
   }
 
-  // Top lifts — the actual work.
+  // Top lifts — the actual work. A long name takes a second line (never cut
+  // to "Competition Sq…"), and a load says the other unit under it, smaller.
   const rows = d.exercises.slice(0, L.story ? 6 : 4);
   if (rows.length) {
     ctx.fillStyle = "rgba(255,255,255,0.14)";
     ctx.fillRect(PAD, y, innerW, 2);
     y += 24;
-    const rowH = L.story ? 104 : 92;
-    const room = L.bottom - 80 - y;
-    const fit = Math.max(1, Math.min(rows.length, Math.floor(room / rowH)));
-    rows.slice(0, fit).forEach((r, i) => {
-      const ry = y + i * rowH;
-      ctx.textAlign = "right";
-      ctx.fillStyle = r.pr ? GOLD_TO : INK;
+    const limit = L.bottom - 80;
+    const NAME_LH = 44;
+    const laid: { r: ShareCardExercise; detail: string; lines: string[]; h: number; ry: number }[] = [];
+    for (const r of rows) {
       ctx.font = display(56);
       const detail = r.detail.toUpperCase();
       const dw = ctx.measureText(detail).width;
+      ctx.font = font(600, 28);
+      const aw = r.alt ? ctx.measureText(r.alt).width : 0;
+      ctx.font = font(700, 36);
+      const nameMax = innerW - Math.max(dw, aw) - 40 - (r.pr ? 70 : 0);
+      const lines = wrapLines(ctx, r.name, Math.max(120, nameMax), 2);
+      const h = Math.max(lines.length * NAME_LH + 4, r.alt ? 96 : 60) + 40;
+      if (laid.length && y + h > limit) break;
+      laid.push({ r, detail, lines, h, ry: y });
+      y += h;
+    }
+    laid.forEach(({ r, detail, lines, h, ry }, i) => {
+      ctx.textAlign = "right";
+      ctx.fillStyle = r.pr ? GOLD_TO : INK;
+      ctx.font = display(56);
       ctx.fillText(detail, W - PAD, ry + 66);
+      if (r.alt) {
+        ctx.font = font(600, 28);
+        ctx.fillStyle = MUTED;
+        ctx.fillText(r.alt, W - PAD, ry + 104);
+      }
       ctx.textAlign = "left";
-      const nameMax = innerW - dw - 40 - (r.pr ? 70 : 0);
       ctx.font = font(700, 36);
       ctx.fillStyle = INK;
-      const nm = ellipsize(ctx, r.name, nameMax);
-      ctx.fillText(nm, PAD, ry + 60);
+      lines.forEach((ln, k) => ctx.fillText(ln, PAD, ry + 60 + k * NAME_LH));
       if (r.pr) {
-        const nx = PAD + ctx.measureText(nm).width + 16;
-        pill(ctx, "PR", nx, ry + 22, gold(ctx, nx, 70), "#2b1700");
+        const last = lines[lines.length - 1] ?? "";
+        const nx = PAD + ctx.measureText(last).width + 16;
+        pill(ctx, "PR", nx, ry + 22 + (lines.length - 1) * NAME_LH, gold(ctx, nx, 70), "#2b1700");
       }
-      if (i < fit - 1) {
+      if (i < laid.length - 1) {
         ctx.fillStyle = "rgba(255,255,255,0.07)";
-        ctx.fillRect(PAD, ry + rowH - 4, innerW, 2);
+        ctx.fillRect(PAD, ry + h - 4, innerW, 2);
       }
     });
   }

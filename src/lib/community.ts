@@ -1067,15 +1067,24 @@ export type ShareCardInput = {
 export function buildShareCardFields(i: ShareCardInput) {
   const s = i.stats;
   const lift = featuredLift(s);
+  const other = i.unit === "lb" ? "kg" : "lb";
+  // each load says the other unit too, smaller on the card (never a stored value changed)
   const exercises = (s.exercises ?? [])
     .filter((e) => e.sets > 0)
-    .map((e) => ({ name: e.name, detail: formatExerciseBest(e, i.unit), pr: !!e.pr }));
+    .map((e) => ({ name: e.name, detail: formatExerciseBest(e, i.unit), pr: !!e.pr, alt: exerciseBestLines(e, i.unit).other }));
   return {
     athleteName: i.athleteName,
     // The server's public title ("Block 5 · Week 1"), never the coach's day name.
     workoutTitle: sessionDisplayTitle(s.workout_title || "Workout"),
     dateLabel: i.dateLabel,
-    lift: lift ? { name: lift.name, detail: formatTopSet(lift.detail, i.unit), prLabel: lift.pr ? SCOPE_WORD[lift.pr].toUpperCase() : null } : null,
+    lift: lift
+      ? {
+          name: lift.name,
+          detail: formatTopSet(lift.detail, i.unit),
+          prLabel: lift.pr ? SCOPE_WORD[lift.pr].toUpperCase() : null,
+          alt: lift.detail.load_kg != null && lift.detail.load_kg > 0 ? formatLoad(lift.detail.load_kg, other) : null,
+        }
+      : null,
     stats: pickCardStats(s, i.unit),
     isPr: isPrMoment(s),
     exercises,

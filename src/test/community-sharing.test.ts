@@ -227,11 +227,11 @@ describe("sharing stays optional", () => {
     expect(summary).toContain("onStudio={(caption) => { setDraftCaption(caption); setShareMounted(true); setShareOpen(true); }}");
     expect(summary).not.toMatch(/useEffect\([^)]*setShareOpen\(true\)/);
     // posting only ever happens from the button, and the footer can take it back
-    expect(footer).toContain("onClick={() => void post()}");
-    expect(footer).not.toMatch(/useEffect\([^)]*post\(\)/);
-    expect(footer).toContain("{justPosted === postId && undoable && (");
-    // one per footer state, plus the caption sheet's
-    expect(footer.match(/>\s*Done\s*</g)?.length).toBe(4);
+    expect(footer).toContain("onClick={() => void shareStory()}");
+    expect(footer).not.toMatch(/useEffect\([^)]*shareStory\(\)/);
+    expect(footer).toContain("data-recap-story-undo");
+    // Done in both footer states
+    expect(footer.match(/>\s*Done\s*</g)?.length).toBe(2);
   });
 
   it("is not offered to memberships or to a coach in View-as-client", () => {
@@ -319,8 +319,9 @@ describe("card fields from canonical stats", () => {
       dateLabel: "Tue, Oct 6",
     });
     expect(f.isPr).toBe(true);
-    expect(f.lift).toEqual({ name: "Bench", detail: "120 kg × 5", prLabel: "ALL-TIME PR" });
-    expect(f.exercises).toEqual([{ name: "Squat", detail: "220 kg × 3", pr: true }]);
+    // the other unit rides along, said smaller on the card (Nov 18 2026)
+    expect(f.lift).toEqual({ name: "Bench", detail: "120 kg × 5", prLabel: "ALL-TIME PR", alt: "264.5 lb" });
+    expect(f.exercises).toEqual([{ name: "Squat", detail: "220 kg × 3", pr: true, alt: "485 lb" }]);
     expect(f.volume).toBe("12,000 kg");
     expect(f.sessionLine).toBe("Session 5 this month");
   });

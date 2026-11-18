@@ -26,12 +26,15 @@ describe("Pulse: a finished workout posts itself, with its real win", () => {
   });
   it("respects privacy: the client's switch, members only, recent sessions only, their hide-weights choice", () => {
     expect(sql).toContain("IF NOT coalesce((SELECT cp.auto_share_workouts FROM public.community_profiles cp WHERE cp.user_id = c.user_id), true) THEN RETURN NULL; END IF;");
+    // since Nov 18 2026 it's off unless they switch it on (20270407090000)
+    const explicit = read("supabase/migrations/20270407090000_workout_story_explicit.sql");
+    expect(explicit).toContain("IF NOT coalesce((SELECT cp.auto_share_workouts FROM public.community_profiles cp WHERE cp.user_id = c.user_id), false) THEN RETURN NULL; END IF;");
     expect(sql).toContain("AND coalesce(cl.portal_access_disabled, false) = false;");
     expect(sql).toContain("IF NEW.completed_at < now() - interval '2 days' THEN RETURN NULL; END IF;");
     expect(sql).toContain("coalesce(v_hide, false)");
     // the switch lives in Edit profile → Privacy
     const privacy = read("src/components/community/privacy-settings.tsx");
-    expect(privacy).toContain("Finished workouts post to your story for 24 hours with the session's best win.");
+    expect(privacy).toContain("Off: a workout goes on your story only when you tap Share to Story.");
     expect(read("src/components/community/profile-edit.tsx")).toContain("<ShareWorkoutsRow />");
   });
   it("no share points for a post nobody shared; never blocks finishing a workout", () => {
@@ -160,19 +163,18 @@ describe("Home reads on until it has 3 posts people made", () => {
   });
 });
 
-describe("after a workout: the session's story post, one tap from the feed", () => {
+describe("after a workout: the story goes up only when they share it (Nov 18 2026)", () => {
   const footer = read("src/components/community/recap-post.tsx");
-  it("says where it actually is (their story, not a crew Activity), and sharing upgrades that same post", () => {
-    expect(footer).toContain("On your story for 24 hours");
+  it("says where it actually is (their story, not a crew Activity); an automatic one says it was automatic", () => {
+    expect(footer).toContain("Posted to your story automatically");
     expect(footer).not.toMatch(/Crew Activity|as Activity/);
-    expect(footer).toContain("const unshared = !justPosted && (!existing || auto || hidden);");
+    expect(footer).toContain("const autoUp = auto && !hiddenHere && isCrewAudience(existing?.visibility);");
   });
-  it("Undo is only for a post the footer made (it would delete the session's story post too)", () => {
-    expect(footer).toContain("const made = !existing;");
-    expect(footer).toContain("{justPosted === postId && undoable && (");
+  it("Undo takes back only the story the footer made (never the session's own post)", () => {
+    expect(footer).toContain("const id = storyId;");
+    expect(footer).toContain("await del.mutateAsync({ id, media_path: data?.media_path ?? null, media_thumb_path: data?.media_thumb_path ?? null, is_mine: true });");
   });
-  it("the PR leads what they'd share (the same headline win as the post), and Done always skips it", () => {
-    expect(footer).toContain("pickWorkoutWin(stats, unit)");
-    expect(footer).toContain('<Button type="button" variant="outline" className="h-12 rounded-xl text-sm font-bold" onClick={onDone}>');
+  it("Done always closes, in every state", () => {
+    expect(footer).toContain("onClick={onDone} data-recap-done");
   });
 });
