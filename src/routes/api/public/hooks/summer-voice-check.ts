@@ -47,7 +47,7 @@ export const Route = createFileRoute("/api/public/hooks/summer-voice-check")({
                 model: m.model,
                 system: "Use the tool to answer.",
                 messages: [{ role: "user", content: "What is the client's bodyweight? Use body_weight." }],
-                tools: { body_weight: tool({ description: "The client's latest bodyweight.", inputSchema: z.object({}), execute: async () => "181 lb" }) },
+                tools: { body_weight: tool({ description: "The client's latest bodyweight.", inputSchema: z.object({}), strict: false, execute: async () => "181 lb" }) },
                 stopWhen: stepCountIs(3),
                 abortSignal: AbortSignal.timeout(45_000),
                 ...(m.providerOptions ? { providerOptions: m.providerOptions } : {}),

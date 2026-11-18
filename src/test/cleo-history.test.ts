@@ -200,6 +200,11 @@ describe("Cleo's models", () => {
     expect(system).not.toContain("toLocaleString");
     expect(server).toContain("const ask = `${now}\\n${input.message.trim()");
   });
+
+  it("her tools aren't strict, so the model never fills an optional field with a placeholder", () => {
+    const server = readFileSync("src/lib/summer.server.ts", "utf8");
+    expect(server).toContain("[name, { ...(t as any), strict: false }]");
+  });
 });
 
 describe("Cleo's voices", () => {
