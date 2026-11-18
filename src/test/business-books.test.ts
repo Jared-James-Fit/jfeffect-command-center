@@ -126,10 +126,27 @@ describe("Cleo context", () => {
     expect(p).toMatch(/restore_program_version/);
   });
 
+  it("Like me borrows the owner's style, never his identity, and matches the energy to the moment", () => {
+    const p = summerSystemPrompt({ ownerName: "Jared" });
+    expect(p).toMatch(/You borrow his style, never his identity: you're still Cleo/);
+    expect(p).toMatch(/Calm and confident is the default, hype is the exception/);
+    for (const moment of [/a PR, a clean week, real progress: bring the energy and make it feel earned/, /setbacks \(pain, sickness, a rough week, a stall\): steady and understanding/, /missed workouts or slipping habits .*never shaming/, /training and nutrition: .*Accuracy first/, /business, money and admin: efficient and exact/, /everyday chat: relaxed and natural/]) expect(p).toMatch(moment);
+    expect(p).toMatch(/Praise only what was earned and name it/);
+    expect(p).toMatch(/Emojis rarely \(most replies have none\)/);
+    expect(p).toMatch(/generic motivation/);
+    // the identity line still says who Cleo is, once
+    expect(p.match(/IDENTITY: /g)).toHaveLength(1);
+    // the other tones are untouched by it
+    for (const tone of ["girly_pop", "chill", "professional"]) {
+      const other = summerSystemPrompt({ tone, ownerName: "Jared" });
+      expect(other).not.toMatch(/borrow his style|Calm and confident is the default/);
+    }
+  });
+
   it("defaults to talking like the owner and switches with their pick", () => {
     expect(summerSystemPrompt({ ownerName: "Jared" })).toMatch(/talk the way Jared talks/);
     expect(summerSystemPrompt()).toMatch(/talk the way the coach talks/);
-    expect(summerSystemPrompt({ tone: "nonsense" })).toMatch(/HOW IT MUST SOUND below/);
+    expect(summerSystemPrompt({ tone: "nonsense" })).toMatch(/HIS VOICE below/);
     // the stored key keeps its old name; the tone itself is Gen Z hype, with no gendered persona
     const hype = summerSystemPrompt({ tone: "girly_pop" });
     expect(hype).toMatch(/Voice: Gen Z hype/);
