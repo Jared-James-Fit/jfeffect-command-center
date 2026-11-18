@@ -15,6 +15,7 @@
  *   committed training days (realignClientToCommittedDays), or the weekdays
  *   the coach named.
  */
+import { wellFormed } from "@/lib/well-formed";
 import { tool } from "ai";
 import { z } from "zod";
 import { rpcRead } from "@/lib/permissions.server";
@@ -39,9 +40,9 @@ function clip(text: string, max = 16_000): string {
 function safe<A>(name: string, fn: (args: A) => Promise<string>) {
   return async (args: A) => {
     try {
-      return clip(await fn(args));
+      return wellFormed(clip(await fn(args)));
     } catch (e: any) {
-      return `Couldn't read ${name}: ${e?.message ?? "error"}. Tell the person you couldn't load it; don't guess.`;
+      return wellFormed(`Couldn't read ${name}: ${e?.message ?? "error"}. Tell the person you couldn't load it; don't guess.`);
     }
   };
 }

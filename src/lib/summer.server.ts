@@ -6,6 +6,7 @@
  * Every read goes through the caller's RLS-scoped client, so only an admin
  * ever gets rows back.
  */
+import { wellFormed } from "@/lib/well-formed";
 import { BUSINESS_TZ, businessToday } from "@/lib/billing-schedule";
 import { buildAppContext, buildOpenSalesContext, clientLabel, EMPTY_APP_SNAPSHOT, type AppSnapshot, type LinkEntry } from "@/lib/summer-app";
 import { z } from "zod";
@@ -610,7 +611,7 @@ export async function cleoAnswer(
 
   // Stable first, so the instructions, the books and the app are read from the
   // prompt cache on a follow-up; the time of day goes with the question (below).
-  const system = [
+  const system = wellFormed([
     summerSystemPrompt({
       tone: opts.bench?.tone ?? profile.data?.tone,
       instructions: profile.data?.instructions,
@@ -635,7 +636,7 @@ export async function cleoAnswer(
     buildAppContext(app, links, { tz: BUSINESS_TZ, route: input.route ?? null }),
     "",
     "NOW: the current date and time come with each message, in brackets at its start.",
-  ].join("\n");
+  ].join("\n"));
 
   const past = ((history.data ?? []) as Array<{ role: string; content: string; attachments?: CleoAttachment[] | null }>).reverse();
   const boss = ownerName ?? "the owner";
@@ -651,11 +652,13 @@ export async function cleoAnswer(
           try {
             const r = await proposeAction({ supabase: own, db: supabase, userId }, caller, kind, params);
             proposed.push(r.id);
-            return r.route === "run"
-              ? `Card is on screen: ${r.summary}\nTell them to tap Confirm. It hasn't happened yet.`
-              : `Card is on screen: ${r.summary}\nThis isn't in their role, so it needs ${boss}'s OK. Tell them "I'll have to ask ${boss} for permission" and that tapping "Ask ${boss}" sends the request.`;
+            return wellFormed(
+              r.route === "run"
+                ? `Card is on screen: ${r.summary}\nTell them to tap Confirm. It hasn't happened yet.`
+                : `Card is on screen: ${r.summary}\nThis isn't in their role, so it needs ${boss}'s OK. Tell them "I'll have to ask ${boss} for permission" and that tapping "Ask ${boss}" sends the request.`,
+            );
           } catch (e: any) {
-            return `Couldn't set that up: ${String(e?.message ?? e).slice(0, 300)}`;
+            return wellFormed(`Couldn't set that up: ${String(e?.message ?? e).slice(0, 300)}`);
           }
         },
       }),
@@ -689,17 +692,17 @@ export async function cleoAnswer(
   const pastImages = lastWithFiles && !attachments.length ? await files.recentImages(lastWithFiles.attachments) : [];
   const read = reading ? await reading : null;
   const now = `[${new Date().toLocaleString("en-CA", { timeZone: BUSINESS_TZ, weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })} (${BUSINESS_TZ}). Today is ${businessToday()}.]`;
-  const ask = `${now}\n${input.message.trim() || "Take a look at this."}`;
+  const ask = wellFormed(`${now}\n${input.message.trim() || "Take a look at this."}`);
   const convo = [
     ...past.map((m) => {
-      if (m.role === "assistant") return { role: "assistant" as const, content: m.content };
-      const text = [m.content, files.attachmentsInHistory(m.attachments)].filter(Boolean).join("\n");
+      if (m.role === "assistant") return { role: "assistant" as const, content: wellFormed(m.content) };
+      const text = wellFormed([m.content, files.attachmentsInHistory(m.attachments)].filter(Boolean).join("\n"));
       return m === lastWithFiles && pastImages.length
         ? { role: "user" as const, content: [{ type: "text" as const, text }, ...pastImages] }
         : { role: "user" as const, content: text };
     }),
     read
-      ? { role: "user" as const, content: [{ type: "text" as const, text: `${ask}\n\n${read.notes}` }, ...read.images.slice(0, 24)] }
+      ? { role: "user" as const, content: [{ type: "text" as const, text: wellFormed(`${ask}\n\n${read.notes}`) }, ...read.images.slice(0, 24)] }
       : { role: "user" as const, content: ask },
   ];
   const usable = (t: string) => (looksLikeLeakedInstructions(t) ? "" : t.trim());

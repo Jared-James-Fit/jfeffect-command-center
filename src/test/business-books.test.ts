@@ -130,9 +130,10 @@ describe("Cleo context", () => {
     const p = summerSystemPrompt({ ownerName: "Jared" });
     expect(p).toMatch(/You borrow his style, never his identity: you're still Cleo/);
     expect(p).toMatch(/Calm and confident is the default, hype is the exception/);
-    for (const moment of [/a PR, a clean week, real progress: bring the energy and make it feel earned/, /setbacks \(pain, sickness, a rough week, a stall\): steady and understanding/, /missed workouts or slipping habits .*never shaming/, /training and nutrition: .*Accuracy first/, /business, money and admin: efficient and exact/, /everyday chat: relaxed and natural/]) expect(p).toMatch(moment);
+    for (const moment of [/a PR, a clean week, real progress \(more reps, more sets or an easier RPE at a weight counts, even when it isn't a record\): bring the energy and make it feel earned/, /setbacks \(pain, sickness, a rough week, a stall\): steady and understanding/, /missed workouts or slipping habits .*never shaming/, /training and nutrition: .*Accuracy first/, /business, money and admin: efficient and exact/, /everyday chat: relaxed and natural/]) expect(p).toMatch(moment);
     expect(p).toMatch(/Praise only what was earned and name it/);
     expect(p).toMatch(/Emojis rarely \(most replies have none\)/);
+    expect(p).toMatch(/Extras nobody asked for \(a draft message to the client, a full plan\) get one line offering them/);
     expect(p).toMatch(/generic motivation/);
     // the identity line still says who Cleo is, once
     expect(p.match(/IDENTITY: /g)).toHaveLength(1);
