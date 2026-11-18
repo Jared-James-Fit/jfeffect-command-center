@@ -194,7 +194,21 @@ export function comparisonFor(p: Period, mode: CompareMode, today: string): { st
     end = addDays(seen.start, -1);
     start = addDays(end, -(span - 1));
   }
-  return { start, end, label: billingRange(start, end, { thisYear }) ?? `${start} – ${end}` };
+  return { start, end, label: comparisonLabel(start, end, Number(p.start.slice(0, 4)), thisYear) };
+}
+
+/**
+ * A comparison in the words people use: a whole month by its name ("June",
+ * "December 2025" when it's in another year than the period), a whole quarter
+ * ("Q2"), a whole year ("2025"), anything else by its dates ("Oct 1 – 16").
+ */
+export function comparisonLabel(start: string, end: string, periodYear: number, thisYear: number): string {
+  const [y, m, d] = parts(start);
+  const other = y !== periodYear;
+  if (d === 1 && end === ymd(y, m, lastDay(y, m))) return other ? `${MONTHS[m - 1]} ${y}` : MONTHS[m - 1];
+  if (d === 1 && m === 1 && end === ymd(y, 12, 31)) return String(y);
+  if (d === 1 && (m - 1) % 3 === 0 && end === ymd(y, m + 2, lastDay(y, m + 2))) return other ? `Q${quarterOf(m)} ${y}` : `Q${quarterOf(m)}`;
+  return billingRange(start, end, { thisYear }) ?? `${start} – ${end}`;
 }
 
 /** "YYYY-MM" for every month a range touches, oldest first. */
@@ -210,15 +224,29 @@ export function monthsBetween(start: string, end: string): string[] {
 }
 
 /**
- * The months a period's chart shows: the period's own months when it spans
- * several, else the 12 months ending with it (so one month is seen against
- * the year around it, and tapping another month moves the period there).
+ * The months a period's chart shows, never before the books' first month
+ * (`firstDay`: months the business didn't exist yet are no data, not zeros).
+ * A period of 3+ months shows its own months. A shorter one is seen in the
+ * months around it: up to 12, ending with it, or, when there are fewer than
+ * 12 months on the books before it, reaching on past it up to this month (a
+ * past July is seen against what came after it too).
  */
-export function chartMonths(p: Period, today: string): string[] {
-  const own = monthsBetween(p.start, elapsed(p, today).end);
-  if (own.length >= 3) return own;
-  const end = elapsed(p, today).end.slice(0, 7);
-  return monthsBetween(addMonths(`${end}-01`, -11), `${end}-01`);
+export function chartMonths(p: Period, today: string, firstDay?: string | null): string[] {
+  const first = firstDay ? firstDay.slice(0, 7) : null;
+  const seenEnd = elapsed(p, today).end;
+  const own = monthsBetween(p.start, seenEnd);
+  if (own.length >= 3) {
+    const kept = first ? own.filter((m) => m >= first) : own;
+    return kept.length ? kept : own;
+  }
+  const periodFirst = p.start.slice(0, 7);
+  const periodLast = seenEnd.slice(0, 7);
+  const thisMonth = today.slice(0, 7);
+  let start = addMonths(`${periodLast}-01`, -11).slice(0, 7);
+  if (first && start < first) start = first < periodFirst ? first : periodFirst;
+  const room = addMonths(`${start}-01`, 11).slice(0, 7);
+  const end = room < thisMonth ? room : thisMonth > periodLast ? thisMonth : periodLast;
+  return monthsBetween(`${start}-01`, `${end < periodLast ? periodLast : end}-01`);
 }
 
 /** "Oct", for an axis. */

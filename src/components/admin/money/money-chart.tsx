@@ -1,11 +1,13 @@
 /**
  * Sales, spending and profit by month: sales and spending as side-by-side
- * bars, profit as a line, one dollar axis. The months in the period are full
- * strength and the rest quieter; tapping a month opens that month. A table of
- * the same numbers is one tap away.
+ * bars, profit as a line, one dollar axis. Every bar is full strength (a dimmed
+ * bar on a dark screen reads as missing); when the chart shows months around
+ * the period, the period's own months sit on a shaded band with their labels
+ * bold. Tapping a month opens that month. A table of the same numbers is one
+ * tap away.
  */
 import { useState } from "react";
-import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { cn } from "@/lib/utils";
 import type { MonthPoint } from "@/lib/books/money-view";
 import { shortMonthOf } from "@/lib/books/period";
@@ -47,6 +49,18 @@ export function MoneyChart({ points, inPeriod, onPickMonth }: {
   const [table, setTable] = useState(false);
   const rows = points.map((p) => ({ ...p, label: shortMonthOf(p.month), sales: p.salesMinor / 100, spent: p.spentMinor / 100, profit: p.profitMinor / 100 }));
   const anyLoss = points.some((p) => p.profitMinor < 0);
+  const shown = points.filter((p) => inPeriod(p.month));
+  // Shade the period only when the chart shows months outside it.
+  const band = shown.length && shown.length < points.length ? { x1: shown[0].month, x2: shown[shown.length - 1].month } : null;
+  const Tick = ({ x, y, payload }: any) => {
+    const ym = String(payload?.value ?? "");
+    const on = !!band && inPeriod(ym);
+    return (
+      <text x={x} y={y + 12} textAnchor="middle" fontSize={11} fill={on ? "var(--foreground)" : "var(--muted-foreground)"} fontWeight={on ? 600 : 400}>
+        {shortMonthOf(ym)}
+      </text>
+    );
+  };
 
   return (
     <div className="min-w-0" data-money-chart>
@@ -87,7 +101,7 @@ export function MoneyChart({ points, inPeriod, onPickMonth }: {
               data={rows}
               margin={{ top: 6, right: 2, left: 0, bottom: 0 }}
               barGap={2}
-              barCategoryGap="24%"
+              barCategoryGap="18%"
               onClick={(e: any) => {
                 const ym = e?.activePayload?.[0]?.payload?.month;
                 if (ym && onPickMonth) onPickMonth(ym);
@@ -95,17 +109,14 @@ export function MoneyChart({ points, inPeriod, onPickMonth }: {
               style={{ cursor: onPickMonth ? "pointer" : undefined }}
             >
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={2} />
+              {band ? <ReferenceArea x1={band.x1} x2={band.x2} fill="var(--muted)" fillOpacity={0.7} strokeOpacity={0} ifOverflow="extendDomain" /> : null}
+              <XAxis dataKey="month" tick={<Tick />} tickLine={false} axisLine={false} interval={rows.length <= 12 ? 0 : "preserveStartEnd"} minTickGap={2} height={22} />
               <YAxis tick={axisTick} tickLine={false} axisLine={false} width={40} tickFormatter={(v: number) => shortMoney(v * 100)} />
               {anyLoss ? <ReferenceLine y={0} stroke="var(--muted-foreground)" strokeOpacity={0.5} /> : null}
-              <Tooltip content={<ChartTip />} cursor={{ fill: "var(--muted)", opacity: 0.5 }} />
-              <Bar dataKey="sales" radius={[4, 4, 0, 0]} maxBarSize={16} isAnimationActive={false}>
-                {rows.map((r) => <Cell key={r.month} fill="var(--money-in)" fillOpacity={inPeriod(r.month) ? 1 : 0.35} />)}
-              </Bar>
-              <Bar dataKey="spent" radius={[4, 4, 0, 0]} maxBarSize={16} isAnimationActive={false}>
-                {rows.map((r) => <Cell key={r.month} fill="var(--money-out)" fillOpacity={inPeriod(r.month) ? 1 : 0.35} />)}
-              </Bar>
-              <Line dataKey="profit" type="monotone" stroke="var(--money-profit)" strokeWidth={2} dot={{ r: 4, strokeWidth: 2, stroke: "var(--card)", fill: "var(--money-profit)" }} activeDot={{ r: 5 }} isAnimationActive={false} />
+              <Tooltip content={<ChartTip />} cursor={{ fill: "var(--muted)", opacity: 0.35 }} />
+              <Bar dataKey="sales" fill="var(--money-in)" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={false} />
+              <Bar dataKey="spent" fill="var(--money-out)" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={false} />
+              <Line dataKey="profit" type="monotone" stroke="var(--money-profit)" strokeWidth={2} dot={{ r: 3, strokeWidth: 2, stroke: "var(--card)", fill: "var(--money-profit)" }} activeDot={{ r: 5 }} isAnimationActive={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
