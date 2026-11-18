@@ -8,7 +8,7 @@ import {
   stripTimingText,
   type MealTiming,
 } from "@/lib/nutrition-targets/meal-timing";
-import { macroItems, readMacroLine } from "@/lib/nutrition-targets/macro-line";
+import { DAILY_TOTAL_HEADING, macroItems, readMacroLine } from "@/lib/nutrition-targets/macro-line";
 import { FLEX_HEADING } from "@/lib/nutrition-targets/meal-plan-structure";
 
 type Props = {
@@ -20,7 +20,8 @@ type Props = {
 // as ONE compact card with its ingredients and an inline "Approx" macro row,
 // instead of being fragmented into multiple cards per blank line.
 export const MEAL_HEADING = /^\s*(meal\s*\d+|pre[- ]?workout|post[- ]?workout|intra[- ]?workout|snack\s*\d*|breakfast|lunch|dinner)\b/i;
-export const TOTAL_HEADING = /^\s*(daily\s*total|totals?)\b/i;
+/** A day's total ("Daily Total", "Approximate Daily Total", "Totals"): macro-line.ts's, one heading for every reader. */
+export const TOTAL_HEADING = DAILY_TOTAL_HEADING;
 const HIGHDAY_HEADING = /^\s*high\s*day\s*(changes?|adjustments?)?\s*$/i;
 const APPROX_LABEL = /^\s*approx[:.]?\s*$/i;
 const APPROX_INLINE = /^\s*approx[:.]\s*(.+)$/i;

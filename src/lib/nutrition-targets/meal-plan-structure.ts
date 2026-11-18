@@ -7,7 +7,7 @@
 export type PlanFood = { amount: string; name: string };
 export type PlanMacros = { protein?: number; carbs?: number; fat?: number; fibre?: number };
 import { detectMealTiming, stripTimingText, type MealTiming } from "@/lib/nutrition-targets/meal-timing";
-import { readMacroLine } from "@/lib/nutrition-targets/macro-line";
+import { DAILY_TOTAL_HEADING, isTotalLine, readMacroLine } from "@/lib/nutrition-targets/macro-line";
 
 export type PlanMeal = { title: string; foods: PlanFood[]; macros: PlanMacros | null; notes: string[]; timing: MealTiming };
 export type StructuredDay = { meals: PlanMeal[]; notes: string[] };
@@ -42,8 +42,9 @@ export function structureMealPlanDay(text: string | null | undefined): Structure
       continue;
     }
     if (MACROS_LABEL.test(line)) { inMacros = true; continue; }
-    if (/^daily total\b/i.test(line)) { skipTotal = true; meal = null; inMacros = false; continue; }
-    if (skipTotal && /^approximately\b/i.test(line)) continue;
+    // a day's total ends the meals: its lines are never the last meal's macros ("Approximate Daily Total / 205 g protein / …")
+    if (DAILY_TOTAL_HEADING.test(line)) { skipTotal = true; meal = null; inMacros = false; continue; }
+    if (skipTotal && (/^approximately\b/i.test(line) || isTotalLine(line))) continue;
     if (/^PHASE\s*[:\-]/i.test(line)) continue;
     // flexible calories close the meal before them: what follows is the day's, not that meal's
     if (FLEX_HEADING.test(line)) { meal = null; inMacros = false; skipTotal = false; out.notes.push(line); continue; }

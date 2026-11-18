@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { AlertTriangle, CheckCircle2, Droplets, Dumbbell, GalleryHorizontalEnd, Rows3, Zap } from "lucide-react";
+import { Droplets, Dumbbell, GalleryHorizontalEnd, Rows3, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import {
@@ -18,7 +18,6 @@ import {
 import { useMealPlanView, type MealPlanView } from "@/lib/nutrition-targets/meal-plan-view";
 import { KCAL_PER_GRAM, MACRO_COLOR, formatKcal } from "./macro-palette";
 import { mealMacroNumbers, splitFoodLine } from "@/lib/nutrition-targets/meal-plan-reader";
-import { clientCoverageLine, dayCoverage, type DayTarget } from "@/lib/nutrition-targets/plan-coverage";
 import { FLEX_HEADING } from "@/lib/nutrition-targets/meal-plan-structure";
 import {
   formatDayWater,
@@ -38,25 +37,10 @@ type NonMealSection = Exclude<MealPlanSection, { kind: "meal" }>;
  * else; only the presentation changes. Swipe shows one meal at a time
  * (default), Scroll shows the whole day. The choice sticks per person.
  */
-export function MealPlanReader({
-  text,
-  water,
-  target,
-}: {
-  text: string;
-  water?: string | null;
-  /** The day's targets: the meals are said to cover them or not (plan-coverage.ts). */
-  target?: DayTarget | null;
-}) {
+export function MealPlanReader({ text, water }: { text: string; water?: string | null }) {
   const { user } = useAuth();
   const [view, setView] = useMealPlanView(user?.id ?? null);
   const sections = useMemo(() => parseMealPlanText(text), [text]);
-  // Whether these meals are the whole day: the same reading the coach sees on their plan.
-  const cover = useMemo(
-    () => (target ? clientCoverageLine(dayCoverage(text, target)) : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [text, target?.calories, target?.protein, target?.carbs, target?.fats],
-  );
 
   const meals = sections.filter((s): s is MealSection => s.kind === "meal");
   // The day's water split across the meals (a little more around training).
@@ -108,22 +92,6 @@ export function MealPlanReader({
             </span>
             {canSwipe && <ViewToggle value={view} onChange={setView} />}
           </div>
-          {cover && (
-            <p
-              className={cn(
-                "-mt-2 flex items-start gap-1.5 text-[13px] leading-snug",
-                cover.tone === "ok" ? "text-muted-foreground" : "text-warning",
-              )}
-              data-meal-plan-coverage={cover.tone}
-            >
-              {cover.tone === "ok" ? (
-                <CheckCircle2 aria-hidden className="mt-px h-3.5 w-3.5 shrink-0 text-success" />
-              ) : (
-                <AlertTriangle aria-hidden className="mt-px h-3.5 w-3.5 shrink-0" />
-              )}
-              <span>{cover.text}</span>
-            </p>
-          )}
 
           {mode === "swipe" ? (
             <MealSwiper key={text} meals={meals} water={mealWater} />

@@ -2,9 +2,14 @@
  * The app's meal plan paste format (MEAL_PLAN_PROMPT's output, or a plan pasted
  * from ChatGPT) read into plan days: one day per "… MENU" section, its numbers
  * from the Daily Total (else the meals' macros summed), its text the meals.
+ * For an AI plan, plan-coverage's `planDayNumbers` decides the published
+ * numbers (the targets unless the meals cover them); a pasted plan's Daily
+ * Total is the coach's own.
  * Pure, so the coach's screens and the server read a plan the same way.
  */
 import { plainPastedText } from "@/lib/nutrition-targets/plain-paste";
+import { DAILY_TOTAL_HEADING, readDailyTotal, type LineMacros } from "@/lib/nutrition-targets/macro-line";
+import { structureMealPlanDay } from "@/lib/nutrition-targets/meal-plan-structure";
 
 export type ParsedDay = {
   day_label: string;
@@ -17,22 +22,11 @@ export type ParsedDay = {
   sort_order: number;
 };
 
-function parseMacroLine(line: string): {
-  protein?: number;
-  carbs?: number;
-  fats?: number;
-  fibre?: number;
-} {
-  const out: any = {};
-  const p = line.match(/(\d+(?:\.\d+)?)\s*g?\s*protein/i);
-  const c = line.match(/(\d+(?:\.\d+)?)\s*g?\s*(?:carb|carbohydrate)/i);
-  const f = line.match(/(\d+(?:\.\d+)?)\s*g?\s*fat/i);
-  const fb = line.match(/(\d+(?:\.\d+)?)\s*g?\s*fibre|fiber/i);
-  if (p) out.protein = Number(p[1]);
-  if (c) out.carbs = Number(c[1]);
-  if (f) out.fats = Number(f[1]);
-  if (fb) out.fibre = Number(fb[1]);
-  return out;
+/** A menu's Daily Total, however it's written (macro-line.ts `readDailyTotal`), else null. */
+function dailyTotalOf(body: string): LineMacros | null {
+  const lines = body.split("\n");
+  const at = lines.findIndex((l) => DAILY_TOTAL_HEADING.test(l));
+  return at < 0 ? null : readDailyTotal(lines, at).total;
 }
 
 function labelFromHeader(header: string): string {
@@ -90,41 +84,22 @@ export function parseMealPlan(text: string): ParsedDay[] {
       .slice(s.start + 1, stop)
       .join("\n")
       .trim();
-    // Find Daily Total macros
-    const totalMatch = body.match(
-      /Daily\s+Total[\s\S]*?(Approximately[^\n]+|\d[^\n]*protein[^\n]+)/i,
-    );
-    let macros: any = {};
-    if (totalMatch) {
-      macros = parseMacroLine(totalMatch[1]);
+    // The Daily Total, else every meal's macros summed (the shared readers: every way macros are written)
+    let macros: { protein?: number; carbs?: number; fats?: number; fibre?: number } = {};
+    const total = dailyTotalOf(body);
+    if (total) {
+      macros = { protein: total.protein, carbs: total.carbs, fats: total.fat, fibre: total.fibre };
     } else {
-      // Sum each "Approximate macros" block
-      const matches = [...body.matchAll(/Approximate macros?:?\s*\n([\s\S]*?)(?=\n\s*\n|$)/gi)];
-      let p = 0,
-        c = 0,
-        f = 0,
-        fb = 0,
-        any = false;
-      for (const m of matches) {
-        const got = parseMacroLine(m[1].replace(/\n/g, " "));
-        if (got.protein) {
-          p += got.protein;
-          any = true;
-        }
-        if (got.carbs) {
-          c += got.carbs;
-          any = true;
-        }
-        if (got.fats) {
-          f += got.fats;
-          any = true;
-        }
-        if (got.fibre) {
-          fb += got.fibre;
-          any = true;
-        }
+      const meals = structureMealPlanDay(body).meals.filter((m) => m.macros);
+      if (meals.length) {
+        const sum = (k: "protein" | "carbs" | "fat" | "fibre") => meals.reduce((a, m) => a + (m.macros?.[k] ?? 0), 0);
+        macros = {
+          protein: sum("protein"),
+          carbs: sum("carbs"),
+          fats: sum("fat"),
+          fibre: meals.some((m) => m.macros?.fibre != null) ? sum("fibre") : undefined,
+        };
       }
-      if (any) macros = { protein: p, carbs: c, fats: f, fibre: fb };
     }
     const calories =
       macros.protein != null && macros.carbs != null && macros.fats != null
