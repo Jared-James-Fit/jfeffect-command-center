@@ -457,7 +457,15 @@ html[data-ios-web-app] [data-shell-root] {
 }
 html[data-pov-banner-on] .ios-status-band {
   background-color: color-mix(in oklch, var(--destructive) 10%, var(--background));
-}/* When keyboard is open, collapse the topbar height so the messenger
+}
+/* The app's own camera (FilmCamera) is full screen like TikTok's: black under the status bar (iOS
+   paints it from the band above) and behind the camera, so nothing of the page's light grey shows
+   over the top of the picture or under its foot (an older home-screen install doesn't draw fixed
+   things past the window, so the page's own colour shows there). camera-presence.ts. */
+html[data-camera-open],
+html[data-camera-open] body,
+html[data-camera-open] [data-shell-root] { background-color: #000; }
+html[data-camera-open]:not([data-pov-banner-on]) .ios-status-band { background-color: #000; }/* When keyboard is open, collapse the topbar height so the messenger
    container fills the full visual viewport without dead space at the top. */
 html[data-keyboard-open="true"] {
   --shell-topbar-h: 0px;
