@@ -15,6 +15,7 @@ import {
   isRecapStats,
   formatTopSet,
   formatWorkoutDuration,
+  topSetOther,
   isTrainingNow,
   pickWorkoutWin,
   lockInTimeLabel,
@@ -62,6 +63,8 @@ import { PageCaption } from "@/components/community/page-caption";
 import { isFilmSummary, isOwnFilmCaption } from "@/lib/workout-film";
 import { POST_SHEET_HEIGHT } from "@/lib/post-sheet";
 import { RepostButton, RepostedHeader, SaveButton, useRepostNote } from "@/components/community/repost-save";
+import { WeightOther } from "@/components/dual-weight";
+import { splitAtWeight } from "@/lib/dual-weight";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
 export function TrainingNowPill({ className }: { className?: string }) {
@@ -330,6 +333,8 @@ export function PulseHero({ stats, unit }: { post?: CommunityPost; stats: Workou
       </div>
       <div className="font-display mt-3 text-[28px] uppercase leading-[1.02]">{win.headline}</div>
       {win.detail && <div className={cn("font-display mt-0.5 text-[24px] uppercase leading-none", win.kind === "pr" ? "text-warning" : "text-foreground/85")}>{win.detail}</div>}
+      {/* the same weight in the other unit, quieter: the lift as typed stays the hero */}
+      {win.other && <WeightOther className="mt-1 block text-[13px]">{win.other}</WeightOther>}
       {nums.length > 0 && <div className="mt-3 min-w-0 truncate text-[11px] font-semibold text-muted-foreground">{nums.join(" · ")}</div>}
     </div>
   );
@@ -366,6 +371,7 @@ export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShar
             <span className="truncate text-[12px] font-semibold text-muted-foreground">{lift.name}</span>
           </div>
           <div className={cn("font-display uppercase leading-none", big ? "text-[54px] @max-[16rem]:text-[44px]" : "text-[42px]", pr && "text-warning")}>{formatTopSet(lift.detail, unit)}</div>
+          <WeightOther className={cn("mt-1 block", big ? "text-[15px]" : "text-[13px]")}>{topSetOther(lift.detail, unit)}</WeightOther>
         </div>
       )}
       {nums.length > 0 && (
@@ -375,12 +381,28 @@ export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShar
           {nums.map((n) => (
             <div key={n.label} className="min-w-0">
               <div className={cn("font-display truncate uppercase leading-none", big ? "text-[30px] @max-[16rem]:text-[24px]" : "text-[24px] @max-[15rem]:text-[20px]")}>{n.value}</div>
+              <SubLine sub={n.sub} row={nums} className="mt-0.5 block truncate text-[11px]" />
               <div className="mt-1 truncate text-[9px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{n.label}</div>
             </div>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * A number's other unit under it ("8,120 kg" under "17,902 lb"). In a row
+ * where any number has one, the others keep the line empty, so every label
+ * still sits on one line across the row.
+ */
+function SubLine({ sub, row, className }: { sub?: string | null; row: { sub?: string | null }[]; className: string }) {
+  if (sub) return <WeightOther className={className}>{sub}</WeightOther>;
+  if (!row.some((r) => r.sub)) return null;
+  return (
+    <span aria-hidden className={cn(className, "font-semibold")}>
+      {"\u00a0"}
+    </span>
   );
 }
 
@@ -738,7 +760,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
                   // each swipe its own, never the first clip's on every slide (a photo or a clip with no set says nothing)
                   <div className="min-w-0 leading-snug" data-page-set>
                     <div className="line-clamp-2 break-words text-[14px] font-medium">{slideSet.title}</div>
-                    {slideSet.detail && <div className="truncate text-[13px] tabular-nums text-foreground/70">{slideSet.detail}</div>}
+                    {slideSet.detail && <SetDetail detail={slideSet.detail} other={slideSet.other} className="truncate text-[13px] tabular-nums text-foreground/70" otherClassName="text-[12px] font-medium text-foreground/50" />}
                   </div>
                 )}
                 {visual && s && (
@@ -892,12 +914,14 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
             {lift && (
               <div className="col-span-2 min-w-0">
                 <div className="font-display truncate text-[22px] uppercase leading-none">{formatTopSet(lift.detail, unit)}</div>
+                <WeightOther className="mt-0.5 block truncate text-[11px]">{topSetOther(lift.detail, unit)}</WeightOther>
                 <div className="mt-0.5 truncate text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{lift.name}</div>
               </div>
             )}
             {stats.slice(0, lift ? 2 : 4).map((x) => (
               <div key={x.label} className="min-w-0">
                 <div className="font-display truncate text-[22px] uppercase leading-none">{x.value}</div>
+                <SubLine sub={x.sub} row={stats.slice(0, lift ? 2 : 4)} className="mt-0.5 block truncate text-[11px]" />
                 <div className="mt-0.5 truncate text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{shortLabel(x.label)}</div>
               </div>
             ))}
@@ -1430,7 +1454,7 @@ function SlideMedia({
  * the sound button and the dots, and never takes a tap (double-tap ❤️ and the
  * clip's sound still work). On a post's own screen it's in the words instead.
  */
-function SlideCaption({ caption, withDots }: { caption: { title: string; detail: string }; withDots: boolean }) {
+function SlideCaption({ caption, withDots }: { caption: { title: string; detail: string; other?: string | null }; withDots: boolean }) {
   return (
     <div
       data-slide-caption
@@ -1440,7 +1464,24 @@ function SlideCaption({ caption, withDots }: { caption: { title: string; detail:
       )}
     >
       <div className="truncate text-[15px] font-semibold leading-tight [text-shadow:0_1px_2px_rgb(0_0_0/0.45)]">{caption.title}</div>
-      <div className="mt-0.5 truncate text-[13px] tabular-nums text-white/85">{caption.detail}</div>
+      <SetDetail detail={caption.detail} other={caption.other} className="mt-0.5 truncate text-[13px] tabular-nums text-white/85" otherClassName="text-[12px] font-medium text-white/60" />
+    </div>
+  );
+}
+
+/**
+ * A set's line with its weight's other unit right after the weight, quieter:
+ * "Top set · 455 lb (206.4 kg) × 1 @ RPE 6". The line as it was when it names
+ * no weight or there's no other unit (a hidden weight, reps only).
+ */
+function SetDetail({ detail, other, className, otherClassName }: { detail: string; other?: string | null; className: string; otherClassName: string }) {
+  const at = other ? splitAtWeight(detail) : null;
+  if (!at) return <div className={className}>{detail}</div>;
+  return (
+    <div className={className}>
+      {at.head}
+      <span data-weight-other className={otherClassName}> ({other})</span>
+      {at.tail}
     </div>
   );
 }

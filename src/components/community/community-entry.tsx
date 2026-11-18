@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
-import { autoPostHasArt, featuredLift, formatTopSet, homeCrewDeck, homeDeckNeedsMore, workoutHeadline, isTrainingNow, postTimeLabel, reactionEmoji, SCOPE_WORD, type CommunityPost } from "@/lib/community";
+import { autoPostHasArt, featuredLift, formatTopSetDual, homeCrewDeck, homeDeckNeedsMore, workoutHeadline, isTrainingNow, postTimeLabel, reactionEmoji, SCOPE_WORD, type CommunityPost } from "@/lib/community";
 import { useCommunityActivity, useCommunityFeed, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import { PostTileFace, postThumbPath } from "@/components/community/post-tile";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -28,7 +28,7 @@ function postLine(post: CommunityPost, unit: "kg" | "lb"): string {
   const lift = post.stats ? featuredLift(post.stats) : null;
   return (
     (!post.stats && post.locked_in_at ? `🔒 Locked in · ${post.session_title ?? "Workout"}` : (post.stats ? workoutHeadline(post.stats) : null) ?? post.session_title ?? "Workout") +
-    (lift ? ` · ${lift.name} ${formatTopSet(lift.detail, unit)}` : "") +
+    (lift ? ` · ${lift.name} ${formatTopSetDual(lift.detail, unit)}` : "") +
     (lift?.pr ? ` · ${SCOPE_WORD[lift.pr]}` : "")
   );
 }
@@ -148,7 +148,7 @@ function CrewCard({ post, unit, thumb: signed, fresh, onOpen }: { post: Communit
   const lift = photo && post.stats ? featuredLift(post.stats) : null;
   // a photo says what the session was underneath it
   const title = photo ? ((post.stats ? workoutHeadline(post.stats) : null) ?? (post.locked_in_at ? "Locked in" : null)) : null;
-  const detail = photo ? (lift ? `${formatTopSet(lift.detail, unit)}${lift.pr ? " · PR" : ""}` : post.locked_in_at && !post.stats ? post.session_title : post.caption?.split("\n")[0]) : null;
+  const detail = photo ? (lift ? `${formatTopSetDual(lift.detail, unit)}${lift.pr ? " · PR" : ""}` : post.locked_in_at && !post.stats ? post.session_title : post.caption?.split("\n")[0]) : null;
   return (
     <button
       ref={ref}

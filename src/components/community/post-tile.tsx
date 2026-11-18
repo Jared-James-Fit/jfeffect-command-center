@@ -2,7 +2,8 @@ import { Suspense, useState } from "react";
 import { LiveDot } from "@/components/live-indicator";
 import { Layers, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { autoPostHasArt, featuredLift, formatTopSet, isTrainingNow, workoutHeadline, workoutSubtitle, type CommunityPost, type WorkoutShareStats } from "@/lib/community";
+import { autoPostHasArt, featuredLift, formatTopSet, isTrainingNow, topSetOther, workoutHeadline, workoutSubtitle, type CommunityPost, type WorkoutShareStats } from "@/lib/community";
+import { WeightOther } from "@/components/dual-weight";
 import { focusPosition } from "@/lib/photo-frame";
 import { postArtCard } from "@/lib/instagram-export";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
@@ -181,6 +182,8 @@ function WorkoutTile({ stats, unit, pad, bottom, large }: { stats: WorkoutShareS
         <div className={cn("font-display line-clamp-2 uppercase leading-[1.02]", large ? "text-[26px]" : "text-[15px]")}>{workoutHeadline(stats)}</div>
         {large && workoutSubtitle(stats) && <div className="mt-0.5 truncate text-[11px] font-semibold text-muted-foreground">{workoutSubtitle(stats)}</div>}
         {lift && <div className={cn("font-display mt-0.5 uppercase", large ? "text-[19px]" : "text-[13px]", pr ? "text-warning" : "text-foreground/80")}>{formatTopSet(lift.detail, unit)}</div>}
+        {/* a big tile has room for the other unit; a grid tile keeps the lift as it was typed, no more */}
+        {lift && large && <WeightOther className="block text-[11px]">{topSetOther(lift.detail, unit)}</WeightOther>}
       </div>
     </div>
   );

@@ -67,14 +67,16 @@ describe("a film post's set is said in its words, the slide on screen's", () => 
     const slides = postSlides(post);
     expect(slides.map((s) => s.caption ?? null)).toEqual([
       null,
-      { title: "Competition Squat", detail: "Top set · 455 lb × 1 @ RPE 6" },
-      { title: "Competition Squat", detail: "Backoff 3 · 375 lb × 4 @ RPE 6" },
-      { title: "Close-Grip Block Press", detail: "Top set · 275 lb × 6 @ RPE 6" },
+      // the weight as typed in the words, its other unit beside it (from the slide's stored kg)
+      { title: "Competition Squat", detail: "Top set · 455 lb × 1 @ RPE 6", other: "206.4 kg" },
+      { title: "Competition Squat", detail: "Backoff 3 · 375 lb × 4 @ RPE 6", other: "170.1 kg" },
+      { title: "Close-Grip Block Press", detail: "Top set · 275 lb × 6 @ RPE 6", other: "124.7 kg" },
     ]);
     // a post that hides weights: the set without them
     expect(postSlides({ ...post, hide_loads: true } as CommunityPost)[3].caption).toEqual({
       title: "Close-Grip Block Press",
       detail: "Top set · 6 reps @ RPE 6",
+      other: null,
     });
   });
 

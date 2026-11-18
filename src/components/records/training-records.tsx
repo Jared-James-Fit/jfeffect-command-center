@@ -1,5 +1,7 @@
 import { Trophy, Medal, Award, Dumbbell } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { dualTotal, recordedLoad } from "@/lib/dual-weight";
+import { WeightOther } from "@/components/dual-weight";
 import {
   alsoLabel, formatLoad, formatTonnage, repRecordLabel, tonnageRecordLabel, topScope, weightRecordLabel,
   type RecordScope, type RepRecord, type TonnageRecord, type WorkoutRecords, type RecentRecords, type ExerciseRecords,
@@ -50,7 +52,21 @@ export function SetRecordBadge({ record, loadRecord }: {
 }
 
 /** Recap: the exciting part — records first, ATPRs on top. */
-export function NewRecordsSection({ records, unit }: { records: WorkoutRecords; unit: "kg" | "lb" }) {
+/**
+ * A record's weight in the unit its set was typed in (`setUnit`, when the
+ * screen knows it; else the athlete's own unit), the other unit beside it.
+ */
+function RecordLoad({ kg, setId, unit, setUnit }: { kg: number; setId: string; unit: "kg" | "lb"; setUnit?: (setId: string) => "kg" | "lb" | null }) {
+  const d = recordedLoad(kg, setUnit?.(setId), unit);
+  return (
+    <>
+      {d.primary}
+      <span data-weight-other className="font-medium text-muted-foreground/70"> ({d.secondary})</span>
+    </>
+  );
+}
+
+export function NewRecordsSection({ records, unit, setUnit }: { records: WorkoutRecords; unit: "kg" | "lb"; setUnit?: (setId: string) => "kg" | "lb" | null }) {
   const reps = records.records ?? [];
   const loads = records.load_records ?? [];
   const tonLabel = tonnageRecordLabel(records.tonnage);
@@ -68,7 +84,9 @@ export function NewRecordsSection({ records, unit }: { records: WorkoutRecords; 
             <li key={r.set_id} className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[13px] font-bold leading-tight">{r.exercise_name}</div>
-                <div className="text-[12px] font-semibold tabular-nums text-muted-foreground">{formatLoad(r.load_kg, unit)} × {r.reps}</div>
+                <div className="text-[12px] font-semibold tabular-nums text-muted-foreground">
+                  <RecordLoad kg={r.load_kg} setId={r.set_id} unit={unit} setUnit={setUnit} /> × {r.reps}
+                </div>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-0.5">
                 <RecordPill scope={scope} label={repRecordLabel(r)!} />
@@ -83,7 +101,7 @@ export function NewRecordsSection({ records, unit }: { records: WorkoutRecords; 
             <div className="min-w-0 flex-1">
               <div className="truncate text-[13px] font-bold leading-tight">{r.exercise_name}</div>
               <div className="text-[12px] font-semibold tabular-nums text-muted-foreground">
-                Heaviest ever · {formatLoad(r.load_kg, unit)} × {r.reps}
+                Heaviest ever · <RecordLoad kg={r.load_kg} setId={r.set_id} unit={unit} setUnit={setUnit} /> × {r.reps}
               </div>
             </div>
             <RecordPill scope={topScope(r)!} label={weightRecordLabel(r)!} />
@@ -93,7 +111,10 @@ export function NewRecordsSection({ records, unit }: { records: WorkoutRecords; 
           <li className="flex items-start gap-2 border-t border-border/60 pt-2">
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-bold leading-tight">Workout Tonnage</div>
-              <div className="text-[12px] font-semibold tabular-nums text-muted-foreground">{formatTonnage(records.tonnage_kg, unit)}</div>
+              <div className="text-[12px] font-semibold tabular-nums text-muted-foreground">
+                {dualTotal(records.tonnage_kg, unit).primary}
+                <span data-weight-other className="font-medium text-muted-foreground/70"> ({dualTotal(records.tonnage_kg, unit).secondary})</span>
+              </div>
             </div>
             <RecordPill scope={topScope(records.tonnage)!} label={tonLabel} />
           </li>
@@ -123,6 +144,7 @@ export function TonnageStat({ records, unit }: { records: WorkoutRecords; unit: 
       <div className="min-w-0 flex-1">
         <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Total tonnage</div>
         <div className="mt-0.5 truncate text-xl font-bold leading-tight tabular-nums text-foreground">{formatTonnage(records.tonnage_kg, unit)}</div>
+        <WeightOther className="block truncate text-[12px]">{dualTotal(records.tonnage_kg, unit).secondary}</WeightOther>
       </div>
       {label && <RecordPill scope={topScope(records.tonnage as TonnageRecord)!} label={label} />}
     </div>

@@ -33,7 +33,8 @@ import { PostViewsRow, useViewOnOpen } from "@/components/community/post-views";
 import { PostScoreRow } from "@/components/community/post-score";
 import { PostExtras } from "@/components/community/post-attach";
 import { useMarkHintSeen, usePostDetail, usePostMediaUrls, useReact } from "@/lib/community.queries";
-import { formatTonnage } from "@/lib/training-records";
+import { dualTotal, recordedUnit } from "@/lib/dual-weight";
+import { WeightOther } from "@/components/dual-weight";
 import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 
 /**
@@ -279,9 +280,13 @@ const WorkoutSummary = forwardRef<
   const stats = [
     dur && { label: "Time", value: dur },
     s.working_sets > 0 && { label: s.working_sets === 1 ? "Working set" : "Working sets", value: String(s.working_sets) },
-    s.tonnage_kg > 0 && { label: "Volume", value: formatTonnage(s.tonnage_kg, unit) },
+    // the volume in the unit most of its weights were typed in, the other under it (the same for every viewer)
+    s.tonnage_kg > 0 && (() => {
+      const t = dualTotal(s.tonnage_kg, recordedUnit(s.unit, unit));
+      return { label: "Volume", value: t.primary, sub: t.secondary };
+    })(),
     s.pr_count > 0 && { label: s.pr_count === 1 ? "PR" : "PRs", value: String(s.pr_count), pr: true },
-  ].filter(Boolean) as { label: string; value: string; pr?: boolean }[];
+  ].filter(Boolean) as { label: string; value: string; sub?: string; pr?: boolean }[];
   return (
     <section ref={ref} className="pt-5" data-workout-section>
       <div className={cn("relative px-4", heroTap && "select-none [-webkit-touch-callout:none]")} onClick={heroTap} data-workout-head>
@@ -293,6 +298,14 @@ const WorkoutSummary = forwardRef<
             {stats.map((t) => (
               <div key={t.label} className="flex min-w-0 flex-col-reverse">
                 <dt className="mt-0.5 text-[12px] text-muted-foreground">{t.label}</dt>
+                {/* the other unit under the number; an empty line on the others, so the labels stay level */}
+                {t.sub ? (
+                  <WeightOther className="text-[12px] font-medium">{t.sub}</WeightOther>
+                ) : stats.some((x) => x.sub) ? (
+                  <span aria-hidden className="text-[12px]">
+                    {"\u00a0"}
+                  </span>
+                ) : null}
                 <dd className={cn("whitespace-nowrap text-[17px] font-semibold leading-tight tabular-nums", t.pr && "text-warning")}>{t.value}</dd>
               </div>
             ))}
