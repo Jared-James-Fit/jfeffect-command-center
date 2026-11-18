@@ -81,32 +81,40 @@ describe("Crew Stories", () => {
   const author = (id: string) => ({ user_id: id, name: id[0].toUpperCase() + id.slice(1), avatar_url: null, is_coach: false });
   const stats = (o: object) => ({ prs: [], pr_count: 0, month_sessions: 2, week_sessions: 1, top_lift: { exercise_name: "Squat", reps: 5, load_kg: 100 }, working_sets: 12, duration_min: 50, ...o });
   const pulse = (id: string, who: string, h: number, o: object, seen = false) => ({ id, author: author(who), created_at: at(h), auto: true, stats: stats(o), visibility: "community", is_mine: false, seen }) as any;
+  // a feed post (what the feed shows), and a story (what someone posted as one)
   const post = (id: string, who: string, h: number, seen = false, extra: object = {}) => ({ id, author: author(who), created_at: at(h), auto: false, stats: null, visibility: "community", is_mine: false, seen, ...extra }) as any;
+  const story = (id: string, who: string, h: number, seen = false, extra: object = {}) => post(id, who, h, seen, { story: true, ...extra });
 
-  it("every session shared with the crew posts itself as a story (a PR or a routine day), like Instagram; never coach-only or private", () => {
+  it("only stories are stories (Nov 18 2026): what someone posted as one, the coach's lessons and a session that posted itself before automatic stories went; never a copy of a feed post, coach-only or private", () => {
+    expect(storyWorthy(story("e", "marc", 1))).toBe(true);
+    expect(storyWorthy(post("l", "coach", 1, false, { series: "lesson" }))).toBe(true);
+    // older automatic sessions play out their 24 hours
     expect(storyWorthy(pulse("a", "vicky", 1, { prs: [{ exercise_name: "Squat", reps: 3, load_kg: 140, scope: "atpr" }], pr_count: 1 }))).toBe(true);
-    expect(storyWorthy(pulse("c", "vicky", 1, {}))).toBe(true); // a top set
-    expect(storyWorthy(pulse("d", "vicky", 1, { top_lift: null }))).toBe(true); // session done
-    expect(storyWorthy(post("e", "marc", 1))).toBe(true);
-    expect(storyWorthy(post("f", "marc", 1, false, { visibility: "coach" }))).toBe(false);
-    expect(storyWorthy(post("g", "marc", 1, false, { visibility: "private" }))).toBe(false);
+    // a post in the feed (a workout, a photo, the daily series) is never a story too
+    expect(storyWorthy(post("w", "marc", 1, false, { stats: stats({}) }))).toBe(false);
+    expect(storyWorthy(post("p", "marc", 1))).toBe(false);
+    expect(storyWorthy(post("d", "coach", 1, false, { series: "wednesday_wins" }))).toBe(false);
+    expect(storyWorthy(story("f", "marc", 1, false, { visibility: "coach" }))).toBe(false);
+    expect(storyWorthy(story("g", "marc", 1, false, { visibility: "private" }))).toBe(false);
   });
-  it("your own story: your last day, oldest first, with nothing older", () => {
-    const g = myStory([post("me2", "jared", 2, false, { is_mine: true }), { ...pulse("me1", "jared", 5, {}), is_mine: true }, post("old", "jared", 30, false, { is_mine: true }), post("x", "marc", 1)], now)!;
+  it("your own story: your last day of stories, oldest first, with nothing older and never your feed posts", () => {
+    const g = myStory([story("me2", "jared", 2, false, { is_mine: true }), { ...pulse("me1", "jared", 5, {}), is_mine: true }, story("old", "jared", 30, false, { is_mine: true }), post("feed", "jared", 1, false, { is_mine: true }), story("x", "marc", 1)], now)!;
     expect(g.mine).toBe(true);
     expect(g.items.map((p) => p.id)).toEqual(["me1", "me2"]);
-    expect(myStory([post("x", "marc", 1)], now)).toBeNull();
+    expect(myStory([story("x", "marc", 1)], now)).toBeNull();
+    expect(myStory([post("feed", "jared", 1, false, { is_mine: true })], now)).toBeNull();
   });
   it("one bubble a person, their last day in order, unseen first, never your own", () => {
     const g = crewStories([
-      post("old", "marc", 30),
-      post("m2", "marc", 2, true),
-      post("m1", "marc", 5, true),
+      story("old", "marc", 30),
+      story("m2", "marc", 2, true),
+      story("m1", "marc", 5, true),
       pulse("v1", "vicky", 3, { week_sessions: 4 }),
-      post("me", "jared", 1, false, { is_mine: true }),
+      story("me", "jared", 1, false, { is_mine: true }),
       pulse("routine", "nicole", 1, {}),
+      // Fionna's workout post is in the feed, not the stories
+      post("fw", "fionna", 1, false, { stats: stats({}) }),
     ], now);
-    // Nicole's routine session is a story too
     expect(g.map((x) => x.author.user_id)).toEqual(["nicole", "vicky", "marc"]);
     expect(g[2].items.map((p) => p.id)).toEqual(["m1", "m2"]);
     expect(g[1].unseen).toBe(true);
@@ -196,15 +204,15 @@ describe("Crew Stories", () => {
   describe("the end of the stories", () => {
     const pr = { prs: [{ exercise_name: "Squat", reps: 3, load_kg: 140, scope: "atpr" }], pr_count: 1 };
     const feed = [
-      post("f1", "fionna", 2),
+      story("f1", "fionna", 2),
       pulse("v1", "vicky", 3, pr),
-      post("m1", "marc", 5, false, { my_reaction: "heart" }),
-      post("n1", "nicole", 4),
-      post("older", "dwayne", 30), // not a story any more, not seen: new in the feed
+      story("m1", "marc", 5, false, { my_reaction: "heart" }),
+      story("n1", "nicole", 4),
+      post("older", "dwayne", 30), // a feed post, not seen: new in the feed
       post("seenfeed", "dwayne", 40, true),
       post("lastweek", "dwayne", 24 * 9),
       pulse("routine", "dwayne", 1, {}), // routine sessions never count as new posts
-      post("mine", "jared", 2, false, { is_mine: true, views: { count: 9, faces: [] } }),
+      story("mine", "jared", 2, false, { is_mine: true, views: { count: 9, faces: [] } }),
     ];
     const groups = crewStories(feed, now);
 
@@ -222,7 +230,7 @@ describe("Crew Stories", () => {
       expect(end.mine?.id).toBe("mine");
     });
     it("at most 3 hearts; with nothing of yours it offers Add yours", () => {
-      const many = [1, 2, 3, 4, 5].map((i) => post(`p${i}`, `p${i}person`, i));
+      const many = [1, 2, 3, 4, 5].map((i) => story(`p${i}`, `p${i}person`, i));
       const g = crewStories(many, now);
       const end = storyEnd(g, many, new Set(many.map((p) => p.id)), now);
       expect(end.celebrate).toHaveLength(3);

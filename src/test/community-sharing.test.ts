@@ -99,7 +99,9 @@ describe("share card data", () => {
     });
     expect(pr).toEqual({ name: "Competition Bench Press", detail: { reps: 5, load_kg: 120 }, pr: "atpr" });
     expect(isPrMoment(base)).toBe(false);
-    expect(isPrMoment({ ...base, prs: [{ exercise_name: "x", reps: 1, load_kg: 1, scope: "block_pr" }] })).toBe(true);
+    // only a headline PR is a PR moment (Nov 18 2026): a block best on an accessory isn't one
+    expect(isPrMoment({ ...base, prs: [{ exercise_name: "x", reps: 1, load_kg: 1, scope: "block_pr" }] })).toBe(false);
+    expect(isPrMoment({ ...base, prs: [{ exercise_name: "Squat", reps: 3, load_kg: 230, scope: "atpr" }] })).toBe(true);
     expect(featuredLift({ ...base, top_lift: null })).toBeNull();
   });
 

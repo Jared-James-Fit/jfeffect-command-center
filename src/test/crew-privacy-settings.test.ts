@@ -19,9 +19,9 @@ describe("privacy lives in Edit profile (Instagram's account privacy)", () => {
     expect(privacy).toContain('const staff = isSelfServe ? "The JF Effect team" : "Your coach";');
   });
 
-  it("automatic posts stay public: workout stories say so, and the server keeps them (and every coach post) on the crew", () => {
-    expect(privacy).toContain("Automatic workout stories are always public.");
-    expect(privacy).toContain("Everyone in the crew sees them.");
+  it("every coach post stays on the crew; there are no automatic workout stories to explain any more (Nov 18 2026)", () => {
+    expect(privacy).not.toContain("Automatic workout stories");
+    expect(privacy).not.toContain("ShareWorkoutsRow");
     const sql = read("supabase/migrations/20261130090000_crew_private_accounts_close_friends.sql");
     expect(sql).toContain("NOT coalesce(NEW.auto_shared, false) AND public.community_is_private(NEW.author_user_id)");
     expect(sql).toContain("AND NOT public.community_is_coach(NEW.author_user_id)");
@@ -30,6 +30,6 @@ describe("privacy lives in Edit profile (Instagram's account privacy)", () => {
   it("the profile page itself is just the profile: no settings cards between the bio and the posts", () => {
     expect(profile).not.toContain("<PrivateSwitch");
     expect(profile).not.toContain("<PulseSwitch");
-    expect(edit).toContain("<ShareWorkoutsRow />");
+    expect(edit).not.toContain("ShareWorkoutsRow");
   });
 });

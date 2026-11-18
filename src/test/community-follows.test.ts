@@ -38,9 +38,9 @@ describe("private accounts and Close Friends", () => {
     expect(pickerAudience("close_friends")).toBe("close_friends");
     expect(isCrewAudience("followers")).toBe(true);
     expect(isCrewAudience("close_friends")).toBe(false);
-    expect(storyWorthy({ visibility: "followers" })).toBe(true);
-    expect(storyWorthy({ visibility: "close_friends" })).toBe(true);
-    expect(storyWorthy({ visibility: "coach" })).toBe(false);
+    expect(storyWorthy({ visibility: "followers", story: true })).toBe(true);
+    expect(storyWorthy({ visibility: "close_friends", story: true })).toBe(true);
+    expect(storyWorthy({ visibility: "coach", story: true })).toBe(false);
     const status = { points: 15, today_earned: false, week_count: 0, week_cap: 2 } as any;
     expect(postPointsHint(status, "followers", false)?.tone).toBe("earn");
     expect(postPointsHint(status, "close_friends", false)?.tone).toBe("muted");
@@ -49,7 +49,7 @@ describe("private accounts and Close Friends", () => {
   it("Close Friends stories ring green while something in them is new", () => {
     const now = Date.UTC(2026, 9, 13, 20);
     const post = (id: string, who: string, visibility: string, seen = false) =>
-      ({ id, created_at: new Date(now - 3600e3).toISOString(), auto: false, stats: null, visibility, is_mine: false, seen, author: { user_id: who, name: who, avatar_url: null, is_coach: false } }) as any;
+      ({ id, created_at: new Date(now - 3600e3).toISOString(), auto: false, stats: null, visibility, is_mine: false, seen, story: true, author: { user_id: who, name: who, avatar_url: null, is_coach: false } }) as any;
     const g = crewStories([post("a", "ann", "close_friends"), post("b", "bob", "community"), post("c", "cat", "close_friends", true)], now);
     expect(Object.fromEntries(g.map((x) => [x.author.user_id, !!x.closeFriends]))).toEqual({ ann: true, bob: false, cat: false });
     expect(readFileSync("src/components/community/crew-stories.tsx", "utf8")).toContain('g.closeFriends ? "bg-emerald-500"');
@@ -106,7 +106,7 @@ describe("Crew Stories order", () => {
   it("new first; among new, people you follow; then the most recent", () => {
     const now = Date.UTC(2026, 9, 13, 20);
     const post = (id: string, who: string, h: number, seen = false) =>
-      ({ id, created_at: new Date(now - h * 3600e3).toISOString(), auto: false, stats: null, visibility: "community", is_mine: false, seen, author: { user_id: who, name: who, avatar_url: null, is_coach: false } }) as any;
+      ({ id, created_at: new Date(now - h * 3600e3).toISOString(), auto: false, stats: null, visibility: "community", is_mine: false, seen, story: true, author: { user_id: who, name: who, avatar_url: null, is_coach: false } }) as any;
     const posts = [post("a", "ann", 1), post("b", "bob", 3), post("c", "cat", 2, true)];
     expect(crewStories(posts, now).map((g) => g.author.user_id)).toEqual(["ann", "bob", "cat"]);
     expect(crewStories(posts, now, new Set(["bob"])).map((g) => g.author.user_id)).toEqual(["bob", "ann", "cat"]);
