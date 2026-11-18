@@ -92,6 +92,163 @@ export type Database = {
         }
         Relationships: []
       }
+      accessory_flow_backup: {
+        Row: {
+          batch: string
+          changed_at: string
+          client_id: string | null
+          day_id: string
+          field: string
+          id: number
+          new_value: string | null
+          old_value: string | null
+          row_id: string
+        }
+        Insert: {
+          batch: string
+          changed_at?: string
+          client_id?: string | null
+          day_id: string
+          field: string
+          id?: number
+          new_value?: string | null
+          old_value?: string | null
+          row_id: string
+        }
+        Update: {
+          batch?: string
+          changed_at?: string
+          client_id?: string | null
+          day_id?: string
+          field?: string
+          id?: number
+          new_value?: string | null
+          old_value?: string | null
+          row_id?: string
+        }
+        Relationships: []
+      }
+      account_deletions: {
+        Row: {
+          attempts: number
+          client_id: string | null
+          deleted_at: string | null
+          email: string | null
+          id: string
+          last_error: string | null
+          member_id: string | null
+          name: string | null
+          prior: Json
+          purge_after: string
+          reason: string | null
+          requested_at: string
+          requested_by: string | null
+          restored_at: string | null
+          restored_by: string | null
+          result: Json | null
+          source: string
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          client_id?: string | null
+          deleted_at?: string | null
+          email?: string | null
+          id?: string
+          last_error?: string | null
+          member_id?: string | null
+          name?: string | null
+          prior?: Json
+          purge_after?: string
+          reason?: string | null
+          requested_at?: string
+          requested_by?: string | null
+          restored_at?: string | null
+          restored_by?: string | null
+          result?: Json | null
+          source: string
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          client_id?: string | null
+          deleted_at?: string | null
+          email?: string | null
+          id?: string
+          last_error?: string | null
+          member_id?: string | null
+          name?: string | null
+          prior?: Json
+          purge_after?: string
+          reason?: string | null
+          requested_at?: string
+          requested_by?: string | null
+          restored_at?: string | null
+          restored_by?: string | null
+          result?: Json | null
+          source?: string
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_deletions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_deletions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "account_deletions_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "app_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      account_lifecycle_events: {
+        Row: {
+          actor_role: string
+          actor_user_id: string | null
+          client_id: string | null
+          created_at: string
+          details: Json
+          event: string
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          actor_role: string
+          actor_user_id?: string | null
+          client_id?: string | null
+          created_at?: string
+          details?: Json
+          event: string
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          actor_role?: string
+          actor_user_id?: string | null
+          client_id?: string | null
+          created_at?: string
+          details?: Json
+          event?: string
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       admin_audit_log: {
         Row: {
           action: string
@@ -476,6 +633,162 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      ai_credit_events: {
+        Row: {
+          allowance_delta: number
+          cost_usd: number | null
+          created_at: string
+          created_by: string | null
+          credits: number
+          extra_delta: number
+          feature: string | null
+          id: string
+          input_tokens: number | null
+          kind: string
+          model: string | null
+          note: string | null
+          output_tokens: number | null
+          period_start: string | null
+          ref: string | null
+          status: string | null
+          use_id: string | null
+          user_id: string
+        }
+        Insert: {
+          allowance_delta?: number
+          cost_usd?: number | null
+          created_at?: string
+          created_by?: string | null
+          credits?: number
+          extra_delta?: number
+          feature?: string | null
+          id?: string
+          input_tokens?: number | null
+          kind: string
+          model?: string | null
+          note?: string | null
+          output_tokens?: number | null
+          period_start?: string | null
+          ref?: string | null
+          status?: string | null
+          use_id?: string | null
+          user_id: string
+        }
+        Update: {
+          allowance_delta?: number
+          cost_usd?: number | null
+          created_at?: string
+          created_by?: string | null
+          credits?: number
+          extra_delta?: number
+          feature?: string | null
+          id?: string
+          input_tokens?: number | null
+          kind?: string
+          model?: string | null
+          note?: string | null
+          output_tokens?: number | null
+          period_start?: string | null
+          ref?: string | null
+          status?: string | null
+          use_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_credit_purchases: {
+        Row: {
+          amount_minor: number
+          client_id: string | null
+          created_at: string
+          credits: number
+          credits_reversed: number
+          currency: string
+          id: string
+          pack: string
+          paid_at: string
+          refunded_at: string | null
+          refunded_minor: number
+          status: string
+          stripe_checkout_session_id: string
+          stripe_customer_id: string | null
+          stripe_mode: string | null
+          stripe_payment_intent_id: string | null
+          tax_minor: number
+          total_minor: number
+          user_id: string
+        }
+        Insert: {
+          amount_minor: number
+          client_id?: string | null
+          created_at?: string
+          credits: number
+          credits_reversed?: number
+          currency?: string
+          id?: string
+          pack: string
+          paid_at?: string
+          refunded_at?: string | null
+          refunded_minor?: number
+          status?: string
+          stripe_checkout_session_id: string
+          stripe_customer_id?: string | null
+          stripe_mode?: string | null
+          stripe_payment_intent_id?: string | null
+          tax_minor?: number
+          total_minor: number
+          user_id: string
+        }
+        Update: {
+          amount_minor?: number
+          client_id?: string | null
+          created_at?: string
+          credits?: number
+          credits_reversed?: number
+          currency?: string
+          id?: string
+          pack?: string
+          paid_at?: string
+          refunded_at?: string | null
+          refunded_minor?: number
+          status?: string
+          stripe_checkout_session_id?: string
+          stripe_customer_id?: string | null
+          stripe_mode?: string | null
+          stripe_payment_intent_id?: string | null
+          tax_minor?: number
+          total_minor?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_credit_wallets: {
+        Row: {
+          created_at: string
+          extra: number
+          period_start: string
+          period_used: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          extra?: number
+          period_start: string
+          period_used?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          extra?: number
+          period_start?: string
+          period_used?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       app_members: {
         Row: {
@@ -1157,6 +1470,125 @@ export type Database = {
         }
         Relationships: []
       }
+      athlete_competition_plans: {
+        Row: {
+          changes: Json
+          client_id: string
+          created_at: string
+          goal_set: boolean
+          id: string
+          plan: Json
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          submission_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          changes?: Json
+          client_id: string
+          created_at?: string
+          goal_set?: boolean
+          id?: string
+          plan: Json
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submission_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          changes?: Json
+          client_id?: string
+          created_at?: string
+          goal_set?: boolean
+          id?: string
+          plan?: Json
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submission_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_competition_plans_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athlete_competition_plans_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "athlete_competition_plans_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "nf_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      athlete_competition_profiles: {
+        Row: {
+          age_classes: string[]
+          client_id: string
+          created_at: string
+          source: string
+          source_submission_id: string | null
+          updated_at: string
+          updated_by: string | null
+          weight_class: string | null
+        }
+        Insert: {
+          age_classes?: string[]
+          client_id: string
+          created_at?: string
+          source?: string
+          source_submission_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          weight_class?: string | null
+        }
+        Update: {
+          age_classes?: string[]
+          client_id?: string
+          created_at?: string
+          source?: string
+          source_submission_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          weight_class?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_competition_profiles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athlete_competition_profiles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "athlete_competition_profiles_source_submission_id_fkey"
+            columns: ["source_submission_id"]
+            isOneToOne: false
+            referencedRelation: "nf_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       athlete_powerlifting_results: {
         Row: {
           athlete_id: string | null
@@ -1290,6 +1722,115 @@ export type Database = {
           },
         ]
       }
+      athlete_program_starts: {
+        Row: {
+          first_at: string
+          program_id: string
+          user_id: string
+        }
+        Insert: {
+          first_at?: string
+          program_id: string
+          user_id: string
+        }
+        Update: {
+          first_at?: string
+          program_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_program_starts_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      athlete_programs: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          days: Json
+          days_per_week: number
+          description: string | null
+          exercise_count: number
+          forked_from: string | null
+          forked_from_owner: string | null
+          goal: string | null
+          hidden_at: string | null
+          hidden_by: string | null
+          hidden_reason: string | null
+          id: string
+          level: string | null
+          owner_id: string
+          published_at: string | null
+          save_count: number
+          start_count: number
+          title: string
+          updated_at: string
+          visibility: string
+          weeks: number
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          days?: Json
+          days_per_week?: number
+          description?: string | null
+          exercise_count?: number
+          forked_from?: string | null
+          forked_from_owner?: string | null
+          goal?: string | null
+          hidden_at?: string | null
+          hidden_by?: string | null
+          hidden_reason?: string | null
+          id?: string
+          level?: string | null
+          owner_id: string
+          published_at?: string | null
+          save_count?: number
+          start_count?: number
+          title: string
+          updated_at?: string
+          visibility?: string
+          weeks?: number
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          days?: Json
+          days_per_week?: number
+          description?: string | null
+          exercise_count?: number
+          forked_from?: string | null
+          forked_from_owner?: string | null
+          goal?: string | null
+          hidden_at?: string | null
+          hidden_by?: string | null
+          hidden_reason?: string | null
+          id?: string
+          level?: string | null
+          owner_id?: string
+          published_at?: string | null
+          save_count?: number
+          start_count?: number
+          title?: string
+          updated_at?: string
+          visibility?: string
+          weeks?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_programs_forked_from_fkey"
+            columns: ["forked_from"]
+            isOneToOne: false
+            referencedRelation: "athlete_programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       athlete_xp_events: {
         Row: {
           client_id: string
@@ -1344,6 +1885,116 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "coaching_agreement_client_status"
             referencedColumns: ["client_id"]
+          },
+        ]
+      }
+      auto_pay_changes: {
+        Row: {
+          cancelled_at: string | null
+          checkout_expires_at: string | null
+          checkout_session_id: string | null
+          checkout_url: string | null
+          client_id: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          each_cents: number
+          every: string
+          first_charge_date: string | null
+          id: string
+          message_id: string | null
+          new_subscription_id: string | null
+          note: string | null
+          replaced_cancel_error: string | null
+          replaces_sale_id: string | null
+          replaces_subscription_id: string | null
+          sale_id: string
+          status: string
+          stripe_mode: string | null
+          stripe_price_id: string | null
+          stripe_product_id: string | null
+          token: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          checkout_expires_at?: string | null
+          checkout_session_id?: string | null
+          checkout_url?: string | null
+          client_id: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          each_cents: number
+          every: string
+          first_charge_date?: string | null
+          id?: string
+          message_id?: string | null
+          new_subscription_id?: string | null
+          note?: string | null
+          replaced_cancel_error?: string | null
+          replaces_sale_id?: string | null
+          replaces_subscription_id?: string | null
+          sale_id: string
+          status?: string
+          stripe_mode?: string | null
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          token: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          checkout_expires_at?: string | null
+          checkout_session_id?: string | null
+          checkout_url?: string | null
+          client_id?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          each_cents?: number
+          every?: string
+          first_charge_date?: string | null
+          id?: string
+          message_id?: string | null
+          new_subscription_id?: string | null
+          note?: string | null
+          replaced_cancel_error?: string | null
+          replaces_sale_id?: string | null
+          replaces_subscription_id?: string | null
+          sale_id?: string
+          status?: string
+          stripe_mode?: string | null
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auto_pay_changes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auto_pay_changes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "auto_pay_changes_replaces_sale_id_fkey"
+            columns: ["replaces_sale_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auto_pay_changes_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_records"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1464,6 +2115,60 @@ export type Database = {
         }
         Relationships: []
       }
+      booking_availability: {
+        Row: {
+          id: boolean
+          settings: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: boolean
+          settings?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: boolean
+          settings?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      booking_availability_overrides: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          date: string
+          end_time: string | null
+          id: string
+          kind: string
+          note: string | null
+          start_time: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          date: string
+          end_time?: string | null
+          id?: string
+          kind: string
+          note?: string | null
+          start_time?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          end_time?: string | null
+          id?: string
+          kind?: string
+          note?: string | null
+          start_time?: string | null
+        }
+        Relationships: []
+      }
       booking_card_hours: {
         Row: {
           booking_card_id: string
@@ -1512,6 +2217,7 @@ export type Database = {
           default_notes: string | null
           description: string | null
           duration_minutes: number
+          follows_smart: boolean
           id: string
           is_active: boolean
           location: string | null
@@ -1544,6 +2250,7 @@ export type Database = {
           default_notes?: string | null
           description?: string | null
           duration_minutes?: number
+          follows_smart?: boolean
           id?: string
           is_active?: boolean
           location?: string | null
@@ -1576,6 +2283,7 @@ export type Database = {
           default_notes?: string | null
           description?: string | null
           duration_minutes?: number
+          follows_smart?: boolean
           id?: string
           is_active?: boolean
           location?: string | null
@@ -1916,6 +2624,7 @@ export type Database = {
           payment_method: string | null
           receipt_mime: string | null
           receipt_path: string | null
+          recurring_id: string | null
           source: string
           status: string
           tax_minor: number
@@ -1938,6 +2647,7 @@ export type Database = {
           payment_method?: string | null
           receipt_mime?: string | null
           receipt_path?: string | null
+          recurring_id?: string | null
           source?: string
           status?: string
           tax_minor?: number
@@ -1960,13 +2670,93 @@ export type Database = {
           payment_method?: string | null
           receipt_mime?: string | null
           receipt_path?: string | null
+          recurring_id?: string | null
           source?: string
           status?: string
           tax_minor?: number
           updated_at?: string
           vendor?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "business_expenses_recurring_id_fkey"
+            columns: ["recurring_id"]
+            isOneToOne: false
+            referencedRelation: "business_recurring_expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_other_income: {
+        Row: {
+          amount_minor: number
+          created_at: string
+          created_by: string | null
+          currency: string
+          deposit_account_id: string | null
+          description: string | null
+          id: string
+          kind: string
+          method: string | null
+          no_tax_reason: string | null
+          notes: string | null
+          payer: string | null
+          proof_mime: string | null
+          proof_path: string | null
+          received_on: string
+          reference: string | null
+          tax_minor: number
+          updated_at: string
+        }
+        Insert: {
+          amount_minor: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          deposit_account_id?: string | null
+          description?: string | null
+          id?: string
+          kind?: string
+          method?: string | null
+          no_tax_reason?: string | null
+          notes?: string | null
+          payer?: string | null
+          proof_mime?: string | null
+          proof_path?: string | null
+          received_on: string
+          reference?: string | null
+          tax_minor?: number
+          updated_at?: string
+        }
+        Update: {
+          amount_minor?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          deposit_account_id?: string | null
+          description?: string | null
+          id?: string
+          kind?: string
+          method?: string | null
+          no_tax_reason?: string | null
+          notes?: string | null
+          payer?: string | null
+          proof_mime?: string | null
+          proof_path?: string | null
+          received_on?: string
+          reference?: string | null
+          tax_minor?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_other_income_deposit_account_id_fkey"
+            columns: ["deposit_account_id"]
+            isOneToOne: false
+            referencedRelation: "deposit_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       business_owners: {
         Row: {
@@ -1980,6 +2770,69 @@ export type Database = {
         Update: {
           created_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      business_recurring_expenses: {
+        Row: {
+          active: boolean
+          amount_minor: number
+          business_use_pct: number
+          category: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          day_of_month: number
+          description: string | null
+          every: string
+          id: string
+          last_added_on: string | null
+          next_on: string
+          notes: string | null
+          payment_method: string | null
+          tax_minor: number
+          updated_at: string
+          vendor: string
+        }
+        Insert: {
+          active?: boolean
+          amount_minor: number
+          business_use_pct?: number
+          category: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          day_of_month: number
+          description?: string | null
+          every: string
+          id?: string
+          last_added_on?: string | null
+          next_on: string
+          notes?: string | null
+          payment_method?: string | null
+          tax_minor?: number
+          updated_at?: string
+          vendor: string
+        }
+        Update: {
+          active?: boolean
+          amount_minor?: number
+          business_use_pct?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          day_of_month?: number
+          description?: string | null
+          every?: string
+          id?: string
+          last_added_on?: string | null
+          next_on?: string
+          notes?: string | null
+          payment_method?: string | null
+          tax_minor?: number
+          updated_at?: string
+          vendor?: string
         }
         Relationships: []
       }
@@ -2073,6 +2926,24 @@ export type Database = {
           stripe_fees_synced_at?: string | null
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      calendar_view_prefs: {
+        Row: {
+          prefs: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          prefs?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          prefs?: Json
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -2341,6 +3212,849 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "coaching_agreement_client_status"
             referencedColumns: ["client_id"]
+          },
+        ]
+      }
+      challenge_attempts: {
+        Row: {
+          attempt_no: number
+          challenge_id: string
+          client_key: string
+          created_at: string
+          entry_id: string
+          id: string
+          is_tiebreak: boolean
+          judge_id: string | null
+          note: string | null
+          replaces: string | null
+          status: string
+          valid: boolean
+          value: number | null
+          video_url: string | null
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          attempt_no: number
+          challenge_id: string
+          client_key: string
+          created_at?: string
+          entry_id: string
+          id?: string
+          is_tiebreak?: boolean
+          judge_id?: string | null
+          note?: string | null
+          replaces?: string | null
+          status?: string
+          valid: boolean
+          value?: number | null
+          video_url?: string | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          attempt_no?: number
+          challenge_id?: string
+          client_key?: string
+          created_at?: string
+          entry_id?: string
+          id?: string
+          is_tiebreak?: boolean
+          judge_id?: string | null
+          note?: string | null
+          replaces?: string | null
+          status?: string
+          valid?: boolean
+          value?: number | null
+          video_url?: string | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_attempts_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_attempts_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "challenge_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_attempts_replaces_fkey"
+            columns: ["replaces"]
+            isOneToOne: false
+            referencedRelation: "challenge_attempts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_audit: {
+        Row: {
+          action: string
+          actor: string | null
+          challenge_id: string | null
+          created_at: string
+          detail: Json
+          entity: string
+          entity_id: string | null
+          id: number
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          challenge_id?: string | null
+          created_at?: string
+          detail?: Json
+          entity: string
+          entity_id?: string | null
+          id?: never
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          challenge_id?: string | null
+          created_at?: string
+          detail?: Json
+          entity?: string
+          entity_id?: string | null
+          id?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_audit_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_divisions: {
+        Row: {
+          challenge_id: string
+          created_at: string
+          id: string
+          load_label: string | null
+          name: string
+          sort: number
+        }
+        Insert: {
+          challenge_id: string
+          created_at?: string
+          id?: string
+          load_label?: string | null
+          name: string
+          sort?: number
+        }
+        Update: {
+          challenge_id?: string
+          created_at?: string
+          id?: string
+          load_label?: string | null
+          name?: string
+          sort?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_divisions_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_entries: {
+        Row: {
+          acknowledged: Json
+          acknowledged_at: string
+          bib: number
+          bodyweight_kg: number | null
+          challenge_id: string
+          created_at: string
+          division_id: string | null
+          id: string
+          person_id: string
+          public_name: string
+          ref_source: string | null
+          referred_by: string | null
+          registered_by: string | null
+          share_code: string
+          show_photo: boolean
+          source: string
+          status: string
+          status_reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          acknowledged?: Json
+          acknowledged_at?: string
+          bib: number
+          bodyweight_kg?: number | null
+          challenge_id: string
+          created_at?: string
+          division_id?: string | null
+          id?: string
+          person_id: string
+          public_name: string
+          ref_source?: string | null
+          referred_by?: string | null
+          registered_by?: string | null
+          share_code: string
+          show_photo?: boolean
+          source: string
+          status?: string
+          status_reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          acknowledged?: Json
+          acknowledged_at?: string
+          bib?: number
+          bodyweight_kg?: number | null
+          challenge_id?: string
+          created_at?: string
+          division_id?: string | null
+          id?: string
+          person_id?: string
+          public_name?: string
+          ref_source?: string | null
+          referred_by?: string | null
+          registered_by?: string | null
+          share_code?: string
+          show_photo?: boolean
+          source?: string
+          status?: string
+          status_reason?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_entries_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_entries_division_id_fkey"
+            columns: ["division_id"]
+            isOneToOne: false
+            referencedRelation: "challenge_divisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_entries_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "challenge_people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_entries_referred_by_fkey"
+            columns: ["referred_by"]
+            isOneToOne: false
+            referencedRelation: "challenge_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_live: {
+        Row: {
+          challenge_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          challenge_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          challenge_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_live_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: true
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_metrics: {
+        Row: {
+          challenge_id: string | null
+          created_at: string
+          entry_id: string | null
+          id: number
+          kind: string
+          person_id: string | null
+          visitor: string
+        }
+        Insert: {
+          challenge_id?: string | null
+          created_at?: string
+          entry_id?: string | null
+          id?: never
+          kind: string
+          person_id?: string | null
+          visitor: string
+        }
+        Update: {
+          challenge_id?: string | null
+          created_at?: string
+          entry_id?: string | null
+          id?: never
+          kind?: string
+          person_id?: string | null
+          visitor?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_metrics_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_metrics_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "challenge_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_metrics_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "challenge_people"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_now: {
+        Row: {
+          challenge_id: string
+          entry_id: string
+          live_value: number | null
+          started_at: string
+          updated_at: string
+        }
+        Insert: {
+          challenge_id: string
+          entry_id: string
+          live_value?: number | null
+          started_at?: string
+          updated_at?: string
+        }
+        Update: {
+          challenge_id?: string
+          entry_id?: string
+          live_value?: number | null
+          started_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_now_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: true
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_now_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "challenge_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_people: {
+        Row: {
+          created_at: string
+          discoverable: boolean
+          display_name: string
+          handle: string
+          id: string
+          photo_path: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          discoverable?: boolean
+          display_name: string
+          handle: string
+          id?: string
+          photo_path?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          discoverable?: boolean
+          display_name?: string
+          handle?: string
+          id?: string
+          photo_path?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      challenge_people_private: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string
+          instagram: string | null
+          marketing_opt_in: boolean
+          marketing_opt_in_at: string | null
+          person_id: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name: string
+          instagram?: string | null
+          marketing_opt_in?: boolean
+          marketing_opt_in_at?: string | null
+          person_id: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string
+          instagram?: string | null
+          marketing_opt_in?: boolean
+          marketing_opt_in_at?: string | null
+          person_id?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_people_private_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: true
+            referencedRelation: "challenge_people"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_photo_tickets: {
+        Row: {
+          created_at: string
+          entry_id: string | null
+          expires_at: string
+          person_id: string
+          token_hash: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          entry_id?: string | null
+          expires_at?: string
+          person_id: string
+          token_hash: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          entry_id?: string | null
+          expires_at?: string
+          person_id?: string
+          token_hash?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_photo_tickets_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "challenge_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_photo_tickets_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "challenge_people"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_prizes: {
+        Row: {
+          challenge_id: string
+          claim_by: string | null
+          claimed_at: string | null
+          collection_notes: string | null
+          created_at: string
+          division_id: string | null
+          fulfillment_notes: string | null
+          id: string
+          notified_at: string | null
+          notified_via: string | null
+          place: number
+          sponsor_id: string | null
+          status: string
+          title: string
+          updated_at: string
+          value_cents: number | null
+          winner_entry_id: string | null
+          winner_source: string | null
+        }
+        Insert: {
+          challenge_id: string
+          claim_by?: string | null
+          claimed_at?: string | null
+          collection_notes?: string | null
+          created_at?: string
+          division_id?: string | null
+          fulfillment_notes?: string | null
+          id?: string
+          notified_at?: string | null
+          notified_via?: string | null
+          place?: number
+          sponsor_id?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          value_cents?: number | null
+          winner_entry_id?: string | null
+          winner_source?: string | null
+        }
+        Update: {
+          challenge_id?: string
+          claim_by?: string | null
+          claimed_at?: string | null
+          collection_notes?: string | null
+          created_at?: string
+          division_id?: string | null
+          fulfillment_notes?: string | null
+          id?: string
+          notified_at?: string | null
+          notified_via?: string | null
+          place?: number
+          sponsor_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          value_cents?: number | null
+          winner_entry_id?: string | null
+          winner_source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_prizes_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_prizes_division_id_fkey"
+            columns: ["division_id"]
+            isOneToOne: false
+            referencedRelation: "challenge_divisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_prizes_sponsor_id_fkey"
+            columns: ["sponsor_id"]
+            isOneToOne: false
+            referencedRelation: "challenge_sponsors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_prizes_winner_entry_id_fkey"
+            columns: ["winner_entry_id"]
+            isOneToOne: false
+            referencedRelation: "challenge_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_rate: {
+        Row: {
+          at: string
+          key: string
+        }
+        Insert: {
+          at?: string
+          key: string
+        }
+        Update: {
+          at?: string
+          key?: string
+        }
+        Relationships: []
+      }
+      challenge_sponsors: {
+        Row: {
+          blurb: string | null
+          challenge_id: string
+          contribution_cents: number | null
+          created_at: string
+          id: string
+          logo_path: string | null
+          name: string
+          sort: number
+          url: string | null
+        }
+        Insert: {
+          blurb?: string | null
+          challenge_id: string
+          contribution_cents?: number | null
+          created_at?: string
+          id?: string
+          logo_path?: string | null
+          name: string
+          sort?: number
+          url?: string | null
+        }
+        Update: {
+          blurb?: string | null
+          challenge_id?: string
+          contribution_cents?: number | null
+          created_at?: string
+          id?: string
+          logo_path?: string | null
+          name?: string
+          sort?: number
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_sponsors_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_staff: {
+        Row: {
+          added_by: string | null
+          challenge_id: string
+          created_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          added_by?: string | null
+          challenge_id: string
+          created_at?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          added_by?: string | null
+          challenge_id?: string
+          created_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_staff_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenges: {
+        Row: {
+          acknowledgments: Json
+          activity: string
+          address: string | null
+          aggregate: string
+          announcement: string | null
+          announcement_at: string | null
+          attempts_allowed: number
+          city: string | null
+          collect: Json
+          cover_path: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          direction: string
+          duplicated_from: string | null
+          eligibility: string | null
+          ended_at: string | null
+          ends_at: string | null
+          entry_fee_label: string | null
+          exercise_id: string | null
+          final_by: string | null
+          id: string
+          is_template: boolean
+          is_test: boolean
+          load_label: string | null
+          max_participants: number | null
+          measure: string
+          min_age: number
+          objective: string | null
+          prize_summary: string | null
+          registration_closes_at: string | null
+          registration_opens_at: string | null
+          relative_to_bodyweight: boolean
+          results_final_at: string | null
+          rules: Json
+          safety: string | null
+          self_registration: boolean
+          slug: string
+          started_at: string | null
+          starts_at: string | null
+          status: string
+          tagline: string | null
+          tiebreak: string
+          timezone: string
+          title: string
+          unit: string
+          updated_at: string
+          venue_name: string | null
+          warmup: string | null
+        }
+        Insert: {
+          acknowledgments?: Json
+          activity: string
+          address?: string | null
+          aggregate?: string
+          announcement?: string | null
+          announcement_at?: string | null
+          attempts_allowed?: number
+          city?: string | null
+          collect?: Json
+          cover_path?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          direction: string
+          duplicated_from?: string | null
+          eligibility?: string | null
+          ended_at?: string | null
+          ends_at?: string | null
+          entry_fee_label?: string | null
+          exercise_id?: string | null
+          final_by?: string | null
+          id?: string
+          is_template?: boolean
+          is_test?: boolean
+          load_label?: string | null
+          max_participants?: number | null
+          measure: string
+          min_age?: number
+          objective?: string | null
+          prize_summary?: string | null
+          registration_closes_at?: string | null
+          registration_opens_at?: string | null
+          relative_to_bodyweight?: boolean
+          results_final_at?: string | null
+          rules?: Json
+          safety?: string | null
+          self_registration?: boolean
+          slug: string
+          started_at?: string | null
+          starts_at?: string | null
+          status?: string
+          tagline?: string | null
+          tiebreak?: string
+          timezone?: string
+          title: string
+          unit: string
+          updated_at?: string
+          venue_name?: string | null
+          warmup?: string | null
+        }
+        Update: {
+          acknowledgments?: Json
+          activity?: string
+          address?: string | null
+          aggregate?: string
+          announcement?: string | null
+          announcement_at?: string | null
+          attempts_allowed?: number
+          city?: string | null
+          collect?: Json
+          cover_path?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          direction?: string
+          duplicated_from?: string | null
+          eligibility?: string | null
+          ended_at?: string | null
+          ends_at?: string | null
+          entry_fee_label?: string | null
+          exercise_id?: string | null
+          final_by?: string | null
+          id?: string
+          is_template?: boolean
+          is_test?: boolean
+          load_label?: string | null
+          max_participants?: number | null
+          measure?: string
+          min_age?: number
+          objective?: string | null
+          prize_summary?: string | null
+          registration_closes_at?: string | null
+          registration_opens_at?: string | null
+          relative_to_bodyweight?: boolean
+          results_final_at?: string | null
+          rules?: Json
+          safety?: string | null
+          self_registration?: boolean
+          slug?: string
+          started_at?: string | null
+          starts_at?: string | null
+          status?: string
+          tagline?: string | null
+          tiebreak?: string
+          timezone?: string
+          title?: string
+          unit?: string
+          updated_at?: string
+          venue_name?: string | null
+          warmup?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenges_duplicated_from_fkey"
+            columns: ["duplicated_from"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenges_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3649,6 +5363,7 @@ export type Database = {
           quick_note_id: string | null
           source: string
           title: string
+          topic: string | null
           updated_at: string
           updated_by: string | null
         }
@@ -3665,6 +5380,7 @@ export type Database = {
           quick_note_id?: string | null
           source?: string
           title?: string
+          topic?: string | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -3681,6 +5397,7 @@ export type Database = {
           quick_note_id?: string | null
           source?: string
           title?: string
+          topic?: string | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -3694,6 +5411,48 @@ export type Database = {
           },
           {
             foreignKeyName: "client_file_notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+        ]
+      }
+      client_food_history_dismissals: {
+        Row: {
+          client_id: string
+          created_at: string
+          dismissed_by: string | null
+          id: string
+          key: string
+          kind: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          dismissed_by?: string | null
+          id?: string
+          key: string
+          kind: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          dismissed_by?: string | null
+          id?: string
+          key?: string
+          kind?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_food_history_dismissals_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_food_history_dismissals_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "coaching_agreement_client_status"
@@ -3970,6 +5729,114 @@ export type Database = {
           },
           {
             foreignKeyName: "client_google_calendars_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+        ]
+      }
+      client_health_items: {
+        Row: {
+          body_area: string | null
+          client_id: string
+          coach_only: boolean
+          created_at: string
+          created_by: string | null
+          details: string | null
+          id: string
+          kind: string
+          label: string
+          resolved_on: string | null
+          since: string | null
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          body_area?: string | null
+          client_id: string
+          coach_only?: boolean
+          created_at?: string
+          created_by?: string | null
+          details?: string | null
+          id?: string
+          kind: string
+          label: string
+          resolved_on?: string | null
+          since?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          body_area?: string | null
+          client_id?: string
+          coach_only?: boolean
+          created_at?: string
+          created_by?: string | null
+          details?: string | null
+          id?: string
+          kind?: string
+          label?: string
+          resolved_on?: string | null
+          since?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_health_items_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_health_items_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+        ]
+      }
+      client_health_profiles: {
+        Row: {
+          client_id: string
+          drug_tested: boolean | null
+          federation: string | null
+          supplement_budget: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          client_id: string
+          drug_tested?: boolean | null
+          federation?: string | null
+          supplement_budget?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          client_id?: string
+          drug_tested?: boolean | null
+          federation?: string | null
+          supplement_budget?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_health_profiles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_health_profiles_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: true
             referencedRelation: "coaching_agreement_client_status"
@@ -4276,10 +6143,13 @@ export type Database = {
           country: string | null
           created_at: string
           date_of_birth: string | null
+          deactivate_at: string | null
           deactivated_at: string | null
           deactivated_by: string | null
           deactivation_note: string | null
+          deactivation_prior: Json | null
           deactivation_reason: string | null
+          deactivation_source: string | null
           default_session_location: string | null
           drive_folder_link: string | null
           email: string | null
@@ -4467,10 +6337,13 @@ export type Database = {
           country?: string | null
           created_at?: string
           date_of_birth?: string | null
+          deactivate_at?: string | null
           deactivated_at?: string | null
           deactivated_by?: string | null
           deactivation_note?: string | null
+          deactivation_prior?: Json | null
           deactivation_reason?: string | null
+          deactivation_source?: string | null
           default_session_location?: string | null
           drive_folder_link?: string | null
           email?: string | null
@@ -4658,10 +6531,13 @@ export type Database = {
           country?: string | null
           created_at?: string
           date_of_birth?: string | null
+          deactivate_at?: string | null
           deactivated_at?: string | null
           deactivated_by?: string | null
           deactivation_note?: string | null
+          deactivation_prior?: Json | null
           deactivation_reason?: string | null
+          deactivation_source?: string | null
           default_session_location?: string | null
           drive_folder_link?: string | null
           email?: string | null
@@ -5490,6 +7366,77 @@ export type Database = {
         }
         Relationships: []
       }
+      coaching_application_drafts: {
+        Row: {
+          answered: number
+          created_at: string
+          dismissed_at: string | null
+          email: string | null
+          full_name: string | null
+          id: string
+          instagram: string | null
+          main_goal: string | null
+          page_url: string | null
+          phone: string | null
+          referrer: string | null
+          source_page: string | null
+          step: string | null
+          submitted_application_id: string | null
+          submitted_at: string | null
+          target_outcome: string | null
+          timeline: string | null
+          updated_at: string
+        }
+        Insert: {
+          answered?: number
+          created_at?: string
+          dismissed_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id: string
+          instagram?: string | null
+          main_goal?: string | null
+          page_url?: string | null
+          phone?: string | null
+          referrer?: string | null
+          source_page?: string | null
+          step?: string | null
+          submitted_application_id?: string | null
+          submitted_at?: string | null
+          target_outcome?: string | null
+          timeline?: string | null
+          updated_at?: string
+        }
+        Update: {
+          answered?: number
+          created_at?: string
+          dismissed_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          instagram?: string | null
+          main_goal?: string | null
+          page_url?: string | null
+          phone?: string | null
+          referrer?: string | null
+          source_page?: string | null
+          step?: string | null
+          submitted_application_id?: string | null
+          submitted_at?: string | null
+          target_outcome?: string | null
+          timeline?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coaching_application_drafts_submitted_application_id_fkey"
+            columns: ["submitted_application_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coaching_applications: {
         Row: {
           application_source: string | null
@@ -5712,6 +7659,62 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "coaching_agreement_client_status"
             referencedColumns: ["client_id"]
+          },
+        ]
+      }
+      coaching_lead_replies: {
+        Row: {
+          application_id: string
+          attempts: number
+          brief: Json | null
+          copied_at: string | null
+          created_at: string
+          error: string | null
+          follow_up: string | null
+          generated_at: string | null
+          instructions: string | null
+          model: string | null
+          reply: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          application_id: string
+          attempts?: number
+          brief?: Json | null
+          copied_at?: string | null
+          created_at?: string
+          error?: string | null
+          follow_up?: string | null
+          generated_at?: string | null
+          instructions?: string | null
+          model?: string | null
+          reply?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          application_id?: string
+          attempts?: number
+          brief?: Json | null
+          copied_at?: string | null
+          created_at?: string
+          error?: string | null
+          follow_up?: string | null
+          generated_at?: string | null
+          instructions?: string | null
+          model?: string | null
+          reply?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coaching_lead_replies_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: true
+            referencedRelation: "coaching_applications"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -6121,6 +8124,220 @@ export type Database = {
           },
         ]
       }
+      community_daily_visual_tests: {
+        Row: {
+          created_at: string
+          data: Json
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          data: Json
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          id?: string
+        }
+        Relationships: []
+      }
+      community_daily_visual_versions: {
+        Row: {
+          ai_line: string | null
+          audience: string | null
+          caption: string | null
+          coach_line: string | null
+          concept: Json | null
+          created_at: string
+          created_by: string | null
+          day: string
+          format: string | null
+          id: string
+          picture: Json | null
+          picture_provider: string | null
+          post_id: string | null
+          reason: string
+          review: Json | null
+          shot: string | null
+          style: string | null
+          topic: string | null
+          verse_ref: string | null
+          verse_text: string | null
+          visual_id: string
+        }
+        Insert: {
+          ai_line?: string | null
+          audience?: string | null
+          caption?: string | null
+          coach_line?: string | null
+          concept?: Json | null
+          created_at?: string
+          created_by?: string | null
+          day: string
+          format?: string | null
+          id?: string
+          picture?: Json | null
+          picture_provider?: string | null
+          post_id?: string | null
+          reason?: string
+          review?: Json | null
+          shot?: string | null
+          style?: string | null
+          topic?: string | null
+          verse_ref?: string | null
+          verse_text?: string | null
+          visual_id: string
+        }
+        Update: {
+          ai_line?: string | null
+          audience?: string | null
+          caption?: string | null
+          coach_line?: string | null
+          concept?: Json | null
+          created_at?: string
+          created_by?: string | null
+          day?: string
+          format?: string | null
+          id?: string
+          picture?: Json | null
+          picture_provider?: string | null
+          post_id?: string | null
+          reason?: string
+          review?: Json | null
+          shot?: string | null
+          style?: string | null
+          topic?: string | null
+          verse_ref?: string | null
+          verse_text?: string | null
+          visual_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_daily_visual_versions_visual_id_fkey"
+            columns: ["visual_id"]
+            isOneToOne: false
+            referencedRelation: "community_daily_visuals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_daily_visuals: {
+        Row: {
+          ai_line: string | null
+          approved_at: string | null
+          approved_by: string | null
+          attempts: number
+          audience: string
+          candidate: Json | null
+          coach_line: string | null
+          concept: Json | null
+          created_at: string
+          day: string
+          error: string | null
+          faith: boolean
+          format: string | null
+          id: string
+          learned: Json | null
+          made_at: string | null
+          max_chars: number | null
+          model: string | null
+          picture: Json | null
+          picture_provider: string | null
+          post_id: string | null
+          regen: string | null
+          regen_reason: string | null
+          regen_style: string | null
+          review: Json | null
+          shot: string | null
+          status: string
+          style: string | null
+          theme: string
+          topic: string | null
+          updated_at: string
+          verse_ref: string | null
+          verse_text: string | null
+        }
+        Insert: {
+          ai_line?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          attempts?: number
+          audience: string
+          candidate?: Json | null
+          coach_line?: string | null
+          concept?: Json | null
+          created_at?: string
+          day: string
+          error?: string | null
+          faith?: boolean
+          format?: string | null
+          id?: string
+          learned?: Json | null
+          made_at?: string | null
+          max_chars?: number | null
+          model?: string | null
+          picture?: Json | null
+          picture_provider?: string | null
+          post_id?: string | null
+          regen?: string | null
+          regen_reason?: string | null
+          regen_style?: string | null
+          review?: Json | null
+          shot?: string | null
+          status?: string
+          style?: string | null
+          theme: string
+          topic?: string | null
+          updated_at?: string
+          verse_ref?: string | null
+          verse_text?: string | null
+        }
+        Update: {
+          ai_line?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          attempts?: number
+          audience?: string
+          candidate?: Json | null
+          coach_line?: string | null
+          concept?: Json | null
+          created_at?: string
+          day?: string
+          error?: string | null
+          faith?: boolean
+          format?: string | null
+          id?: string
+          learned?: Json | null
+          made_at?: string | null
+          max_chars?: number | null
+          model?: string | null
+          picture?: Json | null
+          picture_provider?: string | null
+          post_id?: string | null
+          regen?: string | null
+          regen_reason?: string | null
+          regen_style?: string | null
+          review?: Json | null
+          shot?: string | null
+          status?: string
+          style?: string | null
+          theme?: string
+          topic?: string | null
+          updated_at?: string
+          verse_ref?: string | null
+          verse_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_daily_visuals_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_follow_requests: {
         Row: {
           created_at: string
@@ -6420,6 +8637,44 @@ export type Database = {
           },
         ]
       }
+      community_post_attention: {
+        Row: {
+          exits: number
+          first_at: string
+          last_at: string
+          post_id: string
+          seen_ms: number
+          shows: number
+          viewer_user_id: string
+        }
+        Insert: {
+          exits?: number
+          first_at?: string
+          last_at?: string
+          post_id: string
+          seen_ms?: number
+          shows?: number
+          viewer_user_id: string
+        }
+        Update: {
+          exits?: number
+          first_at?: string
+          last_at?: string
+          post_id?: string
+          seen_ms?: number
+          shows?: number
+          viewer_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_post_attention_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_post_mentions: {
         Row: {
           created_at: string
@@ -6455,18 +8710,65 @@ export type Database = {
           },
         ]
       }
+      community_post_sends: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          group_id: string | null
+          id: string
+          message_id: string | null
+          post_id: string
+          sender_id: string
+          target: string
+          target_user_id: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          message_id?: string | null
+          post_id: string
+          sender_id: string
+          target: string
+          target_user_id?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          message_id?: string | null
+          post_id?: string
+          sender_id?: string
+          target?: string
+          target_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_post_sends_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_post_views: {
         Row: {
+          anonymous: boolean
           post_id: string
           viewed_at: string
           viewer_user_id: string
         }
         Insert: {
+          anonymous?: boolean
           post_id: string
           viewed_at?: string
           viewer_user_id: string
         }
         Update: {
+          anonymous?: boolean
           post_id?: string
           viewed_at?: string
           viewer_user_id?: string
@@ -6495,6 +8797,7 @@ export type Database = {
           created_at: string
           edited_at: string | null
           extra_media: Json
+          film: Json | null
           gif_url: string | null
           hide_loads: boolean
           id: string
@@ -6515,6 +8818,7 @@ export type Database = {
           series_item_id: string | null
           series_key: string | null
           shared_comment_id: string | null
+          shared_post_id: string | null
           sticker: Json | null
           story_only: boolean
           updated_at: string
@@ -6534,6 +8838,7 @@ export type Database = {
           created_at?: string
           edited_at?: string | null
           extra_media?: Json
+          film?: Json | null
           gif_url?: string | null
           hide_loads?: boolean
           id?: string
@@ -6554,6 +8859,7 @@ export type Database = {
           series_item_id?: string | null
           series_key?: string | null
           shared_comment_id?: string | null
+          shared_post_id?: string | null
           sticker?: Json | null
           story_only?: boolean
           updated_at?: string
@@ -6573,6 +8879,7 @@ export type Database = {
           created_at?: string
           edited_at?: string | null
           extra_media?: Json
+          film?: Json | null
           gif_url?: string | null
           hide_loads?: boolean
           id?: string
@@ -6593,6 +8900,7 @@ export type Database = {
           series_item_id?: string | null
           series_key?: string | null
           shared_comment_id?: string | null
+          shared_post_id?: string | null
           sticker?: Json | null
           story_only?: boolean
           updated_at?: string
@@ -6642,10 +8950,18 @@ export type Database = {
             referencedRelation: "community_comments"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "community_posts_shared_post_id_fkey"
+            columns: ["shared_post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
         ]
       }
       community_profiles: {
         Row: {
+          auto_post_film: boolean
           auto_share_workouts: boolean
           avatar_path: string | null
           bio: string | null
@@ -6663,6 +8979,7 @@ export type Database = {
           username_set_at: string | null
         }
         Insert: {
+          auto_post_film?: boolean
           auto_share_workouts?: boolean
           avatar_path?: string | null
           bio?: string | null
@@ -6680,6 +8997,7 @@ export type Database = {
           username_set_at?: string | null
         }
         Update: {
+          auto_post_film?: boolean
           auto_share_workouts?: boolean
           avatar_path?: string | null
           bio?: string | null
@@ -6726,6 +9044,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      community_reports: {
+        Row: {
+          created_at: string
+          details: string | null
+          id: string
+          reason: string
+          reporter_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          snapshot: Json
+          status: string
+          target_id: string
+          target_kind: string
+          target_owner: string | null
+        }
+        Insert: {
+          created_at?: string
+          details?: string | null
+          id?: string
+          reason: string
+          reporter_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          snapshot?: Json
+          status?: string
+          target_id: string
+          target_kind: string
+          target_owner?: string | null
+        }
+        Update: {
+          created_at?: string
+          details?: string | null
+          id?: string
+          reason?: string
+          reporter_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          snapshot?: Json
+          status?: string
+          target_id?: string
+          target_kind?: string
+          target_owner?: string | null
+        }
+        Relationships: []
       }
       community_reposts: {
         Row: {
@@ -6989,32 +9352,49 @@ export type Database = {
       community_series_settings: {
         Row: {
           author_user_id: string | null
+          daily_visuals_days: number[]
+          daily_visuals_lovable: boolean
+          daily_visuals_on: boolean
+          daily_visuals_refs: Json
           id: boolean
           lesson_mode: string
           lesson_time: string | null
           paused: boolean
+          series_on: string[]
           updated_at: string
         }
         Insert: {
           author_user_id?: string | null
+          daily_visuals_days?: number[]
+          daily_visuals_lovable?: boolean
+          daily_visuals_on?: boolean
+          daily_visuals_refs?: Json
           id?: boolean
           lesson_mode?: string
           lesson_time?: string | null
           paused?: boolean
+          series_on?: string[]
           updated_at?: string
         }
         Update: {
           author_user_id?: string | null
+          daily_visuals_days?: number[]
+          daily_visuals_lovable?: boolean
+          daily_visuals_on?: boolean
+          daily_visuals_refs?: Json
           id?: boolean
           lesson_mode?: string
           lesson_time?: string | null
           paused?: boolean
+          series_on?: string[]
           updated_at?: string
         }
         Relationships: []
       }
       community_sticker_answers: {
         Row: {
+          answered_at: string | null
+          answered_post_id: string | null
           body: string | null
           choice: number | null
           created_at: string
@@ -7024,6 +9404,8 @@ export type Database = {
           value: number | null
         }
         Insert: {
+          answered_at?: string | null
+          answered_post_id?: string | null
           body?: string | null
           choice?: number | null
           created_at?: string
@@ -7033,6 +9415,8 @@ export type Database = {
           value?: number | null
         }
         Update: {
+          answered_at?: string | null
+          answered_post_id?: string | null
           body?: string | null
           choice?: number | null
           created_at?: string
@@ -7042,6 +9426,13 @@ export type Database = {
           value?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "community_sticker_answers_answered_post_id_fkey"
+            columns: ["answered_post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "community_sticker_answers_post_id_fkey"
             columns: ["post_id"]
@@ -7066,6 +9457,59 @@ export type Database = {
           created_at?: string
           hidden_user_id?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      community_workout_stats_cache: {
+        Row: {
+          client_id: string
+          completed_at: string | null
+          completion_id: string
+          computed_at: string
+          stats: Json
+          version: number
+        }
+        Insert: {
+          client_id: string
+          completed_at?: string | null
+          completion_id: string
+          computed_at?: string
+          stats: Json
+          version: number
+        }
+        Update: {
+          client_id?: string
+          completed_at?: string | null
+          completion_id?: string
+          computed_at?: string
+          stats?: Json
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_workout_stats_cache_completion_id_fkey"
+            columns: ["completion_id"]
+            isOneToOne: true
+            referencedRelation: "pl_day_completions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_workout_stats_versions: {
+        Row: {
+          changed_at: string
+          client_id: string
+          version: number
+        }
+        Insert: {
+          changed_at?: string
+          client_id: string
+          version?: number
+        }
+        Update: {
+          changed_at?: string
+          client_id?: string
+          version?: number
         }
         Relationships: []
       }
@@ -7218,6 +9662,39 @@ export type Database = {
             referencedColumns: ["client_id"]
           },
         ]
+      }
+      deposit_accounts: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          institution: string | null
+          is_default: boolean
+          label: string
+          last4: string | null
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          institution?: string | null
+          is_default?: boolean
+          label: string
+          last4?: string | null
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          institution?: string | null
+          is_default?: boolean
+          label?: string
+          last4?: string | null
+        }
+        Relationships: []
       }
       discount_code_audit_log: {
         Row: {
@@ -8605,6 +11082,7 @@ export type Database = {
           archived: boolean
           archived_at: string | null
           archived_by: string | null
+          archived_reason: string | null
           created_at: string
           created_by: string | null
           custom_type: string | null
@@ -8624,6 +11102,7 @@ export type Database = {
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
+          archived_reason?: string | null
           created_at?: string
           created_by?: string | null
           custom_type?: string | null
@@ -8643,6 +11122,7 @@ export type Database = {
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
+          archived_reason?: string | null
           created_at?: string
           created_by?: string | null
           custom_type?: string | null
@@ -9024,6 +11504,48 @@ export type Database = {
           visible_to_client?: boolean
         }
         Relationships: []
+      }
+      inbox_client_briefs: {
+        Row: {
+          client_id: string
+          generated_at: string
+          input_hash: string
+          model: string | null
+          next_step: string | null
+          summary: string
+        }
+        Insert: {
+          client_id: string
+          generated_at?: string
+          input_hash: string
+          model?: string | null
+          next_step?: string | null
+          summary: string
+        }
+        Update: {
+          client_id?: string
+          generated_at?: string
+          input_hash?: string
+          model?: string | null
+          next_step?: string | null
+          summary?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbox_client_briefs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbox_client_briefs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+        ]
       }
       jf_billing_events: {
         Row: {
@@ -12158,6 +14680,54 @@ export type Database = {
           },
         ]
       }
+      media_video_checks: {
+        Row: {
+          bucket: string
+          bytes: number
+          checked_at: string
+          client: Json | null
+          context: string | null
+          duration_s: number
+          height: number | null
+          mime: string | null
+          object_id: string | null
+          owner: string
+          path: string
+          video_codec: string | null
+          width: number | null
+        }
+        Insert: {
+          bucket: string
+          bytes?: number
+          checked_at?: string
+          client?: Json | null
+          context?: string | null
+          duration_s: number
+          height?: number | null
+          mime?: string | null
+          object_id?: string | null
+          owner: string
+          path: string
+          video_codec?: string | null
+          width?: number | null
+        }
+        Update: {
+          bucket?: string
+          bytes?: number
+          checked_at?: string
+          client?: Json | null
+          context?: string | null
+          duration_s?: number
+          height?: number | null
+          mime?: string | null
+          object_id?: string | null
+          owner?: string
+          path?: string
+          video_codec?: string | null
+          width?: number | null
+        }
+        Relationships: []
+      }
       medical_clearance_documents: {
         Row: {
           file_hash: string | null
@@ -13800,6 +16370,7 @@ export type Database = {
           deleted_by: string | null
           group_id: string | null
           id: string
+          kind: string
           message_id: string
           original_created_at: string | null
           sender_id: string | null
@@ -13814,6 +16385,7 @@ export type Database = {
           deleted_by?: string | null
           group_id?: string | null
           id?: string
+          kind?: string
           message_id: string
           original_created_at?: string | null
           sender_id?: string | null
@@ -13828,8 +16400,42 @@ export type Database = {
           deleted_by?: string | null
           group_id?: string | null
           id?: string
+          kind?: string
           message_id?: string
           original_created_at?: string | null
+          sender_id?: string | null
+          sender_role?: string | null
+        }
+        Relationships: []
+      }
+      message_edits: {
+        Row: {
+          body: string
+          client_id: string | null
+          edited_at: string
+          edited_by: string | null
+          id: string
+          message_id: string
+          sender_id: string | null
+          sender_role: string | null
+        }
+        Insert: {
+          body: string
+          client_id?: string | null
+          edited_at?: string
+          edited_by?: string | null
+          id?: string
+          message_id: string
+          sender_id?: string | null
+          sender_role?: string | null
+        }
+        Update: {
+          body?: string
+          client_id?: string | null
+          edited_at?: string
+          edited_by?: string | null
+          id?: string
+          message_id?: string
           sender_id?: string | null
           sender_role?: string | null
         }
@@ -14007,9 +16613,10 @@ export type Database = {
           context_snapshot: Json
           created_at: string
           id: string
-          occurrence_id: string | null
           nutrition_requested_at: string | null
           nutrition_submission_id: string | null
+          occurrence_id: string | null
+          plan: Json | null
           request_message_id: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -14030,9 +16637,10 @@ export type Database = {
           context_snapshot?: Json
           created_at?: string
           id?: string
-          occurrence_id?: string | null
           nutrition_requested_at?: string | null
           nutrition_submission_id?: string | null
+          occurrence_id?: string | null
+          plan?: Json | null
           request_message_id?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -14053,9 +16661,10 @@ export type Database = {
           context_snapshot?: Json
           created_at?: string
           id?: string
-          occurrence_id?: string | null
           nutrition_requested_at?: string | null
           nutrition_submission_id?: string | null
+          occurrence_id?: string | null
+          plan?: Json | null
           request_message_id?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -14081,6 +16690,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "coaching_agreement_client_status"
             referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "messenger_checkins_nutrition_submission_id_fkey"
+            columns: ["nutrition_submission_id"]
+            isOneToOne: false
+            referencedRelation: "nf_submissions"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "messenger_checkins_occurrence_id_fkey"
@@ -15004,6 +17620,47 @@ export type Database = {
           },
         ]
       }
+      nf_answer_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          client_id: string
+          id: number
+          new_value: Json | null
+          old_value: Json | null
+          question_id: string
+          submission_id: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          client_id: string
+          id?: never
+          new_value?: Json | null
+          old_value?: Json | null
+          question_id: string
+          submission_id: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          client_id?: string
+          id?: never
+          new_value?: Json | null
+          old_value?: Json | null
+          question_id?: string
+          submission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nf_answer_history_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "nf_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nf_answers: {
         Row: {
           created_at: string
@@ -15059,6 +17716,8 @@ export type Database = {
           created_at: string
           form_id: string
           id: string
+          last_sent_at: string | null
+          last_sent_by: string | null
           next_due_at: string | null
           recurrence: string
           settings: Json
@@ -15070,6 +17729,8 @@ export type Database = {
           created_at?: string
           form_id: string
           id?: string
+          last_sent_at?: string | null
+          last_sent_by?: string | null
           next_due_at?: string | null
           recurrence?: string
           settings?: Json
@@ -15081,6 +17742,8 @@ export type Database = {
           created_at?: string
           form_id?: string
           id?: string
+          last_sent_at?: string | null
+          last_sent_by?: string | null
           next_due_at?: string | null
           recurrence?: string
           settings?: Json
@@ -15143,6 +17806,32 @@ export type Database = {
             columns: ["submission_id"]
             isOneToOne: false
             referencedRelation: "nf_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nf_form_favorites: {
+        Row: {
+          created_at: string
+          form_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          form_id: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          form_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nf_form_favorites_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "nf_forms"
             referencedColumns: ["id"]
           },
         ]
@@ -15220,19 +17909,24 @@ export type Database = {
       nf_forms: {
         Row: {
           active: boolean
+          allow_updates: boolean
           archived: boolean
           archived_at: string | null
           archived_by: string | null
+          archived_reason: string | null
           auto_assign_new_clients: boolean
           button_label: string | null
+          category: string | null
           created_at: string
           created_by: string | null
           description: string | null
           external_url: string | null
           form_type: string
           id: string
+          is_template: boolean
           kind: string
           open_style: string
+          owner_id: string | null
           popup_enabled: boolean
           popup_end_date: string | null
           popup_end_time: string | null
@@ -15242,6 +17936,8 @@ export type Database = {
           recurrence: string
           recurrence_day: string | null
           requires_client_identity: boolean
+          settings: Json
+          shared: boolean
           title: string
           updated_at: string
           version: number
@@ -15249,19 +17945,24 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          allow_updates?: boolean
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
+          archived_reason?: string | null
           auto_assign_new_clients?: boolean
           button_label?: string | null
+          category?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
           external_url?: string | null
           form_type?: string
           id?: string
+          is_template?: boolean
           kind?: string
           open_style?: string
+          owner_id?: string | null
           popup_enabled?: boolean
           popup_end_date?: string | null
           popup_end_time?: string | null
@@ -15271,6 +17972,8 @@ export type Database = {
           recurrence?: string
           recurrence_day?: string | null
           requires_client_identity?: boolean
+          settings?: Json
+          shared?: boolean
           title: string
           updated_at?: string
           version?: number
@@ -15278,19 +17981,24 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          allow_updates?: boolean
           archived?: boolean
           archived_at?: string | null
           archived_by?: string | null
+          archived_reason?: string | null
           auto_assign_new_clients?: boolean
           button_label?: string | null
+          category?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
           external_url?: string | null
           form_type?: string
           id?: string
+          is_template?: boolean
           kind?: string
           open_style?: string
+          owner_id?: string | null
           popup_enabled?: boolean
           popup_end_date?: string | null
           popup_end_time?: string | null
@@ -15300,6 +18008,8 @@ export type Database = {
           recurrence?: string
           recurrence_day?: string | null
           requires_client_identity?: boolean
+          settings?: Json
+          shared?: boolean
           title?: string
           updated_at?: string
           version?: number
@@ -15403,6 +18113,7 @@ export type Database = {
       }
       nf_submissions: {
         Row: {
+          answers_updated_at: string | null
           assignment_id: string | null
           client_confirmed_at: string | null
           client_id: string
@@ -15422,6 +18133,7 @@ export type Database = {
           verification_source: string | null
         }
         Insert: {
+          answers_updated_at?: string | null
           assignment_id?: string | null
           client_confirmed_at?: string | null
           client_id: string
@@ -15441,6 +18153,7 @@ export type Database = {
           verification_source?: string | null
         }
         Update: {
+          answers_updated_at?: string | null
           assignment_id?: string | null
           client_confirmed_at?: string | null
           client_id?: string
@@ -15466,6 +18179,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "nf_assignments"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nf_submissions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nf_submissions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
           },
           {
             foreignKeyName: "nf_submissions_form_id_fkey"
@@ -15560,8 +18287,13 @@ export type Database = {
           meal_plan_text: string | null
           model: string | null
           phase: string | null
+          previous_plan: Json | null
+          progress: Json | null
+          revise_instructions: string | null
+          revisions: Json
           status: string
           submission_id: string
+          supplements: Json | null
           targets_text: string | null
           updated_at: string
           workout_meals: string | null
@@ -15577,8 +18309,13 @@ export type Database = {
           meal_plan_text?: string | null
           model?: string | null
           phase?: string | null
+          previous_plan?: Json | null
+          progress?: Json | null
+          revise_instructions?: string | null
+          revisions?: Json
           status?: string
           submission_id: string
+          supplements?: Json | null
           targets_text?: string | null
           updated_at?: string
           workout_meals?: string | null
@@ -15594,8 +18331,13 @@ export type Database = {
           meal_plan_text?: string | null
           model?: string | null
           phase?: string | null
+          previous_plan?: Json | null
+          progress?: Json | null
+          revise_instructions?: string | null
+          revisions?: Json
           status?: string
           submission_id?: string
+          supplements?: Json | null
           targets_text?: string | null
           updated_at?: string
           workout_meals?: string | null
@@ -15781,6 +18523,91 @@ export type Database = {
           },
         ]
       }
+      nutrition_plan_edits: {
+        Row: {
+          applied_at: string | null
+          applied_by: string | null
+          before_meal_plan_text: string
+          before_targets_text: string
+          client_id: string
+          created_at: string
+          created_by: string | null
+          error: string | null
+          id: string
+          instructions: string
+          meal_plan_text: string | null
+          model: string | null
+          progress: Json | null
+          restore: Json | null
+          status: string
+          target_id: string
+          targets_text: string | null
+          updated_at: string
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_by?: string | null
+          before_meal_plan_text: string
+          before_targets_text: string
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          id?: string
+          instructions: string
+          meal_plan_text?: string | null
+          model?: string | null
+          progress?: Json | null
+          restore?: Json | null
+          status?: string
+          target_id: string
+          targets_text?: string | null
+          updated_at?: string
+        }
+        Update: {
+          applied_at?: string | null
+          applied_by?: string | null
+          before_meal_plan_text?: string
+          before_targets_text?: string
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          id?: string
+          instructions?: string
+          meal_plan_text?: string | null
+          model?: string | null
+          progress?: Json | null
+          restore?: Json | null
+          status?: string
+          target_id?: string
+          targets_text?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_plan_edits_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_plan_edits_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "nutrition_plan_edits_target_id_fkey"
+            columns: ["target_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_targets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nutrition_review_tasks: {
         Row: {
           assigned_coach_id: string | null
@@ -15854,6 +18681,7 @@ export type Database = {
           notes: string | null
           protein: number | null
           sort_order: number
+          steps: number | null
           target_id: string
           use_on: string | null
           weekdays: string[] | null
@@ -15869,6 +18697,7 @@ export type Database = {
           notes?: string | null
           protein?: number | null
           sort_order?: number
+          steps?: number | null
           target_id: string
           use_on?: string | null
           weekdays?: string[] | null
@@ -15884,6 +18713,7 @@ export type Database = {
           notes?: string | null
           protein?: number | null
           sort_order?: number
+          steps?: number | null
           target_id?: string
           use_on?: string | null
           weekdays?: string[] | null
@@ -15897,6 +18727,63 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      nutrition_target_days_backup_20261118: {
+        Row: {
+          backed_up_at: string | null
+          calories: number | null
+          carbs: number | null
+          created_at: string | null
+          day_label: string | null
+          fats: number | null
+          fibre: number | null
+          id: string | null
+          notes: string | null
+          protein: number | null
+          reason: string | null
+          sort_order: number | null
+          steps: number | null
+          target_id: string | null
+          use_on: string | null
+          weekdays: string[] | null
+        }
+        Insert: {
+          backed_up_at?: string | null
+          calories?: number | null
+          carbs?: number | null
+          created_at?: string | null
+          day_label?: string | null
+          fats?: number | null
+          fibre?: number | null
+          id?: string | null
+          notes?: string | null
+          protein?: number | null
+          reason?: string | null
+          sort_order?: number | null
+          steps?: number | null
+          target_id?: string | null
+          use_on?: string | null
+          weekdays?: string[] | null
+        }
+        Update: {
+          backed_up_at?: string | null
+          calories?: number | null
+          carbs?: number | null
+          created_at?: string | null
+          day_label?: string | null
+          fats?: number | null
+          fibre?: number | null
+          id?: string | null
+          notes?: string | null
+          protein?: number | null
+          reason?: string | null
+          sort_order?: number | null
+          steps?: number | null
+          target_id?: string | null
+          use_on?: string | null
+          weekdays?: string[] | null
+        }
+        Relationships: []
       }
       nutrition_target_settings: {
         Row: {
@@ -15976,6 +18863,7 @@ export type Database = {
           start_date: string
           status: string
           structure: string
+          supplements: Json | null
           tracking_status: string
           update_cadence: string
           updated_at: string
@@ -16008,6 +18896,7 @@ export type Database = {
           start_date: string
           status?: string
           structure?: string
+          supplements?: Json | null
           tracking_status?: string
           update_cadence?: string
           updated_at?: string
@@ -16040,6 +18929,7 @@ export type Database = {
           start_date?: string
           status?: string
           structure?: string
+          supplements?: Json | null
           tracking_status?: string
           update_cadence?: string
           updated_at?: string
@@ -16569,12 +19459,15 @@ export type Database = {
           created_at: string
           created_by: string | null
           currency: string
+          deposit_account_id: string | null
           external_reference: string | null
           hosted_invoice_url: string | null
           id: string
           internal_note: string | null
           invoice_pdf_url: string | null
           method: string
+          proof_path: string | null
+          proof_uploaded_at: string | null
           purchase_id: string | null
           receipt_number: string | null
           receipt_url: string | null
@@ -16602,12 +19495,15 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          deposit_account_id?: string | null
           external_reference?: string | null
           hosted_invoice_url?: string | null
           id?: string
           internal_note?: string | null
           invoice_pdf_url?: string | null
           method: string
+          proof_path?: string | null
+          proof_uploaded_at?: string | null
           purchase_id?: string | null
           receipt_number?: string | null
           receipt_url?: string | null
@@ -16635,12 +19531,15 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          deposit_account_id?: string | null
           external_reference?: string | null
           hosted_invoice_url?: string | null
           id?: string
           internal_note?: string | null
           invoice_pdf_url?: string | null
           method?: string
+          proof_path?: string | null
+          proof_uploaded_at?: string | null
           purchase_id?: string | null
           receipt_number?: string | null
           receipt_url?: string | null
@@ -16675,6 +19574,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "coaching_agreement_client_status"
             referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "payment_ledger_deposit_account_id_fkey"
+            columns: ["deposit_account_id"]
+            isOneToOne: false
+            referencedRelation: "deposit_accounts"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "payment_ledger_purchase_id_fkey"
@@ -16990,6 +19896,7 @@ export type Database = {
           name: string
           prep_id: string | null
           sort_order: number
+          source_athlete_program_id: string | null
           source_template_block_key: string | null
           source_template_id: string | null
           source_template_schema_version: number | null
@@ -17022,6 +19929,7 @@ export type Database = {
           name: string
           prep_id?: string | null
           sort_order?: number
+          source_athlete_program_id?: string | null
           source_template_block_key?: string | null
           source_template_id?: string | null
           source_template_schema_version?: number | null
@@ -17054,6 +19962,7 @@ export type Database = {
           name?: string
           prep_id?: string | null
           sort_order?: number
+          source_athlete_program_id?: string | null
           source_template_block_key?: string | null
           source_template_id?: string | null
           source_template_schema_version?: number | null
@@ -17086,6 +19995,13 @@ export type Database = {
             columns: ["prep_id"]
             isOneToOne: false
             referencedRelation: "pl_preps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_blocks_source_athlete_program_id_fkey"
+            columns: ["source_athlete_program_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_programs"
             referencedColumns: ["id"]
           },
           {
@@ -17798,6 +20714,7 @@ export type Database = {
           exercise_name_override: string | null
           id: string
           intensity_techniques: string[]
+          is_optional: boolean
           load_kg: number | null
           load_lb: number | null
           load_unit: string | null
@@ -17837,6 +20754,7 @@ export type Database = {
           exercise_name_override?: string | null
           id?: string
           intensity_techniques?: string[]
+          is_optional?: boolean
           load_kg?: number | null
           load_lb?: number | null
           load_unit?: string | null
@@ -17876,6 +20794,7 @@ export type Database = {
           exercise_name_override?: string | null
           id?: string
           intensity_techniques?: string[]
+          is_optional?: boolean
           load_kg?: number | null
           load_lb?: number | null
           load_unit?: string | null
@@ -17910,6 +20829,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pl_exercise_rows_cardio_target_id_fkey"
+            columns: ["cardio_target_id"]
+            isOneToOne: false
+            referencedRelation: "cardio_targets"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pl_exercise_rows_day_id_fkey"
             columns: ["day_id"]
             isOneToOne: false
@@ -17939,6 +20865,8 @@ export type Database = {
           division: string | null
           end_date: string | null
           event_date: string | null
+          event_day_tbd: boolean
+          event_end_date: string | null
           event_location: string | null
           event_name: string | null
           federation: string | null
@@ -17965,6 +20893,8 @@ export type Database = {
           division?: string | null
           end_date?: string | null
           event_date?: string | null
+          event_day_tbd?: boolean
+          event_end_date?: string | null
           event_location?: string | null
           event_name?: string | null
           federation?: string | null
@@ -17991,6 +20921,8 @@ export type Database = {
           division?: string | null
           end_date?: string | null
           event_date?: string | null
+          event_day_tbd?: boolean
+          event_end_date?: string | null
           event_location?: string | null
           event_name?: string | null
           federation?: string | null
@@ -18032,9 +20964,10 @@ export type Database = {
         Row: {
           block_id: string | null
           cleo_action_id: string | null
-          client_id: string
+          client_id: string | null
           created_at: string
           created_by: string | null
+          edit_id: string | null
           id: string
           kind: string
           payload: Json
@@ -18043,13 +20976,15 @@ export type Database = {
           restored_by: string | null
           source: string
           summary: string
+          template_id: string | null
         }
         Insert: {
           block_id?: string | null
           cleo_action_id?: string | null
-          client_id: string
+          client_id?: string | null
           created_at?: string
           created_by?: string | null
+          edit_id?: string | null
           id?: string
           kind: string
           payload?: Json
@@ -18058,13 +20993,15 @@ export type Database = {
           restored_by?: string | null
           source?: string
           summary: string
+          template_id?: string | null
         }
         Update: {
           block_id?: string | null
           cleo_action_id?: string | null
-          client_id?: string
+          client_id?: string | null
           created_at?: string
           created_by?: string | null
+          edit_id?: string | null
           id?: string
           kind?: string
           payload?: Json
@@ -18073,6 +21010,7 @@ export type Database = {
           restored_by?: string | null
           source?: string
           summary?: string
+          template_id?: string | null
         }
         Relationships: [
           {
@@ -18095,6 +21033,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "coaching_agreement_client_status"
             referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "pl_program_versions_edit_id_fkey"
+            columns: ["edit_id"]
+            isOneToOne: false
+            referencedRelation: "program_ai_edits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_program_versions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "pl_templates"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -18202,6 +21154,45 @@ export type Database = {
           block_id?: string
           last_error?: string | null
           queued_at?: string
+        }
+        Relationships: []
+      }
+      pl_row_result_repairs: {
+        Row: {
+          client_id: string
+          field: string
+          id: number
+          new_value: string | null
+          old_value: string | null
+          reason: string
+          repaired_at: string
+          result_id: string
+          row_id: string
+          set_index: number
+        }
+        Insert: {
+          client_id: string
+          field: string
+          id?: number
+          new_value?: string | null
+          old_value?: string | null
+          reason: string
+          repaired_at?: string
+          result_id: string
+          row_id: string
+          set_index: number
+        }
+        Update: {
+          client_id?: string
+          field?: string
+          id?: number
+          new_value?: string | null
+          old_value?: string | null
+          reason?: string
+          repaired_at?: string
+          result_id?: string
+          row_id?: string
+          set_index?: number
         }
         Relationships: []
       }
@@ -18384,6 +21375,48 @@ export type Database = {
           },
         ]
       }
+      pl_schedule_sync_queue: {
+        Row: {
+          attempts: number
+          client_id: string
+          last_error: string | null
+          queued_at: string
+          queued_by: string | null
+          reason: string | null
+        }
+        Insert: {
+          attempts?: number
+          client_id: string
+          last_error?: string | null
+          queued_at?: string
+          queued_by?: string | null
+          reason?: string | null
+        }
+        Update: {
+          attempts?: number
+          client_id?: string
+          last_error?: string | null
+          queued_at?: string
+          queued_by?: string | null
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_schedule_sync_queue_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_schedule_sync_queue_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+        ]
+      }
       pl_scheduled_workouts: {
         Row: {
           client_id: string
@@ -18447,6 +21480,152 @@ export type Database = {
             columns: ["source_day_id"]
             isOneToOne: false
             referencedRelation: "pl_days"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pl_set_videos: {
+        Row: {
+          client_id: string
+          client_key: string
+          created_at: string
+          day_id: string | null
+          deleted_at: string | null
+          duration_s: number | null
+          exercise_name: string | null
+          feed_duration_s: number | null
+          feed_height: number | null
+          feed_path: string | null
+          feed_size_bytes: number | null
+          feed_width: number | null
+          file_key: string
+          height: number | null
+          id: string
+          label: string
+          message_id: string | null
+          mime: string | null
+          result_id: string | null
+          row_id: string | null
+          set_index: number
+          size_bytes: number | null
+          storage_path: string
+          thumbnail_path: string | null
+          transfer: Json | null
+          uploaded_by: string
+          warmup_id: string | null
+          width: number | null
+          workout_title: string | null
+        }
+        Insert: {
+          client_id: string
+          client_key: string
+          created_at?: string
+          day_id?: string | null
+          deleted_at?: string | null
+          duration_s?: number | null
+          exercise_name?: string | null
+          feed_duration_s?: number | null
+          feed_height?: number | null
+          feed_path?: string | null
+          feed_size_bytes?: number | null
+          feed_width?: number | null
+          file_key: string
+          height?: number | null
+          id?: string
+          label?: string
+          message_id?: string | null
+          mime?: string | null
+          result_id?: string | null
+          row_id?: string | null
+          set_index: number
+          size_bytes?: number | null
+          storage_path: string
+          thumbnail_path?: string | null
+          transfer?: Json | null
+          uploaded_by: string
+          warmup_id?: string | null
+          width?: number | null
+          workout_title?: string | null
+        }
+        Update: {
+          client_id?: string
+          client_key?: string
+          created_at?: string
+          day_id?: string | null
+          deleted_at?: string | null
+          duration_s?: number | null
+          exercise_name?: string | null
+          feed_duration_s?: number | null
+          feed_height?: number | null
+          feed_path?: string | null
+          feed_size_bytes?: number | null
+          feed_width?: number | null
+          file_key?: string
+          height?: number | null
+          id?: string
+          label?: string
+          message_id?: string | null
+          mime?: string | null
+          result_id?: string | null
+          row_id?: string | null
+          set_index?: number
+          size_bytes?: number | null
+          storage_path?: string
+          thumbnail_path?: string | null
+          transfer?: Json | null
+          uploaded_by?: string
+          warmup_id?: string | null
+          width?: number | null
+          workout_title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_set_videos_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_set_videos_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "pl_set_videos_day_id_fkey"
+            columns: ["day_id"]
+            isOneToOne: false
+            referencedRelation: "pl_days"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_set_videos_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_set_videos_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "pl_row_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_set_videos_row_id_fkey"
+            columns: ["row_id"]
+            isOneToOne: false
+            referencedRelation: "pl_exercise_rows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_set_videos_warmup_id_fkey"
+            columns: ["warmup_id"]
+            isOneToOne: false
+            referencedRelation: "pl_warmup_sets"
             referencedColumns: ["id"]
           },
         ]
@@ -19235,6 +22414,741 @@ export type Database = {
         }
         Relationships: []
       }
+      program_ai_edit_calls: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          edit_id: string
+          error: string | null
+          id: string
+          input_tokens: number | null
+          model: string
+          ok: boolean
+          output_tokens: number | null
+          prompt: string
+          prompt_chars: number
+          response: string | null
+          response_chars: number
+          stage: string
+          system_prompt: string
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          edit_id: string
+          error?: string | null
+          id?: string
+          input_tokens?: number | null
+          model: string
+          ok?: boolean
+          output_tokens?: number | null
+          prompt: string
+          prompt_chars?: number
+          response?: string | null
+          response_chars?: number
+          stage: string
+          system_prompt: string
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          edit_id?: string
+          error?: string | null
+          id?: string
+          input_tokens?: number | null
+          model?: string
+          ok?: boolean
+          output_tokens?: number | null
+          prompt?: string
+          prompt_chars?: number
+          response?: string | null
+          response_chars?: number
+          stage?: string
+          system_prompt?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "program_ai_edit_calls_edit_id_fkey"
+            columns: ["edit_id"]
+            isOneToOne: false
+            referencedRelation: "program_ai_edits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      program_ai_edits: {
+        Row: {
+          applied_at: string | null
+          applied_by: string | null
+          applied_changes: string[] | null
+          attempts: number
+          client_id: string | null
+          created_at: string
+          created_by: string
+          error: string | null
+          finished_at: string | null
+          focus_block_id: string | null
+          id: string
+          instruction: string
+          model: string | null
+          parent_id: string | null
+          personalize_client_id: string | null
+          prompt_version: number | null
+          rejected: string[]
+          result: Json | null
+          stage: string | null
+          started_at: string | null
+          status: string
+          target_kind: string
+          template_id: string | null
+          thread_id: string | null
+          updated_at: string
+          version_id: string | null
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_by?: string | null
+          applied_changes?: string[] | null
+          attempts?: number
+          client_id?: string | null
+          created_at?: string
+          created_by?: string
+          error?: string | null
+          finished_at?: string | null
+          focus_block_id?: string | null
+          id?: string
+          instruction: string
+          model?: string | null
+          parent_id?: string | null
+          personalize_client_id?: string | null
+          prompt_version?: number | null
+          rejected?: string[]
+          result?: Json | null
+          stage?: string | null
+          started_at?: string | null
+          status?: string
+          target_kind: string
+          template_id?: string | null
+          thread_id?: string | null
+          updated_at?: string
+          version_id?: string | null
+        }
+        Update: {
+          applied_at?: string | null
+          applied_by?: string | null
+          applied_changes?: string[] | null
+          attempts?: number
+          client_id?: string | null
+          created_at?: string
+          created_by?: string
+          error?: string | null
+          finished_at?: string | null
+          focus_block_id?: string | null
+          id?: string
+          instruction?: string
+          model?: string | null
+          parent_id?: string | null
+          personalize_client_id?: string | null
+          prompt_version?: number | null
+          rejected?: string[]
+          result?: Json | null
+          stage?: string | null
+          started_at?: string | null
+          status?: string
+          target_kind?: string
+          template_id?: string | null
+          thread_id?: string | null
+          updated_at?: string
+          version_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "program_ai_edits_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "program_ai_edits_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "program_ai_edits_focus_block_id_fkey"
+            columns: ["focus_block_id"]
+            isOneToOne: false
+            referencedRelation: "pl_blocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "program_ai_edits_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "program_ai_edits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "program_ai_edits_personalize_client_id_fkey"
+            columns: ["personalize_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "program_ai_edits_personalize_client_id_fkey"
+            columns: ["personalize_client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "program_ai_edits_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "pl_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      program_intel_exports: {
+        Row: {
+          action: string
+          brain: string | null
+          client_id: string
+          created_at: string
+          created_by: string | null
+          data_hash: string | null
+          id: string
+          privacy_safe: boolean
+          scope: Json | null
+        }
+        Insert: {
+          action: string
+          brain?: string | null
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          data_hash?: string | null
+          id?: string
+          privacy_safe?: boolean
+          scope?: Json | null
+        }
+        Update: {
+          action?: string
+          brain?: string | null
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          data_hash?: string | null
+          id?: string
+          privacy_safe?: boolean
+          scope?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "program_intel_exports_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "program_intel_exports_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+        ]
+      }
+      program_intel_job_calls: {
+        Row: {
+          client_id: string
+          created_at: string
+          duration_ms: number | null
+          error: string | null
+          est_input_tokens: number | null
+          id: string
+          input_tokens: number | null
+          job_id: string
+          model: string
+          ok: boolean
+          output_tokens: number | null
+          prompt: string
+          prompt_chars: number
+          response: string | null
+          response_chars: number
+          stage: string
+          system_prompt: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          est_input_tokens?: number | null
+          id?: string
+          input_tokens?: number | null
+          job_id: string
+          model: string
+          ok?: boolean
+          output_tokens?: number | null
+          prompt: string
+          prompt_chars?: number
+          response?: string | null
+          response_chars?: number
+          stage: string
+          system_prompt: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          est_input_tokens?: number | null
+          id?: string
+          input_tokens?: number | null
+          job_id?: string
+          model?: string
+          ok?: boolean
+          output_tokens?: number | null
+          prompt?: string
+          prompt_chars?: number
+          response?: string | null
+          response_chars?: number
+          stage?: string
+          system_prompt?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "program_intel_job_calls_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "program_intel_job_calls_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "program_intel_job_calls_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "program_intel_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      program_intel_jobs: {
+        Row: {
+          attempts: number
+          block_id: string | null
+          brain: string
+          client_id: string
+          context: Json | null
+          created_at: string
+          created_by: string
+          data_hash: string | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          instructions: string | null
+          kind: string
+          model: string | null
+          options: Json
+          privacy_safe: boolean
+          progress: Json | null
+          prompt_version: number | null
+          result: Json | null
+          scope: Json
+          stage: string | null
+          started_at: string | null
+          status: string
+          strategy_job_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          block_id?: string | null
+          brain: string
+          client_id: string
+          context?: Json | null
+          created_at?: string
+          created_by?: string
+          data_hash?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          instructions?: string | null
+          kind: string
+          model?: string | null
+          options?: Json
+          privacy_safe?: boolean
+          progress?: Json | null
+          prompt_version?: number | null
+          result?: Json | null
+          scope: Json
+          stage?: string | null
+          started_at?: string | null
+          status?: string
+          strategy_job_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          block_id?: string | null
+          brain?: string
+          client_id?: string
+          context?: Json | null
+          created_at?: string
+          created_by?: string
+          data_hash?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          instructions?: string | null
+          kind?: string
+          model?: string | null
+          options?: Json
+          privacy_safe?: boolean
+          progress?: Json | null
+          prompt_version?: number | null
+          result?: Json | null
+          scope?: Json
+          stage?: string | null
+          started_at?: string | null
+          status?: string
+          strategy_job_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "program_intel_jobs_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "pl_blocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "program_intel_jobs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "program_intel_jobs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "program_intel_jobs_strategy_job_id_fkey"
+            columns: ["strategy_job_id"]
+            isOneToOne: false
+            referencedRelation: "program_intel_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      program_intel_observations: {
+        Row: {
+          block_id: string | null
+          category: string | null
+          client_id: string
+          confidence: string
+          corrected_statement: string | null
+          created_at: string
+          created_by: string | null
+          data_hash: string | null
+          decision_id: string | null
+          evidence: Json
+          finding_key: string | null
+          id: string
+          job_id: string | null
+          kind: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source: string
+          statement: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          block_id?: string | null
+          category?: string | null
+          client_id: string
+          confidence?: string
+          corrected_statement?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_hash?: string | null
+          decision_id?: string | null
+          evidence?: Json
+          finding_key?: string | null
+          id?: string
+          job_id?: string | null
+          kind?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source?: string
+          statement: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          block_id?: string | null
+          category?: string | null
+          client_id?: string
+          confidence?: string
+          corrected_statement?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_hash?: string | null
+          decision_id?: string | null
+          evidence?: Json
+          finding_key?: string | null
+          id?: string
+          job_id?: string | null
+          kind?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source?: string
+          statement?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "program_intel_observations_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "pl_blocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "program_intel_observations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "program_intel_observations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "program_intel_observations_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "program_intel_observations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      program_intel_profiles: {
+        Row: {
+          brain_override: string | null
+          client_id: string
+          equipment_profile: Json | null
+          long_term_goal: Json | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          brain_override?: string | null
+          client_id: string
+          equipment_profile?: Json | null
+          long_term_goal?: Json | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          brain_override?: string | null
+          client_id?: string
+          equipment_profile?: Json | null
+          long_term_goal?: Json | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "program_intel_profiles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "program_intel_profiles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+        ]
+      }
+      program_library_cleanup_backup: {
+        Row: {
+          backed_up_at: string
+          id: number
+          row_data: Json
+          row_id: string | null
+          source_table: string
+        }
+        Insert: {
+          backed_up_at?: string
+          id?: number
+          row_data: Json
+          row_id?: string | null
+          source_table: string
+        }
+        Update: {
+          backed_up_at?: string
+          id?: number
+          row_data?: Json
+          row_id?: string | null
+          source_table?: string
+        }
+        Relationships: []
+      }
+      program_loading_update_backup: {
+        Row: {
+          backed_up_at: string
+          id: number
+          row_data: Json
+          row_id: string | null
+          source_table: string
+        }
+        Insert: {
+          backed_up_at?: string
+          id?: number
+          row_data: Json
+          row_id?: string | null
+          source_table: string
+        }
+        Update: {
+          backed_up_at?: string
+          id?: number
+          row_data?: Json
+          row_id?: string | null
+          source_table?: string
+        }
+        Relationships: []
+      }
+      program_note_backoff_wording_backup: {
+        Row: {
+          fixed_at: string
+          old_notes: string | null
+          old_payload: Json | null
+          row_id: string | null
+          template_id: string | null
+        }
+        Insert: {
+          fixed_at?: string
+          old_notes?: string | null
+          old_payload?: Json | null
+          row_id?: string | null
+          template_id?: string | null
+        }
+        Update: {
+          fixed_at?: string
+          old_notes?: string | null
+          old_payload?: Json | null
+          row_id?: string | null
+          template_id?: string | null
+        }
+        Relationships: []
+      }
+      program_note_weight_backup: {
+        Row: {
+          fixed_at: string
+          new_notes: string | null
+          old_notes: string
+          row_id: string
+        }
+        Insert: {
+          fixed_at?: string
+          new_notes?: string | null
+          old_notes: string
+          row_id: string
+        }
+        Update: {
+          fixed_at?: string
+          new_notes?: string | null
+          old_notes?: string
+          row_id?: string
+        }
+        Relationships: []
+      }
+      program_rules: {
+        Row: {
+          active: boolean
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          expires_on: string | null
+          id: string
+          kind: string
+          rule: string
+          source: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          active?: boolean
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_on?: string | null
+          id?: string
+          kind: string
+          rule: string
+          source?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          active?: boolean
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_on?: string | null
+          id?: string
+          kind?: string
+          rule?: string
+          source?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "program_rules_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "program_rules_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+        ]
+      }
       progress_bodyweight: {
         Row: {
           created_at: string
@@ -19701,8 +23615,8 @@ export type Database = {
           mode: string
           set_by_user_id: string | null
           suggested_ml: number
-          training_extra_ml: number | null
           target_source: string
+          training_extra_ml: number | null
           updated_at: string
           user_id: string
         }
@@ -19715,8 +23629,8 @@ export type Database = {
           mode?: string
           set_by_user_id?: string | null
           suggested_ml?: number
-          training_extra_ml?: number | null
           target_source?: string
+          training_extra_ml?: number | null
           updated_at?: string
           user_id: string
         }
@@ -19729,8 +23643,8 @@ export type Database = {
           mode?: string
           set_by_user_id?: string | null
           suggested_ml?: number
-          training_extra_ml?: number | null
           target_source?: string
+          training_extra_ml?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -19987,6 +23901,55 @@ export type Database = {
           },
         ]
       }
+      pt_session_coach_notes: {
+        Row: {
+          client_id: string
+          created_at: string
+          note: string
+          pt_session_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          note: string
+          pt_session_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          note?: string
+          pt_session_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pt_session_coach_notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pt_session_coach_notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "pt_session_coach_notes_pt_session_id_fkey"
+            columns: ["pt_session_id"]
+            isOneToOne: true
+            referencedRelation: "pt_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pt_session_gcal_deletes: {
         Row: {
           attempts: number
@@ -20207,6 +24170,7 @@ export type Database = {
           offer_type: string | null
           offer_version: number | null
           package_expiry_date: string | null
+          package_number: number | null
           package_tracking_enabled: boolean | null
           paid_at: string | null
           payment_frequency: string | null
@@ -20222,6 +24186,7 @@ export type Database = {
           purchased_at: string
           receipt_url: string | null
           refund_policy: string | null
+          renewed_from_id: string | null
           service_start_date: string | null
           service_status: string
           session_fulfillment: string
@@ -20308,6 +24273,7 @@ export type Database = {
           offer_type?: string | null
           offer_version?: number | null
           package_expiry_date?: string | null
+          package_number?: number | null
           package_tracking_enabled?: boolean | null
           paid_at?: string | null
           payment_frequency?: string | null
@@ -20323,6 +24289,7 @@ export type Database = {
           purchased_at?: string
           receipt_url?: string | null
           refund_policy?: string | null
+          renewed_from_id?: string | null
           service_start_date?: string | null
           service_status?: string
           session_fulfillment?: string
@@ -20409,6 +24376,7 @@ export type Database = {
           offer_type?: string | null
           offer_version?: number | null
           package_expiry_date?: string | null
+          package_number?: number | null
           package_tracking_enabled?: boolean | null
           paid_at?: string | null
           payment_frequency?: string | null
@@ -20424,6 +24392,7 @@ export type Database = {
           purchased_at?: string
           receipt_url?: string | null
           refund_policy?: string | null
+          renewed_from_id?: string | null
           service_start_date?: string | null
           service_status?: string
           session_fulfillment?: string
@@ -20457,7 +24426,15 @@ export type Database = {
           timezone?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "purchase_records_renewed_from_id_fkey"
+            columns: ["renewed_from_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_records"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       push_notification_dedupe: {
         Row: {
@@ -20789,6 +24766,69 @@ export type Database = {
         Update: {
           access_scope?: string
           author_id?: string | null
+          body?: string
+          calories_per_serving?: number | null
+          category?: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          prep_time_minutes?: number | null
+          protein_grams?: number | null
+          published_at?: string | null
+          servings?: number | null
+          status?: string
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Relationships: []
+      }
+      recipes_cookbook_backup_20261115: {
+        Row: {
+          access_scope: string
+          author_id: string | null
+          backed_up_at: string
+          body: string
+          calories_per_serving: number | null
+          category: string
+          created_at: string
+          id: string
+          image_url: string | null
+          prep_time_minutes: number | null
+          protein_grams: number | null
+          published_at: string | null
+          servings: number | null
+          status: string
+          tags: string[]
+          title: string
+          updated_at: string
+          video_url: string | null
+        }
+        Insert: {
+          access_scope: string
+          author_id?: string | null
+          backed_up_at?: string
+          body: string
+          calories_per_serving?: number | null
+          category: string
+          created_at: string
+          id: string
+          image_url?: string | null
+          prep_time_minutes?: number | null
+          protein_grams?: number | null
+          published_at?: string | null
+          servings?: number | null
+          status: string
+          tags: string[]
+          title: string
+          updated_at: string
+          video_url?: string | null
+        }
+        Update: {
+          access_scope?: string
+          author_id?: string | null
+          backed_up_at?: string
           body?: string
           calories_per_serving?: number | null
           category?: string
@@ -21582,6 +25622,63 @@ export type Database = {
             referencedRelation: "pt_sessions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "session_requests_replaces_session_id_fkey"
+            columns: ["replaces_session_id"]
+            isOneToOne: false
+            referencedRelation: "pt_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      set_video_feed_jobs: {
+        Row: {
+          asset_id: string | null
+          attempts: number
+          created_at: string
+          error: string | null
+          next_at: string
+          playback_id: string | null
+          provider: string
+          set_video_id: string
+          started_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          asset_id?: string | null
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          next_at?: string
+          playback_id?: string | null
+          provider?: string
+          set_video_id: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          asset_id?: string | null
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          next_at?: string
+          playback_id?: string | null
+          provider?: string
+          set_video_id?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "set_video_feed_jobs_set_video_id_fkey"
+            columns: ["set_video_id"]
+            isOneToOne: true
+            referencedRelation: "pl_set_videos"
+            referencedColumns: ["id"]
+          },
         ]
       }
       setup_prompt_dismissals: {
@@ -21816,93 +25913,93 @@ export type Database = {
           app_member_id: string | null
           automation_id: string | null
           automation_trigger: string | null
+          blocked_reason: string | null
           body: string
+          category: string | null
           client_id: string | null
           created_at: string
           error: string | null
-          id: string
-          kind: string
-          message_id: string | null
-          pt_session_id: string | null
-          reminder_step: number | null
-          sender_user_id: string | null
-          status: string
-          to_phone: string
-          twilio_sid: string | null
-          blocked_reason: string | null
-          category: string | null
           error_code: number | null
           est_cost_usd: number | null
+          id: string
           idempotency_base: string | null
           idempotency_key: string | null
+          kind: string
+          message_id: string | null
           price_unit: string | null
           price_usd: number | null
+          pt_session_id: string | null
+          reminder_step: number | null
           segments: number | null
+          sender_user_id: string | null
           sent_at: string | null
+          status: string
           status_checked_at: string | null
           status_checks: number
+          to_phone: string
+          twilio_sid: string | null
           twilio_status: string | null
         }
         Insert: {
           app_member_id?: string | null
           automation_id?: string | null
           automation_trigger?: string | null
+          blocked_reason?: string | null
           body: string
+          category?: string | null
           client_id?: string | null
           created_at?: string
           error?: string | null
-          id?: string
-          kind: string
-          message_id?: string | null
-          pt_session_id?: string | null
-          reminder_step?: number | null
-          sender_user_id?: string | null
-          status?: string
-          to_phone: string
-          twilio_sid?: string | null
-          blocked_reason?: string | null
-          category?: string | null
           error_code?: number | null
           est_cost_usd?: number | null
+          id?: string
           idempotency_base?: string | null
           idempotency_key?: string | null
+          kind: string
+          message_id?: string | null
           price_unit?: string | null
           price_usd?: number | null
+          pt_session_id?: string | null
+          reminder_step?: number | null
           segments?: number | null
+          sender_user_id?: string | null
           sent_at?: string | null
+          status?: string
           status_checked_at?: string | null
           status_checks?: number
+          to_phone: string
+          twilio_sid?: string | null
           twilio_status?: string | null
         }
         Update: {
           app_member_id?: string | null
           automation_id?: string | null
           automation_trigger?: string | null
+          blocked_reason?: string | null
           body?: string
+          category?: string | null
           client_id?: string | null
           created_at?: string
           error?: string | null
-          id?: string
-          kind?: string
-          message_id?: string | null
-          pt_session_id?: string | null
-          reminder_step?: number | null
-          sender_user_id?: string | null
-          status?: string
-          to_phone?: string
-          twilio_sid?: string | null
-          blocked_reason?: string | null
-          category?: string | null
           error_code?: number | null
           est_cost_usd?: number | null
+          id?: string
           idempotency_base?: string | null
           idempotency_key?: string | null
+          kind?: string
+          message_id?: string | null
           price_unit?: string | null
           price_usd?: number | null
+          pt_session_id?: string | null
+          reminder_step?: number | null
           segments?: number | null
+          sender_user_id?: string | null
           sent_at?: string | null
+          status?: string
           status_checked_at?: string | null
           status_checks?: number
+          to_phone?: string
+          twilio_sid?: string | null
           twilio_status?: string | null
         }
         Relationships: [
@@ -21953,71 +26050,71 @@ export type Database = {
       sms_settings: {
         Row: {
           admin_notify_phone: string | null
+          allowed_prefixes: string[]
           brand_name: string
+          budget_alerts: Json
+          client_daily_cap: number
           default_coach_name: string
           enabled: boolean
           from_phone: string | null
           id: string
           manual_default_template: string
-          rate_limit_per_hour: number
-          reminder_steps: Json
-          singleton: boolean
-          updated_at: string
-          updated_by: string | null
-          allowed_prefixes: string[]
-          budget_alerts: Json
-          client_daily_cap: number
           monthly_budget_cad: number
           number_fee_usd: number
           price_per_segment_usd: number
+          rate_limit_per_hour: number
+          reminder_steps: Json
           security_texts_enabled: boolean
+          singleton: boolean
           twilio_usage: Json | null
+          updated_at: string
+          updated_by: string | null
           usd_to_cad: number
         }
         Insert: {
           admin_notify_phone?: string | null
+          allowed_prefixes?: string[]
           brand_name?: string
+          budget_alerts?: Json
+          client_daily_cap?: number
           default_coach_name?: string
           enabled?: boolean
           from_phone?: string | null
           id?: string
           manual_default_template?: string
-          rate_limit_per_hour?: number
-          reminder_steps?: Json
-          singleton?: boolean
-          updated_at?: string
-          updated_by?: string | null
-          allowed_prefixes?: string[]
-          budget_alerts?: Json
-          client_daily_cap?: number
           monthly_budget_cad?: number
           number_fee_usd?: number
           price_per_segment_usd?: number
+          rate_limit_per_hour?: number
+          reminder_steps?: Json
           security_texts_enabled?: boolean
+          singleton?: boolean
           twilio_usage?: Json | null
+          updated_at?: string
+          updated_by?: string | null
           usd_to_cad?: number
         }
         Update: {
           admin_notify_phone?: string | null
+          allowed_prefixes?: string[]
           brand_name?: string
+          budget_alerts?: Json
+          client_daily_cap?: number
           default_coach_name?: string
           enabled?: boolean
           from_phone?: string | null
           id?: string
           manual_default_template?: string
-          rate_limit_per_hour?: number
-          reminder_steps?: Json
-          singleton?: boolean
-          updated_at?: string
-          updated_by?: string | null
-          allowed_prefixes?: string[]
-          budget_alerts?: Json
-          client_daily_cap?: number
           monthly_budget_cad?: number
           number_fee_usd?: number
           price_per_segment_usd?: number
+          rate_limit_per_hour?: number
+          reminder_steps?: Json
           security_texts_enabled?: boolean
+          singleton?: boolean
           twilio_usage?: Json | null
+          updated_at?: string
+          updated_by?: string | null
           usd_to_cad?: number
         }
         Relationships: []
@@ -22783,6 +26880,7 @@ export type Database = {
           archived_at: string | null
           assigned_to: string | null
           assignee_name: string | null
+          assignees: string[]
           campaign_id: string | null
           completed_at: string | null
           completed_by: string | null
@@ -22813,6 +26911,7 @@ export type Database = {
           archived_at?: string | null
           assigned_to?: string | null
           assignee_name?: string | null
+          assignees?: string[]
           campaign_id?: string | null
           completed_at?: string | null
           completed_by?: string | null
@@ -22843,6 +26942,7 @@ export type Database = {
           archived_at?: string | null
           assigned_to?: string | null
           assignee_name?: string | null
+          assignees?: string[]
           campaign_id?: string | null
           completed_at?: string | null
           completed_by?: string | null
@@ -22871,13 +26971,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "tasks_assigned_to_fkey"
-            columns: ["assigned_to"]
-            isOneToOne: false
-            referencedRelation: "coaches"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "tasks_completed_by_fkey"
             columns: ["completed_by"]
             isOneToOne: false
@@ -22899,6 +26992,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      team_notes: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          id: string
+          members: string[]
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          members: string[]
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          members?: string[]
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      template_flow_backup: {
+        Row: {
+          batch: string
+          created_at: string
+          id: number
+          notes: string | null
+          payload: Json | null
+          plan_id: string | null
+          published_payload: Json | null
+          template_id: string
+        }
+        Insert: {
+          batch: string
+          created_at?: string
+          id?: number
+          notes?: string | null
+          payload?: Json | null
+          plan_id?: string | null
+          published_payload?: Json | null
+          template_id: string
+        }
+        Update: {
+          batch?: string
+          created_at?: string
+          id?: number
+          notes?: string | null
+          payload?: Json | null
+          plan_id?: string | null
+          published_payload?: Json | null
+          template_id?: string
+        }
+        Relationships: []
       }
       training_phases: {
         Row: {
@@ -23663,27 +27822,39 @@ export type Database = {
       }
       workout_view_prefs: {
         Row: {
+          focus_tips_at: string | null
           intro_dismissed: number
           intro_last_at: string | null
           intro_shown: number
+          logging_tips_at: string | null
+          set_video_tip_count: number
+          set_video_tip_last_at: string | null
           tried_at: string | null
           updated_at: string
           user_id: string
           view: string
         }
         Insert: {
+          focus_tips_at?: string | null
           intro_dismissed?: number
           intro_last_at?: string | null
           intro_shown?: number
+          logging_tips_at?: string | null
+          set_video_tip_count?: number
+          set_video_tip_last_at?: string | null
           tried_at?: string | null
           updated_at?: string
           user_id: string
           view?: string
         }
         Update: {
+          focus_tips_at?: string | null
           intro_dismissed?: number
           intro_last_at?: string | null
           intro_shown?: number
+          logging_tips_at?: string | null
+          set_video_tip_count?: number
+          set_video_tip_last_at?: string | null
           tried_at?: string | null
           updated_at?: string
           user_id?: string
@@ -23811,34 +27982,178 @@ export type Database = {
       }
     }
     Functions: {
-      sms_claim: {
+      _account_deactivation_apply: { Args: { _client: string }; Returns: Json }
+      _account_deletion_apply: {
+        Args: { _id: string; _restore: boolean }
+        Returns: undefined
+      }
+      _account_deletion_open: {
         Args: {
-          _automation_id?: string
-          _automation_trigger?: string
-          _body: string
-          _category: string
-          _client_id?: string
-          _key?: string
-          _kind: string
-          _max_attempts?: number
-          _member_id?: string
-          _message_id?: string
-          _pt_session_id?: string
-          _reminder_step?: number
-          _segments: number
-          _sender_user_id?: string
-          _to: string
+          _by: string
+          _client: string
+          _member: string
+          _reason: string
+          _source: string
+          _user: string
         }
         Returns: Json
       }
-      sms_cost_summary: { Args: never; Returns: Json }
-      sms_finish: {
-        Args: { _error?: string; _error_code?: number; _id: string; _sid: string }
+      _account_is_staff: { Args: { _user: string }; Returns: boolean }
+      _account_lifecycle_log: {
+        Args: {
+          _actor: string
+          _client: string
+          _details?: Json
+          _event: string
+          _role: string
+          _user: string
+        }
         Returns: undefined
       }
-      sms_month_spend_usd: { Args: never; Returns: number }
-      sms_month_start: { Args: { _at: string }; Returns: string }
-      sms_segment_count: { Args: { _body: string }; Returns: number }
+      _account_purge_personal: {
+        Args: { _client: string; _user: string }
+        Returns: Json
+      }
+      _account_reactivation_apply: {
+        Args: { _by: string; _client: string; _role: string }
+        Returns: Json
+      }
+      _challenge_attempt_result: { Args: { p_attempt: string }; Returns: Json }
+      _challenge_audit: {
+        Args: {
+          p_action: string
+          p_challenge: string
+          p_detail?: Json
+          p_entity: string
+          p_entity_id: string
+        }
+        Returns: undefined
+      }
+      _challenge_bump: { Args: { p_challenge: string }; Returns: undefined }
+      _challenge_card: {
+        Args: { c: Database["public"]["Tables"]["challenges"]["Row"] }
+        Returns: Json
+      }
+      _challenge_client_ip: { Args: never; Returns: string }
+      _challenge_code: { Args: { n: number }; Returns: string }
+      _challenge_divisions_separate: {
+        Args: { p_challenge: string }
+        Returns: boolean
+      }
+      _challenge_handle: { Args: { p_name: string }; Returns: string }
+      _challenge_letters: { Args: { p: string }; Returns: string }
+      _challenge_merge: {
+        Args: { p_drop: string; p_keep: string }
+        Returns: Json
+      }
+      _challenge_norm: { Args: { p: string }; Returns: string }
+      _challenge_rank: {
+        Args: { p_challenge: string }
+        Returns: {
+          attempt_count: number
+          division_id: string
+          entry_id: string
+          last_at: string
+          rank_all: number
+          rank_div: number
+          score: number
+          tied_all: boolean
+          tied_div: boolean
+          valid_count: number
+        }[]
+      }
+      _challenge_rate_ok: {
+        Args: { p_key: string; p_max: number; p_window: string }
+        Returns: boolean
+      }
+      _challenge_row_json: {
+        Args: {
+          e: Database["public"]["Tables"]["challenge_entries"]["Row"]
+          p: Database["public"]["Tables"]["challenge_people"]["Row"]
+          r_at: string
+          r_attempts: number
+          r_rank: number
+          r_rank_div: number
+          r_score: number
+          r_tied: boolean
+          r_tied_div: boolean
+          r_valid: number
+        }
+        Returns: Json
+      }
+      _challenge_slugify: {
+        Args: { p: string; p_max?: number }
+        Returns: string
+      }
+      _challenge_visible: {
+        Args: { p_slug: string }
+        Returns: {
+          acknowledgments: Json
+          activity: string
+          address: string | null
+          aggregate: string
+          announcement: string | null
+          announcement_at: string | null
+          attempts_allowed: number
+          city: string | null
+          collect: Json
+          cover_path: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          direction: string
+          duplicated_from: string | null
+          eligibility: string | null
+          ended_at: string | null
+          ends_at: string | null
+          entry_fee_label: string | null
+          exercise_id: string | null
+          final_by: string | null
+          id: string
+          is_template: boolean
+          is_test: boolean
+          load_label: string | null
+          max_participants: number | null
+          measure: string
+          min_age: number
+          objective: string | null
+          prize_summary: string | null
+          registration_closes_at: string | null
+          registration_opens_at: string | null
+          relative_to_bodyweight: boolean
+          results_final_at: string | null
+          rules: Json
+          safety: string | null
+          self_registration: boolean
+          slug: string
+          started_at: string | null
+          starts_at: string | null
+          status: string
+          tagline: string | null
+          tiebreak: string
+          timezone: string
+          title: string
+          unit: string
+          updated_at: string
+          venue_name: string | null
+          warmup: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "challenges"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _challenge_words_match: {
+        Args: { p_name: string; p_q: string }
+        Returns: boolean
+      }
+      _member_free_join: { Args: { _uid: string }; Returns: Json }
+      _move_session_event: {
+        Args: { _event_id: string; _note: string; _to_purchase: string }
+        Returns: boolean
+      }
       _pt_outstanding_reservation: {
         Args: { _pt_session_id: string }
         Returns: {
@@ -23866,6 +28181,48 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _pt_unreversed_use: {
+        Args: { _pt_session_id: string }
+        Returns: {
+          appointment_id: string | null
+          client_id: string
+          created_at: string
+          created_by: string | null
+          currency: string | null
+          effective_date: string
+          event_type: string
+          expires_at: string | null
+          id: string
+          note: string | null
+          pt_session_id: string | null
+          purchase_id: string | null
+          related_event_id: string | null
+          session_count: number
+          source: string
+          unit_value_minor: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "session_ledger_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _session_balance_rows: {
+        Args: { _client_id: string }
+        Returns: {
+          expired: number
+          expires_at: string
+          granted: number
+          offer_name: string
+          opened_on: string
+          purchase_id: string
+          remaining: number
+          reserved: number
+          transferred: number
+          used: number
+        }[]
+      }
       accept_my_purchase: {
         Args: { p_purchase_id: string }
         Returns: {
@@ -23884,6 +28241,7 @@ export type Database = {
           amount_paid: number | null
           amount_paid_cents: number
           amount_refunded_cents: number
+          amount_tax_paid_cents: number
           archived_at: string | null
           archived_by: string | null
           assigned_at: string
@@ -23920,6 +28278,7 @@ export type Database = {
           offer_type: string | null
           offer_version: number | null
           package_expiry_date: string | null
+          package_number: number | null
           package_tracking_enabled: boolean | null
           paid_at: string | null
           payment_frequency: string | null
@@ -23935,6 +28294,7 @@ export type Database = {
           purchased_at: string
           receipt_url: string | null
           refund_policy: string | null
+          renewed_from_id: string | null
           service_start_date: string | null
           service_status: string
           session_fulfillment: string
@@ -23975,6 +28335,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      account_deactivations_due: { Args: never; Returns: number }
+      account_delete_by_admin: {
+        Args: { _client_id?: string; _member_id?: string; _reason?: string }
+        Returns: Json
+      }
+      account_delete_request: { Args: { _reason?: string }; Returns: Json }
+      account_delete_restore: { Args: { _id?: string }; Returns: boolean }
+      account_deletion_status: { Args: never; Returns: Json }
+      account_lifecycle_status: { Args: never; Returns: Json }
       admin_clients_directory: {
         Args: {
           p_coach_id?: string
@@ -23982,6 +28351,7 @@ export type Database = {
           p_flags?: string[]
           p_lifecycle?: string
           p_limit?: number
+          p_match?: string
           p_offset?: number
           p_search?: string
           p_sort?: string
@@ -23994,6 +28364,77 @@ export type Database = {
       admin_delete_messages: { Args: { _ids: string[] }; Returns: number }
       admin_make_exercise_alias: {
         Args: { _canonical: string; _duplicate: string }
+        Returns: Json
+      }
+      ai_credit_allowance: { Args: { _user: string }; Returns: number }
+      ai_credit_cost: { Args: { _feature: string }; Returns: number }
+      ai_credit_detail: { Args: { _user: string }; Returns: Json }
+      ai_credit_period_start: { Args: never; Returns: string }
+      ai_credit_settings: { Args: never; Returns: Json }
+      ai_credit_state: { Args: { _user: string }; Returns: Json }
+      ai_credit_tier: { Args: { _user: string }; Returns: string }
+      ai_credit_wallet_lock: {
+        Args: { _user: string }
+        Returns: {
+          created_at: string
+          extra: number
+          period_start: string
+          period_used: number
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "ai_credit_wallets"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      ai_credits_admin_grant: {
+        Args: { _credits: number; _note?: string; _user: string }
+        Returns: Json
+      }
+      ai_credits_for_user: { Args: { _user: string }; Returns: Json }
+      ai_credits_mine: { Args: never; Returns: Json }
+      ai_credits_overview: { Args: { _days?: number }; Returns: Json }
+      ai_credits_record_purchase: {
+        Args: {
+          _amount_minor: number
+          _credits: number
+          _currency: string
+          _customer: string
+          _mode: string
+          _pack: string
+          _paid_at?: string
+          _payment_intent: string
+          _session: string
+          _tax_minor: number
+          _total_minor: number
+          _user: string
+        }
+        Returns: Json
+      }
+      ai_credits_record_refund: {
+        Args: { _payment_intent: string; _refunded_minor: number }
+        Returns: Json
+      }
+      ai_credits_set_allowances: {
+        Args: { _coaching: number; _member: number }
+        Returns: Json
+      }
+      ai_credits_settle: {
+        Args: {
+          _cost_usd?: number
+          _input_tokens?: number
+          _model?: string
+          _ok: boolean
+          _output_tokens?: number
+          _use_id: string
+        }
+        Returns: Json
+      }
+      ai_credits_use: {
+        Args: { _feature: string; _ref?: string; _user: string }
         Returns: Json
       }
       apply_conversation_workflow: {
@@ -24012,6 +28453,72 @@ export type Database = {
         Args: { _member_id: string }
         Returns: number
       }
+      apply_unbilled_sessions: {
+        Args: { _purchase_id: string }
+        Returns: number
+      }
+      archive_unused_forms: { Args: { _days?: number }; Returns: number }
+      athlete_program_can_author: { Args: never; Returns: boolean }
+      athlete_program_card: {
+        Args: { p: Database["public"]["Tables"]["athlete_programs"]["Row"] }
+        Returns: Json
+      }
+      athlete_program_clean_days: { Args: { _days: Json }; Returns: Json }
+      athlete_program_copy: { Args: { _id: string }; Returns: string }
+      athlete_program_count_exercises: {
+        Args: { _days: Json }
+        Returns: number
+      }
+      athlete_program_delete: { Args: { _id: string }; Returns: undefined }
+      athlete_program_detail: { Args: { _id: string }; Returns: Json }
+      athlete_program_moderate: {
+        Args: { _hide: boolean; _id: string; _reason?: string }
+        Returns: undefined
+      }
+      athlete_program_save: {
+        Args: {
+          _days: Json
+          _description: string
+          _goal: string
+          _id: string
+          _level: string
+          _title: string
+          _weeks: number
+        }
+        Returns: string
+      }
+      athlete_program_set_shared: {
+        Args: { _id: string; _shared: boolean }
+        Returns: undefined
+      }
+      athlete_program_start: {
+        Args: { _id: string; _start: string }
+        Returns: Json
+      }
+      athlete_program_sync_running: { Args: { _id: string }; Returns: Json }
+      athlete_program_visible: {
+        Args: {
+          _archived: string
+          _hidden: string
+          _owner: string
+          _visibility: string
+        }
+        Returns: boolean
+      }
+      athlete_programs_browse: {
+        Args: {
+          _author?: string
+          _days?: number
+          _goal?: string
+          _level?: string
+          _limit?: number
+          _offset?: number
+          _q?: string
+          _scope?: string
+          _sort?: string
+        }
+        Returns: Json
+      }
       award_athlete_xp: {
         Args: {
           _at: string
@@ -24024,6 +28531,10 @@ export type Database = {
           _xp: number
         }
         Returns: undefined
+      }
+      books_add_recurring_expenses: {
+        Args: { _today?: string }
+        Returns: number
       }
       books_labels: {
         Args: {
@@ -24046,6 +28557,11 @@ export type Database = {
           payment_status: string
         }[]
       }
+      books_recurring_next: {
+        Args: { _day: number; _every: string; _from: string }
+        Returns: string
+      }
+      business_charges_tax: { Args: never; Returns: boolean }
       can_access_chat_presence: { Args: { _topic: string }; Returns: boolean }
       can_access_group_presence: { Args: { _topic: string }; Returns: boolean }
       can_manage_group: {
@@ -24111,6 +28627,149 @@ export type Database = {
         Returns: Json
       }
       capture_league_prescriptions: { Args: { _now?: string }; Returns: number }
+      cardio_day_kind: { Args: { p_day_type: string }; Returns: string }
+      cardio_exercise_for: {
+        Args: { p_custom: string; p_machine: string; p_type: string }
+        Returns: string
+      }
+      cardio_row_notes: {
+        Args: { t: Database["public"]["Tables"]["cardio_targets"]["Row"] }
+        Returns: string
+      }
+      challenge_add_staff: {
+        Args: { p_challenge: string; p_email: string; p_role: string }
+        Returns: Json
+      }
+      challenge_admin_list: { Args: never; Returns: Json }
+      challenge_athlete: { Args: { p_handle: string }; Returns: Json }
+      challenge_board: { Args: { p_slug: string }; Returns: Json }
+      challenge_board_around: {
+        Args: {
+          p_code: string
+          p_division?: string
+          p_radius?: number
+          p_slug: string
+        }
+        Returns: Json
+      }
+      challenge_board_find: {
+        Args: { p_division?: string; p_q: string; p_slug: string }
+        Returns: Json
+      }
+      challenge_board_page: {
+        Args: {
+          p_division?: string
+          p_limit?: number
+          p_offset?: number
+          p_slug: string
+        }
+        Returns: Json
+      }
+      challenge_can: {
+        Args: { p_challenge: string; p_need: string }
+        Returns: boolean
+      }
+      challenge_claim: { Args: never; Returns: Json }
+      challenge_clear_now: {
+        Args: { p_challenge: string; p_entry: string }
+        Returns: undefined
+      }
+      challenge_correct_attempt: {
+        Args: {
+          p_attempt: string
+          p_client_key: string
+          p_reason: string
+          p_valid: boolean
+          p_value: number
+        }
+        Returns: Json
+      }
+      challenge_dashboard: { Args: { p_challenge: string }; Returns: Json }
+      challenge_delete_entry: { Args: { p_entry: string }; Returns: undefined }
+      challenge_duplicate: {
+        Args: { p_as_template?: boolean; p_challenge: string; p_title?: string }
+        Returns: string
+      }
+      challenge_entry_public: { Args: { p_code: string }; Returns: Json }
+      challenge_finalize: { Args: { p_challenge: string }; Returns: Json }
+      challenge_hub: { Args: never; Returns: Json }
+      challenge_insights: { Args: { p_challenge: string }; Returns: Json }
+      challenge_merge_people: {
+        Args: { p_drop: string; p_keep: string }
+        Returns: Json
+      }
+      challenge_my_events: { Args: never; Returns: Json }
+      challenge_my_handle: { Args: never; Returns: string }
+      challenge_my_ids: { Args: never; Returns: string[] }
+      challenge_my_photo_ticket: { Args: never; Returns: string }
+      challenge_now_public: { Args: { p_slug: string }; Returns: Json }
+      challenge_photo_clear: { Args: { p_person: string }; Returns: string }
+      challenge_photo_ticket: { Args: { p_entry: string }; Returns: string }
+      challenge_photo_ticket_check: { Args: { p_token: string }; Returns: Json }
+      challenge_photo_ticket_redeem: {
+        Args: { p_path: string; p_token: string }
+        Returns: Json
+      }
+      challenge_public: { Args: { p_slug: string }; Returns: Json }
+      challenge_public_ids: { Args: never; Returns: string[] }
+      challenge_record_attempt: {
+        Args: {
+          p_client_key: string
+          p_entry: string
+          p_note?: string
+          p_tiebreak?: boolean
+          p_valid: boolean
+          p_value: number
+          p_video_url?: string
+        }
+        Returns: Json
+      }
+      challenge_register: {
+        Args: { p: Json; p_challenge: string }
+        Returns: Json
+      }
+      challenge_remove_staff: {
+        Args: { p_challenge: string; p_user: string }
+        Returns: undefined
+      }
+      challenge_reset_practice: { Args: { p_challenge: string }; Returns: Json }
+      challenge_role: { Args: { p_challenge: string }; Returns: string }
+      challenge_set_now: {
+        Args: { p_challenge: string; p_entry: string; p_value?: number }
+        Returns: undefined
+      }
+      challenge_set_status: {
+        Args: { p_challenge: string; p_status: string }
+        Returns: Json
+      }
+      challenge_staff_board: { Args: { p_challenge: string }; Returns: Json }
+      challenge_staff_list: { Args: { p_challenge: string }; Returns: Json }
+      challenge_track: {
+        Args: {
+          p_code?: string
+          p_handle?: string
+          p_kind: string
+          p_slug: string
+          p_visitor: string
+        }
+        Returns: undefined
+      }
+      challenge_update_entry: {
+        Args: { p: Json; p_entry: string }
+        Returns: Json
+      }
+      challenge_update_my_profile: {
+        Args: { p_discoverable: boolean; p_display_name: string }
+        Returns: Json
+      }
+      challenge_void_attempt: {
+        Args: { p_attempt: string; p_reason: string }
+        Returns: Json
+      }
+      chat_attachments_video_guard: {
+        Args: { _max_bytes: number; _max_s: number; _new: Json; _old: Json }
+        Returns: undefined
+      }
       chat_block_person: {
         Args: { _blocked?: boolean; _user_id: string }
         Returns: Json
@@ -24191,6 +28850,7 @@ export type Database = {
         Args: { _blocker: string; _other: string }
         Returns: boolean
       }
+      chat_history_purge_allowed: { Args: never; Returns: boolean }
       chat_is_direct: { Args: { _group_id: string }; Returns: boolean }
       chat_kind: { Args: { _group_id: string }; Returns: string }
       chat_request_cap: { Args: never; Returns: number }
@@ -24330,6 +28990,7 @@ export type Database = {
         Returns: string
       }
       cleo_chat_title: { Args: { q: string }; Returns: string }
+      cleo_data_catalog: { Args: never; Returns: Json }
       client_daily_training_load: {
         Args: { _client_id: string; _days?: number }
         Returns: {
@@ -24438,7 +29099,9 @@ export type Database = {
       coach_manageable_pl_week_ids: { Args: never; Returns: string[] }
       coach_voice_words: { Args: { _key: string }; Returns: string[] }
       coached_client_ids: { Args: never; Returns: string[] }
+      coached_client_user_ids: { Args: never; Returns: string[] }
       coached_member_ids: { Args: never; Returns: string[] }
+      coached_progress_submission_ids: { Args: never; Returns: string[] }
       coaching_agreement_record_signature: { Args: { p: Json }; Returns: Json }
       coaching_agreement_resign_below_version: { Args: never; Returns: string }
       community_activity: { Args: never; Returns: Json }
@@ -24477,7 +29140,10 @@ export type Database = {
         Args: { _archive: boolean; _post_id: string }
         Returns: undefined
       }
+      community_attention_add: { Args: { _rows: Json }; Returns: number }
       community_author: { Args: { _user_id: string }; Returns: Json }
+      community_auto_post_film: { Args: never; Returns: boolean }
+      community_avatar: { Args: { _user_id: string }; Returns: string }
       community_birthday_act: {
         Args: {
           _action: string
@@ -24501,6 +29167,10 @@ export type Database = {
         Args: {
           b: Database["public"]["Tables"]["community_birthday_posts"]["Row"]
         }
+        Returns: Json
+      }
+      community_birthday_marker: {
+        Args: { _caption?: string; _client_id: string }
         Returns: Json
       }
       community_birthday_on: {
@@ -24565,6 +29235,7 @@ export type Database = {
         Returns: Json
       }
       community_close_friend_authors: { Args: never; Returns: string[] }
+      community_coach_post_day: { Args: { _day: string }; Returns: string }
       community_comment_json: {
         Args: {
           _owner: string
@@ -24620,6 +29291,7 @@ export type Database = {
         Args: {
           _caption?: string
           _media?: Json
+          _shared_post_id?: string
           _story?: boolean
           _visibility?: string
         }
@@ -24645,6 +29317,81 @@ export type Database = {
         Args: { _roster: string[]; _week: string }
         Returns: number
       }
+      community_daily_audience: { Args: { _day: string }; Returns: string }
+      community_daily_theme: { Args: { _day: string }; Returns: string }
+      community_daily_visual_act: {
+        Args: { _action: string; _id: string; _line?: string; _style?: string }
+        Returns: Json
+      }
+      community_daily_visual_apply: {
+        Args: { _id: string; _patch: Json }
+        Returns: Json
+      }
+      community_daily_visual_caption: {
+        Args: {
+          _faith: boolean
+          _line: string
+          _verse_ref: string
+          _verse_text: string
+        }
+        Returns: string
+      }
+      community_daily_visual_held: {
+        Args: {
+          r: Database["public"]["Tables"]["community_daily_visuals"]["Row"]
+        }
+        Returns: boolean
+      }
+      community_daily_visual_move: {
+        Args: { _day: string; _id: string }
+        Returns: Json
+      }
+      community_daily_visual_post: {
+        Args: { _backdate?: boolean; _day: string }
+        Returns: Json
+      }
+      community_daily_visual_restore: {
+        Args: { _version_id: string }
+        Returns: Json
+      }
+      community_daily_visual_stats: { Args: { _days?: number }; Returns: Json }
+      community_daily_visual_sync_post: {
+        Args: { _caption?: string; _id: string }
+        Returns: boolean
+      }
+      community_daily_visual_versions_list: {
+        Args: { _id: string }
+        Returns: Json
+      }
+      community_daily_visuals_kick: {
+        Args: { _force?: boolean }
+        Returns: boolean
+      }
+      community_daily_visuals_overview: { Args: never; Returns: Json }
+      community_daily_visuals_plan: {
+        Args: { _days?: number; _from?: string }
+        Returns: number
+      }
+      community_daily_visuals_restyle: {
+        Args: { _look: string }
+        Returns: number
+      }
+      community_daily_visuals_set_days: {
+        Args: { _days: number[] }
+        Returns: Json
+      }
+      community_daily_visuals_set_lovable: {
+        Args: { _on: boolean }
+        Returns: boolean
+      }
+      community_daily_visuals_set_on: {
+        Args: { _on: boolean }
+        Returns: boolean
+      }
+      community_daily_visuals_set_ref: {
+        Args: { _art: string; _path: string }
+        Returns: Json
+      }
       community_delete_comment: {
         Args: { _comment_id: string }
         Returns: undefined
@@ -24669,6 +29416,15 @@ export type Database = {
           _before_at?: string
           _before_id?: string
           _limit?: number
+        }
+        Returns: Json
+      }
+      community_feed_ranked: {
+        Args: {
+          _cursor?: Json
+          _following?: boolean
+          _limit?: number
+          _seen_before?: string
         }
         Returns: Json
       }
@@ -24735,6 +29491,7 @@ export type Database = {
         Args: { _key: string; _year: number }
         Returns: string
       }
+      community_insight_days: { Args: never; Returns: number[] }
       community_is_coach: { Args: { _user_id: string }; Returns: boolean }
       community_is_member: { Args: { _user_id: string }; Returns: boolean }
       community_is_post_author: { Args: { _post_id: string }; Returns: boolean }
@@ -24861,6 +29618,7 @@ export type Database = {
         Returns: Json
       }
       community_post: { Args: { _post_id: string }; Returns: Json }
+      community_post_activity: { Args: { _post_id: string }; Returns: Json }
       community_post_collab_ids: {
         Args: { _post_id: string }
         Returns: string[]
@@ -24876,6 +29634,10 @@ export type Database = {
       }
       community_post_points_status: { Args: never; Returns: Json }
       community_post_reactors: { Args: { _post_id: string }; Returns: Json }
+      community_post_scores: {
+        Args: { _days?: number; _post_ids?: string[] }
+        Returns: Json
+      }
       community_post_viewers: { Args: { _post_id: string }; Returns: Json }
       community_post_views_summary: {
         Args: { _post_id: string }
@@ -24895,6 +29657,7 @@ export type Database = {
         Args: { _at: string; _client_id: string; _day_id: string }
         Returns: string
       }
+      community_publish_daily_visual: { Args: never; Returns: Json }
       community_publish_holiday: {
         Args: { _force?: boolean; _key?: string }
         Returns: Json
@@ -24914,6 +29677,20 @@ export type Database = {
         Args: { _post_id: string }
         Returns: undefined
       }
+      community_report: {
+        Args: {
+          _details?: string
+          _kind: string
+          _reason: string
+          _target: string
+        }
+        Returns: Json
+      }
+      community_report_resolve: {
+        Args: { _action: string; _kind: string; _target: string }
+        Returns: undefined
+      }
+      community_reports_open: { Args: never; Returns: Json }
       community_repost: {
         Args: {
           _note?: string
@@ -24988,12 +29765,20 @@ export type Database = {
       }
       community_series_overview: { Args: never; Returns: Json }
       community_series_preview: { Args: { _series: string }; Returns: Json }
+      community_series_set_on: {
+        Args: { _on: boolean; _series: string }
+        Returns: string[]
+      }
       community_series_set_paused: {
         Args: { _paused: boolean }
         Returns: undefined
       }
       community_series_update_item: {
         Args: { _active?: boolean; _body: string; _id: string; _media?: Json }
+        Returns: undefined
+      }
+      community_set_auto_post_film: {
+        Args: { _on: boolean }
         Returns: undefined
       }
       community_set_auto_share: { Args: { _on: boolean }; Returns: undefined }
@@ -25018,10 +29803,6 @@ export type Database = {
         Returns: Json
       }
       community_set_private: { Args: { _on: boolean }; Returns: Json }
-      community_set_private_views: {
-        Args: { _on: boolean }
-        Returns: undefined
-      }
       community_set_sticker: {
         Args: { _post_id: string; _sticker: Json }
         Returns: Json
@@ -25035,6 +29816,40 @@ export type Database = {
         Args: { _caption?: string; _comment_id: string }
         Returns: string
       }
+      community_share_faces: {
+        Args: { _key: string; _uid: string }
+        Returns: Json
+      }
+      community_share_is_staff: { Args: { _uid: string }; Returns: boolean }
+      community_share_my_client: { Args: { _uid: string }; Returns: string }
+      community_share_post: {
+        Args: { _body?: string; _post_id: string; _to: string[] }
+        Returns: Json
+      }
+      community_share_refusal:
+        | {
+            Args: { _post_id: string; _target: string; _uid: string }
+            Returns: string
+          }
+        | { Args: { _post_id: string; _viewer: string }; Returns: string }
+      community_share_targets: {
+        Args: { _limit?: number; _post_id?: string; _q?: string }
+        Returns: Json
+      }
+      community_shared_post_json: { Args: { _post_id: string }; Returns: Json }
+      community_staff_people: { Args: never; Returns: string[] }
+      community_stats_bump: {
+        Args: { _client_id: string; _from?: string }
+        Returns: undefined
+      }
+      community_stats_bump_day: {
+        Args: { _day_id: string }
+        Returns: undefined
+      }
+      community_stats_bump_set: {
+        Args: { _at: string; _client_id: string; _row_id: string; _sw: string }
+        Returns: undefined
+      }
       community_sticker_answer: {
         Args: {
           _body?: string
@@ -25047,6 +29862,10 @@ export type Database = {
       community_sticker_clean: { Args: { _s: Json }; Returns: Json }
       community_sticker_json: {
         Args: { _post_id: string; _viewer: string }
+        Returns: Json
+      }
+      community_sticker_mark_answered: {
+        Args: { _post_id: string; _reply_post_id: string; _user_id: string }
         Returns: Json
       }
       community_sticker_try: { Args: { _s: Json }; Returns: Json }
@@ -25086,6 +29905,14 @@ export type Database = {
       community_workout_stats: {
         Args: { _completion_id: string }
         Returns: Json
+      }
+      community_workout_stats_cached: {
+        Args: { _completion_id: string }
+        Returns: Json
+      }
+      community_workout_stats_refresh: {
+        Args: { _limit?: number }
+        Returns: number
       }
       completion_workout_key: {
         Args: { _completion_id: string }
@@ -25263,6 +30090,7 @@ export type Database = {
         }[]
       }
       expire_overdue_sessions: { Args: never; Returns: number }
+      film_caption: { Args: { _film: Json; _hide?: boolean }; Returns: string }
       finalize_league_month: {
         Args: { _month?: string; _now?: string }
         Returns: number
@@ -25275,6 +30103,7 @@ export type Database = {
         Args: { _error?: string; _schedule_id: string; _status: string }
         Returns: undefined
       }
+      fit_package_sessions: { Args: { _purchase_id: string }; Returns: number }
       fn_apply_nutrition_cadence: {
         Args: { _target_id: string }
         Returns: string
@@ -25683,6 +30512,10 @@ export type Database = {
           missing: string
         }[]
       }
+      goals_weekdays_with_schedule: {
+        Args: { p_available: string[]; p_days: string[] }
+        Returns: string[]
+      }
       grant_sessions_due_today: { Args: never; Returns: number }
       grant_sessions_if_paid_in_full: {
         Args: { _purchase_id: string }
@@ -25699,6 +30532,22 @@ export type Database = {
         }
         Returns: boolean
       }
+      import_calendar_pt_session: {
+        Args: {
+          _calendar_id: string
+          _client_id: string
+          _completed: boolean
+          _date: string
+          _end: string
+          _event_id: string
+          _location: string
+          _start: string
+          _title: string
+          _tz: string
+        }
+        Returns: Json
+      }
+      instant_to_local: { Args: { _at: string; _tz: string }; Returns: string }
       ipf_gl_points: {
         Args: { _bw: number; _sex: string; _total: number }
         Returns: number
@@ -25738,6 +30587,8 @@ export type Database = {
         Returns: boolean
       }
       is_privileged_writer: { Args: never; Returns: boolean }
+      is_test_login: { Args: { _uid: string }; Returns: boolean }
+      is_timed_cardio_name: { Args: { p_name: string }; Returns: boolean }
       jf_member_has_full_access: {
         Args: { _user_id: string }
         Returns: boolean
@@ -25842,6 +30693,10 @@ export type Database = {
       linked_visible_pl_day_ids: { Args: never; Returns: string[] }
       linked_visible_pl_week_ids: { Args: never; Returns: string[] }
       list_portal_broadcasts: { Args: { _as_user?: string }; Returns: Json }
+      local_to_instant: {
+        Args: { _local: string; _tz: string }
+        Returns: string
+      }
       mark_checkin_reviewed: {
         Args: { _checkin_id: string; _via?: string }
         Returns: boolean
@@ -25966,14 +30821,33 @@ export type Database = {
         Args: { _bodyweight_kg: number; _user_id: string }
         Returns: undefined
       }
+      media_video_allowed: {
+        Args: {
+          _bucket: string
+          _max_bytes: number
+          _max_s: number
+          _path: string
+        }
+        Returns: undefined
+      }
+      media_video_checks_since: { Args: never; Returns: string }
+      media_video_object: {
+        Args: { _bucket: string; _path: string }
+        Returns: Json
+      }
       member_can_consume: { Args: { _user_id: string }; Returns: boolean }
       member_can_start_plan: {
         Args: { p_client_id: string; p_template_id: string }
         Returns: boolean
       }
+      member_free_join: { Args: never; Returns: Json }
       member_has_access: {
         Args: { _key: string; _member_id: string }
         Returns: boolean
+      }
+      member_program_end: {
+        Args: { _block_id: string; _confirm?: boolean }
+        Returns: Json
       }
       member_setup_complete: { Args: { _member_id: string }; Returns: boolean }
       merge_duplicate_exercise: {
@@ -25983,6 +30857,10 @@ export type Database = {
       message_attachment_kinds: {
         Args: { _attachments: Json }
         Returns: string[]
+      }
+      message_is_new_for_staff: {
+        Args: { _m: Database["public"]["Tables"]["messages"]["Row"] }
+        Returns: boolean
       }
       move_to_dlq: {
         Args: {
@@ -26043,6 +30921,26 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      nf_can_edit_form: { Args: { _form_id: string }; Returns: boolean }
+      nf_editable_form_ids: { Args: never; Returns: string[] }
+      nf_form_last_used: {
+        Args: never
+        Returns: {
+          form_id: string
+          last_used_at: string
+        }[]
+      }
+      nf_form_library_stats: {
+        Args: never
+        Returns: {
+          done: number
+          form_id: string
+          last_sent_at: string
+          questions: number
+          sent: number
+          waiting: number
+        }[]
+      }
       nf_publish_form_version: {
         Args: { _form_id: string; _reason?: string }
         Returns: {
@@ -26081,6 +30979,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      nf_staff_form_ids: { Args: never; Returns: string[] }
       note_inbound_activity: {
         Args: { _at: string; _client_id: string; _kind: string }
         Returns: undefined
@@ -26089,6 +30988,12 @@ export type Database = {
       notif_mark_read: { Args: { items: Json }; Returns: number }
       notif_mark_unread: { Args: { items: Json }; Returns: number }
       notif_restore: { Args: { items: Json }; Returns: number }
+      nutrition_plain_text: { Args: { s: string }; Returns: string }
+      nutrition_review_due: {
+        Args: { _end: string; _last: string; _phase: string; _start: string }
+        Returns: string
+      }
+      nutrition_review_weeks: { Args: { _phase: string }; Returns: number }
       opl_csv_records: { Args: { _csv: string }; Returns: Json[] }
       payment_reminder_hook_secret: { Args: never; Returns: string }
       payment_sms_due: {
@@ -26102,6 +31007,10 @@ export type Database = {
         }[]
       }
       ping_client_activity: { Args: { _route?: string }; Returns: undefined }
+      pl_apply_template_meta: {
+        Args: { p_block_id: string; p_prep_id: string; p_template_id: string }
+        Returns: undefined
+      }
       pl_assign_template_blocks_atomic: {
         Args: {
           _blocks: Json
@@ -26138,6 +31047,19 @@ export type Database = {
       pl_block_logger_enabled: { Args: never; Returns: boolean }
       pl_clone_blocks_for_rows: { Args: { p_mappings: Json }; Returns: number }
       pl_day_logged: { Args: { _day_id: string }; Returns: boolean }
+      pl_day_set_names: {
+        Args: { _day: string }
+        Returns: {
+          main: boolean
+          row_id: string
+          set_index: number
+          set_name: string
+        }[]
+      }
+      pl_day_touched: {
+        Args: { _day_id: string; _scheduled: string; _today: string }
+        Returns: boolean
+      }
       pl_end_block_early: {
         Args: { _block_id: string; _new_end: string }
         Returns: Json
@@ -26154,6 +31076,10 @@ export type Database = {
         }[]
       }
       pl_norm_exercise_name: { Args: { _name: string }; Returns: string }
+      pl_prep_set_meet_day: {
+        Args: { _apply?: boolean; _day: string; _moves?: Json; _prep: string }
+        Returns: Json
+      }
       pl_recompute_block_status: {
         Args: { _block_id: string }
         Returns: string
@@ -26169,6 +31095,14 @@ export type Database = {
         Returns: boolean
       }
       pl_safe_first_int: { Args: { p_text: string }; Returns: number }
+      pl_schedule_sync_enqueue: {
+        Args: { p_clients: string[]; p_reason: string }
+        Returns: undefined
+      }
+      pl_set_name: {
+        Args: { _row_id: string; _set_index: number }
+        Returns: string
+      }
       pl_template_apply_payload: {
         Args: {
           _affected_block_keys: string[]
@@ -26241,6 +31175,33 @@ export type Database = {
         Returns: Json
       }
       powerlifting_opl_tick: { Args: never; Returns: Json }
+      program_ai_apply: {
+        Args: { p_change_ids: string[]; p_edit_id: string; p_plan: Json }
+        Returns: Json
+      }
+      program_ai_apply_template: {
+        Args: {
+          p_base_revision: number
+          p_change_ids: string[]
+          p_edit_id: string
+          p_meta?: Json
+          p_new_name?: string
+          p_payload: Json
+        }
+        Returns: Json
+      }
+      program_ai_restore: { Args: { p_version_id: string }; Returns: Json }
+      program_cardio_sync: { Args: { p_client: string }; Returns: Json }
+      program_cardio_sync_all: { Args: never; Returns: number }
+      program_gaps: { Args: { _client?: string }; Returns: Json }
+      program_gaps_use_estimated_max: {
+        Args: { _client: string; _rows: Json }
+        Returns: number
+      }
+      program_intel_can_coach: {
+        Args: { _client: string; _user: string }
+        Returns: boolean
+      }
       prune_cleo_chats: { Args: never; Returns: number }
       pt_gcal_claim: {
         Args: { _limit?: number }
@@ -26306,6 +31267,13 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      pt_local_today: { Args: { _tz: string }; Returns: string }
+      pt_session_sale_id: { Args: { _pt_session_id: string }; Returns: string }
+      pt_session_settle_credit: {
+        Args: { _pt_session_id: string }
+        Returns: undefined
+      }
+      pt_sessions_auto_complete: { Args: never; Returns: number }
       purge_old_client_media: { Args: never; Returns: undefined }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
@@ -26335,6 +31303,7 @@ export type Database = {
         Args: { _pt_session_id: string; _reason: string }
         Returns: undefined
       }
+      renew_session_package: { Args: { _purchase_id: string }; Returns: string }
       reopen_checkin_review: { Args: { _checkin_id: string }; Returns: boolean }
       report_page_error: {
         Args: {
@@ -26412,7 +31381,22 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      schedule_days_in_order: { Args: { p_days: string[] }; Returns: string[] }
       seed_messenger_checkin_occurrences: { Args: never; Returns: number }
+      sell_booked_sessions: {
+        Args: {
+          _client_id: string
+          _currency: string
+          _offer_id: string
+          _offer_name: string
+          _price_cents: number
+          _session_ids: string[]
+          _sessions: number
+          _stripe_price_id: string
+          _stripe_product_id: string
+        }
+        Returns: string
+      }
       session_balance: {
         Args: { _client_id: string }
         Returns: {
@@ -26427,10 +31411,96 @@ export type Database = {
           used: number
         }[]
       }
+      session_plan_payment_target: {
+        Args: { _purchase_id: string }
+        Returns: string
+      }
       set_conversation_workflow: {
         Args: { _client_id: string; _status: string }
         Returns: undefined
       }
+      set_video_attach: {
+        Args: {
+          _client_id: string
+          _client_key: string
+          _duration: number
+          _file_key: string
+          _height: number
+          _label: string
+          _mime: string
+          _result_id: string
+          _row_id: string
+          _set_index: number
+          _size: number
+          _storage_path: string
+          _thumbnail_path: string
+          _transfer?: Json
+          _width: number
+        }
+        Returns: Json
+      }
+      set_video_feed_copy: {
+        Args: { _id: string; _path: string }
+        Returns: Json
+      }
+      set_video_feed_copy_server: {
+        Args: { _id: string; _path: string }
+        Returns: Json
+      }
+      set_video_feed_job_queue: {
+        Args: { _force?: boolean; _id: string }
+        Returns: boolean
+      }
+      set_video_feed_jobs_kick: { Args: { _id: string }; Returns: undefined }
+      set_video_move: {
+        Args: {
+          _id: string
+          _label?: string
+          _label_no_load?: string
+          _row_id: string
+          _set_index: number
+        }
+        Returns: Json
+      }
+      set_video_needs_server_copy: {
+        Args: { v: Database["public"]["Tables"]["pl_set_videos"]["Row"] }
+        Returns: boolean
+      }
+      set_video_remove: { Args: { _id: string }; Returns: undefined }
+      set_video_server_copies: { Args: never; Returns: boolean }
+      sms_claim: {
+        Args: {
+          _automation_id?: string
+          _automation_trigger?: string
+          _body: string
+          _category: string
+          _client_id?: string
+          _key?: string
+          _kind: string
+          _max_attempts?: number
+          _member_id?: string
+          _message_id?: string
+          _pt_session_id?: string
+          _reminder_step?: number
+          _segments: number
+          _sender_user_id?: string
+          _to: string
+        }
+        Returns: Json
+      }
+      sms_cost_summary: { Args: never; Returns: Json }
+      sms_finish: {
+        Args: {
+          _error?: string
+          _error_code?: number
+          _id: string
+          _sid: string
+        }
+        Returns: undefined
+      }
+      sms_month_spend_usd: { Args: never; Returns: number }
+      sms_month_start: { Args: { _at: string }; Returns: string }
+      sms_segment_count: { Args: { _body: string }; Returns: number }
       staff_inbox_state: {
         Args: never
         Returns: {
@@ -26454,6 +31524,25 @@ export type Database = {
       staff_mark_conversation_unread: {
         Args: { _client_id: string }
         Returns: undefined
+      }
+      staff_support_threads: {
+        Args: never
+        Returns: {
+          avatar: string
+          client_id: string
+          email: string
+          last_at: string
+          last_body: string
+          last_sender_role: string
+          member_id: string
+          name: string
+          service_tier: string
+          status: string
+          thread_id: string
+          ticket_number: number
+          unread_count: number
+          user_id: string
+        }[]
       }
       strength_board_fix_unit: {
         Args: { _result_id: string }
@@ -26514,6 +31603,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      team_note_leave: { Args: { _id: string }; Returns: undefined }
       user_can_access_progress: {
         Args: { _target_user: string }
         Returns: boolean
@@ -26602,6 +31692,7 @@ export type Database = {
       }
       workout_undo_status: { Args: { _snapshot_id: string }; Returns: Json }
       workout_view_intro: { Args: { _event: string }; Returns: undefined }
+      workout_view_logging_tips_seen: { Args: never; Returns: undefined }
       workout_view_session_add: {
         Args: {
           _client_id: string
@@ -26618,7 +31709,12 @@ export type Database = {
         Returns: undefined
       }
       workout_view_set: { Args: { _view: string }; Returns: undefined }
+      workout_view_set_video_tip_shown: { Args: never; Returns: undefined }
+      workout_view_tips_seen: { Args: never; Returns: undefined }
+      works_task_board: { Args: { _uid: string }; Returns: boolean }
       xp_client_for_user: { Args: { _uid: string }; Returns: string }
+      zone_for_instant: { Args: { _at: string; _tz: string }; Returns: string }
+      zone_for_local: { Args: { _local: string; _tz: string }; Returns: string }
     }
     Enums: {
       access_source_type:
