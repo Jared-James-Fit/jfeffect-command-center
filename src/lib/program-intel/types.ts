@@ -378,6 +378,8 @@ export type IntelRecords = {
   ptSessions?: RawPtSession[];
   /** What their health profile is built from (health-load.ts): injuries, conditions, medications, their forms' health answers. */
   health?: import("@/lib/health/health-load").HealthRecords | null;
+  /** The nutrition plan they're on now (load.ts): its phase and each day's numbers, for the training AI's brief. */
+  nutrition?: { phase: string | null; goal: string | null; startDate: string | null; endDate: string | null; days: Array<{ label: string; calories: number | null; protein: number | null; carbs: number | null; fats: number | null }> } | null;
   settings: IntelSettings;
   scope: IntelScope;
   /** yyyy-mm-dd "today" in the athlete's time zone. */

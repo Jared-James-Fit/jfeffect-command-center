@@ -47,6 +47,7 @@ function athleteSection(ctx: AthleteContext): string {
   lines.push(`Training environment: ${e.location ?? "not on file"} · equipment (${e.confidence}${e.source === "program" ? ": proven by the exercises trained in the last program" : e.source === "coach" ? ": confirmed by the coach" : e.source === "goals" ? ": from Goals & Setup" : ""}): ${e.items.map((i) => EQUIPMENT_LABEL[i]).join(", ") || "unknown (nothing ruled out)"}`);
   if (e.constraints.length) lines.push(`Equipment rules:\n${list(e.constraints)}`);
   if (e.conflicts.length) lines.push(`Equipment conflicts in the records:\n${list(e.conflicts)}`);
+  if (ctx.nutrition) lines.push(ctx.nutrition);
   lines.push(`Injuries / restrictions: ${ctx.injuries.stated.join(" · ") || "none stated"}`);
   if (ctx.health?.conditions.length) lines.push(`Health conditions (train around them, never diagnose; anything needing medical clearance goes to the coach): ${ctx.health.conditions.join(" · ")}`);
   if (ctx.health?.medications.length) lines.push(`Medications (some change heart rate, recovery or bleeding risk; never change the program because of one without the coach): ${ctx.health.medications.join(" · ")}`);

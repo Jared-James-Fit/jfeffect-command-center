@@ -158,10 +158,9 @@ export const getClientBriefAi = createServerFn({ method: "POST" })
       }
     }
 
-    const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
-    const { generateText } = await import("ai");
-    const gateway = createLovableAiGateway();
-    const result = await generateText({ model: gateway(DEFAULT_AI_MODEL), system: SYSTEM, prompt });
+    // the coach_write route (routing.ts): GPT-5 mini, then GPT-5.5, on the OpenAI key
+    const { askRoute } = await import("@/lib/ai/route-call.server");
+    const result = await askRoute("coach_write", { system: SYSTEM, prompt, timeoutMs: 40_000 }, { sb: admin });
     const ai = parseAi(result.text);
     const generated_at = new Date().toISOString();
     await admin.from("inbox_client_briefs").upsert({
@@ -169,7 +168,7 @@ export const getClientBriefAi = createServerFn({ method: "POST" })
       input_hash: hash,
       summary: ai.summary,
       next_step: ai.next_step,
-      model: DEFAULT_AI_MODEL,
+      model: result.model,
       generated_at,
     }, { onConflict: "client_id" });
     return { ...ai, generated_at, cached: false };

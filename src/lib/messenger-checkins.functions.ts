@@ -647,10 +647,7 @@ async function generateAnalysis(
       // Jared's voice for this client (Admin → My Voice).
       voicePromptForClient(sb, clientId),
     ]);
-    const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
-    const { generateText } = await import("ai");
-    const gateway = createLovableAiGateway();
-    const modelId = globalCfg?.default_model || DEFAULT_AI_MODEL;
+    const { askRoute } = await import("@/lib/ai/route-call.server");
 
     const system = [
       "You help a strength and nutrition coach review a client check-in.",
@@ -691,11 +688,8 @@ async function generateAnalysis(
       "Produce a coach-facing recap and suggested reply.",
     ].join("\n");
 
-    const result = await generateText({
-      model: gateway(modelId),
-      system,
-      prompt,
-    });
+    // the coach_write route (routing.ts): GPT-5 mini, then GPT-5.5, on the OpenAI key
+    const result = await askRoute("coach_write", { system, prompt, timeoutMs: 45_000 }, { sb });
     const stripped = (result.text ?? "")
       .replace(/^```(?:json)?\s*/i, "")
       .replace(/```\s*$/i, "")

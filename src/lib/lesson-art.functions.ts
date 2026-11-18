@@ -43,7 +43,7 @@ export const makeLessonArt = createServerFn({ method: "POST" })
     if (!canHaveArt(lesson)) return { ok: false as const, reason: "This one has a drawn diagram (or is a technique fix), so it keeps that." };
 
     const { generatePicture } = await import("@/lib/post-pictures.server");
-    const made = await generatePicture(lessonArtPrompt(lesson));
+    const made = await generatePicture(lessonArtPrompt(lesson), { lovable: false });
     if (!made.ok) return { ok: false as const, reason: made.reason };
     const pic = made.picture;
     const ext = pic.mime === "image/jpeg" ? "jpg" : pic.mime === "image/webp" ? "webp" : "png";

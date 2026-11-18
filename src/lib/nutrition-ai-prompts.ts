@@ -9,6 +9,8 @@ import { freeMealRule, mealChoiceOf, mealChoiceRule, wantsFreeMeal } from "@/lib
 import { SHELF_STAPLE, prepDriftLine, type HardToFind, type PrepDrift } from "@/lib/nutrition-targets/plan-foods";
 import type { AllergenHit } from "@/lib/nutrition-targets/food-history";
 import { safetyNotes } from "@/lib/nutrition-targets/nutrition-intel";
+import { MAX_STEP_KCAL } from "@/lib/weight-management/decision";
+import { TRAIN_MINUTES_MAX, TRAIN_MINUTES_MAX_PL, REST_MINUTES_MAX } from "@/lib/weight-management/treadmill";
 
 export const NUTRITION_REQUEST_FORM_ID = "b7a1f0c2-5d3e-4c8a-9f21-6e0d4a1b2c3d";
 export const NUTRITION_REQUEST_FORM_TYPE = "nutrition_update";
@@ -44,7 +46,7 @@ HOW TO DECIDE (reasoning, not a recipe)
   - recomp: weight about flat, protein high; it suits newer or returning lifters and people with more fat to lose
   - maintenance / performance: weight about flat, carbs where training needs them
   - reverse diet: from current intake, small steps up while weight stays about flat
-- sizing a calorie change: about 7,700 kcal per kg (3,500 per lb) of the gap between the rate they're getting and the rate they need, spread over the week. close all of the gap only when the trend is clear over 4+ weeks; about half when the data is thinner. a change over ~300 kcal a day is rarely needed and needs its reason in COACH NOTES
+- sizing a calorie change: about 7,700 kcal per kg (3,500 per lb) of the gap between the rate they're getting and the rate they need, spread over the week. close all of the gap only when the trend is clear over 4+ weeks; about half when the data is thinner. a change over ${MAX_STEP_KCAL} kcal a day (the weight-management read's largest single step) is rarely needed and needs its reason in COACH NOTES
 - protein = about 1.6–2.2 g per kg of bodyweight (0.7–1 g per lb), the higher end in a deficit, for leaner athletes and in harder training. for someone carrying a lot of extra fat, base it on a goal bodyweight instead of total bodyweight
 - fats = enough for health and adherence: usually 20–35% of calories, never under about 0.5 g per kg of bodyweight
 - carbs = remaining calories. they fuel training: a heavier or higher-volume block keeps them up, and a cut takes from fats (to their floor) and lighter days first
@@ -79,7 +81,7 @@ STEPS + CARDIO
 - muscle gain: 7,000–10,000 steps, cardio 10–20 min easy 2–3 days a week for health, never enough to eat the surplus
 - recomp / maintenance / performance: 8,000–10,000 steps, cardio 15–25 min easy a few days a week
 - never over 45 min of cardio in a day. keep it low intensity so it doesn't cut into lifting recovery
-- the Training Day session is the last exercise of every workout (see TRAINING DAYS), done right after lifting: keep it 10–25 min easy so the session stays doable; longer cardio belongs on Non-Training Days
+- the Training Day session is the last exercise of every workout (see TRAINING DAYS), done right after lifting: keep it 10–${TRAIN_MINUTES_MAX} min easy (${TRAIN_MINUTES_MAX_PL} at most for a powerlifter, and no more than a quarter of a booked PT session) so the session stays doable; longer cardio belongs on Non-Training Days, ${REST_MINUTES_MAX} min at most a session
 - a deload, taper or meet week in the TRAINING PROGRAM = easy walks only, no hard cardio
 - cardio and steps are part of the estimated daily expenditure; don't count them twice
 

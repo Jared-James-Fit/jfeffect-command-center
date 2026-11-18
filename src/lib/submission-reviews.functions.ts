@@ -617,7 +617,8 @@ export const generateSubmissionDraft = createServerFn({ method: "POST" })
       .insert({
         review_id: row.id,
         status: "running",
-        model: formCfg?.model || globalCfg?.default_model || "google/gemini-3-flash-preview",
+        // the coach_write route answers (routing.ts); the model that did is recorded when it finishes
+        model: "openai:gpt-5-mini",
         global_config_version: globalCfg?.version ?? null,
         form_config_version: formCfg?.version ?? null,
         submission_instruction: data.submissionInstruction ?? null,
@@ -639,10 +640,7 @@ export const generateSubmissionDraft = createServerFn({ method: "POST" })
     // doesn't support AI SDK's responseFormat protocol, so we instruct the
     // model to return JSON directly and parse + validate with Zod.)
     try {
-      const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
-      const { generateText } = await import("ai");
-      const gateway = createLovableAiGateway();
-      const modelId = gen.model || DEFAULT_AI_MODEL;
+      const { askRoute } = await import("@/lib/ai/route-call.server");
 
       const jsonInstruction = [
         "",
@@ -655,11 +653,8 @@ export const generateSubmissionDraft = createServerFn({ method: "POST" })
         '  "client_response": string }',
       ].join("\n");
 
-      const result = await generateText({
-        model: gateway(modelId),
-        system: systemPrompt + jsonInstruction,
-        prompt: userPrompt,
-      });
+      // the coach_write route (routing.ts): GPT-5 mini, then GPT-5.5, on the OpenAI key
+      const result = await askRoute("coach_write", { system: systemPrompt + jsonInstruction, prompt: userPrompt, timeoutMs: 60_000 }, { sb });
 
       const stripped = (result.text ?? "")
         .replace(/^```(?:json)?\s*/i, "")
@@ -687,6 +682,7 @@ export const generateSubmissionDraft = createServerFn({ method: "POST" })
           client_response: safe.client_response,
           urgency: safe.urgency,
           usage: (result as any).usage ?? null,
+          model: result.model,
         })
         .eq("id", gen.id)
         .select("*")

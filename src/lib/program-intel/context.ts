@@ -80,6 +80,8 @@ export type AthleteContext = {
   cardio: CardioPlan;
   equipment: EquipmentResolution;
   injuries: { stated: string[]; painReports: Array<{ date: string | null; area: string | null; level: number | null; note: string | null }>; areas: string[] };
+  /** The nutrition plan they're on now, as one line for the training AI (nutritionNowLine); null when there's none. */
+  nutrition?: string | null;
   /** Their health profile as the training AI reads it (healthProfileForAi), conditions and medications, drug-tested. */
   health?: { text: string | null; conditions: string[]; medications: string[]; drugTested: boolean | null };
   notes: { coach: string[]; client: string[]; checkins: Array<{ date: string | null; form: string | null; answers: Array<{ q: string; a: string }> }> };
@@ -279,6 +281,7 @@ export function buildAthleteContext(x: {
     cardio: cardioPlanFromTargets(x.rec.cardioTargets ?? [], x.rec.cardioCompletions ?? [], x.rec.today),
     equipment: x.equipment,
     injuries: { stated, painReports: pain, areas },
+    nutrition: nutritionNowLine(rec.nutrition ?? null),
     health: healthProfile
       ? {
           text: healthProfileForAi(healthProfile, "training"),
@@ -302,4 +305,26 @@ export function buildAthleteContext(x: {
     history: { blocks: x.history.blocks.length, firstDate, programs: x.programs.map((p) => summarizeProgram(p.report, p.rec, p.label)) },
     firstProgram: x.history.coverage.loggedSets === 0,
   };
+}
+
+
+/**
+ * The nutrition plan they're on, as the training AI reads it (Nov 18 2026): its phase, since when,
+ * each day type's calories and protein, and what the phase means for training. A cut costs recovery,
+ * so volume holds rather than climbs; a gain phase can carry a little more. Null with no plan.
+ */
+export function nutritionNowLine(n: IntelRecords["nutrition"] | null): string | null {
+  if (!n || !n.days.length) return null;
+  const days = n.days
+    .filter((d) => d.calories != null)
+    .map((d) => `${d.label} ${Math.round(Number(d.calories)).toLocaleString("en-US")} kcal${d.protein != null ? `, protein ${Math.round(Number(d.protein))} g` : ""}`);
+  const phase = String(n.phase ?? "").trim();
+  const cut = /loss|cut|deficit|weight class|lean/i.test(`${phase} ${n.goal ?? ""}`);
+  const gain = /gain|bulk|surplus|build/i.test(`${phase} ${n.goal ?? ""}`);
+  const meaning = cut
+    ? "In a deficit: recovery is the limit, so hold volume steady rather than add, keep the main lifts heavy enough to keep strength, and read harder RPEs as the cut before the program."
+    : gain
+      ? "In a surplus: they can recover from a little more work, so progressing volume is reasonable where the records support it."
+      : "At maintenance: nothing to plan around from nutrition.";
+  return `Nutrition now: ${phase || "plan"}${n.startDate ? ` since ${n.startDate}` : ""}${n.endDate ? ` (next update due ${n.endDate})` : ""}${days.length ? ` · ${days.join(" · ")}` : ""}. ${meaning}`;
 }
