@@ -47,9 +47,44 @@ const BELOW = [
   "Laying Lateral Raise",
   "Arms Lateral Raise And Rotation Up",
   "Crunch (On Bosu Ball)",
+  // the floor stops the stretch these do their work at (Nov 18 2026: Colten's floor skull crushers)
+  "Dumbbell Floor Skull Crusher",
+  "Dumbbell Lying Triceps Extension On Floor",
+  "Dumbbell Floor Fly",
+  "Dumbbell One Arm Floor Fly",
+  "Dumbbell Pullover On Floor",
+  // bench, chair and floor dips
+  "Bench Dip (Knees Bent)",
+  "Bench Dip On Floor",
+  "Bench Triceps Dip Leg Curls",
+  "Bench Triceps Dip Straight Legs",
+  "Chair Triceps Dips",
+  "Dip On Floor With Chair",
+  "Dips Between Chairs",
+  "Floor Tricep Dip",
 ];
 
 const FINE = [
+  // a floor press is a lockout variation or the press with no bench; a cable row sitting on the floor is a full row
+  "Paused Dumbbell Floor Press",
+  "Floor Press",
+  "Barbell Floor Chest Press",
+  "Dumbbell Lying On Floor Chest Press",
+  "Cable Seated On Floor Row",
+  "Crunch Floor",
+  "Dips",
+  "Chest Dip",
+  "Chest Dip Weighted",
+  "Ring Dips",
+  "Triceps Dip Machine",
+  "Chest Dip Machine",
+  "Overhead Cable Triceps Extension",
+  "Dumbbell Overhead Triceps Extension",
+  "Cable Triceps Overhead Extension (Ez Bar)",
+  "Dumbbell Skullcrusher",
+  "Barbell Lying Triceps Skull Crushers",
+  "Cable Pullover",
+  "Lying Rear Delt Fly - Dumbbell",
   "Landmine Row",
   "Single-Arm Landmine Press",
   "Landmine Belt Squat",
@@ -136,5 +171,26 @@ describe("exercise standard", () => {
     expect(withStandardSubstitutions(block).days[0].exercises[0].substitutions).toEqual([{ exercise_name: "Cable Lateral Raises" }]);
     const clean = { days: [{ exercises: [{ exercise_name: "Row", substitutions: [] }] }] };
     expect(withStandardSubstitutions(clean)).toBe(clean);
+  });
+});
+
+describe("quality before convenience (Nov 18 2026)", () => {
+  it("every prompt that picks an exercise chooses it for its job first, and convenience only breaks ties", async () => {
+    const { EXERCISE_STANDARD, EXERCISE_SELECTION } = await import("@/lib/program-intel/exercise-standard");
+    const { ACCESSORY_FLOW_RULES, accessoryStationsLine, constructSystemPrompt, strategySystemPrompt } = await import("@/lib/program-intel/generator-prompts");
+    const { ACCESSORY_FLOW_HINT } = await import("@/lib/program-intel/accessory-flow");
+    const { reviewSystemPrompt } = await import("@/lib/program-intel/coaching-review");
+    const { EDIT_SYSTEM_PROMPT } = await import("@/lib/program-ai/prompts");
+    expect(EXERCISE_STANDARD.startsWith(EXERCISE_SELECTION)).toBe(true);
+    for (const rule of ["Every exercise has a job", "especially the stretched position", "loads in small steps", "fatigue cost fits the session", "an exercise they've already progressed on beats a new one", "Never downgrade an exercise for convenience", "convenience only decides between options of equal quality"]) {
+      expect(EXERCISE_SELECTION).toContain(rule);
+    }
+    for (const prompt of [strategySystemPrompt("bodybuilding"), constructSystemPrompt("powerlifting"), EDIT_SYSTEM_PROMPT]) expect(prompt).toContain("Never downgrade an exercise for convenience");
+    expect(ACCESSORY_FLOW_RULES).toContain("Choose each accessory for quality first");
+    expect(ACCESSORY_FLOW_RULES).toContain("Never trade down (a floor version, a shorter range, a less stable or harder-to-load exercise) to save a station or keep a superset together");
+    expect(ACCESSORY_FLOW_HINT).toContain("Pick each accessory for quality first");
+    expect(accessoryStationsLine(60)).toContain("quality beats the count");
+    expect(reviewSystemPrompt("bodybuilding")).toContain("An accessory picked for convenience over a clearly better option they have");
+    expect(EDIT_SYSTEM_PROMPT).toContain("pick the best exercise for its job first");
   });
 });

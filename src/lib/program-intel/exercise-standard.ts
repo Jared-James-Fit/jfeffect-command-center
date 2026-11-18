@@ -7,7 +7,12 @@
  * lateral raise starts at the bar's ~45 lb; plates and kettlebells jump
  * 10-25 lb / 4 kg at a time), combos that are limited by their weakest part,
  * twists and side bends, wall sits, supermans, loaded work on a ball or
- * balance board, and raises with no load. Those are kept out of the catalog
+ * balance board, raises with no load, floor versions of the exercises whose
+ * value is the stretch (skull crushers, flyes and pullovers on the floor,
+ * where the floor stops the arms before it) and bench / chair dips (the front
+ * of the shoulder loaded at the end of its range, no small steps; Nov 18 2026,
+ * after the generator gave Colten floor skull crushers so a superset could
+ * keep the bench for leg curls). Those are kept out of the catalog
  * the model picks from, named in its rules, retried and cleaned out of its
  * strategy, failed by the audit, and flagged on Cleo's cards. A coach's own
  * pick (a required exercise) is always theirs to make. Stretches and other
@@ -51,6 +56,15 @@ const RULES: Rule[] = [
   {
     test: (n) => /(lateral raise|front raise|\bfly\b|\bflyes?\b)/i.test(n) && /\bbodyweight\b|^(lying|laying) lateral raises?$|arms lateral raise/i.test(n),
     reason: "a raise with no load is a warm-up, not a working set; use dumbbells, a cable or a band",
+  },
+  {
+    // A floor PRESS is fine (a lockout variation, or the press with no bench); these exercises do their work at the stretch.
+    test: (n) => /\bfloor\b/i.test(n) && /(skull ?crusher|triceps? extension|\bfly\b|\bflyes?\b|pullover)/i.test(n),
+    reason: "on the floor the arms stop before the stretch, where this exercise does its work; use an overhead dumbbell or cable triceps extension, a cable or bench fly, or a cable or bench pullover (an overhead extension needs no bench)",
+  },
+  {
+    test: (n) => /\bdips?\b/i.test(n) && /\b(bench|chairs?|floor)\b/i.test(n) && !/leg raise|machine/i.test(n),
+    reason: "bench and chair dips load the front of the shoulder at the end of its range and can't go up in small steps; use a pushdown, an overhead extension, or a parallel-bar or machine dip",
   },
 ];
 
@@ -122,9 +136,22 @@ export function withStandardSubstitutions<B extends { days: Array<{ exercises: A
   return changed ? { ...block, days } : block;
 }
 
+/**
+ * How an elite coach picks each exercise, in the model's words (Nov 18 2026): quality first, the
+ * session's convenience only between options that are equally good. The strategy, build, repair,
+ * coaching review, Edit with AI and Cleo all carry it.
+ */
+export const EXERCISE_SELECTION = `How to choose each exercise (quality first, convenience second):
+- Every exercise has a job: the muscle or quality it's for (a lagging muscle, the main lift it supports, a weak range). Pick the exercise that does that job best for THIS athlete; no exercise for variety's sake, and no second exercise doing the same job in a session unless the volume needs it. Popular isn't a reason either.
+- Best for the job: it loads the target hard through a full range, especially the stretched position (overhead triceps extensions, incline or preacher curls, seated leg curls, deep split squats, flyes and pullovers at full stretch); it's stable, so the target muscle ends the set, not balance or grip (supported, machine and cable versions for isolation work); it loads in small steps and can progress for months; and its fatigue cost fits the session (no extra hinging or spinal loading in accessories after heavy squats, deadlifts or rows when a supported version does the same job).
+- Fit the athlete: only their equipment; the joint-friendly version around an injury or pain they've reported (neutral grips, cables, machines); a version they can learn at their level; an exercise they've already progressed on beats a new one of the same quality.
+- Never downgrade an exercise for convenience: no shorter range, less stable setup, coarser loading or extra fatigue to save a station change, keep a superset together or avoid a bench that's in use. Choose the exercises first, then pair and order them; convenience only decides between options of equal quality.`;
+
 /** The rule in the model's words (strategy, build and repair prompts). */
-export const EXERCISE_STANDARD = `Exercise standard (every level, beginner to advanced):
+export const EXERCISE_STANDARD = `${EXERCISE_SELECTION}
+
+Exercise standard (every level, beginner to advanced):
 - Pick proven, stable, loadable bodybuilding and strength exercises that progress in small steps: barbell, dumbbell, cable and machine versions of squats, presses, rows, pulldowns, hinges, lunges / split squats, curls, extensions, raises and flyes.
 - Isolation work uses dumbbells, cables, machines or bands, never a landmine, plate, kettlebell or barbell where the lightest load is already too heavy or the jumps are too big (e.g. a landmine lateral raise starts at ~45 lb; almost nobody can do that well). A landmine is fine for compound work (rows, presses, belt squats, RDLs).
-- Never: combo moves (lunge to press, squat and press, curl to press, thrusters), Russian twists, side bends and other twists, wall sits, supermans, loaded work on a ball, Bosu or balance board, or raises with no load. For the trunk use cable crunches, reverse crunches, leg raises, ab wheel or Pallof presses; for the lower back, 45° back extensions.
+- Never: combo moves (lunge to press, squat and press, curl to press, thrusters), Russian twists, side bends and other twists, wall sits, supermans, loaded work on a ball, Bosu or balance board, raises with no load, skull crushers, flyes or pullovers on the floor (the floor stops the stretch; an overhead extension needs no bench), or bench and chair dips. A floor press is fine (a lockout variation, or the press with no bench). For the trunk use cable crunches, reverse crunches, leg raises, ab wheel or Pallof presses; for the lower back, 45° back extensions.
 - When unsure between a novel exercise and a standard one, pick the standard one.`;
