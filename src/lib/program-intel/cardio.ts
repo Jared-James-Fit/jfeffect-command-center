@@ -242,9 +242,10 @@ export function cardioTargetsFromProposal(plan: CardioPlan, x: { clientId: strin
     start_date: x.today,
     completion_rule: "any_target",
     source: "program",
+    // the athlete's cue only (the plan's own bookkeeping, like a nutrition plan taking it over later, isn't theirs to read)
     client_notes: dayType === "Training Day"
-      ? "After lifting, at a pace you can talk but not sing. Your nutrition plan will adjust this when it's made."
-      : "An easy walk on a day off, at a pace you can talk but not sing. Your nutrition plan will adjust this when it's made.",
+      ? "After lifting, at a pace you can talk but not sing."
+      : "An easy walk on a day off, at a pace you can talk but not sing.",
     last_updated_at: new Date().toISOString(),
   });
   return [

@@ -179,11 +179,11 @@ describe("Fastest way to log", () => {
     expect(html).toContain('data-testid="quick-log-tips-close"');
   });
 
-  it("opens by itself once per account on their own unfinished workout, and from Log faster any time", () => {
+  it("opens by itself once per account on their own unfinished workout, and from Log faster (the ? beside List / Focus) any time", () => {
     const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
     expect(wdv).toContain("focusKnown && !loggingTipsSeen && !isImpersonating && !readonly && !!client?.id &&");
     expect(wdv).toContain('data-testid="quick-log-tips-open"');
-    expect(wdv).toContain("Log faster");
+    expect(wdv).toContain('aria-label="Log faster: the quickest way to log your sets"');
     // one intro at a time: Focus's own tips and invite wait for it
     expect(wdv).toContain("!isImpersonating && !quickLogDue && !quickLogOpen) setFocusTipsOpen(true);");
     expect(wdv).toContain("!quickLogDue && !quickLogOpen && !quickLogShownHere,");

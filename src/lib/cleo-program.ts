@@ -20,7 +20,7 @@ export const rxSchema = z.object({
   percentage_of: z.enum(["1rm", "training_max", "est_1rm"]).optional(),
   rest_seconds: z.number().int().min(0).max(900).optional(),
   tempo: z.string().trim().max(20).optional(),
-  notes: z.string().trim().max(500).optional().describe("Coaching cue the client sees on this exercise."),
+  notes: z.string().trim().max(500).optional().describe("Optional cue the client sees on this exercise card every session: only when it changes how they do it, one short sentence in the coach's voice, never restating sets, reps, RPE or rest, no generic cues or motivation."),
 });
 export type Rx = z.infer<typeof rxSchema>;
 
