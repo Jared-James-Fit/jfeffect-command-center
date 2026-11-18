@@ -28,7 +28,7 @@ const EVIDENCE_RULES = `Evidence rules:
  * model left scattered, within the same training order, after every block.
  */
 export const ACCESSORY_FLOW_RULES = `- Session flow, the way a coach who runs real sessions builds them. The main lifts (competition lifts, primary and secondary strength work) come first in the order performance needs, whatever it costs in convenience. After them, choose and order the accessories so the session is simple and fast without costing results:
-  · Choose accessories that work together. When two options train the target about equally well, take the one at a station the session already uses (the bar, bench or rack set up for the main lift; the cable or machine the next exercise is on) or the one with less setup. Fewer stations, not less work: don't bring in another piece of equipment for one or two sets when a station already in use does the job, and don't pick variety for its own sake.
+  · Choose each accessory for quality first (see "How to choose each exercise"); station and setup only break ties. When two options train the target equally well, take the one at a station the session already uses (the bar, bench or rack set up for the main lift; the cable or machine the next exercise is on) or the one with less setup. Fewer stations, not less work: don't bring in another piece of equipment for one or two sets when a station already in use does the job as well, and don't pick variety for its own sake. Never trade down (a floor version, a shorter range, a less stable or harder-to-load exercise) to save a station or keep a superset together: pick the right exercises, then pair and order them.
   · Group by station: finish the work at one station before moving to the next (dumbbells together, cables together, machines together) and never send them back to a station they already left. A barbell accessory that suits the main lift's setup (an RDL after deadlifts, close-grip bench after bench, a hip thrust after squats) comes straight after the main lifts.
   · Grouping never overrides training order: compounds before isolation work, never an isolation before a compound that trains the same muscle (no pushdowns before close-grip bench, no curls before rows), a priority muscle's work early while they're fresh. When grouping and training order disagree, training order wins.
   · Fit it to where they train and how long they have: a home gym or a short session uses fewer stations (one cable column, one bench angle at a time, adjustable dumbbells at similar loads); a commercial gym can use its machines, still in as few areas as the work needs. Pair accessories as supersets only on stations that sit together.`;
@@ -160,7 +160,7 @@ export const LOADING_RULES = `- Loading method, per exercise, decided like a coa
 /** How many stations a session's accessories should aim for, by its length (a guide, never a check). */
 export function accessoryStationsLine(minutes: number | null): string {
   const n: number = minutes == null ? 3 : minutes <= 45 ? 2 : minutes <= 75 ? 3 : 4;
-  return `aim for at most ${n} accessory station${n === 1 ? "" : "s"} besides the main lift's${minutes ? ` (a ${minutes}-min session)` : ""}, more only when the work truly needs it.`;
+  return `aim for at most ${n} accessory station${n === 1 ? "" : "s"} besides the main lift's${minutes ? ` (a ${minutes}-min session)` : ""}, more only when the work truly needs it or a clearly better exercise is at another station (quality beats the count).`;
 }
 
 export function constructUserPrompt(x: {

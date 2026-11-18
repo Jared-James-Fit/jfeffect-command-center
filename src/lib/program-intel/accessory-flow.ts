@@ -26,7 +26,7 @@ import { supersetGroup } from "./session-time";
 import type { EquipmentItem } from "./types";
 
 /** The rule in one line, for tools that pick or place a single exercise (Cleo's library lookup). */
-export const ACCESSORY_FLOW_HINT = "Session flow: the main lifts keep their order. When two accessories train the target about as well, pick the one at a station the workout already uses (same equipment, less setup) and place it with the other work at that station, after the main lifts, never ahead of a compound that trains the same muscle.";
+export const ACCESSORY_FLOW_HINT = "Session flow: the main lifts keep their order. Pick each accessory for quality first; only when two train the target equally well, pick the one at a station the workout already uses (same equipment, less setup), and never trade down (a floor version, a shorter range, a less stable exercise) to save a station or keep a superset together. Place it with the other work at that station, after the main lifts, never ahead of a compound that trains the same muscle.";
 
 export type FlowExercise = { exercise_name: string; role?: string | null; superset?: string | null; exercise_id?: string | null };
 export type FlowOptions = {

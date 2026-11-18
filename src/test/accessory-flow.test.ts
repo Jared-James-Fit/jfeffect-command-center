@@ -196,9 +196,9 @@ describe("the generator and Edit with AI are told the same rule", async () => {
     expect(EDIT_SYSTEM_PROMPT).toContain("Don't reorder a workout the coach didn't ask you to touch");
   });
   it("a shorter session aims for fewer accessory stations", () => {
-    expect(accessoryStationsLine(45)).toBe("aim for at most 2 accessory stations besides the main lift's (a 45-min session), more only when the work truly needs it.");
+    expect(accessoryStationsLine(45)).toBe("aim for at most 2 accessory stations besides the main lift's (a 45-min session), more only when the work truly needs it or a clearly better exercise is at another station (quality beats the count).");
     expect(accessoryStationsLine(60)).toContain("at most 3 accessory stations");
     expect(accessoryStationsLine(90)).toContain("at most 4 accessory stations");
-    expect(accessoryStationsLine(null)).toBe("aim for at most 3 accessory stations besides the main lift's, more only when the work truly needs it.");
+    expect(accessoryStationsLine(null)).toBe("aim for at most 3 accessory stations besides the main lift's, more only when the work truly needs it or a clearly better exercise is at another station (quality beats the count).");
   });
 });
