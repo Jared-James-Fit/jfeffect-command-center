@@ -207,6 +207,28 @@ async function exerciseNames(db: Db, ids: string[]): Promise<Map<string, string>
   return map;
 }
 
+/**
+ * What the coach should check on new nutrition targets before they go out (Nov 18 2026): the same
+ * coachChecks the Nutrition Update review runs (calories against their macros at 4/4/9, under the
+ * 1,200 / 1,500 kcal floor, fat under 0.5 g/kg, protein under 1.2 g/kg from their latest weigh-in).
+ */
+async function nutritionChecks(db: Db, clientId: string, days: Array<{ day_label: string; calories?: number | null; protein?: number | null; carbs?: number | null; fats?: number | null }>): Promise<string[]> {
+  const { coachChecks } = await import("@/lib/nutrition-targets/nutrition-intel");
+  const { data: c } = await db.from("clients").select("sex, user_id").eq("id", clientId).maybeSingle();
+  let bodyweightKg: number | null = null;
+  if (c?.user_id) {
+    const { data: w } = await db.from("progress_bodyweight").select("weight_value, weight_unit").eq("user_id", c.user_id).order("logged_date", { ascending: false }).limit(1).maybeSingle();
+    const v = Number(w?.weight_value);
+    if (Number.isFinite(v) && v > 0) bodyweightKg = /lb/i.test(String(w?.weight_unit ?? "")) ? v / 2.2046226218 : v;
+  }
+  return coachChecks({
+    days: days.map((d) => ({ label: d.day_label, kcal: d.calories ?? null, protein: d.protein ?? null, carbs: d.carbs ?? null, fat: d.fats ?? null })),
+    bodyweightKg,
+    female: /^f/i.test(String(c?.sex ?? "")),
+    safety: [],
+  });
+}
+
 async function client(db: Db, id: string) {
   const { data, error } = await db.from("clients").select("id, full_name, preferred_name, first_name, last_name, email, committed_training_days, preferred_weight_unit").eq("id", id).maybeSingle();
   if (error) throw new Error(error.message);
@@ -474,6 +496,9 @@ export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, t
       });
       if (moved.length)
         lines.push(`Their meals stay as written on ${moved.map((d: any) => d.day_label).join(", ")}; to fit them to the new numbers, use Change it with AI on their Current plan.`);
+      // the same checks the AI plan's review runs before publishing (calories against 4/4/9, the floors)
+      const checks = await nutritionChecks(db, p.client_id, p.days);
+      if (checks.length) lines.push(`Check before publishing: ${checks.join("; ")}.`);
       lines.push(current && current.visible_to_client === false ? "Their targets are hidden from them." : `${clientLabel(c)} sees the new targets and gets a heads-up.`);
       return lines.join("\n");
     }

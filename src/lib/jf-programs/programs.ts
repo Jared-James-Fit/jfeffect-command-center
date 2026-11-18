@@ -248,6 +248,7 @@ const p02 = (): ProgramDef => {
     ].join("\n"),
     changes: [
       "Day 1 gets a 2x8–12 seated cable row. Direct back work was 6 sets a week (pulldown 3 + row 3) for a 4-day strength program; the upper back holds the squat bar and the bench setup, and Day 1 had the room (it was the shortest session).",
+      "Session order (Nov 18 2026): Day 1's cable crunch comes straight after the cable row, before the seated leg curl, so the cable stack is used once.",
     ],
     days: [
       {
@@ -257,8 +258,8 @@ const p02 = (): ProgramDef => {
           pl("compSquat", primaryWave("squat"), { role: "Primary", rest: R.heavy, note: "Warm up with 3–5 lighter sets." }),
           pl("compBench", benchMon, { role: "Secondary", rest: 150, note: "Pause on the chest, same setup and leg drive every rep." }),
           a("cableRow", { sets: 2, reps: "8-12", rest: R.machine, note: "Chest up, pull to your stomach, full stretch forward." }),
-          a("seatedLegCurl", { sets: 2, reps: "8-12", rest: R.iso, note: "Hips pinned to the seat, control the lowering." }),
           a("cableCrunch", { sets: 2, reps: "10-15", rest: R.core, conservative: true, note: "Curl the ribs toward the hips; don't sit back into it." }),
+          a("seatedLegCurl", { sets: 2, reps: "8-12", rest: R.iso, note: "Hips pinned to the seat, control the lowering." }),
         ],
       },
       {
@@ -442,7 +443,9 @@ const p04 = (): ProgramDef => {
       "Trim first if over 60 min: Day 1 plank, Day 3 dead bug, then a lateral raise or curl set.",
       "Advance on consistent technique, completion and stable progress, not a calendar date.",
     ].join("\n"),
-    changes: [],
+    changes: [
+      "Session order (Nov 18 2026): Full Body B does the incline press before the pulldown and the pushdown straight after it, so the dumbbells and the cable stack are each one stop (compounds still first, the pushdown after the pressing); Full Body C does the hip thrust before the chest-supported row so the row and curls share the dumbbells.",
+    ],
     days: [
       {
         title: "Day 1 — Full Body A",
@@ -461,10 +464,10 @@ const p04 = (): ProgramDef => {
         focus: "Squat, back, upper chest · about 55 min",
         slots: [
           a("gobletSquat", { sets: 3, reps: "8-12", rest: R.compound, note: "Dumbbell at your chest, sit between your heels, chest up. Ask your coach to move you to a belt or back squat when it's too light." }),
-          a("latPulldown", { sets: 3, reps: "8-12", rest: R.machine, note: "Pull to the top of the chest, elbows down to your sides." }),
           a("inclineDbPress", { sets: 2, reps: "8-12", rest: R.compound, note: "Low incline, full stretch at the bottom." }),
-          a("seatedLegCurl", { sets: 2, reps: "10-15", rest: R.iso, note: "Hips pinned, control the lowering." }),
+          a("latPulldown", { sets: 3, reps: "8-12", rest: R.machine, note: "Pull to the top of the chest, elbows down to your sides." }),
           a("pushdown", { sets: 2, reps: "10-15", rest: R.iso, note: "Elbows pinned, full lockout." }),
+          a("seatedLegCurl", { sets: 2, reps: "10-15", rest: R.iso, note: "Hips pinned, control the lowering." }),
           a("standingCalf", { sets: 2, reps: "10-15", rest: 60, note: "Full stretch at the bottom, pause 1 second at the top." }),
         ],
       },
@@ -474,8 +477,8 @@ const p04 = (): ProgramDef => {
         slots: [
           a("beltSquat", { sets: 2, reps: "8-12", rest: R.compound, note: "Upright torso, full depth. Swap: leg press." }),
           a("machineChestPress", { sets: 2, reps: "8-12", rest: R.machine, note: "Handles at mid-chest, control the stretch." }),
-          a("csRow", { sets: 2, reps: "8-12", rest: R.machine, note: "Chest on the pad, elbows back toward the hips." }),
           a("hipThrust", { sets: 2, reps: "8-12", rest: R.compound, note: "Chin tucked, ribs down, 1-second squeeze at the top." }),
+          a("csRow", { sets: 2, reps: "8-12", rest: R.machine, note: "Chest on the pad, elbows back toward the hips." }),
           a("dbCurl", { sets: 2, reps: "10-15", rest: 60, note: "Elbows still, full stretch at the bottom." }),
           a("deadBug", { sets: 2, reps: "8-12 per side", rest: R.core, conservative: true, note: "Lower back flat, slow." }),
         ],
@@ -526,6 +529,7 @@ const p05 = (): ProgramDef => {
     ].join("\n"),
     changes: [
       "Upper B: the seated dumbbell shoulder press is replaced by a dumbbell lateral raise (3x12–20). Front delts already get about 6 hard pressing sets a week from the incline press and bench, while side delts were getting only 3 direct sets; the raise grows the side delts with less joint and recovery cost. Put the press back for clients who want it (swap note on the row).",
+      "Session order (Nov 18 2026): Upper A does the chest-supported row straight after the incline press on the same bench and angle, then the cable work (pulldown, lateral raise, pushdown) in one stop, then curls.",
     ],
     days: [
       {
@@ -533,8 +537,8 @@ const p05 = (): ProgramDef => {
         focus: "Upper chest, lats, shoulders, arms · about 65 min",
         slots: [
           a("inclineDbPress", { sets: 3, reps: "6-10", repsB3: "5-8", rest: R.hardCompound, note: "1–2 lighter sets first. Low incline, full stretch at the bottom." }),
+          a("csRow", { sets: 2, reps: "8-12", rest: R.machine, note: "Same bench at the incline you just pressed on: chest on the pad, elbows back to the hips." }),
           a("latPulldown", { sets: 3, reps: "8-12", repsB3: "6-10", rest: R.machine, note: "Pull to the top of the chest, elbows down to your sides." }),
-          a("csRow", { sets: 2, reps: "8-12", rest: R.machine, note: "Chest on the pad, elbows back to the hips." }),
           a("cableLateral", { sets: 3, reps: "12-20", rest: 60, note: "Cable from low and behind you, lead with the elbow." }),
           a("pushdown", { sets: 2, reps: "10-15", rest: R.iso, note: "Elbows pinned, full lockout." }),
           a("dbCurl", { sets: 2, reps: "10-15", rest: R.iso, note: "Elbows still, full stretch." }),
@@ -693,7 +697,9 @@ const p07 = (): ProgramDef => {
       "Scale exercise choice to skill and joints: goblet squat or belt squat, split squat with or without dumbbells. For a true novice, drop one set from the hip thrust and leg press in Block 1.",
       "Trim first if over 60 min: plank or dead bug, then the lateral raise.",
     ].join("\n"),
-    changes: [],
+    changes: [
+      "Session order (Nov 18 2026): Full Body B does the seated dumbbell press before the cable row, so the dumbbells are one stop.",
+    ],
     days: [
       {
         title: "Day 1 — Full Body A",
@@ -713,8 +719,8 @@ const p07 = (): ProgramDef => {
         slots: [
           a("hipThrust", { sets: 3, reps: "8-12", rest: R.compound, note: "1–2 lighter sets first. Chin tucked, ribs down, 1-second squeeze at the top." }),
           a("dbSplitSquat", { sets: 2, reps: "8-10 per side", rest: R.compound, note: "Bodyweight first, dumbbells when 10 is easy. Drop the back knee straight down." }),
-          a("cableRow", { sets: 3, reps: "8-12", rest: R.machine, note: "Chest up, pull to your stomach." }),
           a("seatedDbPress", { sets: 2, reps: "8-12", rest: R.compound, note: "Dumbbells from shoulder height, press up and slightly in." }),
+          a("cableRow", { sets: 3, reps: "8-12", rest: R.machine, note: "Chest up, pull to your stomach." }),
           a("seatedLegCurl", { sets: 2, reps: "10-15", rest: R.iso, note: "Hips pinned, control the lowering." }),
           a("deadBug", { sets: 2, reps: "8-12 per side", rest: R.core, conservative: true, note: "Lower back flat, slow." }),
         ],
@@ -766,6 +772,7 @@ const p08 = (): ProgramDef => {
     changes: [
       "Lower B: the leg press (second bilateral quad compound right after the belt squat) is replaced by a lying hamstring curl (2x10–15). Hamstrings were the only lower-body muscle under ~6 weekly sets, while quads were still covered by the belt squat, reverse lunge and leg extension.",
       "Hip thrust gets a 4th set in Blocks 2 and 3: the glutes are this program's priority, so they get the volume progression.",
+      "Session order (Nov 18 2026): Upper B does the curls with the other dumbbell work, before the rear-delt machine.",
     ],
     days: [
       {
@@ -809,8 +816,8 @@ const p08 = (): ProgramDef => {
           a("machineChestPress", { sets: 2, reps: "8-12", rest: R.machine, note: "Handles at mid-chest, control the stretch." }),
           a("csRow", { sets: 3, reps: "8-12", rest: R.machine, note: "Chest on the pad, elbows back to the hips." }),
           a("seatedDbPress", { sets: 2, reps: "8-12", rest: R.compound, note: "Dumbbells from shoulder height, press up and slightly in." }),
-          a("rearDeltMachine", { sets: 2, reps: "12-20", rest: 60 }),
           a("dbCurl", { sets: 2, reps: "10-15", rest: R.iso, note: "Elbows still, full stretch." }),
+          a("rearDeltMachine", { sets: 2, reps: "12-20", rest: 60 }),
           a("cableCrunch", { sets: 2, reps: "10-15", rest: R.core, conservative: true }),
         ],
       },

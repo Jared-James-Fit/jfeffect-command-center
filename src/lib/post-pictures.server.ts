@@ -241,7 +241,7 @@ export async function pictureForPost(admin: Admin, postId: string): Promise<Pict
     const { repictureDailyPost } = await import("@/lib/daily-visuals.server");
     return repictureDailyPost(admin, post.id);
   }
-  const made = await generatePicture(promptFor(kind, post.caption, post.series_data));
+  const made = await generatePicture(promptFor(kind, post.caption, post.series_data), { lovable: false });
   if (!made.ok) return made;
   const entry = await storePicture(admin, post.author_user_id, `post-${post.id}`, made.picture);
   // the made photo is the cover; anything else already on the post stays after it
@@ -262,7 +262,7 @@ export async function pictureForItem(admin: Admin, itemId: string): Promise<Pict
   if (media.some((m) => !madeHere(m?.path))) return { ok: false, reason: "This post has your own photo on it. Remove it first to get a made picture." };
   const { data: settings } = await admin.from("community_series_settings").select("author_user_id").maybeSingle();
   if (!settings?.author_user_id) return { ok: false, reason: "No account to post as yet." };
-  const made = await generatePicture(promptFor(kind, item.body, item.data));
+  const made = await generatePicture(promptFor(kind, item.body, item.data), { lovable: false });
   if (!made.ok) return made;
   const entry = await storePicture(admin, settings.author_user_id, `item-${item.id}`, made.picture);
   const { error } = await admin.from("community_series_items").update({ media: [entry] }).eq("id", item.id);

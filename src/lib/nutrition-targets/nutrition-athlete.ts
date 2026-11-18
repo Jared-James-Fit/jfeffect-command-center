@@ -40,6 +40,11 @@ export function nutritionAthleteText(ctx: AthleteContext, dev: AthleteDevelopmen
     lines.push(
       `Next meet: ${next.name} on ${fmt(next.date)} (${next.weeksOut} weeks out)${next.weightClass ? ` · weight class ${next.weightClass}` : " · no weight class on file"}`,
     );
+  // a booked PT session sets the hour the lifting and the cardio after it share (recommend.ts maxSessionMinutes)
+  if (ctx.session?.ptMinutes)
+    lines.push(
+      `Training sessions: booked ${ctx.session.ptMinutes}-min PT sessions; the training-day cardio after lifting has to fit inside that hour (no more than a quarter of it), so extra cardio belongs on days off`,
+    );
   lines.push(developmentText(dev, ctx.unit, { exercises: false }));
   return lines.join("\n");
 }

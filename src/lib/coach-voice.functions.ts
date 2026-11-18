@@ -162,16 +162,15 @@ export const tryCoachVoiceFn = createServerFn({ method: "POST" })
     const sb = await adminClient();
     const profile = normalizeVoiceProfile(data.profile);
     const audience = await loadVoiceAudience(sb, data.clientId ?? null);
-    const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
-    const { generateText } = await import("ai");
-    const { data: g } = await sb.from("global_ai_config").select("default_model").limit(1).maybeSingle();
-    const result = await generateText({
-      model: createLovableAiGateway()(g?.default_model || DEFAULT_AI_MODEL),
+    // the coach_write route (routing.ts): GPT-5 mini, then GPT-5.5, on the OpenAI key
+    const { askRoute } = await import("@/lib/ai/route-call.server");
+    const result = await askRoute("coach_write", {
       system: [
         "You write the coach's reply to a client check-in. Reply with the message text only, nothing else.",
         buildVoicePrompt(profile, audience),
       ].join("\n\n"),
       prompt: `CHECK-IN:\n${VOICE_SCENARIOS[data.scenario as VoiceScenario]}\n\nWrite the reply.`,
-    });
+      timeoutMs: 40_000,
+    }, { sb });
     return { text: casualize(result.text ?? "") };
   });

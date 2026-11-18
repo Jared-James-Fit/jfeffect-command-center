@@ -475,7 +475,7 @@ export function cleoReadTools(ctx: ToolCtx) {
     }),
 
     nutrition: tool({
-      description: "A client's nutrition targets (calories, protein, carbs, fats per day type), phase, goal and notes.",
+      description: "A client's nutrition targets (calories, protein, carbs, fats per day type), phase, goal and notes, and the weight-management read the coach's Nutrition tab shows (bodyweight trend against the goal, the one recommendation, cardio, water, digestion): the same read the nutrition AI and the check-in recap use.",
       inputSchema: z.object({ client_id: clientId }),
       execute: safe("nutrition", async ({ client_id }) => {
         const c = await clientRow(db, client_id);
@@ -488,6 +488,10 @@ export function cleoReadTools(ctx: ToolCtx) {
           for (const d of (t.nutrition_target_days ?? []) as any[]) lines.push(`  ${d.day_label ?? "Day"}: ${d.calories ?? "?"} kcal | P ${d.protein ?? "?"}g C ${d.carbs ?? "?"}g F ${d.fats ?? "?"}g${d.fibre ? ` fibre ${d.fibre}g` : ""}`);
           if (text(t.admin_notes)) lines.push(`  Coach notes: ${String(t.admin_notes).slice(0, 400)}`);
         }
+        // one read for every AI that touches their nutrition (weight-management, decision.ts); never recomputed here
+        const { loadWeightText } = await import("@/lib/nutrition-ai-plans.server");
+        const wm = await loadWeightText(db, client_id).catch(() => null);
+        if (wm) lines.push("", wm);
         return lines.join("\n");
       }),
     }),

@@ -34,6 +34,8 @@ never hit the gateway's 524 or hold a request open).
 | `nutrition_write` (meal plans, their fix, coach updates) | GPT-5.5, GPT-5-mini | low |
 | `roadmap` (block purpose, weekly focus) | GPT-5-mini, GPT-5.5 | low |
 | `meal_estimate` (a member's or client's AI food log, metered by AI credits) | GPT-5-mini, GPT-5.5 | low |
+| `form_draft` (a coach's Draft with AI form) | GPT-5-mini, GPT-5.5 | low |
+| `coach_write` (the weekly check-in recap and suggested reply, AI drafts of a form reply, a lead's first text, the inbox Brief, My Voice's Try it) | GPT-5-mini, GPT-5.5 | low |
 
 - `strategy`, `review`, `interpret`, `nutrition` are **strong only**: every model on the route is
   top tier. If none answers, the run stops with a message that says so. A coaching decision is
@@ -135,7 +137,8 @@ actionable. Scores are after the parser fix below.
 Flash and GPT-5.5 had the same audit result on every paired build (Devin and Nicolas pass with
 review notes; Jared's fails the same frequency checks with either, a strategy-to-build hand-off
 issue, not the model), Flash in 31–185 s, GPT-5.5 in 80–480 s. Astra as the builder wasn't
-measured: the OpenAI credits ran out mid-run. Flash builds; GPT-5.5 is its fallback.
+measured: the OpenAI credits ran out mid-run. The benchmark had Flash building; Flash only exists through the
+Lovable gateway, so GPT-5.5 builds (the same audit result, slower, in the background) and Astra is its fallback.
 
 **Found and fixed along the way** (each made every model look worse than it was):
 - The schemas wiped text over a cap and lists with one bad item, so Astra's detailed
@@ -159,3 +162,27 @@ tokens and estimated cost, so the admin card compares the real AI cost against p
 the only metered feature is the AI food log (`meal_estimate`, 1 credit, GPT-5 mini answered inside
 the request with `callModelNow`). A new member-facing AI feature gets a cost in `ai_credit_cost` and
 `FEATURE_COSTS` and goes through `withAiCredits`.
+
+
+## Nov 18 2026: one architecture for the coach-side writing, one set of rules
+
+- `coach_write` (above) moved the check-in recap, AI drafts of form replies, lead texts, the inbox Brief and
+  My Voice's Try it off Lovable credits (one Gemini Flash call with no fallback) onto the OpenAI key through
+  `askRoute` (src/lib/ai/route-call.server.ts: the route's models in order, the next one when a model fails,
+  the admin override honoured). They summarise numbers code already worked out (workout counts, the
+  weight-management read, the training readout); none makes a new coaching decision.
+- The picture jobs (post pictures, lesson covers) no longer fall back to Lovable credits by themselves.
+- One rule set across the AIs that touch the same client: a calorie step is the weight-management engine's
+  `MAX_STEP_KCAL` (250) in the nutrition targets prompt and Cleo; a training-day walk is the treadmill caps
+  (20 min, 15 for a powerlifter, a quarter of a booked PT session) in the nutrition prompt; an e1RM is only read
+  from RPE 7+ sets of 10 reps or fewer everywhere (strength-read.ts, the check-in training readout); one hard
+  session is one session's read in check-in replies, as in DEVELOPMENT_RULES; Cleo's loads, notes and session
+  flow follow the generator's LOADING_RULES, ATHLETE_NOTE_RULES and ACCESSORY_FLOW_RULES.
+- Shared context: the training brief (Generate Next Program, Edit with AI) carries the nutrition plan they're on
+  (`nutritionNowLine`: phase, each day's calories and protein, what a cut or a gain means for training); the
+  interpret job carries the health profile; the nutrition AI's athlete read carries a booked PT session's length;
+  Cleo's nutrition look-up carries the weight-management read; Cleo's nutrition cards show the same
+  "Check before publishing" list (`coachChecks`) as the Nutrition Update review.
+- Kept as it is, on purpose: Edit with AI's GPT-5-mini fallback (every proposal is the coach's to approve;
+  Astra as the fallback would time out more), and Cleo's own gateway chain (moving her tool calls and PDF parts to
+  the OpenAI key is a bigger change that needs its own test run).
