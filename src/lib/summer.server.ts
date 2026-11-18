@@ -622,7 +622,12 @@ export async function cleoAnswer(
     }),
     "",
     `WRITING AS ${ownerName ?? "THE COACH"}: when asked to write, draft or reword anything that goes out as him (community posts, captions, shout-outs, messages to clients, replies), write it in HIS voice below, not yours. Your own tone is only for talking to the person using the app. For a post to the whole community, keep it group-friendly (no nicknames, no edgy words).`,
-    buildVoicePrompt(coachVoice, null, { group: true }),
+    // His My Voice rules say "You are Jared…": that is for writing as him. Cleo stays Cleo and
+    // borrows the style only as its tone says (the Like me tone does).
+    buildVoicePrompt(coachVoice, null, {
+      group: true,
+      heading: `HIS VOICE (${ownerName ?? "the coach"}'s My Voice, how anything written as him must sound, over any tone above. Its "You are ${ownerName ?? "the coach"}" means when writing as him: in your own replies you stay Cleo, and use this style only as far as your tone says):`,
+    }),
     "",
     booksSection,
     "",
