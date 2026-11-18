@@ -51,6 +51,7 @@ import { setTitle, setVideoFileKey, setVideoStem, setWord } from "@/lib/set-vide
 import { probeVideo } from "@/lib/video-edit/probe";
 import {
   catchUpJobId,
+  clearCatchUpChecked,
   markCatchUpChecked,
   takeCatchUpLaunch,
   type CatchUpClip,
@@ -524,8 +525,11 @@ async function runJob(id: string) {
     preparedFiles.delete(id);
     const feed = feedSources.get(id);
     feedSources.delete(id);
-    if (feed && res.id)
+    if (feed && res.id) {
       queueFeedCopy({ ...feed, jobId: id, setVideoId: res.id, clientId: job.clientId, tries: 0 });
+      // if this open ends before the copy is made, the next look (a return to the app) finds it at once
+      clearCatchUpChecked(job.userId);
+    }
     set({
       state: "done",
       progress: 100,
