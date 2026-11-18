@@ -234,7 +234,8 @@ export function WorkoutViewToggle({ view, onChange, className, hint = false }: {
                 hint && value === "story" && !on && "badge-pulse text-foreground",
               )}
             >
-              <Icon className="h-4 w-4" aria-hidden />
+              {/* the smallest phones keep the words and lose the icons, so the row never wraps */}
+              <Icon className="h-4 w-4 max-[359px]:hidden" aria-hidden />
               {label}
             </span>
           </button>

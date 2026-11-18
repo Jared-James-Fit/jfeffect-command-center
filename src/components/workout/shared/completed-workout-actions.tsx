@@ -1,7 +1,8 @@
 /**
  * The finished workout's one card, at the top of the log: its status
- * (Completed, or completed with the review still to do), how long it took, the
- * review button and View score. The log itself is the page under it.
+ * (Completed, or completed with the review still to do) on one line with when
+ * the session ran (`status`, the logger's session time line), then the review
+ * and View score side by side. The log itself is the page under it.
  *   - "Finish review" / "Edit review" → opens the shared `WorkoutReviewEditor`,
  *     prefilled with the existing review when one exists.
  *   - "View score" → the recap, once the review is in.
@@ -44,7 +45,12 @@ type Props = {
   onOpenScore?: () => void;
   /** e.g. "1h 5m", after the status. */
   meta?: string | null;
-  /** More of the same card under the status row (the session time line). */
+  /**
+   * Draws the status row around its label (the logger puts the session time
+   * beside "Completed", one tappable line). Without it the label stands alone.
+   */
+  status?: (label: ReactNode) => ReactNode;
+  /** More of the same card under the actions. */
   children?: ReactNode;
   /** The athlete's own finished workout: its film (set videos) shows here, to post or see in the feed. */
   filmCompletionId?: string | null;
@@ -67,6 +73,7 @@ export function CompletedWorkoutActions({
   onAutoOpenReviewConsumed,
   onOpenScore,
   meta,
+  status,
   children,
   filmCompletionId,
   completedAt,
@@ -82,44 +89,47 @@ export function CompletedWorkoutActions({
     onAutoOpenReviewConsumed?.();
   }, [autoOpenReview, onAutoOpenReviewConsumed]);
 
+  const label = (
+    <span className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold">
+      {hasReview ? (
+        <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-hidden />
+      ) : (
+        <MessageSquare className="h-4 w-4 shrink-0 text-warning" aria-hidden />
+      )}
+      <span>{hasReview ? "Completed" : "Completed · review pending"}</span>
+      {meta ? <span className="font-normal tabular-nums text-muted-foreground">· {meta}</span> : null}
+    </span>
+  );
+
   return (
     <>
-      <Card className="space-y-2.5 p-3" data-testid="completed-workout-card">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="mr-auto flex min-w-0 items-center gap-2 text-sm font-semibold">
-            {hasReview ? (
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-hidden />
-            ) : (
-              <MessageSquare className="h-4 w-4 shrink-0 text-warning" aria-hidden />
-            )}
-            <span>{hasReview ? "Completed" : "Completed · review pending"}</span>
-            {meta ? <span className="font-normal tabular-nums text-muted-foreground">· {meta}</span> : null}
-          </div>
-          <div className="flex items-center gap-2">
-            {hasReview && onOpenScore && (
-              <Button variant="outline" onClick={onOpenScore} className="h-10">
-                <Trophy className="h-4 w-4" />
-                View score
-              </Button>
-            )}
-            <Button
-              variant={hasReview ? "ghost" : "default"}
-              onClick={() => setReviewOpen(true)}
-              className={hasReview ? "h-10 text-muted-foreground" : "h-10"}
-            >
-              {hasReview ? (
-                <>
-                  <Pencil className="h-4 w-4" />
-                  Edit review
-                </>
-              ) : (
-                <>
-                  <MessageSquare className="h-4 w-4" />
-                  Finish review
-                </>
-              )}
+      <Card className="space-y-2 px-3 pb-3 pt-2" data-testid="completed-workout-card">
+        {status ? status(label) : <div className="flex min-h-10 items-center">{label}</div>}
+        <div className={hasReview && onOpenScore ? "grid grid-cols-2 gap-2" : "grid grid-cols-1"}>
+          {hasReview && onOpenScore && (
+            <Button variant="outline" onClick={onOpenScore} className="h-10" data-testid="completed-view-score">
+              <Trophy className="h-4 w-4" />
+              View score
             </Button>
-          </div>
+          )}
+          <Button
+            variant={hasReview ? "outline" : "default"}
+            onClick={() => setReviewOpen(true)}
+            className="h-10"
+            data-testid="completed-review"
+          >
+            {hasReview ? (
+              <>
+                <Pencil className="h-4 w-4" />
+                Edit review
+              </>
+            ) : (
+              <>
+                <MessageSquare className="h-4 w-4" />
+                Finish review
+              </>
+            )}
+          </Button>
         </div>
         {children}
         {filmCompletionId && ctx.kind === "client" && (

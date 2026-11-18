@@ -39,7 +39,6 @@ import { ActionButton } from "@/components/action-button";
 import { TrainingHelpSheet } from "@/components/training-help-sheet";
 import { WarmupButton } from "@/components/warmup-sheet";
 import { dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
-import { formatClientDayNotes, formatDayLabel, formatDaySubtitle } from "@/lib/workout-day-label";
 import { format, parseISO, startOfDay } from "date-fns";
 import { useServerFn } from "@tanstack/react-start";
 import { SessionTimeRow } from "@/components/workout-day/SessionTimeRow";
@@ -179,7 +178,8 @@ import { formatClockSeconds, formatDuration } from "@/lib/duration";
 import {
   getTimerTarget, setTimerTarget, getRowInputs, setRowInputs, getVelocityDefault, setVelocityDefault, type RowInputOverrides,
 } from "@/lib/log-as-override";
-import { Timer, Heart, History as HistoryIcon, ChevronRight } from "lucide-react";
+import { Timer, Heart, Activity, History as HistoryIcon, ChevronRight } from "lucide-react";
+import { DayCoachNotes, ScheduledDayLine, loggerMeta, loggerTitle } from "@/components/workout-day/logger-top";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
 import {
   summarizeCompleteness,
@@ -2824,62 +2824,64 @@ function WorkoutDay({
       <PageHeader
         backTo={navigation.backTo}
         backLabel="Workouts"
-        title={
+        /* The workout's name is the title (the name they tapped on Workouts);
+           how far through it they are rides on the back button's row. */
+        title={loggerTitle(day)}
+        actions={
+          statusSummary.setsTotal > 0 ? (
+            <button
+              type="button"
+              onClick={scrollToFirstIncompleteExercise}
+              data-testid="workout-progress"
+              className="inline-flex shrink-0 items-center h-10 gap-1.5 whitespace-nowrap rounded-full bg-secondary/60 px-3 text-[13px] font-semibold tabular-nums text-muted-foreground transition-colors hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              aria-label={`Workout progress ${progressPct}%, ${liftProgress.liftsDone} of ${liftProgress.liftsTotal} exercises${liftProgress.cardioTotal > 0 ? `, cardio ${liftProgress.cardioDone ? "done" : "not done yet"}` : ""}. Scroll to first incomplete exercise.`}
+            >
+              {/* The ring is the sets logged; the count is the exercises. */}
+              <WorkoutProgressRing pct={progressPct} status={progressStatus} size={16} strokeWidth={3} />
+              <span className="text-foreground">{liftProgress.liftsDone}/{liftProgress.liftsTotal}</span>
+              {liftProgress.cardioTotal > 0 && (
+                /* The day's cardio, apart from the lifts: a pulse line (never a
+                   heart, which read as a favourite), green once it's done. */
+                <span
+                  className={`inline-flex items-center ${liftProgress.cardioDone ? "text-success" : ""}`}
+                  data-progress-cardio={liftProgress.cardioDone ? "done" : "open"}
+                  aria-hidden
+                >
+                  <span className="mr-1.5">·</span>
+                  <Activity className="h-3.5 w-3.5" strokeWidth={2.5} />
+                </span>
+              )}
+              {/* Workout time: the live clock rides in the same pill once the
+                  workout has started (nothing until then), not a card of its own. */}
+              {statusBarVisible && !completion?.completed_at && (
+                <span className="inline-flex items-center gap-1.5" aria-label="Workout time">
+                  <span aria-hidden>·</span>
+                  <WorkoutTimer
+                    dayId={dayId}
+                    completedAt={null}
+                    savedDurationMin={null}
+                    readonly
+                    variant="inline"
+                  />
+                </span>
+              )}
+            </button>
+          ) : undefined
+        }
+        subtitle={
+          // Where it sits (never the date: that's on the outside card), and,
+          // opened on another day, one quiet line saying when it was planned.
           <>
-            {formatDayLabel(day)}
-            {statusSummary.setsTotal > 0 && (
-              <button
-                type="button"
-                onClick={scrollToFirstIncompleteExercise}
-                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-secondary/60 px-2 py-0.5 text-[11px] font-bold tabular-nums text-muted-foreground transition-colors hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                aria-label={`Workout progress ${progressPct}%, ${liftProgress.liftsDone} of ${liftProgress.liftsTotal} exercises${liftProgress.cardioTotal > 0 ? `, cardio ${liftProgress.cardioDone ? "done" : "not done yet"}` : ""}. Scroll to first incomplete exercise.`}
-              >
-                <WorkoutProgressRing pct={progressPct} status={progressStatus} size={16} strokeWidth={3} />
-                {progressPct}% · {liftProgress.liftsDone}/{liftProgress.liftsTotal}
-                {liftProgress.cardioTotal > 0 && (
-                  <span
-                    className={`inline-flex items-center ${liftProgress.cardioDone ? "text-success" : ""}`}
-                    data-progress-cardio={liftProgress.cardioDone ? "done" : "open"}
-                    aria-hidden
-                  >
-                    <span className="mr-1.5">·</span>
-                    <Heart className={`h-3 w-3 ${liftProgress.cardioDone ? "fill-current" : ""}`} />
-                  </span>
-                )}
-                {/* Workout time: the live clock rides in the same pill once the
-                    workout has started (nothing until then), not a card of its own. */}
-                {statusBarVisible && !completion?.completed_at && (
-                  <span className="inline-flex items-center gap-1.5" aria-label="Workout time">
-                    <span aria-hidden>·</span>
-                    <WorkoutTimer
-                      dayId={dayId}
-                      completedAt={null}
-                      savedDurationMin={null}
-                      readonly
-                      variant="inline"
-                    />
-                  </span>
-                )}
-              </button>
+            <span className="block">{loggerMeta(day, block, week)}</span>
+            {!readonly && isOutsideScheduledDay && !completion?.completed_at && scheduledDate && (
+              <ScheduledDayLine scheduled={scheduledDate} today={today} />
             )}
           </>
         }
-        subtitle={(() => {
-          // Inside the logger the athlete only needs to know WHICH workout
-          // this is: the coach subtitle plus short block/week context. The
-          // full date lives on the outside card and (when it matters) in the
-          // schedule notice below, so it is not repeated here.
-          const sub = formatDaySubtitle(day);
-          const context = [
-            block?.name,
-            week?.week_index != null ? `Week ${week.week_index}` : null,
-          ].filter(Boolean).join(" · ");
-          return [sub, context].filter(Boolean).join(" · ");
-        })()}
         /* No header "?": Training help is in every exercise card's ⋯ (Focus
            has it too), the same sheet. */
       />
-      <div className="px-3 pt-1.5 space-y-2 md:p-8 md:space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+32px)] md:pb-8">
+      <div className="px-3 pt-2 space-y-2.5 md:p-8 md:space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+32px)] md:pb-8">
 
         <WorkoutSyncBanner
           clientId={client?.id ?? null}
@@ -2887,9 +2889,9 @@ function WorkoutDay({
           pageRoute={`/portal/workouts/${dayId}`}
         />
 
-        {/* A finished workout: one card at the top with its status, the
-            review and View score (never a badge here and a second "completed"
-            bar under the log). */}
+        {/* A finished workout: one card at the top with its status and when
+            it ran on one line, then the review and View score (never a badge
+            here and a second "completed" bar under the log). */}
         {completion?.completed_at && client?.id && (
           <CompletedWorkoutActions
             ctx={{ kind: "client", dayId, scheduledWorkoutId }}
@@ -2934,63 +2936,59 @@ function WorkoutDay({
             filmCompletionId={isClientWorkout && !isImpersonating ? completion.id ?? null : null}
             completedAt={completion.completed_at ?? null}
             meta={
-              /* Client workouts show their length on the Session time line below. */
+              /* Client workouts show their length on the session time line. */
               !isClientWorkout && completion.actual_duration_min != null && completion.actual_duration_min > 0
                 ? formatDurationMin(completion.actual_duration_min)
                 : null
             }
-          >
-            {completion?.id && isClientWorkout && (
-              <SessionTimeRow completion={completion as any} clientId={client.id} workoutTitle={day?.title ?? null} inCard />
-            )}
-          </CompletedWorkoutActions>
+            status={
+              completion?.id && isClientWorkout
+                ? (label) => (
+                    <SessionTimeRow completion={completion as any} clientId={client.id} workoutTitle={day?.title ?? null} inCard lead={label} />
+                  )
+                : undefined
+            }
+          />
         )}
-        {/* Compact Warm-Up launcher. Rescheduling lives on the outside
-            workout card / Schedule Manager, not inside the logger. */}
-        {(!readonly || !!client?.id) && client?.id && (
-          <div className="flex flex-wrap items-center gap-2">
-            <WarmupButton
-              dayId={dayId}
-              blockId={blockId}
-              clientId={client.id}
-              warmupMode={(day as any).warmup_mode}
-              dayProtocolId={(day as any).warmup_protocol_id}
-              exerciseRows={rows as any[]}
-              className="h-10 rounded-full px-3.5 text-[13px]"
-            />
-            {/* The fastest way to log, any time (it also opens by itself once). */}
-            {rowsLoaded && (rows as any[]).length > 0 && !completion?.completed_at && (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setQuickLogOpen(true)}
-                data-testid="quick-log-tips-open"
-                className="h-10 gap-1.5 rounded-full px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
-              >
-                <Zap className="h-4 w-4" aria-hidden />
-                Log faster
-              </Button>
+        {/* One row: the warm-up (only when there's one to open), then the
+            quickest-way-to-log tips as a help button and List / Focus.
+            Rescheduling lives on the outside workout card / Schedule Manager. */}
+        {(!readonly || !!client?.id) && client?.id && rowsLoaded && (rows as any[]).length > 0 && (
+          <div className="flex items-center gap-2" data-logger-controls>
+            {!completion?.completed_at && (
+              <WarmupButton
+                dayId={dayId}
+                blockId={blockId}
+                clientId={client.id}
+                warmupMode={(day as any).warmup_mode}
+                dayProtocolId={(day as any).warmup_protocol_id}
+                exerciseRows={rows as any[]}
+                hideWhenEmpty
+                className="h-10 rounded-full px-3.5 text-[13px]"
+              />
             )}
-            {/* List or Focus (one exercise at a time, full screen), saved on the account. */}
-            {rowsLoaded && (rows as any[]).length > 0 && (
-              <WorkoutViewToggle className="ml-auto" view={storyOpen ? "story" : "list"} onChange={chooseWorkoutView} hint={focusIntro.show} />
-            )}
+            <div className="ml-auto flex items-center gap-1">
+              {/* "Log faster": the fastest way to log, any time (it also opens by itself once). */}
+              {!completion?.completed_at && (
+                <button
+                  type="button"
+                  onClick={() => setQuickLogOpen(true)}
+                  data-testid="quick-log-tips-open"
+                  aria-label="Log faster: the quickest way to log your sets"
+                  title="Log faster"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <HelpCircle className="h-5 w-5" aria-hidden />
+                </button>
+              )}
+              {/* List or Focus (one exercise at a time, full screen), saved on the account. */}
+              <WorkoutViewToggle view={storyOpen ? "story" : "list"} onChange={chooseWorkoutView} hint={focusIntro.show} />
+            </div>
           </div>
         )}
         {focusIntro.show && <FocusIntro onTry={() => chooseWorkoutView("story")} onDismiss={focusIntro.dismiss} />}
 
         <DayCoachNotes day={day} />
-
-
-        {!readonly && isOutsideScheduledDay && !completion?.completed_at && scheduledDate && (
-          <Card className="flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-xs">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-            <div>
-              This workout is scheduled for <strong>{format(scheduledDate, "EEE MMM d")}</strong>,
-              but you can still complete it today. Your scheduled day is saved.
-            </div>
-          </Card>
-        )}
 
         {/* Workouts are always editable — no date/block/program lock banners. */}
 
@@ -3519,37 +3517,6 @@ function ExerciseNotesBlock({ notes }: { notes: string }) {
       </span>
       {canToggle && <span className="shrink-0 font-medium text-foreground/80">{open ? "Less" : "More"}</span>}
     </button>
-  );
-}
-
-/**
- * Coach notes for the whole session (e.g. station order in a home gym and how
- * to progress). Rendered only when the coach marked the day's notes
- * client-visible; the lead paragraph is always shown, the rest on demand.
- */
-function DayCoachNotes({ day }: { day: { notes?: string | null; notes_client_visible?: boolean | null } | null }) {
-  const [open, setOpen] = useState(false);
-  const notes = formatClientDayNotes(day);
-  if (!notes) return null;
-  return (
-    <Card className="p-3 text-xs">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Coach notes</div>
-      <p className="mt-1 whitespace-pre-wrap text-foreground/90">{notes.lead}</p>
-      {notes.detail && (
-        <>
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary"
-            aria-expanded={open}
-          >
-            {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            {open ? "Show less" : "Read more"}
-          </button>
-          {open && <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{notes.detail}</p>}
-        </>
-      )}
-    </Card>
   );
 }
 
