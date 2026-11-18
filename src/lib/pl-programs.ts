@@ -5,9 +5,9 @@ import { filterPrimaryProgramBlocks, isAtHomeBackupSessionBlock } from "@/lib/at
 import { isInactivePrimaryDay } from "@/lib/active-calendar";
 import { normalizeMuscle } from "@/lib/analytics/muscle-map";
 import { compareWorkoutItemsBySchedule } from "@/lib/workout-today";
-import { fetchAllPages } from "@/lib/supabase-paginate";
+import { chunk, fetchAllPages } from "@/lib/supabase-paginate";
 import { inWorkoutOrder } from "@/lib/logged-set-order";
-import { isPlanCardioRow } from "@/lib/workouts/workout-cardio";
+import { cardioSetDone, isPlanCardioRow } from "@/lib/workouts/workout-cardio";
 
 // ---------- Types ----------
 export type PrepStatus = "Planned" | "Active" | "Completed" | "Archived";
@@ -1678,7 +1678,7 @@ type ProgramTree = {
 const SCHEDULED_INSTANCE_COLUMNS = "id, client_id, source_day_id, scheduled_date, scheduled_time, order_index, schedule_source, note, created_at";
 // cardio_target_id / duration_seconds: the day's cardio is its own thing (workout-cardio.ts), done any time that day
 const ESTIMATE_ROW_COLUMNS = "id, day_id, sets, rest_seconds, time_profile, estimated_seconds_override, cardio_target_id, duration_seconds";
-const LOGGED_SET_COLUMNS = "row_id, actual_load, actual_load_unit, actual_reps, completed_duration_seconds";
+const LOGGED_SET_COLUMNS = "row_id, actual_load, actual_load_unit, actual_reps, completed_duration_seconds, completed_at";
 
 /** Drops a nested embed from a row, returning [row without it, the embed]. */
 function unnest(row: any, key: string): [any, any[]] {
@@ -1760,57 +1760,86 @@ async function loadProgramTreeNested(
   return { visibleBlocks, weeks: visibleWeeks, days: visibleDays, exerciseRows, rowResults, completions, feedbacks, scheduledInstances };
 }
 
-/** The same program, read level by level (the fallback if the nested read is refused). */
+/**
+ * Reads every row whose `column` is one of `ids`, in requests the gateway takes:
+ * at most 150 ids a request (838 in one URL, a long-time client's program,
+ * comes back HTTP 400) and paged past the 1,000-row cap, in a stable order.
+ * Any failed request throws: a fallback that turned an error into "no rows"
+ * showed a long-time client's logged workouts and cardio as never done.
+ */
+async function readByIds<T = any>(
+  ids: readonly string[],
+  read: (chunk: string[], from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (const part of chunk([...new Set(ids)], 150)) {
+    out.push(...(await fetchAllPages<T>((from, to) => read(part, from, to))));
+  }
+  return out;
+}
+
+/** The same program, read level by level (the fallback if the nested read is refused). Never partial: any failed read throws. */
 async function loadProgramTreeStepwise(
   clientId: string,
   options: { includeAtHomeBackupSessions?: boolean },
 ): Promise<ProgramTree> {
   const empty: ProgramTree = { visibleBlocks: [], weeks: [], days: [], exerciseRows: [], rowResults: [], completions: [], feedbacks: [], scheduledInstances: [] };
-  const { data: blocks } = await sb
-    .from("pl_blocks")
-    .select("*")
-    .eq("client_id", clientId)
-    .eq("client_visible", true)
-    .neq("status", "Archived")
-    .order("sort_order", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: true });
+  const blocks = await fetchAllPages((from, to) =>
+    sb
+      .from("pl_blocks")
+      .select("*")
+      .eq("client_id", clientId)
+      .eq("client_visible", true)
+      .neq("status", "Archived")
+      .order("sort_order", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
   const visibleBlocks = filterPrimaryProgramBlocks(blocks ?? [], {
     includeSessions: options.includeAtHomeBackupSessions,
   });
   const blockIds = visibleBlocks.map((b: any) => b.id);
   if (!blockIds.length) return empty;
-  const { data: weeks } = await sb.from("pl_weeks").select("*").in("block_id", blockIds).order("week_index");
-  const weekIds = (weeks ?? []).map((w: any) => w.id);
-  const { data: days } = weekIds.length
-    ? await sb.from("pl_days").select("*").in("week_id", weekIds).order("day_index")
-    : { data: [] };
-  const dayIds = (days ?? []).filter((day: any) => !isInactivePrimaryDay(day)).map((d: any) => d.id);
-  const [completionsRes, exerciseRowsRes, scheduledInstancesRes] = dayIds.length
-    ? await Promise.all([
-        sb.from("pl_day_completions").select("*").in("day_id", dayIds).eq("client_id", clientId),
-        sb.from("pl_exercise_rows").select(ESTIMATE_ROW_COLUMNS).in("day_id", dayIds),
-        sb.from("pl_scheduled_workouts").select(SCHEDULED_INSTANCE_COLUMNS).eq("client_id", clientId).in("source_day_id", dayIds),
-      ])
-    : [{ data: [] as any[] }, { data: [] as any[] }, { data: [] as any[] }];
-  const rowIds = ((exerciseRowsRes.data ?? []) as any[]).map((r: any) => r.id);
-  const completionIds = ((completionsRes.data ?? []) as any[]).map((c: any) => c.id).filter(Boolean);
-  const [rowResultsRes, feedbacksRes] = await Promise.all([
-    rowIds.length
-      ? sb.from("pl_row_results").select(LOGGED_SET_COLUMNS).eq("client_id", clientId).in("row_id", rowIds)
-      : Promise.resolve({ data: [] as any[] }),
-    completionIds.length
-      ? sb.from("pl_workout_feedback").select("completion_id").in("completion_id", completionIds)
-      : Promise.resolve({ data: [] as any[] }),
+  const weeks = (await readByIds(blockIds, (ids, from, to) =>
+    sb.from("pl_weeks").select("*").in("block_id", ids).order("id").range(from, to),
+  )).sort((a: any, b: any) => (a.week_index ?? 0) - (b.week_index ?? 0));
+  const weekIds = weeks.map((w: any) => w.id);
+  const days = (await readByIds(weekIds, (ids, from, to) =>
+    sb.from("pl_days").select("*").in("week_id", ids).order("id").range(from, to),
+  )).sort((a: any, b: any) => (a.day_index ?? 0) - (b.day_index ?? 0));
+  const dayIds = days.filter((day: any) => !isInactivePrimaryDay(day)).map((d: any) => d.id);
+  if (!dayIds.length) return { ...empty, visibleBlocks, weeks, days };
+  const [completions, exerciseRows, scheduledInstances] = await Promise.all([
+    readByIds(dayIds, (ids, from, to) =>
+      sb.from("pl_day_completions").select("*").in("day_id", ids).eq("client_id", clientId).order("id").range(from, to),
+    ),
+    readByIds(dayIds, (ids, from, to) =>
+      sb.from("pl_exercise_rows").select(ESTIMATE_ROW_COLUMNS).in("day_id", ids).order("id").range(from, to),
+    ),
+    readByIds(dayIds, (ids, from, to) =>
+      sb.from("pl_scheduled_workouts").select(SCHEDULED_INSTANCE_COLUMNS).eq("client_id", clientId).in("source_day_id", ids).order("id").range(from, to),
+    ),
+  ]);
+  const rowIds = (exerciseRows as any[]).map((r: any) => r.id);
+  const completionIds = (completions as any[]).map((c: any) => c.id).filter(Boolean);
+  const [rowResults, feedbacks] = await Promise.all([
+    readByIds(rowIds, (ids, from, to) =>
+      sb.from("pl_row_results").select(`id, ${LOGGED_SET_COLUMNS}`).eq("client_id", clientId).in("row_id", ids).order("id").range(from, to),
+    ),
+    readByIds(completionIds, (ids, from, to) =>
+      sb.from("pl_workout_feedback").select("id, completion_id").in("completion_id", ids).order("id").range(from, to),
+    ),
   ]);
   return {
     visibleBlocks,
-    weeks: weeks ?? [],
-    days: days ?? [],
-    exerciseRows: exerciseRowsRes.data ?? [],
-    rowResults: rowResultsRes.data ?? [],
-    completions: completionsRes.data ?? [],
-    feedbacks: feedbacksRes.data ?? [],
-    scheduledInstances: scheduledInstancesRes.data ?? [],
+    weeks,
+    days,
+    exerciseRows,
+    rowResults: (rowResults as any[]).map(({ id: _id, ...rr }) => rr),
+    completions,
+    feedbacks: (feedbacks as any[]).map(({ id: _id, ...f }) => f),
+    scheduledInstances,
   };
 }
 
@@ -1824,6 +1853,10 @@ export async function getClientWorkouts(
   // a stable tiebreaker. Previously this used created_at only, causing the
   // workouts list/calendar to disagree with the block-view tab about which
   // block is "current".
+  // The nested read is one request; when it's refused (a network blip as the
+  // phone wakes, a timeout) the step-by-step read gives the same program. Either
+  // throws rather than return part of it, so a failed read never replaces a good
+  // copy with "nothing logged".
   const tree = (await loadProgramTreeNested(clientId, options).catch(() => null))
     ?? (await loadProgramTreeStepwise(clientId, options));
   const { visibleBlocks, weeks } = tree;
@@ -1863,14 +1896,15 @@ export async function getClientWorkouts(
   const loggedSetsByDay = new Map<string, number>();
   const cardioDoneRows = new Set<string>();
   for (const rr of (rowResults ?? []) as any[]) {
+    if (cardioRowIds.has(String(rr.row_id))) {
+      // the database's own rule for the day's cardio (cardioSetDone)
+      if (cardioSetDone(rr)) cardioDoneRows.add(String(rr.row_id));
+      continue;
+    }
     const hasLoad = rr.actual_load != null && Number.isFinite(Number(rr.actual_load)) && Number(rr.actual_load) > 0;
     const hasReps = rr.actual_reps != null && Number.isFinite(Number(rr.actual_reps)) && Number(rr.actual_reps) > 0;
     const hasDuration = rr.completed_duration_seconds != null && Number.isFinite(Number(rr.completed_duration_seconds)) && Number(rr.completed_duration_seconds) > 0;
     if (!hasDuration && !(hasReps && hasLoad)) continue;
-    if (cardioRowIds.has(String(rr.row_id))) {
-      cardioDoneRows.add(String(rr.row_id));
-      continue;
-    }
     const dayId = rowIdToDay.get(rr.row_id);
     if (!dayId) continue;
     loggedSetsByDay.set(dayId, (loggedSetsByDay.get(dayId) ?? 0) + 1);
@@ -1934,15 +1968,16 @@ export async function getClientWorkouts(
     const dayId = it.day?.id;
     if (!dayId) continue;
     const lifts = (rowsByDay.get(dayId) ?? []).filter((r: any) => !isPlanCardioRow(r));
-    const prog = computeWorkoutProgress(lifts as any[], (resultsByDay.get(dayId) ?? []) as any[]);
+    const cardio = cardioRowByDay.get(dayId);
+    const cardioDone = cardio ? cardioDoneRows.has(String(cardio.id)) : null;
+    const prog = { ...computeWorkoutProgress(lifts as any[], (resultsByDay.get(dayId) ?? []) as any[]), cardioDone };
     it.progress_pct = prog.pct;
     it.progress = prog;
-    const cardio = cardioRowByDay.get(dayId);
     it.cardio = cardio
       ? {
           rowId: String(cardio.id),
           minutes: Number(cardio.duration_seconds) > 0 ? Math.round(Number(cardio.duration_seconds) / 60) : null,
-          done: cardioDoneRows.has(String(cardio.id)),
+          done: !!cardioDone,
         }
       : null;
   }

@@ -76,7 +76,7 @@ import { athleteHabitUnit, isMainLiftFamily, readUnitHabitHint, resolveWorkoutRo
 /** As long as the copy the app saves on the phone (QUERY_PERSIST_MAX_AGE, 24h). */
 const UNIT_CACHE_MS = 24 * 60 * 60_000;
 import { backoffCards, firstHeavyCards, rangeLift } from "@/lib/workouts/pick-range";
-import { cardioLast, focusPlaceLabel, isPlanCardioRow, liftAndCardioProgress, liftCount } from "@/lib/workouts/workout-cardio";
+import { cardioLast, cardioRowDone, focusPlaceLabel, isPlanCardioRow, liftAndCardioProgress, liftCount, withCardioDone } from "@/lib/workouts/workout-cardio";
 import {
   convertLoad,
   displayLoadInUnit,
@@ -909,8 +909,9 @@ function WorkoutDay({
     queryFn: () => listRemovedSrv({ data: { dayId } }),
   });
 
+  const resultsQueryKey = ["pl-day-results", dayId, client?.id, adapter?.kind ?? null, adapter?.ref.ownerId ?? null, scheduledWorkoutId];
   const { data: results = [], isSuccess: resultsLoaded, isFetching: resultsFetching } = useQuery({
-    queryKey: ["pl-day-results", dayId, client?.id, adapter?.kind ?? null, adapter?.ref.ownerId ?? null, scheduledWorkoutId],
+    queryKey: resultsQueryKey,
     enabled: !!client?.id && (rows as any[]).length > 0,
     // Logged sets belong to one scheduled instance: never show another
     // instance's (or an older visit's) sets as this one's.
@@ -2043,10 +2044,31 @@ function WorkoutDay({
   // The day's cardio, logged before, during or after the lifting (or later
   // that day): its sets save like any other, but never start the workout, its
   // clock or "in progress" (workout-cardio.ts). The Workouts card shows it done.
-  const refreshCardio = () => {
-    qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
-    qc.invalidateQueries({ queryKey: ["exercise-history"] });
-    qc.invalidateQueries({ queryKey: ["my-workouts"], refetchType: "none" });
+  // Every screen that says whether the day's cardio is done hears it now: the
+  // Workouts card and Home (the cached list, set in place, then read again on
+  // their next open), the card's own day read, and Nutrition's status line and
+  // the cardio card (the plan's completion, which the database writes as the
+  // set saves).
+  const refreshCardio = async () => {
+    await qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
+    const cardio = (rows as any[]).find((r) => isPlanCardioRow(r));
+    const latest = qc.getQueryData<any[]>(resultsQueryKey);
+    if (cardio && Array.isArray(latest)) {
+      const done = cardioRowDone(cardio.id, latest);
+      qc.setQueriesData({ queryKey: ["my-workouts"] }, (old: unknown) => withCardioDone(old, dayId, done));
+      qc.setQueriesData({ queryKey: ["workout-progress", dayId] }, (old: unknown) =>
+        old && typeof old === "object" ? { ...(old as object), cardioDone: done } : old,
+      );
+    }
+    void qc.invalidateQueries({ queryKey: ["my-workouts"], refetchType: "none" });
+    void qc.invalidateQueries({ queryKey: ["workout-progress", dayId], refetchType: "none" });
+    void qc.invalidateQueries({ queryKey: ["exercise-history"] });
+    void qc.invalidateQueries({
+      predicate: (q) => {
+        const k = String(q.queryKey[0] ?? "");
+        return k.startsWith("cardio-completion") || k.startsWith("cardio-analytics") || k.startsWith("cardio-compliance") || k === "client-cardio-resolved" || k === "cal-client-cardio";
+      },
+    });
   };
 
 

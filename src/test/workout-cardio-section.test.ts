@@ -134,7 +134,7 @@ describe("cardio is done when it suits them: before, during, after or later that
     expect(programs).toContain("if (cardioRowIds.has(String(rr.row_id))) {");
     expect(programs).toContain("const lifts = (rowsByDay.get(dayId) ?? []).filter((r: any) => !isPlanCardioRow(r));");
     const card = read("src/components/workouts/WorkoutsExperience.tsx");
-    expect(card).toContain('data-day-cardio={item.cardio.done ? "done" : "open"}');
+    expect(card).toContain('data-day-cardio={cardioDone ? "done" : "open"}');
     expect(card).toContain("search={{ focus: item.cardio.rowId,");
     expect(day).toContain("Before, after or later in the day");
   });
