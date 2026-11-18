@@ -425,7 +425,9 @@ export async function runPlan(
  * Daily Total is off its targets or whose meals don't add up to it
  * (planTotalsIssues, which reads the meals themselves, never only the
  * Daily Total), or a meal whose macros aren't what its foods give
- * (mealsOffTheirFoods). One that fails gets a targeted fix (two rounds at most), each kept only when it
+ * (mealsOffTheirFoods). Each draft is judged with its Daily Totals written
+ * from its meals (withHonestTotals), so a model's arithmetic is never a round.
+ * One that fails gets a targeted fix (two rounds at most), each kept only when it
  * still reads as the same plan (same menus, a Daily Total) with fewer
  * problems. A failed fix never costs the plan already written. Exported for tests.
  */
@@ -439,14 +441,20 @@ export async function withPrepFix(
   /** liveAllergens(): the allergens on file across their whole account. */
   allergens: string[] = [],
 ): Promise<string> {
-  const issues = (text: string) => ({
-    drift: prepDrift(planMenus(text)),
-    totals: targets.length ? planTotalsIssues(text, targets) : [],
-    shelf: hardToFindFoods(planMenus(text), answers),
-    allergy: allergenConflicts(planMenus(text), allergens),
-    // a meal whose Approximate macros aren't what its foods give (food-values.ts: the plain staples only)
-    macros: planMenus(text).flatMap((m) => mealsOffTheirFoods(m.notes).map((c) => `${m.label} ${mealFoodLine(c)}`)),
-  });
+  const issues = (draftText: string) => {
+    // the Daily Totals are the code's to write (withHonestTotals, after this loop), so a model's
+    // arithmetic never costs a round: what goes back is what only the model can fix
+    const text = withHonestTotals(draftText);
+    const menus = planMenus(text);
+    return {
+      drift: prepDrift(menus),
+      totals: targets.length ? planTotalsIssues(text, targets) : [],
+      shelf: hardToFindFoods(menus, answers),
+      allergy: allergenConflicts(menus, allergens),
+      // a meal whose Approximate macros aren't what its foods give (food-values.ts: the plain staples only)
+      macros: menus.flatMap((m) => mealsOffTheirFoods(m.notes).map((c) => `${m.label} ${mealFoodLine(c)}`)),
+    };
+  };
   // an allergen on file comes first, then prep and shelf staples: a fix that gets those right but leaves a total a little off still wins
   const count = (x: ReturnType<typeof issues>) => x.allergy.length * 10 + x.drift.length * 3 + x.shelf.length * 3 + x.totals.length + x.macros.length;
   let current = draft;
