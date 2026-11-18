@@ -256,6 +256,7 @@ import { Route as ApiPublicHooksCleanupPendingSignupsRouteImport } from './route
 import { Route as ApiPublicHooksCleoAttachmentsSweepRouteImport } from './routes/api/public/hooks/cleo-attachments-sweep'
 import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/api/public/hooks/client-calendars-tick'
 import { Route as ApiPublicHooksDailyVisualsTickRouteImport } from './routes/api/public/hooks/daily-visuals-tick'
+import { Route as ApiPublicHooksFeedCopiesTickRouteImport } from './routes/api/public/hooks/feed-copies-tick'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
 import { Route as ApiPublicHooksGcalSessionImportRouteImport } from './routes/api/public/hooks/gcal-session-import'
 import { Route as ApiPublicHooksJfLibraryInstallRouteImport } from './routes/api/public/hooks/jf-library-install'
@@ -1721,6 +1722,12 @@ const ApiPublicHooksDailyVisualsTickRoute =
     path: '/api/public/hooks/daily-visuals-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksFeedCopiesTickRoute =
+  ApiPublicHooksFeedCopiesTickRouteImport.update({
+    id: '/api/public/hooks/feed-copies-tick',
+    path: '/api/public/hooks/feed-copies-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksFilloutRoute = ApiPublicHooksFilloutRouteImport.update({
   id: '/api/public/hooks/fillout',
   path: '/api/public/hooks/fillout',
@@ -2230,6 +2237,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
+  '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
@@ -2521,6 +2529,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
+  '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
@@ -2818,6 +2827,7 @@ export interface FileRoutesById {
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
+  '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
@@ -3115,6 +3125,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/daily-visuals-tick'
+    | '/api/public/hooks/feed-copies-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/jf-library-install'
@@ -3406,6 +3417,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/daily-visuals-tick'
+    | '/api/public/hooks/feed-copies-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/jf-library-install'
@@ -3702,6 +3714,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/daily-visuals-tick'
+    | '/api/public/hooks/feed-copies-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/jf-library-install'
@@ -3830,6 +3843,7 @@ export interface RootRouteChildren {
   ApiPublicHooksCleoAttachmentsSweepRoute: typeof ApiPublicHooksCleoAttachmentsSweepRoute
   ApiPublicHooksClientCalendarsTickRoute: typeof ApiPublicHooksClientCalendarsTickRoute
   ApiPublicHooksDailyVisualsTickRoute: typeof ApiPublicHooksDailyVisualsTickRoute
+  ApiPublicHooksFeedCopiesTickRoute: typeof ApiPublicHooksFeedCopiesTickRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksGcalSessionImportRoute: typeof ApiPublicHooksGcalSessionImportRoute
   ApiPublicHooksJfLibraryInstallRoute: typeof ApiPublicHooksJfLibraryInstallRoute
@@ -5597,6 +5611,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksDailyVisualsTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/feed-copies-tick': {
+      id: '/api/public/hooks/feed-copies-tick'
+      path: '/api/public/hooks/feed-copies-tick'
+      fullPath: '/api/public/hooks/feed-copies-tick'
+      preLoaderRoute: typeof ApiPublicHooksFeedCopiesTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/fillout': {
       id: '/api/public/hooks/fillout'
       path: '/api/public/hooks/fillout'
@@ -6640,6 +6661,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksClientCalendarsTickRoute:
     ApiPublicHooksClientCalendarsTickRoute,
   ApiPublicHooksDailyVisualsTickRoute: ApiPublicHooksDailyVisualsTickRoute,
+  ApiPublicHooksFeedCopiesTickRoute: ApiPublicHooksFeedCopiesTickRoute,
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksGcalSessionImportRoute: ApiPublicHooksGcalSessionImportRoute,
   ApiPublicHooksJfLibraryInstallRoute: ApiPublicHooksJfLibraryInstallRoute,

@@ -49,6 +49,7 @@ import { chatUrlCache } from "@/hooks/use-chat-signed-urls";
 import { keepChatVideo } from "@/lib/chat-video-store";
 import { setTitle, setVideoFileKey, setVideoStem, setWord } from "@/lib/set-videos/label";
 import { probeVideo } from "@/lib/video-edit/probe";
+import { serverCopiesOn } from "@/lib/set-videos/server-copy-flag";
 import {
   catchUpJobId,
   clearCatchUpChecked,
@@ -526,8 +527,12 @@ async function runJob(id: string) {
     const feed = feedSources.get(id);
     feedSources.delete(id);
     if (feed && res.id) {
-      queueFeedCopy({ ...feed, jobId: id, setVideoId: res.id, clientId: job.clientId, tries: 0 });
-      // if this open ends before the copy is made, the next look (a return to the app) finds it at once
+      // the server makes it when it can (no battery or data spent here); else this phone does
+      const setVideoId = res.id;
+      void serverCopiesOn().then((server) => {
+        if (!server) queueFeedCopy({ ...feed, jobId: id, setVideoId, clientId: job.clientId, tries: 0 });
+      });
+      // if the copy isn't made, the next look (a return to the app) finds it at once
       clearCatchUpChecked(job.userId);
     }
     set({

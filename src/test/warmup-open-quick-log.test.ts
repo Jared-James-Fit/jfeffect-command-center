@@ -52,7 +52,7 @@ describe("a warm-up's video is set 0, on the warm-up itself", () => {
     expect(sql).toContain("AFTER INSERT ON public.pl_warmup_sets");
     expect(sql).toContain("IF NEW.set_index > 0 THEN NEW.warmup_id := NULL; END IF;");
     // the film reads clips on a working set's record; warm-ups get no Crew copy
-    expect(read("src/lib/workout-film.functions.ts")).toContain("v.result_id && v.storage_path");
+    expect(read("src/lib/workout-film.server.ts")).toContain("v.result_id && v.storage_path");
     expect(read("src/lib/set-videos/uploader.ts")).toContain("if (feedPlan && job.setIndex > 0) feedSources.set(");
     expect(read("src/lib/set-videos/catch-up.ts")).toContain('.gt("set_index", 0)');
     expect(read("src/lib/workout-film-client.ts")).toContain("j.setIndex > 0 && isActiveJob(j)");

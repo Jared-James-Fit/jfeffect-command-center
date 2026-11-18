@@ -12,6 +12,7 @@ import { useViewingAsClient } from "@/lib/client-impersonation";
 import { isActiveJob, useSetVideoJobs } from "@/lib/set-videos/jobs";
 import { setVideosKey, useSetVideosForDay } from "@/components/workout-day/set-video-cell";
 import { askFeedCopyCatchUp, leftOutForSize } from "@/lib/set-videos/catch-up";
+import { serverCopiesKnown, serverCopiesOn } from "@/lib/set-videos/server-copy-flag";
 import { invalidateCommunity, useMyPostForCompletion } from "@/lib/community.queries";
 import { FILM_CLIP_MAX_S, filmFile, filmPaths, filmUpToDate, pickFilmClips, type FilmLeftOut } from "@/lib/workout-film";
 import { postWorkoutFilmFn, type FilmPostResult } from "@/lib/workout-film.functions";
@@ -70,6 +71,16 @@ export function useWorkoutFilm(completionId: string | null | undefined, dayId: s
   const { data: post } = useMyPostForCompletion(completionId, on);
   const autoOn = useFilmAutoPost(on);
   const post$ = useServerFn(postWorkoutFilmFn);
+  // the server makes Crew copies (nothing waits on this phone), or the phone does
+  const [serverCopies, setServerCopies] = useState(() => serverCopiesKnown() ?? false);
+  useEffect(() => {
+    if (!on) return;
+    let live = true;
+    void serverCopiesOn().then((v) => live && setServerCopies(v));
+    return () => {
+      live = false;
+    };
+  }, [on]);
 
   const state = useMemo<WorkoutFilmState>(() => {
     const sent = (videos ?? []).filter((v) => !!v.result_id && (!userId || v.uploaded_by === userId));
@@ -137,7 +148,7 @@ export function useWorkoutFilm(completionId: string | null | undefined, dayId: s
   // clips again while on screen so the film shows it the moment it's made.
   useEffect(() => {
     if (!on || !userId || !completionId || state.preparing === 0 || state.uploading > 0) return;
-    if (!copyAsked.has(completionId)) {
+    if (!serverCopies && !copyAsked.has(completionId)) {
       copyAsked.add(completionId);
       askFeedCopyCatchUp(userId);
     }
@@ -147,7 +158,7 @@ export function useWorkoutFilm(completionId: string | null | undefined, dayId: s
       void qc.invalidateQueries({ queryKey: ["community-my-post", completionId] });
     }, PREPARING_REFRESH_MS);
     return () => window.clearInterval(t);
-  }, [on, userId, completionId, dayId, state.preparing, state.uploading, qc]);
+  }, [on, userId, completionId, dayId, state.preparing, state.uploading, qc, serverCopies]);
 
   // By itself: every clip landed, the switch is on, it isn't in the feed (or a clip is missing from it).
   const wantAuto = opts.auto !== false;
@@ -163,5 +174,5 @@ export function useWorkoutFilm(completionId: string | null | undefined, dayId: s
     void post_(true);
   }, [on, wantAuto, autoOn, state, completionId, post_]);
 
-  return { ...state, autoOn, posting, error, postNow: () => post_(false) };
+  return { ...state, autoOn, serverCopies, posting, error, postNow: () => post_(false) };
 }
