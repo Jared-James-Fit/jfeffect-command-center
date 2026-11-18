@@ -200,7 +200,7 @@ function LedgerRow({ r, open, onToggle }: { r: LedgerEntry; open: boolean; onTog
             <span className="truncate text-[14px] font-medium">{r.who}</span>
             {r.expense?.receipt_path || r.revenue?.other?.proof_path ? <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Receipt attached" /> : null}
           </div>
-          <div className="truncate text-[12px] text-muted-foreground">
+          <div className="text-[12px] leading-snug text-muted-foreground">
             {r.what}{r.method ? ` · ${methodWord(r.method)}` : ""}
           </div>
           {flags.length ? (

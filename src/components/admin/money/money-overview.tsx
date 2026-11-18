@@ -7,20 +7,21 @@ import { Link } from "@tanstack/react-router";
 import { AlertTriangle, CalendarClock, CheckCircle2, ChevronRight, Info, Landmark, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { changeOf, monthlySeries, recurringExpenses } from "@/lib/books/money-view";
+import { booksFirstDay, changeOf, monthlySeries, recurringExpenses } from "@/lib/books/money-view";
 import { bookedIn } from "@/lib/books/receivables";
 import { chartMonths, elapsed, monthPeriod } from "@/lib/books/period";
 import { billingDay } from "@/lib/date-range";
 import { MoneyChart } from "./money-chart";
 import { RecurringBillsList } from "@/components/admin/books/recurring-bills";
 import { useMoney } from "./money-context";
-import { Line, MoneyCard, RankList, Stat, money, pctWord, shortMoney } from "./money-ui";
+import { Line, MoneyCard, RankList, Stat, money, pctWord, wholeMoney } from "./money-ui";
 
 export function MoneyOverview() {
   const m = useMoney();
   const { figures: f, prev, vs, period, today, snapshot: s, receivables: r, settings } = m;
   const vsLabel = vs?.label ?? null;
-  const months = chartMonths(period, today);
+  const firstDay = booksFirstDay(m.revenue, m.expenses);
+  const months = chartMonths(period, today, firstDay);
   const points = monthlySeries({ revenue: m.revenue, expenses: m.expenses, settings, months });
   const seen = elapsed(period, today);
   const inPeriod = (ym: string) => ym >= seen.start.slice(0, 7) && ym <= seen.end.slice(0, 7);
@@ -28,6 +29,9 @@ export function MoneyOverview() {
   const years = seen.start.slice(0, 4) === seen.end.slice(0, 4) ? seen.end.slice(0, 4) : `${seen.start.slice(0, 4)} and ${seen.end.slice(0, 4)}`;
   const gstReg = settings.gstRegistered;
   const recurring = recurringExpenses(m.data.expenses, today, m.data.recurring ?? []);
+  // "Owed to you" is always today's; a past period says so.
+  const pastPeriod = seen.end < today;
+  const owedNote = !r ? "" : r.overdueCents > 0 ? `${money(r.overdueCents)} overdue` : r.outstandingCents > 0 ? "nothing overdue" : "all paid up";
 
   return (
     <div className="space-y-4" data-money-overview>
@@ -39,7 +43,7 @@ export function MoneyOverview() {
           change={changeOf(f.sales.netMinor, prev?.sales.netMinor)}
           good="up"
           vs={vsLabel}
-          sub={`${money(f.sales.collectedMinor)} came in${gstReg ? " with GST" : ""}${f.sales.refundsMinor ? ` · ${money(f.sales.refundsMinor)} refunded` : ""}`}
+          sub={`${money(f.sales.collectedMinor)}${gstReg ? " with GST" : " came in"}${f.sales.refundsMinor ? ` · ${money(f.sales.refundsMinor)} refunded` : ""}`}
           definition={<>Payments received in this period, less refunds, with GST/HST taken out: what the business earned. Counted the day the money came in.</>}
           onClick={() => m.go("transactions", { type: "in" })}
         />
@@ -70,15 +74,7 @@ export function MoneyOverview() {
           label="Owed to you"
           value={r ? money(r.outstandingCents) : m.receivablesError ? "—" : "…"}
           tone={r && r.overdueCents > 0 ? "bad" : undefined}
-          sub={
-            r
-              ? r.overdueCents > 0
-                ? `${money(r.overdueCents)} overdue`
-                : r.outstandingCents > 0
-                  ? "Nothing overdue"
-                  : "All paid up"
-              : m.receivablesError ?? "Reading balances"
-          }
+          sub={r ? (pastPeriod ? `Today · ${owedNote}` : owedNote.charAt(0).toUpperCase() + owedNote.slice(1)) : m.receivablesError ?? "Reading balances"}
           definition={<>What clients owe right now, with GST, read from each client's Billing tab. Balances on a payment schedule aren't overdue; payment links nobody has paid aren't counted. Not tied to the period.</>}
           onClick={() => document.getElementById("money-owed")?.scrollIntoView({ behavior: "smooth", block: "start" })}
         />
@@ -115,7 +111,7 @@ export function MoneyOverview() {
       <MoneyCard title="Month by month">
         <MoneyChart points={points} inPeriod={inPeriod} onPickMonth={(ym) => m.setPeriod(monthPeriod(ym, today))} />
         <p className="mt-2 text-[12px] text-muted-foreground">
-          {months.length >= 12 && period.unit !== "year" ? "The year around this period. " : ""}Tap a month to open it. Before GST/HST.
+          {months.some((ym) => !inPeriod(ym)) ? `Shaded: ${period.label}. ` : ""}Tap a month to open it. Amounts before GST/HST.
         </p>
       </MoneyCard>
 
@@ -147,7 +143,7 @@ export function MoneyOverview() {
 
         <MoneyCard title="Where money went">
           <RankList
-            rows={f.byCategory.map((c) => ({ key: c.key, label: c.label, minor: c.minor, sub: `${c.count}` }))}
+            rows={f.byCategory.map((c) => ({ key: c.key, label: c.label, minor: c.minor, sub: `${c.count} expense${c.count === 1 ? "" : "s"}` }))}
             color="var(--money-out)"
             empty="Nothing spent in this period."
             total={f.spent.minor}
@@ -177,15 +173,15 @@ function OwedCard() {
         <div className="space-y-3">
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-muted/50 p-2.5">
-              <div className={cn("text-[16px] font-semibold tabular-nums", r.overdueCents > 0 && "text-destructive")}>{shortMoney(r.overdueCents)}</div>
+              <div className={cn("text-[16px] font-semibold tabular-nums", r.overdueCents > 0 && "text-destructive")}>{wholeMoney(r.overdueCents)}</div>
               <div className="text-[12px] text-muted-foreground">Overdue</div>
             </div>
             <div className="rounded-xl bg-muted/50 p-2.5">
-              <div className="text-[16px] font-semibold tabular-nums">{shortMoney(r.expected30Cents)}</div>
+              <div className="text-[16px] font-semibold tabular-nums">{wholeMoney(r.expected30Cents)}</div>
               <div className="text-[12px] text-muted-foreground">Next 30 days</div>
             </div>
             <div className="rounded-xl bg-muted/50 p-2.5">
-              <div className={cn("text-[16px] font-semibold tabular-nums", r.unscheduledCents > 0 && "text-warning")}>{shortMoney(r.unscheduledCents)}</div>
+              <div className={cn("text-[16px] font-semibold tabular-nums", r.unscheduledCents > 0 && "text-warning")}>{wholeMoney(r.unscheduledCents)}</div>
               <div className="text-[12px] text-muted-foreground">No dates</div>
             </div>
           </div>
@@ -196,11 +192,14 @@ function OwedCard() {
                   <>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[14px] font-medium">{l.client}</div>
-                      <div className="truncate text-[12px] text-muted-foreground">
-                        {l.label}
-                        {l.overdueSince ? ` · overdue since ${billingDay(l.overdueSince)}` : l.next ? ` · next ${money(l.next.cents)} ${billingDay(l.next.date)}` : l.unscheduledCents ? " · no payment dates" : ""}
-                        {l.how === "auto_pay" ? " · auto-pay" : ""}
+                      <div className="text-[12px] leading-snug text-muted-foreground">
+                        {l.label}{l.how === "auto_pay" ? " · auto-pay" : ""}
                       </div>
+                      {l.overdueSince || l.next || l.unscheduledCents ? (
+                        <div className={cn("text-[12px] leading-snug", l.overdueSince ? "text-destructive" : "text-muted-foreground")}>
+                          {l.overdueSince ? `Overdue since ${billingDay(l.overdueSince)}` : l.next ? `Next ${money(l.next.cents)} on ${billingDay(l.next.date)}` : "No payment dates"}
+                        </div>
+                      ) : null}
                     </div>
                     <div className={cn("shrink-0 text-[14px] font-semibold tabular-nums", l.overdueCents > 0 && "text-destructive")}>{money(l.outstandingCents)}</div>
                     {owner ? <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" /> : null}
@@ -275,8 +274,8 @@ function ToDoCard() {
           <div className="mb-2 flex items-center gap-1.5 text-[13px] text-muted-foreground"><CalendarClock className="h-3.5 w-3.5" /> Coming up</div>
           <ul className="space-y-1.5">
             {upcoming.map((d, i) => (
-              <li key={i} className="flex justify-between gap-3 text-[14px]">
-                <span className="min-w-0 truncate">{d.title}</span>
+              <li key={i} className="flex items-baseline justify-between gap-3 text-[14px]">
+                <span className="min-w-0 leading-snug">{d.title}</span>
                 <span className="shrink-0 text-[13px] tabular-nums text-muted-foreground">{billingDay(d.date)}</span>
               </li>
             ))}

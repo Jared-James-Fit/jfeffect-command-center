@@ -252,3 +252,42 @@ describe("reports match the screens", () => {
     expect(lines[1].startsWith("2026-11-03,Expense,Rogue")).toBe(true);
   });
 });
+
+describe("the chart and comparisons read the books' own months", () => {
+  const today = "2026-11-18";
+  const first = "2026-05-20";
+
+  it("never shows months before the books start, and a past month is seen with what came after it", async () => {
+    const { chartMonths, monthPeriod, periodFor } = await import("@/lib/books/period");
+    const mayToNov = ["2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10", "2026-11"];
+    expect(chartMonths(monthPeriod("2026-07", today), today, first)).toEqual(mayToNov);
+    expect(chartMonths(periodFor("this_month", today), today, first)).toEqual(mayToNov);
+    expect(chartMonths(periodFor("ytd", today), today, first)).toEqual(mayToNov);
+    // A month picked before the books start still shows itself.
+    expect(chartMonths(monthPeriod("2026-01", today), today, first)[0]).toBe("2026-01");
+    // With more than a year on the books it's the 12 months ending with the period.
+    const later = chartMonths(monthPeriod("2027-07", "2027-11-18"), "2027-11-18", first);
+    expect(later).toHaveLength(12);
+    expect([later[0], later[11]]).toEqual(["2026-08", "2027-07"]);
+    // Empty books: the 12 months ending with it, as before.
+    expect(chartMonths(monthPeriod("2026-07", today), today, null)).toHaveLength(12);
+  });
+
+  it("names whole months, quarters and years, and dates anything else", async () => {
+    const { comparisonFor, monthPeriod, periodFor, yearPeriod } = await import("@/lib/books/period");
+    expect(comparisonFor(monthPeriod("2026-07", today), "previous", today)?.label).toBe("June");
+    expect(comparisonFor(monthPeriod("2027-01", "2027-02-10"), "previous", "2027-02-10")?.label).toBe("December 2026");
+    expect(comparisonFor(monthPeriod("2026-07", today), "last_year", today)?.label).toBe("July 2025");
+    expect(comparisonFor(periodFor("last_quarter", today), "previous", today)?.label).toBe("Q2");
+    expect(comparisonFor(yearPeriod(2025, today), "previous", today)?.label).toBe("2024");
+    // A running month is compared with the same days, said by their dates.
+    expect(comparisonFor(periodFor("this_month", today), "previous", today)?.label).toBe("Oct 1 – 18");
+  });
+
+  it("finds the first day anything is in the books", async () => {
+    const { booksFirstDay } = await import("@/lib/books/money-view");
+    expect(booksFirstDay([{ date: "2026-06-12" }, { date: "2026-05-20" }], [{ date: "2026-06-30" }])).toBe("2026-05-20");
+    expect(booksFirstDay([], [{ date: "2026-04-02" }])).toBe("2026-04-02");
+    expect(booksFirstDay([], [])).toBeNull();
+  });
+});

@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef } from "react";
+import { useScrollFade } from "@/hooks/use-scroll-fade";
+import { useEffect, useMemo } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
@@ -208,7 +209,8 @@ function SalesWorkspace() {
 }
 
 function SectionRow({ items, active, onPick }: { items: typeof SECTIONS; active: SectionKey; onPick: (k: SectionKey) => void }) {
-  const rowRef = useRef<HTMLDivElement>(null);
+  // A word cut at the screen's edge fades out, so it reads as "more to swipe to".
+  const { ref: rowRef, style: fade } = useScrollFade<HTMLDivElement>([items.length]);
   useEffect(() => {
     const row = rowRef.current;
     const el = row?.querySelector<HTMLElement>('[aria-current="page"]');
@@ -217,7 +219,7 @@ function SectionRow({ items, active, onPick }: { items: typeof SECTIONS; active:
   }, [active]);
   return (
     <nav aria-label="Sales sections" className="border-b border-border px-2 lg:hidden" data-sales-row>
-      <div ref={rowRef} className="-mb-px flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div ref={rowRef} style={fade} className="-mb-px flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {items.map((s, i) => {
           const on = s.value === active;
           const groupStart = i > 0 && items[i - 1].group !== s.group;
