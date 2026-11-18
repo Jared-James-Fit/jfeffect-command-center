@@ -10,11 +10,14 @@ vi.mock("@/integrations/supabase/client", () => {
 });
 
 import {
+  CATCH_UP_EVERY_MS,
   CATCH_UP_LAUNCHES,
   catchUpCheckedRecently,
   catchUpJobId,
+  clearCatchUpChecked,
   findCatchUpClips,
   leftOutForSize,
+  resetCatchUpOpen,
   takeCatchUpLaunch,
 } from "@/lib/set-videos/catch-up";
 import { feedCopyPath } from "@/lib/set-videos/feed-copy";
@@ -35,6 +38,7 @@ function fakeStorage() {
 describe("set videos the film left out for their size get a copy later (catch-up)", () => {
   beforeEach(() => {
     fakeStorage();
+    resetCatchUpOpen();
     rows.length = 0;
   });
 
@@ -59,17 +63,27 @@ describe("set videos the film left out for their size get a copy later (catch-up
     expect(leftOutForSize({ size_bytes: null, duration_s: 20 })).toBe(false);
   });
 
-  it("tries a clip on at most a few launches, so a phone that can't make it never downloads it every time", () => {
-    for (let i = 0; i < CATCH_UP_LAUNCHES; i++) expect(takeCatchUpLaunch("v1")).toBe(true);
+  it("tries a clip once an app open and on at most a few opens, so a phone that can't make it never downloads it every time", () => {
+    for (let i = 0; i < CATCH_UP_LAUNCHES; i++) {
+      resetCatchUpOpen();
+      expect(takeCatchUpLaunch("v1")).toBe(true);
+      // coming back to the app in the same open never spends another
+      expect(takeCatchUpLaunch("v1")).toBe(false);
+    }
+    resetCatchUpOpen();
     expect(takeCatchUpLaunch("v1")).toBe(false);
     expect(takeCatchUpLaunch("v2")).toBe(true);
   });
 
-  it("a phone that found nothing looks again only hours later", async () => {
+  it("a phone that found nothing looks again 15 minutes later, or at once once a clip that needs a copy is sent", async () => {
+    expect(CATCH_UP_EVERY_MS).toBe(15 * 60_000);
     expect(catchUpCheckedRecently("u1")).toBe(false);
     expect(await findCatchUpClips("u1")).toEqual([]);
     expect(catchUpCheckedRecently("u1")).toBe(true);
+    expect(catchUpCheckedRecently("u1", Date.now() + CATCH_UP_EVERY_MS + 1)).toBe(false);
     expect(await findCatchUpClips("u1")).toEqual([]);
+    clearCatchUpChecked("u1");
+    expect(catchUpCheckedRecently("u1")).toBe(false);
   });
 
   it("returns the clips that need a copy and keeps looking while there are some", async () => {
