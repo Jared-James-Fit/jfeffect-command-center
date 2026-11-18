@@ -264,19 +264,35 @@ export function WorkoutToolsProvider({ scopeKey, children }: { scopeKey: string;
   const tool = view && view !== "picker" ? view : null;
   const title = tool ? TOOLS[tool].title : "Workout Tools";
   const description = tool ? TOOLS[tool].desc : "For any part of your workout. Nothing here is saved to your log.";
-  // One back control, never two: on the list it closes the sheet; inside a
-  // tool it says "Tools" and returns to the list.
-  const backPill = (
-    <button
-      type="button"
-      onClick={() => (tool ? setView("picker") : setView(null))}
-      aria-label={tool ? "Back to all tools" : "Back"}
-      data-testid={tool ? "tools-back" : "tools-close"}
-      className="absolute left-3 top-3 z-20 inline-flex h-10 min-w-[72px] items-center justify-center gap-1 rounded-full border border-border bg-background/90 px-3 text-sm font-semibold text-foreground shadow-sm backdrop-blur transition hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <ChevronLeft className="h-4 w-4" />
-      <span>{tool ? "Tools" : "Back"}</span>
-    </button>
+  // The way back to the workout is always one tap, Done, top right (and a
+  // swipe down, a tap above the sheet or Escape); "All tools" only steps over
+  // to the list. A tool opened from a card's ⋯ used to have only "‹ Tools",
+  // which led to the list instead of the workout.
+  const sheetBar = (
+    <div className="flex min-h-10 items-center justify-between gap-2">
+      {tool ? (
+        <button
+          type="button"
+          onClick={() => setView("picker")}
+          aria-label="All tools"
+          data-testid="tools-back"
+          className="-ml-2 inline-flex h-10 items-center gap-0.5 rounded-full pl-1 pr-3 text-[15px] font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ChevronLeft className="h-4 w-4" /> All tools
+        </button>
+      ) : (
+        <span />
+      )}
+      <button
+        type="button"
+        onClick={() => setView(null)}
+        aria-label="Done, back to the workout"
+        data-testid="tools-close"
+        className="-mr-1 inline-flex h-10 items-center rounded-full px-3 text-[15px] font-semibold text-foreground transition hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        Done
+      </button>
+    </div>
   );
   const back = tool && (
     <button
@@ -311,9 +327,16 @@ export function WorkoutToolsProvider({ scopeKey, children }: { scopeKey: string;
 
         {isMobile ? (
           <Sheet open={view != null} onOpenChange={(o) => !o && setView(null)}>
-            <SheetContent hideCloseButton side="bottom" className="max-h-[92dvh] overflow-y-auto rounded-t-2xl px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3">
-              {backPill}
-              <SheetHeader className="space-y-0.5 text-left">
+            <SheetContent
+              hideCloseButton
+              swipeToClose
+              side="bottom"
+              data-workout-tools-sheet
+              className="max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-2"
+            >
+              <div aria-hidden className="mx-auto mb-1 h-1 w-10 rounded-full bg-muted-foreground/30" />
+              {sheetBar}
+              <SheetHeader className="min-h-0 space-y-0.5 pl-0 text-left">
                 <SheetTitle className="text-base">{title}</SheetTitle>
                 <SheetDescription className="text-xs">{description}</SheetDescription>
               </SheetHeader>
