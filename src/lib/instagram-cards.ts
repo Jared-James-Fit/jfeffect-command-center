@@ -96,10 +96,10 @@ export async function paintInstagramCard(canvas: HTMLCanvasElement, input: IgCar
     case "lesson":
       return paintLesson(ctx, L, post, logo, input.art ?? null);
     case "wins":
-      if (isWinsStats(post.series_data)) return paintStats(ctx, L, logo, winsWeekLabel(post.series_data.week_of), (c, w, maxH) => winsBlock(c, w, maxH, post.series_data as WinsStats, unit));
+      if (isWinsStats(post.series_data)) return paintStats(ctx, L, logo, winsWeekLabel(post.series_data.week_of), (c, w, maxH) => winsBlock(c, w, maxH, post.series_data as WinsStats));
       break;
     case "recap":
-      if (isRecapStats(post.series_data)) return paintStats(ctx, L, logo, winsWeekLabel(post.series_data.week_of), (c, w, maxH) => recapBlock(c, w, maxH, post.series_data as RecapStats, unit));
+      if (isRecapStats(post.series_data)) return paintStats(ctx, L, logo, winsWeekLabel(post.series_data.week_of), (c, w, maxH) => recapBlock(c, w, maxH, post.series_data as RecapStats));
       break;
     case "compare": {
       const obs = extraObservation(post.series_extra);
@@ -500,14 +500,17 @@ function heroAmount(c: Ctx, top: number, amount: string, unit: string): number {
   return top + 170;
 }
 
-function winsBlock(c: Ctx, w: number, maxH: number, s: WinsStats, unit: "kg" | "lb"): number {
+function winsBlock(c: Ctx, w: number, maxH: number, s: WinsStats): number {
   const parts: Part[] = [];
   if (s.volume_kg > 0) {
     parts.push({
       draw: (c, w, top) => {
-        const hero = winsHero(s, unit);
+        const hero = winsHero(s);
         let y = kicker(c, "Together the crew lifted", 0, top, ink(0.60), 28) + 20;
-        y = heroAmount(c, y, hero.amount, hero.unit) + 22;
+        y = heroAmount(c, y, hero.amount, hero.unit) + 4;
+        // the other unit, smaller under it: the same for every viewer (dual-weight.ts)
+        c.font = font(600, 38);
+        y = textLines(c, [hero.other], 0, y, 38, 1.2, ink(0.62)) + 22;
         if (hero.compare) {
           c.font = font(600, 40);
           y = textLines(c, wrapLines(c, hero.compare, w, 2), 0, y, 40, 1.25, BODY) + 10;
@@ -546,9 +549,9 @@ function winsBlock(c: Ctx, w: number, maxH: number, s: WinsStats, unit: "kg" | "
  * week's biggest moments, then the days when there's room. What's only for
  * the crew (how fully workouts were logged, what to work on) stays in the app.
  */
-function recapBlock(c: Ctx, w: number, maxH: number, s: RecapStats, unit: "kg" | "lb"): number {
+function recapBlock(c: Ctx, w: number, maxH: number, s: RecapStats): number {
   const sum = recapSummary(s);
-  const hero = winsHero(s, unit);
+  const hero = winsHero(s);
   const parts: Part[] = [
     {
       draw: (c, w, top) => {
@@ -592,7 +595,7 @@ function recapBlock(c: Ctx, w: number, maxH: number, s: RecapStats, unit: "kg" |
       draw: (c, w, y) =>
         tilesBlock(c, w, y, [
           { value: s.prs.toLocaleString("en-US"), label: s.prs === 1 ? "personal record" : "personal records", sub: s.pr_people > 1 ? `set by ${s.pr_people} people` : undefined },
-          { value: hero.amount, label: `${hero.unit} lifted together`, sub: hero.change ?? undefined },
+          { value: hero.amount, label: `${hero.unit} lifted together`, sub: hero.change ? `${hero.other} · ${hero.change}` : hero.other },
         ]),
     },
     {

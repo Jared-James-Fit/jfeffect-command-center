@@ -135,8 +135,9 @@ describe("share cards say both units and never cut a lift's name", () => {
       workoutTitle: "x",
       dateLabel: null,
     });
-    expect(f.lift).toMatchObject({ detail: "455 lb × 1", alt: "206.5 kg" });
-    expect(f.exercises[0]).toMatchObject({ detail: "455 lb × 1", alt: "206.5 kg" });
+    // the other unit to one decimal from the stored kg (dual-weight.ts), never plate-rounded
+    expect(f.lift).toMatchObject({ detail: "455 lb × 1", alt: "206.4 kg" });
+    expect(f.exercises[0]).toMatchObject({ detail: "455 lb × 1", alt: "206.4 kg" });
     expect(f.exercises[1].alt).toBeNull();
     const kg = buildShareCardFields({
       stats,
@@ -145,7 +146,11 @@ describe("share cards say both units and never cut a lift's name", () => {
       workoutTitle: "x",
       dateLabel: null,
     });
+    // these sets never said their unit, so they fall back to the viewer's
     expect(kg.lift).toMatchObject({ detail: "206.5 kg × 1", alt: "455 lb" });
+    // a set that says it was typed in lb reads in lb for a kg viewer too
+    const typed = { ...stats, top_lift: { exercise_name: "Competition Squat", reps: 1, load_kg: 206.3845, unit: "lb" } } as WorkoutShareStats;
+    expect(buildShareCardFields({ stats: typed, unit: "kg", athleteName: null, workoutTitle: "x", dateLabel: null }).lift).toMatchObject({ detail: "455 lb × 1", alt: "206.4 kg" });
   });
   it("the painter wraps a long name to two lines and puts the other unit under the load", () => {
     const card = read("src/lib/workout-share-card.ts");

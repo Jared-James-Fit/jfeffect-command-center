@@ -970,6 +970,8 @@ function StoryFrame({ post, unit, clip }: { post: CommunityPost; unit: "kg" | "l
         </span>
         <span className="font-display mt-3 block text-[52px] uppercase leading-[0.95]">{win.headline}</span>
         {win.detail && <span className={cn("mt-2 block text-[20px] font-bold", win.kind === "pr" ? "text-amber-300" : "text-white/85")}>{win.detail}</span>}
+        {/* the same weight in the other unit, quieter (the story is always dark) */}
+        {win.other && <span data-weight-other className="mt-0.5 block text-[14px] font-semibold tabular-nums text-white/55">{win.other}</span>}
         <span className="mt-4 block text-[14px] font-semibold text-white/60">{workoutHeadline(post.stats!)}</span>
       </div>
     );

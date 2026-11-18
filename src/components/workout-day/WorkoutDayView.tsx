@@ -2064,6 +2064,15 @@ function WorkoutDay({
   // ── Celebration screen inputs: session PRs + prescribed-cardio status ────
   const summaryDisplayUnit: "kg" | "lb" =
     ((client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb");
+  // the unit each logged set was typed in: a record on the recap reads in it, never relabelled
+  const setUnitOf = useCallback(
+    (setId: string): "kg" | "lb" | null => {
+      const r = (results as any[]).find((x) => x?.id === setId);
+      const u = r?.entered_unit ?? r?.actual_load_unit;
+      return u === "kg" || u === "lb" ? u : null;
+    },
+    [results],
+  );
   const sessionPRs = useMemo(
     () =>
       collectSessionPRs(
@@ -3304,6 +3313,7 @@ function WorkoutDay({
           points={isClientWorkout ? workoutPoints ?? null : undefined}
           athleteName={(client as any)?.full_name ?? null}
           displayUnit={summaryDisplayUnit}
+          setUnit={setUnitOf}
           cardio={cardioTakeaway}
           // Sharing is the athlete's own choice: not offered on membership
           // workouts, and never from a coach's "View as client" session.

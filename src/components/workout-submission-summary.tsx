@@ -18,7 +18,8 @@ import {
 } from "@/lib/workout-takeaways";
 import type { WorkoutPoints, WorkoutRecords } from "@/lib/training-records";
 import { WorkoutPointsCard } from "@/components/records/workout-points-card";
-import { SCOPE_LABEL, formatLoad, formatTonnage, repRecordLabel, tonnageRecordLabel, topScope, weightRecordLabel } from "@/lib/training-records";
+import { dualTotal, recordedLoad } from "@/lib/dual-weight";
+import { SCOPE_LABEL, repRecordLabel, tonnageRecordLabel, topScope, weightRecordLabel } from "@/lib/training-records";
 import { drawWorkoutStory, type StoryRecord } from "@/lib/workout-story-card";
 import { NewRecordsSection, TonnageStat, recordsHeadline } from "@/components/records/training-records";
 import { RecapPostFooter } from "@/components/community/recap-post";
@@ -56,6 +57,11 @@ type Props = {
   athleteName?: string | null;
   /** Athlete's preferred unit for loads and tonnage. */
   displayUnit?: "kg" | "lb";
+  /**
+   * The unit each logged set was typed in, by set id: a record reads in it
+   * (its other unit beside it), whatever the account's unit says.
+   */
+  setUnit?: (setId: string) => "kg" | "lb" | null;
   /** Prescribed cardio status for the same day, when there is one. */
   cardio?: CardioTakeawayInput;
   /**
@@ -70,7 +76,7 @@ type Props = {
   onClose?: () => void;
 };
 
-export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", cardio, completionId, dayId, onClose }: Props) {
+export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", setUnit, cardio, completionId, dayId, onClose }: Props) {
   // Client workouts use the scope-aware server records; the legacy session PR
   // list only remains for surfaces without them (memberships).
   const usesRecords = records !== undefined;
@@ -181,6 +187,15 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     : takeaways;
 
   // Instagram Story card (1080×1920, safe-zone aware) — see workout-story-card.
+  // a record in the unit its set was typed in, the other unit beside it ("315 lb (142.9 kg)")
+  const recordLoad = (kg: number, setId: string) => {
+    const d = recordedLoad(kg, setUnit?.(setId), displayUnit);
+    return `${d.primary} (${d.secondary})`;
+  };
+  const dualLoadTotalText = (kg: number, u: "kg" | "lb") => {
+    const t = dualTotal(kg, u);
+    return `${t.primary} (${t.secondary})`;
+  };
   const storyRecords = (): StoryRecord[] => {
     const out: StoryRecord[] = [];
     if (records) {
@@ -193,18 +208,18 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         if (load) loads.delete(r.set_id);
         // Same set is a rep record and the heaviest ever → one row.
         const label = load && loadScope === scope ? `${r.reps}-REP + WEIGHT ${SCOPE_LABEL[scope]}` : repRecordLabel(r)!;
-        out.push({ label, tier: scope, title: r.exercise_name, detail: `${formatLoad(r.load_kg, displayUnit)} × ${r.reps}` });
+        out.push({ label, tier: scope, title: r.exercise_name, detail: `${recordLoad(r.load_kg, r.set_id)} × ${r.reps}` });
         if (load && loadScope && loadScope !== scope) {
-          out.push({ label: weightRecordLabel(load)!, tier: loadScope, title: load.exercise_name, detail: `Heaviest ever · ${formatLoad(load.load_kg, displayUnit)}` });
+          out.push({ label: weightRecordLabel(load)!, tier: loadScope, title: load.exercise_name, detail: `Heaviest ever · ${recordLoad(load.load_kg, load.set_id)}` });
         }
       }
       for (const l of loads.values()) {
         const scope = topScope(l);
-        if (scope) out.push({ label: weightRecordLabel(l)!, tier: scope, title: l.exercise_name, detail: `Heaviest ever · ${formatLoad(l.load_kg, displayUnit)} × ${l.reps}` });
+        if (scope) out.push({ label: weightRecordLabel(l)!, tier: scope, title: l.exercise_name, detail: `Heaviest ever · ${recordLoad(l.load_kg, l.set_id)} × ${l.reps}` });
       }
       const ton = tonnageRecordLabel(records.tonnage);
       const tonScope = topScope(records.tonnage);
-      if (ton && tonScope) out.push({ label: ton.replace("WORKOUT ", ""), tier: tonScope, title: "Workout Tonnage", detail: formatTonnage(records.tonnage_kg, displayUnit) });
+      if (ton && tonScope) out.push({ label: ton.replace("WORKOUT ", ""), tier: tonScope, title: "Workout Tonnage", detail: dualLoadTotalText(records.tonnage_kg, displayUnit) });
     } else if (prList[0]) {
       prList.slice(0, 4).forEach((pr) => out.push({ label: "ALL-TIME PR", tier: "atpr", title: formatPR(pr), detail: "" }));
     }
@@ -216,12 +231,11 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   const buildShareBlob = async (): Promise<Blob | null> => {
     const canvas = shareCanvasRef.current ?? document.createElement("canvas");
     shareCanvasRef.current = canvas;
-    const tonnage = records && records.tonnage_kg > 0
-      ? formatTonnage(records.tonnage_kg, displayUnit)
-      : summary.totalLifted > 0 ? summary.totalLiftedFmt : null;
+    const ton = records && records.tonnage_kg > 0 ? dualTotal(records.tonnage_kg, displayUnit) : null;
+    const tonnage = ton ? ton.primary : summary.totalLifted > 0 ? summary.totalLiftedFmt : null;
     const stats = [
       { label: "Sets", value: `${summary.completedSets}/${summary.prescribedSets}` },
-      ...(tonnage ? [{ label: "Tonnage", value: tonnage }] : []),
+      ...(tonnage ? [{ label: "Tonnage", value: tonnage, sub: ton?.secondary ?? null }] : []),
       ...(durationMin && durationMin > 0 ? [{ label: "Minutes", value: String(Math.round(durationMin)) }] : []),
     ];
     await drawWorkoutStory(canvas, {
@@ -315,7 +329,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 [scrollbar-width:none] sm:px-5 [&::-webkit-scrollbar]:hidden">
           <div className={`space-y-2.5 transition-all duration-500 ${revealStage >= 2 ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
             <NewAchievementReveal open={open} />
-            {records && <NewRecordsSection records={records} unit={displayUnit} />}
+            {records && <NewRecordsSection records={records} unit={displayUnit} setUnit={setUnit} />}
             {points && <WorkoutPointsCard points={points} />}
             {prList.length > 0 && (
               <section className="relative overflow-hidden animate-in zoom-in-90 fade-in slide-in-from-bottom-3 rounded-2xl border border-amber-500/40 bg-amber-500/[0.08] p-4 duration-700">

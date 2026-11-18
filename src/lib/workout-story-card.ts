@@ -15,7 +15,8 @@ export type StoryCardData = {
   workoutTitle: string | null;
   dateLabel: string | null;
   records: StoryRecord[];
-  stats: Array<{ label: string; value: string }>;
+  /** `sub`: the same number in the other unit ("8,120 kg"), drawn smaller under it. */
+  stats: Array<{ label: string; value: string; sub?: string | null }>;
   leaguePoints: number | null;
   levelPoints: number | null;
 };
@@ -282,11 +283,17 @@ export async function drawWorkoutStory(canvas: HTMLCanvasElement, d: StoryCardDa
       roundRect(ctx, x, statsTop, tileW, statsH, 30);
       ctx.fill();
       ctx.fillStyle = "#ffffff";
-      fitFont(ctx, s.value, tileW - 30, 900, 46, 26);
-      ctx.fillText(s.value, x + tileW / 2, statsTop + 66);
+      fitFont(ctx, s.value, tileW - 30, 900, s.sub ? 42 : 46, 26);
+      ctx.fillText(s.value, x + tileW / 2, statsTop + (s.sub ? 56 : 66));
+      if (s.sub) {
+        // the other unit, quieter: the number as they lifted it stays the hero
+        ctx.fillStyle = "#d4d4d8";
+        fitFont(ctx, s.sub, tileW - 30, 600, 22, 16);
+        ctx.fillText(s.sub, x + tileW / 2, statsTop + 86);
+      }
       ctx.fillStyle = "#a1a1aa";
-      ctx.font = font(800, 22);
-      ctx.fillText(s.label.toUpperCase(), x + tileW / 2, statsTop + 104);
+      ctx.font = font(800, s.sub ? 20 : 22);
+      ctx.fillText(s.label.toUpperCase(), x + tileW / 2, statsTop + (s.sub ? 113 : 104));
     });
   }
 

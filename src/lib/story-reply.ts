@@ -1,3 +1,4 @@
+import { withOther } from "@/lib/dual-weight";
 import { useSyncExternalStore } from "react";
 import { pickWorkoutWin, storyFrameKind, storyWords, type CommunityPost } from "@/lib/community";
 import { extraLesson, hookLine } from "@/lib/lessons";
@@ -63,7 +64,7 @@ export type StoryShare = { post: CommunityPost };
 
 /**
  * What the shared post's card says, from the post alone: a lesson's title and
- * its hook, a workout's win and the session (in your unit), a words post's
+ * its hook, a workout's win and the session (in the units it was typed in), a words post's
  * words, a photo's caption under it. Never a program or block name (a
  * session's title only shows when the athlete named the workout).
  */
@@ -77,7 +78,8 @@ export function shareCardWords(post: CommunityPost, unit: "kg" | "lb"): { title:
   if (kind === "win" && post.stats) {
     const win = pickWorkoutWin(post.stats, unit);
     const title = win.kind === "pr" ? `${win.headline} PR` : win.headline;
-    return { title: win.detail ? `${title}\n${win.detail}` : title, body: caption };
+    // the lift as typed, the other unit beside it: the same card whoever shares it
+    return { title: win.detail ? `${title}\n${withOther(win.detail, win.other)}` : title, body: caption };
   }
   if (kind === "media") return { title: null, body: caption };
   const w = storyWords(post);
