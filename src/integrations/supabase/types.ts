@@ -28519,6 +28519,7 @@ export type Database = {
         }
         Returns: Json
       }
+      avatar_is_shared: { Args: { _name: string }; Returns: boolean }
       award_athlete_xp: {
         Args: {
           _at: string
@@ -31175,6 +31176,7 @@ export type Database = {
         Returns: Json
       }
       powerlifting_opl_tick: { Args: never; Returns: Json }
+      powerlifting_visible_client_ids: { Args: never; Returns: string[] }
       program_ai_apply: {
         Args: { p_change_ids: string[]; p_edit_id: string; p_plan: Json }
         Returns: Json
