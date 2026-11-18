@@ -49,6 +49,7 @@ Judge, for THIS athlete (the brief: their development read, pain reports, adhere
 - exercise selection (fit for the goal, the athlete's response history and equipment; no needless complexity);
 - specificity for the goal and timeline (a meet or test: does it peak into it, or build what the next phase needs);
 - progression (is each lift's progression appropriate for their training age and recent response; no fake progression);
+- session flow: accessories that send them back and forth between stations, or a new piece of equipment for one or two sets where a station already in use would train the same thing as well (a "consider", unless it pushes the session past their time). Never at the cost of the main lifts' order or training order (compounds before isolation work for the same muscles);
 - anything about this athlete the program ignores.
 
 Report only genuine problems:

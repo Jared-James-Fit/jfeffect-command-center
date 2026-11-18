@@ -87,6 +87,8 @@ export type AuditInput = {
   /** the athlete's own exercise ids (from their history) */
   athleteExerciseIds: Set<string>;
   brief: string;
+  /** what accessory-flow.ts regrouped by station (shown under Session practicality) */
+  flowNotes?: string[];
 };
 
 const LIFT_RE: Record<Lift, RegExp> = { squat: /squat/i, bench: /bench/i, deadlift: /deadlift/i };
@@ -437,6 +439,8 @@ export function auditProgram(x: AuditInput): AuditResult {
   for (const s of long.filter((q, i, arr) => arr.findIndex((y) => y.block === q.block && y.day === q.day) === i).slice(0, 6)) add("practicality", "failed", `${s.title} (block ${s.block + 1}) runs about ${s.minutes} min${cardioAfter ? ` + ${cardioAfter} min cardio` : ""}, over the ${max}-min maximum.`, s.block, true);
   if (!long.length && target != null) for (const s of firstWeeks.filter((q) => q.minutes > target + 10)) add("practicality", "review", `${s.title} (block ${s.block + 1}) runs about ${s.minutes} min vs the ${target}-min target.`, s.block);
   for (const { b, bi } of program.blocks.map((b, bi) => ({ b, bi }))) for (const d of b.days) if (d.exercises.length > 10) add("practicality", "review", `${d.title} (block ${bi + 1}) has ${d.exercises.length} exercises.`, bi);
+  for (const n of (x.flowNotes ?? []).slice(0, 6)) add("practicality", "passed", `Grouped by station: ${n}`);
+  if ((x.flowNotes ?? []).length > 6) add("practicality", "passed", `Grouped by station on ${x.flowNotes!.length - 6} more workouts.`);
   if (x.equipment.home) for (const s of firstWeeks.filter((q) => q.stationChanges > 4)) add("practicality", "review", `${s.title} (block ${s.block + 1}) moves between stations ${s.stationChanges} times.`, s.block, true);
   if (x.equipment.cableStations === 1) for (const { b, bi } of program.blocks.map((b, bi) => ({ b, bi }))) for (const d of b.days) {
     const groups = new Map<string, BuiltExercise[]>();

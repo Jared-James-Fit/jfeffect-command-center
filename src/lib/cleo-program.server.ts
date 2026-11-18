@@ -22,6 +22,7 @@ import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
 import { rxText, rxToRow, trainingDayDates, weekdayLabel, withLoadUnits, type Rx, type Weekday } from "@/lib/cleo-program";
 import { carryPlanDayRules } from "@/lib/client-nutrition-day";
 import { lowValueReason, EXERCISE_STANDARD } from "@/lib/program-intel/exercise-standard";
+import { ACCESSORY_FLOW_HINT } from "@/lib/program-intel/accessory-flow";
 import { coachingTemplates, isMembersProgram } from "@/lib/programs/library-view";
 
 type Db = any;
@@ -56,7 +57,7 @@ export function cleoProgramTools({ db, today }: { db: Db; today: string }) {
   return {
     exercise_library: tool({
       description:
-        `Find exercises in the app's exercise library by name. Program changes can only use exercises from here (by id). If nothing fits, say so and suggest the closest ones; never make one up. Results marked "below the exercise standard" shouldn't go in a program unless the coach asked for that exact exercise.\n\n${EXERCISE_STANDARD}`,
+        `Find exercises in the app's exercise library by name. Program changes can only use exercises from here (by id). If nothing fits, say so and suggest the closest ones; never make one up. Results marked "below the exercise standard" shouldn't go in a program unless the coach asked for that exact exercise.\n\n${EXERCISE_STANDARD}\n\n${ACCESSORY_FLOW_HINT}`,
       inputSchema: z.object({ query: z.string().trim().min(2).max(60) }),
       execute: safe("the exercise library", async ({ query }) => {
         const [exact, byName, byAlias] = await Promise.all([

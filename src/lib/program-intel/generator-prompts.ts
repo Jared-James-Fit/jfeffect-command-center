@@ -15,12 +15,23 @@ import type { BuiltBlock, Strategy } from "./generator-schemas";
 import type { CatalogExercise } from "./next-program";
 import type { GenerationSetup } from "./recommend";
 
-export const PIPELINE_PROMPT_VERSION = 10;
+export const PIPELINE_PROMPT_VERSION = 11;
 
 const EVIDENCE_RULES = `Evidence rules:
 - Facts about the past come only from the brief. Copy numbers exactly as they appear there (week labels like "B1·W2", exercises, loads, reps, RPE, percentages). Never compute, estimate or invent a past result.
 - Mark each decision "fact" only when its observation is itself a measurement from the brief (a load, a trend, a count); otherwise "hypothesis". An observation that links a cause (pain during X, stalled because of Y, recurring in sessions with Z) is a hypothesis even when every number in it is measured. A pattern seen in one block is not an established response; correlation is not causation.
 - Where the data is missing (e.g. no RPE logged, no check-outs, no bodyweight), say so in data_limits and lower confidence; never infer effort or fatigue from load alone. Keep programming when other information is enough.`;
+
+/**
+ * How accessories are chosen and ordered so a session flows (Nov 18 2026; Edit with AI
+ * and the coaching review follow the same rule). accessory-flow.ts groups what the
+ * model left scattered, within the same training order, after every block.
+ */
+export const ACCESSORY_FLOW_RULES = `- Session flow, the way a coach who runs real sessions builds them. The main lifts (competition lifts, primary and secondary strength work) come first in the order performance needs, whatever it costs in convenience. After them, choose and order the accessories so the session is simple and fast without costing results:
+  · Choose accessories that work together. When two options train the target about equally well, take the one at a station the session already uses (the bar, bench or rack set up for the main lift; the cable or machine the next exercise is on) or the one with less setup. Fewer stations, not less work: don't bring in another piece of equipment for one or two sets when a station already in use does the job, and don't pick variety for its own sake.
+  · Group by station: finish the work at one station before moving to the next (dumbbells together, cables together, machines together) and never send them back to a station they already left. A barbell accessory that suits the main lift's setup (an RDL after deadlifts, close-grip bench after bench, a hip thrust after squats) comes straight after the main lifts.
+  · Grouping never overrides training order: compounds before isolation work, never an isolation before a compound that trains the same muscle (no pushdowns before close-grip bench, no curls before rows), a priority muscle's work early while they're fresh. When grouping and training order disagree, training order wins.
+  · Fit it to where they train and how long they have: a home gym or a short session uses fewer stations (one cable column, one bench angle at a time, adjustable dumbbells at similar loads); a commercial gym can use its machines, still in as few areas as the work needs. Pair accessories as supersets only on stations that sit together.`;
 
 const PROGRAMMING_RULES = `Programming rules:
 - Start from THIS athlete's response, never a generic template. Don't assume the next program needs a redesign: keep what worked and progress it; change what didn't only after naming the likely reason; every meaningful change has a purpose.
@@ -33,6 +44,8 @@ const PROGRAMMING_RULES = `Programming rules:
 - Length and timeline (the brief's "Program length and timeline"): write exactly the setup's weeks, every week fully prescribed. These weeks are the current horizon, not the whole goal: the long-term timeline (a meet or test months away, a long-term goal) decides what these weeks must build and leave the athlete ready for, but never squeeze a long-term goal into them. Peak and taper only when this program ends at the deadline, timed so the deadline falls in its last week; otherwise build what the next phase needs.
 - Block structure is yours to decide for this athlete unless the coach set blocks in the setup: how many blocks (up to 12 weeks each), how long, and what each emphasizes (accumulation, intensification, hypertrophy, strength, rising specificity, peaking). Base it on their training age, recovery, adherence, volume tolerance, how they responded to past block lengths, and the timeline; never equal 4-week blocks by habit. Plan a lighter week only where fatigue, their history or the timeline calls for one, or write a deload rule that triggers on fatigue (e.g. top-set RPE up 1+ at the same load two sessions running); never a deload every 4th week by default.
 - Continuity: this program follows the one before it. Keep the exercises and structures that progressed, start loads from where the last program finished (the load references), carry the previous roadmap forward (or say why it changed), and don't reset progressions; change only what the records say isn't working.
+
+${ACCESSORY_FLOW_RULES}
 
 ${DEVELOPMENT_RULES}
 ${TRAINING_LOAD_RULES}
@@ -114,7 +127,7 @@ ${opts.first ? `\n${FIRST_PROGRAM_RULES}\n` : ""}
 Building rules:
 - Follow the approved strategy: its weekly layout (in order: day 1 is their first training day), frequency and volume targets (a muscle's target is sets aimed at it; a compound's other muscles come on top), exercises to keep / replace / add, intensity and progression model. Anything you can't follow, say why in the block's "objective".
 - Exercises: use exercise_id values from the catalog (the athlete's own exercises first: they have demo videos; then library exercises marked "demo video"). Copy the id and name exactly. Only when nothing in the catalog fits, set exercise_id to null and give the exercise's standard name. Never invent ids.
-- Only use exercises the athlete's equipment allows, and follow every equipment rule (stations, one cable column, adjustable dumbbells, shared attachments). Order each session as a sensible flow: main lift first, then by station, finishing one station before the next. Keep each session within the time limit.
+- Only use exercises the athlete's equipment allows, and follow every equipment rule (stations, one cable column, adjustable dumbbells, shared attachments). Order each session by the session flow rule above: main lifts first in their performance order, then accessories grouped by station without breaking training order. Keep each session within the time limit.
 - Supersets save time without cutting work: when a session is tight, pair accessories as "A1" / "A2" (same letter, next to each other; a push with a pull, an upper with a lower, or a small muscle beside a big one) on stations that don't clash: never two cable exercises on one column, two exercises needing the bench at different angles, one barbell loaded two ways, or two different weights on adjustable dumbbells. Never pair the day's main lift; its sets keep their full rest. The rest_seconds of the first exercise in a pair is the short rest before its partner; the last one's is the rest before the next round. The athlete reads who an exercise is paired with.
 - Top sets and back-offs are separate exercises: e.g. role "Primary Squat" (the top set) and "Primary Squat Backoff" (the back-off sets) on the same exercise_id. Other roles: "Secondary <Lift>", "Accessory", "Primary" / "Secondary" for non-competition work.
 - Prescribe every exercise: sets, reps ("5", "8-10", "AMRAP"), an effort target (rpe like "7" or "7-8", or rir), rest_seconds, tempo / pauses when it matters, "progression" (a conditional rule with its numbers, e.g. "When all sets reach 10 reps at RPE ≤8, add 2.5 kg"; the athlete reads it on the card, so a method's name alone like "Double progression" says nothing and isn't shown), up to 3 "substitutions" from the catalog the athlete can swap to, and "notes" (the rule below).
@@ -144,6 +157,12 @@ export const LOADING_RULES = `- Loading method, per exercise, decided like a coa
   · RPE top set + % back-offs: the top set by RPE, then the back-offs as a separate exercise entry on the same exercise_id with "percentage_of": "top_set", "percentage": 88-95 (8-12% lighter, less for more reps or more fatigue) and an RPE cap ("rpe": "6.5"-"7.5"). The app works out the back-off weight from the logged top set.
   · "percentage_of": "training_max" (only a TM on file), "1rm" (a tested 1RM on file), "e1rm" (an e1RM on file or worth working out from their logs), "top_set". Never reference a max the loading references don't list, never invent a training max, and never give a % with reps it can't allow. When in doubt, RPE.`;
 
+/** How many stations a session's accessories should aim for, by its length (a guide, never a check). */
+export function accessoryStationsLine(minutes: number | null): string {
+  const n = minutes == null ? 3 : minutes <= 45 ? 2 : minutes <= 75 ? 3 : 4;
+  return `aim for at most ${n} accessory station${n === 1 ? "" : "s"} besides the main lift's${minutes ? ` (a ${minutes}-min session)` : ""}, more only when the work truly needs it.`;
+}
+
 export function constructUserPrompt(x: {
   brief: string;
   setup: GenerationSetup;
@@ -166,6 +185,7 @@ export function constructUserPrompt(x: {
     `Objective: ${b.objective}`,
     b.phases.length ? `Phases: ${b.phases.map((p) => `W${p.week} ${p.phase}`).join(", ")}` : "",
     `Training days: ${x.setup.daysPerWeek} a week${x.setup.trainingDays.length ? ` (${x.setup.trainingDays.join(", ")})` : ""} · target session ${x.setup.sessionMinutes ?? "—"} min, maximum ${x.setup.maxSessionMinutes ?? "—"} min`,
+    `Session flow: ${accessoryStationsLine(x.setup.sessionMinutes ?? x.setup.maxSessionMinutes ?? null)}`,
     x.setup.cardio?.trainingDay
       ? `Cardio: the app adds ${x.setup.cardio.trainingDay.type} ${x.setup.cardio.trainingDay.minutes} min after every workout (the client's cardio plan). The lifting fits ${x.setup.sessionMinutes ?? "the session"} min on its own; write NO cardio rows.`
       : `Cardio: none after lifting; write NO cardio rows (any cardio lives in the client's cardio plan).`,
@@ -204,6 +224,7 @@ export function repairUserPrompt(x: { block: BuiltBlock; blockIndex: number; iss
     `- Session maximum: ${x.setup.maxSessionMinutes ?? x.setup.sessionMinutes ?? "—"} minutes${x.setup.cardio?.trainingDay ? `, including the ${x.setup.cardio.trainingDay.minutes}-min cardio the app adds after the lifting` : ""}.`,
     `- No walking, treadmill, bike or other steady cardio in the workouts: that's the client's cardio plan.`,
     `- Every exercise and substitution meets the exercise standard: no landmine / plate / kettlebell isolation, combos, twists, wall sits or unstable surfaces.`,
+    `- Session flow: the main lifts stay first in their order; an exercise you change or add goes with the other accessories at its station, without breaking training order (compounds before isolation work for the same muscles).`,
     `- Excluded exercises: ${x.setup.excluded.map((e) => e.name).join(", ") || "none"}; required: ${x.setup.required.map((e) => e.name).join(", ") || "none"}.`,
     ...x.equipmentRules.map((r) => `- ${r}`),
     ``,

@@ -18,9 +18,11 @@
  * And it warns (still applicable): an exercise twice in a workout, a
  * workout left empty, a session over the athlete's limit, an exercise below
  * the exercise standard, a % on a lift with no max on file, two changes on
- * the same exercise.
+ * the same exercise, an accessory that sends them back to a station the
+ * workout already left.
  */
 import { estimateDay, type TimedExercise } from "@/lib/program-intel/session-time";
+import { stationReturns } from "@/lib/program-intel/accessory-flow";
 import type { EditChange, EditOp, RxPatch } from "./ops";
 import { WEEKDAYS } from "./ops";
 import type { BlockSnap, CatalogExercise, DayDiff, DaySnap, Issue, ProgramSnapshot, ResolvedChange, RowLine, RowSnap, WeekSnap } from "./types";
@@ -598,6 +600,31 @@ function changeChecks(snap: ProgramSnapshot, work: Work, ctx: EngineCtx, diffs: 
         for (const [id, n] of count(day.rows)) if (n > 1 && n > (had.get(id) ?? 0)) issues.push({ level: "warning", text: `${lbl}: ${ctx.byId.get(id)?.name ?? "an exercise"} would be in it ${n} times (fine for a top set and back-offs).` });
         if (!day.rows.length) issues.push({ level: "warning", text: `${lbl} would have no exercises: remove the workout instead.` });
       }
+  // a change that sends them back to a station the workout already left (accessory-flow.ts); the coach's order before it is theirs
+  const trips: Array<{ where: string; name: string; station: string }> = [];
+  const flowRows = (rows: RowSnap[]) => rows.filter((r) => !r.cardio).map((r) => ({ exercise_name: r.name, role: r.purposeLabel, exercise_id: r.exerciseId }));
+  const equipmentOf = (e: { exercise_id: string | null }) => (e.exercise_id ? ctx.byId.get(e.exercise_id)?.equipment ?? null : null);
+  for (const block of work.blocks)
+    for (const week of block.weeks)
+      for (const day of week.days) {
+        const lbl = dayLabel(snap, block, week, day);
+        if (!affected.has(lbl)) continue;
+        const after = stationReturns(flowRows(day.rows), equipmentOf);
+        const had = stationReturns(flowRows(before.get(day.id)?.rows ?? []), equipmentOf);
+        if (after.length <= had.length) continue;
+        const extra = after.find((x) => !had.some((y) => y.name === x.name)) ?? after[after.length - 1];
+        trips.push({ where: lbl, ...extra });
+      }
+  if (trips.length) {
+    const t = trips[0];
+    issues.push({
+      level: "warning",
+      text:
+        trips.length === 1
+          ? `${t.where}: ${t.name} goes back to the ${t.station} after the workout already left it. Put it with the other ${t.station} work unless the order is on purpose.`
+          : `${trips.length} workouts would go back to a station they'd already left (${t.where}: ${t.name}, back to the ${t.station}). Put accessories at the same station together unless the order is on purpose.`,
+    });
+  }
   const max = snap.maxSessionMinutes ?? null;
   if (max) {
     const over = diffs.filter((d) => d.minutesAfter != null && d.minutesAfter > max && (d.minutesBefore == null || d.minutesAfter > d.minutesBefore));
