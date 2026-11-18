@@ -301,7 +301,11 @@ export async function workoutToRemove(db: Db, p: { workout_id?: string; day_id?:
     : instance
     ? [instance]
     : rows<any>(await db.from("pl_scheduled_workouts").select("*").eq("source_day_id", day.id).eq("client_id", block.client_id), "scheduled workouts");
-  if (!card && !scheduled.length) throw new Error("That program day isn't on their calendar. To take it out of the program itself, edit the program instead.");
+  if (!card && !scheduled.length) {
+    throw new Error(day.scheduled_date
+      ? "That workout is dated on the program itself, so it can't just come off the calendar (it would be placed back on their training days). Move it to another day, or take it out of the program by editing it."
+      : "That program day isn't on their calendar. To take it out of the program itself, edit the program instead.");
+  }
   if ((await lockedDays(db, [day.id])).has(day.id)) throw new Error("That workout has been started or logged, so it stays.");
   if (scheduled.length) {
     const { data: started } = await db
@@ -312,6 +316,21 @@ export async function workoutToRemove(db: Db, p: { workout_id?: string; day_id?:
   }
   const dayRows = card ? rows<any>(await db.from("pl_exercise_rows").select("*").eq("day_id", day.id).order("sort_order"), "rows") : [];
   return { card, day, rows: dayRows, scheduled, block, clientId: block.client_id as string };
+}
+
+/** A workout dated on the program itself (no schedule entry), as move_workout moves it: never one that's logged. */
+export async function datedDayToMove(db: Db, dayId: string | undefined) {
+  if (!dayId) throw new Error("Say which workout: a workout id or a day id from training_program.");
+  const { data: day } = await db.from("pl_days").select("id, week_id, title, day_index, scheduled_date").eq("id", dayId).maybeSingle();
+  if (!day) throw new Error("I couldn't find that workout.");
+  const { data: entry } = await db.from("pl_scheduled_workouts").select("id").eq("source_day_id", day.id).limit(1);
+  if ((entry ?? []).length) throw new Error("That workout is on the schedule with its own workout id: move it by that id (training_program lists it).");
+  if (!day.scheduled_date) throw new Error("That workout has no date yet. Placing it is the Training tab's Place them.");
+  const { data: week } = await db.from("pl_weeks").select("block_id").eq("id", day.week_id).maybeSingle();
+  const { data: block } = week ? await db.from("pl_blocks").select("id, client_id").eq("id", week.block_id).maybeSingle() : { data: null };
+  if (!block?.client_id) throw new Error("That workout isn't on a client's program.");
+  if ((await lockedDays(db, [day.id])).has(day.id)) throw new Error("That workout has been started or logged, so it stays on the day it was trained.");
+  return { day, clientId: block.client_id as string };
 }
 
 // ---------------------------------------------------------------------------
@@ -513,6 +532,12 @@ export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, t
         : `Take ${clientLabel(c)}'s ${name}${when} off their calendar. The day stays in "${t.block.name}". You can undo it.`;
     }
     case "move_workout": {
+      if (!p.workout_id) {
+        // A workout dated on the program itself (most of them): moved the way the app's calendar does (moveWorkout).
+        const t = await datedDayToMove(db, p.day_id);
+        const c = await client(db, t.clientId);
+        return `Move ${clientLabel(c)}'s ${t.day.title ? `"${t.day.title}"` : `Day ${t.day.day_index ?? "?"}`} from ${longDate(t.day.scheduled_date)} to ${longDate(p.date)}.`;
+      }
       const { data: w } = await db.from("pl_scheduled_workouts").select("id, client_id, scheduled_date, source_day_id").eq("id", p.workout_id).maybeSingle();
       if (!w) throw new Error("I couldn't find that scheduled workout.");
       const { data: done } = await db.from("pl_day_completions").select("completed_at").eq("scheduled_workout_id", w.id).not("completed_at", "is", null).limit(1);
@@ -833,6 +858,13 @@ export async function executeProgramAction(actor: { supabase: Db; userId: string
       return "Taken off their calendar.";
     }
     case "move_workout": {
+      if (!p.workout_id) {
+        // Checked again now: still dated on itself, on a client's program, and not logged.
+        const t = await datedDayToMove(sb, p.day_id);
+        const { moveWorkout } = await import("@/lib/schedule-manager.functions");
+        await moveWorkout({ data: { dayId: t.day.id, newDate: p.date } });
+        return "Moved.";
+      }
       const { moveScheduledWorkout } = await import("@/lib/scheduled-workouts.functions");
       await moveScheduledWorkout({ data: { instanceId: p.workout_id, newDate: p.date } });
       return "Moved.";

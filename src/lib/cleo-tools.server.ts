@@ -17,6 +17,8 @@ import { tool } from "ai";
 import { z } from "zod";
 import { rpcRead } from "@/lib/permissions.server";
 import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
+import { isMissed } from "@/lib/cleo-schedule";
+import { loadDatedWorkouts } from "@/lib/cleo-schedule.server";
 import { clientOwed } from "@/lib/client-owed";
 import { clientTaxRate } from "@/lib/client-billing-summary";
 import {
@@ -381,25 +383,18 @@ export function cleoReadTools(ctx: ToolCtx) {
 
     training_program: tool({
       description:
-        "A client's program: blocks (current one first), and their schedule from 7 days ago to 14 days ahead with which workouts are done. Pass `date` (YYYY-MM-DD) to also get the prescribed exercises for that day's workout.",
+        "A client's program: blocks (current one first), and their schedule from 7 days ago to 14 days ahead (every workout the app shows on their calendar) with which are done, each with its day id (and workout id when it has one). Pass `date` (YYYY-MM-DD) to also get the prescribed exercises for that day's workout.",
       inputSchema: z.object({ client_id: clientId, date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }),
       execute: safe("the program", async ({ client_id, date }) => {
         const c = await clientRow(db, client_id);
         const from = new Date(Date.parse(`${today}T00:00:00Z`) - 7 * DAY).toISOString().slice(0, 10);
         const to = new Date(Date.parse(`${today}T00:00:00Z`) + 14 * DAY).toISOString().slice(0, 10);
-        const [blocksRes, schedRes] = await Promise.all([
+        const [blocksRes, sched] = await Promise.all([
           db.from("pl_blocks").select("*").eq("client_id", client_id).order("start_date", { ascending: false }).limit(30),
-          db.from("pl_scheduled_workouts").select("*").eq("client_id", client_id).gte("scheduled_date", date && date < from ? date : from).lte("scheduled_date", date && date > to ? date : to).order("scheduled_date").limit(80),
+          // The schedule the app shows: schedule entries, and workouts dated on the program itself (most of them).
+          loadDatedWorkouts(db, { clientIds: [client_id], from: date && date < from ? date : from, to: date && date > to ? date : to }),
         ]);
         const blocks = filterPrimaryProgramBlocks(rows<any>(blocksRes as any, "blocks")).filter((b) => !b.archived);
-        const sched = rows<any>(schedRes as any, "schedule");
-        const dayIds = [...new Set(sched.map((s) => s.source_day_id).filter(Boolean))];
-        const [daysRes, compRes] = await Promise.all([
-          dayIds.length ? db.from("pl_days").select("id, title, focus").in("id", dayIds) : Promise.resolve({ data: [], error: null }),
-          sched.length ? db.from("pl_day_completions").select("scheduled_workout_id, completed_at, session_rating").in("scheduled_workout_id", sched.map((s) => s.id)) : Promise.resolve({ data: [], error: null }),
-        ]);
-        const days = new Map(rows<any>(daysRes as any, "days").map((d) => [d.id, d]));
-        const done = new Map(rows<any>(compRes as any, "completions").filter((x) => x.completed_at).map((x) => [x.scheduled_workout_id, x]));
         const current = blocks.find((b) => b.status === "Active" && (!b.start_date || b.start_date <= today) && (!b.end_date || b.end_date >= today)) ?? blocks.find((b) => b.status === "Active");
         const lines = [`${clientName(c)} program:`];
         if (!blocks.length) lines.push("- no program blocks");
@@ -407,19 +402,18 @@ export function cleoReadTools(ctx: ToolCtx) {
           lines.push(`- ${b === current ? "CURRENT " : ""}${b.name ?? "Block"} | block id ${b.id} | ${b.status ?? "?"} | ${b.client_visible ? "published" : "HIDDEN from client"} | ${b.start_date ?? "?"} to ${b.end_date ?? "?"} | ${b.weeks ?? "?"} weeks`);
         }
         lines.push(`Schedule ${from} to ${to}:`);
-        for (const s of sched) {
-          const d = days.get(s.source_day_id);
-          const comp = done.get(s.id);
-          lines.push(`- ${s.scheduled_date}${s.scheduled_time ? ` ${String(s.scheduled_time).slice(0, 5)}` : ""} | ${d?.title ?? "Workout"}${d?.focus ? ` (${d.focus})` : ""} | ${comp ? `done${comp.session_rating != null ? `, rated ${comp.session_rating}` : ""}` : s.scheduled_date < today ? "NOT logged" : "upcoming"} | workout id ${s.id} | day id ${s.source_day_id}`);
+        for (const s of sched.filter((s) => s.date >= from && s.date <= to).slice(0, 80)) {
+          const state = s.done ? `done${s.rating != null ? `, rated ${s.rating}` : ""}` : s.date < today ? (s.optional ? "optional, skipped" : s.visible ? "NOT logged" : "not logged (hidden from client)") : "upcoming";
+          lines.push(`- ${s.date}${s.time ? ` ${s.time}` : ""} | ${s.title ?? "Workout"}${s.focus ? ` (${s.focus})` : ""}${s.optional ? " | optional" : ""} | ${state} | ${s.entryId ? `workout id ${s.entryId} | ` : ""}day id ${s.dayId}`);
         }
         if (!sched.length) lines.push("- nothing scheduled");
         if (date) {
-          const onDay = sched.filter((s) => s.scheduled_date === date);
+          const onDay = sched.filter((s) => s.date === date);
           if (!onDay.length) lines.push(`No workout scheduled on ${date}.`);
           for (const s of onDay) {
-            const ex = await db.from("pl_exercise_rows").select("*, exercises(name)").eq("day_id", s.source_day_id).limit(40);
+            const ex = await db.from("pl_exercise_rows").select("*, exercises(name)").eq("day_id", s.dayId).limit(40);
             const list = rows<any>(ex as any, "exercises").sort((a, b) => (a.sort_order ?? a.position ?? a.row_index ?? 0) - (b.sort_order ?? b.position ?? b.row_index ?? 0));
-            lines.push(`Prescription for ${date} (${days.get(s.source_day_id)?.title ?? "workout"}):`);
+            lines.push(`Prescription for ${date} (${s.title ?? "workout"}):`);
             for (const r of list) {
               // a fixed load with the unit of the column it's in, never a kg number under an lb label
               const fixed = r.load_unit === "kg" && r.load_kg != null ? `${r.load_kg} kg`
@@ -560,19 +554,16 @@ export function cleoReadTools(ctx: ToolCtx) {
       inputSchema: z.object({ days: z.number().int().min(1).max(30).default(7) }),
       execute: safe("team training", async ({ days }) => {
         const from = new Date(Date.parse(`${today}T00:00:00Z`) - days * DAY).toISOString().slice(0, 10);
-        const [schedRes, compRes] = await Promise.all([
-          db.from("pl_scheduled_workouts").select("id, client_id, scheduled_date, source_day_id").gte("scheduled_date", from).lt("scheduled_date", today).limit(3000),
-          db.from("pl_day_completions").select("scheduled_workout_id, client_id, completed_at").gte("completed_at", new Date(Date.parse(`${from}T00:00:00Z`) - 3 * DAY).toISOString()).limit(5000),
-        ]);
-        const sched = rows<any>(schedRes as any, "schedule");
-        const done = new Set(rows<any>(compRes as any, "completions").filter((c) => c.completed_at).map((c) => c.scheduled_workout_id));
+        // The schedule the app shows: schedule entries, and workouts dated on the program itself (most of them).
+        const yesterday = new Date(Date.parse(`${today}T00:00:00Z`) - DAY).toISOString().slice(0, 10);
+        const sched = (await loadDatedWorkouts(db, { clientIds: null, from, to: yesterday })).filter((w) => w.visible && !(w.optional && !w.done));
         const per = new Map<string, { total: number; done: number; missed: string[] }>();
         for (const w of sched) {
-          const p = per.get(w.client_id) ?? { total: 0, done: 0, missed: [] };
+          const p = per.get(w.clientId) ?? { total: 0, done: 0, missed: [] };
           p.total += 1;
-          if (done.has(w.id)) p.done += 1;
-          else p.missed.push(w.scheduled_date);
-          per.set(w.client_id, p);
+          if (w.done) p.done += 1;
+          else if (isMissed(w, today)) p.missed.push(w.date);
+          per.set(w.clientId, p);
         }
         if (!per.size) return `No workouts were scheduled from ${from} to yesterday.`;
         const ids = [...per.keys()];

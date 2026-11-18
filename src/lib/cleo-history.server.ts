@@ -39,6 +39,8 @@ export type Snapshot = {
   block?: { id: string; client_visible: boolean };
   /** move_workout: where it was. */
   scheduled?: { id: string; scheduled_date: string; scheduled_time: string | null; order_index: number | null };
+  /** move_workout of a workout dated on the program itself: the day and its date before. */
+  movedDay?: { id: string; scheduled_date: string };
   /** set_nutrition_targets: the targets before (null = there were none). */
   nutrition?: { target: any | null };
   /** remove_workout: what was taken away (the card and its rows, or just calendar entries). */
@@ -96,6 +98,10 @@ export async function captureBefore(sb: Db, kind: CleoActionKind, p: any): Promi
       return { clientId: b.client_id, blockId: b.id, snapshot: { v: 1, block: { id: b.id, client_visible: !!b.client_visible } }, startedAt };
     }
     case "move_workout": {
+      if (!p.workout_id) {
+        const t = await program.datedDayToMove(sb, p.day_id);
+        return { clientId: t.clientId, blockId: null, snapshot: { v: 1, movedDay: { id: t.day.id, scheduled_date: t.day.scheduled_date } }, startedAt };
+      }
       const { data: s } = await sb.from("pl_scheduled_workouts").select("id, client_id, scheduled_date, scheduled_time, order_index").eq("id", p.workout_id).maybeSingle();
       if (!s) return null;
       const { client_id, ...scheduled } = s;
@@ -284,6 +290,12 @@ export async function restoreVersion(actor: { supabase: Db; userId: string }, ve
         break;
       }
       case "move_workout": {
+        if (snap.movedDay) {
+          const { moveWorkout } = await import("@/lib/schedule-manager.functions");
+          await moveWorkout({ data: { dayId: snap.movedDay.id, newDate: snap.movedDay.scheduled_date } });
+          text = `Moved back to ${snap.movedDay.scheduled_date}.`;
+          break;
+        }
         const s = snap.scheduled;
         if (!s) throw new Error("Nothing to put back.");
         const { moveScheduledWorkout } = await import("@/lib/scheduled-workouts.functions");

@@ -128,7 +128,13 @@ export const CLEO_ACTION_PARAMS = {
     })
     .refine((p) => p.workout_id || p.day_id, "Give workout_id or day_id"),
   publish_program: z.object({ block_id: uuid, visible: z.boolean().default(true).describe("true publishes it to the client; false hides it.") }),
-  move_workout: z.object({ workout_id: uuid.describe("Scheduled workout id from training_program."), date: ymd }),
+  move_workout: z
+    .object({
+      workout_id: uuid.optional().describe("Scheduled workout id from training_program, when it has one."),
+      day_id: uuid.optional().describe("Or the day id from training_program, for a workout dated on the program itself (no workout id)."),
+      date: ymd,
+    })
+    .refine((p) => p.workout_id || p.day_id, "Give workout_id or day_id"),
   correct_logged_exercise: z.object({
     row_id: uuid.describe("The row the sets were logged against (row id from training_log or program_detail)."),
     exercise_id: uuid.describe("The library exercise they actually did, from exercise_library."),
@@ -185,7 +191,7 @@ export const CLEO_ACTION_INFO: Record<CleoActionKind, { title: string; tool: str
   add_workout: { title: "Add a workout", tool: "Add a separate, extra session on a date (a second workout that day, or a day they had nothing). Never use it to add exercises to a workout they already have; that's edit_program_day." },
   remove_workout: { title: "Delete a workout", tool: "Delete a workout card from a client's calendar. An extra workout card (custom, e.g. one added with add_workout) is deleted completely with its exercises; a regular program day is only taken off the calendar (it stays in the block). Use this when they want a whole workout card gone, not edit_program_day (removing its exercises leaves an empty card). Never for a workout that was started or logged. It can be undone." },
   publish_program: { title: "Publish a program", tool: "Make a block visible to the client (publish) or hide it." },
-  move_workout: { title: "Move a workout", tool: "Move a scheduled workout to another date." },
+  move_workout: { title: "Move a workout", tool: "Move a client's workout to another date: by its workout id when training_program lists one, else by its day id (a workout dated on the program itself). Never one that was started or logged." },
   correct_logged_exercise: { title: "Fix a logged exercise", tool: "Correct which exercise a client actually did on a day they already logged (e.g. they did barbell bench instead of the dumbbell incline). Only the exercise changes; every logged set (load, reps, RPE) stays exactly as entered." },
   restore_program_version: { title: "Undo a change", tool: "Undo one of the program or nutrition changes in a client's program history (version ids from program_history): puts days, exercises, dates, visibility or targets back the way they were. Days the client has since started or logged stay as trained." },
   set_nutrition_targets: { title: "Update nutrition", tool: "Set a client's nutrition targets: calories and macros for each day type, plus phase and notes. Replaces their current day list (or creates their first targets)." },
