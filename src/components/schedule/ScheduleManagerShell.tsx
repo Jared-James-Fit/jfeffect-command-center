@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { getClientSchedule } from "@/lib/schedule-bulk.functions";
 import { reorderScheduledWorkouts } from "@/lib/scheduled-workouts.functions";
-import { useMoveWorkout } from "@/lib/use-move-workout";
+import { useMoveWithUndo } from "@/lib/use-move-workout";
 import { scheduleQueryKeys } from "@/lib/workout-move";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -49,7 +49,7 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
   const fetchFn = useServerFn(getClientSchedule);
   const reorderFn = useServerFn(reorderScheduledWorkouts);
   const queryClient = useQueryClient();
-  const optimisticMove = useMoveWorkout(clientId);
+  const moveWithUndo = useMoveWithUndo(clientId);
   const { data, isLoading } = useQuery({
     queryKey: ["client-schedule", clientId],
     enabled: !!clientId,
@@ -102,14 +102,20 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
       const completion = (completions as any[])?.find(
         (row) => row.scheduled_workout_id === target.instanceId,
       );
-      if (instance && !completion?.completed_at) {
-        optimisticMove.mutate({
+      const day = format(targetDate, "yyyy-MM-dd");
+      // A day that already has a workout asks first (the sheet below), so a
+      // drag never stacks two on a day by itself.
+      const taken = (scheduledInstances as any[])?.some(
+        (row) => row.id !== target.instanceId && String(row.scheduled_date ?? "").slice(0, 10) === day,
+      );
+      if (instance && !completion?.completed_at && !taken) {
+        moveWithUndo({
           target: {
             scheduledWorkoutId: target.instanceId,
             dayId: target.dayId,
             fromDate: instance.scheduled_date,
           },
-          newDate: format(targetDate, "yyyy-MM-dd"),
+          newDate: day,
         });
         return;
       }

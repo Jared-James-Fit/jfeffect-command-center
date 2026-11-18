@@ -11,11 +11,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { moveScheduledWorkout } from "@/lib/scheduled-workouts.functions";
-import { moveWorkout } from "@/lib/schedule-manager.functions";
+import { moveWorkout, undoScheduleChange } from "@/lib/schedule-manager.functions";
 import type { WorkoutItem } from "@/lib/workout-today";
 import {
   applyOptimisticMove,
   applyOptimisticScheduleInstanceMove,
+  movedToLabel,
   scheduleQueryKeys,
   type MoveTarget,
 } from "@/lib/workout-move";
@@ -87,4 +88,51 @@ export function useMoveWorkout(clientId?: string | null) {
       }
     },
   });
+}
+
+/**
+ * A drag's move, said out loud: "Moved to Sat, Nov 21" with Undo, so a
+ * workout never changes day without the person seeing it (a press-and-hold
+ * on the calendar is easy to start by accident). Undo puts it back exactly:
+ * the change's own batch for a program day, the instance's previous date,
+ * time and place for a scheduled instance.
+ */
+export function useMoveWithUndo(clientId?: string | null) {
+  const qc = useQueryClient();
+  const move = useMoveWorkout(clientId);
+  const undoFn = useServerFn(undoScheduleChange);
+
+  return (vars: MoveWorkoutVars) =>
+    move.mutate(vars, {
+      onSuccess: (res: any) => {
+        if (!res?.ok || res.noop) return;
+        const undo = async () => {
+          try {
+            if (res.__instance && vars.target.scheduledWorkoutId && res.previous) {
+              await move.mutateAsync({
+                target: { ...vars.target, fromDate: vars.newDate },
+                newDate: res.previous.scheduledDate,
+                time: res.previous.scheduledTime,
+                orderIndex: res.previous.orderIndex,
+              });
+            } else if (res.batchId) {
+              await undoFn({ data: { batchId: res.batchId } });
+              for (const key of scheduleQueryKeys(clientId)) {
+                void qc.invalidateQueries({ queryKey: key });
+              }
+            } else {
+              return;
+            }
+            toast.success("Moved back.");
+          } catch (e: any) {
+            toast.error(e?.message ?? "Could not undo.");
+          }
+        };
+        const canUndo = (res.__instance && !!res.previous) || !!res.batchId;
+        toast.success(movedToLabel(vars.newDate), {
+          action: canUndo ? { label: "Undo", onClick: () => void undo() } : undefined,
+          duration: 7000,
+        });
+      },
+    });
 }
