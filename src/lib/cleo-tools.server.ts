@@ -1,5 +1,5 @@
 /**
- * Cleo's lookups: the tools she calls mid-answer to read a client's file,
+ * Cleo's lookups: the tools Cleo calls mid-answer to read a client's file,
  * training log, body weight, records, program, check-ins, nutrition, coach
  * thread, purchases and the calendar; the business's documents (agreements,
  * policies, FAQs); and anything else in the app (find_data / read_data,

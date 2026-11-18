@@ -153,7 +153,7 @@ describe("Cleo program history", () => {
 });
 
 describe("Cleo's models", () => {
-  it("her brain is the routing table's assistant route: the OpenAI key, a fallback, never Lovable credits by default", async () => {
+  it("Cleo's brain is the routing table's assistant route: the OpenAI key, a fallback, never Lovable credits by default", async () => {
     const { cleoRoute } = await import("@/lib/cleo-model.server");
     const r = cleoRoute(null);
     expect(r.models.length).toBeGreaterThan(1);
@@ -201,7 +201,7 @@ describe("Cleo's models", () => {
     expect(server).toContain("const ask = `${now}\\n${input.message.trim()");
   });
 
-  it("her tools aren't strict, so the model never fills an optional field with a placeholder", () => {
+  it("Cleo's tools aren't strict, so the model never fills an optional field with a placeholder", () => {
     const server = readFileSync("src/lib/summer.server.ts", "utf8");
     expect(server).toContain("[name, { ...(t as any), strict: false }]");
   });
@@ -219,9 +219,10 @@ describe("Cleo's voices", () => {
     expect(serverVoiceValue("soft")).toBe("summer:soft");
   });
 
-  it("asks for a smooth, natural female voice", async () => {
+  it("asks for a smooth, natural voice and never gives Cleo a gender (each voice id sets the sound)", async () => {
     const { SUMMER_VOICE_STYLE } = await import("@/lib/summer.server");
-    expect(SUMMER_VOICE_STYLE).toMatch(/smooth, warm, natural female voice/);
+    expect(SUMMER_VOICE_STYLE).toMatch(/smooth, warm, natural voice/);
+    expect(SUMMER_VOICE_STYLE).not.toMatch(/female|woman|girl|\bmale\b/i);
   });
 
   it("wraps Google's raw 24kHz audio as a playable WAV", async () => {

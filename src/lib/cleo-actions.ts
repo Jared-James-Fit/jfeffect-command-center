@@ -2,7 +2,7 @@
  * What Cleo can offer to do, who may do it, and how a card reads. Pure:
  * shared by the server (cleo-actions.server.ts) and the chat UI.
  *
- * Cleo never acts on her own. She proposes; the person taps Confirm; it runs
+ * Cleo never acts alone: Cleo proposes, the person taps Confirm, and it runs
  * with their own session. When it's outside their role it becomes a request
  * the business owner approves (see 20261101090000_cleo_actions.sql).
  */

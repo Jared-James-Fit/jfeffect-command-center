@@ -1,5 +1,5 @@
 /**
- * Cleo's program building blocks: a prescription as she writes it, how it
+ * Cleo's program building blocks: a prescription as Cleo writes it, how it
  * lands on a pl_exercise_rows row (the way the program editor stores it), how
  * it reads on a card, and which dates a new block's days fall on. Pure.
  */

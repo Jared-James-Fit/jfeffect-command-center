@@ -137,7 +137,7 @@ describe("Cleo's app context", () => {
 });
 
 describe("Cleo's prompt", () => {
-  it("knows she can link and look things up, and never invents ids", () => {
+  it("knows it can link and look things up, and never invents ids", () => {
     const p = summerSystemPrompt();
     expect(p).toMatch(/rest of the app/);
     expect(p).toMatch(/Never invent an id or a path/);
@@ -180,7 +180,7 @@ describe("Cleo for a team admin", () => {
 });
 
 describe("Cleo for the finance login", () => {
-  it("knows the books, says she's view-only, and names what she can change", () => {
+  it("knows the books, says it's view-only, and names what it can change", () => {
     const p = summerSystemPrompt({ owner: false, finance: true, userName: "Fionna", ownerName: "Jared" });
     expect(p).toContain("You are talking with Fionna, Jared's bookkeeper (the finance login). You know the books (BOOKS)");
     expect(p).toMatch(/do themselves the team task board, recording a payment .*never a refund, comp or cancellation.*payment link/);

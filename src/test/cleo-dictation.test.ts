@@ -26,10 +26,10 @@ describe("Cleo dictation", () => {
     expect(chat).not.toMatch(/PhoneOff|Call Cleo|End call/);
   });
 
-  it("after she answers it's your turn: one tap keeps the conversation going", () => {
+  it("after Cleo answers it's your turn: one tap keeps the conversation going", () => {
     expect(chat).toMatch(/if \(turn === turnRef\.current\) setVoiceState\("ready"\);/);
     expect(chat).toContain("Keep talking");
-    // The orb sends while listening, and otherwise starts listening (cutting her off).
+    // The orb sends while listening, and otherwise starts listening (cutting Cleo off).
     expect(chat).toContain("onClick={listening ? onSend : onTalk}");
     expect(chat).toContain("onTalk={startDictation}");
     // Nothing listens on its own: "ready" waits for the tap.
@@ -48,7 +48,7 @@ describe("Cleo in admin has no floating button", () => {
   const layout = read("routes/_authenticated/admin/route.tsx");
   const styles = read("styles.css");
 
-  it("draws no button of her own, only her chat sheet", () => {
+  it("draws no button of its own, only the chat sheet", () => {
     expect(assistant).not.toContain("data-summer-fab");
     expect(assistant).not.toContain('aria-label="Chat with Cleo"');
     expect(assistant).not.toMatch(/fixed right-4/);
@@ -56,7 +56,7 @@ describe("Cleo in admin has no floating button", () => {
     expect(assistant).toContain("<SummerChat");
   });
 
-  it("still opens from Messages, the shortcut and her pushes", () => {
+  it("still opens from Messages, the shortcut and Cleo's pushes", () => {
     expect(layout).toContain('{role === "admin" && <SummerAssistant />}');
     expect(assistant).toContain('window.addEventListener("summer:open", onOpen);');
     expect(assistant).toMatch(/e\.shiftKey && \(e\.key === "S" \|\| e\.key === "s"\)/);

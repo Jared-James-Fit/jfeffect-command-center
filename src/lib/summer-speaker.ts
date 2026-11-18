@@ -45,7 +45,8 @@ export function saveVoicePrefs(p: SummerVoicePrefs) {
   }
 }
 
-const FEMALE = /samantha|ava\b|allison|susan|zoe|nicky|karen|moira|tessa|serena|victoria|zira|aria|jenny|michelle|emma|libby|sonia|natasha|female|google us english|google uk english female/i;
+/** Device voices closest to Cleo's own server voices, so a fallback still sounds like Cleo. */
+const LIKE_CLEO = /samantha|ava\b|allison|susan|zoe|nicky|karen|moira|tessa|serena|victoria|zira|aria|jenny|michelle|emma|libby|sonia|natasha|female|google us english|google uk english female/i;
 /** Neural / downloaded voices: the ones that sound like an assistant, not a robot. */
 const NATURAL = /siri|premium|enhanced|natural|neural|online/i;
 /** Novelty and legacy voices nobody wants reading their books. */
@@ -68,17 +69,17 @@ function voiceScore(v: SpeechSynthesisVoice): number {
   const lang = v.lang?.toLowerCase() ?? "";
   let score = lang.startsWith("en-us") ? 0 : lang.startsWith("en") ? 1 : 4;
   if (!NATURAL.test(v.name)) score += 2;
-  if (!FEMALE.test(v.name)) score += 1;
+  if (!LIKE_CLEO.test(v.name)) score += 1;
   if (NOVELTY.test(v.name)) score += 10;
   return score;
 }
 
-/** Device voices for the picker: natural-sounding English feminine voices first. */
+/** Device voices for the picker: natural-sounding English voices closest to Cleo's own first. */
 export function rankVoices(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice[] {
   return [...voices].sort((a, b) => voiceScore(a) - voiceScore(b) || a.name.localeCompare(b.name));
 }
 
-/** Fallback when her own voice isn't available: the most natural English voice on the device. */
+/** Fallback when Cleo's own voice isn't available: the most natural English voice on the device. */
 function fallbackVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
   return rankVoices(voices)[0];
 }
@@ -106,7 +107,7 @@ export function speechChunks(text: string, maxChars = 220): string[] {
 }
 
 /**
- * A reply split so she can start talking sooner: the opening sentence (fast to
+ * A reply split so Cleo can start talking sooner: the opening sentence (fast to
  * generate) and the rest, generated at the same time. Short replies stay whole
  * so there is no seam at all.
  */
@@ -286,7 +287,7 @@ class SummerSpeaker {
         resolve();
       };
       // iOS (home-screen app especially) sometimes never fires "ended", which
-      // left the chat on "Speaking" after she'd finished. Also finish when
+      // left the chat on "Speaking" after Cleo had finished. Also finish when
       // playback reaches the end, when it's paused from outside (a call, the
       // lock screen), and by the clock as a last resort.
       const finishBy = (ms: number) => {

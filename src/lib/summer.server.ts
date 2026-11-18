@@ -1,6 +1,6 @@
 /**
- * Server side of Cleo as the admin assistant: what she can see across the
- * app, hearing the owner (speech to text), her voice (text to speech) and the
+ * Server side of Cleo as the admin assistant: what Cleo can see across the
+ * app, hearing the owner (speech to text), Cleo's voice (text to speech) and the
  * shared answer path used by both the chat and voice calls.
  *
  * Every read goes through the caller's RLS-scoped client, so only an admin
@@ -221,12 +221,12 @@ export async function transcribeAudio(b64: string, mime: string, names: string[]
 // voice when none answers.
 
 export const SUMMER_VOICE_STYLE =
-  "Voice: a smooth, warm, natural female voice with a neutral North American accent, like a polished voice assistant. Delivery: calm, even and relaxed, conversational pace, never rushed. Sentences flow into each other with short, natural pauses. No dramatic pitch swings, no sing-song, no breathiness, no vocal fry, no upspeak. Read numbers, weights and dollar amounts clearly and naturally.";
+  "Voice: a smooth, warm, natural voice with a neutral North American accent, like a polished voice assistant. Delivery: calm, even and relaxed, conversational pace, never rushed. Sentences flow into each other with short, natural pauses. No dramatic pitch swings, no sing-song, no breathiness, no vocal fry, no upspeak. Read numbers, weights and dollar amounts clearly and naturally.";
 
 /**
  * Per voice: the provider voices (best first) and a line on top of the style.
  * Gemini's are Google's named voices (Despina is literally "smooth");
- * OpenAI's are the fallback. All female.
+ * OpenAI's are the fallback. Each voice id sets the sound; the style only shapes the delivery.
  */
 const VOICE_PRESETS: Record<CleoVoice, { openai: string[]; gemini: string; style: string }> = {
   smooth: { openai: ["marin", "nova"], gemini: "Despina", style: "" },
@@ -243,7 +243,7 @@ const VOICE_PRESETS: Record<CleoVoice, { openai: string[]; gemini: string; style
 const GEMINI_TTS_MODELS = ["google/gemini-2.5-flash-tts", "google/gemini-3.1-flash-tts-preview"];
 let geminiTtsModel: string | null = null;
 
-/** How she should sound, said the way Gemini's voices take direction (it isn't read out). */
+/** How Cleo should sound, said the way Gemini's voices take direction (it isn't read out). */
 function geminiDirection(req: SpeechRequest): string {
   const rate = req.rate ?? 1;
   const pace = rate <= 0.95 ? "a little slower than usual, unhurried" : rate >= 1.05 ? "a little brisker than usual, still clear" : "a relaxed, natural conversational pace";
@@ -380,7 +380,7 @@ function providers(): Provider[] {
             model_id: model,
             ...(req.prev ? { previous_text: req.prev } : {}),
             ...(req.next ? { next_text: req.next } : {}),
-            // Steady and clean: enough stability that she never wobbles, no
+            // Steady and clean: enough stability that the voice never wobbles, no
             // exaggerated style. Their natural speed range is 0.7 to 1.2.
             voice_settings: {
               stability: 0.55,
@@ -529,14 +529,14 @@ function usageOf(u: any): CleoTrace["usage"] {
 }
 
 /**
- * One answer, without saving it: what she read, the model's reply, the cards and the quick
+ * One answer, without saving it: what Cleo read, the model's reply, the cards and the quick
  * question it set up. `bench` is the benchmark's: a model list and effort instead of the route's.
  */
 export async function cleoAnswer(
   supabase: any,
   userId: string,
   input: CleoInput,
-  opts: { bench?: { models?: string[]; effort?: "low" | "medium" | "high" } } = {},
+  opts: { bench?: { models?: string[]; effort?: "low" | "medium" | "high"; tone?: string } } = {},
 ) {
   const t0 = Date.now();
   const books = await import("@/lib/business-books.server");
@@ -589,7 +589,7 @@ export async function cleoAnswer(
     supabase.from("summer_profiles").select("tone, instructions").eq("user_id", userId).maybeSingle(),
     supabase.from("profiles").select("full_name").eq("id", userId).maybeSingle(),
     ownerFirstName(),
-    // His saved voice (Admin → My Voice), for anything she writes as him.
+    // His saved voice (Admin → My Voice), for anything Cleo writes as him.
     import("@/lib/coach-voice.functions").then((m) => m.loadCoachVoice(supabase)),
     import("@/lib/cleo-actions.server").then((m) => m.loadCaller(own, userId)),
     import("@/lib/ai/route-call.server").then((m) => m.readRouteOverride(supabase)),
@@ -612,7 +612,7 @@ export async function cleoAnswer(
   // prompt cache on a follow-up; the time of day goes with the question (below).
   const system = [
     summerSystemPrompt({
-      tone: profile.data?.tone,
+      tone: opts.bench?.tone ?? profile.data?.tone,
       instructions: profile.data?.instructions,
       voice: input.voice,
       owner,
@@ -656,8 +656,8 @@ export async function cleoAnswer(
       }),
     ]),
   );
-  // A quick question with tappable answers, for when she has to know which
-  // thing they mean before she can set up the right card.
+  // A quick question with tappable answers, for when Cleo has to know which
+  // thing they mean before setting up the right card.
   let choices = null as string[] | null;
   const askChoice = tool({
     description:
@@ -716,8 +716,8 @@ export async function cleoAnswer(
     let text = usable(r.text);
     // A card is on screen: say so from the card itself rather than asking again.
     if (!text && !proposed.length && !choices) {
-      // She used every step looking things up and never wrote back. Make her
-      // answer from what she found, with no more tool calls.
+      // Every step went on look-ups and nothing was written back. Ask for the
+      // answer from what was found, with no more tool calls.
       const again = await generateText({
         model: m.model,
         system,
@@ -761,7 +761,7 @@ export async function cleoAnswer(
   } catch (e: any) {
     const f = cleoFailure(e);
     console.error("[cleo] no model answered", trace.attempts);
-    if (f.quota) throw new Error("The OpenAI account behind Cleo is out of credit. Add credit at platform.openai.com to keep using her.");
+    if (f.quota) throw new Error("The OpenAI account behind Cleo is out of credit. Add credit at platform.openai.com to keep using Cleo.");
     if (f.status === 429) throw new Error("Cleo is getting too many requests. Try again in a minute.");
     if (f.status === 402) throw new Error("AI credits are used up. Add credits in Lovable to keep using Cleo.");
     throw new Error(`AI request failed${f.status ? ` (${f.status})` : ""}: ${String(e?.message ?? e).slice(0, 200)}`);
@@ -778,16 +778,16 @@ export async function cleoAnswer(
   if (!text && choices) text = "Quick check before I change anything. Which one?";
   if (!text) text = "I couldn't come up with an answer to that. Try asking it another way.";
   // "Like me": a last pass so a polished reply still reads like his texts.
-  if (summerTone(profile.data?.tone).value === "like_me") text = casualize(text);
+  if (summerTone(opts.bench?.tone ?? profile.data?.tone).value === "like_me") text = casualize(text);
   trace.ms.total = Date.now() - t0;
   console.log("[cleo] answered", { model: trace.model, effort: trace.effort, ms: trace.ms, steps: trace.steps, tools: trace.tools, usage: trace.usage, systemChars: trace.systemChars });
   return { text, choices: choices as string[] | null, proposed, trace, read, attachments, files };
 }
 
 /**
- * `supabase` is what she reads with (the finance login's read-only admin
+ * `supabase` is what Cleo reads with (the finance login's read-only admin
  * view); `own` is the caller's own client, which proposals and their checks
- * use. Lookups and proposals are tools she calls mid-answer.
+ * use. Lookups and proposals are tools Cleo calls mid-answer.
  */
 export async function answerSummer(supabase: any, userId: string, input: CleoInput): Promise<{ user: SummerMsg; assistant: SummerMsg; chatId: string }> {
   const { text, choices, proposed, read, attachments, files } = await cleoAnswer(supabase, userId, input);

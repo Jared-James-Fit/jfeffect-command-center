@@ -29,7 +29,7 @@ export const Route = createFileRoute("/api/public/hooks/summer-voice-check")({
             gatewayModels = String(e?.message ?? e).slice(0, 200);
           }
         }
-        // Cleo's brain, the same path answerSummer takes: each model on her route (the OpenAI key by
+        // Cleo's brain, the same path answerSummer takes: each model on Cleo's route (the OpenAI key by
         // default), the AI SDK, one tool call, then an answer.
         const cleoRuns: Array<{ model: string; ok: boolean; ms: number; steps?: number; text?: string; error?: string }> = [];
         {

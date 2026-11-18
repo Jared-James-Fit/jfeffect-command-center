@@ -106,8 +106,10 @@ describe("Cleo context", () => {
     const p = summerSystemPrompt();
     expect(p).toContain("Cleo");
     expect(p).toMatch(/Never invent/);
-    expect(p).toContain("you don't have a gender");
-    expect(p).not.toMatch(/You are a woman|your pronouns are she/);
+    expect(p).toContain("IDENTITY: you're an AI assistant with no gender and no human backstory");
+    expect(p).toContain('it\'s "Cleo" or "the AI assistant", and "it" if a pronoun is needed');
+    expect(p).toContain("Don't bring this up yourself or add AI disclaimers");
+    expect(p).not.toMatch(/You are a woman|your pronouns are she|bestie:|girly|girl math/i);
   });
 
   it("knows who it is and how it started, without inventing details", () => {
@@ -128,10 +130,13 @@ describe("Cleo context", () => {
     expect(summerSystemPrompt({ ownerName: "Jared" })).toMatch(/talk the way Jared talks/);
     expect(summerSystemPrompt()).toMatch(/talk the way the coach talks/);
     expect(summerSystemPrompt({ tone: "nonsense" })).toMatch(/HOW IT MUST SOUND below/);
-    expect(summerSystemPrompt({ tone: "girly_pop" })).toMatch(/Gen Z girly pop/);
+    // the stored key keeps its old name; the tone itself is Gen Z hype, with no gendered persona
+    const hype = summerSystemPrompt({ tone: "girly_pop" });
+    expect(hype).toMatch(/Voice: Gen Z hype/);
+    expect(hype).not.toMatch(/girly|girl math|💅|bookkeeper bestie/i);
     const pro = summerSystemPrompt({ tone: "professional" });
     expect(pro).toMatch(/no slang, no emojis/);
-    expect(pro).not.toMatch(/girly pop/);
+    expect(pro).not.toMatch(/Gen Z hype/);
   });
 
   it("adds the owner's custom instructions under the facts rules", () => {

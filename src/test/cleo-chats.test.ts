@@ -150,7 +150,7 @@ describe("wiring", () => {
     expect(chat).toContain("<CleoChatHistory");
   });
 
-  it("Cleo only reads the chat she's in, and every message is saved into a chat", () => {
+  it("Cleo only reads the chat it's in, and every message is saved into a chat", () => {
     expect(server).toContain('.eq("chat_id", input.chatId)');
     expect(server).toMatch(/chat_id: chatId, role: "user"/);
   });

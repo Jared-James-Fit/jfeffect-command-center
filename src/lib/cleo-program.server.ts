@@ -1,6 +1,6 @@
 /**
  * Cleo and training programs: the exercise library, program templates and a
- * block's full layout (lookups), plus what her program cards say and do.
+ * block's full layout (lookups), plus what Cleo's program cards say and do.
  * Server-only.
  *
  * Rules every program change follows:

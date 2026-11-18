@@ -98,7 +98,7 @@ describe("wiring", () => {
     expect(reviews).toContain("safe.client_response = casualize(safe.client_response)");
   });
 
-  it("Cleo's \"Like me\" tone is the default and cleans her replies the same way", () => {
+  it("Cleo's \"Like me\" tone is the default and cleans Cleo's replies the same way", () => {
     const cleo = readFileSync("src/lib/summer.server.ts", "utf8");
     expect(cleo).toContain('summerTone(profile.data?.tone).value === "like_me") text = casualize(text)');
     expect(readFileSync("src/lib/summer-persona.ts", "utf8")).toContain('DEFAULT_SUMMER_TONE: SummerTone = "like_me"');

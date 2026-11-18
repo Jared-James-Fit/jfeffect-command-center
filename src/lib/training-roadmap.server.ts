@@ -2,8 +2,8 @@
  * Cleo writes the training roadmap: a phase label + purpose for each block and
  * a label + focus for each week (pl_roadmap_notes.ai_*). Server-only.
  *
- * - She reads the block exactly as the coach built it (digestBlock) and never
- *   writes to the program, only to her own ai_* columns. The coach's
+ * - Cleo reads the block exactly as the coach built it (digestBlock) and never
+ *   writes to the program, only to its own ai_* columns. The coach's
  *   coach_* wording is never touched.
  * - A rewrite happens only when what the words depend on changed
  *   (source_hash). Identical structure elsewhere (the same template assigned
