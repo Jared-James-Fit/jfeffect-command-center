@@ -51,7 +51,7 @@ describe("calendar reschedule surfaces", () => {
 
   it("C+D: the same component serves the client self portal calendar", () => {
     expect(experience).toContain('mode === "self" || mode === "coach"');
-    expect(experience).toContain("const moveWorkoutMutation = useMoveWorkout(clientId);");
+    expect(experience).toContain("const moveWithUndo = useMoveWithUndo(clientId);");
   });
 
   it("E: touch sensors are enabled for iPhone/iPad on both calendar stacks", () => {

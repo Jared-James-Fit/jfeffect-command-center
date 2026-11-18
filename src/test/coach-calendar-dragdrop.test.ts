@@ -11,9 +11,10 @@ const moveHook = read("src/lib/use-move-workout.ts");
 
 describe("coach calendar drag/drop boundary", () => {
   it("routes exact scheduled instances through the shared optimistic move hook", () => {
-    expect(scheduleShell).toContain("const optimisticMove = useMoveWorkout(clientId);");
+    expect(scheduleShell).toContain("const moveWithUndo = useMoveWithUndo(clientId);");
     expect(scheduleShell).toContain("scheduledWorkoutId: target.instanceId");
-    expect(scheduleShell).toContain('newDate: format(targetDate, "yyyy-MM-dd")');
+    expect(scheduleShell).toContain('const day = format(targetDate, "yyyy-MM-dd");');
+    expect(scheduleShell).toContain("newDate: day,");
     expect(scheduleShell).not.toContain("moveScheduledWorkout(");
   });
 

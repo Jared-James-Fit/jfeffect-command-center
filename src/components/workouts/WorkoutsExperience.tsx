@@ -32,7 +32,7 @@ import { ProgramCardSkeleton, ScheduleSkeleton, WorkoutCardSkeleton } from "@/co
 import { resolveEstimatedWorkoutMinutes } from "@/lib/workout-estimate";
 import { cleanDayTitle, type WorkoutItem } from "@/lib/workout-today";
 import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
-import { localStartOfToday, toLocalISO } from "@/lib/today";
+import { localStartOfToday, parseLocalDate, toLocalISO } from "@/lib/today";
 import { pickCurrentBlock } from "@/lib/block-dates";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
@@ -75,8 +75,8 @@ import {
 } from "@/lib/at-home-backup.functions";
 import { AT_HOME_BACKUP_BADGE, isAtHomeBackupClient, isAtHomeBackupSessionBlock, isPrimaryProgramBlock } from "@/lib/at-home-backup";
 import { activeCalendarBlockIds, filterCalendarItemsWithHistory, historicalAnchorDate } from "@/lib/active-calendar";
-import { canDragRescheduleItem, moveTargetFromItem, type MoveTarget } from "@/lib/workout-move";
-import { useMoveWorkout } from "@/lib/use-move-workout";
+import { canDragRescheduleItem, moveTargetFromItem, workoutsAlreadyOn, type MoveTarget } from "@/lib/workout-move";
+import { useMoveWithUndo } from "@/lib/use-move-workout";
 import {
   CalendarDayCell,
   CalendarDndProvider,
@@ -232,8 +232,16 @@ export function WorkoutsExperience({
   // Both a client in self mode and an authorized coach/admin viewing one
   // specific client calendar use the same canonical optimistic move path.
   const canReschedule = mode === "self" || mode === "coach";
-  const moveWorkoutMutation = useMoveWorkout(clientId);
+  const moveWithUndo = useMoveWithUndo(clientId);
   const [drag, setDrag] = useState<{ target: MoveTarget; fromIso: string } | null>(null);
+  // A drop on a day that already has a workout opens the move sheet on that
+  // day (Swap days by default) instead of stacking the two.
+  const [dropAsk, setDropAsk] = useState<{ target: MoveTarget; iso: string } | null>(null);
+  // Stable dates: the sheet starts over whenever its start date changes.
+  const dropAskDates = useMemo(
+    () => ({ to: parseLocalDate(dropAsk?.iso), from: parseLocalDate(dropAsk?.target.fromDate) }),
+    [dropAsk],
+  );
 
   const startWorkoutDrag = (item: WorkoutItem, fromIso: string) => {
     if (!canReschedule || !canDragRescheduleItem(item)) return;
@@ -246,7 +254,14 @@ export function WorkoutsExperience({
     const active = drag;
     setDrag(null);
     if (!active || active.fromIso === iso) return;
-    moveWorkoutMutation.mutate({ target: active.target, newDate: iso });
+    const taken = workoutsAlreadyOn(byDate.get(iso), active.target).filter(
+      (it) => !isAtHomeBackupSessionBlock(it.block),
+    );
+    if (taken.length > 0) {
+      setDropAsk({ target: active.target, iso });
+      return;
+    }
+    moveWithUndo({ target: active.target, newDate: iso });
   };
   const dnd = canReschedule
     ? {
@@ -396,6 +411,17 @@ export function WorkoutsExperience({
                     />
                   )}
                 </CalendarDndProvider>
+                {dropAsk && (
+                  <MoveWorkoutSheet
+                    dayId={dropAsk.target.dayId}
+                    clientId={clientId}
+                    open
+                    onOpenChange={(o) => { if (!o) setDropAsk(null); }}
+                    initialTargetDate={dropAskDates.to}
+                    currentScheduledDate={dropAskDates.from}
+                    scheduledWorkoutId={dropAsk.target.scheduledWorkoutId}
+                  />
+                )}
                 {/* No legend under the strip: the dot, ring and check say it, and a day with a
                     session lists it right under its workout. Appointments live in the header's ⋯. */}
                 <SelectedDayList
