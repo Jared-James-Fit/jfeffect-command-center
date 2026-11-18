@@ -30,20 +30,23 @@ import { planAsMealPlanText, readEditedPlan, type PlanEditPlan } from "@/lib/nut
 import { withPrepFix } from "@/lib/nutrition-ai-plans.server";
 import { REVISE_MAX_CHARS } from "@/lib/nutrition-ai-prompts";
 
+import { createHash } from "node:crypto";
+import {
+  ALIGNED_PLAN_TEXT,
+  DEVIN_AI_TARGETS,
+  DEVIN_HIGH,
+  DEVIN_PLAN_TEXT,
+  DEVIN_REST,
+  DEVIN_TRAINING,
+  STORED_MD5,
+} from "@/test/fixtures/devin-nov-2026";
+import { prepDrift, planMenus } from "@/lib/nutrition-targets/plan-foods";
+
 const read = (p: string) => readFileSync(p, "utf8");
+const md5 = (t: string) => createHash("md5").update(t).digest("hex");
 type MealSection = Extract<MealPlanSection, { kind: "meal" }>;
 const mealsOf = (text: string) => parseMealPlanText(text).filter((s): s is MealSection => s.kind === "meal");
 
-const DEVIN_TRAINING =
-  "Meal 1\n2 whole eggs\n150 g egg whites\n100 g cooked white rice\n150 g broccoli\n10 g olive oil\n\nApproximate macros:\n45 g protein\n30 g carbohydrates\n20 g fat\n4 g fibre\n\nMeal 2 (Pre-Workout)\n180 g cooked chicken breast\n250 g cooked white rice\n1 medium banana\n\nApproximate macros:\n55 g protein\n95 g carbohydrates\n8 g fat\n5 g fibre\n\nMeal 3 (Post-Workout)\n180 g cooked lean ground beef (90% lean)\n450 g cooked potatoes\n150 g green beans\n\nApproximate macros:\n50 g protein\n85 g carbohydrates\n18 g fat\n10 g fibre\n\nDaily Total\nApproximately 180 g protein, 305 g carbohydrates, 71 g fat and 24 g fibre";
-const DEVIN_REST =
-  "Meal 1\n2 whole eggs\n150 g egg whites\n100 g cooked white rice\n150 g broccoli\n10 g olive oil\n\nApproximate macros:\n45 g protein\n30 g carbohydrates\n20 g fat\n4 g fibre\n\nMeal 2\n180 g cooked chicken breast\n250 g cooked white rice\n1 medium banana\n\nApproximate macros:\n55 g protein\n95 g carbohydrates\n8 g fat\n5 g fibre\n\nMeal 3\n180 g cooked lean ground beef (90% lean)\n300 g cooked potatoes\n150 g green beans\n15 g olive oil\n\nApproximate macros:\n50 g protein\n58 g carbohydrates\n32 g fat\n7 g fibre\n\nDaily Total\nApproximately 180 g protein, 238 g carbohydrates, 70 g fat and 21 g fibre";
-const DEVIN_HIGH =
-  "Meal 1\n180 g cooked chicken breast\n200 g cooked white rice\n1 medium banana\n\nApproximate macros:\n55 g protein\n82 g carbohydrates\n6 g fat\n5 g fibre\n\nMeal 2 (Pre-Workout)\n180 g cooked chicken breast\n300 g cooked white rice\n150 g green beans\n\nApproximate macros:\n55 g protein\n88 g carbohydrates\n7 g fat\n7 g fibre\n\nMeal 3 – Free Meal\nYour choice: burger + fries, steak + potatoes, pasta or whatever you're craving\nAim for about 850 kcal with 40+ g protein. Enjoy it, then straight back to the plan.\n\nApproximate macros:\n45 g protein\n100 g carbohydrates\n31 g fat\n6 g fibre\n\nDaily Total\nApproximately 185 g protein, 325 g carbohydrates, 79 g fat and 23 g fibre";
-/** What the targets AI wrote for him on Nov 9 (the coaching decision). */
-const DEVIN_AI_TARGETS =
-  "CALORIE TARGETS\nTraining Day: 2,550 kcal\nNon Training Day: 2,300 kcal\nHigh Day: 2,750 kcal\n\nMACRO TARGETS\n\nTraining Day\nProtein: 180g\nCarbs: 300g\nFats: 70g\n\nNon Training Day\nProtein: 180g\nCarbs: 235g\nFats: 70g\n\nHigh Day\nProtein: 180g\nCarbs: 330g\nFats: 80g";
-const DEVIN_PLAN_TEXT = `PHASE: Recomp\n\nTRAINING-DAY MENU\n${DEVIN_TRAINING}\n\nNON-TRAINING-DAY MENU\n${DEVIN_REST}\n\nHIGH-DAY MENU\n${DEVIN_HIGH}\n\nFOOD-WEIGHING RULES\n1. Weigh all meat, rice and potatoes after cooking.`;
 /** His published days. */
 const T = { calories: 2579, protein: 180, carbs: 305, fats: 71 };
 const R = { calories: 2302, protein: 180, carbs: 238, fats: 70 };
@@ -55,6 +58,79 @@ const DWAYNE =
   "Meal 1 — Protein Oatmeal and Eggs\n70 g oats\n18 g whey protein\n2 whole eggs\nCinnamon and water as desired\n\nApproximate macros:\n41 g protein / 68 g carbohydrates / 24 g fat\n\nMeal 2 — Chicken and Rice\n100 g cooked chicken breast\n210 g cooked white rice\n\nApproximate macros:\n39 g protein / 66 g carbohydrates / 15 g fat";
 const VICKY =
   "Meal 1\n120g oats\n300ml egg whites\n\nApprox:\n\n50P\n115C\n22F\nMeal 2\n220g cooked chicken breast\n400g cooked jasmine rice\n\nApprox:\n\n60P\n115C\n18F";
+
+describe("Devin's saved plan is a read-only regression case", () => {
+  it("the copies here are his stored days, byte for byte (md5 as read from production on Nov 18)", () => {
+    expect(md5(DEVIN_TRAINING)).toBe(STORED_MD5.training);
+    expect(md5(DEVIN_REST)).toBe(STORED_MD5.rest);
+    expect(md5(DEVIN_HIGH)).toBe(STORED_MD5.high);
+  });
+
+  it("reading a plan never changes it: the coverage, macro and food readers are pure and hold no database client", () => {
+    const before = DEVIN_TRAINING;
+    dayCoverage(DEVIN_TRAINING, T);
+    withHonestTotals(DEVIN_PLAN_TEXT);
+    mealsOffTheirFoods(DEVIN_TRAINING);
+    expect(DEVIN_TRAINING).toBe(before);
+    for (const f of ["src/lib/nutrition-targets/plan-coverage.ts", "src/lib/nutrition-targets/food-values.ts", "src/lib/nutrition-targets/macro-line.ts"]) {
+      const src = read(f);
+      expect(src, f).not.toMatch(/supabase|\.update\(|\.insert\(|\.upsert\(|\.delete\(/);
+    }
+    // the coach's fix is a prefill of Change it with AI: nothing is sent or applied without the coach
+    expect(read("src/lib/weight-management/handoff.ts")).toContain("never applied on its own");
+  });
+});
+
+describe("a regeneration for Devin's targets comes out aligned", () => {
+  const targets = parseAiTargets(DEVIN_AI_TARGETS);
+
+  it("his kind of short plan goes back with the gap; an aligned answer is kept with honest totals", async () => {
+    const prompts: string[] = [];
+    const out = await withPrepFix(DEVIN_PLAN_TEXT, "CLIENT DETAILS", async (p) => {
+      prompts.push(p);
+      return ALIGNED_PLAN_TEXT;
+    }, targets);
+    // one round: the answer's Daily Totals (the targets copied in again) are the code's to write
+    expect(prompts).toHaveLength(1);
+    expect(out).toBe(ALIGNED_PLAN_TEXT);
+    const saved = withHonestTotals(out);
+    expect(saved).toContain("TRAINING-DAY MENU");
+    expect(saved).toContain("Daily Total\nApproximately 192 g protein, 292 g carbohydrates, 64 g fat and 14 g fibre");
+    expect(saved).not.toContain("Approximately 180 g protein, 300 g carbohydrates");
+    expect(planTotalsIssues(saved, targets)).toEqual([]);
+    expect(prepDrift(planMenus(saved))).toEqual([]);
+    for (const m of planMenus(saved)) expect(mealsOffTheirFoods(m.notes), m.label).toEqual([]);
+    // every day covers its targets, and publishes what the meals give (within 5% of the AI's targets)
+    const days = parseMealPlan(saved).map((d) => {
+      const t = aiTargetFor(targets, d.day_label)!;
+      const c = dayCoverage(d.notes, t);
+      const n = planDayNumbers({ calories: d.calories ?? null, protein: d.protein ?? null, carbs: d.carbs ?? null, fats: d.fats ?? null, fibre: d.fibre ?? null, notes: d.notes }, t);
+      return [d.day_label, c.state, n.calories, n.protein, t.calories];
+    });
+    expect(days).toEqual([
+      ["Training Day", "covers", 2512, 192, 2550],
+      ["Non-Training Day", "covers", 2308, 189, 2300],
+      ["High Day", "covers", 2697, 183, 2750],
+    ]);
+    expect(clientCoverageLine(dayCoverage(parseMealPlan(saved)[0].notes, { calories: 2512, protein: 192 }))).toEqual({
+      tone: "ok",
+      text: "These meals cover your 2,512 kcal",
+    });
+  });
+
+  it("a model that never closes the gap: the plan is never presented as complete, and its targets aren't lowered", async () => {
+    const out = await withPrepFix(DEVIN_PLAN_TEXT, "x", async () => DEVIN_PLAN_TEXT, targets);
+    const saved = withHonestTotals(out);
+    const training = parseMealPlan(saved)[0];
+    // the code writes the real total; the published numbers stay the targets
+    expect(training).toMatchObject({ calories: 1854, protein: 150 });
+    const n = planDayNumbers({ calories: training.calories ?? null, protein: training.protein ?? null, carbs: training.carbs ?? null, fats: training.fats ?? null, fibre: null, notes: training.notes }, aiTargetFor(targets, "Training Day"));
+    expect(n).toMatchObject({ calories: 2550, protein: 180, carbs: 300, fats: 70 });
+    const c = dayCoverage(training.notes, { calories: n.calories, protein: n.protein });
+    expect(coachCoverageLine(c)).toBe("The meals add up to 1,854 of 2,550 kcal (150 of 180 g protein): 696 kcal short");
+    expect(clientCoverageLine(c)?.tone).toBe("attention");
+  });
+});
 
 describe("one reading of a meal's macro line, however it's written", () => {
   it("one a line, several on one, slashes, P / C / F, and never a food", () => {

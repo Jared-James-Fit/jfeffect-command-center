@@ -437,7 +437,8 @@ export function planTotalsIssues(planText: string, targets: DayTargets[]): strin
       out.push(
         `${menu.label}: the meals add to ${cover.meals.kcal} kcal and ${round(cover.meals.protein)} g protein against a target of ${Math.round(cover.target!)} kcal${target.protein ? ` and ${target.protein} g protein` : ""}`,
       );
-    if (totalKcal == null) continue;
+    // the Daily Total's own claim is judged only when the meals can't be read (else the meals are, above)
+    if (totalKcal == null || cover.meals) continue;
     // meal prep comes first (MEAL_PLAN_PROMPT rule 2c): within about 5% is on target
     if (want && Math.abs(totalKcal - want) / want > 0.05)
       out.push(
