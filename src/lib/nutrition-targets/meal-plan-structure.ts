@@ -7,22 +7,17 @@
 export type PlanFood = { amount: string; name: string };
 export type PlanMacros = { protein?: number; carbs?: number; fat?: number; fibre?: number };
 import { detectMealTiming, stripTimingText, type MealTiming } from "@/lib/nutrition-targets/meal-timing";
+import { readMacroLine } from "@/lib/nutrition-targets/macro-line";
 
 export type PlanMeal = { title: string; foods: PlanFood[]; macros: PlanMacros | null; notes: string[]; timing: MealTiming };
 export type StructuredDay = { meals: PlanMeal[]; notes: string[] };
 
 const MEAL_HEADER = /^(meal\s*\d+|breakfast|lunch|dinner|snack(\s*\d+)?|pre[- ]?workout|post[- ]?workout|intra[- ]?workout)\b\s*:?\s*(.*)$/i;
-// Whole line must be the macro ("38 g protein"), so "30 g protein powder" stays a food.
-const MACRO_LINE = /^(\d+(?:\.\d+)?)\s*g?\s*(protein|carbs?|carbohydrates?|fats?|fibre|fiber)\s*$/i;
+/** "Approximate macros:", "Approx:" (the macros follow on their own lines). */
+const MACROS_LABEL = /^approx(?:imate)?\.?\s*(?:macros?)?\s*[:.]?$/i;
+/** A coach's "Flexible calories" allowance: its own section after the meals, never part of one. */
+export const FLEX_HEADING = /^flex(?:ible)?\s*(?:calories|cals?|kcal|allowance|food|macros)\b/i;
 const FOOD_LINE = /^(\d+(?:[.,]\d+)?(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?)\s*(g|kg|ml|l|oz|lb|lbs|tbsp|tsp|cups?|scoops?|slices?|pieces?|eggs?|whole|cans?|servings?)?\b\.?\s+(.+)$/i;
-
-function macroKey(word: string): keyof PlanMacros {
-  const w = word.toLowerCase();
-  if (w.startsWith("prot")) return "protein";
-  if (w.startsWith("carb")) return "carbs";
-  if (w.startsWith("fat")) return "fat";
-  return "fibre";
-}
 
 export function structureMealPlanDay(text: string | null | undefined): StructuredDay {
   const out: StructuredDay = { meals: [], notes: [] };
@@ -46,17 +41,17 @@ export function structureMealPlanDay(text: string | null | undefined): Structure
       skipTotal = false;
       continue;
     }
-    if (/^approximate macros?:?$/i.test(line)) { inMacros = true; continue; }
+    if (MACROS_LABEL.test(line)) { inMacros = true; continue; }
     if (/^daily total\b/i.test(line)) { skipTotal = true; meal = null; inMacros = false; continue; }
     if (skipTotal && /^approximately\b/i.test(line)) continue;
     if (/^PHASE\s*[:\-]/i.test(line)) continue;
+    // flexible calories close the meal before them: what follows is the day's, not that meal's
+    if (FLEX_HEADING.test(line)) { meal = null; inMacros = false; skipTotal = false; out.notes.push(line); continue; }
 
-    const macro = line.match(MACRO_LINE);
+    // any way the macros are written ("45 g protein", "36 g protein, 65 g carbs, 12 g fat", "40P / 60C / 8F")
+    const macro = readMacroLine(line);
     if (macro && (inMacros || meal)) {
-      if (meal) {
-        meal.macros ??= {};
-        meal.macros[macroKey(macro[2])] = Number(macro[1]);
-      }
+      if (meal) meal.macros = { ...(meal.macros ?? {}), ...macro };
       continue;
     }
 

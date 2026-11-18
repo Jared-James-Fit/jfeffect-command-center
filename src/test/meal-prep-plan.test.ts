@@ -40,7 +40,8 @@ const PREPPED = [
   box(3, 200, " (Pre-Workout)"),
   box(4, 200, " (Post-Workout)"),
   box(5, 200),
-  "1 plain bagel",
+  // a counted carb snack, its own macros (food-values.ts reads a meal's foods against its macros)
+  `Snack\n1 plain bagel${macros(10, 50, 2)}`,
   total,
   "FOOD-WEIGHING RULES",
   "Swap: 100 g cooked chicken breast = 130 g cooked white fish",

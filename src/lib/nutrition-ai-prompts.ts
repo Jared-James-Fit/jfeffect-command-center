@@ -220,6 +220,7 @@ FORMAT RULES (strict — do not change headings, do not add extra commentary):
 5. End every menu with:
    Daily Total
    Approximately <P> g protein, <C> g carbohydrates, <F> g fat and <Fb> g fibre
+   The Daily Total is the sum of that menu's meals as written (code adds them up and checks it against the TARGETS). Never copy the targets into it: if the meals don't reach the targets, make the meals bigger until they do (with few meals a day, each meal is bigger; 3 meals for 2,600 kcal is about 850 kcal each). Every meal's Approximate macros are what its foods give at those amounts (cooked rice ~130 kcal and 28 g carbs per 100 g, cooked chicken breast ~165 kcal and 31 g protein per 100 g, count the protein in rice, bread and dairy too).
 6. After all menus, include a FOOD-WEIGHING RULES section with the standard rules, naming only the kinds of food this plan uses (cooked vs packaged, counted foods like bread / bagels / eggs / scoops / whole fruit are counted not weighed, weigh consistently, track all calorie beverages, oils and sauces, seasonings / zero-cal sauces / zero-cal drinks allowed), then up to 3 "Swap:" lines for the plan's own foods with amounts that keep the macros, e.g. "Swap: 100 g cooked chicken breast = 130 g cooked white fish (cod, tilapia) = 105 g cooked turkey breast" and "Swap: 100 g cooked white rice = 140 g cooked potatoes or sweet potatoes = 90 g cooked pasta".
 
 Output plain text only — no markdown, no bullets, no tables. Match the formatting exactly so the app's parser can read it.`;
@@ -584,6 +585,8 @@ export function mealPrepFixPrompt(
   totals: string[] = [],
   hardToFind: HardToFind[] = [],
   allergens: AllergenHit[] = [],
+  /** Meals whose Approximate macros aren't what their foods give (food-values.ts, `mealFoodLine`). */
+  macros: string[] = [],
 ): string {
   const fix: string[] = [];
   if (allergens.length) {
@@ -611,11 +614,18 @@ export function mealPrepFixPrompt(
       "Make every main meal on every menu the same container (rule 2c): one protein amount and one carb amount, the same grams in every container, and every weighed food one amount in the whole plan. Day types add or take out whole containers, a container's carb or counted units, never different grams. A Daily Total a little off its target is fine; the prep comes first.",
     );
   }
+  if (macros.length) {
+    fix.push(
+      "FIX THE MACROS: these meals' Approximate macros aren't what their foods give at those amounts:",
+      ...macros.map((t) => `- ${t}`),
+      "Write each one's Approximate macros from its foods, then check the menu still lands on its TARGETS (rule 2c: whole containers, a container's carb or counted units).",
+    );
+  }
   if (totals.length) {
     fix.push(
       "FIX THE TOTALS: these don't add up, and the client reads every number:",
       ...totals.map((t) => `- ${t}`),
-      "Make each meal's Approximate macros match its foods, each Daily Total the sum of its meals, and each Daily Total land near its TARGETS by adding or taking out whole containers, a container's carb or counted units, never by changing a container's grams (rule 2c).",
+      "Make each meal's Approximate macros match its foods, each Daily Total the sum of its meals (never the targets copied in), and the meals themselves land near each TARGETS by adding or taking out whole containers, a container's carb or counted units; when the meals are far under, make every container bigger together (rule 2c).",
     );
   }
   return [

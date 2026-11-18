@@ -42,7 +42,9 @@ import { parseFoodWeighingRules, parseMealPlan } from "@/components/nutrition/Me
 import { NutritionTargetDialog } from "@/components/nutrition-target-dialog";
 import { dayKey, parseAiCardio } from "@/lib/nutrition-cardio-sync";
 import { LEAN_GROCERY_LIST, hardToFindFoods, planFoodStats, prepDrift, prepDriftLine, type HardToFind, type PlanFoodStats, type PrepDrift } from "@/lib/nutrition-targets/plan-foods";
-import { bodyweightAnswerKg, coachChecks, coachNotesFlags, parseAiTargets, safetyNotes, withoutCoachNotes } from "@/lib/nutrition-targets/nutrition-intel";
+import { aiTargetFor, bodyweightAnswerKg, coachChecks, coachNotesFlags, parseAiTargets, safetyNotes, withoutCoachNotes } from "@/lib/nutrition-targets/nutrition-intel";
+import { coachCoverageLine, dayCoverage, planDayNumbers } from "@/lib/nutrition-targets/plan-coverage";
+import { mealFoodShort, mealsOffTheirFoods } from "@/lib/nutrition-targets/food-values";
 import { allergenConflictLine, allergenConflicts, foodHistoryKey, onFileRules, type FoodHistory } from "@/lib/nutrition-targets/food-history";
 import { planSupplementsFrom, type SupplementAdvice, type SupplementPick } from "@/lib/nutrition-targets/supplements";
 import { AiSupplementsReview } from "@/components/nutrition/supplements-ui";
@@ -174,7 +176,16 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
 
   const prefill = useMemo(() => {
     if (!plan?.meal_plan_text) return null;
-    const days = parseMealPlan(plan.meal_plan_text);
+    // each day's numbers are its AI targets, or its meals' own when they cover them (planDayNumbers):
+    // a day whose meals fall short never publishes lower targets, and its gap shows below
+    const targets = parseAiTargets(plan.targets_text ?? null);
+    const days = parseMealPlan(plan.meal_plan_text).map((d) => ({
+      ...d,
+      ...planDayNumbers(
+        { calories: d.calories ?? null, protein: d.protein ?? null, carbs: d.carbs ?? null, fats: d.fats ?? null, fibre: d.fibre ?? null, notes: d.notes },
+        aiTargetFor(targets, d.day_label),
+      ),
+    }));
     return {
       days,
       structure: structureFor(days.map((d) => d.day_label)),
@@ -238,8 +249,18 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       safety: safetyNotes(answers),
     });
     const flags = coachNotesFlags(plan.targets_text);
-    return [...allergy, ...out, ...(flags ? [`AI: ${flags}`] : [])];
-  }, [plan?.targets_text, latest?.answers, data?.client?.sex, allergyHits, onFile]);
+    // each day's meals against its targets, read from the meals (never the Daily Total line)
+    const days = prefill?.days ?? [];
+    const meals = days.flatMap((d) => {
+      const short = coachCoverageLine(dayCoverage(d.notes, { calories: d.calories ?? null, protein: d.protein ?? null, carbs: d.carbs ?? null, fats: d.fats ?? null }));
+      return short ? [`${d.day_label}: ${short}. Change something to bring the meals to it.`] : [];
+    });
+    // a meal whose macros aren't what its foods give (the staples only, food-values.ts), the first few
+    const foods = days
+      .flatMap((d) => mealsOffTheirFoods(d.notes).map((c) => `${d.day_label}, ${mealFoodShort(c)}`))
+      .slice(0, 3);
+    return [...allergy, ...meals, ...foods, ...out, ...(flags ? [`AI: ${flags}`] : [])];
+  }, [plan?.targets_text, latest?.answers, data?.client?.sex, allergyHits, onFile, prefill]);
 
   /** Everything for this plan as one block (to paste into a doc, a chat or another AI). */
   const everything = () => {
