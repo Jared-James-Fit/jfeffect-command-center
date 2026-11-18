@@ -107,11 +107,29 @@ export function useWarmupSets(rowId: string, clientId: string | null | undefined
     }
     await qc.refetchQueries({ queryKey: key });
   };
+  /**
+   * "They were lb": every warm-up typed in the other unit keeps its number in
+   * `to` (unit-relabel.ts). Shown at once, then saved; a failed save puts the
+   * list back as it was.
+   */
+  const relabel = async (to: WarmupUnit) => {
+    if (!clientId) return;
+    const wrong = sets.filter((s) => s.unit !== to && Number(s.load) > 0);
+    if (wrong.length === 0) return;
+    qc.setQueryData(key, sets.map((s) => (s.unit !== to && Number(s.load) > 0 ? { ...s, unit: to } : s)));
+    try {
+      for (const s of wrong) {
+        await sb.from("pl_warmup_sets").update({ unit: to }).eq("id", s.id).eq("client_id", clientId).throwOnError();
+      }
+    } catch (e) { fail(e); }
+    await refresh();
+  };
   return {
     sets,
     save,
     remove,
     replaceAll,
+    relabel,
     atLimit: sets.length >= MAX_WARMUPS,
     /** Loaded and settled (nothing being fetched) — safe to read as the truth. */
     ready: !enabled || (isSuccess && !isFetching),
