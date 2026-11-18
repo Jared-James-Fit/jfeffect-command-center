@@ -1456,7 +1456,8 @@ export function useMyCommunitySettings(enabled = true) {
     queryFn: async (): Promise<MyCommunitySettings> => {
       const { data, error } = await db.rpc("community_my_settings");
       if (error) throw error;
-      return (data ?? { auto_share_workouts: true, private_views: false }) as MyCommunitySettings;
+      // automatic stories are off unless they switched them on (20270407090000)
+      return (data ?? { auto_share_workouts: false, private_views: false }) as MyCommunitySettings;
     },
   });
 }

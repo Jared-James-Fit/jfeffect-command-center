@@ -20,7 +20,7 @@ import { useServiceTier } from "@/lib/service-tier";
  *   stay public either way, like every coach post (daily posts, lessons,
  *   birthdays, Wins), so the Crew's shared wins never go dark.
  * - A coach's account is always public: shown as a fact, not a switch.
- * - Share my workouts: a finished workout posts itself to your story.
+ * - Post workouts to my story automatically (off unless switched on): a finished workout posts itself to your story.
  * - Who sees my film: a workout's set videos post to Crew, or stay Coach only.
  */
 
@@ -126,7 +126,11 @@ export function PostMyFilmRow() {
   );
 }
 
-/** Automatic sharing: a finished workout posts itself to your story (24 hours), public to the crew. */
+/**
+ * Automatic sharing, off unless they turn it on: a finished workout posts
+ * itself to their story (24 hours). Otherwise a story goes up only when they
+ * tap Share to Story on the recap.
+ */
 export function ShareWorkoutsRow() {
   const { isImpersonating } = useClientImpersonation();
   const { data } = useMyCommunitySettings(!isImpersonating);
@@ -135,10 +139,10 @@ export function ShareWorkoutsRow() {
   return (
     <label data-pulse-switch className={ROW}>
       <span className="min-w-0">
-        <span className={TITLE}>Share my workouts</span>
-        <span className={NOTE}>Finished workouts post to your story for 24 hours with the session's best win. Everyone in the crew sees them.</span>
+        <span className={TITLE}>Post workouts to my story automatically</span>
+        <span className={NOTE}>Off: a workout goes on your story only when you tap Share to Story. On: every finished workout posts itself for 24 hours with its best win. Everyone in the crew sees them.</span>
       </span>
-      <Switch checked={data.auto_share_workouts} disabled={set.isPending} onCheckedChange={(on) => set.mutate(on, { onError: () => toast.error("Couldn't save that") })} aria-label="Share my workouts" />
+      <Switch checked={data.auto_share_workouts} disabled={set.isPending} onCheckedChange={(on) => set.mutate(on, { onError: () => toast.error("Couldn't save that") })} aria-label="Post workouts to my story automatically" />
     </label>
   );
 }

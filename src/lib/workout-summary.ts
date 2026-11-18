@@ -165,3 +165,25 @@ export function computeWorkoutSummary(
     plan: planCheck(rows as any, results as any),
   };
 }
+
+/**
+ * The recap's score in plain words (the formula above, said, never changed):
+ * the share of planned sets logged, 10 off when pain was reported, 3 on for a
+ * note to the coach, and the stars as the score out of 5 (or their own
+ * rating when it's higher).
+ */
+export function explainWorkoutScore(
+  s: Pick<WorkoutSummary, "score" | "completedSets" | "prescribedSets" | "completionPct">,
+  o: { pain?: boolean | null; ownRating?: number | null } = {},
+): string[] {
+  const lines: string[] = [];
+  lines.push(
+    s.prescribedSets > 0
+      ? `Sets logged: ${Math.min(s.completedSets, s.prescribedSets)} of ${s.prescribedSets} planned (${s.completionPct}%). That's the score.`
+      : `Everything you logged counts (${s.completionPct}%).`,
+  );
+  lines.push(o.pain ? "Pain reported: 10 off." : "Reporting pain takes 10 off.");
+  lines.push("A note for your coach adds 3. Weights and effort don't change it: it's how much of the plan got done.");
+  lines.push(o.ownRating ? "Stars: the score out of 5, or your own rating when it's higher." : "Stars: the score out of 5.");
+  return lines;
+}

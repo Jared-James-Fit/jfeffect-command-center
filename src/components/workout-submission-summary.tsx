@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles, Medal, Share2, Download } from "lucide-react";
+import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles, Medal, Share2, Download, Info } from "lucide-react";
 import { StudioShell } from "@/components/community/studio-chunks";
-import type { WorkoutSummary } from "@/lib/workout-summary";
+import { explainWorkoutScore, type WorkoutSummary } from "@/lib/workout-summary";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { PlanCheck } from "@/lib/workouts/plan-vs-actual";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -286,15 +287,28 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                 <span className="absolute left-full ml-1 whitespace-nowrap text-xs font-bold text-muted-foreground">/100</span>
               </div>
             </div>
-            <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Workout score</div>
-
-            {ratingStars > 0 && revealStage >= 2 && (
-              <div className="mt-2 flex items-center gap-0.5 animate-in fade-in zoom-in-95 duration-500">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <Star key={i} className={`h-3.5 w-3.5 ${i <= ratingStars ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"}`} />
+            {/* what the number and the stars mean, one tap away (the formula is unchanged) */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" className="mt-1 inline-flex min-h-8 items-center gap-1 rounded-full px-2 text-[12px] font-medium text-muted-foreground active:bg-muted" data-score-help>
+                  Workout score
+                  {ratingStars > 0 && revealStage >= 2 && (
+                    <span className="ml-1 inline-flex items-center gap-0.5 animate-in fade-in zoom-in-95 duration-500" aria-label={`${ratingStars} of 5 stars`}>
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <Star key={i} className={`h-3 w-3 ${i <= ratingStars ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"}`} />
+                      ))}
+                    </span>
+                  )}
+                  <Info className="ml-0.5 h-3.5 w-3.5" aria-label="How it's scored" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="bottom" className="w-[min(300px,calc(100vw-32px))] space-y-1.5 p-3 text-left text-[13px] leading-snug" data-score-help-text>
+                <div className="font-semibold">How it's scored</div>
+                {explainWorkoutScore(summary, { pain, ownRating: sessionRating }).map((l) => (
+                  <p key={l} className="text-muted-foreground">{l}</p>
                 ))}
-              </div>
-            )}
+              </PopoverContent>
+            </Popover>
           </div>
         </header>
 
@@ -433,6 +447,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
               completionId={completionId}
               completedAt={workoutDate ?? null}
               unit={displayUnit}
+              workoutTitle={workoutTitle}
+              athleteName={athleteName}
               onDone={() => { onOpenChange(false); onClose?.(); }}
               onStudio={(caption) => { setDraftCaption(caption); setShareMounted(true); setShareOpen(true); }}
             />
