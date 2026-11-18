@@ -93,7 +93,8 @@ describe("the logger shows the cardio under its own heading", () => {
 describe("cardio is done when it suits them: before, during, after or later that day", () => {
   it("logging it never starts the workout, its clock or in progress", () => {
     expect(day).toContain("onChange={cardioRow ? refreshCardio : refresh}");
-    expect(day).toContain("startsWorkout={!cardioRow}");
+    // (nor does fixing a set of a finished workout: its clock is done)
+    expect(day).toContain("startsWorkout={!cardioRow && !completion?.completed_at}");
     // every place a set starts the session clock checks it; the one left is the page's own (refresh's, the lifts')
     const unguarded = day.split("\n").filter((l) => l.includes("beginWorkoutSession(") && !l.includes("startsWorkout") && !l.includes("import"));
     expect(unguarded).toEqual(["    beginWorkoutSession(dayId);"]);

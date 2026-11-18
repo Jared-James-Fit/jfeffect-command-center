@@ -12,8 +12,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Droplet, Plus, Undo2, History, Settings2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { playAppSound } from "@/lib/app-sounds";
 import {
-  addWaterEntry, deleteWaterEntry, ensureWaterTarget, formatWater,
+  addWaterEntry, deleteWaterEntry, ensureWaterTarget, formatWater, reachesWaterTarget,
   listWaterForDate, lToMl, ozToMl, QUICK_ADD_ML, summarizeToday,
   todayLocalISO, type WaterEntry,
 } from "@/lib/water";
@@ -63,6 +64,7 @@ export function WaterTrackerCard({
       await addWaterEntry({
         userId, amountMl, source, createdByUserId: currentUserId,
       });
+      if (reachesWaterTarget(summary.total, amountMl, target?.active_ml ?? 3000)) playAppSound("goal");
       qc.invalidateQueries({ queryKey: ["water-today", userId] });
       qc.invalidateQueries({ queryKey: ["water-history", userId] });
     } catch (e) {

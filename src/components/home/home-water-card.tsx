@@ -11,9 +11,10 @@ import { Droplet, Plus, History, Undo2 } from "lucide-react";
 import { HomeCardHeader, HOME_CARD_ACTION } from "@/components/home/home-card-header";
 import { WaterHistorySheet } from "@/components/progress/water-history-sheet";
 import { toast } from "sonner";
+import { playAppSound } from "@/lib/app-sounds";
 import { format } from "date-fns";
 import {
-  addWaterEntry, deleteWaterEntry, ensureWaterTarget, formatWater, listWaterForDate,
+  addWaterEntry, deleteWaterEntry, ensureWaterTarget, formatWater, listWaterForDate, reachesWaterTarget,
   summarizeToday, todayLocalISO, lToMl, ozToMl,
 } from "@/lib/water";
 
@@ -64,6 +65,7 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
   async function quickAdd(ml: number) {
     try {
       await addWaterEntry({ userId, amountMl: ml, source: "quick_add", createdByUserId: currentUserId });
+      if (reachesWaterTarget(summary.total, ml, targetMl)) playAppSound("goal");
       qc.invalidateQueries({ queryKey: ["water-today", userId] });
       qc.invalidateQueries({ queryKey: ["water-history", userId] });
     } catch (e) {

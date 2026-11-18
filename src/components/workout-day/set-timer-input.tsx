@@ -11,6 +11,7 @@ import { Play, Pause, RotateCcw, Check } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { countdownSoundedEnd, playAppSound, syncCountdown } from "@/lib/app-sounds";
 import {
   readTimer,
   remainingSeconds,
@@ -78,9 +79,17 @@ export function SetTimerInput({
     return () => clearInterval(id);
   }, [running]);
 
+  // A hold's last seconds: 3, 2, 1 and the "go" on zero, on the audio clock
+  // (the same countdown as the rest timer; paused or reset takes it off, and a
+  // "go" that has sounded rings out).
+  const countdownKey = `set:${timerKey}`;
+  useEffect(() => { syncCountdown(countdownKey, state?.endsAt ?? null); });
+  useEffect(() => () => syncCountdown(countdownKey, null), [countdownKey]);
+
   // Countdown reached zero → log the full target automatically.
   useEffect(() => {
     if (!finished) return;
+    const endedAt = state?.endsAt ?? null;
     onCommit(target, "countdown_timer");
     resetTimer(timerKey, target);
     try {
@@ -88,6 +97,9 @@ export function SetTimerInput({
     } catch {
       /* no haptics */
     }
+    // iPhone web can't vibrate: the chime says the hold is done (once, and
+    // only when it just ended on screen and the countdown didn't already).
+    if (endedAt != null && Date.now() - endedAt < 3000 && !countdownSoundedEnd(countdownKey, endedAt)) playAppSound("timer");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 

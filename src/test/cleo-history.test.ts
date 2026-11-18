@@ -257,9 +257,11 @@ describe("Cleo's thinking music", () => {
     expect(src).toContain("const STEP = 0.6;");
     expect(src).toContain("rand() < 0.3");
     expect(src).toContain("g.gain.linearRampToValueAtTime(vel * level, t + 0.06)");
-    expect(src).toContain("master.gain.linearRampToValueAtTime(1, t0 + 1.2)");
-    // Still follows the sounds toggle and stays quiet for quick answers.
-    expect(src).toMatch(/startThinkingSound\(\): \(\) => void \{\n  if \(typeof window === "undefined" \|\| !appSoundsEnabled\(\)\) return/);
+    // fades in to the volume the person set (sound-settings.tsx)
+    expect(src).toContain("master.gain.linearRampToValueAtTime(level, t0 + 1.2)");
+    // Still follows the sounds settings (her messages' switch and the volume) and stays quiet for quick answers.
+    expect(src).toMatch(/startThinkingSound\(\): \(\) => void \{\n  if \(typeof window === "undefined"\) return/);
+    expect(src).toContain('if (!soundAllowed("reply", prefs)) return () => {};');
     expect(src).toMatch(/\}, 350\);/);
   });
 

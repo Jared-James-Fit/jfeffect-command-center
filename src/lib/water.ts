@@ -139,6 +139,10 @@ export async function updateWaterEntry(id: string, patch: Partial<Pick<WaterEntr
 export const QUICK_ADD_ML = [250, 500, 750, 1000] as const;
 export function ozToMl(oz: number): number { return Math.round(oz * FL_OZ_TO_ML); }
 export function lToMl(l: number): number { return Math.round(l * 1000); }
+/** This drink takes the day from under the target to it (the goal sound plays once, on the drink that gets there). */
+export function reachesWaterTarget(totalBeforeMl: number, addMl: number, targetMl: number): boolean {
+  return targetMl > 0 && addMl > 0 && totalBeforeMl < targetMl && totalBeforeMl + addMl >= targetMl;
+}
 export function summarizeToday(entries: WaterEntry[], targetMl: number) {
   const total = entries.reduce((s, e) => s + e.amount_ml, 0);
   const remaining = Math.max(0, targetMl - total);

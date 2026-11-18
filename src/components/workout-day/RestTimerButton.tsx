@@ -1,4 +1,4 @@
-import { playAppSound } from "@/lib/app-sounds";
+import { countdownSoundedEnd, playAppSound, syncCountdown } from "@/lib/app-sounds";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pause, Play, RotateCcw, Timer, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -77,6 +77,15 @@ function useRestTimer({ seconds, onStart, scopeKey, timerId }: RestTimerProps) {
     return () => window.clearInterval(id);
   }, [active]);
 
+  // The last seconds on the audio clock: 3, 2, 1 and the "go" right on zero
+  // (app-sounds `syncCountdown`, armed on every repaint, idempotent; paused or
+  // stopped takes it off). One key per card, so another card's idle hook never
+  // cancels the one that's running.
+  const countdownKey = `rest:${scopeKey}:${timerId}`;
+  const countdownEnd = mine && mine.pausedRemainingMs == null ? mine.endsAt : null;
+  useEffect(() => { syncCountdown(countdownKey, countdownEnd); });
+  useEffect(() => () => syncCountdown(countdownKey, null), [countdownKey]);
+
   // Haptic cue on completion (once per timer instance).
   useEffect(() => {
     if (!mine || !restFinished(mine)) return;
@@ -85,8 +94,9 @@ function useRestTimer({ seconds, onStart, scopeKey, timerId }: RestTimerProps) {
     // Only buzz if the finish just happened while we're looking at it.
     if (Date.now() - mine.endsAt > 3000) return;
     try { navigator?.vibrate?.([180, 80, 180]); } catch { /* no-op */ }
-    // iPhone web can't vibrate: two gentle chimes say rest is over.
-    playAppSound("timer");
+    // iPhone web can't vibrate: the chime says rest is over (unless the
+    // countdown already sounded its "go" right on time).
+    if (!countdownSoundedEnd(countdownKey, mine.endsAt)) playAppSound("timer");
   }, [mine, mine && restRemainingMs(mine)]);
 
   const disabled = !seconds || seconds <= 0;

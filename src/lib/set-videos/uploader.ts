@@ -36,6 +36,7 @@
  *            the film, and the coach's clip never changes.
  */
 import { toast } from "sonner";
+import { playAppSound } from "@/lib/app-sounds";
 import { supabase } from "@/integrations/supabase/client";
 import { pickVideo, type PickedVideo, type TrimFn, type TrimOffer } from "@/lib/video-edit/pick";
 import { planVideo, selectionOf } from "@/lib/video-edit/plan";
@@ -548,6 +549,8 @@ async function runJob(id: string) {
     linkFilmed(job.userId, id, res.id);
     if (!res.existed) {
       toast.success(`${setTitle(job.setIndex)} video sent to your coach`);
+      // the upload took a while: a quick "sent" says it landed (never while the app is away)
+      playAppSound("sent");
       if (res.message_id) void notifyCoach(res.message_id);
     }
   } catch (e) {

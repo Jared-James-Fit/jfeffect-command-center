@@ -3132,7 +3132,9 @@ function WorkoutDay({
                     focusMode={storyOpen}
                     weekIndex={(week as any)?.week_index ?? null}
                     onChange={cardioRow ? refreshCardio : refresh}
-                    startsWorkout={!cardioRow}
+                    /* a finished workout's clock is done: fixing a set never starts it again
+                       (it would play the start cue and stop today's running session) */
+                    startsWorkout={!cardioRow && !completion?.completed_at}
                     onNoteChange={refreshNotes}
                     purposeLabel={purposeLabelById.get(r.id) ?? null}
                     swapContext={swapContextForRow(adapter, dayId, r.id)}

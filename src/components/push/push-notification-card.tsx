@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Bell, BellOff, Smartphone, Share, Plus, CheckCircle2, AlertCircle, Loader2, Volume2, VolumeX, Moon } from "lucide-react";
-import { appSoundsEnabled, setAppSoundsEnabled, subscribeAppSounds } from "@/lib/app-sounds";
+import { Bell, BellOff, Smartphone, Share, Plus, CheckCircle2, AlertCircle, Loader2, Volume2, Moon } from "lucide-react";
+import { SoundSettings } from "@/components/sound-settings";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -83,23 +83,12 @@ function Panel({ bare, className, children }: { bare?: boolean; className?: stri
   return <Card className={"border-border bg-card p-5" + (className ? ` ${className}` : "")}>{children}</Card>;
 }
 
+/** Sounds: the master switch, what plays and how loud (per device, sound-settings.tsx). */
 function AppSoundsCard({ bare = false }: { bare?: boolean }) {
-  const [on, setOn] = useState(true);
-  useEffect(() => {
-    setOn(appSoundsEnabled());
-    return subscribeAppSounds(setOn);
-  }, []);
   return (
     <Panel bare={bare}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <Header icon={on ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />} title="In-App Sounds" />
-          <p className="mt-1 text-xs text-muted-foreground">
-            Soft sounds for new messages, submissions and PRs while the app is open. Follows your phone's silent switch.
-          </p>
-        </div>
-        <Switch checked={on} onCheckedChange={(v) => setAppSoundsEnabled(v)} aria-label="In-app sounds" />
-      </div>
+      <Header icon={<Volume2 className="h-4 w-4" />} title="Sounds" />
+      <SoundSettings className="mt-1" />
     </Panel>
   );
 }
