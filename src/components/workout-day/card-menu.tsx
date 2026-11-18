@@ -87,6 +87,7 @@ export function CardMenu({ name, buttonClassName, children }: { name: string; bu
           <SheetContent
             side="bottom"
             hideCloseButton
+            swipeToClose
             data-card-menu-sheet
             className="max-h-[85dvh] overflow-y-auto overscroll-contain rounded-t-2xl px-2 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] pt-2"
           >
