@@ -71,6 +71,8 @@ import { useEntitlement, useServiceTier } from "@/lib/service-tier";
 import { pushWorkoutNote } from "@/lib/workout-notes";
 import { writeSetEditAudit } from "@/lib/logged-set-audit";
 import { saveExerciseUnitPref, type WUnit } from "@/lib/exercise-unit-prefs";
+import { clearRelabel, markRelabel, relabelIntent, relabeledLoad, unitSwitchAsk, type UnitSwitchAsk } from "@/lib/workouts/unit-relabel";
+import { UnitSwitchSheet } from "@/components/workout-day/unit-switch-sheet";
 import { athleteHabitUnit, isMainLiftFamily, readUnitHabitHint, resolveWorkoutRowUnits, writeUnitHabitHint } from "@/lib/workout-unit-resolution";
 
 /** As long as the copy the app saves on the phone (QUERY_PERSIST_MAX_AGE, 24h). */
@@ -81,6 +83,8 @@ import {
   convertLoad,
   displayLoadInUnit,
   equalDisplayLoads,
+  originalUnit,
+  originalValue,
   persistedLoadForDisplayValue,
 } from "@/lib/workout-unit-persistence";
 import { WorkoutUndoProvider } from "@/lib/workout-undo";
@@ -1733,7 +1737,7 @@ function WorkoutDay({
     [rows, prefRows, historyRows, familyHistoryRows, familyHistoryLoaded, habitHint, unitOverrides, (client as any)?.preferred_weight_unit, (client as any)?.weight_unit_confirmed_at],
   );
 
-  const setExerciseUnit = async (exerciseId: string | null, rowId: string, next: WUnit) => {
+  const setExerciseUnit = async (exerciseId: string | null, rowId: string, next: WUnit, opts?: { relabel?: boolean }) => {
     const rowKey = `row:${rowId}`;
     const key = exerciseId ? `exercise:${exerciseId}` : rowKey;
     const previousOverride = unitOverrides[key];
@@ -1772,9 +1776,18 @@ function WorkoutDay({
       }
     };
     // Undo lives on the confirmation itself — right where the change happened.
-    toast.success(`Now in ${next} for this exercise`, {
+    // Weights kept as typed ("They were lb") go back the same way: the numbers
+    // stay and only their unit returns (unit-relabel.ts).
+    toast.success(opts?.relabel ? `Kept your numbers, now in ${next}` : `Now in ${next} for this exercise`, {
       duration: 5000,
-      action: { label: "Undo", onClick: () => void restorePreviousUnit() },
+      action: {
+        label: "Undo",
+        onClick: () => {
+          if (opts?.relabel) markRelabel(prevUnit);
+          else clearRelabel();
+          void restorePreviousUnit();
+        },
+      },
     });
   };
 
@@ -3095,7 +3108,7 @@ function WorkoutDay({
                     notesLoading={notesLoading}
                     readonly={readonly}
                     unit={unitForRow(r)}
-                    onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? r.exercise_id ?? null, r.id, u)}
+                    onUnitChange={(u, opts) => setExerciseUnit(r.exercises?.id ?? r.exercise_id ?? null, r.id, u, opts)}
                     focusMode={storyOpen}
                     onChange={cardioRow ? refreshCardio : refresh}
                     startsWorkout={!cardioRow}
@@ -3615,7 +3628,7 @@ function PreviousLiftChip({ data, displayUnit, onOpen }: {
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, startsWorkout = true, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; /** Logging here starts the workout's clock (false: the day's cardio, done any time). */ startsWorkout?: boolean; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: TopSetBasis | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, startsWorkout = true, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; /** Logging here starts the workout's clock (false: the day's cardio, done any time). */ startsWorkout?: boolean; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: TopSetBasis | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb", opts?: { relabel?: boolean }) => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -3629,9 +3642,30 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
   // incoming prop so external changes (history hydration, undo) still apply.
   const [activeUnit, setActiveUnit] = useState<"kg" | "lb">(unit);
   useEffect(() => { setActiveUnit(unit); }, [unit]);
-  const handleUnitToggle = (u: "kg" | "lb") => {
+  const warmupSetsRef = useRef<Array<{ load: number; unit: string }>>([]);
+  // A switch the logger makes itself (a "495 lb" pick on a kg card): never asks.
+  const switchUnitNow = (u: "kg" | "lb", opts?: { relabel?: boolean }) => {
+    if (opts?.relabel) markRelabel(u);
+    else clearRelabel();
     setActiveUnit(u);
-    onUnitChange?.(u);
+    onUnitChange?.(u, opts);
+  };
+  // The card's kg | lb: with weights on it in the unit it's leaving, ask
+  // whether they were typed in the other unit (keep the numbers) or should be
+  // converted (unit-relabel.ts); with none, just switch.
+  const [unitAsk, setUnitAsk] = useState<UnitSwitchAsk | null>(null);
+  const handleUnitToggle = (u: "kg" | "lb") => {
+    if (u === activeUnit) return;
+    const weighed = [
+      ...existingResults
+        .filter((r: any) => resolveLoadType(r.load_type, r.is_bodyweight) === "external")
+        .sort((a: any, b: any) => (a.set_index ?? 0) - (b.set_index ?? 0))
+        .map((r: any) => ({ value: Number(r.entered_value ?? r.actual_load), unit: (r.entered_unit ?? r.actual_load_unit) as "kg" | "lb" })),
+      ...warmupSetsRef.current.map((w) => ({ value: Number(w.load), unit: w.unit as "kg" | "lb" })),
+    ];
+    const ask = unitSwitchAsk(weighed, u);
+    if (ask) setUnitAsk(ask);
+    else switchUnitNow(u);
   };
   // Load type default: exercise library metadata (default_load_type) decides
   // whether this exercise opens in Assisted mode. Never hardcode names here.
@@ -4132,7 +4166,16 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
   const warmupAllowed =
     !hideWeight && rowLoadType === "external" && !readonly && adapter?.kind !== "member" && !!clientId;
   const warmupEligible = warmupAllowed && !coachOwnsLoad && !!loadPlan;
-  const { sets: warmupSets, save: saveWarmup, remove: removeWarmup, replaceAll: replaceWarmups, ready: warmupsReady, atLimit: warmupAtLimit } = useWarmupSets(row.id, clientId, adapter?.kind === "client" ? adapter.ref.scheduledWorkoutId ?? null : null);
+  const { sets: warmupSets, save: saveWarmup, remove: removeWarmup, replaceAll: replaceWarmups, relabel: relabelWarmups, ready: warmupsReady, atLimit: warmupAtLimit } = useWarmupSets(row.id, clientId, adapter?.kind === "client" ? adapter.ref.scheduledWorkoutId ?? null : null);
+  warmupSetsRef.current = warmupSets;
+  // "They were lb" on any card of this exercise: its warm-ups keep their numbers too.
+  const warmupUnitRef = useRef(activeUnit);
+  useEffect(() => {
+    if (warmupUnitRef.current === activeUnit) return;
+    warmupUnitRef.current = activeUnit;
+    if (relabelIntent(activeUnit) && !readonly) void relabelWarmups(activeUnit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeUnit]);
   const [warmupForm, setWarmupForm] = useState<string | null>(null);
   // Only the first card of a lift asks for the last warm-up (see warmedUpRowIds).
   const rampsUp = useMemo(() => !warmedUp && offersLastWarmup(family, name), [warmedUp, family, name]);
@@ -4728,6 +4771,14 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
         <div className="min-w-0 flex-1 text-xl font-bold leading-tight tracking-tight break-words" data-exercise-name>{name}</div>
         {/* No weight to log (a walk, a plank): no kg / lb switch either. */}
         {!readonly && onUnitChange && !hideWeight && <UnitSwitch unit={activeUnit} onChange={handleUnitToggle} />}
+        {unitAsk && (
+          <UnitSwitchSheet
+            ask={unitAsk}
+            onKeep={() => { setUnitAsk(null); switchUnitNow(unitAsk.to, { relabel: true }); }}
+            onConvert={() => { setUnitAsk(null); switchUnitNow(unitAsk.to); }}
+            onClose={() => setUnitAsk(null)}
+          />
+        )}
       </div>
       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-muted-foreground">
         <span data-exercise-role>{purposeLabelText(purposeLabel || category)}</span>
@@ -5306,7 +5357,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
               focusMode={focusMode}
               onChange={onChange}
               onSetCompleted={bumpRestTimer}
-              onSwitchUnit={!readonly && onUnitChange && !hideWeight ? handleUnitToggle : undefined}
+              onSwitchUnit={!readonly && onUnitChange && !hideWeight ? switchUnitNow : undefined}
               videoColumn={videoColumn}
               dayTitle={dayTitle}
               registerHandle={registerSetRow}
@@ -6028,6 +6079,15 @@ function SetRow({
     unitPickRef.current = null;
     if (pick && pick.unit === unit && Date.now() - pick.at < UNIT_PICK_WAIT_MS) {
       applyWeightPick(pick);
+      return;
+    }
+    // "They were lb": the number stays exactly as typed and only its unit
+    // changes (unit-relabel.ts). Never adopted as saved, so the row saves it
+    // again in the new unit through its own save, like a weight retyped.
+    if (relabelIntent(unit)) {
+      const kept = relabeledLoad(load, previousUnit, unit, existing ? { value: originalValue(existing as any), unit: originalUnit(existing as any) } : null);
+      if (kept !== load) setLoadPaired(kept);
+      else setLoadUnit(unit);
       return;
     }
     // The toggle changes only the display representation. Convert the visible
@@ -7241,7 +7301,9 @@ function SetRow({
  * use filled: both units on show is what says it can be changed (a lone "LB"
  * read as a label; the filled one is neutral like a picked day, never the
  * brand red). A tap on the other one switches every card of the exercise
- * and remembers it for that exercise; the toast has Undo.
+ * and remembers it for that exercise; the toast has Undo. With weights on
+ * the card in the unit it's leaving it asks first (UnitSwitchSheet): they
+ * were typed in the other unit (keep the numbers) or convert them.
  */
 function UnitSwitch({ unit, onChange }: { unit: "kg" | "lb"; onChange: (u: "kg" | "lb") => void }) {
   const word = (u: "kg" | "lb") => (u === "kg" ? "kilograms" : "pounds");
