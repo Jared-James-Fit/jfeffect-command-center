@@ -11,8 +11,9 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
-import { ChevronDown, MoreHorizontal, Target, Utensils, Zap } from "lucide-react";
+import { AlertTriangle, ChevronDown, MoreHorizontal, Sparkles, Target, Utensils, Zap } from "lucide-react";
 import { structureMealPlanDay, type PlanMacros } from "@/lib/nutrition-targets/meal-plan-structure";
+import { coachCoverageLine, dayCoverage, targetMathLine } from "@/lib/nutrition-targets/plan-coverage";
 import { MEAL_TIMING_LABEL } from "@/lib/nutrition-targets/meal-timing";
 import { AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -262,6 +263,7 @@ export function PlanDaysView({
   waterNote,
   onWater,
   compareLabel = "Now",
+  onFixMeals,
 }: {
   days: PlanViewDay[];
   /** The plan's water, in words ("3.5 L"). */
@@ -272,6 +274,8 @@ export function PlanDaysView({
   onWater?: () => void;
   /** What `was` is called ("Now": their current plan). */
   compareLabel?: string;
+  /** A day whose meals don't cover its targets gets a button that hands the fix to Change it with AI. */
+  onFixMeals?: () => void;
 }) {
   const [picked, setPicked] = useState(0);
   if (!days.length) return null;
@@ -285,6 +289,11 @@ export function PlanDaysView({
   ].filter(Boolean) as TargetExtra[];
   const mealCount = d.meals ? structureMealPlanDay(d.meals).meals.length : 0;
   const delta = d.was?.kcal != null && d.kcal != null ? Math.round(d.kcal - d.was.kcal) : null;
+  // the day's meals against its targets, read from the meals themselves (plan-coverage.ts)
+  const target = { calories: d.kcal, protein: d.protein, carbs: d.carbs, fats: d.fat };
+  const cover = d.meals?.trim() ? dayCoverage(d.meals, target) : null;
+  const short = cover ? coachCoverageLine(cover) : null;
+  const math = targetMathLine(target);
   return (
     <div className="space-y-4" data-plan-days>
       {days.length > 1 ? (
@@ -332,6 +341,12 @@ export function PlanDaysView({
             voice="coach"
           />
         </div>
+        {math ? (
+          <p className="flex items-start gap-1.5 text-[13px] text-warning" data-plan-target-math>
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            <span>{math}. Edit the plan to make them agree.</span>
+          </p>
+        ) : null}
         {d.was ? (
           <p className="text-[13px] tabular-nums text-muted-foreground" data-plan-compare>
             {compareLabel}: {fmt(d.was.kcal)} kcal · P {fmt(d.was.protein)} · C {fmt(d.was.carbs)} · F {fmt(d.was.fat)}
@@ -345,8 +360,27 @@ export function PlanDaysView({
       <section className="space-y-2 border-t border-border pt-4" data-plan-meals aria-label={`${d.label} meal plan`}>
         <h4 className="flex items-center gap-1.5 text-[15px] font-semibold">
           <Utensils className="h-4 w-4 text-muted-foreground" aria-hidden /> Meal plan
-          {mealCount ? <span className="font-normal text-muted-foreground">· {mealCount} {mealCount === 1 ? "meal" : "meals"}</span> : null}
+          {mealCount ? (
+            <span className="font-normal text-muted-foreground">
+              · {mealCount} {mealCount === 1 ? "meal" : "meals"}
+              {cover?.meals ? ` · ${cover.meals.kcal.toLocaleString("en-US")} kcal` : ""}
+              {cover?.flexible ? ` + ${cover.flexible.toLocaleString("en-US")} flexible` : ""}
+            </span>
+          ) : null}
         </h4>
+        {short ? (
+          <div className="space-y-2 rounded-xl border border-warning/40 px-3 py-2.5" data-plan-meals-short>
+            <p className="flex items-start gap-2 text-[13px]">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+              <span>{short}. The client sees the same.</span>
+            </p>
+            {onFixMeals ? (
+              <Button variant="outline" className="h-10 gap-1.5" onClick={onFixMeals}>
+                <Sparkles className="h-4 w-4" aria-hidden /> Fix the meals with AI
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
         {d.meals?.trim() ? (
           <DayMeals text={d.meals} />
         ) : (

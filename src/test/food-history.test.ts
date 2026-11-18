@@ -232,7 +232,7 @@ describe("a written plan never holds an allergen on file", () => {
   it("the coach sees it first in Check before publishing and in the AI change review", () => {
     const panel = read("src/components/nutrition/NutritionRequestPanel.tsx");
     expect(panel).toContain("Against what's on file: ${allergenConflictLine(allergyHits, onFile)}");
-    expect(panel).toContain("return [...allergy, ...out");
+    expect(panel).toContain("return [...allergy, ...meals, ...foods, ...out");
     expect(read("src/components/nutrition/PlanAiChange.tsx")).toContain("data-plan-ai-allergen");
     expect(read("src/lib/nutrition-ai-plans.server.ts")).toContain("mi.foodAllergens ?? []");
     expect(read("src/lib/nutrition-plan-edits.server.ts")).toContain("food.allergens,");

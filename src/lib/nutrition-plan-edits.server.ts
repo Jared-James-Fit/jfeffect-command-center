@@ -20,6 +20,7 @@ import {
 import { WaitingForModel, type CallState } from "@/lib/ai/staged-call.server";
 import { parseMealPlan } from "@/lib/nutrition-targets/meal-plan-parse";
 import { plainOrNull } from "@/lib/nutrition-targets/plain-paste";
+import { withHonestTotals } from "@/lib/nutrition-targets/plan-coverage";
 import {
   planAsMealPlanText,
   planAsTargetsText,
@@ -181,8 +182,9 @@ export async function runPlanEdit(sb: any, editId: string) {
       throw new Error(
         "The AI's answer didn't come back as a meal plan. Try wording the change differently",
       );
-    // the coach's words win, but a specialty food the AI brought in on its own goes back once
-    const mealPlanText = await withShelfFix(
+    // the coach's words win, but a specialty food the AI brought in on its own goes back once;
+    // and every Daily Total is what its meals add up to (the review reads the meals, plan-coverage.ts)
+    const mealPlanText = withHonestTotals(await withShelfFix(
       row.before_meal_plan_text,
       answered,
       mealPrompt,
@@ -198,7 +200,7 @@ export async function runPlanEdit(sb: any, editId: string) {
         ).then((r) => r.text),
       [...qas, { value: row.instructions }, ...(foodNotes ? [{ value: foodNotes }] : [])],
       food.allergens,
-    );
+    ));
     const want = parseMealPlan(row.before_meal_plan_text).length;
     const got = parseMealPlan(mealPlanText).length;
     if (want !== got)

@@ -8,6 +8,8 @@ import {
   stripTimingText,
   type MealTiming,
 } from "@/lib/nutrition-targets/meal-timing";
+import { macroItems, readMacroLine } from "@/lib/nutrition-targets/macro-line";
+import { FLEX_HEADING } from "@/lib/nutrition-targets/meal-plan-structure";
 
 type Props = {
   text?: string | null;
@@ -144,6 +146,28 @@ export function parseMealPlanText(text: string): MealPlanSection[] {
         approxBuf.push(normalizeMacro(line));
         continue;
       }
+    }
+    // Flexible calories: the day's own section after the meals, never a food in the last meal.
+    if (FLEX_HEADING.test(line)) {
+      flushApprox();
+      flushApproxBlock();
+      cur = { kind: "other", items: [line] };
+      sections.push(cur);
+      continue;
+    }
+    // Macros written on one line ("36 g protein, 65 g carbohydrates, 12 g fat", "41 g protein / 68 g carbs / 24 g fat"):
+    // the meal's macros, never a food (the coach's plan view, the PDF and the food log read them the same way).
+    const oneLine = cur?.kind === "meal" || cur?.kind === "total" ? readMacroLine(line) : null;
+    if (oneLine) {
+      flushApprox();
+      if (cur?.kind === "meal") {
+        cur.approxMacros ??= { title: "Approximate macros", items: [] };
+        cur.approxMacros.items.push(...macroItems(oneLine));
+        collectingApproxBlock = true;
+      } else if (cur?.kind === "total") {
+        cur.macros = cur.macros ? `${cur.macros} / ${line}` : line;
+      }
+      continue;
     }
     // Regular item line — exit any approx block first
     if (collectingApproxBlock) flushApproxBlock();
