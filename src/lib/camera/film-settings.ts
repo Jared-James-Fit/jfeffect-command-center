@@ -178,16 +178,17 @@ export function saveFilmAsk(shape: AskShape, storage: Pick<Storage, "setItem"> |
 }
 
 /**
- * How hard to record (bits a second). Close to what the phone's own camera
- * uses for the same picture (an iPhone films 1080p30 at ~10 Mbps in H.264,
- * 4K30 at ~25+): the clip is cut and shrunk for where it goes later, so the
- * recording itself should be clean.
+ * How hard to record (bits a second). Clean, close to what a phone's own
+ * camera gives the same picture (an iPhone films 1080p30 at ~10 Mbps in
+ * H.264, 4K30 at ~25+), and sized so the usual set goes straight into the
+ * Crew film whole: 1080p30 at ~6 Mbps keeps a minute under a workout post's
+ * 50 MB, with no copy to wait for (a 4K clip is for saving to Photos).
  */
 export function recorderBitrate(width: number, height: number, fps: number): number {
   const px = Math.max(1, width) * Math.max(1, height);
   const rate = Math.min(Math.max(fps || 30, 15), 60);
-  // bits per pixel: a little less as the picture grows (4K compresses better)
-  const bpp = px >= 3840 * 2160 * 0.9 ? 0.1 : px >= 1920 * 1080 * 0.9 ? 0.135 : 0.17;
+  // bits per pixel: less for a big picture (it compresses better)
+  const bpp = px >= 1920 * 1080 * 0.9 ? 0.1 : 0.17;
   return Math.round(Math.min(40_000_000, Math.max(4_000_000, px * rate * bpp)));
 }
 

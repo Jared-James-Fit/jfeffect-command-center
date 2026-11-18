@@ -77,10 +77,13 @@ export type FilmLeftOut = {
 const more = (n: number, one: string, many: string) => `${n} more ${n === 1 ? one : many}`;
 const stays = (n: number) => (n === 1 ? "stays" : "stay");
 
+/** While a copy is made: on the server nothing waits on the phone; on the phone it needs the app open. */
+const readyWords = (server: boolean) => (server ? "getting ready for Crew. It's added in a minute or two." : "getting ready for Crew. Keep the app open a minute or two.");
+
 /** Under a film with clips in its post: what's on film but not in it, and why (only what's true). */
-export function filmNotes(f: FilmLeftOut): string[] {
+export function filmNotes(f: FilmLeftOut, opts: { server?: boolean } = {}): string[] {
   const out: string[] = [];
-  if (f.preparing > 0) out.push(`${more(f.preparing, "is", "are")} getting ready for Crew. Keep the app open a minute or two.`);
+  if (f.preparing > 0) out.push(`${more(f.preparing, "is", "are")} ${readyWords(!!opts.server)}`);
   if (f.tooLong > 0) out.push(`${f.tooLong} over 90 seconds ${stays(f.tooLong)} in your coach chat only`);
   if (f.tooBig > 0) out.push(`${f.tooBig} too big for Crew ${stays(f.tooBig)} in your coach chat only`);
   if (f.overMax > 0) out.push(`${more(f.overMax, "stays", "stay")} in your coach chat (a post holds 10)`);
@@ -88,8 +91,8 @@ export function filmNotes(f: FilmLeftOut): string[] {
 }
 
 /** A film none of whose clips fit a post yet: why. */
-export function filmLeftOutStatus(f: FilmLeftOut): string {
-  if (f.preparing > 0) return "Getting it ready for Crew. Keep the app open a minute or two.";
+export function filmLeftOutStatus(f: FilmLeftOut, opts: { server?: boolean } = {}): string {
+  if (f.preparing > 0) return opts.server ? "Getting it ready for Crew. It's added in a minute or two." : "Getting it ready for Crew. Keep the app open a minute or two.";
   if (f.tooLong > 0) return "Over 90 seconds, so it stays in your coach chat";
   return "Too big for Crew, so it stays in your coach chat";
 }

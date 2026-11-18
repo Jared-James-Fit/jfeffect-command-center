@@ -104,10 +104,12 @@ describe("full screen like a reel: the picture is 9:16 upright", () => {
 });
 
 describe("how hard it records and for how long", () => {
-  it("about a phone camera's own bitrate: ~8 Mbps 1080p30, more at 60 and 4K, never under 4", () => {
+  it("clean and sized for Crew: ~6 Mbps 1080p30 (a minute fits a workout post's 50 MB whole), more at 60 and 4K, never under 4", () => {
     const p1080 = recorderBitrate(1080, 1920, 30);
-    expect(p1080).toBeGreaterThan(7_000_000);
-    expect(p1080).toBeLessThan(10_000_000);
+    expect(p1080).toBeGreaterThan(5_500_000);
+    expect(p1080).toBeLessThan(7_000_000);
+    // a 60-second set at 1080p30 with sound goes into the film as it is
+    expect(((p1080 + 128_000) * 60) / 8).toBeLessThan(50 * 1024 * 1024);
     expect(recorderBitrate(1080, 1920, 60)).toBeGreaterThan(p1080 * 1.8);
     expect(recorderBitrate(2160, 3840, 30)).toBeGreaterThan(20_000_000);
     expect(recorderBitrate(480, 360, 30)).toBe(4_000_000);

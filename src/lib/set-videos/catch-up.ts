@@ -26,6 +26,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { FILM_CLIP_MAX_BYTES, FILM_CLIP_MAX_S, FILM_MAX_SLIDES } from "@/lib/workout-film";
 import { FEED_COPY_CATCH_UP_EVENT } from "@/lib/set-videos/catch-up-event";
+import { serverCopiesOn } from "@/lib/set-videos/server-copy-flag";
+import { SERVER_COPY_GRACE_MS } from "@/lib/set-videos/server-copy";
 
 export { FEED_COPY_CATCH_UP_EVENT };
 
@@ -136,11 +138,18 @@ export function resetCatchUpOpen() {
   takenThisOpen.clear();
 }
 
-/** The athlete's own recent set videos the film leaves out for their size, with no copy yet (one small read). */
+/**
+ * The athlete's own recent set videos the film leaves out for their size, with
+ * no copy yet (one small read). While the server makes copies
+ * (server-copy-flag.ts), only a clip it still hasn't done after
+ * SERVER_COPY_GRACE_MS is the phone's.
+ */
 export async function findCatchUpClips(uid: string): Promise<CatchUpClip[]> {
   if (catchUpCheckedRecently(uid)) return [];
   const since = new Date(Date.now() - CATCH_UP_DAYS * 86_400_000).toISOString();
-  const { data, error } = await (supabase as any)
+  const server = await serverCopiesOn();
+  const until = server ? new Date(Date.now() - SERVER_COPY_GRACE_MS).toISOString() : null;
+  let q = (supabase as any)
     .from("pl_set_videos")
     .select("id, client_id, storage_path, size_bytes, duration_s, mime")
     .eq("uploaded_by", uid)
@@ -149,9 +158,9 @@ export async function findCatchUpClips(uid: string): Promise<CatchUpClip[]> {
     // a warm-up's clip (set 0) is never in the film
     .gt("set_index", 0)
     .gt("size_bytes", FILM_CLIP_MAX_BYTES)
-    .gte("created_at", since)
-    .order("created_at", { ascending: true })
-    .limit(FILM_MAX_SLIDES * 2);
+    .gte("created_at", since);
+  if (until) q = q.lte("created_at", until);
+  const { data, error } = await q.order("created_at", { ascending: true }).limit(FILM_MAX_SLIDES * 2);
   if (error) return [];
   const clips = ((data ?? []) as CatchUpClip[]).filter(
     (c) => leftOutForSize(c) && catchUpJobId(c.client_id, c.storage_path),

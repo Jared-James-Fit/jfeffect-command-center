@@ -44,7 +44,7 @@ export function WorkoutFilmRow({
   const film = useWorkoutFilm(completionId, dayId, { auto });
   if (!completionId || (!film.clips && !film.uploading)) return null;
 
-  const notes = filmNotes(film);
+  const notes = filmNotes(film, { server: film.serverCopies });
   let status: React.ReactNode;
   let action: React.ReactNode = null;
   if (film.uploading > 0) {
@@ -79,7 +79,7 @@ export function WorkoutFilmRow({
       </Button>
     ) : null;
   } else if (film.postable === 0) {
-    status = filmLeftOutStatus(film);
+    status = filmLeftOutStatus(film, { server: film.serverCopies });
   } else if (film.autoOn === false && !film.hidden) {
     // their choice: Coach only (every clip is already in the coach chat)
     status = (
