@@ -6,11 +6,12 @@
 import { DEVELOPMENT_RULES } from "@/lib/program-intel/athlete-development";
 import { TRAINING_LOAD_RULES } from "@/lib/program-intel/training-load-intel";
 import { EXERCISE_STANDARD } from "@/lib/program-intel/exercise-standard";
+import { flowStation } from "@/lib/program-intel/accessory-flow";
 import { dayMinutes, dayName, lockReason, rxLine, type EngineCtx } from "./engine";
 import type { RuleKind } from "./ops";
 import type { CatalogExercise, ProgramSnapshot } from "./types";
 
-export const EDIT_PROMPT_VERSION = 6;
+export const EDIT_PROMPT_VERSION = 7;
 
 export type RuleLine = { kind: RuleKind; rule: string; expiresOn: string | null; scope: "athlete" | "all" };
 
@@ -61,7 +62,9 @@ export function programText(snap: ProgramSnapshot, ctx: EngineCtx): string {
         out.push(`${head}${mins ? ` · ~${mins} min` : ""}`);
         for (const r of d.rows) {
           const tag = r.cardio ? "[cardio plan: not editable]" : r.exerciseId ? `[${codeOf.get(r.exerciseId) ?? "?"}]` : "[not a library exercise]";
-          out.push(`      ${r.ref.slice(d.ref.length)} ${tag} ${r.name} · ${rxLine(r)}${r.purposeLabel ? ` · ${r.purposeLabel}` : ""}`);
+          // where it's done, so additions can join a station the workout already uses
+          const station = r.cardio ? null : flowStation(r.name, r.exerciseId ? ctx.byId.get(r.exerciseId)?.equipment ?? null : null);
+          out.push(`      ${r.ref.slice(d.ref.length)} ${tag} ${r.name} · ${rxLine(r)}${r.purposeLabel ? ` · ${r.purposeLabel}` : ""}${station ? ` · @${station}` : ""}`);
         }
       }
     }
@@ -87,6 +90,7 @@ HOW YOU THINK
 - Simple, effective, repeatable exercises are the default (pulldowns, cable / chest-supported / machine rows, lateral raises, reverse pec deck, leg extensions, leg curls, belt squats, split squats, calf raises, pressdowns, overhead extensions, curls, ab work, plus the competition lifts and their close variations). No novelty, no exercises added to look sophisticated, no junk volume. Best stimulus for the least fatigue.
 - Powerlifting: competition specificity, primary and secondary exposures per lift, intensity distribution, top sets and back-offs, RPE/RIR autoregulation, percentages only where a max is on file, weak points, fatigue management, accumulation → intensification → realization, peaking and taper to the real meet date. Pick the structure that fits the athlete and the timeline; no fixed periodization model.
 - Hypertrophy: per-muscle weekly hard sets, stable loadable exercises, full ROM and lengthened loading where it fits, proximity to failure, redundancy, recovery between sessions, session efficiency.
+- Session flow (each exercise line ends with where it's done: @barbell, @dumbbells, @cable, @machine; no tag = anywhere): the main lifts keep the order performance needs, never moved for convenience. When you add or swap an accessory and two options train the target about equally well, pick the one at a station the workout already uses or with less setup, and place it with the other work at its station, after the main lifts, without breaking training order (compounds before isolation work for the same muscles, a priority muscle early). Fewer stations, not less work. Don't reorder a workout the coach didn't ask you to touch; an open instruction ("optimize", "make the sessions faster") may propose grouping accessories by station as its own change.
 - ${EXERCISE_STANDARD.replace(/\n+/g, " ")}
 
 THE ATHLETE, NOT JUST THE NUMBERS

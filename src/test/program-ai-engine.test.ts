@@ -423,3 +423,25 @@ describe("10. templates: the payload changes, nothing else", () => {
     expect(c.ok).toBe(false);
   });
 });
+
+describe("Edit with AI: session flow", () => {
+  const pushdown: CatalogExercise = { code: "X10", id: "ex-X10", name: "Cable Triceps Pushdown", muscle: "Triceps", equipment: "Cable", family: null, video: true, timeProfile: "accessory_isolation", defaultRest: 75, standard: null };
+  const ctx2: EngineCtx = { catalog: new Map([...ctx.catalog, ["X10", pushdown]]), byId: new Map([...ctx.byId, [pushdown.id, pushdown]]) };
+  const flowWarnings = (c: { issues: Array<{ text: string }> }) => c.issues.filter((i) => /goes back to the|go back to a station/.test(i.text)).map((i) => i.text);
+
+  it("the program the model reads says where each exercise is done", () => {
+    const text = programText(client(), ctx2);
+    expect(text).toContain("Lat Pulldown · 3 × 12 @RPE 8 · rest 2:00 · @cable");
+    expect(text).not.toContain("Treadmill Walk · 1 × 10:00 · @");
+  });
+
+  it("warns when an added accessory sends them back to a station the workout already left, and not when it joins it", () => {
+    const s = client();
+    const scattered = change("c1", [{ op: "add", days: ["B1W2D2"], exercise: "X6", position: 3, set: { sets: 3, reps: "15", rpe: "8" } }, { op: "add", days: ["B1W2D2"], exercise: "X10", position: 4, set: { sets: 3, reps: "12", rpe: "8" } }]);
+    const [bad] = resolveChanges(s, [scattered], ctx2);
+    expect(flowWarnings(bad)).toEqual(["Week 2 · Upper · Mon, Nov 16: Cable Triceps Pushdown goes back to the cable after the workout already left it. Put it with the other cable work unless the order is on purpose."]);
+    const grouped = change("c1", [{ op: "add", days: ["B1W2D2"], exercise: "X10", position: 3, set: { sets: 3, reps: "12", rpe: "8" } }, { op: "add", days: ["B1W2D2"], exercise: "X6", position: 4, set: { sets: 3, reps: "15", rpe: "8" } }]);
+    const [good] = resolveChanges(client(), [grouped], ctx2);
+    expect(flowWarnings(good)).toEqual([]);
+  });
+});

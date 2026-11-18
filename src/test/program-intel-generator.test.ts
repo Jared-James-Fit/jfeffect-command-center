@@ -305,6 +305,12 @@ describe("Program quality audit and scorecard", () => {
     expect(a.overall).not.toBe("failed");
     expect(a.sessions.filter((x) => x.week === 1)).toHaveLength(4);
   });
+  it("what the station grouping moved is said under Session practicality, never as a problem", () => {
+    const a = auditProgram({ ...input(good()), flowNotes: ["Lower A: Hip Thrust - Barbell moved up to follow the main lift at the same setup (3 → 1 station change after the main lifts)."] });
+    const row = a.scorecard.find((r) => r.criterion === "practicality")!;
+    expect(row.reasons).toContain("Grouped by station: Lower A: Hip Thrust - Barbell moved up to follow the main lift at the same setup (3 → 1 station change after the main lifts).");
+    expect(a.findings.filter((f) => f.text.startsWith("Grouped by station")).every((f) => f.status === "passed")).toBe(true);
+  });
   it("equipment they don't have, two cable exercises in one superset, and an over-long session fail, located for repair", () => {
     const p = good();
     p.blocks[0].days[0].exercises.push(exr("e-legpress", "Leg Press"));
