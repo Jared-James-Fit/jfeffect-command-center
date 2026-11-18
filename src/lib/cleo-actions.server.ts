@@ -197,6 +197,7 @@ export async function actionLink(db: any, kind: CleoActionKind, p: any): Promise
         return training(data?.client_id);
       }
       case "move_workout": {
+        if (!p.workout_id) return training(await clientOfDay(db, p.day_id));
         const { data } = await db.from("pl_scheduled_workouts").select("client_id").eq("id", p.workout_id).maybeSingle();
         return training(data?.client_id);
       }
