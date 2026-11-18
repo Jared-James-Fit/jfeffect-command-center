@@ -254,6 +254,7 @@ import { Route as ApiPublicHooksAutoPaySendRouteImport } from './routes/api/publ
 import { Route as ApiPublicHooksBirthdayNotificationsRouteImport } from './routes/api/public/hooks/birthday-notifications'
 import { Route as ApiPublicHooksCleanupPendingSignupsRouteImport } from './routes/api/public/hooks/cleanup-pending-signups'
 import { Route as ApiPublicHooksCleoAttachmentsSweepRouteImport } from './routes/api/public/hooks/cleo-attachments-sweep'
+import { Route as ApiPublicHooksCleoBenchRouteImport } from './routes/api/public/hooks/cleo-bench'
 import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/api/public/hooks/client-calendars-tick'
 import { Route as ApiPublicHooksDailyVisualsTickRouteImport } from './routes/api/public/hooks/daily-visuals-tick'
 import { Route as ApiPublicHooksFeedCopiesTickRouteImport } from './routes/api/public/hooks/feed-copies-tick'
@@ -1710,6 +1711,11 @@ const ApiPublicHooksCleoAttachmentsSweepRoute =
     path: '/api/public/hooks/cleo-attachments-sweep',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksCleoBenchRoute = ApiPublicHooksCleoBenchRouteImport.update({
+  id: '/api/public/hooks/cleo-bench',
+  path: '/api/public/hooks/cleo-bench',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksClientCalendarsTickRoute =
   ApiPublicHooksClientCalendarsTickRouteImport.update({
     id: '/api/public/hooks/client-calendars-tick',
@@ -2235,6 +2241,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
+  '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
@@ -2527,6 +2534,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
+  '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
@@ -2825,6 +2833,7 @@ export interface FileRoutesById {
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
+  '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
@@ -3123,6 +3132,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
+    | '/api/public/hooks/cleo-bench'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/feed-copies-tick'
@@ -3415,6 +3425,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
+    | '/api/public/hooks/cleo-bench'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/feed-copies-tick'
@@ -3712,6 +3723,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
+    | '/api/public/hooks/cleo-bench'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/feed-copies-tick'
@@ -3841,6 +3853,7 @@ export interface RootRouteChildren {
   ApiPublicHooksBirthdayNotificationsRoute: typeof ApiPublicHooksBirthdayNotificationsRoute
   ApiPublicHooksCleanupPendingSignupsRoute: typeof ApiPublicHooksCleanupPendingSignupsRoute
   ApiPublicHooksCleoAttachmentsSweepRoute: typeof ApiPublicHooksCleoAttachmentsSweepRoute
+  ApiPublicHooksCleoBenchRoute: typeof ApiPublicHooksCleoBenchRoute
   ApiPublicHooksClientCalendarsTickRoute: typeof ApiPublicHooksClientCalendarsTickRoute
   ApiPublicHooksDailyVisualsTickRoute: typeof ApiPublicHooksDailyVisualsTickRoute
   ApiPublicHooksFeedCopiesTickRoute: typeof ApiPublicHooksFeedCopiesTickRoute
@@ -5597,6 +5610,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksCleoAttachmentsSweepRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/cleo-bench': {
+      id: '/api/public/hooks/cleo-bench'
+      path: '/api/public/hooks/cleo-bench'
+      fullPath: '/api/public/hooks/cleo-bench'
+      preLoaderRoute: typeof ApiPublicHooksCleoBenchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/client-calendars-tick': {
       id: '/api/public/hooks/client-calendars-tick'
       path: '/api/public/hooks/client-calendars-tick'
@@ -6658,6 +6678,7 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksCleanupPendingSignupsRoute,
   ApiPublicHooksCleoAttachmentsSweepRoute:
     ApiPublicHooksCleoAttachmentsSweepRoute,
+  ApiPublicHooksCleoBenchRoute: ApiPublicHooksCleoBenchRoute,
   ApiPublicHooksClientCalendarsTickRoute:
     ApiPublicHooksClientCalendarsTickRoute,
   ApiPublicHooksDailyVisualsTickRoute: ApiPublicHooksDailyVisualsTickRoute,

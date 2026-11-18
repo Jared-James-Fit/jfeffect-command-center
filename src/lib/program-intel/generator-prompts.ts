@@ -160,7 +160,7 @@ export const LOADING_RULES = `- Loading method, per exercise, decided like a coa
 /** How many stations a session's accessories should aim for, by its length (a guide, never a check). */
 export function accessoryStationsLine(minutes: number | null): string {
   const n = minutes == null ? 3 : minutes <= 45 ? 2 : minutes <= 75 ? 3 : 4;
-  return `aim for at most ${n} accessory station${n === 1 ? "" : "s"} besides the main lift's${minutes ? ` (a ${minutes}-min session)` : ""}, more only when the work truly needs it.`;
+  return `aim for at most ${n} accessory stations besides the main lift's${minutes ? ` (a ${minutes}-min session)` : ""}, more only when the work truly needs it.`;
 }
 
 export function constructUserPrompt(x: {

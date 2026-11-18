@@ -2,6 +2,7 @@
  * Program history: Cleo's program changes keep a restore point and Undo puts
  * the day back, without ever touching a day the client has trained.
  */
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Row = Record<string, any>;
@@ -152,18 +153,52 @@ describe("Cleo program history", () => {
 });
 
 describe("Cleo's models", () => {
-  it("uses a model the gateway takes on /v1/chat/completions (not Claude)", async () => {
-    const { CLEO_PRIMARY_MODEL } = await import("@/lib/summer.server");
-    expect(CLEO_PRIMARY_MODEL).not.toMatch(/^anthropic\//);
+  it("her brain is the routing table's assistant route: the OpenAI key, a fallback, never Lovable credits by default", async () => {
+    const { cleoRoute } = await import("@/lib/cleo-model.server");
+    const r = cleoRoute(null);
+    expect(r.models.length).toBeGreaterThan(1);
+    for (const m of r.models) expect(m).toMatch(/^openai:/);
+    // an admin override wins, and a benchmark's list and effort replace the route's
+    expect(cleoRoute({ assistant: ["gateway:google/gemini-3-flash-preview"] }).models).toEqual(["gateway:google/gemini-3-flash-preview"]);
+    expect(cleoRoute(null, { models: ["openai:gpt-5-mini"], effort: "medium" })).toMatchObject({ models: ["openai:gpt-5-mini"], effort: "medium" });
+    expect(cleoRoute(null, { models: ["not a model"] }).models).toEqual(r.models);
   });
 
-  it("tries the strongest model first, then falls back", async () => {
-    const { cleoModels } = await import("@/lib/summer.server");
-    const list = cleoModels("anthropic/x", "google/gemini-3-flash-preview");
-    expect(list[0]).toBe("anthropic/x");
-    expect(list).toContain("google/gemini-3-flash-preview");
-    expect(list[list.length - 1]).toBe("google/gemini-2.5-flash");
-    expect(new Set(list).size).toBe(list.length);
+  it("on the OpenAI key: Responses API, reasoning carried between look-ups, nothing stored, a per-person cache", async () => {
+    const prev = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "test";
+    try {
+      const { cleoModel } = await import("@/lib/cleo-model.server");
+      const m = await cleoModel("openai:gpt-5.5", { effort: "low", userId: "u1" });
+      expect(m.providerOptions?.openai).toMatchObject({ store: false, reasoningEffort: "low", include: ["reasoning.encrypted_content"], promptCacheKey: "cleo:u1" });
+      expect(String(m.model.provider)).toContain("responses");
+      const mini = await cleoModel("openai:gpt-4.1-mini", { effort: "low", userId: "u1" });
+      expect(mini.providerOptions?.openai.reasoningEffort).toBeUndefined();
+    } finally {
+      process.env.OPENAI_API_KEY = prev;
+    }
+  });
+
+  it("moves to the next model when one is refused, rate limited, down or slow; never when the account is out of credit", async () => {
+    const { cleoFailure } = await import("@/lib/cleo-model.server");
+    expect(cleoFailure({ statusCode: 500 }).retry).toBe(true);
+    expect(cleoFailure({ statusCode: 429 }).retry).toBe(true);
+    expect(cleoFailure({ name: "TimeoutError" }).retry).toBe(true);
+    expect(cleoFailure({ statusCode: 401 }).retry).toBe(false);
+    expect(cleoFailure({ statusCode: 429, responseBody: '{"error":{"code":"insufficient_quota"}}' })).toMatchObject({ retry: false, quota: true });
+  });
+
+  it("the answer path reads its context at once and keeps the time with the question, so the prompt caches", () => {
+    const server = readFileSync("src/lib/summer.server.ts", "utf8");
+    expect(server).not.toContain("createOpenAICompatible");
+    expect(server).toContain("cleoRoute(override, opts.bench ?? null)");
+    // the books and the owed read run alongside the rest, not after it
+    expect(server).toContain("const [booksPart, app, links, history");
+    const system = server.slice(server.indexOf("const system = ["), server.indexOf('].join("\\n");', server.indexOf("const system = [")));
+    expect(system.indexOf("buildVoicePrompt")).toBeLessThan(system.indexOf("booksSection"));
+    expect(system.indexOf("booksSection")).toBeLessThan(system.indexOf("buildAppContext"));
+    expect(system).not.toContain("toLocaleString");
+    expect(server).toContain("const ask = `${now}\\n${input.message.trim()");
   });
 });
 

@@ -25,6 +25,7 @@ const TASK_LABEL: Record<string, string> = {
   meal_estimate: "AI food log (members and clients, metered by AI credits)",
   form_draft: "Draft a form with AI",
   coach_write: "Check-in recaps, reply drafts, lead texts, inbox Brief",
+  assistant: "Cleo (chat and voice, with live look-ups)",
 };
 
 /** Admin only: which models run the coaching AI, whether they're reachable, and how the calls have gone. Nothing here changes a program. */
