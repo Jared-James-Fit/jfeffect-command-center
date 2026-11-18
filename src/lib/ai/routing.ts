@@ -15,7 +15,7 @@
  */
 import type { Effort } from "./model-client.server";
 
-export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write";
+export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant";
 export type Route = {
   /** Tried in order. */
   models: string[];
@@ -83,6 +83,14 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
    * GPT-5.5 backs it up.
    */
   coach_write: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "low", maxOutputTokens: 6_000, strongOnly: false },
+  /**
+   * Cleo, the admin assistant (summer.server.ts, Nov 18 2026): one conversation with live look-ups and
+   * the cards the person confirms, answered while they wait (chat and voice). It ran on Lovable credits
+   * (GPT-5.5 through the gateway's chat completions, which drop the model's reasoning between tool
+   * steps, then Gemini Flash); on the OpenAI key it uses the Responses API, which keeps the reasoning
+   * across look-ups (cleo-model.server.ts). Effort from the Nov 18 live benchmark (cleo-bench hook).
+   */
+  assistant: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "low", strongOnly: false },
 };
 
 /**
