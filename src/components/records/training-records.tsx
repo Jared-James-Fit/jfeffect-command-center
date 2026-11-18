@@ -66,12 +66,18 @@ function RecordLoad({ kg, setId, unit, setUnit }: { kg: number; setId: string; u
   );
 }
 
-export function NewRecordsSection({ records, unit, setUnit }: { records: WorkoutRecords; unit: "kg" | "lb"; setUnit?: (setId: string) => "kg" | "lb" | null }) {
+export function NewRecordsSection({ records, unit, setUnit, highlight }: {
+  records: WorkoutRecords;
+  unit: "kg" | "lb";
+  setUnit?: (setId: string) => "kg" | "lb" | null;
+  /** Amber only for a headline PR (the recap's `lead`); without it, any all-time record. */
+  highlight?: boolean;
+}) {
   const reps = records.records ?? [];
   const loads = records.load_records ?? [];
   const tonLabel = tonnageRecordLabel(records.tonnage);
   if (reps.length === 0 && loads.length === 0 && !tonLabel) return null;
-  const hasAtpr = reps.some((r) => r.atpr) || loads.some((r) => r.atpr) || records.tonnage?.atpr;
+  const hasAtpr = highlight ?? (reps.some((r) => r.atpr) || loads.some((r) => r.atpr) || records.tonnage?.atpr);
   return (
     <section className={cn("relative overflow-hidden rounded-2xl border p-3.5 animate-in zoom-in-95 fade-in duration-700",
       hasAtpr ? "border-amber-500/50 bg-amber-500/[0.08]" : "border-border bg-card")}>

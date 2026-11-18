@@ -536,8 +536,11 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const s = post.stats;
   const lift = s ? featuredLift(s) : null;
   const stats = s ? workoutStats(s, unit) : [];
-  // a workout's PRs as one pill: "3 PRs", else the one record's scope ("All-time PR")
+  // a workout's PRs as one pill: "3 PRs", else the one record's scope ("All-time PR"); amber with the
+  // trophy only when one is the headline PR (headlinePr: the main lift's, or a barbell squat / bench /
+  // deadlift's, at 10 reps or fewer), else said quietly (an accessory's rep best is progress, not news)
   const prLabel = !s ? null : s.pr_count > 1 ? `${s.pr_count} PRs` : lift?.pr ? SCOPE_WORD[lift.pr] : s.pr_count === 1 ? "PR" : null;
+  const prLoud = !!lift?.pr;
   const isNote = post.kind === "note";
   // the daily series, lessons, holidays, birthdays: a picture, then the words (Instagram's layout)
   const auto = isAutoPost(post);
@@ -775,8 +778,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
                   >
                     {prLabel ? (
                       <>
-                        <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-warning" data-page-prs>
-                          <Trophy className="h-3.5 w-3.5" aria-hidden />
+                        <span className={cn("inline-flex shrink-0 items-center gap-1 font-semibold", prLoud ? "text-warning" : "text-foreground/80")} data-page-prs={prLoud ? "headline" : "quiet"}>
+                          {prLoud ? <Trophy className="h-3.5 w-3.5" aria-hidden /> : <Dumbbell className="h-3.5 w-3.5 opacity-80" aria-hidden />}
                           {prLabel}
                         </span>
                         <span className="shrink-0 opacity-40" aria-hidden>·</span>

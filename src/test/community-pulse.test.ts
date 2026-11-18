@@ -32,10 +32,11 @@ describe("Pulse: a finished workout posts itself, with its real win", () => {
     expect(sql).toContain("AND coalesce(cl.portal_access_disabled, false) = false;");
     expect(sql).toContain("IF NEW.completed_at < now() - interval '2 days' THEN RETURN NULL; END IF;");
     expect(sql).toContain("coalesce(v_hide, false)");
-    // the switch lives in Edit profile → Privacy
-    const privacy = read("src/components/community/privacy-settings.tsx");
-    expect(privacy).toContain("Off: a workout goes on your story only when you tap Share to Story.");
-    expect(read("src/components/community/profile-edit.tsx")).toContain("<ShareWorkoutsRow />");
+    // and since Nov 18 2026 there's no automatic story at all: the trigger is gone, and so is the switch
+    const gone = read("supabase/migrations/20270409090000_no_automatic_stories.sql");
+    expect(gone).toContain("DROP TRIGGER IF EXISTS trg_community_pulse ON public.pl_day_completions;");
+    expect(gone).not.toMatch(/DELETE FROM|UPDATE public\.community_posts/);
+    expect(read("src/components/community/profile-edit.tsx")).not.toContain("ShareWorkoutsRow");
   });
   it("no share points for a post nobody shared; never blocks finishing a workout", () => {
     expect(sql).toContain("and not cp.auto_shared");

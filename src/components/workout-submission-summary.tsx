@@ -21,11 +21,12 @@ import { WorkoutPointsCard } from "@/components/records/workout-points-card";
 import { dualTotal, recordedLoad } from "@/lib/dual-weight";
 import { SCOPE_LABEL, repRecordLabel, tonnageRecordLabel, topScope, weightRecordLabel } from "@/lib/training-records";
 import { drawWorkoutStory, type StoryRecord } from "@/lib/workout-story-card";
-import { NewRecordsSection, TonnageStat, recordsHeadline } from "@/components/records/training-records";
+import { NewRecordsSection, TonnageStat } from "@/components/records/training-records";
+import { headlineFromRecords } from "@/lib/community";
 import { RecapPostFooter } from "@/components/community/recap-post";
 import { WorkoutFilmRow } from "@/components/workout/shared/workout-film";
 import { PhoneCopyReminder } from "@/components/workout-day/set-video-phone-copy";
-import { usePublicSessionTitle } from "@/lib/community.queries";
+import { useCompletionPreview, usePublicSessionTitle } from "@/lib/community.queries";
 import { SoundToggleButton } from "@/components/sound-toggle";
 
 // The share studio (camera, cards, upload) is only fetched the first time
@@ -82,7 +83,12 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   const usesRecords = records !== undefined;
   const prList = usesRecords ? [] : prs ?? [];
   const recordCount = (records?.records?.length ?? 0) + (records?.load_records?.length ?? 0) + (tonnageRecordLabel(records?.tonnage) ? 1 : 0);
-  const recordHeadline = recordsHeadline(records);
+  // The PR this workout leads with (headlinePr: an all-time PR at 10 reps or fewer on the session's
+  // main lift, or on a barbell squat / bench / deadlift). Only it gets the trophy, the PR headline and
+  // the full sting; every other record is still listed under New records, just not shouted.
+  const { data: shareStats } = useCompletionPreview(completionId ?? null, open && !!completionId);
+  const lead = usesRecords ? headlineFromRecords(records, shareStats?.top_lift?.exercise_name ?? null) : null;
+  const bigMoment = usesRecords ? !!lead : prList.length > 0;
   const [revealStage, setRevealStage] = useState(0);
   const [displayScore, setDisplayScore] = useState(0);
   const [sharing, setSharing] = useState(false);
@@ -130,10 +136,11 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         if (stingPlayedRef.current) stopStingRef.current = playSting(stingRef.current);
       });
     };
-    if (!usesRecords || records !== null) { fire(); return; }
+    // (and the session's main lift, which says which record is the headline)
+    if (!usesRecords || (records !== null && (!completionId || shareStats !== undefined))) { fire(); return; }
     const wait = window.setTimeout(fire, 2000);
     return () => window.clearTimeout(wait);
-  }, [open, revealStage, usesRecords, records]);
+  }, [open, revealStage, usesRecords, records, completionId, shareStats]);
 
   useEffect(() => {
     if (!open || revealStage < 1) return;
@@ -150,15 +157,15 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [open, revealStage, summary.score]);
-  // New records get the full build-and-drop; a finished workout the short one.
+  // A headline PR gets the full build-and-drop; a finished workout (a quieter record or two included) the short one.
   const stingRef = useRef<"pr" | "workout">("workout");
-  stingRef.current = prList.length > 0 || recordCount > 0 ? "pr" : "workout";
+  stingRef.current = bigMoment ? "pr" : "workout";
   const stopStingRef = useRef<() => void>(() => {});
   const stingPlayedRef = useRef(false);
   const hasAchievement = prList.length > 0 || recordCount > 0 || summary.score >= 90 || summary.completionPct === 100;
   const headline =
-    recordHeadline ? recordHeadline
-    : prList.length > 0 ? (prList.length === 1 ? "NEW ALL-TIME PR!" : `${prList.length} NEW ALL-TIME PRs!`)
+    lead ? `${lead.exercise_name} PR`
+    : prList.length > 0 ? (prList.length === 1 ? "New all-time PR" : `${prList.length} new all-time PRs`)
     // the score counts what was done, not how hard it ran: no cheering over a plan that ran hot
     : summary.plan?.lines.some((l) => l.kind === "harder" || l.kind === "short") ? "Workout done"
     : summary.score >= 90 ? "Crushed it!"
@@ -283,8 +290,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           <SoundToggleButton className="absolute left-3 top-3 z-10" onMute={() => stopStingRef.current()} />
 
           <div className={`mx-auto flex w-full max-w-[calc(100%-4.5rem)] flex-col items-center text-center transition-all duration-500 ${revealStage >= 1 ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"}`}>
-            <div className={`relative grid h-14 w-14 place-items-center rounded-full shadow-lg ${prList.length > 0 || recordCount > 0 ? "bg-amber-500 text-white ring-4 ring-amber-500/15" : "bg-primary text-primary-foreground"}`}>
-              {prList.length > 0 || recordCount > 0 ? <Trophy className="h-7 w-7 animate-in zoom-in spin-in-6 duration-500" /> : <CheckCircle2 className="h-7 w-7" />}
+            <div className={`relative grid h-14 w-14 place-items-center rounded-full shadow-lg ${bigMoment ? "bg-amber-500 text-white ring-4 ring-amber-500/15" : "bg-primary text-primary-foreground"}`} data-recap-moment={bigMoment ? "pr" : "done"}>
+              {bigMoment ? <Trophy className="h-7 w-7 animate-in zoom-in spin-in-6 duration-500" /> : <CheckCircle2 className="h-7 w-7" />}
               {revealStage >= 2 && <Sparkles className="absolute -right-2 -top-1 h-5 w-5 animate-pulse text-primary" />}
             </div>
             <div className="mt-2 text-[10px] font-bold uppercase tracking-[0.22em] text-primary">Workout complete</div>
@@ -329,7 +336,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 [scrollbar-width:none] sm:px-5 [&::-webkit-scrollbar]:hidden">
           <div className={`space-y-2.5 transition-all duration-500 ${revealStage >= 2 ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
             <NewAchievementReveal open={open} />
-            {records && <NewRecordsSection records={records} unit={displayUnit} setUnit={setUnit} />}
+            {records && <NewRecordsSection records={records} unit={displayUnit} setUnit={setUnit} highlight={!!lead} />}
             {points && <WorkoutPointsCard points={points} />}
             {prList.length > 0 && (
               <section className="relative overflow-hidden animate-in zoom-in-90 fade-in slide-in-from-bottom-3 rounded-2xl border border-amber-500/40 bg-amber-500/[0.08] p-4 duration-700">

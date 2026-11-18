@@ -1462,18 +1462,6 @@ export function useMyCommunitySettings(enabled = true) {
   });
 }
 
-export function useSetAutoShare() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (on: boolean) => {
-      const { error } = await db.rpc("community_set_auto_share", { _on: on });
-      if (error) throw error;
-    },
-    onMutate: (on) => qc.setQueryData(["community-my-settings"], (old: any) => ({ ...(old ?? { private_views: false }), auto_share_workouts: on })),
-    onSettled: () => qc.invalidateQueries({ queryKey: ["community-my-settings"] }),
-  });
-}
-
 /** Everyone in the community but you (Crew tab). */
 export function useCommunityMembers(enabled: boolean) {
   return useQuery({

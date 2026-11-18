@@ -32,17 +32,14 @@ const TURN_MS = 320;
  * feed. A bubble per person with something new (ringed while any of it is
  * unseen, on any device); tap to watch their moments full screen: tap the
  * sides to step, hold to pause, swipe down to close. Moments are what people
- * shared with the crew in the last day, including each finished session
- * (posted for them when automatic sharing is on), led by its best win; a
- * bubble with a PR in it wears a small "PR" tag. Each one can be cheered
- * right there (the heart, as everywhere) or opened in full. After the last
- * one, an end card points at the next good thing instead of dropping you
- * back on the feed (see StoryEndCard). There's no separate crew "Activity"
- * story: the week's wins are Wednesday Wins in the feed, and Rankings.
- *
- * Nothing new is posted for this: it's the feed's own posts, so the
- * automatic-sharing switch on your profile and who-sees-it on every post
- * apply exactly as in the feed.
+ * posted as a story in the last day (the recap's Share to Story, the camera's
+ * STORY, Add to your story) and the coach's lessons, never a copy of a feed
+ * post (storyWorthy): Instagram's way, a story is something someone chose to
+ * put there. Each one can be cheered right there (the heart, as everywhere)
+ * or opened in full. After the last one, an end card points at the next good
+ * thing instead of dropping you back on the feed (see StoryEndCard). There's
+ * no separate crew "Activity" story: the week's wins are Wednesday Wins in
+ * the feed, and Rankings. Who-sees-it on every story applies as in the feed.
  */
 export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson, onJumpTo, addStory, addYours, rankings }: {
   posts: CommunityPost[];
@@ -76,7 +73,7 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson
     // what's been watched since the feed loaded counts too
     return g.map((x) => ({ ...x, unseen: x.items.some((p) => !p.seen && !seenNow.has(p.id)) }));
   }, [posts, seenNow, follows]);
-  // yours: what you shared in the last day (a finished session posts itself), with who saw it
+  // yours: the stories you shared in the last day, with who saw it
   const mine = useMemo(() => myStory(posts), [posts]);
   const [open, setOpen] = useState<number | null>(null);
   // the order is fixed while watching (rings change as you go)

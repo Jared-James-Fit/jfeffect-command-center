@@ -864,24 +864,72 @@ export const SCOPE_WORD: Record<RecordScope, string> = {
   block_pr: "Block PR",
 };
 
+/** Reps past this are a rep-out, not the kind of PR a workout leads with. */
+export const HEADLINE_PR_MAX_REPS = 10;
+
+/** A barbell squat, bench or deadlift (the competition lift or a barbell variation of it), never a dumbbell, machine, cable, belt or split-squat lift of those families. */
+export function isBarbellBigThree(name: string | null | undefined): boolean {
+  const n = (name ?? "").toLowerCase();
+  return /(squat|bench|deadlift)/.test(n) && !/(dumbbell|\bdb\b|machine|smith|belt|hack|split|bulgarian|goblet|leg press|cable|kettlebell|landmine)/.test(n);
+}
+
 /**
- * The one lift the card features. A PR always wins (it is the story);
- * otherwise the session's primary lift.
+ * The PR a workout leads with, wherever it's celebrated or shared (Nov 18
+ * 2026): an all-time PR at 10 reps or fewer on the session's main lift (the
+ * lift the day is named for, else its heaviest: `top_lift`), else on a
+ * barbell squat, bench or deadlift. Every other record (an accessory's 15-rep
+ * best, a block or program best the plan was always going to bring) still
+ * counts and still shows where the sets are; it just never headlines. In the
+ * 30 days to Nov 18, 120 of 165 workouts had a PR of some kind and 57 had
+ * this one.
+ */
+export function headlinePr(s: Pick<WorkoutShareStats, "prs" | "top_lift"> | null | undefined): WorkoutShareStats["prs"][number] | null {
+  if (!s?.prs?.length) return null;
+  const main = s.top_lift?.exercise_name?.trim().toLowerCase() ?? null;
+  const counts = (p: WorkoutShareStats["prs"][number]) => p.scope === "atpr" && p.reps >= 1 && p.reps <= HEADLINE_PR_MAX_REPS;
+  return (
+    s.prs.find((p) => counts(p) && !!main && p.exercise_name.trim().toLowerCase() === main) ??
+    s.prs.find((p) => counts(p) && isBarbellBigThree(p.exercise_name)) ??
+    null
+  );
+}
+
+/**
+ * The same headline PR read from a workout's full records (the recap's
+ * rep and weight records, every one rather than the stats' top three), with
+ * the session's main lift named by its stats when they're in.
+ */
+export function headlineFromRecords(
+  records: { records?: RecordRow[] | null; load_records?: RecordRow[] | null } | null | undefined,
+  mainLift: string | null | undefined,
+): WorkoutShareStats["prs"][number] | null {
+  const prs = [...(records?.records ?? []), ...(records?.load_records ?? [])]
+    .filter((r) => r.atpr)
+    .map((r) => ({ exercise_name: r.exercise_name, reps: r.reps, load_kg: r.load_kg, scope: "atpr" as const }))
+    // heaviest first, the stats' own order
+    .sort((a, b) => (b.load_kg ?? 0) - (a.load_kg ?? 0));
+  return headlinePr({ prs, top_lift: mainLift ? { exercise_name: mainLift, reps: 0, load_kg: null } : null } as Pick<WorkoutShareStats, "prs" | "top_lift">);
+}
+type RecordRow = { exercise_name: string; reps: number; load_kg: number | null; atpr: boolean };
+
+/**
+ * The one lift the card features: the headline PR when there is one (it is
+ * the story), otherwise the session's main lift as it was lifted.
  */
 export function featuredLift(s: WorkoutShareStats): {
   name: string;
   detail: LiftedSet;
   pr: RecordScope | null;
 } | null {
-  const pr = s.prs[0];
+  const pr = headlinePr(s);
   if (pr) return { name: pr.exercise_name, detail: { reps: pr.reps, load_kg: pr.load_kg, unit: pr.unit }, pr: pr.scope };
   if (s.top_lift) return { name: s.top_lift.exercise_name, detail: { reps: s.top_lift.reps, load_kg: s.top_lift.load_kg, unit: s.top_lift.unit }, pr: null };
   return null;
 }
 
-/** Share-card variant: a PR session gets the PR treatment automatically. */
+/** Share-card variant: a session with a headline PR gets the PR treatment (and the PR look). */
 export function isPrMoment(s: WorkoutShareStats | null | undefined): boolean {
-  return !!s && s.prs.length > 0;
+  return !!headlinePr(s);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1950,14 +1998,19 @@ export function pickWorkoutWin(s: Pick<WorkoutShareStats, "prs" | "pr_count" | "
 export const STORY_WINDOW_MS = 24 * 3_600_000;
 
 /**
- * Worth a story: everything shared with the crew, like Instagram: what people
- * post themselves and every finished session (posted for them when automatic
- * sharing is on), a PR or a routine day alike; the win just makes its frame
- * louder. Who-sees-it on the post still decides (coach-only or private never;
- * Close Friends with a green ring).
+ * Worth a story (Nov 18 2026): what someone posted as a story (the camera's
+ * STORY, the recap's Share to Story, Add to your story), the coach's lessons
+ * (made as stories, with their Questions / Poll stickers), and a finished
+ * session that posted itself before automatic stories were taken out (until
+ * its 24 hours run out). A post in the feed is never a story too: the rail
+ * used to replay every crew post of the last day, so each workout showed up
+ * twice and the row filled with sessions nobody chose to put there.
+ * Who-sees-it still decides (coach-only or private never; Close Friends with
+ * a green ring).
  */
-export function storyWorthy(p: Pick<CommunityPost, "visibility">): boolean {
-  return isCrewAudience(p.visibility) || p.visibility === "close_friends";
+export function storyWorthy(p: Pick<CommunityPost, "visibility"> & { story?: boolean; series?: string | null; auto?: boolean; stats?: unknown }): boolean {
+  if (!(isCrewAudience(p.visibility) || p.visibility === "close_friends")) return false;
+  return !!p.story || p.series === "lesson" || isPulsePost(p);
 }
 
 export type StoryGroup<T> = {
@@ -1974,8 +2027,9 @@ export type StoryGroup<T> = {
 };
 
 /**
- * What a story shows full screen for a post (tested). Every crew post becomes
- * a story, so every kind has a frame and none plays blank:
+ * What a story shows full screen for a post (tested). Only stories reach the
+ * rail now (storyWorthy), but a shared post's card, an older session and a
+ * lesson can each be one, so every kind keeps a frame and none plays blank:
  *  - "lesson": a coach lesson, as its lesson;
  *  - "win": a workout with nothing to look at (posted by itself, or shared
  *    without a photo or GIF) leads with its win, as in the feed;
@@ -2035,7 +2089,7 @@ export function seenAs<T extends Pick<CommunityPost, "is_mine" | "author" | "sti
 }
 
 /** Your own last day of stories (you see them first, with who saw each). */
-export function myStory<T extends Pick<CommunityPost, "id" | "created_at" | "visibility" | "is_mine" | "seen" | "author" | "stats">>(posts: T[], now = Date.now()): StoryGroup<T> | null {
+export function myStory<T extends Pick<CommunityPost, "id" | "created_at" | "visibility" | "is_mine" | "seen" | "author" | "stats"> & { story?: boolean; series?: string | null; auto?: boolean }>(posts: T[], now = Date.now()): StoryGroup<T> | null {
   const items = posts
     .filter((p) => p.is_mine && storyWorthy(p) && now - new Date(p.created_at).getTime() <= STORY_WINDOW_MS)
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -2049,7 +2103,7 @@ export function myStory<T extends Pick<CommunityPost, "id" | "created_at" | "vis
  * in order). People with something unseen first; then people you follow;
  * then a PR; then the most recent.
  */
-export function crewStories<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author">>(posts: T[], now = Date.now(), followed?: ReadonlySet<string>): StoryGroup<T>[] {
+export function crewStories<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author"> & { story?: boolean; series?: string | null }>(posts: T[], now = Date.now(), followed?: ReadonlySet<string>): StoryGroup<T>[] {
   const by = new Map<string, StoryGroup<T>>();
   for (const p of posts) {
     const t = new Date(p.created_at).getTime();
@@ -2110,7 +2164,7 @@ const STORY_END_FEED_MS = 7 * 86_400_000;
  * own story (or a nudge to add one). `posts` is the live feed, so reactions
  * given here show straight away.
  */
-export function storyEnd<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author" | "my_reaction"> & { story?: boolean }>(
+export function storyEnd<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author" | "my_reaction"> & { story?: boolean; series?: string | null }>(
   groups: StoryGroup<T>[],
   posts: T[],
   watched: ReadonlySet<string>,
