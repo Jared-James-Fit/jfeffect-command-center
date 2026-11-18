@@ -102,6 +102,28 @@ describe("Cleo context", () => {
     expect(ctx).toContain("receipt");
   });
 
+  it("names the package each payment paid, so Cleo never reads a paid package's money as unapplied on the next one", () => {
+    // Marc, Nov 16 2026: $672 by e-transfer paid Package 3; he owes $672 on Package 4.
+    const marcData: BooksData = {
+      ...data,
+      asOf: "2026-11-18",
+      revenue: normalizeRevenue([row({ id: "etr", method: "etransfer", amount_minor: 67200, tax_minor: 3200, transaction_date: "2026-11-16", purchase_id: "p3", clients: { full_name: "Marc Asugui" }, purchase_records: { offer_name: "Personal Training — 16 Sessions / 4 Weeks" } })], []),
+    };
+    expect(marcData.revenue[0].saleId).toBe("p3");
+    const owed = {
+      asOf: "2026-11-18", outstandingCents: 67200, overdueCents: 0, dueNowCents: 0, scheduledCents: 67200, unscheduledCents: 0, expected30Cents: 33600, waitingCents: 0,
+      lines: [{ clientId: "marc", client: "Marc Asugui", saleId: "p4", label: "Package 4", outstandingCents: 67200, overdueCents: 0, dueNowCents: 0, scheduledCents: 67200, unscheduledCents: 0, how: "auto_pay", next: { date: "2026-11-27", cents: 33600 }, overdueSince: null, rate: 0.05 }],
+      waiting: [], expected: [], booked: [],
+      packages: { p3: "Package 3", p4: "Package 4" },
+    } as any;
+    const ctx = buildSummerContext(marcData, 2026, owed);
+    expect(ctx).toContain("2026-11-16 | payment | Marc Asugui | Personal Training — 16 Sessions / 4 Weeks (Package 3) | etransfer | $672.00");
+    expect(ctx).toContain("Marc Asugui | Package 4 | owes $672.00");
+    expect(ctx).toMatch(/match payments to what's owed by package, never by amount/);
+    // without the read, a payment row is as before
+    expect(buildSummerContext(marcData, 2026)).toContain("| Marc Asugui | Personal Training — 16 Sessions / 4 Weeks | etransfer |");
+  });
+
   it("names the assistant and forbids invented numbers", () => {
     const p = summerSystemPrompt();
     expect(p).toContain("Cleo");

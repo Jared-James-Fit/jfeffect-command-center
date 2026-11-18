@@ -49,6 +49,8 @@ export type Receivables = {
   waiting: WaitingLine[];
   expected: ExpectedLine[];
   booked: BookedSale[];
+  /** Every session package's label by its sale ("Package 3"), paid off or not, so a payment can say which one it paid. */
+  packages?: Record<string, string>;
 };
 
 export type ClientBillingRead = {
@@ -68,10 +70,12 @@ export function receivablesFrom(clients: ClientBillingRead[], today: string): Re
   const waiting: WaitingLine[] = [];
   const expected: ExpectedLine[] = [];
   const booked: BookedSale[] = [];
+  const packages: Record<string, string> = {};
   const horizon = addDays(today, 30);
 
   for (const c of clients) {
     const { p } = c;
+    for (const pk of p.packages ?? []) packages[pk.saleId] = pk.label;
     for (const b of p.balances) {
       const inst = b.installments;
       const overdue = inst.filter(isMissed);
@@ -148,6 +152,7 @@ export function receivablesFrom(clients: ClientBillingRead[], today: string): Re
     waiting,
     expected,
     booked,
+    packages,
   };
 }
 

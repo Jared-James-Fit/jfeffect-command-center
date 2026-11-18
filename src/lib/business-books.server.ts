@@ -145,6 +145,7 @@ export async function loadBooksData(supabase: any): Promise<BooksData> {
   const ledger: LedgerRowIn[] = ledgerRaw.map(({ client_id, purchase_id, ...r }) => ({
     ...r,
     client_id: client_id ?? null,
+    purchase_id: purchase_id ?? null,
     clients: client_id ? { full_name: labels.clients[client_id] ?? null } : null,
     purchase_records: purchase_id ? { offer_name: labels.purchases[purchase_id] ?? null } : null,
   }));

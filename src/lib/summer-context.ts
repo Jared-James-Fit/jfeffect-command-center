@@ -116,7 +116,8 @@ export function buildSummerContext(data: BooksData, year: number, owed?: Receiva
   const yearRevenue = data.revenue.filter((r) => r.date.startsWith(String(year)));
   push(`REVENUE TRANSACTIONS ${year} (date | kind | client | product | method | gross incl. tax | GST/HST | reference)`);
   for (const r of yearRevenue.slice(-MAX_ROWS)) {
-    push(`- ${r.date} | ${r.kind} | ${r.clientName ?? "?"} | ${r.product ?? "Payment"} | ${r.method ?? "?"} | ${fmtCad(r.grossMinor)} | ${fmtCad(r.taxMinor)}${r.taxEstimated ? " (est.)" : ""} | ${r.reference ?? ""}`);
+    const pkg = r.saleId ? owed?.packages?.[r.saleId] : undefined;
+    push(`- ${r.date} | ${r.kind} | ${r.clientName ?? "?"} | ${r.product ?? "Payment"}${pkg ? ` (${pkg})` : ""} | ${r.method ?? "?"} | ${fmtCad(r.grossMinor)} | ${fmtCad(r.taxMinor)}${r.taxEstimated ? " (est.)" : ""} | ${r.reference ?? ""}`);
   }
   if (yearRevenue.length > MAX_ROWS) push(`(${yearRevenue.length - MAX_ROWS} older rows not shown)`);
   if (!yearRevenue.length) push("- none");
@@ -144,6 +145,7 @@ export function buildSummerContext(data: BooksData, year: number, owed?: Receiva
   if (owed) {
     // The same reading as each client's Billing tab: with GST, on schedule isn't overdue, unpaid links aren't owed.
     push(`OWED BY CLIENTS as of ${owed.asOf} (with GST/HST; not revenue until paid): ${fmtCad(owed.outstandingCents)} total, ${fmtCad(owed.overdueCents)} overdue, ${fmtCad(owed.expected30Cents)} expected in the next 30 days`);
+    push("Each line is one sale's own balance after every payment on it. A payment in REVENUE TRANSACTIONS names the package it paid: match payments to what's owed by package, never by amount (a client often pays one package while owing the same amount on the next).");
     for (const l of owed.lines.slice(0, 50)) {
       push(`- ${l.client} | ${l.label} | owes ${fmtCad(l.outstandingCents)}${l.overdueCents ? ` | ${fmtCad(l.overdueCents)} overdue since ${l.overdueSince}` : ""}${l.next ? ` | next ${fmtCad(l.next.cents)} on ${l.next.date}` : l.unscheduledCents ? " | no payment dates" : ""} | ${l.how === "auto_pay" ? "auto-pay" : l.how}`);
     }
