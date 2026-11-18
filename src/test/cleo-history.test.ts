@@ -194,11 +194,12 @@ describe("Cleo's models", () => {
     expect(server).toContain("cleoRoute(override, opts.bench ?? null)");
     // the books and the owed read run alongside the rest, not after it
     expect(server).toContain("const [booksPart, app, links, history");
-    const system = server.slice(server.indexOf("const system = ["), server.indexOf('].join("\\n");', server.indexOf("const system = [")));
+    const system = server.slice(server.indexOf("const system = wellFormed(["), server.indexOf('].join("\\n"));', server.indexOf("const system = wellFormed([")));
+    expect(system.length).toBeGreaterThan(100);
     expect(system.indexOf("buildVoicePrompt")).toBeLessThan(system.indexOf("booksSection"));
     expect(system.indexOf("booksSection")).toBeLessThan(system.indexOf("buildAppContext"));
     expect(system).not.toContain("toLocaleString");
-    expect(server).toContain("const ask = `${now}\\n${input.message.trim()");
+    expect(server).toContain("const ask = wellFormed(`${now}\\n${input.message.trim()");
   });
 
   it("Cleo's tools aren't strict, so the model never fills an optional field with a placeholder", () => {

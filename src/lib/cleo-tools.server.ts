@@ -361,7 +361,7 @@ export function cleoReadTools(ctx: ToolCtx) {
     }),
 
     personal_records: tool({
-      description: "A client's recent PRs: all-time, program and block records by reps and by load, and tonnage records.",
+      description: "A client's recent PRs: all-time, program and block records by reps and by load, and tonnage records. Records count finished workouts only, so before calling something an all-time PR check training_log for an equal or heavier set in a workout they never finished.",
       inputSchema: z.object({ client_id: clientId, days: z.number().int().min(7).max(365).default(60) }),
       execute: safe("records", async ({ client_id, days }) => {
         const c = await clientRow(db, client_id);
@@ -374,11 +374,14 @@ export function cleoReadTools(ctx: ToolCtx) {
           return unit === "kg" ? `${Math.round(n * 2) / 2} kg` : `${Math.round(n * 2.2046226218 * 2) / 2} lb`;
         };
         const kind = (r: any) => (r.atpr ? "ALL-TIME PR" : r.program_pr ? "program PR" : r.block_pr ? "block PR" : "PR");
-        const lines = [`${clientName(c)} records, last ${days} days (converted to ${unit}):`];
+        const lines = [
+          `${clientName(c)} records, last ${days} days (converted to ${unit}):`,
+          "(Records count finished workouts only: a set in a workout they never tapped Finish on isn't compared. Check training_log for an equal or heavier set before calling one an all-time PR.)",
+        ];
         for (const r of (data?.records ?? []) as any[]) lines.push(`- ${dayIn(r.at, tz)} ${r.exercise_name}: ${kg(r.load_kg)} x ${r.reps} (${kind(r)}${r.prev_all_kg != null ? `, previous best ${kg(r.prev_all_kg)}` : ""})`);
         for (const r of (data?.load_records ?? []) as any[]) lines.push(`- ${dayIn(r.at, tz)} ${r.exercise_name}: heaviest ${kg(r.load_kg)} x ${r.reps} (${kind(r)} by load)`);
         for (const t of (data?.tonnage ?? []) as any[]) lines.push(`- ${dayIn(t.at, tz)} session tonnage ${kg(t.tonnage_kg)} (${kind(t)})`);
-        return lines.length > 1 ? lines.join("\n") : `${clientName(c)} has no PRs in the last ${days} days.`;
+        return lines.length > 2 ? lines.join("\n") : `${clientName(c)} has no PRs in the last ${days} days (finished workouts only; training_log has every logged set).`;
       }),
     }),
 

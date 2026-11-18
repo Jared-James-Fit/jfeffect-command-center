@@ -32,6 +32,14 @@ const r = receivablesFrom(
 );
 
 describe("receivables", () => {
+  it("names every package by its sale, paid off or not, so a payment can say which one it paid", () => {
+    const paid = marc.etransfer.purchase_id;
+    expect(r.packages?.[paid]).toBe("Package 3");
+    expect(r.lines[0].label).toBe("Package 4");
+    expect(r.packages?.[r.lines[0].saleId]).toBe("Package 4");
+    expect(Object.values(r.packages ?? {}).sort()).toEqual(["Package 1", "Package 2", "Package 3", "Package 4"]);
+  });
+
   it("is what each client's Billing tab says is owed, with tax", () => {
     expect(r.outstandingCents).toBe(marcPays.outstandingCents);
     expect(r.outstandingCents).toBe(67200);

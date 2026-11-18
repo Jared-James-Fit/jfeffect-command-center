@@ -67,6 +67,8 @@ export type RevenueRow = RevenueEntry & {
   reference: string | null;
   /** The client the payment is from (client payments only), to open their Billing tab. */
   clientId?: string | null;
+  /** The sale it went to (client payments only), so it can be named by its package. */
+  saleId?: string | null;
   /** Other income: its record, to edit it from Transactions. */
   other?: OtherIncomeRow;
 };
@@ -251,6 +253,8 @@ export type LedgerRowIn = {
   external_reference?: string | null;
   receipt_number?: string | null;
   client_id?: string | null;
+  /** The sale the payment went to. */
+  purchase_id?: string | null;
   clients?: { full_name: string | null } | null;
   purchase_records?: { offer_name: string | null } | null;
 };
@@ -320,6 +324,7 @@ export function normalizeRevenue(ledger: LedgerRowIn[], members: MemberLedgerRow
       source: "client",
       clientName: r.clients?.full_name ?? null,
       clientId: r.client_id ?? null,
+      saleId: r.purchase_id ?? null,
       product: r.purchase_records?.offer_name ?? null,
       currency: (r.currency ?? "CAD").toUpperCase(),
       stripe: r.method === "stripe" || !!(r.stripe_payment_intent_id || r.stripe_checkout_session_id || r.stripe_invoice_id),
