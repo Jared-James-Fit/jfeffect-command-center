@@ -679,7 +679,7 @@ const SummerSettingsInput = z.object({
   instructions: z.string().trim().max(2000).nullable(),
 });
 
-/** Customize Cleo: her vibe and this admin's own instructions. */
+/** Customize Cleo: the vibe and this admin's own instructions. */
 export const saveSummerSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => SummerSettingsInput.parse(d))

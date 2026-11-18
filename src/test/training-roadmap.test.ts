@@ -215,7 +215,7 @@ describe("roadmap wiring", () => {
     expect(DEFAULT_ROUTES.roadmap.models).toEqual(["openai:gpt-5-mini", "openai:gpt-5.5"]);
   });
 
-  it("Cleo only ever writes her own columns", () => {
+  it("Cleo only ever writes its own columns", () => {
     const server = readFileSync("src/lib/training-roadmap.server.ts", "utf8");
     expect(server).not.toMatch(/coach_label|coach_summary/);
     expect(server).not.toMatch(/from\("pl_(blocks|weeks|days|exercise_rows)"\)\s*\.(update|insert|delete|upsert)/);

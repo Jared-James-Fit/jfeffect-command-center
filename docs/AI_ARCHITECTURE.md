@@ -192,24 +192,24 @@ the request with `callModelNow`). A new member-facing AI feature gets a cost in 
 
 Cleo (summer.server.ts) answered on Lovable credits: GPT-5.5 through the gateway's chat completions, then
 Gemini Flash. Chat completions drop a reasoning model's thinking between tool calls, so every look-up started
-her thinking over. She is now the `assistant` route (cleo-model.server.ts):
+its thinking over. Cleo is now the `assistant` route (cleo-model.server.ts):
 
 - The OpenAI key through the Responses API (`@ai-sdk/openai`), `store: false` with
-  `include: ["reasoning.encrypted_content"]`: her reasoning carries from one look-up to the next, and nothing is
-  stored at OpenAI. `promptCacheKey` per person, so a follow-up reads her instructions, the books, the app and the
+  `include: ["reasoning.encrypted_content"]`: Cleo's reasoning carries from one look-up to the next, and nothing is
+  stored at OpenAI. `promptCacheKey` per person, so a follow-up reads Cleo's instructions, the books, the app and the
   chat so far from cache.
-- Her tools are `strict: false`. The Responses API makes every field of a strict tool required, and the first
+- Cleo's tools are `strict: false`. The Responses API makes every field of a strict tool required, and the first
   benchmark filled a calf raise card's optional load and percentage with placeholders (0.0001 lb at 1% of 1RM).
-- Her context is read in parallel (the books, who owes what, the app, her voice and her role together, about
+- Cleo's context is read in parallel (the books, who owes what, the app, the coach's voice and the caller's role together, about
   1 s), the stable parts first, and the time goes with the question so the system prompt stays cacheable.
 - Every answer logs its model, effort, timings, steps, tools and tokens (`[cleo] answered`), and the
-  `cleo-bench` hook (cron secret) runs her real answer path as the owner with given models and effort, saving
+  `cleo-bench` hook (cron secret) runs Cleo's real answer path as the owner with given models and effort, saving
   nothing and deleting any card.
-- Her schedule look-ups read the app's two ways a workout is dated (cleo-schedule.ts): she had read only the
+- Cleo's schedule look-ups read the app's two ways a workout is dated (cleo-schedule.ts): Cleo had read only the
   schedule table, which most workouts aren't on, and said "nothing scheduled" for clients who were training.
 
 The live benchmark, two rounds on real data (seconds per answer; the same questions for every setting).
-Round 1, six questions from how she's been used: a bodyweight trend, a client's last three weeks, the coaching
+Round 1, six questions from how Cleo has been used: a bodyweight trend, a client's last three weeks, the coaching
 policy on ending coaching, adding an exercise to a workout, who owes money, tomorrow's calendar:
 
 | Model and effort | Average | Slowest (the program edit) | Notes |

@@ -1,7 +1,7 @@
 /**
  * Which model is Cleo's brain for one answer, and how it's called (Nov 18 2026).
  *
- * Her models are the routing table's `assistant` route (src/lib/ai/routing.ts), with the admin's
+ * Cleo's models are the routing table's `assistant` route (src/lib/ai/routing.ts), with the admin's
  * override (app_settings.ai_routes) honoured like every other route:
  *   "openai:gpt-5.5"   the OpenAI key, Responses API: the model's reasoning is carried from one
  *                      look-up to the next (encrypted, nothing stored on OpenAI's side), and the
@@ -22,7 +22,7 @@ export type CleoModel = {
   providerOptions?: Record<string, Record<string, any>>;
 };
 
-/** Her models for this answer, best first. `asked` (a benchmark) replaces the route's list. */
+/** Cleo's models for this answer, best first. `asked` (a benchmark) replaces the route's list. */
 export function cleoRoute(override: Partial<Record<string, string[]>> | null, asked?: { models?: string[]; effort?: Effort } | null): Route {
   const route = resolveRoute("assistant", override as any);
   const models = asked?.models?.filter((m) => /^(openai|gateway):[\w./-]+$/.test(m)) ?? [];

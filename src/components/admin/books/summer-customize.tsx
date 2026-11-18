@@ -18,7 +18,7 @@ import {
 
 export type SummerPersona = { tone?: string | null; instructions?: string | null };
 
-/** Customize Cleo: pick her vibe and write your own instructions. */
+/** Customize Cleo: pick the vibe and write your own instructions. */
 export function SummerCustomizeDialog({
   open,
   onClose,

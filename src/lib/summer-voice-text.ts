@@ -1,5 +1,5 @@
 /**
- * Text helpers for Cleo: which links she may hand out, how her replies are
+ * Text helpers for Cleo: which links Cleo may hand out, how replies are
  * split into renderable pieces, and what gets read aloud. Pure, so the same
  * rules hold in the chat, in voice and in tests.
  */

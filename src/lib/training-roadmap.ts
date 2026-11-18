@@ -181,7 +181,7 @@ function compShare(s: WeekStats): string {
 
 /**
  * The week's shape for Cleo to read. Totals and averages are left out on
- * purpose: she can't quote what she never sees, so the athlete reads
+ * purpose: Cleo can't quote what it never sees, so the athlete reads
  * "about 40% less volume than last week", not "52 working sets".
  */
 function statsLine(s: WeekStats, prev: WeekStats | null): string {

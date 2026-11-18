@@ -153,7 +153,7 @@ describe("Cleo can find and read anything the person can see", () => {
     expect(sql).toContain("REVOKE ALL ON FUNCTION public.cleo_data_catalog() FROM PUBLIC, anon;");
   });
 
-  it("she's told to look before saying she doesn't have it", () => {
+  it("Cleo is told to look before saying it doesn't have it", () => {
     const prompt = read("src/lib/summer-context.ts");
     expect(prompt).toContain("call business_documents with `search` set to the topic");
     expect(prompt).toContain("find_data with a few words to see where it lives, then read_data");
