@@ -85,6 +85,13 @@
       "when": 1790548859512,
       "tag": "0011_logging_level_expansion",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795032358562,
+      "tag": "0012_role_permissions_own_roles",
+      "breakpoints": true
     }
   ]
 }
