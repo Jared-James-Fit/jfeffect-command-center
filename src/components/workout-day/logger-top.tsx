@@ -4,6 +4,7 @@ import { differenceInCalendarDays, format } from "date-fns";
 import { cleanDayTitle } from "@/lib/workout-today";
 import { formatClientDayNotes, formatDaySubtitle } from "@/lib/workout-day-label";
 import { blockNameParts } from "@/lib/training-roadmap";
+import { dayNoteView } from "@/lib/workouts/coach-notes";
 import { cn } from "@/lib/utils";
 
 /**
@@ -62,14 +63,25 @@ export function ScheduledDayLine({ scheduled, today }: { scheduled: Date; today:
  * The coach's notes for the whole session, only those marked client-visible.
  * Up to three lines of the first paragraph (usually the day's station order)
  * show as they are; anything longer, and every paragraph after it, opens in
- * place with a tap. No card border, no caps label, no red link.
+ * place with a tap. Against the same workout last week (`previous`, its
+ * client-visible notes): word for word the same folds to one line ("Same as
+ * last week", the whole note a tap away), and a note with something new leads
+ * with what's new (`dayNoteView`, coach-notes.ts). No card border, no caps
+ * label, no red link; nothing at all when there's no note.
  */
-export function DayCoachNotes({ day }: { day: { notes?: string | null; notes_client_visible?: boolean | null } | null }) {
+export function DayCoachNotes({
+  day,
+  previous = null,
+}: {
+  day: { notes?: string | null; notes_client_visible?: boolean | null } | null;
+  /** Last week's notes for this workout, when the athlete could read them. */
+  previous?: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const [clipped, setClipped] = useState(false);
   const leadRef = useRef<HTMLParagraphElement | null>(null);
-  const notes = formatClientDayNotes(day);
-  const lead = notes?.lead ?? "";
+  const view = formatClientDayNotes(day) ? dayNoteView(day?.notes, previous) : null;
+  const lead = view?.lead ?? "";
 
   // Whether the first paragraph runs past its three lines (measured, so a short
   // one never gets a "More" that opens nothing).
@@ -84,29 +96,45 @@ export function DayCoachNotes({ day }: { day: { notes?: string | null; notes_cli
     return () => ro.disconnect();
   }, [lead, open]);
 
-  if (!notes) return null;
-  const expandable = clipped || !!notes.detail;
+  if (!view) return null;
+  const same = view.repeat === "same";
+  const expandable = same || clipped || !!view.detail;
   const body = (
     <>
       <span className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
-        <StickyNote className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+        <StickyNote className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
         Coach notes
+        {view.repeat && (
+          <span className="truncate font-normal text-muted-foreground" data-coach-notes-repeat={view.repeat}>
+            · {same ? "Same as last week" : "New this week"}
+          </span>
+        )}
         {expandable && (
-          <span className="ml-auto inline-flex items-center gap-0.5 text-[12px] font-medium text-muted-foreground">
-            {open ? "Less" : "More"}
+          <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 text-[12px] font-medium text-muted-foreground">
+            {open ? "Less" : same ? "Show" : "More"}
             <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} aria-hidden />
           </span>
         )}
       </span>
-      <p
-        ref={leadRef}
-        className={cn("mt-1 whitespace-pre-wrap text-[13px] leading-snug text-foreground/90", !open && "line-clamp-3")}
-        data-coach-notes-lead
-      >
-        {notes.lead}
-      </p>
-      {open && notes.detail && (
-        <p className="mt-2 whitespace-pre-wrap text-[13px] leading-snug text-muted-foreground">{notes.detail}</p>
+      {lead && !(open && view.repeat === "new") && (
+        <p
+          ref={leadRef}
+          className={cn("mt-1 whitespace-pre-wrap text-[13px] leading-snug text-foreground/90", !open && "line-clamp-3")}
+          data-coach-notes-lead
+        >
+          {lead}
+        </p>
+      )}
+      {open && view.detail && (
+        <p
+          className={cn(
+            "whitespace-pre-wrap text-[13px] leading-snug",
+            view.repeat ? "mt-1 text-foreground/90" : "mt-2 text-muted-foreground",
+          )}
+          data-coach-notes-detail
+        >
+          {view.detail}
+        </p>
       )}
     </>
   );

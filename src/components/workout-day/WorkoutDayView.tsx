@@ -180,6 +180,7 @@ import {
 } from "@/lib/log-as-override";
 import { Timer, Heart, Activity, History as HistoryIcon, ChevronRight } from "lucide-react";
 import { DayCoachNotes, ScheduledDayLine, loggerMeta, loggerTitle } from "@/components/workout-day/logger-top";
+import { exerciseNoteForAthlete } from "@/lib/workouts/coach-notes";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
 import {
   summarizeCompleteness,
@@ -669,6 +670,27 @@ function WorkoutDay({
     : null;
   const block = (weekWithBlock as any)?.pl_blocks ?? null;
   const blockId = (block as any)?.id ?? (weekWithBlock as any)?.block_id ?? null;
+
+  // The same workout's notes last week, so notes that haven't changed fold to
+  // one line and a new sentence leads (DayCoachNotes, coach-notes.ts). Only
+  // asked when this day has notes for the athlete and there is a last week.
+  const lastWeekIndex = (week as any)?.week_index != null ? Number((week as any).week_index) - 1 : 0;
+  const { data: lastWeekDayNotes = null } = useQuery({
+    queryKey: ["pl-day-notes-last-week", blockId, lastWeekIndex, day?.day_index ?? null],
+    enabled: !!blockId && lastWeekIndex >= 1 && day?.day_index != null && day?.notes_client_visible === true && !!String(day?.notes ?? "").trim(),
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data } = await sb
+        .from("pl_days")
+        .select("notes, notes_client_visible, pl_weeks!inner(block_id, week_index)")
+        .eq("pl_weeks.block_id", blockId)
+        .eq("pl_weeks.week_index", lastWeekIndex)
+        .eq("day_index", day.day_index)
+        .limit(1)
+        .maybeSingle();
+      return (data as any)?.notes_client_visible === true ? ((data as any).notes ?? null) : null;
+    },
+  });
 
   const { isImpersonating } = useClientImpersonation();
   const scheduledWorkoutId = adapter?.kind === "client"
@@ -2988,7 +3010,7 @@ function WorkoutDay({
         )}
         {focusIntro.show && <FocusIntro onTry={() => chooseWorkoutView("story")} onDismiss={focusIntro.dismiss} />}
 
-        <DayCoachNotes day={day} />
+        <DayCoachNotes day={day} previous={lastWeekDayNotes} />
 
         {/* Workouts are always editable — no date/block/program lock banners. */}
 
@@ -3108,6 +3130,7 @@ function WorkoutDay({
                     unit={unitForRow(r)}
                     onUnitChange={(u, opts) => setExerciseUnit(r.exercises?.id ?? r.exercise_id ?? null, r.id, u, opts)}
                     focusMode={storyOpen}
+                    weekIndex={(week as any)?.week_index ?? null}
                     onChange={cardioRow ? refreshCardio : refresh}
                     startsWorkout={!cardioRow}
                     onNoteChange={refreshNotes}
@@ -3595,7 +3618,9 @@ function PreviousLiftChip({ data, displayUnit, onOpen }: {
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, startsWorkout = true, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; /** Logging here starts the workout's clock (false: the day's cardio, done any time). */ startsWorkout?: boolean; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: TopSetBasis | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb", opts?: { relabel?: boolean }) => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, startsWorkout = true, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, weekIndex = null, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; /** Logging here starts the workout's clock (false: the day's cardio, done any time). */ startsWorkout?: boolean; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: TopSetBasis | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb", opts?: { relabel?: boolean }) => void; focusMode?: boolean; /** The program week this workout is in (a generated note's "Week 1: …" line shows only in week 1). */ weekIndex?: number | null; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
+  // What the card says of the coach's note (coach-notes.ts): a coach's words as written, a generated note without its boilerplate.
+  const athleteNote = exerciseNoteForAthlete(row?.notes, weekIndex);
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -4862,7 +4887,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
           <Heart className="h-3.5 w-3.5 shrink-0" aria-hidden /> Your cardio plan · now or later today
         </p>
       )}
-      {row.notes && <ExerciseNotesBlock notes={row.notes} />}
+      {/* The note as the athlete should read it: a coach's words as written, a generated one without its boilerplate (coach-notes.ts). */}
+      {athleteNote && <ExerciseNotesBlock notes={athleteNote} />}
       {/* Logging actions: keep the common actions visible and quiet.
           Structural editing is isolated behind one compact reorder control. */}
       {/* Rest on the left ("Rest 5 min", the countdown while it runs), the timer

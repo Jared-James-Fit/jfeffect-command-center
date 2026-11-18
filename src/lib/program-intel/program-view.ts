@@ -7,6 +7,7 @@
 import type { BuiltBlock, BuiltExercise } from "./generator-schemas";
 import { supersetGroup } from "./session-time";
 import { withoutFixedLoads } from "./loading";
+import { cleanGeneratedNote } from "@/lib/workouts/coach-notes";
 
 export type WeekRx = { sets: number; reps: string; rpe: string | null; rir: string | null; percentage: number | null; percentage_of?: "training_max" | "e1rm" | "1rm" | "top_set" | null; notes: string | null };
 
@@ -37,7 +38,9 @@ export function athleteNotes(ex: BuiltExercise, week: number, day?: readonly Bui
   const rx = rxForWeek(ex, week);
   const progression = withoutFixedLoads(ex.progression);
   const parts = [supersetNote(ex, day), withoutFixedLoads(rx.notes), progression ? `Progress: ${progression}` : null, ex.substitutions?.length ? `Swap if needed: ${ex.substitutions.map((s) => s.exercise_name).join(" or ")}` : null].filter(Boolean) as string[];
-  const text = parts.join(" · ").trim();
+  // Only what the athlete can use today: no method-only progression line, no
+  // "Week 1: …" carried onto week 3, no reasoning meant for the coach (coach-notes.ts).
+  const text = cleanGeneratedNote(parts.join(" · "), week);
   return text ? text.slice(0, 900) : null;
 }
 

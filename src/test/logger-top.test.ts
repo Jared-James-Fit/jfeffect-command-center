@@ -62,7 +62,7 @@ describe("the finished workout's card", () => {
 
 describe("one row of logging controls", () => {
   const day = read("src/components/workout-day/WorkoutDayView.tsx");
-  const controls = day.slice(day.indexOf("data-logger-controls"), day.indexOf("<DayCoachNotes day={day} />"));
+  const controls = day.slice(day.indexOf("data-logger-controls"), day.indexOf("<DayCoachNotes day={day}"));
   it("Warm-up only when there's one to open, Log faster as a help button, then List / Focus", () => {
     expect(controls).toContain("hideWhenEmpty");
     expect(controls).toContain('data-testid="quick-log-tips-open"');
