@@ -1,9 +1,19 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
+import {
+  normalizePlan,
+  planFromDays,
+  planIssue,
+  planPayload,
+  type ProgramPlan,
+} from "@/lib/program-plan";
+
 /**
- * Programs people build themselves (athlete_programs, 20270128090000_free_platform.sql).
- * One week of training days repeated for `weeks` weeks; library exercises only.
+ * Programs people build themselves (athlete_programs, 20270128090000_free_platform.sql):
+ * blocks of weeks of training days (`plan`, program-plan.ts; one written out
+ * per week since 20270418090000_member_programs_blocks_weeks.sql), library
+ * exercises only.
  * Private until shared with the crew; anyone who can see a shared one can save
  * their own copy (the original never changes); a self-serve member starts their
  * own copy as a program on their calendar (startMyProgram).
@@ -64,6 +74,8 @@ export type ProgramCard = {
   goal: ProgramGoal | null;
   level: ProgramLevel | null;
   weeks: number;
+  /** how many blocks (1 for a program from before blocks) */
+  blocks?: number;
   days_per_week: number;
   exercise_count: number;
   visibility: "private" | "community";
@@ -82,8 +94,18 @@ export type ProgramDetail = ProgramCard & {
   hidden_reason: string | null;
   can_moderate: boolean;
   copied: boolean;
+  /** week 1, with names (what older apps read) */
   days: ProgramDay[];
+  /** the whole program; null for one saved before plans (its week repeated) */
+  plan?: unknown | null;
+  /** names for every exercise the plan uses */
+  exercise_info?: Record<string, { name?: string | null; muscle_group?: string | null; equipment?: string | null }>;
 };
+
+/** A program's plan as the builder and the program page read it. */
+export function detailPlan(p: Pick<ProgramDetail, "plan" | "exercise_info" | "days" | "weeks">): ProgramPlan {
+  return normalizePlan(p.plan, p.exercise_info ?? undefined) ?? planFromDays(p.days ?? [], p.weeks || 1);
+}
 
 export type BrowseScope = "community" | "mine";
 export type BrowseFilters = {
@@ -138,62 +160,20 @@ export function useProgram(id: string | null | undefined) {
   });
 }
 
-/** What the builder edits: the days as the database stores them. */
+/** What the builder edits. */
 export type ProgramDraft = {
   id?: string | null;
   title: string;
   description: string;
   goal: ProgramGoal | null;
   level: ProgramLevel | null;
-  weeks: number;
-  days: ProgramDay[];
+  plan: ProgramPlan;
 };
 
-/** The plain form the save RPC takes (names and library details stripped). */
-export function draftDaysPayload(days: ProgramDay[]) {
-  return days.map((d) => ({
-    title: d.title.trim(),
-    focus: d.focus?.trim() || null,
-    exercises: d.exercises.map((e) => ({
-      exercise_id: e.exercise_id,
-      sets: Number(e.sets),
-      reps: String(e.reps ?? "").trim(),
-      rpe: e.rpe ? String(e.rpe).trim() : null,
-      rest_seconds: e.rest_seconds ?? null,
-      notes: e.notes?.trim() || null,
-    })),
-  }));
+/** First thing to fix before saving (the database checks the same), or null. */
+export function draftIssue(d: ProgramDraft) {
+  return planIssue(d.title, d.plan);
 }
-
-/**
- * First thing to fix before saving (the database checks the same things), and
- * where it is: the name, the week as a whole, or a day (its index), so the
- * builder can take the person straight to it. Null when it can be saved.
- */
-export function draftIssue(
-  d: ProgramDraft,
-): { message: string; at: "title" | "days" | number } | null {
-  if (d.title.trim().length < 2) return { message: "Give your program a name.", at: "title" };
-  if (!d.days.length) return { message: "Add a training day.", at: "days" };
-  if (d.days.length > 7) return { message: "A week has at most 7 training days.", at: "days" };
-  for (const [i, day] of d.days.entries()) {
-    const name = day.title.trim() || `Day ${i + 1}`;
-    const at = (message: string) => ({ message, at: i });
-    if (!day.exercises.length) return at(`Add an exercise to ${name}.`);
-    if (day.exercises.length > 20) return at(`${name} has more than 20 exercises.`);
-    for (const e of day.exercises) {
-      const sets = Number(e.sets);
-      if (!Number.isInteger(sets) || sets < 1 || sets > 20)
-        return at(`Sets must be 1 to 20 (${name}).`);
-      if (!String(e.reps ?? "").trim()) return at(`Every exercise needs reps (${name}).`);
-      if (e.rpe && !/^(10|[1-9](\.5)?)(-(10|[1-9](\.5)?))?$/.test(String(e.rpe).trim()))
-        return at(`RPE is 1 to 10, like 8 or 7-8 (${name}).`);
-    }
-  }
-  return null;
-}
-
-/** First thing to fix before saving, or null. */
 export function draftProblem(d: ProgramDraft): string | null {
   return draftIssue(d)?.message ?? null;
 }
@@ -210,14 +190,13 @@ export function useProgramActions() {
 
   const save = useMutation({
     mutationFn: async (d: ProgramDraft): Promise<string> => {
-      const { data, error } = await rpc("athlete_program_save", {
+      const { data, error } = await rpc("athlete_program_save_plan", {
         _id: d.id ?? null,
         _title: d.title.trim(),
         _description: d.description.trim() || null,
         _goal: d.goal,
         _level: d.level,
-        _weeks: d.weeks,
-        _days: draftDaysPayload(d.days),
+        _plan: planPayload(d.plan),
       });
       if (error) throw error;
       return data as string;
@@ -260,12 +239,13 @@ export function useProgramActions() {
   return { save, share, copy, remove, moderate };
 }
 
-/** "4 weeks · 3 days a week · 18 exercises" */
+/** "12 weeks · 3 blocks · 4 days a week · 18 exercises" */
 export function programMeta(
-  p: Pick<ProgramCard, "weeks" | "days_per_week" | "exercise_count">,
+  p: Pick<ProgramCard, "weeks" | "days_per_week" | "exercise_count"> & { blocks?: number },
 ): string {
   const parts = [
     `${p.weeks} ${p.weeks === 1 ? "week" : "weeks"}`,
+    ...(p.blocks && p.blocks > 1 ? [`${p.blocks} blocks`] : []),
     `${p.days_per_week} ${p.days_per_week === 1 ? "day" : "days"} a week`,
   ];
   if (p.exercise_count) parts.push(`${p.exercise_count} exercises`);

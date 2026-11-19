@@ -36,6 +36,7 @@ import {
   useShareComment,
   useSyncCommentCount,
 } from "@/lib/community.queries";
+import { feedback } from "@/lib/feedback";
 
 const NOTE_MAX = 1200;
 /** Replies shown under a comment before "View all". */
@@ -588,11 +589,7 @@ function useHold(onHold: () => void, disabled: boolean) {
   const fire = () => {
     cancel();
     held.current = true;
-    try {
-      navigator.vibrate?.(8);
-    } catch {
-      /* no haptics */
-    }
+    feedback("press");
     onHold();
   };
   return {

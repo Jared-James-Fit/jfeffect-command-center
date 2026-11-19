@@ -9,7 +9,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { playAppSound } from "@/lib/app-sounds";
+import { feedback } from "@/lib/feedback";
 import {
   RARITY_STYLE, RARITY_ORDER, featured, progressFor, isLegacyBadge, markAchievementsSeen, useUnseenAchievements,
   type AchievementMetrics, type CatalogBadge, type PublicBadge, type Rarity,
@@ -322,10 +322,12 @@ export function AchievementCelebrations({ clientId, catalog }: { clientId: strin
     if (!shownKey) return;
     if (shownKey.endsWith(":legendary")) {
       let stop = () => {};
+      // the legendary sting is its sound; the tap lands with it
+      feedback("milestone", { sound: false });
       void import("@/lib/achievement-music").then(({ playSting }) => { stop = playSting("legendary"); });
       return () => stop();
     }
-    playAppSound("milestone");
+    feedback("milestone");
   }, [shownKey]);
   if (!b) return null;
   const r = RARITY_STYLE[b.rarity];

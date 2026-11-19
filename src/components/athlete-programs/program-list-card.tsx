@@ -33,6 +33,13 @@ export function ProgramListCard({
       params={{ programId: p.id }}
       className="block rounded-2xl border border-border bg-card p-4 transition active:scale-[0.99]"
     >
+      {/* a crew member's program says whose it is first, the way a JF Effect plan says it's official */}
+      {showAuthor && (
+        <div className="mb-1.5 flex min-w-0 items-center gap-2" data-program-source="crew">
+          <UserAvatar src={p.author?.avatar_url ?? null} name={p.author?.name ?? "?"} size={20} expandable={false} />
+          <span className="truncate text-[12px] font-medium text-muted-foreground">{authorHandle(p.author)}</span>
+        </div>
+      )}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 truncate text-[16px] font-semibold">{p.title}</div>
         {running ? (
@@ -64,23 +71,8 @@ export function ProgramListCard({
       {p.day_titles.length > 0 && (
         <div className="mt-2 truncate text-[13px]">{p.day_titles.join(" · ")}</div>
       )}
-      {(showAuthor || p.save_count > 0 || p.start_count > 0) && (
-        <div className="mt-3 flex items-center justify-between gap-3">
-          {showAuthor ? (
-            <div className="flex min-w-0 items-center gap-2">
-              <UserAvatar
-                src={p.author?.avatar_url ?? null}
-                name={p.author?.name ?? "?"}
-                size={22}
-                expandable={false}
-              />
-              <span className="truncate text-[13px] text-muted-foreground">
-                {authorHandle(p.author)}
-              </span>
-            </div>
-          ) : (
-            <span />
-          )}
+      {(p.save_count > 0 || p.start_count > 0) && (
+        <div className="mt-3 flex items-center justify-end gap-3">
           <div className="flex shrink-0 items-center gap-3 text-[12px] text-muted-foreground">
             {p.save_count > 0 && (
               <span className="inline-flex items-center gap-1" aria-label={`Saved ${p.save_count}`}>

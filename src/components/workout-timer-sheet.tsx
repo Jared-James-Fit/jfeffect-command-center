@@ -1,4 +1,3 @@
-import { playAppSound } from "@/lib/app-sounds";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -6,6 +5,7 @@ import { Play, Pause, RotateCcw, X, Check, Plus, Timer as TimerIcon, Clock } fro
 import { cn } from "@/lib/utils";
 import { formatDuration, formatDurationShort } from "@/lib/duration";
 import { DurationInput } from "@/components/duration-input";
+import { feedback } from "@/lib/feedback";
 
 type CompletionMethod = "countdown_timer" | "stopwatch" | "manual_entry";
 
@@ -38,15 +38,6 @@ function fmtClock(totalMs: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-/** The shared "time's up" chime: follows the sounds setting and mixes with music. */
-function beep() {
-  playAppSound("timer");
-}
-function vibrate(pattern: number | number[]) {
-  if (typeof navigator !== "undefined" && navigator.vibrate) {
-    try { navigator.vibrate(pattern); } catch { /* no-op */ }
-  }
-}
 
 /**
  * Full-screen mobile / desktop-centred countdown sheet.
@@ -151,8 +142,8 @@ export function WorkoutTimerSheet({
     setEndsAt(null);
     setRemainingMs(0);
     setDone(true);
-    beep();
-    vibrate([180, 80, 180]);
+    // the shared "time's up": the timer chime and its long buzz, each following its setting
+    feedback("timer");
   }, [countdownReachedZero]);
 
   const startCountdown = () => {

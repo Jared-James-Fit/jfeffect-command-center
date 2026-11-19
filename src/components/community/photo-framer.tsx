@@ -15,14 +15,10 @@ import {
   type Point,
   type Size,
 } from "@/lib/photo-frame";
+import { feedback } from "@/lib/feedback";
 
-const buzz = () => {
-  try {
-    navigator.vibrate?.(8);
-  } catch {
-    /* no haptics here */
-  }
-};
+/** The frame snapping to a guide: the detent tick. */
+const buzz = () => feedback("detent");
 
 type GestureHandlers = {
   /** A gesture started (the grid shows). */
