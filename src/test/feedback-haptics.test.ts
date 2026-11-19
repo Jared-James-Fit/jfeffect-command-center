@@ -199,7 +199,7 @@ describe("one feedback() per moment", () => {
 
   it("is the only way the app vibrates or plays a cue (one engine, one setting each)", () => {
     const files = walk(path.join(process.cwd(), "src"));
-    const vibrates = files.filter((f) => !f.endsWith(`platform${path.sep}haptics.ts`) && /navigator\??\.vibrate|\.vibrate\(/.test(readFileSync(f, "utf8")));
+    const vibrates = files.filter((f) => !f.endsWith(`platform${path.sep}haptics.ts`) && /navigator\??\.vibrate|\.vibrate\??\.?\(/.test(readFileSync(f, "utf8")));
     expect(vibrates).toEqual([]);
     const sounds = files.filter((f) => !/lib[\\/](app-sounds|ui-sounds|feedback)\.ts$/.test(f) && /playAppSound\(/.test(readFileSync(f, "utf8")));
     expect(sounds).toEqual([]);

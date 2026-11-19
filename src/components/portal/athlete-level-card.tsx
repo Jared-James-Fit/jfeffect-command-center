@@ -22,19 +22,23 @@ import { LeagueRecapButton } from "@/components/portal/league-recap";
 import { LiveMark } from "@/components/live-indicator";
 import { LEAGUE_ONE_LINER, TIEBREAK_NOTE, boostProgress, monthClockLabel, rankedRows, standingOf, standingText } from "@/lib/league-standing";
 import { usePerformanceLeague, type PerformanceLeagueRow } from "@/lib/use-performance-league";
+import { boardMoves, moveMark, weekRange, type RankMove } from "@/lib/league-week";
+import { useLeagueWeek, useLeagueWeekBaseline } from "@/lib/league-week.queries";
+import { LeagueWeekSheet } from "@/components/community/league-week-card";
 
 type XpEvent = { id: string; event_type: string; label: string | null; xp: number; occurred_at: string };
 type Row = PerformanceLeagueRow;
 
-function useXpEvents(clientId: string) {
+function useXpEvents(clientId: string | null) {
   return useQuery({
     queryKey: ["athlete-xp", clientId],
+    enabled: !!clientId,
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("athlete_xp_events")
         .select("id, event_type, label, xp, occurred_at")
-        .eq("client_id", clientId)
+        .eq("client_id", clientId!)
         .order("occurred_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as XpEvent[];
@@ -48,29 +52,36 @@ const MEDALS = ["🥇", "🥈", "🥉"];
 
 /**
  * Crew → Rankings → Monthly: this month's League in one plain card. The
- * title and one line saying what it is, then you (rank, points, the one line
- * that says what's next, the boost; your breakdown one tap away), then the
- * Top 10. Colour only where it means something (green: boost unlocked; amber:
- * the final days). Last month's final standings, Milestones and the rules are
- * rows underneath, one tap away. One query (get_performance_league). Logging
- * Level points still accrue (DB triggers) and feed Milestones; the level
- * itself isn't shown to clients. New-milestone reveals pop on Home
- * (LevelCelebrations).
+ * title and one line saying what it is, then you (rank and how it moved this
+ * week, points and what you've added this week, the one line that says
+ * what's next, the boost; your breakdown one tap away), then the Top 10, each
+ * with how far they've moved since Monday (league_week_snapshots). Colour only
+ * where it means something (green: up / boost unlocked; amber: the final
+ * days). Last week's card, last month's final standings, Milestones and the
+ * rules are rows underneath, one tap away. Logging Level points still accrue
+ * (DB triggers) and feed Milestones; the level itself isn't shown to clients.
+ * New-milestone reveals pop on Home (LevelCelebrations). With no client (a
+ * coach looking at the crew's board) it's the board alone.
  */
 export function AthleteLevelCard({ clientId, openPrevious = false }: {
-  clientId: string;
+  clientId: string | null;
   /** Open on last month's final standings (the Rankings spotlight's Champions podium). */
   openPrevious?: boolean;
 }) {
   const { data: events = [] } = useXpEvents(clientId);
   const stats = statsFromEvents(events);
   const { data: catalog = [] } = useBadgeCatalog();
-  const { data: earned = [] } = useMyAchievements(clientId);
+  const { data: earned = [] } = useMyAchievements(clientId ?? "");
   const { data: rows = [], isPending } = usePerformanceLeague("current");
+  // ▲ / ▼ since Monday, and last week's card (one tap away under the board)
+  const { data: baseline } = useLeagueWeekBaseline();
+  const moves = boardMoves(rows, baseline);
+  const { data: lastWeek } = useLeagueWeek(!!clientId);
+  const [weekOpen, setWeekOpen] = useState(false);
   // The sheet holds only an athlete's details or last month's final standings.
   const [sheet, setSheet] = useState<null | { kind: "athlete"; id: string; fromPrevious?: boolean } | { kind: "previous" }>(() => (openPrevious ? { kind: "previous" } : null));
 
-  const me = rows.find((r) => r.client_id === clientId) ?? rows.find((r) => r.is_me) ?? null;
+  const me = (clientId ? rows.find((r) => r.client_id === clientId) : null) ?? rows.find((r) => r.is_me) ?? null;
   const ranked = rankedRows(rows);
   // The scoreboard is the Top 10 (and you, if you're below it): never the whole roster.
   const shown = ranked.filter((r) => Number(r.rank) <= SHOWN);
@@ -106,7 +117,7 @@ export function AthleteLevelCard({ clientId, openPrevious = false }: {
             </div>
           ) : (
             <>
-              <YouPanel me={me} rows={rows} finalWeek={finalWeek} />
+              <YouPanel me={me} rows={rows} finalWeek={finalWeek} week={me ? moves.get(me.client_id) : undefined} />
 
               {/* Final week: the boost race, in one plain card under you */}
               {me?.qualified && finalWeek && (
@@ -124,7 +135,7 @@ export function AthleteLevelCard({ clientId, openPrevious = false }: {
                 <ol className="mt-3 divide-y divide-border/60 border-t border-border/60" aria-label="Standings">
                   {[...shown, ...(meBelow ? [meBelow] : [])].map((r) => (
                     <li key={r.client_id}>
-                      <BoardRow row={r} finalWeek={finalWeek} onOpen={() => openAthlete(r.client_id)} />
+                      <BoardRow row={r} finalWeek={finalWeek} move={moves.get(r.client_id)?.move ?? null} onOpen={() => openAthlete(r.client_id)} />
                     </li>
                   ))}
                 </ol>
@@ -138,6 +149,21 @@ export function AthleteLevelCard({ clientId, openPrevious = false }: {
 
         {/* everything else, one tap away */}
         <section className="divide-y divide-border/60 overflow-hidden rounded-2xl border bg-card">
+          {/* last week's card (Crew shows it once on Monday): here all week */}
+          {lastWeek && (
+            <button
+              type="button"
+              onClick={() => setWeekOpen(true)}
+              className="flex min-h-12 w-full items-center justify-between gap-3 px-4 text-left text-[14px] font-medium active:bg-muted"
+              data-league-last-week
+            >
+              Last week
+              <span className="flex shrink-0 items-center gap-1 text-[13px] font-normal tabular-nums text-muted-foreground">
+                {weekRange(lastWeek.week_start, lastWeek.week_end)}
+                <ChevronRight className="h-4 w-4" />
+              </span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setSheet({ kind: "previous" })}
@@ -145,7 +171,7 @@ export function AthleteLevelCard({ clientId, openPrevious = false }: {
           >
             {prevName} final standings <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           </button>
-          <MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} variant="row" />
+          {clientId && <MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} variant="row" />}
           <HowPointsWork />
         </section>
       </div>
@@ -168,12 +194,13 @@ export function AthleteLevelCard({ clientId, openPrevious = false }: {
           ) : null}
         </SheetContent>
       </Sheet>
+      <LeagueWeekSheet week={lastWeek ?? null} open={weekOpen} onOpenChange={setWeekOpen} />
     </>
   );
 }
 
 /** You, at the top of the board: rank, points, what's next, the boost; your points breakdown one tap away. */
-function YouPanel({ me, rows, finalWeek }: { me: Row | null; rows: Row[]; finalWeek: boolean }) {
+function YouPanel({ me, rows, finalWeek, week }: { me: Row | null; rows: Row[]; finalWeek: boolean; week?: { move: RankMove; weekPoints: number | null } }) {
   const [open, setOpen] = useState(false);
   if (!me) return null;
   if (!me.qualified) {
@@ -188,13 +215,26 @@ function YouPanel({ me, rows, finalWeek }: { me: Row | null; rows: Row[]; finalW
     );
   }
   const standing = standingOf(rows, me);
+  const mark = moveMark(week?.move ?? null);
+  const gained = week?.weekPoints ?? 0;
   return (
     <div data-league-you className="mx-3 mt-3 rounded-xl bg-muted/60">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center gap-3 px-3 py-3 text-left">
-        <span className="w-11 shrink-0 text-center text-[22px] font-semibold leading-none tabular-nums">#{me.rank}</span>
+        <span className="w-11 shrink-0 text-center">
+          <span className="block text-[22px] font-semibold leading-none tabular-nums">#{me.rank}</span>
+          {/* how far you've moved since Monday */}
+          {mark && (
+            <span className={cn("mt-1 block text-[11px] font-semibold leading-none tabular-nums", week?.move?.dir === "up" ? "text-success" : "text-muted-foreground")} data-you-move={week?.move?.dir}>
+              {mark}
+            </span>
+          )}
+        </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[15px] font-semibold leading-tight tabular-nums">
-            You · {formatLeaguePoints(me.total_points)} <span className="text-[12px] font-medium text-muted-foreground">pts</span>
+          <span className="flex flex-wrap items-baseline gap-x-1.5 text-[15px] font-semibold leading-tight tabular-nums">
+            <span>
+              You · {formatLeaguePoints(me.total_points)} <span className="text-[12px] font-medium text-muted-foreground">pts</span>
+            </span>
+            {gained > 0 && <span className="text-[12px] font-medium text-success" data-you-week-points>+{formatLeaguePoints(gained)} this week</span>}
           </span>
           <span className="block truncate text-[12px] leading-snug text-muted-foreground">{standingText(standing)}</span>
         </span>
@@ -233,8 +273,9 @@ function BoostProgressLine({ me }: { me: Row | null }) {
   );
 }
 
-function BoardRow({ row: r, finalWeek, onOpen }: { row: Row; finalWeek: boolean; onOpen: () => void }) {
+function BoardRow({ row: r, finalWeek, move, onOpen }: { row: Row; finalWeek: boolean; move: RankMove; onOpen: () => void }) {
   const place = Number(r.rank);
+  const mark = moveMark(move);
   return (
     <button type="button" onClick={onOpen} className={cn("flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left active:bg-muted", r.is_me && "bg-muted/60")}>
       <span className="w-5 shrink-0 text-center text-[13px] font-medium tabular-nums text-muted-foreground">{MEDALS[place - 1] ?? place}</span>
@@ -246,7 +287,15 @@ function BoardRow({ row: r, finalWeek, onOpen }: { row: Row; finalWeek: boolean;
         </span>
         {finalWeek && <RowBoost row={r} />}
       </span>
-      <span className="shrink-0 text-[14px] font-semibold tabular-nums">{formatLeaguePoints(r.total_points)}</span>
+      {/* since Monday: green up, quiet down, nothing when unchanged (the column keeps the points lined up) */}
+      <span
+        className={cn("w-7 shrink-0 text-right text-[11px] font-semibold tabular-nums", move?.dir === "up" ? "text-success" : "text-muted-foreground")}
+        aria-label={mark ? `${move?.dir === "up" ? "Up" : "Down"} ${move?.spots} since Monday` : undefined}
+        data-row-move={mark ? move?.dir : undefined}
+      >
+        {mark}
+      </span>
+      <span className="w-10 shrink-0 text-right text-[14px] font-semibold tabular-nums">{formatLeaguePoints(r.total_points)}</span>
     </button>
   );
 }

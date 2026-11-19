@@ -264,6 +264,17 @@ function boardValue(r: StrengthRow, mode: BoardMode, unit: WeightUnit) {
  * like the full board. Tapping a lifter with a career opens it; Back closes.
  */
 /** Your division for the boards: from your own rows (any lift), else All. */
+/**
+ * What the board ranks, in plain words, under its title: pound for pound is
+ * the lift ÷ bodyweight, heaviest is the lift itself; all-time is training
+ * and meets, Meets only is sanctioned meets.
+ */
+export function strengthExplainer(mode: BoardMode, lift: BoardLift, source: BoardSource): string {
+  const what = lift === "total" ? "Squat + bench + deadlift" : lift === "squat" ? "Best squat" : lift === "bench" ? "Best bench" : "Best deadlift";
+  const how = mode === "p4p" ? `${lift === "total" ? "Total" : what} ÷ bodyweight` : what;
+  return `${how} · ${source === "all" ? "training and meets" : "sanctioned meets"}`;
+}
+
 export function defaultDivision(rows: StrengthRow[]): Division {
   return rows.find((r) => r.is_me && r.sex)?.sex ?? "all";
 }
@@ -306,26 +317,26 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
     : status.kind === "other-division" ? null
     : status.kind === "ranked" ? null
     : "Log a heavy single to get on this board";
-  const chip = (on: boolean) => cn("min-h-7 flex-1 rounded-full text-[11px] font-bold transition", on ? "bg-foreground text-background" : "text-muted-foreground active:bg-muted");
+  const chip = (on: boolean) => cn("min-h-8 flex-1 rounded-full text-[12px] font-semibold transition", on ? "bg-foreground text-background" : "text-muted-foreground active:bg-muted");
   const MEDAL = ["🥇", "🥈", "🥉"];
 
   return (
     <>
       <div className="flex h-full flex-col">
-        {/* Same header as the League: what it is on the left, where you stand on the right */}
-        <div className="flex w-full items-start gap-3 px-4 pt-3 text-left">
+        {/* Same header as the League: what it is and how it's ranked on the left, where you stand on the right */}
+        <div className="flex w-full items-start gap-3 px-4 pt-4 text-left">
           <span className="min-w-0 flex-1">
-            <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{source === "all" ? "All-time strength board" : "Competition · sanctioned meets"}</span>
-            <span className="mt-0.5 flex items-center gap-2 text-lg font-bold tracking-tight">
-              Hall of Strength <Trophy className="h-4 w-4 text-amber-400" />
+            <h3 className="text-base font-semibold">{source === "all" ? "All-time bests" : "Meet results"}</h3>
+            <span className="mt-0.5 block text-[12px] leading-snug text-muted-foreground" data-strength-explainer>
+              {strengthExplainer(mode, lift, source)}
+              {count > 0 && ` · ${count} athletes`}
             </span>
-            <span className="block text-[11px] text-muted-foreground">{source === "meets" ? `${count} athletes · meets only` : count > 0 ? `${count} athletes · gym + meets` : "Every JF Effect athlete · gym + meets"}</span>
           </span>
           {!isPending && ranked && me && (
-            <span className="shrink-0 text-right">
-              <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Your rank</span>
-              <span className="block text-lg font-bold leading-tight text-primary">#{status.rank}</span>
-              <span className="block text-[11px] font-bold tabular-nums text-muted-foreground">{boardValue(me, mode, unit)}</span>
+            <span className="shrink-0 text-right" data-strength-you>
+              <span className="block text-[12px] text-muted-foreground">You</span>
+              <span className="block text-[20px] font-semibold leading-tight tabular-nums">#{status.rank}</span>
+              <span className="block text-[12px] font-medium tabular-nums text-muted-foreground">{boardValue(me, mode, unit)}</span>
             </span>
           )}
         </div>
@@ -333,10 +344,10 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
         <div className="mx-3 mt-2 space-y-1">
           {/* how it's ranked, and (one tap) meets only: one row instead of two */}
           <div className="flex items-center gap-1">
-            <div className="grid flex-1 grid-cols-2 rounded-full bg-muted/50 p-0.5 text-[11px] font-bold" role="tablist" aria-label="Ranked by">
+            <div className="grid flex-1 grid-cols-2 rounded-full bg-muted/50 p-0.5 text-[12px] font-semibold" role="tablist" aria-label="Ranked by">
               {([["p4p", "Pound for pound", "P4P"], ["absolute", "Heaviest", "Heaviest"]] as const).map(([k, label, narrow]) => (
                 <button key={k} type="button" role="tab" aria-selected={mode === k} aria-label={label} onClick={() => pick(setMode)(k)}
-                  className={cn("min-h-7 whitespace-nowrap rounded-full transition", mode === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
+                  className={cn("min-h-8 whitespace-nowrap rounded-full transition", mode === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
                   <span className="max-[359px]:hidden">{label}</span><span className="min-[360px]:hidden">{narrow}</span>
                 </button>
               ))}
@@ -346,7 +357,7 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
               aria-pressed={source === "meets"}
               aria-label="Competition: sanctioned meets only"
               onClick={() => pick(setSource)(source === "meets" ? "all" : "meets")}
-              className={cn("min-h-8 shrink-0 rounded-full border px-2.5 text-[11px] font-bold transition", source === "meets" ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground active:bg-muted")}
+              className={cn("min-h-9 shrink-0 rounded-full border px-3 text-[12px] font-semibold transition", source === "meets" ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground active:bg-muted")}
             >
               Meets only
             </button>
@@ -373,7 +384,7 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
         {hint && !isPending && (
           <div className="mx-3 mt-2 flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-left">
             <Scale className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="text-[11px] font-medium">{hint}</span>
+            <span className="text-[12px] font-medium">{hint}</span>
           </div>
         )}
 
@@ -397,10 +408,10 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
                 const place = rankOf(r, mode, division)!;
                 return (
                   <button type="button" key={r.key} onClick={() => show(r.athlete_id)}
-                    className={cn("min-w-0 rounded-xl bg-muted/40 px-1.5 py-2 text-center transition-colors active:bg-muted", r.is_me && "bg-primary/10 ring-1 ring-primary/30")}>
+                    className={cn("min-w-0 rounded-xl bg-muted/40 px-1.5 py-2 text-center transition-colors active:bg-muted", r.is_me && "bg-muted ring-1 ring-foreground/20")}>
                     <div className="text-base leading-none">{MEDAL[place - 1] ?? place}</div>
                     <div className="mt-1 truncate text-xs font-semibold">{r.is_me ? "You" : r.display_name}</div>
-                    <div className="mt-0.5 truncate text-[12px] font-bold tabular-nums text-primary">{boardValue(r, mode, unit)}</div>
+                    <div className="mt-0.5 truncate text-[13px] font-semibold tabular-nums">{boardValue(r, mode, unit)}</div>
                     <div className="truncate text-[10px] text-muted-foreground">
                       {r.source === "meet" ? "Meet" : "Training"}{mode === "p4p" ? ` · ${formatLoad(r.kg, unit)}` : ""}
                     </div>
@@ -413,11 +424,11 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
               <ol className="mx-3 mt-2 divide-y divide-border/60 overflow-hidden rounded-xl bg-muted/25">
                 {[...rest, ...(meBelow ? [meBelow] : [])].map((r) => (
                   <li key={r.key}>
-                    <button type="button" onClick={() => show(r.athlete_id)} className={cn("flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] active:bg-muted", r.is_me && "bg-primary/10")}>
+                    <button type="button" onClick={() => show(r.athlete_id)} className={cn("flex min-h-11 w-full items-center gap-2.5 px-3 py-2 text-left text-[14px] active:bg-muted", r.is_me && "bg-muted/80")}>
                       <span className="w-6 shrink-0 text-center text-[12px] font-bold tabular-nums text-muted-foreground">{rankOf(r, mode, division)}</span>
-                      <span className="min-w-0 flex-1 truncate font-semibold">{r.is_me ? "You" : r.display_name}</span>
-                      <span className="shrink-0 text-[10px] text-muted-foreground">{r.source === "meet" ? "Meet" : "Training"}</span>
-                      <span className="shrink-0 text-[12px] font-bold tabular-nums text-primary">{boardValue(r, mode, unit)}</span>
+                      <span className={cn("min-w-0 flex-1 truncate", r.is_me ? "font-semibold" : "font-medium")}>{r.is_me ? "You" : r.display_name}</span>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">{r.source === "meet" ? "Meet" : "Training"}</span>
+                      <span className="shrink-0 text-[14px] font-semibold tabular-nums">{boardValue(r, mode, unit)}</span>
                     </button>
                   </li>
                 ))}
@@ -428,7 +439,7 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
         <div className="mt-auto space-y-2 px-3 pb-3 pt-2.5">
           {/* everyone else on this board (and who isn't ranked yet), opened right here */}
           {count > TOP && (
-            <button type="button" onClick={() => setShowAll((v) => !v)} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border bg-background text-sm font-bold text-primary active:bg-muted">
+            <button type="button" onClick={() => setShowAll((v) => !v)} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border bg-background text-sm font-semibold active:bg-muted">
               {showAll ? "Show top 10" : `Show all ${count} athletes`}
             </button>
           )}

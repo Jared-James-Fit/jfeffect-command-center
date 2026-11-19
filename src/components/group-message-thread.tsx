@@ -443,7 +443,7 @@ export function GroupMessageThread({
     if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
     const t = setTimeout(() => {
       suppressClickRef.current = true;
-      try { (navigator as any).vibrate?.(10); } catch {}
+      feedback("press");
       if (selectionMode) toggleSelected(id);
       else setSheetForId(id);
     }, 450);

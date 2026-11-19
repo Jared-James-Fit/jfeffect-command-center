@@ -33,7 +33,7 @@ describe("Rankings: swipe between Monthly and Strength", () => {
 
 describe("Monthly board: you first, one board, the rest folded", () => {
   it("your rank, points and next step sit above the board; the breakdown is one tap away", () => {
-    expect(card).toContain("<YouPanel me={me} rows={rows} finalWeek={finalWeek} />");
+    expect(card).toContain("<YouPanel me={me} rows={rows} finalWeek={finalWeek} week={me ? moves.get(me.client_id) : undefined} />");
     expect(card.indexOf("<YouPanel")).toBeLessThan(card.indexOf('aria-label="Standings"'));
     expect(card).toContain("{standingText(standing)}");
     expect(card).toContain("aria-expanded={open}");
@@ -64,9 +64,10 @@ describe("Monthly board: you first, one board, the rest folded", () => {
 });
 
 describe("Recap: on top in recap week, under the board after, never dismissible", () => {
-  it("one card: above the Monthly / Strength switch only in recap week, then under the board; no ✕ or hidden state", () => {
-    expect(hub).toContain("{inRecapWindow() && <LeagueRecapButton />}");
-    expect(hub.indexOf("<LeagueRecapButton />")).toBeLessThan(hub.indexOf('aria-label="Leaderboard"'));
+  it("one card: right under the Monthly League / Hall of Strength switch only in recap week (the switch always first), then under the board; no ✕ or hidden state", () => {
+    expect(hub).toContain("{inRecapWindow() && !spectator && <LeagueRecapButton />}");
+    expect(hub.indexOf("<LeagueRecapButton />")).toBeGreaterThan(hub.indexOf('aria-label="Leaderboard"'));
+    expect(hub.indexOf("<LeagueRecapButton />")).toBeLessThan(hub.indexOf("data-rankings-board={board}"));
     // never both: under the board the rest of the month
     expect(card).toContain("{!inRecapWindow() && <LeagueRecapButton />}");
     expect(card.indexOf("<LeagueRecapButton />")).toBeGreaterThan(card.indexOf('aria-label="Standings"'));

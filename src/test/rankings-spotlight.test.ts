@@ -99,10 +99,11 @@ describe("Rankings spotlight: every board's podium, one at a time", () => {
     expect(c).toContain("data-no-swipe-back");
   });
 
-  it("sits at the top of Rankings; a podium opens its board on that view (Women · Heaviest total → Women, Heaviest; Champions → last month's standings)", () => {
+  it("sits under the board you're on (the switch and you come first, Nov 19 2026); a podium opens its board on that view (Women · Heaviest total → Women, Heaviest; Champions → last month's standings)", () => {
     const hub = read("src/components/community/league-hub.tsx");
     expect(hub.indexOf("<RankingsSpotlight")).toBeGreaterThan(hub.indexOf("<LeagueRecapButton />"));
-    expect(hub.indexOf("<RankingsSpotlight")).toBeLessThan(hub.indexOf('role="tablist" aria-label="Leaderboard"'));
+    expect(hub.indexOf("<RankingsSpotlight")).toBeGreaterThan(hub.indexOf('role="tablist" aria-label="Leaderboard"'));
+    expect(hub.indexOf("<RankingsSpotlight")).toBeGreaterThan(hub.indexOf("<AthleteLevelCard clientId={client.id}"));
     expect(hub).toContain('setOpened((o) => ({ n: o.n + 1, view: slide.view ?? null, previous: slide.board === "champions" }));');
     expect(hub).toContain("<StrengthBoardSlide initialMode={opened.view?.mode} initialDivision={opened.view?.division} />");
     expect(hub).toContain("<AthleteLevelCard clientId={client.id} openPrevious={opened.previous} />");

@@ -47,7 +47,10 @@ export function useBarHidden(enabled: boolean): boolean {
 }
 
 /**
- * Crew's one top bar: left, a centred title, right. On phones it's fixed under
+ * Crew's one top bar: left, a centred middle, right. The middle sits in the
+ * centre of the bar whenever it fits, and gives way only as much as the
+ * buttons need (a grid whose sides are equal but never narrower than their
+ * buttons), so Crew · Following · Rankings fit a 320px phone. On phones it's fixed under
  * the status bar (the shell's own bar steps aside on Crew) and slides away
  * while you read down; on wider screens it sits at the top of the column. A
  * coach viewing as a client gets the very same bar, under the preview banner
@@ -77,14 +80,14 @@ export function CrewBar({ left, center, right, hidden = false, overlay = false, 
         className={cn("crew-bar fixed inset-x-0 top-[var(--app-chrome-top)] z-40 bg-background md:relative md:inset-auto", overlay && "dark text-foreground")}
         style={{ paddingTop: "var(--app-safe-top)" }}
       >
-        <div className="relative mx-auto flex w-full max-w-[560px] items-center justify-between px-1.5" style={{ height: CREW_BAR_HEIGHT }}>
-          <div className="relative z-10 flex min-w-0 items-center">{left}</div>
-          {center != null && (
-            <div className="pointer-events-none absolute inset-x-[92px] inset-y-0 flex items-center justify-center">
-              <div className="pointer-events-auto flex min-w-0 max-w-full items-center justify-center">{center}</div>
-            </div>
-          )}
-          <div className="relative z-10 flex min-w-0 items-center">{right}</div>
+        <div
+          className="relative mx-auto grid w-full max-w-[560px] grid-cols-[minmax(max-content,1fr)_minmax(0,auto)_minmax(max-content,1fr)] items-center px-1.5"
+          style={{ height: CREW_BAR_HEIGHT }}
+          data-crew-bar-row
+        >
+          <div className="flex items-center justify-self-start">{left}</div>
+          <div className="flex min-w-0 items-center justify-center overflow-hidden px-1" data-crew-bar-center>{center}</div>
+          <div className="flex items-center justify-self-end">{right}</div>
         </div>
       </header>
       {/* holds the bar's room in the page, so nothing jumps under it */}
@@ -128,23 +131,38 @@ export function BarTitle({ children }: { children: ReactNode }) {
 }
 
 export type CrewFeedTab = "crew" | "following";
+/** Crew's three top tabs: the feed's two looks, then Rankings. */
+export type CrewTab = CrewFeedTab | "rankings";
 
-const FEED_TABS: readonly (readonly [CrewFeedTab, string])[] = [
+export const CREW_TABS: readonly (readonly [CrewTab, string])[] = [
   ["crew", "Crew"],
   ["following", "Following"],
+  ["rankings", "Rankings"],
 ];
 
 /**
- * The feed's two looks in the middle of Crew's bar, TikTok's Following / For
- * You: Crew (everyone, where the feed always opens) and Following (people you
- * follow and what they repost). The one you're on is full strength with a
- * short line under it; a tap on it again goes back to the top. Over the paged
- * feed the words get the icons' soft shadow (styles.css).
+ * Crew's top tabs in the middle of its bar, TikTok's Following / For You:
+ * Crew (everyone, where the feed always opens), Following (people you follow
+ * and what they repost) and Rankings (the Monthly League and the Hall of
+ * Strength). The one you're on is full strength with a short line under it; a
+ * tap on it again goes back to its top. Over the paged feed the words get the
+ * icons' soft shadow (styles.css). Sized to fit three across a 320px phone
+ * between Crew's buttons.
  */
-export function CrewFeedTabs({ tab, onPick }: { tab: CrewFeedTab; onPick: (t: CrewFeedTab) => void }) {
+export function CrewFeedTabs({ tab, onPick, compact = false }: {
+  tab: CrewTab;
+  onPick: (t: CrewTab) => void;
+  /** Two buttons on the left (the coach's + and Manage): a size smaller, so all three still fit. */
+  compact?: boolean;
+}) {
   return (
-    <div role="tablist" aria-label="Feed" className="flex items-center gap-5 max-[359px]:gap-3.5" data-crew-feed-tabs>
-      {FEED_TABS.map(([k, label]) => {
+    <div
+      role="tablist"
+      aria-label="Crew"
+      className={cn("flex items-center", compact ? "gap-3 max-[389px]:gap-2 max-[359px]:gap-1" : "gap-4 max-[389px]:gap-3 max-[359px]:gap-2")}
+      data-crew-feed-tabs
+    >
+      {CREW_TABS.map(([k, label]) => {
         const on = tab === k;
         return (
           <button
@@ -155,7 +173,8 @@ export function CrewFeedTabs({ tab, onPick }: { tab: CrewFeedTab; onPick: (t: Cr
             onClick={() => onPick(k)}
             // both bold, so picking one never shifts the other; the one you're off is quieter
             className={cn(
-              "relative h-10 px-0.5 text-[17px] font-bold leading-none tracking-[-0.01em] transition-colors active:opacity-70 max-[359px]:text-[15.5px]",
+              "relative h-10 px-0.5 font-bold leading-none tracking-[-0.01em] transition-colors active:opacity-70",
+              compact ? "text-[15px] max-[389px]:text-[13.5px] max-[359px]:text-[11px]" : "text-[16px] max-[389px]:text-[15px] max-[359px]:text-[13.5px]",
               on ? "text-foreground" : "text-foreground/55",
             )}
             data-crew-feed-tab={k}
