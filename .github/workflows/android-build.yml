@@ -99,7 +99,7 @@ jobs:
       # Android refuses silently. Not required hardware, so no device is excluded.
       # VIBRATE (granted at install, never a popup) is what lets the web view's
       # navigator.vibrate reach the motor: the app's haptics (src/platform/haptics.ts).
-      - name: Declare camera, microphone and vibration permissions
+      - name: Declare camera and microphone permissions
         run: |
           python3 << 'PYEOF'
           app = "android/app/src/main/AndroidManifest.xml"
