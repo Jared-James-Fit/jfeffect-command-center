@@ -45,8 +45,8 @@ describe("who liked a post, Instagram's way", () => {
     expect(btn).toContain('stacked ? "-mt-2 h-7 min-w-11 px-1.5" : "-ml-2 h-11 min-w-8 px-1.5 hover:bg-muted"');
     const card = read("src/components/community/post-card.tsx");
     // a post's own screen (the paged feed) and the card row alike
-    expect(card).toContain('<ReactionButton post={post} onReact={onReact} align="right" stacked onCount={openLikes} />');
-    expect(card).toContain("<ReactionButton post={post} onReact={onReact} onCount={openLikes} />");
+    expect(card).toContain('<ReactionButton post={post} onReact={onReact} align="right" stacked onCount={openLikes} onCountPress={likesPress} />');
+    expect(card).toContain("<ReactionButton post={post} onReact={onReact} onCount={openLikes} onCountPress={likesPress} />");
     expect(card).toContain('<LikedBy post={post} onOpen={openLikes} highlight={on} className="-mt-0.5" />');
   });
 
@@ -74,5 +74,38 @@ describe("who liked a post, Instagram's way", () => {
     expect(sql).toContain("WHERE l.user_id NOT IN (SELECT id FROM blocked)");
     expect(sql).toMatch(/ORDER BY \(l\.main = me\) DESC,\s+\(l\.main IN \(SELECT id FROM followed\)/);
     expect(sql).toContain("GRANT EXECUTE ON FUNCTION public.community_post_reactors(uuid) TO authenticated;");
+  });
+
+  it("one rule for the list, the line's faces and the count: community_post_likers, inlined, never a whole set per post", () => {
+    const sql = read("supabase/migrations/20270415090000_likers_one_rule.sql");
+    // plain SQL, no SET clause, so Postgres inlines it into both callers
+    expect(sql).toMatch(/CREATE OR REPLACE FUNCTION public\.community_post_likers\(_post_id uuid, _viewer_main uuid\)\s+RETURNS TABLE[^$]+LANGUAGE sql\s+STABLE\s+AS \$\$/);
+    expect(sql).toContain("REVOKE ALL ON FUNCTION public.community_post_likers(uuid, uuid) FROM PUBLIC, anon, authenticated;");
+    // no deactivated or deleted account, no block either way (a coach is never hidden), always your own
+    expect(sql).toContain("c.user_id IN (r.user_id, m.main) AND c.status = 'Deactivated'");
+    expect(sql).toContain("d.user_id IN (r.user_id, m.main) AND d.status IN ('pending', 'deleted')");
+    expect(sql).toContain("THEN public.community_is_coach(m.main)");
+    expect(sql).toContain("AND (m.main = _viewer_main OR (");
+    // the list and the line read it, in the same order
+    expect(sql).toContain("FROM public.community_post_likers(_post_id, public.community_main_account(uid)) l), '[]'::jsonb);");
+    expect(sql).toContain("FROM public.community_post_likers(n.id, public.community_main_account(_viewer)) l\n                                   ORDER BY l.me DESC, l.followed DESC, l.at DESC LIMIT 3) t)");
+    expect(sql.match(/ORDER BY l\.me DESC, l\.followed DESC, l\.at DESC/g)?.length).toBe(2);
+    expect(sql).toContain("ORDER BY t.me DESC, t.followed DESC, t.at DESC)");
+    // and the counts by the heart, so "and 12 others" is 12 people the list shows
+    expect(sql).toContain("'reaction_count', (SELECT count(*) FROM public.community_post_likers(n.id, public.community_main_account(_viewer)) l),");
+    expect(sql).toContain("FROM (SELECT l.emoji, count(*) c FROM public.community_post_likers(n.id, public.community_main_account(_viewer)) l");
+    // patched in place, refusing to guess when the function isn't what was read
+    expect(sql).toContain("RAISE EXCEPTION '% : fragment % not found', _sig, i;");
+  });
+
+  it("the Likes start loading as the finger lands, from the number and from Liked by", () => {
+    const q = read("src/lib/community.queries.ts");
+    expect(q).toContain("export function usePrefetchPostReactors()");
+    expect(q).toContain("return useQuery({ ...postReactorsQuery(postId), enabled: !!postId });");
+    expect(read("src/components/community/reaction-button.tsx")).toContain("onPointerDown={onCountPress}");
+    expect(read("src/components/community/reactors-sheet.tsx")).toContain("onPointerDown={() => prefetch(post.id)}");
+    const card = read("src/components/community/post-card.tsx");
+    expect(card).toContain('stacked onCount={openLikes} onCountPress={likesPress} />');
+    expect(card).toContain("<ReactionButton post={post} onReact={onReact} onCount={openLikes} onCountPress={likesPress} />");
   });
 });

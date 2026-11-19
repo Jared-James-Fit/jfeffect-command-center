@@ -805,7 +805,7 @@ describe("reactions and who gave them", () => {
     expect(heart).toContain("INSERT INTO public.community_reactions (post_id, user_id, emoji) VALUES (_post_id, uid, v)");
     expect(heart).toContain("ON CONFLICT (post_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji;");
     expect(heart).toContain("v text := CASE WHEN _emoji IN ('muscle', 'clap') THEN 'heart' ELSE nullif(_emoji, '') END;");
-    expect(card).toContain("<ReactionButton post={post} onReact={onReact} onCount={openLikes} />");
+    expect(card).toContain("<ReactionButton post={post} onReact={onReact} onCount={openLikes} onCountPress={likesPress} />");
     expect(card).not.toContain("REACTIONS.map(");
     expect(reactionTotal({ reactions: { fire: 2, heart: 1 } })).toBe(3);
   });

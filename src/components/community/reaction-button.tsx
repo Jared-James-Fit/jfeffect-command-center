@@ -19,6 +19,7 @@ export function ReactionButton({
   align = "left",
   stacked = false,
   onCount,
+  onCountPress,
 }: {
   post: CommunityPost;
   onReact: (p: CommunityPost, next: ReactionKey | null) => void;
@@ -28,6 +29,8 @@ export function ReactionButton({
   stacked?: boolean;
   /** A tap on the number: who liked it (the Likes sheet). */
   onCount?: () => void;
+  /** The finger landed on the number (start loading the Likes). */
+  onCountPress?: () => void;
 }) {
   const sm = size === "sm";
   const [open, setOpen] = useState(false);
@@ -118,6 +121,7 @@ export function ReactionButton({
       {split && (
         <button
           type="button"
+          onPointerDown={onCountPress}
           onClick={onCount}
           aria-label={`${total} ${total === 1 ? "like" : "likes"}. See who liked this`}
           className={cn(

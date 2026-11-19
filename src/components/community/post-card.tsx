@@ -35,7 +35,7 @@ import {
   type WorkoutShareStats,
   type WorkoutWin,
 } from "@/lib/community";
-import { useFullMediaUrl, useSlideThumbUrls } from "@/lib/community.queries";
+import { useFullMediaUrl, usePrefetchPostReactors, useSlideThumbUrls } from "@/lib/community.queries";
 import { FEED_MAX_ASPECT, FEED_VIDEO_MAX_HEIGHT, VIDEO_MIN_ASPECT, clipFrame, feedAspect, focusPosition, screenFit, videoAspect, type MediaFocus } from "@/lib/photo-frame";
 import { LikedBy, ReactorsSheet } from "@/components/community/reactors-sheet";
 import { ReactionsRise, useEngagementPop } from "@/components/community/engagement-pop";
@@ -1106,6 +1106,8 @@ export function ReactionBar({
   // the reactions that rise out of the heart
   const kinds = reactionKinds(post);
   const openLikes = () => setListFor(post.id);
+  const prefetchLikes = usePrefetchPostReactors();
+  const likesPress = () => prefetchLikes(post.id);
   // People are reacting to this one: a moment after it's on screen, its
   // reactions float up out of the heart and who reacted pops (never over the post).
   const pop = useEngagementPop<HTMLDivElement>(post, hidden);
@@ -1136,7 +1138,7 @@ export function ReactionBar({
   if (column) {
     return (
       <div ref={pop.ref} data-engagement-pop={on ? "" : undefined} className="relative flex flex-col items-center gap-1" data-post-actions-column>
-        <ReactionButton post={post} onReact={onReact} align="right" stacked onCount={openLikes} />
+        <ReactionButton post={post} onReact={onReact} align="right" stacked onCount={openLikes} onCountPress={likesPress} />
         {on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} total={reactionTotal(post)} size="lg" className="bottom-3/4 left-1/2" />}
         {onOpenComments && (
           <button
@@ -1168,7 +1170,7 @@ export function ReactionBar({
     <div ref={pop.ref} data-engagement-pop={on ? "" : undefined} className="relative px-2 pb-2 pt-1.5">
       {/* Instagram's row: like, comment, repost, message ... save at the end */}
       <div className="relative flex items-center">
-        <ReactionButton post={post} onReact={onReact} onCount={openLikes} />
+        <ReactionButton post={post} onReact={onReact} onCount={openLikes} onCountPress={likesPress} />
         {on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} total={reactionTotal(post)} className="bottom-1/2 left-5" />}
         {onOpenComments && (
           <button
