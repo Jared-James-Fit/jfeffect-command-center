@@ -18,13 +18,16 @@ describe("Crew · Following tabs", () => {
   const queries = read("src/lib/community.queries.ts");
   const sql = read("supabase/migrations/20270402092000_crew_following_feed.sql");
 
-  it("are two tabs in the middle of Crew's bar, the one you're on underlined", () => {
-    expect(bar).toContain('role="tablist" aria-label="Feed"');
+  it("are tabs in the middle of Crew's bar (Crew · Following · Rankings), the one you're on underlined", () => {
+    expect(bar).toContain('role="tablist"');
+    expect(bar).toContain('aria-label="Crew"');
+    expect(bar).toContain('["crew", "Crew"],\n  ["following", "Following"],\n  ["rankings", "Rankings"],');
     expect(bar).toContain('role="tab"');
     expect(bar).toContain("aria-selected={on}");
     expect(bar).toContain('on ? "scale-x-100 opacity-100" : "scale-x-0 opacity-0"');
     // both bold, so picking one never shifts the other
-    expect(bar).toContain("text-[17px] font-bold");
+    expect(bar).toContain("relative h-10 px-0.5 font-bold");
+    expect(bar).toContain('"text-[16px] max-[389px]:text-[15px] max-[359px]:text-[13.5px]"');
     // neutral, never the brand red
     expect(bar).not.toMatch(/data-crew-feed-tab[\s\S]{0,400}text-primary/);
     // over the paged feed's posts they get the icons' soft shadow
@@ -108,9 +111,8 @@ describe("Crew · Following tabs", () => {
   });
 
   it("a tap on the tab you're on goes to its top; a preview never shows the coach's own follows", () => {
-    expect(screen).toContain(
-      'if (t === feedTab) return window.scrollTo({ top: 0, behavior: "smooth" });',
-    );
+    expect(screen).toContain('const on: CrewTab = scope.kind === "rankings" ? "rankings" : feedTab;');
+    expect(screen).toContain('if (t === on) return window.scrollTo({ top: 0, behavior: "smooth" });');
     expect(screen).toContain('if (t === "following" && previewOnly) return void toast(');
   });
 });

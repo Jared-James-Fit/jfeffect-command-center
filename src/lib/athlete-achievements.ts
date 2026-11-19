@@ -64,6 +64,7 @@ export function useBadgeCatalog() {
 export function useMyAchievements(clientId: string) {
   return useQuery({
     queryKey: ["athlete-achievements", clientId],
+    enabled: !!clientId,
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await db

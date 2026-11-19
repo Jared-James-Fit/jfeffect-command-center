@@ -25,7 +25,7 @@ import { OPEN_DISCOVER_EVENT } from "@/lib/community-discover";
 import { CrewActivity } from "@/components/community/crew-activity";
 import { ActivityHeart } from "@/components/community/activity-heart";
 import { OPEN_ACTIVITY_EVENT } from "@/lib/crew-activity";
-import { BarBack, BarButton, BarTitle, CrewBar, CrewFeedTabs, useBarHidden, type CrewFeedTab } from "@/components/community/crew-header";
+import { BarBack, BarButton, BarTitle, CrewBar, CrewFeedTabs, useBarHidden, type CrewFeedTab, type CrewTab } from "@/components/community/crew-header";
 import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { openAppMore } from "@/lib/shell-events";
 import { bubbleFold, ease, FIRST_POST_RADIUS, FIRST_UNDER_MIN, setFeedPaging, storiesProgress, watchFeedViewport } from "@/lib/feed-paging";
@@ -41,14 +41,16 @@ import { CaughtUp, CaughtUpLine, FeedItem, NewPostsPill, useNewPosts } from "@/c
 import { ActivitySpinner } from "@/components/activity-spinner";
 import { onNewVisit } from "@/lib/feed-anchor";
 import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
+import { LeagueWeekScreen } from "@/components/community/league-week-card";
+import { useLeagueWeek, useLeagueWeekSeen } from "@/lib/league-week.queries";
+import { spotlightReady } from "@/lib/league-week";
 
 /**
- * Crew opens on the feed, under one slim bar (Instagram's): + to post and the
- * trophy (Rankings) on the left, the JF Effect name in the middle (with people
- * you follow, it's also the All / Following switch), Activity (the heart, with
- * its bubble; Find athletes is its search) and your photo (your profile) on the
- * right. Each of those opens as a page with ‹ back, and back lands where you
- * were in the feed.
+ * Crew opens on the feed, under one slim bar (TikTok's / Instagram's): + to
+ * post on the left, Crew · Following · Rankings in the middle (three tabs,
+ * the same bar on each), Activity (the heart, with its bubble; Find athletes is
+ * its search) and your photo (your profile) on the right. Activity and your
+ * profile open as pages with ‹ back, and back lands where you were in the feed.
  */
 type Tab = "feed" | "rankings" | "you" | "members" | "activity" | "manage";
 /** A tab, or someone else's profile opened from one. */
@@ -320,6 +322,26 @@ export function CommunityScreen({
   // floating over its top (it stays put) and the tab bar over its bottom; screens are the
   // window's measured height (--feed-vh). The coach's Crew page is the same feed (Nov 14 2026).
   const paging = ownBar && scope.kind === "feed";
+
+  // Last week in the League (Nov 19 2026): once a week, a screen of the feed right after the first post
+  // (Instagram's spot), from Monday 6 AM on the person's own clock until they've seen it. Decided once a
+  // visit, while they're still on the first screen, so nothing ever slides in under someone mid-feed.
+  // Never on the coach's own page (their login isn't in the League); a coach viewing as a client sees the
+  // client's card and records nothing.
+  const weekOn = ownBar && !coach;
+  const weekQ = useLeagueWeek(weekOn);
+  const week = weekQ.data ?? null;
+  const weekSeen = useLeagueWeekSeen(week && !previewOnly ? week.week_start : null);
+  const [weekSlot, setWeekSlot] = useState<"wait" | "show" | "skip">("wait");
+  useEffect(() => onNewVisit(() => setWeekSlot("wait")), []);
+  useEffect(() => {
+    if (weekSlot !== "wait" || !weekOn || scope.kind !== "feed") return;
+    if (weekQ.isPending && !weekQ.isError) return;
+    if (!week || !spotlightReady(week.week_end)) return setWeekSlot("skip");
+    if (!previewOnly && weekSeen.isPending) return;
+    const unseen = previewOnly || weekSeen.data === false;
+    setWeekSlot(unseen && window.scrollY < window.innerHeight * 0.5 ? "show" : "skip");
+  }, [weekSlot, weekOn, scope.kind, weekQ.isPending, weekQ.isError, week, previewOnly, weekSeen.isPending, weekSeen.data]);
   useLayoutEffect(() => {
     if (!paging) return;
     setFeedPaging(true);
@@ -382,7 +404,7 @@ export function CommunityScreen({
     go({ kind: "you" });
     void navigate({ to: ".", hash: "you", replace: true, resetScroll: false });
   };
-  /** Rankings: the trophy in Crew's bar, one tap from any post (never a bubble among the stories, which fold away). */
+  /** Rankings: the third tab in Crew's bar, one tap from any post (never a bubble among the stories, which fold away). */
   const openRankings = () => {
     go({ kind: "rankings" });
     void navigate({ to: ".", hash: "rankings", replace: true, resetScroll: false });
@@ -568,7 +590,7 @@ export function CommunityScreen({
   const notAllowed = ((ranked.error ?? feed.error) as any)?.code === "42501";
 
   // Crew's one bar, per page. Find athletes keeps its own search field at the top instead.
-  const crewBar = !ownBar ? null : scope.kind === "feed" ? (
+  const crewBar = !ownBar ? null : scope.kind === "feed" || scope.kind === "rankings" ? (
     <CrewBar
       label="Crew"
       hidden={barHidden}
@@ -593,30 +615,30 @@ export function CommunityScreen({
               )}
             />
           )}
-          {/* Rankings: the League and Hall of Strength, one tap from any post (Find athletes is Activity's search,
-              the people-to-follow row and the caught-up card) */}
-          {coach ? (
-            // the coach's Manage in the trophy's place: what's waiting on them, Posts and Insights, a dot while something waits
+          {/* Rankings is the third tab in the middle (Find athletes is Activity's search, the people-to-follow
+              row and the caught-up card); the coach's Manage keeps its spot: what's waiting on them, Posts and
+              Insights, a dot while something waits */}
+          {coach && (
             <BarButton label={coach.waiting ? "Manage Crew, something's waiting on you" : "Manage Crew"} onClick={openManage} data-crew-manage>
               <ChartNoAxesColumn className="h-[24px] w-[24px]" strokeWidth={2} />
               {coach.waiting && <span className="absolute right-[7px] top-[7px] h-[9px] w-[9px] rounded-full bg-primary ring-2 ring-background" aria-hidden data-manage-waiting />}
-            </BarButton>
-          ) : (
-            <BarButton label="Rankings" onClick={openRankings} data-crew-rankings>
-              <Trophy className="h-[23px] w-[23px]" strokeWidth={2} />
             </BarButton>
           )}
         </>
       }
       center={
         <CrewFeedTabs
-          tab={feedTab}
+          compact={!!coach}
+          tab={scope.kind === "rankings" ? "rankings" : feedTab}
           onPick={(t) => {
+            const on: CrewTab = scope.kind === "rankings" ? "rankings" : feedTab;
             // the one you're on: back to its top (TikTok's)
-            if (t === feedTab) return window.scrollTo({ top: 0, behavior: "smooth" });
+            if (t === on) return window.scrollTo({ top: 0, behavior: "smooth" });
+            if (t === "rankings") return openRankings();
             // a preview is the coach's own follows, never the client's
             if (t === "following" && previewOnly) return void toast("Preview only. Their Following feed is theirs to see.");
             setFeedTab(t);
+            if (scope.kind === "rankings") return goBack("feed");
             window.scrollTo({ top: 0 });
           }}
         />
@@ -634,14 +656,12 @@ export function CommunityScreen({
         )
       }
     />
-  ) : scope.kind === "rankings" ? (
-    <CrewBar label="Rankings" left={<BarBack label="Back to the feed" onClick={() => goBack("feed")} />} center={<BarTitle>Rankings</BarTitle>} />
   ) : scope.kind === "manage" && coach ? (
     <CrewBar
       label="Manage Crew"
       left={<BarBack label="Back to the feed" onClick={() => goBack("feed")} />}
       center={<BarTitle>Manage</BarTitle>}
-      // the League (standings, the crew goal, Hall of Strength), the trophy it is on the clients' bar
+      // the League's tools (standings, the crew goal, Hall of Strength)
       right={
         <BarButton label="League" onClick={() => void navigate({ to: "/admin/league" })} data-crew-league>
           <Trophy className="h-[23px] w-[23px]" strokeWidth={2} />
@@ -711,7 +731,10 @@ export function CommunityScreen({
       {scope.kind === "manage" && coach ? (
         coach.manage
       ) : scope.kind === "rankings" ? (
-        <RankingsHub />
+        // a tab, not a page: it eases in from the side the tab sits on
+        <div className="animate-in fade-in-0 slide-in-from-right-3 duration-200 motion-reduce:animate-none" data-crew-tab-body="rankings">
+          <RankingsHub />
+        </div>
       ) : scope.kind === "activity" ? (
         <CrewActivity
           header={!ownBar}
@@ -807,8 +830,11 @@ export function CommunityScreen({
                 />
               ),
             });
+            // last week in the League takes the spot right after the first post, once a week (then people to follow do)
+            const weekCard = i === 0 && !following && weekSlot === "show" && week;
+            if (weekCard) out.push({ key: "league-week", node: <LeagueWeekScreen week={week} onRankings={openRankings} /> });
             // people to follow right after the first post (Instagram's spot), a screen of their own (never the coach's)
-            if (!previewOnly && !following && !coach && i === 0)
+            if (!previewOnly && !following && !coach && i === 0 && !weekCard)
               out.push({ key: "suggested", node: <SuggestedAthletes onOpen={openAuthor} strongOnly hideable onSeeAll={() => openDiscover("feed")} /> });
             if (canShare && !following && i === Math.min(1, feedPosts.length - 1))
               out.push({ key: "share-nudge", node: <ShareNudge surface="feed" unit={unit} /> });
