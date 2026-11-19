@@ -38,7 +38,8 @@ const DrawerContent = React.forwardRef<
     <DrawerPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background dark:bg-card",
+        // phone-column: a phone on its side keeps it a centered sheet (styles.css)
+        "phone-column fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background dark:bg-card",
         className,
       )}
       {...props}

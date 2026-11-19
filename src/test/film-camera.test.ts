@@ -219,7 +219,8 @@ describe("filming a set opens the app's camera, never iOS's 480p Take Video", ()
   });
   it("the phone can turn on its side to film while the camera is up", () => {
     const portrait = read("src/components/portrait-only.tsx");
-    expect(portrait).toContain("if (!sideways || camera) return null;");
+    // the lock is let go while the camera's up, and put back when it closes
+    expect(portrait).toContain("if (isCameraOpen()) unlockPortrait();");
     expect(portrait).toContain("window.addEventListener(CAMERA_OPEN_EVENT, onCamera);");
   });
   it("the Crew studio records at the picture's bitrate with the mic asked for the iOS way", () => {

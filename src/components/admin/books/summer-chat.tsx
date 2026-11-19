@@ -24,6 +24,7 @@ import { CleoActionCard, CleoApprovals, useCleoActions } from "./cleo-action-car
 import { CHATS_KEY, CleoChatHistory } from "./cleo-chat-history";
 import { AttachmentTray, MessageAttachments, useAttachmentTray, workingLabel } from "./cleo-attachments-ui";
 import { ATTACH_ACCEPT, type CleoAttachment } from "@/lib/cleo-attachments";
+import { phoneLayoutNow } from "@/lib/portrait-only";
 
 type Msg = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices?: string[] | null; attachments?: CleoAttachment[] | null };
 type ChatData = { chat: CleoChat | null; messages: Msg[] };
@@ -572,7 +573,7 @@ export function SummerChat({
   const openLink = useOpenLink(
     useCallback(() => {
       // On a phone the sheet covers the page, so step aside; on desktop keep chatting.
-      if (window.innerWidth < 768) {
+      if (phoneLayoutNow()) {
         stopVoice();
         onOpenChange(false);
       }

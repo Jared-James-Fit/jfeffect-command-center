@@ -28,7 +28,7 @@ describe("Crew · Following tabs", () => {
     // neutral, never the brand red
     expect(bar).not.toMatch(/data-crew-feed-tab[\s\S]{0,400}text-primary/);
     // over the paged feed's posts they get the icons' soft shadow
-    expect(css).toContain(".crew-bar[data-overlay] :is(svg, [data-crew-feed-tab])");
+    expect(css).toContain("    & :is(svg, [data-crew-feed-tab]) { filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.45)); }");
   });
 
   it("always open on Crew, and a new visit puts them back there", () => {

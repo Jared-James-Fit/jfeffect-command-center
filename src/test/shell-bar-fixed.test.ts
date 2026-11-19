@@ -21,7 +21,7 @@ describe("the phone top bar is a real fixed bar, so iOS never blurs it", () => {
   it("holds its room in the page, at its own height whatever the keyboard does", () => {
     expect(shell).toContain('style={{ height: "calc(var(--app-safe-top) + 3rem + 1px)" }} data-shell-bar-room');
     // the bar is h-12 (3rem) plus its 1px border: the same 49px --shell-topbar-h says
-    expect(css).toContain(":root { --shell-topbar-h: 49px; }");
+    expect(css).toContain(":root { @variant max-md { --shell-topbar-h: 49px; } }");
   });
 
   it("slides away reading down like Crew's bar, and steps aside while typing", () => {

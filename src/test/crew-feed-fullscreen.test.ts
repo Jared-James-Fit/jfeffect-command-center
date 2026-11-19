@@ -71,7 +71,7 @@ describe("every post fills the screen, TikTok's way", () => {
     const shell = read("src/components/app-shell.tsx");
     expect(shell).toContain("const overFeed = useFeedPaging();");
     expect(shell).toContain('overFeed ? "dark border-white/10 bg-black text-foreground" : "border-border/70 bg-background"');
-    expect(css).toContain("html.feed-paging:not([data-pov-banner-on]) .ios-status-band { background-color: #000; }");
+    expect(css).toContain("html.feed-paging:not([data-pov-banner-on]) .ios-status-band { @variant max-md { background-color: #000; } }");
     expect(read("src/components/community/crew-header.tsx")).toContain('overlay && "dark text-foreground"');
   });
 });

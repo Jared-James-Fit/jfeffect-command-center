@@ -851,7 +851,7 @@ export function MessagesInbox({
           // dvh calc pushed the message list above the viewport and only
           // the composer was visible.
           ? "h-full w-full min-h-0"
-          : "fixed inset-x-0 z-30 md:static md:inset-auto md:z-auto md:h-full md:flex-1",
+          : "phone-column fixed inset-x-0 z-30 md:static md:inset-auto md:z-auto md:h-full md:flex-1",
       )}
       style={
         embedded

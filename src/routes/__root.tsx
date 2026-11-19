@@ -10,7 +10,8 @@ import {
   shouldPersistQuery,
 } from "@/lib/query-persister";
 import { Toaster } from "sonner";
-import { PortraitOnly } from "@/components/portrait-only";
+import { PortraitLock } from "@/components/portrait-only";
+import { PHONE_BOOT_SCRIPT } from "@/lib/portrait-only";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { saveLastRoute } from "@/lib/route-persistence";
 import { ClientImpersonationProvider } from "@/lib/client-impersonation";
@@ -364,6 +365,8 @@ function RootShell({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         {/* The iPhone home-screen app: top bars start below iOS's own blur (ios-edge.ts). */}
         <script dangerouslySetInnerHTML={{ __html: IOS_WEB_APP_BOOT_SCRIPT }} />
+        {/* A phone keeps the phone layout in every orientation (data-phone, portrait-only.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: PHONE_BOOT_SCRIPT }} />
         <HeadContent />
         {/* The status bar takes the theme's colour from the first frame (the tags above exist now). */}
         <script dangerouslySetInnerHTML={{ __html: THEME_COLOR_SCRIPT }} />
@@ -416,8 +419,8 @@ function RootComponent() {
             <PwaUpdateToast />
             {/* Single global media viewer — portalled above every overlay. */}
             <MediaViewerRoot />
-            {/* A phone held on its side where the browser can't lock it upright: turn it back (portrait-only.ts) */}
-            <PortraitOnly />
+            {/* Holds a phone upright where the platform allows; elsewhere it turns and keeps the phone layout (portrait-only.ts) */}
+            <PortraitLock />
           </MediaViewerProvider>
       </ClientImpersonationProvider>
     </AuthProvider>

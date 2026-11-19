@@ -7,6 +7,7 @@ import { Loader2, Zap } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { MessagesInbox } from "@/route-pages/_authenticated/admin/messages";
 import { useAdminNavBadgeCounts } from "@/hooks/use-admin-nav-badges";
+import { onPhoneLayoutChange, phoneLayoutNow } from "@/lib/portrait-only";
 
 // Only the Messages tab ships with this page. The rest load on first visit so
 // opening Messages doesn't download and parse unrelated admin screens.
@@ -103,7 +104,7 @@ function CommunicationWorkspace() {
 
   useEffect(() => {
     if (!viewportLockedTab || typeof window === "undefined") return;
-    const mq = window.matchMedia("(max-width: 767px)");
+    // the phone layout, a phone on its side included (portrait-only.ts)
     const html = document.documentElement;
     const body = document.body;
     const previous = {
@@ -113,7 +114,7 @@ function CommunicationWorkspace() {
       lockAttr: html.getAttribute("data-messenger-scroll-locked"),
     };
     const apply = () => {
-      if (!mq.matches) {
+      if (!phoneLayoutNow()) {
         html.style.overflow = previous.htmlOverflow;
         body.style.overflow = previous.bodyOverflow;
         body.style.overscrollBehavior = previous.bodyOverscroll;
@@ -127,9 +128,9 @@ function CommunicationWorkspace() {
       body.style.overscrollBehavior = "none";
     };
     apply();
-    mq.addEventListener("change", apply);
+    const stop = onPhoneLayoutChange(apply);
     return () => {
-      mq.removeEventListener("change", apply);
+      stop();
       html.style.overflow = previous.htmlOverflow;
       body.style.overflow = previous.bodyOverflow;
       body.style.overscrollBehavior = previous.bodyOverscroll;
@@ -146,7 +147,7 @@ function CommunicationWorkspace() {
     <div
       className={cn(
         "flex flex-col overflow-hidden bg-background md:static md:inset-auto md:z-auto md:mb-0",
-        viewportLockedTab ? "fixed inset-x-0 z-30" : "relative mb-[calc(-140px-env(safe-area-inset-bottom))]",
+        viewportLockedTab ? "phone-column fixed inset-x-0 z-30" : "relative mb-[calc(-140px-env(safe-area-inset-bottom))]",
       )}
       style={{
         // Anchor the entire communication workspace to the iOS Visual

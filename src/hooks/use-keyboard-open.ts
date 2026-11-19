@@ -40,10 +40,16 @@ export function useKeyboardOpen() {
     // calculation reads 0 and the hook never fires. Comparing against the
     // baseline detects the keyboard reliably in Safari AND in installed
     // PWAs.
-    let baseline = vv.height;
+    // One baseline per window width: turning the phone changes the width (a
+    // keyboard never does), and a landscape window read against the upright
+    // baseline (393 against 852) looked like a keyboard for as long as the
+    // phone stayed on its side, hiding the bars (portrait-only.ts).
+    const baselines = new Map<number, number>();
     const update = () => {
       raf = 0;
-      if (vv.height > baseline) baseline = vv.height;
+      const w = Math.round(window.innerWidth);
+      const baseline = Math.max(baselines.get(w) ?? vv.height, vv.height);
+      baselines.set(w, baseline);
       const layoutInset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       const baselineInset = Math.max(0, baseline - vv.height);
       const inset = Math.max(layoutInset, baselineInset);
