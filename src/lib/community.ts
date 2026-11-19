@@ -577,6 +577,29 @@ export function reactorsLine(post: Pick<CommunityPost, "reaction_count" | "react
   return `${shown.join(", ")} and ${rest} ${rest === 1 ? "other" : "others"}`;
 }
 
+/**
+ * Instagram's line under a post: "Liked by Marc and 12 others", "Liked by
+ * you and Nicole". Null when nobody has. The names are reactorsLine's.
+ */
+export function likedByLine(post: Pick<CommunityPost, "reaction_count" | "reactions" | "reactors">): { lead: string; who: string } | null {
+  const who = reactorsLine(post);
+  if (!who) return null;
+  return { lead: "Liked by", who: who.replace(/^You\b/, "you") };
+}
+
+/**
+ * Who's "you" in a list of people, seen as `viewer` (View as client: the
+ * client being previewed, never the coach whose login loaded it). `null`
+ * viewer = the list as it came.
+ */
+export function reactorsSeenAs<T extends { is_me?: boolean }>(people: T[], viewer: string | null, idOf: (p: T) => string): T[] {
+  if (viewer === null) return people;
+  return people.map((p) => {
+    const mine = !!viewer && idOf(p) === viewer;
+    return mine === !!p.is_me ? p : { ...p, is_me: mine };
+  });
+}
+
 /** Someone in the crew (Crew tab). Counts only include posts you can see. */
 export type CommunityMember = {
   author: CommunityAuthor;

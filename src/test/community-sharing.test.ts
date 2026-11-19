@@ -805,7 +805,7 @@ describe("reactions and who gave them", () => {
     expect(heart).toContain("INSERT INTO public.community_reactions (post_id, user_id, emoji) VALUES (_post_id, uid, v)");
     expect(heart).toContain("ON CONFLICT (post_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji;");
     expect(heart).toContain("v text := CASE WHEN _emoji IN ('muscle', 'clap') THEN 'heart' ELSE nullif(_emoji, '') END;");
-    expect(card).toContain("<ReactionButton post={post} onReact={onReact} />");
+    expect(card).toContain("<ReactionButton post={post} onReact={onReact} onCount={openLikes} />");
     expect(card).not.toContain("REACTIONS.map(");
     expect(reactionTotal({ reactions: { fire: 2, heart: 1 } })).toBe(3);
   });
@@ -820,7 +820,7 @@ describe("reactions and who gave them", () => {
   it("shows the kinds beside the names once it isn't just hearts", () => {
     expect(reactionKinds({ reactions: { heart: 1, fire: 3, laugh: 2, thumbs: 1 } })).toEqual(["🔥", "😂", "❤️"]);
     expect(reactionKinds({ reactions: {} })).toEqual([]);
-    expect(card).toContain("kinds.length > 1 || (kinds.length === 1 && kinds[0] !== REACTION.emoji)");
+    expect(read("src/components/community/reactors-sheet.tsx")).toContain("kinds.length > 1 || (kinds.length === 1 && kinds[0] !== REACTION.emoji)");
     // and the full list says who gave which
     expect(heart).toContain("'emoji', r.emoji,");
     expect(read("src/components/community/reactors-sheet.tsx")).toContain("reactionEmoji(r.emoji)");

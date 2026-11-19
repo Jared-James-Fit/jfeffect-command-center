@@ -27,7 +27,6 @@ import {
   reactionEmoji,
   reactionKinds,
   reactionTotal,
-  reactorsLine,
   slideThumbPath,
   type CommunityAuthor,
   type CommunityPost,
@@ -38,7 +37,7 @@ import {
 } from "@/lib/community";
 import { useFullMediaUrl, useSlideThumbUrls } from "@/lib/community.queries";
 import { FEED_MAX_ASPECT, FEED_VIDEO_MAX_HEIGHT, VIDEO_MIN_ASPECT, clipFrame, feedAspect, focusPosition, screenFit, videoAspect, type MediaFocus } from "@/lib/photo-frame";
-import { ReactorsSheet } from "@/components/community/reactors-sheet";
+import { LikedBy, ReactorsSheet } from "@/components/community/reactors-sheet";
 import { ReactionsRise, useEngagementPop } from "@/components/community/engagement-pop";
 import { PostViewsRow, usePostViewTracker } from "@/components/community/post-views";
 import { PostActions } from "@/components/community/post-actions";
@@ -1068,9 +1067,9 @@ export function CommentPreviewList({ post, onOpenComments }: { post: CommunityPo
 
 /**
  * Instagram's row: the heart (tap for ❤️, hold for 👍 ‼️ 🔥 😂), comments,
- * repost, message, and save at the end. Under it, the faces of who reacted
- * ("Jared, Vicky and 3 others", with the kinds they gave), which opens the
- * full list.
+ * repost, message, and save at the end. Under it, "Liked by Jared and 3
+ * others" with their faces (LikedBy). That line, or a tap on the number by
+ * the heart (under it on a post's screen, Reels'), opens the Likes.
  */
 export function ReactionBar({
   post,
@@ -1104,11 +1103,9 @@ export function ReactionBar({
   // a coach can send any post out to his own Instagram (never in View as client)
   const canInstagram = (role === "admin" || role === "coach") && !isImpersonating && !post.story;
   const [ig, setIg] = useState<boolean | null>(null);
-  const who = reactorsLine(post);
-  // the little ❤️🔥😂 beside the names, once it's not just hearts
+  // the reactions that rise out of the heart
   const kinds = reactionKinds(post);
-  const showKinds = kinds.length > 1 || (kinds.length === 1 && kinds[0] !== REACTION.emoji);
-  const faces = [...(post.reactors ?? [])].sort((a, b) => Number(!!b.is_me) - Number(!!a.is_me)).slice(0, 3);
+  const openLikes = () => setListFor(post.id);
   // People are reacting to this one: a moment after it's on screen, its
   // reactions float up out of the heart and who reacted pops (never over the post).
   const pop = useEngagementPop<HTMLDivElement>(post, hidden);
@@ -1139,7 +1136,7 @@ export function ReactionBar({
   if (column) {
     return (
       <div ref={pop.ref} data-engagement-pop={on ? "" : undefined} className="relative flex flex-col items-center gap-1" data-post-actions-column>
-        <ReactionButton post={post} onReact={onReact} align="right" stacked />
+        <ReactionButton post={post} onReact={onReact} align="right" stacked onCount={openLikes} />
         {on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} total={reactionTotal(post)} size="lg" className="bottom-3/4 left-1/2" />}
         {onOpenComments && (
           <button
@@ -1171,7 +1168,7 @@ export function ReactionBar({
     <div ref={pop.ref} data-engagement-pop={on ? "" : undefined} className="relative px-2 pb-2 pt-1.5">
       {/* Instagram's row: like, comment, repost, message ... save at the end */}
       <div className="relative flex items-center">
-        <ReactionButton post={post} onReact={onReact} />
+        <ReactionButton post={post} onReact={onReact} onCount={openLikes} />
         {on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} total={reactionTotal(post)} className="bottom-1/2 left-5" />}
         {onOpenComments && (
           <button
@@ -1198,30 +1195,8 @@ export function ReactionBar({
         <span className="ml-auto" />
         <SaveButton post={post} />
       </div>
-      {/* who reacted, on its own line under the row, so names never get cut short */}
-      {who && (
-        <button
-          type="button"
-          onClick={() => setListFor(post.id)}
-          className={cn("-mt-0.5 flex max-w-full min-w-0 items-center gap-1.5 rounded-full py-1 pl-1.5 pr-2 text-left hover:bg-muted", on && "engage-chip")}
-          aria-label={`See who reacted: ${who}`}
-          data-who-reacted
-        >
-          {faces.length > 0 && (
-            <span className="flex shrink-0 -space-x-1.5">
-              {faces.map((r) => (
-                <span key={r.user_id} className="rounded-full ring-2 ring-card">
-                  <UserAvatar src={r.avatar_url} name={r.is_me ? "You" : r.name} size={22} expandable={false} />
-                </span>
-              ))}
-            </span>
-          )}
-          {showKinds && <span className="shrink-0 text-[13px] leading-none tracking-[-0.15em]">{kinds.join("")}</span>}
-          <span className="truncate text-[13px] text-muted-foreground">
-            <span className="font-bold text-foreground">{who}</span>
-          </span>
-        </button>
-      )}
+      {/* Instagram's "Liked by", on its own line under the row, so names never get cut short */}
+      <LikedBy post={post} onOpen={openLikes} highlight={on} className="-mt-0.5" />
       {sheets}
     </div>
   );
