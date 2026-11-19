@@ -19,10 +19,13 @@ describe("the centre tab is Crew: the feed and the rankings in one place", () =>
     expect(menu?.label).toBe("Crew");
     expect(menu?.keywords).toEqual(expect.arrayContaining(["league", "leaderboard", "rankings", "community", "feed", "crew", "members"]));
   });
-  it("one bar, no Feed · Rankings · You toggle: Rankings is the trophy bubble in the stories, Activity the heart, you your photo", () => {
+  it("one bar, no Feed · Rankings · You toggle: Rankings is the third tab in the bar (Crew · Following · Rankings), Activity the heart, you your photo", () => {
     expect(screen).not.toContain('aria-label="Crew view"');
     expect(screen).toContain("<RankingsHub />");
-    expect(screen).toContain('<CrewBar label="Rankings" left={<BarBack label="Back to the feed" onClick={() => goBack("feed")} />} center={<BarTitle>Rankings</BarTitle>} />');
+    // Rankings is a tab under the same bar as the feed, never a page with ‹ back
+    expect(screen).toContain('const crewBar = !ownBar ? null : scope.kind === "feed" || scope.kind === "rankings" ? (');
+    expect(screen).toContain('tab={scope.kind === "rankings" ? "rankings" : feedTab}');
+    expect(screen).not.toContain('<CrewBar label="Rankings"');
     expect(read("src/components/community/activity-heart.tsx")).toContain('aria-label={unread ? "Activity, new" : "Activity"}');
     // Find athletes (the members directory) opens from Activity's search or the top bar, and goes back where it came from
     expect(screen).toContain('const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "feed", manage: "feed" };');
@@ -54,7 +57,8 @@ describe("the centre tab is Crew: the feed and the rankings in one place", () =>
 
 describe("Rankings", () => {
   it("Monthly and Strength: one board at a time, never stacked", () => {
-    expect(hub).toContain('([["monthly", "Monthly"], ["strength", "Strength"]] as const)');
+    expect(hub).toContain('["monthly", "Monthly League"],\n  ["strength", "Hall of Strength"],');
+    expect(hub).toContain("{BOARD_TABS.map(([k, label]) => (");
     expect(hub).toContain('board === "strength" ? (');
     expect(hub).toContain("<StrengthBoardSlide initialMode={opened.view?.mode} initialDivision={opened.view?.division} />");
     expect(hub).toContain("<AthleteLevelCard clientId={client.id}");

@@ -1,7 +1,8 @@
 import { useRef, useState, type TouchEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { usePortalUserId } from "@/lib/client-impersonation";
+import { usePortalUserId, useViewingAsClient } from "@/lib/client-impersonation";
+import { useAuth } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
@@ -35,14 +36,27 @@ export function boardAfterSwipe(board: RankingsBoard, dx: number, dy: number): R
   return null;
 }
 
+/** The two boards, named for what they are (Crew → Rankings' switch). */
+export const BOARD_TABS: readonly (readonly [RankingsBoard, string])[] = [
+  ["monthly", "Monthly League"],
+  ["strength", "Hall of Strength"],
+];
+
 /**
- * Crew → Rankings: one board at a time. Monthly (this month's League) and
- * Strength (the Hall of Strength), picked with the switch at the top. Every
- * card opens its full view.
+ * Crew → Rankings (the third tab in Crew's bar): one board at a time, picked
+ * with the switch at the top. Monthly League (points this month, you first,
+ * then the Top 10 with how far each moved since Monday) and Hall of Strength
+ * (all-time bests). The other boards' podiums flip under the board, a tap
+ * from opening theirs. Every card opens its full view. A coach sees the
+ * crew's board without a "you".
  */
 export function RankingsHub() {
   // the person whose portal this is (the client in coach "View as")
   const userId = usePortalUserId();
+  const { role } = useAuth();
+  const preview = useViewingAsClient();
+  // a coach on their own Crew page (not viewing as a client): the board, no "you"
+  const spectator = (role === "admin" || role === "coach") && !preview;
   const { data: client, isPending } = useQuery({
     queryKey: ["my-client", userId],
     enabled: !!userId,
@@ -100,24 +114,24 @@ export function RankingsHub() {
 
   return (
     <div data-league-hub className="space-y-3">
-      {/* last month's recap: the banner up here in recap week (news); the rest of the month it's a row under the Monthly board */}
-      {inRecapWindow() && <LeagueRecapButton />}
-      {/* the other boards' podiums, flipping (pause-able); tap one to open that board */}
-      <RankingsSpotlight onOpen={openFromSpotlight} under={board} underView={opened.view} />
-      <div ref={tabsRef} className="grid scroll-mt-3 grid-cols-2 rounded-full bg-muted/60 p-1 text-[13px] font-bold" role="tablist" aria-label="Leaderboard">
-        {([["monthly", "Monthly"], ["strength", "Strength"]] as const).map(([k, label]) => (
+      {/* which board: the first thing on the page, so the two never blur together */}
+      <div ref={tabsRef} className="grid scroll-mt-[calc(var(--app-safe-top)+3.75rem)] grid-cols-2 rounded-full bg-muted/60 p-1 text-[14px] font-semibold" role="tablist" aria-label="Leaderboard">
+        {BOARD_TABS.map(([k, label]) => (
           <button
             key={k}
             type="button"
             role="tab"
             aria-selected={board === k}
             onClick={() => setBoard(k)}
-            className={cn("min-h-9 rounded-full transition-colors", board === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
+            className={cn("min-h-10 truncate rounded-full px-2 transition-colors", board === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
+            data-rankings-tab={k}
           >
             {label}
           </button>
         ))}
       </div>
+      {/* last month's recap: up here in recap week (news); the rest of the month it's a row under the Monthly board */}
+      {inRecapWindow() && !spectator && <LeagueRecapButton />}
       <div
         ref={boardRef}
         key={`${board}:${opened.n}`}
@@ -138,12 +152,16 @@ export function RankingsHub() {
         </section>
       ) : client?.id ? (
         <AthleteLevelCard clientId={client.id} openPrevious={opened.previous} />
+      ) : spectator ? (
+        <AthleteLevelCard clientId={null} openPrevious={opened.previous} />
       ) : isPending && userId ? (
         <Skeleton className="h-64 w-full rounded-2xl" />
       ) : (
         <div className="rounded-2xl border border-dashed border-border px-5 py-10 text-center text-[13px] text-muted-foreground">The monthly League is for active coaching clients.</div>
       )}
       </div>
+      {/* the other boards' podiums, flipping (pause-able), under the board you're on: a tap opens that board */}
+      <RankingsSpotlight onOpen={openFromSpotlight} under={board} underView={opened.view} />
     </div>
   );
 }

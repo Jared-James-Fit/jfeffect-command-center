@@ -53,7 +53,7 @@ function useReducedMotion() {
 }
 
 /**
- * Crew → Rankings: every board's podium in one card at the top, flipping
+ * Crew → Rankings: every other board's podium in one card under the board you're on, flipping
  * every few seconds: this month's League, the Hall of Strength's top men and
  * women (pound for pound, then heaviest total), last month's champions. Tap a
  * podium to open that board on exactly that view. It only moves while you're looking (on screen, app in
