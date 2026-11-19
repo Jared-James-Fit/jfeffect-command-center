@@ -24,7 +24,7 @@ import {
 import { launchMode, LAUNCH_BOOT_SCRIPT } from "@/lib/landing-launch";
 import { sourceFrom } from "@/lib/join-source";
 
-const SQL = readFileSync("supabase/migrations/20270419090000_membership_applications.sql", "utf8");
+const SQL = readFileSync("supabase/migrations/20270420090000_membership_applications.sql", "utf8");
 
 const full: MemberAnswers = {
   goal: "build_muscle",

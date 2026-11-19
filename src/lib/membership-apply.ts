@@ -1,7 +1,7 @@
 /**
  * Free membership by application (/join): the questions, their answers and
  * the rules the page, the server and the database share (pure, tested in
- * membership-apply.test.ts; the CHECKs in 20270419090000_membership_applications.sql
+ * membership-apply.test.ts; the CHECKs in 20270420090000_membership_applications.sql
  * use the same values).
  *
  * Applying is free and needs no account. A real person reads every
