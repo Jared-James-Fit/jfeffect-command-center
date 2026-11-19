@@ -520,6 +520,15 @@ async function runJob(id: string) {
       posterRec.posterUploaded ? (posterRec.posterPath ?? null) : null,
       signal,
     );
+    // bar path and speed, read on this phone from the very file just sent (lift-analysis/auto.ts:
+    // barbell lifts only, a quiet moment, nothing downloaded again)
+    const sentFile = preparedFiles.get(id) ?? rec.file ?? null;
+    if (sentFile && res.id && !res.existed) {
+      const setVideoId = res.id;
+      void import("@/lib/lift-analysis/auto")
+        .then((m) => m.queueLiftAnalysis({ setVideoId, file: sentFile, exerciseName: job.exerciseName }))
+        .catch(() => {});
+    }
     await outboxDelete(id);
     attempts.delete(id);
     posterSends.delete(id);

@@ -25,6 +25,7 @@ import {
 import { cardioClock, cardioHistorySummary, isCardioHistory } from "@/lib/cardio-history";
 import { formatDistance, formatPace, isRunningExercise, paceSeconds, readDistanceUnit } from "@/lib/running/run-log";
 import { LiftProgressCard, type LiftHistory } from "@/components/analytics/lift-progress-card";
+import { useVideoSpeedsByResult } from "@/lib/lift-analysis/queries";
 import { liftHistoryFromRows } from "@/lib/analytics/exercise-progress";
 import {
   dayRefOf,
@@ -170,6 +171,8 @@ export function ExerciseHistorySheet({
       return matchingHistoryExerciseIds(exerciseId, exerciseName, catalog);
     },
   });
+  // bar speed read from set videos (lift analysis), beside a set with no speed typed in
+  const { data: videoSpeeds = {} } = useVideoSpeedsByResult(clientId, identityIds.length ? identityIds : exerciseId ? [exerciseId] : [], open);
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["exercise-history", clientId, exerciseId ?? null, exerciseName, identityIds.join(",")],
@@ -576,7 +579,7 @@ export function ExerciseHistorySheet({
               const editing = editingKey === dayKey;
               const rel = g.at ? relativeDay(g.at) : null;
               const groups = cardio ? [] : sessionGroups(g.hsets, displayUnit);
-              const hasVelocity = g.sets.some((s: any) => s.mean_concentric_velocity_mps != null);
+              const hasVelocity = g.sets.some((s: any) => s.mean_concentric_velocity_mps != null || videoSpeeds[s.id]);
               return (
                 <li
                   key={dayKey}
@@ -827,7 +830,11 @@ export function ExerciseHistorySheet({
                                 </span>
                                 {hasVelocity && (
                                   <span className="shrink-0 text-xs text-muted-foreground">
-                                    {s.mean_concentric_velocity_mps != null ? `${Number(s.mean_concentric_velocity_mps).toFixed(2)} m/s` : ""}
+                                    {s.mean_concentric_velocity_mps != null
+                                      ? `${Number(s.mean_concentric_velocity_mps).toFixed(2)} m/s`
+                                      : videoSpeeds[s.id]
+                                        ? <span data-history-video-speed title="Fastest rep, read from the set's video">{videoSpeeds[s.id].tier === "estimated" ? "≈" : ""}{videoSpeeds[s.id].v.toFixed(2)} m/s · video</span>
+                                        : ""}
                                   </span>
                                 )}
                                 {s.completed_at
