@@ -4,9 +4,10 @@ import { X } from "lucide-react";
 import { MentionText } from "@/components/community/mentions";
 import { CommentThread } from "@/components/community/comments-sheet";
 import { AutoPostCaption, CoachBadge } from "@/components/community/post-card";
+import { LikedBy, ReactorsSheet } from "@/components/community/reactors-sheet";
 import { UserAvatar } from "@/components/user-avatar";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
-import { isAutoPost, postTimeLabel, withHandles, type CommunityAuthor, type CommunityPost } from "@/lib/community";
+import { isAutoPost, postTimeLabel, reactionTotal, withHandles, type CommunityAuthor, type CommunityPost } from "@/lib/community";
 import { useSwipeDownToClose } from "@/hooks/use-swipe-down-to-close";
 import { POST_SHEET_HEIGHT } from "@/lib/post-sheet";
 
@@ -18,7 +19,9 @@ export type PostSheetAt = "caption" | "comments";
  * and TikTok's way: a sheet over the bottom of the screen titled Comments
  * (✕ closes it), the post's caption as its first line, written like a
  * comment (photo, name, when, the words), then the comments in the same
- * scroll, the quick emoji and the comment box pinned under them. The post stays on screen above it, shrunk to fit
+ * scroll, the quick emoji and the comment box pinned under them. Under the
+ * caption, Instagram's "Liked by Marc and 12 others", which opens the Likes
+ * over the sheet. The post stays on screen above it, shrunk to fit
  * (PostCard `sheetOpen`), still playing. One swipe down closes it (from the
  * handle, the caption, or the comments once they're scrolled to the top), as
  * do a tap on the post above it and Escape. The coach's card feed keeps
@@ -52,6 +55,11 @@ export function PostSheet({ post, at, viewerIsStaff, onClose, onOpenAuthor }: {
   const vv = useVisualViewportBox(open);
   const item = post ? { post, at } : shown;
   const openAuthor = onOpenAuthor ? (a: CommunityAuthor) => { onClose(); onOpenAuthor(a); } : undefined;
+  // who liked it, over the sheet (gone with the sheet)
+  const [likesFor, setLikesFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) setLikesFor(null);
+  }, [open]);
 
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
@@ -86,25 +94,36 @@ export function PostSheet({ post, at, viewerIsStaff, onClose, onOpenAuthor }: {
               post={item.post}
               viewerIsStaff={viewerIsStaff}
               onOpenAuthor={openAuthor}
-              header={<PostSheetCaption post={item.post} onOpenAuthor={openAuthor} />}
+              header={<PostSheetCaption post={item.post} onOpenAuthor={openAuthor} onOpenLikes={() => setLikesFor(item.post.id)} />}
               startAtComments={item.at === "comments"}
             />
           )}
         </Dialog.Content>
       </Dialog.Portal>
+      <ReactorsSheet postId={likesFor} onClose={() => setLikesFor(null)} onOpenAuthor={openAuthor} />
     </Dialog.Root>
   );
 }
 
 /**
  * The post's own words as the first line of the comments, the way Instagram
- * lists a caption: the photo, the name and when, then the words, a hairline
- * under them. A post with no words has none (the comments start the sheet).
+ * lists a caption: the photo, the name and when, then the words, then
+ * "Liked by …" (a tap: the Likes), a hairline under them. A post with no
+ * words shows only who liked it, and with no likes either, nothing (the
+ * comments start the sheet).
  */
-function PostSheetCaption({ post, onOpenAuthor }: { post: CommunityPost; onOpenAuthor?: (a: CommunityAuthor) => void }) {
+function PostSheetCaption({ post, onOpenAuthor, onOpenLikes }: { post: CommunityPost; onOpenAuthor?: (a: CommunityAuthor) => void; onOpenLikes: () => void }) {
   const auto = isAutoPost(post);
   const caption = post.caption?.trim() ? withHandles(post.caption, post.mentions) : null;
-  if (!auto && !caption) return null;
+  const likes = reactionTotal(post) > 0;
+  if (!auto && !caption) {
+    if (!likes) return null;
+    return (
+      <div className="-mx-4 mb-1 border-b border-border/60 px-3 pb-2" data-post-sheet-likes>
+        <LikedBy post={post} onOpen={onOpenLikes} />
+      </div>
+    );
+  }
   const open = onOpenAuthor ? () => onOpenAuthor(post.author) : undefined;
   const collabs = post.collaborators ?? [];
   const also = collabs.length === 1 ? ` and ${collabs[0].name}` : collabs.length > 1 ? ` and ${collabs.length} others` : "";
@@ -143,6 +162,7 @@ function PostSheetCaption({ post, onOpenAuthor }: { post: CommunityPost; onOpenA
             </p>
           )
         )}
+        {likes && <LikedBy post={post} onOpen={onOpenLikes} className="-ml-1.5 mt-1.5" />}
       </div>
     </div>
   );
