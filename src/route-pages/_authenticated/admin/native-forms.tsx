@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { quickAnswers, quickExclusive } from "@/lib/form-quick";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,13 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ArrowLeft } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, Trash2, Copy, GripVertical, FileEdit, ChevronUp, ChevronDown, Archive, ExternalLink, Search, Eye, Send, Star, Inbox } from "lucide-react";
+import { Plus, Trash2, Copy, GripVertical, FileEdit, ChevronUp, ChevronDown, Archive, ExternalLink, Search, Eye, Send, Star, Inbox, MoreHorizontal, CheckSquare, Settings2, Check } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { countsLine } from "@/lib/form-response-status";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listForms, listFormLastUsed, upsertForm, duplicateForm, archiveForm,
@@ -34,7 +36,7 @@ import { NativeFormPreviewDialog } from "@/components/forms/native-form-preview"
 import { ConditionalLogicEditor } from "@/components/forms/conditional-logic-editor";
 import { FormVersionHistory } from "@/components/forms/form-version-history";
 import { AnswerSourceEditor, ChecklistItemsEditor, ReadinessFieldsEditor } from "@/components/forms/question-extras-editor";
-import { FormResponses } from "@/components/forms/form-responses";
+import { FormResponses, FormResponsesSheet } from "@/components/forms/form-responses";
 import { CATEGORY_SUGGESTIONS, categoryOf, libraryCategories, matchesSearch, ownerLabel, type LibraryForm } from "@/lib/form-library";
 import { FORM_LIBRARY_KEY, useFormFavorites, useFormLibraryStats, useToggleFavorite, type FormStats } from "@/lib/form-library.queries";
 import { NewFormFlow } from "@/components/forms/new-form-flow";
@@ -153,137 +155,135 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
     setCreating(null);
   }
 
+  const [selecting, setSelecting] = useState(false);
+  const [responsesFor, setResponsesFor] = useState<NfForm | null>(null);
+  const rowProps = (f: NfForm) => ({
+    form: f,
+    stats: stats.get(f.id) ?? null,
+    favorite: favorites.has(f.id),
+    onToggleFavorite: (on: boolean) => toggleFavorite(f.id, on).catch((e: any) => toast.error(e?.message ?? "Couldn't save")),
+    ownerTag: ownerLabel(f as unknown as LibraryForm, user?.id),
+    onResponses: () => setResponsesFor(f),
+    lastUsedAt: lastUsed.get(f.id) ?? null,
+    selecting,
+    selected: formSelection.isSelected(f.id),
+    onSelect: (checked: boolean) => formSelection.setOne(f.id, checked),
+    onEdit: () => { setEditTab(f.kind === "native" ? "questions" : "settings"); setEditing(f); },
+    onSettings: () => { setEditTab("settings"); setEditing(f); },
+    onSend: () => { setEditTab("shared"); setEditing(f); },
+  });
+
   return (
     <>
-      {!embedded && (
-        <PageHeader title="Check-Ins & Form Builder" subtitle="Build native forms or embed external check-ins. Share them from chat or this page — clients only see forms they've been shared." actions={
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={handleSyncFillout} disabled={syncing}>
-              <ExternalLink className="mr-2 h-4 w-4" /> {syncing ? "Syncing…" : "Sync from Fillout"}
-            </Button>
-            <Button onClick={() => setCreating("native")} className="bg-primary font-semibold"><Plus className="mr-2 h-4 w-4" /> New Form</Button>
+      {!embedded && <PageHeader title="Forms" />}
+      <div className="mx-auto max-w-3xl space-y-3 p-4 md:p-6">
+        {/* Search, New form, and everything used now and then in one menu. */}
+        <div className="flex items-center gap-2" data-form-library-toolbar>
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search forms" className="h-11 pl-9 text-[16px]" aria-label="Search forms" />
           </div>
-        } />
-      )}
-      {embedded && (
-        <div className="flex flex-wrap justify-end gap-2 px-4 pt-4 md:px-6">
-          <Button variant="outline" onClick={handleSyncFillout} disabled={syncing}>
-            <ExternalLink className="mr-2 h-4 w-4" /> {syncing ? "Syncing…" : "Sync from Fillout"}
+          <Button onClick={() => setCreating("native")} className="h-11 shrink-0 font-semibold" data-new-form>
+            <Plus className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">New form</span>
           </Button>
-          <Button onClick={() => setCreating("native")} className="bg-primary font-semibold"><Plus className="mr-2 h-4 w-4" /> New Form</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className="h-11 w-11 shrink-0" aria-label="More">
+                <MoreHorizontal className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => { setSelecting(true); }} disabled={!forms.length}>
+                <CheckSquare className="mr-2 h-4 w-4" /> Select forms
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleSyncFillout} disabled={syncing}>
+                <ExternalLink className="mr-2 h-4 w-4" /> {syncing ? "Syncing from Fillout…" : "Sync from Fillout"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      )}
-      <div className="space-y-3 p-4 md:p-6">
-        {forms.length > 0 && (
-          <div className="space-y-2" data-form-library-filters>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search forms" className="h-11 pl-9 text-[16px]" aria-label="Search forms" />
-            </div>
-            {!search.trim() && (
-              <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0">
-                {[
-                  { key: "all", label: "All" },
-                  { key: "favorites", label: `Favorites${favorites.size ? ` · ${favorites.size}` : ""}` },
-                  ...(hasOthers ? [{ key: "mine", label: "Mine" }] : []),
-                  ...categories.map((c) => ({ key: `cat:${c}`, label: c })),
-                ].map((c) => (
-                  <button
-                    key={c.key}
-                    type="button"
-                    onClick={() => setFilter(c.key)}
-                    aria-pressed={filter === c.key}
-                    className={`h-9 shrink-0 rounded-full px-3.5 text-[14px] font-medium ${filter === c.key ? "bg-foreground text-background" : "bg-muted text-foreground"}`}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-            )}
+        {forms.length > 0 && !search.trim() && (
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0" data-form-library-filters>
+            {[
+              { key: "all", label: "All" },
+              { key: "favorites", label: `Favorites${favorites.size ? ` · ${favorites.size}` : ""}` },
+              ...(hasOthers ? [{ key: "mine", label: "Mine" }] : []),
+              ...categories.map((c) => ({ key: `cat:${c}`, label: c })),
+            ].map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => setFilter(c.key)}
+                aria-pressed={filter === c.key}
+                className={`h-9 shrink-0 rounded-full px-3.5 text-[14px] font-medium ${filter === c.key ? "bg-foreground text-background" : "bg-muted text-foreground"}`}
+              >
+                {c.label}
+              </button>
+            ))}
           </div>
         )}
-        {forms.length > 0 && (
-          <Card className="border-border bg-card p-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
-                <Checkbox
-                  checked={formSelection.allSelected || (formSelection.someSelected ? "indeterminate" : false)}
-                  onCheckedChange={formSelection.toggleAll}
-                />
-                {formSelection.count > 0 ? `${formSelection.count} selected` : "Select forms"}
-              </label>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={formSelection.toggleAll}>
-                  {formSelection.allSelected ? "Unselect all" : "Select all"}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={formSelection.clear} disabled={formSelection.count === 0}>Clear</Button>
-                <Button variant="destructive" size="sm" onClick={deleteSelectedForms} disabled={formSelection.count === 0}>
-                  <Trash2 className="mr-1 h-4 w-4" /> Delete selected
-                </Button>
-              </div>
+        {selecting && (
+          <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background p-2" data-form-select-bar>
+            <label className="flex min-h-[40px] cursor-pointer items-center gap-2 px-1 text-[15px] font-medium">
+              <Checkbox
+                checked={formSelection.allSelected || (formSelection.someSelected ? "indeterminate" : false)}
+                onCheckedChange={formSelection.toggleAll}
+                aria-label="Select all"
+              />
+              {formSelection.count > 0 ? `${formSelection.count} selected` : "Select all"}
+            </label>
+            <div className="ml-auto flex gap-2">
+              <Button variant="destructive" size="sm" className="h-10" onClick={deleteSelectedForms} disabled={formSelection.count === 0}>
+                <Trash2 className="mr-1 h-4 w-4" /> Delete
+              </Button>
+              <Button variant="outline" size="sm" className="h-10" onClick={() => { formSelection.clear(); setSelecting(false); }}>
+                Done
+              </Button>
             </div>
-          </Card>
+          </div>
         )}
         {forms.length === 0 && (
-          <Card className="border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
-            No forms yet. Create a Native form (built in-app) or an External form (Fillout, Typeform, Google Forms link).
-          </Card>
+          <div className="rounded-xl border border-dashed border-border p-8 text-center text-[15px] text-muted-foreground">
+            No forms yet. Make one built in the app, or link one from Fillout, Typeform or Google Forms.
+          </div>
         )}
         {forms.length > 0 && liveForms.length === 0 && (
-          <p className="py-6 text-center text-[14px] text-muted-foreground">{search ? "No form matches that." : filter === "favorites" ? "Star a form to keep it here." : "Nothing here yet."}</p>
+          <p className="py-6 text-center text-[15px] text-muted-foreground">{search ? "No form matches that." : filter === "favorites" ? "Star a form to keep it here." : "Nothing here yet."}</p>
         )}
-        {liveForms.map((f) => (
-          <FormRow
-            key={f.id}
-            form={f}
-            stats={stats.get(f.id) ?? null}
-            favorite={favorites.has(f.id)}
-            onToggleFavorite={(on) => toggleFavorite(f.id, on).catch((e: any) => toast.error(e?.message ?? "Couldn't save"))}
-            ownerTag={ownerLabel(f as unknown as LibraryForm, user?.id)}
-            onResponses={() => { setEditTab("responses"); setEditing(f); }}
-            lastUsedAt={lastUsed.get(f.id) ?? null}
-            selected={formSelection.isSelected(f.id)}
-            onSelect={(checked) => formSelection.setOne(f.id, checked)}
-            onEdit={() => { setEditTab("settings"); setEditing(f); }}
-            onSend={() => { setEditTab("shared"); setEditing(f); }}
-          />
-        ))}
+        {liveForms.length > 0 && (
+          <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card" data-form-library-list>
+            {liveForms.map((f) => <FormRow key={f.id} {...rowProps(f)} />)}
+          </ul>
+        )}
         {archivedForms.length > 0 && (
-          <div className="pt-2">
+          <div className="pt-1">
             <button
               type="button"
               onClick={() => setShowArchived((v) => !v)}
-              className="flex w-full items-center justify-between rounded-lg px-1 py-2 text-left text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
+              className="flex min-h-[44px] w-full items-center justify-between gap-3 rounded-lg px-1 text-left text-[14px] font-medium text-muted-foreground hover:text-foreground"
               aria-expanded={showArchived}
             >
               <span>Archived · {archivedForms.length}</span>
-              <span className="text-[11px] font-semibold normal-case tracking-normal">
-                {showArchived ? "Hide" : `Show · forms not used in ${FORM_UNUSED_DAYS / 30} months archive themselves`}
+              <span className="flex items-center gap-1 text-[13px] font-normal">
+                {showArchived ? "Hide" : "Show"}
+                <ChevronDown className={`h-4 w-4 transition-transform ${showArchived ? "rotate-180" : ""}`} />
               </span>
             </button>
             {showArchived && (
-              <div className="space-y-3">
-                {archivedForms.map((f) => (
-                  <FormRow
-                    key={f.id}
-                    form={f}
-                    stats={stats.get(f.id) ?? null}
-                    favorite={favorites.has(f.id)}
-                    onToggleFavorite={(on) => toggleFavorite(f.id, on).catch((e: any) => toast.error(e?.message ?? "Couldn't save"))}
-                    ownerTag={ownerLabel(f as unknown as LibraryForm, user?.id)}
-                    onResponses={() => { setEditTab("responses"); setEditing(f); }}
-                    lastUsedAt={lastUsed.get(f.id) ?? null}
-                    selected={formSelection.isSelected(f.id)}
-                    onSelect={(checked) => formSelection.setOne(f.id, checked)}
-                    onEdit={() => { setEditTab("settings"); setEditing(f); }}
-                    onSend={() => { setEditTab("shared"); setEditing(f); }}
-                  />
-                ))}
-              </div>
+              <>
+                <p className="px-1 pb-2 text-[13px] text-muted-foreground">Forms nobody's used in {FORM_UNUSED_DAYS / 30} months archive themselves. Their responses stay.</p>
+                <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+                  {archivedForms.map((f) => <FormRow key={f.id} {...rowProps(f)} />)}
+                </ul>
+              </>
             )}
           </div>
         )}
       </div>
+
+      {responsesFor && (
+        <FormResponsesSheet formId={responsesFor.id} title={responsesFor.title} open onOpenChange={(o) => !o && setResponsesFor(null)} />
+      )}
 
       {editing && (
         <FormEditorDialog form={editing} open onClose={() => setEditing(null)} initialTab={editTab} />
@@ -337,9 +337,11 @@ function FormRow({
   ownerTag,
   onResponses,
   lastUsedAt,
+  selecting,
   selected,
   onSelect,
   onEdit,
+  onSettings,
   onSend,
 }: {
   form: NfForm;
@@ -350,9 +352,11 @@ function FormRow({
   ownerTag: string | null;
   onResponses: () => void;
   lastUsedAt: string | null;
+  selecting: boolean;
   selected: boolean;
   onSelect: (checked: boolean) => void;
   onEdit: () => void;
+  onSettings: () => void;
   onSend: () => void;
 }) {
   const qc = useQueryClient();
@@ -366,113 +370,144 @@ function FormRow({
 
   const sentCount = stats?.sent ?? 0;
   const hasAudience = form.visibility === "all_active_clients" || sentCount > 0;
-  const hasContent = form.kind === "external" ? !!form.external_url : (stats?.questions ?? 1) > 0;
-  const isActive = form.active && !form.archived && hasContent && hasAudience;
-  const assignedCount = form.visibility === "all_active_clients"
-    ? "Shared with all active clients"
-    : sentCount
-      ? `Sent to ${sentCount} · ${stats?.done ?? 0} answered${stats?.waiting ? ` · ${stats.waiting} waiting` : ""}`
-      : "Not sent yet";
-  const kindLabel = form.kind === "external" ? "External" : "Native";
+  const native = form.kind !== "external";
+  const status = libraryStatus(form, stats);
+  const meta = [
+    categoryOf(form),
+    native ? `${stats?.questions ?? 0} questions` : form.external_url ? "External link" : "No link yet",
+    form.recurrence !== "none" ? form.recurrence : null,
+    lastUsedAt ? `Used ${fmtShort(lastUsedAt)}` : null,
+  ].filter(Boolean).join(" · ");
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["nf-forms"] });
+    qc.invalidateQueries({ queryKey: ["nf-forms-for-client"] });
+    qc.invalidateQueries({ queryKey: FORM_LIBRARY_KEY });
+  };
 
   return (
-    <Card className="border-border bg-card p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
+    <li className="flex items-center gap-1.5 px-2 py-2 sm:px-3" data-form-row>
+      {selecting ? (
+        <span className="grid h-10 w-10 shrink-0 place-items-center">
           <Checkbox checked={selected} onCheckedChange={(checked) => onSelect(checked === true)} aria-label={`Select ${form.title}`} />
-          <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onToggleFavorite(!favorite)}
-              aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
-              aria-pressed={favorite}
-              className="-m-1 grid h-8 w-8 place-items-center rounded-full text-muted-foreground"
-            >
-              <Star className={favorite ? "h-4 w-4 fill-warning text-warning" : "h-4 w-4"} />
-            </button>
-            <div className="text-base font-semibold">{form.title}</div>
-            <Badge variant="outline" className="text-[10px]">{kindLabel}</Badge>
-            {ownerTag && <Badge variant="outline" className="text-[10px]">{ownerTag}</Badge>}
-            {isActive ? (
-              <Badge className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600">● Active</Badge>
-            ) : form.archived ? (
-              <Badge variant="outline">Archived</Badge>
-            ) : (
-              <Badge variant="outline">Draft</Badge>
-            )}
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            {categoryOf(form)}{" · "}
-            {form.kind === "native" ? `${stats?.questions ?? 0} questions` : (form.external_url ? "External link set" : "No URL yet")}
-            {" · "}{assignedCount}{form.recurrence !== "none" ? ` · ${form.recurrence}` : ""}
-            {" · "}{lastUsedAt ? `Last used ${new Date(lastUsedAt).toLocaleDateString([], { month: "short", day: "numeric", year: new Date(lastUsedAt).getFullYear() === new Date().getFullYear() ? undefined : "numeric" })}` : "Never used"}
-          </div>
-          {form.archived && form.archived_reason === "unused" && (
-            <div className="mt-1 text-xs text-muted-foreground">Archived on its own: not used in {FORM_UNUSED_DAYS / 30} months. Unarchive to use it again.</div>
-          )}
-          {hasAudience && (form.archived || !form.active) && (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <div className="text-xs font-medium text-warning">
-                Shared with clients, but not visible because this form is {form.archived ? "archived" : "still Draft"}.
-              </div>
-              {!form.archived && !form.active && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10"
-                  onClick={async () => {
-                    await upsertForm({ id: form.id, active: true });
-                    qc.invalidateQueries({ queryKey: ["nf-forms"] });
-                    qc.invalidateQueries({ queryKey: ["nf-forms-for-client"] });
-                    toast.success("Activated — clients can now see it");
-                  }}
-                >
-                  Activate now
-                </Button>
-              )}
-            </div>
-          )}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={onSend} className="bg-primary font-semibold">
-            <Send className="mr-1 h-4 w-4" /> Share
-          </Button>
-          {form.kind === "native" && (
-            <Button variant="outline" size="sm" onClick={() => setPreview(true)}>
-              <Eye className="mr-1 h-4 w-4" /> Preview
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={onEdit}><FileEdit className="mr-1 h-4 w-4" /> Edit</Button>
-          <Button variant="outline" size="sm" onClick={onResponses}><Inbox className="mr-1 h-4 w-4" /> Responses</Button>
-          <Button variant="outline" size="sm" onClick={async () => {
-            try {
-              await duplicateForm(form.id);
-              qc.invalidateQueries({ queryKey: ["nf-forms"] });
-              qc.invalidateQueries({ queryKey: FORM_LIBRARY_KEY });
-              toast.success("Copied. The copy is yours to change.");
-            } catch (e: any) {
-              toast.error(e?.message ?? "Couldn't copy it");
-            }
-          }}><Copy className="mr-1 h-4 w-4" /> Duplicate</Button>
-          <Button variant="outline" size="sm" onClick={async () => {
-            await archiveForm(form.id, !form.archived);
-            qc.invalidateQueries({ queryKey: ["nf-forms"] });
-            qc.invalidateQueries({ queryKey: ["nf-forms-for-client"] });
-          }}><Archive className="mr-1 h-4 w-4" /> {form.archived ? "Unarchive" : "Archive"}</Button>
-        </div>
-      </div>
-      {preview && form.kind === "native" && (
-        <NativeFormPreviewDialog
-          open={preview}
-          onClose={() => setPreview(false)}
-          form={form}
-          questions={questions}
-        />
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onToggleFavorite(!favorite)}
+          aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
+          aria-pressed={favorite}
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+        >
+          <Star className={favorite ? "h-4 w-4 fill-warning text-warning" : "h-4 w-4"} />
+        </button>
       )}
-    </Card>
+      <button type="button" onClick={selecting ? () => onSelect(!selected) : onEdit} className="min-w-0 flex-1 py-1 text-left" data-form-open>
+        <span className="block text-[16px] font-semibold leading-snug">
+          {form.title}
+          {form.archived ? <Tag>Archived</Tag> : !form.active ? <Tag tone="warn">Draft</Tag> : null}
+          {!native && <Tag>External</Tag>}
+          {ownerTag && <Tag>{ownerTag}</Tag>}
+        </span>
+        <span className="block truncate text-[13px] text-muted-foreground">{meta}</span>
+        <span className="block text-[13px] leading-snug" data-form-row-status>
+          <span className={status.tone === "muted" ? "text-muted-foreground" : "text-foreground"}>{status.text}</span>
+          {(stats?.to_review ?? 0) > 0 && <span className="font-medium text-sky-700 dark:text-sky-400"> · {stats!.to_review} to review</span>}
+        </span>
+        {hasAudience && !form.archived && !form.active && (
+          <span className="mt-0.5 block text-[13px] font-medium text-warning">Sent, but clients can't open it while it's a draft.</span>
+        )}
+        {form.archived && form.archived_reason === "unused" && (
+          <span className="mt-0.5 block text-[13px] text-muted-foreground">Archived on its own: not used in {FORM_UNUSED_DAYS / 30} months.</span>
+        )}
+      </button>
+      {native && !selecting && (
+        <Button variant="outline" size="sm" className="h-10 shrink-0 px-2.5 sm:px-3" onClick={onResponses} aria-label={`Responses to ${form.title}`} data-form-responses-open>
+          <Inbox className="h-4 w-4 sm:mr-1.5" />
+          <span className="hidden sm:inline">Responses</span>
+          {(stats?.responses ?? 0) > 0 && <span className="ml-1 tabular-nums text-muted-foreground">{stats!.responses}</span>}
+        </Button>
+      )}
+      {!selecting && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0" aria-label={`More for ${form.title}`}>
+              <MoreHorizontal className="h-5 w-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onSend}><Send className="mr-2 h-4 w-4" /> Share with clients</DropdownMenuItem>
+            {native && <DropdownMenuItem onClick={() => setPreview(true)}><Eye className="mr-2 h-4 w-4" /> Preview</DropdownMenuItem>}
+            <DropdownMenuItem onClick={onSettings}><Settings2 className="mr-2 h-4 w-4" /> Settings</DropdownMenuItem>
+            {!form.archived && !form.active && hasAudience && (
+              <DropdownMenuItem
+                onClick={async () => {
+                  await upsertForm({ id: form.id, active: true });
+                  refresh();
+                  toast.success("Switched on: clients can open it now");
+                }}
+              >
+                <Check className="mr-2 h-4 w-4" /> Switch it on
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem
+              onClick={async () => {
+                try {
+                  await duplicateForm(form.id);
+                  refresh();
+                  toast.success("Copied. The copy is yours to change.");
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Couldn't copy it");
+                }
+              }}
+            >
+              <Copy className="mr-2 h-4 w-4" /> Duplicate
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={async () => {
+                await archiveForm(form.id, !form.archived);
+                refresh();
+                toast.success(form.archived ? "Back in your forms" : "Archived. Its responses stay.");
+              }}
+            >
+              <Archive className="mr-2 h-4 w-4" /> {form.archived ? "Unarchive" : "Archive"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+      {preview && native && (
+        <NativeFormPreviewDialog open={preview} onClose={() => setPreview(false)} form={form} questions={questions} />
+      )}
+    </li>
   );
+}
+
+function Tag({ children, tone }: { children: ReactNode; tone?: "warn" }) {
+  return (
+    <span className={`ml-1.5 inline-block translate-y-[-1px] whitespace-nowrap rounded-full px-2 py-0.5 align-middle text-[11px] font-medium ${tone === "warn" ? "bg-warning/15 text-warning" : "bg-muted text-muted-foreground"}`}>
+      {children}
+    </span>
+  );
+}
+
+const fmtShort = (iso: string) => {
+  const d = new Date(iso);
+  return d.toLocaleDateString([], { month: "short", day: "numeric", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
+};
+
+/** The row's one line about who it's out with, on the same rule as the responses viewer. */
+function libraryStatus(form: NfForm, stats: FormStats | null): { text: string; tone: "muted" | "normal" } {
+  const sent = stats?.sent ?? 0;
+  if (form.visibility === "all_active_clients") {
+    const line = sent ? countsLine({ people: sent, answered: stats?.done ?? 0, inProgress: stats?.in_progress ?? 0, waiting: stats?.waiting ?? 0 }) : null;
+    return { text: `Every active client${line ? ` · ${line}` : ""}`, tone: "normal" };
+  }
+  if (!sent) return { text: "Not sent yet", tone: "muted" };
+  return {
+    text: `Sent to ${sent} · ${countsLine({ people: sent, answered: stats?.done ?? 0, inProgress: stats?.in_progress ?? 0, waiting: stats?.waiting ?? 0 })}`,
+    tone: "normal",
+  };
 }
 
 type EditorTab = "settings" | "questions" | "shared" | "versions" | "responses";
@@ -535,30 +570,50 @@ export function FormEditorDialog({ form, open, onClose, initialTab = "settings" 
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            Edit Form
-            <Badge variant="outline" className="text-[10px]">{form.kind === "external" ? "External" : "Native"}</Badge>
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="flex flex-wrap gap-2 rounded-lg bg-muted p-1">
-          <Button type="button" size="sm" variant={activeTab === "settings" ? "default" : "ghost"} onClick={() => setActiveTab("settings")}>Settings</Button>
-          {form.kind === "native" && (
-            <Button type="button" size="sm" variant={activeTab === "questions" ? "default" : "ghost"} onClick={() => setActiveTab("questions")}>Questions ({questions.length})</Button>
-          )}
-          <Button type="button" size="sm" variant={activeTab === "shared" ? "default" : "ghost"} onClick={() => setActiveTab("shared")}>Shared with</Button>
-          {form.kind === "native" && (
-            <Button type="button" size="sm" variant={activeTab === "versions" ? "default" : "ghost"} onClick={() => setActiveTab("versions")}>Versions</Button>
-          )}
-          <Button type="button" size="sm" variant={activeTab === "responses" ? "default" : "ghost"} onClick={() => setActiveTab("responses")}>Responses</Button>
-          {form.kind === "native" && (
-            <Button type="button" size="sm" variant="ghost" className="ml-auto" onClick={() => setPreview(true)}>
-              <Eye className="mr-1 h-4 w-4" /> Preview
+      <DialogContent
+        showBackButton={false}
+        className="fixed inset-0 left-0 top-0 flex h-[100dvh] max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0 sm:left-1/2 sm:top-1/2 sm:h-[min(92dvh,960px)] sm:max-w-3xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border"
+        data-form-editor
+      >
+        <header className="shrink-0 border-b border-border px-2 pb-2 pt-[calc(env(safe-area-inset-top)+0.5rem)] sm:pt-2">
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" onClick={onClose} aria-label="Back">
+              <ArrowLeft className="h-5 w-5" />
             </Button>
-          )}
-        </div>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="truncate text-[17px] font-semibold">{local.title || "Untitled form"}</DialogTitle>
+              <p className="text-[13px] text-muted-foreground">{form.kind === "external" ? "External form" : `${questions.length} question${questions.length === 1 ? "" : "s"}`}</p>
+            </div>
+            {form.kind === "native" && (
+              <Button type="button" variant="outline" size="sm" className="h-10 shrink-0" onClick={() => setPreview(true)}>
+                <Eye className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">Preview</span>
+              </Button>
+            )}
+          </div>
+          {/* Questions first: it's what's edited most. Neutral tabs, one row that scrolls. */}
+          <div className="mt-2 flex gap-1 overflow-x-auto px-1 [scrollbar-width:none]" role="tablist" aria-label="Form editor">
+            {([
+              ...(form.kind === "native" ? [{ key: "questions" as const, label: "Questions" }] : []),
+              { key: "settings" as const, label: "Settings" },
+              { key: "shared" as const, label: "Shared with" },
+              { key: "responses" as const, label: "Responses" },
+              ...(form.kind === "native" ? [{ key: "versions" as const, label: "Versions" }] : []),
+            ]).map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === t.key}
+                onClick={() => setActiveTab(t.key)}
+                className={`h-9 shrink-0 rounded-full px-3.5 text-[14px] font-medium ${activeTab === t.key ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                data-editor-tab={t.key}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </header>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-4">
 
           {!canEdit && (
             <p className="rounded-lg bg-muted px-3 py-2 text-[13px]" data-form-read-only>
@@ -710,6 +765,7 @@ export function FormEditorDialog({ form, open, onClose, initialTab = "settings" 
           )}
 
           {activeTab === "responses" && <FormResponses formId={form.id} />}
+        </div>
       </DialogContent>
       {preview && form.kind === "native" && (
         <NativeFormPreviewDialog
@@ -754,7 +810,7 @@ function QuestionsEditor({ formId, questions }: { formId: string; questions: NfQ
       {questions.map((q, idx) => (
         <QuestionRow key={q.id} q={q} formId={formId} allQuestions={questions} onMoveUp={() => move(idx, -1)} onMoveDown={() => move(idx, 1)} />
       ))}
-      <Button variant="outline" onClick={addQuestion}><Plus className="mr-1 h-4 w-4" /> Add Question</Button>
+      <Button variant="outline" className="h-11 w-full" onClick={addQuestion}><Plus className="mr-1.5 h-4 w-4" /> Add a question</Button>
     </div>
   );
 }
@@ -801,16 +857,16 @@ function QuestionRow({ q, formId, allQuestions, onMoveUp, onMoveDown }: { q: NfQ
   return (
     <Card className="border-border bg-card p-3">
       <div className="flex items-start gap-2">
-        <div className="flex flex-col">
-          <button onClick={onMoveUp} className="text-muted-foreground hover:text-foreground"><ChevronUp className="h-4 w-4" /></button>
-          <GripVertical className="h-4 w-4 text-muted-foreground" />
-          <button onClick={onMoveDown} className="text-muted-foreground hover:text-foreground"><ChevronDown className="h-4 w-4" /></button>
+        <div className="-ml-1 flex flex-col items-center">
+          <button type="button" onClick={onMoveUp} aria-label="Move up" className="grid h-9 w-8 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"><ChevronUp className="h-4 w-4" /></button>
+          <GripVertical className="h-4 w-4 text-muted-foreground/60" aria-hidden />
+          <button type="button" onClick={onMoveDown} aria-label="Move down" className="grid h-9 w-8 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"><ChevronDown className="h-4 w-4" /></button>
         </div>
-        <div className="flex-1 space-y-2">
-          <div className="flex gap-2">
-            <Input value={local.label} onChange={(e) => setLocal({ ...local, label: e.target.value })} onBlur={() => save({ label: local.label })} />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input className="text-[16px] sm:text-sm" value={local.label} onChange={(e) => setLocal({ ...local, label: e.target.value })} onBlur={() => save({ label: local.label })} aria-label="Question" />
             <Select value={local.question_type} onValueChange={(v) => save({ question_type: v as NfQuestionType })}>
-              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-44" aria-label="Answer type"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {NF_QUESTION_TYPES.map((t) => (
                   <SelectItem key={t} value={t}>{NF_QUESTION_TYPE_LABEL[t]}</SelectItem>

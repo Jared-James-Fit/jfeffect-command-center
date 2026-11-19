@@ -113,15 +113,21 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
     keywords: ["view as client", "impersonate client", "point of view"] },
 
   // ── COACHING ────────────────────────────────────────────────────────
-  { id: "coaching", label: "Coaching Hub", to: "/admin/coaching", category: "Coaching",
-    parent: "Admin → Coaching", roles: ADMIN_COACH, icon: ClipboardList,
-    keywords: ["training intel", "progress", "requests", "schedules", "management", "coaching workspace"] },
+  // The Coaching Hub is gone (Nov 19 2026): Training Intel and Management are
+  // Clients sorted by attention, Progress is Forms → Submissions, Schedules is
+  // Forms → More → Check-in schedules.
+  { id: "checkin-schedules", label: "Check-in schedules", to: "/admin/forms?tab=schedules", category: "Forms & Check-Ins",
+    parent: "Admin → Forms → More", roles: ADMIN_COACH, icon: ClipboardList,
+    keywords: ["schedules", "check-in schedule", "task cadence", "per-client schedule", "action centre"] },
+  { id: "progress-submissions", label: "Progress photos & videos", to: "/admin/forms?tab=submissions&kind=progress", category: "Forms & Check-Ins",
+    parent: "Admin → Forms → Submissions", roles: ADMIN_COACH, icon: ClipboardList,
+    keywords: ["progress queue", "progress photos", "progress videos", "physique"] },
+  { id: "clients-attention", label: "Clients needing attention", to: "/admin/clients?sort=attention", category: "Clients",
+    parent: "Admin → Clients", roles: ADMIN_COACH, icon: Activity,
+    keywords: ["training intel", "training intelligence", "management", "missed workouts", "inactive", "attention", "coaching hub"] },
   { id: "checkin-reviews", label: "Check-In Reviews", to: "/admin/check-in-reviews",
     category: "Coaching", parent: "Admin → Coaching → Forms", roles: ADMIN_COACH, icon: ClipboardCheck,
     keywords: ["weekly check in", "reviews", "client check-ins", "submissions"] },
-  { id: "training-intel", label: "Training Intelligence", to: "/admin/training-intelligence",
-    category: "Coaching", parent: "Admin → Coaching", roles: ADMIN_COACH, icon: Activity,
-    keywords: ["intel", "insights", "training analytics"] },
   { id: "nutrition-dashboard", label: "Nutrition Dashboard", to: "/admin/nutrition-dashboard",
     category: "Nutrition", parent: "Admin → Coaching", roles: ADMIN_COACH, icon: ChefHat,
     keywords: ["nutrition update", "nutri", "macros review"] },

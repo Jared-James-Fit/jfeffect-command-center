@@ -78,7 +78,7 @@ describe("one menu row per page", () => {
     // tabs of one page are that page's row, not entries of their own
     for (const label of ["Messages", "Calendar", "Team"]) expect(listed(row(label))).toEqual([]);
     expect(listed(row("Crew")).map((c) => c.to)).toEqual(["/admin/community", "/admin/league", "/admin/athlete-records", "/admin/challenges"]);
-    expect(listed(row("Coaching")).map((c) => c.to)).toEqual(["/admin/coaching", "/admin/forms", "/admin/programming"]);
+    expect(listed(row("Coaching")).map((c) => c.to)).toEqual(["/admin/forms", "/admin/programming"]);
     // Athlete Records sits under the League, not at the top
     expect(admin.some((i) => i.to === "/admin/athlete-records")).toBe(false);
   });
@@ -109,7 +109,7 @@ describe("one menu row per page", () => {
     for (const to of [
       "/admin", "/admin/tasks", "/admin/support-alerts", "/admin/messages", "/admin/communication",
       "/admin/community", "/admin/league", "/admin/athlete-records", "/admin/clients", "/admin/check-in-reviews",
-      "/admin/training-intelligence", "/admin/coaching", "/admin/agreements",
+      "/admin/agreements",
       "/admin/programming", "/admin/program-library", "/admin/exercises", "/admin/cardio-targets", "/admin/warmup-protocols",
       "/admin/recipes", "/admin/native-forms", "/admin/forms", "/admin/fillout-submissions", "/admin/calendar",
       "/admin/pt-calendar", "/admin/google-calendar", "/admin/sales/coaching-applications",
@@ -134,17 +134,14 @@ describe("one menu row per page", () => {
     expect(shell).not.toContain("amber-400");
   });
 
-  it("the Coaching hub opens on Training Intel; a named tab still wins", () => {
+  it("the Coaching Hub is gone: each of its tabs lands where it lives now", () => {
     const page = read("src/routes/_authenticated/admin/coaching.tsx");
-    expect(page).toContain('const DEFAULT_TAB: TabKey = "training-intel";');
-    expect(page).toContain('return { tab: t === "check-ins" ? "check-ins" : isTab(t) ? t : DEFAULT_TAB, open };');
+    expect(page).not.toContain("component:");
+    expect(page).toContain('if (tab === "progress") throw redirect({ to: "/admin/forms", search: { tab: "submissions", kind: "progress" } as any, replace: true });');
+    expect(page).toContain('if (tab === "schedules") throw redirect({ to: "/admin/forms", search: { tab: "schedules" } as any, replace: true });');
+    expect(page).toContain('if (tab === "check-ins") throw redirect({ to: "/admin/forms", search: { tab: "submissions" } as any, replace: true });');
+    expect(page).toContain('throw redirect({ to: "/admin/clients", search: { sort: "attention" }, replace: true });');
     expect(read("src/lib/internal-nav.ts")).not.toContain("Legacy Hubs");
-  });
-
-  it("the old check-in queue is gone from the hub, and its links open Forms", () => {
-    const page = read("src/routes/_authenticated/admin/coaching.tsx");
-    expect(page).not.toContain("Check-ins (old)");
-    expect(page).not.toContain("AdminCheckInReviews");
-    expect(page).toContain('if (search.tab === "check-ins") throw redirect({ to: "/admin/forms", search: { tab: "submissions" } as any, replace: true });');
+    expect(read("src/route-pages/_authenticated/admin/forms-tabs.ts")).toContain('{ value: "schedules",              label: "Check-in schedules",   more: true },');
   });
 });
