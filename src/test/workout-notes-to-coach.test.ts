@@ -85,7 +85,8 @@ describe("the athlete knows it goes to their coach (members never hear about a c
   it("exercise note: says so and pushes the coach", () => {
     expect(day).toContain("const toCoach = !isSelfServe && !isImpersonating;");
     expect(day).toContain("Goes to your coach in Messages.");
-    expect(day).toContain("await pushWorkoutNote(data?.coach_message_id ?? null);");
+    // only a new card is pushed; an edit updates the card the coach already has
+    expect(day).toContain("if (data?.coach_message_id && data.coach_message_id !== cardBefore) await pushWorkoutNote(data.coach_message_id);");
   });
 });
 
