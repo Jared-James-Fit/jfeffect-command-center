@@ -74,6 +74,7 @@ import {
   type SetVideoJob,
 } from "@/lib/set-videos/jobs";
 import { linkFilmed } from "@/lib/set-videos/phone-copy";
+import { clipMicNote } from "@/lib/video-mic";
 import {
   outboxDelete,
   outboxForUser,
@@ -428,6 +429,8 @@ async function runJob(id: string) {
         orig_mb: mb(picked.file.size),
         sent_mb: mb(prepared.size),
         ua: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 160) : null,
+        // filmed in the app: what its sound came from ("raw 2ch 48k own"), so a real phone's recording can be checked
+        mic: clipMicNote(picked.file.name),
       };
       const clip = {
         file: prepared,

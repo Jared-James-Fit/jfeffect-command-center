@@ -100,6 +100,8 @@ import { StaffInviteChatCard } from "@/components/staff-invite-chat-card";
 import { listenChannel } from "@/lib/realtime-channel";
 import { SaveMediaButton, useSaveMedia } from "@/components/messages/save-media";
 import { saveItemsOf, saveLabel, warmSave } from "@/lib/save-media";
+import { useFilmCamera } from "@/components/camera/use-film-camera";
+import { videoLimit } from "@/lib/video-edit/limits";
 
 function attachIcon(t: MessageAttachment["type"]) {
   if (t === "image") return ImageIcon;
@@ -845,6 +847,12 @@ export function MessageThread({
   const uploads = useDraftUploads<MessageAttachment>();
   // a video longer than 10 minutes opens the trimmer before it becomes a chip
   const trimmer = useVideoTrimmer();
+  // the + menu's Video: filmed in the app's own camera, then sent like a picked video (Library inside it)
+  const filmCamera = useFilmCamera({
+    maxSeconds: videoLimit("coach"),
+    onClip: (f) => void onPickFiles([f]),
+    onLibrary: () => photoInputRef.current?.click(),
+  });
   // Messages already sent from the composer but still waiting on their media.
   const [queuedUploadSends, setQueuedUploadSends] = useState(0);
   const [sending, setSending] = useState(false);
@@ -1767,7 +1775,7 @@ export function MessageThread({
     exitSelection();
   };
 
-  const onPickFiles = async (files: FileList | null) => {
+  const onPickFiles = async (files: FileList | File[] | null) => {
     if (!files || !files.length) return;
     // (read now: the input is cleared right after this is called)
     const list = await prepareChatFiles(Array.from(files), "coach", trimmer.request);
@@ -2792,6 +2800,7 @@ export function MessageThread({
 
         <DraftUploadChips drafts={uploads.drafts} store={uploads.store} onRemove={uploads.cancel} />
         {trimmer.element}
+        {filmCamera.element}
 
         {/* Hidden file inputs */}
         <input ref={fileInputRef} type="file" multiple className="hidden"
@@ -2862,6 +2871,10 @@ export function MessageThread({
               canSendGifs={canSendGifs}
               canSendSounds={canSendSounds}
               onPickCamera={() => cameraInputRef.current?.click()}
+              onPickVideo={() => {
+                // where a web page can't film, the phone's own camera, as before
+                if (!filmCamera.start()) cameraInputRef.current?.click();
+              }}
               onPickPhotos={() => photoInputRef.current?.click()}
               onPickFiles={() => fileInputRef.current?.click()}
               onInsertText={role === "admin" ? (text) =>
