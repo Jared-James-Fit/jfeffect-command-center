@@ -68,6 +68,7 @@ import { useVideoTrimmer } from "@/components/video-trimmer";
 import type { VideoContext } from "@/lib/video-edit/limits";
 import { useFilmCamera } from "@/components/camera/use-film-camera";
 import { videoLimit } from "@/lib/video-edit/limits";
+import { HapticTap } from "@/components/haptic-tap";
 
 async function uploadGroupFile(
   groupId: string,
@@ -1213,13 +1214,14 @@ export function GroupMessageThread({
                   disabled={sending || uploading}
                   aria-busy={sending || uploading || undefined}
                   size="icon"
-                  className="h-10 w-10 shrink-0 rounded-full bg-primary transition-transform active:scale-90"
+                  className="relative h-10 w-10 shrink-0 rounded-full bg-primary transition-transform active:scale-90"
                 >
                   {sending || uploading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Send className="h-4 w-4" />
                   )}
+                  {!(sending || uploading) && <HapticTap />}
                 </Button>
               ) : textOnly ? (
                 <Button type="button" size="icon" disabled className="h-10 w-10 shrink-0 rounded-full bg-primary" aria-label="Send">

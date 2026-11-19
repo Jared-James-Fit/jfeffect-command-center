@@ -101,6 +101,7 @@ import { saveItemsOf, saveLabel, warmSave } from "@/lib/save-media";
 import { useFilmCamera } from "@/components/camera/use-film-camera";
 import { videoLimit } from "@/lib/video-edit/limits";
 import { feedback } from "@/lib/feedback";
+import { HapticTap } from "@/components/haptic-tap";
 
 function attachIcon(t: MessageAttachment["type"]) {
   if (t === "image") return ImageIcon;
@@ -3008,13 +3009,14 @@ export function MessageThread({
                 disabled={sending || uploading}
                 aria-busy={sending || uploading || undefined}
                 size="icon"
-                className="h-9 w-9 shrink-0 rounded-full bg-primary transition-transform active:scale-90"
+                className="relative h-9 w-9 shrink-0 rounded-full bg-primary transition-transform active:scale-90"
               >
                 {sending || uploading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Send className="h-4 w-4" />
                 )}
+                {!(sending || uploading) && <HapticTap />}
               </Button>
               </>
             ) : (

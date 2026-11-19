@@ -6,6 +6,7 @@ import { useShowLoadSuggestions } from "@/lib/load-suggestion-visibility";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { audibleStep, BACKOFF_FATIGUE, loadStep, roundToStep, type LoadModel, type LoadSuggestion } from "@/lib/load-suggestion";
 import type { PlannedLoadView } from "@/lib/workouts/planned-load";
+import { HapticTap } from "@/components/haptic-tap";
 
 function fmtNum(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
@@ -182,12 +183,14 @@ function FillChip({ load, unit, shown, small = false, ariaLabel, title = "Tap to
       title={title}
       data-testid="load-apply"
       className={cn(
-        "inline-flex min-h-9 max-w-full items-center gap-1 whitespace-nowrap rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-1 font-semibold leading-tight tabular-nums text-foreground transition active:scale-[0.97] active:bg-blue-500/20 disabled:opacity-60",
+        "relative inline-flex min-h-9 max-w-full items-center gap-1 whitespace-nowrap rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-1 font-semibold leading-tight tabular-nums text-foreground transition active:scale-[0.97] active:bg-blue-500/20 disabled:opacity-60",
         small ? "text-[13px]" : "text-sm",
       )}
     >
       <ArrowDownToLine className="h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
       <span data-testid="load-target">{shown}{"\u00a0"}{unit}</span>
+      {/* the iPhone's tap as the finger logs the sets (haptic-tap.tsx) */}
+      {!busy && <HapticTap />}
     </button>
   );
 }
