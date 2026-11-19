@@ -12,6 +12,7 @@ export const TABS = [
   { value: "agreements",             label: "Agreements" },
   { value: "reviews",                label: "AI drafts",            more: true },
   { value: "fillout",                label: "Fillout inbox",        more: true },
+  { value: "schedules",              label: "Check-in schedules",   more: true },
   { value: "scheduler",              label: "Scheduler",            more: true },
   { value: "ai-settings",            label: "AI settings",          more: true },
   { value: "integrations",           label: "Integrations",         more: true },

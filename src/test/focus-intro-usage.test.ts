@@ -68,7 +68,8 @@ describe("Focus usage: is it useful?", () => {
     const sql = read("supabase/migrations/20261208090000_focus_intro_usage_and_exercise_trash.sql");
     expect(sql).toContain("IF NOT (SELECT public.has_role((SELECT auth.uid()), 'admin')) THEN");
     expect(sql.match(/user_id = \(SELECT auth\.uid\(\)\)/g)?.length).toBeGreaterThanOrEqual(4);
-    expect(read("src/route-pages/_authenticated/admin/training-intelligence.tsx")).toContain('{accountRole === "admin" && <FocusUsageCard />}');
+    // moved from Training Intel (gone Nov 19 2026) to Workspace Settings
+    expect(read("src/routes/_authenticated/admin/settings.tsx")).toContain("{isAdmin && <FocusUsageCard />}");
   });
 });
 

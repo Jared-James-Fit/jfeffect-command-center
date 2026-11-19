@@ -20,13 +20,22 @@ export type MeetBoardRow = {
   facts: MeetFacts | null;
   updatedAt: string | null;
   sentAt: string | null;
+  /** A meet on their meet prep with no checklist out yet (the dashboard's only other view of meets coming up). */
+  noChecklist?: boolean;
 };
 
+/** How far ahead a meet on a meet prep shows, checklist or not. */
+export const UPCOMING_MEET_DAYS = 56;
+/** Inside this, a meet with no checklist out says to send it (formSuggestions offers it in the chat from here too). */
+const CHECKLIST_DUE_DAYS = 28;
+
 /**
- * Every athlete with a meet checklist out, soonest meet first: where they
- * stand, the critical items still open, a weight concern, the handler, and
- * when they last changed it. Read live from their answers each time. Hidden
- * when nobody has a meet coming up.
+ * Every athlete with a meet coming up, soonest first: with a meet checklist
+ * out, where they stand, the critical items still open, a weight concern, the
+ * handler, and when they last changed it (read live from their answers); with
+ * a meet on their meet prep in the next 8 weeks and no checklist, the meet and
+ * a nudge to send it inside 4 weeks (this card replaced Training Intel's
+ * "Event approaching"). Hidden when nobody has a meet coming up.
  */
 export function useMeetBoard() {
   return useQuery({
@@ -36,7 +45,8 @@ export function useMeetBoard() {
       const today = todayLocal();
       const { data: forms } = await db.from("nf_forms").select("id, form_type, settings").eq("form_type", MEET_CHECKLIST_FORM_TYPE).eq("archived", false);
       const formIds = ((forms ?? []) as any[]).map((f) => f.id);
-      if (!formIds.length) return [];
+      const preps = await upcomingPreps(today);
+      if (!formIds.length) return preps;
       const since = new Date(Date.now() - 120 * 86_400_000).toISOString();
       const [{ data: subs }, { data: asg }, { data: qs }] = await Promise.all([
         db
@@ -99,24 +109,62 @@ export function useMeetBoard() {
       }
       // Meets still ahead (or yesterday's), and undated ones touched in the last 3 weeks.
       const recent = (iso: string | null) => !!iso && Date.now() - Date.parse(iso) < 21 * 86_400_000;
-      return rows
-        .filter((r) => (r.days != null ? r.days >= -1 : recent(r.updatedAt ?? r.sentAt)))
+      const withChecklist = rows.filter((r) => (r.days != null ? r.days >= -1 : recent(r.updatedAt ?? r.sentAt)));
+      const covered = new Set(withChecklist.map((r) => r.clientId));
+      return [...withChecklist, ...preps.filter((p) => !covered.has(p.clientId))]
         .sort((a, b) => (a.days ?? 999) - (b.days ?? 999) || a.name.localeCompare(b.name));
     },
   });
 }
 
+/** Coaching clients with a meet on their meet prep in the next UPCOMING_MEET_DAYS (RLS: an admin's all, a coach's own). */
+async function upcomingPreps(today: string): Promise<MeetBoardRow[]> {
+  const until = new Date(Date.parse(`${today}T12:00:00Z`) + UPCOMING_MEET_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const { data: preps } = await db
+    .from("pl_preps")
+    .select("client_id, title, event_name, event_date, status, archived")
+    .in("status", ["Active", "Planned"])
+    .gte("event_date", today)
+    .lte("event_date", until)
+    .order("event_date");
+  const live = ((preps ?? []) as any[]).filter((p) => !p.archived);
+  const ids = [...new Set(live.map((p) => p.client_id))];
+  if (!ids.length) return [];
+  const { data: clients } = await db.from("clients").select("id, full_name, archived, service_tier").in("id", ids);
+  const who = new Map(((clients ?? []) as any[]).filter((c) => !c.archived && c.service_tier !== "self_serve").map((c) => [c.id, c.full_name as string]));
+  const seen = new Set<string>();
+  const out: MeetBoardRow[] = [];
+  for (const p of live) {
+    if (!who.has(p.client_id) || seen.has(p.client_id)) continue;
+    seen.add(p.client_id);
+    out.push({
+      clientId: p.client_id,
+      name: who.get(p.client_id) ?? "Athlete",
+      meetName: (p.event_name || p.title || "").trim() || null,
+      meetDate: p.event_date,
+      days: daysUntil(p.event_date, today),
+      readiness: null,
+      facts: null,
+      updatedAt: null,
+      sentAt: null,
+      noChecklist: true,
+    });
+  }
+  return out;
+}
+
 export function MeetReadinessCard() {
   const { data: rows = [] } = useMeetBoard();
   if (!rows.length) return null;
-  const attention = rows.filter((r) => !r.readiness || r.readiness.verdict !== "ready").length;
+  const attention = rows.filter((r) => !r.noChecklist && (!r.readiness || r.readiness.verdict !== "ready")).length;
+  const checklists = rows.some((r) => !r.noChecklist);
   return (
     <Card className="p-4" data-meet-readiness>
       <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-[16px] font-semibold">
-          <Trophy className="h-4 w-4 text-muted-foreground" /> Meet day readiness
+          <Trophy className="h-4 w-4 text-muted-foreground" /> Upcoming meets
         </h2>
-        <span className="text-[13px] text-muted-foreground">{attention ? `${attention} not ready` : "All ready"}</span>
+        {checklists && <span className="text-[13px] text-muted-foreground">{attention ? `${attention} not ready` : "Checklists ready"}</span>}
       </div>
       <ul className="divide-y divide-border">
         {rows.map((r) => {
@@ -136,8 +184,12 @@ export function MeetReadinessCard() {
                 <p className="truncate text-[13px] text-muted-foreground">
                   {[r.meetName, r.meetDate ? new Date(`${r.meetDate}T00:00:00`).toLocaleDateString("en-CA", { month: "short", day: "numeric" }) : null].filter(Boolean).join(" · ") || "Meet not named yet"}
                 </p>
-                <p className={cn("text-[13px] font-medium", r.readiness ? verdictTone(r.readiness) : "text-muted-foreground")}>
-                  {r.readiness ? readinessLine(r.readiness) : `Not opened yet · sent ${relativeTime(r.sentAt) ?? ""}`}
+                <p className={cn("text-[13px] font-medium", r.readiness ? verdictTone(r.readiness) : r.noChecklist && (r.days ?? 99) <= CHECKLIST_DUE_DAYS ? "text-warning" : "text-muted-foreground")}>
+                  {r.readiness
+                    ? readinessLine(r.readiness)
+                    : r.noChecklist
+                      ? (r.days ?? 99) <= CHECKLIST_DUE_DAYS ? "No meet checklist yet · send it from their chat" : "No meet checklist yet"
+                      : `Not opened yet · sent ${relativeTime(r.sentAt) ?? ""}`}
                   {r.updatedAt && r.readiness ? <span className="font-normal text-muted-foreground"> · updated {relativeTime(r.updatedAt)}</span> : null}
                 </p>
                 {critical.length > 0 && <p className="text-[13px] text-destructive">Still need: {critical.map((i) => i.label).join(", ")}</p>}

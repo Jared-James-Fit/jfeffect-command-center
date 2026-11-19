@@ -774,6 +774,21 @@ export function threadMessagesQuery(clientId: string, role: SenderRole) {
   };
 }
 
+/**
+ * A form card already shows its title, so the message's own words when they're
+ * only that ("Shared a form: …", the title) would say it twice; a note the coach
+ * wrote is the message's words and shows above the card (the card no longer
+ * repeats it).
+ */
+export function formCardSaysIt(body: string | null | undefined, att: any): boolean {
+  if (att?.kind !== "form_request") return false;
+  const norm = (x: unknown) => String(x ?? "").trim().toLowerCase();
+  const b = norm(body);
+  if (!b) return true;
+  const title = norm(att.request_title);
+  return !!title && (b === title || b === `shared a form: ${title}`);
+}
+
 export function MessageThread({
   clientId,
   role,
@@ -2375,7 +2390,7 @@ export function MessageThread({
                   </>
                 ) : (
                   // A session request's (or workout note's) card says it all; its text is for inbox previews.
-                  m.body && !m.attachments?.some((a: any) => a?.kind === "session_request" || a?.kind === "session_change" || a?.kind === "session_booked" || a?.kind === "workout_note") && renderBodyWithMeet(m.body, mine)
+                  m.body && !m.attachments?.some((a: any) => a?.kind === "session_request" || a?.kind === "session_change" || a?.kind === "session_booked" || a?.kind === "workout_note" || formCardSaysIt(m.body, a)) && renderBodyWithMeet(m.body, mine)
                 )}
                 {!isDeleted && !isEditing && m.attachments?.some((a) => a !== replyCard) && (
                   <div className={cn("mt-2 space-y-2", m.body ? "" : "")}>

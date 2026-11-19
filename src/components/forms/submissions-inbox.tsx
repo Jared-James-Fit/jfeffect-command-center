@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
-import { NativeAnswers } from "@/components/clients/intake-answers-dialog";
+import { FormResponsesSheet } from "@/components/forms/form-responses";
 import { CheckinAnswersSheet } from "@/components/messages/messenger-checkin-card";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -38,7 +38,7 @@ const QUERY_KEY = ["form-submissions"];
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
-export function SubmissionsInbox() {
+export function SubmissionsInbox({ initialKind }: { initialKind?: string } = {}) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -49,7 +49,9 @@ export function SubmissionsInbox() {
     queryFn: () => list(),
   });
 
-  const [kind, setKind] = useState<SubmissionKind | "all">("all");
+  const [kind, setKind] = useState<SubmissionKind | "all">(() =>
+    SUBMISSION_KINDS.some((k) => k.kind === initialKind) ? (initialKind as SubmissionKind) : "all",
+  );
   const [status, setStatus] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<FormSubmission | null>(null);
@@ -164,7 +166,7 @@ export function SubmissionsInbox() {
         <div className="space-y-4">
           {groups.map((g) => (
             <section key={g.label} aria-label={g.label}>
-              <h3 className="sticky top-0 z-10 -mx-1 bg-background/95 px-1 py-1.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground backdrop-blur">
+              <h3 className="sticky top-0 z-10 -mx-1 bg-background px-1 py-1.5 text-[13px] font-semibold text-muted-foreground">
                 {g.label} <span className="font-semibold">· {g.rows.length}</span>
               </h3>
               <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
@@ -194,32 +196,18 @@ export function SubmissionsInbox() {
           submittedAt={open.submittedAt}
         />
       )}
-      {open?.source === "native" && (
-        <Dialog open onOpenChange={(o) => !o && setOpen(null)}>
-          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>{open.title}</DialogTitle>
-              <DialogDescription>
-                {open.clientName} · submitted {new Date(open.submittedAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-              </DialogDescription>
-            </DialogHeader>
-            <NativeAnswers submissionId={open.id} formId={open.formId} />
-            <div className="flex flex-wrap gap-2">
-              {open.clientId && (
-                <Button asChild variant="secondary" size="sm">
-                  <Link to="/admin/communication" search={{ tab: "messages", client: open.clientId } as any} onClick={() => setOpen(null)}>
-                    <MessageCircle className="mr-1.5 h-4 w-4" /> Open chat
-                  </Link>
-                </Button>
-              )}
-              {open.reviewed === false && (
-                <Button size="sm" variant="outline" onClick={() => { void markReviewed(open); setOpen(null); }}>
-                  <Check className="mr-1.5 h-4 w-4" /> Mark reviewed
-                </Button>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
+      {open?.source === "native" && open.formId && (
+        <FormResponsesSheet
+          formId={open.formId}
+          title={open.title}
+          submissionId={open.id}
+          open
+          onOpenChange={(o) => {
+            if (o) return;
+            setOpen(null);
+            void refetch();
+          }}
+        />
       )}
     </div>
   );

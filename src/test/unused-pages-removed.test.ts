@@ -14,7 +14,11 @@ const REDIRECTS: Array<[file: string, to: string]> = [
   ["portal/resources.$slug.tsx", "/portal"],
   ["admin/broadcasts.tsx", "/admin/communication"],
   ["admin/broadcasts.$broadcastId.tsx", "/admin/communication"],
-  ["admin/client-action-requests.tsx", "/admin/coaching"],
+  ["admin/client-action-requests.tsx", "/admin/clients"],
+  // The Coaching Hub (Nov 19 2026): follow-ups 0 ever, Training Intel's reviews last
+  // used Sep 30, 53 progress items never reviewed there; every tab has a home elsewhere.
+  ["admin/coaching.tsx", "/admin/clients"],
+  ["admin/training-intelligence.tsx", "/admin/clients"],
   ["admin/events.index.tsx", "/admin/calendar"],
   ["admin/events.format-guide.tsx", "/admin/calendar"],
   ["admin/business-systems.tsx", "/admin/team"],
@@ -55,6 +59,9 @@ describe("pages nobody used are gone, and their old addresses never 404", () => 
       "src/route-pages/_authenticated/admin/events.index.tsx",
       "src/route-pages/_authenticated/admin/business-systems.tsx",
       "src/lib/member-resources.functions.ts",
+      "src/route-pages/_authenticated/admin/training-intelligence.tsx",
+      "src/components/admin/coaching-management-board.tsx",
+      "src/components/progress/progress-review-queue.tsx",
     ]) {
       expect(existsSync(f), f).toBe(false);
     }
@@ -77,6 +84,13 @@ describe("pages nobody used are gone, and their old addresses never 404", () => 
     }
     const palette = read("src/lib/admin-route-registry.ts");
     for (const to of gone) expect(palette).not.toContain(`to: "${to}`);
+    // the Coaching Hub and Training Intel (exact: Coaching Agreements stays)
+    for (const to of ["/admin/coaching", "/admin/training-intelligence"]) {
+      expect(palette).not.toContain(`to: "${to}"`);
+      for (const role of ["admin", "coach"] as const) {
+        expect(buildInternalNavCollapsed(role).flatMap((i) => [i.to, ...(i.children ?? []).map((c) => c.to)])).not.toContain(to);
+      }
+    }
     expect(read("src/components/settings/settings-tabs.tsx")).not.toContain("/admin/sops");
     expect(read("src/lib/global-search.functions.ts")).not.toContain('from("broadcasts")');
 

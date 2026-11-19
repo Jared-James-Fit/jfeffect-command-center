@@ -4,6 +4,6 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 // Client action requests were never sent (0 ever) and are gone.
 export const Route = createFileRoute("/_authenticated/admin/client-action-requests")({
   beforeLoad: () => {
-    throw redirect({ to: "/admin/coaching", search: { tab: "training-intel" }, replace: true });
+    throw redirect({ to: "/admin/clients", search: { sort: "attention" }, replace: true });
   },
 });

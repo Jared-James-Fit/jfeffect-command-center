@@ -173,7 +173,7 @@ export function AutomationsHub() {
         </Section>
 
         <Section title="In-app messages" hint="Sent into the client's chat as you.">
-          <Row icon={ClipboardList} tone="bg-violet-500/15 text-violet-500" title="Weekly check-in request" to="/admin/coaching" search={{ tab: "schedules" }}
+          <Row icon={ClipboardList} tone="bg-violet-500/15 text-violet-500" title="Weekly check-in request" to="/admin/forms" search={{ tab: "schedules" }}
             when="Sends the check-in form on each client's check-in day. Change day/time per client in Schedules."
             on={data?.checkin ? !!data.checkin.enabled : undefined} locked={!isAdmin}
             onToggle={data?.checkin ? (v) => run(async () => {

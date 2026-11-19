@@ -129,23 +129,19 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "coach", "sales"], keywords: ["google calendar", "booking links", "sync", "availability"] },
 
   // ── COACHING ─────────────────────────────────────────────────────────
-  // Three pages: the Coaching hub (Training Intel · Progress · Requests ·
-  // Schedules · Management), Forms (Submissions · Requests · Forms ·
-  // Applications · Agreements) and Programs (Programs · Exercises · Cardio ·
-  // Warm-Ups · Recipes). Every older address lands on one of their tabs.
-  { to: "/admin/coaching", label: "Coaching Hub", icon: ClipboardList, group: "Coaching",
-    visibleTo: COACHING_STAFF,
-    keywords: ["coaching", "training intelligence", "progress", "action requests", "schedules", "management"] },
+  // Two pages: Forms (Submissions · Requests · Forms · Applications ·
+  // Agreements) and Programs (Programs · Exercises · Cardio · Warm-Ups ·
+  // Recipes). The Coaching Hub is gone (Nov 19 2026): its address redirects
+  // (Training Intel / Management → Clients by attention, Progress → Forms →
+  // Submissions, Schedules → Forms → Check-in schedules).
   { to: "/admin/forms", label: "Forms", icon: FileEdit, group: "Coaching",
     visibleTo: ["admin", "coach"],
-    keywords: ["submissions", "check-ins", "check-in reviews", "requests", "form builder", "applications", "agreements"] },
+    keywords: ["submissions", "check-ins", "check-in reviews", "requests", "form builder", "applications", "agreements", "responses", "progress photos", "check-in schedules", "coaching hub"] },
   { to: "/admin/programming", label: "Programs", icon: BookOpen, group: "Coaching",
     visibleTo: COACHING_STAFF,
     keywords: ["programming", "program library", "templates", "membership programs", "exercises", "cardio", "warm-ups", "recipes"] },
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardCheck, group: "Coaching", searchOnly: true,
     visibleTo: COACHING_STAFF, keywords: ["weekly check in", "submissions", "reviews"] },
-  { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Coaching", searchOnly: true,
-    visibleTo: COACHING_STAFF },
   { to: "/admin/native-forms", label: "Check-Ins & Forms", icon: FileEdit, group: "Coaching", searchOnly: true,
     visibleTo: COACHING_STAFF },
   { to: "/admin/fillout-submissions", label: "Fillout Submissions", icon: ClipboardList, group: "Coaching", searchOnly: true,
