@@ -6,7 +6,7 @@
  * is the day it was written and never changes, `edited_at` is when its words
  * last changed. Every wording an edit replaced is a row in
  * pl_exercise_note_revisions (`written_at` = when that wording was saved),
- * written by the database (20270418090000_exercise_note_edits.sql).
+ * written by the database (20270419090000_exercise_note_edits.sql).
  */
 
 export type NoteDates = {

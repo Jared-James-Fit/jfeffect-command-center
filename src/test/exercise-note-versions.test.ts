@@ -77,8 +77,8 @@ describe("history keeps each note on the day it was written", () => {
   });
 });
 
-describe("the database keeps every version and the coach's card in step (20270418090000)", () => {
-  const sql = read("supabase/migrations/20270418090000_exercise_note_edits.sql");
+describe("the database keeps every version and the coach's card in step (20270419090000)", () => {
+  const sql = read("supabase/migrations/20270419090000_exercise_note_edits.sql");
   it("the wording an edit replaces is kept, by the trigger only", () => {
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS public.pl_exercise_note_revisions");
     expect(sql).toContain("VALUES (OLD.id, OLD.client_id, OLD.content, coalesce(OLD.edited_at, OLD.created_at), (SELECT auth.uid()));");
