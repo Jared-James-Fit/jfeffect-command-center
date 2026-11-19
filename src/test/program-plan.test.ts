@@ -248,7 +248,7 @@ describe("checking and saving", () => {
 });
 
 describe("the database reads the plan the same way", () => {
-  const sql = readFileSync("supabase/migrations/20270417090000_member_programs_blocks_weeks.sql", "utf8");
+  const sql = readFileSync("supabase/migrations/20270418090000_member_programs_blocks_weeks.sql", "utf8");
   it("checks a plan like planIssue, and keeps week 1 as the days older apps read", () => {
     expect(sql).toContain("CREATE OR REPLACE FUNCTION public.athlete_program_clean_plan(_plan jsonb)");
     expect(sql).toContain("RAISE EXCEPTION 'A program has at most 24 weeks'");

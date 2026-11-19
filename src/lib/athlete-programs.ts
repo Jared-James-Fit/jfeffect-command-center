@@ -12,7 +12,7 @@ import {
 /**
  * Programs people build themselves (athlete_programs, 20270128090000_free_platform.sql):
  * blocks of weeks of training days (`plan`, program-plan.ts; one written out
- * per week since 20270417090000_member_programs_blocks_weeks.sql), library
+ * per week since 20270418090000_member_programs_blocks_weeks.sql), library
  * exercises only.
  * Private until shared with the crew; anyone who can see a shared one can save
  * their own copy (the original never changes); a self-serve member starts their
