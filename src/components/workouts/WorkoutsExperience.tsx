@@ -90,7 +90,7 @@ import { ClientSessionSheet, type ClientSession } from "@/components/schedule/cl
 import { compactTimeRange, compareInstants } from "@/lib/schedule-time";
 import { WorkoutStatusMark, dayMark, workoutMark, type WorkoutMark } from "@/components/workouts/workout-status-mark";
 import { buildWorkoutDateMap } from "@/lib/workout-calendar";
-import { ProgramRoadmapCard, programName, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
+import { ProgramRoadmapCard, programHeading, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
 import type { ProgramRoadmap } from "@/lib/training-roadmap";
 import { ManageProgramSheet } from "@/components/athlete-programs/manage-program-sheet";
 import { useProgramOrigin } from "@/components/athlete-programs/use-my-program";
@@ -211,8 +211,8 @@ export function WorkoutsExperience({
     ownerName: (client as any)?.full_name ?? (client as any)?.first_name ?? null,
   });
   // A JF member's own program (a plan they started, or one they built) is
-  // theirs to manage: the Program card's ⋯ opens Edit / Switch / End. A
-  // coach's program never offers it.
+  // theirs to manage: Manage beside the program's name opens Edit / Training
+  // days / Switch / End. A coach's program never offers it.
   const origin = useProgramOrigin(roadmap, visibleBlocks, mode === "self" ? (client as any)?.user_id ?? null : null);
   const canManageProgram = mode === "self" && isSelfServe && origin.owned && !!origin.blockId;
   const [manageOpen, setManageOpen] = useState(false);
@@ -481,7 +481,6 @@ export function WorkoutsExperience({
             coach={mode === "coach"}
             onSelectProgram={setRoadmapProgramId}
             onManage={canManageProgram ? () => setManageOpen(true) : undefined}
-            manageHint={canManageProgram ? origin.label : null}
             nextProgramTo={mode === "self" && isSelfServe ? "/portal/programs" : undefined}
           />
           </div>
@@ -536,7 +535,7 @@ export function WorkoutsExperience({
         <ManageProgramSheet
           open={manageOpen}
           onOpenChange={setManageOpen}
-          name={programName(roadmap.program)}
+          name={programHeading(roadmap.program)}
           progressLine={programProgressLine({
             programWeek: roadmap.programWeek,
             totalWeeks: roadmap.totalWeeks,
@@ -545,6 +544,8 @@ export function WorkoutsExperience({
             today: toLocalISO(today),
           })}
           origin={origin}
+          onTrainingDays={client ? () => setDaysOpen(true) : undefined}
+          daysLabel={daysState?.set ? daysState.label : null}
         />
       )}
     </>
