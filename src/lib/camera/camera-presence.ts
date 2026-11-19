@@ -1,7 +1,7 @@
 /**
  * Whether the app's own camera is up. While it is, the phone may be turned on
- * its side to film (PortraitOnly steps aside and Android's portrait lock is
- * let go), and it's put back the moment the camera closes. It's also full
+ * its side to film (Android's portrait lock is let go, PortraitLock), and
+ * it's put back the moment the camera closes. It's also full
  * screen the way TikTok's is: the status bar and everything behind the camera
  * are black (`data-camera-open` in styles.css, and `theme-color` for the
  * iPhone home-screen app's solid status bar), never a strip of the page's

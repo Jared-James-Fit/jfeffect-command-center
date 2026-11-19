@@ -75,7 +75,7 @@ describe("phones stay upright", () => {
     vi.stubGlobal("screen", { orientation: { type: "portrait-primary", lock } });
     expect(await lockPortrait(phone)).toBe(true);
     expect(lock).toHaveBeenCalledWith("portrait-primary");
-    // an iPhone: no lock (or it refuses): nothing breaks, the turn-it-back screen covers it
+    // an iPhone: no lock (or it refuses): nothing breaks, the page turns and keeps the phone layout
     vi.stubGlobal("screen", { orientation: { type: "portrait-primary", lock: async () => Promise.reject(new Error("NotSupportedError")) } });
     expect(await lockPortrait(phone)).toBe(false);
     vi.stubGlobal("screen", { orientation: { type: "portrait-primary" } });
@@ -83,7 +83,7 @@ describe("phones stay upright", () => {
     expect(await lockPortrait({ screenW: 1440, screenH: 900, coarse: false })).toBe(false);
     expect(phoneOnItsSide({ ...phone, type: "landscape-primary" })).toBe(true);
     const comp = read("src/components/portrait-only.tsx");
-    expect(comp).toContain("void lockPortrait();");
+    expect(comp).toContain("else void lockPortrait();");
     expect(comp).toContain('document.addEventListener("visibilitychange", back);');
   });
 });

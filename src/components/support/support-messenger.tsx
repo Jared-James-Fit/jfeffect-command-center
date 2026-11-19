@@ -16,6 +16,7 @@ import { summaryFor, titleFor } from "@/lib/support-alert-text";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { listenChannel } from "@/lib/realtime-channel";
+import { phoneLayoutNow } from "@/lib/portrait-only";
 
 const FILTER_KEY = "jf-support-filter";
 const ago = (iso: string) => {
@@ -220,7 +221,7 @@ function Composer({ placeholder, busy, onSend }: { placeholder: string; busy: bo
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && window.matchMedia("(min-width: 768px)").matches) { e.preventDefault(); void send(); }
+            if (e.key === "Enter" && !e.shiftKey && !phoneLayoutNow()) { e.preventDefault(); void send(); }
           }}
           placeholder={placeholder}
           className="max-h-[140px] min-h-[40px] flex-1 resize-none rounded-2xl border border-border bg-background px-3.5 py-2 text-[16px] leading-snug outline-none focus:border-primary/50 md:text-sm"

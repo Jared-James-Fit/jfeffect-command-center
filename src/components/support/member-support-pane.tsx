@@ -12,6 +12,7 @@ import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { phoneLayoutNow } from "@/lib/portrait-only";
 
 /** Every query a support change should refresh: the open chat, the inbox's rows and the badges. */
 export const SUPPORT_REFRESH_KEYS = [["member-support"], ["staff-support-threads"], ["admin-nav-badges"]] as const;
@@ -222,7 +223,7 @@ export function MemberSupportPane({
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && window.matchMedia("(min-width: 768px)").matches) {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !phoneLayoutNow()) {
                 e.preventDefault();
                 void send();
               }

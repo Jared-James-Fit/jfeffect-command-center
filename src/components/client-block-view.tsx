@@ -22,6 +22,7 @@ import { localStartOfToday, parseLocalDate } from "@/lib/today";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
 import { STYLE_LABEL, type ProgramRoadmap } from "@/lib/training-roadmap";
 import { weekPriorities } from "@/lib/block-priorities";
+import { phoneLayoutNow } from "@/lib/portrait-only";
 
 /* ──────────────────────────────────────────────────────────────────────────
    ClientBlockView
@@ -337,7 +338,7 @@ export function ClientBlockView({
     const d = days[activeDayIdx];
     if (!d) return;
     const el = document.getElementById(`cbv-day-${d.id}`);
-    if (el && carouselRef.current && window.innerWidth < 768) {
+    if (el && carouselRef.current && phoneLayoutNow()) {
       el.scrollIntoView({ behavior: "auto", inline: "start", block: "nearest" });
     }
     // Keep the selected day chip fully visible — never let it sit clipped
@@ -355,7 +356,7 @@ export function ClientBlockView({
     if (typeof window === "undefined") return;
     const root = carouselRef.current;
     if (!root || !days.length) return;
-    if (window.innerWidth >= 768) return; // desktop scrolls horizontally too but no chip sync needed
+    if (!phoneLayoutNow()) return; // desktop scrolls horizontally too but no chip sync needed
     const io = new IntersectionObserver(
       (entries) => {
         const visible = entries

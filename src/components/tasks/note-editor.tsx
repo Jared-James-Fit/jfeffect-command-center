@@ -13,6 +13,7 @@ import { MoreHorizontal, Trash2, ChevronLeft, Copy, Check, Pencil, Files } from 
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
+import { onPhoneLayoutChange, phoneLayoutNow } from "@/lib/portrait-only";
 
 export type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -44,14 +45,13 @@ export function useMounted() {
   return m;
 }
 
+/** Not the phone layout (a phone on its side keeps it, portrait-only.ts). */
 export function useIsDesktop() {
   const [d, setD] = useState(false);
   useEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px)");
-    const on = () => setD(mq.matches);
+    const on = () => setD(!phoneLayoutNow());
     on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
+    return onPhoneLayoutChange(on);
   }, []);
   return d;
 }

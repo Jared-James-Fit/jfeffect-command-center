@@ -115,6 +115,29 @@ jobs:
           print("✅ Camera and microphone permissions declared")
           PYEOF
 
+      # ── Portrait only on phones (Instagram's, TikTok's) ──────────────────────
+      # `cap add android` regenerates the manifest every build, so it's set here
+      # every build. The web view can't lock itself (screen.orientation.lock is
+      # refused in an Android WebView), so the activity holds it. Android 16+
+      # ignores it on large screens (tablets turn freely), which is what we want.
+      - name: Keep the Android app upright
+        run: |
+          python3 << 'PYEOF'
+          import re
+          app = "android/app/src/main/AndroidManifest.xml"
+          m = open(app).read()
+          tag = re.search(r'<activity\b[^>]*android:name="[^"]*MainActivity"[^>]*>', m, re.S)
+          assert tag, "MainActivity not found in AndroidManifest.xml"
+          t = tag.group(0)
+          t2 = re.sub(r'\s*android:screenOrientation="[^"]*"', "", t)
+          t2 = t2.replace("<activity", '<activity\n            android:screenOrientation="portrait"', 1)
+          m = m.replace(t, t2, 1)
+          open(app, "w").write(m)
+          check = re.search(r'<activity\b[^>]*MainActivity"[^>]*>', open(app).read(), re.S).group(0)
+          assert 'android:screenOrientation="portrait"' in check, "orientation not set"
+          print("✅ Android phones: portrait only")
+          PYEOF
+
       - name: Run cap sync
         run: |
           npx cap sync android 2>&1 | tail -10

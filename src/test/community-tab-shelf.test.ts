@@ -67,7 +67,7 @@ describe("the tab bar: TikTok's / Instagram's", () => {
     // (less the iPhone home-screen app's short-layout gap, ios-bottom-gap.test.ts; 0 everywhere else)
     expect(css).toContain("  --mobile-bar-h: 50px;\n  --mobile-bar-top: calc(var(--mobile-bar-h) + var(--mobile-bar-pad));");
     // pages clear exactly the bar (the chats end at its top)
-    expect(css).toContain("  :root { --bottom-nav-clearance: var(--mobile-bar-top); }");
+    expect(css).toContain(":root { @variant max-md { --bottom-nav-clearance: var(--mobile-bar-top); } }");
     // no floating card: no side gutter, rounding, shadow, blur or fade under it
     const bar = shell.slice(shell.indexOf("export function MobileBottomBar"), shell.indexOf("// Every bar slot shares one box"));
     for (const gone of ["inset-x-4", "rounded-2xl", "shadow-", "backdrop-blur", "bg-gradient-to-t"]) expect(bar).not.toContain(gone);
