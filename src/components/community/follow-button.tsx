@@ -4,6 +4,8 @@ import { Search, Star, X } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
+import { feedback } from "@/lib/feedback";
+import { HapticTap } from "@/components/haptic-tap";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import type { CommunityAuthor } from "@/lib/community";
@@ -58,17 +60,20 @@ export function FollowButton({ userId, name, avatarUrl, isPrivate, size = "md", 
         aria-pressed={on}
         onClick={(e) => {
           e.stopPropagation();
+          // following is the follow tap; taking it back (or opening the confirm) a plain one
+          feedback(on ? "tap" : "follow");
           if (label === "Following" && isPrivate) setConfirm(true);
           else set(!on);
         }}
         className={cn(
-          "inline-flex shrink-0 items-center justify-center rounded-lg font-bold transition active:scale-[0.97]",
+          "relative inline-flex shrink-0 items-center justify-center rounded-lg font-bold transition active:scale-[0.97]",
           size === "sm" ? "h-8 min-w-[72px] px-3 text-[12px]" : "h-9 min-w-[96px] px-4 text-[13px]",
           on ? "bg-muted text-foreground" : tone === "soft" ? "bg-primary/10 text-primary" : "bg-primary text-primary-foreground",
           className,
         )}
       >
         {label}
+        <HapticTap />
       </button>
       {isPrivate && (
         <Sheet open={confirm} onOpenChange={setConfirm}>

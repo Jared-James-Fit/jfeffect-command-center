@@ -55,6 +55,7 @@ import {
   sleepChip,
 } from "@/lib/workout-review";
 import type { SleepBucket } from "@/lib/analytics/recovery-score";
+import { HapticTap } from "@/components/haptic-tap";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -534,9 +535,11 @@ export function WorkoutReviewEditor({
           <Button variant="ghost" className="flex-1" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
             Close
           </Button>
-          <Button className="flex-1" onClick={() => mutation.mutate()} disabled={!cta.enabled || mutation.isPending}>
+          <Button type="button" className="relative flex-1" onClick={() => mutation.mutate()} disabled={!cta.enabled || mutation.isPending}>
             {mutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             {cta.label}
+            {/* the iPhone's tap as the workout is finished (haptic-tap.tsx) */}
+            {cta.enabled && !mutation.isPending && <HapticTap />}
           </Button>
         </SheetFooter>
       </SheetContent>

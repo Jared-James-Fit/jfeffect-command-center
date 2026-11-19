@@ -212,3 +212,36 @@ describe("coach builder: the phone layout", () => {
     expect(read("src/components/athlete-programs/workbench/sheets.tsx")).toContain("<WeekPickerSheet");
   });
 });
+
+describe("programs: whose program it is, and whose calendar it changes", () => {
+  it("the three kinds are named for what they are, and each card says who it's from on top", () => {
+    const hub = read("src/components/athlete-programs/programs-hub.tsx");
+    expect(hub).toContain('mine: { full: "My programs", short: "Mine" }');
+    expect(hub).toContain('jf: { full: "JF Effect plans", short: "JF Effect" }');
+    expect(hub).toContain('crew: { full: "Crew programs", short: "Crew" }');
+    expect(read("src/components/programs/program-card.tsx")).toContain('data-program-source="jf"');
+    expect(read("src/components/athlete-programs/program-list-card.tsx")).toContain('data-program-source="crew"');
+  });
+
+  it("saving a member's program never rewrites a coach-managed calendar or skips the access check", () => {
+    const sql = read("supabase/migrations/20270418091000_member_program_sync_self_serve_only.sql");
+    expect(sql).toContain("WHERE c.user_id = v_uid AND c.service_tier = 'self_serve' AND coalesce(c.archived, false) = false LIMIT 1;");
+    expect(sql).toContain("IF v_client IS NULL OR NOT public.member_can_consume(v_uid) THEN RETURN NULL; END IF;");
+    // and only the member's own blocks started from this program, untouched workouts only
+    expect(sql).toContain("WHERE b.client_id = v_client AND b.created_by = v_uid AND b.source_athlete_program_id = _id AND b.archived = false;");
+    expect(sql).toContain("pl_day_touched");
+  });
+
+  it("coaches follow one exercise week to week from its ⋯, the member builder's way", () => {
+    const editor = read("src/route-pages/_authenticated/admin/program-library_.$templateId.tsx");
+    expect(editor).toContain("Progress across weeks…");
+    expect(editor).toContain("<ProgressAcrossWeeksSheet");
+    const sheet = read("src/components/program-editor/progress-across-weeks.tsx");
+    expect(sheet).toContain("const res = applyCell(row, field, progressionText(row, field, values[i]));");
+    expect(sheet).toContain('action: { label: "Undo", onClick: () => setWeeksData(before) }');
+    expect(read("src/components/athlete-programs/workbench/sheets.tsx")).toContain(
+      'export { BuilderSheet } from "@/components/program-editor/builder-sheet";',
+    );
+  });
+});
+

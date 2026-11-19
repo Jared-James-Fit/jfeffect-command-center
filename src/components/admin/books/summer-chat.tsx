@@ -18,13 +18,14 @@ import { extractLinks, tokenizeInline } from "@/lib/summer-voice-text";
 import { loadVoicePrefs, summerSpeaker, type ServerVoice, type SummerVoicePrefs } from "@/lib/summer-speaker";
 import { blobToBase64, micSupported, useSummerMic } from "@/hooks/use-summer-mic";
 import { isAudioSessionError } from "@/lib/audio-session";
-import { playAppSound, startThinkingSound } from "@/lib/app-sounds";
+import { startThinkingSound } from "@/lib/app-sounds";
 import { SummerCustomizeDialog, type SummerPersona } from "./summer-customize";
 import { CleoActionCard, CleoApprovals, useCleoActions } from "./cleo-action-card";
 import { CHATS_KEY, CleoChatHistory } from "./cleo-chat-history";
 import { AttachmentTray, MessageAttachments, useAttachmentTray, workingLabel } from "./cleo-attachments-ui";
 import { ATTACH_ACCEPT, type CleoAttachment } from "@/lib/cleo-attachments";
 import { phoneLayoutNow } from "@/lib/portrait-only";
+import { feedback } from "@/lib/feedback";
 
 type Msg = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices?: string[] | null; attachments?: CleoAttachment[] | null };
 type ChatData = { chat: CleoChat | null; messages: Msg[] };
@@ -440,7 +441,7 @@ export function SummerChat({
     void cleo.refresh();
     if (turn !== turnRef.current) return;
     prefsRef.current = loadVoicePrefs();
-    if (!prefsRef.current.autoplay) playAppSound("reply");
+    if (!prefsRef.current.autoplay) feedback("reply");
     if (prefsRef.current.autoplay) {
       setVoiceState("speaking");
       await speak(res.assistant);
@@ -457,7 +458,7 @@ export function SummerChat({
     }
     speaker.stop(); // cutting in: Cleo stops talking
     speaker.unlock(); // this tap is what lets the reply play by itself
-    try { navigator.vibrate?.(10); } catch { /* not supported */ }
+    feedback("press");
     void dictate();
   };
 
@@ -478,7 +479,7 @@ export function SummerChat({
 
   const sendDictation = () => {
     if (voiceState === "listening") {
-      try { navigator.vibrate?.(10); } catch { /* not supported */ }
+      feedback("tap");
       micStop();
     }
   };
@@ -505,7 +506,7 @@ export function SummerChat({
       append([res.user, res.assistant], res.chatId);
       if (atts.length) tray.clear();
       void cleo.refresh();
-      playAppSound("reply");
+      feedback("reply");
     } catch (e: any) {
       setDraft(message);
       toast.error(e?.message ?? `${ASSISTANT_NAME} couldn't answer that`);
@@ -537,7 +538,7 @@ export function SummerChat({
         setPending(null);
         setVoiceState("speaking");
         await speak(res.assistant);
-      } else playAppSound("reply");
+      } else feedback("reply");
     } catch (e: any) {
       if (turn === turnRef.current) toast.error(e?.message ?? `${ASSISTANT_NAME} couldn't answer that`);
     } finally {

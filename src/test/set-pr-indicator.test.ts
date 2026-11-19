@@ -54,7 +54,7 @@ describe("set row look", () => {
   it("PRs are one indicator under the set, not the old pills", () => {
     expect(view).toContain("<SetPrIndicator items={prItems} celebrate={prFresh} />");
     expect(view).not.toContain("<SetRecordBadge");
-    // the PR sound and haptic stay
-    expect(view).toContain('playAppSound("pr")');
+    // the PR sound and haptic stay (one feedback() call gives both)
+    expect(view).toContain('feedback("pr")');
   });
 });

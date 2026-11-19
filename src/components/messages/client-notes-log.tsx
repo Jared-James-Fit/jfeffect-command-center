@@ -8,6 +8,7 @@ import { NOTES_FILTERS, matchesNotesFilter, painLine, type NotesFilter, type Wor
 import { useClientWorkoutNotes } from "@/lib/workout-notes.queries";
 import { OpenWorkout } from "@/components/messages/open-client-workout";
 import { ClientFileNotes } from "@/components/clients/client-file-notes";
+import { EditedToggle, NoteVersions } from "@/components/workout/shared/note-edit-history";
 
 /**
  * A client's notes log for the coach: every review note, pain report and
@@ -74,6 +75,9 @@ export function ClientNotesLog({ clientId, limit, onSeeAll }: { clientId: string
 
 function NoteRow({ e, clientId }: { e: WorkoutNoteEntry; clientId: string }) {
   const when = new Date(e.at);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  // an exercise note opens its earlier versions; a review just says it was edited
+  const dates = e.source === "exercise" && e.edited_at ? { created_at: e.at, edited_at: e.edited_at } : null;
   return (
     <li className={cn("rounded-xl border px-3 py-2.5", e.pain ? "border-red-500/30 bg-red-500/[0.05]" : "border-border/70 bg-card")} data-note-row={e.pain ? "pain" : e.source}>
       <div className="flex items-start gap-2.5">
@@ -84,9 +88,16 @@ function NoteRow({ e, clientId }: { e: WorkoutNoteEntry; clientId: string }) {
           {e.pain && <div className="text-[14px] font-bold leading-snug">{painLine(e.pain)}</div>}
           {e.exercise && <div className="text-[13px] font-bold">{e.exercise}</div>}
           {e.note && <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] leading-snug">“{e.note}”</p>}
-          <div className="mt-1 text-[11px] leading-snug text-muted-foreground">
-            {[format(when, "EEE, MMM d"), e.workout, e.edited_at ? "edited" : null, e.source === "review" && e.rpe ? `effort ${e.rpe}/10` : null].filter(Boolean).join(" · ")}
+          <div className="mt-1 flex flex-wrap items-center gap-x-1 text-[11px] leading-snug text-muted-foreground">
+            <span>{[format(when, "EEE, MMM d"), e.workout, !dates && e.edited_at ? "edited" : null, e.source === "review" && e.rpe ? `effort ${e.rpe}/10` : null].filter(Boolean).join(" · ")}</span>
+            {dates && (
+              <>
+                <span aria-hidden>·</span>
+                <EditedToggle note={dates} open={versionsOpen} onToggle={() => setVersionsOpen((v) => !v)} />
+              </>
+            )}
           </div>
+          {dates && <NoteVersions noteId={e.id} note={dates} open={versionsOpen} className="mt-1.5" />}
           <OpenWorkout clientId={clientId} dayId={e.day_id} rowId={e.row_id} className="-ml-2.5 mt-0.5 h-7" />
         </div>
       </div>

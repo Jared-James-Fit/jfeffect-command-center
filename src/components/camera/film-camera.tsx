@@ -5,7 +5,7 @@ import { ChevronDown, Grid3x3, Images, RefreshCcw, X, Zap, ZapOff } from "lucide
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { baseMediaType } from "@/lib/community";
-import { getMicStream } from "@/lib/audio-session";
+import { noteClipMic, openVideoMic } from "@/lib/video-mic";
 import { holdCameraOpen } from "@/lib/camera/camera-presence";
 import { isPhone, phoneOnItsSide, readOrientation } from "@/lib/portrait-only";
 import {
@@ -365,11 +365,14 @@ export function FilmCamera({
     // the mic only now, and only when sound is on: asking for it stops the music on a phone
     let mic: MediaStream | null = null;
     let restore: (() => void) | null = null;
+    let micNote = "off";
     if (settingsRef.current.sound) {
       try {
-        const got = await getMicStream(true);
+        // the room as it sounds, from the phone's own mic (video-mic.ts): never a call's processing or a headset's mic
+        const got = await openVideoMic();
         mic = got.stream;
         restore = got.restore;
+        micNote = got.note;
       } catch {
         toast.message("Filming without sound", { description: "The microphone isn't available to JF Effect." });
       }
@@ -411,6 +414,7 @@ export function FilmCamera({
       if (!entry.keep || took < MIN_RECORDING_MS || !chunks.length) return;
       const mime = baseMediaType(recorder.mimeType || type || "video/mp4") || "video/mp4";
       const file = new File([new Blob(chunks, { type: mime })], filmFileName(mime), { type: mime });
+      noteClipMic(file.name, micNote);
       onClipRef.current(file);
     };
     try {
@@ -493,7 +497,8 @@ export function FilmCamera({
 
   const body = (
     <div
-      className="fixed inset-0 z-[70] select-none overflow-hidden bg-black text-white"
+      // pointer-events-auto: opened over a modal (a progress video's dialog), whose lock leaves the rest of the page untappable
+      className="pointer-events-auto fixed inset-0 z-[70] select-none overflow-hidden bg-black text-white"
       data-film-camera
       role="dialog"
       aria-modal="true"
