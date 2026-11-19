@@ -30,10 +30,11 @@ import { useSavedPlans, type SavedPlan } from "./use-saved-plans";
 
 export type ProgramsTab = "mine" | "jf" | "crew";
 
-const TAB_LABEL: Record<ProgramsTab, string> = {
-  mine: "My programs",
-  jf: "JF Effect",
-  crew: "Crew",
+/** Each tab named for what's in it; the smallest phones get the short name. */
+const TAB_LABEL: Record<ProgramsTab, { full: string; short: string }> = {
+  mine: { full: "My programs", short: "Mine" },
+  jf: { full: "JF Effect plans", short: "JF Effect" },
+  crew: { full: "Crew programs", short: "Crew" },
 };
 
 /**
@@ -106,13 +107,15 @@ export function ProgramsHub({ initialTab }: { initialTab?: ProgramsTab }) {
                 aria-selected={shown === t}
                 onClick={() => setTab(t)}
                 className={cn(
-                  "h-10 rounded-lg text-[14px] font-medium transition",
+                  "h-10 min-w-0 rounded-lg px-1 text-[14px] font-medium transition",
                   shown === t
                     ? "bg-background text-foreground shadow-sm dark:bg-secondary"
                     : "text-muted-foreground",
                 )}
+                data-programs-tab={t}
               >
-                {TAB_LABEL[t]}
+                <span className="max-[359px]:hidden">{TAB_LABEL[t].full}</span>
+                <span className="hidden max-[359px]:inline">{TAB_LABEL[t].short}</span>
               </button>
             ))}
           </div>
