@@ -54,7 +54,8 @@ export function groupReplies(rows: CommunityPulse["to_reply"]) {
  * its own page (`#tab=league`, `#rankings`).
  */
 export function hubTabFromHash(h: string = typeof window === "undefined" ? "" : window.location.hash): ManageTab | "feed" | "league" {
-  if (/tab=league/.test(h) || /rankings/.test(h)) return "league";
+  // #rankings is Crew's own Rankings tab now (the coach's too): only the old League tab's links leave for the League page
+  if (/tab=league/.test(h)) return "league";
   return manageTabFromHash(h) ?? "feed";
 }
 
@@ -89,7 +90,7 @@ export function hubTabCounts(p: CommunityPulse | undefined, reports = 0): Record
 export function AdminCommunityHub() {
   const { viewOnly } = useAuth();
   const navigate = useNavigate();
-  // old League links (#tab=league, #rankings) go to the League page
+  // old League links (#tab=league) go to the League page
   const routeHash = useRouterState({ select: (s) => s.location.hash });
   useEffect(() => {
     if (hubTabFromHash(`#${routeHash}`) === "league") void navigate({ to: "/admin/league", replace: true });
