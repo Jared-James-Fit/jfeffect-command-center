@@ -480,7 +480,7 @@ function AttachmentView({
 }) {
   // what an athlete told their coach in a workout (pain, a review note, an exercise note)
   if (att.kind === "workout_note" && message) {
-    return <WorkoutNoteCard att={att as unknown as WorkoutNoteCardAttachment} messageId={message.id} role={role === "client" ? "client" : "admin"} clientId={clientId} />;
+    return <WorkoutNoteCard att={att as unknown as WorkoutNoteCardAttachment} messageId={message.id} role={role === "client" ? "client" : "admin"} clientId={clientId} version={message.updated_at ?? null} />;
   }
   if (att.kind === "community_post" && att.post_id) {
     return <CommunityPostChatCard att={att as PostCardAttachment} mine={mine} staff={role !== "client"} />;
