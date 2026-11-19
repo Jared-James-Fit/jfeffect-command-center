@@ -25,7 +25,7 @@ export function NewLeadsCard() {
           <UserPlus className="h-4 w-4 text-muted-foreground" />
           {waiting.length === 1 ? "1 lead waiting on you" : `${waiting.length} leads waiting on you`}
         </h2>
-        <Link to="/admin/leads" className="shrink-0 text-[13px] font-semibold text-muted-foreground hover:text-foreground">
+        <Link to="/admin/leads" search={{ tab: "coaching" } as any} className="shrink-0 text-[13px] font-semibold text-muted-foreground hover:text-foreground">
           All leads →
         </Link>
       </div>

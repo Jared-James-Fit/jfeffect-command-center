@@ -23,6 +23,7 @@ import { NotificationSetupPrompt } from "@/components/notification-setup-prompt"
 import { cn } from "@/lib/utils";
 import { onDashboardClickCapture } from "@/components/return-to-dashboard";
 import { NewLeadsCard } from "@/components/leads/new-leads-card";
+import { NewApplicationsCard } from "@/components/applications/member-applications-entry";
 import { MeetReadinessCard } from "@/components/forms/meet-readiness-card";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
@@ -259,6 +260,7 @@ function AdminDashboard() {
 
         {/* ---------------- LEADS: new applications waiting on a text (admin; hidden when none) ---------------- */}
         <SectionErrorBoundary label="Leads">
+          <NewApplicationsCard />
           <NewLeadsCard />
         </SectionErrorBoundary>
 

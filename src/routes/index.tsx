@@ -8,26 +8,58 @@ import { getViewMode } from "@/lib/view-mode";
 import { supabase } from "@/integrations/supabase/client";
 import { hasPersistedAuthSession } from "@/lib/session-hint";
 import { shareMeta } from "@/lib/share-meta";
+import { LandingPage } from "@/components/landing/landing-page";
+import { currentLaunchMode, installedApp } from "@/lib/landing-launch";
+
+const DESCRIPTION =
+  "A free training app and crew built by Team Canada powerlifter Jared McIntyre: coach-written programs, a log that tracks every set and PR, progress, nutrition and a community that keeps you honest.";
 
 export const Route = createFileRoute("/")({
-  // First-time / signed-out visitors: skip "splash -> hydrate -> wait for auth ->
-  // redirect" and go straight to sign-in. Runs in the browser only (the server
-  // can't see localStorage); anyone with a saved session keeps the flow below,
-  // which opens Crew (or the workout they were in the middle of).
+  // The installed app, signed out: straight to sign-in (it never shows the
+  // landing page). Everyone else signed out gets jfeffect.com's front door;
+  // anyone with a saved session keeps the launch flow below, which opens Crew
+  // (or the workout they were in the middle of). landing-launch.ts.
   beforeLoad: () => {
-    if (typeof window !== "undefined" && !hasPersistedAuthSession()) {
+    if (typeof window !== "undefined" && !hasPersistedAuthSession() && installedApp()) {
       throw redirect({ to: "/auth", replace: true });
     }
   },
   head: () => ({
     meta: [
-      { title: "JF Effect — Private Coaching & Training System" },
-      { name: "description", content: "Structured training, nutrition, progress tracking, and private coaching for men who are done starting over." },
-      ...shareMeta({ title: "JF Effect", description: "Structured training, nutrition, progress tracking, and private coaching for men who are done starting over.", path: "/" }),
+      { title: "JF Effect | Free Training App, Programs & Crew" },
+      { name: "description", content: DESCRIPTION },
+      ...shareMeta({ title: "JF Effect", description: "Programs, a training log and a crew to train with. Free to join.", path: "/" }),
     ],
+    links: [{ rel: "canonical", href: "https://jfeffect.com/" }],
   }),
-  component: IndexRedirect,
+  component: IndexPage,
 });
+
+/**
+ * The server renders both the landing page and the launch splash; a head
+ * script (LAUNCH_BOOT_SCRIPT, __root.tsx) has already shown the right one
+ * before the first paint, so this only starts the launch for the app.
+ */
+function IndexPage() {
+  const [mode, setMode] = useState<"unknown" | "app" | "landing">("unknown");
+  useEffect(() => {
+    const m = currentLaunchMode();
+    // a client-side visit to "/" never ran the head script
+    if (m === "app") document.documentElement.setAttribute("data-launch", "app");
+    else document.documentElement.removeAttribute("data-launch");
+    setMode(m);
+  }, []);
+  return (
+    <>
+      {mode !== "app" && (
+        <div data-landing>
+          <LandingPage />
+        </div>
+      )}
+      <div data-launch-splash>{mode === "app" ? <IndexRedirect /> : <DashboardSplash />}</div>
+    </>
+  );
+}
 
 /**
  * App launch ("/", the installed app's start page): a fresh launch opens Crew,
