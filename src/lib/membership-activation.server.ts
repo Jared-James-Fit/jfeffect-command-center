@@ -26,7 +26,11 @@ function secret(): string {
   return s;
 }
 
-const mac = (purpose: string, payload: string) => createHmac("sha256", secret()).update(purpose + payload).digest("hex").slice(0, 32);
+const mac = (purpose: string, payload: string) =>
+  createHmac("sha256", secret())
+    .update(purpose + payload)
+    .digest("hex")
+    .slice(0, 32);
 
 function same(a: string, b: string): boolean {
   if (!/^[0-9a-f]+$/i.test(a) || a.length !== b.length) return false;
@@ -36,19 +40,27 @@ function same(a: string, b: string): boolean {
 }
 
 /** "<applicationId>.<expires unix s>.<sig>" */
-export function signActivation(applicationId: string, days = ACTIVATION_DAYS, now = Date.now()): string {
+export function signActivation(
+  applicationId: string,
+  days = ACTIVATION_DAYS,
+  now = Date.now(),
+): string {
   const exp = Math.floor(now / 1000) + days * 86_400;
   const payload = `${applicationId}.${exp}`;
   return `${payload}.${mac(PREFIX, payload)}`;
 }
 
 /** The application a valid, unexpired token names; null for anything else. */
-export function verifyActivation(token: string | null | undefined, now = Date.now()): string | null {
+export function verifyActivation(
+  token: string | null | undefined,
+  now = Date.now(),
+): string | null {
   if (!token || typeof token !== "string" || token.length > 120) return null;
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [id, expRaw, sig] = parts;
-  if (!/^[0-9a-f-]{36}$/i.test(id) || !/^\d{9,11}$/.test(expRaw) || !/^[0-9a-f]{32}$/.test(sig)) return null;
+  if (!/^[0-9a-f-]{36}$/i.test(id) || !/^\d{9,11}$/.test(expRaw) || !/^[0-9a-f]{32}$/.test(sig))
+    return null;
   if (Number(expRaw) * 1000 < now) return null;
   try {
     return same(sig, mac(PREFIX, `${id}.${expRaw}`)) ? id : null;
@@ -62,7 +74,11 @@ export function emailProof(applicationId: string, email: string): string {
   return mac(PROOF, `${applicationId}:${email.trim().toLowerCase()}`);
 }
 
-export function proofOk(applicationId: string, email: string, proof: string | null | undefined): boolean {
+export function proofOk(
+  applicationId: string,
+  email: string,
+  proof: string | null | undefined,
+): boolean {
   if (!proof || !/^[0-9a-f]{32}$/i.test(proof)) return false;
   try {
     return same(proof, emailProof(applicationId, email));

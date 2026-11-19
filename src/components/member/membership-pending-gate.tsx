@@ -47,11 +47,18 @@ export function MembershipPendingGate() {
       <div className="text-center" data-membership-pending={status ?? "loading"}>
         <AuthLogo size={64} />
         {q.isLoading || status === "member" || status === "athlete" ? (
-          <Loader2 className="mx-auto mt-8 h-6 w-6 animate-spin text-muted-foreground" aria-label="Checking your membership" />
+          <Loader2
+            className="mx-auto mt-8 h-6 w-6 animate-spin text-muted-foreground"
+            aria-label="Checking your membership"
+          />
         ) : (
           <>
-            <h1 className="mt-6 text-[24px] font-semibold leading-tight tracking-[-0.02em]">{msg.title}</h1>
-            <p className="mx-auto mt-2 max-w-[320px] text-[15px] leading-relaxed text-muted-foreground">{msg.body}</p>
+            <h1 className="mt-6 text-[24px] font-semibold leading-tight tracking-[-0.02em]">
+              {msg.title}
+            </h1>
+            <p className="mx-auto mt-2 max-w-[320px] text-[15px] leading-relaxed text-muted-foreground">
+              {msg.body}
+            </p>
             <div className="mt-7 space-y-2">
               {status === "not_approved" ? (
                 <Link

@@ -11,13 +11,34 @@
  */
 import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { CalendarCheck2, CheckCircle2, Dumbbell, Flame, MessageCircle, Trophy, Users } from "lucide-react";
+import {
+  CalendarCheck2,
+  CheckCircle2,
+  Dumbbell,
+  Flame,
+  MessageCircle,
+  Trophy,
+  Users,
+} from "lucide-react";
 import { SalesPageShell } from "@/components/sales/sales-page-shell";
 import { PhoneShot } from "@/components/sales/coaching-hero";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
 import { Reveal } from "@/components/sales/reveal";
-import { Block, Group, Heading, IconTile, PrimaryCta, Surface, TextLink } from "@/components/sales/apple";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  Block,
+  Group,
+  Heading,
+  IconTile,
+  PrimaryCta,
+  Surface,
+  TextLink,
+} from "@/components/sales/apple";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { COACH_NAME } from "@/lib/social-links";
 import { trackJoin } from "@/lib/join-funnel";
 import { currentLaunchMode } from "@/lib/landing-launch";
@@ -51,21 +72,50 @@ const HERO = {
 };
 
 const ALSO = [
-  { icon: CalendarCheck2, title: "Programs that run your week", body: "Coach-written for your goal and level, or build your own. Workouts land on your training days." },
-  { icon: Dumbbell, title: "2,000+ exercises", body: "Almost every one with a how-to video, so you know you're doing it right." },
+  {
+    icon: CalendarCheck2,
+    title: "Programs that run your week",
+    body: "Coach-written for your goal and level, or build your own. Workouts land on your training days.",
+  },
+  {
+    icon: Dumbbell,
+    title: "2,000+ exercises",
+    body: "Almost every one with a how-to video, so you know you're doing it right.",
+  },
   { icon: Flame, title: "Nutrition", body: "Set your calories and macros, and log what you eat." },
 ];
 
 const CREW = [
-  { icon: Users, title: "Share your wins", body: "Post a PR or a workout and the crew sees it. Follow the people you train with." },
-  { icon: Trophy, title: "Monthly League", body: "Points for showing up and logging your training. See where you rank every month." },
-  { icon: MessageCircle, title: "Copy what works", body: "Members share the programs they build. Save one and make it yours." },
+  {
+    icon: Users,
+    title: "Share your wins",
+    body: "Post a PR or a workout and the crew sees it. Follow the people you train with.",
+  },
+  {
+    icon: Trophy,
+    title: "Monthly League",
+    body: "Points for showing up and logging your training. See where you rank every month.",
+  },
+  {
+    icon: MessageCircle,
+    title: "Copy what works",
+    body: "Members share the programs they build. Save one and make it yours.",
+  },
 ];
 
 const STEPS = [
-  { title: "Apply in about a minute", body: "Your goal, your experience, and the best way to reach you. No account, no card." },
-  { title: "Jared reads it", body: "Usually within a day. He might send you a quick message to say hi. No call needed unless you want one." },
-  { title: "You get your invite", body: "Tap the link, set a password, and pick your first program." },
+  {
+    title: "Apply in about a minute",
+    body: "Your goal, your experience, and the best way to reach you. No account, no card.",
+  },
+  {
+    title: "Jared reads it",
+    body: "Usually within a day. He might send you a quick message to say hi. No call needed unless you want one.",
+  },
+  {
+    title: "You get your invite",
+    body: "Tap the link, set a password, and pick your first program.",
+  },
 ];
 
 const FAQ: Array<{ q: string; a: string }> = [
@@ -127,19 +177,25 @@ export function LandingPage() {
             Train with a plan. Watch it work.
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-[18px] leading-relaxed text-muted-foreground md:text-[19px] lg:mx-0">
-            JF Effect is a free training app and crew, built by Team Canada powerlifter {COACH_NAME}. Real programs, a log
-            that tracks every set and PR, and people who notice when you hit one.
+            JF Effect is a free training app and crew, built by Team Canada powerlifter {COACH_NAME}
+            . Real programs, a log that tracks every set and PR, and people who notice when you hit
+            one.
           </p>
           <div className="mt-7 flex flex-col items-stretch sm:items-center lg:items-start">
             <PrimaryCta to={JOIN_TO} className="sm:min-w-[280px]">
               {CTA}
             </PrimaryCta>
           </div>
-          <p className="mt-3 text-[13px] text-muted-foreground">About a minute to apply · Jared reads every one</p>
+          <p className="mt-3 text-[13px] text-muted-foreground">
+            About a minute to apply · Jared reads every one
+          </p>
         </div>
         <div className="relative mx-auto w-full max-w-[290px] md:max-w-[320px]">
           <PhoneShot src={HERO.src} alt={HERO.alt} priority className="relative z-10" />
-          <div aria-hidden className="pointer-events-none absolute -right-24 top-16 hidden w-[230px] opacity-90 lg:block">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-24 top-16 hidden w-[230px] opacity-90 lg:block"
+          >
             <PhoneShot src={shotInsights} alt="" />
           </div>
         </div>
@@ -155,7 +211,9 @@ export function LandingPage() {
             ["$0", "To join", "No card, no trial"],
           ].map(([value, label, detail]) => (
             <div key={label} className="bg-card px-4 py-5 text-center">
-              <div className="text-[24px] font-semibold leading-none tracking-[-0.02em] md:text-[30px]">{value}</div>
+              <div className="text-[24px] font-semibold leading-none tracking-[-0.02em] md:text-[30px]">
+                {value}
+              </div>
               <div className="mt-2 text-[13px] font-semibold">{label}</div>
               <div className="mt-1 text-[12px] leading-snug text-muted-foreground">{detail}</div>
             </div>
@@ -173,9 +231,14 @@ export function LandingPage() {
           />
           <div className="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-auto md:grid md:max-w-3xl md:grid-cols-2 md:gap-10 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
             {FEATURES.map((f) => (
-              <div key={f.title} className="w-[78vw] max-w-[320px] shrink-0 snap-start md:w-auto md:max-w-none">
+              <div
+                key={f.title}
+                className="w-[78vw] max-w-[320px] shrink-0 snap-start md:w-auto md:max-w-none"
+              >
                 <PhoneShot src={f.src} alt={f.alt} className="max-w-[230px]" />
-                <h3 className="mt-5 text-[19px] font-semibold leading-snug tracking-[-0.01em]">{f.title}</h3>
+                <h3 className="mt-5 text-[19px] font-semibold leading-snug tracking-[-0.01em]">
+                  {f.title}
+                </h3>
                 <p className="mt-1.5 text-[15px] leading-relaxed text-muted-foreground">{f.body}</p>
               </div>
             ))}
@@ -230,7 +293,9 @@ export function LandingPage() {
                 <div className="text-[17px] font-semibold">Free membership</div>
                 <div className="text-[22px] font-semibold tracking-[-0.02em]">$0</div>
               </div>
-              <p className="mt-1 text-[14px] text-muted-foreground">You run your training. The app keeps you honest.</p>
+              <p className="mt-1 text-[14px] text-muted-foreground">
+                You run your training. The app keeps you honest.
+              </p>
               <div className="mt-4 flex-1">
                 <CheckList
                   items={[
@@ -251,7 +316,9 @@ export function LandingPage() {
                 <div className="text-[17px] font-semibold">1:1 Coaching</div>
                 <div className="text-[14px] font-medium text-muted-foreground">Paid · optional</div>
               </div>
-              <p className="mt-1 text-[14px] text-muted-foreground">Jared runs your training with you.</p>
+              <p className="mt-1 text-[14px] text-muted-foreground">
+                Jared runs your training with you.
+              </p>
               <div className="mt-4 flex-1">
                 <CheckList
                   items={[
@@ -268,7 +335,9 @@ export function LandingPage() {
               </div>
             </Surface>
           </div>
-          <p className="mt-5 text-center text-[13px] text-muted-foreground">Coaching is never required. Most people start free.</p>
+          <p className="mt-5 text-center text-[13px] text-muted-foreground">
+            Coaching is never required. Most people start free.
+          </p>
         </Block>
       </Reveal>
 
@@ -284,13 +353,16 @@ export function LandingPage() {
                 </span>
                 <div className="min-w-0">
                   <div className="text-[17px] font-semibold leading-snug">{st.title}</div>
-                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">{st.body}</p>
+                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">
+                    {st.body}
+                  </p>
                 </div>
               </div>
             ))}
           </Group>
           <p className="mx-auto mt-5 max-w-lg text-center text-[15px] leading-relaxed text-muted-foreground">
-            Why an application? I read every one and say hi to the people who join. It keeps the Crew real.
+            Why an application? I read every one and say hi to the people who join. It keeps the
+            Crew real.
           </p>
         </Block>
       </Reveal>
@@ -312,11 +384,16 @@ export function LandingPage() {
             </div>
             <div className="p-6 md:self-center md:p-8">
               <div className="text-[13px] font-semibold text-muted-foreground">Built by</div>
-              <h2 className="mt-1 text-[26px] font-semibold leading-tight tracking-[-0.02em]">{COACH_NAME}</h2>
-              <p className="mt-1 text-[15px] text-muted-foreground">Team Canada powerlifter · 2× international champion</p>
+              <h2 className="mt-1 text-[26px] font-semibold leading-tight tracking-[-0.02em]">
+                {COACH_NAME}
+              </h2>
+              <p className="mt-1 text-[15px] text-muted-foreground">
+                Team Canada powerlifter · 2× international champion
+              </p>
               <p className="mt-4 text-[17px] leading-relaxed text-muted-foreground">
-                I've coached 100+ people, from their first workout to world championships, and I still compete myself. JF Effect is
-                everything I use to coach, built so you can use it too. Structure and standards beat motivation every time.
+                I've coached 100+ people, from their first workout to world championships, and I
+                still compete myself. JF Effect is everything I use to coach, built so you can use
+                it too. Structure and standards beat motivation every time.
               </p>
               <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2">
                 <TextLink to="/about">Read my story</TextLink>
@@ -338,8 +415,12 @@ export function LandingPage() {
                   value={`faq-${i}`}
                   className="border-0 px-5 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border/70"
                 >
-                  <AccordionTrigger className="py-4 text-left text-[17px] font-medium hover:no-underline">{it.q}</AccordionTrigger>
-                  <AccordionContent className="text-[15px] leading-relaxed text-muted-foreground">{it.a}</AccordionContent>
+                  <AccordionTrigger className="py-4 text-left text-[17px] font-medium hover:no-underline">
+                    {it.q}
+                  </AccordionTrigger>
+                  <AccordionContent className="text-[15px] leading-relaxed text-muted-foreground">
+                    {it.a}
+                  </AccordionContent>
                 </AccordionItem>
               ))}
             </Accordion>
@@ -364,7 +445,10 @@ export function LandingPage() {
             </div>
             <p className="mt-4 text-[14px] text-muted-foreground">
               Already a member?{" "}
-              <Link to="/auth" className="font-medium text-foreground underline-offset-4 hover:underline">
+              <Link
+                to="/auth"
+                className="font-medium text-foreground underline-offset-4 hover:underline"
+              >
                 Sign in
               </Link>
             </p>

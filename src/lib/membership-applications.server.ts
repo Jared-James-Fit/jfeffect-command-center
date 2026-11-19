@@ -36,13 +36,31 @@ const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 export async function accountFor(sb: any, rawEmail: string): Promise<AccountState> {
   const email = rawEmail.trim().toLowerCase();
-  const { data: profiles, error } = await sb.from("profiles").select("id, email").ilike("email", escapeLike(email));
+  const { data: profiles, error } = await sb
+    .from("profiles")
+    .select("id, email")
+    .ilike("email", escapeLike(email));
   if (error) throw new Error(error.message);
-  const login = ((profiles ?? []) as any[]).find((p) => String(p.email ?? "").trim().toLowerCase() === email) ?? null;
+  const login =
+    ((profiles ?? []) as any[]).find(
+      (p) =>
+        String(p.email ?? "")
+          .trim()
+          .toLowerCase() === email,
+    ) ?? null;
   if (login) {
-    const { data: roles } = await sb.from("user_roles").select("role").eq("user_id", login.id).in("role", ["admin", "coach", "finance"]);
+    const { data: roles } = await sb
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", login.id)
+      .in("role", ["admin", "coach", "finance"]);
     if ((roles ?? []).length) return { kind: "staff", loginId: login.id };
-    const { data: client } = await sb.from("clients").select("id").eq("user_id", login.id).limit(1).maybeSingle();
+    const { data: client } = await sb
+      .from("clients")
+      .select("id")
+      .eq("user_id", login.id)
+      .limit(1)
+      .maybeSingle();
     if (client?.id) return { kind: "athlete", loginId: login.id, clientId: client.id };
   }
   // A record a coach made (anything but a coaching application nobody took on) owns the email.
@@ -52,7 +70,9 @@ export async function accountFor(sb: any, rawEmail: string): Promise<AccountStat
     .eq("normalized_email", email)
     .is("user_id", null)
     .limit(5);
-  const coachMade = ((records ?? []) as any[]).find((c) => !c.archived && !(c.status === "Lead" && !c.assigned_coach_id));
+  const coachMade = ((records ?? []) as any[]).find(
+    (c) => !c.archived && !(c.status === "Lead" && !c.assigned_coach_id),
+  );
   if (coachMade) return { kind: "coach_record", clientId: coachMade.id };
   return login ? { kind: "orphan_login", loginId: login.id } : { kind: "none" };
 }
@@ -97,7 +117,13 @@ const CONTACT_LINE: Record<string, string> = {
 
 export async function sendReceivedEmail(
   sb: any,
-  app: { id: string; email: string; full_name: string; contact_method: string; coaching_interest: string | null },
+  app: {
+    id: string;
+    email: string;
+    full_name: string;
+    contact_method: string;
+    coaching_interest: string | null;
+  },
   bookingUrl: string | null,
 ) {
   const { sendTemplateEmail } = await import("@/lib/transactional-email.server");
@@ -114,7 +140,11 @@ export async function sendReceivedEmail(
   });
 }
 
-export async function sendCodeEmail(sb: any, app: { email: string; full_name: string }, code: string) {
+export async function sendCodeEmail(
+  sb: any,
+  app: { email: string; full_name: string },
+  code: string,
+) {
   const { sendTemplateEmail } = await import("@/lib/transactional-email.server");
   return sendTemplateEmail(sb, {
     template: "membership-code",
@@ -129,7 +159,10 @@ export async function sendCodeEmail(sb: any, app: { email: string; full_name: st
  * lockscreen apart from who, and a burst collapses into one (30 minutes per
  * admin): the list and the badges carry the rest. Never throws.
  */
-export async function pushNewApplication(sb: any, app: { id: string; full_name: string; goal: string }) {
+export async function pushNewApplication(
+  sb: any,
+  app: { id: string; full_name: string; goal: string },
+) {
   try {
     const { sendWebPushToUser } = await import("@/lib/push/push.server");
     const { safeDisplayName } = await import("@/lib/push/notification-payload");

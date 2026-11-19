@@ -51,10 +51,20 @@ const TEST_EMAIL = (email: string) =>
 
 /** The coach's calendar day (Manitoba keeps UTC-5 from Nov 1 2026; the server's own zone rules know it). */
 function coachDay(now = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Winnipeg", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Winnipeg",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
 }
 
-const optText = (max: number) => z.string().optional().nullable().transform((v) => clip(v ?? "", max) || null);
+const optText = (max: number) =>
+  z
+    .string()
+    .optional()
+    .nullable()
+    .transform((v) => clip(v ?? "", max) || null);
 
 /* ------------------------------------------------------------------ */
 /* Public: the funnel                                                  */
@@ -89,20 +99,26 @@ export const trackJoinFunnel = createServerFn({ method: "POST" })
     try {
       const { admin } = await import("@/lib/membership-applications.server");
       const sb = await admin();
-      await sb.from("membership_funnel_events").upsert(
-        {
-          visitor_id: data.visitorId,
-          event: data.event,
-          step: data.event === "apply_step" ? data.step ?? "" : "",
-          day: coachDay(),
-          source: data.source,
-          referrer_host: referrerHost(data.referrer),
-          utm_source: data.utm_source,
-          utm_medium: data.utm_medium,
-          utm_campaign: data.utm_campaign,
-        },
-        { onConflict: "visitor_id,event,step,day", ignoreDuplicates: true },
-      ).then(() => null, () => null);
+      await sb
+        .from("membership_funnel_events")
+        .upsert(
+          {
+            visitor_id: data.visitorId,
+            event: data.event,
+            step: data.event === "apply_step" ? (data.step ?? "") : "",
+            day: coachDay(),
+            source: data.source,
+            referrer_host: referrerHost(data.referrer),
+            utm_source: data.utm_source,
+            utm_medium: data.utm_medium,
+            utm_campaign: data.utm_campaign,
+          },
+          { onConflict: "visitor_id,event,step,day", ignoreDuplicates: true },
+        )
+        .then(
+          () => null,
+          () => null,
+        );
     } catch {
       /* counting is never worth an error */
     }
@@ -138,7 +154,14 @@ const MIN_HUMAN_MS = 2500;
 const MAX_PER_HOUR = 5;
 
 export type ApplyResult =
-  | { ok: true; status: "received" | "updated"; firstName: string; contactMethod: string; coachingInterest: string | null; bookingUrl: string | null }
+  | {
+      ok: true;
+      status: "received" | "updated";
+      firstName: string;
+      contactMethod: string;
+      coachingInterest: string | null;
+      bookingUrl: string | null;
+    }
   | { ok: true; status: "already_approved"; firstName: string }
   | { ok: true; status: "has_account"; firstName: string };
 
@@ -162,7 +185,14 @@ export const submitMembershipApplication = createServerFn({ method: "POST" })
 
     // A bot gets the same answer a person does, and nothing is saved.
     if (data.honeypot || data.elapsed_ms < MIN_HUMAN_MS) {
-      return { ok: true, status: "received", firstName, contactMethod: clean.contact_method, coachingInterest: clean.coaching_interest, bookingUrl: null };
+      return {
+        ok: true,
+        status: "received",
+        firstName,
+        contactMethod: clean.contact_method,
+        coachingInterest: clean.coaching_interest,
+        bookingUrl: null,
+      };
     }
 
     const m = await import("@/lib/membership-applications.server");
@@ -176,7 +206,8 @@ export const submitMembershipApplication = createServerFn({ method: "POST" })
         .select("id", { count: "exact", head: true })
         .eq("ip_hash", ip)
         .gte("created_at", new Date(Date.now() - 3_600_000).toISOString());
-      if ((count ?? 0) >= MAX_PER_HOUR) throw new Error("A few applications just came from this connection. Try again in an hour.");
+      if ((count ?? 0) >= MAX_PER_HOUR)
+        throw new Error("A few applications just came from this connection. Try again in an hour.");
     }
 
     // Already a member or a coaching client: they sign in, nothing to apply for.
@@ -201,7 +232,10 @@ export const submitMembershipApplication = createServerFn({ method: "POST" })
         const round = (approved.invite_count ?? 0) + 1;
         const sent = await m.sendApprovalEmail(sb, approved, { round });
         if (sent.sent) {
-          await sb.from("membership_applications").update({ invite_sent_at: new Date().toISOString(), invite_count: round }).eq("id", approved.id);
+          await sb
+            .from("membership_applications")
+            .update({ invite_sent_at: new Date().toISOString(), invite_count: round })
+            .eq("id", approved.id);
         }
       }
       return { ok: true, status: "already_approved", firstName };
@@ -245,10 +279,22 @@ export const submitMembershipApplication = createServerFn({ method: "POST" })
       id = pending.id;
       status = "updated";
     } else {
-      const { data: ins, error } = await sb.from("membership_applications").insert(row).select("id").single();
+      const { data: ins, error } = await sb
+        .from("membership_applications")
+        .insert(row)
+        .select("id")
+        .single();
       if (error) {
         // two taps at once: the other one landed
-        if (error.code === "23505") return { ok: true, status: "updated", firstName, contactMethod: clean.contact_method, coachingInterest: clean.coaching_interest, bookingUrl: null };
+        if (error.code === "23505")
+          return {
+            ok: true,
+            status: "updated",
+            firstName,
+            contactMethod: clean.contact_method,
+            coachingInterest: clean.coaching_interest,
+            bookingUrl: null,
+          };
         console.warn("[member-apply] insert failed", error.message);
         throw new Error("That didn't send. Your answers are saved: tap Send again.");
       }
@@ -258,8 +304,14 @@ export const submitMembershipApplication = createServerFn({ method: "POST" })
     if (data.visitor_id) {
       await sb
         .from("membership_funnel_events")
-        .upsert({ visitor_id: data.visitor_id, event: "apply_submit", step: "", day: coachDay() }, { onConflict: "visitor_id,event,step,day", ignoreDuplicates: true })
-        .then(() => null, () => null);
+        .upsert(
+          { visitor_id: data.visitor_id, event: "apply_submit", step: "", day: coachDay() },
+          { onConflict: "visitor_id,event,step,day", ignoreDuplicates: true },
+        )
+        .then(
+          () => null,
+          () => null,
+        );
     }
 
     let bookingUrl: string | null = null;
@@ -270,9 +322,26 @@ export const submitMembershipApplication = createServerFn({ method: "POST" })
     if (status === "received" && !row.is_test) {
       await m.pushNewApplication(sb, { id, full_name: clean.full_name, goal: clean.goal });
     }
-    await m.sendReceivedEmail(sb, { id, email: clean.email, full_name: clean.full_name, contact_method: clean.contact_method, coaching_interest: clean.coaching_interest }, bookingUrl);
+    await m.sendReceivedEmail(
+      sb,
+      {
+        id,
+        email: clean.email,
+        full_name: clean.full_name,
+        contact_method: clean.contact_method,
+        coaching_interest: clean.coaching_interest,
+      },
+      bookingUrl,
+    );
 
-    return { ok: true, status, firstName, contactMethod: clean.contact_method, coachingInterest: clean.coaching_interest, bookingUrl };
+    return {
+      ok: true,
+      status,
+      firstName,
+      contactMethod: clean.contact_method,
+      coachingInterest: clean.coaching_interest,
+      bookingUrl,
+    };
   });
 
 /* ------------------------------------------------------------------ */
@@ -285,9 +354,21 @@ export type ActivationView =
   | { state: "joined" }
   | { state: "has_account" }
   | { state: "coach_record" }
-  | { state: "ok"; firstName: string; emailHint: string | null; email: string | null; proven: boolean; goal: string; experience: string; coachingInterest: string | null };
+  | {
+      state: "ok";
+      firstName: string;
+      emailHint: string | null;
+      email: string | null;
+      proven: boolean;
+      goal: string;
+      experience: string;
+      coachingInterest: string | null;
+    };
 
-const TokenInput = z.object({ token: z.string().min(10).max(120), proof: z.string().max(64).optional().nullable() });
+const TokenInput = z.object({
+  token: z.string().min(10).max(120),
+  proof: z.string().max(64).optional().nullable(),
+});
 
 async function appForToken(token: string): Promise<any | null> {
   const { verifyActivation } = await import("@/lib/membership-activation.server");
@@ -297,7 +378,9 @@ async function appForToken(token: string): Promise<any | null> {
   const sb = await admin();
   const { data } = await sb
     .from("membership_applications")
-    .select("id, email, full_name, goal, experience, coaching_interest, status, activated_at, existing_account, code_hash, code_expires_at, code_attempts, code_sent_at")
+    .select(
+      "id, email, full_name, goal, experience, coaching_interest, status, activated_at, existing_account, code_hash, code_expires_at, code_attempts, code_sent_at",
+    )
     .eq("id", id)
     .maybeSingle();
   return data ?? null;
@@ -330,7 +413,9 @@ async function viewFor(app: any, proof: string | null | undefined): Promise<Acti
 /** What an activation link opens on. */
 export const peekActivation = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => TokenInput.parse(i))
-  .handler(async ({ data }): Promise<ActivationView> => viewFor(await appForToken(data.token), data.proof));
+  .handler(
+    async ({ data }): Promise<ActivationView> => viewFor(await appForToken(data.token), data.proof),
+  );
 
 /** Email a 6-digit code to the application's email (a DM'd or texted link). */
 export const sendActivationCode = createServerFn({ method: "POST" })
@@ -338,9 +423,14 @@ export const sendActivationCode = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const app = await appForToken(data.token);
     const view = await viewFor(app, null);
-    if (view.state !== "ok") throw new Error("This link doesn't work anymore. Ask Jared for a new one.");
-    const { CODE_MINUTES, CODE_RESEND_SECONDS, codeHash, newCode } = await import("@/lib/membership-activation.server");
-    if (app.code_sent_at && Date.now() - Date.parse(app.code_sent_at) < CODE_RESEND_SECONDS * 1000) {
+    if (view.state !== "ok")
+      throw new Error("This link doesn't work anymore. Ask Jared for a new one.");
+    const { CODE_MINUTES, CODE_RESEND_SECONDS, codeHash, newCode } =
+      await import("@/lib/membership-activation.server");
+    if (
+      app.code_sent_at &&
+      Date.now() - Date.parse(app.code_sent_at) < CODE_RESEND_SECONDS * 1000
+    ) {
       return { sentTo: view.emailHint, waitSeconds: CODE_RESEND_SECONDS };
     }
     const m = await import("@/lib/membership-applications.server");
@@ -348,7 +438,12 @@ export const sendActivationCode = createServerFn({ method: "POST" })
     const code = newCode();
     const { error } = await sb
       .from("membership_applications")
-      .update({ code_hash: codeHash(app.id, code), code_expires_at: new Date(Date.now() + CODE_MINUTES * 60_000).toISOString(), code_attempts: 0, code_sent_at: new Date().toISOString() })
+      .update({
+        code_hash: codeHash(app.id, code),
+        code_expires_at: new Date(Date.now() + CODE_MINUTES * 60_000).toISOString(),
+        code_attempts: 0,
+        code_sent_at: new Date().toISOString(),
+      })
       .eq("id", app.id);
     if (error) throw new Error("Couldn't send the code. Try again.");
     const sent = await m.sendCodeEmail(sb, app, code);
@@ -358,23 +453,39 @@ export const sendActivationCode = createServerFn({ method: "POST" })
 
 /** The code from the email: proves the inbox is theirs. Returns the same proof the emailed link carries. */
 export const verifyActivationCode = createServerFn({ method: "POST" })
-  .inputValidator((i: unknown) => TokenInput.extend({ code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code from the email.") }).parse(i))
+  .inputValidator((i: unknown) =>
+    TokenInput.extend({
+      code: z
+        .string()
+        .trim()
+        .regex(/^\d{6}$/, "Enter the 6-digit code from the email."),
+    }).parse(i),
+  )
   .handler(async ({ data }) => {
     const app = await appForToken(data.token);
     const view = await viewFor(app, null);
-    if (view.state !== "ok") throw new Error("This link doesn't work anymore. Ask Jared for a new one.");
-    const { CODE_MAX_ATTEMPTS, codeHash, emailProof } = await import("@/lib/membership-activation.server");
+    if (view.state !== "ok")
+      throw new Error("This link doesn't work anymore. Ask Jared for a new one.");
+    const { CODE_MAX_ATTEMPTS, codeHash, emailProof } =
+      await import("@/lib/membership-activation.server");
     if (!app.code_hash || !app.code_expires_at || Date.parse(app.code_expires_at) < Date.now()) {
       throw new Error("That code has expired. Tap Send a new code.");
     }
-    if ((app.code_attempts ?? 0) >= CODE_MAX_ATTEMPTS) throw new Error("Too many tries. Tap Send a new code.");
+    if ((app.code_attempts ?? 0) >= CODE_MAX_ATTEMPTS)
+      throw new Error("Too many tries. Tap Send a new code.");
     const { admin } = await import("@/lib/membership-applications.server");
     const sb = await admin();
     if (codeHash(app.id, data.code) !== app.code_hash) {
-      await sb.from("membership_applications").update({ code_attempts: (app.code_attempts ?? 0) + 1 }).eq("id", app.id);
+      await sb
+        .from("membership_applications")
+        .update({ code_attempts: (app.code_attempts ?? 0) + 1 })
+        .eq("id", app.id);
       throw new Error("That code didn't work. Check it, or tap Send a new code.");
     }
-    await sb.from("membership_applications").update({ code_hash: null, code_expires_at: null, code_attempts: 0 }).eq("id", app.id);
+    await sb
+      .from("membership_applications")
+      .update({ code_hash: null, code_expires_at: null, code_attempts: 0 })
+      .eq("id", app.id);
     return { proof: emailProof(app.id, app.email), email: app.email as string };
   });
 
@@ -385,14 +496,24 @@ export const verifyActivationCode = createServerFn({ method: "POST" })
  */
 export const activateMembership = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) =>
-    TokenInput.extend({ password: z.string().min(8, "Use at least 8 characters.").max(72, "Use 72 characters or fewer.") }).parse(i),
+    TokenInput.extend({
+      password: z
+        .string()
+        .min(8, "Use at least 8 characters.")
+        .max(72, "Use 72 characters or fewer."),
+    }).parse(i),
   )
   .handler(async ({ data }) => {
     const app = await appForToken(data.token);
     const view = await viewFor(app, data.proof);
-    if (view.state === "joined" || view.state === "has_account") throw new Error("You already have an account. Sign in with your email and password.");
-    if (view.state === "coach_record") throw new Error("Your coach already set up an account for this email. Ask Jared to send your setup link.");
-    if (view.state !== "ok") throw new Error("This link doesn't work anymore. Ask Jared for a new one.");
+    if (view.state === "joined" || view.state === "has_account")
+      throw new Error("You already have an account. Sign in with your email and password.");
+    if (view.state === "coach_record")
+      throw new Error(
+        "Your coach already set up an account for this email. Ask Jared to send your setup link.",
+      );
+    if (view.state !== "ok")
+      throw new Error("This link doesn't work anymore. Ask Jared for a new one.");
     if (!view.proven) throw new Error("Confirm your email first.");
 
     const m = await import("@/lib/membership-applications.server");
@@ -402,7 +523,10 @@ export const activateMembership = createServerFn({ method: "POST" })
     if (account.kind === "orphan_login") {
       // an old sign-up with this email: the inbox is proven, so it becomes theirs with this password
       loginId = account.loginId;
-      const { error } = await sb.auth.admin.updateUserById(loginId, { password: data.password, email_confirm: true });
+      const { error } = await sb.auth.admin.updateUserById(loginId, {
+        password: data.password,
+        email_confirm: true,
+      });
       if (error) throw new Error("Couldn't finish setting up your account. Try again.");
     } else if (account.kind === "none") {
       // Made unconfirmed first, then confirmed: confirmed at creation, the new-login trigger would
@@ -412,7 +536,12 @@ export const activateMembership = createServerFn({ method: "POST" })
         email: app.email,
         password: data.password,
         email_confirm: false,
-        user_metadata: { full_name: app.full_name, first_name: firstNameFrom(app.full_name), jf_signup: "free", membership_application_id: app.id },
+        user_metadata: {
+          full_name: app.full_name,
+          first_name: firstNameFrom(app.full_name),
+          jf_signup: "free",
+          membership_application_id: app.id,
+        },
       });
       if (error || !made?.user) {
         console.warn("[member-activate] create failed", error?.message);
@@ -425,13 +554,23 @@ export const activateMembership = createServerFn({ method: "POST" })
       throw new Error("You already have an account. Sign in with your email and password.");
     }
 
-    const { data: joined, error: jErr } = await sb.rpc("membership_activate_login", { _uid: loginId });
+    const { data: joined, error: jErr } = await sb.rpc("membership_activate_login", {
+      _uid: loginId,
+    });
     const status = (joined as any)?.status as string | undefined;
     if (jErr || !(status === "member" || status === "athlete")) {
       console.warn("[member-activate] join answered", status, jErr?.message);
-      throw new Error("Your account is made, but it didn't finish joining. Sign in and it'll finish, or ask Jared.");
+      throw new Error(
+        "Your account is made, but it didn't finish joining. Sign in and it'll finish, or ask Jared.",
+      );
     }
-    return { ok: true, email: app.email as string, goal: app.goal as string, experience: app.experience as string, firstName: firstNameFrom(app.full_name) };
+    return {
+      ok: true,
+      email: app.email as string,
+      goal: app.goal as string,
+      experience: app.experience as string,
+      firstName: firstNameFrom(app.full_name),
+    };
   });
 
 /* ------------------------------------------------------------------ */
@@ -474,7 +613,8 @@ export const updateMemberApplication = createServerFn({ method: "POST" })
     const sb = await admin();
     const { id, ...rest } = data;
     const patch: Record<string, unknown> = { ...rest };
-    if (rest.contact_status && rest.contact_status !== "not_contacted") patch.contacted_at = new Date().toISOString();
+    if (rest.contact_status && rest.contact_status !== "not_contacted")
+      patch.contacted_at = new Date().toISOString();
     if (rest.contact_status === "not_contacted") patch.contacted_at = null;
     const { error } = await sb.from("membership_applications").update(patch).eq("id", id);
     if (error) throw new Error(error.message);
@@ -482,14 +622,22 @@ export const updateMemberApplication = createServerFn({ method: "POST" })
   });
 
 export type ApproveResult =
-  | { kind: "invited"; link: string; message: string; emailed: boolean; emailProblem: string | null }
+  | {
+      kind: "invited";
+      link: string;
+      message: string;
+      emailed: boolean;
+      emailProblem: string | null;
+    }
   | { kind: "has_account" }
   | { kind: "coach_record"; clientId: string };
 
 /** Approve: send the activation email, and hand back the link to DM or text. Re-approving re-sends. */
 export const approveMemberApplication = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => z.object({ id: z.string().uuid(), note: z.string().max(600).optional().nullable() }).parse(i))
+  .inputValidator((i: unknown) =>
+    z.object({ id: z.string().uuid(), note: z.string().max(600).optional().nullable() }).parse(i),
+  )
   .handler(async ({ data, context }): Promise<ApproveResult> => {
     await assertAdmin(context);
     const m = await import("@/lib/membership-applications.server");
@@ -503,14 +651,34 @@ export const approveMemberApplication = createServerFn({ method: "POST" })
     if (app.activated_at) return { kind: "has_account" };
 
     const account = await m.accountFor(sb, app.email);
-    if (account.kind === "staff") throw new Error("That email is a team login. Ask them to apply with a different email.");
-    const decided = { status: "approved", flagged: false, decided_at: app.status === "approved" ? app.decided_at ?? new Date().toISOString() : new Date().toISOString(), decided_by: (context as any).userId };
+    if (account.kind === "staff")
+      throw new Error("That email is a team login. Ask them to apply with a different email.");
+    const decided = {
+      status: "approved",
+      flagged: false,
+      decided_at:
+        app.status === "approved"
+          ? (app.decided_at ?? new Date().toISOString())
+          : new Date().toISOString(),
+      decided_by: (context as any).userId,
+    };
     if (account.kind === "athlete") {
-      await sb.from("membership_applications").update({ ...decided, existing_account: true, client_id: account.clientId, user_id: account.loginId }).eq("id", app.id);
+      await sb
+        .from("membership_applications")
+        .update({
+          ...decided,
+          existing_account: true,
+          client_id: account.clientId,
+          user_id: account.loginId,
+        })
+        .eq("id", app.id);
       return { kind: "has_account" };
     }
     if (account.kind === "coach_record") {
-      await sb.from("membership_applications").update({ ...decided, client_id: account.clientId }).eq("id", app.id);
+      await sb
+        .from("membership_applications")
+        .update({ ...decided, client_id: account.clientId })
+        .eq("id", app.id);
       return { kind: "coach_record", clientId: account.clientId };
     }
     await sb.from("membership_applications").update(decided).eq("id", app.id);
@@ -518,7 +686,10 @@ export const approveMemberApplication = createServerFn({ method: "POST" })
     const round = (app.invite_count ?? 0) + 1;
     const sent = await m.sendApprovalEmail(sb, app, { round, note: data.note });
     if (sent.sent) {
-      await sb.from("membership_applications").update({ invite_sent_at: new Date().toISOString(), invite_count: round }).eq("id", app.id);
+      await sb
+        .from("membership_applications")
+        .update({ invite_sent_at: new Date().toISOString(), invite_count: round })
+        .eq("id", app.id);
     }
     const link = await m.activationLink(app.id);
     return {
@@ -526,7 +697,11 @@ export const approveMemberApplication = createServerFn({ method: "POST" })
       link,
       message: approvedMessage(app, link),
       emailed: sent.sent,
-      emailProblem: sent.sent ? null : sent.reason === "suppressed" ? "Their email is on the do-not-email list" : "The email didn't go",
+      emailProblem: sent.sent
+        ? null
+        : sent.reason === "suppressed"
+          ? "Their email is on the do-not-email list"
+          : "The email didn't go",
     };
   });
 
@@ -539,7 +714,12 @@ export const declineMemberApplication = createServerFn({ method: "POST" })
     const sb = await admin();
     const { error } = await sb
       .from("membership_applications")
-      .update({ status: "declined", decided_at: new Date().toISOString(), decided_by: (context as any).userId, code_hash: null })
+      .update({
+        status: "declined",
+        decided_at: new Date().toISOString(),
+        decided_by: (context as any).userId,
+        code_hash: null,
+      })
       .eq("id", data.id)
       .is("activated_at", null);
     if (error) throw new Error(error.message);
@@ -554,7 +734,11 @@ export const reopenMemberApplication = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const { admin } = await import("@/lib/membership-applications.server");
     const sb = await admin();
-    const { data: app } = await sb.from("membership_applications").select("email, activated_at").eq("id", data.id).maybeSingle();
+    const { data: app } = await sb
+      .from("membership_applications")
+      .select("email, activated_at")
+      .eq("id", data.id)
+      .maybeSingle();
     if (!app) throw new Error("That application is gone.");
     if (app.activated_at) throw new Error("They've already joined.");
     const { data: other } = await sb
@@ -568,7 +752,13 @@ export const reopenMemberApplication = createServerFn({ method: "POST" })
     if (other) throw new Error("They have a newer application waiting. Open that one.");
     const { error } = await sb
       .from("membership_applications")
-      .update({ status: "pending", decided_at: null, decided_by: null, existing_account: false, code_hash: null })
+      .update({
+        status: "pending",
+        decided_at: null,
+        decided_by: null,
+        existing_account: false,
+        code_hash: null,
+      })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -582,7 +772,11 @@ export const getMemberActivationLink = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const m = await import("@/lib/membership-applications.server");
     const sb = await m.admin();
-    const { data: app } = await sb.from("membership_applications").select("id, full_name, status").eq("id", data.id).maybeSingle();
+    const { data: app } = await sb
+      .from("membership_applications")
+      .select("id, full_name, status")
+      .eq("id", data.id)
+      .maybeSingle();
     if (!app || app.status !== "approved") throw new Error("Approve them first.");
     const link = await m.activationLink(app.id);
     return { link, message: approvedMessage(app, link) };
@@ -604,8 +798,16 @@ export const resendMemberInvite = createServerFn({ method: "POST" })
     if (app.activated_at || app.existing_account) throw new Error("They're already in.");
     const round = (app.invite_count ?? 0) + 1;
     const sent = await m.sendApprovalEmail(sb, app, { round });
-    if (!sent.sent) throw new Error(sent.reason === "suppressed" ? "Their email is on the do-not-email list. Send the link by DM or text." : "The email didn't go. Send the link by DM or text.");
-    await sb.from("membership_applications").update({ invite_sent_at: new Date().toISOString(), invite_count: round }).eq("id", app.id);
+    if (!sent.sent)
+      throw new Error(
+        sent.reason === "suppressed"
+          ? "Their email is on the do-not-email list. Send the link by DM or text."
+          : "The email didn't go. Send the link by DM or text.",
+      );
+    await sb
+      .from("membership_applications")
+      .update({ invite_sent_at: new Date().toISOString(), invite_count: round })
+      .eq("id", app.id);
     return { ok: true };
   });
 

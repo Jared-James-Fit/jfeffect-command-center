@@ -10,7 +10,12 @@
  * `?landing` always shows the page (the coach checking it while signed in).
  */
 
-export type LaunchInput = { hasSession: boolean; standalone: boolean; native: boolean; forceLanding: boolean };
+export type LaunchInput = {
+  hasSession: boolean;
+  standalone: boolean;
+  native: boolean;
+  forceLanding: boolean;
+};
 
 /** Pure (tested): what "/" is for this visitor. */
 export function launchMode(i: LaunchInput): "app" | "landing" {
@@ -26,8 +31,14 @@ export const LAUNCH_BOOT_SCRIPT =
 export function installedApp(): boolean {
   if (typeof window === "undefined") return false;
   const cap = (window as any).Capacitor;
-  const native = !!(cap && (typeof cap.isNativePlatform === "function" ? cap.isNativePlatform() : cap.isNative));
-  return native || (window.navigator as any).standalone === true || !!window.matchMedia?.("(display-mode: standalone)").matches;
+  const native = !!(
+    cap && (typeof cap.isNativePlatform === "function" ? cap.isNativePlatform() : cap.isNative)
+  );
+  return (
+    native ||
+    (window.navigator as any).standalone === true ||
+    !!window.matchMedia?.("(display-mode: standalone)").matches
+  );
 }
 
 /** The same decision after hydration (a client-side visit to "/" never ran the head script). */

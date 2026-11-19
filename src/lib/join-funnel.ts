@@ -15,7 +15,8 @@ const SOURCE_DAYS = 30;
 export type { JoinSource };
 
 function uuid(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
+    return crypto.randomUUID();
   return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) =>
     (Number(c) ^ ((Math.random() * 16) >> (Number(c) / 4))).toString(16),
   );
@@ -35,7 +36,8 @@ export function visitorId(): string | null {
   }
 }
 
-const hasAny = (s: JoinSource) => !!(s.source || s.referrer || s.utm_source || s.utm_medium || s.utm_campaign);
+const hasAny = (s: JoinSource) =>
+  !!(s.source || s.referrer || s.utm_source || s.utm_medium || s.utm_campaign);
 
 /** The first place they came from in the last 30 days (a later direct visit never overwrites it). */
 export function captureSource(): JoinSource {
@@ -46,7 +48,8 @@ export function captureSource(): JoinSource {
     const saved = raw ? (JSON.parse(raw) as { at: number; s: JoinSource }) : null;
     const fresh = saved && Date.now() - Number(saved.at) < SOURCE_DAYS * 86_400_000;
     if (fresh && hasAny(saved!.s) && !hasAny(now)) return saved!.s;
-    if (hasAny(now) || !fresh) window.localStorage.setItem(SOURCE_KEY, JSON.stringify({ at: Date.now(), s: now }));
+    if (hasAny(now) || !fresh)
+      window.localStorage.setItem(SOURCE_KEY, JSON.stringify({ at: Date.now(), s: now }));
     return hasAny(now) ? now : fresh ? saved!.s : now;
   } catch {
     return now;
@@ -61,7 +64,16 @@ export function trackJoin(event: FunnelEvent, step?: MemberStepKey): void {
   void Promise.resolve()
     .then(() =>
       trackJoinFunnel({
-        data: { visitorId: id, event, step: step ?? null, source: s.source, referrer: s.referrer, utm_source: s.utm_source, utm_medium: s.utm_medium, utm_campaign: s.utm_campaign },
+        data: {
+          visitorId: id,
+          event,
+          step: step ?? null,
+          source: s.source,
+          referrer: s.referrer,
+          utm_source: s.utm_source,
+          utm_medium: s.utm_medium,
+          utm_campaign: s.utm_campaign,
+        },
       }),
     )
     .catch(() => null);

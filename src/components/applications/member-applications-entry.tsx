@@ -31,8 +31,14 @@ export function MemberApplicationsInboxRow() {
       at={latest.created_at}
       unread={firstReply.length > 0}
       unreadLabel={`${pending.length} waiting`}
-      after={pending.length > 1 ? <span className="text-[13px] font-semibold text-muted-foreground">{pending.length}</span> : undefined}
-      onClick={() => navigate({ to: "/admin/leads", search: { tab: "members", app: latest.id } as any })}
+      after={
+        pending.length > 1 ? (
+          <span className="text-[13px] font-semibold text-muted-foreground">{pending.length}</span>
+        ) : undefined
+      }
+      onClick={() =>
+        navigate({ to: "/admin/leads", search: { tab: "members", app: latest.id } as any })
+      }
     />
   );
 }
@@ -58,14 +64,23 @@ export function NewApplicationsCard() {
       <ul className="divide-y divide-border">
         {pending.slice(0, 3).map((a) => (
           <li key={a.id}>
-            <Link to="/admin/leads" search={{ tab: "members", app: a.id } as any} className="flex items-center gap-3 py-2.5">
+            <Link
+              to="/admin/leads"
+              search={{ tab: "members", app: a.id } as any}
+              className="flex items-center gap-3 py-2.5"
+            >
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[15px] font-semibold">{a.full_name}</span>
                 <span className="block truncate text-[13px] text-muted-foreground">
                   {applicationLine(a)} · {chatAge(a.created_at)}
                 </span>
               </span>
-              {needsFirstReply(a) && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500" aria-label="Not messaged yet" />}
+              {needsFirstReply(a) && (
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500"
+                  aria-label="Not messaged yet"
+                />
+              )}
             </Link>
           </li>
         ))}

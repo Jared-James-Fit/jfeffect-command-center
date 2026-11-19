@@ -1,8 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
-import { getJoinFunnel, listMemberApplications, type JoinFunnel, type MemberApplicationsList } from "@/lib/membership-applications.functions";
-import { awaitingActivation, needsDecision, needsFirstReply, sortForReview } from "@/lib/membership-apply";
+import {
+  getJoinFunnel,
+  listMemberApplications,
+  type JoinFunnel,
+  type MemberApplicationsList,
+} from "@/lib/membership-applications.functions";
+import {
+  awaitingActivation,
+  needsDecision,
+  needsFirstReply,
+  sortForReview,
+} from "@/lib/membership-apply";
 
 export const MEMBER_APPLICATIONS_KEY = ["member-applications"] as const;
 

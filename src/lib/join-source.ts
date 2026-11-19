@@ -7,7 +7,13 @@ export type JoinSource = {
   utm_campaign: string | null;
 };
 
-export const EMPTY_SOURCE: JoinSource = { source: null, referrer: null, utm_source: null, utm_medium: null, utm_campaign: null };
+export const EMPTY_SOURCE: JoinSource = {
+  source: null,
+  referrer: null,
+  utm_source: null,
+  utm_medium: null,
+  utm_campaign: null,
+};
 
 /** Pure: what a page's address and referrer say about where someone came from (tested). */
 export function sourceFrom(href: string, referrer: string | null | undefined): JoinSource {
@@ -33,4 +39,3 @@ export function sourceFrom(href: string, referrer: string | null | undefined): J
     utm_campaign: p("utm_campaign"),
   };
 }
-

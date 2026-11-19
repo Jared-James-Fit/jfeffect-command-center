@@ -73,7 +73,13 @@ export const EMPTY_MEMBER_ANSWERS: MemberAnswers = {
  * at, coaching), then their name, how to reach them, and the details that
  * way needs. One question per screen; taps move on by themselves.
  */
-export type MemberStepKey = "goal" | "experience" | "coaching_interest" | "full_name" | "contact_method" | "contact";
+export type MemberStepKey =
+  | "goal"
+  | "experience"
+  | "coaching_interest"
+  | "full_name"
+  | "contact_method"
+  | "contact";
 export const MEMBER_STEPS: readonly MemberStepKey[] = [
   "goal",
   "experience",
@@ -93,7 +99,10 @@ export function consentText(method: string): string {
 const inList = (list: ReadonlyArray<{ v: string }>, v: string) => list.some((x) => x.v === v);
 
 /** Instagram is the coach's favourite way in: always asked, required only when it's how they want to be reached. */
-export function contactNeeds(method: string): { instagram: "required" | "optional"; phone: "required" | "hidden" } {
+export function contactNeeds(method: string): {
+  instagram: "required" | "optional";
+  phone: "required" | "hidden";
+} {
   return {
     instagram: method === "instagram" ? "required" : "optional",
     phone: method === "text" ? "required" : "hidden",
@@ -106,9 +115,13 @@ export type FieldProblem = { field: keyof MemberAnswers; message: string };
 export function memberStepProblem(step: MemberStepKey, a: MemberAnswers): FieldProblem | null {
   switch (step) {
     case "goal":
-      return inList(MEMBER_GOALS, a.goal) ? null : { field: "goal", message: "Pick the one that fits best." };
+      return inList(MEMBER_GOALS, a.goal)
+        ? null
+        : { field: "goal", message: "Pick the one that fits best." };
     case "experience":
-      return inList(MEMBER_EXPERIENCE, a.experience) ? null : { field: "experience", message: "Pick the closest one." };
+      return inList(MEMBER_EXPERIENCE, a.experience)
+        ? null
+        : { field: "experience", message: "Pick the closest one." };
     case "coaching_interest":
       // optional: skipping is an answer
       return !a.coaching_interest || inList(COACHING_INTEREST, a.coaching_interest)
@@ -116,19 +129,34 @@ export function memberStepProblem(step: MemberStepKey, a: MemberAnswers): FieldP
         : { field: "coaching_interest", message: "Pick one, or skip it." };
     case "full_name": {
       const n = a.full_name.trim();
-      if (n.length < 2) return { field: "full_name", message: "Add your name so Jared knows who he's talking to." };
+      if (n.length < 2)
+        return { field: "full_name", message: "Add your name so Jared knows who he's talking to." };
       if (n.length > 120) return { field: "full_name", message: "That name is too long." };
       return null;
     }
     case "contact_method":
-      return inList(CONTACT_METHODS, a.contact_method) ? null : { field: "contact_method", message: "Pick how you'd like to hear back." };
+      return inList(CONTACT_METHODS, a.contact_method)
+        ? null
+        : { field: "contact_method", message: "Pick how you'd like to hear back." };
     case "contact": {
-      if (!emailOk(a.email)) return { field: "email", message: a.email.trim() ? "That email doesn't look right. Check for typos." : "Add your email. Your invite goes there." };
+      if (!emailOk(a.email))
+        return {
+          field: "email",
+          message: a.email.trim()
+            ? "That email doesn't look right. Check for typos."
+            : "Add your email. Your invite goes there.",
+        };
       const needs = contactNeeds(a.contact_method);
       const ig = a.instagram.trim();
-      if (needs.instagram === "required" && !ig) return { field: "instagram", message: "Add your Instagram so Jared can DM you." };
-      if (ig && !instagramHandle(ig)) return { field: "instagram", message: "That handle doesn't look right (letters, numbers, dots and underscores)." };
-      if (needs.phone === "required" && !phoneOk(a.phone)) return { field: "phone", message: "Add your number with the area code." };
+      if (needs.instagram === "required" && !ig)
+        return { field: "instagram", message: "Add your Instagram so Jared can DM you." };
+      if (ig && !instagramHandle(ig))
+        return {
+          field: "instagram",
+          message: "That handle doesn't look right (letters, numbers, dots and underscores).",
+        };
+      if (needs.phone === "required" && !phoneOk(a.phone))
+        return { field: "phone", message: "Add your number with the area code." };
       return null;
     }
   }
@@ -154,13 +182,21 @@ export function cleanMemberAnswers(a: MemberAnswers) {
   };
 }
 
-export const goalLabelOf = (v: string | null | undefined) => MEMBER_GOALS.find((g) => g.v === v)?.l ?? "";
-export const goalTagOf = (v: string | null | undefined) => MEMBER_GOALS.find((g) => g.v === v)?.tag ?? null;
-export const experienceLabelOf = (v: string | null | undefined) => MEMBER_EXPERIENCE.find((g) => g.v === v)?.l ?? "";
-export const contactLabelOf = (v: string | null | undefined) => CONTACT_METHODS.find((g) => g.v === v)?.l ?? "";
+export const goalLabelOf = (v: string | null | undefined) =>
+  MEMBER_GOALS.find((g) => g.v === v)?.l ?? "";
+export const goalTagOf = (v: string | null | undefined) =>
+  MEMBER_GOALS.find((g) => g.v === v)?.tag ?? null;
+export const experienceLabelOf = (v: string | null | undefined) =>
+  MEMBER_EXPERIENCE.find((g) => g.v === v)?.l ?? "";
+export const contactLabelOf = (v: string | null | undefined) =>
+  CONTACT_METHODS.find((g) => g.v === v)?.l ?? "";
 
 export function firstNameFrom(fullName: string | null | undefined): string {
-  return String(fullName ?? "").trim().split(/\s+/)[0] ?? "";
+  return (
+    String(fullName ?? "")
+      .trim()
+      .split(/\s+/)[0] ?? ""
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -205,12 +241,16 @@ export function needsDecision(a: Pick<MemberApplication, "status">): boolean {
 }
 
 /** Waiting on the coach and nobody has written to them yet: the ones to answer first. */
-export function needsFirstReply(a: Pick<MemberApplication, "status" | "contact_status" | "flagged">): boolean {
+export function needsFirstReply(
+  a: Pick<MemberApplication, "status" | "contact_status" | "flagged">,
+): boolean {
   return a.status === "pending" && a.contact_status === "not_contacted" && !a.flagged;
 }
 
 /** Approved, invite out, and they haven't come in yet. */
-export function awaitingActivation(a: Pick<MemberApplication, "status" | "activated_at" | "existing_account">): boolean {
+export function awaitingActivation(
+  a: Pick<MemberApplication, "status" | "activated_at" | "existing_account">,
+): boolean {
   return a.status === "approved" && !a.activated_at && !a.existing_account;
 }
 
@@ -218,7 +258,10 @@ export type StageTone = "new" | "warn" | "done" | "muted";
 
 /** Where they stand, in a word or two, for a row. */
 export function applicationStage(
-  a: Pick<MemberApplication, "status" | "flagged" | "contact_status" | "activated_at" | "invite_sent_at" | "existing_account">,
+  a: Pick<
+    MemberApplication,
+    "status" | "flagged" | "contact_status" | "activated_at" | "invite_sent_at" | "existing_account"
+  >,
 ): { label: string; tone: StageTone } {
   if (a.status === "declined") return { label: "Declined", tone: "muted" };
   if (a.status === "approved") {
@@ -269,7 +312,9 @@ const GOAL_HOOK: Record<string, string> = {
 };
 
 /** A first message before deciding: say hi and learn about them. */
-export function hiMessage(a: Pick<MemberApplication, "full_name" | "goal" | "experience" | "coaching_interest">): string {
+export function hiMessage(
+  a: Pick<MemberApplication, "full_name" | "goal" | "experience" | "coaching_interest">,
+): string {
   const first = firstNameFrom(a.full_name);
   const hey = first ? `Hey ${first}!` : "Hey!";
   const hook = GOAL_HOOK[a.goal] ?? "your training";
@@ -277,7 +322,8 @@ export function hiMessage(a: Pick<MemberApplication, "full_name" | "goal" | "exp
     a.experience === "new"
       ? "What's got you wanting to start lifting?"
       : "What's your training look like right now?";
-  const coaching = a.coaching_interest === "yes" ? " Happy to chat coaching too whenever you want." : "";
+  const coaching =
+    a.coaching_interest === "yes" ? " Happy to chat coaching too whenever you want." : "";
   return `${hey} Jared from JF Effect here. Got your application, love that you're focused on ${hook}. ${ask}${coaching}`;
 }
 
@@ -298,7 +344,10 @@ export type FirstMove = { title: string; body: string; cta: string; to: string }
  * today (the JF Effect library leads with the right one for their goal and
  * level), never "explore the app".
  */
-export function firstMove(goal: string | null | undefined, experience: string | null | undefined): FirstMove {
+export function firstMove(
+  goal: string | null | undefined,
+  experience: string | null | undefined,
+): FirstMove {
   const newer = experience === "new" || experience === "beginner";
   if (goal === "powerlifting") {
     return {
@@ -350,15 +399,59 @@ export type FunnelCounts = {
 };
 
 /** Each stage with the share of the stage before it (null when the one before is 0). */
-export function funnelRows(c: FunnelCounts): Array<{ key: keyof FunnelCounts; label: string; value: number; rate: number | null; hint: string }> {
+export function funnelRows(
+  c: FunnelCounts,
+): Array<{
+  key: keyof FunnelCounts;
+  label: string;
+  value: number;
+  rate: number | null;
+  hint: string;
+}> {
   const rate = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : null);
   return [
-    { key: "visitors", label: "Visited the page", value: c.visitors, rate: null, hint: "People who opened jfeffect.com" },
-    { key: "starts", label: "Started applying", value: c.starts, rate: rate(c.starts, c.visitors), hint: "Answered the first question" },
-    { key: "submitted", label: "Sent an application", value: c.submitted, rate: rate(c.submitted, c.starts), hint: "Applications in this period" },
-    { key: "approved", label: "Approved", value: c.approved, rate: rate(c.approved, c.submitted), hint: "Of those sent in this period" },
-    { key: "activated", label: "Joined", value: c.activated, rate: rate(c.activated, c.approved), hint: "Set a password and came in" },
-    { key: "engaged", label: "Trained in week one", value: c.engaged, rate: rate(c.engaged, c.activated), hint: "Logged a workout, started a program or posted in 7 days" },
+    {
+      key: "visitors",
+      label: "Visited the page",
+      value: c.visitors,
+      rate: null,
+      hint: "People who opened jfeffect.com",
+    },
+    {
+      key: "starts",
+      label: "Started applying",
+      value: c.starts,
+      rate: rate(c.starts, c.visitors),
+      hint: "Answered the first question",
+    },
+    {
+      key: "submitted",
+      label: "Sent an application",
+      value: c.submitted,
+      rate: rate(c.submitted, c.starts),
+      hint: "Applications in this period",
+    },
+    {
+      key: "approved",
+      label: "Approved",
+      value: c.approved,
+      rate: rate(c.approved, c.submitted),
+      hint: "Of those sent in this period",
+    },
+    {
+      key: "activated",
+      label: "Joined",
+      value: c.activated,
+      rate: rate(c.activated, c.approved),
+      hint: "Set a password and came in",
+    },
+    {
+      key: "engaged",
+      label: "Trained in week one",
+      value: c.engaged,
+      rate: rate(c.engaged, c.activated),
+      hint: "Logged a workout, started a program or posted in 7 days",
+    },
   ];
 }
 

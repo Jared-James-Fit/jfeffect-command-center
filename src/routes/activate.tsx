@@ -15,7 +15,11 @@ export const Route = createFileRoute("/activate")({
     meta: [
       { title: "You're approved | JF Effect" },
       { name: "robots", content: "noindex" },
-      ...shareMeta({ title: "JF Effect", description: "You're approved. Set your password and you're in.", path: "/activate" }),
+      ...shareMeta({
+        title: "JF Effect",
+        description: "You're approved. Set your password and you're in.",
+        path: "/activate",
+      }),
     ],
   }),
   component: ActivateRoute,

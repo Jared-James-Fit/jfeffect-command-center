@@ -9,7 +9,16 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Check, CheckCircle2, Instagram, Loader2, Mail, MessageSquare, Video } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  Instagram,
+  Loader2,
+  Mail,
+  MessageSquare,
+  Video,
+} from "lucide-react";
 import { SalesPageShell } from "@/components/sales/sales-page-shell";
 import { Block, PrimaryCta, Surface, TextLink } from "@/components/sales/apple";
 import { Input } from "@/components/ui/input";
@@ -17,7 +26,10 @@ import { cn } from "@/lib/utils";
 import { SOCIAL } from "@/lib/social-links";
 import { instagramHandle } from "@/lib/apply-form";
 import { trackJoin, captureSource, visitorId } from "@/lib/join-funnel";
-import { submitMembershipApplication, type ApplyResult } from "@/lib/membership-applications.functions";
+import {
+  submitMembershipApplication,
+  type ApplyResult,
+} from "@/lib/membership-applications.functions";
 import {
   COACHING_INTEREST,
   CONTACT_METHODS,
@@ -73,7 +85,8 @@ const QUESTION: Record<MemberStepKey, { title: (first: string) => string; hint?:
   },
   full_name: { title: () => "What's your name?" },
   contact_method: {
-    title: (first) => (first ? `How should Jared reach you, ${first}?` : "How should Jared reach you?"),
+    title: (first) =>
+      first ? `How should Jared reach you, ${first}?` : "How should Jared reach you?",
     hint: "He reads every application and might say hi before approving you.",
   },
   contact: { title: () => "Where can we reach you?" },
@@ -86,7 +99,9 @@ export function MembershipApplication() {
   const [answers, setAnswers] = useState<MemberAnswers>(EMPTY_MEMBER_ANSWERS);
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState<1 | -1>(1);
-  const [error, setError] = useState<{ field: keyof MemberAnswers | null; message: string } | null>(null);
+  const [error, setError] = useState<{ field: keyof MemberAnswers | null; message: string } | null>(
+    null,
+  );
   const [shake, setShake] = useState(0);
   const [honeypot, setHoneypot] = useState("");
   const [sending, setSending] = useState(false);
@@ -150,7 +165,14 @@ export function MembershipApplication() {
   const fail = (field: keyof MemberAnswers | null, message: string) => {
     setError({ field, message });
     setShake((n) => n + 1);
-    const ref = field === "instagram" ? igRef : field === "phone" ? phoneRef : field === "email" ? emailRef : fieldRef;
+    const ref =
+      field === "instagram"
+        ? igRef
+        : field === "phone"
+          ? phoneRef
+          : field === "email"
+            ? emailRef
+            : fieldRef;
     ref.current?.focus({ preventScroll: true });
   };
   const set = (field: keyof MemberAnswers, v: string) => {
@@ -222,7 +244,11 @@ export function MembershipApplication() {
   const needs = contactNeeds(answers.contact_method);
   const fieldCls = "h-14 rounded-2xl bg-background px-4 text-[18px] md:text-[18px]";
 
-  const choice = (field: keyof MemberAnswers, options: ReadonlyArray<{ v: string; l: string; hint?: string }>, icons?: Record<string, any>) => (
+  const choice = (
+    field: keyof MemberAnswers,
+    options: ReadonlyArray<{ v: string; l: string; hint?: string }>,
+    icons?: Record<string, any>,
+  ) => (
     <div role="radiogroup" aria-labelledby={`join-q-${key}`} className="grid gap-2.5">
       {options.map((o) => {
         const on = answers[field] === o.v;
@@ -236,12 +262,23 @@ export function MembershipApplication() {
             onClick={() => choose(field, o.v)}
             className={cn(
               "flex min-h-[58px] w-full items-center gap-3 rounded-2xl px-5 text-left text-[17px] font-medium transition active:scale-[0.99]",
-              on ? "bg-foreground text-background" : "bg-muted/60 ring-1 ring-border/70 hover:bg-muted",
+              on
+                ? "bg-foreground text-background"
+                : "bg-muted/60 ring-1 ring-border/70 hover:bg-muted",
             )}
           >
             {Icon && <Icon className="h-5 w-5 shrink-0" aria-hidden />}
             <span className="min-w-0 flex-1">{o.l}</span>
-            {o.hint && <span className={cn("shrink-0 text-[13px]", on ? "text-background/70" : "text-muted-foreground")}>{o.hint}</span>}
+            {o.hint && (
+              <span
+                className={cn(
+                  "shrink-0 text-[13px]",
+                  on ? "text-background/70" : "text-muted-foreground",
+                )}
+              >
+                {o.hint}
+              </span>
+            )}
             {on && <Check className="h-5 w-5 shrink-0" aria-hidden />}
           </button>
         );
@@ -263,7 +300,10 @@ export function MembershipApplication() {
             >
               <ArrowLeft className="h-4 w-4" aria-hidden /> Back
             </button>
-            <p className="text-[13px] font-semibold tabular-nums text-muted-foreground" aria-live="polite">
+            <p
+              className="text-[13px] font-semibold tabular-nums text-muted-foreground"
+              aria-live="polite"
+            >
               {step + 1} of {total}
             </p>
             <span className="w-16" aria-hidden />
@@ -284,7 +324,9 @@ export function MembershipApplication() {
 
           {step === 0 && (
             <div className="mt-6">
-              <p className="text-[13px] font-semibold text-muted-foreground">Join JF Effect · Free</p>
+              <p className="text-[13px] font-semibold text-muted-foreground">
+                Join JF Effect · Free
+              </p>
               <p className="mt-1 text-[15px] leading-relaxed text-muted-foreground">
                 A few quick taps, about a minute. Jared reads every application himself.
               </p>
@@ -304,8 +346,15 @@ export function MembershipApplication() {
               dir === 1 ? "slide-in-from-right-2" : "slide-in-from-left-2",
             )}
           >
-            <h1 id={`join-q-${key}`} className="text-[26px] font-semibold leading-tight tracking-[-0.02em] md:text-[30px]">
-              {key === "full_name" ? <label htmlFor="join-full_name">{q.title(first)}</label> : q.title(first)}
+            <h1
+              id={`join-q-${key}`}
+              className="text-[26px] font-semibold leading-tight tracking-[-0.02em] md:text-[30px]"
+            >
+              {key === "full_name" ? (
+                <label htmlFor="join-full_name">{q.title(first)}</label>
+              ) : (
+                q.title(first)
+              )}
             </h1>
             {q.hint && <p className="mt-1.5 text-[15px] text-muted-foreground">{q.hint}</p>}
 
@@ -346,7 +395,11 @@ export function MembershipApplication() {
                   <ContactField
                     id="join-instagram"
                     label="Instagram"
-                    note={needs.instagram === "required" ? "So Jared can DM you." : "Optional, but it helps Jared know who you are."}
+                    note={
+                      needs.instagram === "required"
+                        ? "So Jared can DM you."
+                        : "Optional, but it helps Jared know who you are."
+                    }
                     inputRef={igRef}
                     placeholder="@username"
                     value={answers.instagram}
@@ -390,7 +443,8 @@ export function MembershipApplication() {
             )}
 
             {/* Choices move on by themselves; Next is there after Back, once one is picked. */}
-            {(!["goal", "experience", "coaching_interest", "contact_method"].includes(key) || !!answers[key as keyof MemberAnswers]) && (
+            {(!["goal", "experience", "coaching_interest", "contact_method"].includes(key) ||
+              !!answers[key as keyof MemberAnswers]) && (
               <button
                 type="submit"
                 disabled={sending}
@@ -432,7 +486,10 @@ export function MembershipApplication() {
           {step === 0 && (
             <p className="mt-10 text-center text-[14px] text-muted-foreground">
               Already a member?{" "}
-              <Link to="/auth" className="font-medium text-foreground underline-offset-4 hover:underline">
+              <Link
+                to="/auth"
+                className="font-medium text-foreground underline-offset-4 hover:underline"
+              >
                 Sign in
               </Link>
             </p>
@@ -512,7 +569,9 @@ function JoinResult({ result, answers }: { result: ApplyResult; answers: MemberA
   if (result.status === "has_account") {
     return (
       <ResultShell icon="check" title={`You already have an account${first ? `, ${first}` : ""}`}>
-        <p className="text-[16px] leading-relaxed text-muted-foreground">That email is already a JF Effect account. Sign in to get back to your training.</p>
+        <p className="text-[16px] leading-relaxed text-muted-foreground">
+          That email is already a JF Effect account. Sign in to get back to your training.
+        </p>
         <div className="mt-7 space-y-2">
           <PrimaryCta to="/auth" full>
             Sign in
@@ -528,8 +587,8 @@ function JoinResult({ result, answers }: { result: ApplyResult; answers: MemberA
     return (
       <ResultShell icon="check" title={`You're already approved${first ? `, ${first}` : ""}`}>
         <p className="text-[16px] leading-relaxed text-muted-foreground">
-          Your invite is in your email. Tap the link in it, set a password, and you're in. Can't find it? Check spam, or message Jared on
-          Instagram.
+          Your invite is in your email. Tap the link in it, set a password, and you're in. Can't
+          find it? Check spam, or message Jared on Instagram.
         </p>
         <div className="mt-6">
           <TextLink href={SOCIAL.instagram.url}>Message Jared on Instagram</TextLink>
@@ -540,12 +599,20 @@ function JoinResult({ result, answers }: { result: ApplyResult; answers: MemberA
   const coaching = result.coachingInterest === "yes" || result.coachingInterest === "maybe";
   const steps: Array<{ title: string; body: string; done?: boolean }> = [
     { title: "Application sent", body: "Nothing to pay, no card.", done: true },
-    { title: "Jared reads it", body: `Usually within a day. ${(REACH[result.contactMethod] ?? REACH.email)(answers)}` },
-    { title: "Your invite comes by email", body: `To ${answers.email.trim()}. Tap it, set a password, and pick your first program.` },
+    {
+      title: "Jared reads it",
+      body: `Usually within a day. ${(REACH[result.contactMethod] ?? REACH.email)(answers)}`,
+    },
+    {
+      title: "Your invite comes by email",
+      body: `To ${answers.email.trim()}. Tap it, set a password, and pick your first program.`,
+    },
   ];
   return (
     <ResultShell icon="check" title={`You're on the list${first ? `, ${first}` : ""}.`}>
-      <p className="text-[16px] leading-relaxed text-muted-foreground">Here's what happens next. You don't need to do anything else.</p>
+      <p className="text-[16px] leading-relaxed text-muted-foreground">
+        Here's what happens next. You don't need to do anything else.
+      </p>
       <ol className="mt-6 space-y-4 text-left">
         {steps.map((s, i) => (
           <li key={s.title} className="flex items-start gap-3">
@@ -574,7 +641,8 @@ function JoinResult({ result, answers }: { result: ApplyResult; answers: MemberA
             <div className="min-w-0">
               <div className="text-[16px] font-semibold">Want to talk coaching?</div>
               <p className="mt-0.5 text-[14px] leading-relaxed text-muted-foreground">
-                A text conversation works great. If you'd rather talk it through on a quick video call, pick a time. Totally optional.
+                A text conversation works great. If you'd rather talk it through on a quick video
+                call, pick a time. Totally optional.
               </p>
               <div className="mt-3">
                 <TextLink href={result.bookingUrl}>Pick a call time</TextLink>
@@ -595,13 +663,22 @@ function JoinResult({ result, answers }: { result: ApplyResult; answers: MemberA
   );
 }
 
-function ResultShell({ title, children }: { icon: "check"; title: string; children: React.ReactNode }) {
+function ResultShell({
+  title,
+  children,
+}: {
+  icon: "check";
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <SalesPageShell pageId="join-done" hideMarketingNav>
       <Block narrow className="!py-10">
         <div className="mx-auto max-w-md text-center" data-join-result>
           <CheckCircle2 className="mx-auto h-14 w-14 text-success" aria-hidden />
-          <h1 className="mt-4 text-balance text-[28px] font-semibold leading-tight tracking-[-0.02em] md:text-[34px]">{title}</h1>
+          <h1 className="mt-4 text-balance text-[28px] font-semibold leading-tight tracking-[-0.02em] md:text-[34px]">
+            {title}
+          </h1>
           <div className="mt-3">{children}</div>
         </div>
       </Block>
