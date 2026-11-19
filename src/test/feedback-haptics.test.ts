@@ -13,11 +13,12 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 /** A tiny browser: storage, visibility, matchMedia, and whichever haptics route the test wants. */
-function fakeBrowser(opts: { vibrate?: boolean; native?: boolean; ios?: boolean; reduceMotion?: boolean; hidden?: boolean; active?: { tagName: string; type?: string } }) {
+function fakeBrowser(opts: { vibrate?: boolean; native?: boolean; nativeRegisterOnly?: boolean; nativeWithoutPlugin?: boolean; ios?: boolean; reduceMotion?: boolean; hidden?: boolean; active?: { tagName: string; type?: string } }) {
   const store = new Map<string, string>();
   const vibrate = vi.fn(() => true);
   const native = { impact: vi.fn(async () => {}), notification: vi.fn(async () => {}), vibrate: vi.fn(async () => {}), selectionStart: vi.fn(async () => {}), selectionChanged: vi.fn(async () => {}), selectionEnd: vi.fn(async () => {}) };
   const labelClicks = vi.fn();
+  const registerPlugin = vi.fn((name: string) => (name === "Haptics" ? native : undefined));
   const created: any[] = [];
   const body = { appendChild: (n: any) => { n.isConnected = true; created.push(n); return n; } };
   const document: any = {
@@ -39,7 +40,16 @@ function fakeBrowser(opts: { vibrate?: boolean; native?: boolean; ios?: boolean;
     localStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) },
     matchMedia: (q: string) => ({ matches: q.includes("reduced-motion") ? !!opts.reduceMotion : false }),
     setTimeout: (f: () => void) => { f(); return 0; },
-    Capacitor: opts.native ? { isNativePlatform: () => true, isPluginAvailable: (n: string) => n === "Haptics", Plugins: { Haptics: native } } : undefined,
+    // like the apps' bridges: each plugin the build links is on Plugins (registerPlugin is the
+    // fallback for one that isn't, `nativeRegisterOnly`)
+    Capacitor: opts.native || opts.nativeRegisterOnly || opts.nativeWithoutPlugin
+      ? {
+          isNativePlatform: () => true,
+          isPluginAvailable: (n: string) => !opts.nativeWithoutPlugin && n === "Haptics",
+          Plugins: opts.native ? { Haptics: native } : {},
+          registerPlugin,
+        }
+      : undefined,
   };
   const navigator: any = {
     userAgent: opts.ios ? "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" : "Mozilla/5.0 (Linux; Android 14)",
@@ -52,7 +62,7 @@ function fakeBrowser(opts: { vibrate?: boolean; native?: boolean; ios?: boolean;
   vi.stubGlobal("document", document);
   vi.stubGlobal("navigator", navigator);
   vi.stubGlobal("HTMLInputElement", HTMLInputElement);
-  return { store, vibrate, native, labelClicks, created };
+  return { store, vibrate, native, labelClicks, created, registerPlugin };
 }
 
 async function engine() {
@@ -132,6 +142,25 @@ describe("the haptics engine", () => {
     h.haptic("selection");
     expect(b.native.selectionChanged).toHaveBeenCalled();
     expect(b.vibrate).not.toHaveBeenCalled();
+    expect(b.registerPlugin).not.toHaveBeenCalled();
+    // a bridge that only lists it in its headers: registered once from the page
+    vi.unstubAllGlobals();
+    const reg = fakeBrowser({ nativeRegisterOnly: true, vibrate: true });
+    const h3 = await engine();
+    expect(h3.hapticRoute()).toBe("native");
+    h3.haptic("light");
+    h3.hapticRoute();
+    expect(reg.native.impact).toHaveBeenLastCalledWith({ style: "LIGHT" });
+    expect(reg.registerPlugin).toHaveBeenCalledTimes(1);
+    expect(reg.registerPlugin).toHaveBeenCalledWith("Haptics");
+    // an app build without the plugin falls back to the web's own route
+    vi.unstubAllGlobals();
+    const bare = fakeBrowser({ nativeWithoutPlugin: true, vibrate: true });
+    const h2 = await engine();
+    expect(h2.hapticRoute()).toBe("vibrate");
+    h2.haptic("light");
+    expect(bare.vibrate).toHaveBeenLastCalledWith(12);
+    expect(bare.registerPlugin).not.toHaveBeenCalled();
   });
 
   it("iPhone web: a scripted switch tick (iOS 17.4–26.4) from a switch that's never drawn, never right after a real tap ticked", async () => {
@@ -218,6 +247,12 @@ describe("one feedback() per moment", () => {
       "src/components/workout-day/WorkoutDayView.tsx",
       "src/components/ui/checkbox.tsx",
       "src/components/ui/switch.tsx",
+      // what logs, sends or finishes: Suggested's chip, the chat and comment sends, the review's save
+      "src/components/workout-day/load-suggestion-card.tsx",
+      "src/components/message-thread.tsx",
+      "src/components/group-message-thread.tsx",
+      "src/components/community/comments-sheet.tsx",
+      "src/components/workout/shared/workout-review-editor.tsx",
     ]) {
       expect(read(f), f).toContain("<HapticTap />");
     }
@@ -239,5 +274,10 @@ describe("one feedback() per moment", () => {
     const yml = read(".github/workflows/android-build.yml");
     expect(yml).toContain('"android.permission.VIBRATE"');
     expect(yml).toContain('assert "android.permission.VIBRATE" in open(app).read()');
+    // and links the Haptics plugin (amplitude-controlled taps), checked after cap sync
+    const add = yml.indexOf("@capacitor/haptics@8.");
+    expect(add).toBeGreaterThan(-1);
+    expect(add).toBeLessThan(yml.indexOf("npx cap add android"));
+    expect(yml).toContain('grep -q "capacitor-haptics" android/capacitor.settings.gradle');
   });
 });

@@ -50,6 +50,17 @@ jobs:
           rm -rf node_modules/@capgo/capacitor-health
           echo "Health Connect disabled for this build"
 
+      # ── Native haptics ──────────────────────────────────────────────────────
+      # The app's bridge lists each plugin it links on Capacitor.Plugins, and the
+      # web app (jfeffect.com, which the app loads) uses Haptics as soon as it's
+      # there (src/platform/haptics.ts): amplitude-controlled taps and the system's
+      # own selection tick instead of navigator.vibrate's full-strength buzz.
+      # Pinned and added here only, so the web app's dependencies never change.
+      - name: Add native haptics to the app
+        run: |
+          npm install --legacy-peer-deps --no-audit --no-fund @capacitor/haptics@8.0.2
+          node -e "require('@capacitor/haptics/package.json')" && echo "✅ @capacitor/haptics installed"
+
       - name: Add Android platform
         run: |
           rm -rf android
@@ -145,6 +156,7 @@ jobs:
         run: |
           npx cap sync android 2>&1 | tail -10
           ls android/capacitor.settings.gradle && echo "capacitor.settings.gradle OK"
+          grep -q "capacitor-haptics" android/capacitor.settings.gradle && echo "✅ haptics plugin linked" || { echo "::error::@capacitor/haptics is not linked into the Android app"; exit 1; }
 
       - name: Show generated build.gradle
         run: cat android/app/build.gradle
