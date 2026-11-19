@@ -124,12 +124,13 @@ describe("where the sounds play", () => {
     expect(recap).toContain("<SoundToggleButton");
   });
   it("logging: one sound per completed-set increase, brighter on the last set; PRs sparkle", () => {
-    expect(wdv).toContain('playAppSound(completedSetCount >= setCount ? "exercise" : "set");');
-    expect(wdv).toContain('playAppSound("pr");');
+    // through feedback(): each moment's sound and its haptic together (feedback.ts)
+    expect(wdv).toContain('feedback(completedSetCount >= setCount ? "exercise" : "set");');
+    expect(wdv).toContain('feedback("pr");');
     expect(wdv).not.toContain("playUiSound");
   });
   it("rest over chimes (iPhone web can't vibrate); Workout Tools has the sounds switch", () => {
-    expect(readFileSync("src/components/workout-day/RestTimerButton.tsx", "utf8")).toContain('playAppSound("timer");');
+    expect(readFileSync("src/components/workout-day/RestTimerButton.tsx", "utf8")).toContain('feedback("timer");');
     expect(readFileSync("src/components/workout-tools/workout-tools.tsx", "utf8")).toContain("<SoundsRow />");
   });
   it("the music code is fetched lazily and warmed in idle time", () => {

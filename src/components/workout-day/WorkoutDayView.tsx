@@ -51,7 +51,6 @@ import {
 } from "@/lib/workout-completion.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { cn } from "@/lib/utils";
-import { playAppSound } from "@/lib/app-sounds";
 import { haptic } from "@/platform/haptics";
 import { useWorkoutView } from "@/lib/use-workout-view";
 import { FocusIntro, FocusTips, useFocusIntro } from "@/components/workout-day/focus-intro";
@@ -209,6 +208,8 @@ import {
   touchWorkoutSession,
 } from "@/components/workout-day/WorkoutTimer";
 import { listenChannel } from "@/lib/realtime-channel";
+import { feedback } from "@/lib/feedback";
+import { HapticTap } from "@/components/haptic-tap";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
@@ -2603,7 +2604,7 @@ function WorkoutDay({
   const chooseWorkoutView = useCallback((next: "list" | "story") => {
     storyAutoDayRef.current = dayId;
     saveWorkoutView(next);
-    haptic("light");
+    feedback("tap");
     if (next === "story") openStory(true);
     else closeStory();
   }, [dayId, saveWorkoutView, openStory, closeStory]);
@@ -4305,9 +4306,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     },
     [!!warmupGauge, loadHistory, loadPlan, activeUnit, readiness, bodyweightKg, liftKind],
   );
-  // Logging sound: one soft "tock" each time this card gains a completed set —
-  // however it was completed (typed, tapped, filled down, timed) — and a
-  // brighter cue when it was the last one. Not on load, not for a coach view.
+  // Logging feedback: one soft "tock" and a medium tap each time this card gains
+  // a completed set — however it was completed (typed, tapped, filled down,
+  // timed), in the same render its number turns green — and a warmer cue when
+  // it was the last one. A fill-down that logs three sets at once is one. Not
+  // on load, not for a coach view.
   const completedSetCount = existingResults.filter((x: any) => x.completed_at && Number(x.set_index) <= setCount).length;
   const soundedCountRef = useRef<number | null>(null);
   useEffect(() => {
@@ -4315,7 +4318,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     const before = soundedCountRef.current;
     soundedCountRef.current = completedSetCount;
     if (before == null || completedSetCount <= before) return;
-    playAppSound(completedSetCount >= setCount ? "exercise" : "set");
+    feedback(completedSetCount >= setCount ? "exercise" : "set");
   }, [completedSetCount, resultsReady, readonly, setCount]);
 
   // For the finished card's "why": the last working weight and how the sets felt.
@@ -6924,8 +6927,8 @@ function SetRow({
       : `${rowId}:${setIndex}:${existing.completed_at}:${prBadge!.reps}:${prBadge!.amount}`;
     if (prSoundedRef.current === key) return;
     prSoundedRef.current = key;
-    playAppSound("pr");
-    haptic("success");
+    // the PR chip's pop, its sparkle and the success tap together
+    feedback("pr");
   }, [prBadge, recordForBadge, loadRecordForBadge, hasRecords, existing?.completed_at, rowId, setIndex]);
 
   const prescribedSec = prescribedDurationSeconds ?? null;
@@ -7000,8 +7003,7 @@ function SetRow({
       await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();
       if (!existing?.completed_at) onSetCompleted?.(setIndex);
-      // The card plays the set's sound (it hears every way a set completes).
-      if (completeNow) haptic("light");
+      // The card gives the set's tock and tap (it hears every way a set completes).
       toast.success(
         opts.finishedEarly && prescribedSec
           ? `Saved ${formatDuration(completedSeconds)} of ${formatDuration(prescribedSec)}`
@@ -7075,11 +7077,13 @@ function SetRow({
             title={statusError ? "Status failed to save — tap to retry" : isConfirmed ? "Mark set incomplete" : quickWeight ? `Log this set at ${quickWeight} ${unit} (the sets below fill in with it)` : weightOnlyMissing ? "Type the weight: the set logs once it's in" : "Mark set complete"}
             aria-label={statusError ? `Retry saving set ${setIndex} status` : isConfirmed ? `Mark set ${setIndex} incomplete` : quickWeight ? `Log set ${setIndex} at ${quickWeight} ${unit}` : weightOnlyMissing ? `Type set ${setIndex}'s weight` : `Mark set ${setIndex} complete`}
             className={cn(
-              "flex h-11 w-full items-center justify-center sm:h-9",
+              "relative flex h-11 w-full items-center justify-center sm:h-9",
               statusSaving && "cursor-wait",
             )}
           >
             <SetNumberBadge setIndex={setIndex} done={isConfirmed} saving={statusSaving} error={!!statusError} focusMode={focusMode} />
+            {/* the iPhone's tap on the finger's own touch (the card's tock and tap follow as it logs) */}
+            {!statusSaving && <HapticTap />}
           </button>
         ) : (
           <SetNumberBadge setIndex={setIndex} done={isConfirmed} focusMode={focusMode} />

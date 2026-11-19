@@ -12,6 +12,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Play, Pause, RotateCcw, Check, Clock, Pencil } from "lucide-react";
 import { parseDurationInput } from "@/lib/duration";
 import { cn } from "@/lib/utils";
+import { feedback } from "@/lib/feedback";
 
 function fmtSecs(s: number): string {
   const m = Math.floor(s / 60);
@@ -66,7 +67,7 @@ export function DurationTimerInCard({
         elapsedRef.current += 1;
         if (r <= 1) {
           clearTick();
-          try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch { /* no haptics */ }
+          feedback("timer", { sound: false });
           return 0;
         }
         return r - 1;

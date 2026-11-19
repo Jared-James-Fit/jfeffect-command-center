@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Bookmark, Check, Plus, Repeat2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { feedback } from "@/lib/feedback";
+import { HapticTap } from "@/components/haptic-tap";
 import { UserAvatar } from "@/components/user-avatar";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/lib/auth";
@@ -21,13 +23,6 @@ import {
 const HOLD_MS = 420;
 /** A sheet with a text box sits on the iPhone keyboard, never under it. */
 const KEYBOARD_SAFE = { bottom: "var(--keyboard-inset, 0px)" } as const;
-const buzz = (ms: number) => {
-  try {
-    navigator.vibrate?.(ms);
-  } catch {
-    /* no haptics here */
-  }
-};
 
 /**
  * 🔁 under a post. Tap: it's reposted to your followers and an "Add a note"
@@ -62,7 +57,7 @@ export function RepostButton({ post, onReposted, stacked = false }: { post: Comm
       return;
     }
     setPop((n) => n + 1);
-    buzz(8);
+    feedback("repost");
     repost.mutate({ post, on: true }, { onError: fail });
     if (onReposted) onReposted();
     else toast("Reposted", { action: { label: "Add a note", onClick: () => setNoteOpen(true) } });
@@ -75,7 +70,7 @@ export function RepostButton({ post, onReposted, stacked = false }: { post: Comm
       aria-pressed={mine}
       aria-label={`${mine ? "Reposted. Tap to undo" : "Repost to your followers"}${count ? `, ${count}` : ""}`}
       className={cn(
-        "flex min-w-11 shrink-0 select-none items-center justify-center rounded-full [touch-action:manipulation] hover:bg-muted active:scale-90",
+        "relative flex min-w-11 shrink-0 select-none items-center justify-center rounded-full [touch-action:manipulation] hover:bg-muted active:scale-90",
         stacked ? "min-h-11 flex-col gap-0.5 px-1 py-1" : "h-11 gap-1 px-2",
       )}
       data-repost-button={mine ? "on" : "off"}
@@ -84,6 +79,7 @@ export function RepostButton({ post, onReposted, stacked = false }: { post: Comm
         <Repeat2 className={cn(stacked ? "h-[28px] w-[28px]" : "h-[23px] w-[23px]", mine ? "text-emerald-500" : stacked ? "text-foreground" : "text-foreground/80")} strokeWidth={mine ? 2.6 : 2} />
       </span>
       {count > 0 && <span className={cn(stacked ? "text-[12px]" : "text-[13px]", "font-bold tabular-nums", mine ? "text-emerald-600 dark:text-emerald-400" : stacked ? "text-foreground" : "text-muted-foreground")}>{count}</span>}
+      <HapticTap />
     </button>
     {/* beside the button, never inside it: taps in the sheet must not reach the button */}
     {noteOpen && <RepostNoteEditor post={post} onClose={() => setNoteOpen(false)} />}
@@ -117,7 +113,7 @@ export function SaveButton({ post, stacked = false }: { post: CommunityPost; sta
 
   const doSave = () => {
     setPop((n) => n + 1);
-    buzz(8);
+    feedback("save");
     // the first time, say it's private (remembered on the account)
     const first = !hints?.includes("saved_private");
     if (first) markHint("saved_private");
@@ -158,7 +154,7 @@ export function SaveButton({ post, stacked = false }: { post: CommunityPost; sta
           timer.current = window.setTimeout(() => {
             timer.current = null;
             held.current = true;
-            buzz(10);
+            feedback("press");
             setPicker(true);
           }, HOLD_MS);
         }}
@@ -181,12 +177,13 @@ export function SaveButton({ post, stacked = false }: { post: CommunityPost; sta
         }}
         aria-pressed={saved}
         aria-label={saved ? "Saved. Tap to remove, hold for albums" : "Save. Hold to pick an album"}
-        className="grid h-11 w-11 shrink-0 select-none place-items-center rounded-full [-webkit-touch-callout:none] [touch-action:manipulation] hover:bg-muted active:scale-90"
+        className="relative grid h-11 w-11 shrink-0 select-none place-items-center rounded-full [-webkit-touch-callout:none] [touch-action:manipulation] hover:bg-muted active:scale-90"
         data-save-button={saved ? "on" : "off"}
       >
         <span key={pop} className={cn("inline-flex", pop > 0 && "repost-spin")}>
           <Bookmark className={cn(stacked ? "h-[27px] w-[27px]" : "h-[23px] w-[23px]", saved ? "fill-foreground text-foreground" : stacked ? "text-foreground" : "text-foreground/80")} strokeWidth={2} />
         </span>
+        <HapticTap />
       </button>
       <AlbumPickerSheet post={post} open={picker} onOpenChange={setPicker} />
     </>

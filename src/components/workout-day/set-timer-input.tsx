@@ -25,6 +25,7 @@ import {
   fmtMMSS,
   parseMMSS,
 } from "@/lib/set-timer-store";
+import { feedback } from "@/lib/feedback";
 
 export function SetTimerInput({
   timerKey,
@@ -83,11 +84,8 @@ export function SetTimerInput({
     if (!finished) return;
     onCommit(target, "countdown_timer");
     resetTimer(timerKey, target);
-    try {
-      if (navigator.vibrate) navigator.vibrate([180, 90, 180]);
-    } catch {
-      /* no haptics */
-    }
+    // time's up: the timer's long buzz (the set's own tock follows as it logs)
+    feedback("timer", { sound: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 

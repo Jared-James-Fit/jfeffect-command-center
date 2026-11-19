@@ -28,7 +28,7 @@ import {
 import { cn } from "@/lib/utils";
 import { markCheckinReviewed, refreshReviewQueries, reopenCheckinReview, reviewedViaLabel } from "@/lib/checkin-review";
 import { ClientFormSheet } from "@/components/forms/client-form-sheet";
-import { playAppSound } from "@/lib/app-sounds";
+import { feedback } from "@/lib/feedback";
 import { weekChip } from "@/lib/program-context";
 import {
   analyzeMessengerCheckin,
@@ -509,7 +509,7 @@ function CheckinWizard({
     setSaving(true);
     try {
       const sent = (await submit({ data: { submissionId, answers } })) as { nutrition_submission_id?: string | null } | null;
-      playAppSound("success");
+      feedback("success");
       // Close right away — refresh and the AI recap happen in the background.
       onOpenChange(false);
       setStep(0);
