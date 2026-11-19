@@ -26,6 +26,7 @@ import { ExerciseOrderBadge } from "@/components/exercise-order-badge";
 import { derivePurposeLabels, deriveWeeklyPurposeLabelByRowId, defaultRestSeconds, effectiveRestSeconds, PURPOSE_LABEL_OPTIONS, resolveCategory, purposeLabelBadgeClass, purposeLabelText } from "@/lib/exercise-metadata";
 import { validateDay } from "@/lib/pl-template-validation";
 import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shortcuts";
+import { WeekPickerSheet } from "@/components/program-editor/week-picker-sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -1643,38 +1644,47 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
     next.week_index = (weeksData[weeksData.length - 1]?.week_index ?? 0) + 1;
     setWeeksData([...weeksData, next]);
   };
+  // Deleting a week is one tap with Undo (never a browser confirm), like the member builder.
   const delWeek = (i: number) => {
-    if (!confirm("Remove this week?")) return;
+    const before = weeksData;
+    const label = weeksData[i]?.week_index ?? i + 1;
     setWeeksData(weeksData.filter((_, j) => j !== i));
     if (activeIdx >= weeksData.length - 1) setActiveIdx(Math.max(0, activeIdx - 1));
+    toast(`Deleted week ${label}`, { action: { label: "Undo", onClick: () => setWeeksData(before) }, duration: 6000 });
   };
-  const copyWeekToFuture = (i: number) => {
+  // Copy a week (or one of its days) onto the weeks the coach picks, the same
+  // picker as the member builder (WeekPickerSheet); Undo puts them back.
+  const [copyPick, setCopyPick] = useState<null | { week: number; day: number | null }>(null);
+  const copyWeekTo = (i: number, targets: number[]) => {
     const src = weeksData[i];
-    if (!src) return;
-    const next = weeksData.map((w, j) => {
-      if (j <= i) return w;
+    if (!src || !targets.length) return;
+    const before = weeksData;
+    const hit = new Set(targets);
+    setWeeksData(weeksData.map((w, j) => {
+      if (!hit.has(j) || j === i) return w;
       const c = JSON.parse(JSON.stringify(src));
       c.week_index = w.week_index;
       return c;
-    });
-    setWeeksData(next);
-    toast.success(`Copied Week ${src.week_index} → future weeks`);
+    }));
+    toast(`Copied week ${src.week_index} to ${hit.size} ${hit.size === 1 ? "week" : "weeks"}`, { action: { label: "Undo", onClick: () => setWeeksData(before) }, duration: 6000 });
   };
-  const copyDayToFuture = (weekIdx: number, dayIdx: number) => {
+  const copyDayTo = (weekIdx: number, dayIdx: number, targets: number[]) => {
     const srcDay = weeksData[weekIdx]?.days?.[dayIdx];
-    if (!srcDay) return;
-    const next = weeksData.map((w, j) => {
-      if (j <= weekIdx) return w;
+    if (!srcDay || !targets.length) return;
+    const before = weeksData;
+    const hit = new Set(targets);
+    setWeeksData(weeksData.map((w, j) => {
+      if (!hit.has(j) || j === weekIdx) return w;
       const days = [...(w.days || [])];
       const clone = JSON.parse(JSON.stringify(srcDay));
       const existing = days.findIndex((d: any) => d.day_index === srcDay.day_index);
       if (existing >= 0) days[existing] = clone;
       else days.push(clone);
       return { ...w, days };
-    });
-    setWeeksData(next);
-    toast.success(`Copied Day ${srcDay.day_index} → future weeks`);
+    }));
+    toast(`Copied day ${srcDay.day_index} to ${hit.size} ${hit.size === 1 ? "week" : "weeks"}`, { action: { label: "Undo", onClick: () => setWeeksData(before) }, duration: 6000 });
   };
+  const copyDayToFuture = (weekIdx: number, dayIdx: number) => setCopyPick({ week: weekIdx, day: dayIdx });
   // Week notes / phase: opened from the week's ⋯, edited in place.
   const [weekDetailsOpen, setWeekDetailsOpen] = useState(false);
   const weekNavSlot = useContext(WeekNavSlotContext);
@@ -1707,8 +1717,8 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
           <DropdownMenuItem onSelect={() => dupWeek(i)}>
             <Copy className="mr-2 h-4 w-4" /> Duplicate week
           </DropdownMenuItem>
-          <DropdownMenuItem disabled={i >= weeksData.length - 1} onSelect={() => copyWeekToFuture(i)}>
-            <ArrowRight className="mr-2 h-4 w-4" /> Copy to later weeks
+          <DropdownMenuItem disabled={weeksData.length < 2} onSelect={() => setCopyPick({ week: i, day: null })}>
+            <ArrowRight className="mr-2 h-4 w-4" /> Copy to weeks…
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem className="text-destructive" onSelect={() => delWeek(i)}>
@@ -1807,8 +1817,33 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
     const s = weekStats[i] ?? { days: 0, rows: 0, minutes: 0 };
     return `${s.days} day${s.days === 1 ? "" : "s"}${s.minutes > 0 ? ` · about ${fmtDur(s.minutes)}` : ""}`;
   };
+  const pickFrom = copyPick ? weeksData[copyPick.week] : null;
+  const pickDay = copyPick && copyPick.day != null ? pickFrom?.days?.[copyPick.day] : null;
+  const weekPicker = (
+    <WeekPickerSheet
+      open={!!copyPick && !!pickFrom}
+      onOpenChange={(o) => !o && setCopyPick(null)}
+      title={pickDay ? `Copy day ${pickDay.day_index} to other weeks` : `Copy week ${pickFrom?.week_index ?? ""} to other weeks`}
+      description={pickDay
+        ? `Day ${pickDay.day_index} in each week you pick becomes exactly like week ${pickFrom?.week_index}'s.`
+        : `Each week you pick becomes exactly like week ${pickFrom?.week_index}: every day, exercise and number.`}
+      groups={[{ weeks: weeksData.map((w: any, j: number) => ({ id: String(j), label: String(w.week_index ?? j + 1) })) }]}
+      fromId={String(copyPick?.week ?? -1)}
+      quick={copyPick ? [
+        { label: "Every later week", ids: weeksData.map((_: any, j: number) => j).filter((j: number) => j > copyPick.week).map(String) },
+        { label: "Every week", ids: weeksData.map((_: any, j: number) => String(j)) },
+      ] : []}
+      onConfirm={(ids) => {
+        if (!copyPick) return;
+        const targets = ids.map(Number);
+        if (copyPick.day != null) copyDayTo(copyPick.week, copyPick.day, targets);
+        else copyWeekTo(copyPick.week, targets);
+      }}
+    />
+  );
   return (
     <div className="space-y-2">
+      {weekPicker}
       {weekNavSlot ? createPortal(weekNav, weekNavSlot) : (
         <div className="sticky top-0 z-20 -mx-2 mb-2 flex items-center border-b border-border bg-background px-2 py-1 max-md:mx-0">{weekNav}</div>
       )}
@@ -1983,7 +2018,13 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSum
     copy.scheduled_date = null;
     setWeek({ ...week, days: [...days, copy] });
   };
-  const delDay = (i: number) => { if (!confirm("Remove day?")) return; setWeek({ ...week, days: days.filter((_: any, j: number) => j !== i) }); };
+  // one tap with Undo, never a browser confirm
+  const delDay = (i: number) => {
+    const before = week;
+    const name = days[i]?.title || `Day ${days[i]?.day_index ?? i + 1}`;
+    setWeek({ ...week, days: days.filter((_: any, j: number) => j !== i) });
+    toast(`Deleted ${name}`, { action: { label: "Undo", onClick: () => setWeek(before) }, duration: 6000 });
+  };
   const pasteInto = (i: number) => {
     if (!clip || clip.kind !== "rows") return;
     const d = days[i];
@@ -2140,7 +2181,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSum
                 )}
                 {onCopyDayToFuture && (
                   <DropdownMenuItem onSelect={() => onCopyDayToFuture(i)}>
-                    <ArrowRight className="mr-2 h-4 w-4" /> Copy to later weeks
+                    <ArrowRight className="mr-2 h-4 w-4" /> Copy to weeks…
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onSelect={() => dupDay(i)}>
