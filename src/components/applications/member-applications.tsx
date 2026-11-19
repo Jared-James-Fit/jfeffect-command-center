@@ -60,6 +60,7 @@ import {
   type MemberApplication,
 } from "@/lib/membership-apply";
 import { MEMBER_APPLICATIONS_KEY, useJoinFunnel, useMemberApplications } from "@/components/applications/use-member-applications";
+import { chatAge } from "@/components/messages/chat-list-row";
 
 function initials(name: string | null | undefined) {
   const parts = String(name ?? "").trim().split(/\s+/).filter(Boolean);
@@ -116,7 +117,7 @@ function ApplicationRow({ app, onOpen }: { app: MemberApplication; onOpen: () =>
         <span className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-muted-foreground">
           <span>{contactLabelOf(app.contact_method)}</span>
           <span aria-hidden>·</span>
-          <span>{ago(app.created_at)}</span>
+          <span>{chatAge(app.created_at)}</span>
           {coaching && (
             <>
               <span aria-hidden>·</span>
@@ -153,7 +154,6 @@ export function MemberApplicationsPanel({ focusId }: { focusId?: string }) {
   if (!enabled) return <p className="text-sm text-muted-foreground">Applications are for the admin login.</p>;
   return (
     <div className="space-y-6" data-member-applications>
-      <FunnelCard />
       {isLoading ? (
         <div className="space-y-3">
           <Skeleton className="h-20 w-full rounded-2xl" />
@@ -201,6 +201,7 @@ export function MemberApplicationsPanel({ focusId }: { focusId?: string }) {
           )}
         </>
       )}
+      <FunnelCard />
       <ApplicationSheet app={open} onClose={() => setOpenId(null)} />
     </div>
   );
@@ -264,7 +265,7 @@ function SendRow({
   const ig = igDmHref(app.instagram);
   const sms = smsHref(app.phone, text);
   const mail = `mailto:${encodeURIComponent(app.email)}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(text)}`;
-  const variant = (k: "instagram" | "text" | "email") => (primary === k ? "default" : "outline");
+  const variant = (k: "instagram" | "text" | "email") => (primary === k ? "secondary" : "outline");
   return (
     <div className="space-y-2">
       <div className="select-text whitespace-pre-wrap rounded-xl border border-border bg-muted/40 px-3.5 py-3 text-[15px] leading-[1.45]">{text}</div>

@@ -15,6 +15,7 @@ import { Block, PrimaryCta, Surface, TextLink } from "@/components/sales/apple";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { SOCIAL } from "@/lib/social-links";
+import { instagramHandle } from "@/lib/apply-form";
 import { trackJoin, captureSource, visitorId } from "@/lib/join-funnel";
 import { submitMembershipApplication, type ApplyResult } from "@/lib/membership-applications.functions";
 import {
@@ -222,7 +223,7 @@ export function MembershipApplication() {
   const fieldCls = "h-14 rounded-2xl bg-background px-4 text-[18px] md:text-[18px]";
 
   const choice = (field: keyof MemberAnswers, options: ReadonlyArray<{ v: string; l: string; hint?: string }>, icons?: Record<string, any>) => (
-    <div role="radiogroup" aria-labelledby={`join-${key}`} className="grid gap-2.5">
+    <div role="radiogroup" aria-labelledby={`join-q-${key}`} className="grid gap-2.5">
       {options.map((o) => {
         const on = answers[field] === o.v;
         const Icon = icons?.[o.v];
@@ -303,7 +304,7 @@ export function MembershipApplication() {
               dir === 1 ? "slide-in-from-right-2" : "slide-in-from-left-2",
             )}
           >
-            <h1 id={`join-${key}`} className="text-[26px] font-semibold leading-tight tracking-[-0.02em] md:text-[30px]">
+            <h1 id={`join-q-${key}`} className="text-[26px] font-semibold leading-tight tracking-[-0.02em] md:text-[30px]">
               {key === "full_name" ? <label htmlFor="join-full_name">{q.title(first)}</label> : q.title(first)}
             </h1>
             {q.hint && <p className="mt-1.5 text-[15px] text-muted-foreground">{q.hint}</p>}
@@ -498,7 +499,10 @@ function ContactField({
 /* ------------------------------------------------------------------ */
 
 const REACH: Record<string, (a: MemberAnswers) => string> = {
-  instagram: (a) => `He might DM you on Instagram${a.instagram.trim() ? ` (${a.instagram.trim().startsWith("@") ? a.instagram.trim() : `@${a.instagram.trim()}`})` : ""} to say hi and hear about your goals.`,
+  instagram: (a) => {
+    const h = instagramHandle(a.instagram);
+    return `He might DM you on Instagram${h ? ` (${h})` : ""} to say hi and hear about your goals.`;
+  },
   text: () => "He might text you to say hi and hear about your goals.",
   email: () => "He might email you to say hi and hear about your goals.",
 };
@@ -580,9 +584,9 @@ function JoinResult({ result, answers }: { result: ApplyResult; answers: MemberA
         </Surface>
       )}
 
-      <div className="mt-8 border-t border-border/70 pt-6 text-left">
+      <div className="mt-8 border-t border-border/70 pt-6">
         <div className="text-[15px] font-semibold">While you wait</div>
-        <div className="mt-3 flex flex-col gap-3">
+        <div className="mt-3 flex flex-col items-center gap-3">
           <TextLink href={SOCIAL.instagram.url}>See how Jared trains on Instagram</TextLink>
           <TextLink to="/about">Read Jared's story</TextLink>
         </div>

@@ -11,7 +11,7 @@
  */
 import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { BarChart3, CalendarCheck2, CheckCircle2, Dumbbell, Flame, MessageCircle, Trophy, Users } from "lucide-react";
+import { CalendarCheck2, CheckCircle2, Dumbbell, Flame, MessageCircle, Trophy, Users } from "lucide-react";
 import { SalesPageShell } from "@/components/sales/sales-page-shell";
 import { PhoneShot } from "@/components/sales/coaching-hero";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
@@ -29,19 +29,13 @@ import shotInsights from "@/assets/landing/app-insights.webp";
 export const JOIN_TO = "/join" as const;
 const CTA = "Get started free";
 
-/** What a member gets, each on the screen it lives on. */
+/** What a member gets, each on the screen it lives on (the program screen is the hero's). */
 const FEATURES: Array<{ title: string; body: string; src: string; alt: string }> = [
   {
     title: "Log every set in seconds",
     body: "Reps and RPE come from your program, so most sets only need a weight. Last time and a suggested weight sit right on the card.",
     src: shotLog,
     alt: "The workout logger: back squat, 4 × 5 at RPE 7, last time 290 lb × 5, three sets logged at 295 lb",
-  },
-  {
-    title: "A program that runs your week",
-    body: "Start a coach-written program for your goal and level, or build your own. Workouts land on the days you train.",
-    src: shotWeek,
-    alt: "The Workouts screen: this week's calendar, today's lower body workout in progress, and the program at week 7 of 13",
   },
   {
     title: "Proof it's working",
@@ -51,10 +45,15 @@ const FEATURES: Array<{ title: string; body: string; src: string; alt: string }>
   },
 ];
 
+const HERO = {
+  src: shotWeek,
+  alt: "The Workouts screen: this week's calendar, today's lower body workout in progress, and the program at week 7 of 13",
+};
+
 const ALSO = [
+  { icon: CalendarCheck2, title: "Programs that run your week", body: "Coach-written for your goal and level, or build your own. Workouts land on your training days." },
   { icon: Dumbbell, title: "2,000+ exercises", body: "Almost every one with a how-to video, so you know you're doing it right." },
   { icon: Flame, title: "Nutrition", body: "Set your calories and macros, and log what you eat." },
-  { icon: CalendarCheck2, title: "Your schedule", body: "Move a workout when life happens. Nothing gets lost." },
 ];
 
 const CREW = [
@@ -136,10 +135,10 @@ export function LandingPage() {
               {CTA}
             </PrimaryCta>
           </div>
-          <p className="mt-3 text-[13px] text-muted-foreground">A quick application · Jared approves it, usually within a day</p>
+          <p className="mt-3 text-[13px] text-muted-foreground">About a minute to apply · Jared reads every one</p>
         </div>
         <div className="relative mx-auto w-full max-w-[290px] md:max-w-[320px]">
-          <PhoneShot src={shotLog} alt={FEATURES[0]!.alt} priority className="relative z-10" />
+          <PhoneShot src={HERO.src} alt={HERO.alt} priority className="relative z-10" />
           <div aria-hidden className="pointer-events-none absolute -right-24 top-16 hidden w-[230px] opacity-90 lg:block">
             <PhoneShot src={shotInsights} alt="" />
           </div>
@@ -172,7 +171,7 @@ export function LandingPage() {
             title="Everything you need to get stronger."
             sub="One app for your program, your log and your progress. Here's what it looks like."
           />
-          <div className="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
+          <div className="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-auto md:grid md:max-w-3xl md:grid-cols-2 md:gap-10 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
             {FEATURES.map((f) => (
               <div key={f.title} className="w-[78vw] max-w-[320px] shrink-0 snap-start md:w-auto md:max-w-none">
                 <PhoneShot src={f.src} alt={f.alt} className="max-w-[230px]" />
@@ -205,17 +204,19 @@ export function LandingPage() {
             title="You don't have to train alone."
             sub="Everyone here is chasing something. Show up, log it, and people notice."
           />
-          <div className="mx-auto grid max-w-4xl gap-3 md:grid-cols-3">
+          <Group className="mx-auto max-w-2xl">
             {CREW.map(({ icon: Icon, title, body }) => (
-              <Surface key={title} className="p-5">
+              <div key={title} className="flex items-start gap-4 px-5 py-4">
                 <IconTile>
                   <Icon className="h-5 w-5" aria-hidden />
                 </IconTile>
-                <div className="mt-3 text-[17px] font-semibold">{title}</div>
-                <p className="mt-1 text-[15px] leading-relaxed text-muted-foreground">{body}</p>
-              </Surface>
+                <div className="min-w-0">
+                  <div className="text-[17px] font-semibold leading-snug">{title}</div>
+                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">{body}</p>
+                </div>
+              </div>
             ))}
-          </div>
+          </Group>
         </Block>
       </Reveal>
 
@@ -350,8 +351,7 @@ export function LandingPage() {
       <Reveal>
         <Block narrow>
           <div className="text-center">
-            <BarChart3 className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden />
-            <h2 className="mt-3 text-balance text-[30px] font-semibold leading-[1.1] tracking-[-0.02em] md:text-[40px]">
+            <h2 className="text-balance text-[30px] font-semibold leading-[1.1] tracking-[-0.02em] md:text-[40px]">
               Done guessing? Start here.
             </h2>
             <p className="mx-auto mt-3 max-w-md text-[17px] leading-relaxed text-muted-foreground">
