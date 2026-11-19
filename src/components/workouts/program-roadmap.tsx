@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Archive, Check, ChevronDown, ChevronRight, Eye, Flag, Pencil, Sparkles } from "lucide-react";
+import { Archive, Check, ChevronDown, ChevronRight, Eye, Flag, Pencil, Settings2, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,8 @@ import { isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
 import {
   blockNameParts,
   buildProgramRoadmap,
+  programShortName,
+  roadmapProgressParts,
   type ProgramRoadmap,
   type ProgramSummary,
   type RoadmapBlockView,
@@ -108,14 +110,6 @@ const fmt = (iso: string | null, f = "MMM d") => {
   return d ? format(d, f) : null;
 };
 
-function meetText(daysOut: number): string {
-  if (daysOut <= 0) return "Meet day";
-  if (daysOut === 1) return "Meet tomorrow";
-  if (daysOut < 14) return `Meet in ${daysOut} days`;
-  return `Meet in ${Math.round(daysOut / 7)} weeks`;
-}
-
-
 const weeksLabel = (n: number) => `${n} week${n === 1 ? "" : "s"}`;
 const rangeLabel = (start: string | null, end: string | null) => [fmt(start), fmt(end)].filter(Boolean).join(" – ");
 
@@ -131,14 +125,11 @@ export function ProgramRoadmapCard({
   coach = false,
   onSelectProgram,
   onManage,
-  manageHint,
   nextProgramTo,
 }: {
   roadmap: ProgramRoadmap | null;
-  /** The athlete's own program (one they started or built): the card's last row opens Manage program. */
+  /** The athlete's own program (one they started or built): Manage sits beside its name. */
   onManage?: () => void;
-  /** Beside Manage program: where the program came from ("JF Effect plan", "Built by you"). */
-  manageHint?: string | null;
   /** A finished program of their own: its last row is the way to the next one. */
   nextProgramTo?: string;
   /** Look at another program (read-only: nothing about the schedule changes). null = back to the current one. */
@@ -153,7 +144,7 @@ export function ProgramRoadmapCard({
   const [openBlock, setOpenBlock] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   if (!roadmap || !roadmap.blocks.length) return null;
-  const { blocks, programWeek, totalWeeks, meet } = roadmap;
+  const { blocks } = roadmap;
   // Another program than today's: a read-only look back (or ahead).
   const browsing = roadmap.program.id !== roadmap.defaultProgramId;
   const canPick = roadmap.programs.length > 1 && !!onSelectProgram;
@@ -162,30 +153,21 @@ export function ProgramRoadmapCard({
   const current = blocks.find((b) => b.id === roadmap.currentBlockId) ?? null;
   const currentIdx = current ? blocks.indexOf(current) : -1;
   const thisWeek = current?.weeks.find((w) => w.status === "current") ?? null;
-  const thisWeekIdx = thisWeek && current ? current.weeks.indexOf(thisWeek) : -1;
   const allDone = blocks.every((b) => b.status === "completed");
-  const notStarted = !allDone && blocks.every((b) => b.status === "upcoming");
+  const multi = blocks.length > 1;
 
-  // The headline is where you are: this block by its own name. Its number and
-  // week sit under it, and the program's own week rides on the roadmap row.
-  const headline = allDone
-    ? "Program complete"
-    : current
-      ? blockTitle(current)
-      : notStarted
-        ? `Starts ${fmt(blocks[0]?.start) ?? "soon"}`
-        : "Between blocks";
-  const position = current && !allDone
+  // The program is the heading (Manage beside it), its one progress line and
+  // bar under it; then this block by its own name and this week's focus. One
+  // week number on the card: the program's.
+  const name = programHeading(roadmap.program, !browsing);
+  const progress = roadmapProgressParts(roadmap, todayLocalISO());
+  const blockLine = current && !allDone && multi ? blockTitle(current) : null;
+  const blockWhere = current && !allDone && multi
     ? [
-        blocks.length > 1 ? `Block ${currentIdx + 1} of ${blocks.length}` : null,
-        current.status === "upcoming"
-          ? `starts ${fmt(current.start) ?? "soon"}`
-          : thisWeekIdx >= 0 ? `Week ${thisWeekIdx + 1} of ${current.weekCount}` : weeksLabel(current.weekCount),
+        `Block ${currentIdx + 1} of ${blocks.length}`,
+        current.status === "upcoming" ? `starts ${fmt(current.start) ?? "soon"}` : null,
       ].filter(Boolean).join(" · ")
     : null;
-  // The program's own week says "Program" so it never reads as a second, different
-  // "Week N of M" beside the block's; a one-block program has only the one.
-  const programWeekText = programWeek && !allDone && blocks.length > 1 ? `Program week ${programWeek} of ${totalWeeks}` : null;
   const line = !allDone ? weekLine(thisWeek, current) : null;
   const pick = (id: string) => {
     setPicking(false);
@@ -196,65 +178,60 @@ export function ProgramRoadmapCard({
 
   return (
     <Card className="overflow-hidden p-0" aria-label="Your training program">
-      {/* Where you are: the program's name, this block, its number and week, one bar. */}
       <div className="px-4 pb-4 pt-3.5">
-        <div className="flex items-center justify-between gap-3">
-          {canPick ? (
-            <button
-              type="button"
-              onClick={() => setPicking((v) => !v)}
-              aria-expanded={picking}
-              aria-label="Choose a program"
-              className="-mx-1 flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 text-left transition hover:bg-secondary/50"
-            >
-              <ProgramTitle program={roadmap.program} browsing={browsing} headline={headline} />
-              <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", picking && "rotate-180")} />
-            </button>
-          ) : (
-            <div className="flex min-w-0 items-center gap-1">
-              <ProgramTitle program={roadmap.program} browsing={browsing} headline={headline} />
-            </div>
-          )}
-          {meet ? (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold text-foreground" title={[meet.name, fmt(meet.date)].filter(Boolean).join(" · ")}>
-              <Flag className="h-3 w-3" /> {meetText(meet.daysOut)}
-            </span>
-          ) : roadmap.end && !allDone ? (
-            <span className="shrink-0 text-[12px] text-muted-foreground">Ends {fmt(roadmap.end)}</span>
-          ) : allDone && roadmap.start ? (
-            <span className="shrink-0 text-[12px] text-muted-foreground">{rangeLabel(roadmap.start, roadmap.end)}</span>
-          ) : null}
-        </div>
-        <div className="mt-1 truncate text-xl font-semibold leading-tight tracking-tight">{headline}</div>
-        {position && <div className="mt-0.5 text-[13px] text-muted-foreground tabular-nums" data-roadmap-position>{position}</div>}
+        <ActiveProgramHeader
+          name={name}
+          line={
+            progress.meet && roadmap.meet ? (
+              <span className="inline-flex flex-wrap items-center gap-x-1" title={[roadmap.meet.name, fmt(roadmap.meet.date)].filter(Boolean).join(" · ")}>
+                {progress.where && <>{progress.where} <span aria-hidden>·</span></>}
+                <Flag className="h-3 w-3" aria-hidden /> {progress.until}
+              </span>
+            ) : (
+              [progress.where, progress.until].filter(Boolean).join(" · ")
+            )
+          }
+          blocks={blocks}
+          badge={browsing && roadmap.program.status !== "active" ? (roadmap.program.status === "completed" ? "Past" : "Upcoming") : null}
+          picker={canPick ? { open: picking, onToggle: () => setPicking((v) => !v) } : undefined}
+          onManage={!browsing && !(allDone && nextProgramTo) ? onManage : undefined}
+        />
 
-        {/* The one bar: a segment per block (the program's shape), filled up to this week. */}
-        <ProgramBar blocks={blocks} />
+        {/* This block and this week: the one part worth reading every day. */}
+        {(blockLine || line) && (
+          <div className="mt-3.5" data-roadmap-now>
+            {blockLine && (
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 truncate text-[15px] font-semibold leading-snug">{blockLine}</span>
+                {blockWhere && <span className="shrink-0 text-[12px] text-muted-foreground tabular-nums" data-roadmap-position>{blockWhere}</span>}
+              </div>
+            )}
+            {line && (
+              <p className={cn("text-[14px] leading-relaxed text-foreground/75", blockLine && "mt-0.5")}>
+                {thisWeek?.label && <span className="font-medium text-foreground">{thisWeek.label}. </span>}
+                {line}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {picking && canPick && (
         <ProgramList programs={roadmap.programs} selectedId={roadmap.program.id} defaultId={roadmap.defaultProgramId} onSelect={pick} />
       )}
 
-      {/* This week: the one thing worth reading every day. */}
-      {current && !allDone && line && (
-        <div className="border-t border-border/60 px-4 py-3.5" data-roadmap-now>
-          {thisWeek?.label && <div className="text-[15px] font-semibold leading-snug">{thisWeek.label}</div>}
-          <p className={cn("text-[14px] leading-relaxed text-foreground/75", thisWeek?.label && "mt-0.5")}>{line}</p>
-        </div>
-      )}
-
-      {/* Roadmap: every block in order. Collapsed by default; always open for a finished program. */}
+      {/* Roadmap: every block in order, a tap away. Always open for a finished program. */}
       {roadmap.program.status !== "completed" && (
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={showAll}
           className="flex min-h-11 w-full items-center justify-between gap-2 border-t border-border/60 px-4 py-3 text-[13px] font-semibold transition hover:bg-secondary/40"
+          data-roadmap-toggle
         >
-          <span>{blocks.length > 1 ? (showAll ? "Hide the roadmap" : "See the full roadmap") : showAll ? "Hide the weeks" : "See all weeks"}</span>
+          <span>{multi ? "Roadmap" : "All weeks"}</span>
           <span className="inline-flex items-center gap-1 font-medium text-muted-foreground tabular-nums">
-            {programWeekText ?? (blocks.length > 1 ? `${blocks.length} blocks` : weeksLabel(blocks[0].weekCount))}
+            {multi ? `${blocks.length} blocks` : weeksLabel(blocks[0].weekCount)}
             <ChevronDown className={cn("h-4 w-4 transition-transform", showAll && "rotate-180")} />
           </span>
         </button>
@@ -276,9 +253,8 @@ export function ProgramRoadmapCard({
         </ol>
       )}
 
-      {/* A program of their own: one plain row to change, edit or end it (never a hidden ⋯);
-          a finished one: the way to the next. */}
-      {!browsing && nextProgramTo && allDone ? (
+      {/* A finished program of their own: the way to the next one. */}
+      {!browsing && nextProgramTo && allDone && (
         <Link
           to={nextProgramTo as any}
           className="flex min-h-12 w-full items-center justify-between gap-2 border-t border-border/60 px-4 py-3 text-[14px] font-semibold transition hover:bg-secondary/40"
@@ -287,20 +263,7 @@ export function ProgramRoadmapCard({
           <span>Choose your next program</span>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
         </Link>
-      ) : !browsing && onManage ? (
-        <button
-          type="button"
-          onClick={onManage}
-          className="flex min-h-12 w-full items-center justify-between gap-2 border-t border-border/60 px-4 py-3 text-left text-[14px] font-semibold transition hover:bg-secondary/40"
-          data-manage-program-row
-        >
-          <span>Manage program</span>
-          <span className="inline-flex min-w-0 items-center gap-1 font-normal text-muted-foreground">
-            {manageHint && <span className="truncate text-[13px]">{manageHint}</span>}
-            <ChevronRight className="h-4 w-4 shrink-0" />
-          </span>
-        </button>
-      ) : null}
+      )}
 
       {browsing && onSelectProgram && (
         <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2 text-[11px] text-muted-foreground">
@@ -334,28 +297,103 @@ export function ProgramRoadmapCard({
   );
 }
 
-/** A block by its own name: the roadmap's label, else the coach's name without its "Block N —". */
-function blockTitle(b: RoadmapBlockView): string {
-  return b.label ?? blockNameParts(b.name)?.name ?? b.name;
+/**
+ * The program on their calendar, as a heading: its name (the program picker
+ * when there's more than one), Manage beside it for a program that's theirs,
+ * one progress line ("Week 5 of 12 · Ends Jan 10") and one bar. The Workouts
+ * card and the Programs page's "On your calendar" share it, so the program
+ * reads the same in both.
+ */
+export function ActiveProgramHeader({
+  name,
+  eyebrow,
+  line,
+  blocks,
+  badge,
+  picker,
+  onManage,
+}: {
+  name: string;
+  /** Where it came from, in small type over the name (the Programs page). */
+  eyebrow?: string | null;
+  line?: ReactNode;
+  /** The bar: a segment per block, filled up to this week. */
+  blocks?: RoadmapBlockView[];
+  /** "Past" / "Upcoming" while looking at another program. */
+  badge?: string | null;
+  /** The name opens the program list. */
+  picker?: { open: boolean; onToggle: () => void };
+  onManage?: () => void;
+}) {
+  const title = (
+    <span className="line-clamp-2 break-words text-[17px] font-semibold leading-snug tracking-tight" data-program-name>
+      {name}
+    </span>
+  );
+  return (
+    <div>
+      {/* The name and Manage share the first row; the progress line runs the
+          card's full width under them, so it never wraps beside the button. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3">
+        <div className="min-w-0">
+          {eyebrow && <div className="mb-0.5 truncate text-[12px] font-medium text-muted-foreground" data-program-origin>{eyebrow}</div>}
+          <div className="flex items-start gap-1.5">
+            {picker ? (
+              <button
+                type="button"
+                onClick={picker.onToggle}
+                aria-expanded={picker.open}
+                aria-label="Choose a program"
+                className="-mx-1 flex min-w-0 items-start gap-1 rounded-md px-1 text-left transition hover:bg-secondary/50"
+              >
+                {title}
+                <ChevronDown className={cn("mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform", picker.open && "rotate-180")} />
+              </button>
+            ) : (
+              title
+            )}
+            {badge && (
+              <span className="mt-0.5 shrink-0 rounded bg-secondary px-1.5 text-[11px] font-medium leading-5 text-muted-foreground">{badge}</span>
+            )}
+          </div>
+        </div>
+        {onManage ? (
+          <button
+            type="button"
+            onClick={onManage}
+            // 32px to look at, 44px to tap
+            className="relative inline-flex h-8 shrink-0 items-center gap-1.5 self-start rounded-full bg-secondary px-3 text-[13px] font-semibold text-foreground transition before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-[''] hover:bg-secondary/80 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            data-manage-program
+          >
+            <Settings2 className="h-4 w-4" aria-hidden />
+            Manage
+          </button>
+        ) : (
+          <span aria-hidden />
+        )}
+        {line && (
+          <div className="col-span-2 mt-0.5 text-[13px] text-muted-foreground tabular-nums" data-program-progress>
+            {line}
+          </div>
+        )}
+      </div>
+      {blocks && blocks.length > 0 && <ProgramBar blocks={blocks} />}
+    </div>
+  );
 }
 
 /**
- * The program's name, with Past / Upcoming only when it isn't today's. A
- * one-block program is named by its block, which the headline already says,
- * so the line over it is just "Your program" rather than the name twice.
+ * What the heading calls a program: its short name ("Apex Hypertrophy", not
+ * the level and days after it); with no name at all, today's program is
+ * "Your program" and another one is named by when it started.
  */
-function ProgramTitle({ program, browsing, headline }: { program: ProgramSummary; browsing: boolean; headline: string }) {
-  const name = programName(program);
-  return (
-    <>
-      <span className="min-w-0 truncate text-[13px] font-semibold text-muted-foreground">{name === headline ? "Your program" : name}</span>
-      {browsing && program.status !== "active" && (
-        <span className="shrink-0 rounded bg-secondary px-1.5 text-[11px] font-medium leading-5 text-muted-foreground">
-          {program.status === "completed" ? "Past" : "Upcoming"}
-        </span>
-      )}
-    </>
-  );
+export function programHeading(p: ProgramSummary, isCurrent = true): string {
+  return programShortName(p.title) ?? (isCurrent ? "Your program" : programName(p));
+}
+
+/** A block by its own name: the roadmap's label, else the coach's name without its "Block N —". */
+function blockTitle(b: RoadmapBlockView): string {
+  return b.label ?? blockNameParts(b.name)?.name ?? b.name;
 }
 
 /**

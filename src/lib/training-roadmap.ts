@@ -528,6 +528,63 @@ export function programTitle(title: string | null | undefined, ownerName?: strin
 }
 
 /**
+ * A program's name as a heading: "Apex Hypertrophy — Advanced–Elite • 3-Day •
+ * Bodybuilding" → "Apex Hypertrophy". The part after the dash is only the
+ * level, days and style (it holds a "•"), which the athlete already knows and
+ * which cut the heading off on a phone; a name whose second part is words
+ * ("2027 Canadian Nationals Prep", "Girl Pop Lower Body Build — 12 Week
+ * Bodybuilding Focus") stays whole. The program list keeps the full name.
+ */
+export function programShortName(title: string | null | undefined): string | null {
+  const t = clean(title);
+  if (!t) return null;
+  const m = /^(.+?)\s+[—–-]\s+(.+)$/.exec(t);
+  if (m && /[•·]/.test(m[2]) && clean(m[1])) return clean(m[1]);
+  return t;
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "2027-01-10" → "Jan 10" (a date-only value is that calendar day). */
+function shortDay(iso: string | null | undefined): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
+  return m ? `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}` : null;
+}
+
+/** How far off a meet is, in the words the card uses. */
+export function meetWords(daysOut: number): string {
+  if (daysOut <= 0) return "Meet day";
+  if (daysOut === 1) return "Meet tomorrow";
+  if (daysOut < 14) return `Meet in ${daysOut} days`;
+  return `Meet in ${Math.round(daysOut / 7)} weeks`;
+}
+
+/**
+ * The program card's one progress line, under the program's name: the
+ * program's own week and where it ends ("Week 5 of 12 · Ends Jan 10"), the
+ * meet instead of the end when there is one ("Week 5 of 12 · Meet in 8
+ * weeks"), "Starts Nov 30 · 12 weeks" before it starts, "Finished Jan 10"
+ * after. It's the only week number on the card: the block below is named, not
+ * counted in weeks again.
+ */
+export function roadmapProgressLine(r: Pick<ProgramRoadmap, "programWeek" | "totalWeeks" | "start" | "end" | "meet">, today: string): string {
+  const p = roadmapProgressParts(r, today);
+  return [p.where, p.until].filter(Boolean).join(" · ");
+}
+
+/** The progress line in its two parts (where in the program, and until when), so a meet can carry its flag. */
+export function roadmapProgressParts(
+  r: Pick<ProgramRoadmap, "programWeek" | "totalWeeks" | "start" | "end" | "meet">,
+  today: string,
+): { where: string | null; until: string | null; meet: boolean } {
+  const weeks = r.totalWeeks ? `${r.totalWeeks} week${r.totalWeeks === 1 ? "" : "s"}` : null;
+  if (r.end && r.end < today) return { where: `Finished ${shortDay(r.end) ?? ""}`.trim(), until: null, meet: false };
+  if (r.start && r.start > today) return { where: `Starts ${shortDay(r.start) ?? "soon"}`, until: weeks, meet: false };
+  const where = r.programWeek && r.totalWeeks ? `Week ${Math.min(r.programWeek, r.totalWeeks)} of ${r.totalWeeks}` : weeks;
+  if (r.meet) return { where, until: meetWords(r.meet.daysOut), meet: true };
+  return { where, until: shortDay(r.end) ? `Ends ${shortDay(r.end)}` : null, meet: false };
+}
+
+/**
  * "Block 1 — Volume 5s/7s" → { tag: "Block 1", name: "Volume 5s/7s" }: coaches
  * number their blocks in the name, which reads better as a small tag beside
  * the block's own name than as one long line. A name without that prefix is

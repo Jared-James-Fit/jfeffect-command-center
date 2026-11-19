@@ -12,7 +12,9 @@ describe("Workouts page: program roadmap under the calendar", () => {
   });
   it("is compact by default with an expandable roadmap; one bar, no week pills on top of it", () => {
     const card = readFileSync("src/components/workouts/program-roadmap.tsx", "utf8");
-    expect(card).toContain("See the full roadmap");
+    // the roadmap folds under one row; a block opens Block View from inside it
+    expect(card).toContain("data-roadmap-toggle");
+    expect(card).toContain('{multi ? "Roadmap" : "All weeks"}');
     expect(card).toContain("Open workouts in Block View");
     expect(card).toContain("<ProgramBar blocks={blocks} />");
     expect(card).not.toContain("WeekPills");
@@ -23,10 +25,9 @@ describe("Workouts page: program roadmap under the calendar", () => {
     expect(card).toContain("`Block ${currentIdx + 1} of ${blocks.length}`");
     expect(card).toContain('<div className="h-full rounded-full bg-foreground" style={{ width: `${pct}%` }} />');
     expect(card).not.toMatch(/bg-primary|text-primary/);
-    // the program's own week rides on the roadmap row
-    expect(card).toContain(
-      "{programWeekText ?? (blocks.length > 1 ? `${blocks.length} blocks` : weeksLabel(blocks[0].weekCount))}",
-    );
+    // the program's own week is the one week number, on the line under its name
+    expect(card).toContain("const progress = roadmapProgressParts(roadmap, todayLocalISO());");
+    expect(card).not.toContain("programWeekText");
   });
   it("reads in one pass: the program's name, the week, one bar, then this block and this week", () => {
     const card = readFileSync("src/components/workouts/program-roadmap.tsx", "utf8");
@@ -38,5 +39,9 @@ describe("Workouts page: program roadmap under the calendar", () => {
     expect(card).toContain('aria-label="Choose a program"');
     expect(card).not.toContain("programs.length} programs");
     expect(card).toContain('text-[14px] leading-relaxed');
+    // the program's name is the heading (short: no level and days after it)
+    expect(card).toContain("const name = programHeading(roadmap.program, !browsing);");
+    expect(card).toContain("data-program-name");
+    expect(card).toContain("data-program-progress");
   });
 });

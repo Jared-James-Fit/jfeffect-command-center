@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { BookOpen, ChevronRight, Loader2, Pencil, Repeat, StopCircle } from "lucide-react";
+import { BookOpen, CalendarDays, ChevronRight, Loader2, Pencil, Repeat, StopCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -29,9 +29,13 @@ const PREVIEW = "Preview only: this is how it looks to them.";
 
 /**
  * Everything a member can do with the program on their calendar, in one
- * sheet: edit it (a program they built; the workouts they haven't done
- * follow), see the JF Effect plan it came from, switch to another, or end it
- * (logged workouts stay in their history). Only for a program they own.
+ * sheet (Nov 19 2026): the program's name and where it stands at the top,
+ * then what changes it safely (edit a program they built, where the upcoming
+ * workouts follow; see the JF Effect plan it came from; their training days;
+ * switch to another), and End program on its own below them, so a thumb
+ * reaching for Switch never lands on it; ending still asks first and says
+ * what stays (logged workouts stay in their history). Only for a program they
+ * own. A grip and a swipe down close it, like every sheet with one.
  */
 export function ManageProgramSheet({
   open,
@@ -40,6 +44,8 @@ export function ManageProgramSheet({
   progressLine,
   origin,
   onEnded,
+  onTrainingDays,
+  daysLabel,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -48,6 +54,10 @@ export function ManageProgramSheet({
   origin: ProgramOriginInfo;
   /** after the program ended (the sheet is already closed) */
   onEnded?: () => void;
+  /** Opens the training days editor in place; without it the row goes to Workouts' own editor. */
+  onTrainingDays?: () => void;
+  /** Their days, beside the row ("Mon, Wed, Fri"). */
+  daysLabel?: string | null;
 }) {
   const navigate = useNavigate();
   const { isImpersonating } = useClientImpersonation();
@@ -88,25 +98,36 @@ export function ManageProgramSheet({
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
           side="bottom"
-          className="max-h-[90dvh] gap-0 overflow-y-auto rounded-t-[24px] px-0 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-5 sm:mx-auto sm:max-w-lg"
+          hideCloseButton
+          swipeToClose
+          className="max-h-[90dvh] gap-0 overflow-y-auto rounded-t-[24px] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-2 sm:mx-auto sm:max-w-lg"
           data-manage-program
         >
-          <SheetHeader className="space-y-0.5 pb-4 pr-5 text-left">
-            <div className="text-[13px] font-medium text-muted-foreground">{origin.label}</div>
-            <SheetTitle className="pr-8 text-xl leading-tight">{name}</SheetTitle>
-            {progressLine ? (
-              <SheetDescription className="tabular-nums">{progressLine}</SheetDescription>
-            ) : (
-              <SheetDescription className="sr-only">Manage your program</SheetDescription>
-            )}
-          </SheetHeader>
+          <div aria-hidden className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/30" />
+          <div className="flex items-start gap-3 pb-4">
+            <SheetHeader className="min-w-0 flex-1 space-y-0.5 p-0 text-left">
+              <SheetTitle className="break-words text-[20px] font-semibold leading-tight">{name}</SheetTitle>
+              <SheetDescription className="text-[13px] tabular-nums">
+                {[origin.label, progressLine].filter(Boolean).join(" · ")}
+              </SheetDescription>
+            </SheetHeader>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="-mr-1 inline-flex h-10 shrink-0 items-center rounded-full px-3 text-[15px] font-semibold text-foreground transition hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              data-manage-done
+            >
+              Done
+            </button>
+          </div>
 
-          <div className="border-t border-border">
+          {/* What changes it, safely. */}
+          <div className="overflow-hidden rounded-2xl border border-border bg-card">
             {editable && (
               <Row
                 icon={Pencil}
                 title="Edit program"
-                sub="Your upcoming workouts change with it. Ones you've done stay."
+                sub="Upcoming workouts follow. Done ones stay."
                 onClick={() => {
                   if (isImpersonating) return toast.message(PREVIEW);
                   onOpenChange(false);
@@ -121,26 +142,46 @@ export function ManageProgramSheet({
               <Row
                 icon={BookOpen}
                 title="See the plan"
-                sub="What's in it, week by week"
                 asLink={{ to: "/portal/plans/$planId", params: { planId } }}
                 onClick={() => onOpenChange(false)}
               />
             )}
             <Row
+              icon={CalendarDays}
+              title="Training days"
+              value={daysLabel ?? null}
+              {...(onTrainingDays
+                ? {
+                    onClick: () => {
+                      onOpenChange(false);
+                      onTrainingDays();
+                    },
+                  }
+                : { asLink: { to: "/portal/workouts", search: { days: "1" } }, onClick: () => onOpenChange(false) })}
+            />
+            <Row
               icon={Repeat}
               title="Switch program"
-              sub="Pick another one. Starting it ends this one."
+              sub="Starting another one ends this one."
               asLink={{ to: "/portal/programs" }}
               onClick={() => onOpenChange(false)}
             />
-            <Row
-              icon={StopCircle}
-              title="End program"
-              sub="Take it off your calendar. Logged workouts stay."
-              destructive
-              pending={preview.isPending}
-              onClick={() => void askEnd()}
-            />
+          </div>
+
+          {/* Ending it, set apart from the rest. */}
+          <div className="mt-6" data-manage-end>
+            <div className="overflow-hidden rounded-2xl border border-border bg-card">
+              <Row
+                icon={StopCircle}
+                title="End program"
+                destructive
+                pending={preview.isPending}
+                onClick={() => void askEnd()}
+              />
+            </div>
+            <p className="mt-2 px-1 text-[12px] leading-snug text-muted-foreground">
+              Takes it off your calendar. Workouts you've logged stay in your history and PRs.
+            </p>
           </div>
         </SheetContent>
       </Sheet>
@@ -181,6 +222,7 @@ function Row({
   icon: Icon,
   title,
   sub,
+  value,
   onClick,
   asLink,
   destructive,
@@ -188,7 +230,9 @@ function Row({
 }: {
   icon: typeof Pencil;
   title: string;
-  sub: string;
+  sub?: string;
+  /** what it's set to, on the right ("Mon, Wed, Fri") */
+  value?: string | null;
   onClick?: () => void;
   asLink?: { to: string; params?: Record<string, string>; search?: Record<string, string> };
   destructive?: boolean;
@@ -198,7 +242,7 @@ function Row({
     <>
       <span
         className={cn(
-          "grid h-10 w-10 shrink-0 place-items-center rounded-full bg-muted",
+          "grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted",
           destructive ? "text-destructive" : "text-foreground",
         )}
       >
@@ -209,18 +253,19 @@ function Row({
         )}
       </span>
       <span className="min-w-0 flex-1">
-        <span className={cn("block text-[16px] font-medium", destructive && "text-destructive")}>
+        <span className={cn("block text-[15px] font-medium", destructive && "text-destructive")}>
           {title}
         </span>
-        <span className="block text-[13px] leading-snug text-muted-foreground">{sub}</span>
+        {sub && <span className="block text-[13px] leading-snug text-muted-foreground">{sub}</span>}
       </span>
+      {value && <span className="max-w-[45%] truncate text-[13px] text-muted-foreground">{value}</span>}
       {!destructive && (
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       )}
     </>
   );
   const cls =
-    "flex min-h-[64px] w-full items-center gap-3 border-b border-border px-5 py-3 text-left transition last:border-b-0 hover:bg-secondary/40 active:bg-secondary/60 disabled:opacity-60";
+    "flex min-h-14 w-full items-center gap-3 border-b border-border px-4 py-2.5 text-left transition last:border-b-0 hover:bg-secondary/40 active:bg-secondary/60 disabled:opacity-60";
   if (asLink) {
     return (
       <Link
