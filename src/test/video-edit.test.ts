@@ -229,7 +229,8 @@ describe("every place a video can be picked uses the trimmer and the pipeline", 
     expect(read("src/components/message-thread.tsx")).toContain('prepareChatFiles(Array.from(files), "coach", trimmer.request)');
     expect(read("src/components/direct-chat.tsx")).toContain('videoContext="dm"');
     expect(read("src/components/crew-chat.tsx")).toContain('videoContext="dm"');
-    expect(read("src/components/composer-plus-menu.tsx").match(/preloadVideoEngine\(\)/g)?.length).toBe(2);
+    // the engine warms on Camera, Video (the app's own camera, Nov 19 2026) and Photos & Videos
+    expect(read("src/components/composer-plus-menu.tsx").match(/preloadVideoEngine\(\)/g)?.length).toBe(3);
   });
 
   it("progress videos and check-in videos", () => {
