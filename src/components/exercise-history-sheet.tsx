@@ -25,6 +25,8 @@ import {
 import { cardioClock, cardioHistorySummary, isCardioHistory } from "@/lib/cardio-history";
 import { formatDistance, formatPace, isRunningExercise, paceSeconds, readDistanceUnit } from "@/lib/running/run-log";
 import { LiftProgressCard, type LiftHistory } from "@/components/analytics/lift-progress-card";
+import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
+import { comparesAcrossEquipment, equipmentName, type Equipment } from "@/lib/equipment/equipment";
 import { liftHistoryFromRows } from "@/lib/analytics/exercise-progress";
 import {
   dayRefOf,
@@ -124,6 +126,10 @@ export function ExerciseHistorySheet({
   const [shown, setShown] = useState(10);
   const [moreOpen, setMoreOpen] = useState(false);
   const [onlySplit, setOnlySplit] = useState(false);
+  // Which machine's sessions (only offered when there's history on two or more
+  // machines whose weights mean different things): "all" or an equipment id.
+  const [machine, setMachine] = useState<string>("all");
+  const { data: equipmentData } = useAthleteEquipment(open ? clientId : null);
   const queryClient = useQueryClient();
 
   // Realtime: refetch when this client's logged sets or day completions
@@ -193,7 +199,7 @@ export function ExerciseHistorySheet({
             actual_reps, actual_rpe, actual_rpe_num, actual_rir, mean_concentric_velocity_mps,
             completed_duration_seconds, actual_calories, actual_distance_m, actual_distance_unit,
             entered_value, entered_unit, normalized_kg, normalized_lb,
-            actual_load, actual_load_unit, load_type, is_bodyweight,
+            actual_load, actual_load_unit, load_type, is_bodyweight, equipment_id,
             pl_exercise_rows!inner(
               id, exercise_id, exercise_name_override, sort_order,
               pl_days!inner(id, day_index, title, subtitle, source_day_id, scheduled_date, pl_weeks!inner(id, week_index, pl_blocks!inner(id, name, prep_id)))
@@ -311,6 +317,10 @@ export function ExerciseHistorySheet({
     for (const g of list) g.sets.sort(historySetOrder);
     return list.map((g) => {
       const ref = dayRefOf(g.day, g.block);
+      // what it was done on: the equipment most of its sets were stamped with
+      const counts = new Map<string, number>();
+      for (const set of g.sets) if (set.equipment_id) counts.set(set.equipment_id, (counts.get(set.equipment_id) ?? 0) + 1);
+      const equipmentId = counts.size ? [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0] : null;
       return {
         ...g,
         key: `${g.block?.id ?? "?"}-${g.week?.id ?? "?"}-${g.day?.id}`,
@@ -318,11 +328,44 @@ export function ExerciseHistorySheet({
         name: workoutName(ref),
         same: sameSplit(ref, currentRef),
         hsets: g.sets.map(historySetOf),
+        equipmentId,
       };
     });
     // resolveGroupDate reads completionMap
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, showPartial, completionMap, currentDayId, currentRef]);
+
+  // The equipment these sessions were done on. A machine's name shows on its
+  // sessions; with two or more machines (weights that mean different things),
+  // a filter picks one, and the progress line and the chart read only it.
+  const equipmentById = useMemo(() => new Map(equipmentData.equipment.map((e) => [e.id, e])), [equipmentData.equipment]);
+  const machines = useMemo(() => {
+    const seen = new Map<string, { eq: Equipment; count: number }>();
+    for (const g of grouped) {
+      const eq = g.equipmentId ? equipmentById.get(g.equipmentId) : undefined;
+      if (!eq) continue;
+      const cur = seen.get(eq.id);
+      seen.set(eq.id, { eq, count: (cur?.count ?? 0) + 1 });
+    }
+    return [...seen.values()].sort((a, b) => b.count - a.count);
+  }, [grouped, equipmentById]);
+  const showEquipment = machines.length >= 2 || machines.some((m) => !comparesAcrossEquipment(m.eq.kind));
+  const machineFilter = machines.filter((m) => !comparesAcrossEquipment(m.eq.kind)).length >= 2;
+  const onMachine = machineFilter && machine !== "all" ? grouped.filter((g) => g.equipmentId === machine) : grouped;
+  // The machine a record was set on: the logged set with its reps, weight and time.
+  const recordEquipment = (best: { reps: number; load_kg: number; at: string }): string | null => {
+    const at = Date.parse(best.at);
+    const set = (rows as any[]).find((r) =>
+      r.equipment_id && r.completed_at && Number(r.actual_reps) === best.reps &&
+      Math.abs(Number(r.normalized_kg) - best.load_kg) < 0.05 &&
+      (!Number.isFinite(at) || Math.abs(Date.parse(r.completed_at) - at) < 36 * 60 * 60 * 1000));
+    const eq = set ? equipmentById.get(set.equipment_id) : undefined;
+    return eq && !comparesAcrossEquipment(eq.kind) ? equipmentName(eq) : null;
+  };
+  const loadKey = (equipmentId: string | null) => {
+    const eq = equipmentId ? equipmentById.get(equipmentId) : undefined;
+    return eq && !comparesAcrossEquipment(eq.kind) ? eq.id : null;
+  };
 
   // A treadmill walk or a bike is time, calories and effort, never load / reps / velocity.
   const cardio = useMemo(() => isCardioHistory(exerciseName, rows), [exerciseName, rows]);
@@ -330,8 +373,13 @@ export function ExerciseHistorySheet({
   // from the same sets the list below shows, in the range picked above.
   const progress = useMemo<LiftHistory | null>(
     // the open workout is on screen, not history: left out here as in the list
-    () => (cardio ? null : liftHistoryFromRows((rows as any[]).filter((r) => { const id = r?.pl_exercise_rows?.pl_days?.id; return !!id && id !== currentDayId; }), exerciseName)),
-    [cardio, rows, exerciseName, currentDayId],
+    () => (cardio ? null : liftHistoryFromRows((rows as any[]).filter((r) => {
+      const id = r?.pl_exercise_rows?.pl_days?.id;
+      if (!id || id === currentDayId) return false;
+      // one machine picked: its sets only (another machine's weights aren't the same thing)
+      return !(machineFilter && machine !== "all") || r.equipment_id === machine;
+    }), exerciseName)),
+    [cardio, rows, exerciseName, currentDayId, machineFilter, machine],
   );
   // A run reads by distance and pace instead of calories.
   const runHistory = useMemo(
@@ -445,17 +493,19 @@ export function ExerciseHistorySheet({
   // What's on screen: every session, or only the open workout's split when picked.
   const splitCount = grouped.filter((g) => g.same).length;
   const filterable = splitCount > 0 && splitCount < grouped.length;
-  const visible = filterable && onlySplit ? grouped.filter((g) => g.same) : grouped;
+  const visible = filterable && onlySplit ? onMachine.filter((g) => g.same) : onMachine;
   const currentName = currentRef ? workoutName(currentRef) : null;
   const firstAt = grouped.length ? Math.min(...grouped.map((g) => g.at).filter((t) => t > 0)) : 0;
   const thisYear = new Date().getFullYear();
   // The one progress line: like with like, within one program (exercise-history.ts).
   const progressLine = useMemo(
     () => (cardio ? null : progressSince(
-      grouped.map((g) => ({ key: g.key, at: g.at, blockId: g.block?.id ?? null, programId: g.block?.prep_id ?? null, sets: g.hsets })),
+      onMachine.map((g) => ({ key: g.key, at: g.at, blockId: g.block?.id ?? null, programId: g.block?.prep_id ?? null, sets: g.hsets, equipmentKey: loadKey(g.equipmentId) })),
       displayUnit,
     )),
-    [cardio, grouped, displayUnit],
+    // loadKey reads equipmentById
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cardio, onMachine, displayUnit, equipmentById],
   );
   // A cardio session in one line: its time, distance or calories, and the hardest RPE.
   const cardioLine = (sets: any[]): string => {
@@ -551,6 +601,25 @@ export function ExerciseHistorySheet({
           </div>
         )}
 
+        {machineFilter && (
+          <div className="-mx-6 mt-3 flex gap-1.5 overflow-x-auto px-6 pb-0.5 [scrollbar-width:none]" role="group" aria-label="Which machine" data-history-machine-filter>
+            {[{ id: "all", label: `All · ${grouped.length}` }, ...machines.filter((m) => !comparesAcrossEquipment(m.eq.kind)).map((m) => ({ id: m.eq.id, label: `${equipmentName(m.eq)} · ${m.count}` }))].map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                aria-pressed={machine === c.id}
+                onClick={() => setMachine(c.id)}
+                className={cn(
+                  "inline-flex h-9 shrink-0 items-center rounded-full border px-3 text-[13px] font-medium transition-colors",
+                  machine === c.id ? "border-foreground bg-foreground text-background" : "border-border text-foreground active:bg-muted",
+                )}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="mt-3">
           {isLoading && (
             <div className="space-y-2">
@@ -607,6 +676,9 @@ export function ExerciseHistorySheet({
                         <span className={g.same ? "font-medium text-foreground" : undefined}>{g.name}</span>
                         {g.block?.name ? ` · ${g.block.name}` : ""}
                         {g.week?.week_index ? ` · Week ${g.week.week_index}` : ""}
+                        {showEquipment && g.equipmentId && equipmentById.get(g.equipmentId) && (
+                          <span className="text-foreground" data-history-session-equipment> · on {equipmentName(equipmentById.get(g.equipmentId))}</span>
+                        )}
                       </span>
                       {cardio ? (
                         <span className="mt-1.5 block text-[15px] font-semibold tabular-nums text-foreground">{cardioLine(g.sets)}</span>
@@ -891,7 +963,13 @@ export function ExerciseHistorySheet({
                     conv={(lb) => (displayUnit === "kg" ? lb / 2.2046226218 : lb)}
                   />
                 )}
-                <ExerciseRecordsForClient clientId={clientId} exerciseId={exerciseId} exerciseName={exerciseName} unit={displayUnit} />
+                <ExerciseRecordsForClient
+                  clientId={clientId}
+                  exerciseId={exerciseId}
+                  exerciseName={exerciseName}
+                  unit={displayUnit}
+                  equipmentOf={showEquipment ? recordEquipment : undefined}
+                />
               </div>
             )}
           </section>

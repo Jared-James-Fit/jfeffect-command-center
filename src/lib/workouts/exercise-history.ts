@@ -202,6 +202,12 @@ export type HistorySession = {
   blockId: string | null;
   programId: string | null;
   sets: HistorySet[];
+  /**
+   * The machine it was done on, when a weight on it means nothing on another
+   * (equipment.ts loadEquipmentId). Two sessions on different machines are never
+   * compared; a session that never said is compared as before.
+   */
+  equipmentKey?: string | null;
 };
 
 /** "Nov 8", with the year when it isn't this year. */
@@ -241,8 +247,9 @@ export function progressSince(
   if (!top) return null;
   const samePlace = (s: HistorySession) =>
     (!!latest.blockId && s.blockId === latest.blockId) || (!!latest.programId && s.programId === latest.programId);
+  const sameMachine = (s: HistorySession) => !latest.equipmentKey || !s.equipmentKey || s.equipmentKey === latest.equipmentKey;
   const prev = sorted.slice(1).find((s) => {
-    if (!samePlace(s)) return false;
+    if (!samePlace(s) || !sameMachine(s)) return false;
     const t = topSet(s.sets);
     if (!t || t.reps !== top.reps) return false;
     if (t.rpe != null && top.rpe != null) return Math.abs(t.rpe - top.rpe) <= 1;

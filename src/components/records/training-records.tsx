@@ -181,7 +181,12 @@ export function RecentRecordsList({ data, unit, limit = 8 }: { data: RecentRecor
 }
 
 /** Exercise history: ALL-TIME BESTS per rep count + current program/block bests. */
-export function ExerciseRecordsPanel({ data, unit }: { data: ExerciseRecords; unit: "kg" | "lb" }) {
+export function ExerciseRecordsPanel({ data, unit, equipmentOf }: {
+  data: ExerciseRecords;
+  unit: "kg" | "lb";
+  /** The machine a record was set on, when its weight means nothing on another one ("on Hammer row"). */
+  equipmentOf?: (best: { reps: number; load_kg: number; at: string }) => string | null;
+}) {
   if (!data.rep_bests.length) return null;
   // A column only when it says something the one before it doesn't: in a first
   // program the all-time, program and block bests are the same weights, and
@@ -209,7 +214,12 @@ export function ExerciseRecordsPanel({ data, unit }: { data: ExerciseRecords; un
         {data.rep_bests.map((b) => (
           <div key={b.reps} className="contents">
             <div className="tabular-nums text-muted-foreground">{b.reps}</div>
-            <div className="font-semibold tabular-nums">{b.atpr ? formatLoad(b.atpr.load_kg, unit) : "—"}</div>
+            <div className="font-semibold tabular-nums">
+              {b.atpr ? formatLoad(b.atpr.load_kg, unit) : "—"}
+              {b.atpr && equipmentOf?.({ reps: b.reps, ...b.atpr }) && (
+                <span className="block truncate text-[11px] font-normal text-muted-foreground" data-record-equipment>on {equipmentOf({ reps: b.reps, ...b.atpr })}</span>
+              )}
+            </div>
             {showProgram && <div className="tabular-nums">{b.program ? formatLoad(b.program.load_kg, unit) : "—"}</div>}
             {showBlock && <div className="tabular-nums">{b.block ? formatLoad(b.block.load_kg, unit) : "—"}</div>}
           </div>
@@ -237,12 +247,13 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchWorkoutRecords, useExerciseRecords, useRecentRecords } from "@/lib/training-records";
 
-export function ExerciseRecordsForClient({ clientId, exerciseId, exerciseName, unit }: {
+export function ExerciseRecordsForClient({ clientId, exerciseId, exerciseName, unit, equipmentOf }: {
   clientId: string | null | undefined; exerciseId: string | null | undefined; exerciseName: string; unit: "kg" | "lb";
+  equipmentOf?: (best: { reps: number; load_kg: number; at: string }) => string | null;
 }) {
   const { data } = useExerciseRecords(clientId, exerciseId, exerciseName);
   if (!data || !data.rep_bests?.length) return null;
-  return <ExerciseRecordsPanel data={data} unit={unit} />;
+  return <ExerciseRecordsPanel data={data} unit={unit} equipmentOf={equipmentOf} />;
 }
 
 /** Coach workout review: the records this workout earned + its tonnage. */
