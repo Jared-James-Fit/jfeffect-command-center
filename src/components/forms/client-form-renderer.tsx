@@ -38,7 +38,7 @@ import { buildFilloutUrl } from "@/lib/fillout";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { ageClassLabel, ageClassName, prefillDetail, prefillNote, questionPrefill, sameAnswer, seasonYear, startingAnswer, TRAINING_TIME_DAYS, TRAINING_TIME_RECENT, workoutStartHours, type PrefillKey, type PrefillProfile } from "@/lib/form-prefill";
 import { sexFromAnswer } from "@/lib/athlete-sex";
-import { playAppSound } from "@/lib/app-sounds";
+import { feedback } from "@/lib/feedback";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { cn } from "@/lib/utils";
 import { choiceLayout, formProgress, requiredMark, numberIssue, numberRange, quickAnswers, quickExclusive, quickNumberLabel, quickPicked, toggleQuick } from "@/lib/form-quick";
@@ -449,7 +449,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
           else qc.invalidateQueries({ queryKey: ["athlete-sex"] });
         });
     }
-    playAppSound("success");
+    feedback("success");
     // tells the coach, and (a Nutrition Update Request) writes the AI targets + meal plan on the server
     fireAppEvent("form_submitted", submission.id);
     qc.invalidateQueries({ queryKey: ["nf-current-submission", formId, client?.id] });

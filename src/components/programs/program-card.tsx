@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Bookmark, BookmarkCheck, CalendarCheck, Loader2, Play } from "lucide-react";
+import { BadgeCheck, Bookmark, BookmarkCheck, CalendarCheck, Loader2, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ProgramFacets } from "@/lib/programs/facets";
 import { facetChips } from "@/lib/programs/facets";
@@ -56,6 +56,11 @@ export function ProgramCard({
         params={previewTo.params as any}
         className="block flex-1 p-4 transition active:bg-secondary/40"
       >
+        {/* who it's from, on top like every program card: official, a crew member, or yours */}
+        <div className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground" data-program-source="jf">
+          <BadgeCheck className="h-3.5 w-3.5" aria-hidden />
+          JF Effect plan
+        </div>
         <div className="flex items-start justify-between gap-2">
           <h3 className="line-clamp-2 min-w-0 break-words text-[16px] font-semibold leading-snug">
             {title}

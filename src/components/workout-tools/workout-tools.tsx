@@ -47,10 +47,10 @@ import {
   addTimerSeconds,
 } from "@/lib/workout-tools/timing";
 import { CALC_START, calcReducer } from "@/lib/calculator";
-import { playAppSound } from "@/lib/app-sounds";
 import { useAppSoundsOn } from "@/components/sound-toggle";
 import type { WarmupUnit } from "@/lib/final-warmup";
 import { CalculatorTool, E1rmTool, type E1rmPick } from "@/components/workout-tools/lifting-math";
+import { feedback } from "@/lib/feedback";
 
 export type ToolKey = "calc" | "e1rm" | "timer" | "stopwatch" | "tally";
 type View = ToolKey | "picker" | null;
@@ -154,15 +154,6 @@ export function toolStatus(tool: "timer" | "stopwatch" | "tally", s: ToolsState,
   return s.timer.pausedRemainingMs != null ? `Paused ${formatClock(s.timer.pausedRemainingMs)}` : null;
 }
 
-function safeVibrate(pattern: number | number[]) {
-  try {
-    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-      (navigator as Navigator & { vibrate: (p: number | number[]) => boolean }).vibrate(pattern);
-    }
-  } catch {
-    /* ignore */
-  }
-}
 
 export function WorkoutToolsProvider({ scopeKey, children }: { scopeKey: string; children: React.ReactNode }) {
   const isMobile = useIsMobile();
@@ -220,8 +211,7 @@ export function WorkoutToolsProvider({ scopeKey, children }: { scopeKey: string;
   React.useEffect(() => {
     if (timerIsDone && !doneFiredRef.current) {
       doneFiredRef.current = true;
-      safeVibrate([30, 80, 30]);
-      playAppSound("timer");
+      feedback("timer");
     }
     if (!timerIsDone) doneFiredRef.current = false;
   }, [timerIsDone]);

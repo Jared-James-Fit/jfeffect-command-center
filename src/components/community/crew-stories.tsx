@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/auth";
 import { useDirectThreads, useMessageAuthor } from "@/lib/direct-chats";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { videoLimit } from "@/lib/video-edit/limits";
+import { feedback } from "@/lib/feedback";
 
 /** How long one moment shows before the next. */
 const FRAME_MS = 5000;
@@ -1060,10 +1061,8 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare }: { post:
   }, [sent]);
 
   const like = () => {
-    if (!mine) {
-      setPop((n) => n + 1);
-      navigator.vibrate?.(8);
-    }
+    if (!mine) setPop((n) => n + 1);
+    feedback("like");
     react.mutate(mine ? null : "heart", { onError: () => toast.error("Couldn't send that") });
   };
   const deliver = async (body: string, emoji?: string) => {
@@ -1073,12 +1072,13 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare }: { post:
     if (full) return void toast.message(`You can message ${first} again once they reply`);
     if (emoji) {
       setShower({ id: Date.now(), emoji });
-      navigator.vibrate?.(10);
+      feedback("like");
     }
     input.current?.blur();
     setText("");
     try {
       const r = await send.mutateAsync({ postId: post.id, body: b, story: true });
+      if (!emoji) feedback("send");
       setSent(r.route === "direct" && r.status === "request" ? `Sent to ${first} as a message request` : `Sent to ${first}`);
     } catch (e: any) {
       setText(emoji ? "" : b);
@@ -1407,10 +1407,8 @@ function EndLoveRow({ post, viewerIsStaff, onOpen }: { post: CommunityPost; view
   const mine = post.my_reaction;
   const [pop, setPop] = useState(0);
   const give = () => {
-    if (!mine) {
-      setPop((n) => n + 1);
-      navigator.vibrate?.(8);
-    }
+    if (!mine) setPop((n) => n + 1);
+    feedback("like");
     react.mutate(mine ? null : "heart", { onError: () => toast.error("Couldn't send that") });
   };
   return (

@@ -30,10 +30,23 @@ import { useSavedPlans, type SavedPlan } from "./use-saved-plans";
 
 export type ProgramsTab = "mine" | "jf" | "crew";
 
-const TAB_LABEL: Record<ProgramsTab, string> = {
-  mine: "My programs",
-  jf: "JF Effect",
-  crew: "Crew",
+/** Each tab named for what's in it; the smallest phones get the short name. */
+const TAB_LABEL: Record<ProgramsTab, { full: string; short: string }> = {
+  mine: { full: "My programs", short: "Mine" },
+  jf: { full: "JF Effect plans", short: "JF Effect" },
+  crew: { full: "Crew programs", short: "Crew" },
+};
+
+/**
+ * What each tab is, said once under the tabs, so someone new can tell the
+ * three apart: theirs (and what's on their calendar), the coach-written
+ * plans, and what other members built and shared.
+ */
+/** One quiet line under the tabs saying what each one holds. */
+const TAB_LINE: Record<ProgramsTab, string> = {
+  mine: "What's on your calendar, and programs you built or saved.",
+  jf: "Plans written by JF Effect coaches. Pick one and start it today.",
+  crew: "Programs members built and shared. Save a copy to make it yours.",
 };
 
 /**
@@ -69,7 +82,7 @@ export function ProgramsHub({ initialTab }: { initialTab?: ProgramsTab }) {
           <Button asChild size="sm" variant="secondary">
             <Link to="/portal/programs/new">
               <Plus className="mr-1 h-4 w-4" aria-hidden />
-              Build
+              New program
             </Link>
           </Button>
         }
@@ -94,16 +107,22 @@ export function ProgramsHub({ initialTab }: { initialTab?: ProgramsTab }) {
                 aria-selected={shown === t}
                 onClick={() => setTab(t)}
                 className={cn(
-                  "h-10 rounded-lg text-[14px] font-medium transition",
+                  "h-10 min-w-0 rounded-lg px-1 text-[14px] font-medium transition",
                   shown === t
                     ? "bg-background text-foreground shadow-sm dark:bg-secondary"
                     : "text-muted-foreground",
                 )}
+                data-programs-tab={t}
               >
-                {TAB_LABEL[t]}
+                <span className="max-[359px]:hidden">{TAB_LABEL[t].full}</span>
+                <span className="hidden max-[359px]:inline">{TAB_LABEL[t].short}</span>
               </button>
             ))}
           </div>
+        )}
+
+        {!loading && (
+          <TabLine tab={shown} coachWrites={!isSelfServe} />
         )}
 
         {loading ? (
@@ -117,6 +136,16 @@ export function ProgramsHub({ initialTab }: { initialTab?: ProgramsTab }) {
         )}
       </div>
     </div>
+  );
+}
+
+function TabLine({ tab, coachWrites }: { tab: ProgramsTab; coachWrites: boolean }) {
+  return (
+    <p className="-mt-1 px-1 text-[13px] leading-snug text-muted-foreground" data-tab-line={tab}>
+      {tab === "mine" && coachWrites
+        ? "Your coach writes your training. You can still build programs of your own and share them."
+        : TAB_LINE[tab]}
+    </p>
   );
 }
 
@@ -320,7 +349,7 @@ function FindPrograms({
         <FindRow
           icon={Hammer}
           title="Build your own"
-          sub="Your week of training, from the exercise library."
+          sub="Blocks, weeks and days from the exercise library. 12 weeks to start."
           to="/portal/programs/new"
         />
       </div>

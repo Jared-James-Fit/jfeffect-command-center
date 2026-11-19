@@ -3,51 +3,26 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { GOALS, LEVELS, type ProgramDraft } from "@/lib/athlete-programs";
-import { MAX_WEEKS, MIN_WEEKS, clampWeeks } from "@/lib/athlete-program-draft";
 
-/** Weeks, goal, level and about: the same fields in both layouts. */
+/** Goal, level and about: what a program is for (its weeks and blocks are the builder's own). */
 export function ProgramDetailsFields({
   d,
-  update,
+  updateMeta,
 }: {
   d: ProgramDraft;
-  update: (fn: (x: ProgramDraft) => ProgramDraft) => void;
+  updateMeta: (patch: Partial<Omit<ProgramDraft, "plan" | "id">>) => void;
 }) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-[15px] font-medium">Weeks</div>
-          <div className="text-[13px] text-muted-foreground">The week repeats this many times.</div>
-        </div>
-        <Stepper
-          value={d.weeks}
-          min={MIN_WEEKS}
-          max={MAX_WEEKS}
-          less="Fewer weeks"
-          more="More weeks"
-          onChange={(weeks) => update((x) => ({ ...x, weeks: clampWeeks(weeks) }))}
-        />
-      </div>
-      <ChoiceRow
-        label="Goal"
-        options={GOALS}
-        value={d.goal}
-        onChange={(goal) => update((x) => ({ ...x, goal }))}
-      />
-      <ChoiceRow
-        label="Level"
-        options={LEVELS}
-        value={d.level}
-        onChange={(level) => update((x) => ({ ...x, level }))}
-      />
+      <ChoiceRow label="Goal" options={GOALS} value={d.goal} onChange={(goal) => updateMeta({ goal })} />
+      <ChoiceRow label="Level" options={LEVELS} value={d.level} onChange={(level) => updateMeta({ level })} />
       <div>
         <div className="mb-1.5 text-[15px] font-medium">
           About it <span className="font-normal text-muted-foreground">(optional)</span>
         </div>
         <Textarea
           value={d.description}
-          onChange={(e) => update((x) => ({ ...x, description: e.target.value.slice(0, 1000) }))}
+          onChange={(e) => updateMeta({ description: e.target.value.slice(0, 1000) })}
           placeholder="Who it's for, how to progress, what it's good at"
           className="min-h-[88px] text-base"
         />
