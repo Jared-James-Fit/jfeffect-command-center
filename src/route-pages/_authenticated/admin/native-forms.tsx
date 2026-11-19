@@ -102,15 +102,18 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
             ? true
             : filter === "favorites"
               ? favorites.has(f.id)
-              : filter === "mine"
+              : filter === "review"
+                ? (stats.get(f.id)?.to_review ?? 0) > 0
+                : filter === "mine"
                 ? f.owner_id === user?.id
                 : filter.startsWith("cat:")
                   ? categoryOf(f) === filter.slice(4)
                   : true,
         )
         .sort((a, b) => Number(favorites.has(b.id)) - Number(favorites.has(a.id)) || usedAt(b).localeCompare(usedAt(a))),
-    [forms, lastUsed, search, filter, favorites, user?.id],
+    [forms, lastUsed, search, filter, favorites, user?.id, stats],
   );
+  const toReviewForms = forms.filter((f) => !f.archived && (stats.get(f.id)?.to_review ?? 0) > 0).length;
   const archivedForms = useMemo(() => forms.filter((f) => f.archived).sort((a, b) => (b.archived_at ?? b.updated_at).localeCompare(a.archived_at ?? a.updated_at)), [forms]);
   const [showArchived, setShowArchived] = useState(false);
   const formSelection = useBulkSelection(useMemo(() => forms.map((form) => form.id), [forms]));
@@ -206,6 +209,8 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
           <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0" data-form-library-filters>
             {[
               { key: "all", label: "All" },
+              // only while something's waiting on the coach (unreviewed, last 30 days)
+              ...(toReviewForms || filter === "review" ? [{ key: "review", label: `To review · ${toReviewForms}` }] : []),
               { key: "favorites", label: `Favorites${favorites.size ? ` · ${favorites.size}` : ""}` },
               ...(hasOthers ? [{ key: "mine", label: "Mine" }] : []),
               ...categories.map((c) => ({ key: `cat:${c}`, label: c })),
@@ -248,7 +253,7 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
           </div>
         )}
         {forms.length > 0 && liveForms.length === 0 && (
-          <p className="py-6 text-center text-[15px] text-muted-foreground">{search ? "No form matches that." : filter === "favorites" ? "Star a form to keep it here." : "Nothing here yet."}</p>
+          <p className="py-6 text-center text-[15px] text-muted-foreground">{search ? "No form matches that." : filter === "favorites" ? "Star a form to keep it here." : filter === "review" ? "Nothing waiting on you." : "Nothing here yet."}</p>
         )}
         {liveForms.length > 0 && (
           <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card" data-form-library-list>

@@ -26,7 +26,7 @@ export type QuestionSummary =
   | { kind: "choices"; id: string; label: string; answered: number; multi: boolean; counts: ChoiceCount[] }
   | { kind: "numbers"; id: string; label: string; answered: number; average: number; min: number; max: number; unit: string | null; values: Array<{ name: string; value: number }>; scale: ChoiceCount[] | null }
   | { kind: "checklist"; id: string; label: string; answered: number; items: Array<{ label: string; ready: number; need: number; na: number }> }
-  | { kind: "text"; id: string; label: string; answered: number; entries: Array<{ name: string; at: string; text: string }> };
+  | { kind: "text"; id: string; label: string; answered: number; entries: Array<{ name: string; clientId: string; submissionId: string; at: string; text: string }> };
 
 const CHOICE_TYPES = new Set(["single_choice", "dropdown", "multi_choice"]);
 const SKIP = new Set(["file", "video", "info"]);
@@ -69,7 +69,11 @@ export function summarizeQuestion(q: SummaryQuestion, responses: SummaryResponse
 
   if (q.question_type === "number" || q.question_type === "rating") {
     const values = rows
-      .map(({ r, a }) => ({ name: r.name, value: Number(a!.value_number ?? a!.value_text) }))
+      .map(({ r, a }) => {
+        const raw = a!.value_number ?? a!.value_text;
+        // a cleared box is no answer, never a 0
+        return { name: r.name, value: raw == null || String(raw).trim() === "" ? NaN : Number(raw) };
+      })
       .filter((v) => Number.isFinite(v.value));
     if (!values.length) return { kind: "text", id: q.id, label: q.label, answered, entries: textEntries(rows) };
     const nums = values.map((v) => v.value);
@@ -119,7 +123,7 @@ export function summarizeQuestion(q: SummaryQuestion, responses: SummaryResponse
 
 function textEntries(rows: Array<{ r: SummaryResponse; a: FormAnswerRow | null }>) {
   return rows
-    .map(({ r, a }) => ({ name: r.name, at: r.at, text: formAnswerText(a).trim() }))
+    .map(({ r, a }) => ({ name: r.name, clientId: r.clientId, submissionId: r.submissionId, at: r.at, text: formAnswerText(a).trim() }))
     .sort((a, b) => b.at.localeCompare(a.at));
 }
 

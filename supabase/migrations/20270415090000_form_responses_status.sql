@@ -28,7 +28,16 @@ begin
   end if;
 end
 $$;
-alter table public.nf_assignments validate constraint nf_assignments_client_id_fkey;
+-- Validated when every row points at a client (production on Nov 19 2026: all 16
+-- did). A replay on a database with an orphaned send keeps the key NOT VALID
+-- (new rows still checked) instead of aborting the migration.
+do $$
+begin
+  alter table public.nf_assignments validate constraint nf_assignments_client_id_fkey;
+exception when foreign_key_violation then
+  raise notice 'nf_assignments has sends for clients that no longer exist; the key stays NOT VALID';
+end
+$$;
 create index if not exists nf_assignments_client_id_idx on public.nf_assignments (client_id);
 
 -- The return type changes (in_progress, responses, to_review, last_response_at

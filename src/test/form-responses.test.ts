@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { countsLine, formPeople, personState, responseCounts, sortPeople, type AssignmentRow, type SubmissionRow } from "@/lib/form-response-status";
+import { countsLine, effectiveAsk, formPeople, personState, responseCounts, sortPeople, type AssignmentRow, type SubmissionRow } from "@/lib/form-response-status";
 import { summarizeForm, summarizeQuestion, type SummaryResponse } from "@/lib/form-response-summary";
+import { formAnswerText } from "@/lib/form-answer-text";
 
 const read = (p: string) => readFileSync(p, "utf8");
 const NOW = Date.parse("2026-11-19T15:00:00Z");
@@ -75,6 +76,51 @@ describe("the library, the viewer and the database count the same", () => {
     expect(responseCounts(people, NOW)).toMatchObject({ people: 2, answered: 1, inProgress: 1, waiting: 0 });
   });
 
+  it("a form they keep updating is one copy: a nudge never asks again, a fresh copy does", () => {
+    const sentOnce = [S("m1", "kat", "2026-11-10T00:00:00Z", "reviewed")];
+    const nudged: AssignmentRow = { client_id: "kat", updated_at: "2026-11-15T00:00:00Z", created_at: "2026-11-01T00:00:00Z" };
+    // a checklist is one copy they keep changing: sending it again is a reminder
+    expect(formPeople([nudged], sentOnce, { keepsUpdating: true })[0]).toMatchObject({ state: "answered", askedAgain: false });
+    // a one-off form sent again is a new request
+    expect(formPeople([nudged], sentOnce)[0]).toMatchObject({ state: "waiting", askedAgain: true });
+    // sent for another meet: a fresh copy, asked again
+    const fresh = { ...nudged, settings: { new_copy_since: "2026-11-15T00:00:00Z" } };
+    expect(formPeople([fresh], sentOnce, { keepsUpdating: true })[0]).toMatchObject({ state: "waiting", askedAgain: true });
+    expect(effectiveAsk(fresh, { keepsUpdating: true, hasSent: true })).toBe("2026-11-15T00:00:00Z");
+    expect(effectiveAsk(nudged, { keepsUpdating: true, hasSent: false })).toBe("2026-11-15T00:00:00Z");
+    const sql = read("supabase/migrations/20270416090000_form_status_keeps_updating.sql");
+    expect(sql).toContain("case when asg.keeps_updating and sub.answered_at is not null then asg.fresh_at else asg.asked_at end as asked_at");
+    expect(sql).toContain("create or replace function public.nf_form_library_stats()");
+  });
+
+  it("the client's Forms card reads the same rule", () => {
+    const card = read("src/components/forms/client-forms-overview.tsx");
+    expect(card).toContain("formPeople(f.asg ? [f.asg] : [], f.subs, { keepsUpdating: f.allowUpdates })[0]");
+    expect(card).toContain('return i.state !== "answered";');
+    expect(read("src/components/forms/form-responses.tsx")).toContain("formPeople(assignments, submissions, { keepsUpdating: !!form?.allow_updates })");
+  });
+
+  it("a draft started before the request counts as in progress once they type into it", () => {
+    const asked: AssignmentRow = { client_id: "jm", updated_at: "2026-10-26T14:07:00Z", created_at: "2026-10-04T00:00:00Z" };
+    const oldDraft: SubmissionRow = { id: "d", client_id: "jm", status: "in_progress", created_at: "2026-10-04T00:00:00Z", updated_at: "2026-10-04T00:00:00Z" };
+    expect(formPeople([asked], [oldDraft])[0].state).toBe("waiting");
+    // saving an answer moves nf_answers.updated_at, never the submission's row
+    expect(formPeople([asked], [{ ...oldDraft, answers_touched_at: "2026-11-05T12:00:00Z" }])[0]).toMatchObject({ state: "in_progress", draft: { id: "d" } });
+    const sql = read("supabase/migrations/20270416090000_form_status_keeps_updating.sql");
+    expect(sql).toContain("coalesce(ans.at, s.created_at))) filter (where s.status = 'in_progress') as draft_at");
+    expect(read("src/components/forms/form-responses.tsx")).toContain("s.answers_touched_at = touched.get(s.id)!");
+  });
+
+  it("archived clients shown for their past answers are counted apart, so every list adds up", () => {
+    const people = formPeople(
+      [...assignments, A("gone", "2026-11-01T00:00:00Z", true)],
+      [...submissions, S("s9", "gone", "2026-10-01T00:00:00Z", "reviewed", true)],
+    ).filter((p) => p.counted || p.responses.length > 0);
+    const c = responseCounts(people, NOW);
+    expect(c.people + c.archived).toBe(people.length);
+    expect(c).toMatchObject({ people: 14, archived: 1 });
+  });
+
   it("puts what's waiting on the coach first", () => {
     const order = sortPeople(formPeople(assignments, submissions)).map((p) => p.clientId);
     expect(order[0]).toBe("f30b");
@@ -126,6 +172,15 @@ describe("Summary reads like Google Forms", () => {
     expect(text.entries.map((e: any) => e.name)).toEqual(["new", "old"]);
   });
 
+  it("a cleared number box is no answer, never a 0 or '{\"unit\":\"lb\"}'", () => {
+    expect(formAnswerText({ question_id: "w", value_number: null, value_json: { unit: "lb" } })).toBe("");
+    const w = summarizeQuestion({ id: "w", label: "Bodyweight", question_type: "number" }, [
+      R("a", [{ question_id: "w", value_number: 180, value_json: { unit: "lb" } }]),
+      R("b", [{ question_id: "w", value_number: null, value_json: { unit: "lb" } }]),
+    ]) as any;
+    expect(w).toMatchObject({ answered: 1, average: 180, min: 180 });
+  });
+
   it("leaves headings, files and videos out, in the form's order", () => {
     const out = summarizeForm(
       [
@@ -144,7 +199,7 @@ describe("wiring", () => {
   it("one viewer everywhere: the library, the editor, the chat card and Submissions", () => {
     const viewer = read("src/components/forms/form-responses.tsx");
     expect(viewer).toContain('client:client_id(full_name, archived)');
-    expect(viewer).toContain("people: sortPeople(formPeople(assignments, submissions)),");
+    expect(viewer).toContain(".filter((p) => p.counted || p.responses.length > 0)");
     for (const v of ['"summary"', '"individual"', '"table"']) expect(viewer).toContain(v);
     expect(read("src/route-pages/_authenticated/admin/native-forms.tsx")).toContain("<FormResponsesSheet formId={responsesFor.id}");
     expect(read("src/components/forms/submissions-inbox.tsx")).toContain("<FormResponsesSheet");
