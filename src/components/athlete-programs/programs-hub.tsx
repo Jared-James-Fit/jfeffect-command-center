@@ -37,6 +37,18 @@ const TAB_LABEL: Record<ProgramsTab, string> = {
 };
 
 /**
+ * What each tab is, said once under the tabs, so someone new can tell the
+ * three apart: theirs (and what's on their calendar), the coach-written
+ * plans, and what other members built and shared.
+ */
+/** One quiet line under the tabs saying what each one holds. */
+const TAB_LINE: Record<ProgramsTab, string> = {
+  mine: "What's on your calendar, and programs you built or saved.",
+  jf: "Plans written by JF Effect coaches. Pick one and start it today.",
+  crew: "Programs members built and shared. Save a copy to make it yours.",
+};
+
+/**
  * Programs: one page for every program, each tab saying where they come from.
  * My programs is what's on your calendar (with Manage: edit, switch, end) and
  * everything you built, copied or saved, in sections by source; JF Effect is
@@ -69,7 +81,7 @@ export function ProgramsHub({ initialTab }: { initialTab?: ProgramsTab }) {
           <Button asChild size="sm" variant="secondary">
             <Link to="/portal/programs/new">
               <Plus className="mr-1 h-4 w-4" aria-hidden />
-              Build
+              New program
             </Link>
           </Button>
         }
@@ -106,6 +118,10 @@ export function ProgramsHub({ initialTab }: { initialTab?: ProgramsTab }) {
           </div>
         )}
 
+        {!loading && (
+          <TabLine tab={shown} coachWrites={!isSelfServe} />
+        )}
+
         {loading ? (
           <ListSkeleton />
         ) : shown === "mine" ? (
@@ -117,6 +133,16 @@ export function ProgramsHub({ initialTab }: { initialTab?: ProgramsTab }) {
         )}
       </div>
     </div>
+  );
+}
+
+function TabLine({ tab, coachWrites }: { tab: ProgramsTab; coachWrites: boolean }) {
+  return (
+    <p className="-mt-1 px-1 text-[13px] leading-snug text-muted-foreground" data-tab-line={tab}>
+      {tab === "mine" && coachWrites
+        ? "Your coach writes your training. You can still build programs of your own and share them."
+        : TAB_LINE[tab]}
+    </p>
   );
 }
 
@@ -320,7 +346,7 @@ function FindPrograms({
         <FindRow
           icon={Hammer}
           title="Build your own"
-          sub="Your week of training, from the exercise library."
+          sub="Blocks, weeks and days from the exercise library. 12 weeks to start."
           to="/portal/programs/new"
         />
       </div>

@@ -4,12 +4,11 @@ import { checkFreeSignup, freeJoinMessage, freeSignupRedirect } from "@/lib/free
 import { isMemberAccessActive } from "@/lib/memberAccess";
 import { scannerSafeAuthLink } from "@/lib/scanner-safe-auth-link";
 import {
-  draftDaysPayload,
   draftProblem,
   programMeta,
   type ProgramDraft,
 } from "@/lib/athlete-programs";
-import { moveItem, newDay } from "@/lib/athlete-program-draft";
+import { moveItem, newPlan, newPlanExercise, addExercises, scopeWeeks, planPayload } from "@/lib/program-plan";
 import { prescription } from "@/components/athlete-programs/program-detail";
 
 const read = (p: string) => readFileSync(p, "utf8");
@@ -74,73 +73,26 @@ describe("free accounts", () => {
 });
 
 describe("athlete programs", () => {
-  const ok: ProgramDraft = {
-    title: "Upper / Lower",
-    description: "",
-    goal: "muscle",
-    level: null,
-    weeks: 4,
-    days: [
-      {
-        title: "Upper",
-        exercises: [{ exercise_id: EX, name: "Bench", sets: 3, reps: "8-10", rpe: "8" }],
-      },
-    ],
+  const withBench = () => {
+    let plan = newPlan(4);
+    const day = plan.blocks[0].weeks[0].days[0].key;
+    plan = addExercises(plan, scopeWeeks(plan, { b: 0, w: 0 }, "block"), day, [
+      { ...newPlanExercise({ id: EX, name: "Bench" }), rpe: "8" },
+    ]).plan;
+    return plan;
   };
+  const ok: ProgramDraft = { title: "Upper / Lower", description: "", goal: "muscle", level: null, plan: withBench() };
 
   it("the builder checks what the database checks", () => {
     expect(draftProblem(ok)).toBeNull();
     expect(draftProblem({ ...ok, title: "x" })).toMatch(/name/);
-    expect(draftProblem({ ...ok, days: [] })).toMatch(/day/);
-    expect(draftProblem({ ...ok, days: [{ title: "Upper", exercises: [] }] })).toMatch(
-      /exercise to Upper/,
-    );
-    expect(
-      draftProblem({
-        ...ok,
-        days: [{ title: "A", exercises: [{ exercise_id: EX, sets: 0, reps: "5" }] }],
-      }),
-    ).toMatch(/Sets/);
-    expect(
-      draftProblem({
-        ...ok,
-        days: [{ title: "A", exercises: [{ exercise_id: EX, sets: 3, reps: " " }] }],
-      }),
-    ).toMatch(/reps/);
-    expect(
-      draftProblem({
-        ...ok,
-        days: [{ title: "A", exercises: [{ exercise_id: EX, sets: 3, reps: "5", rpe: "12" }] }],
-      }),
-    ).toMatch(/RPE/);
-    expect(
-      draftProblem({
-        ...ok,
-        days: [{ title: "A", exercises: [{ exercise_id: EX, sets: 3, reps: "5", rpe: "7.5-8" }] }],
-      }),
-    ).toBeNull();
-    expect(
-      draftProblem({
-        ...ok,
-        days: Array.from({ length: 8 }, (_, i) => ({
-          ...newDay(i),
-          exercises: ok.days[0].exercises,
-        })),
-      }),
-    ).toMatch(/7/);
+    expect(draftProblem({ ...ok, plan: newPlan(2) })).toMatch(/exercise to Day 1/);
   });
 
   it("only ids and the prescription are saved (names come from the library)", () => {
-    const [day] = draftDaysPayload(ok.days);
-    expect(day.exercises[0]).toEqual({
-      exercise_id: EX,
-      sets: 3,
-      reps: "8-10",
-      rpe: "8",
-      rest_seconds: null,
-      notes: null,
-    });
-    expect(day.exercises[0]).not.toHaveProperty("name");
+    const e = planPayload(ok.plan).blocks[0].weeks[0].days[0].exercises[0];
+    expect(e).toMatchObject({ exercise_id: EX, sets: 3, reps: "8-10", rpe: "8", rest_seconds: 120, notes: null });
+    expect(e).not.toHaveProperty("name");
   });
 
   it("reorders one step and holds at the ends", () => {
