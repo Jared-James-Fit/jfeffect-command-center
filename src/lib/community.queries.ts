@@ -319,17 +319,29 @@ export function usePostActivity(postId: string | null) {
 }
 
 /** Everyone who reacted to a post (and with what), for the "who reacted" sheet. */
-export function usePostReactors(postId: string | null) {
-  return useQuery({
+export type PostLiker = { author: CommunityAuthor; is_me: boolean; emoji: string | null; created_at: string };
+
+/** Who liked a post (community_post_reactors: you, people you follow, then newest; the same people the post's "Liked by" names). */
+function postReactorsQuery(postId: string | null) {
+  return {
     queryKey: communityKeys.reactors(postId),
-    enabled: !!postId,
     staleTime: 15_000,
-    queryFn: async (): Promise<{ author: CommunityAuthor; is_me: boolean; emoji: string | null; created_at: string }[]> => {
+    queryFn: async (): Promise<PostLiker[]> => {
       const { data, error } = await db.rpc("community_post_reactors", { _post_id: postId });
       if (error) throw error;
       return (data ?? []) as any;
     },
-  });
+  };
+}
+
+export function usePostReactors(postId: string | null) {
+  return useQuery({ ...postReactorsQuery(postId), enabled: !!postId });
+}
+
+/** Start loading the Likes as the finger lands, so the sheet opens with its names (a tap's click comes ~100 ms later). */
+export function usePrefetchPostReactors() {
+  const qc = useQueryClient();
+  return useCallback((postId: string) => void qc.prefetchQuery(postReactorsQuery(postId)), [qc]);
 }
 
 /* ---- birthday posts (coach reviews, then they go out) ------------------ */

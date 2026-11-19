@@ -5,14 +5,15 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { REACTION, likedByLine, reactionEmoji, reactionKinds, reactorsSeenAs, type CommunityAuthor, type CommunityPost } from "@/lib/community";
-import { usePostReactors, usePovViewer } from "@/lib/community.queries";
+import { usePostReactors, usePovViewer, usePrefetchPostReactors } from "@/lib/community.queries";
 import { FollowButton } from "@/components/community/follow-button";
 
 /**
  * Instagram's Likes: everyone who liked a post, for anyone who can see it
- * (community_post_reactors: you first, then people you follow, then the
- * rest, newest first; never someone blocked either way, deleted or
- * deactivated). A ❤️ is the like itself, so only another reaction sits on
+ * (community_post_reactors over community_post_likers: you first, then
+ * people you follow, then the rest, newest first; never someone blocked
+ * either way, deleted or deactivated, the same people the post's "Liked by"
+ * and its count read). A ❤️ is the like itself, so only another reaction sits on
  * the photo. Tap someone for their profile; Follow right from the list.
  * Swipe down, ✕ or a tap above it closes it.
  */
@@ -107,6 +108,7 @@ export function ReactorsSheet({
  */
 export function LikedBy({ post, onOpen, highlight = false, className }: { post: CommunityPost; onOpen: () => void; highlight?: boolean; className?: string }) {
   const pov = usePovViewer();
+  const prefetch = usePrefetchPostReactors();
   const people = reactorsSeenAs(post.reactors ?? [], pov, (r) => r.user_id);
   const line = likedByLine({ ...post, reactors: people });
   if (!line) return null;
@@ -117,6 +119,7 @@ export function LikedBy({ post, onOpen, highlight = false, className }: { post: 
   return (
     <button
       type="button"
+      onPointerDown={() => prefetch(post.id)}
       onClick={onOpen}
       className={cn("flex max-w-full min-w-0 items-center gap-1.5 rounded-full py-1 pl-1.5 pr-2 text-left hover:bg-muted active:opacity-70", highlight && "engage-chip", className)}
       aria-label={`${line.lead} ${line.who}. See who liked this`}
