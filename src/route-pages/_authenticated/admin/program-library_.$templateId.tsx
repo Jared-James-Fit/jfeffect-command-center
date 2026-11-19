@@ -13,7 +13,7 @@ import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
 import { AlertTriangle, ArrowLeft, Check, Dumbbell, X, MoreHorizontal, Smartphone, Search, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight, Video, VideoOff } from "lucide-react";
 import { useEditorBack } from "@/lib/editor-back";
 import { ProgramSheet } from "@/components/program-editor/program-sheet";
-import { Table2 } from "lucide-react";
+import { Table2, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
@@ -27,6 +27,8 @@ import { derivePurposeLabels, deriveWeeklyPurposeLabelByRowId, defaultRestSecond
 import { validateDay } from "@/lib/pl-template-validation";
 import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shortcuts";
 import { WeekPickerSheet } from "@/components/program-editor/week-picker-sheet";
+import { ProgressAcrossWeeksSheet } from "@/components/program-editor/progress-across-weeks";
+import { rowAtSlot } from "@/lib/program-sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -448,6 +450,13 @@ export function useClientMaxesCtx() { return useContext(MaxesContext); }
 // exercises added and swapped from a searchable sheet instead of tiny
 // popovers and a 2,000-item dropdown. Desktop is unchanged.
 const BuilderPhoneContext = createContext(false);
+/**
+ * "Progress across weeks" on an exercise's ⋯: the week editor knows the block
+ * (it opens the sheet for a day and a place in it), the day knows its index,
+ * the row only its place. Absent where there are no weeks (a day or week template).
+ */
+const ProgressWeekContext = createContext<((dayIndex: number, pos: number) => void) | null>(null);
+const ProgressRowContext = createContext<((pos: number) => void) | null>(null);
 const useBuilderPhone = () => useContext(BuilderPhoneContext);
 const inRowMenu = (t: EventTarget | null) =>
   t instanceof Element && !!t.closest("[data-row-menu]");
@@ -1655,6 +1664,12 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
   // Copy a week (or one of its days) onto the weeks the coach picks, the same
   // picker as the member builder (WeekPickerSheet); Undo puts them back.
   const [copyPick, setCopyPick] = useState<null | { week: number; day: number | null }>(null);
+  // one exercise followed week to week (its ⋯ → Progress across weeks)
+  const [progressAt, setProgressAt] = useState<null | { week: number; dayIndex: number; pos: number }>(null);
+  const progressAtRow = progressAt ? rowAtSlot(weeksData[progressAt.week], progressAt) : null;
+  const progressName = progressAtRow
+    ? ((exercises as any[]).find((e) => e.id === progressAtRow.exercise_id)?.name ?? progressAtRow.exercise_name_override ?? "")
+    : "";
   const copyWeekTo = (i: number, targets: number[]) => {
     const src = weeksData[i];
     if (!src || !targets.length) return;
@@ -1844,6 +1859,15 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
   return (
     <div className="space-y-2">
       {weekPicker}
+      <ProgressAcrossWeeksSheet
+        open={!!progressAt}
+        onOpenChange={(o) => !o && setProgressAt(null)}
+        weeksData={weeksData}
+        setWeeksData={setWeeksData}
+        slot={progressAt}
+        activeIdx={progressAt?.week ?? activeIdx}
+        name={progressName}
+      />
       {weekNavSlot ? createPortal(weekNav, weekNavSlot) : (
         <div className="sticky top-0 z-20 -mx-2 mb-2 flex items-center border-b border-border bg-background px-2 py-1 max-md:mx-0">{weekNav}</div>
       )}
@@ -1895,6 +1919,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                 )}
                 {weekDetailsOpen && weekNotesEditor(activeIdx, () => setWeekDetailsOpen(false))}
               </div>
+              <ProgressWeekContext.Provider value={(dayIndex, pos) => setProgressAt({ week: activeIdx, dayIndex, pos })}>
               <WeekEditor
                 week={aw}
                 setWeek={(w) => { const copy = [...weeksData]; copy[activeIdx] = w; setWeeksData(copy); }}
@@ -1910,6 +1935,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                 dayScheduleStatus={dayScheduleStatus}
                 onFixCalendarIssue={onFixCalendarIssue}
               />
+              </ProgressWeekContext.Provider>
             </>
           );
         })()
@@ -1946,6 +1972,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                   </div>
                 )}
                 <div className={compact ? "px-2 pb-2" : "px-2.5 pb-3"}>
+                  <ProgressWeekContext.Provider value={(dayIndex, pos) => setProgressAt({ week: wi, dayIndex, pos })}>
                   <WeekEditor
                     week={w}
                     setWeek={(nw) => { const c = [...weeksData]; c[wi] = nw; setWeeksData(c); }}
@@ -1961,6 +1988,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                     dayScheduleStatus={dayScheduleStatus}
                     onFixCalendarIssue={onFixCalendarIssue}
                   />
+                  </ProgressWeekContext.Provider>
                 </div>
               </section>
             ))}
@@ -2232,6 +2260,11 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
   standalone?: boolean;
 }) {
   const rows = day.rows || [];
+  const progressWeek = useContext(ProgressWeekContext);
+  const progressRow = useMemo(
+    () => (progressWeek ? (pos: number) => progressWeek(Number(day.day_index ?? 0), pos) : null),
+    [progressWeek, day.day_index],
+  );
   // Derive ordered purpose labels (Primary / Secondary / Tertiary / Quaternary
   // for competition + variation rows; Assistance for everything else). Manual
   // `purpose_label` on a row wins. Recomputes whenever rows are reordered.
@@ -2416,6 +2449,7 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
         </p>
       )}
       {rows.length > 0 && (
+        <ProgressRowContext.Provider value={progressRow}>
         <div data-pb-day>
           {rows.map((r: any, i: number) => (
             <Fragment key={i}>
@@ -2495,6 +2529,7 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
             </Fragment>
           ))}
         </div>
+        </ProgressRowContext.Provider>
       )}
       <InlineAddExerciseButton
         exercises={exercises}
@@ -2858,6 +2893,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   // A phone: every field is a 44px box with 16px text (no iOS zoom on focus),
   // every button a 40px tap.
   const phone = useBuilderPhone();
+  const progressRow = useContext(ProgressRowContext);
   // Inputs follow the theme: a well on the card, never a white box in dark mode.
   const inputCls =
     "rounded-lg border border-input bg-background text-foreground shadow-none " +
@@ -3151,6 +3187,11 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           <DropdownMenuItem onSelect={() => setPickerOpen(true)}>
             <ArrowLeftRight className="mr-2 h-4 w-4" /> Swap exercise
           </DropdownMenuItem>
+          {progressRow && typeof index === "number" && (
+            <DropdownMenuItem onSelect={() => progressRow(index)} data-row-progress>
+              <TrendingUp className="mr-2 h-4 w-4" /> Progress across weeks…
+            </DropdownMenuItem>
+          )}
           {onMoveUp && (
             <DropdownMenuItem disabled={canMoveUp === false} onSelect={onMoveUp}>
               <ChevronUp className="mr-2 h-4 w-4" /> Move up

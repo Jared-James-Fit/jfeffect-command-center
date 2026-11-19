@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import type { ProgramDraft } from "@/lib/athlete-programs";
 import {
   MAX_BLOCKS,
@@ -37,57 +36,10 @@ import { ProgramDetailsFields, Stepper } from "../program-builder-parts";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "./rows";
 import { Cell } from "./cells";
 import { WeekPickerSheet } from "@/components/program-editor/week-picker-sheet";
+import { BuilderSheet } from "@/components/program-editor/builder-sheet";
 
 /** A bottom sheet the builder's way: a grip that swipes down, a title, Done. */
-export function BuilderSheet({
-  open,
-  onOpenChange,
-  title,
-  description,
-  children,
-  wide,
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  title: React.ReactNode;
-  description?: React.ReactNode;
-  children: React.ReactNode;
-  wide?: boolean;
-}) {
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="bottom"
-        hideCloseButton
-        swipeToClose
-        className={cn(
-          "max-h-[88dvh] gap-0 overflow-y-auto rounded-t-[24px] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-2 sm:mx-auto",
-          wide ? "sm:max-w-2xl" : "sm:max-w-lg",
-        )}
-      >
-        <div aria-hidden className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/30" />
-        <div className="flex items-start gap-3 pb-3">
-          <div className="min-w-0 flex-1">
-            <SheetTitle className="break-words text-[18px] font-semibold leading-tight">{title}</SheetTitle>
-            {description ? (
-              <SheetDescription className="mt-0.5 text-[13px]">{description}</SheetDescription>
-            ) : (
-              <SheetDescription className="sr-only">Options</SheetDescription>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            className="-mr-1 inline-flex h-10 shrink-0 items-center rounded-full px-3 text-[15px] font-semibold hover:bg-secondary"
-          >
-            Done
-          </button>
-        </div>
-        {children}
-      </SheetContent>
-    </Sheet>
-  );
-}
+export { BuilderSheet } from "@/components/program-editor/builder-sheet";
 
 /** A row of a grouped list: icon, words, a quieter line. */
 export function ActionRow({
