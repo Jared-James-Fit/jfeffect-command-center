@@ -9,9 +9,14 @@
  * or started it. Their state is about the LATEST request:
  *   answered    a response came in at or after it was last asked for
  *               (or it was never asked for: they opened it themselves)
- *   in_progress a draft was touched since it was last asked for, nothing sent
+ *   in_progress a draft was touched (the row or any answer on it) since it
+ *               was last asked for, nothing sent
  *   waiting     asked, and nothing since (answered before + asked again counts
  *               here, said as "Asked again")
+ * A form they keep updating (a meet checklist, `allow_updates`) is one copy:
+ * once they've sent it, sending it again is a nudge, not a new request, so
+ * only a fresh copy (`settings.new_copy_since`, sent for another meet) asks
+ * again (`effectiveAsk`).
  * Someone archived or deactivated isn't waiting on anything: they leave the
  * people count unless they answered (`counted`), and their answers stay in
  * the responses either way.
@@ -31,6 +36,8 @@ export type AssignmentRow = {
   created_at?: string | null;
   updated_at?: string | null;
   last_sent_at?: string | null;
+  /** `new_copy_since`: a form they keep updating was sent for something new (another meet). */
+  settings?: { new_copy_since?: string | null } | null;
   client?: { full_name?: string | null; archived?: boolean | null } | null;
 };
 
@@ -43,6 +50,8 @@ export type SubmissionRow = {
   answers_updated_at?: string | null;
   created_at: string;
   updated_at?: string | null;
+  /** A draft's latest answer change (nf_answers.updated_at): saving an answer never moves the submission's own row. */
+  answers_touched_at?: string | null;
   client?: { full_name?: string | null; archived?: boolean | null } | null;
 };
 
@@ -76,10 +85,10 @@ export type FormPerson = {
 const ms = (iso: string | null | undefined) => (iso ? Date.parse(iso) : NaN);
 const isSent = (s: Pick<SubmissionRow, "status">) => s.status !== "in_progress";
 export const responseAt = (s: Pick<SubmissionRow, "submitted_at" | "created_at">) => s.submitted_at ?? s.created_at;
-const draftAt = (s: Pick<SubmissionRow, "updated_at" | "created_at">) => {
-  const u = ms(s.updated_at);
-  const c = ms(s.created_at);
-  return new Date(Math.max(Number.isFinite(u) ? u : 0, Number.isFinite(c) ? c : 0)).toISOString();
+/** When a draft was last touched: the row itself, or its latest answer (the database's draft_at). */
+const draftAt = (s: Pick<SubmissionRow, "updated_at" | "created_at" | "answers_touched_at">) => {
+  const t = [s.created_at, s.updated_at, s.answers_touched_at].map(ms).filter(Number.isFinite);
+  return new Date(Math.max(0, ...t)).toISOString();
 };
 export const isReviewed = (s: Pick<SubmissionRow, "status" | "reviewed_at">) => !!s.reviewed_at || s.status === "reviewed";
 
@@ -93,8 +102,22 @@ export function personState(i: { askedAt: string | null; answeredAt: string | nu
   return null;
 }
 
+/**
+ * When it was last asked for, as far as answering goes: the send itself, except
+ * that a form they keep updating which they've already sent is only asked again
+ * by a fresh copy (`new_copy_since`), never by a nudge.
+ */
+export function effectiveAsk(a: AssignmentRow | null | undefined, opts: { keepsUpdating?: boolean; hasSent?: boolean } = {}): string | null {
+  if (!a) return null;
+  if (opts.keepsUpdating && opts.hasSent) {
+    const fresh = a.settings?.new_copy_since;
+    return typeof fresh === "string" && Number.isFinite(Date.parse(fresh)) ? fresh : null;
+  }
+  return a.updated_at ?? a.created_at ?? null;
+}
+
 /** Everyone a form is out with, one row each, from its assignments and submissions. */
-export function formPeople(assignments: AssignmentRow[], submissions: SubmissionRow[]): FormPerson[] {
+export function formPeople(assignments: AssignmentRow[], submissions: SubmissionRow[], opts: { keepsUpdating?: boolean } = {}): FormPerson[] {
   const byClient = new Map<string, { asg?: AssignmentRow; subs: SubmissionRow[]; name: string; inactive: boolean }>();
   const entry = (id: string, client: { full_name?: string | null; archived?: boolean | null } | null | undefined) => {
     let e = byClient.get(id);
@@ -112,8 +135,8 @@ export function formPeople(assignments: AssignmentRow[], submissions: Submission
 
   const out: FormPerson[] = [];
   for (const [clientId, e] of byClient) {
-    const askedAt = e.asg ? e.asg.updated_at ?? e.asg.created_at ?? null : null;
     const sent = e.subs.filter(isSent).sort((a, b) => ms(responseAt(b)) - ms(responseAt(a)));
+    const askedAt = effectiveAsk(e.asg, { keepsUpdating: opts.keepsUpdating, hasSent: sent.length > 0 });
     const drafts = e.subs.filter((s) => !isSent(s)).sort((a, b) => ms(draftAt(b)) - ms(draftAt(a)));
     const answeredAt = sent[0] ? responseAt(sent[0]) : null;
     const latestDraft = drafts[0] ? draftAt(drafts[0]) : null;
@@ -144,15 +167,20 @@ export type ResponseCounts = {
   responses: number;
   /** Responses not reviewed yet, from the last RESPONSE_REVIEW_DAYS. */
   toReview: number;
+  /** Archived / deactivated clients shown for their past answers but out of the people counts. */
+  archived: number;
 };
 
 export function responseCounts(people: FormPerson[], now = Date.now()): ResponseCounts {
-  const c: ResponseCounts = { people: people.length, answered: 0, inProgress: 0, waiting: 0, responses: 0, toReview: 0 };
+  const c: ResponseCounts = { people: people.length, answered: 0, inProgress: 0, waiting: 0, responses: 0, toReview: 0, archived: 0 };
   c.people = 0;
   for (const p of people) {
     c.responses += p.responses.length;
     c.toReview += p.responses.filter((r) => !r.reviewed && now - ms(r.at) <= RESPONSE_REVIEW_DAYS * 86_400_000).length;
-    if (!p.counted) continue;
+    if (!p.counted) {
+      c.archived++;
+      continue;
+    }
     c.people++;
     if (p.state === "answered") c.answered++;
     else if (p.state === "in_progress") c.inProgress++;

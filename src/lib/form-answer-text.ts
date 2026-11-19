@@ -29,6 +29,8 @@ export function formAnswerText(a: FormAnswerRow | null | undefined): string {
   }
   // Checkboxes, meets (by their own line), a ranking (in order): the same reading as follow-up questions.
   if (Array.isArray(j)) return answerAsText({ value_json: j });
+  // a number box cleared keeps only its unit ({ unit: "lb" }): no answer, never '{"unit":"lb"}'
+  if (j && typeof j === "object" && Object.keys(j).every((k) => k === "unit")) return "";
   if (j && typeof j === "object") return JSON.stringify(j);
   return j != null ? String(j) : "";
 }

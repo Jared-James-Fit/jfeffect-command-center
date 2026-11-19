@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { answeredQuestions, type FormAnswerRow, type FormQuestionRow } from "@/lib/form-answer-text";
+import { answeredQuestions, formAnswerText, type FormAnswerRow, type FormQuestionRow } from "@/lib/form-answer-text";
 import {
   countsLine,
   formPeople,
@@ -71,7 +71,7 @@ async function loadFormResponses(formId: string): Promise<FormResponsesData> {
       db.from("nf_questions").select("id, label, order_index, question_type, options, validation, archived_at").eq("form_id", formId).order("order_index").range(a, b),
     ),
     readAll<AssignmentRow>((a, b) =>
-      db.from("nf_assignments").select("client_id, created_at, updated_at, last_sent_at, client:client_id(full_name, archived)").eq("form_id", formId).range(a, b),
+      db.from("nf_assignments").select("client_id, created_at, updated_at, last_sent_at, settings, client:client_id(full_name, archived)").eq("form_id", formId).range(a, b),
     ),
     readAll<SubmissionRow>((a, b) =>
       db
@@ -94,10 +94,25 @@ async function loadFormResponses(formId: string): Promise<FormResponsesData> {
   }
   const answersBySubmission = new Map<string, FormAnswerRow[]>();
   for (const a of answers) answersBySubmission.set(a.submission_id, [...(answersBySubmission.get(a.submission_id) ?? []), a]);
+  // A draft is touched when an answer on it changes (saving one never moves the submission's row).
+  const draftIds = submissions.filter((s) => s.status === "in_progress").map((s) => s.id);
+  const touched = new Map<string, string>();
+  for (let i = 0; i < draftIds.length; i += 150) {
+    const ids = draftIds.slice(i, i + 150);
+    const rows = await readAll<{ submission_id: string; created_at: string | null; updated_at: string | null }>((a, b) =>
+      db.from("nf_answers").select("submission_id, created_at, updated_at").in("submission_id", ids).range(a, b),
+    );
+    for (const r of rows) {
+      const at = [r.updated_at, r.created_at].filter(Boolean).sort().pop();
+      if (at && (!touched.has(r.submission_id) || at > touched.get(r.submission_id)!)) touched.set(r.submission_id, at);
+    }
+  }
+  for (const s of submissions) if (touched.has(s.id)) s.answers_touched_at = touched.get(s.id)!;
   return {
     form: (form ?? null) as FormMeta | null,
     questions,
-    people: sortPeople(formPeople(assignments, submissions)),
+    // archived clients only once they answered: the same people the counts are about
+    people: sortPeople(formPeople(assignments, submissions, { keepsUpdating: !!form?.allow_updates })).filter((p) => p.counted || p.responses.length > 0),
     answersBySubmission,
   };
 }
@@ -146,9 +161,20 @@ export function personLine(p: FormPerson): string {
  * The viewer itself. `submissionId` opens Individual on that response; with
  * none it opens on Summary when there's more than one person, else Individual.
  */
-export function FormResponsesView({ formId, submissionId, initialView }: { formId: string; submissionId?: string | null; initialView?: View }) {
+export function FormResponsesView({
+  formId,
+  submissionId,
+  clientId,
+  initialView,
+}: {
+  formId: string;
+  submissionId?: string | null;
+  /** Open on this person (a client's profile), whether or not they've sent it. */
+  clientId?: string | null;
+  initialView?: View;
+}) {
   const { data, isLoading, isError, refetch } = useFormResponses(formId);
-  const [view, setView] = useState<View | null>(initialView ?? (submissionId ? "individual" : null));
+  const [view, setView] = useState<View | null>(initialView ?? (submissionId || clientId ? "individual" : null));
   const [focus, setFocus] = useState<{ clientId: string; submissionId: string | null } | null>(null);
 
   const people = data?.people ?? [];
@@ -157,9 +183,15 @@ export function FormResponsesView({ formId, submissionId, initialView }: { formI
   // Where it opens: the response asked for, else the first one waiting on the coach.
   useEffect(() => {
     if (!data || focus) return;
-    const target = submissionId ? people.find((p) => p.responses.some((r) => r.id === submissionId)) : null;
-    const first = target ?? people.find((p) => p.responses.length) ?? people[0];
-    if (first) setFocus({ clientId: first.clientId, submissionId: target ? submissionId! : first.responses[0]?.id ?? null });
+    const bySub = submissionId ? people.find((p) => p.responses.some((r) => r.id === submissionId)) : null;
+    const target = bySub ?? (clientId ? people.find((p) => p.clientId === clientId) : null);
+    if (!target && (submissionId || clientId)) {
+      // asked for someone who isn't here: Individual says so rather than opening another athlete
+      setFocus({ clientId: clientId ?? "", submissionId: null });
+    } else {
+      const first = target ?? people.find((p) => p.responses.length) ?? people[0];
+      if (first) setFocus({ clientId: first.clientId, submissionId: bySub ? submissionId! : first.responses[0]?.id ?? null });
+    }
     if (!view) setView(people.filter((p) => p.responses.length).length > 1 ? "summary" : "individual");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
@@ -194,6 +226,7 @@ export function FormResponsesView({ formId, submissionId, initialView }: { formI
           <span className="font-semibold">{counts.people} {counts.people === 1 ? "person" : "people"}</span>
           <span className="text-muted-foreground"> · {countsLine(counts)}</span>
           {counts.toReview > 0 && <span className="font-medium text-sky-700 dark:text-sky-400"> · {counts.toReview} to review</span>}
+          {counts.archived > 0 && <span className="text-muted-foreground"> · {counts.archived} archived</span>}
         </p>
         <div className="grid grid-cols-3 rounded-lg bg-muted p-1" role="tablist" aria-label="Responses view">
           {(["summary", "individual", "table"] as const).map((v) => (
@@ -268,10 +301,7 @@ function SummaryView({ data, onOpen }: { data: FormResponsesData; onOpen: (clien
           </p>
           <div className="divide-y divide-border rounded-xl border border-border">
             {summaries.map((s) => (
-              <QuestionSummaryBlock key={s.id} s={s} total={latest.length} onOpenPerson={(name) => {
-                const p = data.people.find((x) => x.name === name);
-                if (p) onOpen(p.clientId, p.responses[0]?.id ?? null);
-              }} />
+              <QuestionSummaryBlock key={s.id} s={s} total={latest.length} onOpenPerson={(clientId, submissionId) => onOpen(clientId, submissionId)} />
             ))}
           </div>
         </>
@@ -282,7 +312,7 @@ function SummaryView({ data, onOpen }: { data: FormResponsesData; onOpen: (clien
 
 const TEXT_PREVIEW = 3;
 
-function QuestionSummaryBlock({ s, total, onOpenPerson }: { s: QuestionSummary; total: number; onOpenPerson: (name: string) => void }) {
+function QuestionSummaryBlock({ s, total, onOpenPerson }: { s: QuestionSummary; total: number; onOpenPerson: (clientId: string, submissionId: string) => void }) {
   const [all, setAll] = useState(false);
   return (
     <section className="space-y-2 p-3.5" data-summary-question={s.kind}>
@@ -318,7 +348,7 @@ function QuestionSummaryBlock({ s, total, onOpenPerson }: { s: QuestionSummary; 
           <ul className="space-y-2">
             {(all ? s.entries : s.entries.slice(0, TEXT_PREVIEW)).map((e, i) => (
               <li key={i} className="rounded-lg bg-muted/60 px-3 py-2">
-                <button type="button" onClick={() => onOpenPerson(e.name)} className="text-[13px] font-medium text-muted-foreground hover:text-foreground">
+                <button type="button" onClick={() => onOpenPerson(e.clientId, e.submissionId)} className="text-[13px] font-medium text-muted-foreground hover:text-foreground">
                   {e.name} · {fmtDay(e.at)}
                 </button>
                 <p className="whitespace-pre-wrap break-words text-[15px] leading-snug">{e.text}</p>
@@ -372,15 +402,17 @@ function IndividualView({
   const [editing, setEditing] = useState(false);
   const [marking, setMarking] = useState(false);
   const people = data.people;
-  const idx = Math.max(0, people.findIndex((p) => p.clientId === focus.clientId));
-  const person = people[idx];
+  const found = people.findIndex((p) => p.clientId === focus.clientId);
+  const idx = Math.max(0, found);
+  const person = found >= 0 ? people[found] : null;
   const response = person?.responses.find((r) => r.id === focus.submissionId) ?? person?.responses[0] ?? null;
   const keepsUpdating = !!data.form?.allow_updates;
   const { data: ready } = useFormReadiness(response?.id, data.form?.id ?? "", { enabled: keepsUpdating && !!response });
   useEffect(() => setEditing(false), [response?.id]);
 
   const go = (d: -1 | 1) => {
-    const next = people[(idx + d + people.length) % people.length];
+    const from = found < 0 ? (d > 0 ? -1 : 0) : found;
+    const next = people[(from + d + people.length) % people.length];
     onFocus({ clientId: next.clientId, submissionId: next.responses[0]?.id ?? null });
   };
 
@@ -389,7 +421,27 @@ function IndividualView({
     return answeredQuestions(data.questions as FormQuestionRow[], data.answersBySubmission.get(response.id) ?? []);
   }, [data, response]);
 
-  if (!person) return null;
+  if (!person) {
+    // asked to open someone who isn't in this form's list: say so, never show another athlete
+    return (
+      <div className="space-y-3" data-responses-individual>
+        <p className="rounded-xl bg-muted/60 p-4 text-[15px] text-muted-foreground" data-individual-missing>
+          Nothing from them on this form. Pick someone to read theirs.
+        </p>
+        <select
+          value=""
+          onChange={(e) => {
+            const p = people.find((x) => x.clientId === e.target.value);
+            if (p) onFocus({ clientId: p.clientId, submissionId: p.responses[0]?.id ?? null });
+          }}
+          className="h-11 w-full rounded-lg border border-border bg-background px-3 text-[16px]"
+        >
+          <option value="" disabled>Pick a person</option>
+          {people.map((p) => <option key={p.clientId} value={p.clientId}>{p.name}</option>)}
+        </select>
+      </div>
+    );
+  }
 
   const markReviewed = async () => {
     if (!response) return;
@@ -432,7 +484,7 @@ function IndividualView({
           >
             {people.map((p) => (
               <option key={p.clientId} value={p.clientId}>
-                {p.name}{p.state !== "answered" ? ` · ${STATE_LABEL[p.state]}` : ""}
+                {p.name}{!p.counted ? " · Archived" : p.state !== "answered" ? ` · ${STATE_LABEL[p.state]}` : ""}
               </option>
             ))}
           </select>
@@ -513,6 +565,13 @@ function IndividualView({
         </div>
       </div>
 
+      {/* answered before, asked again since: what's on screen is the older one */}
+      {person.askedAgain && response?.id === person.responses[0]?.id && (
+        <p className="-mt-2 text-[13px] text-muted-foreground" data-individual-asked-again>
+          Asked again {fmtDay(person.askedAt)} · nothing since, so this is their last one.
+        </p>
+      )}
+
       {response && data.form?.form_type === "competition_strategy" && (
         <CompetitionPlanSummary submissionId={response.id} formId={data.form.id} />
       )}
@@ -547,7 +606,9 @@ function IndividualView({
 
 /* ─────────────────────────────── Table ─────────────────────────────── */
 
-type TableFilter = "all" | PersonState;
+type TableFilter = "all" | PersonState | "archived";
+/** What a row says: an archived client shown for their past answers is "Archived", out of the state counts. */
+const shownState = (p: FormPerson): PersonState | "archived" => (p.counted ? p.state : "archived");
 type TableSort = "newest" | "name" | "status";
 
 function TableView({ data, onOpen }: { data: FormResponsesData; onOpen: (clientId: string, sid: string | null) => void }) {
@@ -557,28 +618,27 @@ function TableView({ data, onOpen }: { data: FormResponsesData; onOpen: (clientI
     () => data.questions.filter((q) => !q.archived_at && !["file", "video", "info"].includes(q.question_type)).sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)),
     [data],
   );
-  const people = data.people.filter((p) => p.counted || p.responses.length);
-  const countOf = (s: TableFilter) => (s === "all" ? people.length : people.filter((p) => p.state === s).length);
+  const people = data.people;
+  const countOf = (s: TableFilter) => (s === "all" ? people.length : people.filter((p) => shownState(p) === s).length);
   const rows = useMemo(() => {
-    const list = people.filter((p) => filter === "all" || p.state === filter);
+    const list = people.filter((p) => filter === "all" || shownState(p) === filter);
     const when = (p: FormPerson) => p.responses[0]?.at ?? p.draft?.at ?? p.askedAt ?? "";
-    const rank: Record<PersonState, number> = { answered: 0, in_progress: 1, waiting: 2 };
+    const rank: Record<PersonState | "archived", number> = { answered: 0, in_progress: 1, waiting: 2, archived: 3 };
     return [...list].sort((a, b) =>
-      sort === "name" ? a.name.localeCompare(b.name) : sort === "status" ? rank[a.state] - rank[b.state] || when(b).localeCompare(when(a)) : when(b).localeCompare(when(a)),
+      sort === "name" ? a.name.localeCompare(b.name) : sort === "status" ? rank[shownState(a)] - rank[shownState(b)] || when(b).localeCompare(when(a)) : when(b).localeCompare(when(a)),
     );
   }, [people, filter, sort]);
   const textOf = (p: FormPerson, qid: string) => {
     const sid = p.responses[0]?.id;
     if (!sid) return "";
-    const a = (data.answersBySubmission.get(sid) ?? []).find((x) => x.question_id === qid);
-    return a ? answeredQuestions([{ id: qid, label: "", question_type: "short_text" }], [a])[0]?.value ?? "" : "";
+    return formAnswerText((data.answersBySubmission.get(sid) ?? []).find((x) => x.question_id === qid)).trim();
   };
 
   return (
     <div className="space-y-3" data-responses-table>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]">
-          {(["all", "answered", "in_progress", "waiting"] as const)
+          {(["all", "answered", "in_progress", "waiting", "archived"] as const)
             .filter((s) => s === "all" || countOf(s) > 0 || filter === s)
             .map((s) => (
               <button
@@ -588,7 +648,7 @@ function TableView({ data, onOpen }: { data: FormResponsesData; onOpen: (clientI
                 aria-pressed={filter === s}
                 className={cn("h-9 shrink-0 rounded-full px-3.5 text-[14px] font-medium", filter === s ? "bg-foreground text-background" : "bg-muted text-foreground")}
               >
-                {s === "all" ? "Everyone" : STATE_LABEL[s]} · {countOf(s)}
+                {s === "all" ? "Everyone" : s === "archived" ? "Archived" : STATE_LABEL[s]} · {countOf(s)}
               </button>
             ))}
         </div>
@@ -621,9 +681,9 @@ function TableView({ data, onOpen }: { data: FormResponsesData; onOpen: (clientI
                   <span className="block max-w-[150px] truncate">{p.name}</span>
                 </td>
                 <td className="whitespace-nowrap px-3 py-2.5">
-                  <span className={STATE_TONE[p.state]}>{p.askedAgain ? "Asked again" : STATE_LABEL[p.state]}</span>
+                  <span className={p.counted ? STATE_TONE[p.state] : "text-muted-foreground"}>{!p.counted ? "Archived" : p.askedAgain ? "Asked again" : STATE_LABEL[p.state]}</span>
                   <span className="block text-[12px] text-muted-foreground">
-                    {p.state === "answered"
+                    {p.state === "answered" || !p.counted
                       ? `${fmtDay(p.responses[0]?.at)}${p.responses[0] && !p.responses[0].reviewed ? " · to review" : ""}`
                       : p.state === "in_progress"
                         ? fmtDay(p.draft?.at)
@@ -655,12 +715,14 @@ export function FormResponsesSheet({
   formId,
   title,
   submissionId,
+  clientId,
   open,
   onOpenChange,
 }: {
   formId: string;
   title?: string | null;
   submissionId?: string | null;
+  clientId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -682,7 +744,7 @@ export function FormResponsesSheet({
           </div>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-4">
-          <FormResponsesView key={`${formId}:${submissionId ?? ""}`} formId={formId} submissionId={submissionId} />
+          <FormResponsesView key={`${formId}:${submissionId ?? ""}:${clientId ?? ""}`} formId={formId} submissionId={submissionId} clientId={clientId} />
         </div>
       </DialogContent>
     </Dialog>
