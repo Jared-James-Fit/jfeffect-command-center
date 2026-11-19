@@ -15,6 +15,7 @@ import { NoteEditor } from "@/components/community/note-editor";
 import { PostDetailDialog } from "@/components/community/post-detail";
 import { ReportsReviewSheet, useOpenReports } from "@/components/community/reports-review";
 import { MANAGE_TABS, manageTabFromHash, type ManageTab } from "@/lib/crew-manage";
+import { feedback } from "@/lib/feedback";
 
 /** "Today 7:00 pm" · "Tomorrow 9:00 am" · "Mon 8:00 am", in the coach's own clock. */
 export function whenLabel(iso: string, now: Date = new Date()): string {
@@ -132,6 +133,7 @@ export function AdminCommunityHub() {
         attach={{ initial: null, key: "new-post" }}
         onSave={async (body, poll, media) => {
           const r = await act.mutateAsync({ kind: "note", body, poll, media });
+          feedback("post");
           toast.success(poll ? "Poll posted to the community" : "Posted to the community");
           return r?.id;
         }}

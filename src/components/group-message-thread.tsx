@@ -60,7 +60,7 @@ import {
 import { SaveMediaButton, useSaveMedia } from "@/components/messages/save-media";
 import { saveItemsOf, saveLabel, warmSave } from "@/lib/save-media";
 import { toast } from "sonner";
-import { haptic } from "@/platform/haptics";
+import { feedback } from "@/lib/feedback";
 import { doubleTapAdds, useLikePops } from "@/lib/message-like";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { listenChannel } from "@/lib/realtime-channel";
@@ -402,7 +402,7 @@ export function GroupMessageThread({
   // double-tap never takes it back (tap the heart under the message for that).
   const onDoubleTapLike = (messageId: string) => {
     if (!user || !canReact || !likePops.pop(messageId)) return;
-    haptic("light");
+    feedback("like");
     const mine = (qc.getQueryData<GroupReaction[]>(["group-reactions", groupId]) ?? reactions).filter(
       (r) => r.user_id === user.id && r.message_id === messageId,
     );
@@ -625,6 +625,8 @@ export function GroupMessageThread({
         body: text,
         attachments: [...ready, ...uploaded, ...linkAtts],
       });
+      // sent: the same tick and tap as the coach chat's
+      feedback("send");
       qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
       qc.invalidateQueries({ queryKey: ["chat-groups"] });
     } catch (e: any) {
@@ -632,6 +634,7 @@ export function GroupMessageThread({
       // Nothing posted: hand the text back so it can be retried.
       if (text) setBody((b) => b || text);
       if (ready.length) setAttachments((a) => (a.length ? a : ready));
+      feedback("error");
       toast.error(e?.message ?? "Failed to send");
     } finally {
       drafts.forEach(releaseDraft);

@@ -1,5 +1,6 @@
 import { useEffect, useRef, type MouseEvent, type PointerEvent } from "react";
 import { guardNativeHold } from "@/lib/hold-guard";
+import { feedback } from "@/lib/feedback";
 
 /**
  * Hold a chat (or right-click it) to open its menu, like iMessage.
@@ -26,7 +27,7 @@ export function useLongPress(onLongPress: () => void, ms = 450) {
   const fire = () => {
     fired.current = true;
     clear();
-    try { navigator.vibrate?.(10); } catch { /* not supported */ }
+    feedback("press");
     cb.current();
   };
 
