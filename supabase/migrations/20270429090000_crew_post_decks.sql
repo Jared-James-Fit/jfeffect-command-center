@@ -121,24 +121,39 @@ BEGIN
 END;
 $$;
 
--- Wake the writer while something's due, at most three at once.
+-- Wake the writer while something's due, at most three at once: one wake-up
+-- per job it names (two that both asked for "the next one" would race for it).
 CREATE OR REPLACE FUNCTION public.community_post_decks_kick()
 RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, extensions
 AS $$
+DECLARE
+  v_free int;
+  v_job uuid;
+  v_sent boolean := false;
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM public.community_post_decks WHERE status = 'pending' AND run_after <= now()) THEN RETURN false; END IF;
-  IF (SELECT count(*) FROM public.community_post_decks WHERE status = 'running' AND claimed_at > now() - interval '12 minutes') >= 3 THEN RETURN false; END IF;
-  PERFORM net.http_post(
-    url := 'https://project--5f1f340c-5afa-4262-90c8-1f9406568c6c.lovable.app/api/public/hooks/post-decks-tick',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'x-hook-secret', (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'cron_hook_secret' LIMIT 1)),
-    body := '{}'::jsonb,
-    timeout_milliseconds := 600000);
-  RETURN true;
+  v_free := 3 - (SELECT count(*) FROM public.community_post_decks WHERE status = 'running' AND claimed_at > now() - interval '12 minutes');
+  IF v_free <= 0 THEN RETURN false; END IF;
+  FOR v_job IN
+    SELECT id FROM public.community_post_decks
+     WHERE status = 'pending' AND run_after <= now()
+     ORDER BY priority, created_at
+     LIMIT v_free
+  LOOP
+    -- held a minute so the next kick doesn't name it again before its run claims it
+    UPDATE public.community_post_decks SET run_after = now() + interval '1 minute' WHERE id = v_job;
+    PERFORM net.http_post(
+      url := 'https://project--5f1f340c-5afa-4262-90c8-1f9406568c6c.lovable.app/api/public/hooks/post-decks-tick',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'x-hook-secret', (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'cron_hook_secret' LIMIT 1)),
+      body := jsonb_build_object('jobId', v_job),
+      timeout_milliseconds := 600000);
+    v_sent := true;
+  END LOOP;
+  RETURN v_sent;
 END;
 $$;
 

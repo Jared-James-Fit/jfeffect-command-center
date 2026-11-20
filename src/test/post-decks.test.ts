@@ -193,6 +193,8 @@ describe("decks: the editor and the writer", () => {
   it("fixes a dash in code instead of spending a draft on it", () => {
     expect(tidyText("leave 1–2 reps")).toBe("leave 1 to 2 reps");
     expect(tidyText("short — and slow")).toBe("short, and slow");
+    expect(tidyText("~~1 g/lb or more~~")).toBe("1 g/lb or more");
+    expect(tidyText("You need **less** protein")).toBe("You need *less* protein");
   });
 
   it("reads a lesson's card and diagram into the source, and never names its authors as fact", () => {
