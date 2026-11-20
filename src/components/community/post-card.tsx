@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type C
 import { LiveDot } from "@/components/live-indicator";
 import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, ChevronsLeft, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
 import { CLIP_HOLD_EVENT, InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
+import { CLIP_SCRUB_EVENT } from "@/lib/video-scrub";
 import { justGaveSound } from "@/lib/video-pool";
 import { UserAvatar } from "@/components/user-avatar";
 import { WIN_STYLE } from "@/components/community/pulse-style";
@@ -528,7 +529,16 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     },
     (clip, on) => clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: on })),
   );
-  const holding = layout === "page" && hold.holding;
+  // a finger on a clip's bar (VideoScrubber) is the same on its screen: the words and buttons step aside while it scrubs
+  const [scrubbing, setScrubbing] = useState(false);
+  useEffect(() => {
+    const a = articleRef.current;
+    if (!a) return;
+    const on = (e: Event) => setScrubbing((e as CustomEvent<boolean>).detail === true);
+    a.addEventListener(CLIP_SCRUB_EVENT, on);
+    return () => a.removeEventListener(CLIP_SCRUB_EVENT, on);
+  }, []);
+  const holding = layout === "page" && (hold.holding || scrubbing);
   // held, the whole screen is the clip (Reels'): Crew's bar steps aside too (styles.css, html[data-clip-held])
   useEffect(() => {
     if (!holding) return;

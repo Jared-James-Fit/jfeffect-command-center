@@ -7,6 +7,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { ReactionBurst, useBurst } from "@/components/community/reaction-button";
 import { useHoldToPause, useSoundFlash } from "@/components/community/clip-gestures";
 import { holdFeedVideos } from "@/components/community/inline-video";
+import { VideoScrubber } from "@/components/community/video-scrubber";
 import {
   REACTION,
   reactionTotal,
@@ -37,7 +38,8 @@ export type ReelStart = { postId: string; path: string | null };
  * workout film's sets one after another, then the next post's), down for
  * the one before. Reels' gestures: a tap is its sound (on or off, said in
  * the middle), a finger held down pauses it with everything else out of the
- * way, two taps ❤️ where the finger was; the speaker mutes too. Only the
+ * way, two taps ❤️ where the finger was; the speaker mutes too; the bar
+ * along the bottom scrubs it (VideoScrubber). Only the
  * clip on screen and the one either side hold a video (three pooled
  * elements, video-pool.ts), each buffered before it's swiped to.
  */
@@ -239,10 +241,14 @@ function ReelPage({
   const react = useReact(post, viewerIsStaff);
   const host = useRef<HTMLDivElement | null>(null);
   const vid = useRef<HTMLVideoElement | null>(null);
-  const bar = useRef<HTMLDivElement | null>(null);
   // the pooled element this page holds right now (a new one when its slot changes)
   const [attached, setAttached] = useState<HTMLVideoElement | null>(null);
   const [playing, setPlaying] = useState(false);
+  // it has shown a frame of its own: its poster stays away, even paused (held, or scrubbed)
+  const [shown, setShown] = useState(false);
+  // a finger on its bar: it holds still until it lets go (scrubbing), its words step aside a moment longer (scrubShown)
+  const [scrubbing, setScrubbing] = useState(false);
+  const [scrubShown, setScrubShown] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [failed, setFailed] = useState(false);
   // held down (Reels'): paused until the finger lets go
@@ -272,10 +278,12 @@ function ReelPage({
         "playing",
         () => {
           setPlaying(true);
+          setShown(true);
           setWaiting(false);
         },
       ],
       ["pause", () => setPlaying(false)],
+      ["seeked", () => v.readyState >= 2 && setShown(true)],
       ["waiting", () => setWaiting(true)],
       ["canplay", () => setWaiting(false)],
       ["error", () => setFailed(true)],
@@ -288,6 +296,7 @@ function ReelPage({
       vid.current = null;
       setAttached(null);
       setPlaying(false);
+      setShown(false);
     };
   }, [loaded, slot, framed]);
 
@@ -298,6 +307,7 @@ function ReelPage({
     if (v.getAttribute("src") !== url) {
       setFailed(false);
       setPlaying(false);
+      setShown(false);
       v.src = url;
     }
   }, [attached, url]);
@@ -311,7 +321,7 @@ function ReelPage({
     if (v && v.currentTime > 0) v.currentTime = 0;
   }, [active]);
 
-  const shouldPlay = active && !!attached && !!url && !paused && !failed;
+  const shouldPlay = active && !!attached && !!url && !paused && !scrubbing && !failed;
   useEffect(() => {
     const v = vid.current;
     if (!v) return;
@@ -336,24 +346,9 @@ function ReelPage({
     if (vid.current) vid.current.muted = !sound;
   }, [sound]);
 
-  // the clip's own clock under it
-  useEffect(() => {
-    if (!active || !playing) return;
-    let raf = 0;
-    const tick = () => {
-      const v = vid.current;
-      const b = bar.current;
-      if (v && b && v.duration && Number.isFinite(v.duration))
-        b.style.transform = `scaleX(${Math.min(1, v.currentTime / v.duration)})`;
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [active, playing]);
-
   // a spinner only when a clip makes you wait
   const [slow, setSlow] = useState(false);
-  const stuck = active && !playing && !paused && !failed;
+  const stuck = active && !playing && !paused && !scrubbing && !failed;
   useEffect(() => {
     if (!stuck && !waiting) {
       setSlow(false);
@@ -440,7 +435,7 @@ function ReelPage({
                   src={poster}
                   alt=""
                   draggable={false}
-                  className={cn("pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-200", playing ? "opacity-0" : "opacity-100")}
+                  className={cn("pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-200", shown ? "opacity-0" : "opacity-100")}
                 />
               )
             }
@@ -459,7 +454,7 @@ function ReelPage({
               draggable={false}
               className={cn(
                 "pointer-events-none absolute inset-0 h-full w-full object-contain transition-opacity duration-200",
-                playing ? "opacity-0" : "opacity-100",
+                shown ? "opacity-0" : "opacity-100",
               )}
             />
           )}
@@ -495,7 +490,7 @@ function ReelPage({
         // held down: out of the way until the finger lets go (Reels')
         className={cn(
           "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent pl-4 pr-20 pt-24 transition-opacity duration-200",
-          hold.holding && "opacity-0 [&_*]:pointer-events-none",
+          (hold.holding || scrubShown) && "opacity-0 [&_*]:pointer-events-none",
         )}
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}
       >
@@ -542,7 +537,7 @@ function ReelPage({
 
       {/* ❤️ 💬 🔊 on the right, Reels' place */}
       <div
-        className={cn("absolute right-1.5 flex flex-col items-center gap-3 transition-opacity duration-200", hold.holding && "pointer-events-none opacity-0")}
+        className={cn("absolute right-1.5 flex flex-col items-center gap-3 transition-opacity duration-200", (hold.holding || scrubShown) && "pointer-events-none opacity-0")}
         style={{ bottom: "calc(env(safe-area-inset-bottom) + 1.5rem)" }}
       >
         <ReelButton
@@ -570,18 +565,14 @@ function ReelPage({
         </ReelButton>
       </div>
 
-      {/* how far through */}
-      <div
-        className="pointer-events-none absolute inset-x-0 h-0.5 bg-white/20"
+      {/* how far through, along the bottom: a finger scrubs it (Reels') */}
+      <VideoScrubber
+        video={attached}
+        onHold={setScrubbing}
+        onActive={setScrubShown}
+        disabled={failed}
         style={{ bottom: "env(safe-area-inset-bottom)" }}
-        aria-hidden
-      >
-        <div
-          ref={bar}
-          className="h-full w-full origin-left bg-white/85"
-          style={{ transform: "scaleX(0)" }}
-        />
-      </div>
+      />
     </section>
   );
 }
