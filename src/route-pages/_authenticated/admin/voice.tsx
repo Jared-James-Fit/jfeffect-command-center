@@ -180,7 +180,7 @@ export function CoachVoicePage() {
       </div>
 
       {draft && (
-        <div className="fixed inset-x-0 bottom-[calc(var(--bottom-nav-clearance,0px)+env(safe-area-inset-bottom))] z-20 border-t border-border bg-background/95 px-4 py-3 backdrop-blur md:bottom-0">
+        <div className="phone-column fixed inset-x-0 bottom-[calc(var(--bottom-nav-clearance,0px)+env(safe-area-inset-bottom))] z-20 border-t border-border bg-background/95 px-4 py-3 backdrop-blur md:bottom-0">
           <div className="mx-auto flex max-w-3xl items-center gap-2">
             <Button
               type="button"

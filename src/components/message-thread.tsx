@@ -3159,7 +3159,7 @@ export function MessageThread({
       {/* iMessage-style selection action bar — pinned above the composer on mobile/tablet/desktop. */}
       {selectionMode && (
         <div
-          className="fixed inset-x-0 z-40 flex items-center gap-2 border-t border-border bg-background/95 px-3 py-2 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85"
+          className="phone-column fixed inset-x-0 z-40 flex items-center gap-2 border-t border-border bg-background/95 px-3 py-2 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85"
           style={{
             bottom: 0,
             paddingBottom: "calc(max(env(safe-area-inset-bottom), 0.5rem))",

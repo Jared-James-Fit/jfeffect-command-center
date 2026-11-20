@@ -6,10 +6,28 @@
 @custom-variant dark (&:is(.dark *));
 
 /* A phone keeps the phone layout in every orientation (portrait-only.ts): turned on
-   its side it's 852pt wide, past md, but `data-phone` on <html> (set before the first
-   paint) keeps md's tablet / desktop layout off it, so turning the phone only changes
-   the width, never the bars, sheets or menus, and nothing remounts. Tablets and
-   computers keep md exactly as before. `:root` itself included, for rules on <html>. */
+   its side it's 852pt wide, past sm and md, but `data-phone` on <html> (set before the
+   first paint) keeps sm's and md's tablet / desktop layout off it, so turning the phone
+   only changes the width, never the bars, sheets or menus, and nothing remounts. Tablets
+   and computers keep sm and md exactly as before. `:root` itself included, for rules on
+   <html>. sm too (Nov 20 2026): with only md guarded, a phone on its side got sm's
+   layouts, never designed or tested at that height (a tall popup "centred on screen"
+   lost its ✕ and Next off the top and bottom of a 393pt screen). */
+@custom-variant sm {
+  @media (width >= 40rem) {
+    &:where(:root:not([data-phone]), :root:not([data-phone]) *) {
+      @slot;
+    }
+  }
+}
+@custom-variant max-sm {
+  @media (width < 40rem) {
+    @slot;
+  }
+  &:where(:root[data-phone], :root[data-phone] *) {
+    @slot;
+  }
+}
 @custom-variant md {
   @media (width >= 48rem) {
     &:where(:root:not([data-phone]), :root:not([data-phone]) *) {
@@ -452,6 +470,18 @@ html[data-ios-web-app] [data-shell-root] {
    so it changes nothing there; tablets and computers never get it (no data-phone). */
 :root[data-phone] .phone-column { max-width: 560px; margin-inline: auto; }
 :root[data-phone] .shell-bar { padding-inline: max(0.5rem, calc((100% - 560px) / 2)); }
+/* And on its side a phone is 393pt tall, so nothing that pops up may be taller than the
+   screen: a bottom sheet scrolls inside the screen's height (min with --app-vh: in the
+   iPhone home-screen app 100dvh counts the status bar), and a popup laid out in a
+   full-screen box (`fixed inset-0`, its card at the bottom or the middle) scrolls with
+   `safe` alignment, so a card taller than the screen starts at the top instead of losing
+   its ✕ above the screen and its button below it (Fastest way to log, Nov 20 2026).
+   Only sideways: upright, nothing changes. */
+@media (orientation: landscape) {
+  :root[data-phone] .phone-column[role="dialog"] { max-height: min(100dvh, var(--app-vh, 100dvh)); overflow-y: auto; }
+  :root[data-phone] [role="dialog"].fixed.inset-0.items-end:not(.flex-col) { align-items: safe flex-end; overflow-y: auto; }
+  :root[data-phone] [role="dialog"].fixed.inset-0.items-center:not(.flex-col) { align-items: safe center; overflow-y: auto; }
+}
 /* Everything above a page on a phone: the View as client banner (when on), the
    notch the shell's bar is padded for, and the bar's own row. A fixed,
    viewport-tall screen (the chats) starts here and is this much shorter, so it
@@ -949,8 +979,8 @@ html.jf-story-vt::view-transition-group(jf-story-card) {
   }
 }
 
-@media (min-width: 640px) {
-  .birthday-card-editor-dialog {
+.birthday-card-editor-dialog {
+  @variant sm {
     max-height: min(90vh, calc(100dvh - 2rem));
   }
 }
@@ -980,37 +1010,44 @@ html.jf-story-vt::view-transition-group(jf-story-card) {
   margin-top: 0.5rem;
 }
 
-@media (max-width: 639px) {
-  .birthday-card-editor-dialog {
+/* sm / max-sm as the phone layout reads them (a phone on its side stays a phone: the
+   variants at the top of this file), never a raw 640px query. */
+.birthday-card-editor-dialog {
+  @variant max-sm {
     margin-top: env(safe-area-inset-top);
     margin-bottom: env(safe-area-inset-bottom);
   }
+}
 
-  /* Sonner can receive a zero inset during the first standalone-PWA paint,
-     even on notched iPhones. Keep every top toast below the compact iOS
-     status area until the native safe-area value is available. */
-  [data-sonner-toaster].toaster {
+/* Sonner can receive a zero inset during the first standalone-PWA paint,
+   even on notched iPhones. Keep every top toast below the compact iOS
+   status area until the native safe-area value is available. A phone on
+   its side keeps them in the phone's column. */
+[data-sonner-toaster].toaster {
+  @variant max-sm {
     top: calc(max(3.5rem, env(safe-area-inset-top)) + 0.75rem) !important;
-    right: 0.75rem !important;
-    left: 0.75rem !important;
+    right: max(0.75rem, calc((100vw - 560px) / 2)) !important;
+    left: max(0.75rem, calc((100vw - 560px) / 2)) !important;
     width: auto !important;
   }
+}
 
-  [data-sonner-toaster].toaster [data-sonner-toast] {
+[data-sonner-toaster].toaster [data-sonner-toast] {
+  @variant max-sm {
     width: 100% !important;
   }
 }
 
-@media (min-width: 640px) {
-  .notifications-page-shell {
+.notifications-page-shell {
+  @variant sm {
     padding-top: 1.5rem;
     padding-bottom: 1.5rem;
   }
 }
 
 /* Keep the birthday editor's pre-existing desktop height contract intact. */
-@media (min-width: 640px) {
-  .birthday-card-editor-dialog {
+.birthday-card-editor-dialog {
+  @variant sm {
     max-height: min(90vh, calc(100dvh - 2rem));
   }
 }
@@ -1347,12 +1384,13 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 /* A member's program builder owns a phone's screen: its own header at the notch
-   and its week bar where the tab bar was (both step aside for nothing else). */
-@variant max-md {
-  html[data-program-builder] .shell-bar,
-  html[data-program-builder] [data-shell-bar-room],
-  html[data-program-builder] [data-mobile-bottom-nav] { display: none !important; }
-}
+   and its week bar where the tab bar was (both step aside for nothing else). The
+   variant goes inside each rule: a top-level `@variant max-md { … }` compiles its
+   phone branch to `:scope:where(:root[data-phone] …) html …`, which matches nothing,
+   so a phone on its side got the tab bar back over the builder (portrait-only.ts). */
+html[data-program-builder] .shell-bar,
+html[data-program-builder] [data-shell-bar-room],
+html[data-program-builder] [data-mobile-bottom-nav] { @variant max-md { display: none !important; } }
 .pb-header { top: var(--app-chrome-top); padding-top: var(--app-safe-top); }
 /* The program editor's header on a phone: fixed under the app's bar (sticky can't
    hold while <main> clips sideways), moving up to the notch when the bar slides

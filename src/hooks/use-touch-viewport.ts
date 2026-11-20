@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { onRotationSettle, tallestPerWidth } from "@/lib/rotation-settle";
 
 /**
  * Touch/keyboard-aware helpers for modal forms.
@@ -67,17 +68,22 @@ export function useVisualViewportBox(active: boolean) {
   useEffect(() => {
     if (!active || typeof window === "undefined") return;
     const vv = window.visualViewport;
-    let tallest = 0;
+    // the tallest at each width (a turn of the phone isn't a keyboard), from readings the screen
+    // could hold, and read again as a turn settles (rotation-settle.ts)
+    const tallest = tallestPerWidth();
     const update = () => {
       const height = vv ? vv.height : window.innerHeight;
-      tallest = Math.max(tallest, height, window.innerHeight);
-      setBox({ top: vv ? vv.offsetTop : 0, height, keyboard: tallest - height > 120 });
+      tallest.see(window.innerWidth, window.innerHeight, screen.width, screen.height);
+      const top = tallest.see(window.innerWidth, height, screen.width, screen.height);
+      setBox({ top: vv ? vv.offsetTop : 0, height, keyboard: top - height > 120 });
     };
     update();
     vv?.addEventListener("resize", update);
     vv?.addEventListener("scroll", update);
     window.addEventListener("resize", update);
+    const stopSettle = onRotationSettle(update);
     return () => {
+      stopSettle();
       vv?.removeEventListener("resize", update);
       vv?.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);

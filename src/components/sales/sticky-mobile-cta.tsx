@@ -37,7 +37,7 @@ export function StickyMobileCta({ label, onClick, href, disabled, paused }: { la
     <div
       aria-hidden={!visible}
       className={cn(
-        "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background p-3 transition-all duration-300 md:hidden",
+        "phone-column fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background p-3 transition-all duration-300 md:hidden",
         visible
           ? "pointer-events-auto translate-y-0 opacity-100"
           : "pointer-events-none translate-y-full opacity-0",

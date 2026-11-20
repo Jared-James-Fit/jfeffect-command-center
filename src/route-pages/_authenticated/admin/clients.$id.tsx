@@ -1217,7 +1217,7 @@ export function ClientProfileWorkspace({
           Sits above the mobile bottom nav with safe-area padding. */}
       {isDirty && (
         <div
-          className="fixed inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.4)]"
+          className="phone-column fixed inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.4)]"
           style={{ bottom: 0, paddingBottom: "env(safe-area-inset-bottom)" }}
         >
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 md:px-8">

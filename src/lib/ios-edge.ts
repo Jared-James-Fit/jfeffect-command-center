@@ -26,10 +26,33 @@
  * scrollable by that much, so the shell is that tall there (and only there:
  * under a transparent status bar it's the whole screen, below).
  */
+import { onRotationSettle, ROTATION_SETTLE_MS, VIEWPORT_AREA_SLACK } from "@/lib/rotation-settle";
+
 export const IOS_EDGE_ROOM = "28px";
 
+/**
+ * `--app-vh` follows a turn of the phone (rotation-settle.ts): read at launch,
+ * and on every turn at once and again as it settles (ROTATION_SETTLE_MS), since
+ * mid-turn iOS reports the new width with the old height; a reading bigger
+ * than the screen is never kept, nor one taken with the keyboard up (read again
+ * once the box is left). A keyboard alone never changes it (no width change).
+ * Plain ES5: it runs in <head> before the app's code.
+ */
 export const IOS_WEB_APP_BOOT_SCRIPT =
-  '(function(){try{if(window.navigator.standalone===true){var r=document.documentElement;r.setAttribute("data-ios-web-app","");var w=window.innerWidth,s=function(){r.style.setProperty("--app-vh",window.innerHeight+"px")};s();window.addEventListener("resize",function(){if(window.innerWidth!==w){w=window.innerWidth;s()}})}}catch(e){}})();';
+  '(function(){try{if(window.navigator.standalone===true){var r=document.documentElement;r.setAttribute("data-ios-web-app","");' +
+  "var w=window.innerWidth,t=[],p=0," +
+  'ty=function(){var a=document.activeElement;return !!a&&(a.tagName==="INPUT"||a.tagName==="TEXTAREA"||a.isContentEditable)},' +
+  'set=function(h){r.style.setProperty("--app-vh",h+"px")},' +
+  "s=function(){var W=window.innerWidth,H=window.innerHeight,S=screen.width*screen.height;if(ty()){p=1;return}" +
+  `if(!(H>0)||(S>0&&W*H>S*${VIEWPORT_AREA_SLACK}))return;p=0;set(H)},` +
+  `g=function(){w=window.innerWidth;for(var i=0;i<t.length;i++)clearTimeout(t[i]);t=[];var m=[${ROTATION_SETTLE_MS.join(",")}];for(var j=0;j<m.length;j++)t.push(setTimeout(s,m[j]))};` +
+  "set(window.innerHeight);" +
+  'window.addEventListener("resize",function(){if(window.innerWidth!==w)g()});' +
+  'window.addEventListener("orientationchange",g);' +
+  'try{screen.orientation&&screen.orientation.addEventListener("change",g)}catch(e){}' +
+  'document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"&&window.innerWidth!==w)g()});' +
+  'document.addEventListener("focusout",function(){if(p)setTimeout(s,350)})' +
+  "}}catch(e){}})();";
 
 /**
  * The bottom, on the same old installs: iOS ends its fixed layout where the
@@ -119,14 +142,14 @@ export function watchIosBottomGap(): () => void {
     window.setTimeout(measure, 400);
   };
   window.addEventListener("resize", measure);
-  window.addEventListener("orientationchange", measure);
   window.addEventListener("pageshow", measure);
   document.addEventListener("visibilitychange", onShow);
+  const stopSettle = onRotationSettle(measure);
   return () => {
     timers.forEach((t) => window.clearTimeout(t));
+    stopSettle();
     ro?.disconnect();
     window.removeEventListener("resize", measure);
-    window.removeEventListener("orientationchange", measure);
     window.removeEventListener("pageshow", measure);
     document.removeEventListener("visibilitychange", onShow);
     probe.remove();
