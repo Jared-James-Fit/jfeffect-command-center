@@ -10,8 +10,8 @@ const IDENTIFY_SYSTEM = `You help lifters find an exercise in a gym app's exerci
 
 Rules:
 - Use the standard name a strength coach would use ("Seated Cable Row", "Romanian Deadlift", "Dumbbell Lateral Raise"). Include the equipment in the name when the description says or clearly implies it.
-- Most likely first, at most 4. Different exercises only, never the same one twice.
-- "also": up to 3 other common names for that same exercise (not variations).
+- Most likely first, at most 3. Different exercises only, never the same one twice.
+- "also": up to 2 other common names for that same exercise (not variations).
 - "confidence": "high" only when the description clearly points to that one exercise; "medium" when it's one of a few that fit; "low" when you are guessing.
 - If the description is too vague to name anything, return no guesses and "vague": true.
 - Only training movements (strength, conditioning, mobility, stretching). Never invent an exercise.

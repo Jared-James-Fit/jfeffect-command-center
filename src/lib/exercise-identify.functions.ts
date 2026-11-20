@@ -6,8 +6,9 @@
  * Not metered with AI credits on purpose: it's part of searching (a lifter
  * shouldn't pay to find an exercise), it costs a fraction of a cent, and it's
  * held to 30 descriptions per login per 10 minutes and 150 a day
- * (`_challenge_rate_ok`). The same description is answered once per server and
- * then served from memory for a day, whoever asks (it carries nothing personal).
+ * (`_challenge_rate_ok`). The same description is answered once per server
+ * instance and then served from its memory for a day, whoever asks (it carries
+ * nothing personal); the app also keeps each answer for the session.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
