@@ -40,7 +40,7 @@ import { cn } from "@/lib/utils";
 const db = supabase as any;
 
 type Scores = { scores?: Record<string, number> } | null;
-type ReviewSummary = { score?: number; passed?: boolean; why?: string | null; text_seen?: string; scores?: Record<string, number> } | null;
+type ReviewSummary = { score?: number; passed?: boolean; why?: string | null; text_seen?: string; scores?: Record<string, number>; physique?: string | null; women?: string | null } | null;
 export type InsightDay = Day;
 type Day = {
   id: string;
