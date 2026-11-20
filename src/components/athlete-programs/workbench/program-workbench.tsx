@@ -276,7 +276,7 @@ export function ProgramWorkbench({ editor }: { editor: ProgramEditor }) {
         <header
           className={cn(
             "z-40 border-b border-border/60 bg-background",
-            desktop ? "sticky top-0 -mx-4 px-4 pt-3 md:-mx-8 md:px-8" : "pb-header fixed inset-x-0 px-3",
+            desktop ? "sticky top-0 -mx-4 px-4 pt-3 md:-mx-8 md:px-8" : "pb-header phone-column fixed inset-x-0 px-3",
           )}
           data-builder-header
         >

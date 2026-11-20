@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { onRotationSettle, typingNow, viewportPlausibleNow } from "@/lib/rotation-settle";
 
 /**
  * Whether Crew's feed is paging right now (one post per screen, TikTok's):
@@ -82,10 +83,21 @@ export function watchFeedViewport(): () => void {
   };
   set();
   const timers = FEED_GAP_SETTLE_MS.map((ms) => window.setTimeout(setGap, ms));
+  // A turn of the phone: the screens take the new height as the turn settles (mid-turn iOS reports
+  // the new width with the old height, rotation-settle.ts), and the post that was on screen stays on
+  // screen (the window's scroll is in pixels: post 5 of 793pt screens would be post 10 of 393pt ones).
+  let anchor: HTMLElement | null = null;
+  const stopSettle = onRotationSettle((step) => {
+    if (step === 0) anchor = postOnScreen();
+    if (typingNow() || !viewportPlausibleNow()) return;
+    if (Math.round(window.innerHeight) === vh) return setGap();
+    set();
+    keepOnScreen(anchor);
+  });
   const onResize = () => {
     if (window.innerWidth === width) return setGap();
+    // a turn: its readings are the settle's (above)
     width = window.innerWidth;
-    set();
   };
   const onShow = () => {
     if (document.visibilityState !== "visible") return;
@@ -100,6 +112,7 @@ export function watchFeedViewport(): () => void {
   window.addEventListener("touchstart", onFirstTouch, { once: true, passive: true });
   return () => {
     timers.forEach((t) => window.clearTimeout(t));
+    stopSettle();
     window.removeEventListener("resize", onResize);
     window.removeEventListener("pageshow", setGap);
     document.removeEventListener("visibilitychange", onShow);
@@ -113,9 +126,29 @@ export function watchFeedViewport(): () => void {
 export const FEED_GAP_SETTLE_MS = [0, 250, 1000, 3000] as const;
 
 /** A text box has the keyboard up: a keyboard can shrink what a fixed box measures (Android), so the gap waits. */
-function typing(): boolean {
-  const a = document.activeElement as HTMLElement | null;
-  return !!a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.isContentEditable);
+const typing = typingNow;
+
+/** The feed's screen nearest the top of the window (where a post snaps), or null at the very top (the stories). */
+function postOnScreen(): HTMLElement | null {
+  if (window.scrollY < 2) return null;
+  let best: HTMLElement | null = null;
+  let bestD = Infinity;
+  for (const el of document.querySelectorAll<HTMLElement>(".feed-page")) {
+    if (!el.firstChild) continue;
+    const top = el.getBoundingClientRect().top - (parseFloat(getComputedStyle(el).scrollMarginTop) || 0);
+    const d = Math.abs(top);
+    if (d < bestD) {
+      bestD = d;
+      best = el;
+    }
+  }
+  return best;
+}
+
+/** Puts that screen back where it snaps, once the screens have their new height. */
+function keepOnScreen(el: HTMLElement | null) {
+  if (!el?.isConnected) return;
+  el.scrollIntoView({ block: "start", behavior: "instant" as ScrollBehavior });
 }
 
 /** The most the screen is believed to run past the window (anything more is a bad reading, ignored). */

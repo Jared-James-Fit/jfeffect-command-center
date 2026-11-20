@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { onRotationSettle, tallestPerWidth, typingNow } from "@/lib/rotation-settle";
 
 function isImmersiveChatRoute() {
   if (typeof window === "undefined") return false;
@@ -43,19 +44,25 @@ export function useKeyboardOpen() {
     // One baseline per window width: turning the phone changes the width (a
     // keyboard never does), and a landscape window read against the upright
     // baseline (393 against 852) looked like a keyboard for as long as the
-    // phone stayed on its side, hiding the bars (portrait-only.ts).
-    const baselines = new Map<number, number>();
+    // phone stayed on its side, hiding the bars (portrait-only.ts). Only from
+    // readings the screen could hold, and read again as a turn settles
+    // (rotation-settle.ts): mid-turn iOS gives the new width with the old
+    // height, so the landscape baseline became 852 and, turned back upright,
+    // a stale 393 against 852 read as a keyboard that never closed, which hid
+    // the tab bar until the app was closed.
+    const baselines = tallestPerWidth();
     const update = () => {
       raf = 0;
-      const w = Math.round(window.innerWidth);
-      const baseline = Math.max(baselines.get(w) ?? vv.height, vv.height);
-      baselines.set(w, baseline);
+      const baseline = baselines.see(window.innerWidth, vv.height, screen.width, screen.height);
       const layoutInset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       const baselineInset = Math.max(0, baseline - vv.height);
       const inset = Math.max(layoutInset, baselineInset);
       // 120px threshold avoids URL-bar collapse / toolbar show-hide
-      // false positives while still firing for every real keyboard.
-      const open = inset > 120;
+      // false positives while still firing for every real keyboard. And a
+      // keyboard is only ever up for a text box: with none focused, whatever
+      // the window reads (a turn's stale height), it's never "open", so the
+      // bars can't be hidden by a bad reading.
+      const open = inset > 120 && typingNow();
       root.style.setProperty("--keyboard-inset", `${open ? inset : 0}px`);
       if (open) {
         root.style.setProperty("--vv-h", `${Math.round(vv.height)}px`);
@@ -83,12 +90,17 @@ export function useKeyboardOpen() {
     update();
     vv.addEventListener("resize", schedule);
     vv.addEventListener("scroll", schedule);
-    window.addEventListener("orientationchange", schedule);
+    // a box gained or lost focus: the keyboard follows it (and "open" needs one)
+    document.addEventListener("focusin", schedule);
+    document.addEventListener("focusout", schedule);
+    const stopSettle = onRotationSettle(schedule);
     return () => {
       if (raf) cancelAnimationFrame(raf);
+      stopSettle();
+      document.removeEventListener("focusin", schedule);
+      document.removeEventListener("focusout", schedule);
       vv.removeEventListener("resize", schedule);
       vv.removeEventListener("scroll", schedule);
-      window.removeEventListener("orientationchange", schedule);
       root.removeAttribute("data-keyboard-open");
       root.style.removeProperty("--keyboard-inset");
       root.style.removeProperty("--vv-h");

@@ -147,7 +147,7 @@ describe("program builder: one screen for phones and computers", () => {
 
   it("on a phone it owns the screen: its header at the notch, its week bar where the tab bar was", () => {
     expect(bench).toContain('html.setAttribute("data-program-builder", "");');
-    expect(css).toContain("html[data-program-builder] [data-mobile-bottom-nav] { display: none !important; }");
+    expect(css).toContain("html[data-program-builder] [data-mobile-bottom-nav] { @variant max-md { display: none !important; } }");
     expect(css).toContain(".pb-header { top: var(--app-chrome-top); padding-top: var(--app-safe-top); }");
     // the week bar steps aside for the keyboard; the quick-value bar sits on it
     expect(rows).toContain("data-hide-on-keyboard");

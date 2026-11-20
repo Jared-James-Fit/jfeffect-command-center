@@ -59,7 +59,8 @@ describe("the home-screen app's status bar is solid: the app starts right under 
   });
 
   it("the shell fills the window's measured height (iOS's 100vh counts the status bar there)", () => {
-    expect(IOS_WEB_APP_BOOT_SCRIPT).toContain('r.style.setProperty("--app-vh",window.innerHeight+"px")');
+    expect(IOS_WEB_APP_BOOT_SCRIPT).toContain('set=function(h){r.style.setProperty("--app-vh",h+"px")}');
+    expect(IOS_WEB_APP_BOOT_SCRIPT).toContain("set(window.innerHeight);"); // at launch; on a turn as it settles (rotation-settle.test.ts)
     // the measured window only under a solid status bar; under a transparent one the whole screen (ios-bottom-gap.test.ts)
     expect(css).toContain("min-height: min(100vh, calc(var(--app-vh, 100vh) + env(safe-area-inset-top, 0px) * 1000));");
   });

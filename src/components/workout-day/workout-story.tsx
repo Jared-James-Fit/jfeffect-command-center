@@ -672,7 +672,7 @@ export function StoryChrome({
       <div
         ref={topRef}
         data-testid="story-top"
-        className={cn("fixed inset-x-0 top-0 z-[41] border-b border-border/60 bg-background px-3 pb-2 pt-[calc(var(--focus-top)+6px)]", anim)}
+        className={cn("phone-column fixed inset-x-0 top-0 z-[41] border-b border-border/60 bg-background px-3 pb-2 pt-[calc(var(--focus-top)+6px)]", anim)}
       >
         <div className="mx-auto max-w-xl">
           <div className="flex gap-1" role="group" aria-label="Exercises">
@@ -771,7 +771,7 @@ export function StoryChrome({
         ref={bottomRef}
         data-testid="story-bottom"
         className={cn(
-          "fixed inset-x-0 bottom-0 z-[41] border-t border-border/60 bg-background px-3 pb-[calc(env(safe-area-inset-bottom,0px)+10px)] pt-2.5",
+          "phone-column fixed inset-x-0 bottom-0 z-[41] border-t border-border/60 bg-background px-3 pb-[calc(env(safe-area-inset-bottom,0px)+10px)] pt-2.5",
           anim,
         )}
       >

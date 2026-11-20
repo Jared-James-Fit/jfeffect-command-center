@@ -158,6 +158,45 @@ describe("phones stay portrait without ever interrupting (Instagram's)", () => {
     expect(css).toContain("input, textarea, select {\n  @variant max-md { font-size: 16px; }\n}");
   });
 
+  it("CSS: sm is a phone's too (a phone on its side is 852pt, past sm's 640): it never gets sm's layouts", () => {
+    const css = read("src/styles.css");
+    expect(css).toContain("@custom-variant sm {\n  @media (width >= 40rem) {\n    &:where(:root:not([data-phone]), :root:not([data-phone]) *) {");
+    expect(css).toContain("@custom-variant max-sm {\n  @media (width < 40rem) {\n    @slot;\n  }\n  &:where(:root[data-phone], :root[data-phone] *) {");
+    // no raw 640px query left either
+    expect(css).not.toMatch(/@media \((?:max|min)-width: 6(?:39|40)px\)/);
+  });
+
+  it("CSS: a phone-only rule sits inside its selector, never a top-level @variant block (its phone branch compiles to `:scope:where(…) html …`, which matches nothing)", () => {
+    const css = read("src/styles.css");
+    expect(css).not.toMatch(/^@variant (?:max-)?(?:sm|md)\b/m);
+    expect(css).toContain("html[data-program-builder] [data-mobile-bottom-nav] { @variant max-md { display: none !important; } }");
+  });
+
+  it("on its side nothing that pops up is taller than the screen, and the phone's own bars keep to its column", () => {
+    const css = read("src/styles.css");
+    expect(css).toContain(':root[data-phone] .phone-column[role="dialog"] { max-height: min(100dvh, var(--app-vh, 100dvh)); overflow-y: auto; }');
+    expect(css).toContain(':root[data-phone] [role="dialog"].fixed.inset-0.items-end:not(.flex-col) { align-items: safe flex-end; overflow-y: auto; }');
+    expect(css).toContain(':root[data-phone] [role="dialog"].fixed.inset-0.items-center:not(.flex-col) { align-items: safe center; overflow-y: auto; }');
+    // the bars a phone screen pins outside <main>: Focus, the program builders, Crew's comments, the chats' action bars
+    expect(read("src/components/workout-day/workout-story.tsx")).toContain('"phone-column fixed inset-x-0 top-0 z-[41]');
+    expect(read("src/components/workout-day/workout-story.tsx")).toContain('"phone-column fixed inset-x-0 bottom-0 z-[41]');
+    expect(read("src/components/athlete-programs/workbench/program-workbench.tsx")).toContain('"pb-header phone-column fixed inset-x-0 px-3"');
+    expect(read("src/components/athlete-programs/workbench/rows.tsx")).toContain('"phone-column fixed inset-x-0 bottom-0 px-3');
+    expect(read("src/components/program-editor/builder-chrome.tsx")).toContain('"builder-header-fixed phone-column fixed inset-x-0"');
+    expect(read("src/components/community/post-sheet.tsx")).toContain('className="phone-column fixed inset-x-0 bottom-0 z-50');
+  });
+
+  it("a video played full screen may turn (the lock lets go and comes back), and the built iPhone app is checked portrait only", () => {
+    const comp = read("src/components/portrait-only.tsx");
+    expect(comp).toContain("const free = () => isCameraOpen() || fullscreenNow();");
+    expect(comp).toContain('document.addEventListener("fullscreenchange", onCamera);');
+    expect(comp).toContain('document.addEventListener("webkitfullscreenchange", onCamera);');
+    const ios = read(".github/workflows/ios-build.yml");
+    expect(ios).toContain('ORI=$(/usr/libexec/PlistBuddy -c "Print :UISupportedInterfaceOrientations" "$APP/Info.plist"');
+    expect(ios.indexOf("Keep the iPhone app upright")).toBeLessThan(ios.indexOf("- name: Build and Archive iOS app"));
+    expect(ios.indexOf("✅ iPhone app: portrait only")).toBeLessThan(ios.indexOf("- name: Export and Upload to TestFlight"));
+  });
+
   it("on its side a phone is one centered column, the tab bar's 560px row (an upright phone is narrower, so nothing changes)", () => {
     const css = read("src/styles.css");
     expect(css).toContain(":root[data-phone] .phone-column { max-width: 560px; margin-inline: auto; }");
@@ -171,10 +210,10 @@ describe("phones stay portrait without ever interrupting (Instagram's)", () => {
     }
   });
 
-  it("turning the phone is never read as a keyboard (one baseline per width)", () => {
+  it("turning the phone is never read as a keyboard (one baseline per width, never a mid-turn reading: rotation-settle.test.ts)", () => {
     const kb = read("src/hooks/use-keyboard-open.ts");
-    expect(kb).toContain("const baselines = new Map<number, number>();");
-    expect(kb).toContain("const baseline = Math.max(baselines.get(w) ?? vv.height, vv.height);");
+    expect(kb).toContain("const baselines = tallestPerWidth();");
+    expect(kb).toContain("const baseline = baselines.see(window.innerWidth, vv.height, screen.width, screen.height);");
     expect(kb).not.toContain("let baseline = vv.height;");
   });
 });

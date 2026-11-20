@@ -51,7 +51,7 @@ export function BuilderHeader({
       data-builder-header
       className={cn(
         "z-30 border-b border-border bg-background",
-        phone ? "builder-header-fixed fixed inset-x-0" : "sticky top-0 -mx-2 md:-mx-3",
+        phone ? "builder-header-fixed phone-column fixed inset-x-0" : "sticky top-0 -mx-2 md:-mx-3",
       )}
     >
       <div className="flex min-h-[52px] items-center gap-1.5 px-2 py-1.5 md:px-3">
