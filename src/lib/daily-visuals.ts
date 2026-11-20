@@ -1,8 +1,8 @@
 /**
  * Athlete Insights (series `daily_visual`, once "daily pictures"): on the
  * weekdays the coach picks (3 a week by default) and no other coach post goes
- * out, one post that's worth opening the app for. An anime frame and a
- * caption made together, written as Jared, a powerlifting coach explaining something
+ * out, one post that's worth opening the app for. A bright 2D frame in
+ * JF Effect's illustrated house style and a caption made together, written as Jared, a powerlifting coach explaining something
  * between sets: direct, confident, analytical, occasionally dry, always about
  * getting stronger. Never a fitness motivation page, and never aimed at men or
  * women: a post is for every athlete, labelled by what it's relevant to
@@ -34,14 +34,18 @@
  *      hype, AI phrasing, preachy, invented, shaming, generic and polished), picks the
  *      best and only fixes what's actually wrong (never into sentence case); `editorVerdict` passes it only at every bar with
  *      no flag, else the writer tries again with the editor's notes;
- *   3. the picture: a still frame from a premium, serious powerlifting anime
- *      (FILM_LOOK, the house style every post shares) of the lesson itself
- *      (each angle's `picture` brief), in a gym or meet that changes post to
- *      post (DAILY_SETTINGS), then a review that looks at the picture with
- *      the caption (REVIEW_PROMPT / `reviewVerdict`: an anime frame, mature,
- *      cinematic colour, clean linework, the equipment, anatomy and
- *      technique right, `teaches` and `on_topic` included). `qualityChecks` reads the seven questions the
- *      coach asks of every post off the editor's and the review's scores.
+ *   3. the picture: the post is read first (concept.read: what kind of post,
+ *      about what, for whom, the best way to show it, whether people are
+ *      needed), then a bright 2D frame in JF Effect's house style (FILM_LOOK,
+ *      anime key art most days, DAILY_RENDERINGS) of the lesson itself (each
+ *      angle's `picture` brief), its place, palette and people changing post
+ *      to post (DAILY_SETTINGS, DAILY_PALETTES, DAILY_CASTS, PICTURE_PROPS),
+ *      then a review that looks at the picture with the caption
+ *      (REVIEW_PROMPT / `reviewVerdict`: the house style, mature, bright with
+ *      a neutral white balance, realistic bodies, clean linework, readable on
+ *      a phone, the equipment, anatomy and technique right, `teaches` and
+ *      `on_topic` included). `qualityChecks` reads the questions the coach
+ *      asks of every post off the editor's and the review's scores.
  * It learns from every posted day (likes, comments (more for real ones),
  * saves, shares and reposts, and whether people stopped on it), by category,
  * angle, form and shot.
@@ -50,7 +54,7 @@ import { JARGON, readingGrade, longestSentence, voiceProblems, words as wordsOf 
 
 export type DailyTheme = "courage" | "patience" | "your_circle" | "self_reflection" | "encouragement" | "self_love" | "emotional";
 export type DailyAudience = "women" | "men" | "everyone";
-/** The shot: every picture is the same anime house style, framed one of these ways (stored as `style`; the keys are the database's). */
+/** The shot: every picture is the same house style, framed one of these ways (stored as `style`; the keys are the database's). */
 export type DailyStyle =
   | "wide_moment"
   | "medium_candid"
@@ -61,32 +65,46 @@ export type DailyStyle =
   | "over_shoulder"
   | "low_angle"
   | "framed_view"
-  | "backlit"
   | "overhead"
-  | "two_frames";
-/** The light: cinematic anime lighting for a gym or a meet, a different one post to post (stored as `concept.light`). */
+  | "two_frames"
+  | "side_profile"
+  | "still_life";
+/** The light: bright, balanced light for a gym, a meet or wherever training happens, a different one post to post (stored as `concept.light`). */
 export type DailyLight =
-  | "dawn_shafts"
-  | "late_sun"
-  | "night_session"
-  | "meet_spotlights"
-  | "warm_up_buzz"
-  | "rainy_night"
+  | "big_windows"
+  | "clean_gym_light"
+  | "fresh_morning"
+  | "open_door"
+  | "soft_daylight"
   | "skylight_noon"
-  | "rim_backlight";
-/** The three anime directions (concept.art): the lift as a key frame, a character moment around training, or the insert close-up that teaches it. */
-export type DailyArt = "key_frame" | "drama" | "insert";
-/** Where it happens (stored as `concept.setting`): a different gym or meet post to post, so the backgrounds never repeat. */
+  | "open_air"
+  | "bright_hall";
+/** The four directions (concept.art): the lift as a key frame, a character moment around training, the insert close-up that teaches it, or a clear explainer frame. */
+export type DailyArt = "key_frame" | "drama" | "insert" | "explainer";
+/** Where it happens (stored as `concept.setting`): a different place to train post to post, so the backgrounds never repeat. */
 export type DailySetting =
   | "powerlifting_club"
   | "commercial_strength"
   | "garage_gym"
   | "university_weight_room"
-  | "basement_gym"
+  | "performance_gym"
+  | "community_gym"
+  | "home_training"
+  | "open_air_yard"
   | "bodybuilding_gym"
-  | "warehouse_gym"
+  | "recovery_corner"
+  | "meal_prep"
+  | "coach_corner"
   | "meet_platform"
   | "meet_warm_up";
+/** How it's drawn (concept.rendering): the house look in one of four 2D treatments, anime key art most days. */
+export type DailyRendering = "anime" | "soft_anime" | "graphic" | "manga_colour";
+/** Who's in it (concept.cast): real, varied people (or nobody), never the same kind of person post after post. */
+export type DailyCast = "newer_lifter" | "everyday" | "powerlifter" | "physique" | "masters" | "coach_athlete" | "crew" | "hands" | "no_people";
+/** The colours (concept.palette): a different palette post to post, every one bright and true. */
+export type DailyPalette = "crisp_white" | "cool_blue" | "sage_cream" | "plate_colours" | "navy_sky" | "teal_slate" | "soft_pastel" | "light_wood";
+/** What kind of post it is (concept.read.kind), read before the picture is planned. */
+export type DailyKind = "educational" | "technical" | "motivational" | "conversational" | "humorous";
 
 /* ------------------------------------------------------------------ */
 /*  What a day is about                                                */
@@ -166,15 +184,15 @@ export const DAILY_PILLAR_KEYS = Object.keys(DAILY_PILLARS) as DailyPillar[];
 /** Each category's angles (stored as `topic`). */
 export const DAILY_TOPICS = {
   bar_path: { pillar: "powerlifting_iq", name: "Bar path and leverages", idea: "why the bar moves where it does in the squat, bench or deadlift, what pulls it off line and how to see it on video", picture: "a side-on view of a squat or bench press mid-rep, the bar over the midfoot or the touch point, a phone on a tripod filming from the side" },
-  rpe_honesty: { pillar: "powerlifting_iq", name: "RPE that means something", idea: "rating effort honestly: what a rep left in the tank looks like, why RPE drifts, how video and bar speed calibrate it", picture: "a lifter just after racking a heavy top set, writing the RPE in a training log with chalky hands" },
-  top_sets: { pillar: "powerlifting_iq", name: "Top sets and back-offs", idea: "what a top set and back-off sets are each for, and what they tell you when you read them in your log", picture: "a lifter between the top set and the back-off sets: plates stripped to the back-off weight, the log open on the bench" },
+  rpe_honesty: { pillar: "powerlifting_iq", name: "RPE that means something", idea: "rating effort honestly: what a rep left in the tank looks like, why RPE drifts, how video and bar speed calibrate it", picture: "a lifter just after racking a heavy top set, holding up two fingers to a training partner for the reps they had left" },
+  top_sets: { pillar: "powerlifting_iq", name: "Top sets and back-offs", idea: "what a top set and back-off sets are each for, and what they tell you when you read them in your log", picture: "a lifter between the top set and the back-off sets, sliding a plate off each side to the back-off weight while a partner chalks up" },
   sticking_points: { pillar: "powerlifting_iq", name: "Sticking points", idea: "where a lift slows down, the usual reasons, and how to find out which one it is before adding a variation", picture: "a squat or bench press caught at the slowest point of a grinding rep, side-on, the effort real" },
   specificity: { pillar: "powerlifting_iq", name: "Specificity", idea: "why the competition lifts need their own practice, and when a variation actually helps", picture: "a powerlifter squatting competition style in training: belt, knee sleeves, competition depth, a monolift or rack" },
   reading_the_log: { pillar: "powerlifting_iq", name: "Reading your log", idea: "trends over weeks instead of one session: load at the same RPE, bar speed, reps at a given weight", picture: "a lifter on a bench between sets reading back weeks of entries in a training log, a loaded bar behind" },
   set_video: { pillar: "coaches_notes", name: "What I look for in a set video", idea: "what a coach watches in a set: the setup, the first inch, where the bar slows, what changes from the first rep to the last", picture: "a coach and a lifter watching a set video on a phone beside the rack, the loaded bar behind them" },
-  one_variable: { pillar: "coaches_notes", name: "One change at a time", idea: "why a coach changes one variable when something stalls, so you know what fixed it", picture: "a coach writing a single change into a lifter's program sheet at the rack, the lifter watching" },
+  one_variable: { pillar: "coaches_notes", name: "One change at a time", idea: "why a coach changes one variable when something stalls, so you know what fixed it", picture: "a coach changing one thing on a lifter's setup, moving the safety pins one notch or nudging a foot out, the lifter watching" },
   execution_first: { pillar: "coaches_notes", name: "Execution over program", idea: "most sensible programs work when the sets are done as written; how they're executed matters more than which one you pick", picture: "a lifter doing a clean, controlled working set while a coach watches the technique closely from the side" },
-  useful_notes: { pillar: "coaches_notes", name: "Notes that help your coach", idea: "what to write after a session so the next one can be adjusted: how it moved, what felt off, sleep, pain", picture: "a lifter writing short notes in a training log after the session, the bar racked, chalk on the page" },
+  useful_notes: { pillar: "coaches_notes", name: "Notes that help your coach", idea: "what to write after a session so the next one can be adjusted: how it moved, what felt off, sleep, pain", picture: "a lifter typing a short note into their phone after the session, sitting on a bench by the racked bar" },
   small_jumps: { pillar: "coaches_notes", name: "Small jumps", idea: "why progressing in small steps adds up over a block, and why big jumps tend to stall early", picture: "a close-up of a lifter sliding small change plates onto an already loaded barbell, collars in hand" },
   sloppy_warmups: { pillar: "mistakes", name: "Sloppy warm-ups", idea: "warm-ups done differently from the top set: practising a different lift than the one you're testing", picture: "a lifter setting up an empty-bar warm-up squat with the same careful grip, brace and stance as a heavy set" },
   every_set_a_max: { pillar: "mistakes", name: "Every set a max", idea: "grinding every set: fatigue that costs the next sessions more than it builds", picture: "a lifter grinding a set that looks like a max effort, red-faced, the bar slow, on what should be a working set" },
@@ -182,18 +200,18 @@ export const DAILY_TOPICS = {
   not_logging: { pillar: "mistakes", name: "Not logging", idea: "skipping the log, so there's no evidence of progress or of a stall", picture: "a lifter writing the set they just did into a training log at the rack, pencil and chalk" },
   junk_volume: { pillar: "mistakes", name: "Junk volume", idea: "extra sets that add fatigue without helping the main lifts", picture: "a tired lifter late in a long session, facing yet another accessory machine, main lifts long finished" },
   chasing_soreness: { pillar: "mistakes", name: "Chasing soreness", idea: "using soreness, sweat or exhaustion as the measure of a good session", picture: "a lifter walking stiffly past the squat racks the day after heavy legs, a foam roller under the arm" },
-  bad_day_data: { pillar: "mindset", name: "A bad day is data", idea: "one bad session is one data point: what to do with it and what not to read into it", picture: "a lifter calmly writing a missed rep into the log after racking the bar, unbothered, the session going on" },
-  boring_consistency: { pillar: "mindset", name: "Boring consistency", idea: "the same work done well for months is what moves a total", picture: "the same lifter at the same rack in an early-morning gym, a worn logbook with weeks of entries beside the bench" },
+  bad_day_data: { pillar: "mindset", name: "A bad day is data", idea: "one bad session is one data point: what to do with it and what not to read into it", picture: "a lifter calmly resetting after a missed rep, the spotters lowering the bar, the coach giving an easy nod from the side" },
+  boring_consistency: { pillar: "mindset", name: "Boring consistency", idea: "the same work done well for months is what moves a total", picture: "the same lifter at the same rack on three ordinary days (a split panel: different clothes, different light through the window), the same clean set each time" },
   earned_confidence: { pillar: "mindset", name: "Earned confidence", idea: "confidence under a heavy bar comes from reps you've already done, not from hype", picture: "a powerlifter calmly chalking up before a heavy single, focused and quiet, not hyped" },
   execution_focus: { pillar: "mindset", name: "Focus on the rep", idea: "during a set, think about one cue for the rep, not the number on the bar or the people watching", picture: "a lifter's hands set on the bar and eyes fixed just before the unrack, the moment of focus" },
-  long_game: { pillar: "mindset", name: "The long game", idea: "strength builds over blocks and years, so judge a week by whether it was done well", picture: "a well-worn training log, months of entries, resting on the plates of a loaded bar" },
+  long_game: { pillar: "mindset", name: "The long game", idea: "strength builds over blocks and years, so judge a week by whether it was done well", picture: "well-used gear laid out: worn lifting shoes, a belt soft with use and a bar with chalk worn into the knurl" },
   own_the_basics: { pillar: "mindset", name: "Owning the basics", idea: "accountability for the things only the athlete controls: sleep, food, showing up, doing the sets as written", picture: "meal-prepped containers, a water bottle and a training log packed beside a gym bag and lifting shoes" },
   sleep_performance: { pillar: "recovery", name: "Sleep and the bar", idea: "how a short night shows up in bar speed and RPE, and what to adjust on that day", picture: "a lifter warming up slowly in the morning, coffee beside the platform, the bar moving a little heavy" },
   eating_to_train: { pillar: "recovery", name: "Eating to train", idea: "eating enough to train well: protein through the day, food around training, not under-eating in a strength block", picture: "a simple pre-training meal (rice and chicken) beside a gym bag and lifting shoes" },
   lighter_weeks: { pillar: "recovery", name: "Lighter weeks", idea: "what a deload or lighter week is for, and how to tell when one would help", picture: "a lifter moving a lighter bar fast and clean in a quiet gym, fewer plates loaded than usual" },
   fatigue_masks_fitness: { pillar: "recovery", name: "Fatigue hides fitness", idea: "why you can feel weak at the end of a hard block and strong once the fatigue clears", picture: "a lifter resting between heavy squat sets on a bench, belt loosened, breathing, the loaded bar waiting" },
   readiness: { pillar: "recovery", name: "Reading readiness", idea: "warm-up speed and the first working set's RPE as signals for how to run the day", picture: "a lifter doing warm-up singles while a coach watches the bar speed from the side" },
-  rest_periods: { pillar: "recovery", name: "Rest between sets", idea: "why heavy sets need longer rest, and what short rest does to the quality of the next set", picture: "a lifter resting between heavy sets, belt loosened, a phone timer on the plate tree" },
+  rest_periods: { pillar: "recovery", name: "Rest between sets", idea: "why heavy sets need longer rest, and what short rest does to the quality of the next set", picture: "a lifter resting between heavy sets, sitting with a water bottle, a stopwatch counting on the bench" },
   muscle_for_lifts: { pillar: "hypertrophy", name: "Muscle that moves the lifts", idea: "quads for the squat, pecs and triceps for the bench, back and hips for the deadlift: muscle as the engine", picture: "a lifter doing an accessory that builds a main lift (a heavy leg press, close-grip bench or chest-supported row) in a strength gym" },
   accessories_with_a_job: { pillar: "hypertrophy", name: "Accessories with a job", idea: "picking each accessory for the muscle that's limiting a lift, not to fill time", picture: "a lifter doing a targeted accessory for a weak point, such as paused squats or close-grip bench" },
   close_to_failure: { pillar: "hypertrophy", name: "Close enough to failure", idea: "taking growth sets close enough to failure to work, without wrecking the main lifts", picture: "a lifter grinding the last reps of a machine accessory set, a training partner counting beside them" },
@@ -393,38 +411,75 @@ export const relevanceOf = (o: { pillar?: string | null; topic?: string | null }
 /* ------------------------------------------------------------------ */
 
 /**
- * The look (Nov 8 2026, Athlete Insights): a still frame from a premium,
- * serious Japanese sports anime about powerlifting. The photos got the subject
- * right (the lesson itself, in a real strength gym) but the coach wants a look
- * that's recognizably JF Effect's: one house style (FILM_LOOK, the same words
- * in every prompt) across every post, mature and athletic, never childish,
- * never a photo, a 3D render or a generic AI illustration. Three anime
- * directions (ART_STYLES: the lift as a key frame, a character moment around
- * training, the insert close-up), and variety comes from the moment, the shot,
- * the light, the place (DAILY_SETTINGS) and the people, so no two posts share
- * a background or a character. FILM_LOOK_VERSION marks which days are in this
- * look (concept.look); `photo_v1` was the photo look before it.
+ * The look (Nov 20 2026, Athlete Insights): JF Effect's illustrated house
+ * style, a clean, bright 2D frame in the tradition of modern Japanese sports
+ * anime. The first anime look (`anime_v1`, Nov 8) got the subject right but
+ * every frame came out dark and orange (a strong key light, rim light, bloom
+ * and deep shadows, with late sun, night sessions and spotlights to pick
+ * from), the people were thick-armed men in black t-shirts, and the place was
+ * the same industrial gym under hanging lamps: the seven pictures from Nov 6
+ * to 27 averaged 0.32 lightness, 34% of the frame near black and 52% amber.
+ * This look keeps the identity (clean line art, cel colour, no words, one
+ * small JF red accent) and changes the light (bright, even, a neutral white
+ * balance, open shadows), the people (who they are decides how they're built:
+ * DAILY_CASTS), the colours (DAILY_PALETTES, a different one post to post),
+ * the places (DAILY_SETTINGS, light and varied, and not always a gym) and
+ * how it's drawn (DAILY_RENDERINGS: anime key art most days, a softer anime,
+ * a graphic illustration or manga colour when the post calls for it), all
+ * after the post is read for what it is (concept.read). FILM_LOOK_VERSION
+ * marks which days are in this look (concept.look); `anime_v1` was the
+ * look before it, `photo_v1` the one before that.
  */
-export const FILM_LOOK_VERSION = "anime_v1";
+export const FILM_LOOK_VERSION = "anime_v2";
 
 export const FILM_LOOK =
-  "JF Effect's house style: a still frame from a premium, beautifully animated Japanese sports anime series about powerlifting, a mature, grounded sports drama, from its best-animated episode. Hand-drawn 2D: clean, confident line art with varied line weight; cel shading in two tones with a soft gradient on skin and crisp specular highlights on steel and sweat; richly painted, highly detailed background art of a real strength gym (racks, platforms, plates, chalk dust, worn rubber floor, every object drawn); cinematic lighting with a strong key light, a clear rim light and soft bloom on the highlights; rich, controlled colour with deep but readable shadows and one warm red accent somewhere in the frame. Adult athletes (20s to 50s) drawn with realistic adult proportions and anatomy: strong, thick, athletic strength-athlete builds, defined faces, naturally sized anime eyes, expressive but restrained, every hand with five well-drawn fingers. Dynamic, intentional composition with depth and a clear focal point, framed like a shot a director chose.";
+  "JF Effect's illustrated house style: a clean, bright, hand-drawn 2D illustration in the tradition of modern Japanese sports anime, grounded and made for adults. Clean, confident line art with varied line weight; flat cel colour with soft, simple shading; backgrounds drawn with care but kept uncluttered so they support the subject instead of competing with it. The frame is bright and evenly exposed: natural daylight or clean, even indoor light, a neutral white balance (whites read white, steel reads grey, skin reads as skin), soft open shadows that keep their detail, and clear, true colour with no colour grade over it. One small touch of JF Effect red somewhere in the frame. Made for a phone screen: one clear subject that reads at a glance, strong separation between the subject and the background, nothing important near the edges.";
+
+/** The house look in four treatments, one shared identity (clean line art, bright true colour, no words, a JF red accent). */
+export const DAILY_RENDERINGS: Record<DailyRendering, { name: string; look: string; use: string }> = {
+  anime: {
+    name: "Anime key art",
+    look: "Drawn as crisp anime key art: clean cel shading, expressive but grounded faces, a well-animated sports series on a bright day.",
+    use: "most posts: the lifts, coaching moments, the platform",
+  },
+  soft_anime: {
+    name: "Soft anime",
+    look: "Drawn in the airy, softly painted daylight look of a slice-of-life anime: light, fresh colour, gentle painted gradients in the background, the people still in clean line art.",
+    use: "recovery, sleep, food, patience, a calm or reflective post",
+  },
+  graphic: {
+    name: "Graphic illustration",
+    look: "Drawn as a flat, graphic 2D illustration: bold clean shapes, a limited palette, minimal shading and a simplified background, like a modern editorial illustration that explains one idea without any words.",
+    use: "a technical breakdown: bar path, positions, a comparison, how something works",
+  },
+  manga_colour: {
+    name: "Manga colour",
+    look: "Drawn as bold manga ink line art with light screen-tone texture and a restrained palette of two or three colours over clean white.",
+    use: "a light, humorous or conversational take, a common mistake",
+  },
+};
+export const DAILY_RENDERING_KEYS = Object.keys(DAILY_RENDERINGS) as DailyRendering[];
 
 export const ART_STYLES: Record<DailyArt, { name: string; look: string; use: string }> = {
   key_frame: {
     name: "Key frame",
-    look: "The lift as the episode's key frame: a dramatic camera angle and strong perspective on the squat, bench press or deadlift, the bar and the body's position drawn exactly right, tension in the muscles and the face, chalk in the air, motion shown with restraint (a few speed lines at most), the moment the whole episode builds to.",
+    look: "The lift as the episode's key frame: a clear camera angle on the squat, bench press or deadlift, the bar and the body's position drawn exactly right, quiet focus in the face, the moment the episode builds to.",
     use: "the lifts, technique, a heavy single, the platform, effort and bar speed",
   },
   drama: {
     name: "Character moment",
-    look: "A quiet character moment around training, like the scene before or after the big lift: a coach and athlete, the warm-up room, a lifter reading their log or resting between sets, intimate framing, expressive faces and body language, the detailed gym behind them telling the rest of the story.",
-    use: "coaching, programs and logs, recovery between sets, mindset, meet prep, attempts",
+    look: "A character moment around training, like the scene before or after the big lift: a coach and athlete, the warm-up room, training partners between sets, expressive faces and body language, the place behind them telling the rest of the story.",
+    use: "coaching, programs, recovery between sets, mindset, meet prep, attempts",
   },
   insert: {
     name: "Insert close-up",
-    look: "An anime insert cut: a tight, beautifully drawn close-up of the one detail that teaches the point (chalked hands on the knurl, a belt being braced, small plates sliding on, the log's page, a coach's finger on a program line), dramatic depth of field and light, part of the athlete in frame.",
-    use: "a cue, a setup detail, the training log, small plates, a single change",
+    look: "An insert cut: a tight, beautifully drawn close-up of the one detail that teaches the point (hands setting a grip, a belt being braced, small plates sliding on, a foot planted for the pull), clean depth of field, part of the athlete in frame.",
+    use: "a cue, a setup detail, small plates, a single change",
+  },
+  explainer: {
+    name: "Explainer",
+    look: "A clear explainer frame, like the moment a sports anime stops to show how something works: the idea shown simply and large on a clean background, a side-on position or a few objects arranged to make the point, people only if the point needs them.",
+    use: "how a lift works, a comparison, an idea best shown with objects",
   },
 };
 export const DAILY_ART_KEYS = Object.keys(ART_STYLES) as DailyArt[];
@@ -436,40 +491,85 @@ export const LEGACY_ART_NAMES: Record<string, string> = {
   detail: "Detail photo (old look)",
 };
 
-/** What it must never look like: a photo, a render, a childish or generic AI look, a lifestyle scene. */
+/** Who's in it: real people of every kind, built like who they are (the picture prompt's people line), or nobody. */
+export const DAILY_CASTS: Record<DailyCast, { name: string; look: string }> = {
+  newer_lifter: { name: "Newer lifter", look: "a newer lifter in their first year or two: an ordinary, healthy everyday build with little visible muscle definition, still learning the movement" },
+  everyday: { name: "Everyday member", look: "a recreational lifter who trains around a job and a life: a normal, fit-looking build, the kind of person at any gym" },
+  powerlifter: { name: "Powerlifter", look: "a competitive powerlifter: sturdy and strong with a solid midsection and a broad back, natural and un-shredded (thick and strong, never a bodybuilder)" },
+  physique: { name: "Physique athlete", look: "a natural bodybuilder or physique athlete: lean and athletic with realistic natural muscle, never stage-ready or oversized" },
+  masters: { name: "Masters lifter", look: "a masters lifter in their 40s to 60s: strong for their age with an ordinary middle-aged body, maybe some grey hair" },
+  coach_athlete: { name: "Coach and athlete", look: "a coach (an ordinary build, a team polo or a plain top) with one athlete built like who they are" },
+  crew: { name: "Training group", look: "a small training group of different ages, sizes and genders, each built like who they are" },
+  hands: { name: "Hands and detail", look: "only hands or part of a body in frame: the detail is the subject" },
+  no_people: { name: "No people", look: "nobody in the frame: the equipment, the setup or the objects tell it" },
+};
+export const DAILY_CAST_KEYS = Object.keys(DAILY_CASTS) as DailyCast[];
+
+/** The colours: a different palette post to post, every one bright and true, never a single colour cast. */
+export const DAILY_PALETTES: Record<DailyPalette, { name: string; look: string }> = {
+  crisp_white: { name: "Crisp white", look: "white walls and pale grey floors, black and steel equipment, clean and airy" },
+  cool_blue: { name: "Cool blue", look: "fresh blues and slate greys with plenty of white" },
+  sage_cream: { name: "Sage and cream", look: "soft sage green, cream and light wood, natural and calm" },
+  plate_colours: { name: "Plate colours", look: "the bright primary colours of calibrated plates (red, blue, yellow, green) against a light grey gym" },
+  navy_sky: { name: "Navy and sky", look: "navy kit and equipment against sky blue and white" },
+  teal_slate: { name: "Teal and slate", look: "teal and slate grey with off-white, crisp and modern" },
+  soft_pastel: { name: "Soft pastel", look: "light mint, lavender and sky tones in the background, the subject in clear true colour" },
+  light_wood: { name: "Light wood", look: "pale natural wood platforms and benches with olive and off-white, warm only in the wood itself" },
+};
+export const DAILY_PALETTE_KEYS = Object.keys(DAILY_PALETTES) as DailyPalette[];
+
+/** The kinds of post, and how each should feel in the frame. */
+export const DAILY_KINDS: Record<DailyKind, string> = {
+  educational: "clear and instructive: the thing being taught is large and easy to read, the background simple",
+  technical: "precise: the position, the bar and the joints drawn so a coach could teach from it, side-on or straight-on, nothing in the way",
+  motivational: "bright and forward-looking, energy without hype, never grim",
+  conversational: "relaxed and relatable, an everyday gym moment anyone recognizes",
+  humorous: "light and playful in the faces and body language, still grounded and adult",
+};
+export const DAILY_KIND_KEYS = Object.keys(DAILY_KINDS) as DailyKind[];
+
+/** What it must never look like: a photo, a render, a dark or orange frame, exaggerated bodies, a childish look, a lifestyle scene. */
 export const FILM_AVOID =
-  "Avoid: photorealism or anything that reads as a photograph; 3D render, CGI, Pixar-like or video-game looks; a generic AI-art sheen (over-smoothed airbrushed skin, everything glowing, random particles, melted details); chibi, cutesy, moe, kids' cartoon or western-cartoon proportions, giant eyes or exaggerated comedic faces; anyone who looks under 20, school uniforms, fanservice or sexualized poses; exaggerated, bodybuilding-show or steroid-looking physiques; a muddy brown or grey palette, washed-out colour or a murky frame; watercolour, oil-painting or sketchy looks; a motivational-poster composition or a character posing for the viewer; lifestyle scenes with no training in them (parks, beaches, brunch, the street); stock-photo staging; brand names, logos, readable text, subtitles, speech bubbles or watermarks.";
+  "Avoid: an orange, amber, golden, sepia or yellow colour cast over the frame; dark or moody lighting, large black areas, heavy shadows, a spotlight in darkness, hanging lamps over a dim room, bloom, haze, smoke or a dramatic cinematic grade; photorealism or anything that reads as a photograph; 3D render, CGI, Pixar-like or video-game looks; a generic AI-art sheen (over-smoothed skin, everything glowing, random particles, melted details); exaggerated muscles, oversized arms or shoulders, visible vein maps, bodybuilder size on an everyday lifter, or every person in a black t-shirt; chibi, cutesy, moe, kids' cartoon or western-cartoon proportions, giant eyes or exaggerated comedic faces; anyone who looks under 20, school uniforms, fanservice or sexualized poses; a muddy brown or grey palette or washed-out colour; a busy frame where the subject gets lost at phone size; a motivational-poster composition or a character posing for the viewer; lifestyle scenes with no training in them (beaches, brunch, parties, a stroll in the park); equipment where it couldn't be (a rack or barbell in a kitchen or a living room that isn't set up for training); stock-photo staging; brand names, logos, readable text, subtitles, speech bubbles or watermarks.";
 
 export const DAILY_STYLES: Record<DailyStyle, { name: string; look: string }> = {
-  wide_moment: { name: "Establishing shot", look: "a wide establishing shot of the gym or the platform, the athlete part of the whole scene, the background art doing the storytelling: racks, plates, chalk bowl, other lifters." },
+  wide_moment: { name: "Establishing shot", look: "a wide establishing shot of the place, the athlete part of the whole scene, the background doing some of the storytelling but never crowding the subject." },
   medium_candid: { name: "Mid-shot", look: "a mid-shot mid-set or just after it, posture, face and hands showing the work and what they're thinking." },
   two_people: { name: "Two-shot", look: "a two-shot of a coach and an athlete (or two training partners) in a real coaching moment: a cue, a spot, watching a set video together, one face in sharp focus." },
-  group: { name: "Ensemble", look: "an ensemble shot of a training group or a meet team around a rack or the platform between attempts, loading plates, watching a lift, each person distinct." },
-  in_action: { name: "The lift", look: "the lift mid-rep, side-on or three-quarter so the technique reads, the bar loaded the same on both sides and the position correct, drawn with weight and tension." },
-  close_detail: { name: "Insert close-up", look: "a tight insert close-up on the detail that teaches it: chalked hands on the knurl, a belt being braced, a training log, small plates and collars." },
-  over_shoulder: { name: "Over the shoulder", look: "over the athlete's shoulder: the loaded bar waiting in the rack or on the platform ahead, judges or a coach in the distance, the moment before." },
-  low_angle: { name: "Low angle", look: "a low, dramatic angle looking up at the athlete under or behind the bar, the gym's ceiling lights and rafters above, side-on enough that the position reads." },
-  framed_view: { name: "Framed", look: "framed through the rack uprights, a doorway or between other lifters, as if watching the set from the side of the gym." },
-  backlit: { name: "Silhouette and rim light", look: "the athlete against a bright window or the platform lights, a glowing rim of light along their outline, their face still readable." },
-  overhead: { name: "From above", look: "a high or top-down angle: an athlete's stance on the platform, a training log beside chalk and a loaded bar, a coach's program sheet on the bench." },
-  two_frames: { name: "Split panel", look: "two anime panels side by side of the same athlete and place (the setup and the lockout, the warm-up and the top set, the first rep and the last), the point living between them." },
+  group: { name: "Ensemble", look: "an ensemble shot of a training group or a meet team around a rack or the platform, loading plates, watching a lift, each person distinct." },
+  in_action: { name: "The lift", look: "the lift mid-rep, side-on or three-quarter so the technique reads, the bar loaded the same on both sides and the position correct." },
+  close_detail: { name: "Insert close-up", look: "a tight close-up on the detail that teaches it: hands on the knurl, a belt being braced, a foot set for the pull, small plates and collars." },
+  over_shoulder: { name: "Over the shoulder", look: "over the athlete's shoulder: the loaded bar waiting in the rack or on the platform ahead, a coach or judges in the distance, the moment before." },
+  low_angle: { name: "Low angle", look: "a low angle looking up at the athlete under or behind the bar, the bright ceiling above, side-on enough that the position reads." },
+  framed_view: { name: "Framed", look: "framed through the rack uprights, a doorway or between other lifters, as if watching the set from the side of the room." },
+  overhead: { name: "From above", look: "a high or top-down angle: an athlete's stance on the platform, the plates laid out, a bar and its collars, what's on the bench." },
+  two_frames: { name: "Split panel", look: "two panels side by side of the same athlete and place (the setup and the lockout, the warm-up and the top set, the first rep and the last), the point living between them." },
+  side_profile: { name: "Side-on", look: "a clean side-on view of the person or the lift at eye level, the position large and easy to read, a simple background behind." },
+  still_life: { name: "Still life", look: "an arranged still life of the few objects that make the point (plates, a bar, shoes, a belt, food containers, a stopwatch), no people, composed with space around them." },
 };
 export const DAILY_STYLE_KEYS = Object.keys(DAILY_STYLES) as DailyStyle[];
 
-/** The light: cinematic, a different one post to post, never murky. */
+/** The light: bright and balanced, a different one post to post, never dark or orange. */
 export const DAILY_LIGHTS: Record<DailyLight, { name: string; look: string }> = {
-  dawn_shafts: { name: "Dawn shafts", look: "early-morning light in long shafts through high gym windows, chalk dust glowing in the beams, cool blue shadows" },
-  late_sun: { name: "Late sun", look: "low golden late-afternoon sun through a roll-up door or west windows, long warm shadows across the platform" },
-  night_session: { name: "Night session", look: "a late training session: deep blue night in the windows, warm industrial lights over the racks pooling on the floor" },
-  meet_spotlights: { name: "Meet spotlights", look: "bright competition spotlights on the platform, the crowd and judges' table falling into soft darkness around it" },
-  warm_up_buzz: { name: "Warm-up room", look: "the busy mixed light of a meet's warm-up room, fluorescent overheads and colourful kit, energy everywhere" },
-  rainy_night: { name: "Rainy night", look: "rain streaking the windows at night, reflections on the glass, the gym warm and bright inside" },
+  big_windows: { name: "Big windows", look: "bright, even daylight from big windows, neutral whites and soft open shadows" },
+  clean_gym_light: { name: "Clean gym light", look: "the clean, even white light of a modern gym's ceiling panels, no hot spots, every corner readable" },
+  fresh_morning: { name: "Fresh morning", look: "crisp early-morning daylight, cool fresh tones, pale blue in the shadows" },
+  open_door: { name: "Open door", look: "daylight pouring in through a big open door or roll-up door, the room bright and airy" },
+  soft_daylight: { name: "Soft daylight", look: "soft, even daylight from a bright cloudy sky, gentle shadows and clear, true colour" },
   skylight_noon: { name: "Skylight noon", look: "bright, clean midday light from skylights, crisp shadows, everything vivid and clear" },
-  rim_backlight: { name: "Rim light", look: "strong backlight from a window or the platform lights, a glowing rim along the athlete's outline and the bar" },
+  open_air: { name: "Outdoors", look: "open-air daylight under a clear blue sky, crisp and fresh" },
+  bright_hall: { name: "Bright hall", look: "a bright, evenly lit hall, the platform lit clean and white and the people around it lit too, nothing falling into darkness" },
 };
 export const DAILY_LIGHT_KEYS = Object.keys(DAILY_LIGHTS) as DailyLight[];
-/** Earlier looks' light (the photos' and the 2D film's), for the names of days made before. */
+/** Earlier looks' light (the anime_v1 frames', the photos' and the 2D film's), for the names of days made before. */
 export const LEGACY_LIGHT_NAMES: Record<string, string> = {
+  dawn_shafts: "Dawn shafts",
+  late_sun: "Late sun",
+  night_session: "Night session",
+  meet_spotlights: "Meet spotlights",
+  warm_up_buzz: "Warm-up room",
+  rainy_night: "Rainy night",
+  rim_backlight: "Rim light",
   window_daylight: "Window daylight",
   overhead_gym: "Gym lights",
   garage_daylight: "Garage daylight",
@@ -489,22 +589,28 @@ export const LEGACY_LIGHT_NAMES: Record<string, string> = {
   neon_night: "Neon night",
 };
 
-/** Where it happens: a different gym or meet post to post, every one a real place to train (never a lifestyle scene). */
+/** Where it happens: a different place post to post, every one somewhere training (or getting ready for it) happens, never a lifestyle scene. */
 export const DAILY_SETTINGS: Record<DailySetting, { name: string; look: string }> = {
-  powerlifting_club: { name: "Powerlifting club", look: "a gritty powerlifting club: chalk-dusted wooden platforms, a monolift, calibrated plates in red, blue, yellow and green on trees, a wall of old meet posters with no readable words" },
+  powerlifting_club: { name: "Powerlifting club", look: "a bright, tidy powerlifting club: light walls, wooden platforms, a monolift, calibrated plates in red, blue, yellow and green on trees, big windows" },
   commercial_strength: { name: "Commercial gym", look: "the strength area of a big commercial gym: a row of power racks and benches, mirrors, dumbbells beyond, other members training" },
-  garage_gym: { name: "Garage gym", look: "a well-used home garage gym: one power rack, a lifting platform made of plywood and rubber, iron plates, tools and a bike on the wall, the door open" },
+  garage_gym: { name: "Garage gym", look: "a tidy home garage gym with the door open to daylight: one power rack, a plywood-and-rubber platform, iron plates, tools on a pegboard" },
   university_weight_room: { name: "University weight room", look: "a university strength room: long rows of platforms and racks, team colours on the walls, high ceilings, bright and clean" },
-  basement_gym: { name: "Basement gym", look: "an old-school basement gym: brick walls, low ceiling with exposed pipes, iron plates, worn benches, a chalk bucket" },
+  performance_gym: { name: "Performance gym", look: "a modern performance gym: white walls, big windows, a turf lane, racks and dumbbells, a few plants, light and airy" },
+  community_gym: { name: "Community gym", look: "a community rec-centre weight room: a few racks and benches, people of every age and ability training, a window onto a gymnasium" },
+  home_training: { name: "Home training", look: "a bright spare room or corner of a home set up for training: an adjustable bench, dumbbells, bands or a small rack, a window" },
+  open_air_yard: { name: "Open-air yard", look: "an open-air training yard: racks and a platform on rubber flooring outside, a fence and trees beyond" },
   bodybuilding_gym: { name: "Bodybuilding gym", look: "a serious bodybuilding gym: rows of machines and cable stations, dumbbell racks, mirrors, a hack squat and leg press" },
-  warehouse_gym: { name: "Warehouse gym", look: "a converted warehouse gym: steel beams, a big roll-up door, long rubber floor, racks along one wall, plates and bars everywhere" },
-  meet_platform: { name: "Meet platform", look: "a powerlifting meet: the competition platform, three judges' chairs, the scorer's table, spotters and loaders, an audience in the stands" },
+  recovery_corner: { name: "Recovery corner", look: "a bright recovery corner of a gym: stretching mats, foam rollers, a massage table, water bottles, a window" },
+  meal_prep: { name: "Meal prep", look: "a bright home kitchen counter during meal prep: containers of rice, chicken and vegetables, a water bottle, a gym bag by the door; no rack, barbell or plates in a kitchen (only for a post about food)" },
+  coach_corner: { name: "Coach's corner", look: "a coach's corner beside the gym floor: a small desk, a laptop and a phone on a tripod (screens turned away or blank), the racks behind" },
+  meet_platform: { name: "Meet platform", look: "a powerlifting meet in a bright hall: the competition platform, three judges' chairs, the scorer's table, spotters and loaders, an audience in the stands" },
   meet_warm_up: { name: "Meet warm-up room", look: "a meet's warm-up room: several racks and benches shared by lifters and coaches, kit bags, attempt cards, handlers loading plates" },
 };
 export const DAILY_SETTING_KEYS = Object.keys(DAILY_SETTINGS) as DailySetting[];
 
 /** Shots and lights from earlier looks, for the names of days made before. */
 export const LEGACY_SHOT_NAMES: Record<string, string> = {
+  backlit: "Silhouette and rim light",
   phone_story: "Phone story",
   golden_hour: "Golden hour",
   blue_hour: "Blue hour",
@@ -712,12 +818,29 @@ export type Recent = {
   visual?: string | null;
   /** Where it happened (concept.setting), so the next one is somewhere else. */
   setting?: string | null;
+  /** Who was in it (concept.cast), its colours (concept.palette) and how it was drawn (concept.rendering). */
+  cast?: string | null;
+  palette?: string | null;
+  rendering?: string | null;
 };
 
 /** An angle isn't used again for this many days (about 12 posts at 3 a week). */
 export const TOPIC_GAP_DAYS = 28;
 
-export type Choices = { pillar: DailyPillar; topics: DailyTopic[]; formats: DailyFormat[]; styles: DailyStyle[]; lights: DailyLight[]; settings?: DailySetting[] };
+export type Choices = {
+  pillar: DailyPillar;
+  topics: DailyTopic[];
+  formats: DailyFormat[];
+  styles: DailyStyle[];
+  lights: DailyLight[];
+  settings?: DailySetting[];
+  /** Who can be in it, the kinds not in the last two pictures first. */
+  casts?: DailyCast[];
+  /** The palettes not used in the last three pictures, shuffled. */
+  palettes?: DailyPalette[];
+  /** The treatments: anime key art always, another one only if it wasn't in the last three. */
+  renderings?: DailyRendering[];
+};
 
 /** A place isn't offered first again for this many days (about 3 posts at 3 a week). */
 export const SETTING_GAP_DAYS = 8;
@@ -753,7 +876,37 @@ export function pickChoices(
   const turn = Math.floor(rand() * DAILY_SETTING_KEYS.length);
   const spun = DAILY_SETTING_KEYS.map((_, i, a) => a[(i + turn) % a.length]);
   const settings = [...spun.filter((k) => !usedSettings.has(k)), ...spun.filter((k) => usedSettings.has(k))];
-  return { pillar, topics, formats, styles: styles.length ? styles : DAILY_STYLE_KEYS, lights: lights.length ? lights : DAILY_LIGHT_KEYS, settings };
+  // a kind of person not in the last two pictures first (shuffled), so the feed isn't one lifter over and over
+  const usedCasts = new Set(lastPictures(o.recent, o.day, 2).map((r) => r.cast).filter(Boolean) as string[]);
+  const castTurn = Math.floor(rand() * DAILY_CAST_KEYS.length);
+  const castSpun = DAILY_CAST_KEYS.map((_, i, a) => a[(i + castTurn) % a.length]);
+  const casts = [...castSpun.filter((k) => !usedCasts.has(k)), ...castSpun.filter((k) => usedCasts.has(k))];
+  // a palette not in the last three pictures
+  const usedPalettes = new Set(lastPictures(o.recent, o.day, 3).map((r) => r.palette).filter(Boolean) as string[]);
+  const palTurn = Math.floor(rand() * DAILY_PALETTE_KEYS.length);
+  const palettes = DAILY_PALETTE_KEYS.map((_, i, a) => a[(i + palTurn) % a.length]).filter((k) => !usedPalettes.has(k));
+  // anime key art is the house look; another treatment only when none of the last three used it
+  const usedRenderings = new Set(lastPictures(o.recent, o.day, 3).map((r) => r.rendering).filter(Boolean) as string[]);
+  const renderings = DAILY_RENDERING_KEYS.filter((k) => k === "anime" || !usedRenderings.has(k));
+  return {
+    pillar,
+    topics,
+    formats,
+    styles: styles.length ? styles : DAILY_STYLE_KEYS,
+    lights: lights.length ? lights : DAILY_LIGHT_KEYS,
+    settings,
+    casts,
+    palettes: palettes.length ? palettes : DAILY_PALETTE_KEYS,
+    renderings,
+  };
+}
+
+/** The last `n` pictures before (or around) the day, nearest last: what the next one shouldn't repeat. */
+function lastPictures(recent: Recent[], day: string, n: number): Recent[] {
+  return recent
+    .filter((r) => r.day !== day && gap(r.day, day) <= 21)
+    .sort((a, b) => gap(b.day, day) - gap(a.day, day))
+    .slice(-n);
 }
 
 /** What's worked, in plain words, for the writer and the coach's card. */
@@ -801,8 +954,16 @@ export type DailyConcept = {
   light: DailyLight;
   /** The anime direction: the lift as a key frame, a character moment or an insert close-up. */
   art: DailyArt;
-  /** Where it happens: a different gym or meet post to post. */
+  /** Where it happens: a different place post to post. */
   setting?: DailySetting;
+  /** How it's drawn (anime key art most days); missing on days made before the second look. */
+  rendering?: DailyRendering;
+  /** Who's in it (or nobody), built like who they are. */
+  cast?: DailyCast;
+  /** Its colours, a different palette post to post. */
+  palette?: DailyPalette;
+  /** The post read before the picture is planned: what kind of post, about what, for whom, how best to show it. */
+  read?: DailyRead;
   /** The frame: who's in it, what they're doing and feeling, where, what's around them. */
   visual: string;
   /** Words in the scene (a text on a phone, a note, a speech bubble), exactly, or "" for none. */
@@ -813,6 +974,19 @@ export type DailyConcept = {
   draftForms: DailyFormat[];
   /** The chosen, polished caption. */
   caption: string;
+};
+
+/** The art director's read of a post, before its picture is planned. */
+export type DailyRead = {
+  kind: DailyKind;
+  /** Powerlifting, bodybuilding, general strength, recovery, nutrition or mindset. */
+  discipline: string;
+  /** Who it speaks to most. */
+  audience: string;
+  /** The best way to show it, in a sentence. */
+  show: string;
+  /** Whether people are needed, and how many. */
+  people: "none" | "hands" | "one" | "two" | "group";
 };
 
 /**
@@ -901,20 +1075,22 @@ ${VOICE_GUIDE}
 WORK IT OUT IN THIS ORDER
 1. The category is given. Pick one angle from its list.
 2. The point: what he wants a lifter to understand or do, in one plain sentence. It must be true for most lifters and defensible to another good coach.
-3. The picture: one specific training moment that goes with the point (it sets the scene; the caption never describes it or repeats words in it).
-4. Three different captions, three takes on the point, each labelled with its form, and different in how they're written too (one a quick one-paragraph thought, another a few short lines; their length and capitals vary, and at least one is typed the casual way of his first example: lowercase starts, a run-on, nothing tidied). Pick the one that sounds most like him and is most useful first, not the most dramatic or the most polished.
+3. Read the post like an art director before you plan any picture ("read"): what it communicates; what kind of post it is (educational, technical, motivational, conversational or humorous); its discipline (powerlifting, bodybuilding, general strength, recovery, nutrition or mindset); who it speaks to most; the best way to show it (a lift, a moment between people, one or two objects, a comparison); and whether people are needed at all (often they aren't: a still life of the right objects or a pair of hands can say it better).
+4. The picture: one specific moment or arrangement that shows the point, planned from that read (it sets the scene; the caption never describes it or repeats words in it).
+5. Three different captions, three takes on the point, each labelled with its form, and different in how they're written too (one a quick one-paragraph thought, another a few short lines; their length and capitals vary, and at least one is typed the casual way of his first example: lowercase starts, a run-on, nothing tidied). Pick the one that sounds most like him and is most useful first, not the most dramatic or the most polished.
 
 THE PICTURE
-- A still frame from a premium, serious Japanese sports anime about powerlifting, in JF Effect's house style (the look is fixed; you choose the moment, the anime direction, the shot, the light and the place). It teaches the post's point: an athlete who only saw the picture should be able to guess what the post is about.
-- Start from the angle's own picture brief (given with each angle) and make it specific to the point. For example: fatigue management, an athlete resting between heavy squat sets; deadlift technique, a conventional deadlift setup side-on so the position reads; progressive overload, an athlete reviewing a training log beside a loaded barbell; competition mindset, a powerlifter in the warm-up room or walking to the platform; hypertrophy, the athlete doing the accessory the post is about.
-- Real powerlifting gyms and meets, drawn accurately: power racks, monolifts, competition benches, deadlift platforms, calibrated plates (red 25, blue 20, yellow 15, green 10) or bumper plates, chalk, belts, knee sleeves, lifting shoes, training logs. Equipment and technique correct: one straight barbell, the same plates on both sides with collars, the grip, stance and bar position that lift really uses.
-- Tell a story with the camera: an interesting angle and perspective (low and side-on for a lift, over the shoulder toward the platform, a tight insert on hands and chalk, a two-shot of coach and athlete), never a flat, centred, posed shot.
-- The people: adults (say their age range), realistic adult anatomy and a strong, athletic build for a strength athlete, their hair, skin tone and training clothes, exactly what they're doing and the position they're in, their expression. Never the same athlete or coach as a recent post (change who they are: gender, age, build, hair, skin tone, kit colours), and never the same place or composition as a recent post.
-- Mature and serious, like a sports drama for adults: never cute, childish or comedic, never a teenager or a school uniform, never fanservice, never an exaggerated or bodybuilding-show physique, never undressed, measuring their body or on a scale outside a meet weigh-in, never a lifestyle scene with no training in it. Intense and focused, not dark or miserable.
-- No readable words anywhere in the frame (no speech bubbles, captions or signs; a logbook's writing and a phone screen are scribbles or turned away; no brand names). "typography" is always "".
+- JF Effect's illustrated house style: a clean, bright 2D frame in the tradition of modern Japanese sports anime (the identity is fixed; you choose the treatment, the direction, the shot, the light, the palette, the place and who's in it). It teaches the post's point: an athlete who only saw the picture should be able to guess what the post is about.
+- Bright and clear, made for a phone: daylight or clean, even indoor light, a neutral white balance, open shadows, true colour. Never dark, moody, orange, amber or golden, never a dim gym under hanging lamps, never a spotlight in darkness. One clear subject that reads at a glance.
+- Start from the angle's own picture brief (given with each angle) and make it specific to the point. For example: fatigue management, an athlete resting between heavy squat sets; deadlift technique, a clean side-on view of the setup; small jumps, a pair of hands sliding small plates on; eating to train, the meal containers by the gym bag. Don't reach for the same props every time: a training log or a phone only when the post is about logging or video.
+- Real places to train, drawn accurately and not always the same kind: a bright club, a commercial gym, a garage, a university room, a performance gym, a community gym, a home setup, an open-air yard, a recovery corner, the meet. Equipment drawn accurately: power racks, monolifts, competition benches, deadlift platforms, calibrated plates (red 25, blue 20, yellow 15, green 10) or bumper plates, belts, knee sleeves, lifting shoes. Equipment and technique correct: one straight barbell, the same plates on both sides with collars, the grip, stance and bar position that lift really uses.
+- Tell it with the camera: an interesting angle and perspective (side-on for a lift, over the shoulder toward the platform, a tight insert on hands, a two-shot of coach and athlete, a still life from above), never a flat, centred, posed shot.
+- The people (when there are any): pick who they are first ("cast"), and their body follows from that. A newer lifter or an everyday member has an ordinary, healthy build; a powerlifter is sturdy and thick through the middle, not shredded; a physique athlete is lean with natural muscle; a masters lifter looks their age. Natural arm and shoulder size, no veins mapped across them. Say their age range, gender, hair, skin tone and training clothes (in colour, never everyone in black), what they're doing and their expression. Across the feed there are as many women as men, every age from 20s to 60s and every body type. Never the same person, cast, place, palette or composition as a recent post.
+- Mature and grounded, made for adults: never cute, childish or comedic in a cartoon way, never a teenager or a school uniform, never fanservice, never an exaggerated or bodybuilding-show physique, never undressed, measuring their body or on a scale outside a meet weigh-in, never a lifestyle scene with no training in it.
+- No readable words anywhere in the frame (no speech bubbles, captions, labels or signs; a phone or laptop screen is blank or turned away; no brand names). "typography" is always "".
 
 Answer with JSON only:
-{"topic": "the angle", "mood": "...", "situation": "the moment", "idea": "the point, in one sentence", "art": "key_frame, drama or insert", "style": "the shot", "light": "...", "setting": "the place", "visual": "...", "typography": "...", "captions": [{"form": "...", "text": "..."}, {"form": "...", "text": "..."}, {"form": "...", "text": "..."}]}`;
+{"topic": "the angle", "mood": "...", "situation": "the moment", "idea": "the point, in one sentence", "read": {"kind": "educational, technical, motivational, conversational or humorous", "discipline": "...", "for": "who it speaks to most", "show": "the best way to show it, in a sentence", "people": "none, hands, one, two or group"}, "rendering": "...", "art": "...", "style": "the shot", "light": "...", "palette": "...", "setting": "the place", "cast": "...", "visual": "...", "typography": "...", "captions": [{"form": "...", "text": "..."}, {"form": "...", "text": "..."}, {"form": "...", "text": "..."}]}`;
 
 /** Ends on a question mark (a closing emoji aside). */
 export const endsWithQuestion = (s: string) => /\?\s*(\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*\s*)?$/u.test(s.trim());
@@ -931,6 +1107,39 @@ export function settingLine(settings: DailySetting[], recent: Recent[], day: str
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+/**
+ * Props that crept into picture after picture (a training log was in 4 of the
+ * 7 anime_v1 frames): one in 2 of the last 4 pictures is left out of the
+ * next, unless the post is about it.
+ */
+export const PICTURE_PROPS: { key: string; name: string; re: RegExp }[] = [
+  { key: "log", name: "a training log, notebook, clipboard or program sheet", re: /\b(training log|log ?book|logbook|notebook|journal|clipboard|program sheet|the log)\b/i },
+  { key: "phone", name: "a phone", re: /\bphones?\b/i },
+  { key: "chalk_bowl", name: "a chalk bowl or bucket", re: /\bchalk (bowl|bucket|tray)\b/i },
+  { key: "lamps", name: "hanging lamps or pendant lights", re: /\b(hanging|pendant|industrial) (lamps?|lights?)\b/i },
+];
+const propsIn = (text: string | null | undefined) => PICTURE_PROPS.filter((p) => p.re.test(text ?? ""));
+
+function propsLately(recent: Recent[], day: string) {
+  const last = lastPictures(recent, day, 4);
+  return PICTURE_PROPS.filter((p) => last.filter((r) => p.re.test(r.visual ?? "")).length >= 2);
+}
+
+/** The props to leave out of the next picture, as a line for the writer (null when there are none). */
+export function propsLine(recent: Recent[], day: string): string | null {
+  const tired = propsLately(recent, day);
+  return tired.length
+    ? `LEAVE OUT OF THE PICTURE (in too many recent ones): ${tired.map((p) => p.name).join("; ")}. Only when the post itself is about one of them does it go in.`
+    : null;
+}
+
+/** A planned picture leaning on a prop the last few pictures already had, when the post isn't about it. */
+export function propRepeat(visual: string, recent: Recent[], day: string, about = ""): string | null {
+  const tired = new Set(propsLately(recent, day).map((p) => p.key));
+  const again = propsIn(visual).filter((p) => tired.has(p.key) && !p.re.test(about));
+  return again.length ? `the picture leans on ${again.map((p) => p.name).join(" and ")} again (in two of the last four pictures): show the point another way` : null;
 }
 
 export function conceptPrompt(o: {
@@ -976,11 +1185,15 @@ export function conceptPrompt(o: {
     o.faith ? SUNDAY_PRINCIPLE : null,
     `CAPTION FORMS, as each draft's "form" (best first; two drafts can share one): ${o.choices.formats.map((k) => `${k} = ${DAILY_FORMATS[k].guide} (up to ${DAILY_FORMATS[k].max} characters)`).join("; ")}`,
     `SHOTS, as "style" (pick the one that tells this story best, best performers first): ${o.choices.styles.map((k) => `${k} = ${DAILY_STYLES[k].look}`).join("; ")}`,
-    `LIGHT, as "light" (pick the one that fits the place and moment): ${o.choices.lights.map((k) => `${k} = ${DAILY_LIGHTS[k].look}`).join("; ")}`,
+    `LIGHT, as "light" (pick the one that fits the place and moment; every one is bright): ${o.choices.lights.map((k) => `${k} = ${DAILY_LIGHTS[k].look}`).join("; ")}`,
+    `PALETTE, as "palette" (pick one; these weren't in the last few pictures): ${(o.choices.palettes ?? DAILY_PALETTE_KEYS).map((k) => `${k} = ${DAILY_PALETTES[k].look}`).join("; ")}`,
     settingLine(o.choices.settings ?? DAILY_SETTING_KEYS, o.recent, o.day),
+    `WHO'S IN IT, as "cast" (pick who the post is about, the first ones not in the last two pictures; "no_people" or "hands" whenever the read says people aren't needed): ${(o.choices.casts ?? DAILY_CAST_KEYS).map((k) => `${k} = ${DAILY_CASTS[k].look}`).join("; ")}`,
+    `TREATMENT, as "rendering" (anime key art for most posts; another only when the read calls for it): ${(o.choices.renderings ?? DAILY_RENDERING_KEYS).map((k) => `${k} = ${DAILY_RENDERINGS[k].name}, for ${DAILY_RENDERINGS[k].use}`).join("; ")}`,
     o.art
-      ? `ART DIRECTION, as "art": ${o.art} (${ART_STYLES[o.art].name})`
-      : `ANIME DIRECTION, as "art" (pick the one that shows the point best): ${DAILY_ART_KEYS.map((k) => `${k} = ${ART_STYLES[k].name}, for ${ART_STYLES[k].use}`).join("; ")}`,
+      ? `DIRECTION, as "art": ${o.art} (${ART_STYLES[o.art].name})`
+      : `DIRECTION, as "art" (pick the one that shows the point best): ${DAILY_ART_KEYS.map((k) => `${k} = ${ART_STYLES[k].name}, for ${ART_STYLES[k].use}`).join("; ")}`,
+    propsLine(o.recent, o.day),
     o.keep?.caption
       ? `KEEP THIS CAPTION EXACTLY, word for word, as all three "captions" (only plan a new picture for it): ${o.keep.caption}\nThe picture shows exactly what this caption is about, not the angles above: whatever it names (a training log, a deadlift setup, small plates, a meet) is clearly in the frame and the subject of the picture. The angles are only for the category and mood.`
       : null,
@@ -998,7 +1211,7 @@ export function conceptPrompt(o: {
           .slice(-14)
           .map(
             (r) =>
-              `- ${r.day} · ${pillarOf(r) ?? "?"} · ${r.topic ?? "?"} · ${r.format ?? "?"} · ${r.style ?? "?"}: ${(r.caption ?? "").replace(/\s+/g, " ").slice(0, 160)}${r.visual ? ` (picture: ${r.visual.replace(/\s+/g, " ").slice(0, 120)})` : ""}`,
+              `- ${r.day} · ${pillarOf(r) ?? "?"} · ${r.topic ?? "?"} · ${r.format ?? "?"} · ${[r.style, r.setting, r.cast, r.palette].filter(Boolean).join(" / ") || "?"}: ${(r.caption ?? "").replace(/\s+/g, " ").slice(0, 160)}${r.visual ? ` (picture: ${r.visual.replace(/\s+/g, " ").slice(0, 120)})` : ""}`,
           )
           .join("\n")}`
       : null,
@@ -1012,7 +1225,37 @@ const isKey = <K extends string>(keys: readonly K[], v: unknown): v is K => type
 
 /** The anime direction a category leans to when the writer doesn't pick one. */
 export function artForPillar(p: DailyPillar): DailyArt {
-  return p === "recovery" || p === "mindset" || p === "comp_prep" || p === "coaches_notes" ? "drama" : "key_frame";
+  return p === "recovery" || p === "mindset" || p === "comp_prep" || p === "coaches_notes" ? "drama" : p === "powerlifting_iq" ? "explainer" : "key_frame";
+}
+
+const READ_PEOPLE = ["none", "hands", "one", "two", "group"] as const;
+
+/** The writer's read of the post, held to the kinds it was given (a missing read stays missing). */
+export function parseRead(v: unknown): DailyRead | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const j = v as Record<string, unknown>;
+  const str = (x: unknown, max: number) => (typeof x === "string" ? x.trim().slice(0, max) : "");
+  const kind = str(j.kind, 40).toLowerCase();
+  const people = str(j.people, 20).toLowerCase();
+  return {
+    kind: (DAILY_KIND_KEYS as string[]).includes(kind) ? (kind as DailyKind) : "educational",
+    discipline: str(j.discipline, 60),
+    audience: str(j.for ?? j.audience, 160),
+    show: str(j.show, 300),
+    people: (READ_PEOPLE as readonly string[]).includes(people) ? (people as DailyRead["people"]) : "one",
+  };
+}
+
+/** Who's in it, agreeing with the read: no people means no people, hands means hands. */
+export function castFor(cast: unknown, read: DailyRead | undefined, allowed: readonly DailyCast[] = DAILY_CAST_KEYS): DailyCast {
+  if (read?.people === "none") return "no_people";
+  if (read?.people === "hands") return "hands";
+  const picked = typeof cast === "string" && (DAILY_CAST_KEYS as string[]).includes(cast) ? (cast as DailyCast) : null;
+  // a picture the read says has people never comes back empty
+  if (picked && !(read && (picked === "no_people" || picked === "hands"))) return picked;
+  if (read?.people === "two") return "coach_athlete";
+  if (read?.people === "group") return "crew";
+  return allowed.find((k) => k !== "no_people" && k !== "hands") ?? "everyday";
 }
 
 /** The concept's JSON (fenced or not), with its choices held to the lists it was given. */
@@ -1054,6 +1297,10 @@ export function parseConcept(
       // any real place goes (a meet angle can go back to the meet), else the first one offered
       setting: isKey(DAILY_SETTING_KEYS, j.setting) ? j.setting : (allowed.settings?.[0] ?? DAILY_SETTING_KEYS[0]),
       art: allowed.art ?? (isKey(DAILY_ART_KEYS, j.art) ? j.art : artForPillar(pillar)),
+      rendering: isKey(DAILY_RENDERING_KEYS, j.rendering) ? j.rendering : (allowed.renderings?.[0] ?? "anime"),
+      palette: isKey(DAILY_PALETTE_KEYS, j.palette) ? j.palette : (allowed.palettes?.[0] ?? DAILY_PALETTE_KEYS[0]),
+      read: parseRead(j.read),
+      cast: castFor(j.cast, parseRead(j.read), allowed.casts ?? DAILY_CAST_KEYS),
       visual: str(j.visual, 1400),
       // a frame carries no readable words (an image model mangles them, and a real gym's are brands)
       typography: "",
@@ -1683,47 +1930,69 @@ export const STYLE_REFERENCE =
 
 /** How each mood should feel in the frame. */
 const MOOD_LOOK: Record<DailyMood, string> = {
-  direct: "focused and determined, serious intent in the faces",
+  direct: "focused and determined, clear intent in the faces",
   analytical: "concentrated, studying the detail that matters",
   dry_humour: "lightly funny, a wry moment readable in the faces",
   matter_of_fact: "an ordinary training moment, calm and competent",
-  focused: "locked-in concentration before or during a lift",
-  calm: "calm and restorative, still bright and colourful",
+  focused: "quiet concentration before or during a lift",
+  calm: "calm and restorative, bright and fresh",
   curious: "engaged, a little 'aha' over the detail",
 };
 
-/** The image model's prompt: the house style and anime direction, the shot, the light, the place, the moment and its mood, the words in it (exactly) or none, and what it must never look like. */
+/** The people line: who they are decides how they're built, never one heavily muscled type. */
+export function peopleLine(cast: DailyCast | string | null | undefined): string {
+  if (cast === "no_people") return "No people in the frame: the objects and the place tell it.";
+  const who = cast && cast in DAILY_CASTS ? `Who's in it: ${DAILY_CASTS[cast as DailyCast].look}. ` : "";
+  return `${who}People look like real lifters: realistic, natural human proportions that fit who they are, natural arm and shoulder size, no veins mapped across the skin, never exaggerated or bodybuilding-show muscle. Adults drawn with correct joints and proportions, five fingers on each hand, their own faces, hair and skin tones, training clothes in real colours that suit the palette (a plain black t-shirt at most once in a frame, never on the main person), natural expressions, caught mid-moment, never posing for the viewer.`;
+}
+
+/** The image model's prompt: the house style and its treatment, the direction, the read, the shot, the light, the palette, the place, the moment and who's in it, the words in it (exactly) or none, and what it must never look like. */
 export function picturePrompt(
   c: Pick<DailyConcept, "style" | "visual" | "typography" | "message"> & {
     light?: DailyLight | string | null;
     art?: DailyArt | string | null;
     mood?: DailyMood | string | null;
     setting?: DailySetting | string | null;
+    rendering?: DailyRendering | string | null;
+    cast?: DailyCast | string | null;
+    palette?: DailyPalette | string | null;
+    read?: DailyRead | null;
   },
   o: { faith?: boolean; fix?: string | null; reference?: boolean } = {},
 ): string {
   const shot = DAILY_STYLES[c.style as DailyStyle] ?? DAILY_STYLES.medium_candid;
-  const light = c.light && c.light in DAILY_LIGHTS ? DAILY_LIGHTS[c.light as DailyLight] : null;
+  const light = DAILY_LIGHTS[(c.light && c.light in DAILY_LIGHTS ? c.light : "big_windows") as DailyLight];
   const art = ART_STYLES[(c.art && c.art in ART_STYLES ? c.art : "key_frame") as DailyArt];
+  const rendering = DAILY_RENDERINGS[(c.rendering && c.rendering in DAILY_RENDERINGS ? c.rendering : "anime") as DailyRendering];
+  const palette = c.palette && c.palette in DAILY_PALETTES ? DAILY_PALETTES[c.palette as DailyPalette] : null;
   const place = c.setting && c.setting in DAILY_SETTINGS ? DAILY_SETTINGS[c.setting as DailySetting] : null;
   const mood = c.mood && c.mood in MOOD_LOOK ? MOOD_LOOK[c.mood as DailyMood] : null;
+  const read = c.read ?? null;
   const words = c.typography.trim();
+  const lifting = c.cast !== "no_people" || /\b(bar|barbell|plate|rack|squat|bench|deadlift|platform)\b/i.test(c.visual);
   return [
     o.reference ? STYLE_REFERENCE : null,
     FILM_LOOK,
+    rendering.look,
     art.look,
+    read
+      ? `The post is ${/^[aeiou]/.test(read.kind) ? "an" : "a"} ${read.kind} post${read.discipline ? ` about ${read.discipline}` : ""}${read.audience ? ` for ${read.audience}` : ""}: the frame should feel ${DAILY_KINDS[read.kind]}.${read.show ? ` Show it this way: ${read.show}` : ""}`
+      : null,
     `The shot: ${shot.look}`,
-    light ? `Light: ${light.look}.` : null,
+    `Light: ${light.look}. Exposure bright and even, a neutral white balance, shadows soft and open.`,
+    palette ? `Colours: ${palette.look}, with one small JF Effect red accent.` : null,
     place ? `The place: ${place.look}.` : null,
     `What happens in the frame: ${c.visual}`,
     `The feeling: ${c.message}${mood ? ` (${mood})` : ""}`,
-    "The people are adults drawn with realistic adult anatomy in the anime style: strong, athletic strength-athlete builds (never exaggerated, show-ready or steroid-looking), correct joints and proportions, five fingers on each hand, mature faces with focused, natural expressions, caught mid-moment, never posing for the viewer.",
-    "Equipment and technique are correct: one straight barbell with the same plates loaded on both sides and collars on, calibrated plates in their real colours and sizes (red 25, blue 20, yellow 15, green 10), a real power rack, monolift, competition bench or deadlift platform; the grip width, stance and bar position that lift actually uses (the bar on the upper back for a squat, feet planted and shoulder blades set on the bench, the bar over the midfoot on a deadlift); chalk, belts and knee sleeves where they belong.",
-    o.faith ? "Calm and focused, still a real gym or meet, with no Bible, cross or other religious object or symbol in it." : null,
+    peopleLine(c.cast ?? null),
+    lifting
+      ? "Equipment and technique are correct: one straight barbell with identical plates on both ends (the same colours in the same order from the collar out, including the far end seen across the frame) and collars on, calibrated plates in their real colours and sizes (red 25, blue 20, yellow 15, green 10), a real power rack, monolift, competition bench or deadlift platform; the grip width, stance and bar position that lift actually uses (the bar on the upper back for a squat, feet planted and shoulder blades set on the bench, the bar over the midfoot on a deadlift); chalk, belts and knee sleeves where they belong."
+      : null,
+    o.faith ? "Calm and focused, still a place to train, with no Bible, cross or other religious object or symbol in it." : null,
     words
       ? `The only readable words are exactly these: ${words}. No other text, brand names or logos anywhere.`
-      : "No readable text, speech bubbles, subtitles, brand names, logos or watermarks anywhere: a logbook's writing and any phone screen are scribbles or turned away, plate markings small and unreadable.",
-    "Vertical portrait. Keep the subject well inside the middle 80% of the height and away from every edge (the feed crops the top and bottom).",
+      : "No readable text, speech bubbles, labels, subtitles, brand names, logos or watermarks anywhere: any screen is blank or turned away, plate markings small and unreadable.",
+    "Vertical portrait. One clear focal point that reads at a glance on a phone; keep it well inside the middle 80% of the height and away from every edge (the feed crops the top and bottom).",
     FILM_AVOID,
     o.fix ? `Fix from the last try: ${o.fix}` : null,
   ]
@@ -1735,39 +2004,42 @@ export function picturePrompt(
 /*  The review                                                         */
 /* ------------------------------------------------------------------ */
 
-export const REVIEW_PROMPT = `You review one Athlete Insight for a powerlifting coach's community feed before it goes out: a picture and its caption, made together for one training idea. The feed is for people serious about getting stronger, not a fitness motivation page. Every picture is meant to be a still frame from a premium, serious Japanese sports anime about powerlifting, in one house style. Be an honest art director at a top anime studio, and a powerlifting coach checking the technique. Look closely at the picture.
+export const REVIEW_PROMPT = `You review one Athlete Insight for a powerlifting coach's community feed before it goes out: a picture and its caption, made together for one training idea. The feed is for people serious about getting stronger, not a fitness motivation page. Every picture is meant to be in JF Effect's illustrated house style: a clean, bright, hand-drawn 2D frame in the tradition of modern Japanese sports anime (most are anime key art; some are a softer anime, a flat graphic illustration or manga colour), with bright, even light, a neutral white balance, real people built like who they are, and one clear subject that reads on a phone. Be an honest art director and a powerlifting coach checking the technique. Look closely at the picture.
 
 Answer with JSON only:
 {
- "medium": "what the picture actually is: anime (a hand-drawn 2D Japanese anime frame: line art and cel shading), illustration (another drawn or painted style: western cartoon, comic, watercolour, painterly, a generic digital painting), photo (a photograph, or photorealistic enough to pass as one), 3d_render (CGI, Pixar-like, video-game, plastic skin) or other",
- "maturity": "mature (adult athletes in a serious sports drama) or childish (chibi, cutesy, moe, a kids' cartoon, giant eyes, comedic faces, anyone who looks under 20, school uniforms, fanservice)",
+ "medium": "what the picture actually is: anime (a hand-drawn 2D Japanese anime frame: line art and cel shading), illustration (another clean drawn 2D style: a flat graphic or editorial illustration, manga ink with screen tones), painting (painterly, watercolour, oil, a generic digital painting), photo (a photograph, or photorealistic enough to pass as one), 3d_render (CGI, Pixar-like, video-game, plastic skin) or other",
+ "maturity": "mature (adults in a grounded sports story) or childish (chibi, cutesy, moe, a kids' cartoon, giant eyes, comedic faces, anyone who looks under 20, school uniforms, fanservice)",
  "description": "two sentences: what the picture shows and how it's drawn",
- "colour": "cinematic (rich, controlled colour and deliberate lighting, readable shadows), flat (washed-out, muddy brown or grey, lifeless) or dark (murky, underexposed, hard to read)",
+ "colour": "bright (well exposed and clear: a neutral white balance where whites read white, open shadows with detail, true colour), dark (underexposed or moody: large areas of deep shadow or black, a dim room, a spotlight in darkness), tinted (an orange, amber, golden, sepia, yellow or other single colour cast over the whole frame) or flat (washed-out, muddy, grey, lifeless)",
+ "physique": "realistic (every body fits who the person is: ordinary, athletic or strong, natural proportions), exaggerated (oversized arms or shoulders, bodybuilder size on an everyday lifter, veins mapped across the skin, impossible muscle) or none (no people, or only hands)",
  "clarity": "clean (confident linework, faces and hands well drawn, details crisp) or messy (smeared or broken lines, mushy faces or hands, AI artefacts, melted details)",
  "text_seen": "every word you can clearly read in the image, exactly as written, or empty",
  "defects": ["only clear mistakes anyone would notice at a glance, each one named"],
- "scores": {"relatable": 1-5, "original": 1-5, "writing": 1-5, "audience_fit": 1-5, "aesthetic": 1-5, "storytelling": 1-5, "match": 1-5, "engaging": 1-5, "uplift": 1-5, "on_topic": 1-5, "teaches": 1-5, "technique": 1-5},
+ "scores": {"relatable": 1-5, "original": 1-5, "writing": 1-5, "audience_fit": 1-5, "aesthetic": 1-5, "storytelling": 1-5, "match": 1-5, "engaging": 1-5, "uplift": 1-5, "on_topic": 1-5, "teaches": 1-5, "technique": 1-5, "readable": 1-5},
  "fix_image": "what would make the picture better, or empty",
  "fix_caption": "what would make the caption better, or empty"
 }
 
-DEFECTS are objective errors only: wrong or extra fingers or limbs, broken anatomy or impossible joints, warped faces or bodies, melted or impossible objects, equipment or technique that's wrong (a bent or broken barbell, different plates on each side, a bar passing through a body or floating, a bar with no collars on a heavy lift, an impossible grip, stance or bar position for the lift, a lifter in a position that would injure them), an exaggerated, steroid-looking physique, readable brand names, speech bubbles, garbled or misspelled text, a watermark or logo, obvious rendering artefacts, the subject cut off at an edge. Taste is never a defect (the framing, the lighting, empty space, what could be clearer): score it and put it in fix_image or fix_caption.
+DEFECTS are objective errors only: wrong or extra fingers or limbs, broken anatomy or impossible joints, warped faces or bodies, melted or impossible objects, equipment or technique that's wrong (a bent or broken barbell, different plates on each side (check both ends: the same colours in the same order, the far end included), a bar passing through a body or floating, a rack or barbell where it couldn't be, a bar with no collars on a heavy lift, an impossible grip, stance or bar position for the lift, a lifter in a position that would injure them), readable brand names, speech bubbles, garbled or misspelled text, a watermark or logo, obvious rendering artefacts, the subject cut off at an edge. Taste is never a defect (the framing, empty space, what could be clearer): score it and put it in fix_image or fix_caption.
 
-SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = a lifter sees their own training in it; original = not a cliché or slogan, and not a generic composition (a character standing centred and posing is 3 or less); writing = reads like Jared, a powerlifting coach who knows his stuff, typed it himself (conversational and accurate; casual grammar, lowercase starts and fragments are fine and never lower the score; motivational, scripted, preachy, AI-sounding or professionally polished is 3 or less; a joke that isn't actually funny is 3 or less); audience_fit = right for who it's for; aesthetic = looks like a still from a beautifully animated, serious sports anime: clean line art, cel shading, a detailed painted gym background, cinematic lighting and a dynamic, intentional composition (a photo, a 3D render, a generic AI illustration, a childish cartoon, an empty or plain background is 2 or less); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other (any contradiction, like another place, time or person than the caption says, is 3 or less); engaging = worth a save, a comment or a send to a training partner; uplift = the picture leaves people keen to train or clearer about their training, never gloomy, shaming or heavy; on_topic = the picture is about strength training (a lift, a coach and athlete, a training log, the platform, recovery that belongs to training): a lifestyle scene with no training in it (a picnic, a beach, brunch, a party, a park) is 2 or less; teaches = the picture shows the specific thing the post is about (the lift, the position, the moment or the tool the caption names), so it reinforces the lesson: when the caption names something (a training log, a deadlift setup, small plates, a meet platform) and it isn't clearly visible, teaches is 2 or less, and a good-looking gym scene that could go with any post is 2 or less; technique = the lift, the equipment and the bodies are drawn right (bar position, grip, stance, depth, a straight bar, matching plates, believable anatomy under load), so a coach would be happy to show it to an athlete: anything a coach would correct is 3 or less.`;
+SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = a lifter sees their own training in it; original = not a cliché or slogan, and not a generic composition (a character standing centred and posing is 3 or less, and so is another lifter in a black t-shirt writing in a notebook); writing = reads like Jared, a powerlifting coach who knows his stuff, typed it himself (conversational and accurate; casual grammar, lowercase starts and fragments are fine and never lower the score; motivational, scripted, preachy, AI-sounding or professionally polished is 3 or less; a joke that isn't actually funny is 3 or less); audience_fit = right for who it's for; aesthetic = a clean, bright, well-made 2D illustration in the house style: confident line art, clear true colour, a deliberate composition (a photo, a 3D render, a generic AI illustration, a childish cartoon, or a dark, orange or muddy frame is 2 or less); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other (any contradiction, like another place, time or person than the caption says, is 3 or less); engaging = worth a save, a comment or a send to a training partner; uplift = the picture leaves people keen to train or clearer about their training, never gloomy, shaming or heavy; on_topic = the picture is about strength training and what serves it (a lift, a coach and athlete, the platform, recovery or food that's part of training): a lifestyle scene with no training in it (a picnic, a beach, brunch, a party, a stroll in a park) is 2 or less; teaches = the picture shows the specific thing the post is about (the lift, the position, the moment or the objects the caption names), so it reinforces the lesson: when the caption names something (a training log, a deadlift setup, small plates, a meet platform) and it isn't clearly visible, teaches is 2 or less, and a good-looking gym scene that could go with any post is 2 or less; technique = the lift, the equipment and the bodies are drawn right (bar position, grip, stance, depth, a straight bar, matching plates, believable anatomy under load), so a coach would be happy to show it to an athlete: anything a coach would correct is 3 or less (with no lift in the picture, judge whatever equipment and bodies are there); readable = at the size of a phone screen the subject reads at a glance: one clear focal point, strong separation from the background, nothing busy competing with it (a cluttered frame or a subject lost in the background is 3 or less).`;
 
 export type Review = {
-  /** What it actually is: only anime passes. */
+  /** What it actually is: anime passes, and a clean drawn illustration when that treatment was asked for. */
   medium: string;
   /** Only mature passes (never chibi, cutesy, teenage or fanservice). */
   maturity: string;
-  /** Only cinematic passes. */
+  /** Only bright passes (never dark, an orange or amber cast, or muddy). */
   colour: string;
+  /** Realistic or none pass (never exaggerated muscle). */
+  physique: string;
   /** Only clean passes. */
   clarity: string;
   description: string;
   text_seen: string;
   defects: string[];
-  scores: Record<"relatable" | "original" | "writing" | "audience_fit" | "aesthetic" | "storytelling" | "match" | "engaging" | "uplift" | "on_topic" | "teaches" | "technique", number>;
+  scores: Record<"relatable" | "original" | "writing" | "audience_fit" | "aesthetic" | "storytelling" | "match" | "engaging" | "uplift" | "on_topic" | "teaches" | "technique" | "readable", number>;
   fix_image: string;
   fix_caption: string;
 };
@@ -1780,6 +2052,10 @@ export function reviewPrompt(o: {
     format?: DailyFormat | string | null;
     pillar?: DailyPillar | string | null;
     mood?: DailyMood | string | null;
+    rendering?: DailyRendering | string | null;
+    cast?: DailyCast | string | null;
+    palette?: DailyPalette | string | null;
+    read?: DailyRead | null;
   };
   audience: DailyAudience;
   /** How many style references come before the picture. */
@@ -1787,16 +2063,21 @@ export function reviewPrompt(o: {
 }): string {
   const art = o.concept.art && o.concept.art in ART_STYLES ? ART_STYLES[o.concept.art as DailyArt] : null;
   const pillar = o.concept.pillar && o.concept.pillar in DAILY_PILLARS ? DAILY_PILLARS[o.concept.pillar as DailyPillar] : null;
+  const rendering = DAILY_RENDERINGS[(o.concept.rendering && o.concept.rendering in DAILY_RENDERINGS ? o.concept.rendering : "anime") as DailyRendering];
+  const cast = o.concept.cast && o.concept.cast in DAILY_CASTS ? DAILY_CASTS[o.concept.cast as DailyCast] : null;
+  const palette = o.concept.palette && o.concept.palette in DAILY_PALETTES ? DAILY_PALETTES[o.concept.palette as DailyPalette] : null;
+  const read = o.concept.read ?? null;
   return [
     o.references
       ? `THE FIRST ${o.references === 1 ? "IMAGE IS THE STYLE REFERENCE" : `${o.references} IMAGES ARE THE STYLE REFERENCES`} THE COACH CHOSE. THE LAST IMAGE IS THE ONE TO REVIEW: judge its colour, light, linework and how its people are drawn against the reference.`
       : null,
     `AUDIENCE: ${DAILY_AUDIENCE_GUIDE[o.audience]}`,
     pillar ? `THE KIND OF POST: ${pillar.name} (${pillar.goal})${o.concept.mood ? `, mood ${o.concept.mood}` : ""}` : null,
+    read ? `THE ART DIRECTOR'S READ: ${read.kind}${read.discipline ? `, ${read.discipline}` : ""}${read.audience ? `, for ${read.audience}` : ""}${read.show ? `. Best shown: ${read.show}` : ""}` : null,
     `THE IDEA: ${o.concept.message}`,
     o.concept.format && o.concept.format in DAILY_FORMATS ? `THE CAPTION'S FORM: ${DAILY_FORMATS[o.concept.format as DailyFormat].name} (${DAILY_FORMATS[o.concept.format as DailyFormat].guide})` : null,
     `THE SITUATION: ${o.concept.situation}`,
-    `THE PICTURE WAS MEANT TO BE: a still frame from a premium, serious Japanese sports anime about powerlifting (never a photo, a 3D render, a generic AI illustration or anything childish)${art ? `, ${art.name.toLowerCase()}` : ""}. ${DAILY_STYLES[o.concept.style as DailyStyle]?.look ?? ""}${o.concept.setting && o.concept.setting in DAILY_SETTINGS ? ` In ${DAILY_SETTINGS[o.concept.setting as DailySetting].look}.` : ""} ${o.concept.visual}`,
+    `THE PICTURE WAS MEANT TO BE: JF Effect's bright 2D house style as ${rendering.name.toLowerCase()} (never a photo, a 3D render, a generic AI illustration, anything childish, or a dark or orange frame)${art ? `, ${art.name.toLowerCase()}` : ""}. ${DAILY_STYLES[o.concept.style as DailyStyle]?.look ?? ""}${o.concept.setting && o.concept.setting in DAILY_SETTINGS ? ` In ${DAILY_SETTINGS[o.concept.setting as DailySetting].look}.` : ""}${cast ? ` Who's in it: ${cast.look}.` : ""}${palette ? ` Colours: ${palette.look}.` : ""} ${o.concept.visual}`,
     o.concept.typography ? `WORDS MEANT TO BE IN THE PICTURE: ${o.concept.typography}` : "THE PICTURE WAS MEANT TO HAVE NO WORDS IN IT.",
     `THE CAPTION:\n${o.caption}`,
   ]
@@ -1813,20 +2094,26 @@ export function parseReview(text: string): Review | null {
     const n = (v: unknown) => Math.max(1, Math.min(5, Math.round(Number(v) || 1)));
     const word = (v: unknown) => (typeof v === "string" ? v.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") : "");
     const medium = word(j.medium);
-    const colour = word(j.colour ?? j.color).split("_")[0];
+    const colourWord = word(j.colour ?? j.color).split("_")[0];
+    // the same reading in other words: a well-exposed frame is bright, an amber cast is tinted
+    const colour = /^(balanced|natural|clear|well|true)$/.test(colourWord) ? "bright" : /^(orange|amber|golden|sepia|yellow|warm)$/.test(colourWord) ? "tinted" : colourWord;
     const clarity = word(j.clarity).split("_")[0];
-    // a review from before the maturity check reads as mature (it was judged on other rules)
+    // a review from before the maturity check reads as mature (it was judged on other rules), and one from before the physique check as realistic
     const maturity = j.maturity == null ? "mature" : word(j.maturity).split("_")[0];
+    const physique = j.physique == null ? "realistic" : word(j.physique).split("_")[0];
     return {
       medium: /^(photo|photograph|photographic|photorealistic|photo_?realistic|real_photo|realistic_photo)$/.test(medium)
         ? "photo"
-        : /^(anime|anime_(2d|frame|still|style|illustration)|(2d|japanese)_anime|hand_?drawn_anime|cel_shaded_anime)$/.test(medium)
+        : /^(anime|anime_(2d|frame|still|style|illustration|key_art)|(2d|japanese)_anime|hand_?drawn_anime|cel_shaded_anime|soft_anime)$/.test(medium)
           ? "anime"
-          : /^hand_?drawn(_2d)?$|^2d$/.test(medium)
-            ? "hand_drawn_2d"
-            : medium,
+          : /^([a-z0-9]+_)*illustration$|^manga(_[a-z]+)*$|^graphic$/.test(medium)
+            ? "illustration"
+            : /^hand_?drawn(_2d)?$|^2d$/.test(medium)
+              ? "hand_drawn_2d"
+              : medium,
       maturity,
       colour,
+      physique: /^(realistic|natural|believable)$/.test(physique) ? "realistic" : /^(none|no|hands)$/.test(physique) ? "none" : physique,
       clarity,
       description: typeof j.description === "string" ? j.description.trim().slice(0, 600) : "",
       text_seen: typeof j.text_seen === "string" ? j.text_seen.trim() : "",
@@ -1848,6 +2135,8 @@ export function parseReview(text: string): Review | null {
         teaches: s.teaches == null ? 4 : n(s.teaches),
         // and one from before the technique score
         technique: s.technique == null ? 4 : n(s.technique),
+        // and one from before the phone-size check
+        readable: s.readable == null ? 4 : n(s.readable),
       },
       fix_image: typeof j.fix_image === "string" ? j.fix_image.trim() : "",
       fix_caption: typeof j.fix_caption === "string" ? j.fix_caption.trim() : "",
@@ -1858,16 +2147,21 @@ export function parseReview(text: string): Review | null {
 }
 
 /** Each score a post has to reach (the caption already passed the editor, so its bars here only catch a picture that changed its meaning). */
-export const REVIEW_BARS: Review["scores"] = { relatable: 3, original: 3, writing: 4, audience_fit: 3, aesthetic: 4, storytelling: 3, match: 4, engaging: 3, uplift: 3, on_topic: 4, teaches: 4, technique: 4 };
-const IMAGE_SCORES = new Set<keyof Review["scores"]>(["aesthetic", "storytelling", "match", "uplift", "on_topic", "teaches", "technique"]);
+export const REVIEW_BARS: Review["scores"] = { relatable: 3, original: 3, writing: 4, audience_fit: 3, aesthetic: 4, storytelling: 3, match: 4, engaging: 3, uplift: 3, on_topic: 4, teaches: 4, technique: 4, readable: 4 };
+const IMAGE_SCORES = new Set<keyof Review["scores"]>(["aesthetic", "storytelling", "match", "uplift", "on_topic", "teaches", "technique", "readable"]);
+
+/** Treatments drawn outside anime key art, where a clean drawn illustration is the right answer. */
+const ILLUSTRATED = new Set<string>(["graphic", "manga_colour"]);
 
 /**
  * Pass or fail, on concrete checks first: the words read off the picture are
- * exactly what was asked for (or none), no defects; then every score at its
- * bar (the picture has to be about strength training: `on_topic`). Says which
- * side failed, so only that side is made again.
+ * exactly what was asked for (or none), no defects; it reads as the house
+ * style (anime, or a clean drawn illustration when that treatment was asked
+ * for), bright with a neutral white balance (never dark or orange), real
+ * bodies; then every score at its bar. Says which side failed, so only that
+ * side is made again.
  */
-export function reviewVerdict(r: Review, typography: string, scene = "", _pillar?: DailyPillar | string | null): { pass: boolean; image: string[]; caption: string[] } {
+export function reviewVerdict(r: Review, typography: string, scene = "", o: { rendering?: string | null } = {}): { pass: boolean; image: string[]; caption: string[] } {
   const image: string[] = [];
   const caption: string[] = [];
   const want = letters(typography);
@@ -1881,12 +2175,15 @@ export function reviewVerdict(r: Review, typography: string, scene = "", _pillar
     .filter((w) => w && !planned.has(w) && !/^(\d+|am|pm|kg|kgs|lb|lbs)$/.test(w));
   if (want && !seen.includes(want)) image.push(`the words in the picture read "${r.text_seen || "nothing"}", not "${typography}"`);
   else if (stray.length) image.push(`${want ? "extra words" : "words that shouldn't be there"} in the picture: "${r.text_seen}"`);
-  // the look is fixed: anything that doesn't read as an anime frame fails whatever its scores
-  if (r.medium !== "anime") image.push(`it reads as ${(r.medium || "something else").replace(/_/g, " ")}, not an anime frame`);
+  // the house style: an anime frame, or a clean drawn illustration when that treatment was asked for; never a photo, a render or a painting
+  const drawnOk = r.medium === "anime" || (r.medium === "illustration" && ILLUSTRATED.has(o.rendering ?? ""));
+  if (!drawnOk) image.push(`it reads as ${(r.medium || "something else").replace(/_/g, " ")}, not ${ILLUSTRATED.has(o.rendering ?? "") ? "a clean 2D illustration" : "an anime frame"}`);
   // serious and adult, never chibi, cutesy, teenage or fanservice
-  if (r.maturity !== "mature") image.push(`it reads as ${r.maturity || "unclear"}, not a mature sports drama`);
-  // rich, deliberate colour and clean linework, never muddy, murky or smeared
-  if (r.colour !== "cinematic") image.push(`its colour reads as ${r.colour || "unclear"}, not cinematic`);
+  if (r.maturity !== "mature") image.push(`it reads as ${r.maturity || "unclear"}, not a mature sports story`);
+  // bright, true colour and clean linework, never dark, orange, muddy or smeared
+  if (r.colour !== "bright") image.push(`its colour reads as ${r.colour || "unclear"}, not bright with a neutral white balance`);
+  // real bodies, never exaggerated muscle
+  if (r.physique === "exaggerated") image.push("the physiques are exaggerated, not realistic for who they are");
   if (r.clarity !== "clean") image.push(`its linework reads as ${r.clarity || "unclear"}, not clean`);
   for (const d of r.defects) image.push(d);
   for (const k of Object.keys(REVIEW_BARS) as (keyof Review["scores"])[]) {
@@ -1958,6 +2255,7 @@ export function qualityChecks(
     { key: "accurate", label: "Technically accurate", pass: all(at(e, "accuracy", 4), at(r, "technique", 4)) },
     { key: "fresh", label: "Different from recent posts", pass: at(e, "fresh", 3) },
     { key: "worth", label: "Worth saving or discussing", pass: all(at(e, "worth_it", 4), at(r, "engaging", 3)) },
+    { key: "phone", label: "Bright and clear on a phone", pass: all(at(r, "readable", 4), at(r, "aesthetic", 4)) },
   ];
 }
 
