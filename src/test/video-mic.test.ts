@@ -1,11 +1,14 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { clipMicNote, isBluetoothMic, micNote, micToName, noteClipMic, openVideoMic, pickOwnMic, videoAudioConstraints } from "@/lib/video-mic";
+import { askForMicAgain, clipMicNote, isBluetoothMic, micNote, micRefused, micToName, noteClipMic, openVideoMic, pickOwnMic, resetVideoMicForTests, videoAudioConstraints } from "@/lib/video-mic";
 
 const read = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
 const g = globalThis as any;
 const withNavigator = (nav: unknown) => Object.defineProperty(g, "navigator", { value: nav, configurable: true, writable: true });
-afterEach(() => withNavigator(undefined));
+afterEach(() => {
+  withNavigator(undefined);
+  resetVideoMicForTests();
+});
 const mic = (deviceId: string, label: string) => ({ deviceId, label, kind: "audioinput" as const });
 
 /**
@@ -128,6 +131,61 @@ describe("opening it", () => {
     withNavigator({ mediaDevices: { getUserMedia, enumerateDevices: async () => [], getSupportedConstraints: () => ({ echoCancellation: true }) } });
     await expect(openVideoMic()).rejects.toThrow("denied");
     expect(getUserMedia).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Nov 19 2026: "every time I record a workout video, I have to tap Allow Audio
+ * Capture again". On an iPhone WebKit reuses an Allow without asking only for a
+ * request made from a tap once nothing has been captured for a minute (and
+ * forgets it 10 minutes after the camera and mic go off, on every platform);
+ * the mic was asked for only after `await enumerateDevices()`, after the tap.
+ */
+describe("asked inside the tap, once", () => {
+  const track = (label: string) => ({ label, stop: vi.fn(), getSettings: () => ({ echoCancellation: false }) });
+  const stream = (t: ReturnType<typeof track>) => ({ getAudioTracks: () => [t], getTracks: () => [t] });
+  const denied = () => Object.assign(new Error("denied"), { name: "NotAllowedError" });
+
+  it("the request goes out in the same tick as the tap, before anything is listed", () => {
+    const getUserMedia = vi.fn().mockResolvedValue(stream(track("iPhone Microphone")));
+    const enumerateDevices = vi.fn(async () => []);
+    withNavigator({ mediaDevices: { getUserMedia, enumerateDevices, getSupportedConstraints: () => ({ echoCancellation: true }) } });
+    void openVideoMic();
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(enumerateDevices).not.toHaveBeenCalled();
+  });
+
+  it("names the device's own mic from the last recording's list, still in the tap", async () => {
+    const getUserMedia = vi.fn().mockImplementation(async () => stream(track("iPhone Microphone")));
+    const enumerateDevices = vi.fn(async () => [mic("a", "AirPods Pro"), mic("i", "iPhone Microphone")]);
+    withNavigator({ mediaDevices: { getUserMedia, enumerateDevices, getSupportedConstraints: () => ({ echoCancellation: true }) } });
+    await openVideoMic();
+    getUserMedia.mockClear();
+    void openVideoMic();
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(getUserMedia.mock.calls[0][0]).toEqual({ audio: { echoCancellation: false, deviceId: { exact: "i" } } });
+  });
+
+  it("a Don't Allow is remembered for the visit, and Ask again asks inside its own tap and lets go at once", async () => {
+    const getUserMedia = vi.fn().mockRejectedValueOnce(denied());
+    withNavigator({ mediaDevices: { getUserMedia, enumerateDevices: async () => [], getSupportedConstraints: () => ({ echoCancellation: true }) } });
+    await expect(openVideoMic()).rejects.toThrow("denied");
+    expect(micRefused()).toBe(true);
+    const t = track("iPhone Microphone");
+    getUserMedia.mockResolvedValueOnce(stream(t));
+    const again = askForMicAgain();
+    expect(getUserMedia).toHaveBeenCalledTimes(2);
+    expect(await again).toBe(true);
+    expect(t.stop).toHaveBeenCalled();
+    expect(micRefused()).toBe(false);
+  });
+
+  it("the recorders don't ask again after a no, and the camera's settings offer Ask again", () => {
+    const cam = read("src/components/camera/film-camera.tsx");
+    expect(cam).toContain("if (settingsRef.current.sound && !micRefused()) {");
+    expect(cam).toContain("askForMicAgain()");
+    expect(cam).toContain("data-mic-refused");
+    expect(read("src/components/community/clip-recorder.ts")).toContain("if (!micRefused()) {");
   });
 });
 

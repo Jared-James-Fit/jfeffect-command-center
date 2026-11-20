@@ -5,9 +5,9 @@ import { ChevronDown, Grid3x3, Images, RefreshCcw, X, Zap, ZapOff } from "lucide
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { baseMediaType } from "@/lib/community";
-import { noteClipMic, openVideoMic } from "@/lib/video-mic";
+import { askForMicAgain, micRefused, noteClipMic, openVideoMic } from "@/lib/video-mic";
 import { holdCameraOpen } from "@/lib/camera/camera-presence";
-import { isPhone, phoneOnItsSide, readOrientation } from "@/lib/portrait-only";
+import { phoneUpright, takePrimedCamera } from "@/lib/camera/camera-prime";
 import {
   FILM_QUALITIES,
   askOrder,
@@ -45,12 +45,6 @@ const MIN_RECORDING_MS = 700;
 /** How long to wait for the first frame's size before judging the picture's shape. */
 const PICTURE_WAIT_MS = 1_500;
 
-/** The phone's held upright (a computer or tablet never re-asks for a shape). */
-function phoneUpright(): boolean | null {
-  const r = readOrientation();
-  if (!r || !isPhone(r)) return null;
-  return !phoneOnItsSide(r);
-}
 
 /** The picture's size as it's shown (turned the way the phone is held), once the first frame is in. */
 function pictureSize(v: HTMLVideoElement, ms: number): Promise<{ w: number; h: number } | null> {
@@ -115,6 +109,7 @@ export function FilmCamera({
   const [elapsed, setElapsed] = useState(0);
   const [panel, setPanel] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [micBlocked, setMicBlocked] = useState(() => micRefused());
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -173,10 +168,15 @@ export function FilmCamera({
       const name = (last as { name?: string } | null)?.name;
       return name === "NotAllowedError" || name === "SecurityError";
     };
+    // the first ask may already be on its way, from the tap that opened the camera (camera-prime.ts)
+    let first = true;
     const open = async (shape: AskShape): Promise<MediaStream | null> => {
       for (const ask of constraintLadder(want, lensId, shape)) {
         try {
-          return await navigator.mediaDevices.getUserMedia({ video: ask, audio: false });
+          const primed = first ? takePrimedCamera(ask) : null;
+          first = false;
+          if (primed && "released" in primed) await primed.released;
+          return await (primed && "stream" in primed ? primed.stream : navigator.mediaDevices.getUserMedia({ video: ask, audio: false }));
         } catch (e) {
           last = e;
           if (refused()) return null;
@@ -366,15 +366,22 @@ export function FilmCamera({
     let mic: MediaStream | null = null;
     let restore: (() => void) | null = null;
     let micNote = "off";
-    if (settingsRef.current.sound) {
+    // a "Don't Allow" this visit films without sound and asks nothing (the settings' Ask again)
+    if (settingsRef.current.sound && !micRefused()) {
       try {
-        // the room as it sounds, from the phone's own mic (video-mic.ts): never a call's processing or a headset's mic
+        // the room as it sounds, from the phone's own mic (video-mic.ts): never a call's processing or a
+        // headset's mic. Asked inside this tap, so a mic already allowed is used without asking again.
         const got = await openVideoMic();
         mic = got.stream;
         restore = got.restore;
         micNote = got.note;
       } catch {
-        toast.message("Filming without sound", { description: "The microphone isn't available to JF Effect." });
+        setMicBlocked(micRefused());
+        toast.message("Filming without sound", {
+          description: micRefused()
+            ? "The microphone isn't allowed. Ask again from the camera's settings."
+            : "The microphone isn't available to JF Effect.",
+        });
       }
     }
     startingRef.current = false;
@@ -630,6 +637,24 @@ export function FilmCamera({
             </span>
             <Switch checked={settings.sound} onCheckedChange={(v) => update({ sound: v })} aria-label="Record sound" />
           </label>
+          {settings.sound && micBlocked && (
+            <div className="mt-2 flex items-center justify-between gap-3 text-[12px] leading-snug text-white/70" data-mic-refused>
+              <span>The microphone isn't allowed, so clips film without sound.</span>
+              <button
+                type="button"
+                // asked inside this tap and let go at once: the next recording uses the answer
+                onClick={() =>
+                  void askForMicAgain().then((ok) => {
+                    setMicBlocked(!ok && micRefused());
+                    if (!ok) toast.message("Still not allowed", { description: "Allow the microphone for JF Effect in your phone's settings to film with sound." });
+                  })
+                }
+                className="h-9 shrink-0 rounded-full bg-white/15 px-3 text-[13px] font-semibold text-white active:scale-[0.97]"
+              >
+                Ask again
+              </button>
+            </div>
+          )}
           <label className="mt-3 flex items-center justify-between gap-3 text-sm font-medium">
             <span className="inline-flex items-center gap-2">
               <Grid3x3 className="h-4 w-4" aria-hidden /> Grid
