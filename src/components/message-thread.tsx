@@ -494,7 +494,7 @@ function AttachmentView({
     return <SessionChangeCard requestId={att.change_request_id} staff={role !== "client"} clientId={clientId} />;
   }
   if (att.kind === "session_booked" && att.session_ids?.length) {
-    return <SessionBookedCard ids={att.session_ids} staff={role !== "client"} clientId={clientId} />;
+    return <SessionBookedCard ids={att.session_ids} staff={role !== "client"} clientId={clientId} bookedByClient={att.booked_by === "client"} />;
   }
   if (att.kind === "staff_invite") {
     return <StaffInviteChatCard att={att as any} mine={mine} />;

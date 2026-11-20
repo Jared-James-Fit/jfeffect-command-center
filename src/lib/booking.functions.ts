@@ -3,7 +3,19 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { PovInput, resolvePovClientId } from "@/lib/client-pov.server";
 import { addDaysISO } from "@/lib/schedule-time";
-import { locationLabel, type BookingType } from "@/lib/booking-types";
+import {
+  audienceAllows,
+  clientsOnly,
+  durationChoices,
+  durationLabel,
+  isCallType,
+  locationLabel,
+  withDuration,
+  type BookingType,
+} from "@/lib/booking-types";
+
+/** What anyone who isn't a coaching client hears on a clients-only type. */
+const CLIENTS_ONLY_MESSAGE = "This booking is for JF Effect coaching clients. Sign in with your client account to book it.";
 
 /**
  * Online booking server functions.
@@ -28,6 +40,8 @@ async function inviteClient(db: any, invite: string | null | undefined) {
   return loadBookingClient(db, clientId);
 }
 const DateISO = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+/** A length the booker picked (minutes); the type decides whether it's one it offers. */
+const DurationInput = z.coerce.number().int().min(5).max(480).optional().nullable();
 
 async function admin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -41,6 +55,11 @@ function publicView(t: BookingType, hostName: string) {
     name: t.name,
     description: t.description,
     durationMin: t.duration_minutes,
+    /** The lengths they pick between (one = a fixed length). */
+    durationOptions: durationChoices(t),
+    /** Only coaching clients can book it (signed in, or a personal link). */
+    clientsOnly: clientsOnly(t),
+    isCall: isCallType(t),
     locationMode: t.location_mode,
     where: locationLabel(t),
     timezone: t.timezone,
@@ -67,20 +86,27 @@ export const getBookingPage = createServerFn({ method: "GET" })
       ...publicView(type, host.name),
       // Only the first name: the link's holder already knows who it's for.
       invitee: invitee
-        ? { firstName: (invitee.full_name ?? "").trim().split(/\s+/)[0] || "you" }
+        ? {
+            firstName: (invitee.full_name ?? "").trim().split(/\s+/)[0] || "you",
+            canBook: audienceAllows(type, { serviceTier: invitee.service_tier }),
+          }
         : null,
     };
   });
 
 /** Open times between two days (the type's zone). */
 export const getBookingSlots = createServerFn({ method: "GET" })
-  .inputValidator((d: unknown) => SlugInput.extend({ from: DateISO, to: DateISO }).parse(d))
+  .inputValidator((d: unknown) =>
+    SlugInput.extend({ from: DateISO, to: DateISO, duration: DurationInput }).parse(d),
+  )
   .handler(async ({ data }) => {
     const { loadBookingType, openSlots, BookingError, MAX_RANGE_DAYS } =
       await import("@/lib/booking.server");
     const db = await admin();
-    const type = await loadBookingType(db, data.slug);
-    if (!type) return { slots: [], error: "not_found" as const };
+    const loaded = await loadBookingType(db, data.slug);
+    if (!loaded) return { slots: [], error: "not_found" as const };
+    // At the length they picked, when the type offers it (else its own).
+    const type = withDuration(loaded, data.duration);
     const to =
       data.to < addDaysISO(data.from, MAX_RANGE_DAYS)
         ? data.to
@@ -103,6 +129,7 @@ const PublicBookInput = SlugInput.extend({
   notes: z.string().trim().max(1500).optional().nullable(),
   applicationId: z.string().uuid().optional().nullable(),
   invite: InviteInput,
+  duration: DurationInput,
 });
 
 /**
@@ -116,9 +143,14 @@ export const bookOnline = createServerFn({ method: "POST" })
     const { loadBookingType, createOnlineBooking, BookingError } =
       await import("@/lib/booking.server");
     const db = await admin();
-    const type = await loadBookingType(db, data.slug);
-    if (!type) throw new Error("This booking page isn't taking bookings right now.");
+    const loaded = await loadBookingType(db, data.slug);
+    if (!loaded) throw new Error("This booking page isn't taking bookings right now.");
+    const type = withDuration(loaded, data.duration);
     const invitee = await inviteClient(db, data.invite);
+    // A clients-only type (General Call) takes a coaching client we know is them; never the public.
+    if (!audienceAllows(type, invitee ? { serviceTier: invitee.service_tier } : null)) {
+      throw new Error(CLIENTS_ONLY_MESSAGE);
+    }
     const name = data.name?.trim() || invitee?.full_name || "";
     const email = data.email?.trim() || invitee?.email || "";
     if (!invitee) {
@@ -171,11 +203,18 @@ export const getClientBookingLink = createServerFn({ method: "POST" })
 async function myClient(supabase: any, userId: string) {
   const { data } = await supabase
     .from("clients")
-    .select("id, full_name, email, phone, archived")
+    .select("id, full_name, email, phone, archived, service_tier, user_id")
     .eq("user_id", userId)
     .maybeSingle();
   return data && !data.archived
-    ? (data as { id: string; full_name: string | null; email: string | null; phone: string | null })
+    ? (data as {
+        id: string;
+        full_name: string | null;
+        email: string | null;
+        phone: string | null;
+        service_tier: string | null;
+        user_id: string | null;
+      })
     : null;
 }
 
@@ -186,6 +225,7 @@ export const bookOnlineAsMe = createServerFn({ method: "POST" })
     SlugInput.extend({
       start: z.string().min(10).max(40),
       notes: z.string().trim().max(1500).optional().nullable(),
+      duration: DurationInput,
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -195,8 +235,11 @@ export const bookOnlineAsMe = createServerFn({ method: "POST" })
     const { loadBookingType, createOnlineBooking, BookingError } =
       await import("@/lib/booking.server");
     const db = await admin();
-    const type = await loadBookingType(db, data.slug);
-    if (!type) throw new Error("This booking page isn't taking bookings right now.");
+    const loaded = await loadBookingType(db, data.slug);
+    if (!loaded) throw new Error("This booking page isn't taking bookings right now.");
+    const type = withDuration(loaded, data.duration);
+    // A JF member has no coach to call: a clients-only type isn't theirs.
+    if (!audienceAllows(type, { serviceTier: me.service_tier })) throw new Error(CLIENTS_ONLY_MESSAGE);
     try {
       return await createOnlineBooking(db, {
         type,
@@ -222,7 +265,14 @@ export const getMyBookingIdentity = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
     const me = await myClient(supabase, userId);
-    return me ? { name: me.full_name ?? "", email: me.email ?? "" } : null;
+    return me
+      ? {
+          name: me.full_name ?? "",
+          email: me.email ?? "",
+          // A coaching client (a JF member has no coach): can book clients-only types.
+          coaching: me.service_tier !== "self_serve",
+        }
+      : null;
   });
 
 /**
@@ -241,15 +291,21 @@ export const listMyBookingTypes = createServerFn({ method: "POST" })
     const { data: types } = await db
       .from("booking_cards")
       .select(
-        "id, slug, name, duration_minutes, location_mode, location, uses_credit, color, sort_order",
+        "id, slug, name, session_type, duration_minutes, duration_options, audience, location_mode, location, uses_credit, color, sort_order",
       )
       .eq("is_active", true)
       .eq("online_enabled", true)
       .eq("show_in_app", true)
       .not("slug", "is", null)
       .order("sort_order", { ascending: true });
-    const rows = (types ?? []) as any[];
+    let rows = (types ?? []) as any[];
     if (!rows.length) return [];
+    // Clients-only types (General Call) are for coaching clients; a JF member has no coach to call.
+    if (rows.some((t) => clientsOnly(t))) {
+      const { data: c } = await db.from("clients").select("service_tier").eq("id", clientId).maybeSingle();
+      const tier = (c as any)?.service_tier ?? null;
+      rows = rows.filter((t) => audienceAllows(t, { serviceTier: tier }));
+    }
     let trainsInPerson = false;
     if (rows.some((t) => t.location_mode === "in_person")) {
       const [{ count: sessions }, { count: credits }, { data: c }] = await Promise.all([
@@ -272,6 +328,10 @@ export const listMyBookingTypes = createServerFn({ method: "POST" })
         slug: t.slug as string,
         name: t.name as string,
         durationMin: t.duration_minutes as number,
+        /** "30 min", or "15–60 min" when they pick the length. */
+        duration: durationLabel(t),
+        /** A call or meeting, not training: Home offers it as "Book a call". */
+        isCall: isCallType(t),
         where: locationLabel(t),
         usesCredit: !!t.uses_credit,
         color: t.color as string | null,

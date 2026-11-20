@@ -34,7 +34,7 @@ export function ClientBookCard({ className }: { className?: string }) {
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-bold">Book {t.name}</div>
                 <div className="truncate text-xs text-muted-foreground">
-                  {t.durationMin} min · {t.where}
+                  {t.duration ?? `${t.durationMin} min`} · {t.where}
                   {t.usesCredit ? " · uses a session" : ""}
                 </div>
               </div>
