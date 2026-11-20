@@ -61,33 +61,28 @@ export function cleoProgramTools({ db, today }: { db: Db; today: string }) {
         `Find exercises in the app's exercise library by name. Program changes can only use exercises from here (by id). If nothing fits, say so and suggest the closest ones; never make one up. Results marked "below the exercise standard" shouldn't go in a program unless the coach asked for that exact exercise.\n\n${EXERCISE_STANDARD}\n\n${ACCESSORY_FLOW_HINT}`,
       inputSchema: z.object({ query: z.string().trim().min(2).max(60) }),
       execute: safe("the exercise library", async ({ query }) => {
-        const [exact, byName, byAlias] = await Promise.all([
+        const [{ searchableLibrary }, { searchExercises }, exact] = await Promise.all([
+          import("@/lib/exercise-search-library.server"),
+          import("@/lib/exercise-search"),
           rpcRead(db, "resolve_exercise_id", { _name: query }),
-          db.from("exercises").select("id, name, primary_muscle_group, muscle_group, category, video_url").eq("archived", false).ilike("name", `%${query.replace(/[%_]/g, "")}%`).limit(12),
-          db.from("exercise_aliases").select("exercise_id, alias_name").ilike("alias_name", `%${query.replace(/[%_]/g, "")}%`).limit(12),
         ]);
-        const ids = new Set<string>();
-        if (exact?.data) ids.add(exact.data);
-        for (const r of rows<any>(byName as any, "exercises")) ids.add(r.id);
-        for (const r of rows<any>(byAlias as any, "aliases")) if (r.exercise_id) ids.add(r.exercise_id);
-        // Word search as a fallback ("hb squat" → every word in the name).
-        if (ids.size < 3) {
-          const words = query.toLowerCase().split(/\s+/).filter((w) => w.length > 1).slice(0, 3);
-          if (words.length > 1) {
-            let q = db.from("exercises").select("id").eq("archived", false);
-            for (const w of words) q = q.ilike("name", `%${w.replace(/[%_]/g, "")}%`);
-            for (const r of rows<any>(await q.limit(12), "exercises")) ids.add(r.id);
-          }
+        // the app's own exercise search: any word order, shorthand ("RDL", "DB"), plurals, typos, aliases
+        const lib = await searchableLibrary(db);
+        const found = searchExercises(lib, query, { limit: 12 });
+        const exactId: string | null = typeof exact?.data === "string" ? exact.data : null;
+        const list = found.results.map((r) => ({ e: r.exercise, alternative: !!r.alternative }));
+        if (exactId && !list.some((x) => x.e.id === exactId)) {
+          const e = lib.find((x) => x.id === exactId);
+          if (e) list.unshift({ e, alternative: false });
         }
-        if (!ids.size) return `No library exercise matches "${query}". Try another name (e.g. "back squat", "RDL", "lat pulldown").`;
-        const list = rows<any>(
-          await db.from("exercises").select("id, name, primary_muscle_group, muscle_group, category, video_url").in("id", [...ids].slice(0, 15)),
-          "exercises",
-        );
-        list.sort((a, b) => (a.id === exact?.data ? -1 : b.id === exact?.data ? 1 : a.name.length - b.name.length));
+        list.sort((a, b) => (a.e.id === exactId ? -1 : b.e.id === exactId ? 1 : 0));
+        if (!list.length) return `No library exercise matches "${query}". Try another name (e.g. "back squat", "RDL", "lat pulldown").`;
+        const head = found.hasExactMatches || exactId
+          ? `Library matches for "${query}", best first (use the id):`
+          : `Nothing in the library is "${query}". The closest, which are different exercises (say so if you suggest one):`;
         return [
-          `Library matches for "${query}" (use the id):`,
-          ...list.map((e) => `- ${e.name} | id ${e.id} | ${e.primary_muscle_group ?? e.muscle_group ?? "?"}${e.category ? ` | ${e.category}` : ""}${e.video_url ? " | has demo video" : ""}${e.id === exact?.data ? " | exact match" : ""}${lowValueReason(e.name) ? ` | below the exercise standard: ${lowValueReason(e.name)}` : ""}`),
+          head,
+          ...list.slice(0, 12).map(({ e, alternative }) => `- ${e.name} | id ${e.id} | ${e.primary_muscle_group ?? e.muscle_group ?? "?"}${e.category ? ` | ${e.category}` : ""}${e.video_url ? " | has demo video" : ""}${e.id === exactId ? " | exact match" : ""}${alternative ? " | an alternative, not the same exercise" : ""}${lowValueReason(e.name) ? ` | below the exercise standard: ${lowValueReason(e.name)}` : ""}`),
         ].join("\n");
       }),
     }),

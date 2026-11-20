@@ -16,6 +16,8 @@ import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import { cn } from "@/lib/utils";
 import { errorText, mediaUrl, MEDIA_BUCKET } from "@/lib/challenges/api";
 import { localDateISO, localTimeHM, wallTimeToUtc } from "@/lib/schedule-time";
+import { useExerciseLibraryLite } from "@/components/workout-day/workout-add-exercise";
+import { useExerciseSearch } from "@/hooks/use-exercise-search";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -312,21 +314,11 @@ export function ActivityPicker({
   const [text, setText] = useState(value);
   const [focus, setFocus] = useState(false);
   const term = text.trim();
-  const matches = useQuery({
-    queryKey: ["challenges", "exercise-search", term],
-    queryFn: async () => {
-      const { data } = await db
-        .from("exercises")
-        .select("id,name")
-        .ilike("name", `%${term}%`)
-        .eq("archived", false)
-        .order("name")
-        .limit(6);
-      return (data ?? []) as { id: string; name: string }[];
-    },
-    enabled: focus && term.length >= 3,
-    staleTime: 60_000,
-  });
+  // the whole library once, ranked locally by the shared search (any word
+  // order, shorthand, typos), so a keystroke never waits on the network
+  const { data: library = [] } = useExerciseLibraryLite(focus || term.length >= 2);
+  const { local } = useExerciseSearch(library, focus && term.length >= 2 ? term : "", { limit: 6, describe: false });
+  const matches = { data: local?.hasExactMatches ? local.results.map((r) => r.exercise) : [] };
   return (
     <div className="relative">
       <Input

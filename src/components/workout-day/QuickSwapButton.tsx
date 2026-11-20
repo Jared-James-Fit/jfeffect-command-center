@@ -26,6 +26,8 @@ import {
 } from "@/components/ui/sheet";
 import { applySwap, getSwapImpact } from "@/lib/quick-swap.functions";
 import { searchEligibleExercises } from "@/lib/exercise-search";
+import { resultsNote, useDescribedExercises, useWarmExerciseIndex } from "@/hooks/use-exercise-search";
+import { DescribedMatches } from "@/components/exercise-search/described-matches";
 import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 import {
   classifyExercise,
@@ -58,6 +60,7 @@ type ExerciseLite = {
   muscle_groups?: string[] | null;
   secondary_muscle_groups?: string[] | null;
   counts_toward_volume?: boolean | null;
+  exercise_family?: string | null;
 };
 
 const MUSCLE_LABEL: Record<string, string> = {
@@ -296,7 +299,7 @@ function matchesChip(chip: EquipmentChip, equipment: string | null): boolean {
   }
 }
 
-const SELECT_COLS = "id,name,muscle_group,category,equipment,difficulty,vimeo_embed_url,youtube_url,thumbnail_url,cues,common_mistakes,default_measurement_type,primary_movement_pattern,muscle_groups,secondary_muscle_groups,counts_toward_volume";
+const SELECT_COLS = "id,name,muscle_group,category,equipment,difficulty,vimeo_embed_url,youtube_url,thumbnail_url,cues,common_mistakes,default_measurement_type,primary_movement_pattern,muscle_groups,secondary_muscle_groups,counts_toward_volume,exercise_family";
 const PAGE_SIZE = 20;
 const LIBRARY_FETCH_PAGE_SIZE = 1000;
 
@@ -660,7 +663,18 @@ export function QuickSwapButton({
     });
   }, [searchPool, debouncedSearch, exerciseId]);
 
-  const searchRows = searchOutcome?.results ?? [];
+  useWarmExerciseIndex(searchPool);
+  // A described exercise ("the cable one you pull to your waist"): the AI's
+  // read, found in the same eligible pool, once typing pauses.
+  const describePool = useMemo(
+    () => searchPool.filter((e) => e.id !== exerciseId && (e as { archived?: boolean | null }).archived !== true),
+    [searchPool, exerciseId],
+  );
+  const { described, describeState } = useDescribedExercises(describePool, debouncedSearch, searchOutcome, {
+    enabled: open && mode === "search",
+  });
+  const describedIds = useMemo(() => new Set(described.map((d) => d.exercise.id)), [described]);
+  const searchRows = (searchOutcome?.results ?? []).filter((r) => !describedIds.has(r.exercise.id));
   const searchTotal = searchRows.length;
   // Cumulative windowing — "Show more" appends instead of paging, so the
   // result list never jumps under the sticky search header.
@@ -821,7 +835,7 @@ export function QuickSwapButton({
                   autoCapitalize="none"
                   spellCheck={false}
                   name="exercise-search"
-                  placeholder="Search exercises…"
+                  placeholder="Search or describe an exercise…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={(e) => {
@@ -920,13 +934,20 @@ export function QuickSwapButton({
                   <Loader2 className="h-4 w-4 animate-spin" /> Searching…
                 </div>
               )}
-              {debouncedSearch.length >= 2 && !isSearching && searchTotal === 0 && (
+              {debouncedSearch.length >= 2 && !isSearching && searchTotal === 0 && described.length === 0 && describeState !== "loading" && (
                 <p className="text-sm text-muted-foreground">No matches.</p>
               )}
-              {searchOutcome && !searchOutcome.hasExactMatches && searchTotal > 0 && (
-                <p className="px-1 text-xs text-muted-foreground">
-                  No exact matches. Showing closest results.
-                </p>
+              {debouncedSearch.length >= 2 && (
+                <DescribedMatches
+                  state={describeState}
+                  matches={described}
+                  renderRow={(m, hint) => (
+                    <ExerciseRowCard ex={m.exercise} reason={hint} onSelect={() => startSelect(m.exercise)} />
+                  )}
+                />
+              )}
+              {resultsNote(searchOutcome, described.length) && searchTotal > 0 && (
+                <p className="px-1 text-xs text-muted-foreground">{resultsNote(searchOutcome, described.length)}</p>
               )}
               {pagedRows.map(({ exercise: ex, reason }) => (
                 <ExerciseRowCard

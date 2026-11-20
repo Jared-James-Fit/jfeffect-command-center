@@ -31,6 +31,8 @@ const DO_NOT_PERSIST_PREFIXES = [
   "exercises",
   "exercises-min",
   "exercise-search-pool-lite",
+  // AI reads of a described exercise: a session's worth, never worth a disk copy.
+  "exercise-identify",
   // Tasks are edited from several devices at once. A 24h-old disk snapshot
   // made the phone show an outdated (or empty) list after a desktop edit.
   "tasks",

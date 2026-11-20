@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Search, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { searchEligibleExercises } from "@/lib/exercise-search";
+import { useExerciseSearch, recentBoost, resultsNote } from "@/hooks/use-exercise-search";
+import { DescribedMatches } from "@/components/exercise-search/described-matches";
 import { sameMuscleGroup, topMuscleGroups } from "@/lib/athlete-program-draft";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,10 @@ export type ExerciseLite = {
   muscle_group: string | null;
   equipment: string | null;
   category: string | null;
+  /** Search reads these too (a muscle, a movement); optional for older cached copies. */
+  primary_movement_pattern?: string | null;
+  muscle_groups?: string[] | null;
+  exercise_family?: string | null;
 };
 
 const LIBRARY_PAGE = 1000;
@@ -40,7 +45,7 @@ export function useExerciseLibraryLite(enabled: boolean) {
       for (let from = 0; from < 20 * LIBRARY_PAGE; from += LIBRARY_PAGE) {
         const { data, error } = await supabase
           .from("exercises")
-          .select("id,name,muscle_group,equipment,category")
+          .select("id,name,muscle_group,equipment,category,primary_movement_pattern,muscle_groups,exercise_family")
           .eq("archived", false)
           .order("name")
           .order("id")
@@ -125,17 +130,56 @@ export function WorkoutAddExercise({
   const groups = useMemo(() => topMuscleGroups(library, 8), [library]);
   // Opens on what they've done lately; a muscle chip or a search takes over.
   const chip = group ?? (recent.length ? RECENT : null);
+  const pool = useMemo(
+    () => (chip && chip !== RECENT ? library.filter((e) => sameMuscleGroup(e.muscle_group, chip)) : library),
+    [library, chip],
+  );
+  // what they've logged lately ranks first among equally good matches
+  const boost = useMemo(() => recentBoost(recentIds), [recentIds]);
+  const { local, described, describeState } = useExerciseSearch(pool, search, { limit: 60, boost });
 
   const results = useMemo<ExerciseLite[]>(() => {
-    const q = search.trim();
-    const pool = chip && chip !== RECENT ? library.filter((e) => sameMuscleGroup(e.muscle_group, chip)) : library;
-    if (q.length >= 2) {
-      return searchEligibleExercises(pool as any, q, { limit: 60 })
-        .results.map((r: any) => r.exercise as ExerciseLite);
+    if (local) {
+      const shown = new Set(described.map((d) => d.exercise.id));
+      return local.results.map((r) => r.exercise).filter((e) => !shown.has(e.id));
     }
     if (chip === RECENT) return recent;
     return pool.slice(0, 40);
-  }, [library, search, chip, recent]);
+  }, [local, described, chip, recent, pool]);
+
+  const note = resultsNote(local, described.length);
+
+  // One row for a search result and an AI suggestion alike (the hint says how sure it is).
+  const row = (ex: ExerciseLite, hint?: string) => (
+    <button
+      type="button"
+      disabled={addingId != null}
+      onClick={() => void add(ex)}
+      className="flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-3 text-left transition active:scale-[0.99]"
+    >
+      <div className="min-w-0">
+        <div className="truncate text-sm font-bold">{ex.name}</div>
+        <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+          {[hint, ex.muscle_group, ex.equipment].filter(Boolean).join(" · ") || "Exercise"}
+        </div>
+      </div>
+      <span className="shrink-0 rounded-lg bg-secondary px-2.5 py-1 text-xs font-semibold text-foreground">
+        {addingId === ex.id ? "Adding…" : "Add"}
+      </span>
+    </button>
+  );
+
+  const add = async (ex: ExerciseLite) => {
+    setAddingId(ex.id);
+    try {
+      await onAdd(ex);
+      setOpen(false);
+      setSearch("");
+      setGroup(null);
+    } finally {
+      setAddingId(null);
+    }
+  };
 
   const chips = [...(recent.length ? [RECENT] : []), ...groups];
 
@@ -178,7 +222,9 @@ export function WorkoutAddExercise({
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search exercises…"
+                placeholder="Search or describe an exercise…"
+                aria-label="Search exercises"
+                enterKeyHint="search"
                 className="h-10 pl-9 text-base"
                 autoComplete="off"
                 autoCorrect="off"
@@ -213,37 +259,18 @@ export function WorkoutAddExercise({
               </div>
             ) : (
               <div className="space-y-2">
-                {results.length === 0 && (
+                <DescribedMatches
+                  state={describeState}
+                  matches={described}
+                  renderRow={(m, hint) => row(m.exercise, hint)}
+                  className="pb-1"
+                />
+                {note && results.length > 0 && <p className="px-1 text-[12px] text-muted-foreground">{note}</p>}
+                {results.length === 0 && described.length === 0 && describeState !== "loading" && (
                   <p className="py-6 text-center text-sm text-muted-foreground">No exercises match.</p>
                 )}
                 {results.map((ex) => (
-                  <button
-                    key={ex.id}
-                    type="button"
-                    disabled={addingId != null}
-                    onClick={async () => {
-                      setAddingId(ex.id);
-                      try {
-                        await onAdd(ex);
-                        setOpen(false);
-                        setSearch("");
-                        setGroup(null);
-                      } finally {
-                        setAddingId(null);
-                      }
-                    }}
-                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-3 text-left transition active:scale-[0.99]"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-bold">{ex.name}</div>
-                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                        {[ex.muscle_group, ex.equipment].filter(Boolean).join(" · ") || "Exercise"}
-                      </div>
-                    </div>
-                    <span className="shrink-0 rounded-lg bg-secondary px-2.5 py-1 text-xs font-semibold text-foreground">
-                      {addingId === ex.id ? "Adding…" : "Add"}
-                    </span>
-                  </button>
+                  <div key={ex.id}>{row(ex)}</div>
                 ))}
               </div>
             )}

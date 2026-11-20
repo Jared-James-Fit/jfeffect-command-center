@@ -10,6 +10,8 @@ import { Search, Star, GripVertical, Check, Loader2, AlertCircle, Circle, Plus, 
 import { cn } from "@/lib/utils";
 import { QuickAddExerciseDialog } from "@/components/quick-add-exercise-dialog";
 import { searchExercises } from "@/lib/exercise-search";
+import { resultsNote, useExerciseSearch } from "@/hooks/use-exercise-search";
+import { DescribedMatches } from "@/components/exercise-search/described-matches";
 import { familyStripeClass, isMovementFamily, resolveMovementFamily } from "@/lib/exercise-family";
 import { FamilyDot } from "@/components/exercise-order-badge";
 import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
@@ -773,14 +775,23 @@ export function ExerciseLibraryPanel({
     };
   }, [collapsed, onToggleCollapse]);
 
-  // Quick-filter chip first, then the shared keyword ranker.
-  const searched = useMemo(() => {
-    const list = filter ? exercises.filter((e) => exerciseMatchesFilter(e, filter)) : exercises;
-    return searchExercises(list, q, { limit: 200 });
-  }, [exercises, q, filter]);
-  const filtered = searched.results.map((r) => r.exercise);
+  // Quick-filter chip first, then the shared keyword ranker; the coach's
+  // favourites and recent picks rank first among equally good matches.
+  const pool = useMemo(
+    () => (filter ? exercises.filter((e) => exerciseMatchesFilter(e, filter)) : exercises),
+    [exercises, filter],
+  );
+  const boost = useMemo(() => {
+    const m = new Map<string, number>();
+    recentIds.forEach((id, i) => m.set(id, Math.max(0.3, 1 - i * 0.05)));
+    for (const id of favs) m.set(id, Math.max(m.get(id) ?? 0, 0.8));
+    return m.size ? m : null;
+  }, [recentIds, favs]);
+  const search = useExerciseSearch(pool, q, { limit: 200, minChars: 1, boost });
+  const searched = search.local ?? searchExercises(pool, "", { limit: 200 });
+  const describedIds = new Set(search.described.map((d) => d.exercise.id));
+  const filtered = searched.results.map((r) => r.exercise).filter((e) => !describedIds.has(e.id));
   const highlightTerms = searched.highlightTerms;
-  const showingClosest = q.trim().length > 0 && !searched.hasExactMatches && filtered.length > 0;
 
   const recent = useMemo(() => {
     const map = new Map(exercises.map((e) => [e.id, e]));
@@ -812,7 +823,7 @@ export function ExerciseLibraryPanel({
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search exercises…   ( / )"
+            placeholder="Search or describe…   ( / )"
             className="h-8 border-0 bg-transparent px-1 text-sm font-medium focus-visible:ring-0"
             onKeyDown={(e) => {
               if (e.key === "Escape") { e.preventDefault(); setQ(""); (e.currentTarget as HTMLInputElement).blur(); }
@@ -900,12 +911,22 @@ export function ExerciseLibraryPanel({
           </Section>
         )}
         <Section label={q || filter ? "Results" : "Library"}>
-          {showingClosest && (
-            <div className="px-2 pb-1 text-[10px] text-muted-foreground">
-              No exact matches. Showing closest results.
-            </div>
+          <DescribedMatches
+            compact
+            state={search.describeState}
+            matches={search.described}
+            renderRow={(m, hint) => (
+              <div title={hint}>
+                <ExerciseItem ex={m.exercise} fav={favs.has(m.exercise.id)} onFav={toggleFav} onPick={onPick} />
+                <div className="px-2 pb-1 text-[10px] text-muted-foreground">{hint}</div>
+              </div>
+            )}
+            className="px-1 pb-1"
+          />
+          {resultsNote(search.local, search.described.length) && filtered.length > 0 && (
+            <div className="px-2 pb-1 text-[10px] text-muted-foreground">{resultsNote(search.local, search.described.length)}</div>
           )}
-          {filtered.length === 0 ? (
+          {filtered.length === 0 && search.described.length === 0 && search.describeState !== "loading" ? (
             <div className="space-y-2 p-3 text-center text-[11px] text-muted-foreground">
               <div>No exercises{q ? <> matching “{q}”</> : null}.</div>
               <Button

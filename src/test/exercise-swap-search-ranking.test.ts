@@ -51,8 +51,9 @@ describe("swap search ranking contract", () => {
     const res = searchExercises(lib, "chest supported dumbbell row").results;
     const rank = (id: string) => res.findIndex((r) => r.exercise.id === id);
     expect(rank("csr")).toBe(0);
-    // Cable Chest Fly only shares the muscle "Chest" — must rank below.
-    expect(rank("fly")).toBeGreaterThan(rank("csr"));
+    // Cable Chest Fly only shares the muscle "Chest": below, or (now that
+    // loosely related exercises are dropped when one matches every word) gone.
+    if (rank("fly") >= 0) expect(rank("fly")).toBeGreaterThan(rank("csr"));
     const flyResult = res.find((r) => r.exercise.id === "fly");
     if (flyResult) expect(flyResult.tier).toBeGreaterThan(SEARCH_TIER.orderedTokens);
   });
