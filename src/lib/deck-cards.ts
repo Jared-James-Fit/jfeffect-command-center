@@ -435,15 +435,18 @@ export function paintDeckSlide(ctx: Ctx, L: DeckLayout, deck: PostDeck, index: n
   if (tag && s.type !== "takeaway") label(ctx, tag, PAD, L.top + 18, p.sub, 28);
 
   switch (s.type) {
-    case "point":
+    case "point": {
+      // numbered only as a sequence (two or more numbered points), counted in order whatever the model wrote
+      const numbered = deck.slides.filter((x) => x.type === "point" && x.n);
+      const n = numbered.length >= 2 && s.n ? numbered.indexOf(s) + 1 : 0;
       scale = place(ctx, (c, w) => {
         let y = 0;
-        if (s.n) {
+        if (n) {
           c.font = display(176);
           c.fillStyle = p.accent;
           c.textAlign = "left";
           c.textBaseline = "alphabetic";
-          c.fillText(String(s.n).padStart(2, "0"), -6, 158);
+          c.fillText(String(n).padStart(2, "0"), -6, 158);
           y = 196;
         } else {
           c.fillStyle = p.accent;
@@ -461,6 +464,7 @@ export function paintDeckSlide(ctx: Ctx, L: DeckLayout, deck: PostDeck, index: n
         return y;
       }, PAD, roomTop, W, roomH);
       break;
+    }
 
     case "stat":
       scale = place(ctx, (c, w) => {

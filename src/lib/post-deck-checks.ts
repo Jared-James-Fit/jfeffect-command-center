@@ -41,6 +41,15 @@ const GENERIC_ASK = [
   "are you guilty",
 ] as const;
 
+/** Openers that are a formula, not a person talking ("I care about this because…" on every post). */
+const CAPTION_PREAMBLE = /^(i care\b|i really care|this matters\b|here'?s why|the reason (?:i|this)|let me\b|real quick|quick one|so here'?s|i want to talk|i wanted to)/i;
+
+/** Office words a coach doesn't use about training. */
+const CORPORATE = ["bandwidth", "actionable", "low-hanging fruit", "move the needle", "level set", "unpack", "synergy", "holistic", "leverage your", "circle back", "value add", "best practices", "key learnings"] as const;
+
+/** The first two words of a caption, lowercased: how it opens. */
+export const captionOpening = (t: string) => t.toLowerCase().replace(/[’]/g, "'").replace(/[^a-z0-9' ]+/g, " ").trim().split(/\s+/).slice(0, 2).join(" ");
+
 /** Research said bigger than it is. */
 const OVERSTATED = /\b(proves?|proven|science says|science proves|guarantee[sd]?|never fails|always works|miracle|the best way to|the only way to|research proves|studies prove)\b/i;
 
@@ -175,6 +184,8 @@ function slideFit(s: DeckSlide, i: number): string[] {
 export type DeckContext = {
   /** Everything the deck was written from: its facts, numbers and names must be in here. */
   source: string;
+  /** The captions of the decks around it: a caption never opens the way one of them did. */
+  recentCaptions?: readonly string[];
   /** The lesson has a diagram the deck can show (a `diagram` slide). */
   diagram?: boolean;
   /** The covers of the posts around it: a hook too close to one is the same post again. */
@@ -236,6 +247,9 @@ export function deckProblems(deck: PostDeck, ctx: DeckContext): string[] {
   const last = slides[n - 1];
   if (n > 1 && last.type === "takeaway" && cover?.type === "cover" && likeness(last.title, cover.title) >= 0.75) out.push("the takeaway only repeats the hook: land somewhere the cover didn't");
 
+  // a number has to say what it is
+  for (const [i, sl] of slides.entries()) if (sl.type === "stat" && wordCount(sl.label) < 3) out.push(`slide ${i + 1}'s number needs a label that says what it means ("${sl.label}" doesn't)`);
+
   // the diagram
   const diagrams = slides.filter((s) => s.type === "diagram").length;
   if (diagrams && !ctx.diagram) out.push("there's no diagram for this post: drop the diagram slide");
@@ -250,6 +264,10 @@ export function deckProblems(deck: PostDeck, ctx: DeckContext): string[] {
   if (share > 0.2) out.push(`the caption repeats the slides (${Math.round(share * 100)}% of it is on them)`);
   for (const s of sentences.slice(0, 2)) out.push(`the caption says what a slide says: "${s.slice(0, 80)}"`);
   if (cover?.type === "cover" && likeness(caption.split(/(?<=[.!?])\s+|\n+/)[0] ?? "", cover.title) >= 0.8) out.push("the caption opens with the hook again");
+  if (CAPTION_PREAMBLE.test(caption.trim())) out.push(`the caption opens with a formula ("${caption.trim().split(/\s+/).slice(0, 5).join(" ")}…"): open with the thought itself`);
+  const opening = captionOpening(caption);
+  if (opening && (ctx.recentCaptions ?? []).some((c) => captionOpening(c) === opening)) out.push(`the caption opens the way a recent one did ("${opening}…")`);
+  for (const w of lowerHas(caption, CORPORATE)) out.push(`says "${w}" (office talk, not a coach)`);
   const ask = lowerHas(caption, GENERIC_ASK);
   if (ask.length) out.push(`the caption asks for engagement ("${ask[0]}"): end on something worth answering or nothing`);
   if (/#\w/.test(caption)) out.push("no hashtags");
