@@ -2,6 +2,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
+import type { BookingCard } from "@/lib/booking-cards";
 
 /** The booking dialog, loaded the first time the coach opens it from a chat (the chat stays light). */
 export const ChatBookingDialog = lazyWithRetry(() =>
@@ -9,11 +10,23 @@ export const ChatBookingDialog = lazyWithRetry(() =>
 );
 
 /**
- * Book a session from the coach's chat with a client (the + menu's Book
- * Session): the same booking dialog as the calendar, already on this client,
- * so Charge for it puts the payment card right in this chat.
+ * Book a session from the coach's chat with a client (the + menu's Schedule
+ * → Pick the time yourself): the same booking dialog as the calendar, already
+ * on this client and the type picked, so Charge for it puts the payment card
+ * right in this chat.
  */
-export function BookSessionFromChat({ clientId, open, onOpenChange }: { clientId: string; open: boolean; onOpenChange: (o: boolean) => void }) {
+export function BookSessionFromChat({
+  clientId,
+  open,
+  onOpenChange,
+  initialCard = null,
+}: {
+  clientId: string;
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  /** The type (and length) picked in Schedule's sheet, when the coach chose to book it himself. */
+  initialCard?: BookingCard | null;
+}) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { if (open) setMounted(true); }, [open]);
   const { data: client } = useQuery({
@@ -30,7 +43,7 @@ export function BookSessionFromChat({ clientId, open, onOpenChange }: { clientId
   if (!mounted) return null;
   return (
     <Suspense fallback={null}>
-      <ChatBookingDialog open={open} onOpenChange={onOpenChange} clientId={clientId} clients={client ? [client] : []} />
+      <ChatBookingDialog open={open} onOpenChange={onOpenChange} clientId={clientId} clients={client ? [client] : []} initialCard={initialCard} />
     </Suspense>
   );
 }

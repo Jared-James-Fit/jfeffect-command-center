@@ -273,28 +273,34 @@ describe("booking type defaults", () => {
   });
 });
 
-describe("personal booking links", async () => {
+describe("personal booking links (legacy, read only)", async () => {
   process.env.BOOKING_INVITE_SECRET = "test-secret-for-booking-links-only";
-  const { signBookingInvite, verifyBookingInvite } = await import("@/lib/booking-invite.server");
+  const { createHmac } = await import("crypto");
+  const { verifyLegacyInvite } = await import("@/lib/booking-invite.server");
   const id = "3d263734-5d46-4903-8520-e772aa8ca19d";
   const now = Date.parse("2026-10-09T15:44:00Z");
+  // How links were signed before Nov 20 2026 (they still book until they run out).
+  const legacy = (clientId: string, days: number) => {
+    const exp = Math.floor(now / 1000) + days * 86_400;
+    const sig = createHmac("sha256", process.env.BOOKING_INVITE_SECRET!)
+      .update(`booking-invite:v1:${clientId}.${exp}`)
+      .digest("hex")
+      .slice(0, 32);
+    return `${clientId}.${exp}.${sig}`;
+  };
 
   it("names the client it was made for", () => {
-    expect(verifyBookingInvite(signBookingInvite(id, 45, now), now)).toBe(id);
+    expect(verifyLegacyInvite(legacy(id, 45), now)).toBe(id);
   });
   it("can't be edited to name someone else or live longer", () => {
-    const [, exp, sig] = signBookingInvite(id, 45, now).split(".");
-    expect(
-      verifyBookingInvite(`8072b23e-93e6-480b-afe6-6f0af204d6a3.${exp}.${sig}`, now),
-    ).toBeNull();
-    expect(verifyBookingInvite(`${id}.${Number(exp) + 86400}.${sig}`, now)).toBeNull();
+    const [, exp, sig] = legacy(id, 45).split(".");
+    expect(verifyLegacyInvite(`8072b23e-93e6-480b-afe6-6f0af204d6a3.${exp}.${sig}`, now)).toBeNull();
+    expect(verifyLegacyInvite(`${id}.${Number(exp) + 86400}.${sig}`, now)).toBeNull();
   });
   it("expires", () => {
-    const t = signBookingInvite(id, 1, now);
-    expect(verifyBookingInvite(t, now + 2 * 86_400_000)).toBeNull();
+    expect(verifyLegacyInvite(legacy(id, 1), now + 2 * 86_400_000)).toBeNull();
   });
   it("rejects junk", () => {
-    for (const junk of ["", "abc", `${id}..`, `${id}.123.zz`, "x".repeat(200)])
-      expect(verifyBookingInvite(junk, now)).toBeNull();
+    for (const junk of ["", "abc", `${id}..`, `${id}.123.zz`, "x".repeat(200)]) expect(verifyLegacyInvite(junk, now)).toBeNull();
   });
 });
