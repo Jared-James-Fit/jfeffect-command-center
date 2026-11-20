@@ -34,10 +34,11 @@ describe("session hint (fast path for first-time visitors)", () => {
     expect(hasPersistedAuthSession()).toBe(true);
   });
 
-  it("root route sends signed-out visitors straight to /auth before hydrating", () => {
+  it("root route sends the signed-out installed app straight to /auth; a visitor gets the landing page", () => {
     const route = fs.readFileSync("src/routes/index.tsx", "utf8");
     expect(route).toContain("beforeLoad");
-    expect(route).toContain("hasPersistedAuthSession()");
+    expect(route).toContain("!hasPersistedAuthSession() && installedApp()");
     expect(route).toContain('redirect({ to: "/auth", replace: true })');
+    expect(route).toContain("<LandingPage />");
   });
 });

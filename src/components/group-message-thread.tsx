@@ -66,6 +66,9 @@ import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { listenChannel } from "@/lib/realtime-channel";
 import { useVideoTrimmer } from "@/components/video-trimmer";
 import type { VideoContext } from "@/lib/video-edit/limits";
+import { useFilmCamera } from "@/components/camera/use-film-camera";
+import { videoLimit } from "@/lib/video-edit/limits";
+import { HapticTap } from "@/components/haptic-tap";
 
 async function uploadGroupFile(
   groupId: string,
@@ -114,6 +117,12 @@ export function GroupMessageThread({
   // away and the message posts once its uploads land.
   const uploads = useDraftUploads<GroupAttachment>();
   const trimmer = useVideoTrimmer();
+  // the + menu's Video: filmed in the app's own camera, then sent like a picked video (Library inside it)
+  const filmCamera = useFilmCamera({
+    maxSeconds: videoLimit(videoContext),
+    onClip: (f) => void onPickFiles([f]),
+    onLibrary: () => photoInputRef.current?.click(),
+  });
   const [queuedUploadIds, setQueuedUploadIds] = useState<string[]>([]);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -533,7 +542,7 @@ export function GroupMessageThread({
 
   /* ---------------- Composer actions ---------------- */
 
-  const onPickFiles = async (files: FileList | null) => {
+  const onPickFiles = async (files: FileList | File[] | null) => {
     if (!files || !files.length) return;
     const ok = Array.from(files).filter((f) => {
       // Videos are trimmed and shrunk on the phone before upload, so only other files are capped.
@@ -1024,6 +1033,7 @@ export function GroupMessageThread({
           )}
           <DraftUploadChips drafts={uploads.drafts} store={uploads.store} onRemove={uploads.cancel} />
           {trimmer.element}
+          {filmCamera.element}
 
           <input ref={fileInputRef} type="file" multiple className="hidden"
             onChange={(e) => { void onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
@@ -1083,6 +1093,10 @@ export function GroupMessageThread({
                 canSendGifs={canSendGifs}
                 canSendSounds={canSendSounds}
                 onPickCamera={() => cameraInputRef.current?.click()}
+                onPickVideo={() => {
+                  // where a web page can't film, the phone's own camera, as before
+                  if (!filmCamera.start()) cameraInputRef.current?.click();
+                }}
                 onPickPhotos={() => photoInputRef.current?.click()}
                 onPickFiles={() => fileInputRef.current?.click()}
                 onAttach={canManage ? async (att, noteBody) => {
@@ -1200,13 +1214,14 @@ export function GroupMessageThread({
                   disabled={sending || uploading}
                   aria-busy={sending || uploading || undefined}
                   size="icon"
-                  className="h-10 w-10 shrink-0 rounded-full bg-primary transition-transform active:scale-90"
+                  className="relative h-10 w-10 shrink-0 rounded-full bg-primary transition-transform active:scale-90"
                 >
                   {sending || uploading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Send className="h-4 w-4" />
                   )}
+                  {!(sending || uploading) && <HapticTap />}
                 </Button>
               ) : textOnly ? (
                 <Button type="button" size="icon" disabled className="h-10 w-10 shrink-0 rounded-full bg-primary" aria-label="Send">

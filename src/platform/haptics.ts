@@ -153,13 +153,18 @@ type NativeHaptics = {
   selectionChanged?: () => Promise<void>;
   selectionEnd?: () => Promise<void>;
 };
+let nativePlugin: NativeHaptics | null = null;
 function nativeHaptics(): NativeHaptics | null {
+  if (nativePlugin) return nativePlugin;
   if (typeof window === "undefined") return null;
   try {
     const cap = (window as any).Capacitor;
     if (!cap?.isNativePlatform?.() || !cap.isPluginAvailable?.("Haptics")) return null;
-    const p = cap.Plugins?.Haptics;
-    return p && typeof p.impact === "function" ? (p as NativeHaptics) : null;
+    // The app's bridge puts each plugin its build links on Capacitor.Plugins (Android and iOS
+    // alike); registerPlugin is only the fallback, since the page never imports @capacitor/haptics.
+    const p = cap.Plugins?.Haptics ?? (typeof cap.registerPlugin === "function" ? cap.registerPlugin("Haptics") : null);
+    if (p && typeof p.impact === "function") nativePlugin = p as NativeHaptics;
+    return nativePlugin;
   } catch {
     return null;
   }

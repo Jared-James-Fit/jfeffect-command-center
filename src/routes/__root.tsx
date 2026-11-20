@@ -12,6 +12,7 @@ import {
 import { Toaster } from "sonner";
 import { PortraitLock } from "@/components/portrait-only";
 import { PHONE_BOOT_SCRIPT } from "@/lib/portrait-only";
+import { LAUNCH_BOOT_SCRIPT } from "@/lib/landing-launch";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { saveLastRoute } from "@/lib/route-persistence";
 import { ClientImpersonationProvider } from "@/lib/client-impersonation";
@@ -367,6 +368,8 @@ function RootShell({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: IOS_WEB_APP_BOOT_SCRIPT }} />
         {/* A phone keeps the phone layout in every orientation (data-phone, portrait-only.ts). */}
         <script dangerouslySetInnerHTML={{ __html: PHONE_BOOT_SCRIPT }} />
+        {/* "/": the app launch for anyone signed in or in the installed app, the landing page for everyone else (landing-launch.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: LAUNCH_BOOT_SCRIPT }} />
         <HeadContent />
         {/* The status bar takes the theme's colour from the first frame (the tags above exist now). */}
         <script dangerouslySetInnerHTML={{ __html: THEME_COLOR_SCRIPT }} />

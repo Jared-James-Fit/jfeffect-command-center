@@ -41,6 +41,7 @@ export function ComposerPlusMenu({
   canSendGifs,
   canSendSounds,
   onPickCamera,
+  onPickVideo,
   onPickPhotos,
   onPickFiles,
   onPickGif,
@@ -57,6 +58,8 @@ export function ComposerPlusMenu({
   canSendGifs?: boolean;
   canSendSounds?: boolean;
   onPickCamera: () => void;
+  /** Film a video in the app's own camera (use-film-camera.tsx); no tile without it. */
+  onPickVideo?: () => void;
   onPickPhotos: () => void;
   onPickFiles: () => void;
   onPickGif?: (g: ChatGif) => void | Promise<void>;
@@ -90,6 +93,16 @@ export function ComposerPlusMenu({
       label: "Camera",
       icon: <Camera className="h-6 w-6" />,
       onClick: () => { setOpen(false); preloadVideoEngine(); onPickCamera(); },
+    },
+    {
+      // a video filmed in the app's own camera: 1080p with the phone's own mic and no call processing,
+      // where the Camera tile's iOS picker records 480 × 360 with squeezed sound
+      key: "video",
+      section: "attach",
+      label: "Video",
+      icon: <Video className="h-6 w-6" />,
+      onClick: () => { setOpen(false); preloadVideoEngine(); onPickVideo?.(); },
+      hidden: !onPickVideo,
     },
     {
       key: "photo",

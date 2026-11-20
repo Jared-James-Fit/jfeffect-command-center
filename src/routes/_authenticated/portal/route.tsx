@@ -19,6 +19,7 @@ import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonat
 import { useWarmClientPages } from "@/lib/portal-page-queries";
 import { useCommunityActivity } from "@/lib/community.queries";
 import { AiCreditsReturn } from "@/components/ai-credits/ai-credits";
+import { MembershipPendingGate } from "@/components/member/membership-pending-gate";
 
 const CREW_OWN_BAR = ["/portal/community"] as const;
 
@@ -26,7 +27,7 @@ function PortalLayout() {
   useActivityHeartbeat();
   const { isImpersonating } = useClientImpersonation();
   // Coaching client or JF member: one portal, the coach's screens only for coaching.
-  const { isSelfServe, loading: tierLoading } = useServiceTier();
+  const { isSelfServe, loading: tierLoading, noAccount } = useServiceTier();
   // Workouts and Nutrition open from the cache: their data is fetched once the app has painted.
   const portalUserId = usePortalUserId();
   useWarmClientPages({ portalUserId, enabled: !isImpersonating && !tierLoading, nutrition: !isSelfServe });
@@ -36,6 +37,8 @@ function PortalLayout() {
     const base = isSelfServe ? selfServeBottomNav : clientBottomNav;
     return community?.enabled === false ? base.filter((i) => i.to !== "/portal/community") : base;
   }, [community?.enabled, isSelfServe]);
+  // a login with no membership (not approved yet): where they stand, never empty screens
+  if (noAccount) return <MembershipPendingGate />;
   return (
     <>
       <PovFrame />

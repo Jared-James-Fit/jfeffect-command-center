@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, Video, StickyNote, NotebookPen, Info, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, Target, LineChart } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, Video, StickyNote, NotebookPen, Info, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, Target, LineChart, Pencil } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -62,6 +62,8 @@ import {
   noteContextLabel,
   NOTE_PREVIEW_CHARS,
 } from "@/lib/exercise-note-history";
+import { isNoteEdited, noteDay } from "@/lib/exercise-note-versions";
+import { EditedToggle, NoteVersions } from "@/components/workout/shared/note-edit-history";
 import { WorkoutEmptyCard } from "@/components/workout-empty-state";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -111,6 +113,20 @@ import { RestTimer } from "@/components/workout-day/RestTimerButton";
 import { SwipeToReveal } from "@/components/workout-day/swipe-to-reveal";
 import { ExerciseActionRow } from "@/components/workout-day/exercise-action-row";
 import { CardMenuItem, CardMenuSeparator } from "@/components/workout-day/card-menu";
+import { SetupLine, SetupSheet, type SetupSheetMode } from "@/components/equipment/setup-sheet";
+import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
+import {
+  LIVE_WINDOW_MS,
+  cardEquipment,
+  comparesAcrossEquipment,
+  currentSetup,
+  equipmentName,
+  loadEquipmentId,
+  settingsFromNote,
+  setupFor,
+  setupSummary,
+} from "@/lib/equipment/equipment";
+import { useViewingAsClient } from "@/lib/client-impersonation";
 import { setGridTemplate } from "@/components/workout-day/set-grid";
 import { SetNumberBadge } from "@/components/workout-day/set-number-badge";
 import { SetPrIndicator } from "@/components/workout-day/set-pr-indicator";
@@ -967,6 +983,20 @@ function WorkoutDay({
     : scheduledWorkoutId
       ? `instance:${scheduledWorkoutId}`
       : `day:${dayId}`;
+  // The machine each card is on (when it changes what a weight means): "Last
+  // time" and the suggestions read history on it, never another machine's.
+  const { data: dayEquipment } = useAthleteEquipment(adapter?.kind === "member" ? null : client?.id ?? null);
+  const loadEquipmentByRow = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const row of rows as any[]) {
+      const exId = row.exercises?.id ?? row.exercise_id ?? null;
+      if (!exId) continue;
+      const shown = cardEquipment((results as any[]).filter((x) => x.row_id === row.id), currentSetup(dayEquipment, exId));
+      const eq = shown.equipmentId ? dayEquipment.equipment.find((e) => e.id === shown.equipmentId) ?? null : null;
+      map.set(row.id, loadEquipmentId(eq));
+    }
+    return map;
+  }, [rows, results, dayEquipment]);
   const previousLiftIdentities = useMemo<PreviousLiftIdentity[]>(
     () => (rows as any[]).map((row) => {
       const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
@@ -980,9 +1010,10 @@ function WorkoutDay({
         purposeLabel: row.purpose_label ?? null,
         // a walk or a bike: last time is its time, calories and effort; a plank: its longest hold
         timed: isTimedCardio(name) ? "cardio" : timedRow ? "hold" : null,
+        equipmentId: loadEquipmentByRow.get(row.id) ?? null,
       };
     }),
-    [rows],
+    [rows, loadEquipmentByRow],
   );
   const previousLiftIdentityKey = useMemo(
     () => previousLiftIdentities
@@ -1059,7 +1090,7 @@ function WorkoutDay({
       const columns = `id, row_id, scheduled_workout_id, completed_at, updated_at, created_at,
           actual_reps, actual_rpe, actual_rir, entered_value, entered_unit,
           normalized_kg, normalized_lb, actual_load, actual_load_unit, is_working_set,
-          is_bodyweight, load_type, completed_duration_seconds, actual_calories, actual_distance_m,
+          is_bodyweight, load_type, completed_duration_seconds, actual_calories, actual_distance_m, equipment_id,
           pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, purpose_label, sort_order, exercises(name), pl_days(scheduled_date))`;
       // Confirmed sets only (drafts from "apply to remaining" are not history),
       // newest first, paged past the 1,000-row response cap so long-term
@@ -1116,6 +1147,7 @@ function WorkoutDay({
           durationSeconds: log.completed_duration_seconds ?? null,
           calories: log.actual_calories ?? null,
           distanceM: log.actual_distance_m != null ? Number(log.actual_distance_m) : null,
+          equipmentId: log.equipment_id ?? null,
         };
       });
     },
@@ -3601,11 +3633,13 @@ function lastTimeText(data: PreviousLift, displayUnit: "kg" | "lb"): string | nu
  * button into its history: a history icon, a chevron, a press state. With
  * nothing logged yet it still opens the history ("None yet").
  */
-function PreviousLiftChip({ data, displayUnit, onOpen }: {
+function PreviousLiftChip({ data, displayUnit, onOpen, otherOn = null }: {
   data: PreviousLift | null;
   displayUnit: "kg" | "lb";
   /** Tapping it opens this exercise's History (it is the History button). */
   onOpen?: () => void;
+  /** Nothing logged on this card's machine yet: the machine last time was on. */
+  otherOn?: string | null;
 }) {
   const text = data ? lastTimeText(data, displayUnit) : null;
   const when = data && text ? lastTimeWhen(data) : "";
@@ -3621,6 +3655,7 @@ function PreviousLiftChip({ data, displayUnit, onOpen }: {
       {text
         ? <span className={REF_VALUE} data-last-time-timed={data?.timed?.kind}>{text}</span>
         : <span className="text-[13px] leading-snug text-muted-foreground">None yet</span>}
+      {text && otherOn && <span className="truncate text-[11px] leading-tight text-muted-foreground" data-last-time-other-equipment>on {otherOn}</span>}
     </>
   );
   if (!onOpen) return <div className={REF_CELL}>{inner}</div>;
@@ -3647,6 +3682,32 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
   // temporarily absent (RLS/cache/network). History identity must not depend
   // on the optional display-details join resolving successfully.
   const exerciseId = exercise?.id ?? row.exercise_id ?? null;
+  // Equipment & setup: the rack or machine this card is on and how it's set up
+  // (equipment.ts). Its own sets say what a finished workout was done on; a
+  // workout being logged shows the exercise's current pick. One quiet line when
+  // something's saved, the sheet from it or the ⋯ menu.
+  const equipmentOn = !!clientId && !!exerciseId && adapter?.kind !== "member";
+  const { data: equipmentData } = useAthleteEquipment(equipmentOn ? clientId : null);
+  const viewingAsClient = useViewingAsClient();
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [noteForSetup, setNoteForSetup] = useState<string | null>(null);
+  const cardSetup = useMemo(() => {
+    if (!equipmentOn) return null;
+    const current = currentSetup(equipmentData, exerciseId);
+    const shown = cardEquipment(existingResults as any[], current);
+    const eq = shown.equipmentId ? equipmentData.equipment.find((e) => e.id === shown.equipmentId) ?? null : null;
+    const setup = shown.source === "current" ? current : shown.equipmentId ? setupFor(equipmentData, exerciseId, shown.equipmentId) : null;
+    const past = (existingResults as any[]).some((r) => r?.completed_at && Date.now() - Date.parse(r.completed_at) > LIVE_WINDOW_MS);
+    return {
+      equipmentId: shown.equipmentId,
+      equipment: eq,
+      summary: setupSummary(setup, eq),
+      mode: (readonly ? "view" : past ? "past" : "live") as SetupSheetMode,
+      // a PR on a machine says which (its weight means nothing on another one)
+      prOn: eq && !comparesAcrossEquipment(eq.kind) ? equipmentName(eq) : null,
+      instance: ((existingResults as any[]).find((r) => r?.completed_at)?.scheduled_workout_id as string | undefined) ?? null,
+    };
+  }, [equipmentOn, equipmentData, exerciseId, existingResults, readonly]);
   // Local mirror of the active unit so the per-exercise KG/LB toggle is always
   // instantly responsive — even if the parent's resolved-unit state takes a
   // tick to recompute or the persistence call is slow. Stays in sync with the
@@ -4797,6 +4858,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
         <span data-exercise-role>{purposeLabelText(purposeLabel || category)}</span>
         {lastWeekSwap && <LastWeekSwapChip swap={lastWeekSwap} unit={activeUnit} />}
       </div>
+      {cardSetup?.summary && (
+        <SetupLine text={cardSetup.summary} retired={!!cardSetup.equipment?.archived_at} onOpen={() => setSetupOpen(true)} />
+      )}
       {/* Standardized prescription line: Sets × Reps @ Weight | RPE (a run reads as a run:
           "3 × 8 min · 2 min easy jog between | RPE 6–7") */}
       <div className="mt-2.5 flex items-center justify-between gap-3">
@@ -4852,6 +4916,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
                 data={previousLift}
                 displayUnit={activeUnit}
                 onOpen={clientId ? () => setHistoryOpen(true) : undefined}
+                otherOn={previousLift?.otherEquipment && previousLift.equipmentId
+                  ? equipmentName(equipmentData.equipment.find((e) => e.id === previousLift.equipmentId)) || "another machine"
+                  : null}
               />
               {right && <span aria-hidden="true" className={REF_DIVIDER} />}
               {right}
@@ -4873,6 +4940,20 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
           // Fix a past day's sets right here, without leaving the workout.
           editable={!readonly}
           onClose={() => setHistoryOpen(false)}
+        />
+      )}
+      {setupOpen && equipmentOn && cardSetup && (
+        <SetupSheet
+          open={setupOpen}
+          onOpenChange={setSetupOpen}
+          clientId={clientId!}
+          exercise={{ id: exerciseId!, name, equipment: (exercise as any)?.equipment ?? null }}
+          mode={cardSetup.mode}
+          dayId={dayId}
+          instance={cardSetup.instance}
+          shownEquipmentId={cardSetup.equipmentId}
+          noteText={noteForSetup ?? existingNote?.content ?? null}
+          coachView={viewingAsClient}
         />
       )}
       {canSuggest && !readonly && suggestNudge && !showSuggestionCard && <LoadSuggestionsNudge onDismiss={suggestNudge} />}
@@ -4987,6 +5068,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
                 {clientId && (
                   <CardMenuItem onSelect={() => setHistoryOpen(true)} className="rounded-lg" data-testid="card-history">
                     <LineChart className="mr-2 h-4 w-4" /> History & progress
+                  </CardMenuItem>
+                )}
+                {equipmentOn && (
+                  <CardMenuItem onSelect={() => setSetupOpen(true)} className="rounded-lg" data-testid="card-setup">
+                    <SlidersHorizontal className="mr-2 h-4 w-4" /> {cardSetup?.summary ? "Setup & equipment" : "Save your setup"}
                   </CardMenuItem>
                 )}
                 {canSuggest && !readonly && (
@@ -5318,6 +5404,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
           return (
             <SetRow
               key={i}
+              prOn={cardSetup?.prOn ?? null}
               rowId={row.id}
               workoutId={dayId}
               startsWorkout={startsWorkout}
@@ -5443,7 +5530,21 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
         exerciseName={name}
         existingNote={existingNote}
         loading={notesLoading}
-        onSaved={onNoteChange}
+        onSaved={(content) => {
+          onNoteChange();
+          // "Rack height 30" typed into a note: offer to keep it as the card's setup
+          if (!equipmentOn || readonly || !content) return;
+          const found = settingsFromNote(content);
+          if (!found.length) return;
+          const saved = cardSetup?.summary ?? "";
+          if (found.every((f) => saved.toLowerCase().includes(`${f.label} ${f.value}`.toLowerCase()))) return;
+          setNoteForSetup(content);
+          toast("Save it as your setup?", {
+            description: `${found.map((f) => `${f.label} ${f.value}`).join(" · ")} shows on this card every time.`,
+            action: { label: "Save", onClick: () => setSetupOpen(true) },
+            duration: 6000,
+          });
+        }}
       />
     </Card>
   );
@@ -5497,7 +5598,8 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   exerciseName: string;
   existingNote?: any;
   loading?: boolean;
-  onSaved: () => void;
+  /** After a save, with what was saved. */
+  onSaved: (content?: string) => void;
 }) {
   const [draft, setDraft] = useState(existingNote?.content ?? "");
   // Only re-hydrate the draft when the sheet (re)opens or the underlying
@@ -5505,6 +5607,10 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   // out user edits whenever a refetch came back with the previous saved
   // content, making it feel like the note couldn't be edited.
   useEffect(() => { setDraft(existingNote?.content ?? ""); }, [existingNote?.id, open]);
+  // This workout's note's earlier versions, and which older note is being edited in place.
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  useEffect(() => { if (!open) { setVersionsOpen(false); setEditingId(null); } }, [open]);
   const adapter = useOptionalAdapter();
   const qc = useQueryClient();
   // A coaching client's note goes to their coach in Messages (a member has no coach; a coach in
@@ -5516,6 +5622,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   // Per-exercise note history. Lazy: only fetched when the sheet is open,
   // keyed by canonical exercise identity, and cached so reopening is instant.
   // Same table (pl_exercise_notes) the coach view / POV read — one source.
+  // Ordered by the day each note was written: an edit never moves a note.
   const { data: historyRaw = [], isLoading: historyLoading } = useQuery({
     queryKey: ["exercise-note-history", clientId, exerciseId ?? "", exerciseName],
     enabled: open && !!clientId,
@@ -5524,10 +5631,10 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
       let q = sb
         .from("pl_exercise_notes")
         .select(
-          "id, exercise_id, exercise_name, content, status, created_at, updated_at, day_id, pl_days(title, day_index, pl_weeks(week_index, pl_blocks(name)))",
+          "id, exercise_id, exercise_name, content, status, created_at, updated_at, edited_at, day_id, pl_days(title, day_index, pl_weeks(week_index, pl_blocks(name)))",
         )
         .eq("client_id", clientId!)
-        .order("updated_at", { ascending: false })
+        .order("created_at", { ascending: false })
         .limit(50);
       q = exerciseId ? q.eq("exercise_id", exerciseId) : q.eq("exercise_name", exerciseName);
       const { data, error } = await q;
@@ -5547,6 +5654,26 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
     [historyRaw, exerciseId, exerciseName, existingNote?.id, dayId],
   );
 
+  /** Rewords a note already written (this workout's or an older one): the same row, never a second note. */
+  const updateNote = async (id: string, content: string) => {
+    // the database keeps the wording it replaces and stamps the edit; the coach's card follows it
+    const payload = { content, status: "edited" };
+    await saveExerciseNoteWithRetry(async () => {
+      if (adapter) {
+        await adapter.upsertPlExerciseNoteRaw(payload, id);
+      } else {
+        const { error } = await sb.from("pl_exercise_notes").update(payload).eq("id", id);
+        if (error) throw error;
+      }
+    });
+    qc.invalidateQueries({ queryKey: ["exercise-note-history", clientId] });
+    qc.invalidateQueries({ queryKey: ["exercise-note-revisions", id] });
+    qc.invalidateQueries({ queryKey: ["workout-note-card", "exercise", id] });
+    qc.invalidateQueries({ queryKey: ["client-workout-notes", clientId ?? null] });
+  };
+
+  const editingOlder = !!editingId;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" hideCloseButton className="keyboard-aware-bottom-sheet h-[88vh] overflow-y-auto p-0 sm:max-w-xl sm:mx-auto sm:rounded-t-2xl">
@@ -5554,14 +5681,19 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
           <SheetTitle className="text-base font-bold">{exerciseName}</SheetTitle>
           <SheetDescription className="text-xs">{dayTitle} · Exercise notes</SheetDescription>
         </SheetHeader>
-        <div className="px-5 py-4 space-y-4 pb-32">
+        <div className="px-5 py-4 space-y-5 pb-32">
           <div>
             <div className="flex items-center justify-between gap-2">
-              <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{toCoach ? "Note for your coach" : "Your note"}</label>
+              <label htmlFor={`exercise-note-${rowId}`} className="text-[13px] font-semibold">{toCoach ? "Note for your coach" : "Your note"}</label>
               {existingNote && (
-                <span className="text-[10px] text-muted-foreground">
-                  Last saved {new Date(existingNote.updated_at).toLocaleString()}
-                  {existingNote.status === "edited" && " · edited"}
+                <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground" data-note-dates>
+                  <span>{noteDay(existingNote.created_at)}</span>
+                  {isNoteEdited(existingNote) && (
+                    <>
+                      <span aria-hidden>·</span>
+                      <EditedToggle note={existingNote} open={versionsOpen} onToggle={() => setVersionsOpen((v) => !v)} />
+                    </>
+                  )}
                 </span>
               )}
             </div>
@@ -5569,6 +5701,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
               <div className="mt-1 h-[140px] w-full animate-pulse rounded-md border border-border bg-muted/40" aria-busy="true" aria-label="Loading note" />
             ) : (
               <Textarea
+                id={`exercise-note-${rowId}`}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 rows={6}
@@ -5576,23 +5709,33 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
                 className="mt-1"
               />
             )}
+            {existingNote && (
+              <NoteVersions
+                noteId={existingNote.id}
+                note={existingNote}
+                open={versionsOpen}
+                onRestore={(content) => setDraft(content)}
+                className="mt-3"
+              />
+            )}
             {toCoach ? (
-              <p className="mt-1 text-[11px] text-muted-foreground" data-exercise-note-to-coach>
-                Goes to your coach in Messages.{existingNote ? " Edit it anytime, they see the change." : ""}
+              <p className="mt-1.5 text-[11px] text-muted-foreground" data-exercise-note-to-coach>
+                {existingNote?.coach_message_id
+                  ? "In your coach's Messages. Edits update that same message."
+                  : "Goes to your coach in Messages."}
               </p>
             ) : existingNote && (
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Edit your note anytime — tap above to change it, then tap Save Note.
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                Edit it anytime. Earlier versions are kept.
               </p>
             )}
           </div>
 
-          {/* Previous notes for THIS exercise, newest first. Reference-only:
-              tapping/saving here never mutates a historical note. */}
+          {/* Previous notes for THIS exercise, by the day each was written,
+              newest first. Each one edits in place (the same note, its earlier
+              wording kept), never as a new note. */}
           <div data-testid="exercise-note-history">
-            <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-              Previous notes
-            </div>
+            <div className="text-[13px] font-semibold">Previous notes</div>
             {historyLoading ? (
               <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading history…
@@ -5604,12 +5747,25 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
             ) : (
               <ul className="mt-2 space-y-2">
                 {history.map((n) => (
-                  <NoteHistoryItem key={n.id} note={n} />
+                  <NoteHistoryItem
+                    key={n.id}
+                    note={n}
+                    canEdit={!!clientId}
+                    editing={editingId === n.id}
+                    onEdit={(on) => setEditingId(on ? n.id : null)}
+                    onSave={async (content) => {
+                      await updateNote(n.id, content);
+                      setEditingId(null);
+                      toast.success("Note updated");
+                    }}
+                  />
                 ))}
               </ul>
             )}
           </div>
         </div>
+        {/* One save button on screen at a time: an older note being edited has its own. */}
+        {!editingOlder && (
         <div
           className="sticky bottom-0 left-0 right-0 border-t border-border bg-background/95 backdrop-blur px-5 pt-3 space-y-2"
           style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}
@@ -5624,44 +5780,41 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
             onAction={async () => {
               if (!clientId) return;
               const trimmed = draft.trim();
-              const doSave = async () => {
-                if (existingNote) {
-                  const payload = { content: trimmed, status: "edited", coach_seen_at: null };
-                  if (adapter) {
-                    await adapter.upsertPlExerciseNoteRaw(payload, existingNote.id);
-                  } else {
-                    const { error } = await sb.from("pl_exercise_notes").update(payload).eq("id", existingNote.id);
-                    if (error) throw error;
-                  }
-                } else {
-                  if (!trimmed) throw new Error("Note is empty");
-                  const payload = {
-                    client_id: clientId,
-                    day_id: dayId,
-                    row_id: rowId,
-                    exercise_id: exerciseId,
-                    exercise_name: exerciseName,
-                    content: trimmed,
-                    status: "new",
-                  };
+              // the card the coach had before this save (an edit updates it; only a note's first words post one)
+              const cardBefore: string | null = existingNote?.coach_message_id ?? null;
+              if (existingNote) {
+                await updateNote(existingNote.id, trimmed);
+              } else {
+                if (!trimmed) throw new Error("Note is empty");
+                const payload = {
+                  client_id: clientId,
+                  day_id: dayId,
+                  row_id: rowId,
+                  exercise_id: exerciseId,
+                  exercise_name: exerciseName,
+                  content: trimmed,
+                  status: "new",
+                };
+                await saveExerciseNoteWithRetry(async () => {
                   if (adapter) {
                     await adapter.upsertPlExerciseNoteRaw(payload, null);
                   } else {
                     const { error } = await sb.from("pl_exercise_notes").insert(payload);
                     if (error) throw error;
                   }
-                }
-              };
-              await saveExerciseNoteWithRetry(doSave);
-              qc.invalidateQueries({ queryKey: ["exercise-note-history", clientId] });
-              // the database put it in the coach's Messages: push them (the same card again is never pushed twice)
-              if (toCoach) {
+                });
+                qc.invalidateQueries({ queryKey: ["exercise-note-history", clientId] });
+                qc.invalidateQueries({ queryKey: ["client-workout-notes", clientId] });
+              }
+              // the database put a new card in the coach's Messages: push them. An edit only
+              // updates the card they already have, so it never pushes.
+              if (toCoach && !cardBefore) {
                 void (async () => {
                   const { data } = await sb.from("pl_exercise_notes").select("coach_message_id").eq("client_id", clientId).eq("day_id", dayId).eq("row_id", rowId).maybeSingle();
-                  await pushWorkoutNote(data?.coach_message_id ?? null);
+                  if (data?.coach_message_id && data.coach_message_id !== cardBefore) await pushWorkoutNote(data.coach_message_id);
                 })().catch(() => {});
               }
-              onSaved();
+              onSaved(trimmed);
             }}
           >
             <StickyNote className="mr-2 h-4 w-4" /> {existingNote ? "Update Note" : "Save Note"}
@@ -5670,36 +5823,107 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Workout
           </Button>
         </div>
+        )}
       </SheetContent>
     </Sheet>
   );
 }
 
-/** One historical note row: date-first, context secondary, long notes collapse. */
-function NoteHistoryItem({ note }: { note: any }) {
+/**
+ * One earlier note: the day it was written first (an edit never changes it),
+ * where it was, the words (long ones fold), "Edited …" opening its earlier
+ * versions, and Edit, which rewords it right here.
+ */
+function NoteHistoryItem({ note, canEdit, editing, onEdit, onSave }: {
+  note: any;
+  canEdit: boolean;
+  editing: boolean;
+  onEdit: (on: boolean) => void;
+  onSave: (content: string) => Promise<void>;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const [draft, setDraft] = useState<string>(note.content ?? "");
+  const [saving, setSaving] = useState(false);
   const content: string = note.content ?? "";
   const isLong = content.length > NOTE_PREVIEW_CHARS;
   const ctx = noteContextLabel(note);
+  const written = note.created_at ? format(parseISO(note.created_at), "MMM d, yyyy") : "";
+  const unchanged = draft.trim() === content.trim();
+  const save = async () => {
+    if (saving || unchanged || !draft.trim()) return;
+    setSaving(true);
+    try {
+      await onSave(draft.trim());
+    } catch (err) {
+      toast.error((err as Error)?.message || "Couldn't save the note. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
   return (
-    <li className="rounded-md border border-border bg-secondary/30 p-2.5">
-      <div className="flex flex-wrap items-baseline gap-x-2 text-[11px]">
-        <span className="font-bold text-foreground">
-          {format(parseISO(note.updated_at), "MMM d, yyyy")}
-        </span>
-        {ctx && <span className="text-muted-foreground">{ctx}</span>}
+    <li className={cn("rounded-xl border p-3", editing ? "border-foreground/40 bg-card" : "border-border bg-secondary/30")} data-note-history-item={note.id}>
+      <div className="flex items-center gap-2 text-[11px]">
+        <span className="shrink-0 font-semibold text-foreground">{written}</span>
+        {ctx && <span className="min-w-0 truncate text-muted-foreground">{ctx}</span>}
+        {canEdit && !editing && (
+          <button
+            type="button"
+            onClick={() => { setDraft(content); onEdit(true); }}
+            className="-my-2 ml-auto inline-flex h-9 shrink-0 items-center gap-1 rounded-full px-2.5 text-[12px] font-semibold text-muted-foreground active:bg-muted"
+            aria-label={`Edit your note from ${written}`}
+            data-note-history-edit
+          >
+            <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit
+          </button>
+        )}
       </div>
-      <p className={cn("mt-1 whitespace-pre-wrap text-sm", isLong && !expanded && "line-clamp-2")}>
-        {content}
-      </p>
-      {isLong && (
-        <button
-          type="button"
-          className="mt-0.5 text-[11px] font-semibold text-primary"
-          onClick={() => setExpanded((v) => !v)}
-        >
-          {expanded ? "Show less" : "Read more"}
-        </button>
+      {editing ? (
+        <>
+          <Textarea
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={4}
+            className="mt-2"
+            aria-label={`Your note from ${written}`}
+          />
+          <div className="mt-2 flex items-center justify-end gap-2">
+            <Button type="button" variant="ghost" className="h-10" onClick={() => onEdit(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="button" className="h-10 min-w-[88px]" onClick={() => void save()} disabled={saving || unchanged || !draft.trim()} data-note-history-save>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className={cn("mt-1 whitespace-pre-wrap text-sm", isLong && !expanded && "line-clamp-2")}>
+            {content}
+          </p>
+          {isLong && (
+            <button
+              type="button"
+              className="mt-0.5 text-[11px] font-semibold text-muted-foreground underline underline-offset-2"
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? "Show less" : "Read more"}
+            </button>
+          )}
+        </>
+      )}
+      {isNoteEdited(note) && (
+        <div className="mt-1.5">
+          <EditedToggle note={note} open={versionsOpen} onToggle={() => setVersionsOpen((v) => !v)} />
+          <NoteVersions
+            noteId={note.id}
+            note={note}
+            open={versionsOpen}
+            onRestore={canEdit ? (c) => { setDraft(c); if (!editing) onEdit(true); } : undefined}
+            className="mt-2"
+          />
+        </div>
       )}
     </li>
   );
@@ -5735,7 +5959,10 @@ function SetRow({
   registerHandle,
   dayTitle = "",
   onSwitchUnit,
+  prOn = null,
 }: {
+  /** The machine the set was done on, when its weight means nothing on another one (a PR says which). */
+  prOn?: string | null;
   loadHint?: LoadSuggestion | null;
   /** The card's KG / LB switch: a weight typed in the other unit switches it, then saves. */
   onSwitchUnit?: (u: "kg" | "lb") => void;
@@ -6926,8 +7153,9 @@ function SetRow({
       localPr: prBadge && (!hasRecords || assistedSet) ? prBadge : null,
       assisted: assistedSet,
       unit,
+      equipment: prOn,
     }),
-    [recordForBadge, loadRecordForBadge, prBadge, hasRecords, assistedSet, unit],
+    [recordForBadge, loadRecordForBadge, prBadge, hasRecords, assistedSet, unit, prOn],
   );
   // It pops in once when it's just been earned, never on reopening an old workout.
   const prFresh = useMemo(() => {
