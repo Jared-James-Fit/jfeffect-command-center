@@ -20,6 +20,7 @@ import { InstagramShareSheet } from "@/components/community/instagram-share-shee
 import { ReportSheet } from "@/components/community/report-sheet";
 import { postArtCard, sendToInstagram } from "@/lib/instagram-export";
 import { peekPostArt, postArtKey } from "@/lib/post-art";
+import { deckOf } from "@/lib/post-decks";
 import { useWeightUnit } from "@/lib/use-weight-unit";
 
 /**
@@ -97,9 +98,11 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
 
   // the file is already made (it's the picture on screen), so the share sheet opens from this tap
   const saveImage = () => {
-    const art = artCard ? peekPostArt(postArtKey(post, artCard, unit)) : null;
-    if (!art) return void toast.message("The picture is still being made. Try again in a second.");
-    void sendToInstagram([art.file], null).then(({ outcome }) => {
+    // a deck: every slide that's ready (the cover first); anything else: its one card
+    const count = artCard === "deck" ? (deckOf(post)?.slides.length ?? 1) : 1;
+    const arts = artCard ? Array.from({ length: count }, (_, i) => peekPostArt(postArtKey(post, artCard, unit, i))) : [];
+    if (!arts.length || arts.some((a) => !a)) return void toast.message("The picture is still being made. Try again in a second.");
+    void sendToInstagram(arts.map((a) => a!.file), null).then(({ outcome }) => {
       if (outcome === "again") toast.message("Tap Save image once more.");
       else if (outcome === "saved") toast.success("Picture saved");
       else if (outcome === "failed") toast.error("Couldn't save the picture");

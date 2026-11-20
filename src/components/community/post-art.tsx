@@ -7,10 +7,18 @@ import { canvasFile, paintInstagramCard, standaloneSvg, svgPicture } from "@/lib
 import { instagramFileName, postArtCard, type IgCard, type IgFormat } from "@/lib/instagram-export";
 import { decodePostArt, findPostArt, isPostArtDecoded, loadPostArt, peekPostArt, postArtAlt, postArtKey, whenStill, type PostArt } from "@/lib/post-art";
 import { cardLogo, ensureDisplayFont } from "@/lib/workout-share-card";
+import { ensureDeckFonts } from "@/lib/deck-cards";
+import { deckOf } from "@/lib/post-decks";
 import { cn } from "@/lib/utils";
 
 /** The drawing a card paints in (a lesson's diagram, Saturday's scene), drawn off screen first; null when it has none. */
-export function cardArtElement(post: CommunityPost, card: IgCard): ReactNode | null {
+export function cardArtElement(post: CommunityPost, card: IgCard, slide = 0): ReactNode | null {
+  if (card === "deck") {
+    // only a deck's diagram slide carries the lesson's drawing
+    if (deckOf(post)?.slides[slide]?.type !== "diagram") return null;
+    const v = extraLesson(post)?.visual;
+    return v && v.kind !== "truth" && v.kind !== "reset" ? <LessonVisualArt visual={v} tone="paper" /> : null;
+  }
   if (card === "lesson") {
     const v = extraLesson(post)?.visual;
     return v && v.kind !== "truth" && v.kind !== "reset" ? <LessonVisualArt visual={v} tone="paper" /> : null;
@@ -27,12 +35,12 @@ export function cardArtElement(post: CommunityPost, card: IgCard): ReactNode | n
  * `pause` (the feed's paint): waited on between drawing the card and encoding it, so the main thread is
  * held in two short stretches, each only while the screen is still, never one long one under a swipe.
  */
-export async function paintCardFile(post: CommunityPost, card: IgCard, format: IgFormat, unit: "kg" | "lb", host: Element | null, index = 0, pause?: () => Promise<void>): Promise<File | null> {
+export async function paintCardFile(post: CommunityPost, card: IgCard, format: IgFormat, unit: "kg" | "lb", host: Element | null, index = 0, pause?: () => Promise<void>, slide = 0): Promise<File | null> {
   const svg = host?.querySelector("svg");
   // the card is light paper: the diagram goes on in its paper colours (dark ink), never the story's white
   const art = svg ? await svgPicture(standaloneSvg(svg, LESSON_PAPER_COLORS, 1080)) : null;
   const canvas = document.createElement("canvas");
-  await paintInstagramCard(canvas, { card, format, post, unit, art });
+  await paintInstagramCard(canvas, { card, format, post, unit, art, slide });
   if (pause) await pause();
   const file = await canvasFile(canvas, instagramFileName(post, index, "image/jpeg"));
   // let the phone have the memory back now, not whenever it collects
@@ -83,13 +91,13 @@ function distanceFromScreen(el: Element | null): number {
  * drawing. `host` is where its drawing goes while it's painted; `box` is
  * where the picture sits.
  */
-export function usePostArt(post: CommunityPost, card: IgCard, unit: "kg" | "lb", near: boolean, box?: RefObject<HTMLElement | null>) {
-  const key = useMemo(() => postArtKey(post, card, unit), [post, card, unit]);
-  const name = instagramFileName(post, 0, "image/jpeg");
+export function usePostArt(post: CommunityPost, card: IgCard, unit: "kg" | "lb", near: boolean, box?: RefObject<HTMLElement | null>, slide = 0) {
+  const key = useMemo(() => postArtKey(post, card, unit, slide), [post, card, unit, slide]);
+  const name = instagramFileName(post, slide, "image/jpeg");
   const [art, setArt] = useState<PostArt | null>(() => peekPostArt(key));
   const [painting, setPainting] = useState(false);
   const [failed, setFailed] = useState(false);
-  const drawing = useMemo(() => cardArtElement(post, card), [post, card]);
+  const drawing = useMemo(() => cardArtElement(post, card, slide), [post, card, slide]);
   const [host, setHost] = useState<HTMLDivElement | null>(null);
   const postRef = useRef(post);
   postRef.current = post;
@@ -116,6 +124,7 @@ export function usePostArt(post: CommunityPost, card: IgCard, unit: "kg" | "lb",
         // what painting it needs, fetched now rather than when it's on screen
         void ensureDisplayFont();
         void cardLogo();
+        if (card === "deck") void ensureDeckFonts();
       }
     });
     return () => {
@@ -132,7 +141,7 @@ export function usePostArt(post: CommunityPost, card: IgCard, unit: "kg" | "lb",
     if (!painting || (drawing && !host)) return;
     let alive = true;
     const rank = () => distanceFromScreen(box?.current ?? null);
-    void loadPostArt(key, name, () => paintCardFile(postRef.current, card, "feed", unit, host, 0, whenStill), { whenStill: true, rank }).then((made) => {
+    void loadPostArt(key, name, () => paintCardFile(postRef.current, card, "feed", unit, host, slide, whenStill, slide), { whenStill: true, rank }).then((made) => {
       if (!alive) return;
       if (made) setArt(made);
       else setFailed(true);
@@ -141,7 +150,7 @@ export function usePostArt(post: CommunityPost, card: IgCard, unit: "kg" | "lb",
     return () => {
       alive = false;
     };
-  }, [painting, drawing, host, key, name, card, unit, box]);
+  }, [painting, drawing, host, key, name, card, unit, box, slide]);
 
   return {
     art: art?.key === key ? art : null,
@@ -214,12 +223,12 @@ function useOnScreenFor(ref: RefObject<HTMLElement | null>, active: boolean, ms:
  * post opens on) the post's words and buttons wait for it too (styles.css,
  * `data-pending`, at most ART_HOLD_MS on screen), so the post appears all at once.
  */
-export function PostArtImage({ post, card, unit, eager = false, fill = false, zoom = true, page = false, hold = false, className }: { post: CommunityPost; card: IgCard; unit: "kg" | "lb"; eager?: boolean; fill?: boolean; zoom?: boolean; page?: boolean; hold?: boolean; className?: string }) {
+export function PostArtImage({ post, card, unit, eager = false, fill = false, zoom = true, page = false, hold = false, slide = 0, className }: { post: CommunityPost; card: IgCard; unit: "kg" | "lb"; eager?: boolean; fill?: boolean; zoom?: boolean; page?: boolean; hold?: boolean; /** A deck's slide (0 = its cover). */ slide?: number; className?: string }) {
   const box = useRef<HTMLDivElement | null>(null);
   const near = useNearScreen(box, eager);
-  const { art, failed, host } = usePostArt(post, card, unit, near, box);
+  const { art, failed, host } = usePostArt(post, card, unit, near, box, slide);
   const shown = useDecodedArt(art, near || eager);
-  const alt = postArtAlt(post, card);
+  const alt = postArtAlt(post, card, slide);
   const pending = !shown && !failed;
   const gaveUp = useOnScreenFor(box, page && hold && pending, ART_HOLD_MS);
   return (
@@ -228,6 +237,7 @@ export function PostArtImage({ post, card, unit, eager = false, fill = false, zo
       className={cn("relative w-full overflow-hidden", shown || failed ? "bg-[#f6f3ee]" : page ? "bg-transparent" : "bg-muted", fill && "h-full", className)}
       style={fill ? undefined : { aspectRatio: "4 / 5" }}
       data-post-art={card}
+      data-deck-slide={card === "deck" ? slide : undefined}
       data-ready={shown ? "" : undefined}
       data-pending={page && hold && pending && !gaveUp ? "" : undefined}
     >

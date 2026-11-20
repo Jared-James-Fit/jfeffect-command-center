@@ -15,7 +15,7 @@
  */
 import type { Effort } from "./model-client.server";
 
-export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify";
+export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write";
 export type Route = {
   /** Tried in order. */
   models: string[];
@@ -82,6 +82,13 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
    */
   exercise_identify: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "minimal", maxOutputTokens: 600, strongOnly: false },
   form_draft: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "low", maxOutputTokens: 8_000, strongOnly: false },
+  /**
+   * Crew's automated posts as decks (post-decks.server.ts, Nov 20 2026): a lesson or tip turned into
+   * slides and a caption the crew reads in the feed, then an editor's read of it. Public writing in
+   * the coach's name, checked in code (post-deck-checks.ts) and by the editor before it's published;
+   * written ahead in the background, so the stronger writer is worth its seconds. OpenAI key only.
+   */
+  post_write: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "medium", maxOutputTokens: 12_000, strongOnly: false },
   /**
    * Coach-side writing a person reads before anything reaches a client (Nov 18 2026): the weekly
    * check-in recap and its suggested reply, AI drafts of a form reply, a lead's first text, the
