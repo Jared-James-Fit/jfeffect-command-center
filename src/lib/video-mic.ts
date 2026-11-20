@@ -119,38 +119,85 @@ function supportedNow(): Supported | null {
   }
 }
 
+/**
+ * The microphones as last listed, kept between recordings so the next request
+ * can name one without listing them first: the request itself has to go out
+ * in the tap (an `await` before it can cost it the tap, and on an iPhone a
+ * request that isn't from a tap is asked about again once the camera and mic
+ * have been off for a minute: WebKit's
+ * inactiveMediaCaptureStreamRepromptWithoutUserGestureIntervalInMinutes).
+ */
+let knownInputs: Input[] = [];
+let watchingDevices = false;
+function rememberInputs(list: Input[]) {
+  if (list.length) knownInputs = list;
+  if (watchingDevices || typeof navigator === "undefined") return;
+  watchingDevices = true;
+  try {
+    // a headset connected or gone between sets: the next recording names the right one
+    navigator.mediaDevices?.addEventListener?.("devicechange", () => void listInputs().then((l) => { if (l.length) knownInputs = l; }));
+  } catch {
+    /* no device events */
+  }
+}
+
+/**
+ * "Don't Allow" is remembered for this visit: the camera films without sound
+ * and nothing asks again on every recording (a request from a tap would show
+ * the prompt each time). `allowMicAgain` (the camera's Ask again) clears it.
+ */
+let refused = false;
+export function micRefused(): boolean {
+  return refused;
+}
+export function allowMicAgain(): void {
+  refused = false;
+}
+
 const stop = (s: MediaStream) => s.getTracks().forEach((t) => t.stop());
 
 /**
  * Open the microphone for a video (the set camera, the Crew studio): the
  * sound as it is, from the device's own mic, iOS's audio session prepared
- * (getMicStream). Throws only when the mic isn't allowed or there isn't one;
- * anything else falls back to the plain request the app always made.
+ * (getMicStream). The first request goes out at once, inside the tap that
+ * started the recording (see `knownInputs`), so a microphone already allowed
+ * on this page is used without asking again. Throws only when the mic isn't
+ * allowed or there isn't one; anything else falls back to the plain request
+ * the app always made.
  */
 export async function openVideoMic(): Promise<{ stream: MediaStream; restore: () => void; note: string }> {
   const supported = supportedNow();
-  const named = micToName(await listInputs());
+  const named = micToName(knownInputs);
   let how: "" | "switched" | "fallback" = "";
   let got: { stream: MediaStream; restore: () => void };
   try {
-    got = await getMicStream(videoAudioConstraints(supported, named));
-  } catch (e) {
-    if (isPermissionError(e)) throw e;
     try {
-      // the microphone named is gone since it was listed: the system's pick, still without call processing
-      if (!named) throw e;
-      got = await getMicStream(videoAudioConstraints(supported));
-    } catch (e2) {
-      if (isPermissionError(e2)) throw e2;
-      // a browser that won't take the request at all: the plain mic, as before
-      got = await getMicStream(true);
-      how = "fallback";
+      got = await getMicStream(videoAudioConstraints(supported, named));
+    } catch (e) {
+      if (isPermissionError(e)) throw e;
+      try {
+        // the microphone named is gone since it was listed: the system's pick, still without call processing
+        if (!named) throw e;
+        got = await getMicStream(videoAudioConstraints(supported));
+      } catch (e2) {
+        if (isPermissionError(e2)) throw e2;
+        // a browser that won't take the request at all: the plain mic, as before
+        got = await getMicStream(true);
+        how = "fallback";
+      }
     }
+  } catch (e) {
+    if (isPermissionError(e)) refused = true;
+    throw e;
   }
+  refused = false;
+  // allowed now, so the list has its names: kept for the next recording
+  const listed = await listInputs();
+  rememberInputs(listed);
   let track = got.stream.getAudioTracks()[0];
-  // the first time on this page there were no labels to go by: a hands-free headset it opened is swapped for the device's own mic
+  // the first time on this page there were no names to go by: a hands-free headset it opened is swapped for the device's own mic
   if (!how && !named && track && isBluetoothMic(track.label)) {
-    const own = pickOwnMic(await listInputs());
+    const own = pickOwnMic(listed);
     if (own) {
       stop(got.stream);
       got.restore();
@@ -165,6 +212,29 @@ export async function openVideoMic(): Promise<{ stream: MediaStream; restore: ()
     }
   }
   return { ...got, note: micNote(track?.getSettings?.(), track?.label, how) };
+}
+
+/**
+ * The camera's Ask again, after a "Don't Allow": asked now, inside that tap,
+ * and let go at once (nothing records and the music carries on), so the next
+ * recording uses the answer without asking. True when it's allowed.
+ */
+export async function askForMicAgain(): Promise<boolean> {
+  refused = false;
+  try {
+    const got = await openVideoMic();
+    stop(got.stream);
+    got.restore();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** For tests. */
+export function resetVideoMicForTests(): void {
+  knownInputs = [];
+  refused = false;
 }
 
 /** What each clip filmed in the app recorded its sound from, by file name, for its upload's diagnostics. */
