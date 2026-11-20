@@ -84,6 +84,12 @@ export function releaseOpen(offset: number, velocity: number): boolean {
 
 function ignoreTarget(target: EventTarget | null, root: HTMLElement | null): boolean {
   const el = target as HTMLElement | null;
+  // A sheet the card opened (its setup, notes, history) is portalled to <body> but
+  // still the card's child in React, so its touches bubble here: never the card's.
+  // A sideways drag on the setup sheet's chips slid the card behind it toward
+  // Delete (in Focus, onto the next exercise) and the click guard then ate the
+  // sheet's next tap.
+  if (!root || !(el instanceof Node) || !root.contains(el)) return true;
   if (el?.closest?.(NO_SIDE_SWIPE)) return true;
   // a swipe nested in this one (a set row in its card) has the gesture
   const owner = el?.closest?.("[data-swipe-root]");
@@ -271,6 +277,8 @@ export function SwipeToReveal({
         onPointerMove={(e) => { if (e.pointerType === "mouse" && g.current) move(e.clientX, e.clientY); }}
         onPointerUp={(e) => { if (e.pointerType === "mouse") end(); }}
         onClickCapture={(e) => {
+          // a click in a sheet the card opened (portalled, not in the card) is never a swipe's
+          if (!rootRef.current?.contains(e.target as Node)) return;
           if (performance.now() < suppressClickUntil.current) {
             suppressClickUntil.current = 0;
             e.preventDefault();
