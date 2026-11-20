@@ -57,6 +57,6 @@ describe("the film post's own caption (film_caption)", () => {
     expect(sql).toContain("caption = CASE WHEN m.caption IS NOT DISTINCT FROM public.film_caption(m.old_film, m.hide)");
   });
   it("the move's toast names the set the same way", () => {
-    expect(readFileSync("src/components/workout-day/set-video-move.tsx", "utf8")).toContain("${res.set_name || `Set ${set.n}`}");
+    expect(readFileSync("src/components/workout-day/set-video-move.tsx", "utf8")).toContain('${res.set_name || (spot.n === 0 ? "Warm-up" : `Set ${spot.n}`)}');
   });
 });

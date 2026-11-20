@@ -105,7 +105,7 @@ import { EffortScaleHeader } from "@/components/workout-day/effort-scale-help";
 import { applyOptimisticSetResult } from "@/lib/optimistic-set-result";
 import { fetchAllPages } from "@/lib/supabase-paginate";
 import { getClientBodyweightKgSeries, smoothedBodyweightKgAt, type BodyweightKgPoint } from "@/lib/bodyweight";
-import { offersLastWarmup, pickFinalWarmup, warmupInUnit } from "@/lib/final-warmup";
+import { finalWarmupRow, offersLastWarmup, warmupInUnit, warmupsForModel } from "@/lib/final-warmup";
 import { enqueueOfflineWrite, registerQueueHandler, supersedeOfflineWrite } from "@/lib/workout-offline-queue";
 import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
@@ -3815,6 +3815,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
       const shifted = existingResults
         .filter((x: any) => Number(x.set_index) !== setIndex)
         .map((x: any) => (Number(x.set_index) > setIndex ? { ...x, set_index: Number(x.set_index) - 1 } : x));
+      shownFieldRef.current.reps.clear();
+      shownFieldRef.current.rpe.clear();
       setRestore((r) => ({ token: (r?.token ?? 0) + 1, sets: snapshotOf(shifted, next).sets }));
       for (let i = setIndex; i <= previous; i++) clearLocalDraft(`workout-set:${row.id}:${clientId}:${i}`);
       await qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] });
@@ -4252,7 +4254,16 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
   // Only the first card of a lift asks for the last warm-up (see warmedUpRowIds).
   const rampsUp = useMemo(() => !warmedUp && offersLastWarmup(family, name), [warmedUp, family, name]);
   const warmupPromptable = warmupEligible && rampsUp;
-  const warmupForModel = warmupEligible ? pickFinalWarmup(warmupSets, activeUnit) : null;
+  // Every warm-up logged on this card, read as one by the engine (readWarmups):
+  // the same list, and the same suggestion, whatever order they were typed in.
+  const warmupsForModelKey = warmupEligible
+    ? warmupsForModel(warmupSets, activeUnit).map((w) => `${w.load}x${w.reps}@${w.rpe ?? ""}`).join(",")
+    : "";
+  const warmupsList = useMemo(
+    () => (warmupEligible ? warmupsForModel(warmupSets, activeUnit) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [warmupsForModelKey],
+  );
   // How this lift's history is read: the competition lifts and everything else differ (HISTORY_PROFILES).
   const liftKind = liftKindOf(row.exercises);
   const loadModel = useMemo<LoadModel | null>(() => {
@@ -4270,14 +4281,14 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     const toUnit = (kg: number) => (activeUnit === "kg" ? kg : kg * 2.2046226218);
     const carryToday = (dayRead?.carryKg ?? []).map((x) => ({ ...x, load: toUnit(x.load) }));
     return buildLoadModel({
-      history: loadHistory, today, unit: activeUnit, readiness, warmup: warmupForModel, bodyweightKg,
+      history: loadHistory, today, unit: activeUnit, readiness, warmups: warmupsList, bodyweightKg,
       dayFactor: dayRead?.factor ?? null, carryToday, lift: liftKind,
       // A back-off card reads its own past back-offs as logged, never as the
       // top set they imply (that's for a fresh first set): until today's top
       // set carries (it's rated), its number is a back-off's (note 11).
       backoffs: followsSameExercise ? "as_logged" : undefined,
     });
-  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness, warmupForModel?.load, warmupForModel?.reps, warmupForModel?.rpe, bodyweightKg, dayRead, liftKind, followsSameExercise]);
+  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness, warmupsList, bodyweightKg, dayRead, liftKind, followsSameExercise]);
   // Every card that can suggest gets the on/off chip (one switch for the whole
   // workout). Doesn't wait for history so the chip never pops in late.
   const canSuggest = !hideWeight && !coachOwnsLoad && rowLoadType === "external" && !!loadPlan;
@@ -4329,14 +4340,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     () => (loadHint && loadPlan ? suggestFinalWarmup(intendedLoad ?? loadHint.target, loadPlan.reps, activeUnit) : null),
     [loadHint?.target, intendedLoad, loadPlan?.reps, activeUnit],
   );
-  const heaviestWarmupId = useMemo(() => {
-    let best: { id: string; kg: number } | null = null;
-    for (const w of warmupSets) {
-      const kg = w.unit === "kg" ? w.load : w.load * 0.45359237;
-      if (!best || kg >= best.kg) best = { id: w.id, kg };
-    }
-    return best?.id ?? null;
-  }, [warmupSets]);
+  // The warm-up today's number is read from (the heaviest; ties by rating, then reps: finalWarmupRow).
+  const heaviestWarmupId = useMemo(() => finalWarmupRow(warmupSets)?.id ?? null, [warmupSets]);
   // Tuning only happens before the first working set.
   const warmupGauge = warmupPromptable && loadModel && !workedToday ? { suggested: warmupGaugeSuggested } : null;
   // The W prompt row: on lifts that ramp up, offered any time — it tunes the
@@ -4365,12 +4370,18 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toolsActions, row.id, name, movePosition, position, activeUnit, e1rmBest?.e1rm, e1rmBest?.from.load, e1rmBest?.from.reps, e1rmBest?.from.rpe]);
   useEffect(() => () => toolsActions?.reportE1rm(row.id, null), [toolsActions, row.id]);
+  // A warm-up too easy to read (RPE 5 or easier) is said so, and the number stays history's (or waits for set 1).
+  const warmupTooEasyFrom: "history" | "cold" | null = !warmupGauge
+    ? null
+    : loadHint?.warmup === "too_easy" ? "history" : loadModel?.warmupTooEasy ? "cold" : null;
+  const warmupTooEasy = warmupTooEasyFrom != null;
   const tunedWarmupId =
-    warmupGauge && (loadModel?.source === "warmup" || loadModel?.source === "history_warmup") ? heaviestWarmupId : null;
+    warmupGauge && !warmupTooEasy && (loadModel?.source === "warmup" || loadModel?.source === "history_warmup") ? heaviestWarmupId : null;
   // With Suggest off, a last warm-up logged before set 1 still sets today's
   // weight: it's what set 1's tap logs, said under the warm-up (never in a box).
+  // (A warm-up too easy to read leaves it at history's number: that's still today's.)
   const warmupTodayLoad: number | null =
-    !readonly && !showSuggestionCard && !!tunedWarmupId && canSuggest && loadHint && loadModel &&
+    !readonly && !showSuggestionCard && (!!tunedWarmupId || warmupTooEasy) && canSuggest && loadHint && loadModel &&
     loadModel.status !== "calibrating" && !loadPicks ? loadHint.target : null;
   const quickLoad: number | null = quickLoadFromStrip ?? warmupTodayLoad;
 
@@ -4378,12 +4389,14 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
   // saved, computed by the same engine (only while it can still tune: before
   // the first working set, history loaded, a reps @ RPE target).
   const previewWarmupTarget = useCallback(
-    (w: { load: number; reps: number; rpe: number | null }): LoadSuggestion | null => {
+    (w: { load: number; reps: number; rpe: number | null }, replacingId?: string | null): LoadSuggestion | null => {
       if (!warmupGauge || !loadHistory || !loadPlan) return null;
-      const model = buildLoadModel({ history: loadHistory, today: [], unit: activeUnit, readiness, warmup: w, bodyweightKg, lift: liftKind });
+      // read with the other warm-ups, as the card will once it's saved (the one being edited replaced)
+      const others = warmupsForModel(warmupSets.filter((x) => x.id !== replacingId), activeUnit);
+      const model = buildLoadModel({ history: loadHistory, today: [], unit: activeUnit, readiness, warmups: [...others, w], bodyweightKg, lift: liftKind });
       return suggestSetLoad(model, loadPlan);
     },
-    [!!warmupGauge, loadHistory, loadPlan, activeUnit, readiness, bodyweightKg, liftKind],
+    [!!warmupGauge, loadHistory, loadPlan, activeUnit, readiness, bodyweightKg, liftKind, warmupSets],
   );
   // Logging feedback: one soft "tock" and a medium tap each time this card gains
   // a completed set — however it was completed (typed, tapped, filled down,
@@ -4551,6 +4564,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     for (let i = 1; i <= Math.max(current.setCount, target.setCount); i++) clearLocalDraft(`workout-set:${row.id}:${clientId}:${i}`);
     cascadeOriginRef.current.clear();
     durationOriginRef.current.clear();
+    shownFieldRef.current.reps.clear();
+    shownFieldRef.current.rpe.clear();
     setRestore((r) => ({ token: (r?.token ?? 0) + 1, sets: target.sets }));
     await Promise.all([
       qc.refetchQueries({ queryKey: ["pl-day-results", dayId] }),
@@ -4653,6 +4668,15 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     const targets = planCascade(fromSetIndex, states);
     if (!targets.length) return 0;
     for (const t of targets) cascadeOriginRef.current.set(t, "auto");
+    // While these sets are being written, a reps / RPE typed onto them waits for
+    // the write and patches the rows it made (cascadeFieldFromSet).
+    let settle!: () => void;
+    const settled = new Promise<void>((r) => (settle = r));
+    weightCascadeRef.current = { targets: new Set(targets), done: settled };
+    const release = () => {
+      settle();
+      if (weightCascadeRef.current?.done === settled) weightCascadeRef.current = null;
+    };
     // 1) Optimistic local state — every affected row updates in one pass.
     const token = ++cascadeTokenRef.current;
     setCascade({ token, targets, ...payload });
@@ -4664,11 +4688,19 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     const tasks: Array<Promise<any>> = [];
     for (const idx of targets) {
       const ex = existingResults.find((x: any) => x.set_index === idx) as any;
-      const repsNum = ex?.actual_reps != null ? Number(ex.actual_reps) : srcReps;
+      // What the set shows is what it saves, whatever order things were typed in:
+      // reps / RPE typed on it (or filled down onto it from a set above) before
+      // its weight arrived, else what it already has, else the source set's.
+      const shownReps = shownFieldRef.current.reps.get(idx);
+      const shownRpe = shownFieldRef.current.rpe.get(idx);
+      const repsNum = shownReps !== undefined
+        ? (shownReps !== "" ? parseInt(shownReps, 10) : null)
+        : ex?.actual_reps != null ? Number(ex.actual_reps) : srcReps;
       // Keep any RPE/RIR the set already has; otherwise carry the source set's,
       // the same way reps are carried.
-      const rpeStr =
-        ex?.actual_rpe_num != null ? String(ex.actual_rpe_num) : (ex?.actual_rpe ?? srcRpe);
+      const rpeStr = shownRpe !== undefined
+        ? (shownRpe !== "" ? shownRpe : null)
+        : ex?.actual_rpe_num != null ? String(ex.actual_rpe_num) : (ex?.actual_rpe ?? srcRpe);
       const rpeNum = rpeStr ? Number(rpeStr) : null;
       const complete = isSetLogComplete({
         requireReps: showReps,
@@ -4709,6 +4741,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     } catch {
       toast.error("Some sets didn’t save — check your connection");
       return 0;
+    } finally {
+      release();
     }
     // One tap logged several sets (a set's number, or the chip): say so, with
     // Undo for a tap that wasn't meant. A typed weight is deliberate: no toast.
@@ -4728,11 +4762,27 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
   // written; load and completion are untouched. The screen updates first
   // (broadcast + cache patch), the server catches up behind it.
   const fieldManualRef = useRef<Record<"reps" | "rpe", Set<number>>>({ reps: new Set(), rpe: new Set() });
+  // The reps / RPE each set shows from typing or a fill-down (not yet saved, or
+  // saved since): the weight's fill-down saves these, so a set never saves one
+  // number while showing another (an RPE typed on set 2 before set 1's weight).
+  const shownFieldRef = useRef<Record<"reps" | "rpe", Map<number, string>>>({ reps: new Map(), rpe: new Map() });
+  // A weight fill-down's writes in flight: the sets it's logging, and when it's done.
+  const weightCascadeRef = useRef<{ targets: Set<number>; done: Promise<void> } | null>(null);
+  /** This card's saved row for a set as the cache has it now (after a refetch), never an optimistic one. */
+  const savedRowNow = (idx: number): any | null => {
+    for (const [, data] of qc.getQueriesData({ queryKey: ["pl-day-results", dayId] })) {
+      if (!Array.isArray(data)) continue;
+      const r = (data as any[]).find((x) => x?.row_id === row.id && Number(x.set_index) === idx && x.id && !String(x.id).startsWith("optimistic:"));
+      if (r) return r;
+    }
+    return null;
+  };
   const fieldCascadeTokenRef = useRef(0);
   const [fieldCascade, setFieldCascade] = useState<{ token: number; targets: number[]; field: "reps" | "rpe"; value: string } | null>(null);
   const cascadeFieldFromSet = async (fromSetIndex: number, field: "reps" | "rpe", value: string, previousValue: string) => {
     if (!clientId || readonly) return;
     fieldManualRef.current[field].add(fromSetIndex);
+    shownFieldRef.current[field].set(fromSetIndex, value);
     if (value === "") return; // clearing a set clears only that set
     // An RPE over the cap isn't carried down: the sets below are being made
     // lighter (capHeld) precisely so they land at the cap, so the 7.5 that set 1
@@ -4748,6 +4798,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     });
     const targets = planFieldCascade(fromSetIndex, previousValue, states);
     if (!targets.length) return;
+    for (const t of targets) shownFieldRef.current[field].set(t, value);
     setFieldCascade({ token: ++fieldCascadeTokenRef.current, targets, field, value });
     const patchFor = (idx: number): Record<string, any> => field === "reps"
       ? { actual_reps: parseInt(value, 10) }
@@ -4758,19 +4809,35 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     const saved = targets
       .map((idx) => existingResults.find((x: any) => x.set_index === idx) as any)
       .filter((ex) => ex?.id && !String(ex.id).startsWith("optimistic:"));
-    if (!saved.length) return;
+    // Sets a weight fill-down is logging right now have no row id yet: once it's
+    // written, they're patched too, so a set never saves one value while showing
+    // another (300 on set 1, then RPE 9 on set 2 before set 3's row came back).
+    const inflight = weightCascadeRef.current;
+    const waiting = inflight
+      ? targets.filter((idx) => inflight.targets.has(idx) && !saved.some((ex: any) => Number(ex.set_index) === idx))
+      : [];
+    if (!saved.length && !waiting.length) return;
     qc.setQueriesData({ queryKey: ["pl-day-results", dayId] }, (old: any) => {
       let next = old;
       for (const ex of saved) next = applyOptimisticSetResult(next, { row_id: row.id, set_index: ex.set_index, ...patchFor(ex.set_index) }, ex.id);
       return next;
     });
-    const tasks = saved.map((ex) => {
+    const writeOne = (ex: any) => {
       const body: Record<string, any> = withMemberWorkoutIndexes({
         row_id: row.id, client_id: clientId, set_index: ex.set_index, ...patchFor(ex.set_index),
       }, adapter, dayId);
       if (adapter) return adapter.upsertPlRowResultRaw(body, ex.id);
       return sb.from("pl_row_results").update(body).eq("id", ex.id).then(({ error }: any) => { if (error) throw error; });
-    });
+    };
+    const tasks: Array<Promise<unknown>> = saved.map(writeOne);
+    if (waiting.length && inflight) {
+      tasks.push(inflight.done.then(async () => {
+        for (const idx of waiting) {
+          const ex = savedRowNow(idx);
+          if (ex) await writeOne(ex);
+        }
+      }));
+    }
     try {
       await Promise.all(tasks);
       onChange();
@@ -5360,9 +5427,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
             canEdit={warmupAllowed}
             onFormChange={setWarmupForm}
             onSave={async (v) => {
-              await saveWarmup(v);
+              const id = await saveWarmup(v);
               // a clip filmed on the open warm-up is tied to it as it saves: read it back
               if (!v.id && looseWarmupClip) void qc.invalidateQueries({ queryKey: setVideosKey(dayId) });
+              return id;
             }}
             onRemove={removeWarmup}
             prompt={warmupPrompt}
@@ -5376,6 +5444,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
             columns={{ focusMode, showReps, showTimer, showDistance, showCalories, showVelocity, videoColumn }}
             effortKind={showRir ? "rir" : "rpe"}
             looseClip={looseWarmupClip}
+            tooEasy={warmupTooEasyFrom}
             suggestOn={showSuggestionCard}
             // open on a barbell squat, bench or deadlift; a one-line prompt elsewhere
             openRow={rangeLift(family, name, exercise?.equipment)}

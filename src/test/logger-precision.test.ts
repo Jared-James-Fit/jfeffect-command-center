@@ -34,7 +34,7 @@ describe("suggested: a weight to choose from only where the lifter chooses by fe
     const h = hint(420, "lb");
     expect(picks(h, { today: [{} as any] })).toBeNull();
     expect(picks(h, { source: "blend" })).toBeNull();
-    expect(picks(h, { warmup: { e1rm: 500, load: 365, reps: 2, trust: 0 } })).toBeNull();
+    expect(picks(h, { warmup: { e1rm: 500, normalE1rm: 500, load: 365, reps: 2, rpe: 7, trust: 0, spread: 0.105, reliability: 1, count: 1 } })).toBeNull();
     expect(picks(h, { source: "history_warmup" })).toBeNull();
     expect(picks(h, { carried: true })).toBeNull();
     expect(picks(h, { early: true })).toBeNull();

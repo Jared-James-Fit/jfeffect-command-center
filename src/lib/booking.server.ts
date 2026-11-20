@@ -859,7 +859,8 @@ async function postSelfBookedCall(
       .from("messages")
       .select("attachments, created_at")
       .eq("client_id", client.id)
-      .contains("attachments", [{ kind: "booking_invite", booking_card_id: type.id }])
+      // JSON text, never a JS array: supabase-js sends an array as a Postgres array literal, which jsonb refuses (HTTP 400)
+      .contains("attachments", JSON.stringify([{ kind: "booking_invite", booking_card_id: type.id }]))
       .gt("created_at", new Date(now.getTime() - INVITE_CARD_DAYS * 86_400_000).toISOString())
       .order("created_at", { ascending: false })
       .limit(1);

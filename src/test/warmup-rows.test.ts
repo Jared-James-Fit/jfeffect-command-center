@@ -106,7 +106,7 @@ describe("warm-up rows in the set table", () => {
     expect(rows).toBeLessThan(wdv.indexOf("<SetRow\n"));
     expect(wdv).toContain('!hideWeight && rowLoadType === "external" && !readonly && adapter?.kind !== "member" && !!clientId;');
     expect(wdv).toContain("const warmupGauge = warmupPromptable && loadModel && !workedToday ?");
-    expect(wdv).toContain("const model = buildLoadModel({ history: loadHistory, today: [], unit: activeUnit, readiness, warmup: w, bodyweightKg, lift: liftKind });");
+    expect(wdv).toContain("const model = buildLoadModel({ history: loadHistory, today: [], unit: activeUnit, readiness, warmups: [...others, w], bodyweightKg, lift: liftKind });");
   });
 
   it("a logged warm-up's weight is what set 1's tap logs, Suggest on or off (never drafts in the boxes)", () => {

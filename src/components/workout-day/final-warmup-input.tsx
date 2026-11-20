@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { describeWarmup, estimateOneRepMax, normalizeWarmupRow, repsLeftLabel, warmupInUnit, type WarmupSetRow, type WarmupUnit } from "@/lib/final-warmup";
+import { describeWarmup, estimateOneRepMax, normalizeWarmupRow, repsLeftLabel, WARMUP_TOO_EASY, warmupInUnit, type WarmupSetRow, type WarmupUnit } from "@/lib/final-warmup";
 import { WARMUP_MAX_REPS, type LoadSuggestion } from "@/lib/load-suggestion";
 import { TypedValueInput } from "@/components/workout-day/typed-value-input";
 import { WeightValueInput } from "@/components/workout-day/weight-value-input";
@@ -76,18 +76,24 @@ export function useWarmupSets(rowId: string, clientId: string | null | undefined
   const sets = data ?? [];
   const refresh = () => qc.invalidateQueries({ queryKey: key });
   const fail = (e: any) => toast.error(e?.message ?? "Could not save warm-up");
-  const save = async (input: { id?: string; load: number; unit: WarmupUnit; reps: number; rpe: number | null }) => {
-    if (!clientId) return;
+  /** Saves one warm-up; resolves to its id (a new one's from the insert), or null when it didn't save. */
+  const save = async (input: { id?: string; load: number; unit: WarmupUnit; reps: number; rpe: number | null }): Promise<string | null> => {
+    if (!clientId) return null;
     try {
+      let id = input.id ?? null;
       if (input.id) {
         await sb.from("pl_warmup_sets").update({ load: input.load, unit: input.unit, reps: input.reps, rpe: input.rpe })
           .eq("id", input.id).eq("client_id", clientId).throwOnError();
       } else {
-        if (sets.length >= MAX_WARMUPS) { toast.error(`Up to ${MAX_WARMUPS} warm-up sets`); return; }
-        await sb.from("pl_warmup_sets").insert({ row_id: rowId, client_id: clientId, scheduled_workout_id: scheduledWorkoutId, load: input.load, unit: input.unit, reps: input.reps, rpe: input.rpe }).throwOnError();
+        if (sets.length >= MAX_WARMUPS) { toast.error(`Up to ${MAX_WARMUPS} warm-up sets`); return null; }
+        const { data } = await sb.from("pl_warmup_sets")
+          .insert({ row_id: rowId, client_id: clientId, scheduled_workout_id: scheduledWorkoutId, load: input.load, unit: input.unit, reps: input.reps, rpe: input.rpe })
+          .select("id").single().throwOnError();
+        id = data?.id ?? null;
       }
       await refresh();
-    } catch (e) { fail(e); }
+      return id;
+    } catch (e) { fail(e); return null; }
   };
   const remove = async (id: string) => {
     if (!clientId) return;
@@ -138,6 +144,8 @@ export function useWarmupSets(rowId: string, clientId: string | null | undefined
 }
 
 type WarmupSaveInput = { id?: string; load: number; unit: WarmupUnit; reps: number; rpe: number | null };
+/** A warm-up save: resolves to the warm-up's id (a new one's from the insert) when the caller passes it on. */
+type WarmupSave = (v: WarmupSaveInput) => void | Promise<unknown>;
 
 /**
  * How the last warm-up felt, as four taps instead of a typed RPE. The middle of a
@@ -197,6 +205,7 @@ export function WarmupRows({
   looseClip = false,
   suggestOn = true,
   openRow = true,
+  tooEasy = null,
 }: {
   sets: WarmupSetRow[];
   unit: WarmupUnit;
@@ -205,7 +214,7 @@ export function WarmupRows({
   /** null = closed, "new" = adding, otherwise the id being edited. */
   form: string | null;
   onFormChange: (f: string | null) => void;
-  onSave: (v: WarmupSaveInput) => void | Promise<void>;
+  onSave: WarmupSave;
   onRemove: (id: string) => void | Promise<void>;
   /** False when read-only: the rows stay, edits go. */
   canEdit: boolean;
@@ -218,7 +227,7 @@ export function WarmupRows({
   /** Today's prescription the warm-up can set a weight for (null once it can't tune). */
   target?: { reps: number; rpe: number } | null;
   /** The engine's suggestion if this warm-up were saved — same math as the card. */
-  preview?: ((w: { load: number; reps: number; rpe: number | null }) => LoadSuggestion | null) | null;
+  preview?: ((w: { load: number; reps: number; rpe: number | null }, replacingId?: string | null) => LoadSuggestion | null) | null;
   /**
    * The weight set 1's tap logs from a logged last warm-up while Suggest is off
    * (the card's own suggestion, never put in a box): said under the warm-up.
@@ -240,6 +249,11 @@ export function WarmupRows({
    * the one-line prompt, so a workout isn't a stack of open warm-up rows.
    */
   openRow?: boolean;
+  /**
+   * The last warm-up was too easy to read (RPE 5 or easier): said instead of
+   * "tuned", with where today's number comes from (history, or the first set).
+   */
+  tooEasy?: "history" | "cold" | null;
 }) {
   const formOpen = canEdit && !!form;
   const editingId = formOpen && form !== "new" ? form : null;
@@ -310,8 +324,11 @@ export function WarmupRows({
       {formOpen && !editingId ? (
         warmupForm(null)
       ) : inline ? (
+        // One row from the first number typed to the last: kept mounted while its
+        // first save turns it from "new" into a saved warm-up, so nothing typed
+        // meanwhile is lost (LastWarmupRow).
         <LastWarmupRow
-          key={inlineRow?.id ?? "new"}
+          key="last-warmup"
           existing={inlineRow}
           unit={unit}
           gridTemplate={gridTemplate}
@@ -326,6 +343,7 @@ export function WarmupRows({
           onSave={onSave}
           onOpenForm={inlineRow ? () => onFormChange(inlineRow.id) : null}
           video={videoOn ? video : null}
+          tooEasy={tooEasy}
         />
       ) : (
         // The prompt is a suggestion, not a logged warm-up: quiet, no orange
@@ -394,6 +412,7 @@ function LastWarmupRow({
   onSave,
   onOpenForm,
   video,
+  tooEasy = null,
 }: {
   existing: WarmupSetRow | null;
   unit: WarmupUnit;
@@ -407,9 +426,10 @@ function LastWarmupRow({
   /** Today's weight from this warm-up while Suggest is off: what set 1's tap logs. */
   todayLoad: number | null;
   target: { reps: number; rpe: number } | null;
-  onSave: (v: WarmupSaveInput) => void | Promise<void>;
+  onSave: WarmupSave;
   onOpenForm: (() => void) | null;
   video: WarmupVideoCell | null;
+  tooEasy?: "history" | "cold" | null;
 }) {
   const [load, setLoad] = useState(existing ? String(warmupDisplay(existing, unit)) : "");
   const [reps, setReps] = useState(existing ? String(existing.reps) : seed ? String(seed.reps) : "");
@@ -423,11 +443,67 @@ function LastWarmupRow({
     if (!repsTyped.current && seed?.reps) setReps(String(seed.reps));
   }, [seed?.reps]);
 
+  // What's on screen, read when a save runs (never a value from when it was queued).
+  const shown = useRef({ load, reps, effort });
+  shown.current = { load, reps, effort };
+  // The warm-up this row is: its saved id, or the one its first save made.
+  const idRef = useRef<string | null>(existing?.id ?? null);
+  // Saves run one at a time, in order, each with what's on screen when it runs:
+  // weight, reps and effort typed in any order, however fast, end up saved as
+  // shown, on one warm-up (a second insert can't start while the first is out).
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const pending = useRef(0);
+  const lastSent = useRef<string | null>(null);
+  const lastInput = useRef<{ load: number; unit: WarmupUnit; reps: number; rpe: number | null } | null>(null);
+  const runSave = () => {
+    pending.current += 1;
+    queue.current = queue.current
+      .then(async () => {
+        const v = shown.current;
+        const l = Number(v.load.replace(",", "."));
+        const r = Number(v.reps);
+        if (!(l > 0) || !Number.isFinite(l) || !Number.isInteger(r) || r < 1 || r > WARMUP_MAX_REPS) return;
+        const input = { load: l, unit, reps: r, rpe: warmupRpeFrom(v.effort, effortKind) };
+        const sig = JSON.stringify(input);
+        if (idRef.current && sig === lastSent.current) return;
+        const id = await onSave({ ...(idRef.current ? { id: idRef.current } : {}), ...input });
+        if (typeof id === "string" && !idRef.current) idRef.current = id;
+        lastSent.current = sig;
+        lastInput.current = input;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        pending.current -= 1;
+      });
+  };
+  // A warm-up changed from outside (undo, the form, another card's unit switch,
+  // removed): show it as it is now, unless this row is saving what's on screen.
+  useEffect(() => {
+    if (pending.current > 0) return;
+    if (!existing) {
+      if (!idRef.current) return;
+      idRef.current = null;
+      lastSent.current = null;
+      lastInput.current = null;
+      setLoad("");
+      return;
+    }
+    idRef.current = existing.id;
+    // its own save coming back: what's on screen is already newer or the same
+    const mine = lastInput.current;
+    if (mine && existing.unit === mine.unit && Number(existing.load) === mine.load && Number(existing.reps) === mine.reps && (existing.rpe ?? null) === mine.rpe) return;
+    setLoad(String(warmupDisplay(existing, unit)));
+    setReps(String(existing.reps));
+    setEffort(warmupEffortText(existing.rpe, effortKind));
+    repsTyped.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existing?.id, existing?.load, existing?.unit, existing?.reps, existing?.rpe, unit, effortKind]);
+
+  /** Saves once there's a weight; reps or effort typed before it ride with the weight's save. */
   const save = (next: { load?: string; reps?: string; effort?: string }) => {
-    const l = Number((next.load ?? load).replace(",", "."));
-    const r = Number(next.reps ?? reps);
-    if (!(l > 0) || !Number.isFinite(l) || !Number.isInteger(r) || r < 1 || r > WARMUP_MAX_REPS) return;
-    void onSave({ id: existing?.id, load: l, unit, reps: r, rpe: warmupRpeFrom(next.effort ?? effort, effortKind) });
+    shown.current = { ...shown.current, ...Object.fromEntries(Object.entries(next).filter(([, v]) => v != null)) };
+    if (!(Number(shown.current.load.replace(",", ".")) > 0)) return;
+    runSave();
   };
   const focusMode = !!columns.focusMode;
   const labelText = existing ? describeWarmup(existing, unit) : "";
@@ -454,7 +530,7 @@ function LastWarmupRow({
           onCommit={(v) => {
             repsTyped.current = true;
             setReps(v);
-            if (existing) save({ reps: v });
+            save({ reps: v });
           }}
           ariaLabel="Last warm-up reps"
           focusMode={focusMode}
@@ -467,7 +543,7 @@ function LastWarmupRow({
           kind={effortKind}
           onCommit={(v) => {
             setEffort(v);
-            if (existing) save({ effort: v });
+            save({ effort: v });
           }}
           ariaLabel={`Last warm-up ${effortKind === "rir" ? "RIR" : "RPE"}`}
           focusMode={focusMode}
@@ -489,7 +565,19 @@ function LastWarmupRow({
         {video ? video({ warmupId: existing?.id ?? null, logged: !!existing, label: labelText }) : null}
       </div>
       <p className="px-2 pb-1.5 pl-[42px] text-[12px] leading-snug text-muted-foreground" data-warmup-caption>
-        {existing && suggestOn && tuned ? (
+        {existing && tooEasy ? (
+          // An easy warm-up isn't read closely: said, and today's number stays history's (or waits for set 1)
+          <span data-warmup-too-easy>
+            {WARMUP_TOO_EASY}
+            {tooEasy === "cold"
+              ? " · your first set sets today's weight"
+              : suggestOn
+                ? " · Suggested stays on your history"
+                : todayLoad != null && target
+                  ? <> · today from your history: <span className="font-semibold tabular-nums text-foreground" data-warmup-answer>{fmt(todayLoad)} {unit}</span></>
+                  : " · your first set sets today's weight"}
+          </span>
+        ) : existing && suggestOn && tuned ? (
           <span className="font-medium text-success">✓ Suggested is tuned from this warm-up</span>
         ) : existing && !suggestOn && todayLoad != null && target ? (
           // Suggest is off: today's weight is said here, and set 1's tap logs it
@@ -498,6 +586,9 @@ function LastWarmupRow({
             <span className="font-semibold tabular-nums text-foreground" data-warmup-answer>{fmt(todayLoad)} {unit}</span>
             {` × ${target.reps} @ RPE ${fmt(target.rpe)} · tap set 1 to log it`}
           </span>
+        ) : !existing && Number(load.replace(",", ".")) > 0 && !(Number(reps) >= 1 && Number(reps) <= WARMUP_MAX_REPS && Number.isInteger(Number(reps))) ? (
+          // a weight with no reps can't be saved yet: say so instead of doing nothing
+          <span className="font-medium text-foreground" data-warmup-needs-reps>Add its reps (1–{WARMUP_MAX_REPS}) to save it</span>
         ) : existing ? (
           "Last warm-up logged"
         ) : canTune ? (
@@ -584,7 +675,7 @@ function WarmupForm({
   gridTemplate: string;
   seed: { load: number; reps: number } | null;
   target: { reps: number; rpe: number } | null;
-  preview: ((w: { load: number; reps: number; rpe: number | null }) => LoadSuggestion | null) | null;
+  preview: ((w: { load: number; reps: number; rpe: number | null }, replacingId?: string | null) => LoadSuggestion | null) | null;
   onCancel: () => void;
   onSave: (v: WarmupSaveInput) => void | Promise<void>;
   onRemove: (() => void | Promise<void>) | null;
@@ -611,7 +702,7 @@ function WarmupForm({
   const loadNum = Number(load.replace(",", "."));
   const repsNum = Number(reps);
   const valid = loadNum > 0 && Number.isFinite(loadNum) && Number.isInteger(repsNum) && repsNum >= 1 && repsNum <= WARMUP_MAX_REPS;
-  const hint = tuning && valid ? preview!({ load: loadNum, reps: repsNum, rpe }) : null;
+  const hint = tuning && valid ? preview!({ load: loadNum, reps: repsNum, rpe }, editing?.id ?? null) : null;
   const saveWarmup = () => onSave({ id: editing?.id, load: loadNum, unit, reps: repsNum, rpe });
   const cell =
     "h-9 w-full rounded-md border border-input bg-background px-1 text-center text-base font-bold tabular-nums text-foreground placeholder:text-muted-foreground/40";
@@ -709,6 +800,9 @@ function WarmupForm({
               {range && <span className="ml-1 text-[11px] tabular-nums text-muted-foreground">({range})</span>}
               {hint && <span className="ml-1.5 text-[11px] text-muted-foreground">· save, then tap set 1 to log it</span>}
             </div>
+            {hint?.warmup === "too_easy" && (
+              <div className="text-[11px] text-muted-foreground" data-warmup-too-easy>{WARMUP_TOO_EASY} · from your history</div>
+            )}
           </div>
         </div>
       ) : null}
