@@ -1,7 +1,7 @@
 /**
  * Equipment & setups: one read per athlete (their gyms, equipment and setups,
  * small enough to load whole) and the writes, all through the equipment_* RPCs
- * (20270418090000_equipment_setups.sql). The read is kept on the phone for a
+ * (20270420090000_equipment_setups.sql). The read is kept on the phone for a
  * day so a workout card shows its setup line on the first frame.
  */
 import { useEffect, useState } from "react";

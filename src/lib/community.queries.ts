@@ -53,6 +53,7 @@ import { cleanDayTitle, computeTodayState } from "@/lib/workout-today";
 import { cachedCommunityUrls, pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, uploadPicked, uploadVoiceMemo, type PickedMedia, type UploadedMedia } from "@/lib/community-media";
 import { onRealtimeRejoin, useResyncOnResume } from "@/hooks/use-resync-on-resume";
 import { feedAnchor } from "@/lib/feed-anchor";
+import { feedback } from "@/lib/feedback";
 
 const db = supabase as any;
 
@@ -604,6 +605,8 @@ export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine
       return data as CommunityComment;
     },
     onMutate: async (c) => {
+      // the comment appears now: its tap lands with it
+      feedback("comment");
       await qc.cancelQueries({ queryKey: communityKeys.comments(postId) });
       const temp: CommunityComment = {
         id: c.tempId,
@@ -1008,6 +1011,8 @@ export async function createCommunityPost(
     throw error;
   }
   const postId = (data as { id: string }).id;
+  // it's up (a post or a story, whichever screen made it): the success tap and the "sent" tick
+  feedback("post");
   try {
     await i.attach?.(postId);
   } catch (e) {

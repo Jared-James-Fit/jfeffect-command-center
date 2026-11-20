@@ -1,4 +1,4 @@
--- Minimal stand-ins for the tables and helpers 20270418090000_equipment_setups.sql uses.
+-- Minimal stand-ins for the tables and helpers 20270420090000_equipment_setups.sql uses.
 create schema if not exists auth;
 create table auth_ctx (uid uuid);
 insert into auth_ctx values (null);

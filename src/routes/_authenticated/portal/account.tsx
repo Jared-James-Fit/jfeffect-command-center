@@ -492,7 +492,7 @@ function AccountPage() {
               </SettingsSection>
             )}
 
-            <SettingsSection id="notifications" icon={Bell} title="Notifications & sounds">
+            <SettingsSection id="notifications" icon={Bell} title="Notifications, sounds & haptics">
               <SectionErrorBoundary label="Push Notifications">
                 <PushNotificationCard bare />
               </SectionErrorBoundary>

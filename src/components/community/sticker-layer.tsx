@@ -5,6 +5,7 @@ import { Check, TextAlignCenter, TextAlignEnd, TextAlignStart, Trash2 } from "lu
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { cn } from "@/lib/utils";
 import type { StickerType } from "@/lib/lessons";
+import { feedback } from "@/lib/feedback";
 
 /**
  * Text and stickers, Instagram-style, placed right on the share card: text
@@ -865,13 +866,8 @@ export function StickerLayer({
   } | null>(null);
   const [guides, setGuides] = useState<{ v: boolean; h: boolean; angle: boolean }>({ v: false, h: false, angle: false });
   const snapRef = useRef({ v: false, h: false, angle: false });
-  const buzz = () => {
-    try {
-      navigator.vibrate?.(8);
-    } catch {
-      /* no haptics here */
-    }
-  };
+  // a guide snapping in, a sticker over the bin: the detent tick
+  const buzz = () => feedback("detent");
 
   const trashHit = (clientX: number, clientY: number) => {
     const b = root.current?.getBoundingClientRect();

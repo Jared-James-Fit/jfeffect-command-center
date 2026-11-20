@@ -35,16 +35,10 @@ import {
   type ShareTarget,
 } from "@/lib/post-share";
 import type { CommunityPost } from "@/lib/community";
+import { feedback } from "@/lib/feedback";
 
 const SELECTED = "bg-[#0095F6]";
 
-const buzz = (ms: number) => {
-  try {
-    navigator.vibrate?.(ms);
-  } catch {
-    /* no haptics here */
-  }
-};
 
 function platformNow(): SharePlatform {
   if (typeof navigator === "undefined") return "desktop";
@@ -144,7 +138,7 @@ export function PostShareSheet({ post, open, onOpenChange, onStory, onInstagram 
       toast(`You can send it to up to ${SHARE_SEND_MAX} at a time`);
       return;
     }
-    buzz(6);
+    feedback("tap");
     setPicked((p) => toggleTarget(p, key));
     // picking from a search: back to everyone, the new face kept in front
     if (q.trim() && !picked.includes(key)) setQ("");
@@ -165,6 +159,7 @@ export function PostShareSheet({ post, open, onOpenChange, onStory, onInstagram 
         onSuccess: (results) => {
           const all = [...known.current.values()];
           const o = shareOutcome(results, all);
+          if (o.sent.length) feedback("send");
           if (o.message) {
             const only = o.sent.length === 1 ? o.sent[0] : null;
             const canOpen = !!only && (only.route === "coach" || only.route === "client" || (!staff && !!only.group_id));

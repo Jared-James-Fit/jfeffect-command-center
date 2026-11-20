@@ -54,8 +54,10 @@ import {
   programMeta,
   useProgram,
   useProgramActions,
+  detailPlan,
   type ProgramDetail,
 } from "@/lib/athlete-programs";
+import { PlanView } from "./plan-view";
 import { prescription } from "@/lib/athlete-program-draft";
 
 /** One program: what's in it, who made it, and what you can do with it. */
@@ -383,36 +385,7 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
           </div>
         )}
 
-        <div className="space-y-3">
-          {p.days.map((d, i) => (
-            <section key={i} className="rounded-2xl border border-border bg-card">
-              <div className="flex items-baseline justify-between gap-3 border-b border-border px-4 py-3">
-                <h2 className="truncate text-[16px] font-semibold">{d.title || `Day ${i + 1}`}</h2>
-                <span className="shrink-0 text-[12px] text-muted-foreground">Day {i + 1}</span>
-              </div>
-              <ol className="divide-y divide-border">
-                {d.exercises.map((e, j) => (
-                  <li key={j} className="flex items-start justify-between gap-3 px-4 py-3">
-                    <div className="min-w-0">
-                      <div className="text-[15px] font-medium">{e.name ?? "Exercise"}</div>
-                      {e.notes && (
-                        <div className="mt-0.5 text-[13px] text-muted-foreground">{e.notes}</div>
-                      )}
-                    </div>
-                    <div className="shrink-0 text-right text-[13px] tabular-nums">
-                      {prescription(e)}
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          ))}
-        </div>
-        {p.weeks > 1 && (
-          <p className="text-center text-[13px] text-muted-foreground">
-            This week repeats for {p.weeks} weeks. Add weight or reps as you go.
-          </p>
-        )}
+        <PlanView plan={detailPlan(p)} />
       </div>
 
       <ReportSheet kind="program" targetId={p.id} open={reporting} onOpenChange={setReporting} />

@@ -3,7 +3,7 @@
  *
  * An athlete's gyms, the racks and machines in them, and how each exercise is
  * set up on each one ("J-hooks 9 · Safeties 4"). The database is the judge of
- * what's current and what a set was done on (20270418090000_equipment_setups.sql:
+ * what's current and what a set was done on (20270420090000_equipment_setups.sql:
  * athlete_current_equipment, the stamping trigger, equipment_choose); this file
  * reads the same data the same way for the screens:
  *
