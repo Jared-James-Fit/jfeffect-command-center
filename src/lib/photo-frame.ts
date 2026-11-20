@@ -34,7 +34,19 @@ export type Framing = { z: number; cx: number; cy: number };
  * the studio (ClipFrame): shown at the shape `a` (w / h), zoomed `z` over just
  * filling it, centred on (x, y) as shares of the clip's width / height.
  */
-export type MediaFocus = { x: number; y: number; z?: number; a?: number };
+export type MediaFocus = {
+  x: number;
+  y: number;
+  z?: number;
+  a?: number;
+  /**
+   * A photo whose own words sit where a post's words go (an older story card
+   * posted as a 9:16 photo, its text in the lower third): on its screen it's
+   * shown whole between Crew's bar and the words, never filling the screen
+   * under them. Stored as `"fit": "whole"` by the Nov 20 2026 feed audit.
+   */
+  whole?: boolean;
+};
 /** A clip's frame from the studio: what every screen shows of it. */
 export type ClipFrame = { a: number; z: number; x: number; y: number };
 
@@ -108,6 +120,8 @@ export function screenFit(
   screenRatio: number | null | undefined,
 ): "cover" | "contain" {
   if (!screenRatio || !(screenRatio > 0)) return "contain";
+  // its own words are where the post's go: shown whole, never under them
+  if (slide.type === "image" && cleanFocus(slide.focus)?.whole) return "contain";
   const media = slideAspect(slide);
   if (!media || !Number.isFinite(media) || media <= 0) return "contain";
   const trim = media < screenRatio ? 1 - media / screenRatio : 1 - screenRatio / media;
@@ -306,6 +320,7 @@ export function cleanFocus(f: unknown): MediaFocus | null {
   const y = Number((f as { y?: unknown }).y);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   const out: MediaFocus = { x: clamp(x, 0, 1), y: clamp(y, 0, 1) };
+  if ((f as { fit?: unknown }).fit === "whole" || (f as { whole?: unknown }).whole === true) out.whole = true;
   const a = Number((f as { a?: unknown }).a);
   if (Number.isFinite(a) && a >= FRAME_MIN_ASPECT && a <= FRAME_MAX_ASPECT) {
     const z = Number((f as { z?: unknown }).z);
