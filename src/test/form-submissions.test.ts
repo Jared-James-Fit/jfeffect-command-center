@@ -9,6 +9,8 @@ import {
   groupByDay,
   isToReview,
   nativeKind,
+  reviewType,
+  toReviewKeys,
   type FormSubmission,
 } from "@/lib/form-submissions";
 import { DEFAULT_TAB, LEGACY_SUB, LEGACY_TAB_ALIAS, TABS, isMoreTab } from "@/route-pages/_authenticated/admin/forms-tabs";
@@ -54,8 +56,23 @@ describe("Forms → Submissions", () => {
     expect(filterSubmissions(rows, { kind: "all", status: "all", search: "progress" }, now).map((r) => r.key)).toEqual(["c"]);
   });
 
+  it("only the client's newest of a kind waits: a newer one, reviewed or not, retires the older", () => {
+    const older = row({ key: "old", submittedAt: hoursAgo(24 * 8) });
+    const newer = row({ key: "new", submittedAt: hoursAgo(24) });
+    expect([...toReviewKeys([older, newer], now)]).toEqual(["new"]);
+    expect([...toReviewKeys([older, { ...newer, reviewed: true }], now)]).toEqual([]);
+    // another form, or another client, is its own thing
+    const form = row({ key: "f", source: "native", kind: "form", formId: "f1", title: "Intake", submittedAt: hoursAgo(30) });
+    const other = row({ key: "o", clientId: "c2", submittedAt: hoursAgo(24 * 9) });
+    expect([...toReviewKeys([older, newer, form, other], now)].sort()).toEqual(["f", "new", "o"]);
+    // a superseded check-in never waits
+    expect(isToReview(row({ superseded: true }), now)).toBe(false);
+    expect(reviewType(form)).toBe("native:f1");
+    expect(reviewType(newer)).toBe("checkin:weekly_checkin");
+  });
+
   it("counts each chip's total and what's waiting", () => {
-    const c = countByKind([row({}), row({ reviewed: true }), row({ kind: "progress", source: "progress", reviewed: null })], now);
+    const c = countByKind([row({}), row({ clientId: "c2", reviewed: true }), row({ kind: "progress", source: "progress", reviewed: null })], now);
     expect(c.all).toEqual({ total: 3, toReview: 1 });
     expect(c.weekly_checkin).toEqual({ total: 2, toReview: 1 });
     expect(c.progress).toEqual({ total: 1, toReview: 0 });

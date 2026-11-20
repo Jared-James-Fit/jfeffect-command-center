@@ -16,7 +16,7 @@ import {
   editMessage, deleteMessageForEveryone, adminDeleteMessages, replyMediaFor,
   makeReplyPreview, replyPreviewText, mediaAttachments, keepReplyClip,
   listReactions, toggleReaction, REACTION_EMOJIS,
-  listOlderMessages, listMessageHistory,
+  listOlderMessages, listMessageHistory, listMessagesBetween, getMessageStamp,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
   type MessageReaction,
 } from "@/lib/messages";
@@ -760,6 +760,9 @@ function LiveWaveform({ levels }: { levels: number[] }) {
   );
 }
 
+/** A message the chat was opened on (or a reply's source): highlighted for a moment. */
+const FLASH_ROW = "bg-primary/10 ring-2 ring-primary/25 ring-offset-2 ring-offset-background";
+
 /**
  * Query options for a 1:1 thread's latest page. Shared with the inbox so a
  * row can prefetch on press and the thread opens with history already there.
@@ -799,9 +802,16 @@ export function MessageThread({
   fullBleed = false,
   peerName,
   peerAvatarPath,
+  focusMessageId = null,
 }: {
   clientId: string;
   role: SenderRole;
+  /**
+   * Open on this message instead of the latest: loaded back to if it's older
+   * than what's on screen, centred and highlighted (a check-in opened from the
+   * dashboard or Forms, `?msg=`).
+   */
+  focusMessageId?: string | null;
   conversationState?: ConversationState | null;
   hideControls?: boolean;
   /** When true, render as full-height chat (no card border) and let the
@@ -1486,6 +1496,102 @@ export function MessageThread({
     [formPlan, visibleMessages],
   );
 
+  // Opened on one message (?msg=): load back to it when it's older than what's
+  // on screen, then centre and highlight it. Once per message per chat; the
+  // reader scrolling takes over (no re-centring after that).
+  const focusRef = useRef<{ key: string; loaded: boolean; done: boolean } | null>(null);
+  useEffect(() => {
+    if (!focusMessageId || messagesPending || !messages.length) return;
+    const key = `${clientId}:${focusMessageId}`;
+    if (focusRef.current?.key !== key) focusRef.current = { key, loaded: false, done: false };
+    const f = focusRef.current;
+    if (f.done) return;
+    if (messageById.has(focusMessageId)) {
+      f.done = true;
+      landOnMessage(focusMessageId);
+      return;
+    }
+    if (f.loaded) {
+      f.done = true;
+      toast.message("Couldn't find that message in this chat.");
+      return;
+    }
+    f.loaded = true;
+    const earliest = olderMessages[0] ?? messages[0];
+    void (async () => {
+      try {
+        const stamp = await getMessageStamp(focusMessageId);
+        if (focusRef.current?.key !== key) return;
+        if (!stamp || stamp.client_id !== clientId) {
+          f.done = true;
+          toast.message("That message isn't in this chat any more.");
+          return;
+        }
+        const range = await listMessagesBetween(clientId, stamp.created_at, earliest.created_at, { includeInternal: role === "admin" });
+        if (focusRef.current?.key !== key) return;
+        if (!range.length) {
+          f.done = true;
+          toast.message("Couldn't find that message in this chat.");
+          return;
+        }
+        // Prepended like "Load earlier messages"; the effect runs again and lands on it.
+        setOlderMessages((prev) => {
+          const seen = new Set([...prev, ...messages].map((m) => m.id));
+          return [...range.filter((m) => !seen.has(m.id)), ...prev];
+        });
+      } catch {
+        f.done = true;
+        toast.message("Couldn't load that message.");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusMessageId, clientId, messagesPending, messageById]);
+
+  /** The row a message shows as: itself, its check-in's visible card, or the history row it's folded into. */
+  const shownRowFor = (id: string): string => {
+    const visible = new Set(visibleMessages.map((m) => m.id));
+    if (visible.has(id) && !formHistory.hidden.has(id)) return id;
+    const unit = formPlan.get(id)?.submissionId;
+    if (unit) {
+      const twin = visibleMessages.find((m) => m.id !== id && formPlan.get(m.id)?.submissionId === unit);
+      if (twin && !formHistory.hidden.has(twin.id)) return twin.id;
+      for (const [leader, group] of formHistory.leaders) {
+        if (group.units.some((u) => u.submissionId === unit)) return leader;
+      }
+    }
+    return id;
+  };
+
+  const landOnMessage = (id: string) => {
+    const rowId = shownRowFor(id);
+    // Stop following the bottom: the reader is here for this message.
+    pinnedRef.current = false;
+    requestAnimationFrame(() => {
+      const el = scrollerRef.current;
+      const node = document.getElementById(`message-${rowId}`);
+      if (!el || !node) {
+        toast.message("Couldn't find that message in this chat.");
+        return;
+      }
+      node.scrollIntoView({ block: "center", behavior: "auto" });
+      pinnedRef.current = false;
+      setFlashMessageId(rowId);
+      window.setTimeout(() => setFlashMessageId((cur) => (cur === rowId ? null : cur)), 2600);
+      // Photos above it can still be loading and push it down: centre it again,
+      // unless the reader has scrolled since.
+      let setTop = el.scrollTop;
+      for (const ms of [250, 700, 1400]) {
+        window.setTimeout(() => {
+          const n = document.getElementById(`message-${rowId}`);
+          if (!n || Math.abs(el.scrollTop - setTop) > 2) return;
+          n.scrollIntoView({ block: "center", behavior: "auto" });
+          pinnedRef.current = false;
+          setTop = el.scrollTop;
+        }, ms);
+      }
+    });
+  };
+
   // Id of the latest message I sent (for inline "Read/Sent" receipt).
   const lastOwnMessageId = useMemo(() => {
     for (let i = visibleMessages.length - 1; i >= 0; i--) {
@@ -2077,7 +2183,7 @@ export function MessageThread({
           const historyGroup = formHistory.leaders.get(m.id);
           if (historyGroup) {
             return (
-              <div key={m.id} id={`message-${m.id}`} className="w-full min-w-0">
+              <div key={m.id} id={`message-${m.id}`} className={cn("w-full min-w-0 rounded-2xl transition-[background-color,box-shadow] duration-500", flashMessageId === m.id && FLASH_ROW)}>
                 <FormHistoryGroup group={historyGroup} role={role === "admin" ? "admin" : "client"} />
               </div>
             );
@@ -2118,7 +2224,7 @@ export function MessageThread({
                 </div>
               )}
               {formPlan.get(m.id)?.mode === "compact" ? (
-                <div id={`message-${m.id}`} className="w-full min-w-0">
+                <div id={`message-${m.id}`} className={cn("w-full min-w-0 rounded-2xl transition-[background-color,box-shadow] duration-500", flashMessageId === m.id && FLASH_ROW)}>
                   <FormHistoryRow p={formPlan.get(m.id)!} role={role === "admin" ? "admin" : "client"} />
                 </div>
               ) : (
@@ -2126,7 +2232,7 @@ export function MessageThread({
               id={`message-${m.id}`}
               className={cn(
                 "relative flex w-full min-w-0 items-end gap-2 will-change-transform rounded-2xl transition-[background-color,box-shadow] duration-500",
-                flashMessageId === m.id && "bg-primary/10 ring-2 ring-primary/25 ring-offset-2 ring-offset-background",
+                flashMessageId === m.id && FLASH_ROW,
                 mine ? "justify-end" : "justify-start",
                 selectionMode && "cursor-pointer",
                 (() => {

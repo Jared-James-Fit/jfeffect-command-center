@@ -5,21 +5,17 @@
  * waiting on the coach in blue; tap a row to read it, ✓ to mark it reviewed.
  */
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Check, ChevronRight, Loader2, MessageCircle, RefreshCw, Search } from "lucide-react";
+import { Check, ChevronRight, Loader2, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
-import { FormResponsesSheet } from "@/components/forms/form-responses";
-import { CheckinAnswersSheet } from "@/components/messages/messenger-checkin-card";
-import { supabase } from "@/integrations/supabase/client";
+import { SubmissionSheet, markSubmissionReviewed, refreshAfterReview } from "@/components/forms/submission-review";
 import { useAuth } from "@/lib/auth";
-import { markCheckinReviewed, refreshReviewQueries } from "@/lib/checkin-review";
 import { cn } from "@/lib/utils";
 import { listFormSubmissionsFn } from "@/lib/form-submissions.functions";
 import {
@@ -28,7 +24,7 @@ import {
   countByKind,
   filterSubmissions,
   groupByDay,
-  isToReview,
+  toReviewKeys,
   type FormSubmission,
   type StatusFilter,
   type SubmissionKind,
@@ -38,7 +34,7 @@ const QUERY_KEY = ["form-submissions"];
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
-export function SubmissionsInbox({ initialKind }: { initialKind?: string } = {}) {
+export function SubmissionsInbox({ initialKind, initialStatus }: { initialKind?: string; initialStatus?: StatusFilter } = {}) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -52,13 +48,15 @@ export function SubmissionsInbox({ initialKind }: { initialKind?: string } = {})
   const [kind, setKind] = useState<SubmissionKind | "all">(() =>
     SUBMISSION_KINDS.some((k) => k.kind === initialKind) ? (initialKind as SubmissionKind) : "all",
   );
-  const [status, setStatus] = useState<StatusFilter>("all");
+  // "To review" from the dashboard's Check-ins to review → All.
+  const [status, setStatus] = useState<StatusFilter>(initialStatus ?? "all");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<FormSubmission | null>(null);
   const [marking, setMarking] = useState<string | null>(null);
 
   const now = Date.now();
   const counts = useMemo(() => countByKind(rows, now), [rows, now]);
+  const waitingKeys = useMemo(() => toReviewKeys(rows, now), [rows, now]);
   const visible = useMemo(() => filterSubmissions(rows, { kind, status, search }, now), [rows, kind, status, search, now]);
   const groups = useMemo(() => groupByDay(visible, now), [visible, now]);
   const kindsShown = SUBMISSION_KINDS.filter((k) => counts[k.kind].total > 0 || kind === k.kind);
@@ -67,19 +65,9 @@ export function SubmissionsInbox({ initialKind }: { initialKind?: string } = {})
   const markReviewed = async (s: FormSubmission) => {
     setMarking(s.key);
     try {
-      if (s.source === "checkin") {
-        await markCheckinReviewed(s.id);
-      } else if (s.source === "native") {
-        const { error: e } = await (supabase.from("nf_submissions") as any)
-          .update({ status: "reviewed", reviewed_at: new Date().toISOString(), reviewed_by: user?.id ?? null })
-          .eq("id", s.id);
-        if (e) throw new Error(e.message);
-      } else if (s.source === "fillout") {
-        const { error: e } = await (supabase.from("fillout_submissions") as any).update({ unread: false }).eq("id", s.id);
-        if (e) throw new Error(e.message);
-      }
+      await markSubmissionReviewed(s, user?.id ?? null);
       qc.setQueryData<FormSubmission[]>(QUERY_KEY, (old) => old?.map((r) => (r.key === s.key ? { ...r, reviewed: true } : r)));
-      refreshReviewQueries(qc);
+      refreshAfterReview(qc, s);
       toast.success("Marked reviewed");
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't mark it reviewed");
@@ -117,7 +105,7 @@ export function SubmissionsInbox({ initialKind }: { initialKind?: string } = {})
             )}
             <span className="font-normal text-muted-foreground"> · {counts.all.total} in the last year</span>
           </div>
-          <div className="text-xs text-muted-foreground">Everything clients send in, newest first. "To review" = not reviewed, last {TO_REVIEW_DAYS} days.</div>
+          <div className="text-xs text-muted-foreground">Everything clients send in, newest first. "To review" = not reviewed, their latest of its kind, last {TO_REVIEW_DAYS} days.</div>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} aria-label="Refresh">
           <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
@@ -174,7 +162,7 @@ export function SubmissionsInbox({ initialKind }: { initialKind?: string } = {})
                   <SubmissionRow
                     key={s.key}
                     s={s}
-                    now={now}
+                    waiting={waitingKeys.has(s.key)}
                     marking={marking === s.key}
                     onOpen={() => openRow(s)}
                     onMark={() => markReviewed(s)}
@@ -186,27 +174,14 @@ export function SubmissionsInbox({ initialKind }: { initialKind?: string } = {})
         </div>
       )}
 
-      {open?.source === "checkin" && (
-        <CheckinAnswersSheet
-          open
-          onOpenChange={(o) => !o && setOpen(null)}
-          submissionId={open.id}
-          taskType="weekly_checkin"
-          role="admin"
-          submittedAt={open.submittedAt}
-        />
-      )}
-      {open?.source === "native" && open.formId && (
-        <FormResponsesSheet
-          formId={open.formId}
-          title={open.title}
-          submissionId={open.id}
-          open
-          onOpenChange={(o) => {
-            if (o) return;
+      {open && (
+        <SubmissionSheet
+          s={open}
+          onClose={() => {
             setOpen(null);
             void refetch();
           }}
+          onReviewed={(r) => qc.setQueryData<FormSubmission[]>(QUERY_KEY, (old) => old?.map((x) => (x.key === r.key ? { ...x, reviewed: true } : x)))}
         />
       )}
     </div>
@@ -243,18 +218,18 @@ function KindChip({ label, count, on, onClick }: { label: string; count: { total
 
 function SubmissionRow({
   s,
-  now,
+  waiting,
   marking,
   onOpen,
   onMark,
 }: {
   s: FormSubmission;
-  now: number;
+  /** Waiting on the coach (review-queue.ts, read over the whole list). */
+  waiting: boolean;
   marking: boolean;
   onOpen: () => void;
   onMark: () => void;
 }) {
-  const waiting = isToReview(s, now);
   const canMark = s.reviewed === false && (s.source === "checkin" || s.source === "native" || s.source === "fillout");
   return (
     <li className="flex items-center gap-3 px-3 py-2.5" data-submission={s.kind}>

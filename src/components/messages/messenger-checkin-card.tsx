@@ -1,5 +1,5 @@
 import { CompetitionPlanSummary } from "@/components/forms/competition-plan-summary";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import type { FormPresentation, FormHistoryGroup as FormHistoryGroupData } from "@/lib/form-message-presentation";
@@ -386,7 +386,7 @@ function AdminCompletedCheckinSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-3xl p-0">
         <div className="mx-auto max-w-lg">
-          <SheetHeader className="min-h-0 border-b border-border px-5 py-4 text-left">
+          <SheetHeader className="min-h-0 border-b border-border py-4 pl-24 pr-5 text-left">
             <SheetTitle>{titleFor(taskType)}</SheetTitle>
             <p className="text-sm text-muted-foreground">Client submission</p>
           </SheetHeader>
@@ -1243,6 +1243,7 @@ export function CheckinAnswersSheet({
   taskType,
   role,
   submittedAt,
+  footer,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -1250,6 +1251,8 @@ export function CheckinAnswersSheet({
   taskType: MessengerCheckinTaskType;
   role: Role;
   submittedAt: string | null;
+  /** Actions pinned under the answers when it's opened outside the chat (Open in chat, Mark reviewed). */
+  footer?: ReactNode;
 }) {
   const get = useServerFn(getMessengerCheckin);
   const { data, isLoading } = useQuery({
@@ -1266,7 +1269,7 @@ export function CheckinAnswersSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-3xl p-0">
         <div className="mx-auto max-w-lg">
-          <SheetHeader className="min-h-0 border-b border-border px-5 py-4 text-left">
+          <SheetHeader className="min-h-0 border-b border-border py-4 pl-24 pr-5 text-left">
             <SheetTitle>{titleFor(taskType)}</SheetTitle>
             <p className="text-sm text-muted-foreground">
               {when ? `Submitted ${fmtDateTime(when)}` : "Submitted"}
@@ -1306,6 +1309,11 @@ export function CheckinAnswersSheet({
               </>
             )}
           </div>
+          {footer && (
+            <div className="sticky bottom-0 border-t border-border bg-background px-5 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3" data-checkin-sheet-actions>
+              {footer}
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>

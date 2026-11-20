@@ -1001,7 +1001,7 @@ export const getRequestStatus = createServerFn({ method: "POST" })
       .select("created_at")
       .eq("client_id", data.clientId)
       .gte("created_at", new Date(Date.now() - 14 * 86_400_000).toISOString())
-      .contains("attachments", [{ kind: "form_request", form_id: NUTRITION_REQUEST_FORM_ID }])
+      .contains("attachments", JSON.stringify([{ kind: "form_request", form_id: NUTRITION_REQUEST_FORM_ID }]))
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();

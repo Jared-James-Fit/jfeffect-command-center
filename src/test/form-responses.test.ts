@@ -202,7 +202,9 @@ describe("wiring", () => {
     expect(viewer).toContain(".filter((p) => p.counted || p.responses.length > 0)");
     for (const v of ['"summary"', '"individual"', '"table"']) expect(viewer).toContain(v);
     expect(read("src/route-pages/_authenticated/admin/native-forms.tsx")).toContain("<FormResponsesSheet formId={responsesFor.id}");
-    expect(read("src/components/forms/submissions-inbox.tsx")).toContain("<FormResponsesSheet");
+    // Submissions and the dashboard's Check-ins to review open it through the shared review sheet
+    expect(read("src/components/forms/submissions-inbox.tsx")).toContain("<SubmissionSheet");
+    expect(read("src/components/forms/submission-review.tsx")).toContain("<FormResponsesSheet");
     const card = read("src/components/messages/messenger-checkin-card.tsx");
     expect(card).toContain("View full response");
     expect(card).toContain("<FormResponsesSheetLazy");
@@ -226,7 +228,7 @@ describe("wiring", () => {
 
   it("the dashboard lists meets coming up, checklist or not", () => {
     const card = read("src/components/forms/meet-readiness-card.tsx");
-    expect(card).toContain("export const UPCOMING_MEET_DAYS = 56;");
+    expect(card).toContain("export { UPCOMING_MEET_DAYS };");
     expect(card).toContain('.in("status", ["Active", "Planned"])');
     expect(card).toContain("Upcoming meets");
   });
