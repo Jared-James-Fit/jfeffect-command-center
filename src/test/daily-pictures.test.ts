@@ -671,6 +671,10 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     // the plates match end to end (the far end too), the miss the first bright tests showed
     expect(p).toContain("one straight barbell with identical plates on both ends (the same colours in the same order from the collar out, including the far end seen across the frame) and collars on");
     expect(REVIEW_PROMPT).toContain("different plates on each side (check both ends: the same colours in the same order, the far end included)");
+    // a simple load is easier to draw matching, and a machine is the real machine
+    expect(p).toContain("Keep the load simple to draw right: one to three plates a side in one or two colours, the same on both ends.");
+    expect(p).toContain("a hack squat: standing on its angled platform with the shoulders under the pads");
+    expect(REVIEW_PROMPT).toContain("a machine that is the real machine the brief names and used the way it's used");
     expect(p).toContain("calibrated plates in their real colours and sizes (red 25, blue 20, yellow 15, green 10)");
     expect(p).toContain("No readable text, speech bubbles, labels, subtitles, brand names, logos or watermarks anywhere");
     expect(p).toContain(FILM_AVOID);
@@ -752,6 +756,10 @@ describe("the review: concrete checks before any score", () => {
     expect(REVIEW_BARS.technique).toBe(4);
     expect(REVIEW_PROMPT).toContain("technique = the lift, the equipment and the bodies are drawn right");
     expect(parseReview('{"scores": {}}')?.scores.technique).toBe(4);
+    // the reviewer writing the word "empty" (or "none") for no text is no text, never a stray word that fails the picture
+    for (const none of ["empty", "Empty.", "none", "No text", "n/a", "\"empty\""]) expect(parseReview(JSON.stringify({ text_seen: none, scores: {} }))?.text_seen, none).toBe("");
+    expect(parseReview(JSON.stringify({ text_seen: "20 KG", scores: {} }))?.text_seen).toBe("20 KG");
+    expect(reviewVerdict(parseReview(JSON.stringify({ ...review(), text_seen: "empty" }))!, "").pass).toBe(true);
     // a review from before the check reads as neutral
     expect(parseReview('{"scores": {}}')?.scores.on_topic).toBe(4);
   });
@@ -770,7 +778,7 @@ describe("the review: concrete checks before any score", () => {
     expect(reviewVerdict(review({ maturity: "childish" }), "").image[0]).toBe("it reads as childish, not a mature sports story");
     expect(parseReview('{"medium": "anime", "maturity": "Mature, adult", "scores": {}}')?.maturity).toBe("mature");
     expect(parseReview('{"medium": "anime", "scores": {}}')?.maturity).toBe("mature");
-    expect(REVIEW_PROMPT).toContain("childish (chibi, cutesy, moe, a kids' cartoon, giant eyes, comedic faces, anyone who looks under 20, school uniforms, fanservice)");
+    expect(REVIEW_PROMPT).toContain("childish (chibi, cutesy, moe, a kids' cartoon, giant eyes, comedic faces, anyone who looks under 20");
     // a clean drawn illustration passes only when that treatment was asked for
     expect(reviewVerdict(review({ medium: "illustration" }), "", "", { rendering: "graphic" }).pass).toBe(true);
     expect(reviewVerdict(review({ medium: "illustration" }), "", "", { rendering: "manga_colour" }).pass).toBe(true);
@@ -1002,7 +1010,11 @@ describe("the bright look: one house style, bright and true, real people, never 
   });
 
   it("who's in it decides how they're built: everyday people look everyday, and nobody is a bodybuilder unless they are one", () => {
+    expect(DAILY_CASTS.newer_lifter.look).toContain("an adult newer lifter (20s to 40s)");
     expect(DAILY_CASTS.newer_lifter.look).toContain("an ordinary, healthy everyday build with little visible muscle definition");
+    // adults from every angle: a newer lifter seen from behind once read as a child
+    expect(FILM_LOOK).toContain("People are adults (20s to 60s) with realistic adult proportions: a normal head-to-body ratio, adult faces and adult builds, never childlike, chibi or big-headed, from any angle.");
+    expect(REVIEW_PROMPT).toContain("anyone who looks under 20 or has a child's proportions (a head too big for the body, a small childlike build, from any angle, the back included)");
     expect(DAILY_CASTS.powerlifter.look).toContain("never a bodybuilder");
     expect(DAILY_CASTS.physique.look).toContain("never stage-ready or oversized");
     expect(DAILY_CASTS.masters.look).toContain("40s to 60s");
