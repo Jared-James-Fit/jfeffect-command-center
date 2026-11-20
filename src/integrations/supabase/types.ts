@@ -8793,6 +8793,7 @@ export type Database = {
         Row: {
           archived_at: string | null
           archived_from: string | null
+          archived_reason: string | null
           audio_duration: number | null
           audio_path: string | null
           author_user_id: string
@@ -8834,6 +8835,7 @@ export type Database = {
         Insert: {
           archived_at?: string | null
           archived_from?: string | null
+          archived_reason?: string | null
           audio_duration?: number | null
           audio_path?: string | null
           author_user_id: string
@@ -8875,6 +8877,7 @@ export type Database = {
         Update: {
           archived_at?: string | null
           archived_from?: string | null
+          archived_reason?: string | null
           audio_duration?: number | null
           audio_path?: string | null
           author_user_id?: string

@@ -68,6 +68,8 @@ export function useWorkoutStudio(target: StudioWorkout | null, unit: "kg" | "lb"
         extras: existing?.extra_media ?? null,
         attach: existing,
         hasCover: !!existing?.media_path,
+        // Crew shows what people post: a finished workout goes there with a photo or clip of theirs
+        needsMedia: true,
         onPost: async (a) => {
           if (!user?.id) throw new Error("Sign in again to post");
           await shareToCommunity(qc, { userId: user.id, completionId: target.completion_id, caption: a.caption, visibility: a.visibility, hideLoads: a.hideLoads, photo: a.photo, existing, extras: a.extras, attach: a.attach });

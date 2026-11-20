@@ -604,7 +604,13 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
                 {pointsHint.text}
               </p>
             )}
-            <Button type="button" className="mt-4 h-13 w-full rounded-2xl py-3.5 text-[16px] font-bold" disabled={posting} onClick={() => void post()}>
+            {!hasMedia && visibility !== "private" && (
+              // Crew shows what people post: a workout goes there with a photo or clip of theirs (community_save_post)
+              <p className="mt-3 text-[13px] text-muted-foreground" data-composer-needs-media>
+                Add a photo or clip to post this workout.
+              </p>
+            )}
+            <Button type="button" className="mt-4 h-13 w-full rounded-2xl py-3.5 text-[16px] font-bold" disabled={posting || (!hasMedia && visibility !== "private")} onClick={() => void post()}>
               <Send className="mr-2 h-5 w-5" />
               {posting
                 ? media?.kind === "video" && Math.max(progress, early.progress) > 0 && Math.max(progress, early.progress) < 100 ? `Uploading ${Math.max(progress, early.progress)}%` : "Posting…"
