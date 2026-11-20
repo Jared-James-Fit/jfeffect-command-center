@@ -14,13 +14,14 @@
  *      captions the coach threw out → the concept and caption, held to
  *      captionProblems (plain words, his voice, no slogans, nothing close to a
  *      recent post) with up to 3 tries; kept on the side in `candidate`.
- *   2. picture: the image model (picturePrompt: a frame from a serious
- *      powerlifting anime in JF Effect's house style, of the lesson, the shot,
- *      the light and the place, the equipment, anatomy and technique right,
- *      no readable words) and then the review that looks at the picture with
- *      the caption (reviewVerdict: an anime frame, mature, cinematic colour,
- *      clean linework, no defects, every score at its bar, `teaches` and
- *      `technique` included). A caption the reviewer marks down gets one rewrite against
+ *   2. picture: the image model (picturePrompt: a bright 2D frame in JF
+ *      Effect's house style, planned from the post's read, of the lesson, the
+ *      treatment, shot, light, palette, place and people, the equipment,
+ *      anatomy and technique right, no readable words) and then the review
+ *      that looks at the picture with the caption (reviewVerdict: the house
+ *      style, mature, bright with a neutral white balance, realistic bodies,
+ *      clean linework, readable on a phone, no defects, every score at its
+ *      bar, `teaches` and `technique` included). A caption the reviewer marks down gets one rewrite against
  *      the same picture. A picture that fails is made again with the fix (2 a
  *      concept), then a new concept (3 at most).
  *   3. it passes → community_daily_visual_apply puts it live in one step
@@ -74,6 +75,7 @@ import {
   tidyCaption,
   typographyProblems,
   visualRepeat,
+  propRepeat,
   type DailyAudience,
   type DailyConcept,
   type DailyArt,
@@ -365,7 +367,7 @@ type Around = {
   style: string | null;
   format: string | null;
   topic: string | null;
-  concept: { light?: string; pillar?: string; mood?: string; typography?: string; visual?: string; setting?: string } | null;
+  concept: { light?: string; pillar?: string; mood?: string; typography?: string; visual?: string; setting?: string; cast?: string; palette?: string; rendering?: string } | null;
 };
 
 /** The days around it (3 weeks back, a week ahead), nearest last, and the captions the coach threw out. */
@@ -402,6 +404,9 @@ async function context(admin: Admin, r: DailyRow) {
     caption: lineOf(d),
     visual: d.concept?.visual ?? null,
     setting: d.concept?.setting ?? null,
+    cast: d.concept?.cast ?? null,
+    palette: d.concept?.palette ?? null,
+    rendering: d.concept?.rendering ?? null,
   }));
   // the two posts before this one both ended on a question: this one doesn't
   const lastTwo = days.filter((d) => d.day < r.day).sort((a, b) => a.day.localeCompare(b.day)).slice(-2);
@@ -512,10 +517,13 @@ async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
     const typography = keepPicture ? "" : parsed.typography;
     // the same visual concept as a recent post is a rerun, however the words differ
     const seenPicture = keepPicture ? null : visualRepeat(parsed.visual, ctx.recent.map((x) => x.visual));
+    // a prop the last few pictures leaned on (a training log, a phone) again, when the post isn't about it
+    const tiredProp = keepPicture ? null : propRepeat(parsed.visual, ctx.recent, r.day, keepCaption ? lineOf(r) : `${parsed.message} ${DAILY_TOPICS[parsed.topic]?.idea ?? ""}`);
     const typo = [
       ...typographyProblems(typography),
       ...(ctx.noWords && typography ? ["words in the picture again (a post just before had some): leave them out today"] : []),
       ...(seenPicture ? [seenPicture] : []),
+      ...(tiredProp ? [tiredProp] : []),
     ];
     const style = keptStyle ?? parsed.style;
     if (keepCaption) {
@@ -635,6 +643,10 @@ async function applyMade(
       light: concept.light,
       art: concept.art,
       setting: concept.setting ?? null,
+      rendering: concept.rendering ?? null,
+      cast: concept.cast ?? null,
+      palette: concept.palette ?? null,
+      read: concept.read ?? null,
       look: FILM_LOOK_VERSION,
       round: c.round,
       pillar: concept.pillar,
@@ -695,7 +707,7 @@ async function drawAndReview(admin: Admin, r: DailyRow, maker: Maker, c: Candida
   }
 
   let rev = await review(maker, r, concept, caption, image);
-  let verdict = reviewVerdict(rev, concept.typography, concept.visual, concept.pillar);
+  let verdict = reviewVerdict(rev, concept.typography, concept.visual, { rendering: concept.rendering ?? null });
   // a caption the reviewer marked down gets one rewrite against this same picture
   if (!verdict.image.length && verdict.caption.length && !c.keepCaption) {
     const t = await maker.json(CAPTION_FIX_PROMPT, captionFixPrompt({ concept, caption, fix: verdict.caption }));
@@ -704,7 +716,7 @@ async function drawAndReview(admin: Admin, r: DailyRow, maker: Maker, c: Candida
     if (fixed && !captionProblems(fixed, { format: concept.format, pillar: concept.pillar, picture: concept.typography, names: crewNames ?? [] }).length) {
       caption = fixed;
       rev = await review(maker, r, concept, caption, image);
-      verdict = reviewVerdict(rev, concept.typography, concept.visual, concept.pillar);
+      verdict = reviewVerdict(rev, concept.typography, concept.visual, { rendering: concept.rendering ?? null });
     }
   }
   // one side of a one-side remake is the day's own, so only the other side is judged
@@ -938,6 +950,10 @@ export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<
     light: concept.light,
     art: concept.art,
     setting: concept.setting ?? null,
+    rendering: concept.rendering ?? null,
+    cast: concept.cast ?? null,
+    palette: concept.palette ?? null,
+    read: concept.read ?? null,
     look: FILM_LOOK_VERSION,
     format: concept.format,
     topic: concept.topic,
@@ -955,6 +971,7 @@ export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<
     score: reviewScore(d!.rev),
     medium: d!.rev.medium,
     colour: d!.rev.colour,
+    physique: d!.rev.physique,
     clarity: d!.rev.clarity,
     reference: d!.provider.endsWith("+ref"),
     description: d!.rev.description,
@@ -964,7 +981,9 @@ export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<
   };
   const { error } = await admin.from("community_daily_visual_tests").insert({ data: test });
   if (error) throw new Error(`Couldn't save the test: ${error.message}`);
-  return test;
+  // the answer (never the saved row) carries a short-lived link to the picture, so a test can be looked at right away
+  const { data: link } = await admin.storage.from(BUCKET).createSignedUrl(d!.entry.path, 3600);
+  return { ...test, url: link?.signedUrl ?? null };
 }
 
 /** The post's ⋯ New picture on a daily picture: the day's picture is remade in the background, the words kept. */
