@@ -59,7 +59,7 @@ describe("a warm-up's video is set 0, on the warm-up itself", () => {
   });
 });
 
-describe("the last warm-up is open on the card, and optional", () => {
+describe("a warm-up is only ever added with + Warm-up", () => {
   const base = {
     sets: [],
     unit: "lb" as const,
@@ -70,27 +70,30 @@ describe("the last warm-up is open on the card, and optional", () => {
     style: "last" as const,
     ramp: true,
     tunes: true,
-    seed: { load: 250, reps: 2 },
     columns: { showReps: true, showTimer: false, showCalories: false, showVelocity: false, videoColumn: true },
     video: () => createElement("span", { "data-video-cell": "" }),
   };
 
-  it("before set 1 on a heavy barbell lift: under its header, reps pre-filled, RPE and the weight blank, a camera", () => {
-    const html = renderToStaticMarkup(createElement(WarmupRows, { ...base, suggestOn: true }));
+  it("before set 1 on a heavy barbell lift: nothing until + Warm-up", () => {
+    expect(renderToStaticMarkup(createElement(WarmupRows, { ...base, suggestOn: true }))).toBe("");
+  });
+
+  it("+ Warm-up's row: under its header, every cell blank (nothing suggested), a camera", () => {
+    // (+ Warm-up opens it on its tap; a static render opens one the way a clip filmed on it does)
+    const html = renderToStaticMarkup(createElement(WarmupRows, { ...base, suggestOn: true, looseClip: true }));
     expect(html).toContain('data-testid="warmup-open"');
     expect(html).toContain('data-warmup-saved="false"');
     // said once, above its row: never a bare "W" to guess at
     expect(html).toContain("data-warmup-label");
-    expect(html).toContain("Last warm-up");
+    expect(html).not.toContain("Last warm-up");
     expect(html).toContain("optional");
     expect(html.indexOf("data-warmup-label")).toBeLessThan(html.indexOf('data-testid="warmup-open"'));
     expect(html).toContain("Warm-up reps");
-    expect(html).toContain(">2<");
-    // no pre-filled RPE 7: a blank warm-up already reads as a normal one
+    expect(html).not.toContain(">2<");
     expect(html).not.toContain(">7<");
     expect(html).toContain("Warm-up weight in lb");
     expect(html).toContain("data-video-cell");
-    expect(html).toContain("about 250 lb × 2");
+    expect(html).not.toContain("about");
   });
 
   it("other lifts get no open row: + Warm-up under the sets adds one", () => {
@@ -123,7 +126,7 @@ describe("the last warm-up is open on the card, and optional", () => {
     expect(warmupRpeFrom("", "rpe")).toBeNull();
   });
 
-  it("the card opens it on a heavy barbell compound, and keeps a clip filmed on it", () => {
+  it("the card keeps a heavy barbell compound's warm-ups open before set 1, and a clip filmed on a new one", () => {
     const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
     expect(wdv).toContain("const warmupStyle = useMemo(() => warmupStyleOf(family, name, exercise?.equipment), [family, name, exercise?.equipment]);");
     expect(wdv).toContain("suggestOn={showSuggestionCard}");
@@ -159,8 +162,10 @@ describe("a tap on a set's number with nothing to log at opens its weight box", 
 
 describe("Fastest way to log", () => {
   it("teaches the quickest path first, the camera only to a coaching client", () => {
-    expect(quickLogSteps(false).map((s) => s.key)).toEqual(["prefilled", "type", "suggest", "warmup"]);
-    expect(quickLogSteps(true).map((s) => s.key)).toEqual(["prefilled", "type", "suggest", "warmup", "video"]);
+    expect(quickLogSteps(false).map((s) => s.key)).toEqual(["prefilled", "type", "suggest", "remove"]);
+    expect(quickLogSteps(true).map((s) => s.key)).toEqual(["prefilled", "type", "suggest", "remove", "video"]);
+    // no step teaches a warm-up row any more (there isn't one): the swipe is taught instead
+    expect(quickLogSteps(true).find((s) => s.key === "remove")?.title).toBe("Swipe a set left to take it out");
     for (const s of quickLogSteps(true)) expect(QUICK_LOG_BEATS[s.key].length).toBeGreaterThan(0);
   });
 

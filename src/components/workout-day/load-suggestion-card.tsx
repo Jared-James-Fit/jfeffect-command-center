@@ -34,16 +34,12 @@ export const REF_VALUE = "break-words text-[15px] font-semibold leading-snug tab
 export const REF_DIVIDER = "my-2.5 w-px shrink-0 bg-border";
 /** Last and Suggested's shared size (older callers). */
 export const REF_TEXT = "text-[15px] leading-snug";
-export interface WarmupGauge {
-  /** What the last warm-up should be (display unit), when a top-set target exists. */
-  suggested: { load: number; reps: number } | null;
-}
 
 export function LoadSuggestionCard({
   hint,
   model,
   plan,
-  warmup = null,
+  warmupReads = false,
   fromName = null,
   picks = null,
   showPlan = true,
@@ -52,8 +48,12 @@ export function LoadSuggestionCard({
   hint: LoadSuggestion | null;
   model: LoadModel;
   plan: { reps: number; rpe: number };
-  /** Last-warm-up tip — offered only before the first working set (the set table holds the warm-up row). */
-  warmup?: WarmupGauge | null;
+  /**
+   * A warm-up logged now (with + Warm-up, never prompted) would still be read
+   * for today's weight: before the first working set of an RPE-led heavy
+   * barbell lift. Only the ⓘ says so; nothing suggests a warm-up weight.
+   */
+  warmupReads?: boolean;
   /** The card today's adjustment comes from (model.dayFactor), e.g. "Competition Squat". */
   fromName?: string | null;
   /** A range to pick within by feel (suggestionPicks): the first set of a main lift. Shown, never offered as buttons. */
@@ -71,9 +71,9 @@ export function LoadSuggestionCard({
       ? `${WARMUP_TOO_EASY} from your last warm-up, and no logs of this lift yet`
       : model.historySessions === 0 ? "No logs of this lift yet" : "No recent logs of this lift with an RPE";
     const next = tooEasy
-      ? "Log your first set with an RPE and the rest get a live suggestion. A heavier last warm-up (RPE 6 or more) would set it now."
-      : warmup
-        ? "Log your last warm-up and it sets today's weight."
+      ? "Log your first set with an RPE and the rest get a live suggestion. A heavier warm-up (RPE 6 or more) would set it now."
+      : warmupReads
+        ? "Log your first set with an RPE and the rest get a live suggestion. A warm-up logged with + Warm-up can set it sooner."
         : "Log your first set with an RPE and the rest get a live suggestion.";
     return (
       <SuggestionPopover
@@ -83,7 +83,7 @@ export function LoadSuggestionCard({
           <>
             <span className={REF_LABEL}>Suggested <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></span>
             <span className="text-[13px] leading-snug text-muted-foreground" data-load-pending={tooEasy ? "warmup-too-easy" : undefined}>
-              {tooEasy ? "Warm-up too easy · after your first set" : warmup ? "After your warm-up" : "After your first set"}
+              {tooEasy ? "Warm-up too easy · after your first set" : "After your first set"}
             </span>
           </>
         }
@@ -103,7 +103,7 @@ export function LoadSuggestionCard({
       {showPlan && <span className="font-normal text-muted-foreground">{planText}</span>}
     </span>
   );
-  const why = <SuggestionWhyBody hint={hint} model={model} warmup={warmup} picks={picks} rpe={plan.rpe} canApply={!!onApply} {...parts} />;
+  const why = <SuggestionWhyBody hint={hint} model={model} warmupReads={warmupReads} picks={picks} rpe={plan.rpe} canApply={!!onApply} {...parts} />;
   if (onApply) {
     // One tap logs the open sets at it (a range opens set 1's weight box); the ⓘ beside it explains.
     return (
@@ -406,11 +406,11 @@ function suggestionParts({ hint, model, fromName, picks }: {
 }
 
 /** What's behind the number: how live it is, the range, the fast / slow call, how it's worked out, the off switch. */
-function SuggestionWhyBody({ hint, why, model, warmup, audible, range, picks, rpe, badge, canApply = false }: {
+function SuggestionWhyBody({ hint, why, model, warmupReads, audible, range, picks, rpe, badge, canApply = false }: {
   hint: LoadSuggestion;
   why: string;
   model: LoadModel;
-  warmup: WarmupGauge | null;
+  warmupReads: boolean;
   audible: number;
   range: string | null;
   picks: { low: number; high: number } | null;
@@ -481,12 +481,9 @@ function SuggestionWhyBody({ hint, why, model, warmup, audible, range, picks, rp
               </p>
             );
           })()}
-          {warmup && (
+          {warmupReads && (
             <p className="mt-1 text-muted-foreground">
-              {warmup.suggested
-                ? `Work up to about ${fmtNum(warmup.suggested.load)} ${hint.unit} × ${warmup.suggested.reps} and log how it felt: `
-                : "Log your heaviest warm-up and how it felt: "}
-              easier than usual nudges this up, harder nudges it down.
+              A warm-up you log with + Warm-up counts too: easier than usual nudges this up, harder nudges it down.
             </p>
           )}
         </details>

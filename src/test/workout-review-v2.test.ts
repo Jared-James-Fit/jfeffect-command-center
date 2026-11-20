@@ -121,7 +121,7 @@ describe("load suggestions in the logger", () => {
   it("builds a live model per exercise (its sets, then the lift's other cards) and shows the card", () => {
     expect(wdv).toContain("history: loadHistory, today, unit: activeUnit, readiness, warmups: warmupsList, bodyweightKg,");
     expect(wdv).toContain("dayFactor: dayRead?.factor ?? null, carryToday,");
-    expect(wdv).toContain("<LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} picks={loadPicks}");
+    expect(wdv).toContain("<LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmupReads={warmupTunes} fromName={dayRead?.fromName ?? null} picks={loadPicks}");
     expect(wdv).not.toContain("suggested={!readonly && !isConfirmed && isNextSet");
   });
   it("never competes with a coach's fixed load, top-set back-off or % of a max", () => {
