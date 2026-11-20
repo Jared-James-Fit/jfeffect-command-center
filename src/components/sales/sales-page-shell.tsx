@@ -3,10 +3,12 @@ import type { ReactNode } from "react";
 import { SocialLinks } from "@/components/sales/apple";
 import { PublicHeader } from "@/components/sales/public-header";
 import type { CtaChoice } from "@/lib/sticky-cta";
+import { blockMediaSave } from "@/lib/protect-media";
 
 /**
  * Every public page's frame: the one header (public-header.tsx, its links and
- * button from public-nav.ts), the page, and the footer.
+ * button from public-nav.ts), the page, and the footer. Its photos can't be
+ * saved from the page (protect-media.ts).
  */
 export function SalesPageShell({
   children,
@@ -34,6 +36,9 @@ export function SalesPageShell({
       className={`min-h-screen bg-background text-foreground ${themeClass}`}
       data-page-id={pageId}
       data-theme={theme}
+      data-protect-media
+      onContextMenu={blockMediaSave}
+      onDragStart={blockMediaSave}
     >
       <PublicHeader
         cta={cta}
