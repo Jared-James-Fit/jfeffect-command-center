@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { inFeed, isWorkoutCard } from "@/lib/community";
-import { PHOTO_FILL_MAX_TRIM, PHOTO_ZOOM_MAX_TRIM, photoZoomBox, screenFit } from "@/lib/photo-frame";
+import { PHOTO_FILL_MAX_TRIM, PHOTO_ZOOM_MAX_TRIM, cleanFocus, photoZoomBox, screenFit } from "@/lib/photo-frame";
 
 const read = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
 const migration = read("supabase/migrations/20270428090000_crew_feed_no_workout_cards.sql");
@@ -72,6 +72,11 @@ describe("photos on a post's screen", () => {
     expect(screenFit(photo(1080, 1920), iphone)).toBe("cover");
     expect(screenFit(photo(2268, 4032), iphone)).toBe("cover");
     expect(PHOTO_FILL_MAX_TRIM).toBe(0.12);
+    // an older story card saved as a 9:16 photo, its own words where the post's go: shown whole (the audit's "fit": "whole")
+    expect(cleanFocus({ x: 0.5, y: 0.5, fit: "whole" })).toEqual({ x: 0.5, y: 0.5, whole: true });
+    expect(screenFit({ ...photo(1080, 1920), focus: { x: 0.5, y: 0.5, whole: true } }, iphone)).toBe("contain");
+    expect(screenFit({ type: "video", width: 1080, height: 1920, focus: { x: 0.5, y: 0.5, whole: true } }, iphone)).toBe("cover");
+    expect(read("supabase/migrations/20270428091000_crew_feed_whole_photo.sql")).toContain("WHERE id = '8901bf28-80bf-4f48-b14a-2b20750e076c'");
     const card = read("src/components/community/post-card.tsx");
     expect(card).toContain('page && !shrunk && fit === "cover" ? (');
     expect(card).toContain('data-photo-fit="cover"');
