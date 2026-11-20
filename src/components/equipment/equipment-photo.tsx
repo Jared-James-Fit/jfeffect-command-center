@@ -7,7 +7,7 @@ import { useRef, useState } from "react";
 import { Camera, ImageOff, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { removeEquipmentPhoto, uploadEquipmentPhoto, useEquipmentPhotoUrl } from "@/lib/equipment/equipment-queries";
+import { uploadEquipmentPhoto, useEquipmentPhotoUrl } from "@/lib/equipment/equipment-queries";
 
 export function EquipmentThumb({
   path,
@@ -37,8 +37,10 @@ export function EquipmentThumb({
 }
 
 /**
- * A photo slot: "Add a photo" until there's one, then the photo with ✕. The
- * old file is removed once the new path is handed over (best effort).
+ * A photo slot: "Add a photo" until there's one, then the photo with ✕. It
+ * never deletes a file itself: the photo it shows may still be the saved one
+ * (a draft can be discarded), so its owner removes a replaced photo once the
+ * change is saved and an unsaved upload when it's thrown away.
  */
 export function PhotoSlot({
   clientId,
@@ -62,9 +64,7 @@ export function PhotoSlot({
     setBusy(true);
     try {
       const next = await uploadEquipmentPhoto(clientId, file);
-      const old = path;
       await onChange(next);
-      if (old && old !== next) void removeEquipmentPhoto(old);
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't add the photo");
     } finally {
@@ -73,9 +73,7 @@ export function PhotoSlot({
     }
   };
   const clear = async () => {
-    const old = path;
     await onChange(null);
-    if (old) void removeEquipmentPhoto(old);
   };
   return (
     <div className={cn("flex items-center gap-3", className)} data-equipment-photo>

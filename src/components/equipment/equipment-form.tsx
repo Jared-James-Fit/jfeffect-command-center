@@ -2,9 +2,11 @@
  * Add or edit a piece of equipment: what they call it, what kind it is, which
  * gym it's in, and (folded) its brand, model, a note and a photo. Typing a
  * name they already have offers that one instead of a second copy; the
- * database refuses a duplicate either way (equipment_save).
+ * database refuses a duplicate either way (equipment_save). A photo picked
+ * here is only the equipment's once Save goes through: Cancel removes what was
+ * uploaded and keeps the saved photo, Save removes the one it replaced.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { ChevronDown, Loader2, Plus, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -32,6 +34,7 @@ import {
   type EquipmentKind,
 } from "@/lib/equipment/equipment";
 import { removeEquipmentPhoto, useEquipmentActions } from "@/lib/equipment/equipment-queries";
+import { noAutofill } from "@/lib/no-autofill";
 import { PhotoSlot } from "./equipment-photo";
 
 export const CHIP = "inline-flex h-9 shrink-0 items-center rounded-full border px-3 text-[13px] font-medium transition-colors";
@@ -48,6 +51,8 @@ export function EquipmentForm({
   onCancel,
   onRemoved,
   onUseExisting,
+  onDirtyChange,
+  saveRef,
 }: {
   clientId: string;
   data: EquipmentData;
@@ -61,6 +66,10 @@ export function EquipmentForm({
   onRemoved?: (result: "archived" | "deleted" | "gone") => void;
   /** "You already have it": use that one instead. */
   onUseExisting?: (id: string) => void;
+  /** Whether anything's typed or picked that Save would keep (the sheet asks before it closes on it). */
+  onDirtyChange?: (dirty: boolean) => void;
+  /** Set to this form's Save (true once saved), so the sheet's "Save changes?" can run it. */
+  saveRef?: MutableRefObject<(() => Promise<boolean>) | null>;
 }) {
   const actions = useEquipmentActions(clientId);
   const gyms = useMemo(() => data.gyms.filter((g) => !g.archived_at).sort((a, b) => a.name.localeCompare(b.name)), [data.gyms]);
@@ -76,6 +85,33 @@ export function EquipmentForm({
   const [saving, setSaving] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [favorite, setFavorite] = useState(!!initial?.favorite);
+  // photos uploaded while this form is open: only the one saved stays
+  const uploads = useRef(new Set<string>());
+
+  const dirty = initial
+    ? name.trim() !== initial.name.trim() ||
+      kind !== initial.kind ||
+      gymId !== initial.gym_id ||
+      brand.trim() !== (initial.brand ?? "").trim() ||
+      model.trim() !== (initial.model ?? "").trim() ||
+      notes.trim() !== (initial.notes ?? "").trim() ||
+      photo !== (initial.photo_path ?? null) ||
+      favorite !== initial.favorite
+    : !!(name.trim() || brand.trim() || model.trim() || notes.trim() || photo);
+  const dirtyRef = useRef(onDirtyChange);
+  dirtyRef.current = onDirtyChange;
+  useEffect(() => {
+    dirtyRef.current?.(dirty);
+  }, [dirty]);
+  // left without Save (Back, Discard, the sheet closing): what was uploaded here goes
+  useEffect(
+    () => () => {
+      dirtyRef.current?.(false);
+      for (const u of uploads.current) void removeEquipmentPhoto(u);
+      uploads.current.clear();
+    },
+    [],
+  );
 
   const trimmed = name.trim();
   const duplicate = !initial ? findDuplicate(data, trimmed, gymId) : findDuplicate(data, trimmed, gymId, initial.id);
@@ -98,14 +134,16 @@ export function EquipmentForm({
     }
   };
 
-  const save = async () => {
+  const save = async (): Promise<boolean> => {
+    if (saving) return false;
     if (!trimmed) {
-      toast.error("Give it a name");
-      return;
+      toast.error("Give it a name first");
+      return false;
     }
     if (duplicate && !initial && onUseExisting) {
+      dropUploads();
       onUseExisting(duplicate.id);
-      return;
+      return true;
     }
     setSaving(true);
     try {
@@ -120,18 +158,29 @@ export function EquipmentForm({
         photoPath: photo,
       });
       if (initial && favorite !== initial.favorite) await actions.setFavorite(initial.id, favorite);
+      // the saved photo stays; the one it replaced and any other upload go
+      if (initial?.photo_path && initial.photo_path !== photo) void removeEquipmentPhoto(initial.photo_path);
+      for (const u of uploads.current) if (u !== photo) void removeEquipmentPhoto(u);
+      uploads.current.clear();
       onSaved(r.id, r.existed);
+      return true;
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't save");
+      return false;
     } finally {
       setSaving(false);
     }
   };
+  if (saveRef) saveRef.current = save;
+
+  // what was uploaded here and never saved (the saved photo is never touched)
+  const dropUploads = () => {
+    for (const u of uploads.current) void removeEquipmentPhoto(u);
+    uploads.current.clear();
+  };
 
   const cancel = () => {
-    // a photo added to equipment that was never saved goes with it
-    if (!initial && photo) void removeEquipmentPhoto(photo);
-    if (initial && photo && photo !== initial.photo_path) void removeEquipmentPhoto(photo);
+    dropUploads();
     onCancel();
   };
 
@@ -150,17 +199,22 @@ export function EquipmentForm({
   return (
     <div className="space-y-4" data-equipment-form>
       <div>
-        <label className="text-[13px] font-medium text-muted-foreground" htmlFor="eq-name">Name</label>
+        {/* never "Name": Safari reads the label and offers the person's own name from their contact card */}
+        <label className="text-[13px] font-medium text-muted-foreground" htmlFor="eq-title">What you call it</label>
         <div className="mt-1 flex items-center gap-2">
           <Input
-            id="eq-name"
+            id="eq-title"
             value={name}
             maxLength={NAME_MAX}
             onChange={(e) => setName(e.target.value)}
             placeholder="Rogue rack, Hammer row, Cable stack 2…"
             className="h-11 text-base"
-            autoComplete="off"
+            {...noAutofill("equipment-title")}
+            autoCapitalize="words"
+            autoCorrect="off"
+            spellCheck={false}
             enterKeyHint="done"
+            data-equipment-title
           />
           {initial && (
             <button
@@ -236,9 +290,14 @@ export function EquipmentForm({
                     void addGym();
                   }
                 }}
-                placeholder="Gold's Gym, Home, Work…"
+                placeholder="Gold's Gym, the garage…"
                 className="h-10 text-base"
+                {...noAutofill("equipment-gym")}
+                autoCapitalize="words"
+                autoCorrect="off"
+                spellCheck={false}
                 enterKeyHint="done"
+                aria-label="New gym"
               />
               <Button type="button" variant="outline" className="h-10" onClick={() => void addGym()}>
                 Add
@@ -261,8 +320,8 @@ export function EquipmentForm({
         {more && (
           <div className="mt-1.5 grid gap-2">
             <div className="grid grid-cols-2 gap-2">
-              <Input value={brand} maxLength={60} onChange={(e) => setBrand(e.target.value)} placeholder="Brand" className="h-10 text-base" aria-label="Brand" />
-              <Input value={model} maxLength={60} onChange={(e) => setModel(e.target.value)} placeholder="Model" className="h-10 text-base" aria-label="Model" />
+              <Input value={brand} maxLength={60} onChange={(e) => setBrand(e.target.value)} placeholder="Brand" className="h-10 text-base" aria-label="Brand" {...noAutofill("equipment-brand")} autoCapitalize="words" autoCorrect="off" spellCheck={false} />
+              <Input value={model} maxLength={60} onChange={(e) => setModel(e.target.value)} placeholder="Model" className="h-10 text-base" aria-label="Model" {...noAutofill("equipment-model")} autoCapitalize="words" autoCorrect="off" spellCheck={false} />
             </div>
             <textarea
               value={notes}
@@ -272,12 +331,21 @@ export function EquipmentForm({
               rows={2}
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Note"
+              {...noAutofill("equipment-note")}
             />
           </div>
         )}
       </div>
 
-      <PhotoSlot clientId={clientId} path={photo} onChange={(p) => setPhoto(p)} label="Add a photo of it" />
+      <PhotoSlot
+        clientId={clientId}
+        path={photo}
+        onChange={(p) => {
+          if (p && p !== initial?.photo_path) uploads.current.add(p);
+          setPhoto(p);
+        }}
+        label="Add a photo of it"
+      />
 
       <div className="flex gap-2 pt-1">
         <Button type="button" variant="outline" className="h-11 flex-1" onClick={cancel} disabled={saving}>

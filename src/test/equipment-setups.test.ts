@@ -281,8 +281,9 @@ describe("the card stays quiet", () => {
     expect(card).toContain('data-testid="card-setup"');
   });
   it("the setup sheet is a grip sheet that swipes down and stays above the keyboard", () => {
-    expect(sheet).toMatch(/side="bottom"\s+swipeToClose/);
-    expect(sheet).toContain("var(--keyboard-inset");
+    // pinned to the visible part of the screen while typing (setup-sheet-reliability.test.ts)
+    expect(sheet).toMatch(/side="bottom"\s+swipeToClose=\{!kb\}/);
+    expect(sheet).toContain("useVisualViewportBox(open)");
   });
   it("the walkthrough never opens inside a workout", () => {
     expect(card).not.toContain("EquipmentIntroGate");
