@@ -29,8 +29,8 @@ export const WEBSITE_FORMS: WebsiteForm[] = [
     name: "Quick Apply — Selkirk Personal Training",
     path: "/personal-trainer-selkirk/apply",
     from: "selkirk",
-    description: "In-person Selkirk PT application. Same pipeline, different source label.",
-    active: true,
+    description: "Retired Nov 2026: the page redirects to the online coaching application (old links keep their ?from=).",
+    active: false,
   },
 ];
 

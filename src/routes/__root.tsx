@@ -242,7 +242,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: "JF Effect" },
-      { name: "description", content: "JF Effect — personal training in Selkirk, MB and online fitness coaching for Selkirk, Winnipeg, and beyond. Strength, fat loss, muscle building, and powerlifting coaching by Jared James Fit." },
+      { name: "description", content: "JF Effect is the training app built by Team Canada powerlifter Jared McIntyre: free to use, with 1:1 online coaching for strength, muscle, fat loss and powerlifting." },
       { name: "author", content: "Jared James Fit | JF Effect" },
       // the page's own colour (THEME_COLOR); THEME_COLOR_SCRIPT sets the dark one before the first frame
       { name: "theme-color", content: "#f6f7f8" },
@@ -251,10 +251,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "apple-mobile-web-app-title", content: "JF Effect" },
       // solid: the home-screen app starts right under the clock, with nothing under the status bar for iOS to blur (ios-edge.ts)
       { name: "apple-mobile-web-app-status-bar-style", content: "default" },
-      { name: "geo.region", content: "CA-MB" },
-      { name: "geo.placename", content: "Selkirk, Manitoba" },
-      { name: "geo.position", content: "50.1436;-96.8839" },
-      { name: "ICBM", content: "50.1436, -96.8839" },
       // A sent link's card (iMessage, texts, Instagram…): "JF Effect" and the
       // logo unless the page says more (share-meta.ts). No og:url here: each
       // page names its own, or a share would point at the home page.
@@ -280,49 +276,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         type: "application/ld+json",
         children: JSON.stringify({
           "@context": "https://schema.org",
-          "@type": ["LocalBusiness", "SportsActivityLocation", "HealthAndBeautyBusiness"],
-          "@id": "https://jfeffect.com/#business",
+          "@type": "Organization",
+          "@id": "https://jfeffect.com/#organization",
           name: "JF Effect",
           alternateName: "Jared James Fit",
-          description: "Personal training in Selkirk, MB and online fitness coaching for Selkirk, Winnipeg, and Manitoba. Specializing in strength, fat loss, muscle building, and powerlifting.",
+          description: "The training app built by Team Canada powerlifter Jared McIntyre, and his 1:1 online coaching for strength, muscle, fat loss and powerlifting.",
           url: "https://jfeffect.com",
           logo: "https://jfeffect.com/logo.png",
           image: "https://jfeffect.com/logo.png",
-          telephone: "+1-204-229-4913",
           email: "jared@jfeffect.com",
-          address: {
-            "@type": "PostalAddress",
-            streetAddress: "Iron Image Gym",
-            addressLocality: "Selkirk",
-            addressRegion: "MB",
-            postalCode: "R1A",
-            addressCountry: "CA",
-          },
-          geo: {
-            "@type": "GeoCoordinates",
-            latitude: 50.1436,
-            longitude: -96.8839,
-          },
-          areaServed: [
-            { "@type": "City", name: "Selkirk", containedInPlace: { "@type": "State", name: "Manitoba" } },
-            { "@type": "City", name: "Winnipeg", containedInPlace: { "@type": "State", name: "Manitoba" } },
-            { "@type": "State", name: "Manitoba" },
-          ],
-          serviceType: ["Personal Training", "Online Fitness Coaching", "Powerlifting Coaching", "Nutrition Coaching"],
-          founder: { "@type": "Person", name: "Jared James McIntyre", jobTitle: "Personal Trainer & Online Fitness Coach", sameAs: ["https://jaredjamesfit.com"] },
+          founder: { "@type": "Person", name: "Jared McIntyre", jobTitle: "Online coach and powerlifter", url: "https://jfeffect.com/about" },
           sameAs: ["https://jaredjamesfit.com", "https://www.instagram.com/jaredmcintyre_/", "https://www.youtube.com/@jared.mcintyre"],
-          openingHoursSpecification: [
-            { "@type": "OpeningHoursSpecification", dayOfWeek: ["Monday","Tuesday","Wednesday","Thursday","Friday"], opens: "06:00", closes: "21:00" },
-            { "@type": "OpeningHoursSpecification", dayOfWeek: ["Saturday","Sunday"], opens: "08:00", closes: "18:00" },
-          ],
-          priceRange: "$$",
-          contactPoint: [{
-            "@type": "ContactPoint",
-            telephone: "+1-204-229-4913",
-            contactType: "customer support",
-            areaServed: "CA-MB",
-            availableLanguage: ["English"],
-          }],
+          areaServed: "Worldwide",
         }),
       },
       {

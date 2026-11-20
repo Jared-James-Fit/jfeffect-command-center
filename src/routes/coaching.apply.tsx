@@ -228,7 +228,7 @@ function QuestionFlow() {
   const contactStep = current.key === "email" || current.key === "phone" || current.key === "instagram";
 
   return (
-    <SalesPageShell>
+    <SalesPageShell hideMarketingNav>
       <Block narrow className="!py-6 md:!py-10">
         <div className="mx-auto max-w-md">
           {/* Where they are: back, "Question N of 7", and the bar. */}
@@ -262,7 +262,7 @@ function QuestionFlow() {
             <div className="mt-7">
               <p className="text-[13px] font-semibold text-primary">JF Effect Coaching</p>
               <p className="mt-1 text-[15px] leading-relaxed text-muted-foreground">
-                {total} quick questions, about a minute. No payment to apply.
+                Online coaching. {total} quick questions, about a minute. Free to apply.
               </p>
             </div>
           )}
@@ -413,14 +413,14 @@ function PostSubmit({ result }: {
 
   if (!result.booking_slug) {
     return (
-      <SalesPageShell>
+      <SalesPageShell hideMarketingNav>
         <Block narrow className="!py-12">
           <div className="mx-auto max-w-xl">
             <Card className="rounded-2xl p-7 text-center shadow-none ring-1 ring-border/70 md:p-9">
               <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" aria-hidden />
               <h1 className="mt-4 text-[28px] font-semibold tracking-[-0.02em] md:text-[34px]">Application received.</h1>
               <p className="mt-3 text-sm text-muted-foreground">
-                We've received your application and will reach out shortly.
+                Got it. I read every application myself and I'll be in touch soon.
               </p>
             </Card>
           </div>
@@ -434,7 +434,7 @@ function PostSubmit({ result }: {
   }
 
   return (
-    <SalesPageShell>
+    <SalesPageShell hideMarketingNav>
       <Block narrow className="!py-12">
         <div className="mx-auto max-w-xl">
           {view === "intro" && (
@@ -444,13 +444,13 @@ function PostSubmit({ result }: {
                 Application received.
               </h1>
               <p className="mt-2 text-[16px] leading-relaxed text-muted-foreground">
-                Your application is with the JF Effect team. One quick step left: pick a time for a short coaching call.
+                I read every one myself. One step left: pick a time for a short call so we can talk about your goal.
               </p>
               <ol className="mx-auto mt-6 max-w-xs space-y-2.5 text-left text-[15px]">
                 {[
                   ["Applied", true],
                   ["Pick a time for your call", false],
-                  ["We map your plan together", false],
+                  ["We talk it through on the call", false],
                 ].map(([label, ok], i) => (
                   <li key={i} className="flex items-center gap-3">
                     <span className={"grid h-6 w-6 shrink-0 place-items-center rounded-full text-[12px] font-semibold " + (ok ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground")}>
@@ -670,7 +670,7 @@ function BookedScreen({
     location: booked.meet_link ?? "",
   });
   return (
-    <SalesPageShell>
+    <SalesPageShell hideMarketingNav>
       <Block narrow className="!py-12">
         <div className="mx-auto max-w-xl">
           <Card className="rounded-2xl p-7 text-center shadow-none ring-1 ring-border/70 md:p-9">

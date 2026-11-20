@@ -80,8 +80,8 @@ const QUESTION: Record<MemberStepKey, { title: (first: string) => string; hint?:
   goal: { title: () => "What do you want from your training?" },
   experience: { title: () => "How long have you been lifting?" },
   coaching_interest: {
-    title: () => "Interested in 1:1 coaching with Jared?",
-    hint: "Coaching is paid and optional. The app is free either way.",
+    title: () => "Interested in online coaching with Jared?",
+    hint: "Online coaching is paid and optional. The app is free either way.",
   },
   full_name: { title: () => "What's your name?" },
   contact_method: {
@@ -639,10 +639,10 @@ function JoinResult({ result, answers }: { result: ApplyResult; answers: MemberA
               <Video className="h-5 w-5" aria-hidden />
             </span>
             <div className="min-w-0">
-              <div className="text-[16px] font-semibold">Want to talk coaching?</div>
+              <div className="text-[16px] font-semibold">Want to talk about online coaching?</div>
               <p className="mt-0.5 text-[14px] leading-relaxed text-muted-foreground">
-                A text conversation works great. If you'd rather talk it through on a quick video
-                call, pick a time. Totally optional.
+                We can sort it out over text, or pick a time for a short video call if you'd
+                rather talk it through.
               </p>
               <div className="mt-3">
                 <TextLink href={result.bookingUrl}>Pick a call time</TextLink>

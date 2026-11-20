@@ -9,33 +9,78 @@ import {
   LANDING_COPY,
 } from "@/components/landing/landing-page";
 
-const page = readFileSync("src/components/landing/landing-page.tsx", "utf8");
+const read = (path: string) => readFileSync(path, "utf8");
 /** What a visitor reads: the file without its comments. */
-const visible = page.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+const visibleOf = (src: string) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
-describe("the landing page says what's free and what's paid", () => {
-  it("says it in the hero, before anything else", () => {
-    const hero = visible.slice(visible.indexOf("data-landing-hero"), visible.indexOf("data-landing-proof"));
-    expect(hero).toContain("The app is free. Coaching with me is the paid part.");
-    // both ways in, the free app first and in the brand red, coaching beside it
+const page = read("src/components/landing/landing-page.tsx");
+const visible = visibleOf(page);
+
+/** Every public marketing page a visitor can read. */
+const PUBLIC_PAGES = [
+  "src/components/landing/landing-page.tsx",
+  "src/routes/coaching.index.tsx",
+  "src/routes/about.tsx",
+  "src/routes/coaching.apply.tsx",
+  "src/components/join/membership-application.tsx",
+  "src/components/sales/public-header.tsx",
+  "src/lib/public-nav.ts",
+];
+
+describe("the landing page sells the free app first and online coaching as its own offer", () => {
+  it("leads with the app, Join free first and online coaching beside it", () => {
+    const hero = visible.slice(
+      visible.indexOf("data-landing-hero"),
+      visible.indexOf("data-landing-proof"),
+    );
+    expect(LANDING_COPY.HERO.title).toBe("The training app built by a Team Canada powerlifter.");
+    expect(LANDING_COPY.HERO.body).toContain("Use it free, or hire me to coach you online.");
     expect(hero.indexOf("<PrimaryCta to={JOIN_TO}")).toBeGreaterThan(-1);
-    expect(hero.indexOf("<SecondaryCta to={COACHING_TO}")).toBeGreaterThan(hero.indexOf("<PrimaryCta to={JOIN_TO}"));
+    expect(hero.indexOf("<SecondaryCta to={COACHING_TO}")).toBeGreaterThan(
+      hero.indexOf("<PrimaryCta to={JOIN_TO}"),
+    );
+    expect(hero).toContain("Online coaching");
   });
 
-  it("never sells the whole thing as free", () => {
+  it("never sells the whole thing as free, and never prices coaching in a table", () => {
     expect(visible).not.toContain("Free to join · No card");
     expect(visible).not.toMatch(/\["\$0"/);
-    expect(visible).not.toContain("free training app and crew");
+    // coaching is its own section, not a "Paid" column beside the free one
+    expect(visible).not.toMatch(/>Paid</);
+    expect(visible).not.toContain("data-landing-plan");
+    expect(visible).toContain("data-landing-coaching");
   });
 
-  it("puts the two side by side, coaching marked paid", () => {
-    expect(visible).toContain('data-landing-plan="free"');
-    expect(visible).toContain('data-landing-plan="coaching"');
-    expect(visible).toMatch(/1:1 coaching<\/h3>\s*<div[^>]*>Paid<\/div>/);
-    expect(LANDING_COPY.COACHING[0]).toBe("Everything in the app");
-    expect(LANDING_COPY.FAQ.map((f) => f.q)).toEqual(
-      expect.arrayContaining(["What's actually free?", "What does coaching cost?", "Can I start free and get coaching later?"]),
+  it("says what the coach does, and that it's paid, without a price list", () => {
+    const titles = LANDING_COPY.COACHING.map((c) => c.title);
+    expect(titles).toEqual([
+      "Your program",
+      "Weekly check-ins",
+      "Nutrition",
+      "Technique and questions",
+      "Meet prep",
+    ]);
+    expect(visible).toContain("I'll run your training.");
+    expect(visible).toContain("We go over price on a short call before you commit.");
+    // replies are what the app's own coach chat promises, never "unlimited"
+    expect(LANDING_COPY.COACHING.map((c) => c.body).join(" ")).toContain(
+      "I usually reply within a day.",
     );
+    expect(visible).not.toMatch(/unlimited/i);
+    expect(LANDING_COPY.FAQ.map((f) => f.q)).toEqual(
+      expect.arrayContaining([
+        "What's free?",
+        "What does coaching cost?",
+        "How does online coaching work?",
+      ]),
+    );
+  });
+
+  it("asks for the coaching application while coaching is on screen", () => {
+    expect(visible).toContain('data-cta-zone="coaching"');
+    expect(visible).toContain("zones={HOME_CTA_ZONES} hideWhenInline");
+    expect(visible).toContain("ctaZones={HOME_CTA_ZONES}");
   });
 
   it("each way in goes where it says", () => {
@@ -47,23 +92,33 @@ describe("the landing page says what's free and what's paid", () => {
   });
 
   it("claims only what's checked (Nov 20 2026)", () => {
-    // 15 published programs, 13,730 sets logged, 1,969 of 2,050 exercises with a video
-    expect(LANDING_COPY.FREE[0]).toContain("15 full programs");
-    expect(LANDING_COPY.PROOF.map((p) => p[0])).toEqual(["8", "2×", "100+", "13,000+"]);
-    expect(visible).toContain("Over 2,000 exercises, almost every one with a how-to video.");
+    // 15 live programs (4 beginner, 3 home), 1,969 of 2,050 exercises with a video
+    expect(LANDING_COPY.PROOF.map((p) => p[0])).toEqual(["8", "2×", "100+", "15"]);
+    expect(LANDING_COPY.FREE[0].text).toBe("2,000+ exercises, almost all with a how-to video");
+    expect(LANDING_COPY.FAQ.find((f) => f.q.startsWith("I'm new"))?.a).toContain(
+      "Four of my programs",
+    );
   });
+});
 
-  it("reads like a person wrote it", () => {
-    const words = [
-      ...LANDING_COPY.FREE,
-      ...LANDING_COPY.COACHING,
-      ...LANDING_COPY.FAQ.flatMap((f) => [f.q, f.a]),
-      visible,
-    ].join(" ");
-    for (const cliche of [
-      /unlock/i,
-      /elevate/i,
-      /journey/i,
+describe("the public site reads like Jared wrote it", () => {
+  const words = PUBLIC_PAGES.map((p) => visibleOf(read(p))).join(" ");
+
+  it("has none of the lines Jared called out, or the usual fitness-marketing words", () => {
+    for (const line of [
+      /Real programs/i,
+      /Structure beats motivation/i,
+      /crew that notices/i,
+      /the paid part/i,
+      /actually prep/i,
+      /Real results/i,
+      /Real coaching/i,
+      /Visible proof/i,
+      /your result could be next/i,
+      /Spots are limited/i,
+      /\bunlock/i,
+      /\belevate/i,
+      /\bjourney/i,
       /transform your/i,
       /game.?changer/i,
       /take your .* to the next level/i,
@@ -71,27 +126,59 @@ describe("the landing page says what's free and what's paid", () => {
       /seamless/i,
       /empower/i,
     ]) {
-      expect(words).not.toMatch(cliche);
+      expect(words).not.toMatch(line);
     }
-    // no em dashes in anything a visitor reads
+  });
+
+  it("uses no dashes in what a visitor reads on the landing page", () => {
     expect(visible).not.toContain("—");
   });
 });
 
-describe("the rest of the way in says it the same way", () => {
-  it("the free application says coaching is paid", () => {
-    const join = readFileSync("src/components/join/membership-application.tsx", "utf8");
-    expect(join).toContain("Coaching is paid and optional. The app is free either way.");
+describe("coaching is marketed online only", () => {
+  it("names no town, gym or in-person training on any public page", () => {
+    for (const p of [...PUBLIC_PAGES, "src/routes/__root.tsx", "src/routes/index.tsx"]) {
+      const text = visibleOf(read(p));
+      expect(text, p).not.toMatch(/Selkirk|Iron Image|in[- ]person|personal-trainer-selkirk/i);
+    }
   });
 
-  it("the coaching page points people who aren't ready at the free app", () => {
-    const coaching = readFileSync("src/routes/coaching.index.tsx", "utf8");
+  it("the old in-person pages send people to online coaching", () => {
+    expect(read("src/routes/personal-trainer-selkirk.tsx")).toContain('redirect({ to: "/coaching"');
+    expect(read("src/routes/personal-trainer-selkirk.apply.tsx")).toContain(
+      `redirect({ to: "/coaching/apply"`,
+    );
+    expect(read("src/routes/personal-trainer-selkirk.tsx")).toContain(
+      `redirect({ to: "/coaching/apply"`,
+    );
+    expect(read("src/routes/selkirk.tsx")).toContain('redirect({ to: "/coaching"');
+    expect(read("public/sitemap.xml")).not.toContain("selkirk");
+  });
+
+  it("the site's own description is an organization, not a local gym", () => {
+    const root = read("src/routes/__root.tsx");
+    expect(root).not.toMatch(/LocalBusiness|geo\.position|openingHoursSpecification/);
+    expect(read("src/routes/coaching.index.tsx")).not.toMatch(/LocalBusiness|geo\.placename/);
+  });
+});
+
+describe("the rest of the way in says it the same way", () => {
+  it("the free application says online coaching is paid", () => {
+    expect(read("src/components/join/membership-application.tsx")).toContain(
+      "Online coaching is paid and optional. The app is free either way.",
+    );
+  });
+
+  it("the coaching page points people who aren't ready at the free app, and only asks for the application", () => {
+    const coaching = read("src/routes/coaching.index.tsx");
     expect(coaching).toContain('q: "Is there a free option?"');
+    expect(visibleOf(coaching)).not.toContain('to="/join"');
+    expect(coaching).toContain("<StickyMobileCta label={CTA} href={APPLY_TO} hideWhenInline />");
   });
 
   it("the page's title and description name both", () => {
-    const route = readFileSync("src/routes/index.tsx", "utf8");
-    expect(route).toContain("Free Training App + 1:1 Coaching with Jared McIntyre");
-    expect(route).toContain("1:1 coaching with Jared is paid, by application.");
+    const route = read("src/routes/index.tsx");
+    expect(route).toContain("Free Training App + Online Coaching with Jared McIntyre");
+    expect(route).toContain("1:1 online coaching with Jared is a paid service, by application.");
   });
 });

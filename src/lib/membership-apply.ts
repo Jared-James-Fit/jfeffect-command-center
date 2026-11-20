@@ -352,7 +352,7 @@ export function firstMove(
   if (goal === "powerlifting") {
     return {
       title: "Start a powerlifting program",
-      body: "Squat, bench and deadlift with real progression. Pick the one for your level and it lands on your training days.",
+      body: "Squat, bench and deadlift, written week by week. Pick the one for your level and it lands on your training days.",
       cta: "See powerlifting programs",
       to: "/portal/programs?tab=jf",
     };
@@ -378,9 +378,9 @@ export function welcomeNote(first: string, goal: string | null | undefined): str
   const hook = GOAL_HOOK[goal ?? ""] ?? "your training";
   return [
     `${first ? `${first}, welcome` : "Welcome"} to JF Effect.`,
-    `I built this for people who are done guessing and want to actually see progress. You told me you're focused on ${hook}, so start there: pick a program, log every set, and let the numbers show you it's working.`,
-    "Post your wins in the Crew. Everyone here is chasing something, and you'd be surprised how much it helps to have people notice.",
-    "Glad you're here. Let's get to work.",
+    `You said you're focused on ${hook}, so start there: pick a program, log every set, and the app keeps track of your PRs and progress for you.`,
+    "When you hit something you're proud of, post it in the Crew.",
+    "Glad you're here.",
   ];
 }
 

@@ -12,7 +12,7 @@ import { LandingPage } from "@/components/landing/landing-page";
 import { currentLaunchMode, installedApp } from "@/lib/landing-launch";
 
 const DESCRIPTION =
-  "The training app Team Canada powerlifter Jared McIntyre coaches in. The app is free: programs, a log that tracks every set and PR, progress, nutrition and a crew. 1:1 coaching with Jared is paid, by application.";
+  "The training app built by Team Canada powerlifter Jared McIntyre: his programs, a log that keeps every set and PR, nutrition and a crew to train with, free to use. 1:1 online coaching with Jared is a paid service, by application.";
 
 export const Route = createFileRoute("/")({
   // The installed app, signed out: straight to sign-in (it never shows the
@@ -26,9 +26,9 @@ export const Route = createFileRoute("/")({
   },
   head: () => ({
     meta: [
-      { title: "JF Effect | Free Training App + 1:1 Coaching with Jared McIntyre" },
+      { title: "JF Effect | Free Training App + Online Coaching with Jared McIntyre" },
       { name: "description", content: DESCRIPTION },
-      ...shareMeta({ title: "JF Effect", description: "A free training app, and 1:1 coaching with Jared McIntyre.", path: "/" }),
+      ...shareMeta({ title: "JF Effect", description: "A free training app, and online coaching with Jared McIntyre.", path: "/" }),
     ],
     links: [{ rel: "canonical", href: "https://jfeffect.com/" }],
   }),
