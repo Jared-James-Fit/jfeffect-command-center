@@ -78,7 +78,7 @@ describe("the post's sheet: the whole caption, then the comments, one swipe to c
 
   it("above the sheet it's a rounded card at its own shape (Instagram's), the same elements so a clip keeps playing", () => {
     const card = read("src/components/community/post-card.tsx");
-    expect(card).toContain("<PostMedia post={post} thumbUrl={thumbUrl} page shrunk={sheetOpen} onSlide={showSlide} />");
+    expect(card).toMatch(/<PostMedia\s+post=\{post\}\s+thumbUrl=\{thumbUrl\}\s+page\s+shrunk=\{sheetOpen\}\s+onSlide=\{showSlide\}/);
     expect(card).toContain("<FitBox ratio={ratio} screen shrunk={shrunk}>");
     expect(card).toContain("<FitBox ratio={0.8} page shrunk={sheetOpen}>");
     // only the boxes change: the screen until the sheet opens, then the post's own shape with room around it

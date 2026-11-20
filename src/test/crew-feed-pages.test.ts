@@ -80,10 +80,10 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
     expect(card).toContain('if (layout === "page") {');
     // an automated post's 4:5 card fits the width; a post's own photos and clips are the screen (TikTok's)
     expect(card).toContain("<FitBox ratio={0.8} page shrunk={sheetOpen}>");
-    expect(card).toContain("<PostMedia post={post} thumbUrl={thumbUrl} page shrunk={sheetOpen} onSlide={showSlide} />");
+    expect(card).toMatch(/<PostMedia\s+post=\{post\}\s+thumbUrl=\{thumbUrl\}\s+page\s+shrunk=\{sheetOpen\}\s+onSlide=\{showSlide\}/);
     expect(card).toContain("width: `min(100cqw, calc(100cqh * ${ratio}))`");
     expect(card).toContain(
-      "<ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} unit={unit} column hidden={sheetOpen || under || holding} />",
+      "<ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} onOpenLikes={() => setLikesOpen(true)} unit={unit} column hidden={sheetOpen || under || holding} />",
     );
     // the whole screen, the bars floating over it; the words just above the tab bar
     expect(card).toContain("style={{ top: -raise, bottom: sheetOpen ? `calc(${POST_SHEET_HEIGHT} - var(--feed-gap, 0px))` : \"var(--feed-nav-room)\" }}");

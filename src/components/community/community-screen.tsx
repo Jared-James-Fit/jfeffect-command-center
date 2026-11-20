@@ -230,13 +230,15 @@ export function CommunityScreen({
     markHint(tipVisit);
   }, [hintId, tipVisit, markHint]);
   const onTipDone = useCallback(() => setTipDone(true), []);
-  // "View full workout": pulses on the first workout in the feed until they open one
-  // (on the account, so it never comes back on another phone). Waits for the like tip.
-  const OPEN_HINT = "open_workout";
+  // "Swipe for workout": on the first workout in the feed until they reach a recap (or open a workout), on the
+  // account, so it never comes back on another phone. Waits for the like tip. A new key from Nov 20 2026, when the
+  // recap became the post's last swipe: everyone who learned "tap to see the whole workout" learns the swipe once
+  const OPEN_HINT = "workout_recap";
   const openHintId =
     scope.kind === "feed" && hints.data && !hints.data.includes(OPEN_HINT) && (tipDone || !tipVisit)
       ? (feedPosts.find((p) => p.kind !== "note" && !!p.stats)?.id ?? null)
       : null;
+  const onRecapSeen = useCallback(() => markHint(OPEN_HINT), [markHint]);
   const openPost = useCallback((post: CommunityPost) => {
     if (post.kind !== "note") markHint(OPEN_HINT);
     setDetailAt(null);
@@ -823,6 +825,7 @@ export function CommunityScreen({
                   onOpenAuthor={openAuthor}
                   doubleTapHint={p.id === hintId}
                   openHint={p.id === openHintId}
+                  onRecapSeen={onRecapSeen}
                   onDoubleTap={onDoubleTap}
                   onTipDone={onTipDone}
                   layout="page"
@@ -1249,6 +1252,7 @@ function PostRow(props: {
   onDoubleTap?: () => void;
   onTipDone?: () => void;
   openHint?: boolean;
+  onRecapSeen?: () => void;
   onOpenReel?: (p: CommunityPost, path: string) => void;
   layout?: "card" | "page";
   onOpenCaption?: (p: CommunityPost) => void;
