@@ -189,6 +189,22 @@ export async function loadIntelRecords(
       .order("set_index")
       .range(f, t),
   );
+  // bar speed read from a set's video (lift analysis): only a measured one (±8 %), and only where no
+  // speed was typed in from a device, so it reads as the set's velocity like any other
+  const videoSpeeds = await optional(
+    "bar speed from set videos",
+    () =>
+      fetchAll<any>((f, t) =>
+        sb.from("pl_set_video_analyses").select("result_id, best_mcv").eq("client_id", clientId).eq("best_mcv_tier", "measured").not("result_id", "is", null).range(f, t),
+      ),
+    [] as any[],
+  );
+  if (videoSpeeds.length) {
+    const byResult = new Map(videoSpeeds.map((v) => [v.result_id, Number(v.best_mcv)]));
+    for (const r of results) {
+      if (r.mean_concentric_velocity_mps == null && byResult.has(r.id)) r.mean_concentric_velocity_mps = byResult.get(r.id);
+    }
+  }
   const completions = await fetchByIds<any>(dayIds, (ids, f, t) =>
     sb.from("pl_day_completions").select("id, day_id, completed_at, started_at, actual_duration_min, logging_percentage, session_rating, skipped_exercises_count, client_notes").in("day_id", ids).eq("client_id", clientId).range(f, t),
   );
