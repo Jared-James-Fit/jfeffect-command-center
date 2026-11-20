@@ -1552,6 +1552,16 @@ html.feed-paging:not([data-pov-banner-on]) .ios-status-band { @variant max-md { 
   .community-hint { animation: community-hint-life 5.2s linear forwards; }
 }
 
+/* Public pages' photos: no iOS long-press "Save to Photos" menu, no drag to
+   the desktop, no selecting them (protect-media.ts blocks right-click and
+   Android's long-press menu). */
+[data-protect-media] :is(img, picture, video, canvas) {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
 /* Charts are touched to inspect them: never select their text, raise the iOS
    callout/loupe, or flash a tap highlight (all Recharts charts). */
 .recharts-wrapper,

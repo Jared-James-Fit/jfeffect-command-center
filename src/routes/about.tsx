@@ -256,11 +256,21 @@ const transformationProof = [
   { name: "Romelyn", result: "Recomp", image: "https://jaredjamesfit.com/assets/client-romelyn-front-C1lSPKXi.png" },
 ];
 
-const multiAngleProof = [
-  ["Jared · Fat Loss", "https://jaredjamesfit.com/assets/leveled-up-12-Dvp868jE.png"],
+/**
+ * The "leveled-up" comparisons carry a caption bar along their bottom: it
+ * starts 87% of the way down the square, and the default 1.18× zoom showed it
+ * down to 92%. These zoom 1.31× around a point 32% down instead, so the top
+ * stays exactly where it was (heads in frame) and the square ends at 84%,
+ * clear of the bar.
+ */
+const CAPTION_BAR_CROP = "origin-[50%_32%] scale-[1.31]";
+const DEFAULT_ANGLE_CROP = "scale-[1.18]";
+
+const multiAngleProof: ReadonlyArray<readonly [label: string, image: string, crop?: string]> = [
+  ["Jared · Fat Loss", "https://jaredjamesfit.com/assets/leveled-up-12-Dvp868jE.png", CAPTION_BAR_CROP],
   ["Jared · Fat Loss Side", "https://jaredjamesfit.com/assets/client-jared-side-BazJEXkY.png"],
   ["Jared · Fat Loss Back", "https://jaredjamesfit.com/assets/client-jared-back-Baz7-tAA.png"],
-  ["Coach Jared · Long-Term Recomp", "https://jaredjamesfit.com/assets/leveled-up-4-DWlPm4Gd.png"],
+  ["Coach Jared · Long-Term Recomp", "https://jaredjamesfit.com/assets/leveled-up-4-DWlPm4Gd.png", CAPTION_BAR_CROP],
   ["Coach Jared · Long-Term Recomp Back", "https://jaredjamesfit.com/assets/client-coach-jared-back-vPzp-iOL.png"],
   ["Tyler · Side", "https://jaredjamesfit.com/assets/client-tyler-side-CwekuRs8.png"],
   ["Tyler · Back", "https://jaredjamesfit.com/assets/client-tyler-back-hN_DvyPt.png"],
@@ -282,7 +292,7 @@ const multiAngleProof = [
   ["Kyrstin · Back", "https://jaredjamesfit.com/assets/client-kyrstin-back-D5IKY3VK.png"],
   ["Romelyn · Side", "https://jaredjamesfit.com/assets/client-romelyn-side-BOQmt44A.png"],
   ["Romelyn · Back", "https://jaredjamesfit.com/assets/client-romelyn-back-CApkI_Jq.png"],
-] as const;
+];
 
 const timeline = [
   { year: "2014", title: "Started training", body: "Started lifting. Everything I coach now started with my own training." },
@@ -339,6 +349,7 @@ function ScrollImage({
       loading={eager ? "eager" : "lazy"}
       decoding="async"
       fetchPriority={eager ? "high" : "auto"}
+      draggable={false}
     />
   );
 }
@@ -555,10 +566,10 @@ function AboutJaredPage() {
           <div className="mt-4 space-y-3">
             <CredentialAccordion title="More transformation angles" summary="Front · side · back progress comparisons">
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-                {multiAngleProof.map(([label, image]) => (
+                {multiAngleProof.map(([label, image, crop]) => (
                   <figure key={label} className="overflow-hidden rounded-xl bg-background ring-1 ring-border/70">
                     <div className="aspect-square overflow-hidden bg-muted">
-                      <ScrollImage src={image} alt={`${label} transformation comparison`} className="h-full w-full scale-[1.18] object-cover object-top" />
+                      <ScrollImage src={image} alt={`${label} transformation comparison`} className={`h-full w-full object-cover object-top ${crop ?? DEFAULT_ANGLE_CROP}`} />
                     </div>
                     <figcaption className="p-3 text-[13px] font-medium">{label}</figcaption>
                   </figure>
