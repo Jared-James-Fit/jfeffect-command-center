@@ -433,7 +433,7 @@ export const relevanceOf = (o: { pillar?: string | null; topic?: string | null }
 export const FILM_LOOK_VERSION = "anime_v2";
 
 export const FILM_LOOK =
-  "JF Effect's illustrated house style: a clean, bright, hand-drawn 2D illustration in the tradition of modern Japanese sports anime, grounded and made for adults. Clean, confident line art with varied line weight; flat cel colour with soft, simple shading; backgrounds drawn with care but kept uncluttered so they support the subject instead of competing with it. The frame is bright and evenly exposed: natural daylight or clean, even indoor light, a neutral white balance (whites read white, steel reads grey, skin reads as skin), soft open shadows that keep their detail, and clear, true colour with no colour grade over it. One small touch of JF Effect red somewhere in the frame. Made for a phone screen: one clear subject that reads at a glance, strong separation between the subject and the background, nothing important near the edges.";
+  "JF Effect's illustrated house style: a clean, bright, hand-drawn 2D illustration in the tradition of modern Japanese sports anime, grounded and made for adults. Clean, confident line art with varied line weight; flat cel colour with soft, simple shading; backgrounds drawn with care but kept uncluttered so they support the subject instead of competing with it. The frame is bright and evenly exposed: natural daylight or clean, even indoor light, a neutral white balance (whites read white, steel reads grey, skin reads as skin), soft open shadows that keep their detail, and clear, true colour with no colour grade over it. One small touch of JF Effect red somewhere in the frame. People are adults (20s to 60s) with realistic adult proportions: a normal head-to-body ratio, adult faces and adult builds, never childlike, chibi or big-headed, from any angle. Made for a phone screen: one clear subject that reads at a glance, strong separation between the subject and the background, nothing important near the edges.";
 
 /** The house look in four treatments, one shared identity (clean line art, bright true colour, no words, a JF red accent). */
 export const DAILY_RENDERINGS: Record<DailyRendering, { name: string; look: string; use: string }> = {
@@ -493,17 +493,61 @@ export const LEGACY_ART_NAMES: Record<string, string> = {
 
 /** Who's in it: real people of every kind, built like who they are (the picture prompt's people line), or nobody. */
 export const DAILY_CASTS: Record<DailyCast, { name: string; look: string }> = {
-  newer_lifter: { name: "Newer lifter", look: "a newer lifter in their first year or two: an ordinary, healthy everyday build with little visible muscle definition, still learning the movement" },
+  newer_lifter: { name: "Newer lifter", look: "an adult newer lifter (20s to 40s) in their first year or two of lifting: an ordinary, healthy everyday build with little visible muscle definition, still learning the movement" },
   everyday: { name: "Everyday member", look: "a recreational lifter who trains around a job and a life: a normal, fit-looking build, the kind of person at any gym" },
-  powerlifter: { name: "Powerlifter", look: "a competitive powerlifter: sturdy and strong with a solid midsection and a broad back, natural and un-shredded (thick and strong, never a bodybuilder)" },
-  physique: { name: "Physique athlete", look: "a natural bodybuilder or physique athlete: lean and athletic with realistic natural muscle, never stage-ready or oversized" },
+  powerlifter: { name: "Powerlifter", look: "a competitive powerlifter, natural and un-shredded: a man sturdy and strong with a solid midsection and a broad back (thick and strong, never a bodybuilder); a woman strong through her hips, glutes and legs with a natural feminine frame and only light tone in her shoulders and arms, never broad or bulky up top" },
+  physique: { name: "Physique athlete", look: "a natural bodybuilder or physique athlete: lean and athletic with realistic natural muscle in balanced proportions, a woman lean and toned with a feminine shape, never stage-ready, bulky or oversized" },
   masters: { name: "Masters lifter", look: "a masters lifter in their 40s to 60s: strong for their age with an ordinary middle-aged body, maybe some grey hair" },
   coach_athlete: { name: "Coach and athlete", look: "a coach (an ordinary build, a team polo or a plain top) with one athlete built like who they are" },
-  crew: { name: "Training group", look: "a small training group of different ages, sizes and genders, each built like who they are" },
+  crew: { name: "Training group", look: "a small training group of different ages, sizes and genders, each built like who they are, the women each a different build (slim, curvy, athletic, soft)" },
   hands: { name: "Hands and detail", look: "only hands or part of a body in frame: the detail is the subject" },
   no_people: { name: "No people", look: "nobody in the frame: the equipment, the setup or the objects tell it" },
 };
 export const DAILY_CAST_KEYS = Object.keys(DAILY_CASTS) as DailyCast[];
+
+/**
+ * How a woman in the picture is built (Nov 20 2026): picked for who she is
+ * (her cast) and turned over day to day, so the women across the feed are
+ * slim, curvy, athletic, soft and strong like real women who train, and
+ * only a physique athlete is visibly muscular. Left alone, an image model
+ * draws a "strong" woman with a man's or a bodybuilder's upper body.
+ */
+export type WomanBuild = "slim" | "curvy" | "athletic" | "soft" | "strong" | "toned";
+export const WOMAN_BUILDS: Record<WomanBuild, string> = {
+  slim: "slim and lightly toned, a slender natural frame",
+  curvy: "curvy, a fuller figure with natural hips and thighs and softly toned arms",
+  athletic: "athletic and fit, light natural tone in her arms and shoulders and strong legs",
+  soft: "an ordinary, soft everyday body that hasn't been training long, no visible muscle definition",
+  strong: "strong and solid through her hips, glutes and legs with a sturdy waist, her shoulders and arms natural with only light tone",
+  toned: "lean and visibly toned with a feminine shape, defined but natural muscle in balanced proportions, never bulky",
+};
+export const WOMAN_BUILD_KEYS = Object.keys(WOMAN_BUILDS) as WomanBuild[];
+/** The builds that fit each cast, the most fitting first. */
+export const CAST_WOMAN_BUILDS: Record<DailyCast, WomanBuild[]> = {
+  newer_lifter: ["soft", "slim", "curvy"],
+  everyday: ["slim", "curvy", "athletic", "soft"],
+  powerlifter: ["strong", "curvy", "athletic"],
+  physique: ["toned", "athletic"],
+  masters: ["soft", "curvy", "slim", "athletic"],
+  coach_athlete: ["athletic", "strong", "curvy", "slim"],
+  crew: ["slim", "curvy", "athletic", "soft"],
+  hands: ["slim", "athletic"],
+  no_people: [],
+};
+
+/** A woman's build for a cast on a day: the cast's builds in turn, so two posts in a row rarely share one. */
+export function womanBuildFor(cast: DailyCast | string | null | undefined, day: string | null | undefined): WomanBuild | null {
+  const builds = cast && cast in CAST_WOMAN_BUILDS ? CAST_WOMAN_BUILDS[cast as DailyCast] : CAST_WOMAN_BUILDS.everyday;
+  if (!builds.length) return null;
+  const n = day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? Math.floor(Date.parse(`${day}T00:00:00Z`) / 86_400_000) : 0;
+  return builds[((n % builds.length) + builds.length) % builds.length];
+}
+
+/** How women and men are drawn in every picture with people in it (the picture prompt and the concept's casting). */
+export const WOMEN_LOOK =
+  "Women look like women who train, the way a good modern sports anime draws its female athletes: feminine faces with soft, natural features (a gentle jaw and brow, natural eyes, never a hard or masculine face), a natural female frame with narrower shoulders than the men, and slim, natural arms and shoulders with at most light tone. Their strength shows in their legs and hips and in how they move, never in upper-body size: no broad or bulky shoulders, no big traps, no defined delts, biceps or back muscles, no visible abs or veins. Only a woman the post is about as a physique athlete is visibly muscular, and even then lean, toned and in balanced feminine proportions, never bulky.";
+export const MEN_LOOK =
+  "Men are athletic and as muscular as who they are calls for (an everyday lifter fit, a powerlifter thick and strong, a physique athlete lean and defined), in natural proportions, never oversized arms or shoulders.";
 
 /** The colours: a different palette post to post, every one bright and true, never a single colour cast. */
 export const DAILY_PALETTES: Record<DailyPalette, { name: string; look: string }> = {
@@ -530,7 +574,7 @@ export const DAILY_KIND_KEYS = Object.keys(DAILY_KINDS) as DailyKind[];
 
 /** What it must never look like: a photo, a render, a dark or orange frame, exaggerated bodies, a childish look, a lifestyle scene. */
 export const FILM_AVOID =
-  "Avoid: an orange, amber, golden, sepia or yellow colour cast over the frame; dark or moody lighting, large black areas, heavy shadows, a spotlight in darkness, hanging lamps over a dim room, bloom, haze, smoke or a dramatic cinematic grade; photorealism or anything that reads as a photograph; 3D render, CGI, Pixar-like or video-game looks; a generic AI-art sheen (over-smoothed skin, everything glowing, random particles, melted details); exaggerated muscles, oversized arms or shoulders, visible vein maps, bodybuilder size on an everyday lifter, or every person in a black t-shirt; chibi, cutesy, moe, kids' cartoon or western-cartoon proportions, giant eyes or exaggerated comedic faces; anyone who looks under 20, school uniforms, fanservice or sexualized poses; a muddy brown or grey palette or washed-out colour; a busy frame where the subject gets lost at phone size; a motivational-poster composition or a character posing for the viewer; lifestyle scenes with no training in them (beaches, brunch, parties, a stroll in the park); equipment where it couldn't be (a rack or barbell in a kitchen or a living room that isn't set up for training); stock-photo staging; brand names, logos, readable text, subtitles, speech bubbles or watermarks.";
+  "Avoid: an orange, amber, golden, sepia or yellow colour cast over the frame; dark or moody lighting, large black areas, heavy shadows, a spotlight in darkness, hanging lamps over a dim room, bloom, haze, smoke or a dramatic cinematic grade; photorealism or anything that reads as a photograph; 3D render, CGI, Pixar-like or video-game looks; a generic AI-art sheen (over-smoothed skin, everything glowing, random particles, melted details); exaggerated muscles, oversized arms or shoulders, visible vein maps, bodybuilder size on an everyday lifter, or every person in a black t-shirt; a woman drawn with a man's frame or a bodybuilder's upper body (broad or bulky shoulders, big traps, defined delts, biceps or back, visible abs) or a hard, masculine face; muscle mapped out muscle by muscle; chibi, cutesy, moe, kids' cartoon or western-cartoon proportions, giant eyes or exaggerated comedic faces; anyone who looks under 20, school uniforms, fanservice or sexualized poses; a muddy brown or grey palette or washed-out colour; a busy frame where the subject gets lost at phone size; a motivational-poster composition or a character posing for the viewer; lifestyle scenes with no training in them (beaches, brunch, parties, a stroll in the park); equipment where it couldn't be (a rack or barbell in a kitchen or a living room that isn't set up for training); stock-photo staging; brand names, logos, readable text, subtitles, speech bubbles or watermarks.";
 
 export const DAILY_STYLES: Record<DailyStyle, { name: string; look: string }> = {
   wide_moment: { name: "Establishing shot", look: "a wide establishing shot of the place, the athlete part of the whole scene, the background doing some of the storytelling but never crowding the subject." },
@@ -960,6 +1004,8 @@ export type DailyConcept = {
   rendering?: DailyRendering;
   /** Who's in it (or nobody), built like who they are. */
   cast?: DailyCast;
+  /** How a woman in it is built (her cast's builds in turn day to day): never a man's or a bodybuilder's upper body. */
+  womanBuild?: WomanBuild | null;
   /** Its colours, a different palette post to post. */
   palette?: DailyPalette;
   /** The post read before the picture is planned: what kind of post, about what, for whom, how best to show it. */
@@ -1085,9 +1131,9 @@ THE PICTURE
 - Start from the angle's own picture brief (given with each angle) and make it specific to the point. For example: fatigue management, an athlete resting between heavy squat sets; deadlift technique, a clean side-on view of the setup; small jumps, a pair of hands sliding small plates on; eating to train, the meal containers by the gym bag. Don't reach for the same props every time: a training log or a phone only when the post is about logging or video.
 - Real places to train, drawn accurately and not always the same kind: a bright club, a commercial gym, a garage, a university room, a performance gym, a community gym, a home setup, an open-air yard, a recovery corner, the meet. Equipment drawn accurately: power racks, monolifts, competition benches, deadlift platforms, calibrated plates (red 25, blue 20, yellow 15, green 10) or bumper plates, belts, knee sleeves, lifting shoes. Equipment and technique correct: one straight barbell, the same plates on both sides with collars, the grip, stance and bar position that lift really uses.
 - Tell it with the camera: an interesting angle and perspective (side-on for a lift, over the shoulder toward the platform, a tight insert on hands, a two-shot of coach and athlete, a still life from above), never a flat, centred, posed shot.
-- The people (when there are any): pick who they are first ("cast"), and their body follows from that. A newer lifter or an everyday member has an ordinary, healthy build; a powerlifter is sturdy and thick through the middle, not shredded; a physique athlete is lean with natural muscle; a masters lifter looks their age. Natural arm and shoulder size, no veins mapped across them. Say their age range, gender, hair, skin tone and training clothes (in colour, never everyone in black), what they're doing and their expression. Across the feed there are as many women as men, every age from 20s to 60s and every body type. Never the same person, cast, place, palette or composition as a recent post.
+- The people (when there are any): pick who they are first ("cast"), and their body follows from that. A newer lifter or an everyday member has an ordinary, healthy build; a man who powerlifts is sturdy and thick through the middle, not shredded, and a woman who powerlifts is strong through her hips and legs with a natural feminine frame; a physique athlete is lean with natural muscle; a masters lifter looks their age. Natural arm and shoulder size, no veins mapped across them. A woman looks like a woman who trains: a feminine face, a natural female frame, slim to lightly toned arms and shoulders, her build in the words WOMEN IN IT gives for her cast; never "sturdy", "thick", "stocky", "broad" or "muscular" for a woman's shoulders, back or arms. Say their age range, gender, hair, skin tone, build and training clothes (in colour, never everyone in black), what they're doing and their expression. Across the feed there are as many women as men, every age from 20s to 60s and every body type. Never the same person, cast, place, palette or composition as a recent post.
 - Mature and grounded, made for adults: never cute, childish or comedic in a cartoon way, never a teenager or a school uniform, never fanservice, never an exaggerated or bodybuilding-show physique, never undressed, measuring their body or on a scale outside a meet weigh-in, never a lifestyle scene with no training in it.
-- No readable words anywhere in the frame (no speech bubbles, captions, labels or signs; a phone or laptop screen is blank or turned away; no brand names). "typography" is always "".
+- No readable words anywhere in the frame (no speech bubbles, captions, labels or signs; a training log's, clipboard's or whiteboard's writing is unreadable scribbles and boxes; a phone or laptop screen is blank or turned away; no brand names). Never plan words into the picture ("the word REST written in"): "typography" is always "".
 
 Answer with JSON only:
 {"topic": "the angle", "mood": "...", "situation": "the moment", "idea": "the point, in one sentence", "read": {"kind": "educational, technical, motivational, conversational or humorous", "discipline": "...", "for": "who it speaks to most", "show": "the best way to show it, in a sentence", "people": "none, hands, one, two or group"}, "rendering": "...", "art": "...", "style": "the shot", "light": "...", "palette": "...", "setting": "the place", "cast": "...", "visual": "...", "typography": "...", "captions": [{"form": "...", "text": "..."}, {"form": "...", "text": "..."}, {"form": "...", "text": "..."}]}`;
@@ -1142,6 +1188,15 @@ export function propRepeat(visual: string, recent: Recent[], day: string, about 
   return again.length ? `the picture leans on ${again.map((p) => p.name).join(" and ")} again (in two of the last four pictures): show the point another way` : null;
 }
 
+/** Today's build for a woman in each cast offered, so the women across the feed vary and none gets a bodybuilder's upper body. */
+export function womenLine(casts: readonly DailyCast[], day: string): string {
+  const each = casts
+    .map((k) => [k, womanBuildFor(k, day)] as const)
+    .filter((x): x is readonly [DailyCast, WomanBuild] => !!x[1])
+    .map(([k, b]) => `${k} = ${WOMAN_BUILDS[b]}`);
+  return `IF A WOMAN IS IN IT (whoever fits the post: a man or a woman, never a woman just because of this line; across the feed men and women about equally), she's built like this for her cast, written in "visual" in these words: ${each.join("; ")}. A training group's women each have a different build (slim, curvy, athletic, soft). ${WOMEN_LOOK}`;
+}
+
 export function conceptPrompt(o: {
   day: string;
   theme: DailyTheme;
@@ -1167,6 +1222,8 @@ export function conceptPrompt(o: {
   noWords?: boolean;
   /** A kept caption from before the categories: its angle (and so its category) is read from its words. */
   classify?: boolean;
+  /** The person the post is about is a woman or a man (a test of how one is drawn); else the writer picks. */
+  lead?: "woman" | "man" | null;
 }): string {
   const t = DAILY_THEMES[o.theme];
   const p = DAILY_PILLARS[o.choices.pillar];
@@ -1189,6 +1246,8 @@ export function conceptPrompt(o: {
     `PALETTE, as "palette" (pick one; these weren't in the last few pictures): ${(o.choices.palettes ?? DAILY_PALETTE_KEYS).map((k) => `${k} = ${DAILY_PALETTES[k].look}`).join("; ")}`,
     settingLine(o.choices.settings ?? DAILY_SETTING_KEYS, o.recent, o.day),
     `WHO'S IN IT, as "cast" (pick who the post is about, the first ones not in the last two pictures; "no_people" or "hands" whenever the read says people aren't needed): ${(o.choices.casts ?? DAILY_CAST_KEYS).map((k) => `${k} = ${DAILY_CASTS[k].look}`).join("; ")}`,
+    o.lead ? `THE PERSON THE POST IS ABOUT IS A ${o.lead.toUpperCase()}: write them as one in "visual".` : null,
+    womenLine(o.choices.casts ?? DAILY_CAST_KEYS, o.day),
     `TREATMENT, as "rendering" (anime key art for most posts; another only when the read calls for it): ${(o.choices.renderings ?? DAILY_RENDERING_KEYS).map((k) => `${k} = ${DAILY_RENDERINGS[k].name}, for ${DAILY_RENDERINGS[k].use}`).join("; ")}`,
     o.art
       ? `DIRECTION, as "art": ${o.art} (${ART_STYLES[o.art].name})`
@@ -1250,18 +1309,19 @@ export function parseRead(v: unknown): DailyRead | undefined {
 export function castFor(cast: unknown, read: DailyRead | undefined, allowed: readonly DailyCast[] = DAILY_CAST_KEYS): DailyCast {
   if (read?.people === "none") return "no_people";
   if (read?.people === "hands") return "hands";
-  const picked = typeof cast === "string" && (DAILY_CAST_KEYS as string[]).includes(cast) ? (cast as DailyCast) : null;
+  // only a cast it was offered (every cast on a real day; one when a test asks for one)
+  const picked = typeof cast === "string" && (allowed as string[]).includes(cast) ? (cast as DailyCast) : null;
   // a picture the read says has people never comes back empty
   if (picked && !(read && (picked === "no_people" || picked === "hands"))) return picked;
-  if (read?.people === "two") return "coach_athlete";
-  if (read?.people === "group") return "crew";
+  if (read?.people === "two" && allowed.includes("coach_athlete")) return "coach_athlete";
+  if (read?.people === "group" && allowed.includes("crew")) return "crew";
   return allowed.find((k) => k !== "no_people" && k !== "hands") ?? "everyday";
 }
 
 /** The concept's JSON (fenced or not), with its choices held to the lists it was given. */
 export function parseConcept(
   text: string,
-  allowed: Omit<Choices, "lights"> & { lights?: DailyLight[]; art?: DailyArt | null; crowd?: DailyCrowd; classify?: boolean },
+  allowed: Omit<Choices, "lights"> & { lights?: DailyLight[]; art?: DailyArt | null; crowd?: DailyCrowd; classify?: boolean; day?: string },
 ): DailyConcept | null {
   const m = /\{[\s\S]*\}/.exec(text ?? "");
   if (!m) return null;
@@ -1301,6 +1361,7 @@ export function parseConcept(
       palette: isKey(DAILY_PALETTE_KEYS, j.palette) ? j.palette : (allowed.palettes?.[0] ?? DAILY_PALETTE_KEYS[0]),
       read: parseRead(j.read),
       cast: castFor(j.cast, parseRead(j.read), allowed.casts ?? DAILY_CAST_KEYS),
+      womanBuild: null,
       visual: str(j.visual, 1400),
       // a frame carries no readable words (an image model mangles them, and a real gym's are brands)
       typography: "",
@@ -1308,6 +1369,8 @@ export function parseConcept(
       draftForms: raw.map((d) => d.form),
       caption: drafts[0] ?? "",
     };
+    // the build the writer was given for a woman in this cast today (WOMEN IN IT), so the picture prompt says it again
+    c.womanBuild = womanBuildFor(c.cast, allowed.day);
     return c.drafts.length && c.visual && c.message ? c : null;
   } catch {
     return null;
@@ -1939,11 +2002,12 @@ const MOOD_LOOK: Record<DailyMood, string> = {
   curious: "engaged, a little 'aha' over the detail",
 };
 
-/** The people line: who they are decides how they're built, never one heavily muscled type. */
-export function peopleLine(cast: DailyCast | string | null | undefined): string {
+/** The people line: who they are decides how they're built, never one heavily muscled type, and a woman always a woman's build. */
+export function peopleLine(cast: DailyCast | string | null | undefined, womanBuild?: WomanBuild | string | null): string {
   if (cast === "no_people") return "No people in the frame: the objects and the place tell it.";
   const who = cast && cast in DAILY_CASTS ? `Who's in it: ${DAILY_CASTS[cast as DailyCast].look}. ` : "";
-  return `${who}People look like real lifters: realistic, natural human proportions that fit who they are, natural arm and shoulder size, no veins mapped across the skin, never exaggerated or bodybuilding-show muscle. Adults drawn with correct joints and proportions, five fingers on each hand, their own faces, hair and skin tones, training clothes in real colours that suit the palette (a plain black t-shirt at most once in a frame, never on the main person), natural expressions, caught mid-moment, never posing for the viewer.`;
+  const build = womanBuild && womanBuild in WOMAN_BUILDS ? `A woman in it is ${WOMAN_BUILDS[womanBuild as WomanBuild]}. ` : "";
+  return `${who}${build}People look like real lifters: realistic, natural human proportions that fit who they are, natural arm and shoulder size, no veins mapped across the skin, never exaggerated or bodybuilding-show muscle. ${WOMEN_LOOK} ${MEN_LOOK} Bodies are drawn the polished anime way: smooth, simple forms and clean cel shading, muscle suggested with a few confident lines, never mapped out muscle by muscle (no striations, no vein maps, no every-muscle outlines). Adults drawn with correct joints and proportions, five fingers on each hand, their own faces, hair and skin tones, training clothes in real colours that suit the palette (a plain black t-shirt at most once in a frame, never on the main person), natural expressions, caught mid-moment, never posing for the viewer.`;
 }
 
 /** The image model's prompt: the house style and its treatment, the direction, the read, the shot, the light, the palette, the place, the moment and who's in it, the words in it (exactly) or none, and what it must never look like. */
@@ -1955,6 +2019,7 @@ export function picturePrompt(
     setting?: DailySetting | string | null;
     rendering?: DailyRendering | string | null;
     cast?: DailyCast | string | null;
+    womanBuild?: WomanBuild | string | null;
     palette?: DailyPalette | string | null;
     read?: DailyRead | null;
   },
@@ -1984,14 +2049,15 @@ export function picturePrompt(
     place ? `The place: ${place.look}.` : null,
     `What happens in the frame: ${c.visual}`,
     `The feeling: ${c.message}${mood ? ` (${mood})` : ""}`,
-    peopleLine(c.cast ?? null),
+    // a concept from before the builds (Nov 20 2026) takes its cast's most fitting one
+    peopleLine(c.cast ?? null, c.womanBuild ?? (c.cast && c.cast in CAST_WOMAN_BUILDS ? (CAST_WOMAN_BUILDS[c.cast as DailyCast][0] ?? null) : null)),
     lifting
-      ? "Equipment and technique are correct: one straight barbell with identical plates on both ends (the same colours in the same order from the collar out, including the far end seen across the frame) and collars on, calibrated plates in their real colours and sizes (red 25, blue 20, yellow 15, green 10), a real power rack, monolift, competition bench or deadlift platform; the grip width, stance and bar position that lift actually uses (the bar on the upper back for a squat, feet planted and shoulder blades set on the bench, the bar over the midfoot on a deadlift); chalk, belts and knee sleeves where they belong."
+      ? "Equipment and technique are correct: one straight barbell with identical plates on both ends (the same colours in the same order from the collar out, including the far end seen across the frame) and collars on, calibrated plates in their real colours and sizes (red 25, blue 20, yellow 15, green 10), a real power rack, monolift, competition bench or deadlift platform; the grip width, stance and bar position that lift actually uses (the bar on the upper back for a squat, feet planted and shoulder blades set on the bench, the bar over the midfoot on a deadlift); chalk, belts and knee sleeves where they belong. Keep the load simple to draw right: one to three plates a side in one or two colours, the same on both ends. A machine is drawn as that real machine and used the way it's used (a hack squat: standing on its angled platform with the shoulders under the pads; a leg press: seated, pushing the sled away)."
       : null,
     o.faith ? "Calm and focused, still a place to train, with no Bible, cross or other religious object or symbol in it." : null,
     words
       ? `The only readable words are exactly these: ${words}. No other text, brand names or logos anywhere.`
-      : "No readable text, speech bubbles, labels, subtitles, brand names, logos or watermarks anywhere: any screen is blank or turned away, plate markings small and unreadable.",
+      : "No readable text, speech bubbles, labels, subtitles, brand names, logos or watermarks anywhere: a training log's, clipboard's or whiteboard's writing is unreadable scribbles and boxes, any screen is blank or turned away, plate markings small and unreadable.",
     "Vertical portrait. One clear focal point that reads at a glance on a phone; keep it well inside the middle 80% of the height and away from every edge (the feed crops the top and bottom).",
     FILM_AVOID,
     o.fix ? `Fix from the last try: ${o.fix}` : null,
@@ -2009,10 +2075,11 @@ export const REVIEW_PROMPT = `You review one Athlete Insight for a powerlifting 
 Answer with JSON only:
 {
  "medium": "what the picture actually is: anime (a hand-drawn 2D Japanese anime frame: line art and cel shading), illustration (another clean drawn 2D style: a flat graphic or editorial illustration, manga ink with screen tones), painting (painterly, watercolour, oil, a generic digital painting), photo (a photograph, or photorealistic enough to pass as one), 3d_render (CGI, Pixar-like, video-game, plastic skin) or other",
- "maturity": "mature (adults in a grounded sports story) or childish (chibi, cutesy, moe, a kids' cartoon, giant eyes, comedic faces, anyone who looks under 20, school uniforms, fanservice)",
+ "maturity": "mature (adults in a grounded sports story) or childish (chibi, cutesy, moe, a kids' cartoon, giant eyes, comedic faces, anyone who looks under 20 or has a child's proportions (a head too big for the body, a small childlike build, from any angle, the back included), school uniforms, fanservice)",
  "description": "two sentences: what the picture shows and how it's drawn",
  "colour": "bright (well exposed and clear: a neutral white balance where whites read white, open shadows with detail, true colour), dark (underexposed or moody: large areas of deep shadow or black, a dim room, a spotlight in darkness), tinted (an orange, amber, golden, sepia, yellow or other single colour cast over the whole frame) or flat (washed-out, muddy, grey, lifeless)",
  "physique": "realistic (every body fits who the person is: ordinary, athletic or strong, natural proportions), exaggerated (oversized arms or shoulders, bodybuilder size on an everyday lifter, veins mapped across the skin, impossible muscle) or none (no people, or only hands)",
+ "women": "natural (every woman in it looks like a woman who trains: a feminine face with soft features, a natural female frame, slim to lightly toned arms and shoulders, her strength in her legs and hips; a lean, toned physique athlete is natural too), overbuilt (any woman drawn with a man's frame or a bodybuilder's upper body: broad or bulky shoulders, big traps, defined delts, biceps or back, visible abs or veins, or a hard, masculine face) or none (no women in it). Look at every woman, the ones in the background included",
  "clarity": "clean (confident linework, faces and hands well drawn, details crisp) or messy (smeared or broken lines, mushy faces or hands, AI artefacts, melted details)",
  "text_seen": "every word you can clearly read in the image, exactly as written, or empty",
  "defects": ["only clear mistakes anyone would notice at a glance, each one named"],
@@ -2023,7 +2090,7 @@ Answer with JSON only:
 
 DEFECTS are objective errors only: wrong or extra fingers or limbs, broken anatomy or impossible joints, warped faces or bodies, melted or impossible objects, equipment or technique that's wrong (a bent or broken barbell, different plates on each side (check both ends: the same colours in the same order, the far end included), a bar passing through a body or floating, a rack or barbell where it couldn't be, a bar with no collars on a heavy lift, an impossible grip, stance or bar position for the lift, a lifter in a position that would injure them), readable brand names, speech bubbles, garbled or misspelled text, a watermark or logo, obvious rendering artefacts, the subject cut off at an edge. Taste is never a defect (the framing, empty space, what could be clearer): score it and put it in fix_image or fix_caption.
 
-SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = a lifter sees their own training in it; original = not a cliché or slogan, and not a generic composition (a character standing centred and posing is 3 or less, and so is another lifter in a black t-shirt writing in a notebook); writing = reads like Jared, a powerlifting coach who knows his stuff, typed it himself (conversational and accurate; casual grammar, lowercase starts and fragments are fine and never lower the score; motivational, scripted, preachy, AI-sounding or professionally polished is 3 or less; a joke that isn't actually funny is 3 or less); audience_fit = right for who it's for; aesthetic = a clean, bright, well-made 2D illustration in the house style: confident line art, clear true colour, a deliberate composition (a photo, a 3D render, a generic AI illustration, a childish cartoon, or a dark, orange or muddy frame is 2 or less); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other (any contradiction, like another place, time or person than the caption says, is 3 or less); engaging = worth a save, a comment or a send to a training partner; uplift = the picture leaves people keen to train or clearer about their training, never gloomy, shaming or heavy; on_topic = the picture is about strength training and what serves it (a lift, a coach and athlete, the platform, recovery or food that's part of training): a lifestyle scene with no training in it (a picnic, a beach, brunch, a party, a stroll in a park) is 2 or less; teaches = the picture shows the specific thing the post is about (the lift, the position, the moment or the objects the caption names), so it reinforces the lesson: when the caption names something (a training log, a deadlift setup, small plates, a meet platform) and it isn't clearly visible, teaches is 2 or less, and a good-looking gym scene that could go with any post is 2 or less; technique = the lift, the equipment and the bodies are drawn right (bar position, grip, stance, depth, a straight bar, matching plates, believable anatomy under load), so a coach would be happy to show it to an athlete: anything a coach would correct is 3 or less (with no lift in the picture, judge whatever equipment and bodies are there); readable = at the size of a phone screen the subject reads at a glance: one clear focal point, strong separation from the background, nothing busy competing with it (a cluttered frame or a subject lost in the background is 3 or less).`;
+SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = a lifter sees their own training in it; original = not a cliché or slogan, and not a generic composition (a character standing centred and posing is 3 or less, and so is another lifter in a black t-shirt writing in a notebook); writing = reads like Jared, a powerlifting coach who knows his stuff, typed it himself (conversational and accurate; casual grammar, lowercase starts and fragments are fine and never lower the score; motivational, scripted, preachy, AI-sounding or professionally polished is 3 or less; a joke that isn't actually funny is 3 or less); audience_fit = right for who it's for; aesthetic = a clean, bright, well-made 2D illustration in the house style: confident line art, clear true colour, a deliberate composition (a photo, a 3D render, a generic AI illustration, a childish cartoon, or a dark, orange or muddy frame is 2 or less); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other (any contradiction, like another place, time or person than the caption says, is 3 or less); engaging = worth a save, a comment or a send to a training partner; uplift = the picture leaves people keen to train or clearer about their training, never gloomy, shaming or heavy; on_topic = the picture is about strength training and what serves it (a lift, a coach and athlete, the platform, recovery or food that's part of training): a lifestyle scene with no training in it (a picnic, a beach, brunch, a party, a stroll in a park) is 2 or less; teaches = the picture shows the specific thing the post is about (the lift, the position, the moment or the objects the caption names), so it reinforces the lesson: when the caption names something (a training log, a deadlift setup, small plates, a meet platform) and it isn't clearly visible, teaches is 2 or less, and a good-looking gym scene that could go with any post is 2 or less; technique = the lift, the equipment and the bodies are drawn right (bar position, grip, stance, depth, a straight bar, matching plates, believable anatomy under load, a machine that is the real machine the brief names and used the way it's used), so a coach would be happy to show it to an athlete: anything a coach would correct is 3 or less (with no lift in the picture, judge whatever equipment and bodies are there); readable = at the size of a phone screen the subject reads at a glance: one clear focal point, strong separation from the background, nothing busy competing with it (a cluttered frame or a subject lost in the background is 3 or less).`;
 
 export type Review = {
   /** What it actually is: anime passes, and a clean drawn illustration when that treatment was asked for. */
@@ -2034,6 +2101,8 @@ export type Review = {
   colour: string;
   /** Realistic or none pass (never exaggerated muscle). */
   physique: string;
+  /** Natural, none or unchecked (a review from before Nov 20 2026) pass; overbuilt (a woman with a man's or a bodybuilder's upper body) fails. */
+  women: string;
   /** Only clean passes. */
   clarity: string;
   description: string;
@@ -2054,6 +2123,7 @@ export function reviewPrompt(o: {
     mood?: DailyMood | string | null;
     rendering?: DailyRendering | string | null;
     cast?: DailyCast | string | null;
+    womanBuild?: WomanBuild | string | null;
     palette?: DailyPalette | string | null;
     read?: DailyRead | null;
   };
@@ -2066,6 +2136,7 @@ export function reviewPrompt(o: {
   const rendering = DAILY_RENDERINGS[(o.concept.rendering && o.concept.rendering in DAILY_RENDERINGS ? o.concept.rendering : "anime") as DailyRendering];
   const cast = o.concept.cast && o.concept.cast in DAILY_CASTS ? DAILY_CASTS[o.concept.cast as DailyCast] : null;
   const palette = o.concept.palette && o.concept.palette in DAILY_PALETTES ? DAILY_PALETTES[o.concept.palette as DailyPalette] : null;
+  const womanBuild = o.concept.cast !== "no_people" && o.concept.womanBuild && o.concept.womanBuild in WOMAN_BUILDS ? WOMAN_BUILDS[o.concept.womanBuild as WomanBuild] : null;
   const read = o.concept.read ?? null;
   return [
     o.references
@@ -2077,13 +2148,16 @@ export function reviewPrompt(o: {
     `THE IDEA: ${o.concept.message}`,
     o.concept.format && o.concept.format in DAILY_FORMATS ? `THE CAPTION'S FORM: ${DAILY_FORMATS[o.concept.format as DailyFormat].name} (${DAILY_FORMATS[o.concept.format as DailyFormat].guide})` : null,
     `THE SITUATION: ${o.concept.situation}`,
-    `THE PICTURE WAS MEANT TO BE: JF Effect's bright 2D house style as ${rendering.name.toLowerCase()} (never a photo, a 3D render, a generic AI illustration, anything childish, or a dark or orange frame)${art ? `, ${art.name.toLowerCase()}` : ""}. ${DAILY_STYLES[o.concept.style as DailyStyle]?.look ?? ""}${o.concept.setting && o.concept.setting in DAILY_SETTINGS ? ` In ${DAILY_SETTINGS[o.concept.setting as DailySetting].look}.` : ""}${cast ? ` Who's in it: ${cast.look}.` : ""}${palette ? ` Colours: ${palette.look}.` : ""} ${o.concept.visual}`,
+    `THE PICTURE WAS MEANT TO BE: JF Effect's bright 2D house style as ${rendering.name.toLowerCase()} (never a photo, a 3D render, a generic AI illustration, anything childish, or a dark or orange frame)${art ? `, ${art.name.toLowerCase()}` : ""}. ${DAILY_STYLES[o.concept.style as DailyStyle]?.look ?? ""}${o.concept.setting && o.concept.setting in DAILY_SETTINGS ? ` In ${DAILY_SETTINGS[o.concept.setting as DailySetting].look}.` : ""}${cast ? ` Who's in it: ${cast.look}.` : ""}${womanBuild ? ` A woman in it is meant to be ${womanBuild}.` : ""}${palette ? ` Colours: ${palette.look}.` : ""} ${o.concept.visual}`,
     o.concept.typography ? `WORDS MEANT TO BE IN THE PICTURE: ${o.concept.typography}` : "THE PICTURE WAS MEANT TO HAVE NO WORDS IN IT.",
     `THE CAPTION:\n${o.caption}`,
   ]
     .filter(Boolean)
     .join("\n\n");
 }
+
+/** What a reviewer writes when it read no words at all. */
+const NO_TEXT = /^["'(]*(empty|none|nothing|no text|no words|no readable (text|words)|n\/?a|-+)["').]*$/i;
 
 export function parseReview(text: string): Review | null {
   const m = /\{[\s\S]*\}/.exec(text ?? "");
@@ -2101,6 +2175,15 @@ export function parseReview(text: string): Review | null {
     // a review from before the maturity check reads as mature (it was judged on other rules), and one from before the physique check as realistic
     const maturity = j.maturity == null ? "mature" : word(j.maturity).split("_")[0];
     const physique = j.physique == null ? "realistic" : word(j.physique).split("_")[0];
+    // and one from before the women's check as unchecked
+    const womenWord = j.women == null ? "unchecked" : word(j.women).split("_")[0];
+    const women = /^(natural|feminine|realistic|fine|good|believable)$/.test(womenWord)
+      ? "natural"
+      : /^(none|no|n|na)$/.test(womenWord)
+        ? "none"
+        : /^(overbuilt|masculine|exaggerated|bulky|muscular|overmuscled|manly)$/.test(womenWord)
+          ? "overbuilt"
+          : womenWord;
     return {
       medium: /^(photo|photograph|photographic|photorealistic|photo_?realistic|real_photo|realistic_photo)$/.test(medium)
         ? "photo"
@@ -2114,9 +2197,11 @@ export function parseReview(text: string): Review | null {
       maturity,
       colour,
       physique: /^(realistic|natural|believable)$/.test(physique) ? "realistic" : /^(none|no|hands)$/.test(physique) ? "none" : physique,
+      women,
       clarity,
       description: typeof j.description === "string" ? j.description.trim().slice(0, 600) : "",
-      text_seen: typeof j.text_seen === "string" ? j.text_seen.trim() : "",
+      // "empty", "none" and the like mean no text (the prompt says "or empty", and a model sometimes writes the word)
+      text_seen: typeof j.text_seen === "string" && !NO_TEXT.test(j.text_seen.trim()) ? j.text_seen.trim() : "",
       defects: Array.isArray(j.defects) ? j.defects.filter((d: unknown) => typeof d === "string" && d.trim()).map((d: string) => d.trim()) : [],
       scores: {
         relatable: n(s.relatable),
@@ -2166,8 +2251,9 @@ export function reviewVerdict(r: Review, typography: string, scene = "", o: { re
   const caption: string[] = [];
   const want = letters(typography);
   const seen = letters(r.text_seen);
-  // words the planned scene itself names (an alarm's "5:30 AM", a note that says "tomorrow") aren't stray text
-  const planned = new Set([...letters(typography).split(" "), ...letters(scene).split(" ")].filter(Boolean));
+  // words the planned scene itself names (an alarm's "5:30 AM", a note that says "tomorrow") aren't stray text, but only in a
+  // picture meant to carry words: with none planned, a word the scene happens to name ("REST" in a log) is still a word
+  const planned = new Set([...letters(typography).split(" "), ...(want ? letters(scene).split(" ") : [])].filter(Boolean));
   // a phone's clock, a date or a plate's weight ("11:23", "6 am", "20 kg") can't be misspelled and tells no other story
   const stray = seen
     .replace(want, " ")
@@ -2184,6 +2270,8 @@ export function reviewVerdict(r: Review, typography: string, scene = "", o: { re
   if (r.colour !== "bright") image.push(`its colour reads as ${r.colour || "unclear"}, not bright with a neutral white balance`);
   // real bodies, never exaggerated muscle
   if (r.physique === "exaggerated") image.push("the physiques are exaggerated, not realistic for who they are");
+  // a woman who trains, never a man's frame or a bodybuilder's upper body
+  if (r.women === "overbuilt") image.push("a woman is drawn with a man's frame or a bodybuilder's upper body, not a natural feminine build");
   if (r.clarity !== "clean") image.push(`its linework reads as ${r.clarity || "unclear"}, not clean`);
   for (const d of r.defects) image.push(d);
   for (const k of Object.keys(REVIEW_BARS) as (keyof Review["scores"])[]) {
@@ -2241,7 +2329,7 @@ export type QualityCheck = { key: string; label: string; pass: boolean | null };
  */
 export function qualityChecks(
   editor: { scores?: Partial<Record<string, number>> | null } | null | undefined,
-  review: { scores?: Partial<Record<string, number>> | null } | null | undefined,
+  review: { scores?: Partial<Record<string, number>> | null; physique?: string | null; women?: string | null } | null | undefined,
 ): QualityCheck[] {
   const e = editor?.scores ?? null;
   const r = review?.scores ?? null;
@@ -2256,6 +2344,12 @@ export function qualityChecks(
     { key: "fresh", label: "Different from recent posts", pass: at(e, "fresh", 3) },
     { key: "worth", label: "Worth saving or discussing", pass: all(at(e, "worth_it", 4), at(r, "engaging", 3)) },
     { key: "phone", label: "Bright and clear on a phone", pass: all(at(r, "readable", 4), at(r, "aesthetic", 4)) },
+    // real bodies: nobody oversized, and every woman a woman's build (a review from before the women's check: not checked)
+    {
+      key: "bodies",
+      label: "Natural, believable bodies",
+      pass: review?.women && review.women !== "unchecked" ? review.physique !== "exaggerated" && review.women !== "overbuilt" : null,
+    },
   ];
 }
 

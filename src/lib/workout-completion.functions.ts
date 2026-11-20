@@ -17,6 +17,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { cleanReports, legacyColumns, painReportsSchema } from "@/lib/pain/report";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   summarizeCompleteness,
@@ -810,6 +811,9 @@ const ReviewInput = z.intersection(
       .nullable()
       .optional(),
     sleepNotes: z.string().nullable().optional(),
+    // Each place that hurt (src/lib/pain/report.ts). When sent, pain_area and
+    // pain_level are filled from them; an older app sends only pain_area.
+    painReports: painReportsSchema.nullable().optional(),
     // 2 = quick check-out with a real self-reported session RPE (see
     // src/lib/workout-review.ts). Absent on legacy clients.
     reviewVersion: z.number().int().min(1).max(9).nullable().optional(),
@@ -911,6 +915,23 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
       if (!completion?.id) throw new Error("Could not prepare workout completion for review");
 
       const completionId = completion.id;
+      // the places that hurt: the review's pain_area / pain_level come from them
+      const painReports = data.pain ? cleanReports(data.painReports ?? []) : [];
+      if (painReports.length) {
+        const cols = legacyColumns(painReports);
+        data.painArea = cols.painArea;
+        data.painLevel = cols.painLevel;
+      }
+      // pain_reports follows the review: what it sends now (none from an older
+      // app, whose pain_area is then read as stored), nothing once pain is off
+      const savePainReports = async (feedbackId: string) => {
+        const { error: painError } = await writer.rpc("pain_reports_save" as any, {
+          _feedback_id: feedbackId,
+          _checkin_id: null,
+          _reports: painReports,
+        } as any);
+        if (painError) throw painError;
+      };
       const { data: existing } = await writer
         .from("pl_workout_feedback")
         .select("id, review_edit_count, review_submitted_at")
@@ -950,6 +971,7 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
           .select("id, coach_message_id" as "id")
           .single();
         if (error) throw error;
+        await savePainReports(row.id);
         // a note or pain went to the coach in Messages (DB trigger): the app pushes it
         return { id: row.id, edited: true, coachMessageId: ((row as any).coach_message_id as string | null) ?? null };
       }
@@ -964,6 +986,7 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
         .select("id, coach_message_id" as "id")
         .single();
       if (error) throw error;
+      await savePainReports(row.id);
       return { id: row.id, edited: false, coachMessageId: ((row as any).coach_message_id as string | null) ?? null };
     }
 

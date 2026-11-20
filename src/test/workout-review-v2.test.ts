@@ -78,6 +78,9 @@ describe("quick check-out (review v2)", () => {
     expect(checkoutCta({ ...base, effort: null }).enabled).toBe(false);
     expect(checkoutCta({ ...base, pain: true }).enabled).toBe(false);
     expect(checkoutCta({ ...base, isEdit: true }).label).toBe("Save changes");
+    // the body map: every place needs a how bad, and "somewhere else" needs words
+    expect(checkoutCta({ ...base, pain: true, painArea: "Knee (R)", painUnrated: true })).toEqual({ label: "Pick how bad it is", enabled: false });
+    expect(checkoutCta({ ...base, pain: true, painArea: "Other", painUnnamed: true })).toEqual({ label: "Say where it hurts", enabled: false });
     const editor = readFileSync("src/components/workout/shared/workout-review-editor.tsx", "utf8");
     expect(editor).toContain(
       "useState<boolean | null>(initial?.submittedAt ? !!initial.pain : null)",
@@ -121,7 +124,7 @@ describe("load suggestions in the logger", () => {
   it("builds a live model per exercise (its sets, then the lift's other cards) and shows the card", () => {
     expect(wdv).toContain("history: loadHistory, today, unit: activeUnit, readiness, warmups: warmupsList, bodyweightKg,");
     expect(wdv).toContain("dayFactor: dayRead?.factor ?? null, carryToday,");
-    expect(wdv).toContain("<LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} picks={loadPicks}");
+    expect(wdv).toContain("<LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmupReads={warmupTunes} fromName={dayRead?.fromName ?? null} picks={loadPicks}");
     expect(wdv).not.toContain("suggested={!readonly && !isConfirmed && isNextSet");
   });
   it("never competes with a coach's fixed load, top-set back-off or % of a max", () => {

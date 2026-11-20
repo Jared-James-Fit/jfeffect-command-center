@@ -4,7 +4,8 @@ import { cn } from "@/lib/utils";
 import { FLICK_PX_PER_MS, NO_SIDE_SWIPE, SWIPE_PAGE_EVENT, flickSpeed, focusAxis } from "@/components/workout-day/workout-story";
 
 /**
- * iOS-style swipe-to-reveal for workout exercise cards.
+ * iOS-style swipe-to-reveal for workout exercise cards, and (variant "row")
+ * for the set and warm-up rows inside them.
  *
  *  - Touch slop: nothing moves until the finger travels SLOP px.
  *  - Direction lock: the gesture becomes a swipe only if it is clearly
@@ -15,7 +16,9 @@ import { FLICK_PX_PER_MS, NO_SIDE_SWIPE, SWIPE_PAGE_EVENT, flickSpeed, focusAxis
  *    or closed. It never stays half-open and never deletes on its own —
  *    the Delete button must still be tapped.
  *  - One open card at a time; tapping elsewhere or scrolling closes it.
- *  - Gestures that start on inputs or [data-no-swipe] controls are ignored.
+ *  - Gestures that start on inputs or [data-no-swipe] controls are ignored,
+ *    and so are ones that start inside another swipe (a set row's swipe in a
+ *    card is the row's, never the card's).
  *  - In Focus (one exercise per screen, a list marked data-swipe-pager)
  *    swiping also moves between exercises, so the card takes only a swipe
  *    left (pagerGesture), keeps Delete hidden while the finger moves fast,
@@ -79,9 +82,12 @@ export function releaseOpen(offset: number, velocity: number): boolean {
   return false;
 }
 
-function ignoreTarget(target: EventTarget | null): boolean {
+function ignoreTarget(target: EventTarget | null, root: HTMLElement | null): boolean {
   const el = target as HTMLElement | null;
-  return !!el?.closest?.(NO_SIDE_SWIPE);
+  if (el?.closest?.(NO_SIDE_SWIPE)) return true;
+  // a swipe nested in this one (a set row in its card) has the gesture
+  const owner = el?.closest?.("[data-swipe-root]");
+  return !!owner && owner !== root;
 }
 
 export function SwipeToReveal({
@@ -89,12 +95,21 @@ export function SwipeToReveal({
   actionLabel,
   onAction,
   children,
+  variant = "card",
+  actionText = "Delete",
+  tone = "destructive",
 }: {
   enabled: boolean;
   /** Accessible label, e.g. "Delete Lateral Raise from this workout". */
   actionLabel: string;
   onAction: () => void;
   children: React.ReactNode;
+  /** "card": an exercise card (rounded, a big Delete). "row": a set or warm-up row (flat, flush, a small word). */
+  variant?: "card" | "row";
+  /** The revealed action's word. */
+  actionText?: string;
+  /** Red only for taking something away; "neutral" for an action that keeps it (Skip). */
+  tone?: "destructive" | "neutral";
 }) {
   const id = useId();
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -141,7 +156,7 @@ export function SwipeToReveal({
   if (!enabled) return <>{children}</>;
 
   const begin = (x: number, y: number, target: EventTarget | null, pointerId: number | null) => {
-    if (ignoreTarget(target)) {
+    if (ignoreTarget(target, rootRef.current)) {
       g.current = null;
       if (offset !== 0) close(); // interacting with the card's inputs closes it
       return;
@@ -199,29 +214,55 @@ export function SwipeToReveal({
   };
 
   const reveal = Math.min(1, -offset / SWIPE_ACTION_WIDTH);
+  const row = variant === "row";
 
   return (
-    <div ref={rootRef} className="relative overflow-hidden rounded-[1.35rem]" data-swipe-open={open ? "true" : undefined}>
+    <div
+      ref={rootRef}
+      // a row doesn't clip (a cell's message can hang below it): the set table clips sideways
+      className={cn("relative", !row && "overflow-hidden rounded-[1.35rem]")}
+      data-swipe-root
+      data-swipe-variant={variant}
+      data-swipe-open={open ? "true" : undefined}
+    >
       <div
         className="absolute inset-y-0 right-0 flex items-center justify-center transition-opacity duration-150"
         style={{ width: SWIPE_ACTION_WIDTH, opacity: quick ? 0 : reveal, pointerEvents: open ? "auto" : "none" }}
         aria-hidden={!open}
       >
-        <button
-          type="button"
-          tabIndex={open ? 0 : -1}
-          className="m-1.5 flex h-[calc(100%-0.75rem)] max-h-28 w-[calc(100%-0.75rem)] flex-col items-center justify-center gap-1 rounded-2xl bg-destructive text-xs font-bold text-destructive-foreground shadow-sm active:scale-95"
-          aria-label={actionLabel}
-          onClick={() => { setOffset(0); onAction(); }}
-        >
-          <Trash2 className="h-5 w-5" />
-          Delete
-        </button>
+        {row ? (
+          // flush with the row, one small word: present only when swiped to
+          <button
+            type="button"
+            tabIndex={open ? 0 : -1}
+            data-swipe-action={actionText.toLowerCase()}
+            className={cn(
+              "flex h-full w-full items-center justify-center text-[13px] font-semibold active:opacity-80",
+              tone === "destructive" ? "bg-destructive text-destructive-foreground" : "bg-secondary text-foreground",
+            )}
+            aria-label={actionLabel}
+            onClick={() => { setOffset(0); onAction(); }}
+          >
+            {actionText}
+          </button>
+        ) : (
+          <button
+            type="button"
+            tabIndex={open ? 0 : -1}
+            className="m-1.5 flex h-[calc(100%-0.75rem)] max-h-28 w-[calc(100%-0.75rem)] flex-col items-center justify-center gap-1 rounded-2xl bg-destructive text-xs font-bold text-destructive-foreground shadow-sm active:scale-95"
+            aria-label={actionLabel}
+            onClick={() => { setOffset(0); onAction(); }}
+          >
+            <Trash2 className="h-5 w-5" />
+            {actionText}
+          </button>
+        )}
       </div>
       <div
         data-swipe-content
-        className={cn("relative bg-background touch-pan-y", !dragging && "transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]")}
-        style={{ transform: `translate3d(${offset}px,0,0)` }}
+        className={cn("relative bg-background touch-pan-y", row && "bg-builder-inset", !dragging && "transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]")}
+        // at rest no transform at all (a transform would trap anything fixed inside it)
+        style={{ transform: offset === 0 && !dragging ? undefined : `translate3d(${offset}px,0,0)` }}
         onTouchStart={(e) => begin(e.touches[0].clientX, e.touches[0].clientY, e.target, null)}
         onTouchMove={(e) => move(e.touches[0].clientX, e.touches[0].clientY)}
         onTouchEnd={end}

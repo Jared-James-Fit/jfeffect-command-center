@@ -89,7 +89,14 @@ export type HealthEntry = {
   fact?: { kind: FactKind; key: string };
 };
 
-export type PainArea = { area: string; count: number; last: string; worst: number | null };
+export type PainArea = {
+  area: string;
+  count: number;
+  last: string;
+  worst: number | null;
+  /** From the pain history (pain/history.ts): "5× in 4 weeks · worse · Competition Bench 2×". */
+  summary?: string;
+};
 
 export type HealthInput = {
   items: HealthItem[];
@@ -103,6 +110,8 @@ export type HealthInput = {
   latest?: { at: string; answers: QA[] } | null;
   /** Check-outs that reported pain. */
   pain?: Array<{ date: string | null; area: string | null; level: number | null }>;
+  /** The pain history's live places, when it could be read (replaces `pain`). */
+  painAreas?: PainArea[] | null;
   /** YYYY-MM-DD */
   today: string;
 };
@@ -277,7 +286,7 @@ export function buildHealthProfile(input: HealthInput): HealthProfile {
       byArea.set(area, a);
     }
   }
-  const pain = [...byArea.values()].sort((a, b) => b.count - a.count || b.last.localeCompare(a.last));
+  const pain = input.painAreas ?? [...byArea.values()].sort((a, b) => b.count - a.count || b.last.localeCompare(a.last));
 
   // The budget: the coach's setting, else what they answered last, else the essentials.
   const budgetAnswer = latest ? clean(answerFor(latest.answers, "spend", "supplements")) : "";
@@ -329,7 +338,11 @@ export function healthProfileForAi(p: HealthProfile, audience: "nutrition" | "tr
   const list = (xs: HealthEntry[]) => xs.map((e) => entryLine(e)).join("; ");
   if (p.injuries.length) lines.push(`- Injuries: ${list(p.injuries)}`);
   if (p.pain.length)
-    lines.push(`- Pain reported after workouts, last ${PAIN_WEEKS} weeks: ${p.pain.map((a) => `${a.area} ${a.count}× (last ${shortDate(a.last)}${a.worst != null ? `, worst ${a.worst}/10` : ""})`).join("; ")}`);
+    lines.push(
+      p.pain.some((a) => a.summary)
+        ? `- Pain they reported, last ${PAIN_WEEKS} weeks (their reports, not a diagnosis; train around it, and anything persistent or worse is the coach's call): ${p.pain.map((a) => `${a.area}: ${a.summary ?? `${a.count}×`}`).join("; ")}`
+        : `- Pain reported after workouts, last ${PAIN_WEEKS} weeks: ${p.pain.map((a) => `${a.area} ${a.count}× (last ${shortDate(a.last)}${a.worst != null ? `, worst ${a.worst}/10` : ""})`).join("; ")}`,
+    );
   if (p.conditions.length) lines.push(`- Conditions: ${list(p.conditions)}`);
   if (p.medications.length) lines.push(`- Medications: ${list(p.medications)}`);
   if (audience === "nutrition") {

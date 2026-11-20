@@ -55,10 +55,11 @@ describe("phone-first logger card", () => {
     expect(logger).not.toContain("Fill All Sets (enter Set 1 weight first)");
     expect(logger).toContain("if (!needsFill) return null;");
   });
-  it("never shows a second warm-up prompt above the table (the W row owns it)", () => {
+  it("never prompts a warm-up: Suggested waits for the first set, the ⓘ only mentions + Warm-up", () => {
     const card = readFileSync("src/components/workout-day/load-suggestion-card.tsx", "utf8");
-    // it points at the W row (Suggested says "After your warm-up") instead of a second prompt
-    expect(card).toContain('"After your warm-up"');
-    expect(card).not.toContain("Log your last warm-up for a first suggestion");
+    expect(card).not.toContain('"After your warm-up"');
+    expect(card).not.toContain("Work up to about");
+    expect(card).not.toContain("Log your last warm-up");
+    expect(card).toContain("A warm-up logged with + Warm-up can set it sooner.");
   });
 });

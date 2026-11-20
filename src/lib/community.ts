@@ -1924,12 +1924,29 @@ export function isPulsePost(p: { auto?: boolean; stats?: unknown }): boolean {
 }
 
 /**
- * Whether a post belongs in the feed: not a Pulse (that's the athlete's
- * story) and not a story someone posted (STORY on the camera: the rail only,
- * for 24 hours, like Instagram's).
+ * A workout post that is only its generated card: a session that posted
+ * itself (a Pulse) or one shared with no photo, clip or words of its own.
+ * Crew is what people post, never an activity log, so none shows in Crew,
+ * Following or on a profile (Nov 20 2026): the server archived the old ones
+ * (community_is_workout_card, the same rule) and refuses a new one
+ * (community_save_post); this keeps a copy a phone saved, or one an older
+ * app made, off the screen too. A lock in and a story aren't workout cards.
  */
-export function inFeed(p: { auto?: boolean; stats?: unknown; story?: boolean }): boolean {
-  return !isPulsePost(p) && !p.story;
+export function isWorkoutCard(
+  p: Partial<Pick<CommunityPost, "kind" | "locked_in_at" | "media_path" | "extra_media" | "caption" | "gif_url" | "audio" | "auto" | "story">>,
+): boolean {
+  if (p.kind !== "workout" || p.locked_in_at || p.story) return false;
+  if (p.auto) return true;
+  return !p.media_path && !(p.extra_media?.length) && !(p.caption ?? "").trim() && !p.gif_url && !p.audio;
+}
+
+/**
+ * Whether a post belongs in the feed: not a Pulse (that's the athlete's
+ * story), not a workout's bare card (isWorkoutCard) and not a story someone
+ * posted (STORY on the camera: the rail only, for 24 hours, like Instagram's).
+ */
+export function inFeed(p: Parameters<typeof isWorkoutCard>[0] & { stats?: unknown }): boolean {
+  return !isPulsePost(p) && !p.story && !isWorkoutCard(p);
 }
 
 /** A moment worth celebrating, not a routine session: a PR, a monthly milestone, a 3rd+ session of the week. */

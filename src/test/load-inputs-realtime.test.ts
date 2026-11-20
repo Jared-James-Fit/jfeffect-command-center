@@ -25,7 +25,8 @@ describe("optimistic set results (instant suggestion updates)", () => {
   });
   it("is wired before the write, with a rollback on failure", () => {
     const src = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
-    const patchAt = src.indexOf("applyOptimisticSetResult(old, payload, existing?.id ?? null)");
+    // the patch is the payload (plus a typed velocity's source, so a video's mark comes off at once)
+    const patchAt = src.indexOf("applyOptimisticSetResult(old, cachePatch, existing?.id ?? null)");
     const writeAt = src.indexOf("adapter.upsertPlRowResultRaw(payload, existing.id)");
     expect(patchAt).toBeGreaterThan(0);
     expect(patchAt).toBeLessThan(writeAt);

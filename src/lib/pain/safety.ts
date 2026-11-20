@@ -1,0 +1,69 @@
+/**
+ * When pain needs more than a coach: the warning signs, worded once (pure,
+ * tested). Nothing here diagnoses. It says when a report is worth a
+ * professional's look, and which signs mean get help now.
+ *
+ * The athlete sees the urgent signs in the review only when what they picked
+ * calls for it (a severe place, numbness or tingling, a pop, swelling): a
+ * static safety notice, never coaching advice. Everything else reaches them
+ * only through a message the coach writes or approves.
+ */
+import type { PainEntry } from "@/lib/pain/history";
+import type { Feel, Severity, Trigger } from "@/lib/pain/report";
+import { areaLabel, type PainSide } from "@/lib/pain/regions";
+
+/** Get help now: the athlete's notice and the coach's sheet say the same. */
+export const URGENT_SIGNS = [
+  "chest pain, or pain with shortness of breath",
+  "numbness in the groin or inner thighs, or new trouble controlling bladder or bowels",
+  "sudden weakness in an arm or leg",
+  "a joint that looks out of place, or a limb you can't put weight on",
+  "severe pain after a fall or a hard hit",
+] as const;
+
+export type SafetyPick = { region: string; side: PainSide | null; severity: Severity | null; feel?: Feel[]; trigger?: Trigger | null };
+
+/** The review shows the notice when any place calls for it. */
+export function needsSafetyNotice(picks: SafetyPick[]): boolean {
+  return picks.some((p) => p.severity === "severe" || (p.feel ?? []).some((f) => f === "numb" || f === "pop" || f === "swollen") || (p.region === "chest" && (p.trigger === "daily" || p.trigger === "unsure")));
+}
+
+/** What the athlete reads in the review (static, the same for everyone). */
+export const CLIENT_SAFETY_NOTICE = {
+  title: "Get it checked",
+  body: "Pain like this is worth a physio or doctor's look before you train it hard again. Your coach will see this.",
+  urgentLead: "Get medical help right away if there's",
+};
+
+export type RedFlag = { key: string; area: string; date: string; text: string; urgent: boolean };
+
+/**
+ * The warning signs in recent reports, worded for the coach. `urgent` = ask
+ * about the urgent signs today; the rest = get it assessed.
+ */
+export function redFlags(entries: PainEntry[]): RedFlag[] {
+  const out: RedFlag[] = [];
+  const seen = new Set<string>();
+  const add = (e: PainEntry, key: string, text: string, urgent = false) => {
+    const id = `${e.region}:${key}`;
+    if (seen.has(id)) return;
+    seen.add(id);
+    out.push({ key, area: areaLabel(e.region, e.side), date: e.date, text, urgent });
+  };
+  for (const e of [...entries].sort((a, b) => b.at.localeCompare(a.at))) {
+    if (e.feel.includes("numb")) {
+      if (e.region === "low_back" || e.region === "glute")
+        add(e, "nerve_back", "Numbness or tingling with back pain: ask about numbness in the groin and bladder or bowel changes today (that's urgent), otherwise get it assessed.", true);
+      else if (e.region === "neck" || e.region === "upper_back")
+        add(e, "nerve_neck", "Numbness or tingling with neck pain: ask whether it runs down the arm or comes with weakness, and get it assessed.");
+      else add(e, "nerve", "Numbness or tingling: nerve involvement is possible, worth an assessment rather than training through it.");
+    }
+    if (e.feel.includes("pop") && (e.severity === "severe" || e.feel.includes("swollen") || e.impact === "stopped"))
+      add(e, "pop", "A pop with swelling, severe pain or a stopped session: get it assessed before loading it again.");
+    else if (e.feel.includes("swollen") && e.severity === "severe")
+      add(e, "swollen", "Severe and swollen: get it assessed before loading it again.");
+    if (e.region === "chest" && (e.trigger === "daily" || e.trigger === "unsure") && (e.severity === "moderate" || e.severity === "severe"))
+      add(e, "chest", "Chest pain that isn't clearly from a lift: ask about shortness of breath, arm or jaw pain, and send them for medical help if there's any doubt.", true);
+  }
+  return out;
+}

@@ -84,7 +84,7 @@ import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft
 import { ChatVideoTile } from "@/components/chat-video-tile";
 import { LiftAnalysisEntry } from "@/components/lift-analysis/lift-analysis-entry";
 import { ReplyThumb } from "@/components/messages/reply-thumb";
-import { COMPOSER_INSERT_EVENT, type ComposerInsertDetail } from "@/lib/composer-insert";
+import { COMPOSER_INSERT_EVENT, takeQueuedComposerInsert, type ComposerInsertDetail } from "@/lib/composer-insert";
 import {
   FormHistoryGroup,
   FormHistoryRow,
@@ -1690,6 +1690,12 @@ export function MessageThread({
       window.setTimeout(() => focusComposerAtEnd(composerRef.current), 350);
     };
     window.addEventListener(COMPOSER_INSERT_EVENT, onInsert);
+    // a reply drafted elsewhere (the pain sheet on Home) waiting for this chat
+    const queued = role === "admin" ? takeQueuedComposerInsert(clientId) : null;
+    if (queued) {
+      setBody((b) => (b.trim() ? `${b.trimEnd()}\n${queued}` : queued));
+      window.setTimeout(() => focusComposerAtEnd(composerRef.current), 350);
+    }
     return () => window.removeEventListener(COMPOSER_INSERT_EVENT, onInsert);
   }, [clientId]);
 

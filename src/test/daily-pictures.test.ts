@@ -87,6 +87,13 @@ import {
   themeForDow,
   typographyProblems,
   visualScore,
+  reviewPrompt,
+  womanBuildFor,
+  womenLine,
+  WOMAN_BUILDS,
+  CAST_WOMAN_BUILDS,
+  WOMEN_LOOK,
+  MEN_LOOK,
   type Review,
   type VisualStat,
 } from "@/lib/daily-visuals";
@@ -121,6 +128,7 @@ const stat = (o: Partial<VisualStat>): VisualStat => ({
 const review = (o: Partial<Review> = {}): Review => ({
   colour: "bright",
   physique: "realistic",
+  women: "natural",
   clarity: "clean",
   medium: "anime",
   maturity: "mature",
@@ -671,6 +679,10 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     // the plates match end to end (the far end too), the miss the first bright tests showed
     expect(p).toContain("one straight barbell with identical plates on both ends (the same colours in the same order from the collar out, including the far end seen across the frame) and collars on");
     expect(REVIEW_PROMPT).toContain("different plates on each side (check both ends: the same colours in the same order, the far end included)");
+    // a simple load is easier to draw matching, and a machine is the real machine
+    expect(p).toContain("Keep the load simple to draw right: one to three plates a side in one or two colours, the same on both ends.");
+    expect(p).toContain("a hack squat: standing on its angled platform with the shoulders under the pads");
+    expect(REVIEW_PROMPT).toContain("a machine that is the real machine the brief names and used the way it's used");
     expect(p).toContain("calibrated plates in their real colours and sizes (red 25, blue 20, yellow 15, green 10)");
     expect(p).toContain("No readable text, speech bubbles, labels, subtitles, brand names, logos or watermarks anywhere");
     expect(p).toContain(FILM_AVOID);
@@ -731,6 +743,11 @@ describe("the review: concrete checks before any score", () => {
     expect(reviewVerdict(review({ defects: ["the barbell has different plates on each side"] }), "").image).toContain("the barbell has different plates on each side");
     // a brand on a plate is stray text
     expect(reviewVerdict(review({ text_seen: "ROGUE" }), "").image[0]).toContain("words that shouldn't be there");
+    // with no words planned, a word the scene happens to name is still a word in the picture (a log that read "Squat Bench Deadlift REST")
+    expect(reviewVerdict(review({ text_seen: "Squat\nBench\nDeadlift\nREST" }), "", "an open training log with the word REST written in").image[0]).toContain("words that shouldn't be there");
+    expect(reviewVerdict(review({ text_seen: "25\n20\n15" }), "", "plates on a tree").pass).toBe(true);
+    expect(CONCEPT_PROMPT).toContain("a training log's, clipboard's or whiteboard's writing is unreadable scribbles and boxes");
+    expect(picturePrompt({ style: "still_life", visual: "an open log", typography: "", message: "m" })).toContain("a training log's, clipboard's or whiteboard's writing is unreadable scribbles and boxes");
     const low = reviewVerdict(review({ scores: { ...review().scores, writing: 2, aesthetic: 3 }, fix_caption: "say it plainer" }), "");
     expect(low.pass).toBe(false);
     expect(low.caption).toEqual(["writing 2/5", "fix: say it plainer"]);
@@ -752,6 +769,10 @@ describe("the review: concrete checks before any score", () => {
     expect(REVIEW_BARS.technique).toBe(4);
     expect(REVIEW_PROMPT).toContain("technique = the lift, the equipment and the bodies are drawn right");
     expect(parseReview('{"scores": {}}')?.scores.technique).toBe(4);
+    // the reviewer writing the word "empty" (or "none") for no text is no text, never a stray word that fails the picture
+    for (const none of ["empty", "Empty.", "none", "No text", "n/a", "\"empty\""]) expect(parseReview(JSON.stringify({ text_seen: none, scores: {} }))?.text_seen, none).toBe("");
+    expect(parseReview(JSON.stringify({ text_seen: "20 KG", scores: {} }))?.text_seen).toBe("20 KG");
+    expect(reviewVerdict(parseReview(JSON.stringify({ ...review(), text_seen: "empty" }))!, "").pass).toBe(true);
     // a review from before the check reads as neutral
     expect(parseReview('{"scores": {}}')?.scores.on_topic).toBe(4);
   });
@@ -770,7 +791,7 @@ describe("the review: concrete checks before any score", () => {
     expect(reviewVerdict(review({ maturity: "childish" }), "").image[0]).toBe("it reads as childish, not a mature sports story");
     expect(parseReview('{"medium": "anime", "maturity": "Mature, adult", "scores": {}}')?.maturity).toBe("mature");
     expect(parseReview('{"medium": "anime", "scores": {}}')?.maturity).toBe("mature");
-    expect(REVIEW_PROMPT).toContain("childish (chibi, cutesy, moe, a kids' cartoon, giant eyes, comedic faces, anyone who looks under 20, school uniforms, fanservice)");
+    expect(REVIEW_PROMPT).toContain("childish (chibi, cutesy, moe, a kids' cartoon, giant eyes, comedic faces, anyone who looks under 20");
     // a clean drawn illustration passes only when that treatment was asked for
     expect(reviewVerdict(review({ medium: "illustration" }), "", "", { rendering: "graphic" }).pass).toBe(true);
     expect(reviewVerdict(review({ medium: "illustration" }), "", "", { rendering: "manga_colour" }).pass).toBe(true);
@@ -1002,9 +1023,13 @@ describe("the bright look: one house style, bright and true, real people, never 
   });
 
   it("who's in it decides how they're built: everyday people look everyday, and nobody is a bodybuilder unless they are one", () => {
+    expect(DAILY_CASTS.newer_lifter.look).toContain("an adult newer lifter (20s to 40s)");
     expect(DAILY_CASTS.newer_lifter.look).toContain("an ordinary, healthy everyday build with little visible muscle definition");
+    // adults from every angle: a newer lifter seen from behind once read as a child
+    expect(FILM_LOOK).toContain("People are adults (20s to 60s) with realistic adult proportions: a normal head-to-body ratio, adult faces and adult builds, never childlike, chibi or big-headed, from any angle.");
+    expect(REVIEW_PROMPT).toContain("anyone who looks under 20 or has a child's proportions (a head too big for the body, a small childlike build, from any angle, the back included)");
     expect(DAILY_CASTS.powerlifter.look).toContain("never a bodybuilder");
-    expect(DAILY_CASTS.physique.look).toContain("never stage-ready or oversized");
+    expect(DAILY_CASTS.physique.look).toContain("never stage-ready, bulky or oversized");
     expect(DAILY_CASTS.masters.look).toContain("40s to 60s");
     expect(Object.keys(DAILY_CASTS)).toEqual(expect.arrayContaining(["no_people", "hands"]));
     expect(peopleLine("everyday")).toContain("training clothes in real colours that suit the palette (a plain black t-shirt at most once in a frame, never on the main person)");
@@ -1102,8 +1127,15 @@ describe("the coach's questions", () => {
       "Different from recent posts",
       "Worth saving or discussing",
       "Bright and clear on a phone",
+      "Natural, believable bodies",
     ]);
-    expect(pass.every((c) => c.pass === true)).toBe(true);
+    expect(pass.filter((c) => c.key !== "bodies").every((c) => c.pass === true)).toBe(true);
+    // the bodies check reads the review's own words; a review from before it isn't checked
+    expect(pass.find((c) => c.key === "bodies")!.pass).toBeNull();
+    const full = qualityChecks({ scores: { natural: 5, substance: 4, accuracy: 5, clarity: 5, match: 4, fresh: 4, worth_it: 4 } }, review());
+    expect(full.every((c) => c.pass === true)).toBe(true);
+    expect(qualityChecks(null, review({ women: "overbuilt" })).find((c) => c.key === "bodies")!.pass).toBe(false);
+    expect(qualityChecks(null, review({ physique: "exaggerated" })).find((c) => c.key === "bodies")!.pass).toBe(false);
     const weak = qualityChecks({ scores: { natural: 5, substance: 3, accuracy: 3, fresh: 2, worth_it: 3 } }, { scores: { ...review().scores, teaches: 2 } });
     expect(weak.filter((c) => c.pass === false).map((c) => c.key)).toEqual(["image", "value", "accurate", "fresh", "worth"]);
     expect(qualityChecks(null, null).every((c) => c.pass === null)).toBe(true);
@@ -1141,5 +1173,98 @@ describe("a scene the image model's safety filter turns down gets a new scene, n
     expect(isSafetyRefusal(new Error("OpenAI said no (500)"))).toBe(false);
     expect(server).toContain('issues: ["the image model\'s safety filter turned the scene down"]');
     expect(CONCEPT_PROMPT).toContain("undressed, measuring their body or on a scale");
+  });
+});
+
+describe("women who train (Nov 20 2026)", () => {
+  it("a woman's build follows who she is and turns over day to day, and never a bodybuilder's unless she's a physique athlete", () => {
+    expect(womanBuildFor("powerlifter", "2026-11-20")).toBeTruthy();
+    for (const cast of DAILY_CAST_KEYS) {
+      for (const day of ["2026-11-20", "2026-11-21", "2026-11-22", "2026-11-23"]) {
+        const b = womanBuildFor(cast, day);
+        if (cast === "no_people") expect(b).toBeNull();
+        else expect(CAST_WOMAN_BUILDS[cast]).toContain(b);
+        // visibly muscular is only ever a physique athlete
+        if (b === "toned") expect(cast).toBe("physique");
+      }
+    }
+    // consecutive days give a cast's next build, so the feed's women aren't one type
+    const days = ["2026-11-20", "2026-11-21", "2026-11-22"].map((d) => womanBuildFor("everyday", d));
+    expect(new Set(days).size).toBe(3);
+    // every kind of woman shows up across the casts
+    expect(new Set(Object.values(CAST_WOMAN_BUILDS).flat())).toEqual(new Set(["slim", "curvy", "athletic", "soft", "strong", "toned"]));
+    expect(womanBuildFor("everyday", "not a day")).toBe("slim");
+    // a strong woman is strong in her legs and hips, never up top
+    expect(WOMAN_BUILDS.strong).toContain("her shoulders and arms natural with only light tone");
+    expect(WOMAN_BUILDS.toned).toContain("never bulky");
+  });
+
+  it("the casts that once read as a man's build say how a woman in them is built", () => {
+    expect(DAILY_CASTS.powerlifter.look).toContain("a woman strong through her hips, glutes and legs with a natural feminine frame and only light tone in her shoulders and arms, never broad or bulky up top");
+    expect(DAILY_CASTS.powerlifter.look).toContain("a man sturdy and strong with a solid midsection and a broad back");
+    expect(DAILY_CASTS.physique.look).toContain("a woman lean and toned with a feminine shape");
+    expect(DAILY_CASTS.crew.look).toContain("the women each a different build (slim, curvy, athletic, soft)");
+  });
+
+  it("the writer is told today's build for each cast and never to call a woman sturdy or broad up top", () => {
+    const line = womenLine(["powerlifter", "everyday", "no_people"], "2026-11-20");
+    expect(line).toContain(`powerlifter = ${WOMAN_BUILDS[womanBuildFor("powerlifter", "2026-11-20")!]}`);
+    expect(line).toContain(`everyday = ${WOMAN_BUILDS[womanBuildFor("everyday", "2026-11-20")!]}`);
+    expect(line).not.toContain("no_people =");
+    expect(line).toContain(WOMEN_LOOK);
+    expect(CONCEPT_PROMPT).toContain('never "sturdy", "thick", "stocky", "broad" or "muscular" for a woman\'s shoulders, back or arms');
+    const parsed = parseConcept('{"topic": "lighter_weeks", "idea": "m", "visual": "v", "cast": "powerlifter", "read": {"people": "one"}, "captions": ["a"]}', { pillar: "recovery", styles: ["side_profile"], lights: ["big_windows"], formats: ["coach_note"], topics: ["lighter_weeks"], day: "2026-11-20" } as any)!;
+    expect(parsed.womanBuild).toBe(womanBuildFor("powerlifter", "2026-11-20"));
+  });
+
+  it("the picture prompt says how women and men are drawn, smoothly, and the build for her cast", () => {
+    const p = picturePrompt({ style: "medium_candid", visual: "a coach and athlete at a bench", typography: "", message: "m", cast: "coach_athlete", womanBuild: "curvy" });
+    expect(p).toContain(`A woman in it is ${WOMAN_BUILDS.curvy}.`);
+    expect(p).toContain(WOMEN_LOOK);
+    expect(p).toContain(MEN_LOOK);
+    expect(p).toContain("never mapped out muscle by muscle (no striations, no vein maps, no every-muscle outlines)");
+    expect(WOMEN_LOOK).toContain("no broad or bulky shoulders, no big traps, no defined delts, biceps or back muscles");
+    expect(WOMEN_LOOK).toContain("Only a woman the post is about as a physique athlete is visibly muscular");
+    // a concept from before the builds takes its cast's most fitting one
+    expect(picturePrompt({ style: "medium_candid", visual: "v", typography: "", message: "m", cast: "powerlifter" })).toContain(`A woman in it is ${WOMAN_BUILDS.strong}.`);
+    // nobody in it: no build
+    expect(picturePrompt({ style: "still_life", visual: "v", typography: "", message: "m", cast: "no_people", womanBuild: "slim" })).not.toContain("A woman in it is");
+    expect(FILM_AVOID).toContain("a woman drawn with a man's frame or a bodybuilder's upper body (broad or bulky shoulders, big traps, defined delts, biceps or back, visible abs) or a hard, masculine face");
+  });
+
+  it("the review looks at every woman, and an overbuilt one sends the picture back", () => {
+    expect(REVIEW_PROMPT).toContain('"women": "natural (every woman in it looks like a woman who trains');
+    expect(REVIEW_PROMPT).toContain("Look at every woman, the ones in the background included");
+    expect(parseReview('{"medium": "anime", "women": "Overbuilt: broad shoulders", "scores": {}}')?.women).toBe("overbuilt");
+    expect(parseReview('{"medium": "anime", "women": "masculine", "scores": {}}')?.women).toBe("overbuilt");
+    expect(parseReview('{"medium": "anime", "women": "natural", "scores": {}}')?.women).toBe("natural");
+    expect(parseReview('{"medium": "anime", "women": "none", "scores": {}}')?.women).toBe("none");
+    // a review from before the check is unchecked, never a fail
+    expect(parseReview('{"medium": "anime", "scores": {}}')?.women).toBe("unchecked");
+    expect(reviewVerdict(review({ women: "unchecked" }), "").pass).toBe(true);
+    expect(reviewVerdict(review({ women: "none" }), "").pass).toBe(true);
+    expect(reviewVerdict(review({ women: "overbuilt" }), "").image[0]).toBe("a woman is drawn with a man's frame or a bodybuilder's upper body, not a natural feminine build");
+    // the reviewer is told the build she was meant to have
+    const rp = reviewPrompt({ caption: "c", concept: { message: "m", situation: "s", visual: "v", typography: "", style: "medium_candid", cast: "powerlifter", womanBuild: "strong" }, audience: "everyone" });
+    expect(rp).toContain(`A woman in it is meant to be ${WOMAN_BUILDS.strong}.`);
+    // and the build is stored with the concept and on a test
+    expect(server).toContain("woman_build: concept.womanBuild ?? null,");
+    expect(server).toContain("parseConcept(t.text, { ...choices, art: force.art ?? null, crowd, classify, day: r.day })");
+  });
+
+  it("a test can ask for one kind of person, to check how she or he is drawn", () => {
+    expect(conceptPrompt({ day: "2026-11-20", theme: "courage", audience: "everyone", crowd: "everyone", faith: false, choices: { pillar: "mindset", topics: ["long_game"], formats: ["coach_note"], styles: ["medium_candid"], lights: ["big_windows"], casts: ["powerlifter"] }, learnings: "", best: [], worst: [], recent: [], lead: "woman" } as any)).toContain("THE PERSON THE POST IS ABOUT IS A WOMAN: write them as one in \"visual\".");
+    expect(server).toContain("casts: force.cast ? [force.cast] : picked.casts,");
+    expect(server).toContain('lead: pick(["woman", "man"] as const, spec.lead),');
+  });
+
+  it("the women's line never tips a post toward women, and a test's cast sticks", () => {
+    const line = womenLine(DAILY_CAST_KEYS, "2026-11-20");
+    expect(line).toContain("whoever fits the post: a man or a woman, never a woman just because of this line");
+    // only a cast it was offered: a test's one cast holds even when the writer picks another
+    expect(castFor("coach_athlete", { kind: "educational", discipline: "", audience: "", show: "", people: "two" }, ["physique"])).toBe("physique");
+    // on a real day every cast is offered, so the writer's pick stands as before
+    expect(castFor("coach_athlete", { kind: "educational", discipline: "", audience: "", show: "", people: "two" })).toBe("coach_athlete");
+    expect(castFor("nonsense", { kind: "educational", discipline: "", audience: "", show: "", people: "group" })).toBe("crew");
   });
 });

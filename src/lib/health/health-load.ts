@@ -12,7 +12,7 @@
 import { NUTRITION_REQUEST_FORM_ID, type QA } from "@/lib/nutrition-request";
 import { formAnswerText } from "@/lib/form-answer-text";
 import { buildFoodHistory, type FoodHistory } from "@/lib/nutrition-targets/food-history";
-import { buildHealthProfile, PAIN_WEEKS, type HealthItem, type HealthProfile, type HealthSettings } from "@/lib/health/health-profile";
+import { buildHealthProfile, PAIN_WEEKS, type HealthItem, type HealthProfile, type HealthSettings, type PainArea } from "@/lib/health/health-profile";
 
 export type HealthRecords = {
   items: HealthItem[];
@@ -27,6 +27,8 @@ export type HealthRecords = {
   } | null;
   clientInjuries: Array<string | null>;
   pain: Array<{ date: string | null; area: string | null; level: number | null }>;
+  /** Pain over time (pain/history.ts), the places still coming up; null when it couldn't be read. */
+  painAreas?: PainArea[] | null;
   /** With `forms`: every Nutrition Update's health-related answers, oldest first. */
   updates: Array<{ at: string; answers: QA[] }>;
   dismissed: Array<{ kind: "allergy" | "diet" | "health"; key: string; at: string }>;
@@ -121,7 +123,25 @@ export async function loadHealthRecords(sb: any, clientId: string, opts: { forms
     dismissed = marks.map((d) => ({ kind: d.kind, key: d.key, at: d.created_at }));
   }
 
+  // the structured pain history (body map reports and older ones read as stored)
+  let painAreas: PainArea[] | null = null;
+  try {
+    const [{ loadPainEntries }, { buildPainHistory, areaSummary }, { severityLevel }] = await Promise.all([
+      import("@/lib/pain/load"),
+      import("@/lib/pain/history"),
+      import("@/lib/pain/report"),
+    ]);
+    const entries = (await loadPainEntries(sb, [clientId], { days: PAIN_WEEKS * 7 + 7 })).get(clientId) ?? [];
+    const history = buildPainHistory(entries, today);
+    painAreas = history.areas
+      .filter((a) => a.status !== "quiet" && a.recentDays > 0)
+      .map((a) => ({ area: a.label.toLowerCase(), count: a.recentDays, last: a.last, worst: a.worstRecent ? severityLevel(a.worstRecent) : null, summary: areaSummary(a) }));
+  } catch {
+    painAreas = null;
+  }
+
   return {
+    painAreas,
     items: items as HealthItem[],
     settings: settings ? { drug_tested: settings.drug_tested ?? null, federation: settings.federation ?? null, supplement_budget: settings.supplement_budget ?? null } : null,
     goals: goals ?? null,
@@ -165,6 +185,7 @@ export function healthProfileFromRecords(
     clientInjuries: rec.clientInjuries,
     latest: own.latest !== undefined ? own.latest : rec.updates.length ? rec.updates[rec.updates.length - 1] : null,
     pain: rec.pain,
+    painAreas: rec.painAreas ?? null,
     today,
   });
 }

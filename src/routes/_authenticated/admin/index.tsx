@@ -25,6 +25,7 @@ import { onDashboardClickCapture } from "@/components/return-to-dashboard";
 import { NewLeadsCard } from "@/components/leads/new-leads-card";
 import { NewApplicationsCard } from "@/components/applications/member-applications-entry";
 import { MeetReadinessCard } from "@/components/forms/meet-readiness-card";
+import { PainWatchCard } from "@/components/pain/pain-watch-card";
 import { CheckinsToReviewCard, useReviewQueue } from "@/components/forms/checkins-to-review-card";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
@@ -266,6 +267,11 @@ function AdminDashboard() {
         {/* ---------------- CHECK-INS: what clients sent that's waiting on a review (hidden when none) ---------------- */}
         <SectionErrorBoundary label="Check-ins to review">
           <CheckinsToReviewCard />
+        </SectionErrorBoundary>
+
+        {/* ---------------- PAIN: clients whose pain wants a look (persistent, worse, severe, limiting; hidden when none) ---------------- */}
+        <SectionErrorBoundary label="Pain to look at">
+          <PainWatchCard />
         </SectionErrorBoundary>
 
         {/* ---------------- LEADS: new applications waiting on a text (admin; hidden when none) ---------------- */}

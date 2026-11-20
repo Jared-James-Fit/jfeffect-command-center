@@ -7,6 +7,7 @@ import { useFullMediaUrl } from "@/lib/community.queries";
 import { preferAmbientAudio } from "@/lib/audio-session";
 import { SOUND_BLOCKED_EVENT, acquireFeedVideo, playFeedVideo, releaseFeedVideo, setSoundWanted, soundBlocked, unmuteBlocked } from "@/lib/video-pool";
 import { clipIsSilent, type SilentProbe } from "@/lib/video-silent";
+import { VideoScrubber } from "@/components/community/video-scrubber";
 
 /*
  * Sound in the feed: clips play with their sound by default. One speaker for
@@ -161,6 +162,10 @@ export function InlineVideo({
   const [soon, setSoon] = useState(false);
   const [visible, setVisible] = useState(false);
   const [playing, setPlaying] = useState(false);
+  // it has shown a frame of its own (played, or been scrubbed to one): its poster stays away, even paused
+  const [shown, setShown] = useState(false);
+  // a finger on its bar (VideoScrubber): it holds still until it lets go, then plays on if it was playing
+  const [scrubbing, setScrubbing] = useState(false);
   const [failed, setFailed] = useState(false);
   const [tapped, setTapped] = useState(false);
   const [blocked, setBlocked] = useState(false);
@@ -220,8 +225,16 @@ export function InlineVideo({
       if (s != null) setSilent(s);
     };
     const handlers: [string, () => void][] = [
-      ["playing", () => setPlaying(true)],
+      [
+        "playing",
+        () => {
+          setPlaying(true);
+          setShown(true);
+        },
+      ],
       ["pause", () => setPlaying(false)],
+      // scrubbed while paused: the frame it's on is what shows (once there is one to show)
+      ["seeked", () => v.readyState >= 2 && setShown(true)],
       ["error", () => setFailed(true)],
       [SOUND_BLOCKED_EVENT, () => setBlocked(soundBlocked(v))],
       ["loadedmetadata", readSound],
@@ -234,6 +247,7 @@ export function InlineVideo({
       releaseFeedVideo(v);
       setEl(null);
       setPlaying(false);
+      setShown(false);
       setBlocked(false);
       setSilent(false);
     };
@@ -272,7 +286,7 @@ export function InlineVideo({
     if (!visible || !active) setHoldPaused(false);
   }, [visible, active]);
 
-  const shouldPlay = active && visible && !held && !holdPaused && !!el && (auto || tapped) && !failed;
+  const shouldPlay = active && visible && !held && !holdPaused && !scrubbing && !!el && (auto || tapped) && !failed;
   const playingWanted = useRef(shouldPlay);
   playingWanted.current = shouldPlay;
   useEffect(() => {
@@ -320,7 +334,7 @@ export function InlineVideo({
                 src={poster}
                 alt=""
                 draggable={false}
-                className={cn("pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-200", playing ? "opacity-0" : "opacity-100")}
+                className={cn("pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-200", shown ? "opacity-0" : "opacity-100")}
               />
             )
           }
@@ -339,13 +353,15 @@ export function InlineVideo({
               className={cn(
                 "pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-200",
                 fit === "contain" ? "object-contain" : "object-cover",
-                playing ? "opacity-0" : "opacity-100",
+                shown ? "opacity-0" : "opacity-100",
               )}
               style={between ? POSTER_BETWEEN_BARS : position && fit === "cover" ? { objectPosition: position } : undefined}
             />
           )}
         </>
       )}
+      {/* its progress bar along the bottom (on a post's screen, right above the tab bar): a finger scrubs it */}
+      <VideoScrubber video={el} onHold={setScrubbing} enabled={active} disabled={failed} />
       {!auto && !tapped && (
         <button
           type="button"
@@ -378,9 +394,10 @@ export function InlineVideo({
             setFeedSound(!soundOn);
           }}
           className={cn(
-            "absolute right-2.5 flex h-8 items-center justify-center gap-1.5 rounded-full bg-black/55 text-white backdrop-blur active:scale-90",
+            "absolute right-2.5 z-[2] flex h-8 items-center justify-center gap-1.5 rounded-full bg-black/55 text-white backdrop-blur active:scale-90",
             askTap ? "px-3 text-[13px] font-semibold" : "w-8",
-            controls === "top" ? "top-[calc(var(--feed-bar-room,0px)+3rem)]" : "bottom-2.5",
+            // clear of the progress bar along the bottom
+            controls === "top" ? "top-[calc(var(--feed-bar-room,0px)+3rem)]" : "bottom-4",
           )}
           aria-label={soundOn ? "Mute" : "Turn sound on"}
           aria-pressed={soundOn}

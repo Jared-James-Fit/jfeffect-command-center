@@ -16,7 +16,7 @@
  * See src/lib/workout-review.ts for the mapping and why v1 was replaced.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   Sheet,
@@ -38,14 +38,6 @@ import { useServiceTier } from "@/lib/service-tier";
 import { pushWorkoutNote } from "@/lib/workout-notes";
 import {
   EFFORT_OPTIONS,
-  PAIN_AREAS,
-  PAIN_SEVERITY,
-  PAIN_SIDES,
-  SIDED_PAIN_AREAS,
-  composePainAreas,
-  parsePainAreas,
-  type PainPick,
-  type PainSide,
   REVIEW_VERSION,
   SLEEP_OPTIONS,
   deriveOverallRating,
@@ -56,6 +48,10 @@ import {
 } from "@/lib/workout-review";
 import type { SleepBucket } from "@/lib/analytics/recovery-score";
 import { HapticTap } from "@/components/haptic-tap";
+import { PainReporter, type PainContext } from "@/components/pain/pain-reporter";
+import { getPainReportContextFn } from "@/lib/pain/pain.functions";
+import { picksFromEntries, picksFromLegacy, picksToReports, type PainPick } from "@/lib/pain/picks";
+import { legacyColumns } from "@/lib/pain/report";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -164,6 +160,7 @@ export function WorkoutReviewEditor({
   actAsClientId,
 }: Props) {
   const submit = useServerFn(submitOrEditReview);
+  const painContextFn = useServerFn(getPainReportContextFn);
   const qc = useQueryClient();
   // A member has no coach: nothing here says it goes to one (their notes stay theirs).
   const { isSelfServe } = useServiceTier();
@@ -180,13 +177,15 @@ export function WorkoutReviewEditor({
   const [recoveryToday, setRecoveryToday] = useState<number | null>(initial?.recoveryToday ?? null);
   // null = not answered. Edits show the stored value; new reviews start blank.
   const [pain, setPain] = useState<boolean | null>(initial?.submittedAt ? !!initial.pain : null);
-  // A stored area splits into chips + optional sides ("Neck, Shoulder (R)");
-  // anything no chip matches (older reviews: "General") shows as written, as a
-  // picked chip that a tap takes off.
-  const initialPain = () => parsePainAreas(initial?.pain ? initial?.painArea ?? null : null);
-  const [painPicks, setPainPicks] = useState<PainPick[]>(() => initialPain().picks);
-  const [otherAreas, setOtherAreas] = useState<string[]>(() => initialPain().other);
-  const [painLevel, setPainLevel] = useState<number>(initial?.painLevel ?? 5);
+  // Each place that hurt, with its own answers (src/lib/pain/). An older review
+  // opens on its pain_area places; its saved places replace them once loaded.
+  const initialPain = () => (initial?.pain ? picksFromLegacy(initial?.painArea ?? null, initial?.painLevel ?? null) : []);
+  const [painPicks, setPainPicksState] = useState<PainPick[]>(initialPain);
+  const painTouched = useRef(false);
+  const setPainPicks = (next: PainPick[]) => {
+    painTouched.current = true;
+    setPainPicksState(next);
+  };
   const [note, setNote] = useState<string>(initial?.clientNote ?? "");
   const [noteOpen, setNoteOpen] = useState<boolean>(!!(initial?.clientNote ?? "").trim());
 
@@ -197,29 +196,48 @@ export function WorkoutReviewEditor({
     setSleepBucket(initial?.sleepBucket ?? null);
     setRecoveryToday(initial?.recoveryToday ?? null);
     setPain(initial?.submittedAt ? !!initial.pain : null);
-    const p = initialPain();
-    setPainPicks(p.picks);
-    setOtherAreas(p.other);
-    setPainLevel(initial?.painLevel ?? 5);
+    painTouched.current = false;
+    setPainPicksState(initialPain());
     setNote(initial?.clientNote ?? "");
     setNoteOpen(!!(initial?.clientNote ?? "").trim());
   }, [open, initial?.submittedAt]);
 
-  const storedArea = composePainAreas(painPicks, otherAreas);
-  const placeCount = painPicks.length + otherAreas.length;
-  const sidedPicks = painPicks.filter((p) => SIDED_PAIN_AREAS.includes(p.area));
-  const toggleArea = (area: string) =>
-    setPainPicks((prev) =>
-      prev.some((p) => p.area === area) ? prev.filter((p) => p.area !== area) : [...prev, { area, side: null }],
-    );
-  const pickSide = (area: string, side: PainSide) =>
-    setPainPicks((prev) => prev.map((p) => (p.area === area ? { ...p, side: p.side === side ? null : side } : p)));
-  const cta = checkoutCta({ isEdit, effort, pain, painArea: storedArea, sleepBucket, recoveryToday });
+  // Their recent places (for "since Nov 16?") and this workout's exercises:
+  // read as the sheet opens, so they're there by the time "Yes" is tapped.
+  const clientCtx = ctx.kind === "client" ? ctx : null;
+  const { data: painCtx } = useQuery({
+    queryKey: ["pain-report-context", clientCtx?.dayId ?? null, (clientCtx as any)?.scheduledWorkoutId ?? null, actAsClientId ?? null],
+    enabled: open && !!clientCtx,
+    staleTime: 60_000,
+    queryFn: () =>
+      painContextFn({ data: { dayId: clientCtx!.dayId, scheduledWorkoutId: (clientCtx as any)?.scheduledWorkoutId ?? null, actAsClientId: actAsClientId ?? null } }),
+  });
+  const painContext: PainContext | null = painCtx?.clientId ? { today: painCtx.today, entries: painCtx.entries, exercises: painCtx.exercises, feedbackId: painCtx.feedbackId } : null;
+  // editing: the review's saved places, unless they've already started changing them
+  useEffect(() => {
+    if (!open || painTouched.current || !painCtx?.feedbackId) return;
+    const saved = picksFromEntries(painCtx.entries, painCtx.feedbackId);
+    if (saved.length) setPainPicksState(saved);
+  }, [open, painCtx?.feedbackId, painCtx?.entries]);
+
+  const painReports = picksToReports(painPicks);
+  const storedArea = legacyColumns(painReports).painArea ?? (painPicks.length ? "…" : null);
+  const cta = checkoutCta({
+    isEdit,
+    effort,
+    pain,
+    painArea: painPicks.length ? storedArea : null,
+    sleepBucket,
+    recoveryToday,
+    painUnrated: painPicks.some((p) => !p.severity),
+    painUnnamed: painPicks.some((p) => p.region === "other" && !p.note?.trim()),
+  });
 
   const mutation = useMutation({
     mutationFn: async () => {
       if (effort == null) throw new Error("Pick how hard it was");
-      if (pain && !storedArea) throw new Error("Pick where it hurts");
+      if (pain && !painReports.length) throw new Error("Pick where it hurts");
+      const painCols = legacyColumns(painReports);
       savingRef.current = true;
       const wasEdit = isEdit;
       const overallRating = deriveOverallRating({
@@ -236,9 +254,10 @@ export function WorkoutReviewEditor({
           pain: !!pain,
           // Constraint pl_workout_feedback_pain_consistency requires:
           // pain=true → pain_level IS NOT NULL AND pain_area IS NOT NULL
-          painLevel: pain ? painLevel : null,
-          painArea: pain ? storedArea : null,
+          painLevel: pain ? painCols.painLevel : null,
+          painArea: pain ? painCols.painArea : null,
           painNote: null,
+          painReports: pain ? painReports : [],
           clientNote: note.trim() ? note.trim() : null,
           // Legacy optional fields: preserved in DB, no longer asked.
           strengthFeel: initial?.strengthFeel ?? null,
@@ -356,93 +375,15 @@ export function WorkoutReviewEditor({
               </Chip>
               <Chip
                 active={pain === true}
-                onClick={() => {
-                  setPain(true);
-                  setNoteOpen(true);
-                }}
+                onClick={() => setPain(true)}
                 label="Yes, pain"
               >
                 Yes
               </Chip>
             </div>
             {pain && (
-              <div className="space-y-3" data-pain-details>
-                <div className="space-y-1.5">
-                  <p className="text-xs font-semibold text-muted-foreground" data-testid="pain-where">
-                    {placeCount ? "Where" : "Where? Tap all that apply"}
-                  </p>
-                  {/* head to toe, three across; any number of places */}
-                  <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Where it hurts">
-                    {PAIN_AREAS.map((a) => (
-                      <Chip
-                        key={a}
-                        active={painPicks.some((p) => p.area === a)}
-                        onClick={() => toggleArea(a)}
-                        label={a}
-                        className="text-[13px] font-semibold"
-                      >
-                        {a}
-                      </Chip>
-                    ))}
-                    {/* an older answer no chip matches, kept as written until it's tapped off */}
-                    {otherAreas.map((o) => (
-                      <Chip
-                        key={o}
-                        active
-                        onClick={() => setOtherAreas((prev) => prev.filter((x) => x !== o))}
-                        label={`${o}, tap to remove`}
-                        className="text-[13px] font-semibold"
-                      >
-                        {o}
-                      </Chip>
-                    ))}
-                  </div>
-                </div>
-                {sidedPicks.length > 0 && (
-                  <div className="space-y-1.5" data-pain-sides>
-                    <p className="text-xs font-semibold text-muted-foreground">
-                      Which side? <span className="font-normal">Optional</span>
-                    </p>
-                    {sidedPicks.map((p) => (
-                      <div key={p.area} className="flex items-center gap-2" role="group" aria-label={`${p.area}: which side`}>
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium">{p.area}</span>
-                        <div className="grid w-[11.5rem] shrink-0 grid-cols-3 rounded-lg border border-border p-0.5">
-                          {PAIN_SIDES.map((o) => (
-                            <button
-                              key={o.v}
-                              type="button"
-                              onClick={() => pickSide(p.area, o.v)}
-                              aria-pressed={p.side === o.v}
-                              className={cn(
-                                "h-10 rounded-md text-xs font-semibold transition-colors",
-                                p.side === o.v ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
-                              )}
-                            >
-                              {o.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="space-y-1.5">
-                  <p className="text-xs font-semibold text-muted-foreground">
-                    {placeCount > 1 ? "How bad? The worst one" : "How bad?"}
-                  </p>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {PAIN_SEVERITY.map((o) => (
-                      <Chip
-                        key={o.v}
-                        active={painLevel === o.v}
-                        onClick={() => setPainLevel(o.v)}
-                        label={`Pain ${o.label}`}
-                      >
-                        {o.label}
-                      </Chip>
-                    ))}
-                  </div>
-                </div>
+              <div className="pt-1">
+                <PainReporter picks={painPicks} onChange={setPainPicks} ctx={painContext} />
               </div>
             )}
           </Row>
@@ -491,7 +432,7 @@ export function WorkoutReviewEditor({
               <Textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder={pain ? (painPicks.some((p) => p.area === "Other") ? "Where does it hurt, and on which movement?" : "What happened? Which movement?") : coached ? "Anything your coach should know?" : "Anything to remember about today?"}
+                placeholder={pain ? "Anything else your coach should know?" : coached ? "Anything your coach should know?" : "Anything to remember about today?"}
                 rows={2}
                 maxLength={600}
                 className="resize-none"

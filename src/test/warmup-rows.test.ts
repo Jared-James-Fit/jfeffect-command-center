@@ -20,28 +20,32 @@ const render = (props: Record<string, unknown>) =>
   renderToStaticMarkup(createElement(WarmupRows, { ...base, sets: [], ...props } as any));
 
 describe("warm-up rows in the set table", () => {
-  it("a heavy barbell lift before set 1: one open 'Last warm-up' row with what to work up to", () => {
-    const html = render({ style: "last", ramp: true, tunes: true, seed: { load: 125, reps: 2 } });
+  it("nothing shows until + Warm-up: no open 'Last warm-up' row, no suggested warm-up weight, on any lift", () => {
+    expect(render({ style: "last", ramp: true, tunes: true })).toBe("");
+    expect(render({ style: "last", ramp: true, tunes: false })).toBe("");
+    expect(render({ style: "secondary", ramp: true, tunes: true })).toBe("");
+    expect(render({ style: "last", ramp: false, tunes: false })).toBe("");
+  });
+
+  it("a new warm-up row is blank: reps, effort and weight empty, nothing suggested", () => {
+    // (+ Warm-up opens it on its tap; a static render opens one the way a clip filmed on it does)
+    const html = render({ style: "last", ramp: true, tunes: true, looseClip: true });
     expect(html).toContain('data-testid="warmup-open"');
-    expect(html).toContain("Last warm-up");
+    expect(html).toContain("Warm-up");
     expect(html).toContain("optional");
-    expect(html).toContain("about 125 kg × 2");
+    expect(html).not.toContain("Last warm-up");
+    expect(html).not.toContain("about");
     // never a bare "W" to guess at, never a coloured row
     expect(html).not.toContain(">W<");
     expect(html).not.toMatch(/orange-|blue-/);
   });
 
-  it("on a % day (nothing to tune) it's still there before set 1, just without the hint", () => {
-    const html = render({ style: "last", ramp: true, tunes: false });
-    expect(html).toContain('data-testid="warmup-open"');
-    expect(html).toContain("Last warm-up");
-    expect(html).not.toContain("about");
-  });
-
-  it("an accessory with nothing logged shows nothing (+ Warm-up lives under the sets)", () => {
-    expect(render({ style: "secondary", ramp: true, tunes: true })).toBe("");
-    // once the working sets start, a heavy lift's open row goes too
-    expect(render({ style: "last", ramp: false, tunes: false })).toBe("");
+  it("a warm-up swipes left to Delete (its flame's menu does the same for anyone who doesn't swipe)", () => {
+    const open = render({ style: "last", ramp: true, tunes: true, sets: [set], read: "tuned" });
+    expect(open).toContain('data-swipe-variant="row"');
+    expect(open).toContain('data-swipe-action="delete"');
+    expect(open).toContain('aria-label="Delete warm-up 140 kg × 2 · RPE 7"');
+    expect(open).toContain("data-warmup-menu");
   });
 
   it("logged warm-ups on an accessory fold into one header line, one tap to open", () => {
@@ -93,7 +97,8 @@ describe("warm-up rows in the set table", () => {
     expect(rows).toBeGreaterThan(wdv.indexOf("<EffortScaleHeader rir={showRir} />"));
     expect(rows).toBeLessThan(wdv.indexOf("<SetRow\n"));
     expect(wdv).toContain('!hideWeight && rowLoadType === "external" && !readonly && adapter?.kind !== "member" && !!clientId;');
-    expect(wdv).toContain("const warmupGauge = warmupPromptable && loadModel && !workedToday ?");
+    expect(wdv).toContain("const warmupTunes = !!(warmupPromptable && loadModel && !workedToday);");
+    expect(wdv).not.toContain("seed={");
     expect(wdv).toContain("flushSync(() => setWarmupAddToken((t) => t + 1));");
     expect(wdv).toContain("warmupDraftEditRef.current?.();");
     expect(wdv).toContain('style={rampsUp ? warmupStyle : "secondary"}');
@@ -114,7 +119,7 @@ describe("warm-up rows in the set table", () => {
   });
 });
 
-describe("which cards get the open Last warm-up row", () => {
+describe("which cards keep logged warm-ups open before set 1 (and read them for today's weight)", () => {
   it("heavy barbell compounds: the main lifts and barbell squats, hinges, hip thrusts and presses", async () => {
     const { warmupStyleOf } = await import("@/lib/final-warmup");
     expect(warmupStyleOf("squat", "Competition Squat", "Barbell, Rack")).toBe("last");

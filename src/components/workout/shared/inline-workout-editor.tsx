@@ -18,7 +18,9 @@ import { toast } from "sonner";
 import { syncProgramDaySchedule } from "@/lib/scheduled-workouts.functions";
 import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
 import { toLocalISO } from "@/lib/today";
-import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
+import { type SearchableExercise } from "@/lib/exercise-search";
+import { useExerciseSearch } from "@/hooks/use-exercise-search";
+import { DescribedMatches } from "@/components/exercise-search/described-matches";
 import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 import { cn } from "@/lib/utils";
 import { displayExerciseName } from "@/lib/exercise-display-name";
@@ -228,14 +230,22 @@ export function InlineWorkoutEditor({
     staleTime: 10 * 60_000,
     gcTime: 30 * 60_000,
     queryFn: async () => {
-      const { data: ex, error } = await supabase
-        .from("exercises")
-        .select("id, name, category, muscle_group, equipment, tags, movement_family, competition_lift_type")
-        .eq("archived", false)
-        .order("name", { ascending: true })
-        .limit(5000);
-      if (error) throw error;
-      return (ex ?? []) as SearchableExercise[];
+      // page by page: one request stops at the server's row cap (1,000) and
+      // would silently drop the end of the alphabet
+      const all: SearchableExercise[] = [];
+      for (let from = 0; from < 20_000; from += 1000) {
+        const { data: ex, error } = await supabase
+          .from("exercises")
+          .select("id, name, category, muscle_group, equipment, tags, movement_family, competition_lift_type, primary_movement_pattern, muscle_groups, exercise_family")
+          .eq("archived", false)
+          .order("name", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, from + 999);
+        if (error) throw error;
+        all.push(...((ex ?? []) as SearchableExercise[]));
+        if (!ex || ex.length < 1000) break;
+      }
+      return all;
     },
   });
 
@@ -245,11 +255,10 @@ export function InlineWorkoutEditor({
     if (open) void refetchSearchPool();
   }, [open, refetchSearchPool]);
 
-  const searchOutcome = useMemo(
-    () => searchExercises(searchPool, search, { limit: 8 }),
-    [searchPool, search],
-  );
-  const searchResults = searchOutcome.results.map((r) => r.exercise) as Array<{
+  const exerciseSearch = useExerciseSearch(searchPool, search, { limit: 8, describe: open });
+  const searchOutcome = exerciseSearch.local;
+  const describedIds = new Set(exerciseSearch.described.map((d) => d.exercise.id));
+  const searchResults = (searchOutcome?.results ?? []).map((r) => r.exercise).filter((e) => !describedIds.has(e.id)) as Array<{
     id: string;
     name: string;
     movement_family?: string | null;
@@ -589,13 +598,20 @@ export function InlineWorkoutEditor({
                     <Input
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Search exercises to add…"
+                      placeholder="Search or describe an exercise to add…"
                       className="pl-8"
                     />
                   </div>
                   {search.trim().length >= 2 && (
                     <div className="mt-2 space-y-1">
-                      {searchResults.length === 0 ? (
+                      <DescribedMatches
+                        compact
+                        state={exerciseSearch.describeState}
+                        matches={exerciseSearch.described}
+                        onPick={(ex) => addExercise(ex as any)}
+                        className="pb-1"
+                      />
+                      {searchResults.length === 0 && exerciseSearch.described.length === 0 && exerciseSearch.describeState !== "loading" ? (
                         <div className="text-xs text-muted-foreground">No matches.</div>
                       ) : (
                         searchResults.map((ex) => (
@@ -612,7 +628,7 @@ export function InlineWorkoutEditor({
                             <span className="truncate">
                               <HighlightedExerciseName
                                 text={ex.name}
-                                terms={searchOutcome.highlightTerms}
+                                terms={searchOutcome?.highlightTerms ?? []}
                               />
                             </span>
                           </button>

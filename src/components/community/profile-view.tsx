@@ -18,7 +18,7 @@ import { AvatarCropper } from "@/components/avatar-cropper";
 import { CoachBadge } from "@/components/community/post-card";
 import { GridSkeleton, PostGrid } from "@/components/community/post-grid";
 import { RepostsGrid, SavedView } from "@/components/community/saved-view";
-import { trainingSinceLabel, type CommunityAuthor, type CommunityPost } from "@/lib/community";
+import { isWorkoutCard, trainingSinceLabel, type CommunityAuthor, type CommunityPost } from "@/lib/community";
 import { useCommunityFeed, useCommunityProfile, useMyArchived, usePostMediaUrls, useSetCommunityAvatar } from "@/lib/community.queries";
 
 /**
@@ -36,7 +36,8 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
   // a block (either way) shows no grid: the server already sends none, so no "Nothing shared yet" either
   const blocked = !!profile?.blocked;
   // (a story someone posted lives in the story rail only, never on the grid: Instagram's way)
-  const shown = useMemo(() => (blocked ? [] : (feed.data?.pages.flatMap((p) => p.posts) ?? []).filter((p) => !p.story)), [feed.data, blocked]);
+  // a profile is what they posted: never a story or a workout's bare card (isWorkoutCard)
+  const shown = useMemo(() => (blocked ? [] : (feed.data?.pages.flatMap((p) => p.posts) ?? []).filter((p) => !p.story && !isWorkoutCard(p))), [feed.data, blocked]);
   // Posts | Reposts | Saved | Archived (Instagram's tabs; only you see Saved and Archived)
   const [tab, setTab] = useState<ProfileTab>("posts");
   const showArchived = tab === "archived";

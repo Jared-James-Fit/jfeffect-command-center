@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { describeWarmup, estimateOneRepMax, normalizeWarmupRow, WARMUP_LOG_MAX_REPS, WARMUP_TOO_EASY, type WarmupSetRow, type WarmupUnit } from "@/lib/final-warmup";
 import { TypedValueInput } from "@/components/workout-day/typed-value-input";
 import { WeightValueInput } from "@/components/workout-day/weight-value-input";
+import { SwipeToReveal } from "@/components/workout-day/swipe-to-reveal";
 
 const sb = supabase as any;
 const MAX_WARMUPS = 8;
@@ -161,11 +162,12 @@ export type WarmupColumns = {
 export type WarmupVideoCell = (w: { warmupId: string | null; logged: boolean; label: string }) => React.ReactNode;
 
 /**
- * How a card offers warm-ups (warmupStyleOf, final-warmup.ts): "last" on a
+ * How a card shows warm-ups it has (warmupStyleOf, final-warmup.ts): "last" on a
  * heavy barbell compound (the squat, bench and deadlift and their barbell
- * variations, barbell squats, hinges, hip thrusts and presses), where the last
- * warm-up sets the day's weight, so it's an open row before set 1; "secondary"
- * everywhere else: + Warm-up under the sets, folded away once logged.
+ * variations, barbell squats, hinges, hip thrusts and presses), where a logged
+ * warm-up can still tune the day's weight, so they stay open before set 1;
+ * "secondary" everywhere else: folded away once logged. Either way a warm-up is
+ * only ever added with + Warm-up under the sets (never an open row by itself).
  */
 export type WarmupStyle = "last" | "secondary";
 
@@ -190,14 +192,14 @@ function WarmupBadge({ saved, focusMode = false }: { saved: boolean; focusMode?:
 
 /**
  * Warm-up sets at the top of an exercise's set table, above set 1, under one
- * quiet header ("Last warm-up · optional · about 140 kg × 1", "Warm-up · 2 sets
- * · ✓ Suggested tuned"). Every warm-up is a row in the set table's own columns
- * (reps · effort · weight · video), typed straight into like a set and saved as
- * it's typed; its flame opens Remove (with Undo). On a heavy barbell compound,
- * before the first working set, the last warm-up is an open row; elsewhere
- * + Warm-up (the card's footer) adds one. Logged warm-ups fold into the header
- * on accessories and once the working sets start, one tap to open. Never
- * counted as work: no volume, records, League points or completion.
+ * quiet header ("Warm-up · 2 sets · ✓ Suggested tuned"). Nothing shows until
+ * the athlete taps + Warm-up (the card's footer): there is no open row and no
+ * suggested warm-up weight. Every warm-up is a row in the set table's own
+ * columns (reps · effort · weight · video), typed straight into like a set and
+ * saved as it's typed; a swipe left shows Delete, and its flame opens the same
+ * Remove for anyone who doesn't swipe (both with Undo). Logged warm-ups fold
+ * into the header on accessories and once the working sets start, one tap to
+ * open. Never counted as work: no volume, records, League points or completion.
  */
 export function WarmupRows({
   sets,
@@ -209,7 +211,6 @@ export function WarmupRows({
   style = "secondary",
   ramp = false,
   tunes = false,
-  seed = null,
   read = null,
   suggestOn = true,
   todayLoad = null,
@@ -230,12 +231,10 @@ export function WarmupRows({
   onSave: WarmupSave;
   onRemove: (id: string) => void | Promise<void>;
   style?: WarmupStyle;
-  /** Before the first working set: a "last" card's warm-up row is open and the section unfolded. */
+  /** Before the first working set: a "last" card's logged warm-ups stay unfolded. */
   ramp?: boolean;
   /** It can still set today's weight: before the first working set, where the engine reads warm-ups. */
   tunes?: boolean;
-  /** What the last warm-up should be (the open row's reps, the header's hint). */
-  seed?: { load: number; reps: number } | null;
   /** What the warm-ups did to today's weight (said in the header). */
   read?: WarmupRead;
   /** Suggested is on (the card's strip shows today's weight). */
@@ -249,7 +248,7 @@ export function WarmupRows({
   effortKind?: "rpe" | "rir";
   /** A video cell per warm-up (a coaching client's, like their sets'). */
   video?: WarmupVideoCell | null;
-  /** A clip was filmed on the open warm-up row before it was saved: keep the row so it's still there. */
+  /** A clip was filmed on a new warm-up row before it was saved: keep the row so it's still there. */
   looseClip?: boolean;
   /** Bumped by the card's + Warm-up: a new row to type into. */
   addToken?: number;
@@ -271,8 +270,7 @@ export function WarmupRows({
   const draftKey = addToken;
 
   const videoOn = !!columns.videoColumn && !!video;
-  const lastOpen = canEdit && style === "last" && ramp && sets.length === 0;
-  const draftShown = canEdit && !!columns.showReps && (asked || lastOpen || (looseClip && sets.length === 0) || !!draftSavedId);
+  const draftShown = canEdit && !!columns.showReps && (asked || (looseClip && sets.length === 0) || !!draftSavedId);
   const draftExisting = draftSavedId ? sets.find((s) => s.id === draftSavedId) ?? null : null;
   const listed = sets.filter((s) => s.id !== draftSavedId);
   if (!listed.length && !draftShown) return null;
@@ -281,7 +279,6 @@ export function WarmupRows({
   // while one is being typed, or while the last warm-up still sets the weight.
   const foldable = sets.length > 0 && !draftShown;
   const expanded = !foldable || (openState ?? (style === "last" && ramp));
-  const lastTitle = style === "last" && ramp && sets.length === 0;
 
   const remove = async (s: WarmupSetRow) => {
     await onRemove(s.id);
@@ -293,11 +290,11 @@ export function WarmupRows({
   const status = sets.length > 0 && tunes ? warmupStatus({ read, suggestOn, todayLoad, unit, target }) : null;
   const header = (
     <>
-      <span className="font-medium text-foreground/80">{lastTitle ? "Last warm-up" : "Warm-up"}</span>
+      <span className="font-medium text-foreground/80">Warm-up</span>
       <span className="min-w-0 text-muted-foreground">
         {sets.length > 0
           ? ` · ${sets.length} ${sets.length === 1 ? "set" : "sets"}`
-          : ` · optional${lastTitle && seed ? ` · about ${fmt(seed.load)} ${unit} × ${seed.reps}` : ""}`}
+          : " · optional"}
         {status}
       </span>
     </>
@@ -328,7 +325,6 @@ export function WarmupRows({
           gridTemplate={gridTemplate}
           columns={columns}
           effortKind={effortKind}
-          seed={null}
           canEdit={canEdit}
           onSave={onSave}
           onRemove={() => void remove(s)}
@@ -343,7 +339,6 @@ export function WarmupRows({
           gridTemplate={gridTemplate}
           columns={columns}
           effortKind={effortKind}
-          seed={lastTitle || !sets.length ? seed : null}
           canEdit={canEdit}
           onSave={onSave}
           onFirstSave={(id) => setSaved({ token: addToken, id })}
@@ -401,10 +396,9 @@ export function warmupRpeFrom(text: string, kind: "rpe" | "rir"): number | null 
 }
 
 /**
- * One warm-up as a row in the set table's own columns: reps (a new one starts
- * on the suggested warm-up's reps), effort (blank reads as a normal last
- * warm-up, RPE 7, the engine's own assumption) and the weight (an empty neutral
- * box: it's optional), then its video. Typing the weight saves it; reps or
+ * One warm-up as a row in the set table's own columns: reps, effort (blank
+ * reads as a normal last warm-up, RPE 7, the engine's own assumption) and the
+ * weight (an empty neutral box: nothing suggested), then its video. Typing the weight saves it; reps or
  * effort changed afterwards update it. Saves run one at a time, in order, each
  * with what's on screen when it runs, onto the warm-up the first save made: the
  * same in any typing order, however fast. Its flame opens Remove.
@@ -415,7 +409,6 @@ function WarmupLine({
   gridTemplate,
   columns,
   effortKind,
-  seed,
   canEdit,
   onSave,
   onFirstSave,
@@ -428,7 +421,6 @@ function WarmupLine({
   gridTemplate: string;
   columns: WarmupColumns;
   effortKind: "rpe" | "rir";
-  seed: { load: number; reps: number } | null;
   canEdit: boolean;
   onSave: WarmupSave;
   onFirstSave?: (id: string) => void;
@@ -438,13 +430,8 @@ function WarmupLine({
   editRef?: { current: (() => void) | null };
 }) {
   const [load, setLoad] = useState(existing ? String(warmupDisplay(existing, unit)) : "");
-  const [reps, setReps] = useState(existing ? String(existing.reps) : seed ? String(seed.reps) : "");
+  const [reps, setReps] = useState(existing ? String(existing.reps) : "");
   const [effort, setEffort] = useState(existing ? warmupEffortText(existing.rpe, effortKind) : "");
-  // The suggested warm-up loads after the row: take its reps until they're typed or saved.
-  const repsTyped = useRef(!!existing);
-  useEffect(() => {
-    if (!repsTyped.current && seed?.reps) setReps(String(seed.reps));
-  }, [seed?.reps]);
 
   // What's on screen, read when a save runs (never a value from when it was queued).
   const shown = useRef({ load, reps, effort });
@@ -496,7 +483,6 @@ function WarmupLine({
     setLoad(String(warmupDisplay(existing, unit)));
     setReps(String(existing.reps));
     setEffort(warmupEffortText(existing.rpe, effortKind));
-    repsTyped.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing?.id, existing?.load, existing?.unit, existing?.reps, existing?.rpe, unit, effortKind]);
 
@@ -513,6 +499,14 @@ function WarmupLine({
   const needsReps = !saved && Number(load.replace(",", ".")) > 0 && !(Number(reps) >= 1 && Number(reps) <= WARMUP_LOG_MAX_REPS && Number.isInteger(Number(reps)));
 
   return (
+    // a swipe left shows Delete (a warm-up never counts as work, so it just goes, with Undo)
+    <SwipeToReveal
+      variant="row"
+      enabled={canEdit && !!onRemove}
+      actionText="Delete"
+      actionLabel={saved ? `Delete warm-up ${label}` : "Discard new warm-up"}
+      onAction={() => onRemove?.()}
+    >
     <div data-testid={saved ? "warmup-row" : "warmup-open"} data-warmup-saved={saved ? "true" : "false"}>
       <div className="grid items-center gap-1.5 px-2 py-1" style={{ gridTemplateColumns: gridTemplate }}>
         {canEdit && onRemove ? (
@@ -545,7 +539,6 @@ function WarmupLine({
           disabled={!canEdit}
           quiet
           onCommit={(v) => {
-            repsTyped.current = true;
             setReps(v);
             save({ reps: v });
           }}
@@ -590,6 +583,7 @@ function WarmupLine({
         <p className="px-3 pb-1 text-[12px] font-medium text-foreground" data-warmup-needs-reps>Add its reps (1–{WARMUP_LOG_MAX_REPS}) to save it</p>
       )}
     </div>
+    </SwipeToReveal>
   );
 }
 

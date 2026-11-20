@@ -13,7 +13,18 @@
  * and speed can be measured per stage. Server only.
  */
 
-export type Effort = "low" | "medium" | "high";
+/**
+ * "minimal": GPT-5's quickest setting, for a short answer someone is waiting on (exercise
+ * search's "describe it"). Only GPT-5 / -mini / -nano take it; any other model gets "low"
+ * (`effortFor`), so a fallback model is never refused for it.
+ */
+export type Effort = "minimal" | "low" | "medium" | "high";
+
+/** The effort a model takes: "minimal" only where it exists. */
+export function effortFor(id: string, effort: Effort | undefined): Exclude<Effort, "minimal"> | "minimal" | undefined {
+  if (effort !== "minimal") return effort;
+  return /(^|\/)gpt-5(-mini|-nano)?$/.test(id) ? "minimal" : "low";
+}
 export type ModelUsage = { input: number | null; output: number | null; reasoning: number | null };
 export type ModelReply = { text: string; model: string; usage: ModelUsage; ms: number };
 export type ModelRequest = {
@@ -111,7 +122,7 @@ function openaiHeaders(): Record<string, string> {
 async function gatewayChat(id: string, r: ModelRequest): Promise<Omit<ModelReply, "model" | "ms">> {
   const body: Record<string, unknown> = { model: id, messages: [{ role: "system", content: r.system }, { role: "user", content: r.prompt }], stream_options: { include_usage: true } };
   if (isReasoning(id)) {
-    if (r.effort) body.reasoning_effort = r.effort;
+    if (r.effort) body.reasoning_effort = effortFor(id, r.effort);
   } else if (r.temperature != null) body.temperature = r.temperature;
   if (r.maxOutputTokens) body[isReasoning(id) ? "max_completion_tokens" : "max_tokens"] = r.maxOutputTokens;
   let text = "";
@@ -136,7 +147,7 @@ async function gatewayChat(id: string, r: ModelRequest): Promise<Omit<ModelReply
  */
 async function gatewayMessages(id: string, r: ModelRequest): Promise<Omit<ModelReply, "model" | "ms">> {
   const body: Record<string, unknown> = { model: id, max_tokens: r.maxOutputTokens ?? 32_000, system: r.system, messages: [{ role: "user", content: r.prompt }], thinking: { type: "adaptive" } };
-  if (r.effort) body.output_config = { effort: r.effort };
+  if (r.effort) body.output_config = { effort: r.effort === "minimal" ? "low" : r.effort };
   let text = "";
   let input: number | null = null;
   let output: number | null = null;
@@ -180,7 +191,7 @@ function openaiBody(id: string, r: ModelRequest, background: boolean): Record<st
     model: id,
     instructions: r.system,
     input: r.prompt,
-    ...(isReasoning(id) ? { reasoning: { effort: r.effort ?? "medium" } } : r.temperature != null ? { temperature: r.temperature } : {}),
+    ...(isReasoning(id) ? { reasoning: { effort: effortFor(id, r.effort) ?? "medium" } } : r.temperature != null ? { temperature: r.temperature } : {}),
     ...(r.maxOutputTokens ? { max_output_tokens: r.maxOutputTokens } : {}),
     ...(background ? { background: true, store: true } : {}),
   };

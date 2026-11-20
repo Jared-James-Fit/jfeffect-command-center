@@ -236,10 +236,18 @@ export function checkoutCta(input: {
   painArea: string | null;
   sleepBucket: string | null;
   recoveryToday: number | null;
+  /** A picked place with no "how bad" yet (the body map's places each have their own). */
+  painUnrated?: boolean;
+  /** "Somewhere else" picked with nothing said about where. */
+  painUnnamed?: boolean;
 }): { label: string; enabled: boolean } {
   if (input.effort == null) return { label: "Pick how hard it was", enabled: false };
   if (input.pain === true && !input.painArea)
     return { label: "Pick where it hurts", enabled: false };
+  if (input.pain === true && input.painUnnamed)
+    return { label: "Say where it hurts", enabled: false };
+  if (input.pain === true && input.painUnrated)
+    return { label: "Pick how bad it is", enabled: false };
   if (input.isEdit) return { label: "Save changes", enabled: true };
   const skipped = [input.sleepBucket, input.recoveryToday, input.pain].filter(
     (v) => v == null,

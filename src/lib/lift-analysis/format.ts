@@ -142,12 +142,18 @@ export function shownNotes(a: LiftAnalysis): QualityNote[] {
   return order.filter((n) => a.quality.notes.includes(n));
 }
 
-/** One line for the set, for the sheet and the chat: "3 reps · best 0.53 m/s · 31% velocity loss". */
+/**
+ * One line for the set, for the sheet and the chat: "5 reps · avg 0.21 m/s"
+ * when the set's average was good enough to log, else the fastest rep with
+ * velocity loss ("3 reps · best ≈0.53 m/s · 31% velocity loss").
+ */
 export function summaryLine(a: LiftAnalysis): string {
   const parts: string[] = [];
   const n = a.set.reps;
   parts.push(n === 1 ? "1 rep" : `${n} reps`);
-  if (a.set.bestMcv.tier !== "unavailable" && a.set.bestMcv.v != null)
+  if (a.velocity?.accepted && a.velocity.value != null) {
+    parts.push(`${n > 1 ? "avg " : ""}${fixed(a.velocity.value, 2)} m/s`);
+  } else if (a.set.bestMcv.tier !== "unavailable" && a.set.bestMcv.v != null)
     parts.push(`${n > 1 ? "best " : ""}${speed(a.set.bestMcv)}`);
   if (n > 1 && a.set.velocityLoss.tier !== "unavailable" && a.set.velocityLoss.v != null)
     parts.push(`${percent(a.set.velocityLoss)} velocity loss`);

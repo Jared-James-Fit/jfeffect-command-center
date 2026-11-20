@@ -117,3 +117,49 @@ describe("a swipe never lands on a half-painted post", () => {
     expect(share).not.toContain("whenStill");
   });
 });
+
+describe("an automated post appears all at once (Nov 20 2026)", () => {
+  const art = read("src/components/community/post-art.tsx");
+  const lib = read("src/lib/post-art.ts");
+
+  it("a kept card is read from the phone as soon as its post is on the page, not when it reaches the screen", () => {
+    expect(art).toContain("// as soon as the post is on the page: the one kept on the phone (a read, nothing drawn), so it's ready long before it's seen");
+    expect(art).toContain("if (near && missing && art?.key !== key) setPainting(true);");
+    // the painting's font and logo are fetched as soon as a card needs painting
+    expect(art).toContain("void ensureDisplayFont();");
+    expect(art).toContain("void cardLogo();");
+  });
+
+  it("the card goes on the page only once it's decoded, with no fade and no blank paper first", () => {
+    expect(lib).toContain("export function decodePostArt(art: PostArt): Promise<void> {");
+    expect(lib).toContain("await img.decode();");
+    expect(art).toContain("const shown = useDecodedArt(art, near || eager);");
+    expect(art).toContain('<img src={src} alt={alt} decoding="sync" draggable={false} className="absolute inset-0 h-full w-full object-cover" />');
+    expect(art).not.toContain("media-fade");
+    expect(art).not.toContain("animate-pulse");
+    // the paper is only under a card that's there (or the words fallback)
+    expect(art).toContain('shown || failed ? "bg-[#f6f3ee]" : page ? "bg-transparent" : "bg-muted"');
+  });
+
+  it("on a post's screen its words and buttons wait for the card it opens on, never longer than the hold", () => {
+    expect(art).toContain('data-pending={page && hold && pending && !gaveUp ? "" : undefined}');
+    const css = read("src/styles.css");
+    expect(css).toContain(".feed-page:has([data-post-art][data-pending]) :is([data-page-words], [data-page-actions]) { visibility: hidden; }");
+    const card = read("src/components/community/post-card.tsx");
+    expect(card).toContain("<AutoPostHero post={post} thumbUrl={thumbUrl} unit={unit} page />");
+    // the card it opens on holds; a card that trails a photo never does
+    expect(card).toContain("lead={<PostArtImage post={post} card={card} unit={unit} fill eager={full} page={page} hold={page} />}");
+    expect(card).toContain("trail={card ? <PostArtImage post={post} card={card} unit={unit} fill page={page} /> : undefined}");
+  });
+});
+
+describe("decodePostArt", () => {
+  it("never marks a picture decoded that isn't the one kept in memory", async () => {
+    const { decodePostArt, isPostArtDecoded, resetPostArt } = await import("@/lib/post-art");
+    resetPostArt();
+    expect(isPostArtDecoded("nope")).toBe(false);
+    // a picture not in memory is never marked decoded (it was evicted or never read)
+    await decodePostArt({ key: "k1", url: "blob:none", file: new File([], "a.jpg") });
+    expect(isPostArtDecoded("k1")).toBe(false);
+  });
+});

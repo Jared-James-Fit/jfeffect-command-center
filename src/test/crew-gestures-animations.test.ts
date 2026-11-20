@@ -57,7 +57,7 @@ describe("press and hold pauses a clip, Reels' way, everywhere a clip plays", ()
     expect(reels).toContain("flashSound(toggleSound());");
     expect(reels).toContain("(_t, on) => setPaused(on),");
     expect(reels).toContain("if (hold.justReleased()) return;");
-    expect(reels).toContain('hold.holding && "opacity-0 [&_*]:pointer-events-none"');
+    expect(reels).toContain('(hold.holding || scrubShown) && "opacity-0 [&_*]:pointer-events-none"');
     // no play button left behind: letting go plays it again
     expect(reels).not.toContain("<Play ");
   });

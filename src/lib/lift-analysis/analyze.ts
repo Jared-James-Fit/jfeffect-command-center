@@ -25,8 +25,9 @@ import {
   type Tier,
 } from "@/lib/lift-analysis/kinematics";
 import type { TrackPoint } from "@/lib/lift-analysis/track";
+import { velocityVerdict, type VelocityVerdict } from "@/lib/lift-analysis/verdict";
 
-export const ENGINE_VERSION = "bar-path/1";
+export const ENGINE_VERSION = "bar-path/2";
 
 export type SetMetrics = {
   reps: number;
@@ -82,6 +83,8 @@ export type LiftAnalysis = {
   reps: RepMetrics[];
   set: SetMetrics;
   quality: { tracked: number; notes: QualityNote[] };
+  /** Whether the set-average MCV is good enough to log as the set's velocity (verdict.ts). */
+  velocity: VelocityVerdict;
   /** The smoothed path for drawing: times, x / y as shares of the frame (0…1), velocity (m/s, or null), tracked flags. */
   series: { t: number[]; x: number[]; y: number[]; v: (number | null)[]; ok: number[] };
 };
@@ -232,7 +235,9 @@ function finish(
     (b, r) => (!b || (r.mcv.v ?? 0) > (b.mcv.v ?? 0) ? r : b),
     null,
   );
-  const mean = withV.length
+  // the set's average only when every rep of it was read: a partial set is never called the set
+  const whole = reps.length > 0 && withV.length === reps.length;
+  const mean = whole
     ? (() => {
         const v = withV.reduce((sum, r) => sum + (r.mcv.v ?? 0), 0) / withV.length;
         const u = Math.sqrt(withV.reduce((sum, r) => sum + (r.mcv.u ?? 0) ** 2, 0)) / withV.length;
@@ -242,7 +247,7 @@ function finish(
         const tier = tierOfShare(u95 / v, 0.08, 0.25);
         return tier ? ({ v, u: u95, tier } as Metric) : NONE("too_uncertain");
       })()
-    : NONE(units === "mm" ? "no_reps" : "not_calibrated");
+    : NONE(units !== "mm" ? "not_calibrated" : reps.length ? "partial_set" : "no_reps");
 
   // velocity loss from the raw rise / time of each rep: the scale cancels, so it works without calibration
   const raw = complete.map((r) => {
@@ -333,7 +338,7 @@ function finish(
     ok: points.map((p, i) => (p.found && s.ok[i] ? 1 : 0)),
   };
 
-  return {
+  const out: Omit<LiftAnalysis, "velocity"> = {
     engine: ENGINE_VERSION,
     units,
     fps: round(fps, 2),
@@ -374,6 +379,7 @@ function finish(
     quality: { tracked: round(tracked, 3), notes: [...notes] },
     series,
   };
+  return { ...out, velocity: velocityVerdict(out as LiftAnalysis) };
 }
 
 function sxValueAt(sx: { t: number[]; y: number[] }, time: number): number {

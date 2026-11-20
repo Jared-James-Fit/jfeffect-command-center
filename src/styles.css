@@ -1443,7 +1443,10 @@ html[data-keyboard-open="true"] .shell-bar { visibility: hidden; }
    whole sits in the room above them, never under them (TikTok's). --page-words-h is their own height
    (PostCard); they sit --feed-words-bottom up from the post's bottom and the hero ends at the tab bar
    (--feed-nav-room), both moving with --feed-gap together, so the room is right however the screen reads; 8px between */
-[data-feed-page-post] { --feed-words-room: calc(var(--page-words-h, 0px) + var(--feed-words-bottom) - var(--feed-nav-room) + 8px); }
+[data-feed-page-post] { --feed-words-room: calc(var(--page-words-h, 0px) + var(--feed-words-bottom) + var(--feed-scrub-lane, 0px) - var(--feed-nav-room) + 8px); }
+/* a post with a clip: its progress bar runs along the screen's bottom, so its words and buttons sit a lane
+   above it (Reels'), clear of the bar's own strip where a tap seeks (VideoScrubber, SCRUB_TAP_PX) */
+[data-feed-page-post][data-has-clip] { --feed-scrub-lane: 12px; }
 /* the first post under the stories (TikTok's Friends): its picture sits right under them, not a bar's
    height lower (the bar only covers that room once the post is up), so a picture shown whole shows whole
    above the tab bar; it eases down to its place as the post comes up (--first-under, useStoriesMotion).
@@ -1514,6 +1517,10 @@ html.feed-paging:not([data-pov-banner-on]) .ios-status-band { @variant max-md { 
 }
 .feed-item[data-shown] .caught-up-ring { animation: caught-up-pop 520ms cubic-bezier(.2,.8,.2,1) 120ms both; }
 /* photos fade in as they arrive instead of popping */
+/* An automated post appears all at once on its screen: its words and buttons wait for the card it opens on
+   (PostArtImage page + hold sets data-pending until the card is decoded, at most ART_HOLD_MS on screen).
+   Visibility only: never an opacity or transform on a whole screen (a layer an iPhone paints in strips). */
+.feed-page:has([data-post-art][data-pending]) :is([data-page-words], [data-page-actions]) { visibility: hidden; }
 .media-fade { opacity: 0; transition: opacity 280ms ease-out; }
 .media-fade[data-loaded] { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {

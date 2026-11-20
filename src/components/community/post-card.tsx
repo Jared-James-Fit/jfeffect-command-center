@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type C
 import { LiveDot } from "@/components/live-indicator";
 import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, ChevronsLeft, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
 import { CLIP_HOLD_EVENT, InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
+import { CLIP_SCRUB_EVENT, inClipScrubBand } from "@/lib/video-scrub";
 import { justGaveSound } from "@/lib/video-pool";
 import { UserAvatar } from "@/components/user-avatar";
 import { WIN_STYLE } from "@/components/community/pulse-style";
@@ -36,7 +37,7 @@ import {
   type WorkoutWin,
 } from "@/lib/community";
 import { useFullMediaUrl, usePrefetchPostReactors, useSlideThumbUrls } from "@/lib/community.queries";
-import { FEED_MAX_ASPECT, FEED_VIDEO_MAX_HEIGHT, VIDEO_MIN_ASPECT, clipFrame, feedAspect, focusPosition, screenFit, videoAspect, type MediaFocus } from "@/lib/photo-frame";
+import { FEED_MAX_ASPECT, FEED_VIDEO_MAX_HEIGHT, VIDEO_MIN_ASPECT, cleanFocus, clipFrame, feedAspect, focusPosition, photoZoomBox, screenFit, slideAspect, videoAspect, type MediaFocus } from "@/lib/photo-frame";
 import { LikedBy, ReactorsSheet } from "@/components/community/reactors-sheet";
 import { ReactionsRise, useEngagementPop } from "@/components/community/engagement-pop";
 import { PostViewsRow, usePostViewTracker } from "@/components/community/post-views";
@@ -126,12 +127,13 @@ export function isPhotoPost(post: Pick<CommunityPost, "kind" | "media_type" | "s
  * send); a photo on it (Saturday's made scene, or one the coach added) is the
  * picture instead, with a numbers card after it and a lesson's card before it.
  */
-export function AutoPostHero({ post, thumbUrl, unit, full = false }: { post: CommunityPost; thumbUrl: string | null; unit: "kg" | "lb"; full?: boolean }) {
+export function AutoPostHero({ post, thumbUrl, unit, full = false, page = false }: { post: CommunityPost; thumbUrl: string | null; unit: "kg" | "lb"; full?: boolean; page?: boolean }) {
   const plan = instagramPlan(post);
   const card = isAutoPost(post) ? plan.card : null;
-  if (post.media_type && card && !plan.cardLast) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} lead={<PostArtImage post={post} card={card} unit={unit} fill eager={full} />} />;
-  if (post.media_type) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} trail={card ? <PostArtImage post={post} card={card} unit={unit} fill /> : undefined} />;
-  return card ? <PostArtImage post={post} card={card} unit={unit} eager={full} /> : null;
+  // `page`: a post's own screen in the feed, where the card it opens on holds the post's words until it's ready (all at once)
+  if (post.media_type && card && !plan.cardLast) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} lead={<PostArtImage post={post} card={card} unit={unit} fill eager={full} page={page} hold={page} />} />;
+  if (post.media_type) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} trail={card ? <PostArtImage post={post} card={card} unit={unit} fill page={page} /> : undefined} />;
+  return card ? <PostArtImage post={post} card={card} unit={unit} eager={full} page={page} hold={page} /> : null;
 }
 
 /**
@@ -524,11 +526,21 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       if (sheetOpen) return null;
       const t = e.target as Element | null;
       const clip = t?.closest?.("[data-inline-video]");
-      return clip && !t?.closest?.("button") ? clip : null;
+      // the bottom of a clip is its progress bar's: a finger resting there is about to scrub, never a pause
+      return clip && !t?.closest?.("button") && !inClipScrubBand(clip, e.clientX, e.clientY) ? clip : null;
     },
     (clip, on) => clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: on })),
   );
-  const holding = layout === "page" && hold.holding;
+  // a finger on a clip's bar (VideoScrubber) is the same on its screen: the words and buttons step aside while it scrubs
+  const [scrubbing, setScrubbing] = useState(false);
+  useEffect(() => {
+    const a = articleRef.current;
+    if (!a) return;
+    const on = (e: Event) => setScrubbing((e as CustomEvent<boolean>).detail === true);
+    a.addEventListener(CLIP_SCRUB_EVENT, on);
+    return () => a.removeEventListener(CLIP_SCRUB_EVENT, on);
+  }, []);
+  const holding = layout === "page" && (hold.holding || scrubbing);
   // held, the whole screen is the clip (Reels'): Crew's bar steps aside too (styles.css, html[data-clip-held])
   useEffect(() => {
     if (!holding) return;
@@ -658,11 +670,16 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     const liked = reactionTotal(post) > 0;
     // the coach among the "Liked by" faces (its first three), so the line already says it
     const coachInFaces = (post.reactors ?? []).slice(0, 3).some((r) => r.is_coach);
+    // a clip has its progress bar along the screen's bottom: the words and buttons sit a lane above it (styles.css)
+    const hasClip = visual && !auto && postSlides(post).some((sl) => sl.type === "video");
     return (
       <article
         ref={articleRef}
         data-feed-post
         data-feed-page-post={visual ? "visual" : "words"}
+        // a drag that starts low on the screen, over the words too, can scrub the clip (VideoScrubber's band)
+        data-scrub-band
+        data-has-clip={hasClip ? "" : undefined}
         className={cn(
           "relative h-full w-full text-foreground",
           raise > 0 ? "z-[1] overflow-visible" : "overflow-hidden",
@@ -688,7 +705,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
               // an automated post's 4:5 card: the full width, black above and below, centred between the bars
               // (its sheet open: a rounded card above it, Instagram's)
               <FitBox ratio={0.8} page shrunk={sheetOpen}>
-                <AutoPostHero post={post} thumbUrl={thumbUrl} unit={unit} />
+                <AutoPostHero post={post} thumbUrl={thumbUrl} unit={unit} page />
               </FitBox>
             ) : (
               // its own photos and clips: the screen is the canvas (TikTok's), PostMedia page;
@@ -770,7 +787,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
             "pointer-events-none absolute inset-x-0 bottom-0 z-[2] pt-16 transition-opacity duration-200",
             (sheetOpen || under || holding) && "opacity-0",
           )}
-          style={{ paddingBottom: "var(--feed-words-bottom)" }}
+          style={{ paddingBottom: "calc(var(--feed-words-bottom) + var(--feed-scrub-lane, 0px))" }}
           data-page-words
         >
           <div ref={wordsRef} className={cn("mr-16 space-y-1.5 px-3 [text-shadow:0_1px_3px_rgb(0_0_0/0.5)]", !sheetOpen && !under && !holding && "pointer-events-auto")} data-page-words-body>
@@ -883,7 +900,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
             visual && "[filter:drop-shadow(0_1px_2px_rgb(0_0_0/0.55))]",
             (sheetOpen || under || holding) && "pointer-events-none opacity-0",
           )}
-          style={{ bottom: "var(--feed-actions-bottom)" }}
+          style={{ bottom: "calc(var(--feed-actions-bottom) + var(--feed-scrub-lane, 0px))" }}
           data-page-actions
         >
           <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} onOpenLikes={() => setLikesOpen(true)} unit={unit} column hidden={sheetOpen || under || holding} />
@@ -1481,6 +1498,8 @@ function SlideMedia({
   const src = (full && !isVideo ? fullUrl : null) ?? thumbUrl;
   // data-pinch-zoom: pinch lifts just this (the page never zooms), see useMediaPinchZoom
   const position = focusPosition(slide.focus);
+  // a photo shown on a post's screen: its box between the bars, zoomed a little when it's slightly taller than the room
+  const zoom = page && !isVideo ? photoZoomBox(slideAspect(slide), cleanFocus(slide.focus)?.y ?? 0.5) : null;
   return (
     <>
       {isVideo ? (
@@ -1496,6 +1515,18 @@ function SlideMedia({
             frame={clipFrame(slide.focus)}
             media={slide.width && slide.height ? slide.width / slide.height : null}
           />
+        </div>
+      ) : page && !shrunk && fit === "cover" ? (
+        // framed for the whole screen (9:16, screenFit): it fills it edge to edge like a clip, the words over its foot
+        <div data-pinch-zoom className="absolute inset-0" data-photo-fit="cover">
+          {src ? <FadeImg src={src} position={position} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+        </div>
+      ) : page && !shrunk && zoom ? (
+        // between Crew's bar and the words: the full width, a slightly taller photo zoomed a little (photoZoomBox), never stretched
+        <div data-pinch-zoom className="absolute inset-0 overflow-hidden" style={{ ...BETWEEN_BARS, containerType: "size" }} data-photo-fit="zoom">
+          <div className="absolute" style={zoom}>
+            {src ? <FadeImg src={src} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+          </div>
         </div>
       ) : (
         // on a post's screen a photo shows whole, between Crew's bar and the tab bar
