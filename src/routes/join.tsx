@@ -1,18 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { FreeSignup } from "@/components/auth/free-signup";
+import { MembershipApplication } from "@/components/join/membership-application";
 import { shareMeta } from "@/lib/share-meta";
 
-// /join: a free JF Effect account, on the web and inside the app alike (no
-// payment, so nothing for the app stores to object to).
+// /join: the free membership application (membership-apply.ts), on the web and
+// inside the app alike. No account or payment: Jared approves it, then an
+// activation link lets them in.
 export const Route = createFileRoute("/join")({
-  component: FreeSignup,
+  component: MembershipApplication,
   head: () => ({
     meta: [
-      { title: "Join JF Effect Free | Workout Programs, Training Log & Fitness Community" },
+      { title: "Join JF Effect Free | Training App, Programs & Crew" },
       {
         name: "description",
         content:
-          "Make a free JF Effect account: coach-written programs or your own, a training log with PRs and progress, and a crew of lifters to train with.",
+          "Apply for a free JF Effect membership in about a minute: coach-written programs, a training log with PRs and progress, nutrition, and a crew of lifters to train with.",
       },
       ...shareMeta({
         title: "Join JF Effect",

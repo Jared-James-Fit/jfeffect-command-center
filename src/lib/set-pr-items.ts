@@ -36,8 +36,11 @@ export function setPrItems(input: {
   localPr?: SetPR | null;
   assisted?: boolean;
   unit: "kg" | "lb";
+  /** The machine it was on, when a weight on it means nothing on another one: "· on Hammer row". */
+  equipment?: string | null;
 }): SetPrItem[] {
   const { record, loadRecord, localPr, assisted, unit } = input;
+  const on = input.equipment ? ` · on ${input.equipment}` : "";
   const items: SetPrItem[] = [];
   const repScope = record ? topScope(record) : null;
   if (record && repScope) {
@@ -46,7 +49,7 @@ export function setPrItems(input: {
       key: "reps",
       scope: repScope,
       title: `${record.reps}-rep ${SCOPE_WORDS[repScope]}`,
-      detail: `${formatLoad(record.load_kg, unit)} × ${record.reps}${prev != null ? ` · was ${formatLoad(prev, unit)}` : ""}`,
+      detail: `${formatLoad(record.load_kg, unit)} × ${record.reps}${prev != null ? ` · was ${formatLoad(prev, unit)}` : ""}${on}`,
     });
   }
   const loadScope = loadRecord ? topScope(loadRecord) : null;
@@ -56,7 +59,7 @@ export function setPrItems(input: {
       key: "weight",
       scope: loadScope,
       title: `Weight ${SCOPE_WORDS[loadScope]}`,
-      detail: `Heaviest yet · ${formatLoad(loadRecord.load_kg, unit)}${prev != null ? ` · was ${formatLoad(prev, unit)}` : ""}`,
+      detail: `Heaviest yet · ${formatLoad(loadRecord.load_kg, unit)}${prev != null ? ` · was ${formatLoad(prev, unit)}` : ""}${on}`,
     });
   }
   if (!items.length && localPr) {
@@ -66,7 +69,7 @@ export function setPrItems(input: {
       title: `${localPr.reps}-rep all-time PR`,
       detail: assisted
         ? `${num(localPr.amount)} ${localPr.unit} less assistance than your best`
-        : `+${num(localPr.amount)} ${localPr.unit} over your previous best`,
+        : `+${num(localPr.amount)} ${localPr.unit} over your previous best${on}`,
     });
   }
   return items;

@@ -33,7 +33,11 @@ import {
   Trophy,
   User,
   Watch,
+  SlidersHorizontal,
 } from "lucide-react";
+import { EquipmentManager, equipmentSummaryLine } from "@/components/equipment/equipment-manager";
+import { EquipmentSetupTips } from "@/components/equipment/setup-tips";
+import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
 import { AiCreditsPanel, useAiCredits } from "@/components/ai-credits/ai-credits";
 import { chipLabel } from "@/lib/ai-credits/packs";
 import { isBasicInfoComplete } from "@/lib/basic-info";
@@ -81,6 +85,7 @@ const PROFILE_FIELDS = ["first_name", "last_name", "preferred_name", "phone", "a
  */
 type SectionId =
   | "units"
+  | "equipment"
   | "notifications"
   | "coaching-agreement"
   | "health"
@@ -100,6 +105,9 @@ const SECTION_ALIASES: Record<string, SectionId> = {
   "training-schedule": "units",
   schedule: "units",
   notifications: "notifications",
+  equipment: "equipment",
+  setups: "equipment",
+  "equipment-setups": "equipment",
   "coaching-agreement": "coaching-agreement",
   agreement: "coaching-agreement",
   health: "health",
@@ -155,6 +163,11 @@ function AccountPage() {
       return data;
     },
   });
+
+  // Equipment & setups: everyone who trains (the summary on its row).
+  const { data: equipmentData } = useAthleteEquipment(client?.id ?? null);
+  const equipmentSummary = equipmentSummaryLine(equipmentData);
+  const [equipmentGuide, setEquipmentGuide] = useState(false);
 
   // Health & injuries: a coaching client's (their coach plans around it).
   const { data: healthItems = [] } = useMyHealthItems(goalsOn ? client?.id : null, isImpersonating);
@@ -469,6 +482,15 @@ function AccountPage() {
                 </SectionErrorBoundary>
               </div>
             </SettingsSection>
+
+            {client?.id && (
+              <SettingsSection id="equipment" icon={SlidersHorizontal} title="Equipment & setups" summary={equipmentSummary ? { text: equipmentSummary } : null}>
+                <SectionErrorBoundary label="Equipment & setups">
+                  <EquipmentManager clientId={client.id} coachView={isImpersonating} onShowGuide={() => setEquipmentGuide(true)} />
+                </SectionErrorBoundary>
+                {equipmentGuide && <EquipmentSetupTips onClose={() => setEquipmentGuide(false)} unit={client?.preferred_weight_unit === "kg" ? "kg" : "lb"} />}
+              </SettingsSection>
+            )}
 
             <SettingsSection id="notifications" icon={Bell} title="Notifications, sounds & haptics">
               <SectionErrorBoundary label="Push Notifications">

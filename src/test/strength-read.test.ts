@@ -78,7 +78,7 @@ describe("history reads like a coach's log", () => {
     expect(sheet).toContain("data-history-day-summary");
     expect(sheet).toContain("const isOpen = openDays.has(dayKey);");
     expect(sheet).toContain('"EEE, MMM d" : "EEE, MMM d, yyyy"');
-    expect(sheet.indexOf("data-history-session-workout")).toBeLessThan(sheet.indexOf("groups.slice(0, 3)"));
+    expect(sheet.indexOf("data-history-session-workout")).toBeLessThan(sheet.indexOf("lines.slice(0, 3)"));
   });
   it("the suggestion's ⓘ is two lines with the working-out folded", () => {
     const card = read("src/components/workout-day/load-suggestion-card.tsx");

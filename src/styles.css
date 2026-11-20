@@ -489,7 +489,13 @@ html[data-pov-banner-on] .ios-status-band {
 html[data-camera-open],
 html[data-camera-open] body,
 html[data-camera-open] [data-shell-root] { background-color: #000; }
-html[data-camera-open]:not([data-pov-banner-on]) .ios-status-band { background-color: #000; }/* When keyboard is open, collapse the topbar height so the messenger
+html[data-camera-open]:not([data-pov-banner-on]) .ios-status-band { background-color: #000; }
+/* "/" renders both jfeffect.com's landing page and the app's launch splash; the head
+   script (landing-launch.ts) picks one before the first paint, so the installed app
+   never flashes a marketing page and a visitor never sees a loading splash. */
+html[data-launch="app"] [data-landing] { display: none !important; }
+html:not([data-launch="app"]) [data-launch-splash] { display: none !important; }
+/* When keyboard is open, collapse the topbar height so the messenger
    container fills the full visual viewport without dead space at the top. */
 html[data-keyboard-open="true"] {
   --shell-topbar-h: 0px;

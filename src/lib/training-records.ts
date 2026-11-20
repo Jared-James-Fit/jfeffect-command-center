@@ -15,6 +15,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { trainingWeightText } from "@/lib/workouts/exercise-history";
 
 export const KG_TO_LB = 2.2046226218;
 
@@ -101,11 +102,13 @@ export function kgTo(unit: "kg" | "lb", kg: number): number {
   return unit === "lb" ? kg * KG_TO_LB : kg;
 }
 
-/** Loads display like the logger: whole/half units. */
+/**
+ * A load as the logger and History read it (trainingWeightText): a typed number
+ * comes back as typed (101.25 kg, 72.5 lb), a converted one exact to one
+ * decimal, never rounded to a plate (152.5 kg reads 336.2 lb, not 336).
+ */
 export function formatLoad(kg: number, unit: "kg" | "lb"): string {
-  const v = kgTo(unit, kg);
-  const rounded = unit === "lb" ? Math.round(v * 2) / 2 : Math.round(v * 4) / 4;
-  return `${Number(rounded.toFixed(2))} ${unit}`;
+  return `${trainingWeightText(kgTo(unit, kg))} ${unit}`;
 }
 
 export function formatTonnage(kg: number, unit: "kg" | "lb"): string {

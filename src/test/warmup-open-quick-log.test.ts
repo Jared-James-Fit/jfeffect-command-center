@@ -75,16 +75,23 @@ describe("the last warm-up is open on the card, and optional", () => {
     video: () => createElement("span", { "data-video-cell": "" }),
   };
 
-  it("before set 1 on a barbell main lift: reps pre-filled, RPE 7, the weight empty, a camera", () => {
+  it("before set 1 on a barbell main lift: under a Warm-up label with ⓘ, reps pre-filled, RPE and the weight blank, a camera", () => {
     const html = renderToStaticMarkup(createElement(WarmupRows, { ...base, openRow: true, suggestOn: true }));
     expect(html).toContain('data-testid="warmup-open"');
     expect(html).toContain('data-warmup-saved="false"');
+    // said once, above its rows: never a bare "W" to guess at
+    expect(html).toContain("data-warmup-label");
+    expect(html).toContain(">Warm-up<");
+    expect(html).toContain("optional, not counted as a set");
+    expect(html).toContain('aria-label="How warm-ups work"');
+    expect(html.indexOf("data-warmup-label")).toBeLessThan(html.indexOf('data-testid="warmup-open"'));
     expect(html).toContain("Last warm-up reps");
     expect(html).toContain(">2<");
-    expect(html).toContain(">7<");
+    // no pre-filled RPE 7: a blank warm-up already reads as a normal one
+    expect(html).not.toContain(">7<");
     expect(html).toContain("Last warm-up weight in lb");
     expect(html).toContain("data-video-cell");
-    expect(html).toContain("Last warm-up · optional");
+    expect(html).toContain("Your last warm-up");
     expect(html).toContain("tunes Suggested");
     // never the old one-line prompt beside it
     expect(html).not.toContain('data-testid="warmup-prompt"');
