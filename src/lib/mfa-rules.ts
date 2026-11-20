@@ -19,6 +19,17 @@ export function roleRequiresMfa(role: string | null | undefined): boolean {
   return !!role && MFA_REQUIRED_ROLES.has(role);
 }
 
+/**
+ * Server functions a session may call before its code: only using a recovery
+ * code (lost phone), which needs the password-only session by design and is
+ * limited to 5 wrong tries an hour in the database.
+ */
+export const MFA_EXEMPT_FNS: ReadonlySet<string> = new Set(["redeemRecoveryCode"]);
+
+export function mfaExemptFn(name: string | null | undefined): boolean {
+  return !!name && MFA_EXEMPT_FNS.has(name);
+}
+
 /** What a server function says to a session that still needs its code. */
 export const MFA_NEEDED_MESSAGE = "Enter the code from your authenticator app to continue.";
 

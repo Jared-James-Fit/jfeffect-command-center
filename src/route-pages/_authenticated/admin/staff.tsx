@@ -1,5 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { roleRequiresMfa } from "@/lib/mfa-rules";
+import { resetTeammateTwoStep } from "@/lib/mfa-recovery.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -240,6 +241,12 @@ function MemberCard({ m, onChanged }: { m: TeamMember; onChanged: () => void }) 
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const isCoachOnly = m.roles.includes("coach") && !m.roles.includes("admin");
+  // A teammate who lost their phone (and their recovery codes): the owner turns
+  // their two-step off and they set it up again at their next sign-in.
+  const { user } = useAuth();
+  const resetTwoStep = useServerFn(resetTeammateTwoStep);
+  const canResetTwoStep = role === "admin" && !viewOnly && m.user_id !== user?.id && !m.roles.includes("admin");
+  const [confirmReset, setConfirmReset] = useState(false);
 
   return (
     <Card className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
@@ -261,6 +268,12 @@ function MemberCard({ m, onChanged }: { m: TeamMember; onChanged: () => void }) 
           <Eye className="h-4 w-4" /><span className="ml-1 text-xs">View as</span>
         </Button>
       )}
+      {canResetTwoStep && (
+        <Button size="sm" variant="ghost" className="shrink-0" disabled={busy} onClick={() => setConfirmReset(true)}
+          data-reset-two-step>
+          Reset two-step
+        </Button>
+      )}
       {removable && (
         <Button size="sm" variant="outline" className="shrink-0" disabled={busy} onClick={() => setConfirm(true)}>Remove</Button>
       )}
@@ -269,6 +282,29 @@ function MemberCard({ m, onChanged }: { m: TeamMember; onChanged: () => void }) 
           People <ChevronRight className="ml-0.5 h-4 w-4" />
         </Button>
       )}
+      <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset {m.name || "this person"}'s two-step sign-in?</AlertDialogTitle>
+            <AlertDialogDescription>
+              For a lost phone. Their authenticator and recovery codes stop working and they're signed out
+              everywhere. They sign in with their password and set up two-step on their new phone. Only do this
+              once you've confirmed it's really them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={async () => {
+              setBusy(true);
+              try {
+                const r = await resetTwoStep({ data: { userId: m.user_id } });
+                toast.success(r.removed ? "Two-step reset. They'll set it up again when they sign in." : "They had no authenticator to reset.");
+              } catch (e: any) { toast.error(e?.message ?? "Couldn't reset it"); }
+              finally { setBusy(false); }
+            }}>Reset</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={confirm} onOpenChange={setConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>

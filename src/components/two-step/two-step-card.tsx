@@ -19,8 +19,17 @@ import { roleRequiresMfa } from "@/lib/mfa-rules";
 import { listAuthenticators, mfaErrorMessage, removeAuthenticator, type TotpFactor } from "@/lib/mfa";
 import { billingDay } from "@/lib/date-range";
 import { TotpSetup } from "@/components/two-step/totp-setup";
+import { RecoveryCodesPanel } from "@/components/two-step/recovery-codes";
+import { supabase } from "@/integrations/supabase/client";
 
 const KEY = ["mfa-authenticators"] as const;
+const CODES_KEY = ["mfa-recovery-left"] as const;
+
+async function recoveryCodesLeft(): Promise<number> {
+  const { data, error } = await (supabase as any).rpc("staff_mfa_recovery_left");
+  if (error) throw error;
+  return typeof data === "number" ? data : 0;
+}
 
 /**
  * The login's authenticators (two-step sign-in, mfa-rules.ts): add a backup
@@ -28,11 +37,14 @@ const KEY = ["mfa-authenticators"] as const;
  * out, or remove one. The last one stays while the login needs it.
  */
 export function TwoStepCard() {
-  const { accountRole } = useAuth();
+  const { accountRole, user } = useAuth();
   const qc = useQueryClient();
   const required = roleRequiresMfa(accountRole);
   const { data: factors, isLoading, error } = useQuery({ queryKey: KEY, queryFn: listAuthenticators, staleTime: 30_000 });
   const [adding, setAdding] = useState(false);
+  const [makingCodes, setMakingCodes] = useState(false);
+  const hasAuthenticator = (factors?.length ?? 0) > 0;
+  const { data: codesLeft } = useQuery({ queryKey: CODES_KEY, queryFn: recoveryCodesLeft, enabled: hasAuthenticator, staleTime: 30_000 });
   const [removing, setRemoving] = useState<TotpFactor | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -89,6 +101,43 @@ export function TwoStepCard() {
       )}
       {!isLoading && list.length === 1 && required && (
         <p className="text-xs text-muted-foreground">Only one authenticator. If you lose that phone you'll need a reset to get back in.</p>
+      )}
+
+      {hasAuthenticator && (
+        <div className="space-y-3 rounded-lg border p-3" data-recovery-codes-row>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-medium">Recovery codes</div>
+              <div className={codesLeft === 0 ? "text-xs text-warning" : "text-xs text-muted-foreground"}>
+                {codesLeft === undefined
+                  ? "For when you lose your phone"
+                  : codesLeft === 0
+                    ? "None left. Make some so a lost phone never locks you out."
+                    : `${codesLeft} left · each works once`}
+              </div>
+            </div>
+            {!makingCodes && (
+              <Button variant="outline" size="sm" onClick={() => setMakingCodes(true)}>
+                {codesLeft ? "Make new codes" : "Make codes"}
+              </Button>
+            )}
+          </div>
+          {makingCodes && (
+            <>
+              {!!codesLeft && <p className="text-xs text-muted-foreground">Your old codes stop working as soon as these are made.</p>}
+              <RecoveryCodesPanel
+                email={user?.email}
+                onDone={() => {
+                  setMakingCodes(false);
+                  void qc.invalidateQueries({ queryKey: CODES_KEY });
+                }}
+              />
+              <Button variant="ghost" className="w-full" onClick={() => { setMakingCodes(false); void qc.invalidateQueries({ queryKey: CODES_KEY }); }}>
+                Close
+              </Button>
+            </>
+          )}
+        </div>
       )}
 
       {adding ? (

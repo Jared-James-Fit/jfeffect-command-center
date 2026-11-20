@@ -10,11 +10,13 @@ import { mfaErrorMessage, startTotpEnrollment, verifyTotp, type TotpEnrollment }
  * link opens the authenticator app or the iPhone's Passwords app), or scan the
  * code from a computer, or type the key; then its 6-digit code turns it on.
  */
-export function TotpSetup({ label, submitLabel, onDone }: {
+export function TotpSetup({ label, submitLabel, onDone, onCantStart }: {
   /** Shown in the authenticator app beside "JF Effect". */
   label?: string;
   submitLabel: string;
   onDone: () => void | Promise<void>;
+  /** When Supabase won't start a setup at all: a way on instead of a dead end. */
+  onCantStart?: () => void;
 }) {
   const [enrollment, setEnrollment] = useState<TotpEnrollment | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -43,7 +45,18 @@ export function TotpSetup({ label, submitLabel, onDone }: {
     }
   }
 
-  if (loadError) return <p className="text-sm text-destructive">{loadError}</p>;
+  if (loadError) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-destructive">{loadError}</p>
+        {onCantStart && (
+          <Button variant="outline" className="h-11 w-full" onClick={onCantStart}>
+            Continue for now, set it up later
+          </Button>
+        )}
+      </div>
+    );
+  }
   if (!enrollment) {
     return (
       <div className="grid h-40 place-items-center" aria-busy="true">
@@ -58,6 +71,10 @@ export function TotpSetup({ label, submitLabel, onDone }: {
         <li>On this phone, tap <span className="font-medium text-foreground">Add to authenticator app</span>. On a computer, scan the square with your phone's camera.</li>
         <li>Type the 6-digit code the app shows for JF Effect.</li>
       </ol>
+      <p className="text-xs text-muted-foreground">
+        On an iPhone the Passwords app works as the authenticator and keeps the code on your other Apple devices,
+        so losing one phone doesn't lose it.
+      </p>
       <Button asChild variant="outline" className="h-11 w-full">
         <a href={enrollment.uri}>Add to authenticator app</a>
       </Button>

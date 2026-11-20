@@ -1,4 +1,5 @@
--- Rollback for supabase/migrations/20270424091500_staff_mfa.sql.
+-- Rollback for supabase/migrations/20270424091500_staff_mfa.sql and
+-- 20270424093000_staff_mfa_recovery.sql.
 -- Puts has_role, has_permission, is_admin_viewer and is_business_owner back
 -- exactly as production had them on Nov 20 2026 (read from pg_get_functiondef
 -- before the change), then drops the two new functions. Run as the database
@@ -64,6 +65,14 @@ $function$;
 
 DROP FUNCTION IF EXISTS public.mfa_enforced_logins();
 DROP FUNCTION IF EXISTS public.caller_mfa_ok(uuid);
+
+-- Recovery codes (20270424093000_staff_mfa_recovery.sql): hashes and events only.
+DROP FUNCTION IF EXISTS public.staff_mfa_recovery_replace(uuid, text[]);
+DROP FUNCTION IF EXISTS public.staff_mfa_recovery_use(uuid, text);
+DROP FUNCTION IF EXISTS public.staff_mfa_recovery_left();
+DROP FUNCTION IF EXISTS public.staff_mfa_reset_record(uuid, uuid);
+DROP TABLE IF EXISTS public.staff_mfa_recovery_codes;
+DROP TABLE IF EXISTS public.staff_mfa_events;
 
 COMMIT;
 RESET lock_timeout;

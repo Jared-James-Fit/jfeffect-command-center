@@ -179,9 +179,14 @@ No measurable performance cost: the new checks are one indexed lookup each, the 
   - **Every server function** refuses the session (`staffMfaGuard` in `src/start.ts` → `mfa-guard.server.ts`). This covers the roughly 70 admin checks that read `user_roles` themselves and then act as the service role.
   - **The database** says no in `has_role`, `has_permission`, `is_admin_viewer` and `is_business_owner` (`caller_mfa_ok`, `20270424091500_staff_mfa.sql`), so direct API calls and realtime are covered too.
   - **Cost and timing.** The rule only applies to logins that have an authenticator, so nothing changes for anyone until they set one up. It costs clients nothing: the server reads the two-person list once a minute per instance, and the database checks only after a staff role is found.
-- **Backups.** Account → Two-step sign-in adds a second authenticator, such as a password manager or another phone. Add one: Supabase TOTP has no recovery codes.
-- **Locked out.** If a login has lost every authenticator, the owner (or Claude, through Lovable's database access) removes its factors and the person sets up a new one on their next open:
+- **Lost phone: three ways back.**
+  - **Recovery codes.** Ten one-time codes are shown right after two-step is turned on (copy, save as a file, "I've saved these" before going on), and can be made again from Account → Two-step sign-in. The database keeps only SHA-256 hashes (`staff_mfa_recovery_codes`, server only). On the code screen, "Lost your phone? Use a recovery code" with the password turns the old authenticator off, signs the login out everywhere (a thief's session too) and asks for the new phone to be set up. Five wrong tries an hour and it waits. `redeemRecoveryCode` is the only server function a password-only session can call.
+  - **The owner resets a teammate.** Team → a person → Reset two-step (never the owner's own; use a recovery code). They sign in with their password and set it up again.
+  - **A backup authenticator.** Account → Two-step sign-in adds a second one. On an iPhone the Passwords app works as the authenticator and syncs the code to your other Apple devices.
+  - Every use and reset pushes the person and the owner, and `staff_mfa_events` keeps the record.
+- **Last resort.** If the owner has lost the phone and the codes, their factors are removed through Lovable's database access, and they set up a new one on their next open:
   `DELETE FROM auth.mfa_factors WHERE user_id = '<login id>';`
+- **Never a dead end.** If Supabase won't start a setup, the gate offers Continue for now. That's no weaker than before: nothing is enforced until an authenticator exists.
 - **Known friction.**
   - Changing your password re-checks it by signing in again, so you'll be asked for a code afterwards.
   - The finance login had this step until Oct 9 2026 and it was removed at the owner's request. It's back for the finance login because the owner asked for MFA on both logins on Nov 17 2026.

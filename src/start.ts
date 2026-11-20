@@ -3,6 +3,7 @@ import { createStart, createMiddleware } from "@tanstack/react-start";
 import { renderErrorPage } from "./lib/error-page";
 import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
 import { getTeamPreview, isPreviewSafeFn, PREVIEW_HEADER, PREVIEW_MESSAGE } from "@/lib/team-preview";
+import { mfaExemptFn } from "@/lib/mfa-rules";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
@@ -39,10 +40,13 @@ const teamPreviewGuard = createMiddleware({ type: "function" })
  * authenticator, without its code yet, is refused before any server function
  * runs (many check admin rights themselves and then act as the server).
  */
-const staffMfaGuard = createMiddleware({ type: "function" }).server(async ({ next }) => {
-  const { getRequest } = await import("@tanstack/react-start/server");
-  const { checkStaffMfa } = await import("@/lib/mfa-guard.server");
-  await checkStaffMfa(getRequest()?.headers.get("authorization"));
+const staffMfaGuard = createMiddleware({ type: "function" }).server(async ({ next, serverFnMeta }) => {
+  // Using a recovery code (lost phone) is the one call made before the code.
+  if (!mfaExemptFn(serverFnMeta?.name)) {
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const { checkStaffMfa } = await import("@/lib/mfa-guard.server");
+    await checkStaffMfa(getRequest()?.headers.get("authorization"));
+  }
   return next();
 });
 
