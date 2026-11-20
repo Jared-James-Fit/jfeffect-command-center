@@ -2,11 +2,14 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   END_ROOM_SECONDS,
-  GRAB_MS,
   PREVIEW_STALL_MS,
+  SCRUB_BAND_PX,
+  SCRUB_TAP_PX,
+  TAP_MAX_MS,
   clipClock,
   clipClockText,
   clipLength,
+  inScrubBand,
   isBarTap,
   makeScrubSeeker,
   rangesOf,
@@ -90,10 +93,24 @@ describe("what a finger on the bar means", () => {
     expect(scrubIntent(5, 5)).toBe("scrub");
   });
 
-  it("a quick touch that stays put is a tap (it jumps there); held longer, it's grabbed instead", () => {
+  it("a touch that stays put and lifts is a tap (it jumps there); one that moved isn't", () => {
     expect(isBarTap(2, 1, 120)).toBe(true);
+    expect(isBarTap(0, 0, 400)).toBe(true);
     expect(isBarTap(9, 0, 120)).toBe(false);
-    expect(isBarTap(0, 0, GRAB_MS)).toBe(false);
+    expect(isBarTap(0, 0, TAP_MAX_MS)).toBe(false);
+  });
+
+  it("is bigger for a finger than it looks: a drag starts anywhere in the bottom 44px across its width, a tap on its own 24px strip", () => {
+    expect(SCRUB_BAND_PX).toBe(44);
+    expect(SCRUB_TAP_PX).toBeLessThan(SCRUB_BAND_PX);
+    // the bar's strip on a 393pt phone, its bottom on the tab bar at 802pt
+    const zone = { left: 0, right: 393, top: 802 - SCRUB_TAP_PX, bottom: 802 };
+    expect(inScrubBand(200, 801, zone)).toBe(true);
+    expect(inScrubBand(200, 802 - 43, zone)).toBe(true);
+    expect(inScrubBand(200, 802 - 45, zone)).toBe(false);
+    expect(inScrubBand(200, 803, zone)).toBe(false);
+    expect(inScrubBand(-1, 790, zone)).toBe(false);
+    expect(inScrubBand(393, 790, zone)).toBe(true);
   });
 });
 
@@ -169,7 +186,7 @@ describe("the bar on every Crew clip, and nothing it does reaches the post", () 
   const reels = read("src/components/community/reels-viewer.tsx");
 
   it("is the feed's own clip element (the pool's), on the feed's clips and the full-screen ones, never a second player", () => {
-    expect(inline).toContain("<VideoScrubber video={el} onHold={setScrubbing} disabled={failed} />");
+    expect(inline).toContain("<VideoScrubber video={el} onHold={setScrubbing} enabled={active} disabled={failed} />");
     expect(reels).toContain("video={attached}");
     expect(reels).not.toContain("bar.current");
     expect(bar).not.toContain("document.createElement");
@@ -180,8 +197,24 @@ describe("the bar on every Crew clip, and nothing it does reaches the post", () 
     expect(bar).toContain('z.addEventListener("pointerdown", onDown);');
     expect(bar).toContain('z.addEventListener("click", onClick);');
     expect(bar).toContain("const onClick = (e: MouseEvent) => e.stopPropagation();");
+    // fingers are read on the band's root (a post's screen, a full-screen clip), so a drag can start over the words
+    expect(bar).toContain('const root = (z.closest("[data-scrub-band]") as HTMLElement | null) ?? z.parentElement ?? z;');
     // once in hand, a thumb drifting up never scrolls the feed
-    expect(bar).toContain('z.addEventListener("touchmove", onTouchMove, { passive: false });');
+    expect(bar).toContain('root.addEventListener("touchmove", onTouchMove, { capture: true, passive: false });');
+    expect(card).toContain("data-scrub-band");
+    expect(reels).toContain("data-scrub-band");
+    // a finger resting in the band is the bar's, never the clip's press-and-hold pause
+    expect(card).toContain("!inClipScrubBand(clip, e.clientX, e.clientY)");
+    expect(reels).toContain('inClipScrubBand(t?.closest?.("[data-reel]"), e.clientX, e.clientY)');
+  });
+
+  it("is a thin line, no handle and no bubble: thicker with its time only while it's in hand", () => {
+    expect(bar).not.toContain("rounded-full bg-white shadow");
+    expect(bar).not.toContain("bg-black/55");
+    expect(bar).toContain("inset-x-3 bottom-1.5 h-1");
+    expect(bar).toContain('mode === "scrub" ? "opacity-100" : "opacity-0"');
+    // a clip post's words sit a lane above the bar's strip
+    expect(read("src/styles.css")).toContain("[data-feed-page-post][data-has-clip] { --feed-scrub-lane: 12px; }");
   });
 
   it("holds the clip still while it's in hand and plays it on after only if it was playing", () => {
@@ -203,5 +236,6 @@ describe("the bar on every Crew clip, and nothing it does reaches the post", () 
     expect(bar).toContain("raf = requestAnimationFrame(frame);");
     // its only state: how long the clip is, and whether it's in hand
     expect(bar.match(/= useState/g)).toHaveLength(2);
+    expect(bar).toContain("setMode(m);");
   });
 });

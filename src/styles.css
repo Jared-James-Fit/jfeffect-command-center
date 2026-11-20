@@ -1443,7 +1443,10 @@ html[data-keyboard-open="true"] .shell-bar { visibility: hidden; }
    whole sits in the room above them, never under them (TikTok's). --page-words-h is their own height
    (PostCard); they sit --feed-words-bottom up from the post's bottom and the hero ends at the tab bar
    (--feed-nav-room), both moving with --feed-gap together, so the room is right however the screen reads; 8px between */
-[data-feed-page-post] { --feed-words-room: calc(var(--page-words-h, 0px) + var(--feed-words-bottom) - var(--feed-nav-room) + 8px); }
+[data-feed-page-post] { --feed-words-room: calc(var(--page-words-h, 0px) + var(--feed-words-bottom) + var(--feed-scrub-lane, 0px) - var(--feed-nav-room) + 8px); }
+/* a post with a clip: its progress bar runs along the screen's bottom, so its words and buttons sit a lane
+   above it (Reels'), clear of the bar's own strip where a tap seeks (VideoScrubber, SCRUB_TAP_PX) */
+[data-feed-page-post][data-has-clip] { --feed-scrub-lane: 12px; }
 /* the first post under the stories (TikTok's Friends): its picture sits right under them, not a bar's
    height lower (the bar only covers that room once the post is up), so a picture shown whole shows whole
    above the tab bar; it eases down to its place as the post comes up (--first-under, useStoriesMotion).
