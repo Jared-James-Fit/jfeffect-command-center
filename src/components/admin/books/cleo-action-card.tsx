@@ -1,5 +1,5 @@
 /**
- * Cleo's action cards: what she offered to do, under the reply that offered
+ * Cleo's action cards: what Cleo offered to do, under the reply that offered
  * it, and (for the owner) the requests waiting on their OK. Nothing runs
  * until someone taps here.
  */

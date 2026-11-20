@@ -2,14 +2,19 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { z } from "zod";
 
 export const Route = createFileRoute("/_authenticated/admin/messages")({
-  validateSearch: (s) => z.object({ client: z.string().uuid().optional() }).parse(s),
+  // `msg`: open the chat on that message (scrolled to and highlighted), e.g. a check-in from the dashboard.
+  validateSearch: (s) => z.object({ client: z.string().uuid().optional(), msg: z.string().uuid().optional().catch(undefined) }).parse(s),
   // Redirect before anything mounts. The old component-level redirect rendered
   // an empty page, then navigated a second time once effects ran: a visible
   // blank frame on every tap of the Messages nav item.
   beforeLoad: ({ search }) => {
     throw redirect({
       to: "/admin/communication",
-      search: { tab: "messages", ...(search.client ? { client: search.client } : {}) } as any,
+      search: {
+        tab: "messages",
+        ...(search.client ? { client: search.client } : {}),
+        ...(search.client && search.msg ? { msg: search.msg } : {}),
+      } as any,
       replace: true,
     });
   },

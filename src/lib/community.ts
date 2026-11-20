@@ -7,7 +7,7 @@
  */
 import { filmCaption, type FilmSlide } from "@/lib/workout-film";
 import { SOURCE_MAX_BYTES } from "@/lib/video-edit/limits";
-import { formatLoad, formatTonnage } from "@/lib/training-records";
+import { CREW_UNIT, dualLoad, dualTotal, labelSecondary, otherUnit, recordedLoad, recordedUnit, type WeightUnit } from "@/lib/dual-weight";
 import type { ShareCardData, ShareTemplate } from "@/lib/workout-share-card";
 import { dayScheduledDate, type WorkoutItem } from "@/lib/workout-today";
 import type { LessonExtra, PostSticker } from "@/lib/lessons";
@@ -83,10 +83,12 @@ export type WorkoutShareStats = {
   duration_min: number | null;
   working_sets: number;
   tonnage_kg: number;
-  /** load_kg is null when the athlete hid their weights. */
-  top_lift: { exercise_name: string; reps: number; load_kg: number | null } | null;
+  /** load_kg is null when the athlete hid their weights; `unit` is the unit its set was typed in. */
+  top_lift: { exercise_name: string; reps: number; load_kg: number | null; unit?: WeightUnit | null } | null;
   pr_count: number;
-  prs: { exercise_name: string; reps: number; load_kg: number | null; scope: RecordScope }[];
+  prs: { exercise_name: string; reps: number; load_kg: number | null; unit?: WeightUnit | null; scope: RecordScope }[];
+  /** The unit most of the workout's weights were typed in: its volume reads in it (dual-weight.ts). */
+  unit?: WeightUnit | null;
   /** Completed sessions in the same local month / week, up to and including this one. */
   month_sessions?: number;
   week_sessions?: number;
@@ -103,7 +105,7 @@ export type WorkoutShareStats = {
   /** Local days trained in the 4 Mon–Sun weeks ending this week. */
   days_trained?: string[];
   /** The same workout (same day name) the last time they did it. */
-  prev?: { completed_at: string; tonnage_kg: number; working_sets: number; top_lift: { exercise_name: string; reps: number; load_kg: number | null } | null } | null;
+  prev?: { completed_at: string; tonnage_kg: number; working_sets: number; unit?: WeightUnit | null; top_lift: { exercise_name: string; reps: number; load_kg: number | null; unit?: WeightUnit | null } | null } | null;
 };
 
 /** One line of the workout breakdown (rows of the same lift merged). */
@@ -112,6 +114,8 @@ export type CommunityExercise = {
   sets: number;
   best_load_kg: number | null;
   best_reps: number | null;
+  /** The unit the best set was typed in. */
+  best_unit?: WeightUnit | null;
   max_reps: number | null;
   max_seconds: number | null;
   pr: RecordScope | null;
@@ -573,6 +577,29 @@ export function reactorsLine(post: Pick<CommunityPost, "reaction_count" | "react
   return `${shown.join(", ")} and ${rest} ${rest === 1 ? "other" : "others"}`;
 }
 
+/**
+ * Instagram's line under a post: "Liked by Marc and 12 others", "Liked by
+ * you and Nicole". Null when nobody has. The names are reactorsLine's.
+ */
+export function likedByLine(post: Pick<CommunityPost, "reaction_count" | "reactions" | "reactors">): { lead: string; who: string } | null {
+  const who = reactorsLine(post);
+  if (!who) return null;
+  return { lead: "Liked by", who: who.replace(/^You\b/, "you") };
+}
+
+/**
+ * Who's "you" in a list of people, seen as `viewer` (View as client: the
+ * client being previewed, never the coach whose login loaded it). `null`
+ * viewer = the list as it came.
+ */
+export function reactorsSeenAs<T extends { is_me?: boolean }>(people: T[], viewer: string | null, idOf: (p: T) => string): T[] {
+  if (viewer === null) return people;
+  return people.map((p) => {
+    const mine = !!viewer && idOf(p) === viewer;
+    return mine === !!p.is_me ? p : { ...p, is_me: mine };
+  });
+}
+
 /** Someone in the crew (Crew tab). Counts only include posts you can see. */
 export type CommunityMember = {
   author: CommunityAuthor;
@@ -767,7 +794,12 @@ export function likesLabel(n: number | null | undefined): string | null {
 /*  What a card shows                                                  */
 /* ------------------------------------------------------------------ */
 
-export type CardStat = { value: string; label: string };
+export type CardStat = {
+  value: string;
+  label: string;
+  /** The same number in the other unit ("8,120 kg"), shown smaller under it. */
+  sub?: string | null;
+};
 
 /** "1h 14m" / "48m" — never "0m". */
 export function formatWorkoutDuration(min: number | null | undefined): string | null {
@@ -779,10 +811,35 @@ export function formatWorkoutDuration(min: number | null | undefined): string | 
   return r === 0 ? `${h}h` : `${h}h ${r}m`;
 }
 
-/** "220 kg × 3" — unit is the viewer's / athlete's own preference. */
-export function formatTopSet(lift: { reps: number; load_kg: number | null }, unit: "kg" | "lb"): string {
+type LiftedSet = { reps: number; load_kg: number | null; unit?: WeightUnit | null };
+
+/**
+ * "220 kg × 3": the weight in the unit it was typed in, as typed (dual-weight.ts).
+ * `unit` is only a fallback for a set that doesn't say its unit; a viewer's
+ * own unit never changes how someone else's lift reads.
+ */
+export function formatTopSet(lift: LiftedSet, unit: "kg" | "lb"): string {
   if (lift.load_kg == null || lift.load_kg <= 0) return `${lift.reps} ${lift.reps === 1 ? "rep" : "reps"}`;
-  return `${formatLoad(lift.load_kg, unit)} × ${lift.reps}`;
+  return `${recordedLoad(lift.load_kg, lift.unit, unit).primary} × ${lift.reps}`;
+}
+
+/** The same set's weight in the other unit ("99.8 kg"), or null when it has none (reps only, hidden). */
+export function topSetOther(lift: LiftedSet, unit: "kg" | "lb"): string | null {
+  if (lift.load_kg == null || lift.load_kg <= 0) return null;
+  return recordedLoad(lift.load_kg, lift.unit, unit).secondary;
+}
+
+/** One line of text with both units, the other right after the weight: "220 lb (99.8 kg) × 3". */
+export function formatTopSetDual(lift: LiftedSet, unit: "kg" | "lb"): string {
+  const other = topSetOther(lift, unit);
+  if (!other) return formatTopSet(lift, unit);
+  return `${recordedLoad(lift.load_kg as number, lift.unit, unit).primary} (${other}) × ${lift.reps}`;
+}
+
+/** A workout's volume: in the unit most of its weights were typed in, the other unit as `sub`. */
+function volumeStat(s: WorkoutShareStats, unit: "kg" | "lb"): CardStat {
+  const t = dualTotal(s.tonnage_kg, recordedUnit(s.unit, unit));
+  return { value: t.primary, label: "Volume", sub: t.secondary };
 }
 
 /**
@@ -796,7 +853,7 @@ export function pickCardStats(s: WorkoutShareStats, unit: "kg" | "lb"): CardStat
   if (dur) out.push({ value: dur, label: "Time" });
   if (s.working_sets > 0) out.push({ value: String(s.working_sets), label: s.working_sets === 1 ? "Working set" : "Working sets" });
   if (s.pr_count > 0) out.push({ value: String(s.pr_count), label: s.pr_count === 1 ? "PR" : "PRs" });
-  if (!dur && s.tonnage_kg > 0 && out.length < 3) out.push({ value: formatTonnage(s.tonnage_kg, unit), label: "Volume" });
+  if (!dur && s.tonnage_kg > 0 && out.length < 3) out.push(volumeStat(s, unit));
   return out.slice(0, 3);
 }
 
@@ -820,7 +877,7 @@ export function workoutStats(s: WorkoutShareStats, unit: "kg" | "lb"): CardStat[
   const dur = formatWorkoutDuration(s.duration_min);
   if (dur) out.push({ value: dur, label: "Time" });
   if (s.working_sets > 0) out.push({ value: String(s.working_sets), label: "Sets" });
-  if (s.tonnage_kg > 0) out.push({ value: formatTonnage(s.tonnage_kg, unit), label: "Volume" });
+  if (s.tonnage_kg > 0) out.push(volumeStat(s, unit));
   return out;
 }
 
@@ -830,24 +887,72 @@ export const SCOPE_WORD: Record<RecordScope, string> = {
   block_pr: "Block PR",
 };
 
+/** Reps past this are a rep-out, not the kind of PR a workout leads with. */
+export const HEADLINE_PR_MAX_REPS = 10;
+
+/** A barbell squat, bench or deadlift (the competition lift or a barbell variation of it), never a dumbbell, machine, cable, belt or split-squat lift of those families. */
+export function isBarbellBigThree(name: string | null | undefined): boolean {
+  const n = (name ?? "").toLowerCase();
+  return /(squat|bench|deadlift)/.test(n) && !/(dumbbell|\bdb\b|machine|smith|belt|hack|split|bulgarian|goblet|leg press|cable|kettlebell|landmine)/.test(n);
+}
+
 /**
- * The one lift the card features. A PR always wins (it is the story);
- * otherwise the session's primary lift.
+ * The PR a workout leads with, wherever it's celebrated or shared (Nov 18
+ * 2026): an all-time PR at 10 reps or fewer on the session's main lift (the
+ * lift the day is named for, else its heaviest: `top_lift`), else on a
+ * barbell squat, bench or deadlift. Every other record (an accessory's 15-rep
+ * best, a block or program best the plan was always going to bring) still
+ * counts and still shows where the sets are; it just never headlines. In the
+ * 30 days to Nov 18, 120 of 165 workouts had a PR of some kind and 57 had
+ * this one.
+ */
+export function headlinePr(s: Pick<WorkoutShareStats, "prs" | "top_lift"> | null | undefined): WorkoutShareStats["prs"][number] | null {
+  if (!s?.prs?.length) return null;
+  const main = s.top_lift?.exercise_name?.trim().toLowerCase() ?? null;
+  const counts = (p: WorkoutShareStats["prs"][number]) => p.scope === "atpr" && p.reps >= 1 && p.reps <= HEADLINE_PR_MAX_REPS;
+  return (
+    s.prs.find((p) => counts(p) && !!main && p.exercise_name.trim().toLowerCase() === main) ??
+    s.prs.find((p) => counts(p) && isBarbellBigThree(p.exercise_name)) ??
+    null
+  );
+}
+
+/**
+ * The same headline PR read from a workout's full records (the recap's
+ * rep and weight records, every one rather than the stats' top three), with
+ * the session's main lift named by its stats when they're in.
+ */
+export function headlineFromRecords(
+  records: { records?: RecordRow[] | null; load_records?: RecordRow[] | null } | null | undefined,
+  mainLift: string | null | undefined,
+): WorkoutShareStats["prs"][number] | null {
+  const prs = [...(records?.records ?? []), ...(records?.load_records ?? [])]
+    .filter((r) => r.atpr)
+    .map((r) => ({ exercise_name: r.exercise_name, reps: r.reps, load_kg: r.load_kg, scope: "atpr" as const }))
+    // heaviest first, the stats' own order
+    .sort((a, b) => (b.load_kg ?? 0) - (a.load_kg ?? 0));
+  return headlinePr({ prs, top_lift: mainLift ? { exercise_name: mainLift, reps: 0, load_kg: null } : null } as Pick<WorkoutShareStats, "prs" | "top_lift">);
+}
+type RecordRow = { exercise_name: string; reps: number; load_kg: number | null; atpr: boolean };
+
+/**
+ * The one lift the card features: the headline PR when there is one (it is
+ * the story), otherwise the session's main lift as it was lifted.
  */
 export function featuredLift(s: WorkoutShareStats): {
   name: string;
-  detail: { reps: number; load_kg: number | null };
+  detail: LiftedSet;
   pr: RecordScope | null;
 } | null {
-  const pr = s.prs[0];
-  if (pr) return { name: pr.exercise_name, detail: { reps: pr.reps, load_kg: pr.load_kg }, pr: pr.scope };
-  if (s.top_lift) return { name: s.top_lift.exercise_name, detail: { reps: s.top_lift.reps, load_kg: s.top_lift.load_kg }, pr: null };
+  const pr = headlinePr(s);
+  if (pr) return { name: pr.exercise_name, detail: { reps: pr.reps, load_kg: pr.load_kg, unit: pr.unit }, pr: pr.scope };
+  if (s.top_lift) return { name: s.top_lift.exercise_name, detail: { reps: s.top_lift.reps, load_kg: s.top_lift.load_kg, unit: s.top_lift.unit }, pr: null };
   return null;
 }
 
-/** Share-card variant: a PR session gets the PR treatment automatically. */
+/** Share-card variant: a session with a headline PR gets the PR treatment (and the PR look). */
 export function isPrMoment(s: WorkoutShareStats | null | undefined): boolean {
-  return !!s && s.prs.length > 0;
+  return !!headlinePr(s);
 }
 
 /* ------------------------------------------------------------------ */
@@ -911,8 +1016,11 @@ export type PostSlide = {
   height: number | null;
   /** Which part shows when the feed or the profile grid crops it (a clip's, or an older photo's); centred when unset. */
   focus?: MediaFocus | null;
-  /** A workout film's clip: its own caption, on the slide (the exercise, then "Set 2 · 145 kg × 5 @ RPE 8"). */
-  caption?: { title: string; detail: string } | null;
+  /**
+   * A workout film's clip: its own caption, on the slide (the exercise, then "Set 2 · 145 kg × 5 @ RPE 8"),
+   * `other` the set's weight in the other unit ("319.7 lb"), shown right after the weight, smaller.
+   */
+  caption?: { title: string; detail: string; other?: string | null } | null;
 };
 
 /** Every slide of a post, cover first. [] when it has no photo. */
@@ -937,7 +1045,8 @@ export function postSlides(
   const byPath = new Map(post.film.map((f) => [f.path, f]));
   return slides.map((s) => {
     const f = byPath.get(s.path);
-    return f ? { ...s, caption: filmCaption(f, hideLoads) } : s;
+    // the slide's own label already says its weight in the unit it was typed in; the other unit comes from its stored kg
+    return f ? { ...s, caption: { ...filmCaption(f, hideLoads), other: hideLoads ? null : labelSecondary(f.label, f.kg) } } : s;
   });
 }
 
@@ -1017,7 +1126,7 @@ export function nextFeedCursor(page: CommunityFeedPage): { at: string; id: strin
 
 /** "220 kg × 3", "12 reps", "1:00" — whatever best describes the lift. */
 export function formatExerciseBest(e: CommunityExercise, unit: "kg" | "lb"): string {
-  if (e.best_load_kg != null && e.best_reps != null && e.best_load_kg > 0) return formatTopSet({ load_kg: e.best_load_kg, reps: e.best_reps }, unit);
+  if (e.best_load_kg != null && e.best_reps != null && e.best_load_kg > 0) return formatTopSet({ load_kg: e.best_load_kg, reps: e.best_reps, unit: e.best_unit }, unit);
   if (e.max_reps != null && e.max_reps > 0) return `${e.max_reps} reps`;
   if (e.max_seconds != null && e.max_seconds > 0) {
     const m = Math.floor(e.max_seconds / 60);
@@ -1025,6 +1134,26 @@ export function formatExerciseBest(e: CommunityExercise, unit: "kg" | "lb"): str
     return m > 0 ? `${m}:${String(sec).padStart(2, "0")}` : `${sec}s`;
   }
   return `${e.sets} ${e.sets === 1 ? "set" : "sets"}`;
+}
+
+/**
+ * An exercise's best set on the workout page: in the unit it was typed in,
+ * the other unit under it, smaller ("455 lb × 1" over "206.4 kg"), the same
+ * for every viewer. A set with no load (reps, a hold) has no second line.
+ * Presentation only: the stored kg is never changed.
+ */
+export function exerciseBestLines(e: CommunityExercise, unit: "kg" | "lb"): { main: string; other: string | null } {
+  const main = formatExerciseBest(e, unit);
+  if (e.best_load_kg != null && e.best_reps != null && e.best_load_kg > 0) {
+    return { main, other: recordedLoad(e.best_load_kg, e.best_unit, unit).secondary };
+  }
+  return { main, other: null };
+}
+
+/** "9th workout this month": what the old "#9 This month" tile counted, said in words. */
+export function monthWorkoutLine(s: Pick<WorkoutShareStats, "month_sessions">): string | null {
+  const n = s.month_sessions ?? 0;
+  return n >= 1 ? `${ordinal(n)} workout this month` : null;
 }
 
 /** "Session 12 this month" — only once it means something (2+). */
@@ -1046,19 +1175,22 @@ export type ShareCardInput = {
 export function buildShareCardFields(i: ShareCardInput) {
   const s = i.stats;
   const lift = featuredLift(s);
+  // each load says the other unit too, smaller on the card: the unit it was typed in leads (dual-weight.ts)
   const exercises = (s.exercises ?? [])
     .filter((e) => e.sets > 0)
-    .map((e) => ({ name: e.name, detail: formatExerciseBest(e, i.unit), pr: !!e.pr }));
+    .map((e) => ({ name: e.name, detail: formatExerciseBest(e, i.unit), pr: !!e.pr, alt: exerciseBestLines(e, i.unit).other }));
+  const volume = s.tonnage_kg > 0 ? dualTotal(s.tonnage_kg, recordedUnit(s.unit, i.unit)) : null;
   return {
     athleteName: i.athleteName,
     // The server's public title ("Block 5 · Week 1"), never the coach's day name.
     workoutTitle: sessionDisplayTitle(s.workout_title || "Workout"),
     dateLabel: i.dateLabel,
-    lift: lift ? { name: lift.name, detail: formatTopSet(lift.detail, i.unit), prLabel: lift.pr ? SCOPE_WORD[lift.pr].toUpperCase() : null } : null,
+    lift: lift ? { name: lift.name, detail: formatTopSet(lift.detail, i.unit), prLabel: lift.pr ? SCOPE_WORD[lift.pr].toUpperCase() : null, alt: topSetOther(lift.detail, i.unit) } : null,
     stats: pickCardStats(s, i.unit),
     isPr: isPrMoment(s),
     exercises,
-    volume: s.tonnage_kg > 0 ? formatTonnage(s.tonnage_kg, i.unit) : null,
+    volume: volume?.primary ?? null,
+    volumeOther: volume?.secondary ?? null,
     sessionLine: sessionLine(s),
     extras: buildCardExtras(s, i.unit),
   };
@@ -1289,14 +1421,18 @@ const ORDINAL = ["", "", "2nd", "3rd"];
 
 /**
  * The big number on the card, said so anyone gets it: everything the crew
- * lifted together last week, in the viewer's unit, with an everyday
- * comparison, a "biggest week ever" badge when it's earned, and how it beat
- * the week before (only when it did).
+ * lifted together last week, in the crew's own unit (CREW_UNIT: a total of
+ * many athletes' sets has no single recorded unit) with the other under it,
+ * the same for every viewer, an everyday comparison, a "biggest week ever"
+ * badge when it's earned, and how it beat the week before (only when it did).
  */
-export function winsHero(s: WinsStats, unit: "kg" | "lb") {
+export function winsHero(s: WinsStats) {
   const lb = s.volume_kg * 2.20462;
-  const raw = unit === "kg" ? s.volume_kg : lb;
-  const amount = raw >= 10_000_000 ? compactNumber(raw) : Math.round(raw).toLocaleString("en-US");
+  const fmt = (raw: number) => (raw >= 10_000_000 ? compactNumber(raw) : Math.round(raw).toLocaleString("en-US"));
+  const word = (u: WeightUnit) => (u === "kg" ? "kg" : "lbs");
+  const raw = CREW_UNIT === "kg" ? s.volume_kg : lb;
+  const otherRaw = CREW_UNIT === "kg" ? lb : s.volume_kg;
+  const amount = fmt(raw);
   const start = weekIndex(s.week_of) % WEIGHT_OF.length;
   let compare: string | null = null;
   for (let k = 0; k < WEIGHT_OF.length && !compare; k++) {
@@ -1312,7 +1448,7 @@ export function winsHero(s: WinsStats, unit: "kg" | "lb") {
         : `${ORDINAL[rank]} biggest week the crew has ever had`
       : null;
   const up = s.volume_prev_kg && s.volume_prev_kg > 0 ? Math.round((s.volume_kg / s.volume_prev_kg - 1) * 100) : 0;
-  return { amount, unit: unit === "kg" ? "kg" : "lbs", compare, badge, change: up >= 3 ? `${up}% more than the week before` : null };
+  return { amount, unit: word(CREW_UNIT), other: `${fmt(otherRaw)} ${word(otherUnit(CREW_UNIT))}`, compare, badge, change: up >= 3 ? `${up}% more than the week before` : null };
 }
 
 /**
@@ -1474,12 +1610,13 @@ export type ShareCardExtras = {
   duration: string | null;
   workoutNumber: number | null;
   compare: string | null;
-  receipt: { name: string; sets: number; detail: string; pr: boolean }[];
+  /** `other`: the best set's weight in the other unit ("99.8 kg"). */
+  receipt: { name: string; sets: number; detail: string; other: string | null; pr: boolean }[];
   streak: { weeks: number; trained: number; cells: StreakCell[] } | null;
   progress: {
     headline: string;
     sub: string;
-    bars: { label: string; value: string; share: number; today: boolean }[];
+    bars: { label: string; value: string; other: string; share: number; today: boolean }[];
     lift: string | null;
   } | null;
 };
@@ -1497,12 +1634,16 @@ export function progressVsLast(s: WorkoutShareStats, unit: "kg" | "lb"): ShareCa
   const a = p.top_lift;
   const b = s.top_lift;
   if (a && b && a.exercise_name === b.exercise_name && a.load_kg != null && b.load_kg != null) {
+    // one comparison, one unit: today's set's own, both sides converted from their stored kg
+    const known = b.unit === "kg" || b.unit === "lb" || s.unit === "kg" || s.unit === "lb";
+    const u = recordedUnit(b.unit, recordedUnit(s.unit, unit));
+    const w = (kg: number) => dualLoad(kg, u, known);
     if (b.load_kg > a.load_kg + 0.01) {
-      lift = `${b.exercise_name}: ${formatLoad(a.load_kg, unit)} → ${formatLoad(b.load_kg, unit)}`;
-      const diff = formatLoad(b.load_kg - a.load_kg, unit);
-      liftHead = { headline: `+${diff}`, sub: `heavier on ${b.exercise_name}` };
+      lift = `${b.exercise_name}: ${w(a.load_kg).primary} → ${w(b.load_kg).primary} (${w(b.load_kg).secondary})`;
+      const diff = w(b.load_kg - a.load_kg);
+      liftHead = { headline: `+${diff.primary}`, sub: `heavier on ${b.exercise_name} (+${diff.secondary})` };
     } else if (Math.abs(b.load_kg - a.load_kg) <= 0.01 && b.reps > a.reps) {
-      lift = `${b.exercise_name}: ${a.reps} → ${b.reps} reps at ${formatLoad(b.load_kg, unit)}`;
+      lift = `${b.exercise_name}: ${a.reps} → ${b.reps} reps at ${w(b.load_kg).primary} (${w(b.load_kg).secondary})`;
       liftHead = { headline: `+${b.reps - a.reps} ${b.reps - a.reps === 1 ? "rep" : "reps"}`, sub: `on ${b.exercise_name}` };
     }
   }
@@ -1510,11 +1651,14 @@ export function progressVsLast(s: WorkoutShareStats, unit: "kg" | "lb"): ShareCa
   const head = pct >= 1 ? { headline: `+${Math.min(pct, 999)}%`, sub: "more weight moved than last time" } : liftHead;
   if (!head) return null;
   const max = Math.max(p.tonnage_kg, s.tonnage_kg, 1);
+  // both bars in today's workout's unit, so they compare at a glance
+  const tu = recordedUnit(s.unit, unit);
+  const bar = (kg: number) => dualTotal(kg, tu);
   const bars =
     p.tonnage_kg > 0 && s.tonnage_kg > 0
       ? [
-          { label: `Last time · ${when}`, value: formatTonnage(p.tonnage_kg, unit), share: p.tonnage_kg / max, today: false },
-          { label: "Today", value: formatTonnage(s.tonnage_kg, unit), share: s.tonnage_kg / max, today: true },
+          { label: `Last time · ${when}`, value: bar(p.tonnage_kg).primary, other: bar(p.tonnage_kg).secondary, share: p.tonnage_kg / max, today: false },
+          { label: "Today", value: bar(s.tonnage_kg).primary, other: bar(s.tonnage_kg).secondary, share: s.tonnage_kg / max, today: true },
         ]
       : [];
   return { ...head, bars, lift: pct >= 1 ? lift : null };
@@ -1530,7 +1674,7 @@ export function buildCardExtras(s: WorkoutShareStats, unit: "kg" | "lb"): ShareC
     duration: formatWorkoutDuration(s.duration_min),
     workoutNumber: s.lifetime_sessions && s.lifetime_sessions > 0 ? s.lifetime_sessions : null,
     compare: s.tonnage_kg > 0 ? everydayWeight(s.tonnage_kg, s.lifetime_sessions ?? 0) : null,
-    receipt: (s.exercises ?? []).filter((e) => e.sets > 0).map((e) => ({ name: e.name, sets: e.sets, detail: formatExerciseBest(e, unit), pr: !!e.pr })),
+    receipt: (s.exercises ?? []).filter((e) => e.sets > 0).map((e) => ({ name: e.name, sets: e.sets, detail: formatExerciseBest(e, unit), other: exerciseBestLines(e, unit).other, pr: !!e.pr })),
     streak: grid && grid.trained >= 2 ? { weeks: s.streak_weeks ?? 0, trained: grid.trained, cells: grid.cells } : null,
     progress: progressVsLast(s, unit),
   };
@@ -1837,12 +1981,15 @@ export type WorkoutWin = {
   label: string;
   headline: string;
   detail: string | null;
+  /** The detail's weight in the other unit ("142.9 kg"), shown smaller. */
+  other?: string | null;
 };
 
-const ordinal = (n: number) => {
+/** 1st, 2nd, 3rd, 4th … 11th, 12th, 13th, 21st. */
+function ordinal(n: number): string {
   const v = n % 100;
   return `${n}${v >= 11 && v <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
-};
+}
 /** The session counts that read as a milestone this month. */
 export const MONTH_MILESTONES = [5, 10, 15, 20, 25, 30];
 
@@ -1856,13 +2003,13 @@ export function pickWorkoutWin(s: Pick<WorkoutShareStats, "prs" | "pr_count" | "
   const pr = s.prs?.[0];
   if (pr) {
     const n = Math.max(s.pr_count ?? 1, 1);
-    return { kind: "pr", label: n > 1 ? `${SCOPE_WORD[pr.scope]} · ${n} PRs` : SCOPE_WORD[pr.scope], headline: pr.exercise_name, detail: formatTopSet(pr, unit) };
+    return { kind: "pr", label: n > 1 ? `${SCOPE_WORD[pr.scope]} · ${n} PRs` : SCOPE_WORD[pr.scope], headline: pr.exercise_name, detail: formatTopSet(pr, unit), other: topSetOther(pr, unit) };
   }
   const month = s.month_sessions ?? 0;
   if (MONTH_MILESTONES.includes(month)) return { kind: "month", label: "Consistency", headline: `${ordinal(month)} session this month`, detail: null };
   const week = s.week_sessions ?? 0;
   if (week >= 3) return { kind: "week", label: "Consistency", headline: `${ordinal(week)} session this week`, detail: null };
-  if (s.top_lift) return { kind: "top", label: "Top set", headline: s.top_lift.exercise_name, detail: formatTopSet(s.top_lift, unit) };
+  if (s.top_lift) return { kind: "top", label: "Top set", headline: s.top_lift.exercise_name, detail: formatTopSet(s.top_lift, unit), other: topSetOther(s.top_lift, unit) };
   // the line under it carries the time
   return { kind: "done", label: "Session done", headline: `${s.working_sets} working ${s.working_sets === 1 ? "set" : "sets"}`, detail: null };
 }
@@ -1874,14 +2021,19 @@ export function pickWorkoutWin(s: Pick<WorkoutShareStats, "prs" | "pr_count" | "
 export const STORY_WINDOW_MS = 24 * 3_600_000;
 
 /**
- * Worth a story: everything shared with the crew, like Instagram: what people
- * post themselves and every finished session (posted for them when automatic
- * sharing is on), a PR or a routine day alike; the win just makes its frame
- * louder. Who-sees-it on the post still decides (coach-only or private never;
- * Close Friends with a green ring).
+ * Worth a story (Nov 18 2026): what someone posted as a story (the camera's
+ * STORY, the recap's Share to Story, Add to your story), the coach's lessons
+ * (made as stories, with their Questions / Poll stickers), and a finished
+ * session that posted itself before automatic stories were taken out (until
+ * its 24 hours run out). A post in the feed is never a story too: the rail
+ * used to replay every crew post of the last day, so each workout showed up
+ * twice and the row filled with sessions nobody chose to put there.
+ * Who-sees-it still decides (coach-only or private never; Close Friends with
+ * a green ring).
  */
-export function storyWorthy(p: Pick<CommunityPost, "visibility">): boolean {
-  return isCrewAudience(p.visibility) || p.visibility === "close_friends";
+export function storyWorthy(p: Pick<CommunityPost, "visibility"> & { story?: boolean; series?: string | null; auto?: boolean; stats?: unknown }): boolean {
+  if (!(isCrewAudience(p.visibility) || p.visibility === "close_friends")) return false;
+  return !!p.story || p.series === "lesson" || isPulsePost(p);
 }
 
 export type StoryGroup<T> = {
@@ -1898,8 +2050,9 @@ export type StoryGroup<T> = {
 };
 
 /**
- * What a story shows full screen for a post (tested). Every crew post becomes
- * a story, so every kind has a frame and none plays blank:
+ * What a story shows full screen for a post (tested). Only stories reach the
+ * rail now (storyWorthy), but a shared post's card, an older session and a
+ * lesson can each be one, so every kind keeps a frame and none plays blank:
  *  - "lesson": a coach lesson, as its lesson;
  *  - "win": a workout with nothing to look at (posted by itself, or shared
  *    without a photo or GIF) leads with its win, as in the feed;
@@ -1959,7 +2112,7 @@ export function seenAs<T extends Pick<CommunityPost, "is_mine" | "author" | "sti
 }
 
 /** Your own last day of stories (you see them first, with who saw each). */
-export function myStory<T extends Pick<CommunityPost, "id" | "created_at" | "visibility" | "is_mine" | "seen" | "author" | "stats">>(posts: T[], now = Date.now()): StoryGroup<T> | null {
+export function myStory<T extends Pick<CommunityPost, "id" | "created_at" | "visibility" | "is_mine" | "seen" | "author" | "stats"> & { story?: boolean; series?: string | null; auto?: boolean }>(posts: T[], now = Date.now()): StoryGroup<T> | null {
   const items = posts
     .filter((p) => p.is_mine && storyWorthy(p) && now - new Date(p.created_at).getTime() <= STORY_WINDOW_MS)
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -1973,7 +2126,7 @@ export function myStory<T extends Pick<CommunityPost, "id" | "created_at" | "vis
  * in order). People with something unseen first; then people you follow;
  * then a PR; then the most recent.
  */
-export function crewStories<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author">>(posts: T[], now = Date.now(), followed?: ReadonlySet<string>): StoryGroup<T>[] {
+export function crewStories<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author"> & { story?: boolean; series?: string | null }>(posts: T[], now = Date.now(), followed?: ReadonlySet<string>): StoryGroup<T>[] {
   const by = new Map<string, StoryGroup<T>>();
   for (const p of posts) {
     const t = new Date(p.created_at).getTime();
@@ -2034,7 +2187,7 @@ const STORY_END_FEED_MS = 7 * 86_400_000;
  * own story (or a nudge to add one). `posts` is the live feed, so reactions
  * given here show straight away.
  */
-export function storyEnd<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author" | "my_reaction"> & { story?: boolean }>(
+export function storyEnd<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author" | "my_reaction"> & { story?: boolean; series?: string | null }>(
   groups: StoryGroup<T>[],
   posts: T[],
   watched: ReadonlySet<string>,

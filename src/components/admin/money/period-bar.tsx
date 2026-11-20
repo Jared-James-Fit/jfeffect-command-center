@@ -10,8 +10,9 @@ import { Button } from "@/components/ui/button";
 import { DateField } from "@/components/ui/date-field";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { useScrollFade } from "@/hooks/use-scroll-fade";
 import {
-  PRESETS, canStepForward, comparisonFor, customPeriod, monthPeriod, periodFor, stepPeriod, yearPeriod,
+  PRESETS, canStepForward, customPeriod, monthPeriod, periodFor, stepPeriod, yearPeriod,
   type CompareMode, type Period,
 } from "@/lib/books/period";
 
@@ -39,9 +40,15 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   );
 }
 
-export function PeriodBar({ period, compare, today, firstYear, onPeriod, onCompare }: {
+export function PeriodBar({ period, compare, vs, noEarlier, showCompare = true, today, firstYear, onPeriod, onCompare }: {
   period: Period;
   compare: CompareMode;
+  /** What the figures are compared with (the workspace's, so the bar and the figures always agree). */
+  vs: { start: string; end: string; label: string } | null;
+  /** A comparison was asked for but falls before anything in the books. */
+  noEarlier?: boolean;
+  /** Say what it's compared with (only where a figure is compared: Overview and Reports). */
+  showCompare?: boolean;
   today: string;
   /** The earliest year with anything in the books. */
   firstYear: number;
@@ -49,10 +56,10 @@ export function PeriodBar({ period, compare, today, firstYear, onPeriod, onCompa
   onCompare: (c: CompareMode) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const presets = useScrollFade<HTMLDivElement>();
   const [pickYear, setPickYear] = useState(Number(period.start.slice(0, 4)));
   const [from, setFrom] = useState(period.start);
   const [to, setTo] = useState(period.end > today ? today : period.end);
-  const vs = useMemo(() => comparisonFor(period, compare, today), [period, compare, today]);
   const thisYear = Number(today.slice(0, 4));
   const years = useMemo(() => {
     const out: number[] = [];
@@ -149,15 +156,17 @@ export function PeriodBar({ period, compare, today, firstYear, onPeriod, onCompa
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
-      <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:px-0 lg:flex-wrap lg:overflow-visible [&::-webkit-scrollbar]:hidden" data-period-presets>
+      <div ref={presets.ref} style={presets.style} className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:px-0 lg:flex-wrap lg:overflow-visible [&::-webkit-scrollbar]:hidden" data-period-presets>
         {PRESETS.map((x) => (
           <Chip key={x.key} active={period.preset === x.key} onClick={() => onPeriod(periodFor(x.key, today))}>{x.label}</Chip>
         ))}
       </div>
-      {vs ? (
+      {!showCompare ? null : vs ? (
         <p className="text-center text-[12px] text-muted-foreground sm:text-left" data-period-vs>
           Compared with {vs.label}{period.end > today && period.start <= today ? ", the same number of days" : ""}
         </p>
+      ) : noEarlier ? (
+        <p className="text-center text-[12px] text-muted-foreground sm:text-left" data-period-vs="none">Nothing earlier in the books to compare with</p>
       ) : null}
     </div>
   );

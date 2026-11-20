@@ -3,6 +3,7 @@
  * into amount + name, and read a meal's macros from either paste format.
  */
 import type { MealPlanSection } from "@/components/meal-plan-display";
+import { readMacroLine } from "@/lib/nutrition-targets/macro-line";
 
 type MealSection = Extract<MealPlanSection, { kind: "meal" }>;
 
@@ -29,14 +30,13 @@ export function mealMacroNumbers(
 ): MealMacros | null {
   const out: MealMacros = {};
   for (const line of meal.approxMacros?.items ?? []) {
-    const m = line.match(/(\d+(?:\.\d+)?)\s*g?\s*(protein|carb\w*|fat\w*|fib(?:re|er)s?)/i);
+    // the shared reader (macro-line.ts): one macro a line, or several on one
+    const m = readMacroLine(line);
     if (!m) continue;
-    const n = Number(m[1]);
-    const w = m[2].toLowerCase();
-    if (w.startsWith("prot")) out.protein = n;
-    else if (w.startsWith("carb")) out.carbs = n;
-    else if (w.startsWith("fat")) out.fats = n;
-    else out.fibre = n;
+    if (m.protein != null) out.protein = m.protein;
+    if (m.carbs != null) out.carbs = m.carbs;
+    if (m.fat != null) out.fats = m.fat;
+    if (m.fibre != null) out.fibre = m.fibre;
   }
   if (meal.approx) {
     for (const m of meal.approx.matchAll(/(\d+(?:\.\d+)?)\s*G?\s*(FIB(?:RE|ER)|[PCF])\b/gi)) {

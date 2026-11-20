@@ -1,4 +1,4 @@
--- ROLLBACK for supabase/migrations/20270403093000_security_hardening.sql
+-- ROLLBACK for supabase/migrations/20270422090000_security_hardening.sql
 --
 -- NOT a migration: it lives outside supabase/migrations so it never runs by
 -- itself. Run one section at a time, only for the part that broke something,
@@ -122,20 +122,8 @@ BEGIN
 END;
 $$;
 
--- ── R3. Athlete records and coaching periods readable by every account ──────
-DROP POLICY IF EXISTS "Staff and the athlete read powerlifting athletes" ON public.powerlifting_athletes;
-CREATE POLICY "Authenticated read powerlifting athletes" ON public.powerlifting_athletes
-  FOR SELECT TO authenticated USING (true);
-DROP POLICY IF EXISTS "Staff read coaching periods" ON public.powerlifting_coaching_periods;
-CREATE POLICY "Authenticated read coaching periods" ON public.powerlifting_coaching_periods
-  FOR SELECT TO authenticated USING (true);
-
--- ── R4. Avatars bucket readable by every account ────────────────────────────
-DROP POLICY IF EXISTS "Avatars: own, staff and crew photos" ON storage.objects;
-CREATE POLICY "Auth view avatars" ON storage.objects
-  FOR SELECT TO authenticated USING (bucket_id = 'avatars');
-DROP FUNCTION IF EXISTS public.avatar_is_shown_to_crew(text);
-DROP FUNCTION IF EXISTS public.avatar_is_my_photo(text);
+-- (R3, R4: the athlete records and the avatars bucket are no longer part of
+-- this migration; main's 20270412100000_tighten_open_read_rules.sql owns them.)
 
 -- ── R5. Legal acceptances writable by the user, not stamped or kept ─────────
 DROP TRIGGER IF EXISTS trg_legal_acceptance_stamp ON public.legal_acceptances;

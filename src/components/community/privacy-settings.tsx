@@ -8,7 +8,6 @@ import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useFollowState, useSetPrivate } from "@/lib/community-social";
-import { useMyCommunitySettings, useSetAutoShare } from "@/lib/community.queries";
 import { useServiceTier } from "@/lib/service-tier";
 
 /**
@@ -16,11 +15,10 @@ import { useServiceTier } from "@/lib/service-tier";
  * "Account privacy" in settings, not on the profile itself).
  *
  * - Private account (athletes only): your own posts and stories reach only
- *   followers you approve (and your coach). Your automatic workout stories
- *   stay public either way, like every coach post (daily posts, lessons,
- *   birthdays, Wins), so the Crew's shared wins never go dark.
+ *   followers you approve (and your coach). Every coach post (daily posts,
+ *   lessons, birthdays, Wins) stays public, so the Crew's shared wins never
+ *   go dark.
  * - A coach's account is always public: shown as a fact, not a switch.
- * - Share my workouts: a finished workout posts itself to your story.
  * - Who sees my film: a workout's set videos post to Crew, or stay Coach only.
  */
 
@@ -53,7 +51,6 @@ export function PrivateAccountRow() {
             {state.is_private
               ? `Only followers you approve see your posts and stories. ${staff} always can.`
               : "Anyone in the crew can follow you and see your posts and stories."}
-            {" "}Automatic workout stories are always public.
           </span>
         </span>
         <Switch checked={state.is_private} disabled={set.isPending} onCheckedChange={(on) => setAsk(on)} aria-label="Private account" />
@@ -123,22 +120,5 @@ export function PostMyFilmRow() {
         when="when you finish"
       />
     </div>
-  );
-}
-
-/** Automatic sharing: a finished workout posts itself to your story (24 hours), public to the crew. */
-export function ShareWorkoutsRow() {
-  const { isImpersonating } = useClientImpersonation();
-  const { data } = useMyCommunitySettings(!isImpersonating);
-  const set = useSetAutoShare();
-  if (isImpersonating || !data) return null;
-  return (
-    <label data-pulse-switch className={ROW}>
-      <span className="min-w-0">
-        <span className={TITLE}>Share my workouts</span>
-        <span className={NOTE}>Finished workouts post to your story for 24 hours with the session's best win. Everyone in the crew sees them.</span>
-      </span>
-      <Switch checked={data.auto_share_workouts} disabled={set.isPending} onCheckedChange={(on) => set.mutate(on, { onError: () => toast.error("Couldn't save that") })} aria-label="Share my workouts" />
-    </label>
   );
 }

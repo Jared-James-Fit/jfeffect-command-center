@@ -15,6 +15,7 @@ import {
   isRecapStats,
   formatTopSet,
   formatWorkoutDuration,
+  topSetOther,
   isTrainingNow,
   pickWorkoutWin,
   lockInTimeLabel,
@@ -26,7 +27,6 @@ import {
   reactionEmoji,
   reactionKinds,
   reactionTotal,
-  reactorsLine,
   slideThumbPath,
   type CommunityAuthor,
   type CommunityPost,
@@ -35,9 +35,9 @@ import {
   type WorkoutShareStats,
   type WorkoutWin,
 } from "@/lib/community";
-import { useFullMediaUrl, useSlideThumbUrls } from "@/lib/community.queries";
+import { useFullMediaUrl, usePrefetchPostReactors, useSlideThumbUrls } from "@/lib/community.queries";
 import { FEED_MAX_ASPECT, FEED_VIDEO_MAX_HEIGHT, VIDEO_MIN_ASPECT, clipFrame, feedAspect, focusPosition, screenFit, videoAspect, type MediaFocus } from "@/lib/photo-frame";
-import { ReactorsSheet } from "@/components/community/reactors-sheet";
+import { LikedBy, ReactorsSheet } from "@/components/community/reactors-sheet";
 import { ReactionsRise, useEngagementPop } from "@/components/community/engagement-pop";
 import { PostViewsRow, usePostViewTracker } from "@/components/community/post-views";
 import { PostActions } from "@/components/community/post-actions";
@@ -62,6 +62,8 @@ import { PageCaption } from "@/components/community/page-caption";
 import { isFilmSummary, isOwnFilmCaption } from "@/lib/workout-film";
 import { POST_SHEET_HEIGHT } from "@/lib/post-sheet";
 import { RepostButton, RepostedHeader, SaveButton, useRepostNote } from "@/components/community/repost-save";
+import { WeightOther } from "@/components/dual-weight";
+import { splitAtWeight } from "@/lib/dual-weight";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
 export function TrainingNowPill({ className }: { className?: string }) {
@@ -330,6 +332,8 @@ export function PulseHero({ stats, unit }: { post?: CommunityPost; stats: Workou
       </div>
       <div className="font-display mt-3 text-[28px] uppercase leading-[1.02]">{win.headline}</div>
       {win.detail && <div className={cn("font-display mt-0.5 text-[24px] uppercase leading-none", win.kind === "pr" ? "text-warning" : "text-foreground/85")}>{win.detail}</div>}
+      {/* the same weight in the other unit, quieter: the lift as typed stays the hero */}
+      {win.other && <WeightOther className="mt-1 block text-[13px]">{win.other}</WeightOther>}
       {nums.length > 0 && <div className="mt-3 min-w-0 truncate text-[11px] font-semibold text-muted-foreground">{nums.join(" · ")}</div>}
     </div>
   );
@@ -366,6 +370,7 @@ export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShar
             <span className="truncate text-[12px] font-semibold text-muted-foreground">{lift.name}</span>
           </div>
           <div className={cn("font-display uppercase leading-none", big ? "text-[54px] @max-[16rem]:text-[44px]" : "text-[42px]", pr && "text-warning")}>{formatTopSet(lift.detail, unit)}</div>
+          <WeightOther className={cn("mt-1 block", big ? "text-[15px]" : "text-[13px]")}>{topSetOther(lift.detail, unit)}</WeightOther>
         </div>
       )}
       {nums.length > 0 && (
@@ -375,12 +380,28 @@ export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShar
           {nums.map((n) => (
             <div key={n.label} className="min-w-0">
               <div className={cn("font-display truncate uppercase leading-none", big ? "text-[30px] @max-[16rem]:text-[24px]" : "text-[24px] @max-[15rem]:text-[20px]")}>{n.value}</div>
+              <SubLine sub={n.sub} row={nums} className="mt-0.5 block truncate text-[11px]" />
               <div className="mt-1 truncate text-[9px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{n.label}</div>
             </div>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * A number's other unit under it ("8,120 kg" under "17,902 lb"). In a row
+ * where any number has one, the others keep the line empty, so every label
+ * still sits on one line across the row.
+ */
+function SubLine({ sub, row, className }: { sub?: string | null; row: { sub?: string | null }[]; className: string }) {
+  if (sub) return <WeightOther className={className}>{sub}</WeightOther>;
+  if (!row.some((r) => r.sub)) return null;
+  return (
+    <span aria-hidden className={cn(className, "font-semibold")}>
+      {"\u00a0"}
+    </span>
   );
 }
 
@@ -514,8 +535,11 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const s = post.stats;
   const lift = s ? featuredLift(s) : null;
   const stats = s ? workoutStats(s, unit) : [];
-  // a workout's PRs as one pill: "3 PRs", else the one record's scope ("All-time PR")
+  // a workout's PRs as one pill: "3 PRs", else the one record's scope ("All-time PR"); amber with the
+  // trophy only when one is the headline PR (headlinePr: the main lift's, or a barbell squat / bench /
+  // deadlift's, at 10 reps or fewer), else said quietly (an accessory's rep best is progress, not news)
   const prLabel = !s ? null : s.pr_count > 1 ? `${s.pr_count} PRs` : lift?.pr ? SCOPE_WORD[lift.pr] : s.pr_count === 1 ? "PR" : null;
+  const prLoud = !!lift?.pr;
   const isNote = post.kind === "note";
   // the daily series, lessons, holidays, birthdays: a picture, then the words (Instagram's layout)
   const auto = isAutoPost(post);
@@ -713,51 +737,10 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
               onOpenPerson={onOpenAuthor}
               trailing={!post.is_mine && onOpenAuthor ? <InlineFollow userId={post.author.user_id} name={post.author.name} /> : null}
             />
-            {visual && s && (
-              // the workout this came from: context, so a quiet line (the way in is the pill under the set)
-              // (a long name wraps to a second line on a small phone rather than being cut)
-              <div className="flex min-w-0 items-start gap-1.5 text-[13px] font-semibold leading-snug text-foreground/90" data-page-workout-name>
-                <CheckCircle2 className="mt-[0.15em] h-3.5 w-3.5 shrink-0 text-success" aria-hidden />
-                <span className="line-clamp-2 break-words">{workoutHeadline(s)}</span>
-              </div>
-            )}
-            {slideSet && (
-              // the set on screen (a workout film's clip): the exercise, then which set and what was lifted;
-              // each swipe its own, never the first clip's on every slide (a photo or a clip with no set says nothing)
-              <div className="min-w-0" data-page-set>
-                <div className="line-clamp-2 break-words text-[15px] font-semibold leading-snug">{slideSet.title}</div>
-                {slideSet.detail && <div className="truncate text-[13px] leading-snug tabular-nums text-foreground/80">{slideSet.detail}</div>}
-              </div>
-            )}
-            {visual && s && (
-              // its PRs and the way in, as pills: 28px to see, 44px to tap (the tap reaches 8px above and below);
-              // the theme's dark grey, so they read on black and over a bright clip alike
-              <button
-                type="button"
-                onClick={() => onOpen(post)}
-                className="relative flex max-w-full items-center gap-1.5 text-left transition-opacity active:opacity-70 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
-                data-page-workout
-              >
-                {prLabel && (
-                  <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-secondary/80 px-2.5 text-[12px] font-bold text-warning" data-page-prs>
-                    <Trophy className="h-3.5 w-3.5" aria-hidden />
-                    {prLabel}
-                  </span>
-                )}
-                <span className="inline-flex h-7 shrink-0 items-center gap-0.5 rounded-full bg-secondary/80 pl-3 pr-2 text-[12px] font-semibold text-foreground">
-                  View workout
-                  <ChevronRight className="h-3.5 w-3.5" aria-hidden />
-                </span>
-              </button>
-            )}
-            {visual && !s && post.locked_in_at && (
-              <button type="button" onClick={() => onOpen(post)} className="flex items-center gap-2 text-left text-[13px] font-semibold">
-                Locked in {isTrainingNow(post) ? <TrainingNowPill /> : <span className="text-muted-foreground">{lockInTimeLabel(post.locked_in_at)}</span>}
-              </button>
-            )}
             {onOpenCaption ? (
-              // Reels': two lines and "… more"; a tap opens the whole caption with the comments under it.
-              // Our own film caption ("Glutes + Legs · 3 sets on film") isn't repeated under the workout's line
+              // their own words come first under the name (Reels': two lines and "… more"; a tap opens the whole
+              // caption with the comments under it). Our own film captions ("Glutes + Legs · 3 sets on film", the
+              // summary of its sets) aren't their words, and the workout's context below already says them
               post.caption?.trim() &&
               (auto || !isNote || visual) &&
               !(visual && s && isOwnFilmCaption(post.caption, [s.workout_name, s.workout_title])) &&
@@ -770,6 +753,50 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
               post.caption && (!isNote || visual) && <FeedCaption name={post.author.name} caption={post.caption} mentions={post.mentions} onOpenPerson={onOpenAuthor} className="px-0 pt-0" />
             )}
             {(!isNote || visual) && !auto && <PostExtras post={post} />}
+            {(slideSet || (visual && s)) && (
+              // the workout's context, one quiet group under their own words (their caption leads, the clip is the show):
+              // the set on screen, then the workout as a small chip that opens it
+              <div className="space-y-1.5 pt-0.5" data-page-workout-context>
+                {slideSet && (
+                  // the set on screen (a workout film's clip): the exercise, then which set and what was lifted;
+                  // each swipe its own, never the first clip's on every slide (a photo or a clip with no set says nothing)
+                  <div className="min-w-0 leading-snug" data-page-set>
+                    <div className="line-clamp-2 break-words text-[14px] font-medium">{slideSet.title}</div>
+                    {slideSet.detail && <SetDetail detail={slideSet.detail} other={slideSet.other} className="truncate text-[13px] tabular-nums text-foreground/70" otherClassName="text-[12px] font-medium text-foreground/50" />}
+                  </div>
+                )}
+                {visual && s && (
+                  // the workout, and the way into it: one small chip (its PRs first, in amber), 28px to see and 44px to tap
+                  // (the tap reaches 8px above and below); the theme's dark grey, so it reads on black and over a bright clip
+                  <button
+                    type="button"
+                    onClick={() => onOpen(post)}
+                    aria-label={`View workout: ${workoutHeadline(s)}${prLabel ? `, ${prLabel}` : ""}`}
+                    className="relative inline-flex h-7 max-w-full items-center gap-1.5 rounded-md bg-secondary/70 pl-2 pr-1.5 text-[12px] leading-none text-foreground transition-opacity active:opacity-70 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
+                    data-page-workout
+                  >
+                    {prLabel ? (
+                      <>
+                        <span className={cn("inline-flex shrink-0 items-center gap-1 font-semibold", prLoud ? "text-warning" : "text-foreground/80")} data-page-prs={prLoud ? "headline" : "quiet"}>
+                          {prLoud ? <Trophy className="h-3.5 w-3.5" aria-hidden /> : <Dumbbell className="h-3.5 w-3.5 opacity-80" aria-hidden />}
+                          {prLabel}
+                        </span>
+                        <span className="shrink-0 opacity-40" aria-hidden>·</span>
+                      </>
+                    ) : (
+                      <Dumbbell className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
+                    )}
+                    <span className="min-w-0 truncate font-medium">{workoutHeadline(s)}</span>
+                    <ChevronRight className="-ml-0.5 h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+                  </button>
+                )}
+              </div>
+            )}
+            {visual && !s && post.locked_in_at && (
+              <button type="button" onClick={() => onOpen(post)} className="flex items-center gap-2 text-left text-[13px] font-semibold">
+                Locked in {isTrainingNow(post) ? <TrainingNowPill /> : <span className="text-muted-foreground">{lockInTimeLabel(post.locked_in_at)}</span>}
+              </button>
+            )}
             {/* one line, never two: the views, then the coach's ❤️ or reply, and a coach's own score (every line here is room the picture loses) */}
             {((post.views?.count ?? 0) > 0 || post.coach_reactions.length > 0 || post.coach_commented || viewerIsStaff) && (
               <div className="flex min-w-0 items-center gap-2 [&_[data-post-views]]:mx-0 [&_[data-post-views]]:mb-0 [&_[data-post-views]]:shrink-0" data-page-meta>
@@ -889,12 +916,14 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
             {lift && (
               <div className="col-span-2 min-w-0">
                 <div className="font-display truncate text-[22px] uppercase leading-none">{formatTopSet(lift.detail, unit)}</div>
+                <WeightOther className="mt-0.5 block truncate text-[11px]">{topSetOther(lift.detail, unit)}</WeightOther>
                 <div className="mt-0.5 truncate text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{lift.name}</div>
               </div>
             )}
             {stats.slice(0, lift ? 2 : 4).map((x) => (
               <div key={x.label} className="min-w-0">
                 <div className="font-display truncate text-[22px] uppercase leading-none">{x.value}</div>
+                <SubLine sub={x.sub} row={stats.slice(0, lift ? 2 : 4)} className="mt-0.5 block truncate text-[11px]" />
                 <div className="mt-0.5 truncate text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{shortLabel(x.label)}</div>
               </div>
             ))}
@@ -1038,9 +1067,9 @@ export function CommentPreviewList({ post, onOpenComments }: { post: CommunityPo
 
 /**
  * Instagram's row: the heart (tap for ❤️, hold for 👍 ‼️ 🔥 😂), comments,
- * repost, message, and save at the end. Under it, the faces of who reacted
- * ("Jared, Vicky and 3 others", with the kinds they gave), which opens the
- * full list.
+ * repost, message, and save at the end. Under it, "Liked by Jared and 3
+ * others" with their faces (LikedBy). That line, or a tap on the number by
+ * the heart (under it on a post's screen, Reels'), opens the Likes.
  */
 export function ReactionBar({
   post,
@@ -1074,11 +1103,11 @@ export function ReactionBar({
   // a coach can send any post out to his own Instagram (never in View as client)
   const canInstagram = (role === "admin" || role === "coach") && !isImpersonating && !post.story;
   const [ig, setIg] = useState<boolean | null>(null);
-  const who = reactorsLine(post);
-  // the little ❤️🔥😂 beside the names, once it's not just hearts
+  // the reactions that rise out of the heart
   const kinds = reactionKinds(post);
-  const showKinds = kinds.length > 1 || (kinds.length === 1 && kinds[0] !== REACTION.emoji);
-  const faces = [...(post.reactors ?? [])].sort((a, b) => Number(!!b.is_me) - Number(!!a.is_me)).slice(0, 3);
+  const openLikes = () => setListFor(post.id);
+  const prefetchLikes = usePrefetchPostReactors();
+  const likesPress = () => prefetchLikes(post.id);
   // People are reacting to this one: a moment after it's on screen, its
   // reactions float up out of the heart and who reacted pops (never over the post).
   const pop = useEngagementPop<HTMLDivElement>(post, hidden);
@@ -1109,7 +1138,7 @@ export function ReactionBar({
   if (column) {
     return (
       <div ref={pop.ref} data-engagement-pop={on ? "" : undefined} className="relative flex flex-col items-center gap-1" data-post-actions-column>
-        <ReactionButton post={post} onReact={onReact} align="right" stacked />
+        <ReactionButton post={post} onReact={onReact} align="right" stacked onCount={openLikes} onCountPress={likesPress} />
         {on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} total={reactionTotal(post)} size="lg" className="bottom-3/4 left-1/2" />}
         {onOpenComments && (
           <button
@@ -1141,7 +1170,7 @@ export function ReactionBar({
     <div ref={pop.ref} data-engagement-pop={on ? "" : undefined} className="relative px-2 pb-2 pt-1.5">
       {/* Instagram's row: like, comment, repost, message ... save at the end */}
       <div className="relative flex items-center">
-        <ReactionButton post={post} onReact={onReact} />
+        <ReactionButton post={post} onReact={onReact} onCount={openLikes} onCountPress={likesPress} />
         {on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} total={reactionTotal(post)} className="bottom-1/2 left-5" />}
         {onOpenComments && (
           <button
@@ -1168,30 +1197,8 @@ export function ReactionBar({
         <span className="ml-auto" />
         <SaveButton post={post} />
       </div>
-      {/* who reacted, on its own line under the row, so names never get cut short */}
-      {who && (
-        <button
-          type="button"
-          onClick={() => setListFor(post.id)}
-          className={cn("-mt-0.5 flex max-w-full min-w-0 items-center gap-1.5 rounded-full py-1 pl-1.5 pr-2 text-left hover:bg-muted", on && "engage-chip")}
-          aria-label={`See who reacted: ${who}`}
-          data-who-reacted
-        >
-          {faces.length > 0 && (
-            <span className="flex shrink-0 -space-x-1.5">
-              {faces.map((r) => (
-                <span key={r.user_id} className="rounded-full ring-2 ring-card">
-                  <UserAvatar src={r.avatar_url} name={r.is_me ? "You" : r.name} size={22} expandable={false} />
-                </span>
-              ))}
-            </span>
-          )}
-          {showKinds && <span className="shrink-0 text-[13px] leading-none tracking-[-0.15em]">{kinds.join("")}</span>}
-          <span className="truncate text-[13px] text-muted-foreground">
-            <span className="font-bold text-foreground">{who}</span>
-          </span>
-        </button>
-      )}
+      {/* Instagram's "Liked by", on its own line under the row, so names never get cut short */}
+      <LikedBy post={post} onOpen={openLikes} highlight={on} className="-mt-0.5" />
       {sheets}
     </div>
   );
@@ -1427,7 +1434,7 @@ function SlideMedia({
  * the sound button and the dots, and never takes a tap (double-tap ❤️ and the
  * clip's sound still work). On a post's own screen it's in the words instead.
  */
-function SlideCaption({ caption, withDots }: { caption: { title: string; detail: string }; withDots: boolean }) {
+function SlideCaption({ caption, withDots }: { caption: { title: string; detail: string; other?: string | null }; withDots: boolean }) {
   return (
     <div
       data-slide-caption
@@ -1437,7 +1444,24 @@ function SlideCaption({ caption, withDots }: { caption: { title: string; detail:
       )}
     >
       <div className="truncate text-[15px] font-semibold leading-tight [text-shadow:0_1px_2px_rgb(0_0_0/0.45)]">{caption.title}</div>
-      <div className="mt-0.5 truncate text-[13px] tabular-nums text-white/85">{caption.detail}</div>
+      <SetDetail detail={caption.detail} other={caption.other} className="mt-0.5 truncate text-[13px] tabular-nums text-white/85" otherClassName="text-[12px] font-medium text-white/60" />
+    </div>
+  );
+}
+
+/**
+ * A set's line with its weight's other unit right after the weight, quieter:
+ * "Top set · 455 lb (206.4 kg) × 1 @ RPE 6". The line as it was when it names
+ * no weight or there's no other unit (a hidden weight, reps only).
+ */
+function SetDetail({ detail, other, className, otherClassName }: { detail: string; other?: string | null; className: string; otherClassName: string }) {
+  const at = other ? splitAtWeight(detail) : null;
+  if (!at) return <div className={className}>{detail}</div>;
+  return (
+    <div className={className}>
+      {at.head}
+      <span data-weight-other className={otherClassName}> ({other})</span>
+      {at.tail}
     </div>
   );
 }

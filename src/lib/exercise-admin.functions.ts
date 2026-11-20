@@ -57,7 +57,7 @@ async function countReferences(exerciseId: string): Promise<Record<string, numbe
     const { count, error } = await supabaseAdmin
       .from("athlete_programs" as any)
       .select("id", { count: "exact", head: true })
-      .contains("days", [{ exercises: [{ exercise_id: exerciseId }] }]);
+      .contains("days", JSON.stringify([{ exercises: [{ exercise_id: exerciseId }] }]));
     if (error) throw new Error(`Reference check failed on athlete_programs: ${error.message}`);
     counts.athlete_programs = count ?? 0;
   }

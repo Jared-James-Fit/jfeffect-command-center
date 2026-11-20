@@ -160,6 +160,8 @@ export type RawRow = {
   load_kg: number | null;
   load_lb: number | null;
   load_unit: string | null;
+  /** The coach's exact load over a % (load_kg / load_lb hold it). */
+  manual_override?: boolean | null;
   tempo: string | null;
   rest_seconds: number | null;
   notes: string | null;
@@ -376,6 +378,8 @@ export type IntelRecords = {
   ptSessions?: RawPtSession[];
   /** What their health profile is built from (health-load.ts): injuries, conditions, medications, their forms' health answers. */
   health?: import("@/lib/health/health-load").HealthRecords | null;
+  /** The nutrition plan they're on now (load.ts): its phase and each day's numbers, for the training AI's brief. */
+  nutrition?: { phase: string | null; goal: string | null; startDate: string | null; endDate: string | null; days: Array<{ label: string; calories: number | null; protein: number | null; carbs: number | null; fats: number | null }> } | null;
   settings: IntelSettings;
   scope: IntelScope;
   /** yyyy-mm-dd "today" in the athlete's time zone. */

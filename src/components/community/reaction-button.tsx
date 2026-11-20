@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { REACTION, REACTIONS, reactionEmoji, reactionTotal, type CommunityPost, type ReactionKey } from "@/lib/community";
+import { feedback } from "@/lib/feedback";
+import { HapticTap } from "@/components/haptic-tap";
 
 /** How long a press has to be to open the other reactions. */
 const HOLD_MS = 380;
@@ -9,6 +11,8 @@ const HOLD_MS = 380;
 /**
  * The like button: tap for ❤️ (tap again to take it back), hold for
  * 👍 ‼️ 🔥 😂. Shows your reaction once you've given one, and how many.
+ * With `onCount` the number is a tap of its own that opens who liked it
+ * (Instagram's and Reels'): the heart likes, the number lists.
  */
 export function ReactionButton({
   post,
@@ -16,6 +20,8 @@ export function ReactionButton({
   size = "md",
   align = "left",
   stacked = false,
+  onCount,
+  onCountPress,
 }: {
   post: CommunityPost;
   onReact: (p: CommunityPost, next: ReactionKey | null) => void;
@@ -23,6 +29,10 @@ export function ReactionButton({
   align?: "left" | "right";
   /** The count under the heart (a post's own screen in the feed, TikTok's right column). */
   stacked?: boolean;
+  /** A tap on the number: who liked it (the Likes sheet). */
+  onCount?: () => void;
+  /** The finger landed on the number (start loading the Likes). */
+  onCountPress?: () => void;
 }) {
   const sm = size === "sm";
   const [open, setOpen] = useState(false);
@@ -31,6 +41,8 @@ export function ReactionButton({
   const held = useRef(false);
   const mine = post.my_reaction;
   const total = reactionTotal(post);
+  // the number is its own button: a tap on it lists who liked it, never a like
+  const split = !!onCount && total > 0;
 
   const cancel = () => {
     if (timer.current) window.clearTimeout(timer.current);
@@ -39,19 +51,15 @@ export function ReactionButton({
   useEffect(() => cancel, []);
   const choose = (next: ReactionKey | null) => {
     setOpen(false);
-    if (next) {
-      setPop((n) => n + 1);
-      try {
-        navigator.vibrate?.(8);
-      } catch {
-        /* no haptics here */
-      }
-    }
+    if (next) setPop((n) => n + 1);
+    // the heart's pop and its tap land together (taking a like back is a tap too, Instagram's)
+    feedback("like");
     onReact(post, next);
   };
 
+  const count = total > 0 && <span className={cn(sm || stacked ? "text-[12px]" : "text-[14px]", "font-bold tabular-nums", mine || stacked ? "text-foreground" : "text-muted-foreground")}>{total}</span>;
   return (
-    <div className="relative shrink-0">
+    <div className={cn("relative shrink-0", split && (stacked ? "flex flex-col items-center" : "flex items-center"))}>
       <button
         type="button"
         onPointerDown={() => {
@@ -61,11 +69,7 @@ export function ReactionButton({
             timer.current = null;
             held.current = true;
             setOpen(true);
-            try {
-              navigator.vibrate?.(10);
-            } catch {
-              /* no haptics here */
-            }
+            feedback("press");
           }, HOLD_MS);
         }}
         onPointerUp={cancel}
@@ -88,10 +92,12 @@ export function ReactionButton({
         aria-pressed={!!mine}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`${mine ? `You reacted ${reactionEmoji(mine) ?? ""}. Tap to remove` : "Like"}${total ? `, ${total}` : ""}. Hold for more reactions`}
+        aria-label={`${mine ? `You reacted ${reactionEmoji(mine) ?? ""}. Tap to remove` : "Like"}${total && !split ? `, ${total}` : ""}. Hold for more reactions`}
         className={cn(
-          "flex select-none items-center justify-center rounded-full transition-transform [-webkit-touch-callout:none] [touch-action:manipulation] hover:bg-muted active:scale-90",
-          stacked ? "min-h-11 min-w-11 flex-col gap-0.5 px-1 py-1" : sm ? "h-10 min-w-10 gap-1 px-2" : "h-11 min-w-11 gap-1.5 px-2.5",
+          "relative flex select-none items-center justify-center rounded-full transition-transform [-webkit-touch-callout:none] [touch-action:manipulation] hover:bg-muted active:scale-90",
+          split
+            ? sm ? "h-10 w-10" : "h-11 w-11"
+            : stacked ? "min-h-11 min-w-11 flex-col gap-0.5 px-1 py-1" : sm ? "h-10 min-w-10 gap-1 px-2" : "h-11 min-w-11 gap-1.5 px-2.5",
         )}
       >
         <span key={pop} className={cn("inline-flex", pop > 0 && "community-pop")}>
@@ -103,8 +109,25 @@ export function ReactionButton({
             <Heart className={cn(sm ? "h-[21px] w-[21px]" : stacked ? "h-[30px] w-[30px] text-foreground" : "h-[26px] w-[26px]", !stacked && "text-foreground/80")} strokeWidth={2} />
           )}
         </span>
-        {total > 0 && <span className={cn(sm || stacked ? "text-[12px]" : "text-[14px]", "font-bold tabular-nums", mine || stacked ? "text-foreground" : "text-muted-foreground")}>{total}</span>}
+        {!split && count}
+        <HapticTap />
       </button>
+      {split && (
+        <button
+          type="button"
+          onPointerDown={onCountPress}
+          onClick={onCount}
+          aria-label={`${total} ${total === 1 ? "like" : "likes"}. See who liked this`}
+          className={cn(
+            "flex select-none items-center justify-center rounded-full [touch-action:manipulation] active:opacity-60",
+            // under the heart: tucked up to it, 44 wide; beside it: the row's full height
+            stacked ? "-mt-2 h-7 min-w-11 px-1.5" : "-ml-2 h-11 min-w-8 px-1.5 hover:bg-muted",
+          )}
+          data-like-count
+        >
+          {count}
+        </button>
+      )}
       {open && <ReactionPicker current={mine} align={align} onPick={(k) => choose(k === mine ? null : k)} onClose={() => setOpen(false)} />}
     </div>
   );
@@ -171,6 +194,8 @@ export function useBurst() {
       y = Math.round(e.clientY - r.top);
     }
     setBurst((b) => ({ n: b.n + 1, x, y }));
+    // every double-tap is a like: its tap lands with the heart
+    feedback("like");
   }, []);
   return [burst, fire] as const;
 }

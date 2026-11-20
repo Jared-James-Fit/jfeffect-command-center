@@ -98,7 +98,7 @@ describe("training days, from their schedule", () => {
 describe("age classes, from their birth year", () => {
   const age = q("age_class", "multi_choice", AGE);
   it("ticks every class the season allows", () => {
-    expect(prefillDetail(age, { date_of_birth: "1998-05-05", season_year: 2027 })).toEqual({
+    expect(prefillDetail(age, { date_of_birth: "1998-05-05", season_year: 2027 })).toMatchObject({
       value: ["OPEN (19–59)"],
       strong: true,
       source: "From your birth year: you can lift Open in 2027",
@@ -153,13 +153,13 @@ describe("weight class", () => {
 
   it("is the coach's meet prep class first, a fact", () => {
     const p = { sex: "male", prep_weight_class: "93", recent_bodyweight: { value: 180, unit: "lb" as const, count: 5 } };
-    expect(prefillDetail(wc, p)).toEqual({ value: "Men's 93 kg", strong: true, source: "From your meet prep" });
+    expect(prefillDetail(wc, p)).toMatchObject({ value: "Men's 93 kg", strong: true, source: "From your meet prep" });
     expect(startingAnswer(wc, p, "Men's 83 kg")).toEqual({ value: "Men's 93 kg", from: "profile" });
   });
 
   it("else the class their weigh-ins put them in, which their last answer beats", () => {
     const p = { sex: "male", recent_bodyweight: { value: 180.4, unit: "lb" as const, count: 5 } };
-    expect(prefillDetail(wc, p)).toEqual({ value: "Men's 83 kg", strong: false, source: "From your weigh-ins (180.4 lb average)" });
+    expect(prefillDetail(wc, p)).toMatchObject({ value: "Men's 83 kg", strong: false, source: "From your weigh-ins (180.4 lb average)" });
     expect(startingAnswer(wc, p, "Men's 74 kg")).toEqual({ value: "Men's 74 kg", from: "last" });
     expect(startingAnswer(wc, p, null)).toEqual({ value: "Men's 83 kg", from: "profile" });
     // a junior's 53 kg class is only theirs to be put in while they're a junior
@@ -185,8 +185,9 @@ describe("precedence and the note", () => {
     expect(prefillNote(n, p, "3")).toBe("From your training schedule");
     expect(prefillNote(n, p, 5)).toBeNull();
     expect(prefillNote(n, p, "")).toBeNull();
-    // the name and the meet speak for themselves
-    expect(prefillNote(q("full_name", "short_text"), { full_name: "Ashley" }, "Ashley")).toBeNull();
+    expect(prefillNote(q("full_name", "short_text"), { full_name: "Ashley" }, "Ashley")).toBe("From your profile");
+    // the meet speaks for itself (the checklist's own line names it)
+    expect(prefillNote(q("meet_name", "short_text"), { meet: { name: "Provincials", date: null, weightClass: null, source: "prep" } }, "Provincials")).toBeNull();
   });
 
   it("compares answers by meaning", () => {

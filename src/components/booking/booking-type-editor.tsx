@@ -36,6 +36,7 @@ import {
 import {
   ADVANCE_CHOICES,
   BUFFER_CHOICES,
+  CALL_LENGTHS,
   DURATION_CHOICES,
   LOCATION_MODES,
   NOTICE_CHOICES,
@@ -92,6 +93,8 @@ function blank(): Form {
     collect_phone: true,
     collect_notes: true,
     follows_smart: false,
+    duration_options: null,
+    audience: "anyone",
     hours: [1, 2, 3, 4, 5].map((d) => ({ day_of_week: d, start_time: "09:00", end_time: "17:00" })),
   };
 }
@@ -328,6 +331,12 @@ export function BookingTypeEditor({
         collect_phone: form.collect_phone,
         collect_notes: form.collect_notes,
         follows_smart: !!form.follows_smart,
+        // Lengths they pick between (calls only); the default is always one of them.
+        duration_options:
+          !training && (form.duration_options?.length ?? 0) > 0
+            ? Array.from(new Set([form.duration_minutes, ...(form.duration_options ?? [])])).sort((a, b) => a - b)
+            : null,
+        audience: form.audience === "clients" ? "clients" : "anyone",
       };
       const q = isEdit
         ? (supabase as any)
@@ -410,7 +419,7 @@ export function BookingTypeEditor({
           </div>
 
           <div className="space-y-1.5">
-            <Label>How long?</Label>
+            <Label>{!training && (form.duration_options?.length ?? 0) > 0 ? "Default length" : "How long?"}</Label>
             <div className="flex flex-wrap items-center gap-1.5">
               <Choice
                 value={
@@ -443,6 +452,54 @@ export function BookingTypeEditor({
               </div>
             </div>
           </div>
+
+          {!training && (
+            <div className="space-y-2" data-editor-lengths>
+              <Row
+                title="Let them pick the length"
+                hint={
+                  (form.duration_options?.length ?? 0) > 0
+                    ? "The booking page asks how long they need. When you send the link from a chat, you pick it for them."
+                    : "Off: it's always the length above."
+                }
+                checked={(form.duration_options?.length ?? 0) > 0}
+                onChange={(v) => set("duration_options", v ? [...CALL_LENGTHS] : null)}
+              />
+              {(form.duration_options?.length ?? 0) > 0 && (
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Lengths they can pick">
+                  {Array.from(new Set([...CALL_LENGTHS, form.duration_minutes]))
+                    .sort((a, b) => a - b)
+                    .map((m) => {
+                      const isDefault = m === form.duration_minutes;
+                      const on = isDefault || (form.duration_options ?? []).includes(m);
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          aria-pressed={on}
+                          disabled={isDefault}
+                          title={isDefault ? "The length it opens on" : undefined}
+                          onClick={() => {
+                            const cur = form.duration_options ?? [];
+                            const next = on ? cur.filter((x) => x !== m) : [...cur, m];
+                            set("duration_options", next.length ? next : [form.duration_minutes]);
+                          }}
+                          className={cn(
+                            "h-9 rounded-full border px-3 text-xs font-bold transition",
+                            on
+                              ? "border-foreground bg-foreground text-background"
+                              : "border-border bg-secondary/30 text-muted-foreground hover:text-foreground",
+                            isDefault && "cursor-default",
+                          )}
+                        >
+                          {m} min
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label>Where?</Label>
@@ -522,6 +579,23 @@ export function BookingTypeEditor({
                       aria-label="Link name"
                     />
                   </div>
+                </div>
+
+                <div className="space-y-1.5" data-editor-audience>
+                  <Label>Who can book it?</Label>
+                  <Choice
+                    value={form.audience === "clients" ? "clients" : "anyone"}
+                    options={[
+                      { value: "anyone", label: "Anyone with the link" },
+                      { value: "clients", label: "Only my coaching clients" },
+                    ]}
+                    onChange={(v) => set("audience", v as "anyone" | "clients")}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    {form.audience === "clients"
+                      ? "Clients book signed in, or from a link you send them. Anyone else is asked to sign in, and JF members never see it."
+                      : "Anyone can book from the link. Someone who isn't signed in gets a calendar invite and never uses a session."}
+                  </p>
                 </div>
 
                 <Row

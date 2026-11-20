@@ -160,7 +160,7 @@ export function MoneyReports() {
                   <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[14px] font-medium">{r.title}</span>
-                    <span className="block truncate text-[12px] text-muted-foreground">{r.sub}</span>
+                    <span className="block text-[12px] leading-snug text-muted-foreground">{r.sub}</span>
                   </span>
                   {busy === r.key ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : isReady ? <span className="rounded-full bg-foreground px-2.5 py-1 text-[12px] text-background">Save</span> : null}
                 </button>

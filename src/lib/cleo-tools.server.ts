@@ -1,5 +1,5 @@
 /**
- * Cleo's lookups: the tools she calls mid-answer to read a client's file,
+ * Cleo's lookups: the tools Cleo calls mid-answer to read a client's file,
  * training log, body weight, records, program, check-ins, nutrition, coach
  * thread, purchases and the calendar; the business's documents (agreements,
  * policies, FAQs); and anything else in the app (find_data / read_data,
@@ -13,10 +13,13 @@
  * Never reads member-made chats (chat_groups 'direct' / 'crew'): those are
  * private to their members (AGENTS.md). The coach thread is `messages`.
  */
+import { wellFormed } from "@/lib/well-formed";
 import { tool } from "ai";
 import { z } from "zod";
 import { rpcRead } from "@/lib/permissions.server";
 import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
+import { isMissed } from "@/lib/cleo-schedule";
+import { loadDatedWorkouts } from "@/lib/cleo-schedule.server";
 import { clientOwed } from "@/lib/client-owed";
 import { clientTaxRate } from "@/lib/client-billing-summary";
 import {
@@ -140,9 +143,9 @@ function liftUnit(c: any): "kg" | "lb" {
 function safe<A>(name: string, fn: (args: A) => Promise<string>) {
   return async (args: A) => {
     try {
-      return clip(await fn(args));
+      return wellFormed(clip(await fn(args)));
     } catch (e: any) {
-      return `Couldn't read ${name}: ${e?.message ?? "error"}. Tell the person you couldn't load it; don't guess.`;
+      return wellFormed(`Couldn't read ${name}: ${e?.message ?? "error"}. Tell the person you couldn't load it; don't guess.`);
     }
   };
 }
@@ -358,7 +361,7 @@ export function cleoReadTools(ctx: ToolCtx) {
     }),
 
     personal_records: tool({
-      description: "A client's recent PRs: all-time, program and block records by reps and by load, and tonnage records.",
+      description: "A client's recent PRs: all-time, program and block records by reps and by load, and tonnage records. Records count finished workouts only, so before calling something an all-time PR check training_log for an equal or heavier set in a workout they never finished.",
       inputSchema: z.object({ client_id: clientId, days: z.number().int().min(7).max(365).default(60) }),
       execute: safe("records", async ({ client_id, days }) => {
         const c = await clientRow(db, client_id);
@@ -371,35 +374,31 @@ export function cleoReadTools(ctx: ToolCtx) {
           return unit === "kg" ? `${Math.round(n * 2) / 2} kg` : `${Math.round(n * 2.2046226218 * 2) / 2} lb`;
         };
         const kind = (r: any) => (r.atpr ? "ALL-TIME PR" : r.program_pr ? "program PR" : r.block_pr ? "block PR" : "PR");
-        const lines = [`${clientName(c)} records, last ${days} days (converted to ${unit}):`];
+        const lines = [
+          `${clientName(c)} records, last ${days} days (converted to ${unit}):`,
+          "(Records count finished workouts only: a set in a workout they never tapped Finish on isn't compared. Check training_log for an equal or heavier set before calling one an all-time PR.)",
+        ];
         for (const r of (data?.records ?? []) as any[]) lines.push(`- ${dayIn(r.at, tz)} ${r.exercise_name}: ${kg(r.load_kg)} x ${r.reps} (${kind(r)}${r.prev_all_kg != null ? `, previous best ${kg(r.prev_all_kg)}` : ""})`);
         for (const r of (data?.load_records ?? []) as any[]) lines.push(`- ${dayIn(r.at, tz)} ${r.exercise_name}: heaviest ${kg(r.load_kg)} x ${r.reps} (${kind(r)} by load)`);
         for (const t of (data?.tonnage ?? []) as any[]) lines.push(`- ${dayIn(t.at, tz)} session tonnage ${kg(t.tonnage_kg)} (${kind(t)})`);
-        return lines.length > 1 ? lines.join("\n") : `${clientName(c)} has no PRs in the last ${days} days.`;
+        return lines.length > 2 ? lines.join("\n") : `${clientName(c)} has no PRs in the last ${days} days (finished workouts only; training_log has every logged set).`;
       }),
     }),
 
     training_program: tool({
       description:
-        "A client's program: blocks (current one first), and their schedule from 7 days ago to 14 days ahead with which workouts are done. Pass `date` (YYYY-MM-DD) to also get the prescribed exercises for that day's workout.",
+        "A client's program: blocks (current one first), and their schedule from 7 days ago to 14 days ahead (every workout the app shows on their calendar) with which are done, each with its day id (and workout id when it has one). Pass `date` (YYYY-MM-DD) to also get the prescribed exercises for that day's workout.",
       inputSchema: z.object({ client_id: clientId, date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }),
       execute: safe("the program", async ({ client_id, date }) => {
         const c = await clientRow(db, client_id);
         const from = new Date(Date.parse(`${today}T00:00:00Z`) - 7 * DAY).toISOString().slice(0, 10);
         const to = new Date(Date.parse(`${today}T00:00:00Z`) + 14 * DAY).toISOString().slice(0, 10);
-        const [blocksRes, schedRes] = await Promise.all([
+        const [blocksRes, sched] = await Promise.all([
           db.from("pl_blocks").select("*").eq("client_id", client_id).order("start_date", { ascending: false }).limit(30),
-          db.from("pl_scheduled_workouts").select("*").eq("client_id", client_id).gte("scheduled_date", date && date < from ? date : from).lte("scheduled_date", date && date > to ? date : to).order("scheduled_date").limit(80),
+          // The schedule the app shows: schedule entries, and workouts dated on the program itself (most of them).
+          loadDatedWorkouts(db, { clientIds: [client_id], from: date && date < from ? date : from, to: date && date > to ? date : to }),
         ]);
         const blocks = filterPrimaryProgramBlocks(rows<any>(blocksRes as any, "blocks")).filter((b) => !b.archived);
-        const sched = rows<any>(schedRes as any, "schedule");
-        const dayIds = [...new Set(sched.map((s) => s.source_day_id).filter(Boolean))];
-        const [daysRes, compRes] = await Promise.all([
-          dayIds.length ? db.from("pl_days").select("id, title, focus").in("id", dayIds) : Promise.resolve({ data: [], error: null }),
-          sched.length ? db.from("pl_day_completions").select("scheduled_workout_id, completed_at, session_rating").in("scheduled_workout_id", sched.map((s) => s.id)) : Promise.resolve({ data: [], error: null }),
-        ]);
-        const days = new Map(rows<any>(daysRes as any, "days").map((d) => [d.id, d]));
-        const done = new Map(rows<any>(compRes as any, "completions").filter((x) => x.completed_at).map((x) => [x.scheduled_workout_id, x]));
         const current = blocks.find((b) => b.status === "Active" && (!b.start_date || b.start_date <= today) && (!b.end_date || b.end_date >= today)) ?? blocks.find((b) => b.status === "Active");
         const lines = [`${clientName(c)} program:`];
         if (!blocks.length) lines.push("- no program blocks");
@@ -407,21 +406,24 @@ export function cleoReadTools(ctx: ToolCtx) {
           lines.push(`- ${b === current ? "CURRENT " : ""}${b.name ?? "Block"} | block id ${b.id} | ${b.status ?? "?"} | ${b.client_visible ? "published" : "HIDDEN from client"} | ${b.start_date ?? "?"} to ${b.end_date ?? "?"} | ${b.weeks ?? "?"} weeks`);
         }
         lines.push(`Schedule ${from} to ${to}:`);
-        for (const s of sched) {
-          const d = days.get(s.source_day_id);
-          const comp = done.get(s.id);
-          lines.push(`- ${s.scheduled_date}${s.scheduled_time ? ` ${String(s.scheduled_time).slice(0, 5)}` : ""} | ${d?.title ?? "Workout"}${d?.focus ? ` (${d.focus})` : ""} | ${comp ? `done${comp.session_rating != null ? `, rated ${comp.session_rating}` : ""}` : s.scheduled_date < today ? "NOT logged" : "upcoming"} | workout id ${s.id} | day id ${s.source_day_id}`);
+        for (const s of sched.filter((s) => s.date >= from && s.date <= to).slice(0, 80)) {
+          const state = s.done ? `done${s.rating != null ? `, rated ${s.rating}` : ""}` : s.date < today ? (s.optional ? "optional, skipped" : s.visible ? "NOT logged" : "not logged (hidden from client)") : "upcoming";
+          lines.push(`- ${s.date}${s.time ? ` ${s.time}` : ""} | ${s.title ?? "Workout"}${s.focus ? ` (${s.focus})` : ""}${s.optional ? " | optional" : ""} | ${state} | ${s.entryId ? `workout id ${s.entryId} | ` : ""}day id ${s.dayId}`);
         }
         if (!sched.length) lines.push("- nothing scheduled");
         if (date) {
-          const onDay = sched.filter((s) => s.scheduled_date === date);
+          const onDay = sched.filter((s) => s.date === date);
           if (!onDay.length) lines.push(`No workout scheduled on ${date}.`);
           for (const s of onDay) {
-            const ex = await db.from("pl_exercise_rows").select("*, exercises(name)").eq("day_id", s.source_day_id).limit(40);
+            const ex = await db.from("pl_exercise_rows").select("*, exercises(name)").eq("day_id", s.dayId).limit(40);
             const list = rows<any>(ex as any, "exercises").sort((a, b) => (a.sort_order ?? a.position ?? a.row_index ?? 0) - (b.sort_order ?? b.position ?? b.row_index ?? 0));
-            lines.push(`Prescription for ${date} (${days.get(s.source_day_id)?.title ?? "workout"}):`);
+            lines.push(`Prescription for ${date} (${s.title ?? "workout"}):`);
             for (const r of list) {
-              const load = r.percentage ? `${r.percentage}%` : r.load_kg || r.load_lb ? `${r.load_unit === "kg" ? r.load_kg : r.load_lb ?? r.load_kg} ${r.load_unit ?? ""}`.trim() : "";
+              // a fixed load with the unit of the column it's in, never a kg number under an lb label
+              const fixed = r.load_unit === "kg" && r.load_kg != null ? `${r.load_kg} kg`
+                : r.load_unit === "lb" && r.load_lb != null ? `${r.load_lb} lb`
+                : r.load_kg != null ? `${r.load_kg} kg` : r.load_lb != null ? `${r.load_lb} lb` : "";
+              const load = r.percentage ? `${r.percentage}%` : fixed;
               lines.push(`- ${text(r.exercises?.name) ?? text(r.exercise_name_override) ?? "Exercise"}: ${r.sets ?? "?"} x ${r.reps_text ?? "?"}${r.rpe ? ` @RPE ${r.rpe}` : r.rir ? ` @${r.rir} RIR` : ""}${load ? ` | ${load}` : ""}${text(r.notes) ? ` | ${String(r.notes).slice(0, 120)}` : ""}`);
             }
           }
@@ -471,7 +473,7 @@ export function cleoReadTools(ctx: ToolCtx) {
     }),
 
     nutrition: tool({
-      description: "A client's nutrition targets (calories, protein, carbs, fats per day type), phase, goal and notes.",
+      description: "A client's nutrition targets (calories, protein, carbs, fats per day type), phase, goal and notes, and the weight-management read the coach's Nutrition tab shows (bodyweight trend against the goal, the one recommendation, cardio, water, digestion): the same read the nutrition AI and the check-in recap use.",
       inputSchema: z.object({ client_id: clientId }),
       execute: safe("nutrition", async ({ client_id }) => {
         const c = await clientRow(db, client_id);
@@ -484,6 +486,10 @@ export function cleoReadTools(ctx: ToolCtx) {
           for (const d of (t.nutrition_target_days ?? []) as any[]) lines.push(`  ${d.day_label ?? "Day"}: ${d.calories ?? "?"} kcal | P ${d.protein ?? "?"}g C ${d.carbs ?? "?"}g F ${d.fats ?? "?"}g${d.fibre ? ` fibre ${d.fibre}g` : ""}`);
           if (text(t.admin_notes)) lines.push(`  Coach notes: ${String(t.admin_notes).slice(0, 400)}`);
         }
+        // one read for every AI that touches their nutrition (weight-management, decision.ts); never recomputed here
+        const { loadWeightText } = await import("@/lib/nutrition-ai-plans.server");
+        const wm = await loadWeightText(db, client_id).catch(() => null);
+        if (wm) lines.push("", wm);
         return lines.join("\n");
       }),
     }),
@@ -552,19 +558,16 @@ export function cleoReadTools(ctx: ToolCtx) {
       inputSchema: z.object({ days: z.number().int().min(1).max(30).default(7) }),
       execute: safe("team training", async ({ days }) => {
         const from = new Date(Date.parse(`${today}T00:00:00Z`) - days * DAY).toISOString().slice(0, 10);
-        const [schedRes, compRes] = await Promise.all([
-          db.from("pl_scheduled_workouts").select("id, client_id, scheduled_date, source_day_id").gte("scheduled_date", from).lt("scheduled_date", today).limit(3000),
-          db.from("pl_day_completions").select("scheduled_workout_id, client_id, completed_at").gte("completed_at", new Date(Date.parse(`${from}T00:00:00Z`) - 3 * DAY).toISOString()).limit(5000),
-        ]);
-        const sched = rows<any>(schedRes as any, "schedule");
-        const done = new Set(rows<any>(compRes as any, "completions").filter((c) => c.completed_at).map((c) => c.scheduled_workout_id));
+        // The schedule the app shows: schedule entries, and workouts dated on the program itself (most of them).
+        const yesterday = new Date(Date.parse(`${today}T00:00:00Z`) - DAY).toISOString().slice(0, 10);
+        const sched = (await loadDatedWorkouts(db, { clientIds: null, from, to: yesterday })).filter((w) => w.visible && !(w.optional && !w.done));
         const per = new Map<string, { total: number; done: number; missed: string[] }>();
         for (const w of sched) {
-          const p = per.get(w.client_id) ?? { total: 0, done: 0, missed: [] };
+          const p = per.get(w.clientId) ?? { total: 0, done: 0, missed: [] };
           p.total += 1;
-          if (done.has(w.id)) p.done += 1;
-          else p.missed.push(w.scheduled_date);
-          per.set(w.client_id, p);
+          if (w.done) p.done += 1;
+          else if (isMissed(w, today)) p.missed.push(w.date);
+          per.set(w.clientId, p);
         }
         if (!per.size) return `No workouts were scheduled from ${from} to yesterday.`;
         const ids = [...per.keys()];

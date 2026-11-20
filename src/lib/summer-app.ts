@@ -1,7 +1,7 @@
 /**
  * What Cleo knows about the rest of the app (beyond the books): clients,
  * calendar, check-ins waiting, applications, tasks, unread messages, alerts,
- * plus the pages she can link to. Pure: the server loads the rows, this
+ * plus the pages Cleo can link to. Pure: the server loads the rows, this
  * writes them out for the model.
  */
 

@@ -174,7 +174,7 @@ export async function loadIntelRecords(
   const rows = await fetchByIds<any>(dayIds, (ids, f, t) =>
     sb
       .from("pl_exercise_rows")
-      .select("id, day_id, sort_order, exercise_id, exercise_name_override, sets, reps_text, rpe, rir, percentage, percentage_basis, load_kg, load_lb, load_unit, tempo, rest_seconds, notes, purpose_label, measurement_type, duration_seconds, intensity_techniques, progression_method")
+      .select("id, day_id, sort_order, exercise_id, exercise_name_override, sets, reps_text, rpe, rir, percentage, percentage_basis, load_kg, load_lb, load_unit, manual_override, tempo, rest_seconds, notes, purpose_label, measurement_type, duration_seconds, intensity_techniques, progression_method")
       .in("day_id", ids)
       .order("sort_order")
       .range(f, t),
@@ -276,6 +276,24 @@ export async function loadIntelRecords(
   // Their health profile: injuries, conditions and medications the coach or client recorded, and what
   // their Nutrition Updates said (never blocks the read: an unreadable part is left out).
   const health = await optional("health profile", () => loadHealthRecords(sb, clientId, { forms: true, today }), null);
+  // The nutrition plan they're on now (the newest one not archived, as every client screen reads it):
+  // a cut or a gain changes what training can carry, so the training AI reads it too.
+  const nutrition = await optional(
+    "nutrition plan",
+    async () => {
+      const { data, error } = await sb
+        .from("nutrition_targets")
+        .select("phase, goal, start_date, end_date, status, nutrition_target_days(day_label, calories, protein, carbs, fats, sort_order)")
+        .eq("client_id", clientId)
+        .neq("status", "Archived")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data ?? null;
+    },
+    null,
+  );
   const settingsRow = await optional(
     "analytics settings",
     async () => {
@@ -452,6 +470,17 @@ export async function loadIntelRecords(
     cardioCompletions,
     ptSessions,
     health,
+    nutrition: nutrition
+      ? {
+          phase: (nutrition as any).phase ?? null,
+          goal: (nutrition as any).goal ?? null,
+          startDate: (nutrition as any).start_date ?? null,
+          endDate: (nutrition as any).end_date ?? null,
+          days: (((nutrition as any).nutrition_target_days ?? []) as any[])
+            .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+            .map((d) => ({ label: String(d.day_label ?? "Day"), calories: d.calories ?? null, protein: d.protein ?? null, carbs: d.carbs ?? null, fats: d.fats ?? null })),
+        }
+      : null,
     settings: {
       e1rmFormula: settingsRow?.e1rm_formula === "brzycki" ? "brzycki" : "epley",
       workingRpeMin: Number(settingsRow?.working_set_rpe_min ?? 6) || 6,

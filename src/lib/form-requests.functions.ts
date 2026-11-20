@@ -119,7 +119,7 @@ export const listFormTrackerFn = createServerFn({ method: "POST" })
       sb
         .from("messages")
         .select("id, client_id, created_at, read_by_client_at, attachments")
-        .contains("attachments", [{ kind: "form_request" }])
+        .contains("attachments", JSON.stringify([{ kind: "form_request" }]))
         .is("deleted_at", null)
         .eq("is_internal_note", false)
         .gte("created_at", since)

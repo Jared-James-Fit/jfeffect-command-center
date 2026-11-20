@@ -90,10 +90,10 @@ describe("training readout", () => {
   it("e1RM is compared only against reliable sets earlier in the block", () => {
     const r = buildTrainingReadout({
       thisWeekId: "w3", nextWeekId: null, days, rows, sets, asOf: "2026-10-15", unit: "lb",
-      history: [set("h-bp", 245, 5, 7.5, 1, "2026-10-08"), set("h-bp", 240, 10, 9, 2, "2026-10-08")],
+      history: [set("h-bp", 245, 5, 7.5, 1, "2026-10-08"), set("h-bp", 235, 11, 9, 2, "2026-10-08")],
       historyRows,
     })!;
-    expect(r.this_week.find((x) => x.lift === "bench")!.e1rm_change).toMatch(/^\+0\.\d% vs best earlier this block \(306lb\)$/); // 245 × 5 @ 7.5; the 10-rep set is excluded
+    expect(r.this_week.find((x) => x.lift === "bench")!.e1rm_change).toMatch(/^\+0\.\d% vs best earlier this block \(306lb\)$/); // 245 × 5 @ 7.5; the 11-rep set is excluded (strength-read.ts: 10 reps or fewer)
   });
 
   it("today's session isn't due until it's logged; a passed day with nothing logged is called out", () => {

@@ -11,8 +11,10 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
-import { ChevronDown, MoreHorizontal, Target, Utensils, Zap } from "lucide-react";
+import { AlertTriangle, ChevronDown, MoreHorizontal, Sparkles, Target, Utensils, Zap } from "lucide-react";
 import { structureMealPlanDay, type PlanMacros } from "@/lib/nutrition-targets/meal-plan-structure";
+import { coachCoverageLine, dayCoverage, targetMathLine, type Coverage } from "@/lib/nutrition-targets/plan-coverage";
+import { mealFoodShort, mealMath, mealsOffTheirFoods, type MealMath } from "@/lib/nutrition-targets/food-values";
 import { MEAL_TIMING_LABEL } from "@/lib/nutrition-targets/meal-timing";
 import { AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -262,6 +264,7 @@ export function PlanDaysView({
   waterNote,
   onWater,
   compareLabel = "Now",
+  onFixMeals,
 }: {
   days: PlanViewDay[];
   /** The plan's water, in words ("3.5 L"). */
@@ -272,8 +275,11 @@ export function PlanDaysView({
   onWater?: () => void;
   /** What `was` is called ("Now": their current plan). */
   compareLabel?: string;
+  /** A day whose meals don't cover its targets gets a button that hands the fix to Change it with AI. */
+  onFixMeals?: () => void;
 }) {
   const [picked, setPicked] = useState(0);
+  const [showMath, setShowMath] = useState(false);
   if (!days.length) return null;
   const i = Math.min(picked, days.length - 1);
   const d = days[i];
@@ -285,6 +291,17 @@ export function PlanDaysView({
   ].filter(Boolean) as TargetExtra[];
   const mealCount = d.meals ? structureMealPlanDay(d.meals).meals.length : 0;
   const delta = d.was?.kcal != null && d.kcal != null ? Math.round(d.kcal - d.was.kcal) : null;
+  // The coach's checks on this day (never the client's): the meals against the targets (plan-coverage.ts),
+  // meals whose macros aren't what their foods give, amounts that can't be right (food-values.ts).
+  const target = { calories: d.kcal, protein: d.protein, carbs: d.carbs, fats: d.fat };
+  const hasMeals = !!d.meals?.trim();
+  const cover = hasMeals ? dayCoverage(d.meals, target) : null;
+  const short = cover ? coachCoverageLine(cover) : null;
+  const math = targetMathLine(target);
+  const perMeal = hasMeals ? mealMath(d.meals) : [];
+  const mislabelled = hasMeals ? mealsOffTheirFoods(d.meals).slice(0, 3) : [];
+  const odd = perMeal.flatMap((m) => m.odd.map((l) => `${m.title}: ${l}`));
+  const unchecked = cover?.state === "unknown" && mealCount > 0 && d.kcal != null;
   return (
     <div className="space-y-4" data-plan-days>
       {days.length > 1 ? (
@@ -332,6 +349,12 @@ export function PlanDaysView({
             voice="coach"
           />
         </div>
+        {math ? (
+          <p className="flex items-start gap-1.5 text-[13px] text-warning" data-plan-target-math>
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            <span>{math}. Edit the plan to make them agree.</span>
+          </p>
+        ) : null}
         {d.was ? (
           <p className="text-[13px] tabular-nums text-muted-foreground" data-plan-compare>
             {compareLabel}: {fmt(d.was.kcal)} kcal · P {fmt(d.was.protein)} · C {fmt(d.was.carbs)} · F {fmt(d.was.fat)}
@@ -345,14 +368,90 @@ export function PlanDaysView({
       <section className="space-y-2 border-t border-border pt-4" data-plan-meals aria-label={`${d.label} meal plan`}>
         <h4 className="flex items-center gap-1.5 text-[15px] font-semibold">
           <Utensils className="h-4 w-4 text-muted-foreground" aria-hidden /> Meal plan
-          {mealCount ? <span className="font-normal text-muted-foreground">· {mealCount} {mealCount === 1 ? "meal" : "meals"}</span> : null}
+          {mealCount ? (
+            <span className="font-normal text-muted-foreground">
+              · {mealCount} {mealCount === 1 ? "meal" : "meals"}
+              {cover?.meals ? ` · ${cover.meals.kcal.toLocaleString("en-US")} kcal` : ""}
+              {cover?.flexible ? ` + ${cover.flexible.toLocaleString("en-US")} flexible` : ""}
+            </span>
+          ) : null}
         </h4>
+        {short || mislabelled.length || odd.length ? (
+          <div className="space-y-2 rounded-xl border border-warning/40 px-3 py-2.5" data-plan-meals-short>
+            <div className="flex items-start gap-2 text-[13px]">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+              <div className="min-w-0 space-y-1">
+                {short ? <p>{short}.</p> : null}
+                {mislabelled.map((c) => (
+                  <p key={c.title} data-plan-meal-foods>{mealFoodShort(c)}.</p>
+                ))}
+                {odd.map((l) => (
+                  <p key={l} data-plan-meal-amount>Check the amount: {l}.</p>
+                ))}
+              </div>
+            </div>
+            {onFixMeals && (short || mislabelled.length) ? (
+              <Button variant="outline" className="h-10 gap-1.5" onClick={onFixMeals}>
+                <Sparkles className="h-4 w-4" aria-hidden /> Fix the meals with AI
+              </Button>
+            ) : null}
+          </div>
+        ) : unchecked ? (
+          <p className="text-[13px] text-muted-foreground" data-plan-meals-unchecked>
+            Not every meal says its macros, so these meals can't be checked against the targets.
+          </p>
+        ) : null}
+        {perMeal.some((m) => m.stated) ? (
+          <div data-plan-math>
+            <button
+              type="button"
+              className="text-[13px] font-medium text-muted-foreground underline-offset-2 hover:underline"
+              aria-expanded={showMath}
+              onClick={() => setShowMath((v) => !v)}
+            >
+              {showMath ? "Hide the math" : "Show the math"}
+            </button>
+            {showMath ? <MealMathRows meals={perMeal} cover={cover} /> : null}
+          </div>
+        ) : null}
         {d.meals?.trim() ? (
           <DayMeals text={d.meals} />
         ) : (
           <p className="text-[13px] text-muted-foreground">No meals written for this day.</p>
         )}
       </section>
+    </div>
+  );
+}
+
+/**
+ * "Show the math" on a plan day: each meal as written (its Approximate macros,
+ * calories at 4 / 4 / 9) and by its foods (USDA values for the plain staples,
+ * or why they can't be checked), then the day against its target. The coach's only.
+ */
+function MealMathRows({ meals, cover }: { meals: MealMath[]; cover: Coverage | null }) {
+  const k = (v: number) => Math.round(v).toLocaleString("en-US");
+  return (
+    <div className="mt-2 space-y-1.5 rounded-xl bg-muted/50 px-3 py-2.5 text-[13px] tabular-nums" data-plan-math-rows>
+      {meals.map((m, i) => (
+        <div key={i} className="flex flex-wrap items-baseline justify-between gap-x-3">
+          <span className="font-medium">{m.title}</span>
+          <span className="text-muted-foreground">
+            {m.stated ? `${k(m.stated.kcal)} kcal written (P ${k(m.stated.protein)} · C ${k(m.stated.carbs)} · F ${k(m.stated.fat)})` : "no macros written"}
+            {" · "}
+            {m.worked ? `about ${k(m.worked.kcal)} by its foods` : m.unread.length ? `foods not checked: ${m.unread[0].slice(0, 40)}` : "no foods"}
+          </span>
+        </div>
+      ))}
+      {cover?.meals && cover.target != null ? (
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 border-t border-border pt-1.5">
+          <span className="font-medium">Day</span>
+          <span className="text-muted-foreground">
+            {k(cover.meals.kcal)} kcal in meals{cover.flexible ? ` + ${k(cover.flexible)} flexible` : ""} · target {k(cover.target)} kcal
+          </span>
+        </div>
+      ) : null}
+      <p className="text-xs text-muted-foreground">Written: the plan's own numbers, what the client sees. By its foods: USDA values for plain staples, an estimate.</p>
     </div>
   );
 }

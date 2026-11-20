@@ -40,6 +40,8 @@ export type WorkoutNoteEntry = {
   pain: WorkoutNotePain | null;
   rpe: number | null;
   message_id: string | null;
+  /** An exercise note's earlier versions kept (pl_exercise_note_revisions). */
+  versions?: number;
 };
 
 /**

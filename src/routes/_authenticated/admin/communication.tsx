@@ -7,6 +7,7 @@ import { Loader2, Zap } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { MessagesInbox } from "@/route-pages/_authenticated/admin/messages";
 import { useAdminNavBadgeCounts } from "@/hooks/use-admin-nav-badges";
+import { onPhoneLayoutChange, phoneLayoutNow } from "@/lib/portrait-only";
 
 // Only the Messages tab ships with this page. The rest load on first visit so
 // opening Messages doesn't download and parse unrelated admin screens.
@@ -41,7 +42,7 @@ function isTab(v: unknown): v is TabKey {
   return typeof v === "string" && TABS.some((t) => t.value === v);
 }
 
-type Search = { tab: TabKey; client?: string; sub?: string; support?: string };
+type Search = { tab: TabKey; client?: string; sub?: string; support?: string; msg?: string };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -49,15 +50,17 @@ export const Route = createFileRoute("/_authenticated/admin/communication")({
   validateSearch: (raw: Record<string, unknown>): Search => {
     const t = typeof raw?.tab === "string" && LEGACY_TABS[raw.tab] ? LEGACY_TABS[raw.tab] : raw?.tab;
     const client = typeof raw?.client === "string" ? (raw.client as string) : undefined;
+    // A message in that client's chat to open on (scrolled to and highlighted).
+    const msg = client && typeof raw?.msg === "string" && UUID.test(raw.msg) ? raw.msg : undefined;
     const sub = typeof raw?.sub === "string" ? (raw.sub as string) : undefined;
     // A member's Support chat (a push, or an old Support-tab ticket link "t:<id>") opens in 1:1 Chats.
     const ticket = /^t:(.+)$/.exec(sub ?? "")?.[1];
     const support = typeof raw?.support === "string" && UUID.test(raw.support) ? raw.support
       : ticket && UUID.test(ticket) ? ticket : undefined;
     if (support) return { tab: "messages", support };
-    if (isTab(t)) return { tab: t, client, sub };
+    if (isTab(t)) return { tab: t, client, sub, ...(msg && t === "messages" ? { msg } : {}) };
     // No ?tab= opens Chats, never whichever tab was used last.
-    return { tab: "messages", client, sub };
+    return { tab: "messages", client, sub, ...(msg ? { msg } : {}) };
   },
   beforeLoad: ({ location }) => {
     const raw = (location.search as Record<string, unknown>)?.tab;
@@ -70,7 +73,7 @@ export const Route = createFileRoute("/_authenticated/admin/communication")({
 });
 
 function CommunicationWorkspace() {
-  const { tab, client, sub, support } = Route.useSearch();
+  const { tab, client, sub, support, msg } = Route.useSearch();
   const navigate = useNavigate();
   const viewportLockedTab = tab === "messages" || tab === "groups" || tab === "support";
   const { data: badgeCounts } = useAdminNavBadgeCounts();
@@ -103,7 +106,7 @@ function CommunicationWorkspace() {
 
   useEffect(() => {
     if (!viewportLockedTab || typeof window === "undefined") return;
-    const mq = window.matchMedia("(max-width: 767px)");
+    // the phone layout, a phone on its side included (portrait-only.ts)
     const html = document.documentElement;
     const body = document.body;
     const previous = {
@@ -113,7 +116,7 @@ function CommunicationWorkspace() {
       lockAttr: html.getAttribute("data-messenger-scroll-locked"),
     };
     const apply = () => {
-      if (!mq.matches) {
+      if (!phoneLayoutNow()) {
         html.style.overflow = previous.htmlOverflow;
         body.style.overflow = previous.bodyOverflow;
         body.style.overscrollBehavior = previous.bodyOverscroll;
@@ -127,9 +130,9 @@ function CommunicationWorkspace() {
       body.style.overscrollBehavior = "none";
     };
     apply();
-    mq.addEventListener("change", apply);
+    const stop = onPhoneLayoutChange(apply);
     return () => {
-      mq.removeEventListener("change", apply);
+      stop();
       html.style.overflow = previous.htmlOverflow;
       body.style.overflow = previous.bodyOverflow;
       body.style.overscrollBehavior = previous.bodyOverscroll;
@@ -146,7 +149,7 @@ function CommunicationWorkspace() {
     <div
       className={cn(
         "flex flex-col overflow-hidden bg-background md:static md:inset-auto md:z-auto md:mb-0",
-        viewportLockedTab ? "fixed inset-x-0 z-30" : "relative mb-[calc(-140px-env(safe-area-inset-bottom))]",
+        viewportLockedTab ? "phone-column fixed inset-x-0 z-30" : "relative mb-[calc(-140px-env(safe-area-inset-bottom))]",
       )}
       style={{
         // Anchor the entire communication workspace to the iOS Visual
@@ -221,7 +224,7 @@ function CommunicationWorkspace() {
           messenger header/sidebar to drift as the outer container scrolls. */}
       {viewportLockedTab && (
         <div className="min-h-0 flex-1 overflow-hidden">
-          {tab === "messages" && <MessagesInbox key="chats" initialClient={client} initialSupport={support} embedded view="chats" />}
+          {tab === "messages" && <MessagesInbox key="chats" initialClient={client} initialMessage={msg} initialSupport={support} embedded view="chats" />}
           {tab === "groups" && <MessagesInbox key="groups" embedded view="groups" />}
           {tab === "support" && (
             <Suspense fallback={<TabFallback />}>

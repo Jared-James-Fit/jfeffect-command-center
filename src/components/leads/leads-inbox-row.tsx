@@ -33,7 +33,7 @@ export function LeadsInboxRow() {
       unread={waiting.length > 0}
       unreadLabel={`${waiting.length} waiting`}
       after={waiting.length > 1 ? <span className="text-[13px] font-semibold text-muted-foreground">{waiting.length}</span> : undefined}
-      onClick={() => navigate({ to: "/admin/leads", search: latest && needs ? { id: latest.app.id } : {} })}
+      onClick={() => navigate({ to: "/admin/leads", search: (latest && needs ? { id: latest.app.id } : { tab: "coaching" }) as any })}
     />
   );
 }

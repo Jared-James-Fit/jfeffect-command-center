@@ -89,7 +89,8 @@ export function PaymentsList({ payments, year, kind, onChanged }: { payments: Ta
   const delFn = useServerFn(deleteTaxPayment);
   const canDelete = useBooksMode() === "owner";
   const rows = payments.filter((p) => p.tax_year === year && p.kind === kind);
-  if (!rows.length) return <p className="text-[13px] text-muted-foreground">None recorded for {year}.</p>;
+  // Nothing paid yet: the "Paid to CRA" line above already says $0.00.
+  if (!rows.length) return null;
   return (
     <ul className="divide-y text-sm">
       {rows.map((p) => (

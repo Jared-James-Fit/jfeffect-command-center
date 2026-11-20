@@ -34,10 +34,10 @@ describe("iOS 26 status-bar strip", () => {
 
   it("over the paged feed the bar is see-through (the posts run up under it), its notch solid black and the status bar black too", () => {
     const css = read("src/styles.css");
-    expect(css).toContain(".crew-bar[data-overlay] { background-color: transparent; }");
-    expect(css).toContain("      #000 calc(var(--app-safe-top) - var(--app-edge-room)),\n      rgb(0 0 0 / 0.5) calc(var(--app-safe-top) - var(--app-edge-room)),");
+    expect(css).toContain(".crew-bar[data-overlay] {\n  @variant max-md {\n    background-color: transparent;");
+    expect(css).toContain("        #000 calc(var(--app-safe-top) - var(--app-edge-room)),\n        rgb(0 0 0 / 0.5) calc(var(--app-safe-top) - var(--app-edge-room)),");
     // iOS reads the strip's colour for the status bar: black over the feed, never the light theme's white
-    expect(css).toContain("html.feed-paging:not([data-pov-banner-on]) .ios-status-band { background-color: #000; }");
+    expect(css).toContain("html.feed-paging:not([data-pov-banner-on]) .ios-status-band { @variant max-md { background-color: #000; } }");
     expect(css).not.toMatch(/\.crew-bar\[data-overlay\][^}]*backdrop-filter/);
   });
 });
@@ -100,7 +100,7 @@ describe("phones stay upright (TikTok's, Instagram's)", () => {
     expect(read("public/manifest.json")).toContain('"orientation": "portrait-primary"');
   });
 
-  it("where the browser can't lock it, a phone on its side gets one screen asking to turn it back", async () => {
+  it("a phone on its side is read from the device, never the viewport's shape (the app's camera uses it)", async () => {
     const { phoneOnItsSide } = await import("@/lib/portrait-only");
     const phone = { screenW: 430, screenH: 932, coarse: true };
     expect(phoneOnItsSide({ ...phone, type: "landscape-primary" })).toBe(true);
@@ -116,6 +116,6 @@ describe("phones stay upright (TikTok's, Instagram's)", () => {
     // read from the device, never the viewport's shape (a keyboard makes an upright phone's viewport wide)
     const lib = read("src/lib/portrait-only.ts");
     expect(lib).not.toContain("innerWidth");
-    expect(read("src/routes/__root.tsx")).toContain("<PortraitOnly />");
+    expect(read("src/routes/__root.tsx")).toContain("<PortraitLock />");
   });
 });

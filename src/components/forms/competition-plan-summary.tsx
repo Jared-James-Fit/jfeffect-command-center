@@ -28,7 +28,7 @@ type Row = {
  * approving can also set the primary meet as the program's dated goal
  * (Generate Next Program's timeline). Nothing here changes a program.
  */
-export function CompetitionPlanSummary({ submissionId, formId }: { submissionId: string; formId: string }) {
+export function CompetitionPlanSummary({ submissionId, formId, compact = false }: { submissionId: string; formId: string; compact?: boolean }) {
   const qc = useQueryClient();
   const { user } = useAuth();
   const ensure = useServerFn(ensureCompetitionPlanFn);
@@ -67,7 +67,8 @@ export function CompetitionPlanSummary({ submissionId, formId }: { submissionId:
   const [busy, setBusy] = useState(false);
 
   if (!isCompetition || !row) return null;
-  const lines = planSummaryLines(row.plan);
+  // In a chat card: the two lines that matter (the meet they peak for and its goal), the rest in the full response.
+  const lines = compact ? planSummaryLines(row.plan).slice(0, 2) : planSummaryLines(row.plan);
 
   const review = async (status: Row["status"]) => {
     setBusy(true);
@@ -95,7 +96,7 @@ export function CompetitionPlanSummary({ submissionId, formId }: { submissionId:
   };
 
   return (
-    <div className="rounded-xl bg-white/80 p-3 text-foreground dark:bg-blue-950/50" data-competition-plan>
+    <div className={cn(compact ? "border-t border-blue-200/70 pt-2 dark:border-blue-400/15" : "rounded-xl border border-border p-3")} data-competition-plan>
       <div className="flex items-center gap-2">
         <Trophy className="h-4 w-4 text-muted-foreground" aria-hidden />
         <p className="text-sm font-semibold">Competition plan</p>
@@ -108,7 +109,7 @@ export function CompetitionPlanSummary({ submissionId, formId }: { submissionId:
           {row.status === "approved" ? "Approved" : row.status === "dismissed" ? "Dismissed" : "Needs your OK"}
         </span>
       </div>
-      <p className="mt-0.5 text-[11px] text-muted-foreground">From their answers</p>
+      {!compact && <p className="mt-0.5 text-[11px] text-muted-foreground">From their answers</p>}
       <dl className="mt-2 space-y-1.5">
         {lines.map((l) => (
           <div key={l.label}>
@@ -117,7 +118,12 @@ export function CompetitionPlanSummary({ submissionId, formId }: { submissionId:
           </div>
         ))}
       </dl>
-      {row.changes.length > 0 && (
+      {compact && row.changes.length > 0 && (
+        <p className="mt-1.5 text-[12px] text-muted-foreground" data-competition-changes>
+          {row.changes.length} change{row.changes.length === 1 ? "" : "s"} since their last plan
+        </p>
+      )}
+      {!compact && row.changes.length > 0 && (
         <div className="mt-2.5 border-t border-border pt-2" data-competition-changes>
           <p className="text-[11px] text-muted-foreground">Changed since their last plan</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[13px]">
@@ -127,7 +133,7 @@ export function CompetitionPlanSummary({ submissionId, formId }: { submissionId:
           </ul>
         </div>
       )}
-      <div className="mt-3 border-t border-border pt-2.5">
+      <div className={cn("mt-3", !compact && "border-t border-border pt-2.5")}>
         {row.status === "submitted" ? (
           <>
             {goal && (
@@ -137,14 +143,14 @@ export function CompetitionPlanSummary({ submissionId, formId }: { submissionId:
               </label>
             )}
             <div className="flex gap-2">
-              <Button size="sm" className="h-10 flex-1" disabled={busy} onClick={() => review("approved")}>
+              <Button size="sm" variant={compact ? "outline" : "default"} className="h-10 flex-1" disabled={busy} onClick={() => review("approved")}>
                 Approve
               </Button>
               <Button size="sm" variant="ghost" className="h-10" disabled={busy} onClick={() => review("dismissed")}>
                 Dismiss
               </Button>
             </div>
-            <p className="mt-1.5 text-[11px] text-muted-foreground">Approving lets the program AI plan around it. It never changes a program by itself.</p>
+            {!compact && <p className="mt-1.5 text-[11px] text-muted-foreground">Approving lets the program AI plan around it. It never changes a program by itself.</p>}
           </>
         ) : (
           <div className="flex items-center gap-2 text-[12px] text-muted-foreground">

@@ -30,7 +30,7 @@ export async function loadNutritionSide(sb: any, clientId: string, due: string, 
           .select("created_at")
           .eq("client_id", clientId)
           .gte("created_at", `${addDays(due, -14)}T00:00:00Z`)
-          .contains("attachments", [{ kind: "form_request", form_id: NUTRITION_REQUEST_FORM_ID }])
+          .contains("attachments", JSON.stringify([{ kind: "form_request", form_id: NUTRITION_REQUEST_FORM_ID }]))
           .order("created_at", { ascending: false })
           .limit(1),
       [],

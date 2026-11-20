@@ -469,6 +469,14 @@ export function recurringExpenses(expenses: ExpenseRow[], today: string, setUp: 
   return out.sort((a, b) => b.minor - a.minor);
 }
 
+/** The first day anything is in the books (money in or out), or null for empty books. */
+export function booksFirstDay(revenue: Array<Pick<RevenueEntry, "date">>, expenses: Array<Pick<ExpenseEntry, "date">>): string | null {
+  let first: string | null = null;
+  for (const r of revenue) if (!first || r.date < first) first = r.date;
+  for (const e of expenses) if (!first || e.date < first) first = e.date;
+  return first;
+}
+
 /** Months with money in a range, for an empty-state check. */
 export function hasActivity(revenue: RevenueEntry[], expenses: ExpenseEntry[], range: Range): boolean {
   return revenue.some((r) => inRange(r.date, range)) || expenses.some((e) => inRange(e.date, range));

@@ -81,7 +81,22 @@ export function useRecentSends(userId: string | null | undefined) {
   });
 }
 
-export type FormStats = { questions: number; sent: number; done: number; waiting: number; last_sent_at: string | null };
+/**
+ * nf_form_library_stats(): per form, the people it's out with on the responses
+ * viewer's rule (form-response-status.ts): sent = answered (done) + in_progress
+ * + waiting; responses and to_review count every response sent in.
+ */
+export type FormStats = {
+  questions: number;
+  sent: number;
+  done: number;
+  waiting: number;
+  in_progress?: number;
+  responses?: number;
+  to_review?: number;
+  last_sent_at: string | null;
+  last_response_at?: string | null;
+};
 
 export function useFormLibraryStats(enabled = true) {
   return useQuery({

@@ -1,5 +1,7 @@
 import { Trophy, Medal, Award, Dumbbell } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { dualTotal, recordedLoad } from "@/lib/dual-weight";
+import { WeightOther } from "@/components/dual-weight";
 import {
   alsoLabel, formatLoad, formatTonnage, repRecordLabel, tonnageRecordLabel, topScope, weightRecordLabel,
   type RecordScope, type RepRecord, type TonnageRecord, type WorkoutRecords, type RecentRecords, type ExerciseRecords,
@@ -50,12 +52,32 @@ export function SetRecordBadge({ record, loadRecord }: {
 }
 
 /** Recap: the exciting part — records first, ATPRs on top. */
-export function NewRecordsSection({ records, unit }: { records: WorkoutRecords; unit: "kg" | "lb" }) {
+/**
+ * A record's weight in the unit its set was typed in (`setUnit`, when the
+ * screen knows it; else the athlete's own unit), the other unit beside it.
+ */
+function RecordLoad({ kg, setId, unit, setUnit }: { kg: number; setId: string; unit: "kg" | "lb"; setUnit?: (setId: string) => "kg" | "lb" | null }) {
+  const d = recordedLoad(kg, setUnit?.(setId), unit);
+  return (
+    <>
+      {d.primary}
+      <span data-weight-other className="font-medium text-muted-foreground/70"> ({d.secondary})</span>
+    </>
+  );
+}
+
+export function NewRecordsSection({ records, unit, setUnit, highlight }: {
+  records: WorkoutRecords;
+  unit: "kg" | "lb";
+  setUnit?: (setId: string) => "kg" | "lb" | null;
+  /** Amber only for a headline PR (the recap's `lead`); without it, any all-time record. */
+  highlight?: boolean;
+}) {
   const reps = records.records ?? [];
   const loads = records.load_records ?? [];
   const tonLabel = tonnageRecordLabel(records.tonnage);
   if (reps.length === 0 && loads.length === 0 && !tonLabel) return null;
-  const hasAtpr = reps.some((r) => r.atpr) || loads.some((r) => r.atpr) || records.tonnage?.atpr;
+  const hasAtpr = highlight ?? (reps.some((r) => r.atpr) || loads.some((r) => r.atpr) || records.tonnage?.atpr);
   return (
     <section className={cn("relative overflow-hidden rounded-2xl border p-3.5 animate-in zoom-in-95 fade-in duration-700",
       hasAtpr ? "border-amber-500/50 bg-amber-500/[0.08]" : "border-border bg-card")}>
@@ -68,7 +90,9 @@ export function NewRecordsSection({ records, unit }: { records: WorkoutRecords; 
             <li key={r.set_id} className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[13px] font-bold leading-tight">{r.exercise_name}</div>
-                <div className="text-[12px] font-semibold tabular-nums text-muted-foreground">{formatLoad(r.load_kg, unit)} × {r.reps}</div>
+                <div className="text-[12px] font-semibold tabular-nums text-muted-foreground">
+                  <RecordLoad kg={r.load_kg} setId={r.set_id} unit={unit} setUnit={setUnit} /> × {r.reps}
+                </div>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-0.5">
                 <RecordPill scope={scope} label={repRecordLabel(r)!} />
@@ -83,7 +107,7 @@ export function NewRecordsSection({ records, unit }: { records: WorkoutRecords; 
             <div className="min-w-0 flex-1">
               <div className="truncate text-[13px] font-bold leading-tight">{r.exercise_name}</div>
               <div className="text-[12px] font-semibold tabular-nums text-muted-foreground">
-                Heaviest ever · {formatLoad(r.load_kg, unit)} × {r.reps}
+                Heaviest ever · <RecordLoad kg={r.load_kg} setId={r.set_id} unit={unit} setUnit={setUnit} /> × {r.reps}
               </div>
             </div>
             <RecordPill scope={topScope(r)!} label={weightRecordLabel(r)!} />
@@ -93,7 +117,10 @@ export function NewRecordsSection({ records, unit }: { records: WorkoutRecords; 
           <li className="flex items-start gap-2 border-t border-border/60 pt-2">
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-bold leading-tight">Workout Tonnage</div>
-              <div className="text-[12px] font-semibold tabular-nums text-muted-foreground">{formatTonnage(records.tonnage_kg, unit)}</div>
+              <div className="text-[12px] font-semibold tabular-nums text-muted-foreground">
+                {dualTotal(records.tonnage_kg, unit).primary}
+                <span data-weight-other className="font-medium text-muted-foreground/70"> ({dualTotal(records.tonnage_kg, unit).secondary})</span>
+              </div>
             </div>
             <RecordPill scope={topScope(records.tonnage)!} label={tonLabel} />
           </li>
@@ -123,6 +150,7 @@ export function TonnageStat({ records, unit }: { records: WorkoutRecords; unit: 
       <div className="min-w-0 flex-1">
         <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Total tonnage</div>
         <div className="mt-0.5 truncate text-xl font-bold leading-tight tabular-nums text-foreground">{formatTonnage(records.tonnage_kg, unit)}</div>
+        <WeightOther className="block truncate text-[12px]">{dualTotal(records.tonnage_kg, unit).secondary}</WeightOther>
       </div>
       {label && <RecordPill scope={topScope(records.tonnage as TonnageRecord)!} label={label} />}
     </div>
@@ -153,7 +181,12 @@ export function RecentRecordsList({ data, unit, limit = 8 }: { data: RecentRecor
 }
 
 /** Exercise history: ALL-TIME BESTS per rep count + current program/block bests. */
-export function ExerciseRecordsPanel({ data, unit }: { data: ExerciseRecords; unit: "kg" | "lb" }) {
+export function ExerciseRecordsPanel({ data, unit, equipmentOf }: {
+  data: ExerciseRecords;
+  unit: "kg" | "lb";
+  /** The machine a record was set on, when its weight means nothing on another one ("on Hammer row"). */
+  equipmentOf?: (best: { reps: number; load_kg: number; at: string }) => string | null;
+}) {
   if (!data.rep_bests.length) return null;
   // A column only when it says something the one before it doesn't: in a first
   // program the all-time, program and block bests are the same weights, and
@@ -181,7 +214,12 @@ export function ExerciseRecordsPanel({ data, unit }: { data: ExerciseRecords; un
         {data.rep_bests.map((b) => (
           <div key={b.reps} className="contents">
             <div className="tabular-nums text-muted-foreground">{b.reps}</div>
-            <div className="font-semibold tabular-nums">{b.atpr ? formatLoad(b.atpr.load_kg, unit) : "—"}</div>
+            <div className="font-semibold tabular-nums">
+              {b.atpr ? formatLoad(b.atpr.load_kg, unit) : "—"}
+              {b.atpr && equipmentOf?.({ reps: b.reps, ...b.atpr }) && (
+                <span className="block truncate text-[11px] font-normal text-muted-foreground" data-record-equipment>on {equipmentOf({ reps: b.reps, ...b.atpr })}</span>
+              )}
+            </div>
             {showProgram && <div className="tabular-nums">{b.program ? formatLoad(b.program.load_kg, unit) : "—"}</div>}
             {showBlock && <div className="tabular-nums">{b.block ? formatLoad(b.block.load_kg, unit) : "—"}</div>}
           </div>
@@ -209,12 +247,13 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchWorkoutRecords, useExerciseRecords, useRecentRecords } from "@/lib/training-records";
 
-export function ExerciseRecordsForClient({ clientId, exerciseId, exerciseName, unit }: {
+export function ExerciseRecordsForClient({ clientId, exerciseId, exerciseName, unit, equipmentOf }: {
   clientId: string | null | undefined; exerciseId: string | null | undefined; exerciseName: string; unit: "kg" | "lb";
+  equipmentOf?: (best: { reps: number; load_kg: number; at: string }) => string | null;
 }) {
   const { data } = useExerciseRecords(clientId, exerciseId, exerciseName);
   if (!data || !data.rep_bests?.length) return null;
-  return <ExerciseRecordsPanel data={data} unit={unit} />;
+  return <ExerciseRecordsPanel data={data} unit={unit} equipmentOf={equipmentOf} />;
 }
 
 /** Coach workout review: the records this workout earned + its tonnage. */

@@ -56,6 +56,7 @@ import {
   coachNotesFlags,
   foodLogSummary,
   observedMaintenance,
+  aiTargetFor,
   parseAiTargets,
   planTotalsIssues,
   safetyNotes,
@@ -66,6 +67,9 @@ import {
   type WeighIn,
 } from "@/lib/nutrition-targets/nutrition-intel";
 import { planResults, previousPlanText } from "@/lib/nutrition-history";
+import { dayCoverage, withHonestTotals } from "@/lib/nutrition-targets/plan-coverage";
+import { parseMealPlan } from "@/lib/nutrition-targets/meal-plan-parse";
+import { ALIGNED_PLAN_TEXT, DEVIN_AI_TARGETS, DEVIN_PLAN_TEXT } from "@/test/fixtures/devin-nov-2026";
 import { TARGETS_PROMPT, targetsUserPrompt } from "@/lib/nutrition-ai-prompts.server";
 import { DEFAULT_ROUTES, STRONG_MODELS, resolveRoute } from "@/lib/ai/routing";
 import { developmentText } from "@/lib/program-intel/athlete-development";
@@ -374,37 +378,70 @@ const plan = (carbsTotal: number) =>
     "FOOD-WEIGHING RULES",
     "Weigh cooked.",
   ].join("\n");
+/** Three of the same meals: 150 / 180 / 30, 1,590 kcal. */
+const plan3 = [
+  "PHASE: Fat Loss",
+  "",
+  "TRAINING-DAY MENU",
+  meal(1),
+  meal(2),
+  meal(3),
+  "Daily Total",
+  "Approximately 150 g protein, 180 g carbohydrates, 30 g fat and 6 g fibre",
+  "",
+  "FOOD-WEIGHING RULES",
+  "Weigh cooked.",
+].join("\n");
+const BIG_TARGETS = parseAiTargets(
+  "CALORIE TARGETS\nTraining Day: 1590\n\nMACRO TARGETS\n\nTraining Day\nProtein: 150\nCarbs: 180\nFats: 30",
+);
 const SMALL_TARGETS = parseAiTargets(
   "CALORIE TARGETS\nTraining Day: 1060\n\nMACRO TARGETS\n\nTraining Day\nProtein: 100\nCarbs: 120\nFats: 20",
 );
 
 describe("a written meal plan is checked against its targets", () => {
-  it("names meals that don't add up to the Daily Total and a Daily Total off its target", () => {
+  it("names meals that don't add up to the Daily Total, and meals off their target (read from the meals)", () => {
+    // the meals (1,060 kcal) are on target; only the Daily Total line says otherwise
     expect(planTotalsIssues(plan(150), SMALL_TARGETS)).toEqual([
       "Training Day: the meals add to 100 g protein, 120 g carbs, 20 g fat, but its Daily Total says 100 / 150 / 20",
-      "Training Day: Daily Total is 1180 kcal against a target of 1060 kcal",
     ]);
     expect(planTotalsIssues(plan(120), SMALL_TARGETS)).toEqual([]);
+    // meals short of the targets are named however honest the Daily Total is
+    expect(planTotalsIssues(plan(120), BIG_TARGETS)).toEqual([
+      "Training Day: the meals add to 1060 kcal and 100 g protein against a target of 1590 kcal and 150 g protein",
+    ]);
   });
 
-  it("totals that don't hold get the same one fix as meal prep, kept only when it's better", async () => {
+  it("a Daily Total its meals don't add up to is the code's to fix, never a model round", async () => {
+    const prompts: string[] = [];
+    const out = await withPrepFix(plan(150), "x", async (p) => {
+      prompts.push(p);
+      return plan(120);
+    }, SMALL_TARGETS);
+    expect(prompts).toEqual([]);
+    expect(out).toBe(plan(150));
+  });
+
+  it("meals short of their targets get the same one fix as meal prep, kept only when it's better", async () => {
     const prompts: string[] = [];
     const out = await withPrepFix(
       plan(150),
       "CLIENT DETAILS",
       async (p) => {
         prompts.push(p);
-        return plan(120);
+        return plan3;
       },
-      SMALL_TARGETS,
+      BIG_TARGETS,
     );
-    expect(out).toBe(plan(120));
+    expect(out).toBe(plan3);
+    expect(prompts).toHaveLength(1);
     expect(prompts[0]).toContain("FIX THE TOTALS");
     expect(prompts[0]).toContain(
-      "- Training Day: Daily Total is 1180 kcal against a target of 1060 kcal",
+      "- Training Day: the meals add to 1060 kcal and 100 g protein against a target of 1590 kcal and 150 g protein",
     );
     expect(prompts[0]).not.toContain("FIX THE MEAL PREP");
-    expect(await withPrepFix(plan(150), "x", async () => plan(160), SMALL_TARGETS)).toBe(plan(150));
+    // a "fix" that's no closer is never kept
+    expect(await withPrepFix(plan(150), "x", async () => plan(160), BIG_TARGETS)).toBe(plan(150));
   });
 });
 
@@ -487,7 +524,8 @@ describe("routing: the targets are a coaching decision, the meal plan is writing
       async () => {
         throw new WaitingForModel();
       },
-      SMALL_TARGETS,
+      // meals short of their targets: only the model can fix that
+      BIG_TARGETS,
     );
     await expect(waiting).rejects.toBeInstanceOf(WaitingForModel);
   });
@@ -729,5 +767,38 @@ describe("a Nutrition Update plan runs across requests while OpenAI thinks", () 
     // the targets were submitted once; the meal plan never saw COACH NOTES
     expect(asked).toEqual(["openai:gpt-6-astra", "openai:gpt-5.5"]);
     expect(sent[1].prompt).not.toContain("secret reasoning");
+  });
+
+  it("Devin's targets regenerated: a short first draft goes back once, and what's saved covers every day with real totals", async () => {
+    replies.length = 0;
+    asked.length = 0;
+    sent.length = 0;
+    background.clear();
+    bg.submitted = 0;
+    bg.stillThinking = 0;
+    Object.assign(nutritionPollConfig, { ms: 0, every: 0 });
+    // the targets AI's Nov 9 answer, his Nov 9 meal plan as the first draft, then an aligned fix
+    replies.push(DEVIN_AI_TARGETS, DEVIN_PLAN_TEXT, ALIGNED_PLAN_TEXT);
+    const { db, row } = fakeDb({
+      kind: "plan",
+      calls: {},
+      pending: {},
+      targetsPrompt: "CLIENT DATA",
+      meals: { qas: [], phase: "Recomp", workoutMeals: "auto", history: null, previousMeals: "" },
+    });
+    let result: { status: string } = { status: "pending" };
+    for (let i = 0; i < 8 && result.status === "pending"; i++) result = await runPlan(db, "s1");
+    expect(result).toEqual({ status: "ready" });
+    // targets, the meal plan, one fix
+    expect(asked).toEqual(["openai:gpt-6-astra", "openai:gpt-5.5", "openai:gpt-5.5"]);
+    expect(sent[2].prompt).toContain(
+      "- Training Day: the meals add to 1854 kcal and 150 g protein against a target of 2550 kcal and 180 g protein",
+    );
+    const saved: string = row.meal_plan_text;
+    expect(saved).toBe(withHonestTotals(ALIGNED_PLAN_TEXT));
+    const targets = parseAiTargets(row.targets_text);
+    expect(planTotalsIssues(saved, targets)).toEqual([]);
+    for (const d of parseMealPlan(saved))
+      expect(dayCoverage(d.notes, aiTargetFor(targets, d.day_label)).state, d.day_label).toBe("covers");
   });
 });

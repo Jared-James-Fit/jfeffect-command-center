@@ -23,6 +23,8 @@ import { ensureWaterTarget, formatWater } from "@/lib/water";
 import { useAuth } from "@/lib/auth";
 import { downloadNutritionTargetsPdf } from "@/lib/nutrition-targets-pdf";
 import { GroceryListSheet } from "@/components/nutrition/GroceryListSheet";
+import { prefillPlanAiChange } from "@/lib/weight-management/handoff";
+import { BRING_MEALS_TO_TARGETS } from "@/lib/nutrition-targets/plan-coverage";
 import { PlanAiChange } from "@/components/nutrition/PlanAiChange";
 import { SupplementList } from "@/components/nutrition/supplements-ui";
 import { readPlanSupplements } from "@/lib/nutrition-targets/supplements";
@@ -218,6 +220,8 @@ export function NutritionTargetsPanel({ clientId, className = "md:col-span-3" }:
             water={clientUserId && waterTarget ? formatWater(waterTarget.active_ml, "L") : null}
             waterNote={waterTarget?.target_source === "auto" ? "Automatic" : null}
             onWater={clientUserId ? () => setWaterOpen(true) : undefined}
+            // meals that don't cover a day's targets: the fix lands in Change it with AI for the coach to send and review
+            onFixMeals={() => prefillPlanAiChange(clientId, BRING_MEALS_TO_TARGETS)}
           />
           <PlanAiChange clientId={clientId} plan={plan} firstName={firstName} />
           {current.slice(1).map((t: any) => (

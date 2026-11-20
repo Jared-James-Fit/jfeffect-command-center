@@ -112,7 +112,9 @@ describe("the current plan as the AI reads it", () => {
   it("meals are the paste format: PHASE, a menu per day with its Daily Total, the weighing rules", () => {
     const m = planAsMealPlanText(PLAN);
     expect(m.startsWith("PHASE: Recomp\n\nTRAINING DAY (FRIDAY ONLY) MENU\n\nMeal 1")).toBe(true);
-    expect(m).toContain("Daily Total\nApproximately 180 g protein, 238 g carbohydrates, 70 g fat");
+    // each Daily Total is what that day's meals add up to (plan-coverage.ts), never the day's targets copied in
+    expect(m).toContain("Daily Total\nApproximately 71 g protein, 101 g carbohydrates, 20 g fat");
+    expect(m).not.toContain("Approximately 180 g protein");
     expect(m).toContain("FOOD-WEIGHING RULES\nWeigh meat and rice cooked.");
     // the app's own reader reads it back, one day per menu
     expect(parseMealPlan(m)).toHaveLength(2);
@@ -133,25 +135,22 @@ describe("the current plan as the AI reads it", () => {
 });
 
 describe("the AI's answer as the plan's new days", () => {
-  const answer = planAsMealPlanText(PLAN)
-    .replace(
-      "150 g cooked chicken breast\n200 g cooked white rice",
-      "150 g cooked salmon\n200 g cooked white rice",
-    )
-    .replace(
-      "Approximately 180 g protein, 305 g carbohydrates, 71 g fat",
-      "Approximately 180 g protein, 285 g carbohydrates, 71 g fat",
-    );
-  const targets = planAsTargetsText(PLAN).replace(
-    "Training Day (Friday Only): 10,000 steps",
-    "Training Day (Friday Only): 11,000 steps",
+  const answer = planAsMealPlanText(PLAN).replace(
+    "150 g cooked chicken breast\n200 g cooked white rice",
+    "150 g cooked salmon\n200 g cooked white rice",
   );
+  // the numbers change in the answer's targets (a Daily Total is only what the meals add up to)
+  const targets = planAsTargetsText(PLAN)
+    .replace("Training Day (Friday Only): 10,000 steps", "Training Day (Friday Only): 11,000 steps")
+    .replace("Training Day (Friday Only): 2579", "Training Day (Friday Only): 2499")
+    .replace("Training Day (Friday Only)\nProtein: 180\nCarbs: 305", "Training Day (Friday Only)\nProtein: 180\nCarbs: 285");
 
   it("keeps each day's label, rules and order; takes the numbers, meals and steps from the answer", () => {
     const edited = readEditedPlan(PLAN, answer, targets);
     const [training, rest] = edited.days;
     expect(training).toMatchObject({
       day_label: "Training Day (Friday Only)",
+      calories: 2499,
       carbs: 285,
       use_on: "training",
       weekdays: ["Fri"],

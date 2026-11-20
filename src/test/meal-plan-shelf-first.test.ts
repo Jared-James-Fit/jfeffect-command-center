@@ -156,7 +156,7 @@ describe("a plan with a hard-to-find food goes back once for the staple", () => 
     ).toBe(CASSAVA);
     let asked = 0;
     await withPrepFix(CASSAVA, "x", async () => (asked++, SWEET_POTATO), [], 2, [
-      { value: "cassava please" },
+      { label: "Foods", value: "cassava please" },
     ]);
     expect(asked).toBe(0);
   });

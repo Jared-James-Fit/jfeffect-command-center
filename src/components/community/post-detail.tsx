@@ -1,9 +1,10 @@
-import { Archive, ChevronLeft } from "lucide-react";
+import { forwardRef, useLayoutEffect, useRef } from "react";
+import { Archive, ChevronLeft, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { AuthorLine, AutoPostCaption, AutoPostHero, LockInHero, NoteBody, NoteExtras, PostMedia, ReactionBar, TrainingNowPill, WorkoutHero, audienceNote, isPhotoPost } from "@/components/community/post-card";
+import { AuthorLine, AutoPostCaption, AutoPostHero, LockInHero, NoteBody, NoteExtras, PostMedia, ReactionBar, TrainingNowPill, audienceNote, isPhotoPost } from "@/components/community/post-card";
 import { isAutoPost } from "@/lib/community";
 import { InlineFollow } from "@/components/community/follow-button";
 import { CommentThread } from "@/components/community/comments-sheet";
@@ -15,10 +16,11 @@ import { CLIP_HOLD_EVENT } from "@/components/community/inline-video";
 import {
   REACTION,
   SCOPE_WORD,
-  formatExerciseBest,
+  exerciseBestLines,
   formatWorkoutDuration,
   isTrainingNow,
   lockInTimeLabel,
+  monthWorkoutLine,
   postTimeLabel,
   reactionEmoji,
   type CommunityAuthor,
@@ -31,12 +33,15 @@ import { PostViewsRow, useViewOnOpen } from "@/components/community/post-views";
 import { PostScoreRow } from "@/components/community/post-score";
 import { PostExtras } from "@/components/community/post-attach";
 import { useMarkHintSeen, usePostDetail, usePostMediaUrls, useReact } from "@/lib/community.queries";
-import { formatTonnage } from "@/lib/training-records";
+import { dualTotal, recordedUnit } from "@/lib/dual-weight";
+import { WeightOther } from "@/components/dual-weight";
 import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 
 /**
  * The activity page: one shared workout in full — photo, the numbers, every
  * exercise with its best set and records, then props and comments.
+ * `at="workout"` (View workout from the feed): it opens scrolled to the
+ * workout itself, past the picture they were just looking at.
  */
 export function PostDetailDialog({
   postId,
@@ -44,12 +49,14 @@ export function PostDetailDialog({
   viewerIsStaff,
   onClose,
   onOpenAuthor,
+  at,
 }: {
   postId: string | null;
   unit: "kg" | "lb";
   viewerIsStaff: boolean;
   onClose: () => void;
   onOpenAuthor?: (a: CommunityAuthor) => void;
+  at?: "workout";
 }) {
   // its pictures pinch-zoom wherever it opens (the coach's Insights and Needs you too, not only over Crew)
   useMediaPinchZoom(!!postId);
@@ -61,13 +68,13 @@ export function PostDetailDialog({
       >
         <DialogTitle className="sr-only">Shared workout</DialogTitle>
         <DialogDescription className="sr-only">The full workout, reactions and comments.</DialogDescription>
-        {postId && <Body postId={postId} unit={unit} viewerIsStaff={viewerIsStaff} onClose={onClose} onOpenAuthor={onOpenAuthor} />}
+        {postId && <Body postId={postId} unit={unit} viewerIsStaff={viewerIsStaff} onClose={onClose} onOpenAuthor={onOpenAuthor} at={at} />}
       </DialogContent>
     </Dialog>
   );
 }
 
-function Body({ postId, unit, viewerIsStaff, onClose, onOpenAuthor }: { postId: string; unit: "kg" | "lb"; viewerIsStaff: boolean; onClose: () => void; onOpenAuthor?: (a: CommunityAuthor) => void }) {
+function Body({ postId, unit, viewerIsStaff, onClose, onOpenAuthor, at }: { postId: string; unit: "kg" | "lb"; viewerIsStaff: boolean; onClose: () => void; onOpenAuthor?: (a: CommunityAuthor) => void; at?: "workout" }) {
   const { data: post, isLoading, isError } = usePostDetail(postId);
   // opening a post counts as a view
   useViewOnOpen(post);
@@ -84,7 +91,7 @@ function Body({ postId, unit, viewerIsStaff, onClose, onOpenAuthor }: { postId: 
         {post && <PostActions post={post} viewerIsStaff={viewerIsStaff} onGone={onClose} unit={unit} className="ml-auto grid h-11 w-11 place-items-center rounded-full text-muted-foreground hover:bg-muted" />}
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[max(env(safe-area-inset-bottom),1rem)]">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[max(env(safe-area-inset-bottom),1rem)]" data-detail-scroll>
         {isLoading ? (
           <div className="space-y-3 p-4">
             <Skeleton className="h-10 w-48 rounded-full" />
@@ -94,7 +101,7 @@ function Body({ postId, unit, viewerIsStaff, onClose, onOpenAuthor }: { postId: 
         ) : isError || !post ? (
           <div className="px-6 py-16 text-center text-sm text-muted-foreground">This post isn't available any more.</div>
         ) : (
-          <Detail post={post} thumb={thumb} unit={unit} viewerIsStaff={viewerIsStaff} onOpenAuthor={onOpenAuthor} />
+          <Detail post={post} thumb={thumb} unit={unit} viewerIsStaff={viewerIsStaff} onOpenAuthor={onOpenAuthor} at={at} />
         )}
       </div>
     </>
@@ -107,12 +114,14 @@ function Detail({
   unit,
   viewerIsStaff,
   onOpenAuthor,
+  at,
 }: {
   post: NonNullable<ReturnType<typeof usePostDetail>["data"]>;
   thumb: string | null;
   unit: "kg" | "lb";
   viewerIsStaff: boolean;
   onOpenAuthor?: (a: CommunityAuthor) => void;
+  at?: "workout";
 }) {
   const react = useReact(post, viewerIsStaff);
   const s = post.stats;
@@ -143,18 +152,20 @@ function Detail({
     if (!hold.justReleased()) doubleTap(e);
   };
 
-  // a workout with no picture opens on its own card (WorkoutHero), which already says its time, sets and volume:
-  // the tiles under it add only what it doesn't (with a picture, the tiles say them all)
-  const heroStats = !!s && !auto && !(post.kind === "note" && !photo) && !post.media_type;
-  const tiles = s
-    ? [
-        !heroStats && formatWorkoutDuration(s.duration_min) && { label: "Time", value: formatWorkoutDuration(s.duration_min)! },
-        !heroStats && s.working_sets > 0 && { label: "Sets", value: String(s.working_sets) },
-        !heroStats && s.tonnage_kg > 0 && { label: "Volume", value: formatTonnage(s.tonnage_kg, unit) },
-        s.pr_count > 0 && { label: s.pr_count === 1 ? "PR" : "PRs", value: String(s.pr_count), gold: true },
-        (s.month_sessions ?? 0) > 0 && { label: "This month", value: `#${s.month_sessions}` },
-      ].filter(Boolean) as { label: string; value: string; gold?: boolean }[]
-    : [];
+  // View workout from the feed: open on the workout, past the picture they were just looking at
+  // (the picture's frame has its own shape before it loads, so nothing moves under it afterwards).
+  // Measured while the page is still zooming in, so the distance is read back at full size
+  const workoutRef = useRef<HTMLElement | null>(null);
+  const jumped = useRef(false);
+  useLayoutEffect(() => {
+    const el = workoutRef.current;
+    const box = el?.closest<HTMLElement>("[data-detail-scroll]");
+    if (jumped.current || at !== "workout" || !post.media_type || !el || !box) return;
+    jumped.current = true;
+    const b = box.getBoundingClientRect();
+    const scale = box.offsetHeight > 0 && b.height > 0 ? b.height / box.offsetHeight : 1;
+    box.scrollTop = Math.max(0, (el.getBoundingClientRect().top - b.top) / scale + box.scrollTop);
+  }, [at, post.media_type]);
 
   return (
     <div>
@@ -188,12 +199,10 @@ function Detail({
           <NoteBody post={post} onOpenPerson={onOpenAuthor} cover={post.media_type ? <PostMedia post={post} thumbUrl={thumb} full /> : undefined} />
           <NoteExtras post={post} unit={unit} className="mx-4 mb-2 mt-2" />
         </>
-      ) : post.media_type || s || post.locked_in_at ? (
+      ) : post.media_type || (!s && post.locked_in_at) ? (
         <div className="relative select-none [-webkit-touch-callout:none]" onClick={onHeroTap} {...hold.handlers}>
           {post.media_type ? (
             <PostMedia post={post} thumbUrl={thumb} full />
-          ) : s ? (
-            <div className="px-4"><div className="overflow-hidden rounded-3xl"><WorkoutHero stats={s} unit={unit} size="detail" /></div></div>
           ) : (
             <div className="px-4"><div className="overflow-hidden rounded-3xl"><LockInHero post={post} size="detail" /></div></div>
           )}
@@ -203,7 +212,7 @@ function Detail({
 
       {post.media_type && !s && post.locked_in_at && (
         <div className="flex items-center gap-2 px-4 pt-4">
-          <h2 className="font-display text-[28px] uppercase leading-none">Locked in</h2>
+          <h2 className="text-[20px] font-semibold leading-tight">Locked in</h2>
           {isTrainingNow(post) ? <TrainingNowPill /> : <span className="text-[13px] font-bold text-muted-foreground">{lockInTimeLabel(post.locked_in_at)}</span>}
         </div>
       )}
@@ -215,45 +224,15 @@ function Detail({
       )}
       {(post.kind !== "note" || photo) && <PostExtras post={post} className="px-4 pt-3" />}
 
-      {s && post.media_type && (
-        <div className="px-4 pt-4">
-          <h2 className="font-display text-[28px] uppercase leading-none">{workoutHeadline(s)}</h2>
-          {workoutSubtitle(s) && <div className="mt-1 text-[12px] font-semibold text-muted-foreground">{workoutSubtitle(s)}</div>}
-        </div>
-      )}
-
-      {tiles.length > 0 && (
-        <div className={cn("grid gap-2 px-4 pt-4", tiles.length <= 2 ? "grid-cols-2" : "grid-cols-3")} data-workout-tiles>
-          {tiles.map((t) => (
-            <div key={t.label} className="rounded-2xl border border-border/70 bg-card px-3 py-2.5">
-              <div className={cn("font-display truncate uppercase leading-none", t.value.length > 7 ? "text-[19px]" : "text-[24px]", t.gold && "text-amber-600 dark:text-amber-400")}>{t.value}</div>
-              <div className="mt-1 truncate text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{t.label}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {post.exercises.length > 0 && (
-        <section className="px-4 pt-5">
-          <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">The work</div>
-          <div className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/70 bg-card">
-            {post.exercises.map((e, i) => (
-              <div key={`${e.name}-${i}`} className="flex items-center gap-3 px-3.5 py-3">
-                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-muted text-[11px] font-bold text-muted-foreground">{i + 1}</div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[14px] font-bold">{e.name}</div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {e.sets} working {e.sets === 1 ? "set" : "sets"}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className={cn("font-display text-[19px] uppercase leading-none", e.pr && "text-amber-600 dark:text-amber-400")}>{formatExerciseBest(e, unit)}</div>
-                  {e.pr && <div className="mt-1 text-[9px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">{SCOPE_WORD[e.pr]}</div>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+      {s && !auto && !(post.kind === "note" && !photo) && (
+        <WorkoutSummary
+          ref={workoutRef}
+          post={post}
+          unit={unit}
+          // a workout with no picture: its summary is what two taps ❤️
+          heroTap={post.media_type ? undefined : onHeroTap}
+          burst={post.media_type ? null : <ReactionBurst n={burst.n} x={burst.x} y={burst.y} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />}
+        />
       )}
 
       {(post.coach_reactions.length > 0 || post.coach_commented) && (
@@ -272,9 +251,107 @@ function Detail({
       </div>
 
       <section className="border-t border-border/60">
-        <div className="px-4 pt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Comments</div>
+        <h3 className="px-4 pt-4 text-[15px] font-semibold">Comments</h3>
         <CommentThread post={post} viewerIsStaff={viewerIsStaff} inline onOpenAuthor={onOpenAuthor} />
       </section>
     </div>
   );
 }
+
+/**
+ * The workout on its page, read top to bottom: what it was (its name, where it
+ * sits in the program, which workout of the month), its numbers in one quiet
+ * row, then every exercise with its best set. Plain type in the app's text
+ * face, sentence case, numbers in tabular figures at text size: the display
+ * face is the feed card's, never a summary someone reads.
+ */
+const WorkoutSummary = forwardRef<
+  HTMLElement,
+  {
+    post: NonNullable<ReturnType<typeof usePostDetail>["data"]>;
+    unit: "kg" | "lb";
+    heroTap?: (e: React.MouseEvent) => void;
+    burst: React.ReactNode;
+  }
+>(function WorkoutSummary({ post, unit, heroTap, burst }, ref) {
+  const s = post.stats!;
+  const meta = [workoutSubtitle(s), monthWorkoutLine(s)].filter(Boolean).join(" · ");
+  const dur = formatWorkoutDuration(s.duration_min);
+  const stats = [
+    dur && { label: "Time", value: dur },
+    s.working_sets > 0 && { label: s.working_sets === 1 ? "Working set" : "Working sets", value: String(s.working_sets) },
+    // the volume in the unit most of its weights were typed in, the other under it (the same for every viewer)
+    s.tonnage_kg > 0 && (() => {
+      const t = dualTotal(s.tonnage_kg, recordedUnit(s.unit, unit));
+      return { label: "Volume", value: t.primary, sub: t.secondary };
+    })(),
+    s.pr_count > 0 && { label: s.pr_count === 1 ? "PR" : "PRs", value: String(s.pr_count), pr: true },
+  ].filter(Boolean) as { label: string; value: string; sub?: string; pr?: boolean }[];
+  return (
+    <section ref={ref} className="pt-5" data-workout-section>
+      <div className={cn("relative px-4", heroTap && "select-none [-webkit-touch-callout:none]")} onClick={heroTap} data-workout-head>
+        <h2 className="break-words text-[20px] font-semibold leading-tight tracking-[-0.01em]">{workoutHeadline(s)}</h2>
+        {meta && <p className="mt-1 text-[13px] leading-snug text-muted-foreground">{meta}</p>}
+        {stats.length > 0 && (
+          // one row at the numbers' own widths (closer together on a small phone, so four still fit), a line of its own before anything's cut
+          <dl className="mt-4 flex flex-wrap gap-x-4 gap-y-3 min-[375px]:gap-x-6" data-workout-stats>
+            {stats.map((t) => (
+              <div key={t.label} className="flex min-w-0 flex-col-reverse">
+                <dt className="mt-0.5 text-[12px] text-muted-foreground">{t.label}</dt>
+                {/* the other unit under the number; an empty line on the others, so the labels stay level */}
+                {t.sub ? (
+                  <WeightOther className="text-[12px] font-medium">{t.sub}</WeightOther>
+                ) : stats.some((x) => x.sub) ? (
+                  <span aria-hidden className="text-[12px]">
+                    {"\u00a0"}
+                  </span>
+                ) : null}
+                <dd className={cn("whitespace-nowrap text-[17px] font-semibold leading-tight tabular-nums", t.pr && "text-warning")}>{t.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {burst}
+      </div>
+
+      {post.exercises.length > 0 && (
+        <div className="px-4 pt-6" data-workout-exercises>
+          <div className="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
+            <h3 className="text-[15px] font-semibold">
+              Exercises <span className="font-normal text-muted-foreground">{post.exercises.length}</span>
+            </h3>
+            <span className="text-[12px] text-muted-foreground">Best set</span>
+          </div>
+          <ul className="divide-y divide-border/60">
+            {post.exercises.map((e, i) => {
+              const best = exerciseBestLines(e, unit);
+              return (
+                <li key={`${e.name}-${i}`} className="flex items-start gap-3 py-3" data-workout-exercise>
+                  <div className="min-w-0 flex-1">
+                    <div className="break-words text-[15px] font-medium leading-snug">{e.name}</div>
+                    {/* its record after the sets, wrapping whole under them on a small phone (the trophy marks it, no separator left dangling) */}
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 text-[13px] leading-snug text-muted-foreground">
+                      <span>
+                        {e.sets} working {e.sets === 1 ? "set" : "sets"}
+                      </span>
+                      {e.pr && (
+                        <span className="inline-flex items-center gap-1 font-medium text-warning" data-exercise-pr>
+                          <Trophy className="h-3.5 w-3.5" aria-hidden />
+                          {SCOPE_WORD[e.pr]}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="whitespace-nowrap text-[15px] font-semibold leading-snug tabular-nums">{best.main}</div>
+                    {best.other && <div className="mt-0.5 whitespace-nowrap text-[12px] leading-snug tabular-nums text-muted-foreground">{best.other}</div>}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+});

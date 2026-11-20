@@ -10,9 +10,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
 import { useViewingAsClient } from "@/lib/client-impersonation";
 import { isActiveJob, useSetVideoJobs } from "@/lib/set-videos/jobs";
-import { useSetVideosForDay } from "@/components/workout-day/set-video-cell";
+import { setVideosKey, useSetVideosForDay } from "@/components/workout-day/set-video-cell";
+import { askFeedCopyCatchUp, leftOutForSize } from "@/lib/set-videos/catch-up";
+import { serverCopiesKnown, serverCopiesOn } from "@/lib/set-videos/server-copy-flag";
 import { invalidateCommunity, useMyPostForCompletion } from "@/lib/community.queries";
-import { filmFile, filmPaths, filmUpToDate, pickFilmClips } from "@/lib/workout-film";
+import { FILM_CLIP_MAX_S, filmFile, filmPaths, filmUpToDate, pickFilmClips, type FilmLeftOut } from "@/lib/workout-film";
 import { postWorkoutFilmFn, type FilmPostResult } from "@/lib/workout-film.functions";
 import { useFilmAutoPost } from "@/lib/workout-film-pref";
 
@@ -21,8 +23,23 @@ export { useFilmAutoPost, useSetFilmAutoPost } from "@/lib/workout-film-pref";
 /** Posts already asked for in this app open (one automatic try per film state, whichever screen asks). */
 const autoTried = new Set<string>();
 const inFlight = new Map<string, Promise<FilmPostResult>>();
+/** Films that already asked the phone for their missing copies in this app open. */
+const copyAsked = new Set<string>();
+/** While a clip waits on its copy, how often the film reads its clips again (on screen only). */
+const PREPARING_REFRESH_MS = 30_000;
 
-export type WorkoutFilmState = {
+/** This phone can make a 720p copy (WebCodecs). */
+function canShrinkVideo(): boolean {
+  return typeof window !== "undefined" && typeof (window as any).VideoEncoder !== "undefined";
+}
+
+/**
+ * `preparing`: clips left out only for their size (over 50 MB, 90 s or less)
+ * with no 720p copy yet. This phone makes one while the app is open
+ * (catch-up.ts) and the film picks it up; zero on a phone that can't (those
+ * are `tooBig`).
+ */
+export type WorkoutFilmState = FilmLeftOut & {
   /** Sets with a clip on them (sent). */
   clips: number;
   /** Clips still on their way. */
@@ -54,17 +71,29 @@ export function useWorkoutFilm(completionId: string | null | undefined, dayId: s
   const { data: post } = useMyPostForCompletion(completionId, on);
   const autoOn = useFilmAutoPost(on);
   const post$ = useServerFn(postWorkoutFilmFn);
+  // the server makes Crew copies (nothing waits on this phone), or the phone does
+  const [serverCopies, setServerCopies] = useState(() => serverCopiesKnown() ?? false);
+  useEffect(() => {
+    if (!on) return;
+    let live = true;
+    void serverCopiesOn().then((v) => live && setServerCopies(v));
+    return () => {
+      live = false;
+    };
+  }, [on]);
 
   const state = useMemo<WorkoutFilmState>(() => {
     const sent = (videos ?? []).filter((v) => !!v.result_id && (!userId || v.uploaded_by === userId));
     const uploading = jobs.filter((j) => j.dayId === dayId && j.setIndex > 0 && isActiveJob(j)).length;
     // each clip as the film uses it: its 720p feed copy when it has one
-    const { picked } = pickFilmClips(
-      sent.map((v) => {
-        const f = filmFile(v);
-        return { ...v, order: 0, src: f.path, size_bytes: f.size_bytes, duration_s: f.duration_s };
-      }),
-    );
+    const asFilm = sent.map((v) => {
+      const f = filmFile(v);
+      return { ...v, order: 0, src: f.path, size_bytes: f.size_bytes, duration_s: f.duration_s, feed: f.feed };
+    });
+    const { picked, overMax } = pickFilmClips(asFilm);
+    const forSize = asFilm.filter((v) => !v.feed && leftOutForSize(v)).length;
+    const shrink = canShrinkVideo();
+    const tooLong = asFilm.filter((v) => v.duration_s != null && Number(v.duration_s) > FILM_CLIP_MAX_S + 1.5).length;
     const wanted = completionId && userId ? picked.map((v) => filmPaths(userId, completionId, v.id, v.src).path) : [];
     const crew = post?.visibility === "community" || post?.visibility === "followers" || post?.visibility === "close_friends";
     const filmOn = !!post && !post.auto_shared && crew && (post.film?.length ?? 0) > 0;
@@ -72,6 +101,10 @@ export function useWorkoutFilm(completionId: string | null | undefined, dayId: s
       clips: sent.length,
       uploading,
       postable: picked.length,
+      preparing: shrink ? forSize : 0,
+      tooBig: shrink ? 0 : forSize,
+      tooLong,
+      overMax,
       posted: filmOn,
       behind: filmOn && !filmUpToDate(post?.film, wanted),
       hidden: !!post && !post.auto_shared && !crew,
@@ -111,6 +144,22 @@ export function useWorkoutFilm(completionId: string | null | undefined, dayId: s
     [on, completionId, post$, qc],
   );
 
+  // A clip waiting on its 720p copy: ask the phone to make it now (once an open), and read the
+  // clips again while on screen so the film shows it the moment it's made.
+  useEffect(() => {
+    if (!on || !userId || !completionId || state.preparing === 0 || state.uploading > 0) return;
+    if (!serverCopies && !copyAsked.has(completionId)) {
+      copyAsked.add(completionId);
+      askFeedCopyCatchUp(userId);
+    }
+    const t = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void qc.invalidateQueries({ queryKey: setVideosKey(dayId ?? "") });
+      void qc.invalidateQueries({ queryKey: ["community-my-post", completionId] });
+    }, PREPARING_REFRESH_MS);
+    return () => window.clearInterval(t);
+  }, [on, userId, completionId, dayId, state.preparing, state.uploading, qc, serverCopies]);
+
   // By itself: every clip landed, the switch is on, it isn't in the feed (or a clip is missing from it).
   const wantAuto = opts.auto !== false;
   const lastKey = useRef<string | null>(null);
@@ -125,5 +174,5 @@ export function useWorkoutFilm(completionId: string | null | undefined, dayId: s
     void post_(true);
   }, [on, wantAuto, autoOn, state, completionId, post_]);
 
-  return { ...state, autoOn, posting, error, postNow: () => post_(false) };
+  return { ...state, autoOn, serverCopies, posting, error, postNow: () => post_(false) };
 }

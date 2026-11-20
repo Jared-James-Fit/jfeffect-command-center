@@ -197,25 +197,33 @@ describe("the screens: one Programs page, every program says where it's from, an
     );
   });
 
-  it("the Workouts program card ends in a Manage program row (with where it came from) only for a member's own program", () => {
+  it("Manage sits beside the program's name on Workouts and on Programs, only for a member's own program", () => {
     expect(workouts).toContain(
       'const canManageProgram = mode === "self" && isSelfServe && origin.owned && !!origin.blockId;',
     );
     expect(workouts).toContain(
       "onManage={canManageProgram ? () => setManageOpen(true) : undefined}",
     );
-    expect(workouts).toContain("manageHint={canManageProgram ? origin.label : null}");
-    // a plain row, never a hidden ⋯ in the header
-    expect(card).toContain("data-manage-program-row");
+    expect(workouts).not.toContain("manageHint");
+    // a labelled button in the heading, never a hidden ⋯ or a row at the bottom of the roadmap
+    expect(card).toContain("data-manage-program");
+    expect(card).not.toContain("data-manage-program-row");
     expect(card).not.toContain('aria-label="Manage program"');
-    expect(card).toContain(") : !browsing && onManage ? (");
+    expect(card).toContain("onManage={!browsing && !(allDone && nextProgramTo) ? onManage : undefined}");
+    // the Programs page's running program is the same heading, with one way to Workouts
+    expect(hub).toContain("<ActiveProgramHeader");
+    expect(hub).toContain("onManage={canManage ? () => setManageOpen(true) : undefined}");
+    expect(hub).toContain("data-open-workouts");
+    // Training days is in Manage, through the same sheet as the ⋯ on Workouts
+    expect(workouts).toContain("onTrainingDays={client ? () => setDaysOpen(true) : undefined}");
+    expect(sheet).toContain('title="Training days"');
   });
 
   it("a finished program of their own points at the next one; a one-block program's weeks fold like a roadmap", () => {
-    expect(card).toContain("{!browsing && nextProgramTo && allDone ? (");
+    expect(card).toContain("{!browsing && nextProgramTo && allDone && (");
     expect(card).toContain("<span>Choose your next program</span>");
     expect(workouts).toContain('nextProgramTo={mode === "self" && isSelfServe ? "/portal/programs" : undefined}');
-    expect(card).toContain('showAll ? "Hide the weeks" : "See all weeks"');
+    expect(card).toContain('{multi ? "Roadmap" : "All weeks"}');
     expect(card).toContain("{showAll && (");
     expect(card).not.toContain("(showAll || blocks.length === 1)");
   });
@@ -244,6 +252,10 @@ describe("the screens: one Programs page, every program says where it's from, an
     }
     expect(sheet).toContain("const facts = await preview.mutateAsync(origin.blockId);");
     expect(sheet).toContain("if (isImpersonating) return toast.message(PREVIEW);");
+    // End is set apart from the everyday rows and says what stays before the tap
+    expect(sheet.indexOf('title="Switch program"')).toBeLessThan(sheet.indexOf('title="End program"'));
+    expect(sheet).toContain("data-manage-end");
+    expect(sheet).toContain("Workouts you've logged stay in your history and PRs.");
   });
 
   it("saving an edit to the running program updates the calendar's untouched workouts", () => {

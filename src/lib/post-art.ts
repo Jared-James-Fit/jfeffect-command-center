@@ -19,7 +19,7 @@ import { extraLesson } from "@/lib/lessons";
 import type { IgCard } from "@/lib/instagram-export";
 
 /** Bump when a card's look changes: every phone paints its pictures again. */
-export const POST_ART_VERSION = 3;
+export const POST_ART_VERSION = 4;
 
 export type PostArt = { key: string; url: string; file: File };
 
@@ -28,8 +28,13 @@ const MAX_MEMORY = 80;
 /** Pictures kept on the phone between visits (about 200 KB each). */
 const MAX_STORED = 160;
 
-/** Cards whose numbers are in the viewer's unit. */
-const UNIT_CARDS: ReadonlySet<IgCard> = new Set<IgCard>(["wins", "recap", "workout"]);
+/**
+ * Cards that can fall back to the viewer's unit: only a workout's, and only for
+ * a weight its stats don't say the unit of. Every weight a card shows is in the
+ * unit it was typed in with the other beside it, the same for everyone; the
+ * crew's totals (Wins, the Recap) lead with the crew's unit (dual-weight.ts).
+ */
+const UNIT_CARDS: ReadonlySet<IgCard> = new Set<IgCard>(["workout"]);
 
 /** FNV-1a, as base36: enough to tell two versions of a post apart. */
 export function hashText(s: string): string {

@@ -19,8 +19,9 @@ import { useServiceTier } from "@/lib/service-tier";
 import { cn } from "@/lib/utils";
 import { todayLocalISO } from "@/lib/today";
 import { GOALS, usePrograms, type BrowseFilters, type ProgramGoal } from "@/lib/athlete-programs";
-import { programProgress, programProgressLine, splitOwnPrograms } from "@/lib/my-program";
-import { programName } from "@/components/workouts/program-roadmap";
+import { splitOwnPrograms } from "@/lib/my-program";
+import { roadmapProgressLine } from "@/lib/training-roadmap";
+import { ActiveProgramHeader, programHeading } from "@/components/workouts/program-roadmap";
 import { PlanLibraryBody } from "@/route-pages/_authenticated/portal/plans";
 import { ProgramListCard } from "./program-list-card";
 import { ManageProgramSheet } from "./manage-program-sheet";
@@ -29,10 +30,23 @@ import { useSavedPlans, type SavedPlan } from "./use-saved-plans";
 
 export type ProgramsTab = "mine" | "jf" | "crew";
 
-const TAB_LABEL: Record<ProgramsTab, string> = {
-  mine: "My programs",
-  jf: "JF Effect",
-  crew: "Crew",
+/** Each tab named for what's in it; the smallest phones get the short name. */
+const TAB_LABEL: Record<ProgramsTab, { full: string; short: string }> = {
+  mine: { full: "My programs", short: "Mine" },
+  jf: { full: "JF Effect plans", short: "JF Effect" },
+  crew: { full: "Crew programs", short: "Crew" },
+};
+
+/**
+ * What each tab is, said once under the tabs, so someone new can tell the
+ * three apart: theirs (and what's on their calendar), the coach-written
+ * plans, and what other members built and shared.
+ */
+/** One quiet line under the tabs saying what each one holds. */
+const TAB_LINE: Record<ProgramsTab, string> = {
+  mine: "What's on your calendar, and programs you built or saved.",
+  jf: "Plans written by JF Effect coaches. Pick one and start it today.",
+  crew: "Programs members built and shared. Save a copy to make it yours.",
 };
 
 /**
@@ -65,10 +79,10 @@ export function ProgramsHub({ initialTab }: { initialTab?: ProgramsTab }) {
         title="Programs"
         backTo="/portal/workouts"
         actions={
-          <Button asChild size="sm">
+          <Button asChild size="sm" variant="secondary">
             <Link to="/portal/programs/new">
               <Plus className="mr-1 h-4 w-4" aria-hidden />
-              Build
+              New program
             </Link>
           </Button>
         }
@@ -93,16 +107,22 @@ export function ProgramsHub({ initialTab }: { initialTab?: ProgramsTab }) {
                 aria-selected={shown === t}
                 onClick={() => setTab(t)}
                 className={cn(
-                  "h-10 rounded-lg text-[14px] font-medium transition",
+                  "h-10 min-w-0 rounded-lg px-1 text-[14px] font-medium transition",
                   shown === t
                     ? "bg-background text-foreground shadow-sm dark:bg-secondary"
                     : "text-muted-foreground",
                 )}
+                data-programs-tab={t}
               >
-                {TAB_LABEL[t]}
+                <span className="max-[359px]:hidden">{TAB_LABEL[t].full}</span>
+                <span className="hidden max-[359px]:inline">{TAB_LABEL[t].short}</span>
               </button>
             ))}
           </div>
+        )}
+
+        {!loading && (
+          <TabLine tab={shown} coachWrites={!isSelfServe} />
         )}
 
         {loading ? (
@@ -116,6 +136,16 @@ export function ProgramsHub({ initialTab }: { initialTab?: ProgramsTab }) {
         )}
       </div>
     </div>
+  );
+}
+
+function TabLine({ tab, coachWrites }: { tab: ProgramsTab; coachWrites: boolean }) {
+  return (
+    <p className="-mt-1 px-1 text-[13px] leading-snug text-muted-foreground" data-tab-line={tab}>
+      {tab === "mine" && coachWrites
+        ? "Your coach writes your training. You can still build programs of your own and share them."
+        : TAB_LINE[tab]}
+    </p>
   );
 }
 
@@ -211,40 +241,33 @@ function OnYourCalendar({
   const [manageOpen, setManageOpen] = useState(false);
   const roadmap = current.roadmap!;
   const today = todayLocalISO();
-  const facts = {
-    programWeek: roadmap.programWeek,
-    totalWeeks: roadmap.totalWeeks,
-    start: roadmap.start,
-    end: roadmap.end,
-    today,
-  };
-  const name = programName(roadmap.program);
-  const line = programProgressLine(facts);
-  const pct = Math.round(programProgress(facts) * 100);
+  const name = programHeading(roadmap.program);
+  // the same heading as the Workouts card, with where it came from over the
+  // name (this page sorts programs by where they're from)
+  const line = roadmapProgressLine(roadmap, today);
   const canManage = isSelfServe && current.origin.owned && !!current.origin.blockId;
 
   return (
     <section className="space-y-2" aria-label="On your calendar">
       <SectionTitle icon={CalendarCheck}>On your calendar</SectionTitle>
-      <div className="rounded-2xl border border-border bg-card p-4" data-running-program>
-        <div className="text-[13px] text-muted-foreground">{current.origin.label}</div>
-        <div className="mt-0.5 text-[18px] font-semibold leading-snug">{name}</div>
-        {line && (
-          <div className="mt-0.5 text-[13px] tabular-nums text-muted-foreground">{line}</div>
-        )}
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted-foreground/20" aria-hidden>
-          <div className="h-full rounded-full bg-foreground" style={{ width: `${pct}%` }} />
+      <div className="overflow-hidden rounded-2xl border border-border bg-card" data-running-program>
+        <div className="p-4">
+          <ActiveProgramHeader
+            name={name}
+            eyebrow={current.origin.label}
+            line={line}
+            blocks={roadmap.blocks}
+            onManage={canManage ? () => setManageOpen(true) : undefined}
+          />
         </div>
-        <div className="mt-4 flex gap-2">
-          <Button asChild variant="secondary" className="h-11 flex-1">
-            <Link to="/portal/workouts">Open workouts</Link>
-          </Button>
-          {canManage && (
-            <Button variant="outline" className="h-11 flex-1" onClick={() => setManageOpen(true)}>
-              Manage
-            </Button>
-          )}
-        </div>
+        <Link
+          to="/portal/workouts"
+          className="flex min-h-12 items-center justify-between gap-2 border-t border-border/60 px-4 py-3 text-[14px] font-semibold transition hover:bg-secondary/40"
+          data-open-workouts
+        >
+          <span>Go to your workouts</span>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+        </Link>
       </div>
       {canManage && (
         <ManageProgramSheet
@@ -260,6 +283,7 @@ function OnYourCalendar({
 }
 
 function SavedPlanCard({ plan: p, running }: { plan: SavedPlan; running: boolean }) {
+  const words = (t: string) => t.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
   const meta = [
     p.weeks ? `${p.weeks} weeks` : null,
     p.days_per_week ? `${p.days_per_week} days a week` : null,
@@ -267,7 +291,7 @@ function SavedPlanCard({ plan: p, running }: { plan: SavedPlan; running: boolean
   ]
     .filter(Boolean)
     .join(" · ");
-  const tags = [p.difficulty, p.goal].filter(Boolean) as string[];
+  const tags = ([p.difficulty, p.goal].filter(Boolean) as string[]).map(words).join(" · ");
   return (
     <Link
       to="/portal/plans/$planId"
@@ -275,24 +299,11 @@ function SavedPlanCard({ plan: p, running }: { plan: SavedPlan; running: boolean
       className="block rounded-2xl border border-border bg-card p-4 transition active:scale-[0.99]"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="truncate text-[16px] font-semibold">{p.public_title || p.name}</div>
-          {meta && <div className="mt-0.5 text-[13px] text-muted-foreground">{meta}</div>}
-        </div>
-        {running ? <RunningChip /> : <SourceChip>JF Effect</SourceChip>}
+        <div className="min-w-0 truncate text-[16px] font-semibold">{p.public_title || p.name}</div>
+        {running && <RunningChip />}
       </div>
-      {tags.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {tags.map((t) => (
-            <span
-              key={t}
-              className="rounded-full bg-muted px-2 py-0.5 text-[11px] capitalize text-muted-foreground"
-            >
-              {t.replace(/_/g, " ")}
-            </span>
-          ))}
-        </div>
-      )}
+      {meta && <div className="mt-0.5 text-[13px] text-muted-foreground">{meta}</div>}
+      {tags && <div className="text-[13px] text-muted-foreground">{tags}</div>}
     </Link>
   );
 }
@@ -338,7 +349,7 @@ function FindPrograms({
         <FindRow
           icon={Hammer}
           title="Build your own"
-          sub="Your week of training, from the exercise library."
+          sub="Blocks, weeks and days from the exercise library. 12 weeks to start."
           to="/portal/programs/new"
         />
       </div>
@@ -524,14 +535,6 @@ function SectionTitle({
       {children}
       {typeof count === "number" && <span className="font-normal tabular-nums">{count}</span>}
     </h2>
-  );
-}
-
-function SourceChip({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="mt-0.5 inline-flex shrink-0 items-center rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-      {children}
-    </span>
   );
 }
 

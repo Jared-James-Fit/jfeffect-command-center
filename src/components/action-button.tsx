@@ -4,8 +4,8 @@ import { toast } from "sonner";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { jobStore } from "@/lib/progress-jobs";
-import { playUiSound, unlockUiSounds } from "@/lib/ui-sounds";
-import { haptic } from "@/platform/haptics";
+import { unlockUiSounds } from "@/lib/ui-sounds";
+import { feedback } from "@/lib/feedback";
 
 /**
  * Action state machine used by both <ActionButton> and the useAction() hook.
@@ -125,16 +125,15 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
         await onAction(event);
         if (!mountedRef.current) return;
         setInnerState("success");
-        playUiSound("success");
-        haptic("success");
+        // the check mark, the "sent" tick and the success tap together
+        feedback("success");
         if (successToast) toast.success(successToast);
         if (handle) jobStore.succeed(handle.id);
         scheduleReset();
       } catch (err: any) {
         if (!mountedRef.current) return;
         setInnerState("error");
-        playUiSound("error");
-        haptic("error");
+        feedback("error");
         if (handle) jobStore.fail(handle.id, err);
         if (errorToast !== false) {
           const msg =
@@ -280,8 +279,7 @@ export function useAction<TArgs extends any[], TResult>(
         const result = await fn(...args);
         if (mountedRef.current) {
           setState("success");
-          playUiSound("success");
-          haptic("success");
+          feedback("success");
           if (successToast) toast.success(successToast);
           scheduleReset();
         }
@@ -289,8 +287,7 @@ export function useAction<TArgs extends any[], TResult>(
       } catch (err: any) {
         if (mountedRef.current) {
           setState("error");
-          playUiSound("error");
-          haptic("error");
+          feedback("error");
           if (errorToast !== false) {
             const msg =
               typeof errorToast === "string"

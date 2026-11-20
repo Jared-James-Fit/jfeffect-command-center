@@ -129,7 +129,7 @@ export function NextProgramWorkstation({ clientId, prefill }: { clientId: string
 
   const conflicts = useMemo(() => {
     if (!intel || !setup) return [];
-    const lookup = (r: { id: string | null; name: string }) => (r.id ? intel.exercises.get(r.id) ?? null : null) ?? { name: r.name, equipment: null };
+    const lookup = (r: { id: string | null; name: string }) => (r.id ? intel.exercises.get(r.id) : undefined) ?? { name: r.name, equipment: null };
     return findConflicts(setup, intel.ctx, intel.recommendation.baseline, lookup, intel.recommendation.setup);
   }, [intel, setup]);
   const red = useMemo(() => (intel && setup ? redistribution(setup, intel.recommendation.baseline) : null), [intel, setup]);

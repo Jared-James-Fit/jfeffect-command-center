@@ -11,6 +11,7 @@ import { PREVIEW_ONLY_MESSAGE } from "@/lib/community";
 import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import { cn } from "@/lib/utils";
 import { listenChannel } from "@/lib/realtime-channel";
+import { phoneLayoutNow } from "@/lib/portrait-only";
 
 export const Route = createFileRoute("/_authenticated/portal/support")({ component: SupportPage });
 
@@ -98,7 +99,7 @@ function SupportPage() {
 
   return (
     <div
-      className="fixed inset-x-0 z-30 flex flex-col bg-background md:static md:inset-auto md:z-auto md:mx-auto md:h-full md:w-full md:max-w-3xl md:flex-1 md:border-x md:border-border"
+      className="phone-column fixed inset-x-0 z-30 flex flex-col bg-background md:static md:inset-auto md:z-auto md:mx-auto md:h-full md:w-full md:max-w-3xl md:flex-1 md:border-x md:border-border"
       style={{
         // Like the coach chat: anchored to the visible part of the screen,
         // so the box sits right above the keyboard, under the top bar.
@@ -171,7 +172,7 @@ function SupportPage() {
             value={body}
             onChange={(e) => setBody(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && window.matchMedia("(min-width: 768px)").matches) {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !phoneLayoutNow()) {
                 e.preventDefault();
                 void submit();
               }

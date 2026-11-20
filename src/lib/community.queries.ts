@@ -50,9 +50,10 @@ import {
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { getClientTodayItems } from "@/lib/today-dashboard.functions";
 import { cleanDayTitle, computeTodayState } from "@/lib/workout-today";
-import { cachedCommunityUrls, pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, uploadPicked, uploadVoiceMemo, type PickedMedia, type UploadedMedia } from "@/lib/community-media";
+import { cachedCommunityUrls, communityAvatarFiles, pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, uploadPicked, uploadVoiceMemo, type PickedMedia, type UploadedMedia } from "@/lib/community-media";
 import { onRealtimeRejoin, useResyncOnResume } from "@/hooks/use-resync-on-resume";
 import { feedAnchor } from "@/lib/feed-anchor";
+import { feedback } from "@/lib/feedback";
 
 const db = supabase as any;
 
@@ -319,17 +320,29 @@ export function usePostActivity(postId: string | null) {
 }
 
 /** Everyone who reacted to a post (and with what), for the "who reacted" sheet. */
-export function usePostReactors(postId: string | null) {
-  return useQuery({
+export type PostLiker = { author: CommunityAuthor; is_me: boolean; emoji: string | null; created_at: string };
+
+/** Who liked a post (community_post_reactors: you, people you follow, then newest; the same people the post's "Liked by" names). */
+function postReactorsQuery(postId: string | null) {
+  return {
     queryKey: communityKeys.reactors(postId),
-    enabled: !!postId,
     staleTime: 15_000,
-    queryFn: async (): Promise<{ author: CommunityAuthor; is_me: boolean; emoji: string | null; created_at: string }[]> => {
+    queryFn: async (): Promise<PostLiker[]> => {
       const { data, error } = await db.rpc("community_post_reactors", { _post_id: postId });
       if (error) throw error;
       return (data ?? []) as any;
     },
-  });
+  };
+}
+
+export function usePostReactors(postId: string | null) {
+  return useQuery({ ...postReactorsQuery(postId), enabled: !!postId });
+}
+
+/** Start loading the Likes as the finger lands, so the sheet opens with its names (a tap's click comes ~100 ms later). */
+export function usePrefetchPostReactors() {
+  const qc = useQueryClient();
+  return useCallback((postId: string) => void qc.prefetchQuery(postReactorsQuery(postId)), [qc]);
 }
 
 /* ---- birthday posts (coach reviews, then they go out) ------------------ */
@@ -592,6 +605,8 @@ export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine
       return data as CommunityComment;
     },
     onMutate: async (c) => {
+      // the comment appears now: its tap lands with it
+      feedback("comment");
       await qc.cancelQueries({ queryKey: communityKeys.comments(postId) });
       const temp: CommunityComment = {
         id: c.tempId,
@@ -996,6 +1011,8 @@ export async function createCommunityPost(
     throw error;
   }
   const postId = (data as { id: string }).id;
+  // it's up (a post or a story, whichever screen made it): the success tap and the "sent" tick
+  feedback("post");
   try {
     await i.attach?.(postId);
   } catch (e) {
@@ -1456,20 +1473,9 @@ export function useMyCommunitySettings(enabled = true) {
     queryFn: async (): Promise<MyCommunitySettings> => {
       const { data, error } = await db.rpc("community_my_settings");
       if (error) throw error;
-      return (data ?? { auto_share_workouts: true, private_views: false }) as MyCommunitySettings;
+      // automatic stories are off unless they switched them on (20270407090000)
+      return (data ?? { auto_share_workouts: false, private_views: false }) as MyCommunitySettings;
     },
-  });
-}
-
-export function useSetAutoShare() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (on: boolean) => {
-      const { error } = await db.rpc("community_set_auto_share", { _on: on });
-      if (error) throw error;
-    },
-    onMutate: (on) => qc.setQueryData(["community-my-settings"], (old: any) => ({ ...(old ?? { private_views: false }), auto_share_workouts: on })),
-    onSettled: () => qc.invalidateQueries({ queryKey: ["community-my-settings"] }),
   });
 }
 
@@ -1496,11 +1502,12 @@ export function useSetCommunityAvatar(userId: string | null) {
       const path = file ? await uploadCommunityAvatar(file, userId) : null;
       const { data, error } = await db.rpc("community_set_avatar", { _path: path });
       if (error) {
-        if (path) await db.storage.from("avatars").remove([path]).catch(() => {});
+        if (path) await db.storage.from("avatars").remove(communityAvatarFiles(path)).catch(() => {});
         throw error;
       }
+      // the photo it replaced goes, with its full-size copy
       const previous = (data as { previous?: string | null } | null)?.previous;
-      if (previous && previous !== path) await db.storage.from("avatars").remove([previous]).catch(() => {});
+      if (previous && previous !== path) await db.storage.from("avatars").remove(communityAvatarFiles(previous)).catch(() => {});
     },
     onSuccess: () => invalidateCommunity(qc),
   });

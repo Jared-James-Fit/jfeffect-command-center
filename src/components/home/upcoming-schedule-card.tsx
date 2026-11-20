@@ -2,7 +2,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CalendarPlus } from "lucide-react";
+import { CalendarPlus, Video } from "lucide-react";
 import { listMyBookingTypes } from "@/lib/booking.functions";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { KIND_FAMILY, KIND_META, placeLabel, scheduleTitle, useClientCalendarSources, type CalendarItem } from "@/lib/calendar-sources";
@@ -274,7 +274,12 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
     for (const list of m.values()) list.sort(monthChipOrder);
     return m;
   }, [homeEntries]);
-  const singleBook = bookable.length === 1 && !pov.viewAsClientId ? bookable[0] : null;
+  // Training they book themselves, apart from calls (a General Call): asking for a
+  // session stays the footer's first action, and a call is its own "Book a call".
+  const sessionTypes = useMemo(() => bookable.filter((t) => !t.isCall), [bookable]);
+  const callTypes = useMemo(() => bookable.filter((t) => t.isCall), [bookable]);
+  const singleBook = sessionTypes.length === 1 && !pov.viewAsClientId ? sessionTypes[0] : null;
+  const bookCall = callTypes.length && !pov.viewAsClientId ? callTypes : null;
   // A dot per appointment / date on each day of the week strip (not workouts).
   const dotsByDay = useMemo(() => {
     const m = new Map<string, CalendarItem[]>();
@@ -467,7 +472,7 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
         )}
 
         {/* The action, in words: ask for (or book) a session. Seeing everything is the header's link. */}
-        {links && (singleBook || (bookable.length > 1 && !pov.viewAsClientId) || canRequest) && (
+        {links && (singleBook || (sessionTypes.length > 1 && !pov.viewAsClientId) || canRequest || bookCall) && (
           <AgendaFooter>
             {singleBook ? (
               <Link
@@ -478,15 +483,31 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
               >
                 <CalendarPlus className="h-4 w-4" /> Book a session
               </Link>
-            ) : bookable.length > 1 && !pov.viewAsClientId ? (
+            ) : sessionTypes.length > 1 && !pov.viewAsClientId ? (
               <Link to="/portal/calendar" className={AGENDA_ACTION}>
                 <CalendarPlus className="h-4 w-4" /> Book a session
               </Link>
-            ) : (
+            ) : canRequest ? (
               <button type="button" onClick={() => setRequesting({ date: period === "day" && anchor > today ? anchor : today })} className={AGENDA_ACTION}>
                 <CalendarPlus className="h-4 w-4" /> Request a session
               </button>
-            )}
+            ) : <span />}
+            {bookCall &&
+              (bookCall.length === 1 ? (
+                <Link
+                  to="/book/$slug"
+                  params={{ slug: bookCall[0].slug }}
+                  search={{ name: "", email: "", phone: "", application_id: "", i: "" }}
+                  className={AGENDA_ACTION}
+                  data-book-call
+                >
+                  <Video className="h-4 w-4" /> Book a call
+                </Link>
+              ) : (
+                <Link to="/portal/calendar" className={AGENDA_ACTION} data-book-call>
+                  <Video className="h-4 w-4" /> Book a call
+                </Link>
+              ))}
           </AgendaFooter>
         )}
 

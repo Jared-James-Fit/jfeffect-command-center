@@ -338,7 +338,7 @@ export const autoSendPaymentRequestMessage = createServerFn({ method: "POST" })
       .from("messages")
       .select("id")
       .eq("client_id", rec.client_id)
-      .contains("attachments", [{ kind: "payment_request", purchase_id: rec.id }])
+      .contains("attachments", JSON.stringify([{ kind: "payment_request", purchase_id: rec.id }]))
       .limit(1);
     if ((existing ?? []).length) return { sent: false, reason: "already_sent" as const };
 

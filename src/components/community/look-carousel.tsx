@@ -6,6 +6,7 @@ import {
 import { cn } from "@/lib/utils";
 import { TEMPLATE_LABEL, type ShareTemplate } from "@/lib/workout-share-card";
 import { HOLD_TO_RECORD_MS } from "@/components/community/clip-recorder";
+import { feedback } from "@/lib/feedback";
 
 const ICON: Record<ShareTemplate, LucideIcon> = {
   pr: Trophy,
@@ -245,11 +246,8 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
       }
       if (i !== shown.current) {
         shown.current = i;
-        try {
-          navigator.vibrate?.(6);
-        } catch {
-          /* no haptics here */
-        }
+        // each look a detent, the iPhone camera's filter wheel
+        feedback("detent");
         lookRef.current(looks[i].key);
       }
     });

@@ -80,7 +80,8 @@ describe("the engagement pop", () => {
     expect(card).toContain('{on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} total={reactionTotal(post)} size="lg" className="bottom-3/4 left-1/2" />}');
     expect(card).toContain("column hidden={sheetOpen || under || holding} />");
     expect(pop).toContain("if (!el || hidden || !engaged || on || popped.has(post.id) || typeof IntersectionObserver === \"undefined\") return;");
-    expect(card).toContain('on && "engage-chip"');
+    expect(card).toContain("highlight={on}");
+    expect(read("src/components/community/reactors-sheet.tsx")).toContain('highlight && "engage-chip"');
     expect(card).not.toContain("<EngagementPop");
     // Home's cards get the capsule
     expect(entry).toContain("<EngagementPop post={post} />");

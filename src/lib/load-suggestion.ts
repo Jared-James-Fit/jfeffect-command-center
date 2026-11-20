@@ -30,13 +30,21 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 //   7. The range is target RPE ±0.5 widened to the error measured on real
 //      client logs, so most sets genuinely land inside it.
 //   8. SBD lifts can take an optional FINAL WARM-UP (load × reps, optional RPE)
-//      before the first working set. It is submaximal by design and RIR guesses
-//      on an easy single/double are optimistic, so it is deliberately weak: its
-//      RPE is floored at 6 (a claimed "easy" can never inflate the estimate), it
+//      before the first working set. It is submaximal by design and a rating far
+//      from failure is a poor guess (Nov 20 2026, 6,149 rated sets: a set's chart
+//      max spreads ~3.5% per rep in reserve, and at RPE 5 or easier it reads ~16%
+//      LIGHT, ±25%), so it is deliberately weak and read for what it can say: it
 //      only nudges a history-based suggestion (+1.5% / −3% at most, so a heavy
-//      warm-up backs you off more readily than an easy one pushes you up), and
-//      with no history at all it gives a conservative first suggestion (−4%,
-//      wider range). A HARD final warm-up is different: a single @ RPE 8 is a
+//      warm-up backs you off more readily than an easy one pushes you up); a
+//      read LIGHTER than history pulls down only as far as its rating can be
+//      believed (warmupReliability: all of it at RPE 7+, none at 5 or easier, a
+//      smooth ramp between), while a read HEAVIER is a lower bound however easy
+//      (an easy rating reads light), so it keeps its small up; every warm-up
+//      near the heaviest is read together, the same in any order (readWarmups);
+//      with no history at all it gives a conservative first suggestion (−4%, a
+//      range as wide as the rating is believable), and none from a warm-up at
+//      RPE 5 or easier: the card says the RPE was too low for a reliable
+//      estimate and the first set sets it. A HARD final warm-up is different: a single @ RPE 8 is a
 //      top set in all but name and the best read of today there is, so from a
 //      logged RPE 7 up to 8 its own chart estimate takes over, until it alone
 //      sets the weight (210 kg × 1 @ 8 → 5 @ 4.5 = 165 kg, not 185 because
@@ -223,9 +231,48 @@ export interface WarmupSet {
 }
 /** Assumed effort when the athlete doesn't say: a normal final warm-up. */
 export const WARMUP_DEFAULT_RPE = 7;
-/** Floor on warm-up RPE. Lower claims mean MORE reps in reserve, hence a bigger e1RM: never let "easy" inflate it. */
-export const WARMUP_RPE_FLOOR = 6;
 export const WARMUP_MAX_REPS = 8;
+/**
+ * How much a warm-up's RPE can be believed (header note 8, Nov 20 2026). A
+ * rating is a guess at reps in reserve, and the guess gets worse the further
+ * the set was from failure. Measured on 6,149 rated working sets (240 days, 13+
+ * athletes, reps ≤ 10), each set's chart max against the athlete's hard sets
+ * (RPE 8+, ≤ 6 reps) of the same exercise within 10 days:
+ *   RPE ≤ 5:  median 0.84 of the real max, middle half 0.73–0.98 (100 sets)
+ *   RPE 5.5–6: 1.03, 0.93–1.11 (200)    RPE 6.5–7: 1.00, 0.93–1.08 (303)
+ *   RPE 7.5:  0.98, 0.94–1.05 (108)     RPE 8–8.5: 1.00, 0.97–1.05 (687)
+ * So a warm-up's own estimate spreads about 3.5% per rep in reserve
+ * (`warmupSpread`), and at RPE 5 or easier it reads ~16% light with a ±25%
+ * spread: no evidence at all that today is weaker, only (being light) a lower
+ * bound. Only 38 warm-ups had been logged, too few to fit on their own; the
+ * rating error is the same thing.
+ */
+export const WARMUP_SPREAD_PER_RIR = 0.035;
+/** At or under this RPE a warm-up says nothing about today being weaker (read light, ±25%). */
+export const WARMUP_UNREADABLE_RPE = 5;
+/** A warm-up's rating as a number, a missing one read as a typical last warm-up. */
+function warmupRpe(rpe: number | string | null | undefined): number {
+  return parseRpe(rpe ?? null) ?? WARMUP_DEFAULT_RPE;
+}
+/** The spread of a warm-up's own estimate of today's max, from how hard it was (WARMUP_SPREAD_PER_RIR). */
+export function warmupSpread(rpe: number | string | null | undefined): number {
+  return WARMUP_SPREAD_PER_RIR * Math.max(1, 10 - warmupRpe(rpe));
+}
+/**
+ * How much a warm-up that reads LIGHTER than history may pull today's weight
+ * down, 0..1: its precision against a normal last warm-up's (RPE 7), faded to
+ * nothing at WARMUP_UNREADABLE_RPE. RPE 7 and harder 1, RPE 6.5 0.59, 6 0.32,
+ * 5 and easier 0. A smooth ramp, so changing the rating never jumps the weight.
+ * A warm-up that reads HEAVIER than history is a lower bound however easy it
+ * was (an easy rating reads light), so that side keeps its full say.
+ */
+export function warmupReliability(rpe: number | string | null | undefined): number {
+  const at = (r: number) => (warmupSpread(WARMUP_DEFAULT_RPE) / warmupSpread(r)) ** 2;
+  const floor = at(WARMUP_UNREADABLE_RPE);
+  return Math.min(1, Math.max(0, (at(warmupRpe(rpe)) - floor) / (1 - floor)));
+}
+/** Other warm-ups within this much of the heaviest are read with it (a single and a double at the top of the ramp). */
+export const WARMUP_COMPANION_GAP = 0.075;
 /** With history: the warm-up moves the suggestion by half its disagreement, clamped to −6% / +3% of it → −3% / +1.5%. */
 export const WARMUP_NUDGE_DOWN = -0.06;
 export const WARMUP_NUDGE_UP = 0.03;
@@ -249,12 +296,77 @@ export const WARMUP_COLD_START_FACTOR = 0.96;
 export const WARMUP_COLD_START_SPREAD = 0.08;
 export const WARMUP_COLD_START_MAX_RATIO = 1.25;
 
-/** Estimated 1RM implied by a final warm-up, or null when it can't be trusted. */
+/**
+ * Estimated 1RM implied by a final warm-up at its own rating, or null when it
+ * isn't a warm-up the chart can read. An easy rating is read as given: it reads
+ * light, never heavy (see WARMUP_SPREAD_PER_RIR), and how much it may count is
+ * warmupReliability's call, not a floor on the rating.
+ */
 export function warmupE1rm(w: WarmupSet): number | null {
   if (!(w.load > 0) || !(w.reps >= 1) || w.reps > WARMUP_MAX_REPS) return null;
-  const rpe = Math.min(10, Math.max(WARMUP_RPE_FLOOR, parseRpe(w.rpe ?? null) ?? WARMUP_DEFAULT_RPE));
+  const rpe = Math.min(10, warmupRpe(w.rpe));
   const pct = percentOf1RM(w.reps, 10 - rpe);
   return pct ? w.load / pct : null;
+}
+
+/** The warm-ups as the model reads them (readWarmups). */
+export interface ModelWarmup {
+  /** Today's max they imply, combined (in the model's unit). */
+  e1rm: number;
+  /** The same, every rating read as no harder than a normal 7: the monotone ceiling for a hard warm-up. */
+  normalE1rm: number;
+  /** The heaviest warm-up's load and reps. */
+  load: number;
+  reps: number;
+  /** The hardest rating among those read (a missing one counts as 7). */
+  rpe: number;
+  /** How far a hard warm-up is read like a set (warmupTrust of `rpe`). */
+  trust: number;
+  /** The combined read's spread (warmupSpread of the most precise one). */
+  spread: number;
+  /** How much a lighter read may pull the weight down (warmupReliability of `rpe`). */
+  reliability: number;
+  /** Warm-ups read (the heaviest and any within WARMUP_COMPANION_GAP of it). */
+  count: number;
+}
+
+/**
+ * Today's warm-ups as one read, the same whatever order they were logged in:
+ * the heaviest (ties: the harder-rated, then more reps), with any others within
+ * WARMUP_COMPANION_GAP of its load, each weighed by its precision (1 /
+ * warmupSpread²) on the log scale. Lighter ramp sets are left out: a bar or a
+ * 60% set rated at its default says nothing about today's top set. The
+ * combined spread is the most precise one's, not narrower: the ratings come
+ * from one athlete on one day, so their errors move together.
+ */
+export function readWarmups(list: Array<WarmupSet | null | undefined>): ModelWarmup | null {
+  const sets = list
+    .filter((w): w is WarmupSet => !!w && w.load > 0 && w.reps >= 1 && w.reps <= WARMUP_MAX_REPS && warmupE1rm(w) != null)
+    .map((w) => ({ ...w, r: warmupRpe(w.rpe) }));
+  if (!sets.length) return null;
+  const top = sets.reduce((a, b) =>
+    b.load > a.load || (b.load === a.load && (b.r > a.r || (b.r === a.r && b.reps > a.reps))) ? b : a);
+  const near = sets.filter((w) => w.load >= top.load * (1 - WARMUP_COMPANION_GAP));
+  const combine = (cap: number | null) => {
+    let num = 0;
+    let den = 0;
+    for (const w of near) {
+      const e = warmupE1rm({ load: w.load, reps: w.reps, rpe: cap == null ? w.r : Math.min(w.r, cap) });
+      if (!e) continue;
+      const p = 1 / warmupSpread(w.r) ** 2;
+      num += p * Math.log(e);
+      den += p;
+    }
+    return den > 0 ? Math.exp(num / den) : null;
+  };
+  const e1rm = combine(null);
+  const normalE1rm = combine(WARMUP_TRUST_FROM_RPE);
+  if (!e1rm || !normalE1rm) return null;
+  const rpe = Math.max(...near.map((w) => w.r));
+  return {
+    e1rm, normalE1rm, load: top.load, reps: top.reps, rpe,
+    trust: warmupTrust(rpe), spread: warmupSpread(rpe), reliability: warmupReliability(rpe), count: near.length,
+  };
 }
 
 export interface SetSample {
@@ -366,8 +478,13 @@ export interface LoadModel {
   staleDays: number | null;
   /** Mean bodyweight adjustment applied to history (1 = none), for the "why". */
   bodyweightScale: number;
-  /** The athlete's final warm-up, when given and no working set is logged yet today. */
-  warmup: { e1rm: number; load: number; reps: number; trust: number } | null;
+  /** The athlete's last warm-ups (readWarmups), when given and no working set is logged yet today. */
+  warmup: ModelWarmup | null;
+  /**
+   * No history and the warm-ups are too easy to read (RPE ≤ WARMUP_UNREADABLE_RPE):
+   * no number is made up, and the card says why (calibrating).
+   */
+  warmupTooEasy?: boolean;
   /** Today's read from this lift's other cards, applied to a cold suggestion (1 = as usual). */
   dayFactor: number | null;
   /** True when "today" includes this exercise's earlier sets on another card (a back-off after its top set). */
@@ -401,6 +518,8 @@ export function buildLoadModel(input: {
   readiness?: Readiness;
   /** Optional final warm-up (SBD). Ignored once a working set is logged today. */
   warmup?: WarmupSet | null;
+  /** Every warm-up logged on the card today, in any order (readWarmups reads them as one). */
+  warmups?: WarmupSet[] | null;
   /** Today's smoothed bodyweight (kg); history logs carry theirs in `bodyweightKg`. */
   bodyweightKg?: number | null;
   /** How today's other cards of this lift ran vs history (see dayFactorFrom). Cold suggestions only. */
@@ -531,8 +650,7 @@ export function buildLoadModel(input: {
     ? { load: top.load, reps: top.reps, rpe: top.rpe, e1rm: topEst.e1rm }
     : null;
 
-  const wE1rm = input.warmup ? warmupE1rm(input.warmup) : null;
-  const warmup = wE1rm && input.warmup && today.length === 0 ? { e1rm: wE1rm, load: input.warmup.load, reps: input.warmup.reps, trust: warmupTrust(input.warmup.rpe) } : null;
+  const warmup = today.length === 0 ? readWarmups([...(input.warmups ?? []), input.warmup]) : null;
   const bodyweightScaleMean = bwScales.length ? bwScales.reduce((a, b) => a + b, 0) / bwScales.length : 1;
   const base = {
     unit, historySessions: sessions.length, staleDays, warmup, bodyweightScale: bodyweightScaleMean,
@@ -559,9 +677,14 @@ export function buildLoadModel(input: {
     };
   }
   // No usable history: a warm-up is the only same-day signal there is, which is
-  // exactly when a brand-new lift needs a first suggestion.
-  if (warmup) {
+  // exactly when a brand-new lift needs a first suggestion. One too easy to read
+  // (it reads ~16% light, ±25%) would only be a made-up number: the first set
+  // sets it instead, and the card says why.
+  if (warmup && warmup.rpe > WARMUP_UNREADABLE_RPE) {
     return { ...base, status: "ready", source: "warmup", history: [], today: [], readiness: NEUTRAL_READINESS };
+  }
+  if (warmup) {
+    return { ...base, status: "calibrating", source: null, history: [], today: [], readiness: NEUTRAL_READINESS, warmupTooEasy: true };
   }
   return { ...base, status: "calibrating", source: null, history: [], today: [], readiness: NEUTRAL_READINESS };
 }
@@ -608,7 +731,17 @@ export const BACKOFF_FATIGUE = 0.06;
 /** A card the program calls a back-off ("Primary Squat Backoff", "Back-offs"). */
 const BACKOFF_LABEL = /\bback[\s-]?offs?\b/i;
 
-export function estimateFor(model: LoadModel, reps: number, rpe: number): { load: number; spread: number } | null {
+export interface LoadEstimate {
+  load: number;
+  spread: number;
+  /**
+   * What the last warm-up did to it (only when one was read): "tuned" it moved
+   * the number, "too_easy" it was too easy to read and the number is history's.
+   */
+  warmup?: "tuned" | "too_easy";
+}
+
+export function estimateFor(model: LoadModel, reps: number, rpe: number): LoadEstimate | null {
   if (model.status !== "ready") return null;
   const targetPct = percentOf1RM(reps, 10 - rpe);
   if (!targetPct) return null;
@@ -648,32 +781,37 @@ export function estimateFor(model: LoadModel, reps: number, rpe: number): { load
   // null otherwise). It nudges a history estimate, or — with no history — gives
   // a conservative first suggestion. See header note 8.
   if (model.warmup && !t) {
+    const wu = model.warmup;
+    // Lighter than history: by as much as the rating can be believed
+    // (warmupReliability, 0 at RPE 5 and easier). Heavier: a lower bound however
+    // easy it was, so its full (small) say.
+    const nudge = (x: number) => (x < 0 ? Math.max(x, WARMUP_NUDGE_DOWN) * wu.reliability : Math.min(x, WARMUP_NUDGE_UP));
     const softFor = (w: number) =>
       h
         ? {
-            load: h.load * (1 + WARMUP_NUDGE_WEIGHT * clamp(w / h.load - 1, WARMUP_NUDGE_DOWN, WARMUP_NUDGE_UP)),
+            load: h.load * (1 + WARMUP_NUDGE_WEIGHT * nudge(w / h.load - 1)),
             spread: clamp(h.spread / 2, HISTORY_SPREAD, 0.07),
           }
         : {
-            load: Math.min(w * WARMUP_COLD_START_FACTOR, model.warmup!.load * WARMUP_COLD_START_MAX_RATIO),
-            spread: WARMUP_COLD_START_SPREAD,
+            load: Math.min(w * WARMUP_COLD_START_FACTOR, wu.load * WARMUP_COLD_START_MAX_RATIO),
+            // as wide as the rating is believable (RPE 7: ±10.5%), never narrower than before
+            spread: Math.max(WARMUP_COLD_START_SPREAD, wu.spread),
           };
-    const w = model.warmup.e1rm * targetPct;
+    const w = wu.e1rm * targetPct;
     const soft = softFor(w);
     // A hard warm-up is read like a set done today (header note 8).
     // Down as far as it says (backing off is the safe side), up by at most
     // WARMUP_HARD_MAX_UP over the soft estimate (a typo'd warm-up can't load the bar).
-    const k = model.warmup.trust;
+    const k = wu.trust;
     const hard = Math.min(w, soft.load * (1 + WARMUP_HARD_MAX_UP));
     let load = k * hard + (1 - k) * soft.load;
     // Monotonic: the same warm-up rated harder never suggests MORE than rated a
     // normal 7 (the soft read). Otherwise "felt heavy" could out-weigh "felt
     // smooth" whenever the warm-up implies more than recent sessions.
-    if (k > 0) {
-      const normal = warmupE1rm({ load: model.warmup.load, reps: model.warmup.reps, rpe: WARMUP_TRUST_FROM_RPE });
-      if (normal) load = Math.min(load, softFor(normal * targetPct).load);
-    }
-    return { load, spread: k * TODAY_SPREAD + (1 - k) * soft.spread };
+    if (k > 0) load = Math.min(load, softFor(wu.normalE1rm * targetPct).load);
+    // Said when it couldn't move the number: too easy to read, and no heavier than history.
+    const tooEasy = !!h && wu.reliability === 0 && load <= h.load * (1 + 1e-9);
+    return { load, spread: k * TODAY_SPREAD + (1 - k) * soft.spread, warmup: tooEasy ? "too_easy" : "tuned" };
   }
   // Spread floors are calibrated on real logs so the range is honest (most
   // sets land inside it) rather than falsely precise.
@@ -698,6 +836,8 @@ export interface LoadSuggestion {
   high: number;
   target: number;
   unit: "kg" | "lb";
+  /** What the last warm-up did to it (LoadEstimate.warmup): only when one was read. */
+  warmup?: "tuned" | "too_easy";
 }
 
 export function roundToStep(value: number, step: number): number {
@@ -737,7 +877,7 @@ export function suggestSetLoad(
   low = Math.min(low, targetLoad);
   high = Math.max(high, targetLoad);
   if (!(targetLoad > 0) || !(low > 0)) return null;
-  return { low, high, target: targetLoad, unit: model.unit };
+  return { low, high, target: targetLoad, unit: model.unit, ...(est.warmup ? { warmup: est.warmup } : {}) };
 }
 
 /**

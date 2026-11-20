@@ -29,6 +29,7 @@ import { getWebsiteFormStats } from "@/lib/coaching-applications.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { TABS, LAST_TAB_KEY, isMoreTab, type TabKey } from "@/route-pages/_authenticated/admin/forms-tabs";
 import { SubmissionsInbox } from "@/components/forms/submissions-inbox";
+import { AdminCoachingSchedules } from "@/components/admin/coaching-schedules";
 import { getRouteApi as __getRouteApi } from "@tanstack/react-router";
 const Route = __getRouteApi("/_authenticated/admin/forms");
 
@@ -36,7 +37,7 @@ const Route = __getRouteApi("/_authenticated/admin/forms");
 
 
 export function FormsWorkspacePage() {
-  const { tab, sub, kind } = Route.useSearch();
+  const { tab, sub, kind, status } = Route.useSearch();
   const navigate = useNavigate();
 
   // Persist last tab so direct /admin/forms hits remember the choice, while
@@ -57,7 +58,6 @@ export function FormsWorkspacePage() {
     <>
       <PageHeader
         title="Forms"
-        subtitle="What clients send in, what you've asked for, and the forms themselves."
       />
       <div className="border-b border-border bg-background/50">
         <div className="-mb-px flex gap-1 overflow-x-auto px-2 md:px-4">
@@ -71,7 +71,7 @@ export function FormsWorkspacePage() {
                 className={cn(
                   "shrink-0 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-semibold transition-colors",
                   active
-                    ? "border-primary text-foreground"
+                    ? "border-foreground text-foreground"
                     : "border-transparent text-muted-foreground hover:text-foreground",
                 )}
                 aria-current={active ? "page" : undefined}
@@ -87,7 +87,7 @@ export function FormsWorkspacePage() {
                 type="button"
                 className={cn(
                   "inline-flex shrink-0 items-center gap-1 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-semibold transition-colors",
-                  moreActive ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+                  moreActive ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
                 )}
               >
                 {moreActive ? moreActive.label : "More"} <ChevronDown className="h-3.5 w-3.5" />
@@ -104,15 +104,16 @@ export function FormsWorkspacePage() {
         </div>
       </div>
       <div>
-        {tab === "submissions" && <SubmissionsInbox />}
+        {tab === "submissions" && <SubmissionsInbox key={`${kind ?? "all"}:${status ?? "all"}`} initialKind={kind} initialStatus={status} />}
         {tab === "reviews" && <ReviewsTab />}
         {tab === "fillout" && <FilloutSubmissionsPage embedded />}
-        {tab === "requests" && <RequestsTab key={kind ?? "all"} initialKind={kind} />}
+        {tab === "requests" && <RequestsTab key={kind ?? "all"} initialKind={kind === "progress" ? undefined : kind} />}
         {tab === "builder" && <BuilderRouter sub={sub} />}
         {tab === "applications" && <ApplicationsInbox embedded />}
         {tab === "agreements" && <AgreementsAdminPage embedded />}
         {tab === "integrations" && <IntegrationsPanel />}
         {tab === "scheduler" && <SchedulerTab />}
+        {tab === "schedules" && <AdminCoachingSchedules />}
         {tab === "ai-settings" && <AiSettingsTab />}
       </div>
     </>
@@ -139,7 +140,7 @@ function BuilderRouter({ sub }: { sub?: string }) {
   };
   return (
     <>
-      <div className="flex gap-1 border-b border-border bg-background/30 px-2 py-2 md:px-4">
+      <div className="flex gap-1 overflow-x-auto border-b border-border bg-background/30 px-2 py-2 md:px-4">
         <SubTab active={current === "app"} onClick={() => setSub("app")} label="App forms" />
         <SubTab active={current === "document"} onClick={() => setSub("document")} label="Document links" />
         <SubTab active={current === "website"} onClick={() => setSub("website")} label="Website forms" />
@@ -157,8 +158,8 @@ function SubTab({ active, onClick, label }: { active: boolean; onClick: () => vo
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-md px-2.5 py-1 text-xs font-semibold transition-colors",
-        active ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        "h-9 rounded-md px-3 text-[14px] font-medium transition-colors",
+        active ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
       {label}

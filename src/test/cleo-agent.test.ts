@@ -162,7 +162,7 @@ describe("Cleo actions: who can do what", () => {
   });
 });
 
-describe("Cleo never answers with her own rules", () => {
+describe("Cleo never answers with its own rules", () => {
   it("spots a reply that just restates the formatting rules", async () => {
     const { looksLikeLeakedInstructions } = await import("@/lib/summer-voice-text");
     expect(looksLikeLeakedInstructions("1 to 3 short sentences. No list, no emoji, no markdown, no money symbols, no numbers at start of lines. Write money as $1,234.56. Put the link at the very end.")).toBe(true);

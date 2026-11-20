@@ -1,5 +1,5 @@
 import { CompetitionPlanSummary } from "@/components/forms/competition-plan-summary";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import type { FormPresentation, FormHistoryGroup as FormHistoryGroupData } from "@/lib/form-message-presentation";
@@ -28,7 +28,7 @@ import {
 import { cn } from "@/lib/utils";
 import { markCheckinReviewed, refreshReviewQueries, reopenCheckinReview, reviewedViaLabel } from "@/lib/checkin-review";
 import { ClientFormSheet } from "@/components/forms/client-form-sheet";
-import { playAppSound } from "@/lib/app-sounds";
+import { feedback } from "@/lib/feedback";
 import { weekChip } from "@/lib/program-context";
 import {
   analyzeMessengerCheckin,
@@ -39,7 +39,7 @@ import {
 } from "@/lib/messenger-checkins.functions";
 import { generateNutritionPlanFn } from "@/lib/nutrition-ai-plans.functions";
 import { planMissing, requestCardSubmission, updatingCardSubmission } from "@/lib/form-request-state";
-import { ChecklistAnswers, ReadinessSummary, meetSummary, useFormReadiness } from "@/components/forms/readiness-view";
+import { meetSummary, useFormReadiness } from "@/components/forms/readiness-view";
 import { readinessLine } from "@/lib/form-checklist";
 import { MEET_CHECKLIST_FORM_TYPE, type MeetFacts } from "@/lib/meet-checklist";
 import { answeredQuestions, type FormAnswerRow, type FormQuestionRow } from "@/lib/form-answer-text";
@@ -386,7 +386,7 @@ function AdminCompletedCheckinSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-3xl p-0">
         <div className="mx-auto max-w-lg">
-          <SheetHeader className="min-h-0 border-b border-border px-5 py-4 text-left">
+          <SheetHeader className="min-h-0 border-b border-border py-4 pl-24 pr-5 text-left">
             <SheetTitle>{titleFor(taskType)}</SheetTitle>
             <p className="text-sm text-muted-foreground">Client submission</p>
           </SheetHeader>
@@ -509,7 +509,7 @@ function CheckinWizard({
     setSaving(true);
     try {
       const sent = (await submit({ data: { submissionId, answers } })) as { nutrition_submission_id?: string | null } | null;
-      playAppSound("success");
+      feedback("success");
       // Close right away — refresh and the AI recap happen in the background.
       onOpenChange(false);
       setStep(0);
@@ -1243,6 +1243,7 @@ export function CheckinAnswersSheet({
   taskType,
   role,
   submittedAt,
+  footer,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -1250,6 +1251,8 @@ export function CheckinAnswersSheet({
   taskType: MessengerCheckinTaskType;
   role: Role;
   submittedAt: string | null;
+  /** Actions pinned under the answers when it's opened outside the chat (Open in chat, Mark reviewed). */
+  footer?: ReactNode;
 }) {
   const get = useServerFn(getMessengerCheckin);
   const { data, isLoading } = useQuery({
@@ -1266,7 +1269,7 @@ export function CheckinAnswersSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-3xl p-0">
         <div className="mx-auto max-w-lg">
-          <SheetHeader className="min-h-0 border-b border-border px-5 py-4 text-left">
+          <SheetHeader className="min-h-0 border-b border-border py-4 pl-24 pr-5 text-left">
             <SheetTitle>{titleFor(taskType)}</SheetTitle>
             <p className="text-sm text-muted-foreground">
               {when ? `Submitted ${fmtDateTime(when)}` : "Submitted"}
@@ -1306,6 +1309,11 @@ export function CheckinAnswersSheet({
               </>
             )}
           </div>
+          {footer && (
+            <div className="sticky bottom-0 border-t border-border bg-background px-5 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3" data-checkin-sheet-actions>
+              {footer}
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>
@@ -1344,7 +1352,7 @@ export function FormRequestChatCard({
       const [{ data }, { data: form }, { data: asg }] = await Promise.all([
         db
           .from("nf_submissions")
-          .select("id, status, submitted_at, created_at, answers_updated_at")
+          .select("id, status, submitted_at, reviewed_at, created_at, answers_updated_at")
           .eq("form_id", formId)
           .eq("client_id", clientId)
           .order("created_at", { ascending: false })
@@ -1352,7 +1360,7 @@ export function FormRequestChatCard({
         db.from("nf_forms").select("form_type, allow_updates").eq("id", formId).maybeSingle(),
         db.from("nf_assignments").select("settings").eq("form_id", formId).eq("client_id", clientId).maybeSingle(),
       ]);
-      const subs = (data ?? []) as Array<{ id: string; status: string; submitted_at: string | null; created_at: string; answers_updated_at: string | null }>;
+      const subs = (data ?? []) as Array<{ id: string; status: string; submitted_at: string | null; reviewed_at: string | null; created_at: string; answers_updated_at: string | null }>;
       const keepsUpdating = !!form?.allow_updates;
       return {
         // The answer to THIS request is one sent after it, whenever its draft
@@ -1372,9 +1380,20 @@ export function FormRequestChatCard({
   const started = !!sub && sub.status === "in_progress";
   const isNutrition = formId === NUTRITION_FORM_ID;
   const heading = title || (isNutrition ? "Nutrition Update" : "Form");
+  const reviewed = !!sub && (!!(sub as any).reviewed_at || sub.status === "reviewed");
+  const [viewing, setViewing] = useState(false);
+  // The coach's line under the title: when it came in and whether it's been reviewed;
+  // before that, where it stands (never a nested status box).
+  const coachLine = isLoading
+    ? "Loading…"
+    : done
+      ? `${sub?.submitted_at ? `Sent ${fmtDateTime(sub.submitted_at)}` : "Sent"}`
+      : started
+        ? "They're filling it in"
+        : `Waiting on them${sentAt ? ` · sent ${fmtShortDate(sentAt)}` : ""}`;
   return (
     <>
-      <div className={cn(FORM_CARD, done && role === "admin" && "w-[min(82vw,400px)]")}>
+      <div className={cn(FORM_CARD, done && role === "admin" && "w-[min(82vw,400px)]")} data-form-request-card>
         <div className="flex items-start gap-3">
           <span className={cn(
             "grid h-9 w-9 shrink-0 place-items-center rounded-full",
@@ -1383,24 +1402,41 @@ export function FormRequestChatCard({
             {done ? <CheckCircle2 className="h-5 w-5" /> : <ClipboardCheck className="h-5 w-5" />}
           </span>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold">{heading}</div>
-            <div className={cn("mt-0.5 text-xs", FORM_MUTED)}>
-              {isLoading
-                ? "Loading…"
-                : ready && (done || started)
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 text-[15px] font-semibold leading-snug">{heading}</div>
+              {role === "admin" && done && !keepsUpdating && (
+                <span
+                  className={cn(
+                    "mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
+                    reviewed ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-blue-600/10 text-blue-700 dark:bg-blue-400/15 dark:text-blue-200",
+                  )}
+                  data-card-review-state
+                >
+                  {reviewed ? "Reviewed" : "To review"}
+                </span>
+              )}
+            </div>
+            <div className={cn("mt-0.5 text-[13px]", FORM_MUTED)}>
+              {role === "admin"
+                ? ready && (done || started)
                   ? readinessLine(ready.readiness)
-                  : done
-                    ? sub?.submitted_at ? `Submitted ${fmtDateTime(sub.submitted_at)}` : "Submitted"
-                    : started ? "In progress" : isNutrition ? "About 3–4 minutes" : status?.isMeet ? "Not started" : "A few minutes"}
+                  : coachLine
+                : isLoading
+                  ? "Loading…"
+                  : ready && (done || started)
+                    ? readinessLine(ready.readiness)
+                    : done
+                      ? sub?.submitted_at ? `Submitted ${fmtDateTime(sub.submitted_at)}` : "Submitted"
+                      : started ? "In progress" : isNutrition ? "About 3–4 minutes" : status?.isMeet ? "Not started" : "A few minutes"}
             </div>
             {(meetLineFor(ready?.facts ?? null) ?? sentMeetLine(status?.sentMeet)) && (
-              <div className={cn("mt-0.5 text-xs font-medium", FORM_MUTED)} data-card-meet>
+              <div className={cn("mt-0.5 text-[13px] font-medium", FORM_MUTED)} data-card-meet>
                 Competition: {meetLineFor(ready?.facts ?? null) ?? sentMeetLine(status?.sentMeet)}
               </div>
             )}
           </div>
         </div>
-        {note && !done && <div className={cn("mt-2 text-xs", FORM_MUTED)}>{note}</div>}
+        {/* The coach's note is the message's own words, right above the card (message-thread formCardSaysIt). */}
         {!isLoading && !done && role === "client" && (
           <Button
             className="mt-3 h-10 w-full bg-blue-600 font-semibold text-white hover:bg-blue-700"
@@ -1409,30 +1445,20 @@ export function FormRequestChatCard({
             {started ? "Continue" : isNutrition ? "Start nutrition update" : status?.isMeet ? "Start checklist" : "Start form"} <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         )}
-        {!isLoading && !done && role === "admin" && (
-          <div className="mt-3 rounded-xl bg-blue-600/10 px-3 py-2 text-xs font-medium text-blue-700 dark:bg-blue-400/15 dark:text-blue-200">
-            {started ? "Client is filling it out" : "Waiting for client"}
-          </div>
-        )}
         {done && role === "admin" && sub && ready && (keepsUpdating || status?.isMeet) && (
-          <div className="mt-3 space-y-2 rounded-xl bg-white/70 p-3 text-foreground dark:bg-blue-900/40" data-card-readiness>
-            <ReadinessSummary data={ready} />
-            <ChecklistAnswers data={ready} />
-            <a
-              href={`/admin/clients/${clientId}?tab=documents`}
-              className="flex h-10 w-full items-center justify-center rounded-md border border-blue-600/25 text-sm font-semibold text-blue-700 dark:border-blue-300/25 dark:text-blue-100"
-            >
-              Open in their profile <ChevronRight className="ml-1 h-4 w-4" />
-            </a>
-          </div>
+          <CriticalNeeds ready={ready} />
         )}
         {done && role === "admin" && sub && !(keepsUpdating || status?.isMeet) && (
-          <SubmittedFormAnswers
-            submissionId={sub.id}
-            formId={formId}
-            clientId={clientId}
-            isNutrition={isNutrition}
-          />
+          <SubmittedFormGlance submissionId={sub.id} formId={formId} isNutrition={isNutrition} clientId={clientId} />
+        )}
+        {done && role === "admin" && sub && (
+          <Button
+            className="mt-3 h-10 w-full bg-blue-600 font-semibold text-white hover:bg-blue-700"
+            onClick={() => setViewing(true)}
+            data-view-full-response
+          >
+            View full response <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
         )}
         {done && role === "client" && !keepsUpdating && (
           <div className="mt-3 rounded-xl bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-700">
@@ -1449,6 +1475,21 @@ export function FormRequestChatCard({
           </Button>
         )}
       </div>
+      {role === "admin" && viewing && sub && (
+        <Suspense fallback={null}>
+          <FormResponsesSheetLazy
+            formId={formId}
+            title={heading}
+            submissionId={sub.id}
+            open
+            onOpenChange={(v) => {
+              if (v) return;
+              setViewing(false);
+              qc.invalidateQueries({ queryKey: ["chat-form-request-status", formId] });
+            }}
+          />
+        </Suspense>
+      )}
       {role === "client" && open && (
         <ClientFormSheet
           formId={formId}
@@ -1477,17 +1518,35 @@ function sentMeetLine(m: { name?: string | null; date?: string | null } | null |
   return meetSummary({ meetName: m.name ?? null, meetDate: m.date ?? null } as MeetFacts);
 }
 
-/** How many answers show before "Show all". */
-const ANSWERS_PREVIEW = 6;
+/** How many answers the coach's card shows before "View full response". */
+const ANSWERS_PREVIEW = 3;
 
 type ChatPlan = { status: string; error: string | null; updated_at: string | null; applied_at: string | null } | null;
 
+/** The response viewer (Summary · Individual · Table), loaded the first time a coach opens one. */
+const FormResponsesSheetLazy = lazyWithRetry(() =>
+  import("@/components/forms/form-responses").then((m) => ({ default: m.FormResponsesSheet })),
+);
+
+/** A checklist kept up to date: only what's still critical, the rest is in the full response. */
+function CriticalNeeds({ ready }: { ready: NonNullable<ReturnType<typeof useFormReadiness>["data"]> }) {
+  const critical = ready.readiness.issues.filter((i) => i.kind !== "unconfirmed" && i.severity === "critical");
+  if (!critical.length) return null;
+  return (
+    <p className="mt-2 text-[13px] font-medium text-rose-700 dark:text-rose-300" data-card-critical>
+      Still need: {critical.map((i) => i.label).join(", ")}
+    </p>
+  );
+}
+
 /**
- * The coach's side of a submitted form in the chat: every answer, in the form's
- * order, and for the Nutrition Update the AI plan's state. Opening the chat
- * writes a plan that never got written (like the client's Nutrition panel).
+ * The coach's side of a sent form in the chat, at a glance: the competition
+ * plan's approval when it's that form, the AI plan's state for a Nutrition
+ * Update (opening the chat writes a plan that never got written, like the
+ * Nutrition panel), else the first few answers. Every answer is one tap away
+ * in the full response.
  */
-function SubmittedFormAnswers({
+function SubmittedFormGlance({
   submissionId,
   formId,
   clientId,
@@ -1500,26 +1559,26 @@ function SubmittedFormAnswers({
 }) {
   const qc = useQueryClient();
   const genFn = useServerFn(generateNutritionPlanFn);
-  const [showAll, setShowAll] = useState(false);
   const key = ["chat-form-answers", submissionId];
   const { data, isLoading, isError } = useQuery({
     queryKey: key,
     staleTime: 30_000,
     queryFn: async () => {
-      const { supabase } = await import("@/integrations/supabase/client");
       const db = supabase as any;
-      const [q, a, p] = await Promise.all([
+      const [q, a, p, f] = await Promise.all([
         db.from("nf_questions").select("id, label, order_index, question_type").eq("form_id", formId),
         db.from("nf_answers").select("question_id, value_text, value_number, value_json").eq("submission_id", submissionId),
         isNutrition
           ? db.from("nutrition_ai_plans").select("status, error, updated_at, applied_at").eq("submission_id", submissionId).maybeSingle()
           : Promise.resolve({ data: null }),
+        db.from("nf_forms").select("form_type").eq("id", formId).maybeSingle(),
       ]);
       if (q.error) throw q.error;
       if (a.error) throw a.error;
       return {
         rows: answeredQuestions((q.data ?? []) as FormQuestionRow[], (a.data ?? []) as FormAnswerRow[]),
         plan: (p.data ?? null) as ChatPlan,
+        competition: f.data?.form_type === "competition_strategy",
       };
     },
     refetchInterval: (query) => {
@@ -1541,9 +1600,6 @@ function SubmittedFormAnswers({
   }, [isNutrition, data, plan?.status, plan?.updated_at, submissionId]);
 
   const rows = data?.rows ?? [];
-  const shown = showAll ? rows : rows.slice(0, ANSWERS_PREVIEW);
-  const href = `/admin/clients/${clientId}?tab=${isNutrition ? "nutrition" : "documents"}`;
-
   const planLine = !isNutrition
     ? null
     : !plan || plan.status === "pending" || plan.status === "generating"
@@ -1554,67 +1610,55 @@ function SubmittedFormAnswers({
           ? { text: "AI plan applied to their targets", tone: "done" as const }
           : { text: "AI targets and meal plan are ready to review", tone: "done" as const };
 
+  if (isLoading) {
+    return (
+      <div className={cn("mt-2 flex items-center gap-2 text-[13px]", FORM_MUTED)}>
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading answers…
+      </div>
+    );
+  }
+  if (isError) return <div className={cn("mt-2 text-[13px]", FORM_MUTED)}>Couldn't load the answers here. Open the full response.</div>;
+
   return (
-    <div className="mt-3 space-y-3">
-      <CompetitionPlanSummary submissionId={submissionId} formId={formId} />
-      {isLoading ? (
-        <div className={cn("flex items-center gap-2 text-xs", FORM_MUTED)}>
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading answers…
-        </div>
-      ) : isError ? (
-        <div className={cn("text-xs", FORM_MUTED)}>Couldn't load the answers here. Open them in the profile.</div>
-      ) : rows.length === 0 ? (
-        <div className={cn("text-xs", FORM_MUTED)}>No answers were filled in.</div>
-      ) : (
-        <dl className="divide-y divide-blue-200/70 overflow-hidden rounded-xl bg-white/70 dark:divide-blue-400/15 dark:bg-blue-900/40">
-          {shown.map((r) => (
-            <div key={r.id} className="px-3 py-2">
-              <dt className={cn("text-[11px] leading-snug", FORM_MUTED)}>{r.label}</dt>
-              <dd className="mt-0.5 whitespace-pre-wrap break-words text-sm font-medium leading-snug">{r.value}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-
-      {rows.length > ANSWERS_PREVIEW && (
-        <button
-          type="button"
-          onClick={() => setShowAll((v) => !v)}
-          aria-expanded={showAll}
-          className="flex w-full items-center justify-center gap-1 rounded-lg py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-600/10 dark:text-blue-200 dark:hover:bg-blue-400/10"
-        >
-          {showAll ? "Show less" : `Show all ${rows.length} answers`}
-          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAll && "rotate-180")} />
-        </button>
-      )}
-
-      {planLine && (
-        <div
+    <div className="mt-2 space-y-2" data-card-glance>
+      {data?.competition ? (
+        <CompetitionPlanSummary submissionId={submissionId} formId={formId} compact />
+      ) : planLine ? (
+        <a
+          href={`/admin/clients/${clientId}?tab=nutrition`}
           className={cn(
-            "flex items-start gap-2 rounded-xl px-3 py-2 text-xs font-medium",
-            planLine.tone === "busy" && "bg-amber-500/10 text-amber-800 dark:text-amber-200",
-            planLine.tone === "error" && "bg-rose-500/10 text-rose-700 dark:text-rose-200",
-            planLine.tone === "done" && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+            "flex items-center gap-2 border-t border-blue-200/70 pt-2 text-[13px] font-medium dark:border-blue-400/15",
+            planLine.tone === "busy" && "text-amber-800 dark:text-amber-200",
+            planLine.tone === "error" && "text-rose-700 dark:text-rose-200",
+            planLine.tone === "done" && "text-emerald-700 dark:text-emerald-300",
           )}
+          data-card-plan
         >
           {planLine.tone === "busy" ? (
-            <Loader2 className="mt-px h-3.5 w-3.5 shrink-0 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
           ) : planLine.tone === "error" ? (
-            <Flag className="mt-px h-3.5 w-3.5 shrink-0" />
+            <Flag className="h-3.5 w-3.5 shrink-0" />
           ) : (
-            <Sparkles className="mt-px h-3.5 w-3.5 shrink-0" />
+            <Sparkles className="h-3.5 w-3.5 shrink-0" />
           )}
-          <span>{planLine.text}</span>
-        </div>
+          <span className="min-w-0 flex-1">{planLine.text}</span>
+          {planLine.tone !== "busy" && <ChevronRight className="h-4 w-4 shrink-0" />}
+        </a>
+      ) : rows.length === 0 ? (
+        <div className={cn("text-[13px]", FORM_MUTED)}>No answers were filled in.</div>
+      ) : (
+        <dl className="divide-y divide-blue-200/70 border-t border-blue-200/70 dark:divide-blue-400/15 dark:border-blue-400/15" data-card-answers>
+          {rows.slice(0, ANSWERS_PREVIEW).map((r) => (
+            <div key={r.id} className="py-1.5">
+              <dt className={cn("text-[12px] leading-snug", FORM_MUTED)}>{r.label}</dt>
+              <dd className="line-clamp-2 break-words text-[14px] font-medium leading-snug">{r.value}</dd>
+            </div>
+          ))}
+          {rows.length > ANSWERS_PREVIEW && (
+            <p className={cn("pt-1.5 text-[12px]", FORM_MUTED)}>+{rows.length - ANSWERS_PREVIEW} more in the full response</p>
+          )}
+        </dl>
       )}
-
-      <a
-        href={href}
-        className="flex h-10 w-full items-center justify-center rounded-md border border-blue-600/25 bg-white/70 text-sm font-semibold text-blue-700 hover:bg-white dark:border-blue-300/25 dark:bg-blue-900/40 dark:text-blue-100 dark:hover:bg-blue-900/60"
-      >
-        {isNutrition ? "Open AI plan" : "Open in their profile"}
-        <ChevronRight className="ml-1 h-4 w-4" />
-      </a>
     </div>
   );
 }

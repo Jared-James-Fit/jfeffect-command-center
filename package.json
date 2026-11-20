@@ -21,6 +21,7 @@
     "native:build": "bun run build && cap sync"
   },
   "dependencies": {
+    "@ai-sdk/openai": "3.0.70",
     "@ai-sdk/openai-compatible": "^2.0.49",
     "@capacitor/android": "^8.4.0",
     "@capacitor/app": "^8.1.0",
@@ -109,7 +110,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
-    "@lovable.dev/vite-tanstack-config": "2.26.5",
+    "@lovable.dev/vite-tanstack-config": "2.27.1",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

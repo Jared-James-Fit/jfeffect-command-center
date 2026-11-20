@@ -48,7 +48,7 @@ describe("a weight over the cap is asked about, never dropped", () => {
     expect(view).toContain("unitPickRef.current = { ...next, unit: next.unit, at: Date.now() };");
     expect(view).toContain("onSwitchUnit(next.unit);");
     expect(view).toContain("if (pick && pick.unit === unit && Date.now() - pick.at < UNIT_PICK_WAIT_MS) {");
-    expect(view).toContain("onSwitchUnit={!readonly && onUnitChange && !hideWeight ? handleUnitToggle : undefined}");
+    expect(view).toContain("onSwitchUnit={!readonly && onUnitChange && !hideWeight ? switchUnitNow : undefined}");
     expect(view).toContain("canSwitchUnit={!!onSwitchUnit}");
     // the pick is applied before the switch's own conversion, never converted
     const effect = view.slice(view.indexOf("const pick = unitPickRef.current;"), view.indexOf("const current = Number(load);"));

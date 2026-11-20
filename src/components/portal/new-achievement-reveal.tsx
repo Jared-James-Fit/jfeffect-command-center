@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { BadgeIcon } from "@/components/portal/achievements-card";
 import { RARITY_STYLE, markAchievementsSeen, type Rarity } from "@/lib/athlete-achievements";
 import { cn } from "@/lib/utils";
-import { playAppSound } from "@/lib/app-sounds";
+import { feedback } from "@/lib/feedback";
 
 type Row = { badge_key: string; client_id: string; athlete_badge_catalog: { name: string; icon_key: string; rarity: Rarity; description: string } | null };
 
@@ -32,29 +32,25 @@ export function NewAchievementReveal({ open }: { open: boolean }) {
   const shownKey = rows.map((r) => r.badge_key).join(",");
   useEffect(() => {
     if (!rows.length) return;
-    // A bell chime as the milestones appear (after the recap's sting has landed).
-    playAppSound("milestone");
+    // A bell chime and the strongest tap as the milestones appear (after the recap's sting has landed).
+    feedback("milestone");
     markAchievementsSeen(rows[0].client_id, rows.map((r) => r.badge_key))
       .then(() => qc.invalidateQueries({ queryKey: ["athlete-achievements-unseen"] }))
       .catch(() => {});
   }, [shownKey]);
   if (!rows.length) return null;
+  // Compact: one line a milestone (its badge, its name, how rare), its description on a long press / hover.
   return (
-    <section className="animate-in zoom-in-95 fade-in rounded-2xl border-2 border-primary/40 bg-primary/5 p-3 duration-700">
-      <div className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-primary">
-        {rows.length === 1 ? "New milestone unlocked" : `${rows.length} milestones unlocked`}
-      </div>
-      <div className="space-y-2">
+    <section className="animate-in fade-in rounded-2xl border border-border/80 bg-card px-3 py-2.5 duration-500" data-recap-milestone>
+      <div className="mb-1.5 text-[12px] font-medium text-muted-foreground">{rows.length === 1 ? "New milestone" : `${rows.length} new milestones`}</div>
+      <div className="space-y-1.5">
         {rows.map((r) => {
           const b = r.athlete_badge_catalog!;
           return (
-            <div key={r.badge_key} className="flex items-center gap-3">
-              <BadgeIcon icon={b.icon_key} rarity={b.rarity} />
-              <div className="min-w-0">
-                <div className="text-sm font-bold leading-tight">{b.name}</div>
-                <div className={cn("text-[10px] font-semibold uppercase tracking-wider", RARITY_STYLE[b.rarity]?.text)}>{RARITY_STYLE[b.rarity]?.label}</div>
-                <div className="truncate text-xs text-muted-foreground">{b.description}</div>
-              </div>
+            <div key={r.badge_key} className="flex min-w-0 items-center gap-2.5" title={b.description}>
+              <BadgeIcon icon={b.icon_key} rarity={b.rarity} size="sm" />
+              <span className="min-w-0 flex-1 truncate text-[14px] font-semibold leading-tight">{b.name}</span>
+              <span className={cn("shrink-0 text-[12px] font-medium", RARITY_STYLE[b.rarity]?.text)}>{RARITY_STYLE[b.rarity]?.label}</span>
             </div>
           );
         })}

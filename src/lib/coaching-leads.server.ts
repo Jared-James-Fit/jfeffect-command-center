@@ -95,18 +95,15 @@ async function writeLead(sb: any, row: Claimable, claimedAt: string, attempts: n
     const booking = await leadBookingUrl(sb, lead.booking_link_slug);
 
     const { voicePromptForClient } = await import("@/lib/coach-voice.functions");
-    const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
-    const { generateText } = await import("ai");
-    const [voice, { data: g }] = await Promise.all([
-      voicePromptForClient(sb, lead.client_id),
-      sb.from("global_ai_config").select("default_model").limit(1).maybeSingle(),
-    ]);
-    const modelId = g?.default_model || DEFAULT_AI_MODEL;
-    const t = await generateText({
-      model: createLovableAiGateway()(modelId),
+    const { askRoute } = await import("@/lib/ai/route-call.server");
+    const voice = await voicePromptForClient(sb, lead.client_id);
+    // the coach_write route (routing.ts): GPT-5 mini, then GPT-5.5, on the OpenAI key
+    const t = await askRoute("coach_write", {
       system: `${LEAD_REPLY_PROMPT}\n\nYOUR VOICE FOR THE TWO TEXTS (the read stays plain and clear):\n${voice}`,
       prompt: leadUserPrompt(lead, { bookingUrl: booking, instructions: row.instructions }),
-    });
+      timeoutMs: 60_000,
+    }, { sb });
+    const modelId = t.model;
     const parsed = parseLeadReply(t.text);
     if (!parsed) throw new Error("The AI's answer didn't read as a reply");
 

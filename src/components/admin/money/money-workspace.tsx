@@ -22,7 +22,7 @@ import { expenseCategory } from "@/lib/business-expense-categories";
 import { businessToday } from "@/lib/billing-schedule";
 import { RECEIPT_ACCEPT } from "@/lib/receipt-upload";
 import { comparisonFor, decodePeriod, elapsed, encodePeriod, periodFor, type CompareMode, type Period } from "@/lib/books/period";
-import { moneyFigures, periodTaxReserve, type LedgerFilter } from "@/lib/books/money-view";
+import { booksFirstDay, moneyFigures, periodTaxReserve, type LedgerFilter } from "@/lib/books/money-view";
 import { RECEIVABLES_KEY, useReceivables } from "./use-receivables";
 import { useBooksData } from "@/components/admin/finance/finance-ui";
 import { ExpenseDialog } from "@/components/admin/books/expense-dialog";
@@ -38,6 +38,7 @@ import { MoneyOverview } from "./money-overview";
 import { MoneyLedger } from "./money-ledger";
 import { MoneyTaxes } from "./money-taxes";
 import { MoneyReports } from "./money-reports";
+import { useScrollFade } from "@/hooks/use-scroll-fade";
 
 
 export type MoneyState = { view?: MoneyView; p?: string; cmp?: CompareMode };
@@ -83,7 +84,11 @@ export function MoneyWorkspace({ view, periodCode, compare = "previous", onState
     const settings = toTaxSettings(data.settings);
     const expenses = data.expenses.map(toExpenseEntry);
     const seen = elapsed(period, today);
-    const vs = comparisonFor(period, compare, today);
+    // Nothing to compare with before the books start: no "None in …" on every figure.
+    const asked = comparisonFor(period, compare, today);
+    const firstDay = booksFirstDay(data.revenue, expenses);
+    const vs = asked && (!firstDay || asked.end < firstDay) ? null : asked;
+    const noEarlier = !!asked && !vs;
     const figures = moneyFigures({ revenue: data.revenue, expenses, settings, range: seen });
     const prev = vs ? moneyFigures({ revenue: data.revenue, expenses, settings, range: vs }) : null;
     const reserve = periodTaxReserve({ revenue: data.revenue, expenses, settings, range: seen });
@@ -95,7 +100,7 @@ export function MoneyWorkspace({ view, periodCode, compare = "previous", onState
       expenses,
       taxPayments: data.taxPayments.map(toTaxPaymentEntry),
     });
-    return { data, settings, expenses, vs, figures, prev, reserve, snapshot };
+    return { data, settings, expenses, vs, noEarlier, figures, prev, reserve, snapshot };
   }, [books.data, period, compare, today]);
 
   const onFiles = async (files: FileList | null) => {
@@ -168,6 +173,9 @@ export function MoneyWorkspace({ view, periodCode, compare = "previous", onState
               <PeriodBar
                 period={period}
                 compare={compare}
+                vs={derived.vs}
+                noEarlier={derived.noEarlier}
+                showCompare={view === "overview" || view === "reports"}
                 today={today}
                 firstYear={firstYear}
                 onPeriod={(p) => onState({ p: encodePeriod(p) })}
@@ -234,9 +242,10 @@ export function MoneyWorkspace({ view, periodCode, compare = "previous", onState
 
 /** Overview · Transactions · Taxes · Reports as one row of words (the client tabs' style). */
 export function MoneyTabs({ view, onView }: { view: MoneyView; onView: (v: MoneyView) => void }) {
+  const { ref, style } = useScrollFade<HTMLDivElement>();
   return (
     <nav aria-label="Money" className="-mx-4 border-b border-border px-4 sm:mx-0 sm:px-0">
-      <div className="-mb-px flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div ref={ref} style={style} className="-mb-px flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {MONEY_VIEWS.map((t) => {
           const on = view === t.key;
           return (

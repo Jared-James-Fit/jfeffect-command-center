@@ -94,40 +94,101 @@ function safeStorage(): Storage | null {
 }
 
 /**
+ * Which way round to write the size: "landscape" (1920 × 1080, the camera's own
+ * way round) or "portrait" (1080 × 1920). Browsers disagree on which one they
+ * read a phone held upright against, so the camera checks the picture it gets
+ * and remembers what worked on this phone (`askOrder`, `pictureFits`).
+ */
+export type AskShape = "landscape" | "portrait";
+
+/** A phone's full screen, a reel's and a TikTok's: 9:16 held upright. */
+export const SCREEN_PICTURE = 9 / 16;
+/** How far from 9:16 a picture can be and still fill the screen (1080 × 1920 is exact; 3:4 is 0.75). */
+const SHAPE_SLACK = 0.03;
+
+/**
  * What to ask the camera for. Ideal values, never exact: a phone that can't
  * do 4K60 gives the nearest it can, and the screen then says what it got
- * (`describeTrack`). Width / height are the landscape sizes: phones turn them
- * to the way they're held.
+ * (`describeTrack`). The shape is asked for as well (16:9 the camera's way,
+ * 9:16 upright), so a phone never settles on a 4:3 picture that would play
+ * boxed in instead of filling the screen.
  */
-export function videoConstraints(s: Pick<FilmSettings, "quality" | "fps" | "facing">, deviceId?: string | null): MediaTrackConstraints {
+export function videoConstraints(s: Pick<FilmSettings, "quality" | "fps" | "facing">, deviceId?: string | null, shape: AskShape = "landscape"): MediaTrackConstraints {
   const q = FILM_QUALITIES[s.quality];
+  const portrait = shape === "portrait";
   return {
     ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: s.facing } }),
-    width: { ideal: q.long },
-    height: { ideal: q.short },
+    width: { ideal: portrait ? q.short : q.long },
+    height: { ideal: portrait ? q.long : q.short },
+    aspectRatio: { ideal: portrait ? q.short / q.long : q.long / q.short },
     frameRate: { ideal: s.fps },
   };
 }
 
 /** The asks in order: everything, then without the frame rate, then just the camera. */
-export function constraintLadder(s: Pick<FilmSettings, "quality" | "fps" | "facing">, deviceId?: string | null): MediaTrackConstraints[] {
-  const full = videoConstraints(s, deviceId);
+export function constraintLadder(s: Pick<FilmSettings, "quality" | "fps" | "facing">, deviceId?: string | null, shape: AskShape = "landscape"): MediaTrackConstraints[] {
+  const full = videoConstraints(s, deviceId, shape);
   const { frameRate: _fr, ...noFps } = full;
   const plain: MediaTrackConstraints = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: s.facing };
   return [full, noFps, plain];
 }
 
+/** How far a picture is from filling the screen the way the phone is held (0 = exactly 9:16, or 16:9 on its side). */
+export function pictureMiss(w: number, h: number, upright: boolean): number {
+  if (!w || !h) return 0;
+  const tallWay = h >= w;
+  const ratio = Math.min(w, h) / Math.max(w, h);
+  // the wrong way round is as far off as it gets
+  if (tallWay !== upright) return 1 + Math.abs(ratio - SCREEN_PICTURE);
+  return Math.abs(ratio - SCREEN_PICTURE);
+}
+
+/** The picture fills the screen like a reel: 9:16 upright (16:9 with the phone on its side). Unknown counts as fine. */
+export function pictureFits(w: number, h: number, upright: boolean): boolean {
+  return pictureMiss(w, h, upright) <= SHAPE_SLACK;
+}
+
 /**
- * How hard to record (bits a second). Close to what the phone's own camera
- * uses for the same picture (an iPhone films 1080p30 at ~10 Mbps in H.264,
- * 4K30 at ~25+): the clip is cut and shrunk for where it goes later, so the
- * recording itself should be clean.
+ * Which way to write the size, in order to try. On its side, always the
+ * camera's own way. Upright, what worked on this phone before first.
+ */
+export function askOrder(upright: boolean, remembered: AskShape | null): AskShape[] {
+  if (!upright) return ["landscape"];
+  return remembered === "portrait" ? ["portrait", "landscape"] : ["landscape", "portrait"];
+}
+
+/** Where this phone's way of asking is kept (per device: browsers differ). */
+export const FILM_ASK_KEY = "jf-film-camera-ask-v1";
+
+export function readFilmAsk(storage: Pick<Storage, "getItem"> | null = safeStorage()): AskShape | null {
+  try {
+    const v = storage?.getItem(FILM_ASK_KEY);
+    return v === "portrait" || v === "landscape" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveFilmAsk(shape: AskShape, storage: Pick<Storage, "setItem"> | null = safeStorage()): void {
+  try {
+    storage?.setItem(FILM_ASK_KEY, shape);
+  } catch {
+    /* private mode: it checks again next time */
+  }
+}
+
+/**
+ * How hard to record (bits a second). Clean, close to what a phone's own
+ * camera gives the same picture (an iPhone films 1080p30 at ~10 Mbps in
+ * H.264, 4K30 at ~25+), and sized so the usual set goes straight into the
+ * Crew film whole: 1080p30 at ~6 Mbps keeps a minute under a workout post's
+ * 50 MB, with no copy to wait for (a 4K clip is for saving to Photos).
  */
 export function recorderBitrate(width: number, height: number, fps: number): number {
   const px = Math.max(1, width) * Math.max(1, height);
   const rate = Math.min(Math.max(fps || 30, 15), 60);
-  // bits per pixel: a little less as the picture grows (4K compresses better)
-  const bpp = px >= 3840 * 2160 * 0.9 ? 0.1 : px >= 1920 * 1080 * 0.9 ? 0.135 : 0.17;
+  // bits per pixel: less for a big picture (it compresses better)
+  const bpp = px >= 1920 * 1080 * 0.9 ? 0.1 : 0.17;
   return Math.round(Math.min(40_000_000, Math.max(4_000_000, px * rate * bpp)));
 }
 

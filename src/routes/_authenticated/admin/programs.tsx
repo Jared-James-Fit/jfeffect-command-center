@@ -4,6 +4,6 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 // Was only ever a "coming soon" placeholder; programs live in Programming.
 export const Route = createFileRoute("/_authenticated/admin/programs")({
   beforeLoad: () => {
-    throw redirect({ to: "/admin/programming", replace: true });
+    throw redirect({ to: "/admin/programming", search: { tab: "programs" }, replace: true });
   },
 });

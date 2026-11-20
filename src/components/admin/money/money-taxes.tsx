@@ -107,7 +107,7 @@ export function MoneyTaxes() {
             <Line strong label="Put aside from this period" value={`~${money(m.reserve.minor)}`} sub="What this period's profit adds to the year's estimate. Add up a year's periods and you get its total." />
             {!corp ? (
               <p className="mt-1 text-[12px] text-muted-foreground">
-                Your next dollar of profit is taxed about {pctWord(s.incomeTax.projected.marginalRate)} (income tax + CPP, {s.incomeTax.ytd.ratesYear} rates{s.incomeTax.ytd.ratesExact ? "" : ", the latest on file"}). Every $100 of coaching you sell from here: keep {reg ? "the $5 GST and " : ""}about ${Math.round(s.setAsideRate * 100)}.
+                Your next dollar of profit is taxed about {pctWord(s.incomeTax.projected.marginalRate)} (income tax + CPP, {s.incomeTax.ytd.ratesYear} rates{s.incomeTax.ytd.ratesExact ? "" : ", the latest on file"}). Of every $100 of coaching you sell from here, put aside {reg ? "the $5 GST and " : ""}about ${Math.round(s.setAsideRate * 100)} for tax.
               </p>
             ) : null}
             <div className="mt-2">

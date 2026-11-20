@@ -314,7 +314,7 @@ function compareRow(
 ): RowCompare {
   const repR = repRange(row.reps_text);
   const rpeR = rpeRange(row.rpe);
-  const loadKg = toNum(row.load_kg) ?? (toNum(row.load_lb) != null ? round((toNum(row.load_lb) as number) / LB_PER_KG, 2) : null);
+  const loadKg = prescribedFixedKg(row);
   const working = sets.filter((s) => s.working);
   const doneSets = sets.filter((s) => s.done);
   const prescribed = prescribedSetCount(row, setBlocks);
@@ -373,4 +373,24 @@ function compareRow(
     topSet: top,
     clientNotes,
   };
+}
+
+/**
+ * The fixed load a row prescribes, in kg, or null when it prescribes none.
+ * A % row's load columns aren't its prescription (the % is) unless the coach
+ * overrode it with an exact load; old builders left a cached number there
+ * (Dwayne's June–August 70% squats held "455", the lb load, in load_kg, which
+ * the brief read as a 1,003 lb prescription). The number is read from the
+ * column of the row's unit, never a stale one left in the other.
+ */
+export function prescribedFixedKg(row: Pick<RawRow, "percentage" | "percentage_basis" | "load_kg" | "load_lb" | "load_unit" | "manual_override">): number | null {
+  const basis = String(row.percentage_basis ?? "");
+  const pctRow = row.percentage != null && basis !== "" && basis !== "manual" && basis !== "none";
+  if (pctRow && row.manual_override !== true) return null;
+  const kg = toNum(row.load_kg);
+  const lb = toNum(row.load_lb);
+  const fromLb = lb != null ? round(lb / LB_PER_KG, 2) : null;
+  if (row.load_unit === "lb" && fromLb != null) return fromLb;
+  if (row.load_unit === "kg" && kg != null) return kg;
+  return kg ?? fromLb;
 }

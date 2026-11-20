@@ -366,16 +366,21 @@ describe("authorization fixes", () => {
 });
 
 describe("the migration", () => {
-  const sql = read("supabase/migrations/20270403093000_security_hardening.sql");
+  const sql = read("supabase/migrations/20270422090000_security_hardening.sql");
   it("takes the worker and job functions away from signed-in users and visitors", () => {
     for (const fn of ["claim_scheduled_messages(text, integer, integer)", "finalize_message_send(uuid, text, text)", "consume_session_for_pt(uuid)", "crm_last_contacted_map(uuid[])", "xp_client_for_user(uuid)", "grant_sessions_due_today()"]) {
       expect(sql).toContain(`'public.${fn}'`);
     }
     expect(sql).toContain("REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon, authenticated");
   });
-  it("narrows the powerlifting records, the avatars bucket and the legal records", () => {
-    expect(sql).toContain('DROP POLICY IF EXISTS "Authenticated read powerlifting athletes"');
-    expect(sql).toContain('DROP POLICY IF EXISTS "Auth view avatars" ON storage.objects;');
+  it("narrows the legal records, and leaves the athlete records and avatars to main's own rules", () => {
+    // 20270412100000_tighten_open_read_rules.sql (live) narrowed those two first;
+    // a second, broader policy here would loosen them again (policies are OR'd).
+    expect(sql).not.toMatch(/CREATE POLICY[^;]*ON public\.powerlifting_(athletes|coaching_periods)/);
+    expect(sql).not.toMatch(/CREATE POLICY[^;]*ON storage\.objects/);
+    expect(read("supabase/migrations/20270412100000_tighten_open_read_rules.sql")).toContain(
+      'DROP POLICY IF EXISTS "Auth view avatars" ON storage.objects;',
+    );
     expect(sql).toContain('DROP POLICY IF EXISTS "Users insert their own acceptances"');
     expect(sql).toContain("CREATE TRIGGER trg_legal_acceptance_stamp");
     expect(sql).toContain("CREATE TRIGGER trg_legal_acceptance_keep");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ATHLETE_HABIT_MIN_LOGS, athleteHabitUnit, resolveWorkoutRowUnits } from "@/lib/workout-unit-resolution";
+import { ATHLETE_HABIT_MIN_LOGS, athleteHabitUnit, readUnitHabitHint, recentUnit, resolveWorkoutRowUnits, writeUnitHabitHint } from "@/lib/workout-unit-resolution";
 
 const pausedBench = { id: "ex-pb", is_competition_lift: false, competition_lift_type: null, default_load_unit: null };
 
@@ -196,5 +196,135 @@ describe("a lift nobody has logged opens in the athlete's own unit, not the kg d
     expect(view).toContain("athleteChosenUnit: (client as any)?.weight_unit_confirmed_at ? (client as any)?.preferred_weight_unit ?? null : null,");
     expect(view).toContain('.select("id, full_name, preferred_weight_unit, weight_unit_confirmed_at")');
     expect(readFileSync("src/lib/workout-context/client-adapter.ts", "utf8")).toContain("weight_unit_confirmed_at: (data as any).weight_unit_confirmed_at ?? null,");
+  });
+});
+
+describe("what the athlete logs beats the account's unit (Jared McIntyre, Nov 16 2026)", () => {
+  // His account said kg (stamped by a migration, never chosen) while 148 of his
+  // last 150 loaded sets were lb: every exercise he'd never logged opened in kg.
+  const adduction = { id: "ex-add", competition_lift_type: null, movement_family: "accessory", default_load_unit: null };
+  const pullUp = { id: "ex-pu", competition_lift_type: null, movement_family: "accessory", default_load_unit: "lb" };
+  const rows = [
+    { id: "a", exercise_id: "ex-add", exercises: adduction, load_unit: null },
+    { id: "p", exercise_id: "ex-pu", exercises: pullUp, load_unit: null },
+  ];
+  const log = (unit: string, family = "accessory", load = 100) =>
+    ({ actual_load_unit: unit, actual_load: load, pl_exercise_rows: { exercises: { movement_family: family } } });
+  const lbHabit = [...Array.from({ length: 148 }, () => log("lb")), log("kg"), log("kg")];
+
+  it("a new accessory opens in lb for an lb lifter whose account says kg", () => {
+    const units = resolveWorkoutRowUnits({
+      rows, prefRows: [], historyRows: [], familyHistoryRows: lbHabit, athleteChosenUnit: "kg", overrides: {},
+    });
+    expect(units).toEqual({ "row:a": "lb", "row:p": "lb" });
+  });
+
+  it("the account's unit still decides when the logs show no habit", () => {
+    const mixed = [...Array.from({ length: 6 }, () => log("lb")), ...Array.from({ length: 4 }, () => log("kg"))];
+    expect(resolveWorkoutRowUnits({
+      rows, prefRows: [], historyRows: [], familyHistoryRows: mixed, athleteChosenUnit: "kg", overrides: {},
+    })["row:a"]).toBe("kg");
+  });
+
+  it("a kg lifter's habit beats an lb account the same way", () => {
+    const kgHabit = Array.from({ length: 20 }, () => log("kg"));
+    expect(resolveWorkoutRowUnits({
+      rows, prefRows: [], historyRows: [], familyHistoryRows: kgHabit, athleteChosenUnit: "lb", overrides: {},
+    })["row:p"]).toBe("kg");
+  });
+
+  it("before the logs load, the habit last read on this phone paints first", () => {
+    const loading = { rows, prefRows: [], historyRows: [], athleteChosenUnit: "kg" as const, overrides: {} };
+    expect(resolveWorkoutRowUnits({ ...loading, habitHint: "lb" })["row:a"]).toBe("lb");
+    // no hint yet: the account's unit, as before
+    expect(resolveWorkoutRowUnits({ ...loading, habitHint: null })["row:a"]).toBe("kg");
+    // once the logs are in they decide, whatever the hint said
+    expect(resolveWorkoutRowUnits({ ...loading, habitHint: "kg", familyHistoryRows: lbHabit })["row:a"]).toBe("lb");
+  });
+
+  it("the hint is kept per athlete on the phone", () => {
+    const g = globalThis as any;
+    const before = g.localStorage;
+    const mem = new Map<string, string>();
+    g.localStorage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) };
+    try {
+      writeUnitHabitHint("client-1", "lb");
+      expect(readUnitHabitHint("client-1")).toBe("lb");
+      expect(readUnitHabitHint("client-2")).toBeNull();
+      writeUnitHabitHint("client-1", null);
+      expect(readUnitHabitHint("client-1")).toBeNull();
+    } finally {
+      g.localStorage = before;
+    }
+    // no storage at all (a private window): nothing breaks, no hint
+    expect(readUnitHabitHint("client-1")).toBeNull();
+  });
+
+  it("a set with no weight never decides the unit (Hanging Leg Raises saved as 0 kg)", () => {
+    const units = resolveWorkoutRowUnits({
+      rows: [rows[0]], prefRows: [], familyHistoryRows: lbHabit, overrides: {},
+      historyRows: [{ actual_load_unit: "kg", actual_load: 0, pl_exercise_rows: { exercise_id: "ex-add" } }],
+    });
+    expect(units["row:a"]).toBe("lb");
+  });
+
+  it("a toggle saved on the exercise still wins over the habit", () => {
+    expect(resolveWorkoutRowUnits({
+      rows, prefRows: [{ exercise_id: "ex-add", unit: "kg" }], historyRows: [], familyHistoryRows: lbHabit, overrides: {},
+    })["row:a"]).toBe("kg");
+  });
+});
+
+describe("an exercise follows its newest logs, never a vote over a mixed window", () => {
+  // Jared's Competition Deadlift: 8 kg sets from October under 4 lb sets from
+  // November; a majority vote over the window put the card back in kg.
+  const compDeadlift = { id: "ex-cdl", competition_lift_type: "deadlift", is_competition_lift: true, movement_family: "deadlift" };
+  const rows = [{ id: "dl", exercise_id: "ex-cdl", exercises: compDeadlift, load_unit: null }];
+  const h = (unit: string) => ({ actual_load_unit: unit, actual_load: 200, pl_exercise_rows: { exercise_id: "ex-cdl" } });
+
+  it("moved from kg to lb: lb", () => {
+    const historyRows = [h("lb"), h("lb"), h("lb"), h("lb"), ...Array.from({ length: 8 }, () => h("kg"))];
+    expect(resolveWorkoutRowUnits({ rows, prefRows: [], historyRows, overrides: {} })["row:dl"]).toBe("lb");
+  });
+
+  it("the family follows its newest logs too", () => {
+    const f = (unit: string) => ({ actual_load_unit: unit, actual_load: 200, pl_exercise_rows: { exercises: { movement_family: "deadlift" } } });
+    const familyHistoryRows = [f("lb"), f("lb"), f("lb"), f("lb"), ...Array.from({ length: 10 }, () => f("kg"))];
+    expect(resolveWorkoutRowUnits({ rows, prefRows: [], historyRows: [], familyHistoryRows, overrides: {} })["row:dl"]).toBe("lb");
+  });
+
+  it("recentUnit: the newest few decide, a tie goes to the newest", () => {
+    expect(recentUnit(["lb", "kg", "kg", "kg", "kg"], 3)).toBe("kg");
+    expect(recentUnit(["lb", "lb", "kg", "kg", "kg"], 3)).toBe("lb");
+    expect(recentUnit(["kg", "lb"], 3)).toBe("kg");
+    expect(recentUnit([null, "lb"], 3)).toBe("lb");
+    expect(recentUnit([], 3)).toBeNull();
+  });
+});
+
+describe("the workout reads what decides a card's unit on every day", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { readFileSync } = require("node:fs") as typeof import("node:fs");
+  const view = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+  const block = view.slice(view.indexOf('queryKey: ["client-lift-family-unit-history"'), view.indexOf("// Map exercise_id -> resolved unit"));
+
+  it("the habit is read on accessory days too, not only with a squat / bench / deadlift", () => {
+    expect(block).toContain("enabled: secondaryHydrationReady && !!client?.id,");
+    expect(view).not.toContain("hasMainLiftRow");
+  });
+
+  it("only sets with a weight are read, and the reads are kept on the phone", () => {
+    const history = view.slice(view.indexOf('queryKey: ["client-exercise-unit-history"'), view.indexOf('queryKey: ["client-lift-family-unit-history"'));
+    expect(history).toContain('.gt("actual_load", 0)');
+    expect(history).toContain("gcTime: UNIT_CACHE_MS");
+    expect(block).toContain('.gt("actual_load", 0)');
+    expect(block).toContain("gcTime: UNIT_CACHE_MS");
+  });
+
+  it("the card's switch shows both units, the one in use checked", () => {
+    const sw = view.slice(view.indexOf("function UnitSwitch("));
+    expect(sw).toContain('role="radiogroup"');
+    expect(sw).toContain('(["kg", "lb"] as const).map(');
+    expect(sw).toContain("aria-checked={on}");
   });
 });

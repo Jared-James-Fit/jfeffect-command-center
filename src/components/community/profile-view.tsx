@@ -85,24 +85,37 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
   return (
     <div>
       <div className="flex items-center gap-4">
-        {/* Your own photo: tap to add / change. Community-only, never your account photo. */}
+        {/* The photo: a tap opens it big (photo-viewer.tsx); your own changes from the camera badge, or a tap on the circle while there's none. Community-only, never your account photo. */}
         <div className="flex shrink-0 flex-col items-center gap-1">
-          <button
-            type="button"
-            disabled={!profile.is_me || setAvatar.isPending}
-            onClick={() => photoRef.current?.click()}
-            className="relative rounded-full bg-[linear-gradient(135deg,#ffb054,#ef3340)] p-[3px] disabled:cursor-default"
-            aria-label={profile.is_me ? (profile.author.avatar_url ? "Change your community photo" : "Add a community photo") : undefined}
-          >
+          <div className="relative rounded-full bg-[linear-gradient(135deg,#ffb054,#ef3340)] p-[3px]">
             <span className={cn("block rounded-full bg-background p-[2px]", setAvatar.isPending && "animate-pulse")}>
-              <UserAvatar src={profile.author.avatar_url} name={profile.author.name} size={78} expandable={false} />
+              {profile.is_me && !profile.author.avatar_url ? (
+                <button
+                  type="button"
+                  disabled={setAvatar.isPending}
+                  onClick={() => photoRef.current?.click()}
+                  className="block rounded-full"
+                  aria-label="Add a community photo"
+                >
+                  <UserAvatar src={null} name={profile.author.name} size={78} expandable={false} />
+                </button>
+              ) : (
+                <UserAvatar src={profile.author.avatar_url} name={profile.author.name} size={78} />
+              )}
             </span>
             {profile.is_me && (
-              <span className="absolute -bottom-0.5 -right-0.5 grid h-7 w-7 place-items-center rounded-full border-2 border-background bg-foreground text-background">
+              <button
+                type="button"
+                disabled={setAvatar.isPending}
+                onClick={() => photoRef.current?.click()}
+                data-profile-photo-change
+                aria-label={profile.author.avatar_url ? "Change your community photo" : "Add a community photo"}
+                className="absolute -bottom-0.5 -right-0.5 grid h-7 w-7 place-items-center rounded-full border-2 border-background bg-foreground text-background after:absolute after:-inset-2 after:content-[''] active:scale-95"
+              >
                 <Camera className="h-3.5 w-3.5" />
-              </span>
+              </button>
             )}
-          </button>
+          </div>
           {profile.is_me && !profile.author.avatar_url && <span className="text-[11px] font-bold text-primary">Add photo</span>}
           {profile.is_me && profile.author.avatar_url && (
             <button type="button" disabled={setAvatar.isPending} className="text-[11px] font-semibold text-muted-foreground" onClick={() => setAvatar.mutate(null, { onError: (e: any) => toast.error(e?.message ?? "Couldn't remove it") })}>

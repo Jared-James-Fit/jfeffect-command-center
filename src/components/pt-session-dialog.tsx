@@ -30,7 +30,7 @@ import {
   AdjustPtCreditDialog, CancelPtSessionDialog, DeletePtSessionDialog, NoShowPtDialog,
 } from "@/components/pt-session-manage-dialogs";
 import { BookingTypeEditor } from "@/components/booking/booking-type-editor";
-import { creditDefaultFor } from "@/lib/booking-types";
+import { CALL_LENGTHS, creditDefaultFor, durationChoices, durationLabel, isCallType } from "@/lib/booking-types";
 import { addMinutesToTime, cardAccent, fmtDuration, type BookingCard } from "@/lib/booking-cards";
 import { addDaysISO, deviceTodayISO } from "@/lib/schedule-time";
 import { ConflictNotice, useConflictCheck } from "@/components/schedule/use-conflict-check";
@@ -313,7 +313,8 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
                   <span className={`absolute inset-y-0 left-0 w-1 ${accent.bar}`} />
                   <p className="text-sm font-bold break-words">{card.name}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground break-words">
-                    {fmtDuration(card.duration_minutes)}{card.location ? ` · ${card.location}` : ""}
+                    {durationChoices(card as any).length > 1 ? durationLabel(card as any) : fmtDuration(card.duration_minutes)}
+                    {card.location ? ` · ${card.location}` : ""}
                   </p>
                   <div className="mt-1.5">
                     <Badge
@@ -354,6 +355,20 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
   };
 
   const isNewBooking = !form.id;
+  // A call picks its length in a tap (15 · 30 · 45 · 60, or its booking type's own lengths).
+  const callLengths: number[] = isCallType(form)
+    ? (() => {
+        const card = form.booking_card_id ? allCards.find((c) => c.id === form.booking_card_id) : undefined;
+        const own = card ? durationChoices(card as any) : [];
+        return own.length > 1 ? own : [...CALL_LENGTHS];
+      })()
+    : [];
+  const currentLength = (() => {
+    const [sh, sm] = String(form.start_time ?? "").slice(0, 5).split(":").map(Number);
+    const [eh, em] = String(form.end_time ?? "").slice(0, 5).split(":").map(Number);
+    const n = eh * 60 + em - (sh * 60 + sm);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
   const bookingCount = isNewBooking ? previewDates.length : 0;
   const willReserve = (tracking || hasCredits) && isNewBooking && form.status === "Scheduled" ? bookingCount : 0;
   const overbook = willReserve > remaining;
@@ -620,6 +635,33 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
               <Input type="time" value={form.end_time} onChange={(e) => set("end_time", e.target.value)} />
             </div>
           </div>
+          {callLengths.length > 0 && (
+            <div className="md:col-span-2" data-call-length>
+              <Label>Length</Label>
+              <div className="mt-1 flex flex-wrap gap-1.5" role="radiogroup" aria-label="Call length">
+                {callLengths.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    role="radio"
+                    aria-checked={currentLength === n}
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        _duration: n,
+                        end_time: addMinutesToTime(String(form.start_time).slice(0, 5), n),
+                      })
+                    }
+                    className={`h-9 min-w-[4.25rem] rounded-full border px-3 text-sm font-semibold tabular-nums ${
+                      currentLength === n ? "border-foreground bg-foreground text-background" : "border-border text-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    {n} min
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="md:col-span-2">
             <Label>Location</Label>
             <Input value={form.location} onChange={(e) => set("location", e.target.value)} />

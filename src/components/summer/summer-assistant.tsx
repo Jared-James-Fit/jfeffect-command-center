@@ -1,8 +1,8 @@
 /**
- * Cleo's chat in admin, with no floating button of her own: she opens from
- * her row in Messages (tap to type, the mic to talk), ⌘/Ctrl+Shift+S,
- * "/admin#cleo" (her approval and decision pushes) and window events other
- * screens use to open her ("summer:open", "summer:toggle", "summer:close";
+ * Cleo's chat in admin, with no floating button of its own: it opens from
+ * Cleo's row in Messages (tap to type, the mic to talk), ⌘/Ctrl+Shift+S,
+ * "/admin#cleo" (Cleo's approval and decision pushes) and window events other
+ * screens use to open it ("summer:open", "summer:toggle", "summer:close";
  * detail { year?, dictate? }).
  *
  * Admin only; mounted once in the admin layout.
@@ -15,11 +15,11 @@ import { getSummerProfile } from "@/lib/business-books.functions";
 import { summerSpeaker } from "@/lib/summer-speaker";
 import { SummerChat } from "@/components/admin/books/summer-chat";
 
-/** `dictate`: open straight into listening (the mic on her row in Messages). */
+/** `dictate`: open straight into listening (the mic on Cleo's row in Messages). */
 export type SummerOpenDetail = { year?: number; dictate?: boolean };
 
 export function openSummer(detail: SummerOpenDetail = {}) {
-  // Called from a tap: unlock audio now so her first spoken reply can autoplay.
+  // Called from a tap: unlock audio now so the first spoken reply can autoplay.
   if (detail.dictate) summerSpeaker().unlock();
   try {
     window.dispatchEvent(new CustomEvent<SummerOpenDetail>("summer:open", { detail }));
@@ -80,7 +80,7 @@ export function SummerAssistant() {
     };
   }, [show]);
 
-  // "/admin#cleo" (Cleo's approval and decision pushes) opens her chat.
+  // "/admin#cleo" (Cleo's approval and decision pushes) opens the chat.
   useEffect(() => {
     if (hash !== "cleo" && hash !== "#cleo") return;
     setOpen(true);
@@ -92,7 +92,7 @@ export function SummerAssistant() {
     }
   }, [hash, qc]);
 
-  // Year from Taxes & Books applies while she's open from there; reset after.
+  // Year from Taxes & Books applies while the chat is open from there; reset after.
   useEffect(() => {
     if (!open) setYear(undefined);
   }, [open]);

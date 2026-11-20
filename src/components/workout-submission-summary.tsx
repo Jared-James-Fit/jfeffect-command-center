@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles, Medal, Share2, Download } from "lucide-react";
+import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles, Medal, Share2, Download, Info } from "lucide-react";
 import { StudioShell } from "@/components/community/studio-chunks";
-import type { WorkoutSummary } from "@/lib/workout-summary";
+import { explainWorkoutScore, type WorkoutSummary } from "@/lib/workout-summary";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { PlanCheck } from "@/lib/workouts/plan-vs-actual";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -17,14 +18,17 @@ import {
 } from "@/lib/workout-takeaways";
 import type { WorkoutPoints, WorkoutRecords } from "@/lib/training-records";
 import { WorkoutPointsCard } from "@/components/records/workout-points-card";
-import { SCOPE_LABEL, formatLoad, formatTonnage, repRecordLabel, tonnageRecordLabel, topScope, weightRecordLabel } from "@/lib/training-records";
+import { dualTotal, recordedLoad } from "@/lib/dual-weight";
+import { SCOPE_LABEL, repRecordLabel, tonnageRecordLabel, topScope, weightRecordLabel } from "@/lib/training-records";
 import { drawWorkoutStory, type StoryRecord } from "@/lib/workout-story-card";
-import { NewRecordsSection, TonnageStat, recordsHeadline } from "@/components/records/training-records";
+import { NewRecordsSection, TonnageStat } from "@/components/records/training-records";
+import { headlineFromRecords } from "@/lib/community";
 import { RecapPostFooter } from "@/components/community/recap-post";
 import { WorkoutFilmRow } from "@/components/workout/shared/workout-film";
 import { PhoneCopyReminder } from "@/components/workout-day/set-video-phone-copy";
-import { usePublicSessionTitle } from "@/lib/community.queries";
+import { useCompletionPreview, usePublicSessionTitle } from "@/lib/community.queries";
 import { SoundToggleButton } from "@/components/sound-toggle";
+import { feedback } from "@/lib/feedback";
 
 // The share studio (camera, cards, upload) is only fetched the first time
 // someone taps Share workout, so the recap itself stays light.
@@ -55,6 +59,11 @@ type Props = {
   athleteName?: string | null;
   /** Athlete's preferred unit for loads and tonnage. */
   displayUnit?: "kg" | "lb";
+  /**
+   * The unit each logged set was typed in, by set id: a record reads in it
+   * (its other unit beside it), whatever the account's unit says.
+   */
+  setUnit?: (setId: string) => "kg" | "lb" | null;
   /** Prescribed cardio status for the same day, when there is one. */
   cardio?: CardioTakeawayInput;
   /**
@@ -69,13 +78,18 @@ type Props = {
   onClose?: () => void;
 };
 
-export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", cardio, completionId, dayId, onClose }: Props) {
+export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", setUnit, cardio, completionId, dayId, onClose }: Props) {
   // Client workouts use the scope-aware server records; the legacy session PR
   // list only remains for surfaces without them (memberships).
   const usesRecords = records !== undefined;
   const prList = usesRecords ? [] : prs ?? [];
   const recordCount = (records?.records?.length ?? 0) + (records?.load_records?.length ?? 0) + (tonnageRecordLabel(records?.tonnage) ? 1 : 0);
-  const recordHeadline = recordsHeadline(records);
+  // The PR this workout leads with (headlinePr: an all-time PR at 10 reps or fewer on the session's
+  // main lift, or on a barbell squat / bench / deadlift). Only it gets the trophy, the PR headline and
+  // the full sting; every other record is still listed under New records, just not shouted.
+  const { data: shareStats } = useCompletionPreview(completionId ?? null, open && !!completionId);
+  const lead = usesRecords ? headlineFromRecords(records, shareStats?.top_lift?.exercise_name ?? null) : null;
+  const bigMoment = usesRecords ? !!lead : prList.length > 0;
   const [revealStage, setRevealStage] = useState(0);
   const [displayScore, setDisplayScore] = useState(0);
   const [sharing, setSharing] = useState(false);
@@ -119,14 +133,17 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     const fire = () => {
       if (stingPlayedRef.current) return;
       stingPlayedRef.current = true;
+      // the finish's tap lands with the reveal (a headline PR its success tap); the sting is its sound
+      feedback(stingRef.current === "pr" ? "pr" : "workout", { sound: false });
       void import("@/lib/achievement-music").then(({ playSting }) => {
         if (stingPlayedRef.current) stopStingRef.current = playSting(stingRef.current);
       });
     };
-    if (!usesRecords || records !== null) { fire(); return; }
+    // (and the session's main lift, which says which record is the headline)
+    if (!usesRecords || (records !== null && (!completionId || shareStats !== undefined))) { fire(); return; }
     const wait = window.setTimeout(fire, 2000);
     return () => window.clearTimeout(wait);
-  }, [open, revealStage, usesRecords, records]);
+  }, [open, revealStage, usesRecords, records, completionId, shareStats]);
 
   useEffect(() => {
     if (!open || revealStage < 1) return;
@@ -143,15 +160,15 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [open, revealStage, summary.score]);
-  // New records get the full build-and-drop; a finished workout the short one.
+  // A headline PR gets the full build-and-drop; a finished workout (a quieter record or two included) the short one.
   const stingRef = useRef<"pr" | "workout">("workout");
-  stingRef.current = prList.length > 0 || recordCount > 0 ? "pr" : "workout";
+  stingRef.current = bigMoment ? "pr" : "workout";
   const stopStingRef = useRef<() => void>(() => {});
   const stingPlayedRef = useRef(false);
   const hasAchievement = prList.length > 0 || recordCount > 0 || summary.score >= 90 || summary.completionPct === 100;
   const headline =
-    recordHeadline ? recordHeadline
-    : prList.length > 0 ? (prList.length === 1 ? "NEW ALL-TIME PR!" : `${prList.length} NEW ALL-TIME PRs!`)
+    lead ? `${lead.exercise_name} PR`
+    : prList.length > 0 ? (prList.length === 1 ? "New all-time PR" : `${prList.length} new all-time PRs`)
     // the score counts what was done, not how hard it ran: no cheering over a plan that ran hot
     : summary.plan?.lines.some((l) => l.kind === "harder" || l.kind === "short") ? "Workout done"
     : summary.score >= 90 ? "Crushed it!"
@@ -180,6 +197,15 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     : takeaways;
 
   // Instagram Story card (1080×1920, safe-zone aware) — see workout-story-card.
+  // a record in the unit its set was typed in, the other unit beside it ("315 lb (142.9 kg)")
+  const recordLoad = (kg: number, setId: string) => {
+    const d = recordedLoad(kg, setUnit?.(setId), displayUnit);
+    return `${d.primary} (${d.secondary})`;
+  };
+  const dualLoadTotalText = (kg: number, u: "kg" | "lb") => {
+    const t = dualTotal(kg, u);
+    return `${t.primary} (${t.secondary})`;
+  };
   const storyRecords = (): StoryRecord[] => {
     const out: StoryRecord[] = [];
     if (records) {
@@ -192,18 +218,18 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         if (load) loads.delete(r.set_id);
         // Same set is a rep record and the heaviest ever → one row.
         const label = load && loadScope === scope ? `${r.reps}-REP + WEIGHT ${SCOPE_LABEL[scope]}` : repRecordLabel(r)!;
-        out.push({ label, tier: scope, title: r.exercise_name, detail: `${formatLoad(r.load_kg, displayUnit)} × ${r.reps}` });
+        out.push({ label, tier: scope, title: r.exercise_name, detail: `${recordLoad(r.load_kg, r.set_id)} × ${r.reps}` });
         if (load && loadScope && loadScope !== scope) {
-          out.push({ label: weightRecordLabel(load)!, tier: loadScope, title: load.exercise_name, detail: `Heaviest ever · ${formatLoad(load.load_kg, displayUnit)}` });
+          out.push({ label: weightRecordLabel(load)!, tier: loadScope, title: load.exercise_name, detail: `Heaviest ever · ${recordLoad(load.load_kg, load.set_id)}` });
         }
       }
       for (const l of loads.values()) {
         const scope = topScope(l);
-        if (scope) out.push({ label: weightRecordLabel(l)!, tier: scope, title: l.exercise_name, detail: `Heaviest ever · ${formatLoad(l.load_kg, displayUnit)} × ${l.reps}` });
+        if (scope) out.push({ label: weightRecordLabel(l)!, tier: scope, title: l.exercise_name, detail: `Heaviest ever · ${recordLoad(l.load_kg, l.set_id)} × ${l.reps}` });
       }
       const ton = tonnageRecordLabel(records.tonnage);
       const tonScope = topScope(records.tonnage);
-      if (ton && tonScope) out.push({ label: ton.replace("WORKOUT ", ""), tier: tonScope, title: "Workout Tonnage", detail: formatTonnage(records.tonnage_kg, displayUnit) });
+      if (ton && tonScope) out.push({ label: ton.replace("WORKOUT ", ""), tier: tonScope, title: "Workout Tonnage", detail: dualLoadTotalText(records.tonnage_kg, displayUnit) });
     } else if (prList[0]) {
       prList.slice(0, 4).forEach((pr) => out.push({ label: "ALL-TIME PR", tier: "atpr", title: formatPR(pr), detail: "" }));
     }
@@ -215,12 +241,11 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   const buildShareBlob = async (): Promise<Blob | null> => {
     const canvas = shareCanvasRef.current ?? document.createElement("canvas");
     shareCanvasRef.current = canvas;
-    const tonnage = records && records.tonnage_kg > 0
-      ? formatTonnage(records.tonnage_kg, displayUnit)
-      : summary.totalLifted > 0 ? summary.totalLiftedFmt : null;
+    const ton = records && records.tonnage_kg > 0 ? dualTotal(records.tonnage_kg, displayUnit) : null;
+    const tonnage = ton ? ton.primary : summary.totalLifted > 0 ? summary.totalLiftedFmt : null;
     const stats = [
       { label: "Sets", value: `${summary.completedSets}/${summary.prescribedSets}` },
-      ...(tonnage ? [{ label: "Tonnage", value: tonnage }] : []),
+      ...(tonnage ? [{ label: "Tonnage", value: tonnage, sub: ton?.secondary ?? null }] : []),
       ...(durationMin && durationMin > 0 ? [{ label: "Minutes", value: String(Math.round(durationMin)) }] : []),
     ];
     await drawWorkoutStory(canvas, {
@@ -268,8 +293,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           <SoundToggleButton className="absolute left-3 top-3 z-10" onMute={() => stopStingRef.current()} />
 
           <div className={`mx-auto flex w-full max-w-[calc(100%-4.5rem)] flex-col items-center text-center transition-all duration-500 ${revealStage >= 1 ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"}`}>
-            <div className={`relative grid h-14 w-14 place-items-center rounded-full shadow-lg ${prList.length > 0 || recordCount > 0 ? "bg-amber-500 text-white ring-4 ring-amber-500/15" : "bg-primary text-primary-foreground"}`}>
-              {prList.length > 0 || recordCount > 0 ? <Trophy className="h-7 w-7 animate-in zoom-in spin-in-6 duration-500" /> : <CheckCircle2 className="h-7 w-7" />}
+            <div className={`relative grid h-14 w-14 place-items-center rounded-full shadow-lg ${bigMoment ? "bg-amber-500 text-white ring-4 ring-amber-500/15" : "bg-primary text-primary-foreground"}`} data-recap-moment={bigMoment ? "pr" : "done"}>
+              {bigMoment ? <Trophy className="h-7 w-7 animate-in zoom-in spin-in-6 duration-500" /> : <CheckCircle2 className="h-7 w-7" />}
               {revealStage >= 2 && <Sparkles className="absolute -right-2 -top-1 h-5 w-5 animate-pulse text-primary" />}
             </div>
             <div className="mt-2 text-[10px] font-bold uppercase tracking-[0.22em] text-primary">Workout complete</div>
@@ -286,22 +311,35 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                 <span className="absolute left-full ml-1 whitespace-nowrap text-xs font-bold text-muted-foreground">/100</span>
               </div>
             </div>
-            <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Workout score</div>
-
-            {ratingStars > 0 && revealStage >= 2 && (
-              <div className="mt-2 flex items-center gap-0.5 animate-in fade-in zoom-in-95 duration-500">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <Star key={i} className={`h-3.5 w-3.5 ${i <= ratingStars ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"}`} />
+            {/* what the number and the stars mean, one tap away (the formula is unchanged) */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" className="mt-1 inline-flex min-h-8 items-center gap-1 rounded-full px-2 text-[12px] font-medium text-muted-foreground active:bg-muted" data-score-help>
+                  Workout score
+                  {ratingStars > 0 && revealStage >= 2 && (
+                    <span className="ml-1 inline-flex items-center gap-0.5 animate-in fade-in zoom-in-95 duration-500" aria-label={`${ratingStars} of 5 stars`}>
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <Star key={i} className={`h-3 w-3 ${i <= ratingStars ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"}`} />
+                      ))}
+                    </span>
+                  )}
+                  <Info className="ml-0.5 h-3.5 w-3.5" aria-label="How it's scored" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="bottom" className="w-[min(300px,calc(100vw-32px))] space-y-1.5 p-3 text-left text-[13px] leading-snug" data-score-help-text>
+                <div className="font-semibold">How it's scored</div>
+                {explainWorkoutScore(summary, { pain, ownRating: sessionRating }).map((l) => (
+                  <p key={l} className="text-muted-foreground">{l}</p>
                 ))}
-              </div>
-            )}
+              </PopoverContent>
+            </Popover>
           </div>
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 [scrollbar-width:none] sm:px-5 [&::-webkit-scrollbar]:hidden">
           <div className={`space-y-2.5 transition-all duration-500 ${revealStage >= 2 ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
             <NewAchievementReveal open={open} />
-            {records && <NewRecordsSection records={records} unit={displayUnit} />}
+            {records && <NewRecordsSection records={records} unit={displayUnit} setUnit={setUnit} highlight={!!lead} />}
             {points && <WorkoutPointsCard points={points} />}
             {prList.length > 0 && (
               <section className="relative overflow-hidden animate-in zoom-in-90 fade-in slide-in-from-bottom-3 rounded-2xl border border-amber-500/40 bg-amber-500/[0.08] p-4 duration-700">
@@ -433,6 +471,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
               completionId={completionId}
               completedAt={workoutDate ?? null}
               unit={displayUnit}
+              workoutTitle={workoutTitle}
+              athleteName={athleteName}
               onDone={() => { onOpenChange(false); onClose?.(); }}
               onStudio={(caption) => { setDraftCaption(caption); setShareMounted(true); setShareOpen(true); }}
             />

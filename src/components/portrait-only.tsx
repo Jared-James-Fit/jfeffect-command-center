@@ -1,71 +1,45 @@
-import { useEffect, useState } from "react";
-import { Smartphone } from "lucide-react";
-import { lockPortrait, phoneOnItsSide, readOrientation } from "@/lib/portrait-only";
+import { useEffect } from "react";
+import { lockPortrait, syncPhoneAttr, unlockPortrait } from "@/lib/portrait-only";
 import { CAMERA_OPEN_EVENT, isCameraOpen } from "@/lib/camera/camera-presence";
 
 /**
- * Phones stay upright: on mount (and on coming back) it asks the browser to
- * lock portrait (lockPortrait: Android takes it). Held on its side where the
- * browser won't lock (Safari, the iPhone home-screen app): one calm screen
- * over the app asking to turn it back. Nothing underneath changes or reloads, so turning it upright again
- * picks up exactly where they were. The installed app never shows it (iOS
- * keeps it upright).
+ * Phones stay upright where the platform allows it, and nothing interrupts
+ * where it doesn't (portrait-only.ts). Draws nothing: on mount, and again on
+ * coming back (a lock can lapse in the background), it asks the browser to
+ * lock portrait (Android's installed web app takes it). Where it's refused
+ * the page turns with the phone and keeps the phone layout, so a workout,
+ * a form or a chat carries on exactly where it was. Every turn and resize
+ * keeps `data-phone` true to the device (a foldable opened or closed). The
+ * app's own camera lets the lock go while it's up, so the phone can turn
+ * to film (camera-presence.ts).
  */
-export function PortraitOnly() {
-  const [sideways, setSideways] = useState(false);
-  // The app's own camera is up: the phone may go on its side to film, and the
-  // lock is let go (Android) until it closes (camera-presence.ts).
-  const [camera, setCamera] = useState(false);
+export function PortraitLock() {
   useEffect(() => {
     const onCamera = () => {
-      const now = isCameraOpen();
-      setCamera(now);
-      if (now) {
-        try {
-          (screen.orientation as { unlock?: () => void } | undefined)?.unlock?.();
-        } catch {
-          /* not lockable here */
-        }
-      } else void lockPortrait();
+      if (isCameraOpen()) unlockPortrait();
+      else void lockPortrait();
     };
-    onCamera();
-    window.addEventListener(CAMERA_OPEN_EVENT, onCamera);
-    return () => window.removeEventListener(CAMERA_OPEN_EVENT, onCamera);
-  }, []);
-  useEffect(() => {
-    const check = () => {
-      const r = readOrientation();
-      setSideways(!!r && phoneOnItsSide(r));
-    };
-    check();
-    // hold it upright where the browser lets us (and again on coming back: a lock can lapse in the background)
-    void lockPortrait();
     const back = () => {
       if (document.visibilityState === "visible" && !isCameraOpen()) void lockPortrait();
     };
+    const sync = () => {
+      syncPhoneAttr();
+    };
+    sync();
+    onCamera();
     const o = typeof screen !== "undefined" ? screen.orientation : undefined;
-    o?.addEventListener?.("change", check);
-    window.addEventListener("orientationchange", check);
-    window.addEventListener("resize", check);
+    o?.addEventListener?.("change", sync);
+    window.addEventListener("orientationchange", sync);
+    window.addEventListener("resize", sync);
+    window.addEventListener(CAMERA_OPEN_EVENT, onCamera);
     document.addEventListener("visibilitychange", back);
     return () => {
-      o?.removeEventListener?.("change", check);
-      window.removeEventListener("orientationchange", check);
-      window.removeEventListener("resize", check);
+      o?.removeEventListener?.("change", sync);
+      window.removeEventListener("orientationchange", sync);
+      window.removeEventListener("resize", sync);
+      window.removeEventListener(CAMERA_OPEN_EVENT, onCamera);
       document.removeEventListener("visibilitychange", back);
     };
   }, []);
-  if (!sideways || camera) return null;
-  return (
-    <div
-      role="alert"
-      aria-live="polite"
-      className="fixed inset-0 z-[2147483646] flex flex-col items-center justify-center gap-3 bg-background px-8 text-center text-foreground"
-      data-portrait-only
-    >
-      <Smartphone className="h-10 w-10 text-muted-foreground" strokeWidth={1.75} aria-hidden />
-      <p className="text-[17px] font-semibold">Turn your phone upright</p>
-      <p className="max-w-[28ch] text-[14px] leading-snug text-muted-foreground">JF Effect works in portrait. Everything's right where you left it.</p>
-    </div>
-  );
+  return null;
 }

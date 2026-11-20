@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, Video, StickyNote, NotebookPen, Info, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, Target, LineChart } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, Video, StickyNote, NotebookPen, Info, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, Target, LineChart, Pencil } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -39,7 +39,6 @@ import { ActionButton } from "@/components/action-button";
 import { TrainingHelpSheet } from "@/components/training-help-sheet";
 import { WarmupButton } from "@/components/warmup-sheet";
 import { dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
-import { formatClientDayNotes, formatDayLabel, formatDaySubtitle } from "@/lib/workout-day-label";
 import { format, parseISO, startOfDay } from "date-fns";
 import { useServerFn } from "@tanstack/react-start";
 import { SessionTimeRow } from "@/components/workout-day/SessionTimeRow";
@@ -52,7 +51,6 @@ import {
 } from "@/lib/workout-completion.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { cn } from "@/lib/utils";
-import { playAppSound } from "@/lib/app-sounds";
 import { haptic } from "@/platform/haptics";
 import { useWorkoutView } from "@/lib/use-workout-view";
 import { FocusIntro, FocusTips, useFocusIntro } from "@/components/workout-day/focus-intro";
@@ -64,6 +62,8 @@ import {
   noteContextLabel,
   NOTE_PREVIEW_CHARS,
 } from "@/lib/exercise-note-history";
+import { isNoteEdited, noteDay } from "@/lib/exercise-note-versions";
+import { EditedToggle, NoteVersions } from "@/components/workout/shared/note-edit-history";
 import { WorkoutEmptyCard } from "@/components/workout-empty-state";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -71,13 +71,20 @@ import { useEntitlement, useServiceTier } from "@/lib/service-tier";
 import { pushWorkoutNote } from "@/lib/workout-notes";
 import { writeSetEditAudit } from "@/lib/logged-set-audit";
 import { saveExerciseUnitPref, type WUnit } from "@/lib/exercise-unit-prefs";
-import { isMainLiftFamily, resolveWorkoutRowUnits } from "@/lib/workout-unit-resolution";
+import { clearRelabel, markRelabel, relabelIntent, relabeledLoad, unitSwitchAsk, type UnitSwitchAsk } from "@/lib/workouts/unit-relabel";
+import { UnitSwitchSheet } from "@/components/workout-day/unit-switch-sheet";
+import { athleteHabitUnit, isMainLiftFamily, readUnitHabitHint, resolveWorkoutRowUnits, writeUnitHabitHint } from "@/lib/workout-unit-resolution";
+
+/** As long as the copy the app saves on the phone (QUERY_PERSIST_MAX_AGE, 24h). */
+const UNIT_CACHE_MS = 24 * 60 * 60_000;
 import { backoffCards, firstHeavyCards, rangeLift } from "@/lib/workouts/pick-range";
-import { cardioLast, focusPlaceLabel, isPlanCardioRow, liftAndCardioProgress, liftCount } from "@/lib/workouts/workout-cardio";
+import { cardioLast, cardioRowDone, focusPlaceLabel, isPlanCardioRow, liftAndCardioProgress, liftCount, withCardioDone } from "@/lib/workouts/workout-cardio";
 import {
   convertLoad,
   displayLoadInUnit,
   equalDisplayLoads,
+  originalUnit,
+  originalValue,
   persistedLoadForDisplayValue,
 } from "@/lib/workout-unit-persistence";
 import { WorkoutUndoProvider } from "@/lib/workout-undo";
@@ -89,7 +96,8 @@ import { matchPreviousWeekSlots, type SlotRow } from "@/lib/previous-week-slot";
 import { LastWeekSwapChip, type LastWeekSwap } from "@/components/workout-day/last-week-swap";
 import { useCardHistory, type CardHistoryAction } from "@/components/workout-day/use-card-history";
 import { LoadSuggestionCard, PlannedLoadCell, LoadSuggestionsChip, LoadSuggestionsDone, LoadSuggestionsDoneNote, LoadSuggestionsNudge, REF_BAR, REF_CELL, REF_DIVIDER, REF_LABEL, REF_TAP, REF_VALUE } from "@/components/workout-day/load-suggestion-card";
-import { lastTimeLoad } from "@/lib/workouts/exercise-history";
+import { lastTimeLoad, trainedOn, ymdMs } from "@/lib/workouts/exercise-history";
+import { instanceDates } from "@/lib/workouts/history-reads";
 import { effortRange, loggedRpe, setGuidance } from "@/lib/workouts/plan-vs-actual";
 import { dismissSuggestionsNudgeForNow, suggestionsNudgeDismissed, useShowLoadSuggestions, LOAD_SUGGESTIONS_TRIED_KEY } from "@/lib/load-suggestion-visibility";
 import { TypedValueInput } from "@/components/workout-day/typed-value-input";
@@ -97,7 +105,7 @@ import { EffortScaleHeader } from "@/components/workout-day/effort-scale-help";
 import { applyOptimisticSetResult } from "@/lib/optimistic-set-result";
 import { fetchAllPages } from "@/lib/supabase-paginate";
 import { getClientBodyweightKgSeries, smoothedBodyweightKgAt, type BodyweightKgPoint } from "@/lib/bodyweight";
-import { offersLastWarmup, pickFinalWarmup, warmupInUnit } from "@/lib/final-warmup";
+import { finalWarmupRow, offersLastWarmup, warmupInUnit, warmupsForModel } from "@/lib/final-warmup";
 import { enqueueOfflineWrite, registerQueueHandler, supersedeOfflineWrite } from "@/lib/workout-offline-queue";
 import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
@@ -105,6 +113,20 @@ import { RestTimer } from "@/components/workout-day/RestTimerButton";
 import { SwipeToReveal } from "@/components/workout-day/swipe-to-reveal";
 import { ExerciseActionRow } from "@/components/workout-day/exercise-action-row";
 import { CardMenuItem, CardMenuSeparator } from "@/components/workout-day/card-menu";
+import { SetupLine, SetupSheet, type SetupSheetMode } from "@/components/equipment/setup-sheet";
+import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
+import {
+  LIVE_WINDOW_MS,
+  cardEquipment,
+  comparesAcrossEquipment,
+  currentSetup,
+  equipmentName,
+  loadEquipmentId,
+  settingsFromNote,
+  setupFor,
+  setupSummary,
+} from "@/lib/equipment/equipment";
+import { useViewingAsClient } from "@/lib/client-impersonation";
 import { setGridTemplate } from "@/components/workout-day/set-grid";
 import { SetNumberBadge } from "@/components/workout-day/set-number-badge";
 import { SetPrIndicator } from "@/components/workout-day/set-pr-indicator";
@@ -172,7 +194,9 @@ import { formatClockSeconds, formatDuration } from "@/lib/duration";
 import {
   getTimerTarget, setTimerTarget, getRowInputs, setRowInputs, getVelocityDefault, setVelocityDefault, type RowInputOverrides,
 } from "@/lib/log-as-override";
-import { Timer, Heart, History as HistoryIcon, ChevronRight } from "lucide-react";
+import { Timer, Heart, Activity, ChevronRight } from "lucide-react";
+import { DayCoachNotes, ScheduledDayLine, loggerMeta, loggerTitle } from "@/components/workout-day/logger-top";
+import { exerciseNoteForAthlete } from "@/lib/workouts/coach-notes";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
 import {
   summarizeCompleteness,
@@ -201,6 +225,8 @@ import {
   touchWorkoutSession,
 } from "@/components/workout-day/WorkoutTimer";
 import { listenChannel } from "@/lib/realtime-channel";
+import { feedback } from "@/lib/feedback";
+import { HapticTap } from "@/components/haptic-tap";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
@@ -663,6 +689,27 @@ function WorkoutDay({
   const block = (weekWithBlock as any)?.pl_blocks ?? null;
   const blockId = (block as any)?.id ?? (weekWithBlock as any)?.block_id ?? null;
 
+  // The same workout's notes last week, so notes that haven't changed fold to
+  // one line and a new sentence leads (DayCoachNotes, coach-notes.ts). Only
+  // asked when this day has notes for the athlete and there is a last week.
+  const lastWeekIndex = (week as any)?.week_index != null ? Number((week as any).week_index) - 1 : 0;
+  const { data: lastWeekDayNotes = null } = useQuery({
+    queryKey: ["pl-day-notes-last-week", blockId, lastWeekIndex, day?.day_index ?? null],
+    enabled: !!blockId && lastWeekIndex >= 1 && day?.day_index != null && day?.notes_client_visible === true && !!String(day?.notes ?? "").trim(),
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data } = await sb
+        .from("pl_days")
+        .select("notes, notes_client_visible, pl_weeks!inner(block_id, week_index)")
+        .eq("pl_weeks.block_id", blockId)
+        .eq("pl_weeks.week_index", lastWeekIndex)
+        .eq("day_index", day.day_index)
+        .limit(1)
+        .maybeSingle();
+      return (data as any)?.notes_client_visible === true ? ((data as any).notes ?? null) : null;
+    },
+  });
+
   const { isImpersonating } = useClientImpersonation();
   const scheduledWorkoutId = adapter?.kind === "client"
     ? adapter.ref.scheduledWorkoutId ?? (search as any)?.instance ?? null
@@ -906,8 +953,9 @@ function WorkoutDay({
     queryFn: () => listRemovedSrv({ data: { dayId } }),
   });
 
+  const resultsQueryKey = ["pl-day-results", dayId, client?.id, adapter?.kind ?? null, adapter?.ref.ownerId ?? null, scheduledWorkoutId];
   const { data: results = [], isSuccess: resultsLoaded, isFetching: resultsFetching } = useQuery({
-    queryKey: ["pl-day-results", dayId, client?.id, adapter?.kind ?? null, adapter?.ref.ownerId ?? null, scheduledWorkoutId],
+    queryKey: resultsQueryKey,
     enabled: !!client?.id && (rows as any[]).length > 0,
     // Logged sets belong to one scheduled instance: never show another
     // instance's (or an older visit's) sets as this one's.
@@ -935,6 +983,20 @@ function WorkoutDay({
     : scheduledWorkoutId
       ? `instance:${scheduledWorkoutId}`
       : `day:${dayId}`;
+  // The machine each card is on (when it changes what a weight means): "Last
+  // time" and the suggestions read history on it, never another machine's.
+  const { data: dayEquipment } = useAthleteEquipment(adapter?.kind === "member" ? null : client?.id ?? null);
+  const loadEquipmentByRow = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const row of rows as any[]) {
+      const exId = row.exercises?.id ?? row.exercise_id ?? null;
+      if (!exId) continue;
+      const shown = cardEquipment((results as any[]).filter((x) => x.row_id === row.id), currentSetup(dayEquipment, exId));
+      const eq = shown.equipmentId ? dayEquipment.equipment.find((e) => e.id === shown.equipmentId) ?? null : null;
+      map.set(row.id, loadEquipmentId(eq));
+    }
+    return map;
+  }, [rows, results, dayEquipment]);
   const previousLiftIdentities = useMemo<PreviousLiftIdentity[]>(
     () => (rows as any[]).map((row) => {
       const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
@@ -948,9 +1010,10 @@ function WorkoutDay({
         purposeLabel: row.purpose_label ?? null,
         // a walk or a bike: last time is its time, calories and effort; a plank: its longest hold
         timed: isTimedCardio(name) ? "cardio" : timedRow ? "hold" : null,
+        equipmentId: loadEquipmentByRow.get(row.id) ?? null,
       };
     }),
-    [rows],
+    [rows, loadEquipmentByRow],
   );
   const previousLiftIdentityKey = useMemo(
     () => previousLiftIdentities
@@ -1027,8 +1090,8 @@ function WorkoutDay({
       const columns = `id, row_id, scheduled_workout_id, completed_at, updated_at, created_at,
           actual_reps, actual_rpe, actual_rir, entered_value, entered_unit,
           normalized_kg, normalized_lb, actual_load, actual_load_unit, is_working_set,
-          is_bodyweight, load_type, completed_duration_seconds, actual_calories, actual_distance_m,
-          pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, purpose_label, sort_order, exercises(name))`;
+          is_bodyweight, load_type, completed_duration_seconds, actual_calories, actual_distance_m, equipment_id,
+          pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, purpose_label, sort_order, exercises(name), pl_days(scheduled_date))`;
       // Confirmed sets only (drafts from "apply to remaining" are not history),
       // newest first, paged past the 1,000-row response cap so long-term
       // clients keep their full rep-max baselines.
@@ -1045,6 +1108,10 @@ function WorkoutDay({
       const uniqueLogs = Array.from(
         new Map(batches.flat().map((log: any) => [log.id, log])).values(),
       );
+      // The day each session was trained (trainedOn: its calendar day, a moved
+      // workout's new one, never after it was logged), so "Last time · Sep 20"
+      // says the same day as the History sheet.
+      const instDates = await instanceDates(uniqueLogs.map((log: any) => log.scheduled_workout_id)).catch(() => new Map<string, string>());
       return uniqueLogs.map((log: any) => {
         const historyRow = log.pl_exercise_rows;
         const enteredUnit = log.entered_unit === "kg" || log.entered_unit === "lb"
@@ -1060,6 +1127,11 @@ function WorkoutDay({
             ? `instance:${log.scheduled_workout_id}`
             : `day:${historyRow?.day_id ?? "unknown"}`,
           occurredAt: log.completed_at ?? log.updated_at ?? log.created_at ?? null,
+          trainedOn: trainedOn({
+            instanceDate: log.scheduled_workout_id ? instDates.get(log.scheduled_workout_id) ?? null : null,
+            dayDate: historyRow?.pl_days?.scheduled_date ?? null,
+            loggedAt: log.completed_at ?? log.created_at ?? null,
+          }),
           reps: log.actual_reps ?? null,
           rpe: log.actual_rpe ?? null,
           rir: log.actual_rir ?? null,
@@ -1075,6 +1147,7 @@ function WorkoutDay({
           durationSeconds: log.completed_duration_seconds ?? null,
           calories: log.actual_calories ?? null,
           distanceM: log.actual_distance_m != null ? Number(log.actual_distance_m) : null,
+          equipmentId: log.equipment_id ?? null,
         };
       });
     },
@@ -1646,10 +1719,14 @@ function WorkoutDay({
     [rows],
   );
 
+  // Every read that decides a card's unit is kept for a day (UNIT_CACHE_MS, the
+  // copy the app saves on the phone), so the next open paints in the right unit
+  // instead of flipping once the logs arrive.
   const { data: prefRows = [] } = useQuery({
     queryKey: ["client-exercise-unit-prefs", adapter?.kind ?? "client", client?.id, exerciseIds.join(",")],
     enabled: secondaryHydrationReady && !!client?.id && exerciseIds.length > 0,
     staleTime: 60_000,
+    gcTime: UNIT_CACHE_MS,
     queryFn: async () => {
       // Route through the adapter so the member adapter can read its own
       // member_exercise_unit_prefs table (parity with client side).
@@ -1663,32 +1740,34 @@ function WorkoutDay({
     },
   });
 
+  // The newest loaded sets of each exercise in this workout (a set with no
+  // weight took whatever unit the card showed, so it says nothing). Enough rows
+  // that a lift trained a few weeks back isn't crowded out by today's others.
   const { data: historyRows = [] } = useQuery({
     queryKey: ["client-exercise-unit-history", client?.id, exerciseIds.join(",")],
     enabled: secondaryHydrationReady && !!client?.id && exerciseIds.length > 0,
     staleTime: 5 * 60_000,
+    gcTime: UNIT_CACHE_MS,
     queryFn: async () => (await sb
       .from("pl_row_results")
-      .select("actual_load_unit, pl_exercise_rows!inner(exercise_id)")
+      .select("actual_load_unit, actual_load, pl_exercise_rows!inner(exercise_id)")
       .eq("client_id", client!.id)
       .in("pl_exercise_rows.exercise_id", exerciseIds)
       .not("actual_load_unit", "is", null)
+      .gt("actual_load", 0)
       .order("created_at", { ascending: false })
-      // 50 is enough — we only need the most recent unit per exercise (not full history).
-      .limit(50)).data ?? [],
+      .limit(400)).data ?? [],
   });
 
-  // The unit the athlete uses for squat / bench / deadlift across every
-  // variation, so a lift they've never logged opens in that unit instead of
-  // the competition-lift kg default (see resolveWorkoutRowUnits).
-  const hasMainLiftRow = useMemo(
-    () => (rows as any[]).some((r) => isMainLiftFamily(r.exercises?.movement_family)),
-    [rows],
-  );
-  const { data: familyHistoryRows = [] } = useQuery({
+  // The athlete's latest loaded logs of anything: the unit they use for squat /
+  // bench / deadlift across every variation, and the unit nearly everything
+  // they log is in (their habit), so a lift they've never logged opens in it.
+  // Read on every workout, accessory days included (see resolveWorkoutRowUnits).
+  const { data: familyHistoryRows, isSuccess: familyHistoryLoaded } = useQuery({
     queryKey: ["client-lift-family-unit-history", client?.id],
-    enabled: secondaryHydrationReady && !!client?.id && hasMainLiftRow,
+    enabled: secondaryHydrationReady && !!client?.id,
     staleTime: 5 * 60_000,
+    gcTime: UNIT_CACHE_MS,
     queryFn: async () => (await sb
       .from("pl_row_results")
       .select("actual_load_unit, actual_load, pl_exercise_rows(exercises(movement_family))")
@@ -1698,6 +1777,13 @@ function WorkoutDay({
       .order("created_at", { ascending: false })
       .limit(150)).data ?? [],
   });
+  // The habit as last read on this phone, so the first paint of a workout
+  // already shows it while the logs load.
+  const habitHint = useMemo(() => readUnitHabitHint(client?.id), [client?.id]);
+  useEffect(() => {
+    if (!familyHistoryLoaded || !client?.id) return;
+    writeUnitHabitHint(client.id, athleteHabitUnit(familyHistoryRows as any[]));
+  }, [familyHistoryLoaded, familyHistoryRows, client?.id]);
 
   // Map exercise_id -> resolved unit, recomputed when inputs change.
   const [unitOverrides, setUnitOverrides] = useState<Record<string, WUnit>>({});
@@ -1707,15 +1793,16 @@ function WorkoutDay({
       rows: rows as any[],
       prefRows: prefRows as any[],
       historyRows: historyRows as any[],
-      familyHistoryRows: familyHistoryRows as any[],
-      // The athlete's own unit beats the competition-lift kg default (see resolveWorkoutRowUnits).
+      familyHistoryRows: familyHistoryLoaded ? (familyHistoryRows as any[]) : undefined,
+      habitHint,
+      // The account's unit, only once confirmed: used when the logs show no habit (see resolveWorkoutRowUnits).
       athleteChosenUnit: (client as any)?.weight_unit_confirmed_at ? (client as any)?.preferred_weight_unit ?? null : null,
       overrides: unitOverrides,
     }),
-    [rows, prefRows, historyRows, familyHistoryRows, unitOverrides, (client as any)?.preferred_weight_unit, (client as any)?.weight_unit_confirmed_at],
+    [rows, prefRows, historyRows, familyHistoryRows, familyHistoryLoaded, habitHint, unitOverrides, (client as any)?.preferred_weight_unit, (client as any)?.weight_unit_confirmed_at],
   );
 
-  const setExerciseUnit = async (exerciseId: string | null, rowId: string, next: WUnit) => {
+  const setExerciseUnit = async (exerciseId: string | null, rowId: string, next: WUnit, opts?: { relabel?: boolean }) => {
     const rowKey = `row:${rowId}`;
     const key = exerciseId ? `exercise:${exerciseId}` : rowKey;
     const previousOverride = unitOverrides[key];
@@ -1754,9 +1841,18 @@ function WorkoutDay({
       }
     };
     // Undo lives on the confirmation itself — right where the change happened.
-    toast.success(`Switched to ${next.toUpperCase()}`, {
+    // Weights kept as typed ("They were lb") go back the same way: the numbers
+    // stay and only their unit returns (unit-relabel.ts).
+    toast.success(opts?.relabel ? `Kept your numbers, now in ${next}` : `Now in ${next} for this exercise`, {
       duration: 5000,
-      action: { label: "Undo", onClick: () => void restorePreviousUnit() },
+      action: {
+        label: "Undo",
+        onClick: () => {
+          if (opts?.relabel) markRelabel(prevUnit);
+          else clearRelabel();
+          void restorePreviousUnit();
+        },
+      },
     });
   };
 
@@ -2026,10 +2122,31 @@ function WorkoutDay({
   // The day's cardio, logged before, during or after the lifting (or later
   // that day): its sets save like any other, but never start the workout, its
   // clock or "in progress" (workout-cardio.ts). The Workouts card shows it done.
-  const refreshCardio = () => {
-    qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
-    qc.invalidateQueries({ queryKey: ["exercise-history"] });
-    qc.invalidateQueries({ queryKey: ["my-workouts"], refetchType: "none" });
+  // Every screen that says whether the day's cardio is done hears it now: the
+  // Workouts card and Home (the cached list, set in place, then read again on
+  // their next open), the card's own day read, and Nutrition's status line and
+  // the cardio card (the plan's completion, which the database writes as the
+  // set saves).
+  const refreshCardio = async () => {
+    await qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
+    const cardio = (rows as any[]).find((r) => isPlanCardioRow(r));
+    const latest = qc.getQueryData<any[]>(resultsQueryKey);
+    if (cardio && Array.isArray(latest)) {
+      const done = cardioRowDone(cardio.id, latest);
+      qc.setQueriesData({ queryKey: ["my-workouts"] }, (old: unknown) => withCardioDone(old, dayId, done));
+      qc.setQueriesData({ queryKey: ["workout-progress", dayId] }, (old: unknown) =>
+        old && typeof old === "object" ? { ...(old as object), cardioDone: done } : old,
+      );
+    }
+    void qc.invalidateQueries({ queryKey: ["my-workouts"], refetchType: "none" });
+    void qc.invalidateQueries({ queryKey: ["workout-progress", dayId], refetchType: "none" });
+    void qc.invalidateQueries({ queryKey: ["exercise-history"] });
+    void qc.invalidateQueries({
+      predicate: (q) => {
+        const k = String(q.queryKey[0] ?? "");
+        return k.startsWith("cardio-completion") || k.startsWith("cardio-analytics") || k.startsWith("cardio-compliance") || k === "client-cardio-resolved" || k === "cal-client-cardio";
+      },
+    });
   };
 
 
@@ -2047,6 +2164,15 @@ function WorkoutDay({
   // ── Celebration screen inputs: session PRs + prescribed-cardio status ────
   const summaryDisplayUnit: "kg" | "lb" =
     ((client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb");
+  // the unit each logged set was typed in: a record on the recap reads in it, never relabelled
+  const setUnitOf = useCallback(
+    (setId: string): "kg" | "lb" | null => {
+      const r = (results as any[]).find((x) => x?.id === setId);
+      const u = r?.entered_unit ?? r?.actual_load_unit;
+      return u === "kg" || u === "lb" ? u : null;
+    },
+    [results],
+  );
   const sessionPRs = useMemo(
     () =>
       collectSessionPRs(
@@ -2520,7 +2646,7 @@ function WorkoutDay({
   const chooseWorkoutView = useCallback((next: "list" | "story") => {
     storyAutoDayRef.current = dayId;
     saveWorkoutView(next);
-    haptic("light");
+    feedback("tap");
     if (next === "story") openStory(true);
     else closeStory();
   }, [dayId, saveWorkoutView, openStory, closeStory]);
@@ -2763,62 +2889,64 @@ function WorkoutDay({
       <PageHeader
         backTo={navigation.backTo}
         backLabel="Workouts"
-        title={
+        /* The workout's name is the title (the name they tapped on Workouts);
+           how far through it they are rides on the back button's row. */
+        title={loggerTitle(day)}
+        actions={
+          statusSummary.setsTotal > 0 ? (
+            <button
+              type="button"
+              onClick={scrollToFirstIncompleteExercise}
+              data-testid="workout-progress"
+              className="inline-flex shrink-0 items-center h-10 gap-1.5 whitespace-nowrap rounded-full bg-secondary/60 px-3 text-[13px] font-semibold tabular-nums text-muted-foreground transition-colors hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              aria-label={`Workout progress ${progressPct}%, ${liftProgress.liftsDone} of ${liftProgress.liftsTotal} exercises${liftProgress.cardioTotal > 0 ? `, cardio ${liftProgress.cardioDone ? "done" : "not done yet"}` : ""}. Scroll to first incomplete exercise.`}
+            >
+              {/* The ring is the sets logged; the count is the exercises. */}
+              <WorkoutProgressRing pct={progressPct} status={progressStatus} size={16} strokeWidth={3} />
+              <span className="text-foreground">{liftProgress.liftsDone}/{liftProgress.liftsTotal}</span>
+              {liftProgress.cardioTotal > 0 && (
+                /* The day's cardio, apart from the lifts: a pulse line (never a
+                   heart, which read as a favourite), green once it's done. */
+                <span
+                  className={`inline-flex items-center ${liftProgress.cardioDone ? "text-success" : ""}`}
+                  data-progress-cardio={liftProgress.cardioDone ? "done" : "open"}
+                  aria-hidden
+                >
+                  <span className="mr-1.5">·</span>
+                  <Activity className="h-3.5 w-3.5" strokeWidth={2.5} />
+                </span>
+              )}
+              {/* Workout time: the live clock rides in the same pill once the
+                  workout has started (nothing until then), not a card of its own. */}
+              {statusBarVisible && !completion?.completed_at && (
+                <span className="inline-flex items-center gap-1.5" aria-label="Workout time">
+                  <span aria-hidden>·</span>
+                  <WorkoutTimer
+                    dayId={dayId}
+                    completedAt={null}
+                    savedDurationMin={null}
+                    readonly
+                    variant="inline"
+                  />
+                </span>
+              )}
+            </button>
+          ) : undefined
+        }
+        subtitle={
+          // Where it sits (never the date: that's on the outside card), and,
+          // opened on another day, one quiet line saying when it was planned.
           <>
-            {formatDayLabel(day)}
-            {statusSummary.setsTotal > 0 && (
-              <button
-                type="button"
-                onClick={scrollToFirstIncompleteExercise}
-                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-secondary/60 px-2 py-0.5 text-[11px] font-bold tabular-nums text-muted-foreground transition-colors hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                aria-label={`Workout progress ${progressPct}%, ${liftProgress.liftsDone} of ${liftProgress.liftsTotal} exercises${liftProgress.cardioTotal > 0 ? `, cardio ${liftProgress.cardioDone ? "done" : "not done yet"}` : ""}. Scroll to first incomplete exercise.`}
-              >
-                <WorkoutProgressRing pct={progressPct} status={progressStatus} size={16} strokeWidth={3} />
-                {progressPct}% · {liftProgress.liftsDone}/{liftProgress.liftsTotal}
-                {liftProgress.cardioTotal > 0 && (
-                  <span
-                    className={`inline-flex items-center ${liftProgress.cardioDone ? "text-success" : ""}`}
-                    data-progress-cardio={liftProgress.cardioDone ? "done" : "open"}
-                    aria-hidden
-                  >
-                    <span className="mr-1.5">·</span>
-                    <Heart className={`h-3 w-3 ${liftProgress.cardioDone ? "fill-current" : ""}`} />
-                  </span>
-                )}
-                {/* Workout time: the live clock rides in the same pill once the
-                    workout has started (nothing until then), not a card of its own. */}
-                {statusBarVisible && !completion?.completed_at && (
-                  <span className="inline-flex items-center gap-1.5" aria-label="Workout time">
-                    <span aria-hidden>·</span>
-                    <WorkoutTimer
-                      dayId={dayId}
-                      completedAt={null}
-                      savedDurationMin={null}
-                      readonly
-                      variant="inline"
-                    />
-                  </span>
-                )}
-              </button>
+            <span className="block">{loggerMeta(day, block, week)}</span>
+            {!readonly && isOutsideScheduledDay && !completion?.completed_at && scheduledDate && (
+              <ScheduledDayLine scheduled={scheduledDate} today={today} />
             )}
           </>
         }
-        subtitle={(() => {
-          // Inside the logger the athlete only needs to know WHICH workout
-          // this is: the coach subtitle plus short block/week context. The
-          // full date lives on the outside card and (when it matters) in the
-          // schedule notice below, so it is not repeated here.
-          const sub = formatDaySubtitle(day);
-          const context = [
-            block?.name,
-            week?.week_index != null ? `Week ${week.week_index}` : null,
-          ].filter(Boolean).join(" · ");
-          return [sub, context].filter(Boolean).join(" · ");
-        })()}
         /* No header "?": Training help is in every exercise card's ⋯ (Focus
            has it too), the same sheet. */
       />
-      <div className="px-3 pt-1.5 space-y-2 md:p-8 md:space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+32px)] md:pb-8">
+      <div className="px-3 pt-2 space-y-2.5 md:p-8 md:space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+32px)] md:pb-8">
 
         <WorkoutSyncBanner
           clientId={client?.id ?? null}
@@ -2826,9 +2954,9 @@ function WorkoutDay({
           pageRoute={`/portal/workouts/${dayId}`}
         />
 
-        {/* A finished workout: one card at the top with its status, the
-            review and View score (never a badge here and a second "completed"
-            bar under the log). */}
+        {/* A finished workout: one card at the top with its status and when
+            it ran on one line, then the review and View score (never a badge
+            here and a second "completed" bar under the log). */}
         {completion?.completed_at && client?.id && (
           <CompletedWorkoutActions
             ctx={{ kind: "client", dayId, scheduledWorkoutId }}
@@ -2873,63 +3001,59 @@ function WorkoutDay({
             filmCompletionId={isClientWorkout && !isImpersonating ? completion.id ?? null : null}
             completedAt={completion.completed_at ?? null}
             meta={
-              /* Client workouts show their length on the Session time line below. */
+              /* Client workouts show their length on the session time line. */
               !isClientWorkout && completion.actual_duration_min != null && completion.actual_duration_min > 0
                 ? formatDurationMin(completion.actual_duration_min)
                 : null
             }
-          >
-            {completion?.id && isClientWorkout && (
-              <SessionTimeRow completion={completion as any} clientId={client.id} workoutTitle={day?.title ?? null} inCard />
-            )}
-          </CompletedWorkoutActions>
+            status={
+              completion?.id && isClientWorkout
+                ? (label) => (
+                    <SessionTimeRow completion={completion as any} clientId={client.id} workoutTitle={day?.title ?? null} inCard lead={label} />
+                  )
+                : undefined
+            }
+          />
         )}
-        {/* Compact Warm-Up launcher. Rescheduling lives on the outside
-            workout card / Schedule Manager, not inside the logger. */}
-        {(!readonly || !!client?.id) && client?.id && (
-          <div className="flex flex-wrap items-center gap-2">
-            <WarmupButton
-              dayId={dayId}
-              blockId={blockId}
-              clientId={client.id}
-              warmupMode={(day as any).warmup_mode}
-              dayProtocolId={(day as any).warmup_protocol_id}
-              exerciseRows={rows as any[]}
-              className="h-10 rounded-full px-3.5 text-[13px]"
-            />
-            {/* The fastest way to log, any time (it also opens by itself once). */}
-            {rowsLoaded && (rows as any[]).length > 0 && !completion?.completed_at && (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setQuickLogOpen(true)}
-                data-testid="quick-log-tips-open"
-                className="h-10 gap-1.5 rounded-full px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
-              >
-                <Zap className="h-4 w-4" aria-hidden />
-                Log faster
-              </Button>
+        {/* One row: the warm-up (only when there's one to open), then the
+            quickest-way-to-log tips as a help button and List / Focus.
+            Rescheduling lives on the outside workout card / Schedule Manager. */}
+        {(!readonly || !!client?.id) && client?.id && rowsLoaded && (rows as any[]).length > 0 && (
+          <div className="flex items-center gap-2" data-logger-controls>
+            {!completion?.completed_at && (
+              <WarmupButton
+                dayId={dayId}
+                blockId={blockId}
+                clientId={client.id}
+                warmupMode={(day as any).warmup_mode}
+                dayProtocolId={(day as any).warmup_protocol_id}
+                exerciseRows={rows as any[]}
+                hideWhenEmpty
+                className="h-10 rounded-full px-3.5 text-[13px]"
+              />
             )}
-            {/* List or Focus (one exercise at a time, full screen), saved on the account. */}
-            {rowsLoaded && (rows as any[]).length > 0 && (
-              <WorkoutViewToggle className="ml-auto" view={storyOpen ? "story" : "list"} onChange={chooseWorkoutView} hint={focusIntro.show} />
-            )}
+            <div className="ml-auto flex items-center gap-1">
+              {/* "Log faster": the fastest way to log, any time (it also opens by itself once). */}
+              {!completion?.completed_at && (
+                <button
+                  type="button"
+                  onClick={() => setQuickLogOpen(true)}
+                  data-testid="quick-log-tips-open"
+                  aria-label="Log faster: the quickest way to log your sets"
+                  title="Log faster"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <HelpCircle className="h-5 w-5" aria-hidden />
+                </button>
+              )}
+              {/* List or Focus (one exercise at a time, full screen), saved on the account. */}
+              <WorkoutViewToggle view={storyOpen ? "story" : "list"} onChange={chooseWorkoutView} hint={focusIntro.show} />
+            </div>
           </div>
         )}
         {focusIntro.show && <FocusIntro onTry={() => chooseWorkoutView("story")} onDismiss={focusIntro.dismiss} />}
 
-        <DayCoachNotes day={day} />
-
-
-        {!readonly && isOutsideScheduledDay && !completion?.completed_at && scheduledDate && (
-          <Card className="flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-xs">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-            <div>
-              This workout is scheduled for <strong>{format(scheduledDate, "EEE MMM d")}</strong>,
-              but you can still complete it today. Your scheduled day is saved.
-            </div>
-          </Card>
-        )}
+        <DayCoachNotes day={day} previous={lastWeekDayNotes} />
 
         {/* Workouts are always editable — no date/block/program lock banners. */}
 
@@ -3047,8 +3171,9 @@ function WorkoutDay({
                     notesLoading={notesLoading}
                     readonly={readonly}
                     unit={unitForRow(r)}
-                    onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? r.exercise_id ?? null, r.id, u)}
+                    onUnitChange={(u, opts) => setExerciseUnit(r.exercises?.id ?? r.exercise_id ?? null, r.id, u, opts)}
                     focusMode={storyOpen}
+                    weekIndex={(week as any)?.week_index ?? null}
                     onChange={cardioRow ? refreshCardio : refresh}
                     startsWorkout={!cardioRow}
                     onNoteChange={refreshNotes}
@@ -3287,6 +3412,7 @@ function WorkoutDay({
           points={isClientWorkout ? workoutPoints ?? null : undefined}
           athleteName={(client as any)?.full_name ?? null}
           displayUnit={summaryDisplayUnit}
+          setUnit={setUnitOf}
           cardio={cardioTakeaway}
           // Sharing is the athlete's own choice: not offered on membership
           // workouts, and never from a coach's "View as client" session.
@@ -3461,42 +3587,17 @@ function ExerciseNotesBlock({ notes }: { notes: string }) {
 }
 
 /**
- * Coach notes for the whole session (e.g. station order in a home gym and how
- * to progress). Rendered only when the coach marked the day's notes
- * client-visible; the lead paragraph is always shown, the rest on demand.
+ * When "Last time" was, short enough to sit beside its label on a phone:
+ * "today", "yesterday", "3d", else "Sep 20". The day it was trained
+ * (trainedOn: the History sheet's own date), never when the sets were typed.
  */
-function DayCoachNotes({ day }: { day: { notes?: string | null; notes_client_visible?: boolean | null } | null }) {
-  const [open, setOpen] = useState(false);
-  const notes = formatClientDayNotes(day);
-  if (!notes) return null;
-  return (
-    <Card className="p-3 text-xs">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Coach notes</div>
-      <p className="mt-1 whitespace-pre-wrap text-foreground/90">{notes.lead}</p>
-      {notes.detail && (
-        <>
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary"
-            aria-expanded={open}
-          >
-            {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            {open ? "Show less" : "Read more"}
-          </button>
-          {open && <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{notes.detail}</p>}
-        </>
-      )}
-    </Card>
-  );
-}
-
-/** When "Last time" was, short enough to sit beside its label on a phone: "today", "yesterday", "3d", else "Nov 3". */
-function lastTimeWhen(occurredAt: string | null): string {
-  if (!occurredAt) return "";
-  const d = new Date(occurredAt);
-  const days = Math.round((Date.now() - d.getTime()) / 86400000);
-  return days <= 0 ? "today" : days === 1 ? "yesterday" : days < 7 ? `${days}d` : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+function lastTimeWhen(data: { trainedOn?: string | null; occurredAt: string | null }): string {
+  const ms = data.trainedOn ? ymdMs(data.trainedOn) : data.occurredAt ? new Date(data.occurredAt).getTime() : 0;
+  if (!ms) return "";
+  const d = new Date(ms);
+  const now = new Date();
+  const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86400000);
+  return days <= 0 ? "today" : days === 1 ? "yesterday" : days < 7 ? `${days}d` : d.toLocaleDateString(undefined, { month: "short", day: "numeric", ...(d.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}) });
 }
 
 /** " @ 7" from a logged RPE, " · 2 RIR" from a logged RIR, else nothing. */
@@ -3532,24 +3633,29 @@ function lastTimeText(data: PreviousLift, displayUnit: "kg" | "lb"): string | nu
  * button into its history: a history icon, a chevron, a press state. With
  * nothing logged yet it still opens the history ("None yet").
  */
-function PreviousLiftChip({ data, displayUnit, onOpen }: {
+function PreviousLiftChip({ data, displayUnit, onOpen, otherOn = null }: {
   data: PreviousLift | null;
   displayUnit: "kg" | "lb";
   /** Tapping it opens this exercise's History (it is the History button). */
   onOpen?: () => void;
+  /** Nothing logged on this card's machine yet: the machine last time was on. */
+  otherOn?: string | null;
 }) {
   const text = data ? lastTimeText(data, displayUnit) : null;
-  const when = data && text ? lastTimeWhen(data.occurredAt) : "";
+  const when = data && text ? lastTimeWhen(data) : "";
   const inner = (
     <>
+      {/* "Last time · Sep 20 ›": the date is never the part that's cut (a phone's
+          half is ~136pt; with a history icon too it read "Last time · Sep …"). */}
       <span className={REF_LABEL}>
-        <HistoryIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        <span className="truncate">Last time{when ? ` · ${when}` : ""}</span>
+        <span className="truncate">Last time</span>
+        {when && <span className="shrink-0 whitespace-nowrap" data-last-time-when>· {when}</span>}
         {onOpen && <ChevronRight className="-mr-1 ml-auto h-4 w-4 shrink-0" aria-hidden="true" />}
       </span>
       {text
         ? <span className={REF_VALUE} data-last-time-timed={data?.timed?.kind}>{text}</span>
         : <span className="text-[13px] leading-snug text-muted-foreground">None yet</span>}
+      {text && otherOn && <span className="truncate text-[11px] leading-tight text-muted-foreground" data-last-time-other-equipment>on {otherOn}</span>}
     </>
   );
   if (!onOpen) return <div className={REF_CELL}>{inner}</div>;
@@ -3566,7 +3672,9 @@ function PreviousLiftChip({ data, displayUnit, onOpen }: {
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, startsWorkout = true, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; /** Logging here starts the workout's clock (false: the day's cardio, done any time). */ startsWorkout?: boolean; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: TopSetBasis | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, startsWorkout = true, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, weekIndex = null, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; /** Logging here starts the workout's clock (false: the day's cardio, done any time). */ startsWorkout?: boolean; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: TopSetBasis | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb", opts?: { relabel?: boolean }) => void; focusMode?: boolean; /** The program week this workout is in (a generated note's "Week 1: …" line shows only in week 1). */ weekIndex?: number | null; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
+  // What the card says of the coach's note (coach-notes.ts): a coach's words as written, a generated note without its boilerplate.
+  const athleteNote = exerciseNoteForAthlete(row?.notes, weekIndex);
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -3574,15 +3682,62 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
   // temporarily absent (RLS/cache/network). History identity must not depend
   // on the optional display-details join resolving successfully.
   const exerciseId = exercise?.id ?? row.exercise_id ?? null;
+  // Equipment & setup: the rack or machine this card is on and how it's set up
+  // (equipment.ts). Its own sets say what a finished workout was done on; a
+  // workout being logged shows the exercise's current pick. One quiet line when
+  // something's saved, the sheet from it or the ⋯ menu.
+  const equipmentOn = !!clientId && !!exerciseId && adapter?.kind !== "member";
+  const { data: equipmentData } = useAthleteEquipment(equipmentOn ? clientId : null);
+  const viewingAsClient = useViewingAsClient();
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [noteForSetup, setNoteForSetup] = useState<string | null>(null);
+  const cardSetup = useMemo(() => {
+    if (!equipmentOn) return null;
+    const current = currentSetup(equipmentData, exerciseId);
+    const shown = cardEquipment(existingResults as any[], current);
+    const eq = shown.equipmentId ? equipmentData.equipment.find((e) => e.id === shown.equipmentId) ?? null : null;
+    const setup = shown.source === "current" ? current : shown.equipmentId ? setupFor(equipmentData, exerciseId, shown.equipmentId) : null;
+    const past = (existingResults as any[]).some((r) => r?.completed_at && Date.now() - Date.parse(r.completed_at) > LIVE_WINDOW_MS);
+    return {
+      equipmentId: shown.equipmentId,
+      equipment: eq,
+      summary: setupSummary(setup, eq),
+      mode: (readonly ? "view" : past ? "past" : "live") as SetupSheetMode,
+      // a PR on a machine says which (its weight means nothing on another one)
+      prOn: eq && !comparesAcrossEquipment(eq.kind) ? equipmentName(eq) : null,
+      instance: ((existingResults as any[]).find((r) => r?.completed_at)?.scheduled_workout_id as string | undefined) ?? null,
+    };
+  }, [equipmentOn, equipmentData, exerciseId, existingResults, readonly]);
   // Local mirror of the active unit so the per-exercise KG/LB toggle is always
   // instantly responsive — even if the parent's resolved-unit state takes a
   // tick to recompute or the persistence call is slow. Stays in sync with the
   // incoming prop so external changes (history hydration, undo) still apply.
   const [activeUnit, setActiveUnit] = useState<"kg" | "lb">(unit);
   useEffect(() => { setActiveUnit(unit); }, [unit]);
-  const handleUnitToggle = (u: "kg" | "lb") => {
+  const warmupSetsRef = useRef<Array<{ load: number; unit: string }>>([]);
+  // A switch the logger makes itself (a "495 lb" pick on a kg card): never asks.
+  const switchUnitNow = (u: "kg" | "lb", opts?: { relabel?: boolean }) => {
+    if (opts?.relabel) markRelabel(u);
+    else clearRelabel();
     setActiveUnit(u);
-    onUnitChange?.(u);
+    onUnitChange?.(u, opts);
+  };
+  // The card's kg | lb: with weights on it in the unit it's leaving, ask
+  // whether they were typed in the other unit (keep the numbers) or should be
+  // converted (unit-relabel.ts); with none, just switch.
+  const [unitAsk, setUnitAsk] = useState<UnitSwitchAsk | null>(null);
+  const handleUnitToggle = (u: "kg" | "lb") => {
+    if (u === activeUnit) return;
+    const weighed = [
+      ...existingResults
+        .filter((r: any) => resolveLoadType(r.load_type, r.is_bodyweight) === "external")
+        .sort((a: any, b: any) => (a.set_index ?? 0) - (b.set_index ?? 0))
+        .map((r: any) => ({ value: Number(r.entered_value ?? r.actual_load), unit: (r.entered_unit ?? r.actual_load_unit) as "kg" | "lb" })),
+      ...warmupSetsRef.current.map((w) => ({ value: Number(w.load), unit: w.unit as "kg" | "lb" })),
+    ];
+    const ask = unitSwitchAsk(weighed, u);
+    if (ask) setUnitAsk(ask);
+    else switchUnitNow(u);
   };
   // Load type default: exercise library metadata (default_load_type) decides
   // whether this exercise opens in Assisted mode. Never hardcode names here.
@@ -3660,6 +3815,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
       const shifted = existingResults
         .filter((x: any) => Number(x.set_index) !== setIndex)
         .map((x: any) => (Number(x.set_index) > setIndex ? { ...x, set_index: Number(x.set_index) - 1 } : x));
+      shownFieldRef.current.reps.clear();
+      shownFieldRef.current.rpe.clear();
       setRestore((r) => ({ token: (r?.token ?? 0) + 1, sets: snapshotOf(shifted, next).sets }));
       for (let i = setIndex; i <= previous; i++) clearLocalDraft(`workout-set:${row.id}:${clientId}:${i}`);
       await qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] });
@@ -3895,13 +4052,15 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
       percentage: Number(row.percentage),
       manualLoadKg: row.load_kg ? Number(row.load_kg) : null,
       manualLoadLb: row.load_lb ? Number(row.load_lb) : null,
-      unit: "kg",
+      // worked out and rounded once, in the unit on the card: computed in kg and
+      // then rounded again in lb, a % of an lb max could land a plate step off
+      unit: activeUnit,
       maxesIndex: buildMaxIndex(maxes),
       family: refFamily,
       ownCompetition,
       loggedE1rmKg,
     });
-  }, [row.percentage, row.percentage_basis, row.load_kg, row.load_lb, name, maxes, refFamily, ownCompetition, loggedE1rmKg]);
+  }, [row.percentage, row.percentage_basis, row.load_kg, row.load_lb, name, maxes, refFamily, ownCompetition, loggedE1rmKg, activeUnit]);
   // The coach planned this load as a % (of a max, or of today's top set): it's the
   // weight in the cell, and the RPE beside it is a cap, not a target.
   const plannedFromMax = !row.manual_override && isMaxBasis(row.percentage_basis) && computed?.status === "ok" && computed.load != null;
@@ -3953,9 +4112,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     if (row.manual_override) return prescribedLoadInActiveUnit();
     if (percentageBackoffWeight != null) return percentageBackoffWeight;
     if (computed && computed.status === "ok" && computed.load != null) {
-      const inUnit = activeUnit === "kg" ? computed.load : computed.load * 2.2046226218;
+      // already rounded in the card's unit (computeRowLoad above)
+      if (computed.unit === activeUnit) return computed.load;
       const step = weightIncrement(activeUnit);
-      return Math.round(inUnit / step) * step;
+      return Math.round(convertLoad(computed.load, computed.unit, activeUnit) / step) * step;
     }
     return prescribedLoadInActiveUnit();
   }, [row.manual_override, row.load_kg, row.load_lb, percentageBackoffWeight, computed, activeUnit]);
@@ -4080,12 +4240,30 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
   const warmupAllowed =
     !hideWeight && rowLoadType === "external" && !readonly && adapter?.kind !== "member" && !!clientId;
   const warmupEligible = warmupAllowed && !coachOwnsLoad && !!loadPlan;
-  const { sets: warmupSets, save: saveWarmup, remove: removeWarmup, replaceAll: replaceWarmups, ready: warmupsReady, atLimit: warmupAtLimit } = useWarmupSets(row.id, clientId, adapter?.kind === "client" ? adapter.ref.scheduledWorkoutId ?? null : null);
+  const { sets: warmupSets, save: saveWarmup, remove: removeWarmup, replaceAll: replaceWarmups, relabel: relabelWarmups, ready: warmupsReady, atLimit: warmupAtLimit } = useWarmupSets(row.id, clientId, adapter?.kind === "client" ? adapter.ref.scheduledWorkoutId ?? null : null);
+  warmupSetsRef.current = warmupSets;
+  // "They were lb" on any card of this exercise: its warm-ups keep their numbers too.
+  const warmupUnitRef = useRef(activeUnit);
+  useEffect(() => {
+    if (warmupUnitRef.current === activeUnit) return;
+    warmupUnitRef.current = activeUnit;
+    if (relabelIntent(activeUnit) && !readonly) void relabelWarmups(activeUnit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeUnit]);
   const [warmupForm, setWarmupForm] = useState<string | null>(null);
   // Only the first card of a lift asks for the last warm-up (see warmedUpRowIds).
   const rampsUp = useMemo(() => !warmedUp && offersLastWarmup(family, name), [warmedUp, family, name]);
   const warmupPromptable = warmupEligible && rampsUp;
-  const warmupForModel = warmupEligible ? pickFinalWarmup(warmupSets, activeUnit) : null;
+  // Every warm-up logged on this card, read as one by the engine (readWarmups):
+  // the same list, and the same suggestion, whatever order they were typed in.
+  const warmupsForModelKey = warmupEligible
+    ? warmupsForModel(warmupSets, activeUnit).map((w) => `${w.load}x${w.reps}@${w.rpe ?? ""}`).join(",")
+    : "";
+  const warmupsList = useMemo(
+    () => (warmupEligible ? warmupsForModel(warmupSets, activeUnit) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [warmupsForModelKey],
+  );
   // How this lift's history is read: the competition lifts and everything else differ (HISTORY_PROFILES).
   const liftKind = liftKindOf(row.exercises);
   const loadModel = useMemo<LoadModel | null>(() => {
@@ -4103,14 +4281,14 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     const toUnit = (kg: number) => (activeUnit === "kg" ? kg : kg * 2.2046226218);
     const carryToday = (dayRead?.carryKg ?? []).map((x) => ({ ...x, load: toUnit(x.load) }));
     return buildLoadModel({
-      history: loadHistory, today, unit: activeUnit, readiness, warmup: warmupForModel, bodyweightKg,
+      history: loadHistory, today, unit: activeUnit, readiness, warmups: warmupsList, bodyweightKg,
       dayFactor: dayRead?.factor ?? null, carryToday, lift: liftKind,
       // A back-off card reads its own past back-offs as logged, never as the
       // top set they imply (that's for a fresh first set): until today's top
       // set carries (it's rated), its number is a back-off's (note 11).
       backoffs: followsSameExercise ? "as_logged" : undefined,
     });
-  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness, warmupForModel?.load, warmupForModel?.reps, warmupForModel?.rpe, bodyweightKg, dayRead, liftKind, followsSameExercise]);
+  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness, warmupsList, bodyweightKg, dayRead, liftKind, followsSameExercise]);
   // Every card that can suggest gets the on/off chip (one switch for the whole
   // workout). Doesn't wait for history so the chip never pops in late.
   const canSuggest = !hideWeight && !coachOwnsLoad && rowLoadType === "external" && !!loadPlan;
@@ -4162,14 +4340,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     () => (loadHint && loadPlan ? suggestFinalWarmup(intendedLoad ?? loadHint.target, loadPlan.reps, activeUnit) : null),
     [loadHint?.target, intendedLoad, loadPlan?.reps, activeUnit],
   );
-  const heaviestWarmupId = useMemo(() => {
-    let best: { id: string; kg: number } | null = null;
-    for (const w of warmupSets) {
-      const kg = w.unit === "kg" ? w.load : w.load * 0.45359237;
-      if (!best || kg >= best.kg) best = { id: w.id, kg };
-    }
-    return best?.id ?? null;
-  }, [warmupSets]);
+  // The warm-up today's number is read from (the heaviest; ties by rating, then reps: finalWarmupRow).
+  const heaviestWarmupId = useMemo(() => finalWarmupRow(warmupSets)?.id ?? null, [warmupSets]);
   // Tuning only happens before the first working set.
   const warmupGauge = warmupPromptable && loadModel && !workedToday ? { suggested: warmupGaugeSuggested } : null;
   // The W prompt row: on lifts that ramp up, offered any time — it tunes the
@@ -4198,12 +4370,18 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toolsActions, row.id, name, movePosition, position, activeUnit, e1rmBest?.e1rm, e1rmBest?.from.load, e1rmBest?.from.reps, e1rmBest?.from.rpe]);
   useEffect(() => () => toolsActions?.reportE1rm(row.id, null), [toolsActions, row.id]);
+  // A warm-up too easy to read (RPE 5 or easier) is said so, and the number stays history's (or waits for set 1).
+  const warmupTooEasyFrom: "history" | "cold" | null = !warmupGauge
+    ? null
+    : loadHint?.warmup === "too_easy" ? "history" : loadModel?.warmupTooEasy ? "cold" : null;
+  const warmupTooEasy = warmupTooEasyFrom != null;
   const tunedWarmupId =
-    warmupGauge && (loadModel?.source === "warmup" || loadModel?.source === "history_warmup") ? heaviestWarmupId : null;
+    warmupGauge && !warmupTooEasy && (loadModel?.source === "warmup" || loadModel?.source === "history_warmup") ? heaviestWarmupId : null;
   // With Suggest off, a last warm-up logged before set 1 still sets today's
   // weight: it's what set 1's tap logs, said under the warm-up (never in a box).
+  // (A warm-up too easy to read leaves it at history's number: that's still today's.)
   const warmupTodayLoad: number | null =
-    !readonly && !showSuggestionCard && !!tunedWarmupId && canSuggest && loadHint && loadModel &&
+    !readonly && !showSuggestionCard && (!!tunedWarmupId || warmupTooEasy) && canSuggest && loadHint && loadModel &&
     loadModel.status !== "calibrating" && !loadPicks ? loadHint.target : null;
   const quickLoad: number | null = quickLoadFromStrip ?? warmupTodayLoad;
 
@@ -4211,16 +4389,20 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
   // saved, computed by the same engine (only while it can still tune: before
   // the first working set, history loaded, a reps @ RPE target).
   const previewWarmupTarget = useCallback(
-    (w: { load: number; reps: number; rpe: number | null }): LoadSuggestion | null => {
+    (w: { load: number; reps: number; rpe: number | null }, replacingId?: string | null): LoadSuggestion | null => {
       if (!warmupGauge || !loadHistory || !loadPlan) return null;
-      const model = buildLoadModel({ history: loadHistory, today: [], unit: activeUnit, readiness, warmup: w, bodyweightKg, lift: liftKind });
+      // read with the other warm-ups, as the card will once it's saved (the one being edited replaced)
+      const others = warmupsForModel(warmupSets.filter((x) => x.id !== replacingId), activeUnit);
+      const model = buildLoadModel({ history: loadHistory, today: [], unit: activeUnit, readiness, warmups: [...others, w], bodyweightKg, lift: liftKind });
       return suggestSetLoad(model, loadPlan);
     },
-    [!!warmupGauge, loadHistory, loadPlan, activeUnit, readiness, bodyweightKg, liftKind],
+    [!!warmupGauge, loadHistory, loadPlan, activeUnit, readiness, bodyweightKg, liftKind, warmupSets],
   );
-  // Logging sound: one soft "tock" each time this card gains a completed set —
-  // however it was completed (typed, tapped, filled down, timed) — and a
-  // brighter cue when it was the last one. Not on load, not for a coach view.
+  // Logging feedback: one soft "tock" and a medium tap each time this card gains
+  // a completed set — however it was completed (typed, tapped, filled down,
+  // timed), in the same render its number turns green — and a warmer cue when
+  // it was the last one. A fill-down that logs three sets at once is one. Not
+  // on load, not for a coach view.
   const completedSetCount = existingResults.filter((x: any) => x.completed_at && Number(x.set_index) <= setCount).length;
   const soundedCountRef = useRef<number | null>(null);
   useEffect(() => {
@@ -4228,7 +4410,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     const before = soundedCountRef.current;
     soundedCountRef.current = completedSetCount;
     if (before == null || completedSetCount <= before) return;
-    playAppSound(completedSetCount >= setCount ? "exercise" : "set");
+    feedback(completedSetCount >= setCount ? "exercise" : "set");
   }, [completedSetCount, resultsReady, readonly, setCount]);
 
   // For the finished card's "why": the last working weight and how the sets felt.
@@ -4382,6 +4564,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     for (let i = 1; i <= Math.max(current.setCount, target.setCount); i++) clearLocalDraft(`workout-set:${row.id}:${clientId}:${i}`);
     cascadeOriginRef.current.clear();
     durationOriginRef.current.clear();
+    shownFieldRef.current.reps.clear();
+    shownFieldRef.current.rpe.clear();
     setRestore((r) => ({ token: (r?.token ?? 0) + 1, sets: target.sets }));
     await Promise.all([
       qc.refetchQueries({ queryKey: ["pl-day-results", dayId] }),
@@ -4484,6 +4668,15 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     const targets = planCascade(fromSetIndex, states);
     if (!targets.length) return 0;
     for (const t of targets) cascadeOriginRef.current.set(t, "auto");
+    // While these sets are being written, a reps / RPE typed onto them waits for
+    // the write and patches the rows it made (cascadeFieldFromSet).
+    let settle!: () => void;
+    const settled = new Promise<void>((r) => (settle = r));
+    weightCascadeRef.current = { targets: new Set(targets), done: settled };
+    const release = () => {
+      settle();
+      if (weightCascadeRef.current?.done === settled) weightCascadeRef.current = null;
+    };
     // 1) Optimistic local state — every affected row updates in one pass.
     const token = ++cascadeTokenRef.current;
     setCascade({ token, targets, ...payload });
@@ -4495,11 +4688,19 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     const tasks: Array<Promise<any>> = [];
     for (const idx of targets) {
       const ex = existingResults.find((x: any) => x.set_index === idx) as any;
-      const repsNum = ex?.actual_reps != null ? Number(ex.actual_reps) : srcReps;
+      // What the set shows is what it saves, whatever order things were typed in:
+      // reps / RPE typed on it (or filled down onto it from a set above) before
+      // its weight arrived, else what it already has, else the source set's.
+      const shownReps = shownFieldRef.current.reps.get(idx);
+      const shownRpe = shownFieldRef.current.rpe.get(idx);
+      const repsNum = shownReps !== undefined
+        ? (shownReps !== "" ? parseInt(shownReps, 10) : null)
+        : ex?.actual_reps != null ? Number(ex.actual_reps) : srcReps;
       // Keep any RPE/RIR the set already has; otherwise carry the source set's,
       // the same way reps are carried.
-      const rpeStr =
-        ex?.actual_rpe_num != null ? String(ex.actual_rpe_num) : (ex?.actual_rpe ?? srcRpe);
+      const rpeStr = shownRpe !== undefined
+        ? (shownRpe !== "" ? shownRpe : null)
+        : ex?.actual_rpe_num != null ? String(ex.actual_rpe_num) : (ex?.actual_rpe ?? srcRpe);
       const rpeNum = rpeStr ? Number(rpeStr) : null;
       const complete = isSetLogComplete({
         requireReps: showReps,
@@ -4540,6 +4741,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     } catch {
       toast.error("Some sets didn’t save — check your connection");
       return 0;
+    } finally {
+      release();
     }
     // One tap logged several sets (a set's number, or the chip): say so, with
     // Undo for a tap that wasn't meant. A typed weight is deliberate: no toast.
@@ -4559,11 +4762,27 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
   // written; load and completion are untouched. The screen updates first
   // (broadcast + cache patch), the server catches up behind it.
   const fieldManualRef = useRef<Record<"reps" | "rpe", Set<number>>>({ reps: new Set(), rpe: new Set() });
+  // The reps / RPE each set shows from typing or a fill-down (not yet saved, or
+  // saved since): the weight's fill-down saves these, so a set never saves one
+  // number while showing another (an RPE typed on set 2 before set 1's weight).
+  const shownFieldRef = useRef<Record<"reps" | "rpe", Map<number, string>>>({ reps: new Map(), rpe: new Map() });
+  // A weight fill-down's writes in flight: the sets it's logging, and when it's done.
+  const weightCascadeRef = useRef<{ targets: Set<number>; done: Promise<void> } | null>(null);
+  /** This card's saved row for a set as the cache has it now (after a refetch), never an optimistic one. */
+  const savedRowNow = (idx: number): any | null => {
+    for (const [, data] of qc.getQueriesData({ queryKey: ["pl-day-results", dayId] })) {
+      if (!Array.isArray(data)) continue;
+      const r = (data as any[]).find((x) => x?.row_id === row.id && Number(x.set_index) === idx && x.id && !String(x.id).startsWith("optimistic:"));
+      if (r) return r;
+    }
+    return null;
+  };
   const fieldCascadeTokenRef = useRef(0);
   const [fieldCascade, setFieldCascade] = useState<{ token: number; targets: number[]; field: "reps" | "rpe"; value: string } | null>(null);
   const cascadeFieldFromSet = async (fromSetIndex: number, field: "reps" | "rpe", value: string, previousValue: string) => {
     if (!clientId || readonly) return;
     fieldManualRef.current[field].add(fromSetIndex);
+    shownFieldRef.current[field].set(fromSetIndex, value);
     if (value === "") return; // clearing a set clears only that set
     // An RPE over the cap isn't carried down: the sets below are being made
     // lighter (capHeld) precisely so they land at the cap, so the 7.5 that set 1
@@ -4579,6 +4798,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     });
     const targets = planFieldCascade(fromSetIndex, previousValue, states);
     if (!targets.length) return;
+    for (const t of targets) shownFieldRef.current[field].set(t, value);
     setFieldCascade({ token: ++fieldCascadeTokenRef.current, targets, field, value });
     const patchFor = (idx: number): Record<string, any> => field === "reps"
       ? { actual_reps: parseInt(value, 10) }
@@ -4589,19 +4809,35 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     const saved = targets
       .map((idx) => existingResults.find((x: any) => x.set_index === idx) as any)
       .filter((ex) => ex?.id && !String(ex.id).startsWith("optimistic:"));
-    if (!saved.length) return;
+    // Sets a weight fill-down is logging right now have no row id yet: once it's
+    // written, they're patched too, so a set never saves one value while showing
+    // another (300 on set 1, then RPE 9 on set 2 before set 3's row came back).
+    const inflight = weightCascadeRef.current;
+    const waiting = inflight
+      ? targets.filter((idx) => inflight.targets.has(idx) && !saved.some((ex: any) => Number(ex.set_index) === idx))
+      : [];
+    if (!saved.length && !waiting.length) return;
     qc.setQueriesData({ queryKey: ["pl-day-results", dayId] }, (old: any) => {
       let next = old;
       for (const ex of saved) next = applyOptimisticSetResult(next, { row_id: row.id, set_index: ex.set_index, ...patchFor(ex.set_index) }, ex.id);
       return next;
     });
-    const tasks = saved.map((ex) => {
+    const writeOne = (ex: any) => {
       const body: Record<string, any> = withMemberWorkoutIndexes({
         row_id: row.id, client_id: clientId, set_index: ex.set_index, ...patchFor(ex.set_index),
       }, adapter, dayId);
       if (adapter) return adapter.upsertPlRowResultRaw(body, ex.id);
       return sb.from("pl_row_results").update(body).eq("id", ex.id).then(({ error }: any) => { if (error) throw error; });
-    });
+    };
+    const tasks: Array<Promise<unknown>> = saved.map(writeOne);
+    if (waiting.length && inflight) {
+      tasks.push(inflight.done.then(async () => {
+        for (const idx of waiting) {
+          const ex = savedRowNow(idx);
+          if (ex) await writeOne(ex);
+        }
+      }));
+    }
     try {
       await Promise.all(tasks);
       onChange();
@@ -4669,18 +4905,29 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
         "workout-card-surface relative scroll-mt-24 overflow-hidden p-3.5 transition-[colors,box-shadow] hover:border-builder-card-border-strong sm:p-5",
       )}
     >
-      {/* The name, with the card's unit as one quiet word top right ("LB", tap
-          for the other); its role in the day under it in plain words. The
-          order lives in Focus's "Exercise N of M" and the list's own order. */}
+      {/* The name, with the card's unit top right as a small kg | lb switch;
+          its role in the day under it in plain words. The order lives in
+          Focus's "Exercise N of M" and the list's own order. */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1 text-xl font-bold leading-tight tracking-tight break-words" data-exercise-name>{name}</div>
         {/* No weight to log (a walk, a plank): no kg / lb switch either. */}
         {!readonly && onUnitChange && !hideWeight && <UnitSwitch unit={activeUnit} onChange={handleUnitToggle} />}
+        {unitAsk && (
+          <UnitSwitchSheet
+            ask={unitAsk}
+            onKeep={() => { setUnitAsk(null); switchUnitNow(unitAsk.to, { relabel: true }); }}
+            onConvert={() => { setUnitAsk(null); switchUnitNow(unitAsk.to); }}
+            onClose={() => setUnitAsk(null)}
+          />
+        )}
       </div>
       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-muted-foreground">
         <span data-exercise-role>{purposeLabelText(purposeLabel || category)}</span>
         {lastWeekSwap && <LastWeekSwapChip swap={lastWeekSwap} unit={activeUnit} />}
       </div>
+      {cardSetup?.summary && (
+        <SetupLine text={cardSetup.summary} retired={!!cardSetup.equipment?.archived_at} onOpen={() => setSetupOpen(true)} />
+      )}
       {/* Standardized prescription line: Sets × Reps @ Weight | RPE (a run reads as a run:
           "3 × 8 min · 2 min easy jog between | RPE 6–7") */}
       <div className="mt-2.5 flex items-center justify-between gap-3">
@@ -4736,6 +4983,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
                 data={previousLift}
                 displayUnit={activeUnit}
                 onOpen={clientId ? () => setHistoryOpen(true) : undefined}
+                otherOn={previousLift?.otherEquipment && previousLift.equipmentId
+                  ? equipmentName(equipmentData.equipment.find((e) => e.id === previousLift.equipmentId)) || "another machine"
+                  : null}
               />
               {right && <span aria-hidden="true" className={REF_DIVIDER} />}
               {right}
@@ -4757,6 +5007,20 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
           // Fix a past day's sets right here, without leaving the workout.
           editable={!readonly}
           onClose={() => setHistoryOpen(false)}
+        />
+      )}
+      {setupOpen && equipmentOn && cardSetup && (
+        <SetupSheet
+          open={setupOpen}
+          onOpenChange={setSetupOpen}
+          clientId={clientId!}
+          exercise={{ id: exerciseId!, name, equipment: (exercise as any)?.equipment ?? null }}
+          mode={cardSetup.mode}
+          dayId={dayId}
+          instance={cardSetup.instance}
+          shownEquipmentId={cardSetup.equipmentId}
+          noteText={noteForSetup ?? existingNote?.content ?? null}
+          coachView={viewingAsClient}
         />
       )}
       {canSuggest && !readonly && suggestNudge && !showSuggestionCard && <LoadSuggestionsNudge onDismiss={suggestNudge} />}
@@ -4792,7 +5056,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
           <Heart className="h-3.5 w-3.5 shrink-0" aria-hidden /> Your cardio plan · now or later today
         </p>
       )}
-      {row.notes && <ExerciseNotesBlock notes={row.notes} />}
+      {/* The note as the athlete should read it: a coach's words as written, a generated one without its boilerplate (coach-notes.ts). */}
+      {athleteNote && <ExerciseNotesBlock notes={athleteNote} />}
       {/* Logging actions: keep the common actions visible and quiet.
           Structural editing is isolated behind one compact reorder control. */}
       {/* Rest on the left ("Rest 5 min", the countdown while it runs), the timer
@@ -4870,6 +5135,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
                 {clientId && (
                   <CardMenuItem onSelect={() => setHistoryOpen(true)} className="rounded-lg" data-testid="card-history">
                     <LineChart className="mr-2 h-4 w-4" /> History & progress
+                  </CardMenuItem>
+                )}
+                {equipmentOn && (
+                  <CardMenuItem onSelect={() => setSetupOpen(true)} className="rounded-lg" data-testid="card-setup">
+                    <SlidersHorizontal className="mr-2 h-4 w-4" /> {cardSetup?.summary ? "Setup & equipment" : "Save your setup"}
                   </CardMenuItem>
                 )}
                 {canSuggest && !readonly && (
@@ -5157,9 +5427,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
             canEdit={warmupAllowed}
             onFormChange={setWarmupForm}
             onSave={async (v) => {
-              await saveWarmup(v);
+              const id = await saveWarmup(v);
               // a clip filmed on the open warm-up is tied to it as it saves: read it back
               if (!v.id && looseWarmupClip) void qc.invalidateQueries({ queryKey: setVideosKey(dayId) });
+              return id;
             }}
             onRemove={removeWarmup}
             prompt={warmupPrompt}
@@ -5173,6 +5444,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
             columns={{ focusMode, showReps, showTimer, showDistance, showCalories, showVelocity, videoColumn }}
             effortKind={showRir ? "rir" : "rpe"}
             looseClip={looseWarmupClip}
+            tooEasy={warmupTooEasyFrom}
             suggestOn={showSuggestionCard}
             // open on a barbell squat, bench or deadlift; a one-line prompt elsewhere
             openRow={rangeLift(family, name, exercise?.equipment)}
@@ -5201,6 +5473,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
           return (
             <SetRow
               key={i}
+              prOn={cardSetup?.prOn ?? null}
               rowId={row.id}
               workoutId={dayId}
               startsWorkout={startsWorkout}
@@ -5254,7 +5527,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
               focusMode={focusMode}
               onChange={onChange}
               onSetCompleted={bumpRestTimer}
-              onSwitchUnit={!readonly && onUnitChange && !hideWeight ? handleUnitToggle : undefined}
+              onSwitchUnit={!readonly && onUnitChange && !hideWeight ? switchUnitNow : undefined}
               videoColumn={videoColumn}
               dayTitle={dayTitle}
               registerHandle={registerSetRow}
@@ -5326,7 +5599,21 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
         exerciseName={name}
         existingNote={existingNote}
         loading={notesLoading}
-        onSaved={onNoteChange}
+        onSaved={(content) => {
+          onNoteChange();
+          // "Rack height 30" typed into a note: offer to keep it as the card's setup
+          if (!equipmentOn || readonly || !content) return;
+          const found = settingsFromNote(content);
+          if (!found.length) return;
+          const saved = cardSetup?.summary ?? "";
+          if (found.every((f) => saved.toLowerCase().includes(`${f.label} ${f.value}`.toLowerCase()))) return;
+          setNoteForSetup(content);
+          toast("Save it as your setup?", {
+            description: `${found.map((f) => `${f.label} ${f.value}`).join(" · ")} shows on this card every time.`,
+            action: { label: "Save", onClick: () => setSetupOpen(true) },
+            duration: 6000,
+          });
+        }}
       />
     </Card>
   );
@@ -5380,7 +5667,8 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   exerciseName: string;
   existingNote?: any;
   loading?: boolean;
-  onSaved: () => void;
+  /** After a save, with what was saved. */
+  onSaved: (content?: string) => void;
 }) {
   const [draft, setDraft] = useState(existingNote?.content ?? "");
   // Only re-hydrate the draft when the sheet (re)opens or the underlying
@@ -5388,6 +5676,10 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   // out user edits whenever a refetch came back with the previous saved
   // content, making it feel like the note couldn't be edited.
   useEffect(() => { setDraft(existingNote?.content ?? ""); }, [existingNote?.id, open]);
+  // This workout's note's earlier versions, and which older note is being edited in place.
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  useEffect(() => { if (!open) { setVersionsOpen(false); setEditingId(null); } }, [open]);
   const adapter = useOptionalAdapter();
   const qc = useQueryClient();
   // A coaching client's note goes to their coach in Messages (a member has no coach; a coach in
@@ -5399,6 +5691,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   // Per-exercise note history. Lazy: only fetched when the sheet is open,
   // keyed by canonical exercise identity, and cached so reopening is instant.
   // Same table (pl_exercise_notes) the coach view / POV read — one source.
+  // Ordered by the day each note was written: an edit never moves a note.
   const { data: historyRaw = [], isLoading: historyLoading } = useQuery({
     queryKey: ["exercise-note-history", clientId, exerciseId ?? "", exerciseName],
     enabled: open && !!clientId,
@@ -5407,10 +5700,10 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
       let q = sb
         .from("pl_exercise_notes")
         .select(
-          "id, exercise_id, exercise_name, content, status, created_at, updated_at, day_id, pl_days(title, day_index, pl_weeks(week_index, pl_blocks(name)))",
+          "id, exercise_id, exercise_name, content, status, created_at, updated_at, edited_at, day_id, pl_days(title, day_index, pl_weeks(week_index, pl_blocks(name)))",
         )
         .eq("client_id", clientId!)
-        .order("updated_at", { ascending: false })
+        .order("created_at", { ascending: false })
         .limit(50);
       q = exerciseId ? q.eq("exercise_id", exerciseId) : q.eq("exercise_name", exerciseName);
       const { data, error } = await q;
@@ -5430,6 +5723,26 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
     [historyRaw, exerciseId, exerciseName, existingNote?.id, dayId],
   );
 
+  /** Rewords a note already written (this workout's or an older one): the same row, never a second note. */
+  const updateNote = async (id: string, content: string) => {
+    // the database keeps the wording it replaces and stamps the edit; the coach's card follows it
+    const payload = { content, status: "edited" };
+    await saveExerciseNoteWithRetry(async () => {
+      if (adapter) {
+        await adapter.upsertPlExerciseNoteRaw(payload, id);
+      } else {
+        const { error } = await sb.from("pl_exercise_notes").update(payload).eq("id", id);
+        if (error) throw error;
+      }
+    });
+    qc.invalidateQueries({ queryKey: ["exercise-note-history", clientId] });
+    qc.invalidateQueries({ queryKey: ["exercise-note-revisions", id] });
+    qc.invalidateQueries({ queryKey: ["workout-note-card", "exercise", id] });
+    qc.invalidateQueries({ queryKey: ["client-workout-notes", clientId ?? null] });
+  };
+
+  const editingOlder = !!editingId;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" hideCloseButton className="keyboard-aware-bottom-sheet h-[88vh] overflow-y-auto p-0 sm:max-w-xl sm:mx-auto sm:rounded-t-2xl">
@@ -5437,14 +5750,19 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
           <SheetTitle className="text-base font-bold">{exerciseName}</SheetTitle>
           <SheetDescription className="text-xs">{dayTitle} · Exercise notes</SheetDescription>
         </SheetHeader>
-        <div className="px-5 py-4 space-y-4 pb-32">
+        <div className="px-5 py-4 space-y-5 pb-32">
           <div>
             <div className="flex items-center justify-between gap-2">
-              <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{toCoach ? "Note for your coach" : "Your note"}</label>
+              <label htmlFor={`exercise-note-${rowId}`} className="text-[13px] font-semibold">{toCoach ? "Note for your coach" : "Your note"}</label>
               {existingNote && (
-                <span className="text-[10px] text-muted-foreground">
-                  Last saved {new Date(existingNote.updated_at).toLocaleString()}
-                  {existingNote.status === "edited" && " · edited"}
+                <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground" data-note-dates>
+                  <span>{noteDay(existingNote.created_at)}</span>
+                  {isNoteEdited(existingNote) && (
+                    <>
+                      <span aria-hidden>·</span>
+                      <EditedToggle note={existingNote} open={versionsOpen} onToggle={() => setVersionsOpen((v) => !v)} />
+                    </>
+                  )}
                 </span>
               )}
             </div>
@@ -5452,6 +5770,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
               <div className="mt-1 h-[140px] w-full animate-pulse rounded-md border border-border bg-muted/40" aria-busy="true" aria-label="Loading note" />
             ) : (
               <Textarea
+                id={`exercise-note-${rowId}`}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 rows={6}
@@ -5459,23 +5778,33 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
                 className="mt-1"
               />
             )}
+            {existingNote && (
+              <NoteVersions
+                noteId={existingNote.id}
+                note={existingNote}
+                open={versionsOpen}
+                onRestore={(content) => setDraft(content)}
+                className="mt-3"
+              />
+            )}
             {toCoach ? (
-              <p className="mt-1 text-[11px] text-muted-foreground" data-exercise-note-to-coach>
-                Goes to your coach in Messages.{existingNote ? " Edit it anytime, they see the change." : ""}
+              <p className="mt-1.5 text-[11px] text-muted-foreground" data-exercise-note-to-coach>
+                {existingNote?.coach_message_id
+                  ? "In your coach's Messages. Edits update that same message."
+                  : "Goes to your coach in Messages."}
               </p>
             ) : existingNote && (
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Edit your note anytime — tap above to change it, then tap Save Note.
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                Edit it anytime. Earlier versions are kept.
               </p>
             )}
           </div>
 
-          {/* Previous notes for THIS exercise, newest first. Reference-only:
-              tapping/saving here never mutates a historical note. */}
+          {/* Previous notes for THIS exercise, by the day each was written,
+              newest first. Each one edits in place (the same note, its earlier
+              wording kept), never as a new note. */}
           <div data-testid="exercise-note-history">
-            <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-              Previous notes
-            </div>
+            <div className="text-[13px] font-semibold">Previous notes</div>
             {historyLoading ? (
               <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading history…
@@ -5487,12 +5816,25 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
             ) : (
               <ul className="mt-2 space-y-2">
                 {history.map((n) => (
-                  <NoteHistoryItem key={n.id} note={n} />
+                  <NoteHistoryItem
+                    key={n.id}
+                    note={n}
+                    canEdit={!!clientId}
+                    editing={editingId === n.id}
+                    onEdit={(on) => setEditingId(on ? n.id : null)}
+                    onSave={async (content) => {
+                      await updateNote(n.id, content);
+                      setEditingId(null);
+                      toast.success("Note updated");
+                    }}
+                  />
                 ))}
               </ul>
             )}
           </div>
         </div>
+        {/* One save button on screen at a time: an older note being edited has its own. */}
+        {!editingOlder && (
         <div
           className="sticky bottom-0 left-0 right-0 border-t border-border bg-background/95 backdrop-blur px-5 pt-3 space-y-2"
           style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}
@@ -5507,44 +5849,41 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
             onAction={async () => {
               if (!clientId) return;
               const trimmed = draft.trim();
-              const doSave = async () => {
-                if (existingNote) {
-                  const payload = { content: trimmed, status: "edited", coach_seen_at: null };
-                  if (adapter) {
-                    await adapter.upsertPlExerciseNoteRaw(payload, existingNote.id);
-                  } else {
-                    const { error } = await sb.from("pl_exercise_notes").update(payload).eq("id", existingNote.id);
-                    if (error) throw error;
-                  }
-                } else {
-                  if (!trimmed) throw new Error("Note is empty");
-                  const payload = {
-                    client_id: clientId,
-                    day_id: dayId,
-                    row_id: rowId,
-                    exercise_id: exerciseId,
-                    exercise_name: exerciseName,
-                    content: trimmed,
-                    status: "new",
-                  };
+              // the card the coach had before this save (an edit updates it; only a note's first words post one)
+              const cardBefore: string | null = existingNote?.coach_message_id ?? null;
+              if (existingNote) {
+                await updateNote(existingNote.id, trimmed);
+              } else {
+                if (!trimmed) throw new Error("Note is empty");
+                const payload = {
+                  client_id: clientId,
+                  day_id: dayId,
+                  row_id: rowId,
+                  exercise_id: exerciseId,
+                  exercise_name: exerciseName,
+                  content: trimmed,
+                  status: "new",
+                };
+                await saveExerciseNoteWithRetry(async () => {
                   if (adapter) {
                     await adapter.upsertPlExerciseNoteRaw(payload, null);
                   } else {
                     const { error } = await sb.from("pl_exercise_notes").insert(payload);
                     if (error) throw error;
                   }
-                }
-              };
-              await saveExerciseNoteWithRetry(doSave);
-              qc.invalidateQueries({ queryKey: ["exercise-note-history", clientId] });
-              // the database put it in the coach's Messages: push them (the same card again is never pushed twice)
-              if (toCoach) {
+                });
+                qc.invalidateQueries({ queryKey: ["exercise-note-history", clientId] });
+                qc.invalidateQueries({ queryKey: ["client-workout-notes", clientId] });
+              }
+              // the database put a new card in the coach's Messages: push them. An edit only
+              // updates the card they already have, so it never pushes.
+              if (toCoach && !cardBefore) {
                 void (async () => {
                   const { data } = await sb.from("pl_exercise_notes").select("coach_message_id").eq("client_id", clientId).eq("day_id", dayId).eq("row_id", rowId).maybeSingle();
-                  await pushWorkoutNote(data?.coach_message_id ?? null);
+                  if (data?.coach_message_id && data.coach_message_id !== cardBefore) await pushWorkoutNote(data.coach_message_id);
                 })().catch(() => {});
               }
-              onSaved();
+              onSaved(trimmed);
             }}
           >
             <StickyNote className="mr-2 h-4 w-4" /> {existingNote ? "Update Note" : "Save Note"}
@@ -5553,36 +5892,107 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Workout
           </Button>
         </div>
+        )}
       </SheetContent>
     </Sheet>
   );
 }
 
-/** One historical note row: date-first, context secondary, long notes collapse. */
-function NoteHistoryItem({ note }: { note: any }) {
+/**
+ * One earlier note: the day it was written first (an edit never changes it),
+ * where it was, the words (long ones fold), "Edited …" opening its earlier
+ * versions, and Edit, which rewords it right here.
+ */
+function NoteHistoryItem({ note, canEdit, editing, onEdit, onSave }: {
+  note: any;
+  canEdit: boolean;
+  editing: boolean;
+  onEdit: (on: boolean) => void;
+  onSave: (content: string) => Promise<void>;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const [draft, setDraft] = useState<string>(note.content ?? "");
+  const [saving, setSaving] = useState(false);
   const content: string = note.content ?? "";
   const isLong = content.length > NOTE_PREVIEW_CHARS;
   const ctx = noteContextLabel(note);
+  const written = note.created_at ? format(parseISO(note.created_at), "MMM d, yyyy") : "";
+  const unchanged = draft.trim() === content.trim();
+  const save = async () => {
+    if (saving || unchanged || !draft.trim()) return;
+    setSaving(true);
+    try {
+      await onSave(draft.trim());
+    } catch (err) {
+      toast.error((err as Error)?.message || "Couldn't save the note. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
   return (
-    <li className="rounded-md border border-border bg-secondary/30 p-2.5">
-      <div className="flex flex-wrap items-baseline gap-x-2 text-[11px]">
-        <span className="font-bold text-foreground">
-          {format(parseISO(note.updated_at), "MMM d, yyyy")}
-        </span>
-        {ctx && <span className="text-muted-foreground">{ctx}</span>}
+    <li className={cn("rounded-xl border p-3", editing ? "border-foreground/40 bg-card" : "border-border bg-secondary/30")} data-note-history-item={note.id}>
+      <div className="flex items-center gap-2 text-[11px]">
+        <span className="shrink-0 font-semibold text-foreground">{written}</span>
+        {ctx && <span className="min-w-0 truncate text-muted-foreground">{ctx}</span>}
+        {canEdit && !editing && (
+          <button
+            type="button"
+            onClick={() => { setDraft(content); onEdit(true); }}
+            className="-my-2 ml-auto inline-flex h-9 shrink-0 items-center gap-1 rounded-full px-2.5 text-[12px] font-semibold text-muted-foreground active:bg-muted"
+            aria-label={`Edit your note from ${written}`}
+            data-note-history-edit
+          >
+            <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit
+          </button>
+        )}
       </div>
-      <p className={cn("mt-1 whitespace-pre-wrap text-sm", isLong && !expanded && "line-clamp-2")}>
-        {content}
-      </p>
-      {isLong && (
-        <button
-          type="button"
-          className="mt-0.5 text-[11px] font-semibold text-primary"
-          onClick={() => setExpanded((v) => !v)}
-        >
-          {expanded ? "Show less" : "Read more"}
-        </button>
+      {editing ? (
+        <>
+          <Textarea
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={4}
+            className="mt-2"
+            aria-label={`Your note from ${written}`}
+          />
+          <div className="mt-2 flex items-center justify-end gap-2">
+            <Button type="button" variant="ghost" className="h-10" onClick={() => onEdit(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="button" className="h-10 min-w-[88px]" onClick={() => void save()} disabled={saving || unchanged || !draft.trim()} data-note-history-save>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className={cn("mt-1 whitespace-pre-wrap text-sm", isLong && !expanded && "line-clamp-2")}>
+            {content}
+          </p>
+          {isLong && (
+            <button
+              type="button"
+              className="mt-0.5 text-[11px] font-semibold text-muted-foreground underline underline-offset-2"
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? "Show less" : "Read more"}
+            </button>
+          )}
+        </>
+      )}
+      {isNoteEdited(note) && (
+        <div className="mt-1.5">
+          <EditedToggle note={note} open={versionsOpen} onToggle={() => setVersionsOpen((v) => !v)} />
+          <NoteVersions
+            noteId={note.id}
+            note={note}
+            open={versionsOpen}
+            onRestore={canEdit ? (c) => { setDraft(c); if (!editing) onEdit(true); } : undefined}
+            className="mt-2"
+          />
+        </div>
       )}
     </li>
   );
@@ -5618,7 +6028,10 @@ function SetRow({
   registerHandle,
   dayTitle = "",
   onSwitchUnit,
+  prOn = null,
 }: {
+  /** The machine the set was done on, when its weight means nothing on another one (a PR says which). */
+  prOn?: string | null;
   loadHint?: LoadSuggestion | null;
   /** The card's KG / LB switch: a weight typed in the other unit switches it, then saves. */
   onSwitchUnit?: (u: "kg" | "lb") => void;
@@ -5976,6 +6389,15 @@ function SetRow({
     unitPickRef.current = null;
     if (pick && pick.unit === unit && Date.now() - pick.at < UNIT_PICK_WAIT_MS) {
       applyWeightPick(pick);
+      return;
+    }
+    // "They were lb": the number stays exactly as typed and only its unit
+    // changes (unit-relabel.ts). Never adopted as saved, so the row saves it
+    // again in the new unit through its own save, like a weight retyped.
+    if (relabelIntent(unit)) {
+      const kept = relabeledLoad(load, previousUnit, unit, existing ? { value: originalValue(existing as any), unit: originalUnit(existing as any) } : null);
+      if (kept !== load) setLoadPaired(kept);
+      else setLoadUnit(unit);
       return;
     }
     // The toggle changes only the display representation. Convert the visible
@@ -6800,8 +7222,9 @@ function SetRow({
       localPr: prBadge && (!hasRecords || assistedSet) ? prBadge : null,
       assisted: assistedSet,
       unit,
+      equipment: prOn,
     }),
-    [recordForBadge, loadRecordForBadge, prBadge, hasRecords, assistedSet, unit],
+    [recordForBadge, loadRecordForBadge, prBadge, hasRecords, assistedSet, unit, prOn],
   );
   // It pops in once when it's just been earned, never on reopening an old workout.
   const prFresh = useMemo(() => {
@@ -6819,8 +7242,8 @@ function SetRow({
       : `${rowId}:${setIndex}:${existing.completed_at}:${prBadge!.reps}:${prBadge!.amount}`;
     if (prSoundedRef.current === key) return;
     prSoundedRef.current = key;
-    playAppSound("pr");
-    haptic("success");
+    // the PR chip's pop, its sparkle and the success tap together
+    feedback("pr");
   }, [prBadge, recordForBadge, loadRecordForBadge, hasRecords, existing?.completed_at, rowId, setIndex]);
 
   const prescribedSec = prescribedDurationSeconds ?? null;
@@ -6895,8 +7318,7 @@ function SetRow({
       await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();
       if (!existing?.completed_at) onSetCompleted?.(setIndex);
-      // The card plays the set's sound (it hears every way a set completes).
-      if (completeNow) haptic("light");
+      // The card gives the set's tock and tap (it hears every way a set completes).
       toast.success(
         opts.finishedEarly && prescribedSec
           ? `Saved ${formatDuration(completedSeconds)} of ${formatDuration(prescribedSec)}`
@@ -6970,11 +7392,13 @@ function SetRow({
             title={statusError ? "Status failed to save — tap to retry" : isConfirmed ? "Mark set incomplete" : quickWeight ? `Log this set at ${quickWeight} ${unit} (the sets below fill in with it)` : weightOnlyMissing ? "Type the weight: the set logs once it's in" : "Mark set complete"}
             aria-label={statusError ? `Retry saving set ${setIndex} status` : isConfirmed ? `Mark set ${setIndex} incomplete` : quickWeight ? `Log set ${setIndex} at ${quickWeight} ${unit}` : weightOnlyMissing ? `Type set ${setIndex}'s weight` : `Mark set ${setIndex} complete`}
             className={cn(
-              "flex h-11 w-full items-center justify-center sm:h-9",
+              "relative flex h-11 w-full items-center justify-center sm:h-9",
               statusSaving && "cursor-wait",
             )}
           >
             <SetNumberBadge setIndex={setIndex} done={isConfirmed} saving={statusSaving} error={!!statusError} focusMode={focusMode} />
+            {/* the iPhone's tap on the finger's own touch (the card's tock and tap follow as it logs) */}
+            {!statusSaving && <HapticTap />}
           </button>
         ) : (
           <SetNumberBadge setIndex={setIndex} done={isConfirmed} focusMode={focusMode} />
@@ -7184,21 +7608,45 @@ function SetRow({
 /* kg/lb toggle                                                                */
 /* -------------------------------------------------------------------------- */
 
-/** The card's unit as one quiet word top right ("LB"): a tap switches the card to the other unit, the same as KG / LB did. */
+/**
+ * The card's unit top right as a small two-way switch, "kg | lb", the one in
+ * use filled: both units on show is what says it can be changed (a lone "LB"
+ * read as a label; the filled one is neutral like a picked day, never the
+ * brand red). A tap on the other one switches every card of the exercise
+ * and remembers it for that exercise; the toast has Undo. With weights on
+ * the card in the unit it's leaving it asks first (UnitSwitchSheet): they
+ * were typed in the other unit (keep the numbers) or convert them.
+ */
 function UnitSwitch({ unit, onChange }: { unit: "kg" | "lb"; onChange: (u: "kg" | "lb") => void }) {
-  const other = unit === "kg" ? "lb" : "kg";
   const word = (u: "kg" | "lb") => (u === "kg" ? "kilograms" : "pounds");
   return (
-    <button
-      type="button"
-      onClick={() => onChange(other)}
+    <div
+      role="radiogroup"
+      aria-label="Weight unit for this exercise"
       data-card-unit={unit}
-      aria-label={`Weights in ${word(unit)}. Switch to ${word(other)}`}
-      title={`Switch to ${word(other)}`}
-      className="-my-2 -mr-2 inline-flex h-10 min-w-10 shrink-0 items-center justify-center rounded-md px-2 text-sm font-medium uppercase text-muted-foreground transition-colors hover:text-foreground active:bg-muted"
+      className="-my-1.5 -mr-1 inline-flex h-10 shrink-0 items-center rounded-lg border border-border p-0.5"
     >
-      {unit}
-    </button>
+      {(["kg", "lb"] as const).map((u) => {
+        const on = u === unit;
+        return (
+          <button
+            key={u}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            aria-label={on ? `Weights in ${word(u)}` : `Switch to ${word(u)}`}
+            data-unit-option={u}
+            onClick={() => { if (!on) onChange(u); }}
+            className={cn(
+              "inline-flex h-full min-w-[2.5rem] items-center justify-center rounded-md px-2 text-[13px] font-semibold transition-colors active:scale-[0.97]",
+              on ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {u}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

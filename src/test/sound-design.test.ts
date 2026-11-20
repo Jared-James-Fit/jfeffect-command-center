@@ -117,19 +117,20 @@ describe("one sound system, one setting", () => {
 describe("where the sounds play", () => {
   const recap = readFileSync("src/components/workout-submission-summary.tsx", "utf8");
   const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
-  it("recap: the PR sting on a record day, the finish sting otherwise, waits for records, stops on close, has a mute", () => {
-    expect(recap).toContain('stingRef.current = prList.length > 0 || recordCount > 0 ? "pr" : "workout";');
-    expect(recap).toContain("if (!usesRecords || records !== null) { fire(); return; }");
+  it("recap: the PR sting on a headline PR day (Nov 18 2026), the finish sting otherwise, waits for records and the main lift, stops on close, has a mute", () => {
+    expect(recap).toContain('stingRef.current = bigMoment ? "pr" : "workout";');
+    expect(recap).toContain("if (!usesRecords || (records !== null && (!completionId || shareStats !== undefined))) { fire(); return; }");
     expect(recap).toContain("stopStingRef.current();");
     expect(recap).toContain("<SoundToggleButton");
   });
   it("logging: one sound per completed-set increase, brighter on the last set; PRs sparkle", () => {
-    expect(wdv).toContain('playAppSound(completedSetCount >= setCount ? "exercise" : "set");');
-    expect(wdv).toContain('playAppSound("pr");');
+    // through feedback(): each moment's sound and its haptic together (feedback.ts)
+    expect(wdv).toContain('feedback(completedSetCount >= setCount ? "exercise" : "set");');
+    expect(wdv).toContain('feedback("pr");');
     expect(wdv).not.toContain("playUiSound");
   });
   it("rest over chimes (iPhone web can't vibrate); Workout Tools has the sounds switch", () => {
-    expect(readFileSync("src/components/workout-day/RestTimerButton.tsx", "utf8")).toContain('playAppSound("timer");');
+    expect(readFileSync("src/components/workout-day/RestTimerButton.tsx", "utf8")).toContain('feedback("timer");');
     expect(readFileSync("src/components/workout-tools/workout-tools.tsx", "utf8")).toContain("<SoundsRow />");
   });
   it("the music code is fetched lazily and warmed in idle time", () => {

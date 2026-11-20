@@ -5,10 +5,12 @@ import { ChevronDown, Grid3x3, Images, RefreshCcw, X, Zap, ZapOff } from "lucide
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { baseMediaType } from "@/lib/community";
-import { getMicStream } from "@/lib/audio-session";
+import { askForMicAgain, micRefused, noteClipMic, openVideoMic } from "@/lib/video-mic";
 import { holdCameraOpen } from "@/lib/camera/camera-presence";
+import { phoneUpright, takePrimedCamera } from "@/lib/camera/camera-prime";
 import {
   FILM_QUALITIES,
+  askOrder,
   availableFps,
   availableQualities,
   clampZoom,
@@ -18,12 +20,17 @@ import {
   fitSettings,
   lensesFrom,
   pickType,
+  pictureFits,
+  pictureMiss,
+  readFilmAsk,
   readFilmSettings,
   recordClock,
   recordLimitSeconds,
   recorderBitrate,
   recorderTypes,
+  saveFilmAsk,
   saveFilmSettings,
+  type AskShape,
   type CameraCaps,
   type FilmFps,
   type FilmQuality,
@@ -35,13 +42,38 @@ export { canFilmInApp } from "@/lib/camera/film-settings";
 
 /** Recordings shorter than this are a slip of the thumb, not a clip. */
 const MIN_RECORDING_MS = 700;
+/** How long to wait for the first frame's size before judging the picture's shape. */
+const PICTURE_WAIT_MS = 1_500;
+
+
+/** The picture's size as it's shown (turned the way the phone is held), once the first frame is in. */
+function pictureSize(v: HTMLVideoElement, ms: number): Promise<{ w: number; h: number } | null> {
+  return new Promise((resolve) => {
+    const read = () => (v.videoWidth && v.videoHeight ? { w: v.videoWidth, h: v.videoHeight } : null);
+    const now = read();
+    if (now) return resolve(now);
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(t);
+      v.removeEventListener("loadedmetadata", finish);
+      v.removeEventListener("resize", finish);
+      resolve(read());
+    };
+    const t = setTimeout(finish, ms);
+    v.addEventListener("loadedmetadata", finish);
+    v.addEventListener("resize", finish);
+  });
+}
 
 type Status = "starting" | "live" | "denied" | "unavailable";
 type Rec = { recorder: MediaRecorder; mic: MediaStream | null; restore: (() => void) | null; startedAt: number; keep: boolean };
 
 /**
- * The app's own video camera, full screen (Instagram's / the phone's camera):
- * films at the quality picked (1080p by default, 4K or 60 fps where the phone
+ * The app's own video camera, full screen like TikTok's / a reel's (the
+ * picture edge to edge, 9:16 upright, the controls over it; the page and the
+ * status bar black behind it, camera-presence.ts): films at the quality picked (1080p by default, 4K or 60 fps where the phone
  * can), with its lenses (0.5 · 1× · Tele), pinch to zoom, the light, the front
  * camera, a grid and sound on or off, all remembered on the phone
  * (film-settings.ts). One tap starts, one stops: a propped phone films the
@@ -77,6 +109,7 @@ export function FilmCamera({
   const [elapsed, setElapsed] = useState(0);
   const [panel, setPanel] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [micBlocked, setMicBlocked] = useState(() => micRefused());
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -129,26 +162,90 @@ export function FilmCamera({
     setStatus("starting");
     setTorch(false);
     setZoom(null);
-    void (async () => {
-      let stream: MediaStream | null = null;
-      let last: unknown = null;
-      for (const ask of constraintLadder({ quality: settings.quality, fps: settings.fps, facing }, lensId)) {
+    const want = { quality: settings.quality, fps: settings.fps, facing };
+    let last: unknown = null;
+    const refused = () => {
+      const name = (last as { name?: string } | null)?.name;
+      return name === "NotAllowedError" || name === "SecurityError";
+    };
+    // the first ask may already be on its way, from the tap that opened the camera (camera-prime.ts)
+    let first = true;
+    const open = async (shape: AskShape): Promise<MediaStream | null> => {
+      for (const ask of constraintLadder(want, lensId, shape)) {
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: ask, audio: false });
-          break;
+          const primed = first ? takePrimedCamera(ask) : null;
+          first = false;
+          if (primed && "released" in primed) await primed.released;
+          return await (primed && "stream" in primed ? primed.stream : navigator.mediaDevices.getUserMedia({ video: ask, audio: false }));
         } catch (e) {
           last = e;
-          const name = (e as { name?: string } | null)?.name;
-          if (name === "NotAllowedError" || name === "SecurityError") break;
+          if (refused()) return null;
         }
       }
-      if (cancelled) {
-        stream?.getTracks().forEach((t) => t.stop());
-        return;
+      return null;
+    };
+    const show = (stream: MediaStream) => {
+      const v = videoRef.current;
+      if (!v) return;
+      // iOS shows a live camera inline only when muted + playsinline are attributes
+      v.muted = true;
+      v.setAttribute("muted", "");
+      v.setAttribute("playsinline", "");
+      v.srcObject = stream;
+      void v.play().catch(() => undefined);
+    };
+    void (async () => {
+      // A reel's picture: 9:16 upright, filling the screen. Browsers read the size asked for against
+      // different ways round, so the picture is checked and, when it isn't 9:16 (a 3:4 or sideways
+      // picture would play boxed in), asked for the other way; what worked is kept on the phone.
+      const upright = phoneUpright();
+      const order = upright == null ? (["landscape"] as AskShape[]) : askOrder(upright, readFilmAsk());
+      let stream: MediaStream | null = null;
+      let best: { shape: AskShape; miss: number } | null = null;
+      for (let i = 0; i < order.length; i++) {
+        const shape = order[i];
+        const got = await open(shape);
+        if (cancelled) {
+          got?.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        if (!got) {
+          if (refused()) break;
+          continue;
+        }
+        show(got);
+        const v = videoRef.current;
+        const pic = v && upright != null ? await pictureSize(v, PICTURE_WAIT_MS) : null;
+        if (cancelled) {
+          got.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        if (!pic || upright == null || pictureFits(pic.w, pic.h, upright)) {
+          if (pic && upright) saveFilmAsk(shape);
+          stream = got;
+          break;
+        }
+        const miss = pictureMiss(pic.w, pic.h, upright);
+        const lastTry = i === order.length - 1;
+        if (lastTry && (!best || miss <= best.miss)) {
+          stream = got;
+          break;
+        }
+        // one camera at a time: this one goes before the next is asked for
+        got.getTracks().forEach((t) => t.stop());
+        if (!best || miss < best.miss) best = { shape, miss };
+      }
+      // neither way gave 9:16: the closest one again (never no camera because the shape was off)
+      if (!stream && best && !refused()) {
+        stream = await open(best.shape);
+        if (cancelled) {
+          stream?.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        if (stream) show(stream);
       }
       if (!stream) {
-        const name = (last as { name?: string } | null)?.name;
-        setStatus(name === "NotAllowedError" || name === "SecurityError" ? "denied" : "unavailable");
+        setStatus(refused() ? "denied" : "unavailable");
         return;
       }
       streamRef.current = stream;
@@ -165,15 +262,7 @@ export function FilmCamera({
         const z = (t?.getSettings?.() as { zoom?: number } | undefined)?.zoom;
         setZoom(typeof z === "number" ? z : (c.zoom.min ?? 1));
       }
-      const v = videoRef.current;
-      if (v) {
-        // iOS shows a live camera inline only when muted + playsinline are attributes
-        v.muted = true;
-        v.setAttribute("muted", "");
-        v.setAttribute("playsinline", "");
-        v.srcObject = stream;
-        void v.play().catch(() => undefined);
-      }
+      if (videoRef.current?.srcObject !== stream) show(stream);
       setStatus("live");
       // the system ended it (another app took the camera, the phone locked): what's filmed is kept
       t?.addEventListener("ended", () => {
@@ -276,13 +365,23 @@ export function FilmCamera({
     // the mic only now, and only when sound is on: asking for it stops the music on a phone
     let mic: MediaStream | null = null;
     let restore: (() => void) | null = null;
-    if (settingsRef.current.sound) {
+    let micNote = "off";
+    // a "Don't Allow" this visit films without sound and asks nothing (the settings' Ask again)
+    if (settingsRef.current.sound && !micRefused()) {
       try {
-        const got = await getMicStream(true);
+        // the room as it sounds, from the phone's own mic (video-mic.ts): never a call's processing or a
+        // headset's mic. Asked inside this tap, so a mic already allowed is used without asking again.
+        const got = await openVideoMic();
         mic = got.stream;
         restore = got.restore;
+        micNote = got.note;
       } catch {
-        toast.message("Filming without sound", { description: "The microphone isn't available to JF Effect." });
+        setMicBlocked(micRefused());
+        toast.message("Filming without sound", {
+          description: micRefused()
+            ? "The microphone isn't allowed. Ask again from the camera's settings."
+            : "The microphone isn't available to JF Effect.",
+        });
       }
     }
     startingRef.current = false;
@@ -322,6 +421,7 @@ export function FilmCamera({
       if (!entry.keep || took < MIN_RECORDING_MS || !chunks.length) return;
       const mime = baseMediaType(recorder.mimeType || type || "video/mp4") || "video/mp4";
       const file = new File([new Blob(chunks, { type: mime })], filmFileName(mime), { type: mime });
+      noteClipMic(file.name, micNote);
       onClipRef.current(file);
     };
     try {
@@ -404,7 +504,8 @@ export function FilmCamera({
 
   const body = (
     <div
-      className="fixed inset-0 z-[70] select-none overflow-hidden bg-black text-white"
+      // pointer-events-auto: opened over a modal (a progress video's dialog), whose lock leaves the rest of the page untappable
+      className="pointer-events-auto fixed inset-0 z-[70] select-none overflow-hidden bg-black text-white"
       data-film-camera
       role="dialog"
       aria-modal="true"
@@ -460,7 +561,7 @@ export function FilmCamera({
       )}
 
       {/* top: close, what it's filming at (the clock while recording), the light and settings */}
-      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/55 to-transparent px-3 pb-6 pt-[max(env(safe-area-inset-top),12px)]">
+      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/55 to-transparent px-3 pb-6 pt-[max(calc(env(safe-area-inset-top)_+_var(--ios-edge-room,0px)),12px)]" data-film-top>
         <div className="flex h-11 items-center justify-between gap-2">
           {recording ? (
             <span className="w-10" />
@@ -501,7 +602,7 @@ export function FilmCamera({
 
       {/* settings: what to film at, all remembered on this phone */}
       {panel && !recording && (
-        <div className="absolute inset-x-3 top-[calc(max(env(safe-area-inset-top),12px)+3.75rem)] rounded-2xl bg-black/80 p-4 backdrop-blur-sm" data-film-panel>
+        <div className="absolute inset-x-3 top-[calc(max(calc(env(safe-area-inset-top)_+_var(--ios-edge-room,0px)),12px)+3.75rem)] rounded-2xl bg-black/80 p-4 backdrop-blur-sm" data-film-panel>
           <p className="text-[13px] font-semibold text-white/70">Quality</p>
           <div className="mt-2 flex gap-1.5">
             {qualities.map((q) => (
@@ -536,6 +637,24 @@ export function FilmCamera({
             </span>
             <Switch checked={settings.sound} onCheckedChange={(v) => update({ sound: v })} aria-label="Record sound" />
           </label>
+          {settings.sound && micBlocked && (
+            <div className="mt-2 flex items-center justify-between gap-3 text-[12px] leading-snug text-white/70" data-mic-refused>
+              <span>The microphone isn't allowed, so clips film without sound.</span>
+              <button
+                type="button"
+                // asked inside this tap and let go at once: the next recording uses the answer
+                onClick={() =>
+                  void askForMicAgain().then((ok) => {
+                    setMicBlocked(!ok && micRefused());
+                    if (!ok) toast.message("Still not allowed", { description: "Allow the microphone for JF Effect in your phone's settings to film with sound." });
+                  })
+                }
+                className="h-9 shrink-0 rounded-full bg-white/15 px-3 text-[13px] font-semibold text-white active:scale-[0.97]"
+              >
+                Ask again
+              </button>
+            </div>
+          )}
           <label className="mt-3 flex items-center justify-between gap-3 text-sm font-medium">
             <span className="inline-flex items-center gap-2">
               <Grid3x3 className="h-4 w-4" aria-hidden /> Grid

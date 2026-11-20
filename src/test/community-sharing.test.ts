@@ -23,6 +23,8 @@ import {
   lockInCameraCard,
   pickLockInSession,
   formatExerciseBest,
+  exerciseBestLines,
+  monthWorkoutLine,
   sessionLine,
   trainingSinceLabel,
   isTrainingNow,
@@ -97,7 +99,9 @@ describe("share card data", () => {
     });
     expect(pr).toEqual({ name: "Competition Bench Press", detail: { reps: 5, load_kg: 120 }, pr: "atpr" });
     expect(isPrMoment(base)).toBe(false);
-    expect(isPrMoment({ ...base, prs: [{ exercise_name: "x", reps: 1, load_kg: 1, scope: "block_pr" }] })).toBe(true);
+    // only a headline PR is a PR moment (Nov 18 2026): a block best on an accessory isn't one
+    expect(isPrMoment({ ...base, prs: [{ exercise_name: "x", reps: 1, load_kg: 1, scope: "block_pr" }] })).toBe(false);
+    expect(isPrMoment({ ...base, prs: [{ exercise_name: "Squat", reps: 3, load_kg: 230, scope: "atpr" }] })).toBe(true);
     expect(featuredLift({ ...base, top_lift: null })).toBeNull();
   });
 
@@ -225,11 +229,11 @@ describe("sharing stays optional", () => {
     expect(summary).toContain("onStudio={(caption) => { setDraftCaption(caption); setShareMounted(true); setShareOpen(true); }}");
     expect(summary).not.toMatch(/useEffect\([^)]*setShareOpen\(true\)/);
     // posting only ever happens from the button, and the footer can take it back
-    expect(footer).toContain("onClick={() => void post()}");
-    expect(footer).not.toMatch(/useEffect\([^)]*post\(\)/);
-    expect(footer).toContain("{justPosted === postId && undoable && (");
-    // one per footer state, plus the caption sheet's
-    expect(footer.match(/>\s*Done\s*</g)?.length).toBe(4);
+    expect(footer).toContain("onClick={() => void shareStory()}");
+    expect(footer).not.toMatch(/useEffect\([^)]*shareStory\(\)/);
+    expect(footer).toContain("data-recap-story-undo");
+    // Done in both footer states
+    expect(footer.match(/>\s*Done\s*</g)?.length).toBe(2);
   });
 
   it("is not offered to memberships or to a coach in View-as-client", () => {
@@ -292,10 +296,24 @@ describe("card fields from canonical stats", () => {
     expect(formatExerciseBest(ex({ max_seconds: 75 }), "kg")).toBe("1:15");
     expect(formatExerciseBest(ex({ max_seconds: 45 }), "kg")).toBe("45s");
     expect(formatExerciseBest(ex({ sets: 1 }), "kg")).toBe("1 set");
+    // the workout page: the unit the set was typed in first, the other under it (one decimal), whoever is looking
+    expect(exerciseBestLines(ex({ best_load_kg: 206.3845, best_reps: 1, best_unit: "lb" }), "kg")).toEqual({ main: "455 lb × 1", other: "206.4 kg" });
+    expect(exerciseBestLines(ex({ best_load_kg: 206.3845, best_reps: 1, best_unit: "lb" }), "lb")).toEqual({ main: "455 lb × 1", other: "206.4 kg" });
+    // an older set that never said its unit falls back to the viewer's, to a plate step, as before
+    expect(exerciseBestLines(ex({ best_load_kg: 206.384, best_reps: 1 }), "lb")).toEqual({ main: "455 lb × 1", other: "206.4 kg" });
+    expect(exerciseBestLines(ex({ best_load_kg: 206.384, best_reps: 1 }), "kg")).toEqual({ main: "206.5 kg × 1", other: "455 lb" });
+    expect(exerciseBestLines(ex({ max_reps: 12 }), "lb")).toEqual({ main: "12 reps", other: null });
+    expect(exerciseBestLines(ex({ max_seconds: 75 }), "kg")).toEqual({ main: "1:15", other: null });
   });
   it("only claims a session count once it means something", () => {
     expect(sessionLine({ month_sessions: 1 })).toBeNull();
     expect(sessionLine({ month_sessions: 12 })).toBe("Session 12 this month");
+    // the workout page says what the old "#9 This month" tile counted
+    expect(monthWorkoutLine({ month_sessions: 9 })).toBe("9th workout this month");
+    expect(monthWorkoutLine({ month_sessions: 1 })).toBe("1st workout this month");
+    expect(monthWorkoutLine({ month_sessions: 12 })).toBe("12th workout this month");
+    expect(monthWorkoutLine({ month_sessions: 22 })).toBe("22nd workout this month");
+    expect(monthWorkoutLine({ month_sessions: 0 })).toBeNull();
     expect(sessionLine({})).toBeNull();
   });
   it("builds every card field from one source", () => {
@@ -306,9 +324,11 @@ describe("card fields from canonical stats", () => {
       dateLabel: "Tue, Oct 6",
     });
     expect(f.isPr).toBe(true);
-    expect(f.lift).toEqual({ name: "Bench", detail: "120 kg × 5", prLabel: "ALL-TIME PR" });
-    expect(f.exercises).toEqual([{ name: "Squat", detail: "220 kg × 3", pr: true }]);
+    // the other unit rides along, said smaller on the card: one decimal, from the stored kg
+    expect(f.lift).toEqual({ name: "Bench", detail: "120 kg × 5", prLabel: "ALL-TIME PR", alt: "264.6 lb" });
+    expect(f.exercises).toEqual([{ name: "Squat", detail: "220 kg × 3", pr: true, alt: "485 lb" }]);
     expect(f.volume).toBe("12,000 kg");
+    expect(f.volumeOther).toBe("26,455 lb");
     expect(f.sessionLine).toBe("Session 5 this month");
   });
   it("labels profile tenure", () => {
@@ -493,7 +513,11 @@ describe("community photos are the athlete's own", () => {
     expect(media).toContain("const path = `${userId}/community-${Date.now()}.jpg`;");
   });
   it("lets you add, change or remove it from your own profile only", () => {
-    expect(profile).toContain("disabled={!profile.is_me || setAvatar.isPending}");
+    // adding (a tap on the empty circle) and changing (the camera badge) render only on your own profile;
+    // on anyone's, a tap on the photo opens it big (photo-viewer.tsx)
+    expect(profile).toContain("{profile.is_me && !profile.author.avatar_url ? (");
+    expect(profile).toMatch(/\{profile\.is_me && \(\s*<button[^>]*?\s*type="button"\s*disabled=\{setAvatar\.isPending\}\s*onClick=\{\(\) => photoRef\.current\?\.click\(\)\}\s*data-profile-photo-change/);
+    expect(profile).toContain("{profile.is_me && profile.author.avatar_url && (");
     expect(profile).toContain("setAvatar.mutate(null");
   });
 });
@@ -645,24 +669,24 @@ describe("Wednesday Wins reads like the coach wrote it, with the crew's numbers"
   };
   it("leads with one team number anyone gets, said as a team total", () => {
     expect(winsWeekLabel("2026-09-28")).toBe("Sep 28 – Oct 4");
-    const lb = winsHero(full, "lb");
-    expect(lb).toMatchObject({ amount: "450,216", unit: "lbs" });
+    // the crew's total reads in the crew's unit (lb) with kg under it, the same for every viewer
+    const lb = winsHero(full);
+    expect(lb).toMatchObject({ amount: "450,216", unit: "lbs", other: "204,215 kg" });
     expect(lb.compare).toMatch(/^That's about the weight of \d+ (pickup trucks|elephants|cars|school buses)$/);
-    expect(winsHero(full, "kg")).toMatchObject({ amount: "204,215", unit: "kg" });
     // 4th best week: no badge; lighter than the week before: no change pill
     expect(lb.badge).toBeNull();
     expect(lb.change).toBeNull();
-    expect(winsHero({ ...full, volume_rank: 1 }, "lb").badge).toBe("Biggest week the crew has ever had");
-    expect(winsHero({ ...full, volume_rank: 2 }, "lb").badge).toBe("2nd biggest week the crew has ever had");
-    expect(winsHero({ ...full, volume_rank: 1, weeks_tracked: 3 }, "lb").badge).toBeNull();
-    expect(winsHero({ ...full, volume_prev_kg: 180000 }, "lb").change).toBe("13% more than the week before");
+    expect(winsHero({ ...full, volume_rank: 1 }).badge).toBe("Biggest week the crew has ever had");
+    expect(winsHero({ ...full, volume_rank: 2 }).badge).toBe("2nd biggest week the crew has ever had");
+    expect(winsHero({ ...full, volume_rank: 1, weeks_tracked: 3 }).badge).toBeNull();
+    expect(winsHero({ ...full, volume_prev_kg: 180000 }).change).toBe("13% more than the week before");
     expect(compactNumber(12_500_000)).toBe("12.5M");
   });
   it("keeps the comparison sensible at any size and rotates it week to week", () => {
-    const picks = new Set(["2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"].map((w) => winsHero({ ...full, week_of: w }, "lb").compare?.split(" ").pop()));
+    const picks = new Set(["2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"].map((w) => winsHero({ ...full, week_of: w }).compare?.split(" ").pop()));
     expect(picks.size).toBeGreaterThan(1);
     for (const kg of [2_000, 50_000, 204_215, 900_000]) {
-      const n = Number(winsHero({ ...full, volume_kg: kg }, "lb").compare?.match(/\d+/)?.[0] ?? "0");
+      const n = Number(winsHero({ ...full, volume_kg: kg }).compare?.match(/\d+/)?.[0] ?? "0");
       expect(n === 0 || (n >= 3 && n <= 300)).toBe(true);
     }
   });
@@ -722,11 +746,10 @@ describe("weight units: a setting for clients, a tap on the community card", () 
     week_of: "2026-09-28", roster: 16, opened: 15, trained: 12, sessions: 36, sessions_prev: 32, prs: 41, pr_people: 9,
     volume_kg: 204215, reps: 6015, streaks: 10, bodyweight: 9, checkins: 4, busiest_day: "Friday",
   };
-  it("Wednesday Wins' picture is painted in each viewer's own unit", () => {
-    expect(winsHero(s, "lb").unit).toBe("lbs");
-    expect(winsHero(s, "kg").unit).toBe("kg");
-    // the unit is part of which picture it is (Wins, the Recap, a workout), so a kg viewer never gets a lb one
-    expect(postArt).toContain('const UNIT_CARDS: ReadonlySet<IgCard> = new Set<IgCard>(["wins", "recap", "workout"]);');
+  it("Wednesday Wins' picture is the same for every viewer: lb first, kg under it", () => {
+    expect(winsHero(s)).toMatchObject({ unit: "lbs", other: "204,215 kg" });
+    // only a workout card can still lean on the viewer's unit (an old set that never said its own), so only it is keyed by it
+    expect(postArt).toContain('const UNIT_CARDS: ReadonlySet<IgCard> = new Set<IgCard>(["workout"]);');
     expect(postArt).toContain('${UNIT_CARDS.has(card) ? `.${unit}` : ""}');
     // and painting it never writes the viewer's saved preference
     expect(postArt).not.toContain("preferred_weight_unit");
@@ -786,7 +809,7 @@ describe("reactions and who gave them", () => {
     expect(heart).toContain("INSERT INTO public.community_reactions (post_id, user_id, emoji) VALUES (_post_id, uid, v)");
     expect(heart).toContain("ON CONFLICT (post_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji;");
     expect(heart).toContain("v text := CASE WHEN _emoji IN ('muscle', 'clap') THEN 'heart' ELSE nullif(_emoji, '') END;");
-    expect(card).toContain("<ReactionButton post={post} onReact={onReact} />");
+    expect(card).toContain("<ReactionButton post={post} onReact={onReact} onCount={openLikes} onCountPress={likesPress} />");
     expect(card).not.toContain("REACTIONS.map(");
     expect(reactionTotal({ reactions: { fire: 2, heart: 1 } })).toBe(3);
   });
@@ -801,7 +824,7 @@ describe("reactions and who gave them", () => {
   it("shows the kinds beside the names once it isn't just hearts", () => {
     expect(reactionKinds({ reactions: { heart: 1, fire: 3, laugh: 2, thumbs: 1 } })).toEqual(["🔥", "😂", "❤️"]);
     expect(reactionKinds({ reactions: {} })).toEqual([]);
-    expect(card).toContain("kinds.length > 1 || (kinds.length === 1 && kinds[0] !== REACTION.emoji)");
+    expect(read("src/components/community/reactors-sheet.tsx")).toContain("kinds.length > 1 || (kinds.length === 1 && kinds[0] !== REACTION.emoji)");
     // and the full list says who gave which
     expect(heart).toContain("'emoji', r.emoji,");
     expect(read("src/components/community/reactors-sheet.tsx")).toContain("reactionEmoji(r.emoji)");
@@ -1029,7 +1052,7 @@ describe("stat cards anyone can read: receipt, streak, vs last time", () => {
     expect(progressVsLast({ ...tonight, tonnage_kg: 4000 }, "lb")).toBeNull();
     const heavier = progressVsLast({ ...tonight, tonnage_kg: 4000, top_lift: { exercise_name: "Sumo Deadlift", reps: 7, load_kg: 150 } }, "kg")!;
     expect(heavier.headline).toBe("+7 kg");
-    expect(heavier.sub).toBe("heavier on Sumo Deadlift");
+    expect(heavier.sub).toBe("heavier on Sumo Deadlift (+15.7 lb)");
     expect(progressVsLast({ ...tonight, prev: null }, "lb")).toBeNull();
   });
   it("feeds every card from the one preview", () => {

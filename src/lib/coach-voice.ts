@@ -133,11 +133,11 @@ const list = (xs: string[]) => xs.join(", ");
 export function buildVoicePrompt(
   profile: VoiceProfile = DEFAULT_VOICE,
   audience?: VoiceAudience | null,
-  opts?: { group?: boolean },
+  opts?: { group?: boolean; heading?: string },
 ): string {
   const p = profile;
   const lines: string[] = [
-    "HOW IT MUST SOUND (overrides any tone/brand voice above):",
+    opts?.heading ?? "HOW IT MUST SOUND (overrides any tone/brand voice above):",
     p.rules,
   ];
   if (p.everyday.length) lines.push(`WORDS HE USES (1–2 max, only where they fit naturally, never forced): ${list(p.everyday)}`);

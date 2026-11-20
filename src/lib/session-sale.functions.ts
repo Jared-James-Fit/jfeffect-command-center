@@ -191,7 +191,7 @@ export const sellSessions = createServerFn({ method: "POST" })
         .from("messages")
         .select("id")
         .eq("client_id", data.clientId)
-        .contains("attachments", [{ kind: "payment_request", purchase_id: purchaseId }])
+        .contains("attachments", JSON.stringify([{ kind: "payment_request", purchase_id: purchaseId }]))
         .limit(1);
       if (sale && !(existing ?? []).length) {
         const { data: client } = await supabase

@@ -26,6 +26,11 @@ export function shortMoney(minor: number): string {
 
 export const pctWord = (n: number) => `${Math.round(n * 100)}%`;
 
+const WHOLE = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0, minimumFractionDigits: 0 });
+
+/** $1,124: a figure in a small tile, rounded to the dollar (the exact one is a tap away). */
+export const wholeMoney = (minor: number) => WHOLE.format(Math.round(minor / 100)).replace("-", "−");
+
 export function MoneyCard({ title, icon: Icon, action, children, className, id }: {
   title: ReactNode;
   icon?: typeof Info;
@@ -151,7 +156,7 @@ export function RankList({ rows, color, empty, onPick, total }: {
         const inner = (
           <>
             <div className="flex items-baseline justify-between gap-3 text-[14px]">
-              <span className="min-w-0 truncate">
+              <span className="min-w-0 leading-snug">
                 {r.label}
                 {r.sub ? <span className="ml-1.5 text-[12px] text-muted-foreground">{r.sub}</span> : null}
               </span>

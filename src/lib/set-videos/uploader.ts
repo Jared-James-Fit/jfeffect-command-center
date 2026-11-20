@@ -49,8 +49,10 @@ import { chatUrlCache } from "@/hooks/use-chat-signed-urls";
 import { keepChatVideo } from "@/lib/chat-video-store";
 import { setTitle, setVideoFileKey, setVideoStem, setWord } from "@/lib/set-videos/label";
 import { probeVideo } from "@/lib/video-edit/probe";
+import { serverCopiesOn } from "@/lib/set-videos/server-copy-flag";
 import {
   catchUpJobId,
+  clearCatchUpChecked,
   markCatchUpChecked,
   takeCatchUpLaunch,
   type CatchUpClip,
@@ -72,6 +74,7 @@ import {
   type SetVideoJob,
 } from "@/lib/set-videos/jobs";
 import { linkFilmed } from "@/lib/set-videos/phone-copy";
+import { clipMicNote } from "@/lib/video-mic";
 import {
   outboxDelete,
   outboxForUser,
@@ -426,6 +429,8 @@ async function runJob(id: string) {
         orig_mb: mb(picked.file.size),
         sent_mb: mb(prepared.size),
         ua: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 160) : null,
+        // filmed in the app: what its sound came from ("raw 2ch 48k own"), so a real phone's recording can be checked
+        mic: clipMicNote(picked.file.name),
       };
       const clip = {
         file: prepared,
@@ -524,8 +529,15 @@ async function runJob(id: string) {
     preparedFiles.delete(id);
     const feed = feedSources.get(id);
     feedSources.delete(id);
-    if (feed && res.id)
-      queueFeedCopy({ ...feed, jobId: id, setVideoId: res.id, clientId: job.clientId, tries: 0 });
+    if (feed && res.id) {
+      // the server makes it when it can (no battery or data spent here); else this phone does
+      const setVideoId = res.id;
+      void serverCopiesOn().then((server) => {
+        if (!server) queueFeedCopy({ ...feed, jobId: id, setVideoId, clientId: job.clientId, tries: 0 });
+      });
+      // if the copy isn't made, the next look (a return to the app) finds it at once
+      clearCatchUpChecked(job.userId);
+    }
     set({
       state: "done",
       progress: 100,

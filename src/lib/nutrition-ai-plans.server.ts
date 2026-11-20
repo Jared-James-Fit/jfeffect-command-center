@@ -23,6 +23,8 @@ import {
 } from "@/lib/nutrition-ai-prompts.server";
 import { phaseFromText } from "@/lib/nutrition-cardio";
 import { hardToFindFoods, introducedHardToFind, planMenus, prepDrift } from "@/lib/nutrition-targets/plan-foods";
+import { withHonestTotals } from "@/lib/nutrition-targets/plan-coverage";
+import { mealFoodLine, mealsOffTheirFoods } from "@/lib/nutrition-targets/food-values";
 import { foodNotes, foodNotesForAi, type FoodNotes } from "@/lib/nutrition-targets/food-notes";
 import { allergenConflicts, buildFoodHistory, foodHistoryForAi, introducedAllergens, knownRestrictions, liveAllergens, type FoodHistory } from "@/lib/nutrition-targets/food-history";
 import { configuredHighWeekday } from "@/lib/client-nutrition-day";
@@ -60,7 +62,7 @@ export async function loadQAs(sb: any, submissionId: string): Promise<{ sub: any
     sb.from("nf_questions").select("id, label, order_index, question_type").eq("form_id", sub.form_id).order("order_index"),
     sb.from("nf_answers").select("question_id, value_text, value_number, value_json").eq("submission_id", submissionId),
   ]);
-  const byQ = new Map((answers ?? []).map((a: any) => [a.question_id, a]));
+  const byQ = new Map<string, any>((answers ?? []).map((a: any) => [a.question_id, a]));
   const qas: QA[] = (questions ?? [])
     .filter((q: any) => q.question_type !== "file" && q.question_type !== "video")
     .map((q: any) => ({ label: q.label, value: byQ.has(q.id) ? answerValue(byQ.get(q.id)) : "" }));
@@ -366,7 +368,7 @@ export async function runPlan(
     // The meal plan is the client's: the targets' COACH NOTES (reasoning, health flags) stay out of it.
     const mealPrompt = mealPlanUserPrompt(mi.qas, withoutCoachNotes(targetsText) ?? "", mi.phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), mi.workoutMeals, mi.history, mi.previousMeals, mi.foodNotes, mi.foodRestrictions);
     const m = await nutritionCall(sb, progress, save, "nutrition_write", "meals", MEAL_PLAN_PROMPT, mealPrompt);
-    const mealPlanText = await withPrepFix(
+    let mealPlanText = await withPrepFix(
       cleanAiText(m.text),
       mealPrompt,
       // each round its own key, so a resumed run reuses the answers it already has
@@ -377,6 +379,8 @@ export async function runPlan(
       mi.foodNotes ? [...mi.qas, { label: "Coach's food notes", value: mi.foodNotes }] : mi.qas,
       mi.foodAllergens ?? [],
     );
+    // every Daily Total is the sum of its meals as written: the text can never claim what the meals don't give
+    mealPlanText = withHonestTotals(mealPlanText);
     const modelId = `targets ${t.model} · meals ${m.model}`;
     // The supplements, now with the plan's own foods (fish, whey) and its calories.
     const supplements = mi.supplementInput ? adviseSupplements({ ...mi.supplementInput, foods: [mealPlanText, mi.supplementInput.foods].filter(Boolean).join("\n"), planGiven: !!mealPlanText.trim(), kcal: averageKcal(targetsText) }) : null;
@@ -419,7 +423,11 @@ export async function runPlan(
  * client didn't ask for (hardToFindFoods: cassava for an AIP client when
  * sweet potatoes fit), a menu whose
  * Daily Total is off its targets or whose meals don't add up to it
- * (planTotalsIssues). One that fails gets a targeted fix (two rounds at most), each kept only when it
+ * (planTotalsIssues, which reads the meals themselves, never only the
+ * Daily Total), or a meal whose macros aren't what its foods give
+ * (mealsOffTheirFoods). Each draft is judged with its Daily Totals written
+ * from its meals (withHonestTotals), so a model's arithmetic is never a round.
+ * One that fails gets a targeted fix (two rounds at most), each kept only when it
  * still reads as the same plan (same menus, a Daily Total) with fewer
  * problems. A failed fix never costs the plan already written. Exported for tests.
  */
@@ -433,20 +441,28 @@ export async function withPrepFix(
   /** liveAllergens(): the allergens on file across their whole account. */
   allergens: string[] = [],
 ): Promise<string> {
-  const issues = (text: string) => ({
-    drift: prepDrift(planMenus(text)),
-    totals: targets.length ? planTotalsIssues(text, targets) : [],
-    shelf: hardToFindFoods(planMenus(text), answers),
-    allergy: allergenConflicts(planMenus(text), allergens),
-  });
+  const issues = (draftText: string) => {
+    // the Daily Totals are the code's to write (withHonestTotals, after this loop), so a model's
+    // arithmetic never costs a round: what goes back is what only the model can fix
+    const text = withHonestTotals(draftText);
+    const menus = planMenus(text);
+    return {
+      drift: prepDrift(menus),
+      totals: targets.length ? planTotalsIssues(text, targets) : [],
+      shelf: hardToFindFoods(menus, answers),
+      allergy: allergenConflicts(menus, allergens),
+      // a meal whose Approximate macros aren't what its foods give (food-values.ts: the plain staples only)
+      macros: menus.flatMap((m) => mealsOffTheirFoods(m.notes).map((c) => `${m.label} ${mealFoodLine(c)}`)),
+    };
+  };
   // an allergen on file comes first, then prep and shelf staples: a fix that gets those right but leaves a total a little off still wins
-  const count = (x: ReturnType<typeof issues>) => x.allergy.length * 10 + x.drift.length * 3 + x.shelf.length * 3 + x.totals.length;
+  const count = (x: ReturnType<typeof issues>) => x.allergy.length * 10 + x.drift.length * 3 + x.shelf.length * 3 + x.totals.length + x.macros.length;
   let current = draft;
   for (let round = 0; round < rounds; round++) {
     const before = issues(current);
     if (!count(before)) break;
     const fixed = cleanAiText(
-      await ask(mealPrepFixPrompt(userPrompt, current, before.drift, before.totals, before.shelf, before.allergy), round).catch((e) => {
+      await ask(mealPrepFixPrompt(userPrompt, current, before.drift, before.totals, before.shelf, before.allergy, before.macros), round).catch((e) => {
         // still thinking: the run carries on next request; any other failure keeps the draft
         if (e instanceof WaitingForModel) throw e;
         return "";
@@ -993,15 +1009,16 @@ export async function runRevision(sb: any, submissionId: string, instructions: s
     if (!revisionLooksRight("meals", row.meal_plan_text, answered)) {
       throw new Error("The AI's answer didn't come back as a meal plan. Try wording the change differently");
     }
-    // the coach's words win, but a specialty food the AI brought in on its own goes back once
-    const mealPlanText = await withShelfFix(
+    // the coach's words win, but a specialty food the AI brought in on its own goes back once;
+    // and every Daily Total is what its meals add up to
+    const mealPlanText = withHonestTotals(await withShelfFix(
       row.meal_plan_text,
       answered,
       mealPrompt,
       (prompt) => nutritionCall(sb, progress, save, "nutrition_write", "update_shelf", MEAL_PLAN_PROMPT, prompt).then((r) => r.text),
       [...qas, { value: instructions }, ...(foodNotes ? [{ value: foodNotes }] : [])],
       food.allergens,
-    );
+    ));
 
     const now = new Date().toISOString();
     const revisions: PlanRevision[] = [

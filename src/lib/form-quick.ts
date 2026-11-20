@@ -77,13 +77,27 @@ export function quickNumberLabel(chip: string): string {
  * big tick; short ones (3 / 4 / 5 / 6, Male / Female) share a row; the rest
  * are full-width rows that fit a thumb.
  */
-export function choiceLayout(options: string[]): "agree" | "row" | "list" {
+export function choiceLayout(options: string[]): "agree" | "row" | "chips" | "list" {
   if (options.length === 1) return "agree";
   if (options.length <= 4 && options.every((o) => o.length <= 12)) return "row";
+  // five or more short ones (age classes, body fat ranges, a go-to meal) wrap as chips: a wall of rows otherwise
+  if (options.length >= 5 && options.every((o) => o.length <= CHIP_MAX_CHARS)) return "chips";
   return "list";
 }
+
+/** The longest option that still reads well as a chip two to a row on a phone. */
+export const CHIP_MAX_CHARS = 22;
 
 /** How much of the form is done: the required questions on screen that have an answer. */
 export function formProgress(required: { answered: boolean }[]): { done: number; total: number } {
   return { done: required.filter((r) => r.answered).length, total: required.length };
+}
+
+/**
+ * Which questions a form marks: the fewer kind, never both. Mostly required → "Optional" beside the
+ * rest; mostly optional (or a tie) → an asterisk on the required ones.
+ */
+export function requiredMark(questions: { required?: boolean | null }[]): "optional" | "required" {
+  const required = questions.filter((q) => q.required).length;
+  return required > questions.length - required ? "optional" : "required";
 }

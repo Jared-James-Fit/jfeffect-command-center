@@ -120,7 +120,7 @@ describe("the film is made from the copy", () => {
   });
 
   it("the server, the app and the uploader are wired to it", () => {
-    const fn = read("src/lib/workout-film.functions.ts");
+    const fn = read("src/lib/workout-film.server.ts");
     expect(fn).toContain("const f = filmFile(v);");
     expect(fn).toContain("if (!(await copyInto(admin, v.src, path))) continue;");
     // the film files the post no longer shows are removed

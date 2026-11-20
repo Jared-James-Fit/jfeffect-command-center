@@ -41,6 +41,9 @@ export const AUDIO_BITRATE = 128_000;
 export const MAX_FPS = 30;
 /** Below this, sending as is beats any amount of work on the phone. */
 export const MIN_BYTES_TO_COMPRESS = 4 * 1024 * 1024;
+
+/** Of a place's hard byte limit, what a cut sent without re-encoding may be estimated at (a whole clip's size is exact: up to the limit). */
+export const AS_IS_MAX_SHARE = 0.9;
 /** Container overhead (index, headers) on top of the media bytes. */
 const MUX_OVERHEAD = 1.02;
 
@@ -162,6 +165,11 @@ function planSelection(src: SourceInfo, trim: VideoTrim | null | undefined, ctx:
   const whole = isWhole(src, trim);
   const copy = copyBytes(src, trim);
   const copyFits = copy <= budget.target && sendable(src);
+  // Sent as it is when the encoder turns out too slow: anything the server takes (its hard limit,
+  // a cut's estimate kept under it), never minutes of encoding for a clip a few MB past the target
+  // (Nov 18 2026: a 143.6 MB Belt Squat clip, 3.6 MB over the coach chat's 140 MB target, sat 6.5
+  // minutes encoding on the phone, so it reached the coach two days later).
+  const copyAllowed = (whole ? copy <= budget.max : copy <= budget.max * AS_IS_MAX_SHARE) && sendable(src);
   const small = copy < MIN_BYTES_TO_COMPRESS;
   // An MP4 / MOV copy starts on the exact frame (an edit list hides the lead-in from
   // the keyframe before it); WebM has no edit lists, so its copy starts on that keyframe.
@@ -196,7 +204,7 @@ function planSelection(src: SourceInfo, trim: VideoTrim | null | undefined, ctx:
     videoBitrate,
     ...(frameRate ? { frameRate } : {}),
     estBytes,
-    copyFallback: copyFits && exactCopy ? { estBytes: copy } : null,
+    copyFallback: copyAllowed && exactCopy ? { estBytes: copy } : null,
   };
 }
 

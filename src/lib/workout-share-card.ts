@@ -31,6 +31,7 @@
  * Always rendered dark: the image has to read the same wherever it's posted.
  */
 import { ellipsize, fitFont as fitSystemFont, font, loadImage, roundRect } from "@/lib/workout-story-card";
+import { withOther } from "@/lib/dual-weight";
 import type { CardStat, ShareCardExtras } from "@/lib/community";
 
 export type ShareFormat = "feed" | "story";
@@ -67,7 +68,8 @@ export const TEMPLATE_LABEL: Record<ShareTemplate, string> = {
 
 export type ShareCardMedia = CanvasImageSource & { width?: number; height?: number };
 
-export type ShareCardExercise = { name: string; detail: string; pr: boolean };
+/** `alt`: the same load in the other unit ("206.5 kg" under "455 lb × 1"), smaller; null without a load. */
+export type ShareCardExercise = { name: string; detail: string; pr: boolean; alt?: string | null };
 
 export type ShareCardData = {
   format: ShareFormat;
@@ -76,14 +78,18 @@ export type ShareCardData = {
   athleteName: string | null;
   workoutTitle: string;
   dateLabel: string | null;
-  /** Featured lift, pre-formatted: `detail` = "220 kg × 3". `prLabel` set → it's a record. */
-  lift: { name: string; detail: string; prLabel: string | null } | null;
+  /**
+   * Featured lift, pre-formatted: `detail` = "220 kg × 3". `prLabel` set → it's a record.
+   * `alt` is its load in the other unit ("485 lb"), said smaller: never a stored value, only how it reads.
+   */
+  lift: { name: string; detail: string; prLabel: string | null; alt?: string | null } | null;
   stats: CardStat[];
   isPr: boolean;
   /** Top lifts for the stats card, pre-formatted, programmed order. */
   exercises: ShareCardExercise[];
-  /** "12,450 kg" — null when nothing with external load was lifted. */
+  /** "12,450 kg" — null when nothing with external load was lifted. `volumeOther`: the other unit. */
   volume: string | null;
+  volumeOther?: string | null;
   /** "Session 12 this month" */
   sessionLine: string | null;
   media: ShareCardMedia | null;
@@ -260,10 +266,16 @@ export function brandRow(ctx: Ctx, logo: HTMLImageElement | null, x: number, y: 
   ctx.restore();
 }
 
-/** Big display numbers with small labels underneath. Returns the block height. */
+/** How tall a statRow is: a number's other unit (CardStat.sub) adds a line under it. */
+function statRowHeight(stats: CardStat[], size: number): number {
+  return stats.length ? size * 0.92 + (stats.some((s) => s.sub) ? 80 : 40) : 0;
+}
+
+/** Big display numbers with small labels underneath (and the other unit, smaller, between). Returns the block height. */
 function statRow(ctx: Ctx, stats: CardStat[], x: number, top: number, width: number, size: number, color: string | CanvasGradient = INK): number {
   if (!stats.length) return 0;
   const colW = width / stats.length;
+  const subs = stats.some((s) => s.sub);
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   stats.forEach((s, i) => {
@@ -271,13 +283,18 @@ function statRow(ctx: Ctx, stats: CardStat[], x: number, top: number, width: num
     ctx.fillStyle = color;
     const used = fitDisplay(ctx, s.value.toUpperCase(), colW - 60, size, 44);
     ctx.fillText(s.value.toUpperCase(), cx, top + used * 0.92);
+    if (s.sub) {
+      ctx.fillStyle = MUTED;
+      ctx.font = font(700, 28);
+      ctx.fillText(ellipsize(ctx, s.sub, colW - 40), cx, top + size * 0.92 + 38);
+    }
     ctx.fillStyle = MUTED;
     ctx.font = font(800, 22);
     setSpacing(ctx, 3);
-    ctx.fillText(s.label.toUpperCase(), cx, top + size * 0.92 + 40);
+    ctx.fillText(s.label.toUpperCase(), cx, top + size * 0.92 + (subs ? 80 : 40));
     setSpacing(ctx, 0);
   });
-  return size * 0.92 + 40;
+  return statRowHeight(stats, size);
 }
 
 function pill(ctx: Ctx, text: string, x: number, y: number, fill: string | CanvasGradient, ink: string): number {
@@ -399,7 +416,8 @@ function drawPr(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: La
   const nameLines = wrapLines(ctx, name, innerW, 2);
   const detailSize = detail ? fitDisplay(ctx, detail, innerW, L.story ? 230 : 190, 90) : 0;
   const prSize = L.story ? 250 : 200;
-  const heroH = prSize * 0.9 + 40 + 54 + 46 + nameLines.length * (nameSize + 6) + (detail ? detailSize * 0.95 + 20 : 0);
+  const alt = detail ? (lift?.alt ?? "").trim() : "";
+  const heroH = prSize * 0.9 + 40 + 54 + 46 + nameLines.length * (nameSize + 6) + (detail ? detailSize * 0.95 + 20 : 0) + (alt ? 70 : 0);
   const regionTop = L.top + 90;
   const regionBottom = L.bottom - 230;
   let y = regionTop + Math.max(0, (regionBottom - regionTop - heroH) * 0.42);
@@ -421,6 +439,12 @@ function drawPr(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: La
     ctx.fillStyle = INK;
     ctx.font = display(detailSize);
     ctx.fillText(detail, PAD - 4, y + detailSize * 0.92 + 10);
+    if (alt) {
+      // the other unit, quieter: a lifter who thinks in it reads it without converting
+      ctx.font = font(700, 44);
+      ctx.fillStyle = MUTED;
+      ctx.fillText(ellipsize(ctx, alt, innerW), PAD, y + detailSize * 0.95 + 20 + 52);
+    }
   }
 
   drawFooterStats(ctx, d, logo, L);
@@ -458,16 +482,28 @@ function drawPhoto(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L:
   let y = L.bottom - 40;
   ctx.textAlign = "left";
   if (d.stats.length) {
-    const h = statRow(ctx, d.stats, PAD, y - 136, innerW, 96);
-    y -= h + 70;
+    const h = statRow(ctx, d.stats, PAD, y - statRowHeight(d.stats, 96) - 8, innerW, 96);
+    y -= h + 78;
   }
   if (d.lift) {
     ctx.font = font(700, 36);
     ctx.fillStyle = MUTED;
     ctx.fillText(ellipsize(ctx, d.lift.name, innerW), PAD, y - 78);
+    const liftAlt = (d.lift.alt ?? "").trim();
+    ctx.font = font(700, 36);
+    const altW = liftAlt ? ctx.measureText(liftAlt).width + 24 : 0;
     ctx.fillStyle = d.isPr ? gold(ctx, PAD, innerW * 0.6) : INK;
-    const s = fitDisplay(ctx, d.lift.detail.toUpperCase(), innerW, 84, 48);
-    ctx.fillText(d.lift.detail.toUpperCase(), PAD, y - 78 + 14 + s * 0.92);
+    const detailText = d.lift.detail.toUpperCase();
+    const s = fitDisplay(ctx, detailText, innerW - altW, 84, 48);
+    const base = y - 78 + 14 + s * 0.92;
+    ctx.fillText(detailText, PAD, base);
+    // the other unit beside it, quieter (left off only when the line has no room for it)
+    const dw = ctx.measureText(detailText).width;
+    if (liftAlt && dw + altW <= innerW) {
+      ctx.font = font(700, 36);
+      ctx.fillStyle = MUTED;
+      ctx.fillText(liftAlt, PAD + dw + 24, base);
+    }
     y -= 78 + 50;
   }
   ctx.fillStyle = INK;
@@ -912,36 +948,52 @@ function drawStats(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L:
     y += h + 70;
   }
 
-  // Top lifts — the actual work.
+  // Top lifts — the actual work. A long name takes a second line (never cut
+  // to "Competition Sq…"), and a load says the other unit under it, smaller.
   const rows = d.exercises.slice(0, L.story ? 6 : 4);
   if (rows.length) {
     ctx.fillStyle = "rgba(255,255,255,0.14)";
     ctx.fillRect(PAD, y, innerW, 2);
     y += 24;
-    const rowH = L.story ? 104 : 92;
-    const room = L.bottom - 80 - y;
-    const fit = Math.max(1, Math.min(rows.length, Math.floor(room / rowH)));
-    rows.slice(0, fit).forEach((r, i) => {
-      const ry = y + i * rowH;
-      ctx.textAlign = "right";
-      ctx.fillStyle = r.pr ? GOLD_TO : INK;
+    const limit = L.bottom - 80;
+    const NAME_LH = 44;
+    const laid: { r: ShareCardExercise; detail: string; lines: string[]; h: number; ry: number }[] = [];
+    for (const r of rows) {
       ctx.font = display(56);
       const detail = r.detail.toUpperCase();
       const dw = ctx.measureText(detail).width;
+      ctx.font = font(600, 28);
+      const aw = r.alt ? ctx.measureText(r.alt).width : 0;
+      ctx.font = font(700, 36);
+      const nameMax = innerW - Math.max(dw, aw) - 40 - (r.pr ? 70 : 0);
+      const lines = wrapLines(ctx, r.name, Math.max(120, nameMax), 2);
+      const h = Math.max(lines.length * NAME_LH + 4, r.alt ? 96 : 60) + 40;
+      if (laid.length && y + h > limit) break;
+      laid.push({ r, detail, lines, h, ry: y });
+      y += h;
+    }
+    laid.forEach(({ r, detail, lines, h, ry }, i) => {
+      ctx.textAlign = "right";
+      ctx.fillStyle = r.pr ? GOLD_TO : INK;
+      ctx.font = display(56);
       ctx.fillText(detail, W - PAD, ry + 66);
+      if (r.alt) {
+        ctx.font = font(600, 28);
+        ctx.fillStyle = MUTED;
+        ctx.fillText(r.alt, W - PAD, ry + 104);
+      }
       ctx.textAlign = "left";
-      const nameMax = innerW - dw - 40 - (r.pr ? 70 : 0);
       ctx.font = font(700, 36);
       ctx.fillStyle = INK;
-      const nm = ellipsize(ctx, r.name, nameMax);
-      ctx.fillText(nm, PAD, ry + 60);
+      lines.forEach((ln, k) => ctx.fillText(ln, PAD, ry + 60 + k * NAME_LH));
       if (r.pr) {
-        const nx = PAD + ctx.measureText(nm).width + 16;
-        pill(ctx, "PR", nx, ry + 22, gold(ctx, nx, 70), "#2b1700");
+        const last = lines[lines.length - 1] ?? "";
+        const nx = PAD + ctx.measureText(last).width + 16;
+        pill(ctx, "PR", nx, ry + 22 + (lines.length - 1) * NAME_LH, gold(ctx, nx, 70), "#2b1700");
       }
-      if (i < fit - 1) {
+      if (i < laid.length - 1) {
         ctx.fillStyle = "rgba(255,255,255,0.07)";
-        ctx.fillRect(PAD, ry + rowH - 4, innerW, 2);
+        ctx.fillRect(PAD, ry + h - 4, innerW, 2);
       }
     });
   }
@@ -961,7 +1013,8 @@ function drawVolume(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L
   const [num, unit] = vol.split(" ");
   const numSize = fitDisplay(ctx, num ?? "", innerW, L.story ? 330 : 280, 120);
   const compare = d.extras?.compare ?? null;
-  const blockH = 40 + numSize * 0.92 + 56 + 80 + 40 + 60 + (compare ? 80 : 0);
+  const volumeOther = d.volumeOther ?? null;
+  const blockH = 40 + numSize * 0.92 + 56 + 80 + 40 + 60 + (compare ? 80 : 0) + (volumeOther ? 64 : 0);
   const regionTop = L.top + 100;
   const regionBottom = L.bottom - 240;
   let y = regionTop + Math.max(0, (regionBottom - regionTop - blockH) * 0.4);
@@ -984,6 +1037,13 @@ function drawVolume(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L
   ctx.font = display(88);
   ctx.fillText(`${(unit ?? "KG").toUpperCase()} LIFTED`, PAD - 2, y + 80);
   y += 80 + 40;
+  if (volumeOther) {
+    // the same total in the other unit, quieter
+    ctx.font = font(800, 44);
+    ctx.fillStyle = MUTED;
+    ctx.fillText(volumeOther, PAD, y + 34);
+    y += 64;
+  }
   if (compare) {
     // The bit anyone gets: "≈ the weight of 3 pickup trucks".
     ctx.font = font(800, 44);
@@ -1110,7 +1170,7 @@ function drawReceipt(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, 
   };
 
   dash();
-  rows.forEach((r) => line(`${r.sets}× ${r.name.toUpperCase()}`, r.detail.toUpperCase(), { color: r.pr ? "#b45309" : PAPER_INK, bold: r.pr }));
+  rows.forEach((r) => line(`${r.sets}× ${r.name.toUpperCase()}`, withOther(r.detail.toUpperCase(), r.other), { color: r.pr ? "#b45309" : PAPER_INK, bold: r.pr }));
   if (more > 0) line(`+ ${more} MORE`, "", { color: PAPER_MUTED });
   dash();
   const totalsY = y;
@@ -1124,6 +1184,12 @@ function drawReceipt(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, 
     fitDisplay(ctx, d.volume.toUpperCase(), iw * 0.6, 76, 44);
     ctx.fillText(d.volume.toUpperCase(), R0, y + 64);
     y += 92;
+    if (d.volumeOther) {
+      ctx.font = mono(700, 26);
+      ctx.fillStyle = PAPER_MUTED;
+      ctx.fillText(d.volumeOther.toUpperCase(), R0, y + 8);
+      y += 34;
+    }
   }
   if (x?.compare) {
     ctx.font = mono(700, 26);
@@ -1269,7 +1335,8 @@ function drawProgress(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null,
   if (!p) return drawFooterStats(ctx, d, logo, L);
   const head = (L.story ? 280 : 210);
   const barH = L.story ? 66 : 56;
-  const barBlock = 44 + 16 + barH + 44;
+  const barOther = p.bars.some((b) => b.other) ? 34 : 0;
+  const barBlock = 44 + 16 + barH + 44 + barOther;
   const blockH = 34 + 24 + head * 0.92 + 30 + 84 + 70 + p.bars.length * barBlock + (p.lift ? 70 : 0);
   const regionTop = L.top + 100;
   const regionBottom = L.bottom - 250;
@@ -1303,7 +1370,12 @@ function drawProgress(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null,
     ctx.textAlign = "right";
     ctx.font = display(48);
     ctx.fillText(b.value.toUpperCase(), W - PAD, y + 40);
-    y += 44 + 16;
+    if (barOther) {
+      ctx.font = font(700, 26);
+      ctx.fillStyle = MUTED;
+      ctx.fillText(b.other, W - PAD, y + 40 + 32);
+    }
+    y += 44 + 16 + barOther;
     roundRect(ctx, PAD, y, innerW, barH, barH / 2);
     ctx.fillStyle = "rgba(255,255,255,0.10)";
     ctx.fill();
@@ -1334,7 +1406,8 @@ function drawSticker(canvas: HTMLCanvasElement, d: ShareCardData, logo: HTMLImag
   const PAD = 70;
   const innerW = W - PAD * 2;
   const hasLift = !!d.lift;
-  const H = 180 + 150 + 30 + 170 + (hasLift ? 120 : 0) + 70;
+  const liftOther = hasLift ? d.lift!.alt ?? null : null;
+  const H = 180 + 150 + 30 + 170 + (hasLift ? 120 : 0) + (liftOther ? 50 : 0) + 70;
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d");
@@ -1399,6 +1472,13 @@ function drawSticker(canvas: HTMLCanvasElement, d: ShareCardData, logo: HTMLImag
     ctx.fillStyle = d.isPr ? GOLD_FROM : INK;
     fitDisplay(ctx, line, innerW, 74, 40);
     ctx.fillText(line, cx, y + 80);
+    if (liftOther) {
+      ctx.fillStyle = INK;
+      ctx.globalAlpha = 0.78;
+      ctx.font = font(700, 38);
+      ctx.fillText(liftOther, cx, y + 80 + 54);
+      ctx.globalAlpha = 1;
+    }
   }
 }
 

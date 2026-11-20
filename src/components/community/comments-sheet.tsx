@@ -36,6 +36,8 @@ import {
   useShareComment,
   useSyncCommentCount,
 } from "@/lib/community.queries";
+import { feedback } from "@/lib/feedback";
+import { HapticTap } from "@/components/haptic-tap";
 
 const NOTE_MAX = 1200;
 /** Replies shown under a comment before "View all". */
@@ -54,7 +56,7 @@ export function CommentsSheet({ post, viewerIsStaff, onClose, onOpenAuthor }: {
 }) {
   return (
     <Sheet open={!!post} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" hideCloseButton className="flex h-[78dvh] max-h-[640px] flex-col gap-0 rounded-t-[24px] bg-card p-0 sm:mx-auto sm:max-w-[520px]">
+      <SheetContent side="bottom" swipeToClose hideCloseButton className="flex h-[78dvh] max-h-[640px] flex-col gap-0 rounded-t-[24px] bg-card p-0 sm:mx-auto sm:max-w-[520px]">
         {post && (
           <>
             <SheetHeader className="relative shrink-0 space-y-0 pb-2 pt-2 text-center">
@@ -465,8 +467,9 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
                   </button>
                   {/* nothing to send yet: the mic, to say it instead */}
                   {canSend ? (
-                    <Button type="button" size="icon" className="ml-0.5 h-9 w-9 shrink-0 rounded-full" onClick={send} aria-label="Send comment" data-comment-send>
+                    <Button type="button" size="icon" className="relative ml-0.5 h-9 w-9 shrink-0 rounded-full" onClick={send} aria-label="Send comment" data-comment-send>
                       <ArrowUp className="h-5 w-5" strokeWidth={2.25} />
+                      <HapticTap />
                     </Button>
                   ) : (
                     <MicButton onClick={() => void recorder.start()} disabled={!user?.id || picking} quiet />
@@ -588,11 +591,7 @@ function useHold(onHold: () => void, disabled: boolean) {
   const fire = () => {
     cancel();
     held.current = true;
-    try {
-      navigator.vibrate?.(8);
-    } catch {
-      /* no haptics */
-    }
+    feedback("press");
     onHold();
   };
   return {

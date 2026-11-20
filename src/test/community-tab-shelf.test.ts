@@ -67,7 +67,7 @@ describe("the tab bar: TikTok's / Instagram's", () => {
     // (less the iPhone home-screen app's short-layout gap, ios-bottom-gap.test.ts; 0 everywhere else)
     expect(css).toContain("  --mobile-bar-h: 50px;\n  --mobile-bar-top: calc(var(--mobile-bar-h) + var(--mobile-bar-pad));");
     // pages clear exactly the bar (the chats end at its top)
-    expect(css).toContain("  :root { --bottom-nav-clearance: var(--mobile-bar-top); }");
+    expect(css).toContain(":root { @variant max-md { --bottom-nav-clearance: var(--mobile-bar-top); } }");
     // no floating card: no side gutter, rounding, shadow, blur or fade under it
     const bar = shell.slice(shell.indexOf("export function MobileBottomBar"), shell.indexOf("// Every bar slot shares one box"));
     for (const gone of ["inset-x-4", "rounded-2xl", "shadow-", "backdrop-blur", "bg-gradient-to-t"]) expect(bar).not.toContain(gone);
@@ -99,11 +99,12 @@ describe("the tab bar: TikTok's / Instagram's", () => {
     expect(shell).not.toContain("dy > 0 || dx !== 0 || scale !== 1");
   });
 
-  it("Rankings is the trophy in Crew's bar, one tap from any post; the coach's Manage takes its place (the finance feed keeps the League bubble)", () => {
+  it("Rankings is the third tab in Crew's bar (Crew · Following · Rankings), one tap from any post (the finance feed keeps the League bubble)", () => {
     const rail = read("src/components/community/crew-stories.tsx");
     expect(rail).toContain("data-story-rankings");
     expect(rail).toContain("if (!groups.length && !mine && !addStory && !rankings) return null;");
-    expect(screen).toContain('<BarButton label="Rankings" onClick={openRankings} data-crew-rankings>');
+    expect(screen).not.toContain("data-crew-rankings");
+    expect(screen).toContain('if (t === "rankings") return openRankings();');
     expect(screen).toContain('const rankings = hideTabs ? { label: "League", onOpen: () => void navigate({ to: "/admin/league" }) } : undefined;');
     expect(screen).toContain('void navigate({ to: ".", hash: "rankings", replace: true, resetScroll: false });');
     expect(screen.match(/rankings=\{rankings\}/g)?.length).toBe(2);
@@ -169,54 +170,40 @@ describe("Home order: what you do today, then what you check", () => {
   });
 });
 
-describe("the recap's one-tap post", () => {
+describe("the recap: Story is the quick share, Crew the considered post (Nov 18 2026)", () => {
   const footer = read("src/components/community/recap-post.tsx");
-  it("posts the workout card to the crew, with a caption right there (optional)", () => {
-    expect(footer).toContain('saveCommunityPost({ completionId, caption: caption.trim(), visibility: "community", media: { action: "keep" } })');
-    expect(footer).toContain("<CaptionRow value={caption} onOpen={() => setWriting(true)} />");
-    expect(footer).toContain("<CaptionSheet open={writing}");
-    // opening the camera instead keeps what they wrote
-    expect(footer).toContain("onPhoto={() => onStudio(caption)}");
-    expect(read("src/components/community/use-workout-studio.ts")).toContain("caption: existing ? existing.caption : draftCaption,");
+  const quick = read("src/components/community/quick-story.tsx");
+  it("the story is painted already and shown small; one tap on Share to Story posts it, a tap on it opens it to change", () => {
+    expect(footer).toContain("<QuickStoryThumb story={story}");
+    expect(footer).toContain("onClick={() => void shareStory()}");
+    expect(footer).toContain("onClick={() => setEditing(true)}");
+    // posting only ever happens from a button, and Undo takes it back
+    expect(footer).not.toMatch(/useEffect\([^)]*share/);
+    expect(footer).toContain("data-recap-story-undo");
+    expect(quick).not.toMatch(/useEffect\([^)]*share\(\)/);
   });
-  it("says what it earns only when it really earns (DB rule: recent workout, 1 a day, 2 a week)", () => {
+  it("Create Crew Post opens the full studio carrying the words; it shows what it earns only when it really earns", () => {
+    expect(footer).toContain("onClick={() => onStudio(story.caption.trim())} data-recap-crew-post");
     expect(footer).toContain('const earn = hint?.tone === "earn" && points ? points.points : 0;');
     expect(footer).toContain("{earn > 0 && <span");
+    expect(read("src/components/community/use-workout-studio.ts")).toContain("caption: existing ? existing.caption : draftCaption,");
   });
-  it("an earlier finish post: says where it is, Done takes over; a lock-in never counts as one", () => {
-    expect(footer).toContain('"It\'s in the crew\'s feed"');
-    expect(footer).toContain('existing?.visibility === "coach"');
+  it("says once where the workout already is; a lock-in never counts as one", () => {
+    expect(footer).toContain("In the Crew feed");
+    expect(footer).toContain("Posted to your story automatically");
     expect(footer).not.toContain("locked_in_at");
     expect(footer).toContain('useMyPostForCompletion(completionId, true, "lockin")');
   });
-});
-
-describe("the recap's composer, with the automatic story post", () => {
-  const footer = read("src/components/community/recap-post.tsx");
-  const summary = read("src/components/workout-submission-summary.tsx");
-  it("shows what the crew will see first: the same headline win as the post, from the same stats", () => {
-    expect(footer).toContain("useCompletionPreview(completionId)");
-    expect(footer).toContain("pickWorkoutWin(stats, unit)");
-    // weights hidden on their posts stay hidden on the preview
-    expect(footer).toContain("const detail = win?.detail && !hideLoads ? win.detail : null;");
-    expect(summary).toContain("unit={displayUnit}");
-  });
-  it("the automatic post isn't 'shared': Share to Crew upgrades that same post, Hide it takes it out of Crew", () => {
-    expect(footer).toContain("const unshared = !justPosted && (!existing || auto || hidden);");
-    expect(footer).toContain("On your story for 24 hours");
+  it("an automatic story (switched on in Privacy) can be hidden, and one they make takes its place", () => {
     expect(footer).toContain('saveCommunityPost({ completionId, caption: "", visibility: "private", media: { action: "keep" } })');
-    // the hide is only a choice they make: never on its own
-    expect(footer).toContain("onClick={() => void hide()}");
-    expect(footer).not.toMatch(/useEffect\([^)]*hide\(\)/);
+    expect(footer).toContain("onClick={() => void hideAuto()}");
+    expect(footer).toContain("if (replaces) await hideAuto(true);");
   });
-  it("one save at a time, and a failed share keeps the caption to try again", () => {
-    expect(footer).toContain("if (busy.current) return;");
-    const fail = footer.slice(footer.indexOf("} catch (e: any) {"), footer.indexOf("} finally {"));
-    expect(fail).not.toContain("setCaption");
-  });
-  it("tells them the review stays with the coach", () => {
-    expect(footer).toContain("Your review and coach note stay private.");
-    expect(footer).not.toMatch(/feedback|pain|session_rpe|pl_workout_feedback/);
+  it("one share at a time; Done always closes", () => {
+    expect(quick).toContain("if (busyRef.current || !data || !look) return null;");
+    expect(footer).toContain("onClick={onDone} data-recap-done");
+    // the review stays with the coach: nothing of it reaches a story or a post
+    expect(footer).not.toMatch(/feedback|\bpain\b|session_rpe|pl_workout_feedback/);
   });
 });
 

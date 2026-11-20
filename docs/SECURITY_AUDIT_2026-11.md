@@ -2,7 +2,7 @@
 
 Scope: the whole production app (TanStack Start on Lovable/Cloudflare, Supabase project `ojrsinmwkqfuukfmtryx`), its database as it runs in production (read-only catalog queries and anonymous, count-only probes; no personal data read), the client bundle as built, the public attack surface, the agreements and the acceptance system. Nothing intrusive was run against production, and nothing was deployed.
 
-Companion documents: `docs/legal/AGREEMENT_UPDATES_DRAFT_2026-11.md` (draft agreement language for legal review), `supabase/migrations/20270403093000_security_hardening.sql` (database fixes), `src/test/security-hardening.test.ts` (tests).
+Companion documents: `docs/legal/AGREEMENT_UPDATES_DRAFT_2026-11.md` (draft agreement language for legal review), `supabase/migrations/20270422090000_security_hardening.sql` (database fixes), `src/test/security-hardening.test.ts` (tests).
 
 ## 1. Summary
 
@@ -41,7 +41,7 @@ Fix: `account-recovery-lookup.server.ts` finds the login first, exactly (`auth_u
 
 ### High and medium (database)
 
-All in `20270403093000_security_hardening.sql`, each caller traced in the live database first:
+All in `20270422090000_security_hardening.sql`, each caller traced in the live database first:
 
 - **Worker and job functions** (`claim_scheduled_messages`, `claim_message_for_retry`, `finalize_message_send`, `mark_message_sending`, `release_message_claim`, `cancel_scheduled_message`, `cancel_scheduled_response_safe`, `finalize_schedule_send`, `mark_schedule_sending`, `consume_session_for_pt`, `grant_sessions_due_today`, `grant_sessions_if_paid_in_full`, `expire_overdue_sessions`, `mark_stale_lift_uploads`, `maybe_refresh_water_target`, `apply_default_member_access`, `sync_athlete_achievements`, `crm_last_contacted_map`, `xp_client_for_user`): revoked from `PUBLIC`, `anon`, `authenticated`; granted to `service_role`. Every caller is the service role, pg_cron or a SECURITY DEFINER function/trigger. The admin's "retry a failed message" (`retryFailedMessage`) checks the caller and now calls its two functions as the server.
 - **`pl_clone_blocks_for_rows`**: now checks the caller can coach every program on both sides (the same rule as `pl_exercise_blocks`' own policies). Unused today (0 rows), so nothing changes in practice.

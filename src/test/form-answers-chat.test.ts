@@ -35,9 +35,10 @@ describe("submitted form answers in the coach's chat", () => {
     ]);
   });
 
-  it("the coach's form card shows the answers and the AI plan, not just a link", () => {
+  it("the coach's form card shows the key answers and the AI plan, with every answer one tap away", () => {
     const card = readFileSync("src/components/messages/messenger-checkin-card.tsx", "utf8");
-    expect(card).toContain("<SubmittedFormAnswers");
+    expect(card).toContain("<SubmittedFormGlance");
+    expect(card).toContain("View full response");
     expect(card).toContain("answeredQuestions(");
     expect(card).toContain("planMissing(plan)");
     expect(card).not.toContain('"View AI plan"');

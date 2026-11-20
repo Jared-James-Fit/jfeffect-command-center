@@ -18,6 +18,7 @@ import {
 import { useMealPlanView, type MealPlanView } from "@/lib/nutrition-targets/meal-plan-view";
 import { KCAL_PER_GRAM, MACRO_COLOR, formatKcal } from "./macro-palette";
 import { mealMacroNumbers, splitFoodLine } from "@/lib/nutrition-targets/meal-plan-reader";
+import { FLEX_HEADING } from "@/lib/nutrition-targets/meal-plan-structure";
 import {
   formatDayWater,
   formatMealWater,
@@ -474,10 +475,14 @@ function PlanNote({ section }: { section: NonMealSection }) {
       </div>
     );
   }
+  // A coach's flexible calories: titled like a meal, the rules for using them under it.
+  const flex = section.kind === "other" && FLEX_HEADING.test(section.items[0] ?? "");
   return (
-    <div className="rounded-2xl bg-secondary/35 p-4 text-[15px] leading-relaxed text-foreground/90">
+    <div className="rounded-2xl bg-secondary/35 p-4 text-[15px] leading-relaxed text-foreground/90" data-meal-plan-flexible={flex || undefined}>
       {section.items.map((it, j) => (
-        <p key={j}>{it}</p>
+        <p key={j} className={cn(flex && j === 0 && "font-semibold text-foreground")}>
+          {it}
+        </p>
       ))}
     </div>
   );

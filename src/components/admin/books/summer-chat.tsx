@@ -18,12 +18,14 @@ import { extractLinks, tokenizeInline } from "@/lib/summer-voice-text";
 import { loadVoicePrefs, summerSpeaker, type ServerVoice, type SummerVoicePrefs } from "@/lib/summer-speaker";
 import { blobToBase64, micSupported, useSummerMic } from "@/hooks/use-summer-mic";
 import { isAudioSessionError } from "@/lib/audio-session";
-import { playAppSound, startThinkingSound } from "@/lib/app-sounds";
+import { startThinkingSound } from "@/lib/app-sounds";
 import { SummerCustomizeDialog, type SummerPersona } from "./summer-customize";
 import { CleoActionCard, CleoApprovals, useCleoActions } from "./cleo-action-card";
 import { CHATS_KEY, CleoChatHistory } from "./cleo-chat-history";
 import { AttachmentTray, MessageAttachments, useAttachmentTray, workingLabel } from "./cleo-attachments-ui";
 import { ATTACH_ACCEPT, type CleoAttachment } from "@/lib/cleo-attachments";
+import { phoneLayoutNow } from "@/lib/portrait-only";
+import { feedback } from "@/lib/feedback";
 
 type Msg = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices?: string[] | null; attachments?: CleoAttachment[] | null };
 type ChatData = { chat: CleoChat | null; messages: Msg[] };
@@ -34,7 +36,7 @@ type ChatData = { chat: CleoChat | null; messages: Msg[] };
  */
 type ChatView = { kind: "current" } | { kind: "new" } | { kind: "chat"; id: string };
 const chatKey = (v: ChatView) => ["summer-chat", v.kind === "chat" ? v.id : v.kind];
-/** "ready" = she answered and it's your turn: one tap keeps the conversation going. */
+/** "ready" = Cleo answered and it's your turn: one tap keeps the conversation going. */
 type VoiceState = "idle" | "listening" | "thinking" | "speaking" | "ready";
 
 const OWNER_STARTERS = [
@@ -168,7 +170,7 @@ function clock(ms: number): string {
 
 /**
  * The voice conversation. The big orb always does the obvious next thing:
- * listening → send, she's talking → cut in and talk, her answer is done →
+ * listening → send, Cleo is talking → cut in and talk, the answer is done →
  * talk again. Nothing listens without a tap.
  */
 function DictationPanel({
@@ -181,9 +183,9 @@ function DictationPanel({
   elapsedMs: number;
   /** Listening: send what was said. */
   onSend: () => void;
-  /** Speaking or ready: start listening again (cuts her off if she's talking). */
+  /** Speaking or ready: start listening again (cuts Cleo off mid-reply). */
   onTalk: () => void;
-  /** Speaking: stop her and wait for your turn. */
+  /** Speaking: stop the reply and wait for your turn. */
   onStop: () => void;
   /** Leave voice and go back to typing. */
   onCancel: () => void;
@@ -284,7 +286,7 @@ export function SummerChat({
   year?: number;
   persona: SummerPersona;
   onPersonaSaved: () => void;
-  /** Current page, so "this client" makes sense to her. */
+  /** Current page, so "this client" makes sense to Cleo. */
   route?: string;
   /** Owner gets the books; other admins get team starters. */
   isOwner?: boolean;
@@ -347,7 +349,7 @@ export function SummerChat({
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages.length, pending, open, voiceState]);
 
-  // A soft "working on it" sound while she thinks (typed or spoken).
+  // A soft "working on it" sound while Cleo thinks (typed or spoken).
   const working = open && (!!pending || voiceState === "thinking");
   useEffect(() => (working ? startThinkingSound() : undefined), [working]);
 
@@ -382,7 +384,7 @@ export function SummerChat({
     [speaker, serverVoice],
   );
 
-  /** Throw away what's being said, or stop her talking. */
+  /** Throw away what's being said, or stop Cleo talking. */
   const turnRef = useRef(0);
   const stopVoice = useCallback(() => {
     turnRef.current += 1; // a reply that lands after this stays quiet
@@ -391,7 +393,7 @@ export function SummerChat({
     setVoiceState("idle");
   }, [micCancel, speaker]);
 
-  /** Dictate: listen until the tap, then she answers (and speaks it if auto-play is on). */
+  /** Dictate: listen until the tap, then Cleo answers (and speaks it if auto-play is on). */
   const dictate = useCallback(async () => {
     const turn = ++turnRef.current;
     setVoiceState("listening");
@@ -439,12 +441,12 @@ export function SummerChat({
     void cleo.refresh();
     if (turn !== turnRef.current) return;
     prefsRef.current = loadVoicePrefs();
-    if (!prefsRef.current.autoplay) playAppSound("reply");
+    if (!prefsRef.current.autoplay) feedback("reply");
     if (prefsRef.current.autoplay) {
       setVoiceState("speaking");
       await speak(res.assistant);
     }
-    // Her answer is done (or was stopped): your turn, one tap to keep going.
+    // The answer is done (or was stopped): your turn, one tap to keep going.
     if (turn === turnRef.current) setVoiceState("ready");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [micStart, askVoice, year, route, speak, stopVoice]);
@@ -454,13 +456,13 @@ export function SummerChat({
       toast.error("Voice isn't supported in this browser. Type to Cleo instead.");
       return;
     }
-    speaker.stop(); // cutting in: she stops talking
-    speaker.unlock(); // this tap is what lets her reply play by itself
-    try { navigator.vibrate?.(10); } catch { /* not supported */ }
+    speaker.stop(); // cutting in: Cleo stops talking
+    speaker.unlock(); // this tap is what lets the reply play by itself
+    feedback("press");
     void dictate();
   };
 
-  // Long-press on the Cleo button, or the mic on her row in Messages: open straight into dictation.
+  // Long-press on the Cleo button, or the mic on Cleo's row in Messages: open straight into dictation.
   useEffect(() => {
     if (open && startDictating && (voiceState === "idle" || voiceState === "ready")) {
       onDictationStarted?.();
@@ -477,12 +479,12 @@ export function SummerChat({
 
   const sendDictation = () => {
     if (voiceState === "listening") {
-      try { navigator.vibrate?.(10); } catch { /* not supported */ }
+      feedback("tap");
       micStop();
     }
   };
 
-  /** Stop her mid-answer and wait for your turn (the reply is still on screen). */
+  /** Stop Cleo mid-answer and wait for your turn (the reply is still on screen). */
   const stopSpeaking = () => {
     speaker.stop();
   };
@@ -504,7 +506,7 @@ export function SummerChat({
       append([res.user, res.assistant], res.chatId);
       if (atts.length) tray.clear();
       void cleo.refresh();
-      playAppSound("reply");
+      feedback("reply");
     } catch (e: any) {
       setDraft(message);
       toast.error(e?.message ?? `${ASSISTANT_NAME} couldn't answer that`);
@@ -515,15 +517,15 @@ export function SummerChat({
   };
 
   /**
-   * A tap on one of her quick answers. In a voice conversation it stays one:
-   * she answers out loud and it's your turn again after.
+   * A tap on one of Cleo's quick answers. In a voice conversation it stays one:
+   * Cleo answers out loud and it's your turn again after.
    */
   const pick = async (choice: string) => {
     if (pending) return;
     if (voiceState !== "ready") return void send(choice);
     const turn = ++turnRef.current;
     speaker.stop();
-    speaker.unlock(); // this tap lets her answer play
+    speaker.unlock(); // this tap lets the answer play
     setPending(choice);
     setVoiceState("thinking");
     try {
@@ -536,7 +538,7 @@ export function SummerChat({
         setPending(null);
         setVoiceState("speaking");
         await speak(res.assistant);
-      } else playAppSound("reply");
+      } else feedback("reply");
     } catch (e: any) {
       if (turn === turnRef.current) toast.error(e?.message ?? `${ASSISTANT_NAME} couldn't answer that`);
     } finally {
@@ -572,7 +574,7 @@ export function SummerChat({
   const openLink = useOpenLink(
     useCallback(() => {
       // On a phone the sheet covers the page, so step aside; on desktop keep chatting.
-      if (window.innerWidth < 768) {
+      if (phoneLayoutNow()) {
         stopVoice();
         onOpenChange(false);
       }
@@ -668,7 +670,7 @@ export function SummerChat({
           )}
           {messages.map((m, idx) => {
             const links = m.role === "assistant" ? extractLinks(m.content).filter((l) => l.internal).slice(0, 4) : [];
-            // Her quick question's answers, only while it's still the latest thing she said.
+            // Cleo's quick question's answers, only while it's still the latest thing Cleo said.
             const choices = m.role === "assistant" && idx === messages.length - 1 && !pending ? (m.choices ?? []).filter(Boolean) : [];
             return (
               <div key={m.id} className={cn("flex flex-col", m.role === "user" ? "items-end" : "items-start")}>
@@ -754,7 +756,7 @@ export function SummerChat({
                 </div>
               )}
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> {pendingNote ?? `${ASSISTANT_NAME} is on it${tone.value === "girly_pop" ? " 💅" : "…"}`}
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> {pendingNote ?? `${ASSISTANT_NAME} is on it${tone.value === "girly_pop" ? " ✨" : "…"}`}
               </div>
             </>
           )}

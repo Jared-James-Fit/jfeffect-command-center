@@ -74,6 +74,8 @@ export type PrefillProfile = {
   recent_bodyweight?: { value: number; unit: "kg" | "lb"; count: number } | null;
   /** The competition season the form is about (October on is next year's). */
   season_year?: number | null;
+  /** Their competition profile (competition-profile.ts): the class they compete in and the age classes they enter. */
+  competition?: { weightClass: string | null; ageClasses: string[] } | null;
 };
 
 /** A number answered in a unit (bodyweight): what the form keeps on screen. */
@@ -82,7 +84,10 @@ export type UnitValue = { value: string; unit: "kg" | "lb" };
 export type Answer = string | string[] | UnitValue;
 
 /** What the profile gives a question: the answer, where it's from, and whether it beats their last answer. */
-export type Prefilled = { value: Answer; source: string | null; strong: boolean };
+export type Prefilled = { value: Answer; source: string | null; strong: boolean; origin?: "competition" | "birth_year" | "prep" | "weigh_ins" };
+
+/** The line under an answer that came from their competition profile (Account → Competition). */
+export const COMPETITION_SOURCE = "From your competition profile";
 
 export function questionPrefill(q: {
   validation?: Record<string, unknown> | null;
@@ -225,6 +230,14 @@ const names = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} 
 export const ageClassName = (o: string) =>
   o.replace(/\s*\(.*\)\s*$/, "").toLowerCase().replace(/(^|\s|-)\w/g, (c) => c.toUpperCase());
 
+/** An age class option as it reads on screen: "SUB-JUNIOR (14–18)" → "Sub-Junior (14–18)" (the stored answer keeps its text). */
+export function ageClassLabel(o: string): string {
+  const m = o.match(/^([^(]*?)(\s*\(.*\))?\s*$/);
+  const name = (m?.[1] ?? o).trim();
+  if (!name || name !== name.toUpperCase() || !/[A-Z]/.test(name)) return o;
+  return `${ageClassName(name)}${m?.[2] ?? ""}`;
+}
+
 /** What the profile gives a question, or null when it has nothing to say. */
 export function prefillDetail(
   q: { validation?: Record<string, unknown> | null; options?: string[] | null; label?: string | null; question_type?: string | null },
@@ -238,7 +251,8 @@ export function prefillDetail(
   if (key === "meet_name") return fact(profile.meet?.name?.trim() || null);
   if (key === "meet_date") return fact(profile.meet?.date || null);
   if (key === "meet_weight_class") {
-    const cls = profile.meet?.weightClass?.trim();
+    // the meet's own class first (the coach's send, their meet prep or plan), else the class they compete in
+    const cls = profile.meet?.weightClass?.trim() || profile.competition?.weightClass?.trim();
     return fact(cls ? matchClassOption(opts, cls, profile.sex) : null);
   }
   if (key === "bodyweight") {
@@ -257,14 +271,23 @@ export function prefillDetail(
   if (key === "age_class") {
     const year = profile.season_year ?? seasonYear();
     const allowed = eligibleOptions(opts, eligibleAgeClasses(profile.date_of_birth, year));
+    // the classes they said they enter, while their birth year still allows them
+    const kept = profile.competition?.ageClasses?.length
+      ? eligibleOptions(opts, profile.competition.ageClasses).filter((o) => !allowed.length || allowed.includes(o))
+      : [];
+    if (kept.length) return { value: kept, source: COMPETITION_SOURCE, strong: true, origin: "competition" };
     if (!allowed.length) return null;
-    return fact(allowed, `From your birth year: you can lift ${names(allowed.map(ageClassName))} in ${year}`);
+    return { value: allowed, source: ageClassesAllowedLine(allowed, year), strong: true, origin: "birth_year" };
   }
   if (key === "weight_class") {
     // the coach's meet prep is the class; else the class their weigh-ins put them in, a starting point
     const prep = profile.prep_weight_class?.trim();
     const fromPrep = prep ? matchClassOption(opts, prep, profile.sex) : null;
-    if (fromPrep) return fact(fromPrep, "From your meet prep");
+    if (fromPrep) return { value: fromPrep, source: "From your meet prep", strong: true, origin: "prep" };
+    // the class they compete in, as they or their coach last set it
+    const mine = profile.competition?.weightClass?.trim();
+    const fromProfile = mine ? matchClassOption(opts, mine, profile.sex) : null;
+    if (fromProfile) return { value: fromProfile, source: COMPETITION_SOURCE, strong: true, origin: "competition" };
     const bw = profile.recent_bodyweight;
     if (!bw) return null;
     const kg = bw.unit === "kg" ? bw.value : bw.value / LB_PER_KG;
@@ -274,7 +297,7 @@ export function prefillDetail(
     const hit = cls ? matchClassOption(opts, cls, profile.sex) : null;
     if (!hit) return null;
     const avg = `${round1(bw.value)} ${bw.unit}`;
-    return { value: hit, source: `From your weigh-ins (${bw.count > 1 ? `${avg} average` : avg})`, strong: false };
+    return { value: hit, source: `From your weigh-ins (${bw.count > 1 ? `${avg} average` : avg})`, strong: false, origin: "weigh_ins" };
   }
   if (key === "training_days") {
     const days = (profile.training_days ?? []).filter(Boolean);
@@ -293,7 +316,7 @@ export function prefillDetail(
     const hit = trainingTimeOption(opts, profile.training_starts);
     return hit ? fact(hit, `From your last ${plural(profile.training_starts!.length, "workout")}`) : null;
   }
-  if (key === "full_name") return fact(profile.full_name?.trim() || null);
+  if (key === "full_name") return fact(profile.full_name?.trim() || null, "From your profile");
   if (key === "nutrition_plan") {
     if (profile.has_nutrition_plan !== false) return null;
     return fact(!opts.length || opts.includes(MEAL_CHOICE.first) ? MEAL_CHOICE.first : null);
@@ -333,7 +356,7 @@ export function startingAnswer(
 ): { value: unknown; from: "profile" | "last" } | null {
   const p = prefillDetail(q, profile);
   const last = blank(remembered) ? null : remembered;
-  if (questionPrefill(q) === "age_class" && p && Array.isArray(last)) {
+  if (questionPrefill(q) === "age_class" && p?.origin === "birth_year" && Array.isArray(last)) {
     const allowed = new Set(p.value as string[]);
     const keep = (last as unknown[]).map(String).filter((o) => allowed.has(o));
     if (keep.length) return { value: keep, from: "last" };
@@ -369,8 +392,19 @@ export function prefillNote(
 ): string | null {
   const p = prefillDetail(q, profile);
   if (!p?.source) return null;
-  if (questionPrefill(q) === "age_class") return p.source;
-  return sameAnswer(p.value, answer) ? p.source : null;
+  if (sameAnswer(p.value, answer)) return p.source;
+  // age classes they've picked themselves: still say what their birth year allows
+  if (questionPrefill(q) === "age_class" && profile) {
+    const year = profile.season_year ?? seasonYear();
+    const allowed = eligibleOptions(q.options ?? [], eligibleAgeClasses(profile.date_of_birth, year));
+    return allowed.length ? ageClassesAllowedLine(allowed, year) : null;
+  }
+  return null;
+}
+
+/** "From your birth year: you can lift Junior and Open in 2027". */
+function ageClassesAllowedLine(allowed: string[], year: number): string {
+  return `From your birth year: you can lift ${names(allowed.map(ageClassName))} in ${year}`;
 }
 
 /**

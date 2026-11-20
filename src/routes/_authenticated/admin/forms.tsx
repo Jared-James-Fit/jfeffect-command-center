@@ -2,9 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { DEFAULT_TAB, LEGACY_SUB, LEGACY_TAB_ALIAS, LAST_TAB_KEY, isTab, type TabKey } from "@/route-pages/_authenticated/admin/forms-tabs";
 import { FormsWorkspacePage } from "@/route-pages/_authenticated/admin/forms";
 
-const KINDS = ["weekly_checkin", "nutrition_update", "form"] as const;
+// Requests open on one form (the inbox's Weekly / Nutrition strip); Submissions
+// open on one kind (Coaching Hub's old Progress tab lands on progress).
+const KINDS = ["weekly_checkin", "nutrition_update", "form", "progress"] as const;
 type Kind = (typeof KINDS)[number];
-type FormsSearch = { tab: TabKey; sub?: string; kind?: Kind };
+type FormsSearch = { tab: TabKey; sub?: string; kind?: Kind; status?: "to_review" };
 
 export const Route = createFileRoute("/_authenticated/admin/forms")({
   validateSearch: (raw: Record<string, unknown>): FormsSearch => {
@@ -12,6 +14,8 @@ export const Route = createFileRoute("/_authenticated/admin/forms")({
     let sub = typeof raw?.sub === "string" ? (raw.sub as string) : undefined;
     // Requests tracker opened on one form (the inbox's Weekly / Nutrition strip).
     const kind = KINDS.includes(raw?.kind as Kind) ? (raw.kind as Kind) : undefined;
+    // Submissions opened on "To review" (the dashboard's Check-ins to review → All).
+    if (t === "submissions" && raw?.status === "to_review") return { tab: "submissions", kind, status: "to_review" };
     // The old Submissions → "Fillout only" is the Fillout inbox now.
     if (t === "submissions" && sub === "fillout") return { tab: "fillout" };
     if (typeof t === "string" && LEGACY_TAB_ALIAS[t]) {

@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { parseISO, format, startOfDay } from "date-fns";
 import { inWorkoutOrder } from "@/lib/logged-set-order";
+import { displayLoadInUnit } from "@/lib/workout-unit-persistence";
 
 const sb = supabase as any;
 
@@ -164,9 +165,10 @@ export async function getBlockAnalytics(blockId: string): Promise<BlockAnalytics
     const week = day ? weekById.get(day.week_id) as any : null;
     const comp = day ? compByDay.get(day.id) as any : null;
     const ex = row?.exercise ?? null;
-    const weight = unit === "lb"
-      ? (r.actual_load_unit === "kg" ? null : r.actual_load) // don't auto-convert per spec
-      : (r.actual_load_unit === "lb" ? null : r.actual_load);
+    // Every set in the block's unit, from the stored kg / lb mirrors: a set
+    // logged in the other unit was dropped here, then read back as its raw
+    // number (225 lb counted as 225 kg in a kg block's volume, top set and e1RM).
+    const weight = displayLoadInUnit(r, unit);
     return {
       id: r.id,
       row_id: r.row_id,
@@ -181,7 +183,7 @@ export async function getBlockAnalytics(blockId: string): Promise<BlockAnalytics
       block_id: blockId,
       row_order: row?.sort_order ?? 0,
       set_index: r.set_index ?? 0,
-      weight: weight != null ? Number(weight) : (r.actual_load != null ? Number(r.actual_load) : null),
+      weight: weight != null ? Number(weight) : null,
       reps: r.actual_reps ?? null,
       rpe: parseRPE(r.actual_rpe),
       completed: !!r.completed_at,
@@ -273,7 +275,8 @@ export async function getBlockAnalytics(blockId: string): Promise<BlockAnalytics
       if (v == null) continue;
       if (v > bestVal) { bestVal = v; best = s; }
     }
-    if (best) prs.push({ label, value: `${bestVal} ${label.includes("Reps") ? "reps" : unit}`, exercise: best.exercise_name, date: best.date });
+    // a set logged in the other unit converts to 4 decimals (220.4623): shown to one
+    if (best) prs.push({ label, value: `${Math.round(bestVal * 10) / 10} ${label.includes("Reps") ? "reps" : unit}`, exercise: best.exercise_name, date: best.date });
   };
   bestByMetric("Highest Load", (s) => s.weight);
   bestByMetric("Highest e1RM", (s) => (s.weight && s.reps && s.reps > 0 && !isBodyweightCategory(s.category) ? epley(s.weight, s.reps) : null));

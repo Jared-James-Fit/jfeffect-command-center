@@ -29,7 +29,8 @@ function fakeDb(tables: Record<string, any[]>) {
       const api: any = {
         select: () => api,
         eq: (c: string, v: unknown) => (filters.push((r) => r[c] === v), api),
-        contains: (c: string, v: any[]) => (filters.push((r) => v.every((want) => (r[c] ?? []).some((a: any) => Object.entries(want).every(([k, x]) => a?.[k] === x)))), api),
+        // jsonb containment arrives as JSON text, as PostgREST takes it (a JS array would be a Postgres array literal)
+        contains: (c: string, v: string) => (filters.push((r) => (JSON.parse(v) as any[]).every((want) => (r[c] ?? []).some((a: any) => Object.entries(want).every(([k, x]) => a?.[k] === x)))), api),
         order: () => api,
         limit: () => api,
         insert: (r: any) => ((row = { id: `m${inserted.length + 1}`, ...r }), inserted.push(row), (tables[table] ??= []).push(row), api),

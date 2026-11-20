@@ -42,7 +42,7 @@ export function PageCaption({ text: typed, mentions: typedMentions, onOpen, clas
   useLayoutEffect(() => {
     const p = probe.current;
     if (!p || !width) return;
-    const lh = parseFloat(getComputedStyle(p).lineHeight) || 14 * 1.4;
+    const lh = parseFloat(getComputedStyle(p).lineHeight) || 15 * 1.4;
     const lines = (t: string) => {
       p.textContent = t;
       return Math.round(p.scrollHeight / lh);
@@ -72,7 +72,7 @@ export function PageCaption({ text: typed, mentions: typedMentions, onOpen, clas
         e.stopPropagation();
         onOpen();
       }}
-      className={cn("relative block w-full text-left text-[14px] leading-[1.4]", className)}
+      className={cn("relative block w-full text-left text-[15px] leading-[1.4]", className)}
       aria-label="Open the caption and comments"
       data-page-caption
     >
@@ -88,7 +88,7 @@ export function PageCaption({ text: typed, mentions: typedMentions, onOpen, clas
       <span
         ref={probe}
         aria-hidden
-        className="pointer-events-none invisible absolute inset-x-0 top-0 -z-10 block text-[14px] leading-[1.4]"
+        className="pointer-events-none invisible absolute inset-x-0 top-0 -z-10 block text-[15px] leading-[1.4]"
       />
     </button>
   );

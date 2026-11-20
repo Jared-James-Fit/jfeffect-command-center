@@ -1,6 +1,6 @@
 /**
  * Cleo and training programs: the exercise library, program templates and a
- * block's full layout (lookups), plus what her program cards say and do.
+ * block's full layout (lookups), plus what Cleo's program cards say and do.
  * Server-only.
  *
  * Rules every program change follows:
@@ -15,13 +15,15 @@
  *   committed training days (realignClientToCommittedDays), or the weekdays
  *   the coach named.
  */
+import { wellFormed } from "@/lib/well-formed";
 import { tool } from "ai";
 import { z } from "zod";
 import { rpcRead } from "@/lib/permissions.server";
 import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
-import { rxText, rxToRow, trainingDayDates, weekdayLabel, type Rx, type Weekday } from "@/lib/cleo-program";
+import { rxText, rxToRow, trainingDayDates, weekdayLabel, withLoadUnits, type Rx, type Weekday } from "@/lib/cleo-program";
 import { carryPlanDayRules } from "@/lib/client-nutrition-day";
 import { lowValueReason, EXERCISE_STANDARD } from "@/lib/program-intel/exercise-standard";
+import { ACCESSORY_FLOW_HINT } from "@/lib/program-intel/accessory-flow";
 import { coachingTemplates, isMembersProgram } from "@/lib/programs/library-view";
 
 type Db = any;
@@ -38,9 +40,9 @@ function clip(text: string, max = 16_000): string {
 function safe<A>(name: string, fn: (args: A) => Promise<string>) {
   return async (args: A) => {
     try {
-      return clip(await fn(args));
+      return wellFormed(clip(await fn(args)));
     } catch (e: any) {
-      return `Couldn't read ${name}: ${e?.message ?? "error"}. Tell the person you couldn't load it; don't guess.`;
+      return wellFormed(`Couldn't read ${name}: ${e?.message ?? "error"}. Tell the person you couldn't load it; don't guess.`);
     }
   };
 }
@@ -56,7 +58,7 @@ export function cleoProgramTools({ db, today }: { db: Db; today: string }) {
   return {
     exercise_library: tool({
       description:
-        `Find exercises in the app's exercise library by name. Program changes can only use exercises from here (by id). If nothing fits, say so and suggest the closest ones; never make one up. Results marked "below the exercise standard" shouldn't go in a program unless the coach asked for that exact exercise.\n\n${EXERCISE_STANDARD}`,
+        `Find exercises in the app's exercise library by name. Program changes can only use exercises from here (by id). If nothing fits, say so and suggest the closest ones; never make one up. Results marked "below the exercise standard" shouldn't go in a program unless the coach asked for that exact exercise.\n\n${EXERCISE_STANDARD}\n\n${ACCESSORY_FLOW_HINT}`,
       inputSchema: z.object({ query: z.string().trim().min(2).max(60) }),
       execute: safe("the exercise library", async ({ query }) => {
         const [exact, byName, byAlias] = await Promise.all([
@@ -206,6 +208,28 @@ async function exerciseNames(db: Db, ids: string[]): Promise<Map<string, string>
   return map;
 }
 
+/**
+ * What the coach should check on new nutrition targets before they go out (Nov 18 2026): the same
+ * coachChecks the Nutrition Update review runs (calories against their macros at 4/4/9, under the
+ * 1,200 / 1,500 kcal floor, fat under 0.5 g/kg, protein under 1.2 g/kg from their latest weigh-in).
+ */
+async function nutritionChecks(db: Db, clientId: string, days: Array<{ day_label: string; calories?: number | null; protein?: number | null; carbs?: number | null; fats?: number | null }>): Promise<string[]> {
+  const { coachChecks } = await import("@/lib/nutrition-targets/nutrition-intel");
+  const { data: c } = await db.from("clients").select("sex, user_id").eq("id", clientId).maybeSingle();
+  let bodyweightKg: number | null = null;
+  if (c?.user_id) {
+    const { data: w } = await db.from("progress_bodyweight").select("weight_value, weight_unit").eq("user_id", c.user_id).order("logged_date", { ascending: false }).limit(1).maybeSingle();
+    const v = Number(w?.weight_value);
+    if (Number.isFinite(v) && v > 0) bodyweightKg = /lb/i.test(String(w?.weight_unit ?? "")) ? v / 2.2046226218 : v;
+  }
+  return coachChecks({
+    days: days.map((d) => ({ label: d.day_label, kcal: d.calories ?? null, protein: d.protein ?? null, carbs: d.carbs ?? null, fat: d.fats ?? null })),
+    bodyweightKg,
+    female: /^f/i.test(String(c?.sex ?? "")),
+    safety: [],
+  });
+}
+
 async function client(db: Db, id: string) {
   const { data, error } = await db.from("clients").select("id, full_name, preferred_name, first_name, last_name, email, committed_training_days, preferred_weight_unit").eq("id", id).maybeSingle();
   if (error) throw new Error(error.message);
@@ -278,7 +302,11 @@ export async function workoutToRemove(db: Db, p: { workout_id?: string; day_id?:
     : instance
     ? [instance]
     : rows<any>(await db.from("pl_scheduled_workouts").select("*").eq("source_day_id", day.id).eq("client_id", block.client_id), "scheduled workouts");
-  if (!card && !scheduled.length) throw new Error("That program day isn't on their calendar. To take it out of the program itself, edit the program instead.");
+  if (!card && !scheduled.length) {
+    throw new Error(day.scheduled_date
+      ? "That workout is dated on the program itself, so it can't just come off the calendar (it would be placed back on their training days). Move it to another day, or take it out of the program by editing it."
+      : "That program day isn't on their calendar. To take it out of the program itself, edit the program instead.");
+  }
   if ((await lockedDays(db, [day.id])).has(day.id)) throw new Error("That workout has been started or logged, so it stays.");
   if (scheduled.length) {
     const { data: started } = await db
@@ -289,6 +317,21 @@ export async function workoutToRemove(db: Db, p: { workout_id?: string; day_id?:
   }
   const dayRows = card ? rows<any>(await db.from("pl_exercise_rows").select("*").eq("day_id", day.id).order("sort_order"), "rows") : [];
   return { card, day, rows: dayRows, scheduled, block, clientId: block.client_id as string };
+}
+
+/** A workout dated on the program itself (no schedule entry), as move_workout moves it: never one that's logged. */
+export async function datedDayToMove(db: Db, dayId: string | undefined) {
+  if (!dayId) throw new Error("Say which workout: a workout id or a day id from training_program.");
+  const { data: day } = await db.from("pl_days").select("id, week_id, title, day_index, scheduled_date").eq("id", dayId).maybeSingle();
+  if (!day) throw new Error("I couldn't find that workout.");
+  const { data: entry } = await db.from("pl_scheduled_workouts").select("id").eq("source_day_id", day.id).limit(1);
+  if ((entry ?? []).length) throw new Error("That workout is on the schedule with its own workout id: move it by that id (training_program lists it).");
+  if (!day.scheduled_date) throw new Error("That workout has no date yet. Placing it is the Training tab's Place them.");
+  const { data: week } = await db.from("pl_weeks").select("block_id").eq("id", day.week_id).maybeSingle();
+  const { data: block } = week ? await db.from("pl_blocks").select("id, client_id").eq("id", week.block_id).maybeSingle() : { data: null };
+  if (!block?.client_id) throw new Error("That workout isn't on a client's program.");
+  if ((await lockedDays(db, [day.id])).has(day.id)) throw new Error("That workout has been started or logged, so it stays on the day it was trained.");
+  return { day, clientId: block.client_id as string };
 }
 
 // ---------------------------------------------------------------------------
@@ -314,7 +357,46 @@ function longDate(iso: string): string {
   return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-CA", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" });
 }
 
+/** Any load in the params with no kg / lb on it. */
+function hasBareLoad(v: any): boolean {
+  if (Array.isArray(v)) return v.some(hasBareLoad);
+  if (!v || typeof v !== "object") return false;
+  if (typeof v.load === "number" && v.load_unit !== "kg" && v.load_unit !== "lb") return true;
+  return Object.values(v).some(hasBareLoad);
+}
+
+/**
+ * The same params with a unit on every load (withLoadUnits): the row's own
+ * unit when it already has a fixed load, else the athlete's. The approval card
+ * and the save both read the result, so what the coach approves is what's saved.
+ */
+async function withUnits(db: Db, kind: ProgramKind, p: any): Promise<any> {
+  if (!(kind === "build_program" || kind === "edit_program_day" || kind === "add_workout") || !hasBareLoad(p)) return p;
+  let clientId: string | null = p.client_id ?? null;
+  if (!clientId && p.day_id) {
+    const { data } = await db.from("pl_days").select("pl_weeks(pl_blocks(client_id))").eq("id", p.day_id).maybeSingle();
+    clientId = (data as any)?.pl_weeks?.pl_blocks?.client_id ?? null;
+  }
+  let fallback: "kg" | "lb" = "lb";
+  if (clientId) {
+    const { data } = await db.from("clients").select("preferred_weight_unit").eq("id", clientId).maybeSingle();
+    if ((data as any)?.preferred_weight_unit === "kg") fallback = "kg";
+  }
+  const rowIds = (Array.isArray(p.changes) ? p.changes : []).map((c: any) => c?.row_id).filter((x: unknown): x is string => typeof x === "string");
+  const rowUnits = new Map<string, "kg" | "lb">();
+  if (rowIds.length) {
+    const { data } = await db.from("pl_exercise_rows").select("id, load_unit, load_kg, load_lb").in("id", rowIds);
+    for (const r of (data ?? []) as any[]) {
+      const u = r.load_unit === "kg" || r.load_unit === "lb" ? r.load_unit
+        : r.load_kg != null && r.load_lb == null ? "kg" : r.load_lb != null && r.load_kg == null ? "lb" : null;
+      if (u && (r.load_kg != null || r.load_lb != null)) rowUnits.set(r.id, u);
+    }
+  }
+  return withLoadUnits(p, fallback, rowUnits);
+}
+
 export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, today: string): Promise<string> {
+  p = await withUnits(db, kind, p);
   switch (kind) {
     case "assign_program_template": {
       const c = await client(db, p.client_id);
@@ -434,6 +516,9 @@ export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, t
       });
       if (moved.length)
         lines.push(`Their meals stay as written on ${moved.map((d: any) => d.day_label).join(", ")}; to fit them to the new numbers, use Change it with AI on their Current plan.`);
+      // the same checks the AI plan's review runs before publishing (calories against 4/4/9, the floors)
+      const checks = await nutritionChecks(db, p.client_id, p.days);
+      if (checks.length) lines.push(`Check before publishing: ${checks.join("; ")}.`);
       lines.push(current && current.visible_to_client === false ? "Their targets are hidden from them." : `${clientLabel(c)} sees the new targets and gets a heads-up.`);
       return lines.join("\n");
     }
@@ -448,6 +533,12 @@ export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, t
         : `Take ${clientLabel(c)}'s ${name}${when} off their calendar. The day stays in "${t.block.name}". You can undo it.`;
     }
     case "move_workout": {
+      if (!p.workout_id) {
+        // A workout dated on the program itself (most of them): moved the way the app's calendar does (moveWorkout).
+        const t = await datedDayToMove(db, p.day_id);
+        const c = await client(db, t.clientId);
+        return `Move ${clientLabel(c)}'s ${t.day.title ? `"${t.day.title}"` : `Day ${t.day.day_index ?? "?"}`} from ${longDate(t.day.scheduled_date)} to ${longDate(p.date)}.`;
+      }
       const { data: w } = await db.from("pl_scheduled_workouts").select("id, client_id, scheduled_date, source_day_id").eq("id", p.workout_id).maybeSingle();
       if (!w) throw new Error("I couldn't find that scheduled workout.");
       const { data: done } = await db.from("pl_day_completions").select("completed_at").eq("scheduled_workout_id", w.id).not("completed_at", "is", null).limit(1);
@@ -511,6 +602,7 @@ async function insertRows(sb: Db, dayId: string, exercises: Array<Rx & { exercis
 
 export async function executeProgramAction(actor: { supabase: Db; userId: string }, kind: ProgramKind, p: any, today: string): Promise<string> {
   const sb = actor.supabase;
+  p = await withUnits(sb, kind, p);
   switch (kind) {
     case "assign_program_template": {
       const { applyTemplateToClientFn } = await import("@/lib/pl-programs.functions");
@@ -767,6 +859,13 @@ export async function executeProgramAction(actor: { supabase: Db; userId: string
       return "Taken off their calendar.";
     }
     case "move_workout": {
+      if (!p.workout_id) {
+        // Checked again now: still dated on itself, on a client's program, and not logged.
+        const t = await datedDayToMove(sb, p.day_id);
+        const { moveWorkout } = await import("@/lib/schedule-manager.functions");
+        await moveWorkout({ data: { dayId: t.day.id, newDate: p.date } });
+        return "Moved.";
+      }
       const { moveScheduledWorkout } = await import("@/lib/scheduled-workouts.functions");
       await moveScheduledWorkout({ data: { instanceId: p.workout_id, newDate: p.date } });
       return "Moved.";

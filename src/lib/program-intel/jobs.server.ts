@@ -117,7 +117,9 @@ export async function runIntelJob(admin: Db, jobId: string | null): Promise<{ st
     // the workload read the analytics page shows (training-load.ts)
     const { trainingLoadBrief } = await import("./training-load-intel");
     const load = trainingLoadBrief(gi.trainingLoad);
-    const markdown = `${reportToMarkdown(report, rec, { privacySafe: !!job.privacy_safe, reportId: job.id })}\n\n## Athlete development (computed from their records)\n${developmentText(dev, report.client.unit)}${load ? `\n\n## Training load (computed from their logged sets and the program)\n${load}` : ""}`;
+    // their health profile as the training AI reads it (the program brief has it; the read of their training should too)
+    const health = job.privacy_safe ? null : gi.ctx.health?.text ?? null;
+    const markdown = `${reportToMarkdown(report, rec, { privacySafe: !!job.privacy_safe, reportId: job.id })}\n\n## Athlete development (computed from their records)\n${developmentText(dev, report.client.unit)}${load ? `\n\n## Training load (computed from their logged sets and the program)\n${load}` : ""}${health ? `\n\n## Health profile (injuries, conditions, medications on file; plan around them, never diagnose)\n${health}` : ""}`;
     const { value, model } = await askJson<any>(admin, interpretSystemPrompt(job.brain), markdown, interpretReplySchema, 140_000);
     const rows = value.observations.map((o: any) => ({
       client_id: job.client_id,

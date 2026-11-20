@@ -60,6 +60,28 @@ function matches(item: WorkoutItem, target: MoveTarget): boolean {
 }
 
 /**
+ * The workouts already on the day a dragged workout is dropped on (the
+ * dragged one itself left out). A drop on a free day moves it at once; a
+ * drop on a day with one of these asks first (the move sheet: Swap days by
+ * default, or Do both), so a drag never stacks two workouts on a day by
+ * itself. Devin's Wednesday pull day landed on top of his Saturday bench day
+ * that way on Nov 17 2026 without him noticing.
+ */
+export function workoutsAlreadyOn(items: WorkoutItem[] | undefined | null, target: MoveTarget): WorkoutItem[] {
+  return (items ?? []).filter((item) => !matches(item, target));
+}
+
+/** "Moved to Sat, Nov 21" (a yyyy-mm-dd read as that calendar day, never UTC). */
+export function movedToLabel(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return "Workout moved";
+  const day = new Date(y, m - 1, d);
+  const wd = day.toLocaleDateString("en-US", { weekday: "short" });
+  const md = day.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `Moved to ${wd}, ${md}`;
+}
+
+/**
  * Immutably patch a loaded workout list so the moved instance renders on its
  * destination date immediately. Preserves the exact object identity fields
  * (scheduledWorkoutId, day, completion, logs) — nothing is cloned or removed,

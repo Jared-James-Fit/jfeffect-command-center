@@ -80,10 +80,13 @@ describe("the logger shows the cardio under its own heading", () => {
     expect(day).toContain("{canEditWorkoutStructure && !storyOpen && !cardioRow && (");
   });
 
-  it("the progress pill counts the lifts, with the cardio as a heart beside them", () => {
+  it("the progress pill counts the lifts, with the cardio as a pulse line beside them (never a heart, which read as a favourite)", () => {
     expect(day).toContain("const liftProgress = liftAndCardioProgress(rows as any[], statusSummary.doneRowIds);");
-    expect(day).toContain("{progressPct}% · {liftProgress.liftsDone}/{liftProgress.liftsTotal}");
+    expect(day).toContain("{liftProgress.liftsDone}/{liftProgress.liftsTotal}");
     expect(day).toContain('data-progress-cardio={liftProgress.cardioDone ? "done" : "open"}');
+    const pill = day.slice(day.indexOf('data-testid="workout-progress"'), day.indexOf("subtitle={"));
+    expect(pill).toContain("<Activity ");
+    expect(pill).not.toContain("<Heart ");
   });
 });
 
@@ -134,7 +137,7 @@ describe("cardio is done when it suits them: before, during, after or later that
     expect(programs).toContain("if (cardioRowIds.has(String(rr.row_id))) {");
     expect(programs).toContain("const lifts = (rowsByDay.get(dayId) ?? []).filter((r: any) => !isPlanCardioRow(r));");
     const card = read("src/components/workouts/WorkoutsExperience.tsx");
-    expect(card).toContain('data-day-cardio={item.cardio.done ? "done" : "open"}');
+    expect(card).toContain('data-day-cardio={cardioDone ? "done" : "open"}');
     expect(card).toContain("search={{ focus: item.cardio.rowId,");
     expect(day).toContain("Before, after or later in the day");
   });

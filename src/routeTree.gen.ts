@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AccountDeletionRouteImport } from './routes/account-deletion'
+import { Route as ActivateRouteImport } from './routes/activate'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as ApplyRouteImport } from './routes/apply'
 import { Route as AuthRouteImport } from './routes/auth'
@@ -254,8 +255,10 @@ import { Route as ApiPublicHooksAutoPaySendRouteImport } from './routes/api/publ
 import { Route as ApiPublicHooksBirthdayNotificationsRouteImport } from './routes/api/public/hooks/birthday-notifications'
 import { Route as ApiPublicHooksCleanupPendingSignupsRouteImport } from './routes/api/public/hooks/cleanup-pending-signups'
 import { Route as ApiPublicHooksCleoAttachmentsSweepRouteImport } from './routes/api/public/hooks/cleo-attachments-sweep'
+import { Route as ApiPublicHooksCleoBenchRouteImport } from './routes/api/public/hooks/cleo-bench'
 import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/api/public/hooks/client-calendars-tick'
 import { Route as ApiPublicHooksDailyVisualsTickRouteImport } from './routes/api/public/hooks/daily-visuals-tick'
+import { Route as ApiPublicHooksFeedCopiesTickRouteImport } from './routes/api/public/hooks/feed-copies-tick'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
 import { Route as ApiPublicHooksGcalSessionImportRouteImport } from './routes/api/public/hooks/gcal-session-import'
 import { Route as ApiPublicHooksJfLibraryInstallRouteImport } from './routes/api/public/hooks/jf-library-install'
@@ -321,6 +324,11 @@ const AboutRoute = AboutRouteImport.update({
 const AccountDeletionRoute = AccountDeletionRouteImport.update({
   id: '/account-deletion',
   path: '/account-deletion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ActivateRoute = ActivateRouteImport.update({
+  id: '/activate',
+  path: '/activate',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -1709,6 +1717,11 @@ const ApiPublicHooksCleoAttachmentsSweepRoute =
     path: '/api/public/hooks/cleo-attachments-sweep',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksCleoBenchRoute = ApiPublicHooksCleoBenchRouteImport.update({
+  id: '/api/public/hooks/cleo-bench',
+  path: '/api/public/hooks/cleo-bench',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksClientCalendarsTickRoute =
   ApiPublicHooksClientCalendarsTickRouteImport.update({
     id: '/api/public/hooks/client-calendars-tick',
@@ -1719,6 +1732,12 @@ const ApiPublicHooksDailyVisualsTickRoute =
   ApiPublicHooksDailyVisualsTickRouteImport.update({
     id: '/api/public/hooks/daily-visuals-tick',
     path: '/api/public/hooks/daily-visuals-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicHooksFeedCopiesTickRoute =
+  ApiPublicHooksFeedCopiesTickRouteImport.update({
+    id: '/api/public/hooks/feed-copies-tick',
+    path: '/api/public/hooks/feed-copies-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicHooksFilloutRoute = ApiPublicHooksFilloutRouteImport.update({
@@ -2006,6 +2025,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/account-deletion': typeof AccountDeletionRoute
+  '/activate': typeof ActivateRoute
   '/app': typeof AppRoute
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
@@ -2228,8 +2248,10 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
+  '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
+  '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
@@ -2301,6 +2323,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/account-deletion': typeof AccountDeletionRoute
+  '/activate': typeof ActivateRoute
   '/app': typeof AppRoute
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
@@ -2519,8 +2542,10 @@ export interface FileRoutesByTo {
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
+  '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
+  '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
@@ -2594,6 +2619,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/about': typeof AboutRoute
   '/account-deletion': typeof AccountDeletionRoute
+  '/activate': typeof ActivateRoute
   '/app': typeof AppRoute
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
@@ -2816,8 +2842,10 @@ export interface FileRoutesById {
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
+  '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
+  '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
@@ -2891,6 +2919,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/account-deletion'
+    | '/activate'
     | '/app'
     | '/apply'
     | '/auth'
@@ -3113,8 +3142,10 @@ export interface FileRouteTypes {
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
+    | '/api/public/hooks/cleo-bench'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/daily-visuals-tick'
+    | '/api/public/hooks/feed-copies-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/jf-library-install'
@@ -3186,6 +3217,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/account-deletion'
+    | '/activate'
     | '/app'
     | '/apply'
     | '/auth'
@@ -3404,8 +3436,10 @@ export interface FileRouteTypes {
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
+    | '/api/public/hooks/cleo-bench'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/daily-visuals-tick'
+    | '/api/public/hooks/feed-copies-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/jf-library-install'
@@ -3478,6 +3512,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/about'
     | '/account-deletion'
+    | '/activate'
     | '/app'
     | '/apply'
     | '/auth'
@@ -3700,8 +3735,10 @@ export interface FileRouteTypes {
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
+    | '/api/public/hooks/cleo-bench'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/daily-visuals-tick'
+    | '/api/public/hooks/feed-copies-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/jf-library-install'
@@ -3775,6 +3812,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AboutRoute: typeof AboutRoute
   AccountDeletionRoute: typeof AccountDeletionRoute
+  ActivateRoute: typeof ActivateRoute
   AppRoute: typeof AppRoute
   ApplyRoute: typeof ApplyRoute
   AuthRoute: typeof AuthRoute
@@ -3828,8 +3866,10 @@ export interface RootRouteChildren {
   ApiPublicHooksBirthdayNotificationsRoute: typeof ApiPublicHooksBirthdayNotificationsRoute
   ApiPublicHooksCleanupPendingSignupsRoute: typeof ApiPublicHooksCleanupPendingSignupsRoute
   ApiPublicHooksCleoAttachmentsSweepRoute: typeof ApiPublicHooksCleoAttachmentsSweepRoute
+  ApiPublicHooksCleoBenchRoute: typeof ApiPublicHooksCleoBenchRoute
   ApiPublicHooksClientCalendarsTickRoute: typeof ApiPublicHooksClientCalendarsTickRoute
   ApiPublicHooksDailyVisualsTickRoute: typeof ApiPublicHooksDailyVisualsTickRoute
+  ApiPublicHooksFeedCopiesTickRoute: typeof ApiPublicHooksFeedCopiesTickRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksGcalSessionImportRoute: typeof ApiPublicHooksGcalSessionImportRoute
   ApiPublicHooksJfLibraryInstallRoute: typeof ApiPublicHooksJfLibraryInstallRoute
@@ -3894,6 +3934,13 @@ declare module '@tanstack/react-router' {
       path: '/account-deletion'
       fullPath: '/account-deletion'
       preLoaderRoute: typeof AccountDeletionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activate': {
+      id: '/activate'
+      path: '/activate'
+      fullPath: '/activate'
+      preLoaderRoute: typeof ActivateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app': {
@@ -5583,6 +5630,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksCleoAttachmentsSweepRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/cleo-bench': {
+      id: '/api/public/hooks/cleo-bench'
+      path: '/api/public/hooks/cleo-bench'
+      fullPath: '/api/public/hooks/cleo-bench'
+      preLoaderRoute: typeof ApiPublicHooksCleoBenchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/client-calendars-tick': {
       id: '/api/public/hooks/client-calendars-tick'
       path: '/api/public/hooks/client-calendars-tick'
@@ -5595,6 +5649,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/daily-visuals-tick'
       fullPath: '/api/public/hooks/daily-visuals-tick'
       preLoaderRoute: typeof ApiPublicHooksDailyVisualsTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/feed-copies-tick': {
+      id: '/api/public/hooks/feed-copies-tick'
+      path: '/api/public/hooks/feed-copies-tick'
+      fullPath: '/api/public/hooks/feed-copies-tick'
+      preLoaderRoute: typeof ApiPublicHooksFeedCopiesTickRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/fillout': {
@@ -6579,6 +6640,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AboutRoute: AboutRoute,
   AccountDeletionRoute: AccountDeletionRoute,
+  ActivateRoute: ActivateRoute,
   AppRoute: AppRoute,
   ApplyRoute: ApplyRoute,
   AuthRoute: AuthRoute,
@@ -6637,9 +6699,11 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksCleanupPendingSignupsRoute,
   ApiPublicHooksCleoAttachmentsSweepRoute:
     ApiPublicHooksCleoAttachmentsSweepRoute,
+  ApiPublicHooksCleoBenchRoute: ApiPublicHooksCleoBenchRoute,
   ApiPublicHooksClientCalendarsTickRoute:
     ApiPublicHooksClientCalendarsTickRoute,
   ApiPublicHooksDailyVisualsTickRoute: ApiPublicHooksDailyVisualsTickRoute,
+  ApiPublicHooksFeedCopiesTickRoute: ApiPublicHooksFeedCopiesTickRoute,
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksGcalSessionImportRoute: ApiPublicHooksGcalSessionImportRoute,
   ApiPublicHooksJfLibraryInstallRoute: ApiPublicHooksJfLibraryInstallRoute,

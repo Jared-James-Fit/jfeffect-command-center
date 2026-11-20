@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import {
   DEFAULT_FILM_SETTINGS,
+  FILM_ASK_KEY,
   FILM_SETTINGS_KEY,
+  askOrder,
   availableFps,
   availableQualities,
   clampZoom,
@@ -12,12 +14,16 @@ import {
   fitSettings,
   lensesFrom,
   pickType,
+  pictureFits,
+  pictureMiss,
+  readFilmAsk,
   readFilmSettings,
   recordClock,
   recordLimitSeconds,
   recorderBitrate,
   recorderTypes,
   sanitizeFilmSettings,
+  saveFilmAsk,
   saveFilmSettings,
   videoConstraints,
 } from "@/lib/camera/film-settings";
@@ -28,10 +34,14 @@ const read = (p: string) => readFileSync(p, "utf8");
 describe("what the app's camera asks for", () => {
   it("films 1080p at 30 by default, the back camera, with sound", () => {
     expect(DEFAULT_FILM_SETTINGS).toEqual({ quality: "1080p", fps: 30, sound: true, grid: false, facing: "environment" });
-    expect(videoConstraints(DEFAULT_FILM_SETTINGS)).toEqual({ facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } });
+    expect(videoConstraints(DEFAULT_FILM_SETTINGS)).toEqual({ facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 }, aspectRatio: { ideal: 1920 / 1080 }, frameRate: { ideal: 30 } });
   });
   it("a lens is asked for by its camera; 4K60 is asked for as ideal, never exact", () => {
-    expect(videoConstraints({ quality: "4k", fps: 60, facing: "environment" }, "lens-1")).toEqual({ deviceId: { exact: "lens-1" }, width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 60 } });
+    expect(videoConstraints({ quality: "4k", fps: 60, facing: "environment" }, "lens-1")).toEqual({ deviceId: { exact: "lens-1" }, width: { ideal: 3840 }, height: { ideal: 2160 }, aspectRatio: { ideal: 3840 / 2160 }, frameRate: { ideal: 60 } });
+  });
+  it("the size can be written either way round: the camera's way, or upright 9:16", () => {
+    expect(videoConstraints(DEFAULT_FILM_SETTINGS, null, "portrait")).toEqual({ facingMode: { ideal: "environment" }, width: { ideal: 1080 }, height: { ideal: 1920 }, aspectRatio: { ideal: 1080 / 1920 }, frameRate: { ideal: 30 } });
+    expect(constraintLadder(DEFAULT_FILM_SETTINGS, null, "portrait")[1]).toMatchObject({ width: { ideal: 1080 }, height: { ideal: 1920 } });
   });
   it("steps down to asks any camera can answer", () => {
     const ladder = constraintLadder({ quality: "1080p", fps: 60, facing: "user" });
@@ -41,11 +51,65 @@ describe("what the app's camera asks for", () => {
   });
 });
 
+describe("full screen like a reel: the picture is 9:16 upright", () => {
+  it("a 9:16 picture held upright fills the screen; 3:4, square or sideways doesn't", () => {
+    expect(pictureFits(1080, 1920, true)).toBe(true);
+    expect(pictureFits(720, 1280, true)).toBe(true);
+    expect(pictureFits(2160, 3840, true)).toBe(true);
+    // a 3:4 picture (an iPhone's 1440 × 1920) would play boxed in, with bars, in the feed
+    expect(pictureFits(1440, 1920, true)).toBe(false);
+    expect(pictureFits(1080, 1080, true)).toBe(false);
+    // the right shape the wrong way round
+    expect(pictureFits(1920, 1080, true)).toBe(false);
+    // on its side: 16:9 the long way is right
+    expect(pictureFits(1920, 1080, false)).toBe(true);
+    expect(pictureFits(1080, 1920, false)).toBe(false);
+    // not known yet: left as it is
+    expect(pictureFits(0, 0, true)).toBe(true);
+  });
+  it("the closer of two pictures is the one kept when neither is 9:16", () => {
+    expect(pictureMiss(1440, 1920, true)).toBeLessThan(pictureMiss(1920, 1080, true));
+    expect(pictureMiss(1080, 1920, true)).toBe(0);
+  });
+  it("upright it tries what worked on this phone first, then the other way; on its side only the camera's way", () => {
+    expect(askOrder(true, null)).toEqual(["landscape", "portrait"]);
+    expect(askOrder(true, "portrait")).toEqual(["portrait", "landscape"]);
+    expect(askOrder(true, "landscape")).toEqual(["landscape", "portrait"]);
+    expect(askOrder(false, "portrait")).toEqual(["landscape"]);
+  });
+  it("what worked is kept on the phone", () => {
+    const store = new Map<string, string>();
+    const storage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
+    expect(readFilmAsk(storage)).toBeNull();
+    saveFilmAsk("portrait", storage);
+    expect(store.get(FILM_ASK_KEY)).toBe("portrait");
+    expect(readFilmAsk(storage)).toBe("portrait");
+    expect(readFilmAsk({ getItem: () => "sideways" })).toBeNull();
+  });
+  it("the camera checks the picture it got, asks the other way when it isn't 9:16, and never ends up with no camera for it", () => {
+    const cam = read("src/components/camera/film-camera.tsx");
+    expect(cam).toContain("askOrder(upright, readFilmAsk())");
+    expect(cam).toContain("pictureFits(pic.w, pic.h, upright)");
+    expect(cam).toContain("if (pic && upright) saveFilmAsk(shape);");
+    expect(cam).toContain("if (!stream && best && !refused()) {");
+    // the picture fills the screen, the controls over it
+    expect(cam).toContain('className={cn("absolute inset-0 h-full w-full object-cover"');
+  });
+  it("while it's up the status bar and everything behind it are black, then the page's colour again", () => {
+    const css = read("src/styles.css");
+    expect(css).toContain("html[data-camera-open] [data-shell-root] { background-color: #000; }");
+    expect(css).toContain("html[data-camera-open]:not([data-pov-banner-on]) .ios-status-band { background-color: #000; }");
+    expect(read("src/lib/camera/camera-presence.ts")).toContain("if (was !== open > 0) paintThemeColor(open > 0);");
+  });
+});
+
 describe("how hard it records and for how long", () => {
-  it("about a phone camera's own bitrate: ~8 Mbps 1080p30, more at 60 and 4K, never under 4", () => {
+  it("clean and sized for Crew: ~6 Mbps 1080p30 (a minute fits a workout post's 50 MB whole), more at 60 and 4K, never under 4", () => {
     const p1080 = recorderBitrate(1080, 1920, 30);
-    expect(p1080).toBeGreaterThan(7_000_000);
-    expect(p1080).toBeLessThan(10_000_000);
+    expect(p1080).toBeGreaterThan(5_500_000);
+    expect(p1080).toBeLessThan(7_000_000);
+    // a 60-second set at 1080p30 with sound goes into the film as it is
+    expect(((p1080 + 128_000) * 60) / 8).toBeLessThan(50 * 1024 * 1024);
     expect(recorderBitrate(1080, 1920, 60)).toBeGreaterThan(p1080 * 1.8);
     expect(recorderBitrate(2160, 3840, 30)).toBeGreaterThan(20_000_000);
     expect(recorderBitrate(480, 360, 30)).toBe(4_000_000);
@@ -145,8 +209,10 @@ describe("filming a set opens the app's camera, never iOS's 480p Take Video", ()
   });
   it("records the person's settings at a phone camera's bitrate, the mic only when filming and only with sound on", () => {
     expect(cam).toContain("videoBitsPerSecond: rate");
-    expect(cam).toContain("if (settingsRef.current.sound) {");
-    expect(cam).toContain("await getMicStream(true)");
+    expect(cam).toContain("if (settingsRef.current.sound && !micRefused()) {");
+    // the room as it sounds, from the phone's own mic (video-mic.ts), never a call's processing
+    expect(cam).toContain("const got = await openVideoMic();");
+    expect(cam).not.toContain("getMicStream(true)");
     expect(cam).toContain('wl.request("screen")');
     expect(cam).toContain("data-film-lenses");
     expect(cam).toContain("data-film-torch");
@@ -155,13 +221,15 @@ describe("filming a set opens the app's camera, never iOS's 480p Take Video", ()
   });
   it("the phone can turn on its side to film while the camera is up", () => {
     const portrait = read("src/components/portrait-only.tsx");
-    expect(portrait).toContain("if (!sideways || camera) return null;");
+    // the lock is let go while the camera's up, and put back when it closes
+    expect(portrait).toContain("if (isCameraOpen()) unlockPortrait();");
     expect(portrait).toContain("window.addEventListener(CAMERA_OPEN_EVENT, onCamera);");
   });
   it("the Crew studio records at the picture's bitrate with the mic asked for the iOS way", () => {
     const rec = read("src/components/community/clip-recorder.ts");
     expect(rec).not.toContain("videoBitsPerSecond: 3_000_000");
     expect(rec).toContain("videoBitsPerSecond: recorderBitrate(w, h, fps)");
-    expect(rec).toContain("const got = await getMicStream(true);");
+    expect(rec).toContain("const got = await openVideoMic();");
+    expect(rec).not.toContain("getMicStream(true)");
   });
 });

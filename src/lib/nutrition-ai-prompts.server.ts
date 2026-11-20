@@ -9,6 +9,8 @@ import { freeMealRule, mealChoiceOf, mealChoiceRule, wantsFreeMeal } from "@/lib
 import { SHELF_STAPLE, prepDriftLine, type HardToFind, type PrepDrift } from "@/lib/nutrition-targets/plan-foods";
 import type { AllergenHit } from "@/lib/nutrition-targets/food-history";
 import { safetyNotes } from "@/lib/nutrition-targets/nutrition-intel";
+import { MAX_STEP_KCAL } from "@/lib/weight-management/decision";
+import { TRAIN_MINUTES_MAX, TRAIN_MINUTES_MAX_PL, REST_MINUTES_MAX } from "@/lib/weight-management/treadmill";
 
 import {
   NUTRITION_REQUEST_FORM_ID,
@@ -68,7 +70,7 @@ HOW TO DECIDE (reasoning, not a recipe)
   - recomp: weight about flat, protein high; it suits newer or returning lifters and people with more fat to lose
   - maintenance / performance: weight about flat, carbs where training needs them
   - reverse diet: from current intake, small steps up while weight stays about flat
-- sizing a calorie change: about 7,700 kcal per kg (3,500 per lb) of the gap between the rate they're getting and the rate they need, spread over the week. close all of the gap only when the trend is clear over 4+ weeks; about half when the data is thinner. a change over ~300 kcal a day is rarely needed and needs its reason in COACH NOTES
+- sizing a calorie change: about 7,700 kcal per kg (3,500 per lb) of the gap between the rate they're getting and the rate they need, spread over the week. close all of the gap only when the trend is clear over 4+ weeks; about half when the data is thinner. a change over ${MAX_STEP_KCAL} kcal a day (the weight-management read's largest single step) is rarely needed and needs its reason in COACH NOTES
 - protein = about 1.6–2.2 g per kg of bodyweight (0.7–1 g per lb), the higher end in a deficit, for leaner athletes and in harder training. for someone carrying a lot of extra fat, base it on a goal bodyweight instead of total bodyweight
 - fats = enough for health and adherence: usually 20–35% of calories, never under about 0.5 g per kg of bodyweight
 - carbs = remaining calories. they fuel training: a heavier or higher-volume block keeps them up, and a cut takes from fats (to their floor) and lighter days first
@@ -103,7 +105,7 @@ STEPS + CARDIO
 - muscle gain: 7,000–10,000 steps, cardio 10–20 min easy 2–3 days a week for health, never enough to eat the surplus
 - recomp / maintenance / performance: 8,000–10,000 steps, cardio 15–25 min easy a few days a week
 - never over 45 min of cardio in a day. keep it low intensity so it doesn't cut into lifting recovery
-- the Training Day session is the last exercise of every workout (see TRAINING DAYS), done right after lifting: keep it 10–25 min easy so the session stays doable; longer cardio belongs on Non-Training Days
+- the Training Day session is the last exercise of every workout (see TRAINING DAYS), done right after lifting: keep it 10–${TRAIN_MINUTES_MAX} min easy (${TRAIN_MINUTES_MAX_PL} at most for a powerlifter, and no more than a quarter of a booked PT session) so the session stays doable; longer cardio belongs on Non-Training Days, ${REST_MINUTES_MAX} min at most a session
 - a deload, taper or meet week in the TRAINING PROGRAM = easy walks only, no hard cardio
 - cardio and steps are part of the estimated daily expenditure; don't count them twice
 
@@ -244,6 +246,7 @@ FORMAT RULES (strict — do not change headings, do not add extra commentary):
 5. End every menu with:
    Daily Total
    Approximately <P> g protein, <C> g carbohydrates, <F> g fat and <Fb> g fibre
+   The Daily Total is the sum of that menu's meals as written (code adds them up and checks it against the TARGETS). Never copy the targets into it: if the meals don't reach the targets, make the meals bigger until they do (with few meals a day, each meal is bigger; 3 meals for 2,600 kcal is about 850 kcal each). Every meal's Approximate macros are what its foods give at those amounts (cooked rice ~130 kcal and 28 g carbs per 100 g, cooked chicken breast ~165 kcal and 31 g protein per 100 g, count the protein in rice, bread and dairy too).
 6. After all menus, include a FOOD-WEIGHING RULES section with the standard rules, naming only the kinds of food this plan uses (cooked vs packaged, counted foods like bread / bagels / eggs / scoops / whole fruit are counted not weighed, weigh consistently, track all calorie beverages, oils and sauces, seasonings / zero-cal sauces / zero-cal drinks allowed), then up to 3 "Swap:" lines for the plan's own foods with amounts that keep the macros, e.g. "Swap: 100 g cooked chicken breast = 130 g cooked white fish (cod, tilapia) = 105 g cooked turkey breast" and "Swap: 100 g cooked white rice = 140 g cooked potatoes or sweet potatoes = 90 g cooked pasta".
 
 Output plain text only — no markdown, no bullets, no tables. Match the formatting exactly so the app's parser can read it.`;
@@ -522,6 +525,8 @@ export function mealPrepFixPrompt(
   totals: string[] = [],
   hardToFind: HardToFind[] = [],
   allergens: AllergenHit[] = [],
+  /** Meals whose Approximate macros aren't what their foods give (food-values.ts, `mealFoodLine`). */
+  macros: string[] = [],
 ): string {
   const fix: string[] = [];
   if (allergens.length) {
@@ -549,11 +554,18 @@ export function mealPrepFixPrompt(
       "Make every main meal on every menu the same container (rule 2c): one protein amount and one carb amount, the same grams in every container, and every weighed food one amount in the whole plan. Day types add or take out whole containers, a container's carb or counted units, never different grams. A Daily Total a little off its target is fine; the prep comes first.",
     );
   }
+  if (macros.length) {
+    fix.push(
+      "FIX THE MACROS: these meals' Approximate macros aren't what their foods give at those amounts:",
+      ...macros.map((t) => `- ${t}`),
+      "Write each one's Approximate macros from its foods, then check the menu still lands on its TARGETS (rule 2c: whole containers, a container's carb or counted units).",
+    );
+  }
   if (totals.length) {
     fix.push(
       "FIX THE TOTALS: these don't add up, and the client reads every number:",
       ...totals.map((t) => `- ${t}`),
-      "Make each meal's Approximate macros match its foods, each Daily Total the sum of its meals, and each Daily Total land near its TARGETS by adding or taking out whole containers, a container's carb or counted units, never by changing a container's grams (rule 2c).",
+      "Make each meal's Approximate macros match its foods, each Daily Total the sum of its meals (never the targets copied in), and the meals themselves land near each TARGETS by adding or taking out whole containers, a container's carb or counted units; when the meals are far under, make every container bigger together (rule 2c).",
     );
   }
   return [

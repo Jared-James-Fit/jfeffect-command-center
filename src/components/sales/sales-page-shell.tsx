@@ -9,12 +9,15 @@ export function SalesPageShell({
   theme = "dark",
   floatingHeader = false,
   hideMarketingNav = false,
+  joinCta = false,
 }: {
   children: ReactNode;
   pageId?: string;
   theme?: "light" | "dark";
   floatingHeader?: boolean;
   hideMarketingNav?: boolean;
+  /** The front door: "Join free" leads the bar, Sign in sits quietly beside it. */
+  joinCta?: boolean;
 }) {
   const themeClass = theme === "light" ? "theme-light" : "";
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -45,7 +48,7 @@ export function SalesPageShell({
           <nav className="flex items-center gap-1 sm:gap-2">
             {!hideMarketingNav && (
               <>
-                <Link to="/coaching" aria-current={isCoaching ? "page" : undefined}>
+                <Link to="/coaching" aria-current={isCoaching ? "page" : undefined} className={joinCta ? "hidden min-[370px]:inline-flex" : undefined}>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -54,7 +57,7 @@ export function SalesPageShell({
                     Coaching
                   </Button>
                 </Link>
-                <Link to="/about" aria-current={isAbout ? "page" : undefined}>
+                <Link to="/about" aria-current={isAbout ? "page" : undefined} className={joinCta ? "hidden sm:inline-flex" : undefined}>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -65,15 +68,30 @@ export function SalesPageShell({
                 </Link>
               </>
             )}
-            <Link to="/auth" aria-current={isAuth ? "page" : undefined}>
-              <Button
-                size="sm"
-                variant={isAuth ? "default" : "outline"}
-                className="rounded-full px-3.5 text-[14px] font-medium transition-colors sm:text-[15px]"
-              >
-                Sign In
-              </Button>
-            </Link>
+            {joinCta ? (
+              <>
+                <Link to="/auth">
+                  <Button size="sm" variant="ghost" className={navButtonClass}>
+                    Sign in
+                  </Button>
+                </Link>
+                <Link to="/join" data-nav-join>
+                  <Button size="sm" className="rounded-full px-3.5 text-[14px] font-semibold sm:text-[15px]">
+                    Join free
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              <Link to="/auth" aria-current={isAuth ? "page" : undefined}>
+                <Button
+                  size="sm"
+                  variant={isAuth ? "default" : "outline"}
+                  className="rounded-full px-3.5 text-[14px] font-medium transition-colors sm:text-[15px]"
+                >
+                  Sign In
+                </Button>
+              </Link>
+            )}
           </nav>
         </div>
       </header>
@@ -84,9 +102,12 @@ export function SalesPageShell({
       </main>
       <footer className="mt-8 border-t border-border/70 px-5 py-10 text-center text-[13px] text-muted-foreground">
         <nav aria-label="Footer" className="mb-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+          <Link to="/join" className="hover:text-foreground">Join free</Link>
           <Link to="/coaching" className="hover:text-foreground">Coaching</Link>
           <Link to="/about" className="hover:text-foreground">About</Link>
           <Link to="/auth" className="hover:text-foreground">Sign in</Link>
+          <Link to="/privacy" className="hover:text-foreground">Privacy</Link>
+          <Link to="/terms" className="hover:text-foreground">Terms</Link>
         </nav>
         <SocialLinks variant="icons" className="mb-4" />
         © {new Date().getFullYear()} JF Effect. All rights reserved.

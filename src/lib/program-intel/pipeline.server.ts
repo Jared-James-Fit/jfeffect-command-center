@@ -24,6 +24,7 @@ import { resolveRoute, type AiTask } from "@/lib/ai/routing";
 import { ModelsExhausted, OPENAI_CREDITS_HINT, WaitingForModel, stagedCall } from "@/lib/ai/staged-call.server";
 import type { Effort } from "@/lib/ai/model-client.server";
 import { auditProgram, type AuditResult } from "./audit";
+import { withAccessoryFlow } from "./accessory-flow";
 import { reviewRepairs, reviewReplySchema, reviewSystemPrompt, reviewUserPrompt, withReview, type CoachingReview, type ReviewReply } from "./coaching-review";
 import { buildBrief, CONSTRUCT_EXCLUDE, loadReferences } from "./brief";
 import { builtBlockSchema, setupSchema, strategySchema, type BuiltBlock, type BuiltProgram, type Strategy } from "./generator-schemas";
@@ -323,7 +324,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     if (pe) throw new Error(pe.message);
     if (!allowed) throw new Error("The coach who asked for this no longer coaches this client.");
     const { intel, rec, setup, edited } = await intelFor(admin, job);
-    const lookup = (r: { id: string | null; name: string }) => (r.id ? intel.exercises.get(r.id) ?? null : null) ?? (r.name ? { name: r.name, equipment: null } : null);
+    const lookup = (r: { id: string | null; name: string }) => (r.id ? intel.exercises.get(r.id) : undefined) ?? (r.name ? { name: r.name, equipment: null } : null);
     const conflicts = findConflicts(setup, intel.ctx, intel.recommendation.baseline, lookup, intel.recommendation.setup);
     const blockers = conflicts.filter((c) => c.severity === "blocker");
     if (blockers.length) throw new Error(`Resolve before generating: ${blockers.map((b) => b.title).join("; ")}`);
@@ -505,6 +506,14 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     });
     const ids = resolved.program.blocks.flatMap((b) => b.days.flatMap((d) => d.exercises.map((e) => e.exercise_id))).filter(Boolean) as string[];
     const meta = await exerciseMeta(admin, ids);
+    // accessories grouped by station after the main lifts, never at the cost of training order (accessory-flow.ts)
+    const flowOpts = { priorities: [...setup.priorities, ...strategy.prioritize.map((p) => p.item)], items: setup.equipment.items as any, home: !!ai.home };
+    resolved.program.blocks = resolved.program.blocks.map((b, bi) => {
+      const flowed = withAccessoryFlow(b, (e) => (e.exercise_id ? meta.get(e.exercise_id)?.equipment ?? null : null), flowOpts);
+      const prefix = resolved.program.blocks.length > 1 ? `Block ${bi + 1}, ` : "";
+      if (flowed.notes.length) result.flowAdjusted = [...new Set([...(result.flowAdjusted ?? []), ...flowed.notes.map((n) => prefix + n)])];
+      return flowed.block;
+    });
     const audit: AuditResult = auditProgram({
       program: resolved.program,
       setup,
@@ -517,6 +526,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       unmatched: resolved.unmatched,
       athleteExerciseIds: new Set((ai.athlete_exercise_ids ?? []) as string[]),
       brief,
+      flowNotes: result.flowAdjusted ?? [],
     });
     result.blocks = resolved.program.blocks;
     result.program = resolved.program;

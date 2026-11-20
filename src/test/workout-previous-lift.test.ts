@@ -91,3 +91,28 @@ describe("same lift twice in a workout: each card keeps its own role", () => {
     expect(view).toContain("const rampsUp = useMemo(() => !warmedUp && offersLastWarmup(family, name)");
   });
 });
+
+describe("Last time is the latest session by the day it was trained", () => {
+  it("a session typed in late never jumps ahead of one trained after it, and carries its trained day", () => {
+    // Monday's workout typed in on Wednesday; Tuesday's logged live on Tuesday
+    const selected = selectPreviousLifts(
+      [{ rowId: "r", exerciseId: "squat-id", exerciseName: "Competition Squat" }],
+      [
+        log({ id: "mon", sessionKey: "day:mon", occurredAt: "2026-11-18T23:00:00Z", trainedOn: "2026-11-16", normalizedKg: 180, normalizedLb: 396.8 }),
+        log({ id: "tue", sessionKey: "day:tue", occurredAt: "2026-11-17T23:00:00Z", trainedOn: "2026-11-17", normalizedKg: 175, normalizedLb: 385.8 }),
+      ],
+      "day:today",
+    ).get("r");
+    expect(selected?.id).toBe("tue");
+    expect(selected?.trainedOn).toBe("2026-11-17");
+  });
+
+  it("the card's query reads each set's calendar day, the same one History shows", () => {
+    const view = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+    expect(view).toContain("exercises(name), pl_days(scheduled_date))");
+    expect(view).toContain("const instDates = await instanceDates(uniqueLogs.map((log: any) => log.scheduled_workout_id))");
+    expect(view).toContain("const when = data && text ? lastTimeWhen(data) : \"\";");
+    const sheet = readFileSync("src/components/exercise-history-sheet.tsx", "utf8");
+    expect(sheet).toContain("const day = trainedOn({ instanceDate: g.instanceId ? instDates.get(g.instanceId) ?? null : null, dayDate: g.day?.scheduled_date ?? null, loggedAt: logged });");
+  });
+});

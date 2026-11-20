@@ -1,5 +1,6 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { ChevronLeft, X } from "lucide-react";
+import { feedback } from "@/lib/feedback";
 
 /** The phone's own edge swipe lives here: leave it to the phone. */
 const EDGE_PX = 24;
@@ -183,13 +184,8 @@ export function SwipeBack({
       const over = dx >= commitDistance(window.innerWidth);
       if (over !== armed) {
         armed = over;
-        if (over) {
-          try {
-            navigator.vibrate?.(8);
-          } catch {
-            /* no haptics */
-          }
-        }
+        // crossing the point where letting go goes back: the detent tick
+        if (over) feedback("detent");
       }
       schedule();
     };

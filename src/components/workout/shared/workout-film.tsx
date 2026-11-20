@@ -3,6 +3,9 @@
  *   [posters] 3 sets on film · In the feed ✓      (View)
  *   [posters] 3 sets on film · 1 still uploading, posts when it's done
  *   [posters] 3 sets on film · Coach only          (Share to Crew)
+ *             1 more is getting ready for Crew. Keep the app open a minute or two.
+ * (a clip over a post's 50 MB waits on the 720p copy this phone makes of it,
+ * `preparing`; one over 90 seconds stays in the coach chat, and says so)
  * and "Who sees your film" at the end of the review: Crew (it posts by
  * itself) or Coach only (saved on the account). Their coach gets every clip
  * either way: each one is already its own message in the coach chat. Only
@@ -19,6 +22,7 @@ import { useChatSignedUrl } from "@/hooks/use-chat-signed-urls";
 import { isActiveJob, useSetVideoJobs } from "@/lib/set-videos/jobs";
 import { useSetVideosForDay } from "@/components/workout-day/set-video-cell";
 import { useFilmAutoPost, useSetFilmAutoPost, useWorkoutFilm } from "@/lib/workout-film-client";
+import { filmLeftOutStatus, filmNotes } from "@/lib/workout-film";
 import { FilmAudienceOptions } from "@/components/workout/shared/film-audience-options";
 
 const sets = (n: number) => `${n} ${n === 1 ? "set" : "sets"} on film`;
@@ -40,7 +44,7 @@ export function WorkoutFilmRow({
   const film = useWorkoutFilm(completionId, dayId, { auto });
   if (!completionId || (!film.clips && !film.uploading)) return null;
 
-  const tooBig = film.clips - film.postable;
+  const notes = filmNotes(film, { server: film.serverCopies });
   let status: React.ReactNode;
   let action: React.ReactNode = null;
   if (film.uploading > 0) {
@@ -75,7 +79,7 @@ export function WorkoutFilmRow({
       </Button>
     ) : null;
   } else if (film.postable === 0) {
-    status = "Over 90 seconds, so it stays in your coach chat";
+    status = filmLeftOutStatus(film, { server: film.serverCopies });
   } else if (film.autoOn === false && !film.hidden) {
     // their choice: Coach only (every clip is already in the coach chat)
     status = (
@@ -111,9 +115,12 @@ export function WorkoutFilmRow({
       <div className="min-w-0 flex-1">
         <div className="text-sm font-semibold">{sets(film.clips + film.uploading)}</div>
         <div className="flex items-center gap-1 text-xs text-muted-foreground">{status}</div>
-        {tooBig > 0 && film.postable > 0 && !film.uploading && (
-          <div className="text-[11px] text-muted-foreground">{tooBig} over 90 seconds stay in your coach chat only</div>
-        )}
+        {film.postable > 0 && !film.uploading &&
+          notes.map((n) => (
+            <div key={n} className="text-[11px] text-muted-foreground" data-film-note>
+              {n}
+            </div>
+          ))}
       </div>
       {action}
     </div>

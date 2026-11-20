@@ -59,7 +59,7 @@ describe("each clip's caption", () => {
     expect(filmCaption(back, true).detail).toBe("Backoff 1 · 4 reps @ RPE 6");
     // a slide from before set names: its number
     expect(filmCaption({ ...back, set_name: null, set: 2 }, false).detail).toBe("Set 2 · 245 lb × 4 @ RPE 6");
-    const fn = readFileSync("src/lib/workout-film.functions.ts", "utf8");
+    const fn = readFileSync("src/lib/workout-film.functions.ts", "utf8") + readFileSync("src/lib/workout-film.server.ts", "utf8");
     expect(fn).toContain('admin.rpc("pl_day_set_names", { _day: comp.day_id })');
     expect(fn).toContain('set_name: named?.set_name ?? `Set ${set}`,');
   });
@@ -67,7 +67,7 @@ describe("each clip's caption", () => {
     expect(filmLabels(null, "100 kg × 5 @ RPE 8")).toEqual({ label: "100 kg × 5 @ RPE 8", label_no_load: "5 reps @ RPE 8" });
   });
   it("the post's own caption is the database's: the best set of each main lift, no emoji", () => {
-    const fn = readFileSync("src/lib/workout-film.functions.ts", "utf8");
+    const fn = readFileSync("src/lib/workout-film.functions.ts", "utf8") + readFileSync("src/lib/workout-film.server.ts", "utf8");
     expect(fn).toContain('admin.rpc("film_caption", { _film: filmOnPost, _hide: hide })');
     expect(fn).toContain("const caption = filmCaptionFor(post?.caption, previous, typeof next === \"string\" ? next : \"\");");
     expect(fn).not.toContain("🎥");
@@ -153,7 +153,7 @@ describe("who sees it: Crew or Coach only", () => {
 });
 
 describe("posting it", () => {
-  const fn = readFileSync("src/lib/workout-film.functions.ts", "utf8");
+  const fn = readFileSync("src/lib/workout-film.functions.ts", "utf8") + readFileSync("src/lib/workout-film.server.ts", "utf8");
   const card = readFileSync("src/components/workout/shared/completed-workout-actions.tsx", "utf8");
   const sql = readFileSync("supabase/migrations/20270307090000_workout_film.sql", "utf8");
   it("only the athlete posts their own film, and a post they took out of Crew stays out", () => {

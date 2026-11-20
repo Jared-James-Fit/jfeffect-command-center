@@ -3,6 +3,8 @@
 // and videos, old Fillout forms and website applications, newest first and
 // grouped by day. Pure (the server function feeds it rows) and tested.
 
+import { TO_REVIEW_DAYS, waitingForReview } from "@/lib/review-queue";
+
 export type SubmissionKind = "weekly_checkin" | "nutrition_update" | "form" | "progress" | "fillout" | "application";
 export type SubmissionSource = "checkin" | "native" | "progress" | "fillout" | "application";
 
@@ -25,6 +27,8 @@ export type FormSubmission = {
    * videos are reviewed in Coaching → Progress), so they never count as waiting.
    */
   reviewed: boolean | null;
+  /** A check-in a newer one replaced (never waits on the coach). */
+  superseded?: boolean;
   /** One short extra: "182 lb", "Not matched to a client". */
   detail: string | null;
   formId: string | null;
@@ -45,19 +49,29 @@ export const KIND_LABEL: Record<SubmissionKind, string> = Object.fromEntries(
 ) as Record<SubmissionKind, string>;
 
 /**
- * An unreviewed submission counts as waiting on the coach only while it's this
- * fresh: older ones read "Not reviewed" but stay out of the count, so a
- * backlog from months ago never buries this week's.
+ * What's waiting on the coach is review-queue.ts's one rule (the dashboard,
+ * this list and the Messages inbox all read it): not reviewed, sent in the last
+ * TO_REVIEW_DAYS, and the client's newest of its kind. Older ones read
+ * "Not reviewed" but stay out of the count, so a backlog never buries this week's.
  */
-export const TO_REVIEW_DAYS = 30;
+export { TO_REVIEW_DAYS };
 
-/** How long a form can go without a submission, a send or an edit before it's archived on its own (archive_unused_forms). */
+/** How many days without a submission, a send or an edit before a form is archived on its own (archive_unused_forms). */
 export const FORM_UNUSED_DAYS = 60;
 
-export function isToReview(s: Pick<FormSubmission, "reviewed" | "submittedAt">, now = Date.now()): boolean {
-  if (s.reviewed !== false) return false;
-  const t = Date.parse(s.submittedAt);
-  return Number.isFinite(t) && now - t <= TO_REVIEW_DAYS * 86_400_000;
+/** "The same thing again": a check-in's task, a form's id (else its title). */
+export function reviewType(s: Pick<FormSubmission, "source" | "kind" | "formId" | "title">): string {
+  return s.source === "checkin" ? `checkin:${s.kind}` : `${s.source}:${s.formId ?? s.title}`;
+}
+
+/** The keys of the submissions waiting on the coach (review-queue.ts). */
+export function toReviewKeys(rows: FormSubmission[], now = Date.now()): Set<string> {
+  return new Set(waitingForReview(rows.map((r) => ({ ...r, type: reviewType(r) })), now).map((r) => r.key));
+}
+
+/** One submission read on its own (nothing newer beside it): not reviewed and recent. */
+export function isToReview(s: FormSubmission, now = Date.now()): boolean {
+  return toReviewKeys([s], now).has(s.key);
 }
 
 export type StatusFilter = "all" | "to_review";
@@ -68,9 +82,10 @@ export function filterSubmissions(
   now = Date.now(),
 ): FormSubmission[] {
   const q = f.search.trim().toLowerCase();
+  const waiting = f.status === "to_review" ? toReviewKeys(rows, now) : null;
   return rows
     .filter((r) => f.kind === "all" || r.kind === f.kind)
-    .filter((r) => f.status === "all" || isToReview(r, now))
+    .filter((r) => !waiting || waiting.has(r.key))
     .filter((r) => !q || r.clientName.toLowerCase().includes(q) || r.title.toLowerCase().includes(q))
     .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
 }
@@ -81,8 +96,9 @@ export type KindCount = { total: number; toReview: number };
 export function countByKind(rows: FormSubmission[], now = Date.now()): Record<SubmissionKind | "all", KindCount> {
   const out = { all: { total: 0, toReview: 0 } } as Record<SubmissionKind | "all", KindCount>;
   for (const k of SUBMISSION_KINDS) out[k.kind] = { total: 0, toReview: 0 };
+  const keys = toReviewKeys(rows, now);
   for (const r of rows) {
-    const waiting = isToReview(r, now) ? 1 : 0;
+    const waiting = keys.has(r.key) ? 1 : 0;
     out[r.kind].total += 1;
     out[r.kind].toReview += waiting;
     out.all.total += 1;

@@ -942,6 +942,7 @@ function TaskRowItem({ task, showQuadrant = true, ...p }: { task: TaskRow; showQ
       <Checkbox
         checked={p.selectMode ? isSelected : isDone}
         onCheckedChange={(v) => (p.selectMode ? p.toggleSelected(task.id) : p.onComplete(task, !!v))}
+        checkedFeedback={p.selectMode ? "toggle" : "complete"}
         onClick={(e) => e.stopPropagation()}
         className="mt-0.5 h-[18px] w-[18px]"
         aria-label={p.selectMode ? "Select task" : "Complete task"}
@@ -1291,6 +1292,7 @@ function TaskDetailSheet({
                 <Checkbox
                   checked={isDone}
                   onCheckedChange={(v) => onComplete(task, !!v)}
+                  checkedFeedback="complete"
                   className="mt-1.5 h-5 w-5"
                   aria-label={isDone ? "Mark open" : "Complete task"}
                 />

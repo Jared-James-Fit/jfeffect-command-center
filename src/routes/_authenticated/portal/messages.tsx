@@ -170,7 +170,6 @@ function ClientMessages() {
             name={coachName}
             size={40}
             ring
-            expandable={false}
           />
         </LiveAvatar>
         <div className="min-w-0 flex-1">
@@ -237,7 +236,7 @@ function ClientMessages() {
 
   return (
     <div
-      className="fixed inset-x-0 z-30 flex flex-col bg-background md:static md:inset-auto md:z-auto md:h-full md:flex-1"
+      className="phone-column fixed inset-x-0 z-30 flex flex-col bg-background md:static md:inset-auto md:z-auto md:h-full md:flex-1"
       style={{
         // Anchor the chat to the iOS Visual Viewport. --vv-h / --vv-top are
         // updated live by useKeyboardOpen() so the container shrinks and

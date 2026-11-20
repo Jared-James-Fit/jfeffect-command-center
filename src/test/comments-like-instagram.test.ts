@@ -27,7 +27,8 @@ describe("comments read like Instagram's and TikTok's (Nov 14 2026)", () => {
     expect(sheet).toContain('<Dialog.Title className="mt-2.5 text-center text-[16px] font-semibold leading-6">Comments</Dialog.Title>');
     expect(sheet).toContain('aria-label="Close comments"');
     expect(sheet).toContain("data-post-sheet-caption");
-    expect(sheet).toContain("if (!auto && !caption) return null;");
+    // no words: only who liked it (Nov 19 2026), and with no likes either, nothing
+    expect(sheet).toContain("if (!auto && !caption) {\n    if (!likes) return null;");
     // no Follow in the sheet: the post's own screen has it
     expect(sheet).not.toContain("InlineFollow");
     const cards = read("src/components/community/comments-sheet.tsx");

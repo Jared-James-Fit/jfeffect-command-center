@@ -24,6 +24,7 @@ import {
 } from "@/lib/nutrition-ai-plans.functions";
 import { REVISE_MAX_CHARS } from "@/lib/nutrition-request";
 import { PLAN_AI_PREFILL_EVENT } from "@/lib/weight-management/handoff";
+import { coachCoverageLine, dayCoverage } from "@/lib/nutrition-targets/plan-coverage";
 import {
   editChangesNothing,
   planAsMealPlanText,
@@ -202,6 +203,13 @@ export function PlanAiChange({
           edited.days.map((d) => ({ label: d.day_label, notes: d.notes })),
           allergens,
         ),
+        // a day whose changed meals still don't cover its targets (read from the meals, plan-coverage.ts)
+        short: edited.days.flatMap((d) => {
+          const line = coachCoverageLine(
+            dayCoverage(d.notes, { calories: d.calories, protein: d.protein, carbs: d.carbs, fats: d.fats }),
+          );
+          return line ? [`${d.day_label}: ${line}`] : [];
+        }),
         error: null as string | null,
       };
     } catch (e: any) {
@@ -212,6 +220,7 @@ export function PlanAiChange({
         rulesChanged: false,
         hardToFind: [] as HardToFind[],
         allergy: [] as AllergenHit[],
+        short: [] as string[],
         error: String(e?.message ?? e),
       };
     }
@@ -264,6 +273,16 @@ export function PlanAiChange({
                 </p>
               )}
               <ChangeRows changes={review.changes} />
+              {review.short.length > 0 && (
+                <div className="space-y-1" data-plan-ai-short>
+                  {review.short.map((line) => (
+                    <p key={line} className="flex items-start gap-1.5 text-[13px] text-warning">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                      <span>{line}.</span>
+                    </p>
+                  ))}
+                </div>
+              )}
               {review.allergy.length > 0 && (
                 <p className="flex items-start gap-1.5 text-[13px] font-medium text-warning" data-plan-ai-allergen>
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />

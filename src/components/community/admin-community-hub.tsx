@@ -15,6 +15,7 @@ import { NoteEditor } from "@/components/community/note-editor";
 import { PostDetailDialog } from "@/components/community/post-detail";
 import { ReportsReviewSheet, useOpenReports } from "@/components/community/reports-review";
 import { MANAGE_TABS, manageTabFromHash, type ManageTab } from "@/lib/crew-manage";
+import { feedback } from "@/lib/feedback";
 
 /** "Today 7:00 pm" · "Tomorrow 9:00 am" · "Mon 8:00 am", in the coach's own clock. */
 export function whenLabel(iso: string, now: Date = new Date()): string {
@@ -54,7 +55,8 @@ export function groupReplies(rows: CommunityPulse["to_reply"]) {
  * its own page (`#tab=league`, `#rankings`).
  */
 export function hubTabFromHash(h: string = typeof window === "undefined" ? "" : window.location.hash): ManageTab | "feed" | "league" {
-  if (/tab=league/.test(h) || /rankings/.test(h)) return "league";
+  // #rankings is Crew's own Rankings tab now (the coach's too): only the old League tab's links leave for the League page
+  if (/tab=league/.test(h)) return "league";
   return manageTabFromHash(h) ?? "feed";
 }
 
@@ -89,7 +91,7 @@ export function hubTabCounts(p: CommunityPulse | undefined, reports = 0): Record
 export function AdminCommunityHub() {
   const { viewOnly } = useAuth();
   const navigate = useNavigate();
-  // old League links (#tab=league, #rankings) go to the League page
+  // old League links (#tab=league) go to the League page
   const routeHash = useRouterState({ select: (s) => s.location.hash });
   useEffect(() => {
     if (hubTabFromHash(`#${routeHash}`) === "league") void navigate({ to: "/admin/league", replace: true });
@@ -132,6 +134,7 @@ export function AdminCommunityHub() {
         attach={{ initial: null, key: "new-post" }}
         onSave={async (body, poll, media) => {
           const r = await act.mutateAsync({ kind: "note", body, poll, media });
+          feedback("post");
           toast.success(poll ? "Poll posted to the community" : "Posted to the community");
           return r?.id;
         }}

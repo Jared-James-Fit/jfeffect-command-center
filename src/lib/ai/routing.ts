@@ -15,7 +15,7 @@
  */
 import type { Effort } from "./model-client.server";
 
-export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft";
+export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant";
 export type Route = {
   /** Tried in order. */
   models: string[];
@@ -74,6 +74,23 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
    * read by code (parseFormDraft) and saved as a draft only the coach sees until they send it.
    */
   form_draft: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "low", maxOutputTokens: 8_000, strongOnly: false },
+  /**
+   * Coach-side writing a person reads before anything reaches a client (Nov 18 2026): the weekly
+   * check-in recap and its suggested reply, AI drafts of a form reply, a lead's first text, the
+   * inbox Brief, My Voice's "Try it". Summaries of numbers code already worked out (never a new
+   * coaching decision), answered inside the request (askRoute, route-call.server.ts). They ran on
+   * Lovable credits through one model with no fallback (Gemini Flash); GPT-5 mini is as quick,
+   * GPT-5.5 backs it up.
+   */
+  coach_write: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "low", maxOutputTokens: 6_000, strongOnly: false },
+  /**
+   * Cleo, the admin assistant (summer.server.ts, Nov 18 2026): one conversation with live look-ups and
+   * the cards the person confirms, answered while they wait (chat and voice). It ran on Lovable credits
+   * (GPT-5.5 through the gateway's chat completions, which drop the model's reasoning between tool
+   * steps, then Gemini Flash); on the OpenAI key it uses the Responses API, which keeps the reasoning
+   * across look-ups (cleo-model.server.ts). Effort from the Nov 18 live benchmark (cleo-bench hook).
+   */
+  assistant: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "low", strongOnly: false },
 };
 
 /**

@@ -45,10 +45,13 @@ describe("the post's sheet: the whole caption, then the comments, one swipe to c
 
   it("drags from the grip, the caption, or the comments only once they're at the top; never from the comment box", () => {
     const sheet = read("src/components/community/post-sheet.tsx");
-    expect(sheet).toContain('el.addEventListener("touchmove", onMove, { passive: false });');
-    expect(sheet).toContain('if (list && list.scrollTop > 0) return;');
-    expect(sheet).toContain('t?.closest?.("textarea, input, [contenteditable=\'true\']")');
-    expect(sheet).toContain("if (sheetDragCloses({ dy, ms: e.timeStamp - startT, height: el.offsetHeight })) close();");
+    // the one swipe-down rule every bottom sheet shares (useSwipeDownToClose)
+    expect(sheet).toContain("useSwipeDownToClose(node, open, closeNow);");
+    const hook = read("src/hooks/use-swipe-down-to-close.ts");
+    expect(hook).toContain('target?.addEventListener("touchmove", onMove as EventListener, { passive: false });');
+    expect(hook).toContain("if (t?.closest?.(NO_DRAG) || scrolledDown(t, el)) return;");
+    expect(hook).toContain(`const NO_DRAG = "input, textarea, select, [contenteditable='true'], [role='slider'], [data-no-sheet-drag]";`);
+    expect(hook).toContain("if (sheetDragCloses({ dy, ms: e.timeStamp - startT, height: el.offsetHeight })) closeRef.current();");
     // never the keyboard on open
     expect(sheet).toContain("e.preventDefault();\n            content.current?.focus({ preventScroll: true });");
   });

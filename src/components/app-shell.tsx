@@ -45,6 +45,7 @@ import { OPEN_MORE_EVENT, pageOwnsTopBar } from "@/lib/shell-events";
 import { pageScrolledPx, requestTabRefresh, scrollPageToTop, topFirstPage, topFirstTap } from "@/lib/tab-refresh";
 import { TabRefresh } from "@/components/tab-refresh";
 import { useBarHidden } from "@/components/community/crew-header";
+import { onPhoneLayoutChange, phoneLayoutNow } from "@/lib/portrait-only";
 
 export interface NavItem {
   to: string;
@@ -191,19 +192,19 @@ function useIsTablet() {
       "(min-width: 768px) and (max-width: 1279px)",
     );
     const mqCoarse = window.matchMedia("(pointer: coarse)");
-    const mqMobile = window.matchMedia("(max-width: 767px)");
+    // the phone layout (a phone on its side included) is never a tablet (portrait-only.ts)
     const sync = () =>
       setIsTablet(
-        !mqMobile.matches && (mqTabletWidth.matches || mqCoarse.matches),
+        !phoneLayoutNow() && (mqTabletWidth.matches || mqCoarse.matches),
       );
     sync();
     mqTabletWidth.addEventListener?.("change", sync);
     mqCoarse.addEventListener?.("change", sync);
-    mqMobile.addEventListener?.("change", sync);
+    const stopPhone = onPhoneLayoutChange(sync);
     return () => {
       mqTabletWidth.removeEventListener?.("change", sync);
       mqCoarse.removeEventListener?.("change", sync);
-      mqMobile.removeEventListener?.("change", sync);
+      stopPhone();
     };
   }, []);
   return isTablet;
@@ -1010,7 +1011,7 @@ export function AppShell({
         {/* holds the bar's room in the page (48px + its border), so nothing sits under it */}
         {!pageBar && <div aria-hidden className="md:hidden" style={{ height: "calc(var(--app-safe-top) + 3rem + 1px)" }} data-shell-bar-room />}
 
-        <main className="w-full max-w-full box-border min-w-0 flex-1 overflow-x-hidden pb-[calc(140px+env(safe-area-inset-bottom))] md:pb-0">
+        <main className="phone-column w-full max-w-full box-border min-w-0 flex-1 overflow-x-hidden pb-[calc(140px+env(safe-area-inset-bottom))] md:pb-0">
           {/* Refreshing: the bar's re-tap, or a pull down at the top of a tab's own page (Instagram's).
               First in the page, so the room it makes for its spinner opens right under the top bar. */}
           <TabRefresh

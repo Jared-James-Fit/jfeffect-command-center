@@ -62,6 +62,41 @@ export function pickFilmClips<T extends FilmClipSource>(clips: T[], max = FILM_M
   return { picked: fits.slice(0, max), tooLong: sorted.length - fits.length, overMax: Math.max(0, fits.length - max) };
 }
 
+/** A film's clips that aren't in its post yet, by why (the film row's words, `filmNotes`). */
+export type FilmLeftOut = {
+  /** Over 50 MB, 90 s or less, no 720p copy yet: the phone is making one (catch-up.ts). */
+  preparing: number;
+  /** Over 50 MB on a phone that can't make a copy. */
+  tooBig: number;
+  /** Over 90 seconds. */
+  tooLong: number;
+  /** Past the ten a post holds. */
+  overMax: number;
+};
+
+const more = (n: number, one: string, many: string) => `${n} more ${n === 1 ? one : many}`;
+const stays = (n: number) => (n === 1 ? "stays" : "stay");
+
+/** While a copy is made: on the server nothing waits on the phone; on the phone it needs the app open. */
+const readyWords = (server: boolean) => (server ? "getting ready for Crew. It's added in a minute or two." : "getting ready for Crew. Keep the app open a minute or two.");
+
+/** Under a film with clips in its post: what's on film but not in it, and why (only what's true). */
+export function filmNotes(f: FilmLeftOut, opts: { server?: boolean } = {}): string[] {
+  const out: string[] = [];
+  if (f.preparing > 0) out.push(`${more(f.preparing, "is", "are")} ${readyWords(!!opts.server)}`);
+  if (f.tooLong > 0) out.push(`${f.tooLong} over 90 seconds ${stays(f.tooLong)} in your coach chat only`);
+  if (f.tooBig > 0) out.push(`${f.tooBig} too big for Crew ${stays(f.tooBig)} in your coach chat only`);
+  if (f.overMax > 0) out.push(`${more(f.overMax, "stays", "stay")} in your coach chat (a post holds 10)`);
+  return out;
+}
+
+/** A film none of whose clips fit a post yet: why. */
+export function filmLeftOutStatus(f: FilmLeftOut, opts: { server?: boolean } = {}): string {
+  if (f.preparing > 0) return opts.server ? "Getting it ready for Crew. It's added in a minute or two." : "Getting it ready for Crew. Keep the app open a minute or two.";
+  if (f.tooLong > 0) return "Over 90 seconds, so it stays in your coach chat";
+  return "Too big for Crew, so it stays in your coach chat";
+}
+
 /** The set's numbers, as they were logged. */
 export type FilmSetValues = {
   load: number | null;

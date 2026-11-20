@@ -200,7 +200,10 @@ describe("one picture per post, painted once", () => {
   it("is named by what's on it: a new caption or new numbers make a new one; the unit only where numbers show", () => {
     const a = post({ series: "wednesday_wins", series_data: wins as never });
     expect(postArtKey(a, "wins", "lb")).toBe(postArtKey({ ...a }, "wins", "lb"));
-    expect(postArtKey(a, "wins", "lb")).not.toBe(postArtKey(a, "wins", "kg"));
+    // Wins reads the same for every viewer (lb first, kg under it), so it's one picture whoever looks
+    expect(postArtKey(a, "wins", "lb")).toBe(postArtKey(a, "wins", "kg"));
+    // a workout card can still fall back to the viewer's unit (a set that never said its own)
+    expect(postArtKey(a, "workout", "lb")).not.toBe(postArtKey(a, "workout", "kg"));
     expect(postArtKey(a, "wins", "lb")).not.toBe(
       postArtKey({ ...a, caption: "edited" }, "wins", "lb"),
     );

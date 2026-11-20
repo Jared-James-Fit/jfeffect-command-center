@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 import {
   buildProgramRoadmap,
   digestBlock,
+  meetWords,
+  programShortName,
+  roadmapProgressLine,
+  roadmapProgressParts,
   noteText,
   parseRoadmapReply,
   weekStats,
@@ -215,7 +219,7 @@ describe("roadmap wiring", () => {
     expect(DEFAULT_ROUTES.roadmap.models).toEqual(["openai:gpt-5-mini", "openai:gpt-5.5"]);
   });
 
-  it("Cleo only ever writes her own columns", () => {
+  it("Cleo only ever writes its own columns", () => {
     const server = readFileSync("src/lib/training-roadmap.server.ts", "utf8");
     expect(server).not.toMatch(/coach_label|coach_summary/);
     expect(server).not.toMatch(/from\("pl_(blocks|weeks|days|exercise_rows)"\)\s*\.(update|insert|delete|upsert)/);
@@ -247,5 +251,36 @@ describe("no week totals in athlete text", () => {
     expect(quotesTotals("Across all 28 exercises.")).toBe(true);
     expect(quotesTotals("Top single at RPE 8, then 3 sets of 3 at RPE 7.5.")).toBe(false);
     expect(quotesTotals("About 40% less volume than last week, sets at 3 to 4 RIR.")).toBe(false);
+  });
+});
+
+describe("the program card's heading and its one progress line", () => {
+  it("names a program by its own name, not its level and days", () => {
+    expect(programShortName("Apex Hypertrophy — Advanced–Elite • 3-Day • Bodybuilding")).toBe("Apex Hypertrophy");
+    expect(programShortName("Elite Powerlifting — Intermediate • 4-Day")).toBe("Elite Powerlifting");
+    // a dash that's part of the name stays
+    expect(programShortName("Block 1 — Nationals Base")).toBe("Block 1 — Nationals Base");
+    expect(programShortName("Full-Body Strength")).toBe("Full-Body Strength");
+    expect(programShortName("  ")).toBeNull();
+  });
+  it("says the program's week and when it ends, the meet instead when there is one", () => {
+    const base = { programWeek: 5, totalWeeks: 12, start: "2026-10-19", end: "2027-01-10", meet: null };
+    expect(roadmapProgressLine(base, "2026-11-19")).toBe("Week 5 of 12 · Ends Jan 10");
+    expect(roadmapProgressLine({ ...base, meet: { name: "Nationals", date: "2027-01-09", daysOut: 51 } }, "2026-11-19")).toBe(
+      "Week 5 of 12 · Meet in 7 weeks",
+    );
+    expect(roadmapProgressParts({ ...base, meet: { name: null, date: "2026-11-27", daysOut: 8 } }, "2026-11-19")).toEqual({
+      where: "Week 5 of 12",
+      until: "Meet in 8 days",
+      meet: true,
+    });
+    expect(roadmapProgressLine({ ...base, programWeek: null, start: "2026-11-30" }, "2026-11-19")).toBe("Starts Nov 30 · 12 weeks");
+    expect(roadmapProgressLine({ ...base, end: "2026-11-15" }, "2026-11-19")).toBe("Finished Nov 15");
+  });
+  it("words a meet's distance the way the card says it", () => {
+    expect(meetWords(0)).toBe("Meet day");
+    expect(meetWords(1)).toBe("Meet tomorrow");
+    expect(meetWords(13)).toBe("Meet in 13 days");
+    expect(meetWords(21)).toBe("Meet in 3 weeks");
   });
 });

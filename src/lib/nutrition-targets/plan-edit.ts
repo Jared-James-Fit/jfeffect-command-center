@@ -7,6 +7,8 @@
  */
 import { parseFoodWeighingRules, parseMealPlan } from "@/lib/nutrition-targets/meal-plan-parse";
 import { structureMealPlanDay } from "@/lib/nutrition-targets/meal-plan-structure";
+import { planDayNumbers, withHonestTotals } from "@/lib/nutrition-targets/plan-coverage";
+import { aiTargetFor, parseAiTargets } from "@/lib/nutrition-targets/nutrition-intel";
 
 /** A plan day as stored (`nutrition_target_days`). */
 export type PlanEditDay = {
@@ -76,7 +78,12 @@ export function planAsTargetsText(plan: PlanEditPlan): string {
   ].join("\n");
 }
 
-/** The plan's meals in the paste format: PHASE, a menu per day with its Daily Total, FOOD-WEIGHING RULES. */
+/**
+ * The plan's meals in the paste format: PHASE, a menu per day with its Daily
+ * Total, FOOD-WEIGHING RULES. Each Daily Total is what that day's meals add up
+ * to (`withHonestTotals`), never a stored line that claims the targets, so the
+ * AI sees a day that falls short as short.
+ */
 export function planAsMealPlanText(plan: PlanEditPlan): string {
   const phase = plan.phase === "Custom" ? plan.custom_phase : plan.phase;
   const menus = planDays(plan).map((d) => {
@@ -88,13 +95,11 @@ export function planAsMealPlanText(plan: PlanEditPlan): string {
     return `${menuHeader(d.day_label)}\n\n${body}${total}`.trim();
   });
   const rules = String(plan.food_weighing_rules ?? "").trim();
-  return [
-    phase ? `PHASE: ${phase}` : null,
-    ...menus,
-    rules ? `FOOD-WEIGHING RULES\n${rules}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  return withHonestTotals(
+    [phase ? `PHASE: ${phase}` : null, ...menus, rules ? `FOOD-WEIGHING RULES\n${rules}` : null]
+      .filter(Boolean)
+      .join("\n\n"),
+  );
 }
 
 /** A day's total steps from the DAILY STEPS TARGETS section, by the day's own label. */
@@ -129,8 +134,10 @@ export type EditedPlan = { days: PlanEditDay[]; foodWeighingRules: string | null
 /**
  * The AI's answer as the plan's new days, each in the place of the day it
  * changes: the label, when it's used (`use_on` / `weekdays`) and its order are
- * the plan's own; the numbers come from the answer's Daily Totals (a day the
- * answer leaves without numbers keeps its own), its meals from the answer, and
+ * the plan's own; the numbers are the answer's targets (else the day's own
+ * numbers), or its meals' own numbers when the meals cover them
+ * (`planDayNumbers`: meals that fall short never lower a day's targets), its
+ * meals from the answer, and
  * steps from the answer's DAILY STEPS TARGETS when it says. An answer with a
  * different number of days than the plan isn't this plan, so it's refused.
  */
@@ -146,16 +153,25 @@ export function readEditedPlan(
     throw new Error(
       `The AI's answer has ${parsed.length} ${parsed.length === 1 ? "day" : "days"} where the plan has ${before.length}. Try wording the change differently`,
     );
+  const targets = targetsText ? parseAiTargets(targetsText) : [];
   const days = before.map((d, i) => {
     const p = parsed[i];
     const steps = targetsText ? stepsFor(targetsText, d.day_label) : undefined;
+    const num = planDayNumbers(
+      {
+        calories: p.calories ?? d.calories ?? null,
+        protein: p.protein ?? d.protein ?? null,
+        carbs: p.carbs ?? d.carbs ?? null,
+        fats: p.fats ?? d.fats ?? null,
+        fibre: p.fibre ?? d.fibre ?? null,
+        notes: p.notes ?? d.notes ?? null,
+      },
+      // the answer's targets for this day, else the day's numbers as they are: an answer's meals never lower them
+      aiTargetFor(targets, d.day_label) ?? { calories: d.calories ?? null, protein: d.protein ?? null, carbs: d.carbs ?? null, fats: d.fats ?? null },
+    );
     return {
       day_label: d.day_label,
-      calories: p.calories ?? d.calories ?? null,
-      protein: p.protein ?? d.protein ?? null,
-      carbs: p.carbs ?? d.carbs ?? null,
-      fats: p.fats ?? d.fats ?? null,
-      fibre: p.fibre ?? d.fibre ?? null,
+      ...num,
       notes: p.notes ?? d.notes ?? null,
       sort_order: i,
       use_on: d.use_on ?? null,

@@ -1,5 +1,5 @@
 /**
- * Cleo's own server voices: smooth, natural female voices. Shared by the
+ * Cleo's own server voices: smooth, natural voices. Shared by the
  * voice picker (Customize Cleo), the browser speaker and the server
  * (summer.server.ts), which maps each one to a provider voice. "Smooth" is
  * the default.

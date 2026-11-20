@@ -46,9 +46,10 @@ export function reviewSystemPrompt(brain: Brain): string {
 Judge, for THIS athlete (the brief: their development read, pain reports, adherence, recovery, session length, equipment, goal and timeline):
 - fatigue across the week and across the weeks (where the hard sessions and the volume land; whether it builds sensibly and has a way to shed fatigue when it needs one);
 - recovery between demanding sessions, in context: a heavy squat the day after a heavy deadlift can be fine or a problem depending on the loads, the volume, the athlete and the phase. Judge it; never flag it by rule;
-- exercise selection (fit for the goal, the athlete's response history and equipment; no needless complexity);
+- exercise selection: does each exercise have a job, and is it the best one for that job on their equipment (a full range with the stretched position, stable enough that the target muscle ends the set, loads in small steps, a fatigue cost that fits the session, kind to their injuries, what they've already progressed on)? An accessory picked for convenience over a clearly better option they have (a floor version, a shorter range, an unstable or hard-to-load exercise to save a station or keep a superset together) is a must_fix naming the swap. No needless complexity, no popular exercise without a purpose, no redundancy;
 - specificity for the goal and timeline (a meet or test: does it peak into it, or build what the next phase needs);
 - progression (is each lift's progression appropriate for their training age and recent response; no fake progression);
+- session flow: accessories that send them back and forth between stations, or a new piece of equipment for one or two sets where a station already in use would train the same thing as well (a "consider", unless it pushes the session past their time). Never at the cost of exercise quality, the main lifts' order or training order (compounds before isolation work for the same muscles);
 - anything about this athlete the program ignores.
 
 Report only genuine problems:

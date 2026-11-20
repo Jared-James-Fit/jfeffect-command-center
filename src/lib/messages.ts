@@ -25,6 +25,8 @@ export type MessageAttachment = {
   change_request_id?: string;
   /** kind "session_booked": the sessions the coach booked for them, earliest first (pt_sessions.id). */
   session_ids?: string[];
+  /** kind "session_booked": "client" when the client booked it themselves (a call from their app). */
+  booked_by?: "client";
   /** kind "community_post": the post it opens (e.g. a birthday post). */
   post_id?: string;
   fallback_emoji?: string;
@@ -325,6 +327,41 @@ export async function listOlderMessages(
   const { data, error } = await q;
   if (error) throw error;
   return ((data ?? []) as Message[]).slice().reverse();
+}
+
+/**
+ * Every delivered message from `fromCreatedAt` (inclusive) up to, not
+ * including, `beforeCreatedAt`, oldest first: what a jump to an older message
+ * (a check-in opened from the dashboard) loads in one read so the thread
+ * between it and what's on screen stays continuous. Capped; the jump then
+ * pages the usual way.
+ */
+export async function listMessagesBetween(
+  clientId: string,
+  fromCreatedAt: string,
+  beforeCreatedAt: string,
+  opts: { includeInternal?: boolean; limit?: number } = {},
+) {
+  let q = db
+    .from("messages")
+    .select("*")
+    .eq("client_id", clientId)
+    .in("delivery_status", ["sent", "sending"])
+    .gte("created_at", fromCreatedAt)
+    .lt("created_at", beforeCreatedAt)
+    .order("created_at", { ascending: false })
+    .limit(opts.limit ?? 400);
+  if (!opts.includeInternal) q = q.eq("is_internal_note", false);
+  const { data, error } = await q;
+  if (error) throw error;
+  return ((data ?? []) as Message[]).slice().reverse();
+}
+
+/** One message's conversation and time (null when it's gone or not this login's to read). */
+export async function getMessageStamp(messageId: string): Promise<{ id: string; client_id: string; created_at: string } | null> {
+  const { data, error } = await db.from("messages").select("id, client_id, created_at").eq("id", messageId).maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as { id: string; client_id: string; created_at: string } | null;
 }
 
 /**

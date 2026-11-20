@@ -3,8 +3,10 @@
  *
  * They live in their own table (pl_warmup_sets), never in pl_row_results: that
  * table feeds records, tonnage, league points, completion and coach review, none
- * of which should ever see a warm-up. The load-suggestion engine reads only the
- * heaviest warm-up of the day (the "final" one) — see load-suggestion.ts, note 8.
+ * of which should ever see a warm-up. The load-suggestion engine reads the
+ * heaviest warm-up of the day (the "final" one) with any others close to its
+ * weight, whatever order they were logged in (readWarmups, load-suggestion.ts,
+ * note 8).
  */
 import { classifyExercise, type MovementPattern } from "@/lib/exercise-classifier";
 import { percentOf1RM } from "@/lib/load-suggestion";
@@ -47,18 +49,56 @@ export function normalizeWarmupRow(r: any): WarmupSetRow | null {
   };
 }
 
-/** The "final" warm-up = the heaviest one logged (ties: the latest), in the display unit. */
+/**
+ * Which warm-up is the "final" one: the heaviest, compared across units; a tie
+ * goes to the harder-rated (a missing rating counts as 7), then the one with
+ * more reps, then the id. Never the order they were logged in, so the same
+ * warm-ups typed in any order are read the same (readWarmups does the same).
+ */
+function isMoreFinal(a: WarmupSetRow, b: WarmupSetRow): boolean {
+  const kg = (w: WarmupSetRow) => (w.unit === "kg" ? w.load : w.load * KG_PER_LB);
+  const d = kg(a) - kg(b);
+  if (Math.abs(d) > 1e-6) return d > 0;
+  const ra = a.rpe ?? 7;
+  const rb = b.rpe ?? 7;
+  if (ra !== rb) return ra > rb;
+  if (a.reps !== b.reps) return a.reps > b.reps;
+  return String(a.id) > String(b.id);
+}
+
+/** The final warm-up's row (isMoreFinal), or null. */
+export function finalWarmupRow(sets: WarmupSetRow[]): WarmupSetRow | null {
+  let best: WarmupSetRow | null = null;
+  for (const s of sets) if (!best || isMoreFinal(s, best)) best = s;
+  return best;
+}
+
+/** The final warm-up in the display unit (isMoreFinal), or null. */
 export function pickFinalWarmup(
   sets: WarmupSetRow[],
   unit: WarmupUnit,
 ): { load: number; reps: number; rpe: number | null } | null {
-  let best: { load: number; reps: number; rpe: number | null } | null = null;
-  for (const s of sets) {
-    const c = warmupInUnit(s, unit);
-    if (!best || c.load >= best.load) best = c;
-  }
-  return best;
+  const best = finalWarmupRow(sets);
+  return best ? warmupInUnit(best, unit) : null;
 }
+
+/**
+ * Every warm-up in the display unit for the suggestion engine (readWarmups),
+ * in one fixed order (heaviest first) so the screen's memo sees the same list
+ * however they were logged.
+ */
+export function warmupsForModel(sets: WarmupSetRow[], unit: WarmupUnit): Array<{ load: number; reps: number; rpe: number | null }> {
+  return [...sets]
+    .sort((a, b) => (isMoreFinal(a, b) ? -1 : isMoreFinal(b, a) ? 1 : 0))
+    .map((s) => warmupInUnit(s, unit));
+}
+
+/**
+ * Said when the last warm-up was too easy to read (RPE 5 or easier, header
+ * note 8 in load-suggestion.ts): the number stays history's, or, with no
+ * history, waits for the first set. Never a made-up weight.
+ */
+export const WARMUP_TOO_EASY = "RPE too low for a reliable estimate";
 
 /** Human summary: "140 kg × 2 · RPE 7". */
 export function describeWarmup(

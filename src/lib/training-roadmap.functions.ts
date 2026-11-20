@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 /**
- * Coach: have Cleo re-read a block now and rewrite her roadmap words (the
+ * Coach: have Cleo re-read a block now and rewrite its roadmap words (the
  * schedule tick does this on its own a couple of minutes after a change).
  * Never touches the coach's own wording.
  */

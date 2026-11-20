@@ -2,16 +2,22 @@ import * as React from "react";
 import * as SwitchPrimitives from "@radix-ui/react-switch";
 
 import { cn } from "@/lib/utils";
+import { feedback } from "@/lib/feedback";
+import { HapticTap } from "@/components/haptic-tap";
 
 const Switch = React.forwardRef<
   React.ElementRef<typeof SwitchPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root>
->(({ className, ...props }, ref) => (
+>(({ className, onCheckedChange, ...props }, ref) => (
   <SwitchPrimitives.Root
     className={cn(
-      "peer inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted-foreground/35",
+      "relative peer inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted-foreground/35",
       className,
     )}
+    onCheckedChange={(checked) => {
+      feedback("tap");
+      onCheckedChange?.(checked);
+    }}
     {...props}
     ref={ref}
   >
@@ -20,6 +26,8 @@ const Switch = React.forwardRef<
         "pointer-events-none block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform data-[state=checked]:translate-x-4 data-[state=unchecked]:translate-x-0",
       )}
     />
+    {/* the iPhone's tap on the finger's own touch (haptic-tap.tsx) */}
+    {!props.disabled && <HapticTap />}
   </SwitchPrimitives.Root>
 ));
 Switch.displayName = SwitchPrimitives.Root.displayName;

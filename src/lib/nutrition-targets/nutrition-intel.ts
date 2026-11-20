@@ -9,6 +9,8 @@
  */
 import { normalizeDayLabel, type ClientNutritionDayType } from "@/lib/client-nutrition-day";
 import { planMenus } from "@/lib/nutrition-targets/plan-foods";
+import { dayCoverage, mealsTotal } from "@/lib/nutrition-targets/plan-coverage";
+import { DAILY_TOTAL_HEADING, readDailyTotal } from "@/lib/nutrition-targets/macro-line";
 
 const DAY = 86_400_000;
 const LB = 2.2046226;
@@ -316,10 +318,11 @@ export function parseAiTargets(text: string | null | undefined): DayTargets[] {
       continue;
     }
     if (section === "kcal") {
-      const m = line.match(/^([A-Za-z][A-Za-z\s-]*day)\s*:\s*([\d,]+)/i);
+      // any day label, "Training Day (Friday Only): 2,579" included
+      const m = line.match(/^([A-Za-z][^:]*?)\s*:\s*([\d,]+)\s*(?:k?cals?|calories)?\s*$/i);
       if (m) get(m[1]).kcal = Number(m[2].replace(/,/g, ""));
     } else if (section === "macros") {
-      if (/^[A-Za-z][A-Za-z\s-]*day\s*:?$/i.test(line)) {
+      if (!/\d/.test(line) && /^[A-Za-z][^:]*:?$/.test(line) && !/^(protein|carbs?|carbohydrates?|fats?|fib(?:re|er))\b/i.test(line)) {
         current = get(line.replace(/:$/, ""));
         continue;
       }
@@ -334,6 +337,16 @@ export function parseAiTargets(text: string | null | undefined): DayTargets[] {
     }
   }
   return [...out.values()];
+}
+
+/** One day type's AI targets in a plan day's shape (`calories / protein / carbs / fats`), matched by its label, else null. */
+export function aiTargetFor(
+  targets: DayTargets[],
+  label: string,
+): { calories: number | null; protein: number | null; carbs: number | null; fats: number | null } | null {
+  const key = (l: string) => normalizeDayLabel(l) ?? l.trim().toLowerCase();
+  const t = targets.find((x) => key(x.label) === key(label));
+  return t ? { calories: t.kcal, protein: t.protein, carbs: t.carbs, fats: t.fat } : null;
 }
 
 const macroKcal = (d: { protein: number | null; carbs: number | null; fat: number | null }) =>
@@ -377,22 +390,13 @@ export function coachNotesFlags(text: string | null | undefined): string | null 
 
 type Totals = { protein: number | null; carbs: number | null; fat: number | null };
 
-function readTotals(line: string): Totals {
-  const pick = (re: RegExp) => {
-    const m = line.match(re);
-    return m ? Number(m[1]) : null;
-  };
-  return {
-    protein: pick(/(\d+(?:\.\d+)?)\s*g?\s*protein/i),
-    carbs: pick(/(\d+(?:\.\d+)?)\s*g?\s*carb/i),
-    fat: pick(/(\d+(?:\.\d+)?)\s*g?\s*fat/i),
-  };
-}
 
 /**
- * Where a written meal plan doesn't hold together: a menu whose Daily Total is
- * off its targets by more than 3% (calories or protein), or whose meals don't
- * add up to the Daily Total it states. What the client sees has to add up.
+ * Where a written meal plan doesn't hold together: a menu whose meals don't
+ * cover its targets (read from the meals themselves, `dayCoverage`: more than
+ * 5% off its calories or 10 g under its protein), whose meals don't add up to
+ * the Daily Total it states, or whose Daily Total is off its targets. What the
+ * client sees has to add up, and a Daily Total is only the writer's claim.
  */
 export function planTotalsIssues(planText: string, targets: DayTargets[]): string[] {
   const out: string[] = [];
@@ -401,44 +405,30 @@ export function planTotalsIssues(planText: string, targets: DayTargets[]): strin
   );
   for (const menu of planMenus(planText)) {
     const lines = menu.notes.split("\n").map((l) => l.trim());
-    const at = lines.findIndex((l) => /^daily total\b/i.test(l));
-    const totalLine = at >= 0 ? lines.slice(at, at + 3).join(" ") : "";
-    const total = readTotals(totalLine);
-    // the meals' own macro blocks, summed
-    let p = 0;
-    let c = 0;
-    let f = 0;
-    let meals = 0;
-    let inMacros = false;
-    for (const l of lines.slice(0, at >= 0 ? at : lines.length)) {
-      if (/^approximate macros?:?$/i.test(l)) {
-        inMacros = true;
-        meals++;
-        continue;
-      }
-      if (!l) {
-        inMacros = false;
-        continue;
-      }
-      if (!inMacros) continue;
-      const m = l.match(/^(\d+(?:\.\d+)?)\s*g?\s*(protein|carb\w*|fat\w*)\b/i);
-      if (!m) continue;
-      const n = Number(m[1]);
-      if (/^prot/i.test(m[2])) p += n;
-      else if (/^carb/i.test(m[2])) c += n;
-      else f += n;
-    }
+    const at = lines.findIndex((l) => DAILY_TOTAL_HEADING.test(l));
+    const read = at >= 0 ? readDailyTotal(lines, at).total : null;
+    const total: Totals = { protein: read?.protein ?? null, carbs: read?.carbs ?? null, fat: read?.fat ?? null };
+    // the meals' own macro blocks, summed (the shared reader: every way macros are written)
+    const meals = mealsTotal(menu.notes);
     const totalKcal = macroKcal(total);
-    if (meals >= 2 && total.protein != null && total.carbs != null && total.fat != null) {
+    if (meals && meals.meals >= 2 && total.protein != null && total.carbs != null && total.fat != null) {
       const off = (a: number, b: number) => Math.abs(a - b) > Math.max(5, b * 0.05);
-      if (off(p, total.protein) || off(c, total.carbs) || off(f, total.fat))
+      if (off(meals.protein, total.protein) || off(meals.carbs, total.carbs) || off(meals.fat, total.fat))
         out.push(
-          `${menu.label}: the meals add to ${round(p)} g protein, ${round(c)} g carbs, ${round(f)} g fat, but its Daily Total says ${total.protein} / ${total.carbs} / ${total.fat}`,
+          `${menu.label}: the meals add to ${round(meals.protein)} g protein, ${round(meals.carbs)} g carbs, ${round(meals.fat)} g fat, but its Daily Total says ${total.protein} / ${total.carbs} / ${total.fat}`,
         );
     }
     const target = byType.get(normalizeDayLabel(menu.label) ?? menu.label.toLowerCase());
-    if (!target || totalKcal == null) continue;
+    if (!target) continue;
     const want = target.kcal ?? macroKcal(target);
+    // the meals themselves against the targets: a short plan is never hidden behind a Daily Total that copies them
+    const cover = dayCoverage(menu.notes, { calories: want, protein: target.protein, carbs: target.carbs, fats: target.fat });
+    if (cover.meals && (cover.state === "short" || cover.state === "over"))
+      out.push(
+        `${menu.label}: the meals add to ${cover.meals.kcal} kcal and ${round(cover.meals.protein)} g protein against a target of ${Math.round(cover.target!)} kcal${target.protein ? ` and ${target.protein} g protein` : ""}`,
+      );
+    // the Daily Total's own claim is judged only when the meals can't be read (else the meals are, above)
+    if (totalKcal == null || cover.meals) continue;
     // meal prep comes first (MEAL_PLAN_PROMPT rule 2c): within about 5% is on target
     if (want && Math.abs(totalKcal - want) / want > 0.05)
       out.push(

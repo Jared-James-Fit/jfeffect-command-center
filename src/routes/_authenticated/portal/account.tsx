@@ -17,6 +17,7 @@ import {
   Bell,
   CheckCircle2,
   ChevronRight,
+  Camera,
   CreditCard,
   FileSignature,
   HeartPulse,
@@ -30,9 +31,14 @@ import {
   Sparkles,
   Target,
   PauseCircle,
+  Trophy,
   User,
   Watch,
+  SlidersHorizontal,
 } from "lucide-react";
+import { EquipmentManager, equipmentSummaryLine } from "@/components/equipment/equipment-manager";
+import { EquipmentSetupTips } from "@/components/equipment/setup-tips";
+import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
 import { AiCreditsPanel, useAiCredits } from "@/components/ai-credits/ai-credits";
 import { chipLabel } from "@/lib/ai-credits/packs";
 import { isBasicInfoComplete } from "@/lib/basic-info";
@@ -61,6 +67,7 @@ import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { PushNotificationCard } from "@/components/push/push-notification-card";
 import { WeightUnitCard } from "@/components/portal/weight-unit-card";
 import { MyHealthSection, myHealthSummary, useMyHealthItems } from "@/components/health/my-health-section";
+import { CompetitionProfileEditor, profileSummary, useCompetes, useCompetitionProfile } from "@/components/athlete/competition-profile";
 import { UserAvatar } from "@/components/user-avatar";
 import { billingDay } from "@/lib/date-range";
 import { useMyBilling } from "@/components/billing/use-my-billing";
@@ -79,9 +86,11 @@ const PROFILE_FIELDS = ["first_name", "last_name", "preferred_name", "phone", "a
  */
 type SectionId =
   | "units"
+  | "equipment"
   | "notifications"
   | "coaching-agreement"
   | "health"
+  | "competition"
   | "basic-information"
   | "profile-picture"
   | "social-media"
@@ -97,10 +106,15 @@ const SECTION_ALIASES: Record<string, SectionId> = {
   "training-schedule": "units",
   schedule: "units",
   notifications: "notifications",
+  equipment: "equipment",
+  setups: "equipment",
+  "equipment-setups": "equipment",
   "coaching-agreement": "coaching-agreement",
   agreement: "coaching-agreement",
   health: "health",
   injuries: "health",
+  competition: "competition",
+  "weight-class": "competition",
   medications: "health",
   "basic-information": "basic-information",
   basic: "basic-information",
@@ -151,8 +165,16 @@ function AccountPage() {
     },
   });
 
+  // Equipment & setups: everyone who trains (the summary on its row).
+  const { data: equipmentData } = useAthleteEquipment(client?.id ?? null);
+  const equipmentSummary = equipmentSummaryLine(equipmentData);
+  const [equipmentGuide, setEquipmentGuide] = useState(false);
+
   // Health & injuries: a coaching client's (their coach plans around it).
   const { data: healthItems = [] } = useMyHealthItems(goalsOn ? client?.id : null, isImpersonating);
+  // the classes they compete in: only for someone who competes (a meet prep, a powerlifting goal, anything on file)
+  const competes = useCompetes(client?.id);
+  const { data: competition } = useCompetitionProfile(competes ? client?.id : null);
 
   // Fill the form once per account: a refetch (after a save, or coming back
   // to the app) must never overwrite what's being typed.
@@ -407,16 +429,31 @@ function AccountPage() {
     <>
       <PageHeader title="Account Settings" actions={<SavedIndicator state={saveState} />} actionsInline />
       <div className="w-full max-w-2xl space-y-4 px-4 pb-[max(6rem,env(safe-area-inset-bottom))] pt-4 md:px-5 xl:px-6">
-        {/* Who this is: photo (a tap opens the photo section), name, email. */}
+        {/* Who this is: photo (a tap opens it big; the camera badge, or a tap while there's none, opens the photo section), name, email. */}
         <div className="flex items-center gap-3 px-1">
-          <button
-            type="button"
-            onClick={() => openSection("profile-picture")}
-            aria-label="Change your profile photo"
-            className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <UserAvatar src={form.profile_picture_url} name={displayName} size={56} expandable={false} />
-          </button>
+          <div className="relative shrink-0">
+            {form.profile_picture_url ? (
+              <UserAvatar src={form.profile_picture_url} name={displayName} size={56} />
+            ) : (
+              <button
+                type="button"
+                onClick={() => openSection("profile-picture")}
+                aria-label="Add your profile photo"
+                className="block rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <UserAvatar src={null} name={displayName} size={56} expandable={false} />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => openSection("profile-picture")}
+              data-account-photo-change
+              aria-label={form.profile_picture_url ? "Change your profile photo" : "Add your profile photo"}
+              className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full border-2 border-background bg-foreground text-background after:absolute after:-inset-2.5 after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-95"
+            >
+              <Camera className="h-3 w-3" />
+            </button>
+          </div>
           <div className="min-w-0">
             <div className="truncate text-lg font-semibold leading-tight">{displayName}</div>
             {email && <div className="truncate text-sm text-muted-foreground">{email}</div>}
@@ -462,7 +499,16 @@ function AccountPage() {
               </div>
             </SettingsSection>
 
-            <SettingsSection id="notifications" icon={Bell} title="Notifications & sounds">
+            {client?.id && (
+              <SettingsSection id="equipment" icon={SlidersHorizontal} title="Equipment & setups" summary={equipmentSummary ? { text: equipmentSummary } : null}>
+                <SectionErrorBoundary label="Equipment & setups">
+                  <EquipmentManager clientId={client.id} coachView={isImpersonating} onShowGuide={() => setEquipmentGuide(true)} />
+                </SectionErrorBoundary>
+                {equipmentGuide && <EquipmentSetupTips onClose={() => setEquipmentGuide(false)} unit={client?.preferred_weight_unit === "kg" ? "kg" : "lb"} />}
+              </SettingsSection>
+            )}
+
+            <SettingsSection id="notifications" icon={Bell} title="Notifications, sounds & haptics">
               <SectionErrorBoundary label="Push Notifications">
                 <PushNotificationCard bare />
               </SectionErrorBoundary>
@@ -488,6 +534,20 @@ function AccountPage() {
               >
                 <SectionErrorBoundary label="Health & injuries">
                   <MyHealthSection clientId={client.id} preview={isImpersonating} />
+                </SectionErrorBoundary>
+              </SettingsSection>
+            )}
+
+            {/* Competition: the weight class and age classes their powerlifting forms start from. */}
+            {competes && client && (
+              <SettingsSection
+                id="competition"
+                icon={Trophy}
+                title="Competition"
+                summary={{ text: profileSummary(competition) ?? "Not set" }}
+              >
+                <SectionErrorBoundary label="Competition">
+                  <CompetitionProfileEditor clientId={client.id} as="client" preview={isImpersonating} />
                 </SectionErrorBoundary>
               </SettingsSection>
             )}

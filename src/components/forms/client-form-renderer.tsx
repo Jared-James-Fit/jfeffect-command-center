@@ -36,12 +36,12 @@ import {
 } from "@/lib/native-forms";
 import { buildFilloutUrl } from "@/lib/fillout";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
-import { prefillNote, questionPrefill, seasonYear, startingAnswer, TRAINING_TIME_DAYS, TRAINING_TIME_RECENT, workoutStartHours, type PrefillKey, type PrefillProfile } from "@/lib/form-prefill";
+import { ageClassLabel, ageClassName, prefillDetail, prefillNote, questionPrefill, sameAnswer, seasonYear, startingAnswer, TRAINING_TIME_DAYS, TRAINING_TIME_RECENT, workoutStartHours, type PrefillKey, type PrefillProfile } from "@/lib/form-prefill";
 import { sexFromAnswer } from "@/lib/athlete-sex";
-import { playAppSound } from "@/lib/app-sounds";
+import { feedback } from "@/lib/feedback";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { cn } from "@/lib/utils";
-import { choiceLayout, formProgress, numberIssue, numberRange, quickAnswers, quickExclusive, quickNumberLabel, quickPicked, toggleQuick } from "@/lib/form-quick";
+import { choiceLayout, formProgress, requiredMark, numberIssue, numberRange, quickAnswers, quickExclusive, quickNumberLabel, quickPicked, toggleQuick } from "@/lib/form-quick";
 import { NF_JSON_TYPES } from "@/lib/native-forms";
 import { alignRanking, meetItems } from "@/lib/form-fields";
 import { GroupedChoice, MeetsInput, RankingInput } from "@/components/forms/form-field-inputs";
@@ -181,6 +181,9 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   // and each question's writes go one at a time, so an older keystroke can
   // never land after a newer one. Taps save at once.
   const pendingSaves = useRef(new Map<string, { timer: ReturnType<typeof setTimeout>; run: () => Promise<void> }>());
+  // what the progress line says about saving: nothing until the first save, then Saving… / Saved
+  const inFlight = useRef(0);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const saveChains = useRef(new Map<string, Promise<void>>());
   function writeAnswer(q: NfQuestion, raw: any): Promise<void> {
     if (!submission || readOnly) return Promise.resolve();
@@ -195,10 +198,19 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     } else {
       payload.value_text = raw == null ? null : String(raw);
     }
+    inFlight.current += 1;
+    setSaveState("saving");
+    let failed = false;
     const next = (saveChains.current.get(q.id) ?? Promise.resolve())
       .then(() => upsertAnswer(payload))
       .catch((e: any) => {
+        failed = true;
         toast.error("Couldn't save: " + e.message);
+      })
+      .finally(() => {
+        inFlight.current -= 1;
+        if (failed) setSaveState("error");
+        else if (inFlight.current === 0) setSaveState((s) => (s === "error" ? s : "saved"));
       });
     saveChains.current.set(q.id, next);
     return next;
@@ -437,7 +449,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
           else qc.invalidateQueries({ queryKey: ["athlete-sex"] });
         });
     }
-    playAppSound("success");
+    feedback("success");
     // tells the coach, and (a Nutrition Update Request) writes the AI targets + meal plan on the server
     fireAppEvent("form_submitted", submission.id);
     qc.invalidateQueries({ queryKey: ["nf-current-submission", formId, client?.id] });
@@ -506,26 +518,38 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     })
     .sort((a, b) => Number(b.critical) - Number(a.critical));
   const meet = form.form_type === MEET_CHECKLIST_FORM_TYPE ? meetFacts(questions, liveAnswers) : null;
+  const sent = submission.status !== "in_progress";
+  // what Submit would stop on, in order: the end of the form offers the first one
+  const stillMissing = shownQuestions.filter((q) => q.required && q.question_type !== "info" && !answeredNow(q));
+  const numbered = shownQuestions.filter((x) => x.question_type !== "info" && x.question_type !== "checklist");
+  const mark = requiredMark(numbered);
   const goTo = (id: string) => document.getElementById(`q-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
     <>
       {trimmer.element}
       {embedded ? (
-        <div className="flex items-center justify-end px-1 pb-1">
-          <Badge className={statusTone(submission.status) + " border"}>{statusLabel(submission.status)}</Badge>
-        </div>
+        sent && (
+          <div className="flex items-center justify-end px-1 pb-1">
+            <Badge className={statusTone(submission.status) + " border"}>{statusLabel(submission.status)}</Badge>
+          </div>
+        )
       ) : (
         <PageHeader
           backTo="/portal/messages"
           backLabel="Back to Messages"
           title={form.title}
           subtitle={submission.period_start ? `Week of ${submission.period_start}` : undefined}
-          actions={<Badge className={statusTone(submission.status) + " border"}>{statusLabel(submission.status)}</Badge>}
+          // while they're filling it in the progress line says where it stands; a status badge only once it's news
+          actions={sent ? <Badge className={statusTone(submission.status) + " border"}>{statusLabel(submission.status)}</Badge> : undefined}
         />
       )}
 
-      <div className={embedded ? "mx-auto max-w-3xl space-y-4 pb-24" : "mx-auto max-w-3xl space-y-4 p-4 md:p-8"}>
+      <div
+        className={embedded ? "mx-auto max-w-3xl space-y-3" : "form-page-end mx-auto max-w-3xl space-y-3 px-4 pt-3 md:p-8"}
+        // nothing fixed over the form: its end is the end of the page, clear of the tab bar or the sheet's edge
+        style={{ paddingBottom: embedded ? "max(env(safe-area-inset-bottom), 1rem)" : "1.5rem" }}
+      >
         {review && (
           <Card className="border-emerald-500/30 bg-emerald-500/5 p-4">
             <div className="mb-2 text-xs font-bold uppercase tracking-wider text-emerald-600">
@@ -544,6 +568,8 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
 
         {meet && <MeetLine name={meet.meetName} date={meet.meetDate} />}
         {stillToSort.length > 0 && <StillToSort rows={stillToSort} onGo={goTo} />}
+
+        {!readOnly && <ProgressLine done={progress.done} total={progress.total} noun={checklists.length ? "checked" : "required"} save={saveState} />}
 
         {carried && !readOnly && (
           <p className="rounded-xl bg-muted px-3.5 py-2.5 text-[14px]" data-form-carried>
@@ -586,7 +612,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
                 }
               : null;
             return (
-              <QuestionCard key={q.id} q={q} index={shownQuestions.filter((x) => x.question_type !== "info" && x.question_type !== "checklist").indexOf(q)} flagged={flagged.has(q.id)}>
+              <QuestionCard key={q.id} q={q} index={numbered.indexOf(q)} flagged={flagged.has(q.id)} mark={mark}>
                 <UnitNumberInput
                   value={cur}
                   units={units}
@@ -598,49 +624,60 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
               </QuestionCard>
             );
           }
-          if ((q.validation as any)?.compact && typeof local[q.id] === "string" && local[q.id].trim() && !editingCompact.has(q.id)) {
+          const idx = numbered.indexOf(q);
+          const issue = q.question_type === "number" ? numberIssue(q, local[q.id]) : null;
+          const flag = flagged.has(q.id);
+          // an answer that's still what the app knows (their schedule, birth year, profile) is one line
+          // with Change, so a form sent again never asks them to re-read what's on file
+          const app = readOnly ? null : prefillDetail(q, prefillProfile ?? null);
+          const fromApp = !!app?.source && COMPACT_TYPES.has(q.question_type) && sameAnswer(app.value, local[q.id]);
+          const namedCompact = (q.validation as any)?.compact && typeof local[q.id] === "string" && local[q.id].trim();
+          if ((fromApp || namedCompact) && !editingCompact.has(q.id) && !flag) {
             return (
-              <div key={q.id} id={`q-${q.id}`} className="flex min-h-[52px] items-center gap-3 rounded-2xl border border-border bg-card px-4 py-2.5" data-form-compact>
+              <div
+                key={q.id}
+                id={`q-${q.id}`}
+                className="flex scroll-mt-24 items-center gap-3 rounded-2xl border border-border bg-card py-2.5 pl-4 pr-2"
+                data-form-compact
+                data-form-question={q.question_type}
+              >
+                <QuestionNumber n={idx + 1} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] text-muted-foreground">{q.label}</p>
-                  <p className="truncate text-[16px] font-semibold">{local[q.id]}</p>
+                  <p className="text-[13px] leading-snug text-muted-foreground">{q.label}</p>
+                  <p className="truncate text-[16px] font-semibold leading-snug">{answerShown(q, local[q.id])}</p>
+                  {fromApp && (
+                    <p className="text-[12px] leading-snug text-muted-foreground" data-form-prefilled>
+                      {app!.source}
+                    </p>
+                  )}
                 </div>
                 {!readOnly && (
-                  <Button variant="ghost" className="h-10 px-3" onClick={() => setEditingCompact((s) => new Set(s).add(q.id))}>
-                    Edit
+                  <Button
+                    variant="ghost"
+                    className="h-10 shrink-0 px-3 text-[15px]"
+                    aria-label={`Change ${q.label}`}
+                    onClick={() => setEditingCompact((s) => new Set(s).add(q.id))}
+                  >
+                    Change
                   </Button>
                 )}
               </div>
             );
           }
-          const idx = shownQuestions.filter((x) => x.question_type !== "info" && x.question_type !== "checklist").indexOf(q);
-          const issue = q.question_type === "number" ? numberIssue(q, local[q.id]) : null;
-          const flag = flagged.has(q.id);
           const note = readOnly ? null : prefillNote(q, prefillProfile ?? null, local[q.id]);
           return (
             <section
               key={q.id}
               id={`q-${q.id}`}
-              className={cn("scroll-mt-24 rounded-2xl border bg-card p-4 transition-colors sm:p-5", flag ? "border-destructive ring-2 ring-destructive/20" : "border-border")}
+              className={cn("scroll-mt-24 rounded-2xl border bg-card p-4 transition-colors", flag ? "border-destructive ring-2 ring-destructive/20" : "border-border")}
               data-form-question={q.question_type}
             >
-              <div className="flex items-start gap-3">
-                <span className="mt-px grid h-7 w-7 shrink-0 place-items-center rounded-full bg-muted text-[13px] font-bold tabular-nums text-muted-foreground" aria-hidden>
-                  {idx + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-[17px] font-bold leading-snug">
-                    {q.label}
-                    {q.required && <span className="ml-1 text-destructive">*</span>}
-                  </h3>
-                  {q.help_text && <p className="mt-1 text-[14px] leading-snug text-muted-foreground">{q.help_text}</p>}
-                </div>
-              </div>
+              <QuestionHead q={q} n={idx + 1} mark={mark} />
               {getQuestionReferenceImage(q) && (
                 <QuestionReferenceImage src={getQuestionReferenceImage(q)!} label={q.label} />
               )}
 
-              <div className="mt-3.5">
+              <div className="mt-3">
                 <QuestionInput
                   q={q}
                   value={local[q.id]}
@@ -672,22 +709,10 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
         })}
 
         {updating && (
-          <div
-            className={cn("sticky z-10 border-t border-border/70 bg-background/95 pt-3 backdrop-blur", embedded ? "px-1" : "-mx-4 px-4 md:mx-0 md:rounded-2xl md:border")}
-            style={{
-              bottom: embedded ? 0 : "calc(var(--bottom-nav-clearance, 0px) + env(safe-area-inset-bottom))",
-              paddingBottom: embedded ? "max(env(safe-area-inset-bottom), 0.75rem)" : "0.75rem",
-            }}
-            data-form-update-bar
-          >
-            <div className="mb-2 flex items-center justify-between gap-3 text-[13px]">
-              <span className="font-semibold tabular-nums">
-                {progress.total > 0 ? `${progress.done} of ${progress.total} ${checklists.length ? "checked" : "answered"}` : "Sent to your coach"}
-              </span>
-              <span className="text-muted-foreground">Changes save as you go</span>
-            </div>
+          // a form they keep updating (a meet checklist): changes are already saved, Done just closes it
+          <section className="pt-2" data-form-finish data-form-update-bar>
             <Button
-              className="h-14 w-full rounded-2xl text-[16px] font-semibold"
+              className="h-12 w-full rounded-xl text-[16px] font-semibold"
               onClick={async () => {
                 await flushSaves();
                 qc.invalidateQueries({ queryKey: ["chat-form-request-status", formId] });
@@ -696,40 +721,43 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
             >
               <Check className="mr-2 h-5 w-5" /> Done
             </Button>
-          </div>
+            <p className="mt-2 px-1 text-center text-[13px] leading-snug text-muted-foreground">Changes save as you go, and your coach sees them in your chat.</p>
+          </section>
         )}
 
         {!readOnly && !updating && (
-          // Submit sits above the tab bar (or the sheet's bottom), full width for a thumb
-          <div
-            className={cn("sticky z-10 border-t border-border/70 bg-background/95 pt-3 backdrop-blur", embedded ? "px-1" : "-mx-4 px-4 md:mx-0 md:rounded-2xl md:border")}
-            style={{
-              bottom: embedded ? 0 : "calc(var(--bottom-nav-clearance, 0px) + env(safe-area-inset-bottom))",
-              paddingBottom: embedded ? "max(env(safe-area-inset-bottom), 0.75rem)" : "0.75rem",
-            }}
-            data-form-submit-bar
-          >
-            {progress.total > 0 && (
-              <>
-                <div className="mb-1.5 flex items-center justify-between gap-3 text-[13px]">
-                  <span className="font-semibold tabular-nums">
-                    {progress.done} of {progress.total} {checklists.length ? "checked" : "answered"}
-                  </span>
-                  <span className="text-muted-foreground">Saves as you go</span>
-                </div>
-                <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
-                  <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
-                </div>
-              </>
+          // Submit is the end of the questionnaire, never a bar over it
+          <section className="pt-2" data-form-finish data-form-submit-bar>
+            {stillMissing.length > 0 ? (
+              <button
+                type="button"
+                className="mb-2.5 flex min-h-[44px] w-full items-center justify-between gap-3 rounded-xl bg-muted px-3.5 py-2 text-left text-[14px]"
+                onClick={() => {
+                  const first = stillMissing[0];
+                  setFlagged((f) => new Set(f).add(first.id));
+                  document.getElementById(`q-${first.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
+                data-form-missing
+              >
+                <span>{stillMissing.length === 1 ? "1 required question left" : `${stillMissing.length} required questions left`}</span>
+                <span className="shrink-0 font-semibold">{stillMissing.length === 1 ? "Go to it" : "Go to the first"}</span>
+              </button>
+            ) : (
+              progress.total > 0 &&
+              !checklists.length && (
+                <p className="mb-2.5 flex items-center gap-1.5 px-1 text-[14px] text-muted-foreground" data-form-complete>
+                  <Check className="h-4 w-4 text-success" aria-hidden /> Every required question is answered
+                </p>
+              )
             )}
             <ActionButton
               onAction={handleSubmit}
-              loadingLabel="Submitting…"
-              successLabel="Submitted"
-              successToast="Submitted! Coach Jared will reply in messenger."
-              jobLabel="Submitting onboarding form"
+              loadingLabel="Sending…"
+              successLabel="Sent"
+              successToast="Sent! Your coach will reply in your chat."
+              jobLabel="Sending a form"
               jobDescription={form?.title ?? undefined}
-              className="h-14 w-full rounded-2xl bg-primary text-[16px] font-semibold"
+              className="h-12 w-full rounded-xl bg-primary text-[16px] font-semibold"
               icon={<Send className="h-5 w-5" />}
             >
               {form.button_label ||
@@ -737,10 +765,90 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
                   ? "Submit Weekly Check-In"
                   : `Submit ${form.title}`)}
             </ActionButton>
-          </div>
+            <p className="mt-2 px-1 text-center text-[13px] leading-snug text-muted-foreground" data-form-after-submit>
+              {form.allow_updates ? "Your coach sees it in your chat, and you can keep updating it after." : "Your answers go to your coach in your chat."}
+            </p>
+          </section>
         )}
       </div>
     </>
+  );
+}
+
+/** Question types an answer from the app can fold into one line (never a long answer or a file). */
+const COMPACT_TYPES = new Set(["short_text", "number", "single_choice", "dropdown", "multi_choice"]);
+
+/** An answer as one line: age classes by name, a number with its unit. */
+function answerShown(q: NfQuestion, v: unknown): string {
+  if (Array.isArray(v)) return v.map((x) => (questionPrefill(q) === "age_class" ? ageClassName(String(x)) : String(x))).join(", ");
+  if (isUnitValue(v)) return `${v.value} ${v.unit}`;
+  const unit = q.question_type === "number" ? numberRange(q).unit : null;
+  return unit ? `${v} ${unit}` : String(v ?? "");
+}
+
+function QuestionNumber({ n }: { n: number }) {
+  return (
+    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-muted text-[12px] font-semibold tabular-nums text-muted-foreground" aria-hidden>
+      {n}
+    </span>
+  );
+}
+
+/**
+ * Which questions get a mark: the fewer kind. Most required → "Optional" on the rest, no asterisks;
+ * most optional → an asterisk on the required ones (requiredMark, form-quick.ts).
+ */
+type RequiredMark = "optional" | "required";
+
+/** A question's number, words (required or optional marked, never both) and help. */
+function QuestionHead({ q, n, mark }: { q: NfQuestion; n: number; mark: RequiredMark }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <span className="mt-px">
+        <QuestionNumber n={n} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <h3 className="text-[16px] font-semibold leading-snug">
+          {q.label}
+          {q.required && mark === "required" && (
+            <span className="ml-1 text-destructive" aria-label="required">*</span>
+          )}
+          {!q.required && mark === "optional" && <span className="ml-1.5 text-[13px] font-normal text-muted-foreground">Optional</span>}
+        </h3>
+        {q.help_text && <p className="mt-0.5 text-[14px] leading-snug text-muted-foreground">{q.help_text}</p>}
+      </div>
+    </div>
+  );
+}
+
+/** How far along they are (required questions, or a checklist's items) and whether it's saved. Never fixed over the form. */
+function ProgressLine({ done, total, noun, save }: { done: number; total: number; noun: "required" | "checked"; save: "idle" | "saving" | "saved" | "error" }) {
+  const all = total > 0 && done >= total;
+  const count = total === 0 ? null : noun === "checked" ? `${done} of ${total} checked` : all ? `All ${total} required answered` : `${done} of ${total} required`;
+  return (
+    <div className="px-1" data-form-progress>
+      <div className="flex items-center justify-between gap-3 text-[13px] leading-none text-muted-foreground">
+        <span className="tabular-nums" data-form-progress-count>{count}</span>
+        <span className={cn("inline-flex items-center gap-1", save === "error" && "text-destructive")} aria-live="polite" data-form-save={save}>
+          {save === "saving" ? (
+            "Saving…"
+          ) : save === "saved" ? (
+            <>
+              <Check className="h-3.5 w-3.5" aria-hidden /> Saved
+            </>
+          ) : save === "error" ? (
+            "Not saved, check your connection"
+          ) : (
+            "Saves as you go"
+          )}
+        </span>
+      </div>
+      {total > 0 && (
+        <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted" aria-hidden>
+          <div className={cn("h-full rounded-full transition-[width] duration-300", all ? "bg-success" : "bg-foreground/60")} style={{ width: `${Math.min(100, (done / total) * 100)}%` }} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -776,26 +884,15 @@ function MeetLine({ name, date }: { name: string | null; date: string | null }) 
 }
 
 /** One question's card: its number, words and help, then the input. */
-function QuestionCard({ q, index, flagged, children }: { q: NfQuestion; index: number; flagged: boolean; children: React.ReactNode }) {
+function QuestionCard({ q, index, flagged, mark, children }: { q: NfQuestion; index: number; flagged: boolean; mark: RequiredMark; children: React.ReactNode }) {
   return (
     <section
       id={`q-${q.id}`}
-      className={cn("scroll-mt-24 rounded-2xl border bg-card p-4 transition-colors sm:p-5", flagged ? "border-destructive ring-2 ring-destructive/20" : "border-border")}
+      className={cn("scroll-mt-24 rounded-2xl border bg-card p-4 transition-colors", flagged ? "border-destructive ring-2 ring-destructive/20" : "border-border")}
       data-form-question={q.question_type}
     >
-      <div className="flex items-start gap-3">
-        <span className="mt-px grid h-7 w-7 shrink-0 place-items-center rounded-full bg-muted text-[13px] font-bold tabular-nums text-muted-foreground" aria-hidden>
-          {index + 1}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-[17px] font-bold leading-snug">
-            {q.label}
-            {q.required && <span className="ml-1 text-destructive">*</span>}
-          </h3>
-          {q.help_text && <p className="mt-1 text-[14px] leading-snug text-muted-foreground">{q.help_text}</p>}
-        </div>
-      </div>
-      <div className="mt-3.5">{children}</div>
+      <QuestionHead q={q} n={index + 1} mark={mark} />
+      <div className="mt-3">{children}</div>
       {flagged && <p className="mt-2 text-[13px] font-semibold text-destructive">This one needs an answer</p>}
     </section>
   );
@@ -855,7 +952,7 @@ async function loadPrefillProfile(clientId: string, userId: string | null | unde
   const today = todayLocal();
   const wants = (...k: PrefillKey[]) => k.some((x) => keys.has(x));
   const since = new Date(Date.now() - TRAINING_TIME_DAYS * 86_400_000).toISOString();
-  const [{ data }, plans, goals, starts, prep] = await Promise.all([
+  const [{ data }, plans, goals, starts, prep, competition] = await Promise.all([
     db.from("clients").select("sex, height_cm, preferred_height_unit, full_name, date_of_birth, committed_training_days, timezone").eq("id", clientId).maybeSingle(),
     wants("nutrition_plan")
       ? db.from("nutrition_targets").select("id, nutrition_target_days(id)").eq("client_id", clientId).neq("status", "Archived").limit(5)
@@ -866,6 +963,10 @@ async function loadPrefillProfile(clientId: string, userId: string | null | unde
       : Promise.resolve(null),
     wants("weight_class")
       ? db.from("pl_preps").select("weight_class, event_date, status, archived").eq("client_id", clientId).gte("event_date", today).not("weight_class", "is", null).order("event_date").limit(5)
+      : Promise.resolve(null),
+    // their competition profile: the class they compete in and the age classes they enter
+    wants("age_class", "weight_class", "meet_weight_class")
+      ? db.from("athlete_competition_profiles").select("weight_class, age_classes").eq("client_id", clientId).maybeSingle()
       : Promise.resolve(null),
   ]);
   if (!data) return null;
@@ -888,6 +989,7 @@ async function loadPrefillProfile(clientId: string, userId: string | null | unde
     prep_weight_class: nextPrep?.weight_class ?? null,
     recent_bodyweight: recent,
     season_year: seasonYear(),
+    competition: competition?.data ? { weightClass: competition.data.weight_class ?? null, ageClasses: competition.data.age_classes ?? [] } : null,
   };
 }
 
@@ -1037,7 +1139,7 @@ function QuestionInput({
         ) : (
           <Textarea
             rows={3}
-            className="min-h-[104px] rounded-xl px-3.5 py-3 text-[16px] leading-snug"
+            className="min-h-[88px] rounded-xl px-3.5 py-3 text-[16px] leading-snug"
             value={text}
             disabled={readOnly}
             placeholder={placeholder}
@@ -1097,8 +1199,8 @@ function QuestionInput({
             disabled={readOnly}
             onClick={() => onChange(n === i ? "" : i)}
             className={cn(
-              "h-12 rounded-xl border-2 text-[17px] font-bold tabular-nums transition-colors active:scale-[0.97]",
-              n === i ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background",
+              "h-11 rounded-xl border text-[16px] font-semibold tabular-nums transition-colors active:scale-[0.97]",
+              n === i ? "border-foreground bg-foreground text-background" : "border-border bg-background",
             )}
           >
             {i}
@@ -1113,7 +1215,6 @@ function QuestionInput({
   if (q.question_type === "multi_choice") {
     const arr: string[] = Array.isArray(value) ? value : [];
     return (
-      <>
       <ChoiceButtons
         multi
         options={opts}
@@ -1121,8 +1222,8 @@ function QuestionInput({
         picked={(o) => arr.includes(o)}
         readOnly={readOnly}
         onPick={(o) => onChange(arr.includes(o) ? arr.filter((x) => x !== o) : [...arr, o])}
+        display={questionPrefill(q) === "age_class" ? ageClassLabel : undefined}
       />
-      </>
     );
   }
   if (q.question_type === "file" || q.question_type === "video") {
@@ -1212,12 +1313,12 @@ function QuickChips({ chips, readOnly, isOn, onPick, label }: { chips: string[];
             aria-pressed={on}
             onClick={() => onPick(c)}
             className={cn(
-              "inline-flex min-h-[44px] items-center gap-1.5 rounded-full border-2 px-4 text-[15px] font-semibold transition-colors active:scale-[0.97] disabled:opacity-60",
-              on ? "border-primary bg-primary/10 text-foreground" : "border-border bg-background text-foreground",
+              "inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-3.5 text-[15px] font-medium transition-colors active:scale-[0.97] disabled:opacity-60",
+              on ? "border-foreground bg-foreground text-background" : "border-border bg-background text-foreground",
             )}
             data-quick-answer
           >
-            {on && <Check className="h-4 w-4 text-primary" />}
+            {on && <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden />}
             {label ? label(c) : c}
           </button>
         );
@@ -1231,39 +1332,35 @@ function QuickChips({ chips, readOnly, isOn, onPick, label }: { chips: string[];
  * agree" is one big tick, short ones share a row, the rest are full-width
  * rows (choiceLayout). Tap again to take it back.
  */
-function ChoiceButtons({ options, label, picked, onPick, readOnly, multi = false }: { options: string[]; label: string; picked: (o: string) => boolean; onPick: (o: string) => void; readOnly: boolean; multi?: boolean }) {
+function ChoiceButtons({ options, label, picked, onPick, readOnly, multi = false, display }: { options: string[]; label: string; picked: (o: string) => boolean; onPick: (o: string) => void; readOnly: boolean; multi?: boolean; display?: (o: string) => string }) {
   const layout = choiceLayout(options);
   const role = multi ? "checkbox" : "radio";
+  const text = (o: string) => (display ? display(o) : o);
+  // selected reads neutral and strong (the screen's one red is Submit): a filled mark, a firm edge
   const mark = (on: boolean) => (
     <span
       className={cn(
-        "grid h-6 w-6 shrink-0 place-items-center border-2 transition-colors",
-        multi || layout === "agree" ? "rounded-md" : "rounded-full",
-        on ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40 bg-background",
+        "grid h-5 w-5 shrink-0 place-items-center border-[1.5px] transition-colors",
+        multi || layout === "agree" ? "rounded-[5px]" : "rounded-full",
+        on ? "border-foreground bg-foreground text-background" : "border-muted-foreground/45 bg-background",
       )}
       aria-hidden
     >
-      {on && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+      {on && <Check className="h-3 w-3" strokeWidth={3.5} />}
     </span>
   );
+  const rowClass = (on: boolean) =>
+    cn(
+      "flex min-h-[46px] w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left text-[15px] leading-snug transition-colors active:scale-[0.99] disabled:opacity-60",
+      on ? "border-foreground bg-foreground/[0.06] font-semibold" : "border-border bg-background font-medium",
+    );
   if (layout === "agree") {
     const o = options[0];
     const on = picked(o);
     return (
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={on}
-        disabled={readOnly}
-        onClick={() => onPick(o)}
-        className={cn(
-          "flex min-h-[56px] w-full items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left text-[16px] font-bold transition-colors active:scale-[0.99] disabled:opacity-60",
-          on ? "border-primary bg-primary/10" : "border-border bg-background",
-        )}
-        data-choice-agree
-      >
+      <button type="button" role="checkbox" aria-checked={on} disabled={readOnly} onClick={() => onPick(o)} className={rowClass(on)} data-choice-agree>
         {mark(on)}
-        <span className="min-w-0">{o}</span>
+        <span className="min-w-0">{text(o)}</span>
       </button>
     );
   }
@@ -1281,12 +1378,39 @@ function ChoiceButtons({ options, label, picked, onPick, readOnly, multi = false
               disabled={readOnly}
               onClick={() => onPick(o)}
               className={cn(
-                "min-h-[52px] rounded-2xl border-2 px-2 text-[16px] font-bold leading-tight transition-colors active:scale-[0.97] disabled:opacity-60",
-                on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background",
+                "min-h-[46px] rounded-xl border px-2 text-[15px] font-semibold leading-tight transition-colors active:scale-[0.97] disabled:opacity-60",
+                on ? "border-foreground bg-foreground text-background" : "border-border bg-background",
               )}
               data-choice
             >
-              {o}
+              {text(o)}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+  if (layout === "chips") {
+    return (
+      <div className="flex flex-wrap gap-2" role={multi ? "group" : "radiogroup"} aria-label={label} data-choice-chips>
+        {options.map((o) => {
+          const on = picked(o);
+          return (
+            <button
+              key={o}
+              type="button"
+              role={role}
+              aria-checked={on}
+              disabled={readOnly}
+              onClick={() => onPick(o)}
+              className={cn(
+                "inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-3.5 text-[15px] font-medium transition-colors active:scale-[0.97] disabled:opacity-60",
+                on ? "border-foreground bg-foreground text-background" : "border-border bg-background text-foreground",
+              )}
+              data-choice
+            >
+              {on && multi && <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden />}
+              {text(o)}
             </button>
           );
         })}
@@ -1298,21 +1422,9 @@ function ChoiceButtons({ options, label, picked, onPick, readOnly, multi = false
       {options.map((o) => {
         const on = picked(o);
         return (
-          <button
-            key={o}
-            type="button"
-            role={role}
-            aria-checked={on}
-            disabled={readOnly}
-            onClick={() => onPick(o)}
-            className={cn(
-              "flex min-h-[52px] w-full items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left text-[16px] font-semibold leading-snug transition-colors active:scale-[0.99] disabled:opacity-60",
-              on ? "border-primary bg-primary/10" : "border-border bg-background",
-            )}
-            data-choice
-          >
+          <button key={o} type="button" role={role} aria-checked={on} disabled={readOnly} onClick={() => onPick(o)} className={rowClass(on)} data-choice>
             {mark(on)}
-            <span className="min-w-0">{o}</span>
+            <span className="min-w-0">{text(o)}</span>
           </button>
         );
       })}

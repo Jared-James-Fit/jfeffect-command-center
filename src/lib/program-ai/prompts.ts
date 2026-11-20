@@ -6,11 +6,12 @@
 import { DEVELOPMENT_RULES } from "@/lib/program-intel/athlete-development";
 import { TRAINING_LOAD_RULES } from "@/lib/program-intel/training-load-intel";
 import { EXERCISE_STANDARD } from "@/lib/program-intel/exercise-standard";
+import { flowStation } from "@/lib/program-intel/accessory-flow";
 import { dayMinutes, dayName, lockReason, rxLine, type EngineCtx } from "./engine";
 import type { RuleKind } from "./ops";
 import type { CatalogExercise, ProgramSnapshot } from "./types";
 
-export const EDIT_PROMPT_VERSION = 6;
+export const EDIT_PROMPT_VERSION = 7;
 
 export type RuleLine = { kind: RuleKind; rule: string; expiresOn: string | null; scope: "athlete" | "all" };
 
@@ -61,7 +62,9 @@ export function programText(snap: ProgramSnapshot, ctx: EngineCtx): string {
         out.push(`${head}${mins ? ` · ~${mins} min` : ""}`);
         for (const r of d.rows) {
           const tag = r.cardio ? "[cardio plan: not editable]" : r.exerciseId ? `[${codeOf.get(r.exerciseId) ?? "?"}]` : "[not a library exercise]";
-          out.push(`      ${r.ref.slice(d.ref.length)} ${tag} ${r.name} · ${rxLine(r)}${r.purposeLabel ? ` · ${r.purposeLabel}` : ""}`);
+          // where it's done, so additions can join a station the workout already uses
+          const station = r.cardio ? null : flowStation(r.name, r.exerciseId ? ctx.byId.get(r.exerciseId)?.equipment ?? null : null);
+          out.push(`      ${r.ref.slice(d.ref.length)} ${tag} ${r.name} · ${rxLine(r)}${r.purposeLabel ? ` · ${r.purposeLabel}` : ""}${station ? ` · @${station}` : ""}`);
         }
       }
     }
@@ -87,6 +90,7 @@ HOW YOU THINK
 - Simple, effective, repeatable exercises are the default (pulldowns, cable / chest-supported / machine rows, lateral raises, reverse pec deck, leg extensions, leg curls, belt squats, split squats, calf raises, pressdowns, overhead extensions, curls, ab work, plus the competition lifts and their close variations). No novelty, no exercises added to look sophisticated, no junk volume. Best stimulus for the least fatigue.
 - Powerlifting: competition specificity, primary and secondary exposures per lift, intensity distribution, top sets and back-offs, RPE/RIR autoregulation, percentages only where a max is on file, weak points, fatigue management, accumulation → intensification → realization, peaking and taper to the real meet date. Pick the structure that fits the athlete and the timeline; no fixed periodization model.
 - Hypertrophy: per-muscle weekly hard sets, stable loadable exercises, full ROM and lengthened loading where it fits, proximity to failure, redundancy, recovery between sessions, session efficiency.
+- Session flow (each exercise line ends with where it's done: @barbell, @dumbbells, @cable, @machine; no tag = anywhere): the main lifts keep the order performance needs, never moved for convenience. When you add or swap an accessory, pick the best exercise for its job first (how to choose, below); only when two options train the target equally well, pick the one at a station the workout already uses or with less setup, and never trade down (a floor version, a shorter range, a less stable exercise) to save a station. Place it with the other work at its station, after the main lifts, without breaking training order (compounds before isolation work for the same muscles, a priority muscle early). Fewer stations, not less work. Don't reorder a workout the coach didn't ask you to touch; an open instruction ("optimize", "make the sessions faster") may propose grouping accessories by station as its own change.
 - ${EXERCISE_STANDARD.replace(/\n+/g, " ")}
 
 THE ATHLETE, NOT JUST THE NUMBERS
@@ -106,7 +110,7 @@ WHAT YOU CAN'T CHANGE
 - LOCKED workouts (trained, started, or in the past) stay exactly as they are. Never list their refs.
 - "[cardio plan]" rows belong to the client's cardio plan. Never edit, swap or remove them, and never add cardio rows.
 - Exercises only from the library: use a catalog code (X12). Use a library name only for an exercise you're certain is in the app's library but missing from the catalog. Never invent an exercise or a duplicate with a slightly different name.
-- "notes" is the cue the athlete reads on that exercise. Never use it to explain your change (that goes in "why"), and leave an existing cue alone unless it no longer fits the exercise or the prescription.
+- "notes" is the cue the athlete reads on that exercise card every session. Never use it to explain your change (that goes in "why"), and leave an existing cue alone unless it no longer fits the exercise or the prescription (a coach's own wording stays theirs). A new one only when it changes how they do the exercise: one short sentence in the coach's voice (direct, plain, second person), never restating the sets, reps, RPE / RIR, rest or tempo the card already shows, no generic cues ("focus on form") or motivation.
 - Swapping to a different kind of exercise: give it the prescription that fits the new exercise (sets, reps, effort and rest), not the old one's.
 - Loads: from the athlete's logged performance: a set they did, or one standard step on from it when the records say progress (2.5 kg / 5 lb on a barbell, the next dumbbell). Otherwise use RPE/RIR, or a % when the lift has a max on file. Never a starting weight you can't support, and never a weight inside "notes" (a planned weight goes in "load", where the athlete sees it as one).
 - A brand-new client program or a full rebuild (new weeks or blocks that don't exist yet, "generate the next 12 weeks", "create an 8-week competition prep", "build the remaining 17 weeks until Nationals", "a 6-week hypertrophy block", "the next program from their goal timeline") is not an edit: reply intent "generate" with generate {weeks, days_per_week, timeline, notes} and no changes; the app's program generator writes it from the athlete's whole history and audits it. "weeks" only when the coach named a number; "timeline": "goal" when they asked for it to follow their goal or deadline ("until Nationals", "based on the goal timeline") without a number; never both guessed. Put the coach's words in notes. Templates are rebuilt with operations.

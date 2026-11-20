@@ -11,6 +11,7 @@
  * type. GPP is nobody's. Sessions scheduled after `asOf` are "still to come",
  * never "missed": check-ins usually go out before the week is over.
  */
+import { COMPARABLE_MAX_REPS, COMPARABLE_MIN_RPE } from "@/lib/analytics/strength-read";
 import { estimate1RMWithRpe } from "@/lib/analytics/e1rm";
 
 export type Lift = "squat" | "bench" | "deadlift";
@@ -83,11 +84,12 @@ function topSet(sets: ReadoutSet[]): ReadoutSet | null {
 }
 
 /**
- * RPE-adjusted e1RM, only where RPE is a reliable read: RPE 7+ and 8 reps or
- * fewer. A set of 5 @ RPE 6 says little about a max, so it gets no number.
+ * RPE-adjusted e1RM, only where RPE is a reliable read: the same sets every
+ * strength read in the app compares (strength-read.ts: RPE 7+, 10 reps or
+ * fewer). A set of 5 @ RPE 6 says little about a max, so it gets no number.
  */
 function e1rm(s: ReadoutSet | null): number | null {
-  if (!s || !s.kg || !s.reps || s.reps > 8 || s.rpe == null || s.rpe < 7) return null;
+  if (!s || !s.kg || !s.reps || s.reps > COMPARABLE_MAX_REPS || s.rpe == null || s.rpe < COMPARABLE_MIN_RPE) return null;
   return estimate1RMWithRpe(s.kg, s.reps, s.rpe);
 }
 

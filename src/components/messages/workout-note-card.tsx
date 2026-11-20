@@ -8,37 +8,62 @@ import { cn } from "@/lib/utils";
 import { painLine, type WorkoutNoteCardAttachment, type WorkoutNotePain } from "@/lib/workout-notes";
 import { ClientNotesSheet } from "@/components/messages/client-notes-log";
 import { OpenWorkout } from "@/components/messages/open-client-workout";
+import { EditedToggle, NoteVersions } from "@/components/workout/shared/note-edit-history";
+import type { NoteDates } from "@/lib/exercise-note-versions";
 
 const sb = supabase as any;
 
-type Live = { note: string | null; pain: WorkoutNotePain | null; edited: boolean; latestMessageId: string | null; exercise: string | null } | null;
+type Live = {
+  note: string | null;
+  pain: WorkoutNotePain | null;
+  edited: boolean;
+  latestMessageId: string | null;
+  exercise: string | null;
+  /** An exercise note's dates: written, and when its words last changed. */
+  dates?: NoteDates | null;
+} | null;
 
 /**
  * A note the athlete sent from a workout, in the coach chat: pain first (it's
  * what the coach must not miss), then what they wrote, the workout and when.
- * It reads the note as it is now, so an edit shows here; a later card for the
- * same note takes over ("Updated below"). The coach can open that workout or
- * the client's whole notes log; the athlete sees it went to their coach.
+ * It reads the note as it is now, so an edit shows here: an exercise note's
+ * edit updates this same message (the database rewrites its preview, which
+ * reaches an open chat in realtime, `version`), says "Edited …" and opens its
+ * earlier versions. Older notes could post a second card for a later change,
+ * and that one takes over ("Updated below"). The coach can open that workout
+ * or the client's whole notes log; the athlete sees it went to their coach.
  */
-export function WorkoutNoteCard({ att, messageId, role, clientId }: {
+export function WorkoutNoteCard({ att, messageId, role, clientId, version }: {
   att: WorkoutNoteCardAttachment;
   messageId: string;
   role: "admin" | "client";
   clientId: string;
+  /** The message's last update: the card reads the note again when it moves. */
+  version?: string | null;
 }) {
   const staff = role === "admin";
   const [log, setLog] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
   const source = att.source === "exercise" ? "exercise" : "review";
   const sourceId = source === "exercise" ? att.note_id : att.feedback_id;
   const { data: live } = useQuery({
-    queryKey: ["workout-note-card", source, sourceId ?? null],
+    queryKey: ["workout-note-card", source, sourceId ?? null, version ?? null],
     enabled: !!sourceId,
     staleTime: 30_000,
+    // a newer version of the message reads the note again without blanking the card
+    placeholderData: (prev) => prev,
     queryFn: async (): Promise<Live> => {
       if (source === "exercise") {
-        const { data } = await sb.from("pl_exercise_notes").select("content, status, exercise_name, coach_message_id").eq("id", sourceId).maybeSingle();
+        const { data } = await sb.from("pl_exercise_notes").select("content, status, exercise_name, coach_message_id, created_at, updated_at, edited_at").eq("id", sourceId).maybeSingle();
         if (!data) return null;
-        return { note: (data.content ?? "").trim() || null, pain: null, edited: data.status === "edited", latestMessageId: data.coach_message_id ?? null, exercise: data.exercise_name ?? null };
+        return {
+          note: (data.content ?? "").trim() || null,
+          pain: null,
+          edited: data.status === "edited" || !!data.edited_at,
+          latestMessageId: data.coach_message_id ?? null,
+          exercise: data.exercise_name ?? null,
+          dates: { created_at: data.created_at, updated_at: data.updated_at, edited_at: data.edited_at ?? null, status: data.status },
+        };
       }
       const { data } = await sb.from("pl_workout_feedback").select("client_note, pain, pain_area, pain_level, review_edit_count, coach_message_id").eq("id", sourceId).maybeSingle();
       if (!data) return null;
@@ -81,9 +106,18 @@ export function WorkoutNoteCard({ att, messageId, role, clientId }: {
         ) : (
           note && <p className="whitespace-pre-wrap break-words text-[14px] leading-snug">“{note}”</p>
         )}
-        <div className="text-[11px] text-muted-foreground">
-          {[att.workout, when && format(when, "EEE, MMM d"), live?.edited ? "edited" : null, source === "review" && att.rpe ? `effort ${att.rpe}/10` : null].filter(Boolean).join(" · ")}
+        <div className="flex flex-wrap items-center gap-x-1 text-[11px] text-muted-foreground">
+          <span>{[att.workout, when && format(when, "EEE, MMM d"), source === "review" && live?.edited ? "edited" : null, source === "review" && att.rpe ? `effort ${att.rpe}/10` : null].filter(Boolean).join(" · ")}</span>
+          {source === "exercise" && live?.dates && live.edited && (
+            <>
+              <span aria-hidden>·</span>
+              <EditedToggle note={live.dates} open={versionsOpen} onToggle={() => setVersionsOpen((v) => !v)} />
+            </>
+          )}
         </div>
+        {source === "exercise" && live?.dates && (
+          <NoteVersions noteId={sourceId} note={live.dates} open={versionsOpen} className="mt-1" />
+        )}
       </div>
       <div className="flex items-center gap-1 border-t border-border/60 px-2 py-1.5">
         {staff ? (

@@ -32,7 +32,7 @@ import { ProgramCardSkeleton, ScheduleSkeleton, WorkoutCardSkeleton } from "@/co
 import { resolveEstimatedWorkoutMinutes } from "@/lib/workout-estimate";
 import { cleanDayTitle, type WorkoutItem } from "@/lib/workout-today";
 import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
-import { localStartOfToday, toLocalISO } from "@/lib/today";
+import { localStartOfToday, parseLocalDate, toLocalISO } from "@/lib/today";
 import { pickCurrentBlock } from "@/lib/block-dates";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
@@ -75,8 +75,8 @@ import {
 } from "@/lib/at-home-backup.functions";
 import { AT_HOME_BACKUP_BADGE, isAtHomeBackupClient, isAtHomeBackupSessionBlock, isPrimaryProgramBlock } from "@/lib/at-home-backup";
 import { activeCalendarBlockIds, filterCalendarItemsWithHistory, historicalAnchorDate } from "@/lib/active-calendar";
-import { canDragRescheduleItem, moveTargetFromItem, type MoveTarget } from "@/lib/workout-move";
-import { useMoveWorkout } from "@/lib/use-move-workout";
+import { canDragRescheduleItem, moveTargetFromItem, workoutsAlreadyOn, type MoveTarget } from "@/lib/workout-move";
+import { useMoveWithUndo } from "@/lib/use-move-workout";
 import {
   CalendarDayCell,
   CalendarDndProvider,
@@ -90,7 +90,7 @@ import { ClientSessionSheet, type ClientSession } from "@/components/schedule/cl
 import { compactTimeRange, compareInstants } from "@/lib/schedule-time";
 import { WorkoutStatusMark, dayMark, workoutMark, type WorkoutMark } from "@/components/workouts/workout-status-mark";
 import { buildWorkoutDateMap } from "@/lib/workout-calendar";
-import { ProgramRoadmapCard, programName, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
+import { ProgramRoadmapCard, programHeading, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
 import type { ProgramRoadmap } from "@/lib/training-roadmap";
 import { ManageProgramSheet } from "@/components/athlete-programs/manage-program-sheet";
 import { useProgramOrigin } from "@/components/athlete-programs/use-my-program";
@@ -127,7 +127,7 @@ export function WorkoutsExperience({
   });
   // The program, shared with Home's calendar, Nutrition and the cardio card, and kept
   // on the phone a day: opening Workouts paints from it at once and refreshes behind.
-  const { data: rawItems, isLoading } = useQuery(clientWorkoutsQuery(clientId));
+  const { data: rawItems, isLoading, isError: workoutsFailed, refetch: refetchWorkouts } = useQuery(clientWorkoutsQuery(clientId));
   const items = (rawItems ?? []) as WorkoutItem[];
   const arrived = useArrivalClass(isLoading);
 
@@ -211,8 +211,8 @@ export function WorkoutsExperience({
     ownerName: (client as any)?.full_name ?? (client as any)?.first_name ?? null,
   });
   // A JF member's own program (a plan they started, or one they built) is
-  // theirs to manage: the Program card's ⋯ opens Edit / Switch / End. A
-  // coach's program never offers it.
+  // theirs to manage: Manage beside the program's name opens Edit / Training
+  // days / Switch / End. A coach's program never offers it.
   const origin = useProgramOrigin(roadmap, visibleBlocks, mode === "self" ? (client as any)?.user_id ?? null : null);
   const canManageProgram = mode === "self" && isSelfServe && origin.owned && !!origin.blockId;
   const [manageOpen, setManageOpen] = useState(false);
@@ -232,8 +232,16 @@ export function WorkoutsExperience({
   // Both a client in self mode and an authorized coach/admin viewing one
   // specific client calendar use the same canonical optimistic move path.
   const canReschedule = mode === "self" || mode === "coach";
-  const moveWorkoutMutation = useMoveWorkout(clientId);
+  const moveWithUndo = useMoveWithUndo(clientId);
   const [drag, setDrag] = useState<{ target: MoveTarget; fromIso: string } | null>(null);
+  // A drop on a day that already has a workout opens the move sheet on that
+  // day (Swap days by default) instead of stacking the two.
+  const [dropAsk, setDropAsk] = useState<{ target: MoveTarget; iso: string } | null>(null);
+  // Stable dates: the sheet starts over whenever its start date changes.
+  const dropAskDates = useMemo(
+    () => ({ to: parseLocalDate(dropAsk?.iso), from: parseLocalDate(dropAsk?.target.fromDate) }),
+    [dropAsk],
+  );
 
   const startWorkoutDrag = (item: WorkoutItem, fromIso: string) => {
     if (!canReschedule || !canDragRescheduleItem(item)) return;
@@ -246,7 +254,14 @@ export function WorkoutsExperience({
     const active = drag;
     setDrag(null);
     if (!active || active.fromIso === iso) return;
-    moveWorkoutMutation.mutate({ target: active.target, newDate: iso });
+    const taken = workoutsAlreadyOn(byDate.get(iso), active.target).filter(
+      (it) => !isAtHomeBackupSessionBlock(it.block),
+    );
+    if (taken.length > 0) {
+      setDropAsk({ target: active.target, iso });
+      return;
+    }
+    moveWithUndo({ target: active.target, newDate: iso });
   };
   const dnd = canReschedule
     ? {
@@ -373,6 +388,12 @@ export function WorkoutsExperience({
           <div className="space-y-4">
             {isLoading ? (
               <ScheduleSkeleton />
+            ) : workoutsFailed && !rawItems ? (
+              <Card className="p-6 text-center" data-workouts-load-failed>
+                <div className="text-base font-semibold">Couldn't load your workouts</div>
+                <div className="mt-1 text-sm text-muted-foreground">Check your connection and try again.</div>
+                <Button variant="outline" className="mt-4" onClick={() => void refetchWorkouts()}>Try again</Button>
+              </Card>
             ) : dayItems.length === 0 ? (
               <EmptyState mode={mode} />
             ) : (
@@ -396,6 +417,17 @@ export function WorkoutsExperience({
                     />
                   )}
                 </CalendarDndProvider>
+                {dropAsk && (
+                  <MoveWorkoutSheet
+                    dayId={dropAsk.target.dayId}
+                    clientId={clientId}
+                    open
+                    onOpenChange={(o) => { if (!o) setDropAsk(null); }}
+                    initialTargetDate={dropAskDates.to}
+                    currentScheduledDate={dropAskDates.from}
+                    scheduledWorkoutId={dropAsk.target.scheduledWorkoutId}
+                  />
+                )}
                 {/* No legend under the strip: the dot, ring and check say it, and a day with a
                     session lists it right under its workout. Appointments live in the header's ⋯. */}
                 <SelectedDayList
@@ -449,7 +481,6 @@ export function WorkoutsExperience({
             coach={mode === "coach"}
             onSelectProgram={setRoadmapProgramId}
             onManage={canManageProgram ? () => setManageOpen(true) : undefined}
-            manageHint={canManageProgram ? origin.label : null}
             nextProgramTo={mode === "self" && isSelfServe ? "/portal/programs" : undefined}
           />
           </div>
@@ -504,7 +535,7 @@ export function WorkoutsExperience({
         <ManageProgramSheet
           open={manageOpen}
           onOpenChange={setManageOpen}
-          name={programName(roadmap.program)}
+          name={programHeading(roadmap.program)}
           progressLine={programProgressLine({
             programWeek: roadmap.programWeek,
             totalWeeks: roadmap.totalWeeks,
@@ -513,6 +544,8 @@ export function WorkoutsExperience({
             today: toLocalISO(today),
           })}
           origin={origin}
+          onTrainingDays={client ? () => setDaysOpen(true) : undefined}
+          daysLabel={daysState?.set ? daysState.label : null}
         />
       )}
     </>
@@ -1250,29 +1283,35 @@ function SelectedDayCard({
             lifting, or later in the day. One tap opens the workout on it
             (?focus=, never Focus mode), and logging it doesn't start the
             workout (workout-cardio.ts). */}
-        {item.cardio && (
+        {item.cardio && (() => {
+          // The day's own read (useWorkoutProgress) wins: it's asked again every
+          // few seconds, so a set logged in the logger shows here even while the
+          // whole-program list is still the copy from before it.
+          const cardioDone = progress?.cardioDone ?? item.cardio.done;
+          return (
           <Link
             to="/portal/workouts/$dayId"
             params={{ dayId: item.day.id }}
             search={{ focus: item.cardio.rowId, ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any}
             className="mt-3 flex min-h-11 items-center gap-2.5 border-t border-border pt-3 text-sm"
-            data-day-cardio={item.cardio.done ? "done" : "open"}
+            data-day-cardio={cardioDone ? "done" : "open"}
           >
-            <Heart className={cn("h-4 w-4 shrink-0", item.cardio.done ? "fill-current text-success" : "text-muted-foreground")} aria-hidden />
+            <Heart className={cn("h-4 w-4 shrink-0", cardioDone ? "fill-current text-success" : "text-muted-foreground")} aria-hidden />
             <span className="min-w-0 flex-1">
               <span className="font-semibold">Cardio</span>
               <span className="text-muted-foreground">
                 {item.cardio.minutes ? ` · ${item.cardio.minutes} min` : ""}
-                {!item.cardio.done && date && isSameDay(date, new Date()) ? " · any time today" : ""}
+                {!cardioDone && date && isSameDay(date, new Date()) ? " · any time today" : ""}
               </span>
             </span>
-            {item.cardio.done ? (
+            {cardioDone ? (
               <span className="inline-flex items-center gap-1 text-xs font-semibold text-success"><Check className="h-3.5 w-3.5" aria-hidden /> Done</span>
             ) : !readonly ? (
               <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-foreground">Log it <ChevronRight className="h-3.5 w-3.5" aria-hidden /></span>
             ) : null}
           </Link>
-        )}
+          );
+        })()}
         {inlineOpen && item.day?.id && (
           <div className="mt-3">
             <InlineWorkoutPreview

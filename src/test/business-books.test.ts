@@ -102,12 +102,36 @@ describe("Cleo context", () => {
     expect(ctx).toContain("receipt");
   });
 
+  it("names the package each payment paid, so Cleo never reads a paid package's money as unapplied on the next one", () => {
+    // Marc, Nov 16 2026: $672 by e-transfer paid Package 3; he owes $672 on Package 4.
+    const marcData: BooksData = {
+      ...data,
+      asOf: "2026-11-18",
+      revenue: normalizeRevenue([row({ id: "etr", method: "etransfer", amount_minor: 67200, tax_minor: 3200, transaction_date: "2026-11-16", purchase_id: "p3", clients: { full_name: "Marc Asugui" }, purchase_records: { offer_name: "Personal Training — 16 Sessions / 4 Weeks" } })], []),
+    };
+    expect(marcData.revenue[0].saleId).toBe("p3");
+    const owed = {
+      asOf: "2026-11-18", outstandingCents: 67200, overdueCents: 0, dueNowCents: 0, scheduledCents: 67200, unscheduledCents: 0, expected30Cents: 33600, waitingCents: 0,
+      lines: [{ clientId: "marc", client: "Marc Asugui", saleId: "p4", label: "Package 4", outstandingCents: 67200, overdueCents: 0, dueNowCents: 0, scheduledCents: 67200, unscheduledCents: 0, how: "auto_pay", next: { date: "2026-11-27", cents: 33600 }, overdueSince: null, rate: 0.05 }],
+      waiting: [], expected: [], booked: [],
+      packages: { p3: "Package 3", p4: "Package 4" },
+    } as any;
+    const ctx = buildSummerContext(marcData, 2026, owed);
+    expect(ctx).toContain("2026-11-16 | payment | Marc Asugui | Personal Training — 16 Sessions / 4 Weeks (Package 3) | etransfer | $672.00");
+    expect(ctx).toContain("Marc Asugui | Package 4 | owes $672.00");
+    expect(ctx).toMatch(/match payments to what's owed by package, never by amount/);
+    // without the read, a payment row is as before
+    expect(buildSummerContext(marcData, 2026)).toContain("| Marc Asugui | Personal Training — 16 Sessions / 4 Weeks | etransfer |");
+  });
+
   it("names the assistant and forbids invented numbers", () => {
     const p = summerSystemPrompt();
     expect(p).toContain("Cleo");
     expect(p).toMatch(/Never invent/);
-    expect(p).toContain("you don't have a gender");
-    expect(p).not.toMatch(/You are a woman|your pronouns are she/);
+    expect(p).toContain("IDENTITY: you're an AI assistant with no gender and no human backstory");
+    expect(p).toContain('it\'s "Cleo" or "the AI assistant", and "it" if a pronoun is needed');
+    expect(p).toContain("Don't bring this up yourself or add AI disclaimers");
+    expect(p).not.toMatch(/You are a woman|your pronouns are she|bestie:|girly|girl math/i);
   });
 
   it("knows who it is and how it started, without inventing details", () => {
@@ -124,14 +148,35 @@ describe("Cleo context", () => {
     expect(p).toMatch(/restore_program_version/);
   });
 
+  it("Like me borrows the owner's style, never his identity, and matches the energy to the moment", () => {
+    const p = summerSystemPrompt({ ownerName: "Jared" });
+    expect(p).toMatch(/You borrow his style, never his identity: you're still Cleo/);
+    expect(p).toMatch(/Calm and confident is the default, hype is the exception/);
+    for (const moment of [/a PR, a clean week, real progress \(more reps, more sets or an easier RPE at a weight counts, even when it isn't a record\): bring the energy and make it feel earned/, /setbacks \(pain, sickness, a rough week, a stall\): steady and understanding/, /missed workouts or slipping habits .*never shaming/, /training and nutrition: .*Accuracy first/, /business, money and admin: efficient and exact/, /everyday chat: relaxed and natural/]) expect(p).toMatch(moment);
+    expect(p).toMatch(/Praise only what was earned and name it/);
+    expect(p).toMatch(/Emojis rarely \(most replies have none\)/);
+    expect(p).toMatch(/Extras nobody asked for \(a draft message to the client, a full plan\) get one line offering them/);
+    expect(p).toMatch(/generic motivation/);
+    // the identity line still says who Cleo is, once
+    expect(p.match(/IDENTITY: /g)).toHaveLength(1);
+    // the other tones are untouched by it
+    for (const tone of ["girly_pop", "chill", "professional"]) {
+      const other = summerSystemPrompt({ tone, ownerName: "Jared" });
+      expect(other).not.toMatch(/borrow his style|Calm and confident is the default/);
+    }
+  });
+
   it("defaults to talking like the owner and switches with their pick", () => {
     expect(summerSystemPrompt({ ownerName: "Jared" })).toMatch(/talk the way Jared talks/);
     expect(summerSystemPrompt()).toMatch(/talk the way the coach talks/);
-    expect(summerSystemPrompt({ tone: "nonsense" })).toMatch(/HOW IT MUST SOUND below/);
-    expect(summerSystemPrompt({ tone: "girly_pop" })).toMatch(/Gen Z girly pop/);
+    expect(summerSystemPrompt({ tone: "nonsense" })).toMatch(/HIS VOICE below/);
+    // the stored key keeps its old name; the tone itself is Gen Z hype, with no gendered persona
+    const hype = summerSystemPrompt({ tone: "girly_pop" });
+    expect(hype).toMatch(/Voice: Gen Z hype/);
+    expect(hype).not.toMatch(/girly|girl math|💅|bookkeeper bestie/i);
     const pro = summerSystemPrompt({ tone: "professional" });
     expect(pro).toMatch(/no slang, no emojis/);
-    expect(pro).not.toMatch(/girly pop/);
+    expect(pro).not.toMatch(/Gen Z hype/);
   });
 
   it("adds the owner's custom instructions under the facts rules", () => {

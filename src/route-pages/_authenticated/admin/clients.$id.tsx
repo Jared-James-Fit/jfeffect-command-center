@@ -20,6 +20,7 @@ import { ADMIN_AGREEMENT_QUERY_ROOT } from "@/components/coaching-agreement/admi
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ShareBookingSheet } from "@/components/booking/share-booking-sheet";
 import { useBookingTypes } from "@/components/booking/use-booking-types";
+import { inviteOrder } from "@/components/messages/booking-invite";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -1277,9 +1278,9 @@ export function ClientProfileWorkspace({
       />
       <ShareBookingSheet
         target={null}
-        choices={bookingTypes
-          .filter((t) => t.is_active && t.online_enabled && t.slug && (t.hours ?? []).length)
-          .map((t) => ({ name: t.name, slug: t.slug! }))}
+        choices={inviteOrder(
+          bookingTypes.filter((t) => t.is_active && t.online_enabled && t.slug && ((t.hours ?? []).length || t.follows_smart)),
+        ).map((t) => ({ name: t.name, slug: t.slug! }))}
         open={bookingLinkOpen}
         onOpenChange={setBookingLinkOpen}
         client={{ id, full_name: form.full_name ?? null, email: form.email ?? null, phone: form.phone ?? null }}

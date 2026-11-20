@@ -52,7 +52,7 @@ describe("a warm-up's video is set 0, on the warm-up itself", () => {
     expect(sql).toContain("AFTER INSERT ON public.pl_warmup_sets");
     expect(sql).toContain("IF NEW.set_index > 0 THEN NEW.warmup_id := NULL; END IF;");
     // the film reads clips on a working set's record; warm-ups get no Crew copy
-    expect(read("src/lib/workout-film.functions.ts")).toContain("v.result_id && v.storage_path");
+    expect(read("src/lib/workout-film.server.ts")).toContain("v.result_id && v.storage_path");
     expect(read("src/lib/set-videos/uploader.ts")).toContain("if (feedPlan && job.setIndex > 0) feedSources.set(");
     expect(read("src/lib/set-videos/catch-up.ts")).toContain('.gt("set_index", 0)');
     expect(read("src/lib/workout-film-client.ts")).toContain("j.setIndex > 0 && isActiveJob(j)");
@@ -75,16 +75,23 @@ describe("the last warm-up is open on the card, and optional", () => {
     video: () => createElement("span", { "data-video-cell": "" }),
   };
 
-  it("before set 1 on a barbell main lift: reps pre-filled, RPE 7, the weight empty, a camera", () => {
+  it("before set 1 on a barbell main lift: under a Warm-up label with ⓘ, reps pre-filled, RPE and the weight blank, a camera", () => {
     const html = renderToStaticMarkup(createElement(WarmupRows, { ...base, openRow: true, suggestOn: true }));
     expect(html).toContain('data-testid="warmup-open"');
     expect(html).toContain('data-warmup-saved="false"');
+    // said once, above its rows: never a bare "W" to guess at
+    expect(html).toContain("data-warmup-label");
+    expect(html).toContain(">Warm-up<");
+    expect(html).toContain("optional, not counted as a set");
+    expect(html).toContain('aria-label="How warm-ups work"');
+    expect(html.indexOf("data-warmup-label")).toBeLessThan(html.indexOf('data-testid="warmup-open"'));
     expect(html).toContain("Last warm-up reps");
     expect(html).toContain(">2<");
-    expect(html).toContain(">7<");
+    // no pre-filled RPE 7: a blank warm-up already reads as a normal one
+    expect(html).not.toContain(">7<");
     expect(html).toContain("Last warm-up weight in lb");
     expect(html).toContain("data-video-cell");
-    expect(html).toContain("Last warm-up · optional");
+    expect(html).toContain("Your last warm-up");
     expect(html).toContain("tunes Suggested");
     // never the old one-line prompt beside it
     expect(html).not.toContain('data-testid="warmup-prompt"');
@@ -179,11 +186,11 @@ describe("Fastest way to log", () => {
     expect(html).toContain('data-testid="quick-log-tips-close"');
   });
 
-  it("opens by itself once per account on their own unfinished workout, and from Log faster any time", () => {
+  it("opens by itself once per account on their own unfinished workout, and from Log faster (the ? beside List / Focus) any time", () => {
     const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
     expect(wdv).toContain("focusKnown && !loggingTipsSeen && !isImpersonating && !readonly && !!client?.id &&");
     expect(wdv).toContain('data-testid="quick-log-tips-open"');
-    expect(wdv).toContain("Log faster");
+    expect(wdv).toContain('aria-label="Log faster: the quickest way to log your sets"');
     // one intro at a time: Focus's own tips and invite wait for it
     expect(wdv).toContain("!isImpersonating && !quickLogDue && !quickLogOpen) setFocusTipsOpen(true);");
     expect(wdv).toContain("!quickLogDue && !quickLogOpen && !quickLogShownHere,");

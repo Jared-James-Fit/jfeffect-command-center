@@ -1,35 +1,25 @@
 /**
- * Server side of Cleo as the admin assistant: what she can see across the
- * app, hearing the owner (speech to text), her voice (text to speech) and the
+ * Server side of Cleo as the admin assistant: what Cleo can see across the
+ * app, hearing the owner (speech to text), Cleo's voice (text to speech) and the
  * shared answer path used by both the chat and voice calls.
  *
  * Every read goes through the caller's RLS-scoped client, so only an admin
  * ever gets rows back.
  */
+import { wellFormed } from "@/lib/well-formed";
 import { BUSINESS_TZ, businessToday } from "@/lib/billing-schedule";
-import { buildAppContext, clientLabel, EMPTY_APP_SNAPSHOT, type AppSnapshot, type LinkEntry } from "@/lib/summer-app";
+import { buildAppContext, buildOpenSalesContext, clientLabel, EMPTY_APP_SNAPSHOT, type AppSnapshot, type LinkEntry } from "@/lib/summer-app";
 import { z } from "zod";
 import { summerTone } from "@/lib/summer-persona";
 import { MAX_ATTACHMENTS, type CleoAttachment } from "@/lib/cleo-attachments";
 import { DEFAULT_CLEO_VOICE, isCleoVoice, type CleoVoice } from "@/lib/cleo-voices";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1";
-/** Used when the main model refuses a tool step (see answerSummer). */
-const CLEO_FALLBACK_MODEL = "google/gemini-2.5-flash";
 /**
- * Cleo's brain: the strongest model the gateway takes for careful, multi-step
- * tool work (program edits especially). CLEO_AI_MODEL overrides it. If it's
- * refused or too slow, the answer is retried down the list. It has to take
- * the gateway's /v1/chat/completions: Claude models there only take the
- * native /v1/messages format, so they can't be used here.
+ * Cleo's brain is the routing table's `assistant` route (src/lib/ai/routing.ts, the OpenAI key;
+ * cleo-model.server.ts). Longest a model gets before the answer moves to the next one.
  */
-export const CLEO_PRIMARY_MODEL = "openai/gpt-5.5";
-/** Longest the primary model gets before the answer moves to the next one. */
 const PRIMARY_TIMEOUT_MS = 70_000;
-
-export function cleoModels(primary = process.env.CLEO_AI_MODEL || CLEO_PRIMARY_MODEL, main = "google/gemini-3-flash-preview"): string[] {
-  return [...new Set([primary, main, CLEO_FALLBACK_MODEL].filter(Boolean))];
-}
 
 function settle<T>(res: { data: T | null; error: any }, fallback: T): T {
   return res.error || res.data == null ? fallback : res.data;
@@ -232,12 +222,12 @@ export async function transcribeAudio(b64: string, mime: string, names: string[]
 // voice when none answers.
 
 export const SUMMER_VOICE_STYLE =
-  "Voice: a smooth, warm, natural female voice with a neutral North American accent, like a polished voice assistant. Delivery: calm, even and relaxed, conversational pace, never rushed. Sentences flow into each other with short, natural pauses. No dramatic pitch swings, no sing-song, no breathiness, no vocal fry, no upspeak. Read numbers, weights and dollar amounts clearly and naturally.";
+  "Voice: a smooth, warm, natural voice with a neutral North American accent, like a polished voice assistant. Delivery: calm, even and relaxed, conversational pace, never rushed. Sentences flow into each other with short, natural pauses. No dramatic pitch swings, no sing-song, no breathiness, no vocal fry, no upspeak. Read numbers, weights and dollar amounts clearly and naturally.";
 
 /**
  * Per voice: the provider voices (best first) and a line on top of the style.
  * Gemini's are Google's named voices (Despina is literally "smooth");
- * OpenAI's are the fallback. All female.
+ * OpenAI's are the fallback. Each voice id sets the sound; the style only shapes the delivery.
  */
 const VOICE_PRESETS: Record<CleoVoice, { openai: string[]; gemini: string; style: string }> = {
   smooth: { openai: ["marin", "nova"], gemini: "Despina", style: "" },
@@ -254,7 +244,7 @@ const VOICE_PRESETS: Record<CleoVoice, { openai: string[]; gemini: string; style
 const GEMINI_TTS_MODELS = ["google/gemini-2.5-flash-tts", "google/gemini-3.1-flash-tts-preview"];
 let geminiTtsModel: string | null = null;
 
-/** How she should sound, said the way Gemini's voices take direction (it isn't read out). */
+/** How Cleo should sound, said the way Gemini's voices take direction (it isn't read out). */
 function geminiDirection(req: SpeechRequest): string {
   const rate = req.rate ?? 1;
   const pace = rate <= 0.95 ? "a little slower than usual, unhurried" : rate >= 1.05 ? "a little brisker than usual, still clear" : "a relaxed, natural conversational pace";
@@ -391,7 +381,7 @@ function providers(): Provider[] {
             model_id: model,
             ...(req.prev ? { previous_text: req.prev } : {}),
             ...(req.next ? { next_text: req.next } : {}),
-            // Steady and clean: enough stability that she never wobbles, no
+            // Steady and clean: enough stability that the voice never wobbles, no
             // exaggerated style. Their natural speed range is 0.7 to 1.2.
             voice_settings: {
               stability: 0.55,
@@ -514,16 +504,42 @@ export async function probeSpeechProviders(sample = "Hi, it's Cleo. Your books a
 
 export type SummerMsg = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices?: string[] | null; chat_id?: string | null; attachments?: CleoAttachment[] | null };
 
+type CleoInput = { message: string; year?: number | null; voice?: boolean; route?: string | null; finance?: boolean; own?: any; chatId?: string | null; attachments?: CleoAttachment[] };
+
+/** How one answer went: which model answered, how long each part took and what it read. For the log and the benchmark. */
+export type CleoTrace = {
+  model: string | null;
+  effort: string;
+  ms: { context: number; model: number; total: number };
+  steps: number;
+  tools: string[];
+  usage: { input: number | null; cachedInput: number | null; output: number | null; reasoning: number | null };
+  systemChars: number;
+  attempts: Array<{ model: string; ms: number; error?: string }>;
+};
+
+/** The usage the AI SDK reports, whichever version of its shape (cached input and reasoning when the provider says). */
+function usageOf(u: any): CleoTrace["usage"] {
+  const n = (v: any) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  return {
+    input: n(u?.inputTokens),
+    cachedInput: n(u?.inputTokenDetails?.cacheReadTokens ?? u?.cachedInputTokens),
+    output: n(u?.outputTokens),
+    reasoning: n(u?.outputTokenDetails?.reasoningTokens ?? u?.reasoningTokens),
+  };
+}
+
 /**
- * `supabase` is what she reads with (the finance login's read-only admin
- * view); `own` is the caller's own client, which proposals and their checks
- * use. Lookups and proposals are tools she calls mid-answer.
+ * One answer, without saving it: what Cleo read, the model's reply, the cards and the quick
+ * question it set up. `bench` is the benchmark's: a model list and effort instead of the route's.
  */
-export async function answerSummer(
+export async function cleoAnswer(
   supabase: any,
   userId: string,
-  input: { message: string; year?: number | null; voice?: boolean; route?: string | null; finance?: boolean; own?: any; chatId?: string | null; attachments?: CleoAttachment[] },
-): Promise<{ user: SummerMsg; assistant: SummerMsg; chatId: string }> {
+  input: CleoInput,
+  opts: { bench?: { models?: string[]; effort?: "low" | "medium" | "high"; tone?: string } } = {},
+) {
+  const t0 = Date.now();
   const books = await import("@/lib/business-books.server");
   // Attachments: only the sender's own files. Reading them (a video watched
   // in full, a PDF read) starts now, alongside everything else.
@@ -531,11 +547,33 @@ export async function answerSummer(
   const files = await import("@/lib/cleo-attachments.server");
   files.assertOwnAttachments(userId, attachments);
   const reading = attachments.length ? files.readAttachments(attachments) : null;
-  const { buildSummerContext, summerSystemPrompt } = await import("@/lib/summer-context");
-  const { buildOpenSalesContext } = await import("@/lib/summer-app");
+  const own = input.own ?? supabase;
 
-  const [owner, app, links, history, profile, me, ownerName] = await Promise.all([
-    books.isBusinessOwner(supabase, userId),
+  // The books (taxes, expenses, income) are the owner's, and the finance
+  // login keeps them. Other admins get the rest of the app plus who still owes
+  // money, which is operational. Read alongside everything else.
+  const booksRead = books.isBusinessOwner(supabase, userId).then(async (owner) => {
+    const finance = !!input.finance && !owner;
+    if (!owner && !finance) return { owner, finance, section: ["OPEN SALES", buildOpenSalesContext(await books.loadOpenSales(supabase))].join("\n") };
+    const currentYear = Number(businessToday().slice(0, 4));
+    // Who owes what, read the way each client's Billing tab reads it (service role, after the books check).
+    const owedRead = (async () => {
+      try {
+        await books.assertBooksAccess({ supabase: own, userId } as any, "finance.read");
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { loadReceivables } = await import("@/lib/books/receivables.server");
+        return await loadReceivables(supabaseAdmin as any, businessToday());
+      } catch {
+        return null;
+      }
+    })();
+    const [data, owed, { buildSummerContext }] = await Promise.all([books.loadBooksData(supabase), owedRead, import("@/lib/summer-context")]);
+    const year = input.year && data.years.includes(input.year) ? input.year : currentYear;
+    return { owner, finance, section: ["BOOKS", buildSummerContext(data, year, owed)].join("\n") };
+  });
+
+  const [booksPart, app, links, history, profile, me, ownerName, coachVoice, caller, override, mods] = await Promise.all([
+    booksRead,
     loadAppSnapshot(supabase).catch(() => EMPTY_APP_SNAPSHOT),
     summerLinkCatalog(),
     // Only this chat: a new chat starts with a clean slate, so an old topic
@@ -552,39 +590,30 @@ export async function answerSummer(
     supabase.from("summer_profiles").select("tone, instructions").eq("user_id", userId).maybeSingle(),
     supabase.from("profiles").select("full_name").eq("id", userId).maybeSingle(),
     ownerFirstName(),
+    // His saved voice (Admin → My Voice), for anything Cleo writes as him.
+    import("@/lib/coach-voice.functions").then((m) => m.loadCoachVoice(supabase)),
+    import("@/lib/cleo-actions.server").then((m) => m.loadCaller(own, userId)),
+    import("@/lib/ai/route-call.server").then((m) => m.readRouteOverride(supabase)),
+    Promise.all([
+      import("@/lib/summer-context"),
+      import("@/lib/coach-voice"),
+      import("@/lib/cleo-tools.server"),
+      import("@/lib/cleo-actions.server"),
+      import("@/lib/cleo-actions"),
+      import("@/lib/cleo-program.server"),
+      import("@/lib/summer-voice-text"),
+      import("ai"),
+      import("@/lib/cleo-model.server"),
+    ]),
   ]);
-  // His saved voice (Admin → My Voice), for anything she writes as him.
-  const { loadCoachVoice } = await import("@/lib/coach-voice.functions");
-  const { buildVoicePrompt, casualize } = await import("@/lib/coach-voice");
-  const coachVoice = await loadCoachVoice(supabase);
+  const [{ summerSystemPrompt }, { buildVoicePrompt, casualize }, { cleoReadTools }, { proposeAction, discardProposals }, { CLEO_ACTION_INFO, CLEO_ACTION_KINDS, CLEO_ACTION_PARAMS }, { cleoProgramTools }, { looksLikeLeakedInstructions }, { generateText, stepCountIs, tool }, { cleoRoute, cleoModel, cleoFailure }] = mods;
+  const { owner, finance, section: booksSection } = booksPart;
 
-  // The books (taxes, expenses, income) are the owner's, and the finance
-  // login keeps them. Other admins get the rest of the app plus who still owes
-  // money, which is operational.
-  const finance = !!input.finance && !owner;
-  let booksSection: string;
-  if (owner || finance) {
-    const data = await books.loadBooksData(supabase);
-    const currentYear = Number(businessToday().slice(0, 4));
-    const year = input.year && data.years.includes(input.year) ? input.year : currentYear;
-    // Who owes what, read the way each client's Billing tab reads it (service role, after the books check above).
-    let owed = null;
-    try {
-      await books.assertBooksAccess({ supabase: input.own ?? supabase, userId } as any, "finance.read");
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      const { loadReceivables } = await import("@/lib/books/receivables.server");
-      owed = await loadReceivables(supabaseAdmin as any, businessToday());
-    } catch {
-      owed = null;
-    }
-    booksSection = ["BOOKS", buildSummerContext(data, year, owed)].join("\n");
-  } else {
-    booksSection = ["OPEN SALES", buildOpenSalesContext(await books.loadOpenSales(supabase))].join("\n");
-  }
-
-  const system = [
+  // Stable first, so the instructions, the books and the app are read from the
+  // prompt cache on a follow-up; the time of day goes with the question (below).
+  const system = wellFormed([
     summerSystemPrompt({
-      tone: profile.data?.tone,
+      tone: opts.bench?.tone ?? profile.data?.tone,
       instructions: profile.data?.instructions,
       voice: input.voice,
       owner,
@@ -593,25 +622,23 @@ export async function answerSummer(
       ownerName,
     }),
     "",
-    booksSection,
-    "",
     `WRITING AS ${ownerName ?? "THE COACH"}: when asked to write, draft or reword anything that goes out as him (community posts, captions, shout-outs, messages to clients, replies), write it in HIS voice below, not yours. Your own tone is only for talking to the person using the app. For a post to the whole community, keep it group-friendly (no nicknames, no edgy words).`,
-    buildVoicePrompt(coachVoice, null, { group: true }),
+    // His My Voice rules say "You are Jared…": that is for writing as him. Cleo stays Cleo and
+    // borrows the style only as its tone says (the Like me tone does).
+    buildVoicePrompt(coachVoice, null, {
+      group: true,
+      heading: `HIS VOICE (${ownerName ?? "the coach"}'s My Voice, how anything written as him must sound, over any tone above. Its "You are ${ownerName ?? "the coach"}" means when writing as him: in your own replies you stay Cleo, and use this style only as far as your tone says):`,
+    }),
     "",
-    `NOW: ${new Date().toLocaleString("en-CA", { timeZone: BUSINESS_TZ, weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })} (${BUSINESS_TZ}). Today is ${businessToday()}.`,
+    booksSection,
     "",
     "APP",
     buildAppContext(app, links, { tz: BUSINESS_TZ, route: input.route ?? null }),
-  ].join("\n");
+    "",
+    "NOW: the current date and time come with each message, in brackets at its start.",
+  ].join("\n"));
 
   const past = ((history.data ?? []) as Array<{ role: string; content: string; attachments?: CleoAttachment[] | null }>).reverse();
-  const own = input.own ?? supabase;
-  const { cleoReadTools } = await import("@/lib/cleo-tools.server");
-  const { loadCaller, proposeAction } = await import("@/lib/cleo-actions.server");
-  const { CLEO_ACTION_INFO, CLEO_ACTION_KINDS, CLEO_ACTION_PARAMS } = await import("@/lib/cleo-actions");
-  const { generateText, stepCountIs, tool } = await import("ai");
-
-  const caller = await loadCaller(own, userId);
   const boss = ownerName ?? "the owner";
   const proposed: string[] = [];
   const actionTools = Object.fromEntries(
@@ -625,18 +652,20 @@ export async function answerSummer(
           try {
             const r = await proposeAction({ supabase: own, db: supabase, userId }, caller, kind, params);
             proposed.push(r.id);
-            return r.route === "run"
-              ? `Card is on screen: ${r.summary}\nTell them to tap Confirm. It hasn't happened yet.`
-              : `Card is on screen: ${r.summary}\nThis isn't in their role, so it needs ${boss}'s OK. Tell them "I'll have to ask ${boss} for permission" and that tapping "Ask ${boss}" sends the request.`;
+            return wellFormed(
+              r.route === "run"
+                ? `Card is on screen: ${r.summary}\nTell them to tap Confirm. It hasn't happened yet.`
+                : `Card is on screen: ${r.summary}\nThis isn't in their role, so it needs ${boss}'s OK. Tell them "I'll have to ask ${boss} for permission" and that tapping "Ask ${boss}" sends the request.`,
+            );
           } catch (e: any) {
-            return `Couldn't set that up: ${String(e?.message ?? e).slice(0, 300)}`;
+            return wellFormed(`Couldn't set that up: ${String(e?.message ?? e).slice(0, 300)}`);
           }
         },
       }),
     ]),
   );
-  // A quick question with tappable answers, for when she has to know which
-  // thing they mean before she can set up the right card.
+  // A quick question with tappable answers, for when Cleo has to know which
+  // thing they mean before setting up the right card.
   let choices = null as string[] | null;
   const askChoice = tool({
     description:
@@ -651,86 +680,101 @@ export async function answerSummer(
     },
   });
   const tz = BUSINESS_TZ;
-  const { cleoProgramTools } = await import("@/lib/cleo-program.server");
-  const tools = { ...cleoReadTools({ db: supabase, tz, today: businessToday(), books: owner || finance }), ...cleoProgramTools({ db: supabase, today: businessToday() }), ...actionTools, ask_choice: askChoice };
+  // Not strict: OpenAI's Responses API makes every field of a strict tool required, and the model then fills
+  // the optional ones with placeholders (Nov 18 2026's benchmark: a calf raise card at "0.0001 lb, 1% of 1RM").
+  const tools = Object.fromEntries(
+    Object.entries({ ...cleoReadTools({ db: supabase, tz, today: businessToday(), books: owner || finance }), ...cleoProgramTools({ db: supabase, today: businessToday() }), ...actionTools, ask_choice: askChoice }).map(([name, t]) => [name, { ...(t as any), strict: false }]),
+  );
 
-  // Gemini 3 needs its "thought signature" echoed back on every tool step.
-  // The SDK keeps it under the provider's name but only sends back what's
-  // under "google", so Cleo's provider is named "google". If the gateway
-  // still refuses, the answer is retried once on a model that doesn't need it.
-  const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("AI is not configured (LOVABLE_API_KEY missing).");
-  const gateway = createOpenAICompatible({ name: "google", baseURL: GATEWAY, headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "vercel-ai-sdk" } });
   // Earlier attachments come back as words (what was read from them); the
   // photos from the latest one are re-sent so "what about the second photo?" works.
   const lastWithFiles = [...past].reverse().find((m) => m.role === "user" && m.attachments?.length);
   const pastImages = lastWithFiles && !attachments.length ? await files.recentImages(lastWithFiles.attachments) : [];
   const read = reading ? await reading : null;
-  const ask = input.message.trim() || "Take a look at this.";
+  const now = `[${new Date().toLocaleString("en-CA", { timeZone: BUSINESS_TZ, weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })} (${BUSINESS_TZ}). Today is ${businessToday()}.]`;
+  const ask = wellFormed(`${now}\n${input.message.trim() || "Take a look at this."}`);
   const convo = [
     ...past.map((m) => {
-      if (m.role === "assistant") return { role: "assistant" as const, content: m.content };
-      const text = [m.content, files.attachmentsInHistory(m.attachments)].filter(Boolean).join("\n");
+      if (m.role === "assistant") return { role: "assistant" as const, content: wellFormed(m.content) };
+      const text = wellFormed([m.content, files.attachmentsInHistory(m.attachments)].filter(Boolean).join("\n"));
       return m === lastWithFiles && pastImages.length
         ? { role: "user" as const, content: [{ type: "text" as const, text }, ...pastImages] }
         : { role: "user" as const, content: text };
     }),
     read
-      ? { role: "user" as const, content: [{ type: "text" as const, text: `${ask}\n\n${read.notes}` }, ...read.images.slice(0, 24)] }
+      ? { role: "user" as const, content: [{ type: "text" as const, text: wellFormed(`${ask}\n\n${read.notes}`) }, ...read.images.slice(0, 24)] }
       : { role: "user" as const, content: ask },
   ];
-  const { looksLikeLeakedInstructions } = await import("@/lib/summer-voice-text");
   const usable = (t: string) => (looksLikeLeakedInstructions(t) ? "" : t.trim());
-  const run = async (model: string, timeoutMs?: number) => {
+  const route = cleoRoute(override, opts.bench ?? null);
+  const trace: CleoTrace = { model: null, effort: route.effort, ms: { context: Date.now() - t0, model: 0, total: 0 }, steps: 0, tools: [], usage: { input: null, cachedInput: null, output: null, reasoning: null }, systemChars: system.length, attempts: [] };
+  const run = async (ref: string, timeoutMs?: number) => {
+    const m = await cleoModel(ref, { effort: route.effort, userId });
     const r = await generateText({
-      model: gateway(model),
+      model: m.model,
       system,
       messages: convo,
       tools,
       stopWhen: stepCountIs(20),
+      ...(m.providerOptions ? { providerOptions: m.providerOptions } : {}),
       ...(timeoutMs ? { abortSignal: AbortSignal.timeout(timeoutMs) } : {}),
     });
-    const first = usable(r.text);
+    const steps = [...r.steps];
+    let usage = usageOf(r.totalUsage);
+    let text = usable(r.text);
     // A card is on screen: say so from the card itself rather than asking again.
-    if (first || proposed.length || choices) return { text: first };
-    // She used every step looking things up and never wrote back. Make her
-    // answer from what she found, with no more tool calls.
-    const again = await generateText({
-      model: gateway(model),
-      system,
-      messages: [...convo, ...(r.response.messages as any[]), { role: "user" as const, content: "Answer my question now from what you found. No more lookups." }],
-      tools,
-      toolChoice: "none",
-    });
-    return { text: usable(again.text) };
+    if (!text && !proposed.length && !choices) {
+      // Every step went on look-ups and nothing was written back. Ask for the
+      // answer from what was found, with no more tool calls.
+      const again = await generateText({
+        model: m.model,
+        system,
+        messages: [...convo, ...(r.response.messages as any[]), { role: "user" as const, content: "Answer my question now from what you found. No more lookups." }],
+        tools,
+        toolChoice: "none",
+        ...(m.providerOptions ? { providerOptions: m.providerOptions } : {}),
+      });
+      steps.push(...again.steps);
+      const u2 = usageOf(again.totalUsage);
+      usage = { input: (usage.input ?? 0) + (u2.input ?? 0), cachedInput: (usage.cachedInput ?? 0) + (u2.cachedInput ?? 0), output: (usage.output ?? 0) + (u2.output ?? 0), reasoning: (usage.reasoning ?? 0) + (u2.reasoning ?? 0) };
+      text = usable(again.text);
+    }
+    trace.steps = steps.length;
+    trace.tools = steps.flatMap((s: any) => (s.toolCalls ?? []).map((c: any) => c.toolName));
+    trace.usage = usage;
+    return text;
   };
 
   let text = "";
-  const models = cleoModels(undefined, books.BOOKS_AI_MODEL);
+  const models = route.models;
+  const tModel = Date.now();
   try {
     for (let i = 0; i < models.length; i++) {
+      const started = Date.now();
       try {
-        text = (await run(models[i], i === 0 && models.length > 1 ? PRIMARY_TIMEOUT_MS : undefined)).text.trim();
+        // The first model gets 70s before the answer moves on; the last one as long as it needs.
+        text = (await run(models[i], i < models.length - 1 ? PRIMARY_TIMEOUT_MS : undefined)).trim();
+        trace.attempts.push({ model: models[i], ms: Date.now() - started });
+        trace.model = models[i];
         break;
       } catch (e: any) {
-        const status = e?.statusCode ?? e?.status ?? e?.lastError?.statusCode;
-        const timedOut = e?.name === "TimeoutError" || e?.name === "AbortError";
-        // Refused (unknown model, a tool step it won't take), down or too slow: next model.
-        const retry = timedOut || status === 400 || status === 404 || status === 422 || (status >= 500 && status < 600);
-        if (!retry || i === models.length - 1) throw e;
-        console.warn(`[cleo] ${models[i]} failed (${timedOut ? "timeout" : status}); trying ${models[i + 1]}`, String(e?.message ?? e).slice(0, 200));
-        const { discardProposals } = await import("@/lib/cleo-actions.server");
+        const f = cleoFailure(e);
+        trace.attempts.push({ model: models[i], ms: Date.now() - started, error: `${f.timedOut ? "timeout" : f.status ?? "error"}: ${String(e?.message ?? e).slice(0, 160)}` });
+        if (!f.retry || i === models.length - 1) throw e;
+        console.warn(`[cleo] ${models[i]} failed (${f.timedOut ? "timeout" : f.status}); trying ${models[i + 1]}`, String(e?.message ?? e).slice(0, 200));
         await discardProposals(userId, proposed.splice(0));
         choices = null;
       }
     }
   } catch (e: any) {
-    const status = e?.statusCode ?? e?.status ?? e?.lastError?.statusCode;
-    if (status === 429) throw new Error("Cleo is getting too many requests. Try again in a minute.");
-    if (status === 402) throw new Error("AI credits are used up. Add credits in Lovable to keep using Cleo.");
-    throw new Error(`AI request failed${status ? ` (${status})` : ""}: ${String(e?.message ?? e).slice(0, 200)}`);
+    const f = cleoFailure(e);
+    console.error("[cleo] no model answered", trace.attempts);
+    if (f.quota) throw new Error("The OpenAI account behind Cleo is out of credit. Add credit at platform.openai.com to keep using Cleo.");
+    if (f.status === 429) throw new Error("Cleo is getting too many requests. Try again in a minute.");
+    if (f.status === 402) throw new Error("AI credits are used up. Add credits in Lovable to keep using Cleo.");
+    throw new Error(`AI request failed${f.status ? ` (${f.status})` : ""}: ${String(e?.message ?? e).slice(0, 200)}`);
   }
+  trace.ms.model = Date.now() - tModel;
   if (!text && proposed.length) {
     const { data: cards } = await (await import("@/integrations/supabase/client.server")).supabaseAdmin
       .from("cleo_actions")
@@ -742,7 +786,19 @@ export async function answerSummer(
   if (!text && choices) text = "Quick check before I change anything. Which one?";
   if (!text) text = "I couldn't come up with an answer to that. Try asking it another way.";
   // "Like me": a last pass so a polished reply still reads like his texts.
-  if (summerTone(profile.data?.tone).value === "like_me") text = casualize(text);
+  if (summerTone(opts.bench?.tone ?? profile.data?.tone).value === "like_me") text = casualize(text);
+  trace.ms.total = Date.now() - t0;
+  console.log("[cleo] answered", { model: trace.model, effort: trace.effort, ms: trace.ms, steps: trace.steps, tools: trace.tools, usage: trace.usage, systemChars: trace.systemChars });
+  return { text, choices: choices as string[] | null, proposed, trace, read, attachments, files };
+}
+
+/**
+ * `supabase` is what Cleo reads with (the finance login's read-only admin
+ * view); `own` is the caller's own client, which proposals and their checks
+ * use. Lookups and proposals are tools Cleo calls mid-answer.
+ */
+export async function answerSummer(supabase: any, userId: string, input: CleoInput): Promise<{ user: SummerMsg; assistant: SummerMsg; chatId: string }> {
+  const { text, choices, proposed, read, attachments, files } = await cleoAnswer(supabase, userId, input);
 
   // Saved only once there is an answer, so a failed call leaves no orphan
   // question (or empty chat). A new chat is named after its first question.

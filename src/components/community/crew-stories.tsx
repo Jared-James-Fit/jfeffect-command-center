@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/auth";
 import { useDirectThreads, useMessageAuthor } from "@/lib/direct-chats";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { videoLimit } from "@/lib/video-edit/limits";
+import { feedback } from "@/lib/feedback";
 
 /** How long one moment shows before the next. */
 const FRAME_MS = 5000;
@@ -32,17 +33,14 @@ const TURN_MS = 320;
  * feed. A bubble per person with something new (ringed while any of it is
  * unseen, on any device); tap to watch their moments full screen: tap the
  * sides to step, hold to pause, swipe down to close. Moments are what people
- * shared with the crew in the last day, including each finished session
- * (posted for them when automatic sharing is on), led by its best win; a
- * bubble with a PR in it wears a small "PR" tag. Each one can be cheered
- * right there (the heart, as everywhere) or opened in full. After the last
- * one, an end card points at the next good thing instead of dropping you
- * back on the feed (see StoryEndCard). There's no separate crew "Activity"
- * story: the week's wins are Wednesday Wins in the feed, and Rankings.
- *
- * Nothing new is posted for this: it's the feed's own posts, so the
- * automatic-sharing switch on your profile and who-sees-it on every post
- * apply exactly as in the feed.
+ * posted as a story in the last day (the recap's Share to Story, the camera's
+ * STORY, Add to your story) and the coach's lessons, never a copy of a feed
+ * post (storyWorthy): Instagram's way, a story is something someone chose to
+ * put there. Each one can be cheered right there (the heart, as everywhere)
+ * or opened in full. After the last one, an end card points at the next good
+ * thing instead of dropping you back on the feed (see StoryEndCard). There's
+ * no separate crew "Activity" story: the week's wins are Wednesday Wins in
+ * the feed, and Rankings. Who-sees-it on every story applies as in the feed.
  */
 export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson, onJumpTo, addStory, addYours, rankings }: {
   posts: CommunityPost[];
@@ -76,7 +74,7 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson
     // what's been watched since the feed loaded counts too
     return g.map((x) => ({ ...x, unseen: x.items.some((p) => !p.seen && !seenNow.has(p.id)) }));
   }, [posts, seenNow, follows]);
-  // yours: what you shared in the last day (a finished session posts itself), with who saw it
+  // yours: the stories you shared in the last day, with who saw it
   const mine = useMemo(() => myStory(posts), [posts]);
   const [open, setOpen] = useState<number | null>(null);
   // the order is fixed while watching (rings change as you go)
@@ -970,6 +968,8 @@ function StoryFrame({ post, unit, clip }: { post: CommunityPost; unit: "kg" | "l
         </span>
         <span className="font-display mt-3 block text-[52px] uppercase leading-[0.95]">{win.headline}</span>
         {win.detail && <span className={cn("mt-2 block text-[20px] font-bold", win.kind === "pr" ? "text-amber-300" : "text-white/85")}>{win.detail}</span>}
+        {/* the same weight in the other unit, quieter (the story is always dark) */}
+        {win.other && <span data-weight-other className="mt-0.5 block text-[14px] font-semibold tabular-nums text-white/55">{win.other}</span>}
         <span className="mt-4 block text-[14px] font-semibold text-white/60">{workoutHeadline(post.stats!)}</span>
       </div>
     );
@@ -1061,10 +1061,8 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare }: { post:
   }, [sent]);
 
   const like = () => {
-    if (!mine) {
-      setPop((n) => n + 1);
-      navigator.vibrate?.(8);
-    }
+    if (!mine) setPop((n) => n + 1);
+    feedback("like");
     react.mutate(mine ? null : "heart", { onError: () => toast.error("Couldn't send that") });
   };
   const deliver = async (body: string, emoji?: string) => {
@@ -1074,12 +1072,13 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare }: { post:
     if (full) return void toast.message(`You can message ${first} again once they reply`);
     if (emoji) {
       setShower({ id: Date.now(), emoji });
-      navigator.vibrate?.(10);
+      feedback("like");
     }
     input.current?.blur();
     setText("");
     try {
       const r = await send.mutateAsync({ postId: post.id, body: b, story: true });
+      if (!emoji) feedback("send");
       setSent(r.route === "direct" && r.status === "request" ? `Sent to ${first} as a message request` : `Sent to ${first}`);
     } catch (e: any) {
       setText(emoji ? "" : b);
@@ -1408,10 +1407,8 @@ function EndLoveRow({ post, viewerIsStaff, onOpen }: { post: CommunityPost; view
   const mine = post.my_reaction;
   const [pop, setPop] = useState(0);
   const give = () => {
-    if (!mine) {
-      setPop((n) => n + 1);
-      navigator.vibrate?.(8);
-    }
+    if (!mine) setPop((n) => n + 1);
+    feedback("like");
     react.mutate(mine ? null : "heart", { onError: () => toast.error("Couldn't send that") });
   };
   return (

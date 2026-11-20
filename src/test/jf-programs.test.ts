@@ -154,7 +154,7 @@ describe("the 12 JF Effect programs", () => {
 
   it("every change from the spec is written down with its reason", () => {
     const changed = JF_PROGRAMS.filter((p) => p.changes.length);
-    expect(changed.map((p) => p.number)).toEqual([1, 2, 3, 5, 6, 8, 10, 12]);
+    expect(changed.map((p) => p.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 10, 12]);
     for (const p of changed) expect(lib[p.number - 1].notes).toContain("Changes from the JF Effect master spec");
   });
 

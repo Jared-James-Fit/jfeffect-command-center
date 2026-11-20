@@ -23,7 +23,7 @@ import { phaseSourceText, suggestTargetsPhase } from "@/lib/nutrition-targets/ph
 import { NUTRITION_PHASES, NUTRITION_STRUCTURES, PHASE_GOAL, dayLabelsForStructure, TARGET_STATUSES } from "@/lib/nutrition-cardio";
 import { addMonths, addWeeks, format, parseISO } from "date-fns";
 import type React from "react";
-import { CalendarDays, ClipboardPaste, FileText, Lock, MessageSquare, Pill, Plus, Settings2, Upload, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, ClipboardPaste, FileText, Lock, MessageSquare, Pill, Plus, Settings2, Upload, X } from "lucide-react";
 import { readPlanSupplements, type PlanSupplements } from "@/lib/nutrition-targets/supplements";
 import { SupplementsEditor } from "@/components/nutrition/supplements-ui";
 import { todayLocalISO } from "@/lib/today";
@@ -36,6 +36,7 @@ import { resolveTrainingWeekdays } from "@/lib/cardio-prescription";
 import { cardioDraftsFor, dayKey, parseAiCardio, type CardioDraft } from "@/lib/nutrition-cardio-sync";
 import { plainOrNull } from "@/lib/nutrition-targets/plain-paste";
 import { archiveReplacedPlans, syncPlanCardio } from "@/lib/nutrition-targets/plan-publish";
+import { coachCoverageLine, dayCoverage, targetMathLine } from "@/lib/nutrition-targets/plan-coverage";
 
 const QUICK_DAY_TYPES = [
   "Training Day",
@@ -195,7 +196,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     if (!form || initial || phasePicked || phaseFrom === "paste" || phaseFrom === "prefill" || !suggestFor) return;
     if (requestsQ.isLoading || contextQ.isLoading) return;
     const data = requestsQ.data as any;
-    const latest = data ? currentRequest(data.requests ?? [], data.requestedAt ?? null) : null;
+    const latest = data ? currentRequest((data.requests ?? []) as Array<{ status: string; submitted_at?: string | null; answers?: unknown; plan?: { phase?: string | null } | null }>, data.requestedAt ?? null) : null;
     const answered = latest && latest.status !== "in_progress" ? latest : null;
     const qas = (answered?.answers ?? []) as Array<{ label: string; value: string }>;
     const goalAnswer = qas.find((q) => /^goal\b/i.test(q.label.trim()))?.value ?? null;
@@ -532,6 +533,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
                           </div>
                         ))}
                       </div>
+                      <DayNumbersCheck day={d} onUseCalories={(kcal) => updateDay(i, "calories", String(kcal))} />
                       <DayCardio draft={d.cardio} onChange={(patch) => setCardio(i, patch)} willSync={form.status === "Active"} />
                       <div className="space-y-1.5">
                         <Label className="text-[13px] text-muted-foreground">Meals</Label>
@@ -653,6 +655,46 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * A day's numbers checked as the coach types them (never changed by themselves):
+ * calories that aren't what the protein, carbs and fat add up to at 4 / 4 / 9,
+ * with one tap to use that, and the day's meals against these numbers
+ * (plan-coverage.ts). Dwayne's June plan saved 3,200 kcal over macros of 3,020.
+ */
+function DayNumbersCheck({ day, onUseCalories }: { day: Day; onUseCalories: (kcal: number) => void }) {
+  const n = (v: unknown) => (v === "" || v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+  const target = { calories: n(day.calories), protein: n(day.protein), carbs: n(day.carbs), fats: n(day.fats) };
+  const math = targetMathLine(target);
+  const fromMacros = target.protein != null && target.carbs != null && target.fats != null
+    ? Math.round(target.protein * 4 + target.carbs * 4 + target.fats * 9)
+    : null;
+  const meals = day.notes?.trim() ? coachCoverageLine(dayCoverage(day.notes, target)) : null;
+  if (!math && !meals) return null;
+  return (
+    <div className="space-y-2 rounded-xl border border-warning/40 px-3 py-2.5 text-[13px]" data-editor-day-check>
+      {math ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="flex min-w-0 items-start gap-1.5">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+            <span>{math}.</span>
+          </p>
+          {fromMacros != null ? (
+            <Button type="button" variant="outline" className="h-10" onClick={() => onUseCalories(fromMacros)}>
+              Use {fromMacros.toLocaleString("en-US")} kcal
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {meals ? (
+        <p className="flex items-start gap-1.5">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+          <span>{meals}.</span>
+        </p>
+      ) : null}
+    </div>
   );
 }
 

@@ -5,6 +5,27 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* A phone keeps the phone layout in every orientation (portrait-only.ts): turned on
+   its side it's 852pt wide, past md, but `data-phone` on <html> (set before the first
+   paint) keeps md's tablet / desktop layout off it, so turning the phone only changes
+   the width, never the bars, sheets or menus, and nothing remounts. Tablets and
+   computers keep md exactly as before. `:root` itself included, for rules on <html>. */
+@custom-variant md {
+  @media (width >= 48rem) {
+    &:where(:root:not([data-phone]), :root:not([data-phone]) *) {
+      @slot;
+    }
+  }
+}
+@custom-variant max-md {
+  @media (width < 48rem) {
+    @slot;
+  }
+  &:where(:root[data-phone], :root[data-phone] *) {
+    @slot;
+  }
+}
+
 /*
  * Design system definition.
  *
@@ -347,9 +368,12 @@ html[data-keyboard-open="true"] [data-hide-on-keyboard] {
   --bottom-nav-clearance: 0px;
   --composer-bottom-pad: max(env(safe-area-inset-bottom), 0.5rem);
 }
-@media (max-width: 768px) {
-  :root { --bottom-nav-clearance: var(--mobile-bar-top); }
-}
+/* (max-md: the phone layout, a phone on its side included) */
+:root { @variant max-md { --bottom-nav-clearance: var(--mobile-bar-top); } }
+
+/* A form's page ends at its last line (Submit and what it does), just clear of the tab bar:
+   the shell keeps 140px under every page for floating buttons a form never has. */
+.form-page-end { @variant max-md { margin-bottom: calc(var(--bottom-nav-clearance, 0px) - 140px - env(safe-area-inset-bottom)); } }
 
 /* The phone's tab bar (MobileBottomBar), TikTok's / Instagram's: edge to edge
    and flush with the bottom, a 50px row of tabs over the home indicator's room
@@ -419,9 +443,15 @@ html[data-ios-web-app] [data-shell-root] {
 }
 
 :root { --shell-topbar-h: 0px; }
-@media (max-width: 768px) {
-  :root { --shell-topbar-h: 49px; }
-}
+:root { @variant max-md { --shell-topbar-h: 49px; } }
+
+/* A phone on its side keeps the phone layout in one centered column, the tab bar's
+   and Crew's bar's own 560px row (portrait-only.ts): the page, the full-height chats
+   and bottom sheets, so nothing stretches to 852pt and nothing sits under the screen's
+   rounded corners or the camera on the sides. An upright phone is narrower than 560,
+   so it changes nothing there; tablets and computers never get it (no data-phone). */
+:root[data-phone] .phone-column { max-width: 560px; margin-inline: auto; }
+:root[data-phone] .shell-bar { padding-inline: max(0.5rem, calc((100% - 560px) / 2)); }
 /* Everything above a page on a phone: the View as client banner (when on), the
    notch the shell's bar is padded for, and the bar's own row. A fixed,
    viewport-tall screen (the chats) starts here and is this much shorter, so it
@@ -451,7 +481,21 @@ html[data-ios-web-app] [data-shell-root] {
 }
 html[data-pov-banner-on] .ios-status-band {
   background-color: color-mix(in oklch, var(--destructive) 10%, var(--background));
-}/* When keyboard is open, collapse the topbar height so the messenger
+}
+/* The app's own camera (FilmCamera) is full screen like TikTok's: black under the status bar (iOS
+   paints it from the band above) and behind the camera, so nothing of the page's light grey shows
+   over the top of the picture or under its foot (an older home-screen install doesn't draw fixed
+   things past the window, so the page's own colour shows there). camera-presence.ts. */
+html[data-camera-open],
+html[data-camera-open] body,
+html[data-camera-open] [data-shell-root] { background-color: #000; }
+html[data-camera-open]:not([data-pov-banner-on]) .ios-status-band { background-color: #000; }
+/* "/" renders both jfeffect.com's landing page and the app's launch splash; the head
+   script (landing-launch.ts) picks one before the first paint, so the installed app
+   never flashes a marketing page and a visitor never sees a loading splash. */
+html[data-launch="app"] [data-landing] { display: none !important; }
+html:not([data-launch="app"]) [data-launch-splash] { display: none !important; }
+/* When keyboard is open, collapse the topbar height so the messenger
    container fills the full visual viewport without dead space at the top. */
 html[data-keyboard-open="true"] {
   --shell-topbar-h: 0px;
@@ -468,21 +512,21 @@ html[data-keyboard-open="true"] {
   pointer-events: auto;
 }
 
-/* Prevent iOS auto-zoom on focus: ensure inputs are at least 16px */
-@media (max-width: 768px) {
-  input, textarea, select {
-    font-size: 16px;
-  }
+/* Prevent iOS auto-zoom on focus: ensure inputs are at least 16px (a phone on its side too) */
+input, textarea, select {
+  @variant max-md { font-size: 16px; }
+}
 
-  /* Faster tap response + no double-tap zoom on actionable controls. */
-  button, a, [role="button"], [data-tap] {
+/* Faster tap response + no double-tap zoom on actionable controls. */
+button, a, [role="button"], [data-tap] {
+  @variant max-md {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
-
-  /* Guard against accidental horizontal overflow on phones. */
-  html, body { overflow-x: hidden; }
 }
+
+/* Guard against accidental horizontal overflow on phones. */
+html, body { @variant max-md { overflow-x: hidden; } }
 
 /* Reaction chip pop-in animation (≈240ms) */
 @keyframes reaction-pop {
@@ -1291,6 +1335,17 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
    (Crew's bar's behaviour). While typing it steps aside: iOS pans fixed bars with the
    keyboard, and full-height chats rise to the notch then (--shell-topbar-h: 0). */
 .shell-bar { transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+/* Rows that scroll sideways without a bar under them. */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+/* A member's program builder owns a phone's screen: its own header at the notch
+   and its week bar where the tab bar was (both step aside for nothing else). */
+@variant max-md {
+  html[data-program-builder] .shell-bar,
+  html[data-program-builder] [data-shell-bar-room],
+  html[data-program-builder] [data-mobile-bottom-nav] { display: none !important; }
+}
+.pb-header { top: var(--app-chrome-top); padding-top: var(--app-safe-top); }
 /* The program editor's header on a phone: fixed under the app's bar (sticky can't
    hold while <main> clips sideways), moving up to the notch when the bar slides
    away or the keyboard is up. */
@@ -1305,7 +1360,7 @@ html[data-keyboard-open="true"] .shell-bar { visibility: hidden; }
 }
 .crew-bar { transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 200ms ease-out; }
 .crew-bar[data-hidden] { transform: translateY(calc(-100% - var(--app-chrome-top))); }
-@media (min-width: 768px) { .crew-bar[data-hidden] { transform: none; } }
+.crew-bar[data-hidden] { @variant md { transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .crew-bar { transition: none; }
 }
@@ -1337,9 +1392,7 @@ html[data-keyboard-open="true"] .shell-bar { visibility: hidden; }
   --feed-words-bottom: max(12px, calc(var(--mobile-bar-top) + 12px - var(--feed-gap, 0px)));
   --feed-actions-bottom: max(8px, calc(var(--mobile-bar-top) + 8px - var(--feed-gap, 0px)));
 }
-@media (min-width: 768px) {
-  :root { --feed-page-top: 0px; --feed-bar-room: 0px; --feed-nav-room: 0px; --feed-words-bottom: 0.75rem; --feed-actions-bottom: 0.75rem; }
-}
+:root { @variant md { --feed-page-top: 0px; --feed-bar-room: 0px; --feed-nav-room: 0px; --feed-words-bottom: 0.75rem; --feed-actions-bottom: 0.75rem; } }
 /* a post's words (who, the caption, views) take the bottom of its screen: a picture or a card shown
    whole sits in the room above them, never under them (TikTok's). --page-words-h is their own height
    (PostCard); they sit --feed-words-bottom up from the post's bottom and the hero ends at the tab bar
@@ -1374,30 +1427,33 @@ html.feed-paging main { overflow-x: clip; }
   scroll-snap-stop: always;
   scroll-margin-top: var(--feed-page-top);
 }
-@media (max-width: 767.98px) {
-  /* black behind everything (a pull at the top, the room under the bar), and under the status bar */
-  html.feed-paging,
-  html.feed-paging body,
-  html.feed-paging [data-shell-root] { background-color: #000; }
-  html.feed-paging:not([data-pov-banner-on]) .ios-status-band { background-color: #000; }
-  /* Crew's bar over the posts: see-through, the notch solid black, a soft shade under the icons */
-  .crew-bar[data-overlay] { background-color: transparent; }
-  .crew-bar[data-overlay]::before {
-    content: "";
-    position: absolute;
-    inset: 0 0 -28px 0;
-    z-index: -1;
-    pointer-events: none;
-    /* the notch solid black; from there (iOS's blur band on the home-screen app included) a shade over the post */
-    background: linear-gradient(
-      to bottom,
-      #000 0,
-      #000 calc(var(--app-safe-top) - var(--app-edge-room)),
-      rgb(0 0 0 / 0.5) calc(var(--app-safe-top) - var(--app-edge-room)),
-      rgb(0 0 0 / 0) 100%
-    );
+/* the phone layout only (a phone on its side too, max-md) */
+/* black behind everything (a pull at the top, the room under the bar), and under the status bar */
+html.feed-paging,
+html.feed-paging body,
+html.feed-paging [data-shell-root] { @variant max-md { background-color: #000; } }
+html.feed-paging:not([data-pov-banner-on]) .ios-status-band { @variant max-md { background-color: #000; } }
+/* Crew's bar over the posts: see-through, the notch solid black, a soft shade under the icons */
+.crew-bar[data-overlay] {
+  @variant max-md {
+    background-color: transparent;
+    &::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 -28px 0;
+      z-index: -1;
+      pointer-events: none;
+      /* the notch solid black; from there (iOS's blur band on the home-screen app included) a shade over the post */
+      background: linear-gradient(
+        to bottom,
+        #000 0,
+        #000 calc(var(--app-safe-top) - var(--app-edge-room)),
+        rgb(0 0 0 / 0.5) calc(var(--app-safe-top) - var(--app-edge-room)),
+        rgb(0 0 0 / 0) 100%
+      );
+    }
+    & :is(svg, [data-crew-feed-tab]) { filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.45)); }
   }
-  .crew-bar[data-overlay] :is(svg, [data-crew-feed-tab]) { filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.45)); }
 }
 /* a moment with nothing to show (no one to suggest) takes no screen */
 .feed-page:empty { display: none; }

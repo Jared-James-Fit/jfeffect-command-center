@@ -98,9 +98,17 @@ describe("wiring", () => {
     expect(reviews).toContain("safe.client_response = casualize(safe.client_response)");
   });
 
-  it("Cleo's \"Like me\" tone is the default and cleans her replies the same way", () => {
+  it("everyone else's voice block keeps its heading; Cleo's frames My Voice as his style, not Cleo's identity", () => {
+    expect(buildVoicePrompt(DEFAULT_VOICE).split("\n")[0]).toBe("HOW IT MUST SOUND (overrides any tone/brand voice above):");
+    expect(buildVoicePrompt(DEFAULT_VOICE, null, { group: true, heading: "HIS VOICE (x):" }).split("\n")[0]).toBe("HIS VOICE (x):");
     const cleo = readFileSync("src/lib/summer.server.ts", "utf8");
-    expect(cleo).toContain('summerTone(profile.data?.tone).value === "like_me") text = casualize(text)');
+    expect(cleo).toMatch(/heading: `HIS VOICE \(/);
+    expect(cleo).toMatch(/in your own replies you stay Cleo/);
+  });
+
+  it("Cleo's \"Like me\" tone is the default and cleans Cleo's replies the same way", () => {
+    const cleo = readFileSync("src/lib/summer.server.ts", "utf8");
+    expect(cleo).toMatch(/summerTone\([^)]*profile\.data\?\.tone\)\.value === "like_me"\) text = casualize\(text\)/);
     expect(readFileSync("src/lib/summer-persona.ts", "utf8")).toContain('DEFAULT_SUMMER_TONE: SummerTone = "like_me"');
   });
 
@@ -118,7 +126,7 @@ describe("voice everywhere he writes", () => {
     const { readFileSync } = await import("node:fs");
     const src = readFileSync("src/lib/summer.server.ts", "utf8");
     expect(src).toMatch(/loadCoachVoice\(supabase\)/);
-    expect(src).toMatch(/buildVoicePrompt\(coachVoice, null, \{ group: true \}\)/);
+    expect(src).toMatch(/buildVoicePrompt\(coachVoice, null, \{\s*group: true,/);
   });
   it("My Voice saves on its own and removing a word can be undone", async () => {
     const { readFileSync } = await import("node:fs");
