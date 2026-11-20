@@ -14,7 +14,8 @@ import {
   useExerciseLibraryLite,
   type ExerciseLite,
 } from "@/components/workout-day/workout-add-exercise";
-import { searchEligibleExercises } from "@/lib/exercise-search";
+import { useExerciseSearch, resultsNote } from "@/hooks/use-exercise-search";
+import { DescribedMatches } from "@/components/exercise-search/described-matches";
 import { MAX_EXERCISES, sameMuscleGroup, topMuscleGroups } from "@/lib/athlete-program-draft";
 import { cn } from "@/lib/utils";
 
@@ -49,14 +50,18 @@ export function ExercisePickerSheet({
   const { data: library = [], isLoading, isError, refetch } = useExerciseLibraryLite(open);
 
   const groups = useMemo(() => topMuscleGroups(library, 10), [library]);
+  const pool = useMemo(
+    () => (group ? library.filter((e) => sameMuscleGroup(e.muscle_group, group)) : library),
+    [library, group],
+  );
+  const { local, described, describeState } = useExerciseSearch(pool, search, { limit: 60 });
   const results = useMemo<ExerciseLite[]>(() => {
-    const pool = group ? library.filter((e) => sameMuscleGroup(e.muscle_group, group)) : library;
-    const q = search.trim();
-    if (q.length >= 2) {
-      return searchEligibleExercises(pool, q, { limit: 60 }).results.map((r) => r.exercise);
+    if (local) {
+      const shown = new Set(described.map((d) => d.exercise.id));
+      return local.results.map((r) => r.exercise).filter((e) => !shown.has(e.id));
     }
     return pool.slice(0, BROWSE_LIMIT);
-  }, [library, group, search]);
+  }, [local, described, pool]);
 
   const reset = () => {
     setSearch("");
@@ -86,6 +91,45 @@ export function ExercisePickerSheet({
       }
       return [...list, ex];
     });
+  };
+
+  const note = resultsNote(local, described.length);
+
+  // One row for a search result and an AI suggestion alike (the hint says how sure it is).
+  const row = (ex: ExerciseLite, hint?: string) => {
+    const order = picked.findIndex((p) => p.id === ex.id);
+    const on = order >= 0;
+    return (
+      <button
+        type="button"
+        aria-pressed={mode === "multi" ? on : undefined}
+        onClick={() => toggle(ex)}
+        className={cn(
+          "flex min-h-[56px] w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition active:scale-[0.99]",
+          on ? "border-foreground bg-secondary" : "border-border bg-card",
+        )}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[15px] font-medium">{ex.name}</div>
+          <div className="truncate text-[12px] text-muted-foreground">
+            {[hint, ex.muscle_group, ex.equipment].filter(Boolean).join(" · ") || "Exercise"}
+          </div>
+        </div>
+        {mode === "multi" ? (
+          <span
+            aria-hidden
+            className={cn(
+              "grid h-7 w-7 shrink-0 place-items-center rounded-full border text-[13px] font-semibold tabular-nums",
+              on ? "border-foreground bg-foreground text-background" : "border-border text-transparent",
+            )}
+          >
+            {on ? order + 1 : <Check className="h-3.5 w-3.5" />}
+          </span>
+        ) : (
+          <span className="shrink-0 text-[13px] font-medium text-muted-foreground">Pick</span>
+        )}
+      </button>
+    );
   };
 
   const add = () => {
@@ -137,7 +181,7 @@ export function ExercisePickerSheet({
               }}
               enterKeyHint="search"
               type="search"
-              placeholder="Search exercises"
+              placeholder="Search or describe an exercise"
               aria-label="Search exercises"
               className="h-11 pl-9 text-base"
               autoComplete="off"
@@ -175,54 +219,26 @@ export function ExercisePickerSheet({
                 Try again
               </Button>
             </div>
-          ) : results.length === 0 ? (
+          ) : results.length === 0 && described.length === 0 && describeState !== "loading" ? (
             <p className="py-10 text-center text-sm text-muted-foreground">
               Nothing matches that. Try another word.
             </p>
           ) : (
             <ul className="space-y-1.5">
-              {results.map((ex) => {
-                const order = picked.findIndex((p) => p.id === ex.id);
-                const on = order >= 0;
-                return (
-                  <li key={ex.id}>
-                    <button
-                      type="button"
-                      aria-pressed={mode === "multi" ? on : undefined}
-                      onClick={() => toggle(ex)}
-                      className={cn(
-                        "flex min-h-[56px] w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition active:scale-[0.99]",
-                        on ? "border-foreground bg-secondary" : "border-border bg-card",
-                      )}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[15px] font-medium">{ex.name}</div>
-                        <div className="truncate text-[12px] text-muted-foreground">
-                          {[ex.muscle_group, ex.equipment].filter(Boolean).join(" · ") ||
-                            "Exercise"}
-                        </div>
-                      </div>
-                      {mode === "multi" ? (
-                        <span
-                          aria-hidden
-                          className={cn(
-                            "grid h-7 w-7 shrink-0 place-items-center rounded-full border text-[13px] font-semibold tabular-nums",
-                            on
-                              ? "border-foreground bg-foreground text-background"
-                              : "border-border text-transparent",
-                          )}
-                        >
-                          {on ? order + 1 : <Check className="h-3.5 w-3.5" />}
-                        </span>
-                      ) : (
-                        <span className="shrink-0 text-[13px] font-medium text-muted-foreground">
-                          Pick
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
+              <li>
+                <DescribedMatches
+                  state={describeState}
+                  matches={described}
+                  renderRow={(m, hint) => row(m.exercise, hint)}
+                  className="pb-1.5"
+                />
+              </li>
+              {note && results.length > 0 ? (
+                <li className="px-1 text-[12px] text-muted-foreground">{note}</li>
+              ) : null}
+              {results.map((ex) => (
+                <li key={ex.id}>{row(ex)}</li>
+              ))}
             </ul>
           )}
           {browsingHint && !isLoading ? (

@@ -37,7 +37,7 @@ import {
   type WorkoutWin,
 } from "@/lib/community";
 import { useFullMediaUrl, usePrefetchPostReactors, useSlideThumbUrls } from "@/lib/community.queries";
-import { FEED_MAX_ASPECT, FEED_VIDEO_MAX_HEIGHT, VIDEO_MIN_ASPECT, clipFrame, feedAspect, focusPosition, screenFit, videoAspect, type MediaFocus } from "@/lib/photo-frame";
+import { FEED_MAX_ASPECT, FEED_VIDEO_MAX_HEIGHT, VIDEO_MIN_ASPECT, cleanFocus, clipFrame, feedAspect, focusPosition, photoZoomBox, screenFit, slideAspect, videoAspect, type MediaFocus } from "@/lib/photo-frame";
 import { LikedBy, ReactorsSheet } from "@/components/community/reactors-sheet";
 import { ReactionsRise, useEngagementPop } from "@/components/community/engagement-pop";
 import { PostViewsRow, usePostViewTracker } from "@/components/community/post-views";
@@ -1491,6 +1491,8 @@ function SlideMedia({
   const src = (full && !isVideo ? fullUrl : null) ?? thumbUrl;
   // data-pinch-zoom: pinch lifts just this (the page never zooms), see useMediaPinchZoom
   const position = focusPosition(slide.focus);
+  // a photo shown on a post's screen: its box between the bars, zoomed a little when it's slightly taller than the room
+  const zoom = page && !isVideo ? photoZoomBox(slideAspect(slide), cleanFocus(slide.focus)?.y ?? 0.5) : null;
   return (
     <>
       {isVideo ? (
@@ -1506,6 +1508,18 @@ function SlideMedia({
             frame={clipFrame(slide.focus)}
             media={slide.width && slide.height ? slide.width / slide.height : null}
           />
+        </div>
+      ) : page && !shrunk && fit === "cover" ? (
+        // framed for the whole screen (9:16, screenFit): it fills it edge to edge like a clip, the words over its foot
+        <div data-pinch-zoom className="absolute inset-0" data-photo-fit="cover">
+          {src ? <FadeImg src={src} position={position} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+        </div>
+      ) : page && !shrunk && zoom ? (
+        // between Crew's bar and the words: the full width, a slightly taller photo zoomed a little (photoZoomBox), never stretched
+        <div data-pinch-zoom className="absolute inset-0 overflow-hidden" style={{ ...BETWEEN_BARS, containerType: "size" }} data-photo-fit="zoom">
+          <div className="absolute" style={zoom}>
+            {src ? <FadeImg src={src} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+          </div>
         </div>
       ) : (
         // on a post's screen a photo shows whole, between Crew's bar and the tab bar

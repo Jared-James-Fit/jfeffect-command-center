@@ -354,11 +354,24 @@ export async function resolveLibraryNames(db: Db, names: string[], startCode: nu
         continue;
       }
     }
-    const words = name.toLowerCase().split(/\s+/).filter((w) => w.length > 2).slice(0, 3);
-    let q = db.from("exercises").select("id, name, primary_muscle_group, muscle_group, equipment, movement_family, video_url, category, exercise_category, archived").eq("archived", false);
-    for (const w of words) q = q.ilike("name", `%${w.replace(/[%_]/g, "")}%`);
-    const { data: cands } = words.length ? await q.limit(6) : { data: [] };
-    missing.push({ name, candidates: ((cands ?? []) as ExerciseMetaRow[]).filter((c) => !lowValueReason(c.name)).map((c) => toCatalog(c, `X${code++}`)) });
+    // the app's own exercise search: the same exercise in other words ("Lateral Raise Cable",
+    // "DB RDL") is that exercise; anything else is only offered as a candidate for the coach
+    const [{ searchableLibrary }, { searchExercises, findCanonicalExerciseMatch }] = await Promise.all([
+      import("@/lib/exercise-search-library.server"),
+      import("@/lib/exercise-search"),
+    ]);
+    const lib = await searchableLibrary(db).catch(() => []);
+    const same = findCanonicalExerciseMatch(lib, name);
+    if (same) {
+      found.set(normName(name), toCatalog(same as ExerciseMetaRow, `X${code++}`));
+      continue;
+    }
+    const cands = searchExercises(lib, name, { limit: 10 }).results
+      .filter((r) => r.complete && !r.alternative)
+      .map((r) => r.exercise)
+      .filter((c) => !lowValueReason(c.name))
+      .slice(0, 6);
+    missing.push({ name, candidates: cands.map((c) => toCatalog(c as ExerciseMetaRow, `X${code++}`)) });
   }
   return { found, missing };
 }

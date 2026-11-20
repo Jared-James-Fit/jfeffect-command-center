@@ -34,7 +34,19 @@ export type Framing = { z: number; cx: number; cy: number };
  * the studio (ClipFrame): shown at the shape `a` (w / h), zoomed `z` over just
  * filling it, centred on (x, y) as shares of the clip's width / height.
  */
-export type MediaFocus = { x: number; y: number; z?: number; a?: number };
+export type MediaFocus = {
+  x: number;
+  y: number;
+  z?: number;
+  a?: number;
+  /**
+   * A photo whose own words sit where a post's words go (an older story card
+   * posted as a 9:16 photo, its text in the lower third): on its screen it's
+   * shown whole between Crew's bar and the words, never filling the screen
+   * under them. Stored as `"fit": "whole"` by the Nov 20 2026 feed audit.
+   */
+  whole?: boolean;
+};
 /** A clip's frame from the studio: what every screen shows of it. */
 export type ClipFrame = { a: number; z: number; x: number; y: number };
 
@@ -108,6 +120,8 @@ export function screenFit(
   screenRatio: number | null | undefined,
 ): "cover" | "contain" {
   if (!screenRatio || !(screenRatio > 0)) return "contain";
+  // its own words are where the post's go: shown whole, never under them
+  if (slide.type === "image" && cleanFocus(slide.focus)?.whole) return "contain";
   const media = slideAspect(slide);
   if (!media || !Number.isFinite(media) || media <= 0) return "contain";
   const trim = media < screenRatio ? 1 - media / screenRatio : 1 - screenRatio / media;
@@ -124,6 +138,36 @@ export function screenFit(
  * shows whole.
  */
 export const PHOTO_FILL_MAX_TRIM = 0.12;
+
+/**
+ * On a post's screen a photo that isn't framed for the whole screen sits in
+ * the room between Crew's bar and the post's words. One a little taller than
+ * that room (a 2:3 picture, an older 3:4 photo) would leave black strips down
+ * both sides, so it's zoomed to fill the room's width, giving up at most this
+ * share of its height (top and bottom, by its focus). It's never stretched,
+ * its sides are never cut (where the studio's numbers and logo sit), and a
+ * taller one is only zoomed this far (the rest stays black at its sides).
+ */
+export const PHOTO_ZOOM_MAX_TRIM = 0.1;
+
+/**
+ * The photo's box inside that room (FitBox's container units: the room has
+ * `container-type: size`): CSS width / height / left / top. `aspect` is the
+ * photo's own (w / h); `focusY` (0 top, 1 bottom) says which part of a
+ * trimmed height stays. Wider than the room it's the full width, centred,
+ * black above and below (as before); taller, the full width when that trims
+ * at most PHOTO_ZOOM_MAX_TRIM, else as wide as that trim allows. Null when the
+ * shape is unknown (shown whole as before).
+ */
+export function photoZoomBox(aspect: number | null | undefined, focusY = 0.5, maxTrim = PHOTO_ZOOM_MAX_TRIM): { width: string; height: string; left: string; top: string } | null {
+  if (!aspect || !Number.isFinite(aspect) || aspect <= 0) return null;
+  const keep = Math.round(Math.min(1, Math.max(0.5, 1 - maxTrim)) * 1000) / 1000;
+  const a = Math.round(aspect * 10000) / 10000;
+  const fy = Math.min(1, Math.max(0, Number.isFinite(focusY) ? focusY : 0.5));
+  const width = `min(100cqw, calc(100cqh * ${a} / ${keep}))`;
+  const height = `min(calc(100cqw / ${a}), calc(100cqh / ${keep}))`;
+  return { width, height, left: `calc((100cqw - ${width}) / 2)`, top: `calc((100cqh - ${height}) * ${Math.round(fy * 1000) / 1000})` };
+}
 
 /** The shape a slide shows at (w / h): a framed clip's frame, else its own. Null when unknown. */
 export function slideAspect(slide: { width: number | null | undefined; height: number | null | undefined; focus?: MediaFocus | null }): number | null {
@@ -276,6 +320,7 @@ export function cleanFocus(f: unknown): MediaFocus | null {
   const y = Number((f as { y?: unknown }).y);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   const out: MediaFocus = { x: clamp(x, 0, 1), y: clamp(y, 0, 1) };
+  if ((f as { fit?: unknown }).fit === "whole" || (f as { whole?: unknown }).whole === true) out.whole = true;
   const a = Number((f as { a?: unknown }).a);
   if (Number.isFinite(a) && a >= FRAME_MIN_ASPECT && a <= FRAME_MAX_ASPECT) {
     const z = Number((f as { z?: unknown }).z);
