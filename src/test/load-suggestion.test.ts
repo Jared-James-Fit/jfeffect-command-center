@@ -202,7 +202,7 @@ describe("final warm-up (SBD) → working-set suggestion", () => {
     it("backing off is allowed more than pushing up (asymmetric, safety first) — on the unrounded estimate", () => {
       const raw = (w: { load: number; reps: number; rpe: number }) => estimateFor(withWarm(w), 5, 8)!.load;
       const h = estimateFor(base(), 5, 8)!.load;
-      const down = raw({ load: 60, reps: 1, rpe: 7 }); // implausibly weak -> clamped
+      const down = raw({ load: 125, reps: 3, rpe: 7 }); // near the working weight, but weak -> clamped
       const up = raw({ load: 300, reps: 1, rpe: 6 }); // implausibly strong -> clamped
       expect(down / h).toBeCloseTo(0.97, 3); // −3%
       expect(up / h).toBeCloseTo(1.015, 3); // +1.5%
@@ -211,8 +211,8 @@ describe("final warm-up (SBD) → working-set suggestion", () => {
 
     it("a hard (RPE 8+) warm-up is read like a set: down as far as it says, never above the same warm-up rated a normal 7", () => {
       const h = estimateFor(base(), 5, 8)!.load;
-      const weak = estimateFor(withWarm({ load: 90, reps: 3, rpe: 9 }), 5, 8)!.load;
-      expect(weak).toBeCloseTo(warmupE1rm({ load: 90, reps: 3, rpe: 9 })! * percentOf1RM(5, 2)!, 6);
+      const weak = estimateFor(withWarm({ load: 125, reps: 3, rpe: 9 }), 5, 8)!.load;
+      expect(weak).toBeCloseTo(warmupE1rm({ load: 125, reps: 3, rpe: 9 })! * percentOf1RM(5, 2)!, 6);
       const strong = estimateFor(withWarm({ load: 300, reps: 1, rpe: 8 }), 5, 8)!.load;
       const strongNormal = estimateFor(withWarm({ load: 300, reps: 1, rpe: 7 }), 5, 8)!.load;
       expect(strong).toBeLessThanOrEqual(strongNormal + 1e-9);

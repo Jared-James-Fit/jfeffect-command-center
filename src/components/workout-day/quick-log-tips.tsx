@@ -15,7 +15,7 @@
  * motion holds each step on its last beat.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Check, Play, X, Zap } from "lucide-react";
+import { Camera, Check, Flame, Play, X, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type StepKey = "prefilled" | "type" | "suggest" | "warmup" | "video";
@@ -268,7 +268,7 @@ function MockCard({ step, beat, unit, videoOn }: { step: StepKey; beat: number; 
                 Suggested
                 {warmLogged && <span className="h-1.5 w-1.5 rounded-full bg-success" data-testid="mock-tuned" />}
               </div>
-              <div className={cn("inline-flex rounded-md px-1.5 font-semibold tabular-nums transition-colors duration-300", warmLogged ? "bg-success/15 text-success" : "bg-blue-500/10 text-blue-700 dark:text-blue-300")}>
+              <div className={cn("inline-flex rounded-md border px-1.5 font-semibold tabular-nums transition-colors duration-300", warmLogged ? "border-success/40 text-success" : "border-border bg-background text-foreground")}>
                 {shownSuggested} {unit}
               </div>
             </div>
@@ -290,14 +290,21 @@ function MockCard({ step, beat, unit, videoOn }: { step: StepKey; beat: number; 
         {videoOn && <span className="flex justify-center"><Camera className="h-3 w-3" /></span>}
       </div>
 
-      {/* the last warm-up, open and optional, under its own label (WarmupLabel) */}
-      <div className={cn("mt-1 border-t border-border/70 bg-orange-500/[0.04] transition-colors")}>
+      {/* the last warm-up, open and optional, under its own quiet header (WarmupRows) */}
+      <div className="mt-1 border-t border-border/70 transition-colors">
         <div className="flex min-h-7 items-center gap-1.5 px-2 text-[11px]">
-          <span className="font-semibold text-orange-600 dark:text-orange-400">Warm-up</span>
-          <span className="text-muted-foreground">· optional, not counted as a set</span>
+          <span className="font-medium text-foreground/80">{warmLogged ? "Warm-up" : "Last warm-up"}</span>
+          <span className="text-muted-foreground">
+            {warmLogged ? " · 1 set" : " · optional"}
+            {warmLogged && <span className="font-medium text-success"> · ✓ Suggested tuned</span>}
+          </span>
         </div>
         <div className="grid items-center gap-1.5 px-2 py-1.5" style={{ gridTemplateColumns: grid }}>
-          <span className={cn("text-center text-sm font-semibold", warmLogged ? "text-orange-500" : "text-orange-500/60")}>W</span>
+          <span className="flex justify-center">
+            <span className={cn("inline-flex h-7 w-7 items-center justify-center rounded-full border text-muted-foreground", warmLogged ? "border-border bg-muted/40" : "border-dashed border-muted-foreground/40")}>
+              <Flame className="h-3.5 w-3.5" />
+            </span>
+          </span>
           <span className={cn(CELL, WELL)}>3</span>
           <span className={cn(CELL, WELL, "text-muted-foreground/60")}>—</span>
           <span className={cn(CELL, step === "warmup" && beat === 1 ? FOCUSED : WELL, !warmWeight && "text-muted-foreground/60")}>
@@ -309,9 +316,6 @@ function MockCard({ step, beat, unit, videoOn }: { step: StepKey; beat: number; 
               <Camera className="h-4 w-4" />
             </span>
           )}
-        </div>
-        <div className="px-2 pb-1.5 pl-[42px] text-[11px] text-muted-foreground">
-          {warmLogged ? <span className="font-medium text-success">✓ Suggested is tuned from this warm-up</span> : "Your last warm-up · tunes Suggested"}
         </div>
       </div>
 
@@ -339,7 +343,7 @@ function MockCard({ step, beat, unit, videoOn }: { step: StepKey; beat: number; 
               <span
                 className={cn(
                   CELL,
-                  st.focused ? FOCUSED : st.weight ? WELL : "border-blue-500/40 bg-blue-500/10 text-muted-foreground",
+                  st.focused ? FOCUSED : st.weight ? WELL : "border-muted-foreground/40 bg-background text-muted-foreground",
                 )}
                 data-testid={`mock-weight-${k}`}
               >

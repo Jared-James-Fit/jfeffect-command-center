@@ -1,7 +1,7 @@
 /**
  * Move a set video to the set it really is (set_video_move): the workout's
  * exercises (a repeated one by its role, "· Backoff"), each with its warm-ups
- * ("W", or W1 / W2…) and its set numbers as round chips (the one it's on now
+ * (a flame, numbered when there are several) and its set numbers as round chips (the one it's on now
  * filled, logged ones solid, ones not logged yet dashed). One tap moves the
  * clip, its chat message and its caption on the workout's film, with Undo.
  * Opened from a clip's ⋯ in the set's video sheet.
@@ -9,11 +9,11 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Flame, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { moveChoices, warmupChip, type MoveExercise, type MoveSet, type MoveWarmup } from "@/lib/set-videos/move";
+import { moveChoices, warmupChipNumber, type MoveExercise, type MoveSet, type MoveWarmup } from "@/lib/set-videos/move";
 import { setVideosKey, type SetVideo } from "@/components/workout-day/set-video-cell";
 import { UNLINKED_SET_VIDEO_MS } from "@/lib/set-videos/jobs";
 
@@ -203,7 +203,7 @@ export function SetVideoMovePicker({
                   const here = ex.rowId === video.row_id && video.set_index === 0 && (video.warmup_id ?? null) === w.id;
                   const spot = spotOfWarmup(w);
                   const key = `${ex.rowId}:0:${w.id ?? ""}`;
-                  const name = warmupChip(ex.warmups, i);
+                  const num = warmupChipNumber(ex.warmups, i);
                   return (
                     <button
                       key={`w-${w.id ?? "open"}`}
@@ -216,7 +216,7 @@ export function SetVideoMovePicker({
                       data-move-warmup={w.id ?? "open"}
                       className={chip(here, w.logged)}
                     >
-                      {busy === key ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : name}
+                      {busy === key ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <span className="inline-flex items-center gap-0.5"><Flame className="h-3.5 w-3.5" aria-hidden />{num}</span>}
                     </button>
                   );
                 })}

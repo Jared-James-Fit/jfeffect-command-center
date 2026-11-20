@@ -5,7 +5,7 @@ import { Sheet, SheetClose, SheetContent, SheetTitle, SheetDescription } from "@
 import { ExerciseRecordsForClient } from "@/components/records/training-records";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { History, CheckCircle2, Circle, StickyNote, Pencil, Loader2, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, Trophy } from "lucide-react";
+import { History, CheckCircle2, Circle, StickyNote, Pencil, Loader2, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, Trophy, Flame } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { matchingHistoryExerciseIds } from "@/lib/workout-previous-lift";
@@ -1035,7 +1035,7 @@ export function ExerciseHistorySheet({
                             const v = weightView(wset, displayUnit);
                             return (
                               <div key={w.id} className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-baseline gap-2 py-0.5 text-sm tabular-nums text-muted-foreground" data-history-warmup>
-                                <span className="text-xs font-semibold text-orange-500">W</span>
+                                <Flame className="h-3.5 w-3.5 self-center text-muted-foreground" aria-label="Warm-up" />
                                 <span className="min-w-0">
                                   {v.text}
                                   {v.logged && <span className="text-[13px]"> ({v.logged})</span>}

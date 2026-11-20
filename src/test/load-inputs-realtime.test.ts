@@ -54,6 +54,6 @@ describe("history feeding suggestions", () => {
   });
   it("passes bodyweight into the model and recomputes when it changes", () => {
     expect(src).toContain("warmups: warmupsList, bodyweightKg,");
-    expect(src).toMatch(/warmupsList, bodyweightKg, dayRead, liftKind, followsSameExercise\]\);/);
+    expect(src).toMatch(/warmupsList, bodyweightKg, dayRead, liftKind, followsSameExercise, progressionPlan, equipmentKind\]\);/);
   });
 });

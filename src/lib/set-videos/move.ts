@@ -74,7 +74,7 @@ export function takesWarmup(name: string, results: { load_type?: string | null; 
   return !isTimedCardio(name);
 }
 
-/** "W", or "W1" / "W2" when the exercise has more than one warm-up. */
-export function warmupChip(list: MoveWarmup[], i: number): string {
-  return list.length > 1 ? `W${i + 1}` : "W";
+/** A warm-up chip's number beside its flame: none for one warm-up, "1", "2"… for several. */
+export function warmupChipNumber(list: MoveWarmup[], i: number): string {
+  return list.length > 1 ? String(i + 1) : "";
 }

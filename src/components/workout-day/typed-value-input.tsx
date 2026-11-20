@@ -21,6 +21,7 @@ export function TypedValueInput({
   disabled = false,
   focusMode = false,
   empty = "—",
+  quiet = false,
 }: {
   /** Stored value as typed in this field's terms (RIR for RIR rows). */
   value: string;
@@ -33,6 +34,8 @@ export function TypedValueInput({
   disabled?: boolean;
   focusMode?: boolean;
   empty?: string;
+  /** An optional warm-up's cell: lighter than a working set's, so the sets lead the card. */
+  quiet?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [typed, setTyped] = useState("");
@@ -112,10 +115,12 @@ export function TypedValueInput({
           className={cn(
             "flex w-full items-center justify-center whitespace-nowrap rounded-md border px-2 text-sm font-medium tabular-nums transition-colors",
             cellHeight,
-            hasValue
-              // a value the plan filled in reads the same as one they typed
-              ? "border-border/60 bg-muted/40 text-foreground"
-              : "border-border/60 bg-muted/40 text-muted-foreground/60",
+            quiet
+              ? cn("border-border/40 bg-transparent", hasValue ? "text-foreground/80" : "text-muted-foreground/50")
+              : hasValue
+                // a value the plan filled in reads the same as one they typed
+                ? "border-border/60 bg-muted/40 text-foreground"
+                : "border-border/60 bg-muted/40 text-muted-foreground/60",
             !disabled && "cursor-text hover:bg-muted/60",
           )}
         >

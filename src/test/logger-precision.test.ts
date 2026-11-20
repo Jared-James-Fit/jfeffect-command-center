@@ -137,10 +137,11 @@ describe("a quieter card", () => {
     expect(wdv).toContain("const lead = clipped && !open ? noteLead(notes) : null;");
     expect(wdv).toContain("{lead ?? notes}");
   });
-  it("the last warm-up prompt is a quiet suggestion; logged warm-ups keep their orange W", () => {
+  it("warm-ups are quiet and monochrome: a flame in the set column, never an orange W or a tinted row", () => {
     const w = read("src/components/workout-day/final-warmup-input.tsx");
-    const prompt = w.slice(w.indexOf('data-testid="warmup-prompt"'), w.indexOf('data-testid="warmup-prompt"') + 1200);
-    expect(prompt).not.toContain("orange");
-    expect(w).toContain('className="text-center text-sm font-bold text-orange-500" title="Warm-up: not counted as a working set"');
+    expect(w).not.toMatch(/orange-|blue-/);
+    expect(w).not.toContain(">W<");
+    expect(w).toContain("<Flame");
+    expect(w).toContain('title="Warm-up: not counted as a working set"');
   });
 });
