@@ -24,7 +24,7 @@ export const Route = createFileRoute("/welcome")({
 type Phase =
   | { kind: "confirm" }
   | { kind: "working" }
-  | { kind: "message"; title: string; body: string }
+  | { kind: "message"; title: string; body: string; cta?: { to: string; label: string } }
   | { kind: "expired" };
 
 /**
@@ -124,10 +124,10 @@ function WelcomePage() {
               {phase.body}
             </p>
             <Link
-              to="/auth"
+              to={(phase.cta?.to ?? "/auth") as any}
               className="mt-7 flex h-[54px] w-full items-center justify-center rounded-2xl bg-primary text-[17px] font-semibold text-primary-foreground"
             >
-              Go to sign in
+              {phase.cta?.label ?? "Go to sign in"}
             </Link>
           </>
         )}
@@ -151,7 +151,7 @@ function WelcomePage() {
                 to="/join"
                 className="flex h-12 w-full items-center justify-center rounded-2xl text-[15px] font-medium text-muted-foreground"
               >
-                Start again
+                Apply to join
               </Link>
             </div>
           </>
