@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts";
+import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-request";
 import { createMessengerCheckinRequest } from "@/lib/messenger-checkins.functions";
 import {
   classifyKind,

@@ -19,7 +19,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Accordion } from "@/components/ui/accordion";
 import { CardHeader, DayRows, MoreButton, PlanDaysView, Section, StatusChip, type ChipTone, type PlanViewDay } from "@/components/nutrition/nutrition-ui";
 import { NUTRITION_PHASES, PHASE_GOAL, phaseFromPlanText, phaseFromText } from "@/lib/nutrition-cardio";
-import { MEAL_PLAN_PROMPT, REVISE_MAX_CHARS, TARGETS_PROMPT, answerFor, clientBasicsLines, manualMealPlanPrompt, manualRevisePrompt, manualTargetsPrompt, nutritionSubmissionSummary, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
+import { REVISE_MAX_CHARS, answerFor, clientBasicsLines, nutritionSubmissionSummary, type WorkoutMealsMode } from "@/lib/nutrition-request";
+import { copyWhenReady } from "@/lib/copy-when-ready";
 import { lastPlanSummary, previousMealsText, previousPlanText, type PreviousPlan } from "@/lib/nutrition-history";
 import { WorkoutMealsSelect } from "@/components/nutrition/WorkoutMealsSelect";
 import { Card } from "@/components/ui/card";
@@ -37,6 +38,8 @@ import {
   sendNutritionRequestFn,
   setAiPlanSupplementsFn,
   undoNutritionRevisionFn,
+  getManualNutritionPromptFn,
+  type ManualNutritionPromptRequest,
 } from "@/lib/nutrition-ai-plans.functions";
 import { parseFoodWeighingRules, parseMealPlan } from "@/components/nutrition/MealPlanBulkPaste";
 import { NutritionTargetDialog } from "@/components/nutrition-target-dialog";
@@ -123,6 +126,14 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
   const genFn = useServerFn(generateNutritionPlanFn);
   const appliedFn = useServerFn(markNutritionPlanAppliedFn);
   const reviseFn = useServerFn(reviseNutritionPlanFn);
+  const manualPromptFn = useServerFn(getManualNutritionPromptFn);
+  // The AI's prompts stay on the server; the copy starts inside the tap and
+  // fills in when the finished prompt arrives (copy-when-ready.ts).
+  const copyPrompt = (req: ManualNutritionPromptRequest, label: string) => {
+    void copyWhenReady(manualPromptFn({ data: req as any }).then((r: { text: string }) => r.text)).then((ok) =>
+      ok ? toast.success(`${label} copied — paste it into ChatGPT or Claude`) : toast.error("Couldn't copy"),
+    );
+  };
   const undoFn = useServerFn(undoNutritionRevisionFn);
   const setSuppsFn = useServerFn(setAiPlanSupplementsFn);
   const [change, setChange] = useState("");
@@ -618,8 +629,9 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
                         title="The same change as a prompt, to run in ChatGPT or Claude yourself"
                         onClick={() =>
                           plan.meal_plan_text &&
-                          copyText(
-                            manualRevisePrompt({
+                          copyPrompt(
+                            {
+                              kind: "revise",
                               qas: latest!.answers,
                               targetsText: plan.targets_text ?? "",
                               mealPlanText: plan.meal_plan_text,
@@ -629,7 +641,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
                               history: data?.trainingPattern ?? null,
                               foodNotes: data?.foodNotes ?? null,
                               foodRestrictions: data?.foodRestrictions ?? null,
-                            }),
+                            },
                             "Change prompt",
                           )
                         }
@@ -730,10 +742,10 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
         open={copyOpen}
         onOpenChange={setCopyOpen}
         items={[
-          { group: "Prompts to run it yourself", label: "Targets, steps and cardio prompt", hint: "with every answer and the context", disabled: !submitted, run: () => latest && copyText(manualTargetsPrompt(data?.client ?? data?.clientName ?? "Client", latest.answers, plan?.phase ?? null, previousPlanText(plan?.previous_plan), { program: data?.programText ?? null, cardio: data?.cardioText ?? null, foodNotes: data?.foodNotes ?? null }), "Targets prompt") },
-          { group: "Prompts to run it yourself", label: "Meal plan prompt", hint: "with the AI targets", disabled: !plan?.targets_text || !latest, run: () => plan?.targets_text && latest && copyText(manualMealPlanPrompt(latest.answers, plan.targets_text, plan.phase, regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null, data?.trainingPattern ?? null, previousMealsText(plan.previous_plan), data?.foodNotes ?? null, data?.foodRestrictions ?? null), "Meal plan prompt") },
-          { group: "Prompts to run it yourself", label: "Blank targets formula", run: () => copyText(TARGETS_PROMPT, "Targets formula") },
-          { group: "Prompts to run it yourself", label: "Blank meal plan formula", run: () => copyText(MEAL_PLAN_PROMPT, "Meal plan formula") },
+          { group: "Prompts to run it yourself", label: "Targets, steps and cardio prompt", hint: "with every answer and the context", disabled: !submitted, run: () => latest && copyPrompt({ kind: "targets", client: data?.client ?? data?.clientName ?? "Client", qas: latest.answers, phase: plan?.phase ?? null, previous: previousPlanText(plan?.previous_plan), program: data?.programText ?? null, cardio: data?.cardioText ?? null, foodNotes: data?.foodNotes ?? null }, "Targets prompt") },
+          { group: "Prompts to run it yourself", label: "Meal plan prompt", hint: "with the AI targets", disabled: !plan?.targets_text || !latest, run: () => plan?.targets_text && latest && copyPrompt({ kind: "meals", qas: latest.answers, targetsText: plan.targets_text, phase: plan.phase, workoutMeals: regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null, history: data?.trainingPattern ?? null, currentMeals: previousMealsText(plan.previous_plan), foodNotes: data?.foodNotes ?? null, restrictions: data?.foodRestrictions ?? null }, "Meal plan prompt") },
+          { group: "Prompts to run it yourself", label: "Blank targets formula", run: () => copyPrompt({ kind: "blank_targets" }, "Targets formula") },
+          { group: "Prompts to run it yourself", label: "Blank meal plan formula", run: () => copyPrompt({ kind: "blank_meals" }, "Meal plan formula") },
           { group: "Text", label: "Client answers", disabled: !submitted, run: () => latest && copyText(nutritionSubmissionSummary({ client: data?.client ?? data?.clientName ?? "Client", qas: latest.answers, phase: plan?.phase ?? data?.requestedPhase ?? null, submittedAt: latest.submitted_at }), "Client answers") },
           { group: "Text", label: "AI targets, steps and cardio", disabled: !plan?.targets_text, run: () => plan?.targets_text && copyText(plan.targets_text, "AI targets") },
           { group: "Text", label: "AI meal plan", disabled: !plan?.meal_plan_text, run: () => plan?.meal_plan_text && copyText(plan.meal_plan_text, "AI meal plan") },

@@ -5,7 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { NUTRITION_REQUEST_FORM_ID, REVISE_MAX_CHARS, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
+import { NUTRITION_REQUEST_FORM_ID, REVISE_MAX_CHARS, type WorkoutMealsMode } from "@/lib/nutrition-request";
 import { NUTRITION_PHASES } from "@/lib/nutrition-cardio";
 
 /** The AI and the answers (server only: loaded inside the handlers). */
@@ -368,4 +368,131 @@ export const setAiPlanSupplementsFn = createServerFn({ method: "POST" })
     const { error } = await (await admin()).from("nutrition_ai_plans").update({ supplements: next }).eq("submission_id", data.submissionId);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+/* ── The coach's "run it yourself" prompts ─────────────────────────────────
+ * The nutrition AI's prompts are the coach's method and stay on the server
+ * (nutrition-ai-prompts.server.ts): screens ask for a finished prompt here,
+ * built from what the coach has on screen, and only staff get one. */
+
+const QaList = z.array(z.object({ label: z.string().max(2_000), value: z.string().max(20_000) })).max(200);
+const LongText = z.string().max(60_000).nullable().optional();
+const ClientBasicsSchema = z.union([
+  z.string().max(200),
+  z.object({
+    name: z.string().max(200),
+    sex: z.string().max(40).nullable().optional(),
+    age: z.number().nullable().optional(),
+    height: z.string().max(40).nullable().optional(),
+  }),
+]);
+
+const ManualPromptInput = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("blank_targets") }),
+  z.object({ kind: z.literal("blank_meals") }),
+  z.object({
+    kind: z.literal("targets"),
+    client: ClientBasicsSchema,
+    qas: QaList,
+    phase: z.string().max(80).nullable().optional(),
+    previous: LongText,
+    program: LongText,
+    cardio: LongText,
+    foodNotes: LongText,
+  }),
+  z.object({
+    kind: z.literal("meals"),
+    qas: QaList,
+    targetsText: z.string().max(60_000),
+    phase: z.string().max(80).nullable().optional(),
+    workoutMeals: workoutMealsSchema.nullable().optional(),
+    history: z.any().nullable().optional(),
+    currentMeals: LongText,
+    foodNotes: LongText,
+    restrictions: LongText,
+  }),
+  z.object({
+    kind: z.literal("revise"),
+    qas: QaList,
+    targetsText: z.string().max(60_000),
+    mealPlanText: z.string().max(60_000),
+    instructions: z.string().max(REVISE_MAX_CHARS),
+    phase: z.string().max(80).nullable().optional(),
+    workoutMeals: workoutMealsSchema.nullable().optional(),
+    history: z.any().nullable().optional(),
+    foodNotes: LongText,
+    foodRestrictions: LongText,
+  }),
+  z.object({
+    kind: z.literal("quick_paste"),
+    client: ClientBasicsSchema.nullable().optional(),
+    qas: QaList.nullable().optional(),
+    targetsText: LongText,
+    phase: z.string().max(80).nullable().optional(),
+    workoutMeals: workoutMealsSchema.nullable().optional(),
+    history: z.any().nullable().optional(),
+  }),
+]);
+
+export type ManualNutritionPromptRequest = z.input<typeof ManualPromptInput>;
+
+export const getManualNutritionPromptFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => ManualPromptInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    if (!(await isStaff(supabase, userId))) throw new Error("Only your coach can copy these prompts.");
+    const P = await import("@/lib/nutrition-ai-prompts.server");
+    let text: string;
+    switch (data.kind) {
+      case "blank_targets":
+        text = P.TARGETS_PROMPT;
+        break;
+      case "blank_meals":
+        text = P.MEAL_PLAN_PROMPT;
+        break;
+      case "targets":
+        text = P.manualTargetsPrompt(data.client as any, data.qas, data.phase ?? null, data.previous ?? null, {
+          program: data.program ?? null,
+          cardio: data.cardio ?? null,
+          foodNotes: data.foodNotes ?? null,
+        });
+        break;
+      case "meals":
+        text = P.manualMealPlanPrompt(
+          data.qas,
+          data.targetsText,
+          data.phase ?? null,
+          (data.workoutMeals ?? null) as WorkoutMealsMode | null,
+          data.history ?? null,
+          data.currentMeals ?? null,
+          data.foodNotes ?? null,
+          data.restrictions ?? null,
+        );
+        break;
+      case "revise":
+        text = P.manualRevisePrompt({
+          qas: data.qas,
+          targetsText: data.targetsText,
+          mealPlanText: data.mealPlanText,
+          instructions: data.instructions,
+          phase: data.phase ?? null,
+          workoutMeals: (data.workoutMeals ?? null) as WorkoutMealsMode | null,
+          history: data.history ?? null,
+          foodNotes: data.foodNotes ?? null,
+          foodRestrictions: data.foodRestrictions ?? null,
+        });
+        break;
+      case "quick_paste":
+        text = P.quickPastePrompt({
+          client: (data.client ?? null) as any,
+          qas: data.qas ?? null,
+          targetsText: data.targetsText ?? null,
+          phase: data.phase ?? null,
+          workoutMeals: (data.workoutMeals ?? null) as WorkoutMealsMode | null,
+          history: data.history ?? null,
+        });
+        break;
+    }
+    return { text };
   });

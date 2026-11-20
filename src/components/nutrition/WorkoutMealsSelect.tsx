@@ -1,5 +1,5 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { WORKOUT_MEALS_OPTIONS, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
+import { WORKOUT_MEALS_OPTIONS, type WorkoutMealsMode } from "@/lib/nutrition-request";
 
 /** Coach control: how the AI should handle Pre-/Post-Workout meals. */
 export function WorkoutMealsSelect({

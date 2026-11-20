@@ -9,7 +9,7 @@ import {
   planSpan,
   saidWhen,
 } from "@/lib/nutrition-targets/food-history";
-import { mealPlanUserPrompt } from "@/lib/nutrition-ai-prompts";
+import { mealPlanUserPrompt } from "@/lib/nutrition-ai-prompts.server";
 
 const read = (p: string) => readFileSync(p, "utf8");
 

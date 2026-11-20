@@ -7,7 +7,7 @@ import {
   reviseMealPlanUserPrompt,
   revisionLooksRight,
   type QA,
-} from "@/lib/nutrition-ai-prompts";
+} from "@/lib/nutrition-ai-prompts.server";
 import {
   queueNutritionPlan,
   queueNutritionRevision,

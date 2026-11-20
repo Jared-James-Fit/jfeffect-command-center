@@ -988,7 +988,7 @@ export const getRequestStatus = createServerFn({ method: "POST" })
     const [{ data: pending }, { data: occ }, { NUTRITION_REQUEST_FORM_ID }] = await Promise.all([
       sb.from("messenger_checkins").select("created_at").eq("client_id", data.clientId).eq("task_type", "weekly_checkin").eq("status", "pending").gte("created_at", since).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       sb.from("client_task_occurrences").select("id, due_local_date").eq("client_id", data.clientId).eq("task_type", "weekly_checkin").not("status", "in", "(completed,skipped)").order("due_local_date", { ascending: true }).limit(1).maybeSingle(),
-      import("@/lib/nutrition-ai-prompts"),
+      import("@/lib/nutrition-request"),
     ]);
     let nextAutomated: string | null = null;
     if (occ?.due_local_date) {

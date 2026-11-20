@@ -185,7 +185,7 @@ describe("wired into the app", () => {
     expect(ci).toContain("recordCheckinReview(sb, row.client_id, row.id)");
     const plans = read("src/lib/nutrition-ai-plans.server.ts");
     expect(plans).toContain("loadWeightText(sb, sub.client_id)");
-    const prompts = read("src/lib/nutrition-ai-prompts.ts");
+    const prompts = read("src/lib/nutrition-ai-prompts.server.ts");
     expect(prompts).toMatch(/new cardio is a treadmill walk/);
     expect(prompts).toMatch(/never plan dehydration, water loading, sodium manipulation or a crash cut/);
     const reviews = read("src/lib/weight-management/reviews.server.ts");

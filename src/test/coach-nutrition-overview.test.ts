@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { dietTags, foodNotes, foodNotesForAi, isNoneAnswer } from "@/lib/nutrition-targets/food-notes";
-import { mealPlanUserPrompt, reviseMealPlanUserPrompt, targetsUserPrompt } from "@/lib/nutrition-ai-prompts";
+import { mealPlanUserPrompt, reviseMealPlanUserPrompt, targetsUserPrompt } from "@/lib/nutrition-ai-prompts.server";
 import {
   bodyweightSummary,
   nutritionConsistency,

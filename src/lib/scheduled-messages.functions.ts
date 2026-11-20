@@ -153,9 +153,13 @@ export const retryFailedMessage = createServerFn({ method: "POST" })
       throw new Error("Not authorized to retry this message");
     }
 
+    // The caller is checked above; the worker functions below are the
+    // server's only (20270423090000_security_hardening.sql), so they run as it.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
     // Atomically grab the row (race-safe). Second simultaneous click finds
     // delivery_status='sending' and returns 0 rows.
-    const { data: claimed, error: claimErr } = await supabase.rpc(
+    const { data: claimed, error: claimErr } = await (supabaseAdmin as any).rpc(
       "claim_message_for_retry",
       { _message_id: data.messageId },
     );
@@ -167,7 +171,7 @@ export const retryFailedMessage = createServerFn({ method: "POST" })
 
     // Mark as delivered (retry is "send now" semantics — the body has not
     // changed since the original failed attempt).
-    const { error: finErr } = await supabase.rpc("finalize_message_send", {
+    const { error: finErr } = await (supabaseAdmin as any).rpc("finalize_message_send", {
       _message_id: data.messageId,
       _status: "sent",
       _error: null,

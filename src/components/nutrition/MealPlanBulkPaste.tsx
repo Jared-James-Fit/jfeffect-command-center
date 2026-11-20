@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Copy, ClipboardPaste, Check, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { phaseFromPlanText } from "@/lib/nutrition-cardio";
-import { quickPastePrompt, type ClientBasics, type QA, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
+import type { ClientBasics, QA, WorkoutMealsMode } from "@/lib/nutrition-request";
+import { copyWhenReady } from "@/lib/copy-when-ready";
 import { currentRequest } from "@/lib/form-request-state";
-import { listNutritionRequestsFn } from "@/lib/nutrition-ai-plans.functions";
+import { getManualNutritionPromptFn, listNutritionRequestsFn, type ManualNutritionPromptRequest } from "@/lib/nutrition-ai-plans.functions";
 import type { TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
 import { parseFoodWeighingRules, parseMealPlan, type ParsedDay } from "@/lib/nutrition-targets/meal-plan-parse";
 import { hardToFindFoods } from "@/lib/nutrition-targets/plan-foods";
@@ -208,9 +209,11 @@ export function MealPlanBulkPaste({ onApply, clientId, phase: coachPhase }: Prop
     retry: false,
   });
 
-  // Built ahead of the tap, so copying never waits on the network (iOS only
-  // lets a tap copy synchronously).
-  const { prompt, source } = useMemo(() => {
+  const promptFn = useServerFn(getManualNutritionPromptFn);
+  // What the prompt is built from, ready before the tap; the prompt itself is
+  // built on the server (the AI's prompts never ship to a phone) and the copy
+  // starts inside the tap, filling in when it arrives (copy-when-ready.ts).
+  const { promptRequest, source } = useMemo(() => {
     const data = reqQ.data;
     const latest = data ? currentRequest(data.requests ?? [], data.requestedAt ?? null) : null;
     const answered = latest && latest.status !== "in_progress" && latest.answers?.length ? latest : null;
@@ -218,14 +221,15 @@ export function MealPlanBulkPaste({ onApply, clientId, phase: coachPhase }: Prop
     const phase = coachPhase || answered?.plan?.phase || data?.requestedPhase || null;
     const name = data?.client?.name?.trim().split(/\s+/)[0] || null;
     return {
-      prompt: quickPastePrompt({
+      promptRequest: {
+        kind: "quick_paste",
         client: data?.client ?? null,
         qas: answered?.answers ?? null,
         targetsText: targets,
         phase,
         workoutMeals: answered?.plan?.workout_meals ?? data?.requestedWorkoutMeals ?? null,
         history: data?.trainingPattern ?? null,
-      }),
+      } as ManualNutritionPromptRequest,
       source: !clientId
         ? null
         : reqQ.isLoading
@@ -239,14 +243,17 @@ export function MealPlanBulkPaste({ onApply, clientId, phase: coachPhase }: Prop
   }, [reqQ.data, reqQ.isLoading, clientId, coachPhase]);
 
   const copy = async (kind: "template" | "prompt") => {
-    try {
-      await navigator.clipboard.writeText(kind === "template" ? EXAMPLE_TEMPLATE : prompt);
-      setCopied(kind);
-      toast.success(kind === "template" ? "Template copied" : "ChatGPT prompt copied");
-      setTimeout(() => setCopied(null), 1500);
-    } catch {
+    const ok =
+      kind === "template"
+        ? await copyWhenReady(Promise.resolve(EXAMPLE_TEMPLATE))
+        : await copyWhenReady(promptFn({ data: promptRequest as any }).then((r: { text: string }) => r.text));
+    if (!ok) {
       toast.error("Copy failed — long-press and copy manually");
+      return;
     }
+    setCopied(kind);
+    toast.success(kind === "template" ? "Template copied" : "ChatGPT prompt copied");
+    setTimeout(() => setCopied(null), 1500);
   };
 
   const pasteFromClipboard = async () => {

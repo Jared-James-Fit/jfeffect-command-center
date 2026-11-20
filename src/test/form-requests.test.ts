@@ -10,7 +10,7 @@ import {
   requestStatus,
   type OutstandingRequest,
 } from "@/lib/form-requests";
-import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts";
+import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts.server";
 
 const H = 3_600_000;
 const now = Date.parse("2026-10-06T12:00:00Z");
