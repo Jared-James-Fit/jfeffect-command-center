@@ -2,6 +2,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { importWithRetry } from "@/lib/chunk-import";
 import { canFilmInApp } from "@/lib/camera/film-settings";
+import { primeCamera } from "@/lib/camera/camera-prime";
 
 type CameraComponent = (typeof import("@/components/camera/film-camera"))["FilmCamera"];
 /** Loaded on first use (the set camera's own loader keeps its module the same one). */
@@ -35,6 +36,8 @@ export function useFilmCamera({ maxSeconds, title, onClip, onLibrary }: {
   library.current = onLibrary;
   const start = () => {
     if (!canFilmInApp()) return false;
+    // the camera asked for in this tap, so a camera already allowed opens without asking again (camera-prime.ts)
+    primeCamera();
     if (Cam) {
       setOpen(true);
       return true;

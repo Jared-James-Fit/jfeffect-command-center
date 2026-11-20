@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { claimSetVideoTip, releaseSetVideoTip, setVideoTipCopy, useSetVideoTip } from "@/lib/set-videos/tip";
 import { looksFilmedInApp } from "@/lib/set-videos/phone-copy";
 import { SET_RECORD_MAX_SECONDS, canFilmInApp } from "@/lib/camera/film-settings";
+import { primeCamera } from "@/lib/camera/camera-prime";
 import { setTitle, setWord } from "@/lib/set-videos/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -371,6 +372,8 @@ export function SetVideoCell(props: SetVideoCellProps) {
   const openCamera = () => {
     if (!canAdd) return;
     if (!canFilmInApp()) return openPicker();
+    // the camera asked for in this tap, so a camera already allowed opens without asking again (camera-prime.ts)
+    primeCamera();
     void loadFlow().catch(() => {});
     void import("@/lib/video-edit/pick").then((m) => m.preloadVideoEngine()).catch(() => {});
     // a sheet over the workout would hold the camera's taps (a modal), so it closes first
