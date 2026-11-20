@@ -21,6 +21,7 @@ import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 import { supabase } from "@/integrations/supabase/client";
 import { createSignedUrlCache, localSignedUrlStorage } from "@/lib/signed-url-cache";
 import { checkMediaFile } from "@/lib/community";
+import { fullAvatarPath } from "@/lib/photo-zoom";
 import { captureVideoPoster } from "@/lib/video-poster";
 import type { VideoContext } from "@/lib/video-edit/limits";
 import { pickVideo, preloadVideoEngine, retrimVideo, type PickedVideo, type TrimFn } from "@/lib/video-edit/pick";
@@ -252,38 +253,78 @@ async function uploadVideo(m: PickedMedia, userId: string, onProgress?: (pct: nu
 
 /* ---- community profile photo -------------------------------------- */
 
+/** Every face in the app (lists, the feed, stories) is drawn from this size. */
+export const COMMUNITY_AVATAR_PX = 512;
+/** The full-size copy only the photo viewer loads (the cropper's own export size). */
+export const COMMUNITY_AVATAR_FULL_PX = 1080;
+
 /**
- * Centre-crop a chosen photo to a 512px square JPEG. Lives in the existing
- * private `avatars` bucket under `<uid>/community-*` (owner-write, signed-in
- * read), separate from the account / identity photo.
+ * Centre-crop a chosen photo to a square JPEG of at most `max` px. Lives in
+ * the existing private `avatars` bucket under `<uid>/community-*`
+ * (owner-write, signed-in read), separate from the account / identity photo.
  */
-export async function prepareCommunityAvatar(file: File): Promise<Blob> {
+export async function prepareCommunityAvatar(file: File, max = COMMUNITY_AVATAR_PX): Promise<Blob> {
+  return (await prepareCommunityAvatarSizes(file, [max]))[0]!;
+}
+
+/** The same square at each size, from one read of the photo (a size it doesn't have the pixels for is drawn at its own). */
+async function prepareCommunityAvatarSizes(file: File, sizes: number[]): Promise<Blob[]> {
   if (!file.type.startsWith("image/")) throw new Error("Pick a photo");
   const url = URL.createObjectURL(file);
   try {
     const img = await loadImageEl(url);
     if (!img) throw new Error("Couldn't read that photo. Try a JPEG or PNG.");
     const side = Math.min(img.naturalWidth, img.naturalHeight);
-    const out = Math.min(512, side);
-    const c = document.createElement("canvas");
-    c.width = out;
-    c.height = out;
-    c.getContext("2d")!.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, out, out);
-    const blob = await canvasToJpeg(c, 0.86);
-    c.width = c.height = 0;
-    if (!blob) throw new Error("Couldn't prepare that photo");
-    return blob;
+    const out: Blob[] = [];
+    for (const max of sizes) {
+      const px = Math.min(max, side);
+      const c = document.createElement("canvas");
+      c.width = px;
+      c.height = px;
+      const ctx = c.getContext("2d")!;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, px, px);
+      const blob = await canvasToJpeg(c, px > COMMUNITY_AVATAR_PX ? 0.88 : 0.86);
+      c.width = c.height = 0;
+      if (!blob) throw new Error("Couldn't prepare that photo");
+      out.push(blob);
+    }
+    return out;
   } finally {
     URL.revokeObjectURL(url);
   }
 }
 
+/**
+ * Saves a Crew photo twice: `community-<t>.jpg` at 512 px (what every face
+ * loads) and, when the photo has the pixels, `community-<t>-full.jpg` at up
+ * to 1080 px for the photo viewer (fullAvatarPath, photo-zoom.ts). The
+ * full-size copy is best effort: the photo is saved without it, and the
+ * viewer shows the 512 px one instead.
+ */
 export async function uploadCommunityAvatar(file: File, userId: string): Promise<string> {
-  const blob = await prepareCommunityAvatar(file);
+  const [small, full] = await prepareCommunityAvatarSizes(file, [COMMUNITY_AVATAR_PX, COMMUNITY_AVATAR_FULL_PX]);
   const path = `${userId}/community-${Date.now()}.jpg`;
-  const { error } = await supabase.storage.from("avatars").upload(path, blob, { contentType: "image/jpeg", upsert: false });
-  if (error) throw error;
+  const bucket = supabase.storage.from("avatars");
+  const bigger = full && full.size > small!.size;
+  const [{ error }] = await Promise.all([
+    bucket.upload(path, small!, { contentType: "image/jpeg", upsert: false }),
+    bigger
+      ? bucket.upload(fullAvatarPath(path)!, full!, { contentType: "image/jpeg", upsert: false }).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+  if (error) {
+    if (bigger) await bucket.remove([fullAvatarPath(path)!]).catch(() => {});
+    throw error;
+  }
   return path;
+}
+
+/** A Crew photo's files: the photo and its full-size copy (removing one that isn't there is harmless). */
+export function communityAvatarFiles(path: string | null | undefined): string[] {
+  if (!path) return [];
+  const full = fullAvatarPath(path);
+  return full ? [path, full] : [path];
 }
 
 /** Best-effort cleanup of files no post points at any more. */
