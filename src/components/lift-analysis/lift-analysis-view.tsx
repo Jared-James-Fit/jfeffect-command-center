@@ -58,10 +58,14 @@ import type { Metric } from "@/lib/lift-analysis/kinematics";
 import { compareToProfile, fitProfile } from "@/lib/lift-analysis/profile";
 import {
   deleteAnalysis,
+  isRead,
   saveAnalysis,
+  saveNotRead,
   useLoadVelocityPoints,
+  useSetForVideo,
   useSetVideoAnalyses,
 } from "@/lib/lift-analysis/queries";
+import { loggedState, type LoggedSet } from "@/lib/lift-analysis/verdict";
 import { analyzeVideo, type RunProgress } from "@/lib/lift-analysis/run";
 import { useRunningAnalysis } from "@/lib/lift-analysis/store";
 import { cn } from "@/lib/utils";
@@ -115,8 +119,12 @@ function Body({
   setLabel,
   startOnOpen,
 }: Props) {
-  const { data: stored, isLoading } = useSetVideoAnalyses([setVideoId]);
-  const saved = stored?.[setVideoId] ?? null;
+  const { data: storedMap, isLoading } = useSetVideoAnalyses([setVideoId]);
+  const stored = storedMap?.[setVideoId] ?? null;
+  const saved = isRead(stored) ? stored : null;
+  // tried by itself after it was sent: the plate needs a tap (with the circles worth offering), or it couldn't be read
+  const notRead = stored && !saved ? stored : null;
+  const { data: loggedSet } = useSetForVideo(setVideoId);
   const autoRun = useRunningAnalysis(setVideoId);
   const [fresh, setFresh] = useState<LiftAnalysis | null>(null);
   const [mode, setMode] = useState<"idle" | "running" | "pick" | "failed">("idle");
@@ -175,6 +183,13 @@ function Body({
     if (res.why === "ambiguous" || res.why === "no_plate" || res.why === "no_plate_at_tap") {
       setSuggestions(res.suggestions ?? []);
       setMode("pick");
+      if (!saved && !opts.tap)
+        void saveNotRead(setVideoId, {
+          engine: "bar-path/2",
+          status: "needs_tap",
+          why: res.why,
+          suggestions: res.suggestions ?? [],
+        }).catch(() => {});
       if (res.why === "no_plate_at_tap")
         toast.message("No plate there. Tap the round end of the bar.");
       return;
@@ -187,14 +202,22 @@ function Body({
     setMode("failed");
   };
 
-  // opened to analyse: start once the stored read is known to be missing (and no auto run is going)
+  // opened to analyse: start once the stored read is known to be missing (and no auto run is going);
+  // one that found no plate by itself opens straight on the tap, with the circles it saw
   const started = useRef(false);
   useEffect(() => {
-    if (started.current || !startOnOpen || isLoading || saved || autoRun || !src) return;
+    if (started.current || isLoading || saved || autoRun || !src) return;
+    if (notRead?.status === "needs_tap") {
+      started.current = true;
+      setSuggestions(((notRead.result as any)?.suggestions ?? []) as PickSuggestion[]);
+      setMode("pick");
+      return;
+    }
+    if (!startOnOpen || notRead) return;
     started.current = true;
     void run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startOnOpen, isLoading, saved, autoRun, src]);
+  }, [startOnOpen, isLoading, saved, notRead?.status, autoRun, src]);
 
   const remove = async () => {
     try {
@@ -367,8 +390,9 @@ function Body({
         {!busy && mode !== "pick" && !analysis && !isLoading && mode !== "failed" && (
           <div className="rounded-2xl border border-border p-4">
             <p className="text-sm text-muted-foreground">
-              Reads the bar's path and speed from the video, on this device: film side-on with the
-              end of the bar in view.
+              {notRead?.status === "failed"
+                ? "This video couldn't be read on the phone that sent it. Try it here."
+                : "Reads the bar's path and speed from the video, on this device: film side-on with the end of the bar in view."}
             </p>
             <Button
               className="mt-3 h-11"
@@ -388,6 +412,8 @@ function Body({
             setVideoId={setVideoId}
             clientId={saved?.client_id ?? null}
             exerciseId={saved?.exercise_id ?? null}
+            loggedSet={loggedSet ?? null}
+            fresh={!!fresh}
           />
         )}
       </div>
@@ -495,6 +521,8 @@ function Results({
   setVideoId,
   clientId,
   exerciseId,
+  loggedSet,
+  fresh,
 }: {
   analysis: LiftAnalysis;
   selected: number | null;
@@ -502,6 +530,9 @@ function Results({
   setVideoId: string;
   clientId: string | null;
   exerciseId: string | null;
+  loggedSet: LoggedSet | null;
+  /** Read just now, on this device (the set is read again once the save lands). */
+  fresh: boolean;
 }) {
   const calibrated = a.units === "mm";
   const headline = a.set.reps > 1 ? a.set.bestMcv : a.set.firstMcv;
@@ -516,6 +547,9 @@ function Results({
   const rep = a.reps[repIdx];
   const notes = shownNotes(a);
   const incomplete = a.reps.filter((r) => !r.complete).length;
+  // an older read (before set velocities were logged) has no verdict: nothing said
+  const logged = a.velocity ? loggedState(a, loggedSet, setVideoId) : null;
+  const notLogged = logged && !logged.logged ? logged.text : null;
 
   if (!a.reps.length) {
     return (
@@ -530,7 +564,9 @@ function Results({
     <div className="space-y-4" data-lift-analysis-results>
       {/* the set at a glance */}
       <section>
-        {calibrated && headline.tier !== "unavailable" ? (
+        {a.velocity?.accepted && a.velocity.value != null ? (
+          <SetAverage analysis={a} setVideoId={setVideoId} loggedSet={loggedSet} fresh={fresh} />
+        ) : calibrated && headline.tier !== "unavailable" ? (
           <>
             <div className="text-[12px] text-muted-foreground">
               {a.set.reps > 1 ? "Fastest rep · mean velocity up" : "Mean velocity up"}
@@ -544,6 +580,11 @@ function Results({
               </span>
             </div>
             <TierNote m={headline} />
+            {notLogged && (
+              <p className="mt-1 text-xs text-muted-foreground" data-velocity-not-logged>
+                {notLogged.replace("Not logged:", "Set velocity not logged:")}
+              </p>
+            )}
           </>
         ) : (
           <>
@@ -619,6 +660,42 @@ function Results({
       )}
 
       <HowMeasured analysis={a} />
+    </div>
+  );
+}
+
+/** The set's average of every rep, and whether it's the set's velocity in the logger. */
+function SetAverage({
+  analysis: a,
+  setVideoId,
+  loggedSet,
+  fresh,
+}: {
+  analysis: LiftAnalysis;
+  setVideoId: string;
+  loggedSet: LoggedSet | null;
+  fresh: boolean;
+}) {
+  const state = loggedState(a, loggedSet, setVideoId);
+  const reps = a.velocity.reps;
+  return (
+    <div data-set-average>
+      <div className="text-[12px] text-muted-foreground">
+        {reps > 1 ? `Average velocity · all ${reps} reps` : "Mean velocity up"}
+      </div>
+      <div className="text-[32px] font-semibold leading-tight tabular-nums" data-headline-speed>
+        {a.velocity.value!.toFixed(2)} m/s
+      </div>
+      <p
+        className="text-xs text-muted-foreground"
+        data-logged-state={state.logged ? "logged" : state.why}
+      >
+        {state.logged
+          ? "Logged to the set"
+          : fresh && state.why === "other"
+            ? "Saving to the set…"
+            : state.text}
+      </p>
     </div>
   );
 }

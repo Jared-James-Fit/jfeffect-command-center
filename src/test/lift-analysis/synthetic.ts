@@ -199,7 +199,7 @@ export function trajectory(scene: Scene): Truth {
   return { t, y, x, v, reps, mmPerPx: (scene.plateMm ?? 450) / scene.plateDiameterPx };
 }
 
-function interp(arr: Float64Array, t: Float64Array, at: number): number {
+export function interp(arr: Float64Array, t: Float64Array, at: number): number {
   const dt = t[1] - t[0];
   const f = Math.max(0, Math.min(arr.length - 1, (at - t[0]) / dt));
   const i = Math.floor(f);

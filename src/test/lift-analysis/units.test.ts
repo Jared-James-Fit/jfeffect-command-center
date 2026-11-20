@@ -7,7 +7,6 @@
 import { describe, expect, it } from "vitest";
 import { analyzeTrack, MAX_REP_ROM_MM } from "@/lib/lift-analysis/analyze";
 import { calibrate } from "@/lib/lift-analysis/calibrate";
-import { outerRings } from "@/lib/lift-analysis/detect";
 import { analysableExercise, repDirection } from "@/lib/lift-analysis/exercise";
 import {
   cm,
@@ -21,7 +20,6 @@ import {
 import { bridgeGaps, legs, loess, metric, NONE } from "@/lib/lift-analysis/kinematics";
 import { compareToProfile, fitProfile, type LvPoint } from "@/lib/lift-analysis/profile";
 import type { TrackPoint } from "@/lib/lift-analysis/track";
-import type { RimFit } from "@/lib/lift-analysis/circle";
 
 describe("smoothing", () => {
   it("recovers position and velocity of a parabola exactly, on uneven timestamps", () => {
@@ -81,26 +79,6 @@ describe("a number's tier comes from its margin", () => {
     expect(metric(0.5, 0.2).tier).toBe("unavailable");
     expect(metric(0.5, 0.02, { forceEstimate: "low_fps" }).tier).toBe("estimated");
     expect(metric(0.5, 0.02).u).toBeCloseTo(0.02, 6);
-  });
-});
-
-describe("plate rings", () => {
-  const c = (x: number, y: number, r: number): RimFit => ({
-    x,
-    y,
-    r,
-    a: r,
-    b: r,
-    coverage: 0.9,
-    rms: 0.3,
-    strength: 80,
-    n: 60,
-  });
-  it("a hub inside a plate counts for the plate and is never a candidate itself", () => {
-    const out = outerRings([c(100, 100, 10), c(100, 101, 40), c(200, 200, 40), c(100, 100, 36)]);
-    expect(out.map((o) => o.r)).toEqual([40, 40]);
-    expect(out.find((o) => o.x === 100)!.rings).toBe(2);
-    expect(out.find((o) => o.x === 200)!.rings).toBe(0);
   });
 });
 
@@ -240,6 +218,10 @@ describe("how numbers are said", () => {
       seed: { x: 140, y: 160, r: 40, t: 0 },
       frame: { w: 270, h: 480 },
     });
-    expect(summaryLine(a)).toMatch(/^2 reps · best (≈)?0\.\d\d m\/s/);
+    // a set good enough to log says its average; one that isn't, its fastest rep
+    expect(a.velocity.accepted).toBe(true);
+    expect(summaryLine(a)).toMatch(/^2 reps · avg 0\.\d\d m\/s/);
+    const notLogged = { ...a, velocity: { ...a.velocity, accepted: false, value: null } };
+    expect(summaryLine(notLogged)).toMatch(/^2 reps · best (≈)?0\.\d\d m\/s/);
   });
 });

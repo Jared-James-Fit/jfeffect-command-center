@@ -1,9 +1,10 @@
 /**
  * The way into a set video's bar path & speed: one quiet line under the clip
  * (the set video's sheet, its card in the coach chat). It says the set's
- * read once there is one ("Bar path · 3 reps · best 0.53 m/s · 31% velocity
- * loss"), how far a read on this phone has got while it runs, or offers
- * "Analyze bar path" for a barbell lift. Nothing for an exercise without a
+ * read once there is one ("Bar path · 5 reps · avg 0.21 m/s · 18% velocity
+ * loss"), how far a read on this phone has got while it runs, that the
+ * plate needs a tap when it wasn't clear on its own, or offers "Analyze bar
+ * path" for a barbell lift. Nothing for an exercise without a
  * bar. The full view loads only when it's opened.
  */
 import { useState } from "react";
@@ -12,7 +13,7 @@ import { Activity, ChevronRight } from "lucide-react";
 import { importWithRetry } from "@/lib/chunk-import";
 import { analysableExercise } from "@/lib/lift-analysis/exercise";
 import { summaryLine } from "@/lib/lift-analysis/format";
-import { useSetVideoAnalyses } from "@/lib/lift-analysis/queries";
+import { isRead, useSetVideoAnalyses } from "@/lib/lift-analysis/queries";
 import { useRunningAnalysis } from "@/lib/lift-analysis/store";
 import { cn } from "@/lib/utils";
 
@@ -41,12 +42,16 @@ export function LiftAnalysisEntry({
   className?: string;
 }) {
   const { data } = useSetVideoAnalyses([setVideoId]);
-  const saved = data?.[setVideoId] ?? null;
+  const stored = data?.[setVideoId] ?? null;
+  const saved = isRead(stored) ? stored : null;
+  // tried on its own: the plate needs a tap, or the video couldn't be read on that phone
+  const notRead =
+    stored && !saved ? (stored.status === "needs_tap" ? "needs_tap" : "failed") : null;
   const running = useRunningAnalysis(setVideoId);
   const [open, setOpen] = useState(false);
   const [, setLoaded] = useState(0);
   const barbell = analysableExercise(exerciseName);
-  if (!saved && !running && !barbell) return null;
+  if (!stored && !running && !barbell) return null;
 
   const openView = () => {
     if (View) return setOpen(true);
@@ -64,7 +69,11 @@ export function LiftAnalysisEntry({
     ? `Reading bar path… ${Math.round(100 * ((["opening", "finding", "tracking", "reading"].indexOf(running.stage) + running.progress) / 4))}%`
     : saved
       ? `Bar path · ${summaryLine(saved.result)}`
-      : "Analyze bar path";
+      : notRead === "needs_tap"
+        ? "Bar path · tap the plate to read it"
+        : notRead === "failed"
+          ? "Bar path · couldn't read this video"
+          : "Analyze bar path";
 
   return (
     <>
@@ -77,7 +86,7 @@ export function LiftAnalysisEntry({
           saved ? "text-foreground" : "text-muted-foreground hover:text-foreground",
           className,
         )}
-        data-lift-analysis-entry={saved ? "done" : running ? "running" : "offer"}
+        data-lift-analysis-entry={saved ? "done" : running ? "running" : (notRead ?? "offer")}
       >
         <Activity className="h-4 w-4 shrink-0" />
         <span className="min-w-0 flex-1 truncate tabular-nums">{label}</span>
@@ -92,7 +101,7 @@ export function LiftAnalysisEntry({
           poster={poster}
           exerciseName={exerciseName}
           setLabel={setLabel}
-          startOnOpen={!saved && !running}
+          startOnOpen={!stored && !running}
         />
       )}
     </>

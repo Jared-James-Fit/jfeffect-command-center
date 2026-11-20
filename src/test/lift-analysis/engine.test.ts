@@ -12,7 +12,15 @@
  */
 import { describe, expect, it } from "vitest";
 import { runEngine, type EngineResult } from "@/lib/lift-analysis/engine";
-import { deadliftSet, renderClip, squatSet, type Clip, type Phase, type Scene } from "./synthetic";
+import {
+  deadliftSet,
+  interp,
+  renderClip,
+  squatSet,
+  type Clip,
+  type Phase,
+  type Scene,
+} from "./synthetic";
 
 const T = 120_000;
 
@@ -80,7 +88,9 @@ describe("lift analysis engine (synthetic clips with a known answer)", () => {
         }),
       );
       const a = checkReps(clip, res, { expectTier: "measured" });
-      expect(Math.abs(a.plate.x - 139.5)).toBeLessThan(2);
+      // the plate where it really was in the frame its picture was taken from (the bar drifts)
+      const xTruth = 140 - 0.5 + interp(clip.truth.x, clip.truth.t, a.plate.t) / clip.truth.mmPerPx;
+      expect(Math.abs(a.plate.x - xTruth)).toBeLessThan(2);
       expect(a.plate.source).toBe("auto");
       expect(a.dir).toBe("lower_first");
       expect(a.calibration.ok).toBe(true);

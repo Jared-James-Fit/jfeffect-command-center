@@ -196,6 +196,7 @@ import {
   getTimerTarget, setTimerTarget, getRowInputs, setRowInputs, getVelocityDefault, setVelocityDefault, type RowInputOverrides,
 } from "@/lib/log-as-override";
 import { Timer, Heart, Activity, ChevronRight } from "lucide-react";
+import { LIFT_ANALYSIS_CHANGED } from "@/lib/lift-analysis/store";
 import { DayCoachNotes, ScheduledDayLine, loggerMeta, loggerTitle } from "@/components/workout-day/logger-top";
 import { exerciseNoteForAthlete } from "@/lib/workouts/coach-notes";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
@@ -1445,6 +1446,14 @@ function WorkoutDay({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [secondaryHydrationReady, client?.id, dayId, rowIds.join(","), qc]);
   // ────────────────────────────────────────────────────────────────────────
+
+  // A set video's bar speed read on this device: the server puts it on the
+  // set (set_video_analysis_save), so read the sets again to show it.
+  useEffect(() => {
+    const on = () => void qc.invalidateQueries({ queryKey: ["pl-day-results"] });
+    window.addEventListener(LIFT_ANALYSIS_CHANGED, on);
+    return () => window.removeEventListener(LIFT_ANALYSIS_CHANGED, on);
+  }, [qc]);
 
   // ── Member real-time multi-device sync ──────────────────────────────────
   // Mirror the client realtime channel for member workouts: when a member
@@ -4006,7 +4015,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
       throw error;
     }
   };
-  const showVelocity = inputOverrides.velocity ?? velocityDefault;
+  // a set whose bar speed was read from its video shows the column, unless they turned it off here
+  const velocityFromVideo = (existingResults as any[]).some((x) => x?.velocity_source === "video");
+  const showVelocity = inputOverrides.velocity ?? (velocityDefault || velocityFromVideo);
   // Cardio done for time (a treadmill walk, a bike) gets an optional Calories
   // box by default; any row can turn it on or off in the columns menu. It's
   // never needed for the set to count as done.
@@ -5537,7 +5548,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
           ))}
           {showCalories && <span title="Calories from the machine or your watch (optional)">Cal</span>}
           <EffortScaleHeader rir={showRir} />
-          {showVelocity && <span title="Average concentric velocity — enter the final rep for multi-rep sets">Avg Vel</span>}
+          {showVelocity && <span title="Average concentric velocity of the set, in m/s">Avg Vel</span>}
           {!hideWeight && <span className="truncate">{loadColumnLabel(rowLoadType, activeUnit)}</span>}
           {videoColumn && (
             <span className="flex justify-center" title="A video of the set, for your coach">
@@ -6307,8 +6318,30 @@ function SetRow({
     setLoadUnit(unitRef.current);
   };
   const serverVelocity = (existing as any)?.mean_concentric_velocity_mps != null ? Number((existing as any).mean_concentric_velocity_mps) : null;
-  const [velocity, setVelocity] = useState(serverVelocity != null ? String(serverVelocity) : "");
-  useEffect(() => { setVelocity(serverVelocity != null ? String(serverVelocity) : ""); }, [serverVelocity]);
+  const serverVelocityText = serverVelocity != null ? String(serverVelocity) : "";
+  // what the server holds now: a save sends the velocity only when it's been changed from this,
+  // so saving the reps or RPE never wipes (or claims as typed) a speed read from the set's video
+  const serverVelocityRef = useRef(serverVelocityText);
+  serverVelocityRef.current = serverVelocityText;
+  const velocityFromVideo = (existing as any)?.velocity_source === "video";
+  const [velocity, setVelocity] = useState(serverVelocityText);
+  const velocityRef = useRef(velocity);
+  velocityRef.current = velocity;
+  const velocityFocusedRef = useRef(false);
+  useEffect(() => {
+    const shown = velocityRef.current.trim() === "" ? null : Number(velocityRef.current);
+    if (velocityFocusedRef.current || shown === serverVelocity) return;
+    setVelocity(serverVelocityText);
+    // already saved (a video's read, another device): shown, never saved a second time
+    adoptShownAsSaved(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverVelocity]);
+  const velocityChanged = (typed: string) => {
+    const a = typed.trim();
+    const b = serverVelocityRef.current;
+    if (!a || !b) return a !== b;
+    return Number(a) !== Number(b);
+  };
   // Calories for a cardio set (from the machine or a watch). Optional.
   const serverCalories = (existing as any)?.actual_calories != null ? Number((existing as any).actual_calories) : null;
   const [calories, setCalories] = useState(serverCalories != null ? String(serverCalories) : "");
@@ -6755,7 +6788,7 @@ function SetRow({
             actual_reps: repsNum,
             actual_rpe: value.rpe || null,
             actual_rpe_num: rpeNum,
-            mean_concentric_velocity_mps: velocityNum,
+            ...(velocityChanged(value.velocity) ? { mean_concentric_velocity_mps: velocityNum } : {}),
             ...(showCalories ? { actual_calories: caloriesNum } : {}),
             ...distanceFields(value.distance, value.distanceUnit),
             ...(autoDuration ? { completed_duration_seconds: autoDuration, completion_method: "prescribed_quick_confirm" } : {}),
@@ -6823,7 +6856,7 @@ function SetRow({
         actual_reps: onlyPlan ? null : repsNum,
         actual_rpe: onlyPlan ? null : rpe || null,
         actual_rpe_num: onlyPlan ? null : rpeNum,
-        mean_concentric_velocity_mps: velocityNum,
+        ...(velocityChanged(velocity) ? { mean_concentric_velocity_mps: velocityNum } : {}),
         ...(showCalories ? { actual_calories: caloriesNum } : {}),
         ...distanceFields(distance, distUnit),
         ...(autoDuration
@@ -6836,8 +6869,12 @@ function SetRow({
       // now and let them recalculate instantly. The hydrate guard keeps this
       // from touching the inputs; a failed write refetches the truth below.
       recentlySavedRef.current = true;
+      // a speed typed here is theirs (the server stamps it the same way): the video's mark comes off at once
+      const cachePatch = "mean_concentric_velocity_mps" in payload
+        ? { ...payload, velocity_source: payload.mean_concentric_velocity_mps == null ? null : "device", velocity_set_video_id: null }
+        : payload;
       qc.setQueriesData({ queryKey: ["pl-day-results", workoutId] }, (old: any) =>
-        applyOptimisticSetResult(old, payload, existing?.id ?? null));
+        applyOptimisticSetResult(old, cachePatch, existing?.id ?? null));
       // PostgREST keeps a pooled connection in "current transaction is
       // aborted" (SQLSTATE 25P02) state if a prior statement on the same
       // connection failed. Detect that and retry exactly once after a brief
@@ -7635,20 +7672,28 @@ function SetRow({
           focusMode={focusMode}
       />
       {showVelocity && (
-        <Input
-          value={velocity}
-          onChange={(e) => setVelocity(e.target.value.replace(/[^0-9.]/g, "").slice(0, 5))}
-          onBlur={flushSaveAfterEdit}
-          onKeyDown={onEnter}
-          inputMode="decimal"
-          placeholder="m/s"
-          aria-label={`Set ${setIndex} average concentric velocity in metres per second; for multi-rep sets enter the final rep`}
-          disabled={readonly}
-          className={cn(
-            "px-1.5 text-center tabular-nums",
-            focusMode ? "h-12 text-base sm:h-10 sm:text-sm" : "h-11 text-sm sm:h-8 sm:text-xs",
+        <div className="relative min-w-0">
+          <Input
+            value={velocity}
+            onChange={(e) => setVelocity(e.target.value.replace(/[^0-9.]/g, "").slice(0, 5))}
+            onFocus={() => { velocityFocusedRef.current = true; }}
+            onBlur={() => { velocityFocusedRef.current = false; flushSaveAfterEdit(); }}
+            onKeyDown={onEnter}
+            inputMode="decimal"
+            placeholder="m/s"
+            aria-label={`Set ${setIndex} average concentric velocity in metres per second${velocityFromVideo && !velocityChanged(velocity) ? ", read from the set video" : ""}`}
+            title={velocityFromVideo && !velocityChanged(velocity) ? "Read from the set video (average of every rep)" : undefined}
+            disabled={readonly}
+            data-velocity-source={velocityFromVideo && !velocityChanged(velocity) ? "video" : undefined}
+            className={cn(
+              "px-1.5 text-center tabular-nums",
+              focusMode ? "h-12 text-base sm:h-10 sm:text-sm" : "h-11 text-sm sm:h-8 sm:text-xs",
+            )}
+          />
+          {velocityFromVideo && !velocityChanged(velocity) && (
+            <Video aria-hidden className="pointer-events-none absolute right-1 top-1 h-2.5 w-2.5 text-muted-foreground" />
           )}
-        />
+        </div>
       )}
       {!hideWeight && (
       <WeightValueInput
