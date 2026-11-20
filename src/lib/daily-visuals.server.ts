@@ -509,7 +509,7 @@ async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
       }),
     );
     model = t.model;
-    const parsed = parseConcept(t.text, { ...choices, art: force.art ?? null, crowd, classify });
+    const parsed = parseConcept(t.text, { ...choices, art: force.art ?? null, crowd, classify, day: r.day });
     if (!parsed) {
       notes = ["the answer wasn't the JSON asked for"];
       continue;
@@ -645,6 +645,7 @@ async function applyMade(
       setting: concept.setting ?? null,
       rendering: concept.rendering ?? null,
       cast: concept.cast ?? null,
+      woman_build: concept.womanBuild ?? null,
       palette: concept.palette ?? null,
       read: concept.read ?? null,
       look: FILM_LOOK_VERSION,
@@ -972,6 +973,8 @@ export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<
     medium: d!.rev.medium,
     colour: d!.rev.colour,
     physique: d!.rev.physique,
+    women: d!.rev.women,
+    woman_build: concept.womanBuild ?? null,
     clarity: d!.rev.clarity,
     reference: d!.provider.endsWith("+ref"),
     description: d!.rev.description,
