@@ -1253,8 +1253,18 @@ describe("women who train (Nov 20 2026)", () => {
   });
 
   it("a test can ask for one kind of person, to check how she or he is drawn", () => {
-    expect(conceptPrompt({ day: "2026-11-20", theme: "courage", audience: "everyone", crowd: "everyone", faith: false, choices: { pillar: "mindset", topics: ["long_game"], formats: ["coach_note"], styles: ["medium_candid"], lights: ["big_windows"], casts: ["powerlifter"] }, learnings: "", best: [], worst: [], recent: [], lead: "woman" } as any)).toContain("THE PERSON THE POST IS ABOUT IS A WOMAN.");
+    expect(conceptPrompt({ day: "2026-11-20", theme: "courage", audience: "everyone", crowd: "everyone", faith: false, choices: { pillar: "mindset", topics: ["long_game"], formats: ["coach_note"], styles: ["medium_candid"], lights: ["big_windows"], casts: ["powerlifter"] }, learnings: "", best: [], worst: [], recent: [], lead: "woman" } as any)).toContain("THE PERSON THE POST IS ABOUT IS A WOMAN: write them as one in \"visual\".");
     expect(server).toContain("casts: force.cast ? [force.cast] : picked.casts,");
     expect(server).toContain('lead: pick(["woman", "man"] as const, spec.lead),');
+  });
+
+  it("the women's line never tips a post toward women, and a test's cast sticks", () => {
+    const line = womenLine(DAILY_CAST_KEYS, "2026-11-20");
+    expect(line).toContain("whoever fits the post: a man or a woman, never a woman just because of this line");
+    // only a cast it was offered: a test's one cast holds even when the writer picks another
+    expect(castFor("coach_athlete", { kind: "educational", discipline: "", audience: "", show: "", people: "two" }, ["physique"])).toBe("physique");
+    // on a real day every cast is offered, so the writer's pick stands as before
+    expect(castFor("coach_athlete", { kind: "educational", discipline: "", audience: "", show: "", people: "two" })).toBe("coach_athlete");
+    expect(castFor("nonsense", { kind: "educational", discipline: "", audience: "", show: "", people: "group" })).toBe("crew");
   });
 });
