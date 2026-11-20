@@ -12,6 +12,7 @@ import { ThemeAccountSync } from "@/lib/theme-account-sync";
 import { CoachingAgreementProvider } from "@/components/coaching-agreement/agreement-provider";
 import { AccountLifecycleGate } from "@/components/account/account-lifecycle";
 import { SetVideoResume } from "@/lib/set-videos/resume";
+import { StaffMfaGate } from "@/components/two-step/staff-mfa-gate";
 
 // Module-level warm session: once the guard has validated a user this app
 // lifetime, in-app revalidations (router.invalidate after mutations, error
@@ -160,21 +161,25 @@ export const Route = createFileRoute("/_authenticated")({
 
 function AuthenticatedLayout() {
   return (
-    // Coaching Agreement: status, the launch popup and the signing flow. It sits above every
-    // signed-in page so the popup shows once per app open wherever the client lands.
-    <CoachingAgreementProvider>
-      <NavigationProgress />
-      <SignedInAppContext.Provider value>
-        <Outlet />
-      </SignedInAppContext.Provider>
-      <ClientProfileOverlayMount />
-      <MemberProfileOverlayMount />
-      <ThemeAnnouncementGate />
-      <ThemeAccountSync />
-      {/* a set video iOS cut off mid-upload carries on by itself */}
-      <SetVideoResume />
-      {/* an account in Recently deleted: Restore (or Contact support) over everything */}
-      <AccountLifecycleGate />
-    </CoachingAgreementProvider>
+    // Two-step sign-in first (the admin and finance logins, and anyone with an authenticator):
+    // nothing behind it renders until the session has had its code.
+    <StaffMfaGate>
+      {/* Coaching Agreement: status, the launch popup and the signing flow. It sits above every
+          signed-in page so the popup shows once per app open wherever the client lands. */}
+      <CoachingAgreementProvider>
+        <NavigationProgress />
+        <SignedInAppContext.Provider value>
+          <Outlet />
+        </SignedInAppContext.Provider>
+        <ClientProfileOverlayMount />
+        <MemberProfileOverlayMount />
+        <ThemeAnnouncementGate />
+        <ThemeAccountSync />
+        {/* a set video iOS cut off mid-upload carries on by itself */}
+        <SetVideoResume />
+        {/* an account in Recently deleted: Restore (or Contact support) over everything */}
+        <AccountLifecycleGate />
+      </CoachingAgreementProvider>
+    </StaffMfaGate>
   );
 }
