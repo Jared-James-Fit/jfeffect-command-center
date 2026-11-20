@@ -43,6 +43,7 @@ import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenti
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
 import { Route as AthletesHandleRouteImport } from './routes/athletes.$handle'
 import { Route as AutopayTokenRouteImport } from './routes/autopay.$token'
+import { Route as BTokenRouteImport } from './routes/b.$token'
 import { Route as BookRouteImport } from './routes/book.'
 import { Route as BookSlugRouteImport } from './routes/book.$slug'
 import { Route as ChallengesIndexRouteImport } from './routes/challenges.index'
@@ -476,6 +477,11 @@ const AthletesHandleRoute = AthletesHandleRouteImport.update({
 const AutopayTokenRoute = AutopayTokenRouteImport.update({
   id: '/autopay/$token',
   path: '/autopay/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BTokenRoute = BTokenRouteImport.update({
+  id: '/b/$token',
+  path: '/b/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookRoute = BookRouteImport.update({
@@ -2056,6 +2062,7 @@ export interface FileRoutesByFullPath {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/athletes/$handle': typeof AthletesHandleRoute
   '/autopay/$token': typeof AutopayTokenRoute
+  '/b/$token': typeof BTokenRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
@@ -2351,6 +2358,7 @@ export interface FileRoutesByTo {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/athletes/$handle': typeof AthletesHandleRoute
   '/autopay/$token': typeof AutopayTokenRoute
+  '/b/$token': typeof BTokenRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
@@ -2650,6 +2658,7 @@ export interface FileRoutesById {
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/athletes/$handle': typeof AthletesHandleRoute
   '/autopay/$token': typeof AutopayTokenRoute
+  '/b/$token': typeof BTokenRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
@@ -2950,6 +2959,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/athletes/$handle'
     | '/autopay/$token'
+    | '/b/$token'
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
@@ -3245,6 +3255,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/athletes/$handle'
     | '/autopay/$token'
+    | '/b/$token'
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
@@ -3543,6 +3554,7 @@ export interface FileRouteTypes {
     | '/api/drive-upload'
     | '/athletes/$handle'
     | '/autopay/$token'
+    | '/b/$token'
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
@@ -3837,6 +3849,7 @@ export interface RootRouteChildren {
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   AthletesHandleRoute: typeof AthletesHandleRoute
   AutopayTokenRoute: typeof AutopayTokenRoute
+  BTokenRoute: typeof BTokenRoute
   BookSlugRoute: typeof BookSlugRoute
   CoachingApplyRoute: typeof CoachingApplyRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
@@ -4144,6 +4157,13 @@ declare module '@tanstack/react-router' {
       path: '/autopay/$token'
       fullPath: '/autopay/$token'
       preLoaderRoute: typeof AutopayTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/b/$token': {
+      id: '/b/$token'
+      path: '/b/$token'
+      fullPath: '/b/$token'
+      preLoaderRoute: typeof BTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/book/': {
@@ -6665,6 +6685,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   AthletesHandleRoute: AthletesHandleRoute,
   AutopayTokenRoute: AutopayTokenRoute,
+  BTokenRoute: BTokenRoute,
   BookSlugRoute: BookSlugRoute,
   CoachingApplyRoute: CoachingApplyRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
