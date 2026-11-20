@@ -20,9 +20,10 @@ import type { CommunityPost } from "@/lib/community";
 import { SERIES_LABEL, extraBirthday, extraFeature, extraHoliday } from "@/lib/community";
 import { extraLesson } from "@/lib/lessons";
 import type { IgCard } from "@/lib/instagram-export";
+import { deckOf, deckSlideAlt } from "@/lib/post-decks";
 
 /** Bump when a card's look changes: every phone paints its pictures again. */
-export const POST_ART_VERSION = 4;
+export const POST_ART_VERSION = 5;
 
 export type PostArt = { key: string; url: string; file: File };
 
@@ -49,9 +50,10 @@ export function hashText(s: string): string {
   return (h >>> 0).toString(36);
 }
 
-/** Which picture this is: the post, its card, the unit (only where it shows), and a hash of everything painted on it. */
-export function postArtKey(post: CommunityPost, card: IgCard, unit: "kg" | "lb"): string {
+/** Which picture this is: the post, its card (a deck's: which slide), the unit (only where it shows), and a hash of everything painted on it. */
+export function postArtKey(post: CommunityPost, card: IgCard, unit: "kg" | "lb", slide = 0): string {
   const content = JSON.stringify([
+    post.deck ?? null,
     post.caption ?? null,
     post.quote ?? null,
     post.quote_author ?? null,
@@ -60,7 +62,7 @@ export function postArtKey(post: CommunityPost, card: IgCard, unit: "kg" | "lb")
     post.series_extra ?? null,
     (post.mentions ?? []).map((m) => [m.user_id, m.name]),
   ]);
-  return `v${POST_ART_VERSION}.${post.id}.${card}${UNIT_CARDS.has(card) ? `.${unit}` : ""}.${hashText(content)}`;
+  return `v${POST_ART_VERSION}.${post.id}.${card}${card === "deck" ? `.s${slide}` : ""}${UNIT_CARDS.has(card) ? `.${unit}` : ""}.${hashText(content)}`;
 }
 
 /** A words card's headline: the quote, else the caption's first line. */
@@ -72,8 +74,12 @@ function wordsHead(post: CommunityPost): string {
 }
 
 /** What the picture says, for screen readers. */
-export function postArtAlt(post: CommunityPost, card: IgCard): string {
+export function postArtAlt(post: CommunityPost, card: IgCard, slide = 0): string {
   switch (card) {
+    case "deck": {
+      const deck = deckOf(post);
+      return deck ? deckSlideAlt(deck, slide) : wordsHead(post);
+    }
     case "lesson":
       return extraLesson(post)?.title ?? wordsHead(post);
     case "wins":

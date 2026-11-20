@@ -349,6 +349,8 @@ export type LessonItem = {
   use_count: number;
   last_used_at: string | null;
   media?: unknown[];
+  /** Its slides and their caption (post-decks.ts), while they're still about these words. */
+  deck?: unknown;
   /** library only: the day it's planned for, if it is */
   planned?: string | null;
 };

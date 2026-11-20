@@ -20,6 +20,8 @@ import {
 } from "@/lib/lessons";
 import { lessonKeys, useLessonAct, useLessonLibrary, useLessonsOverview, useLessonsSettings, useSaveLessonItem, type LessonAction } from "@/lib/lessons.queries";
 import { PostArtImage } from "@/components/community/post-art";
+import { AutoPostHero } from "@/components/community/post-card";
+import { deckOf } from "@/lib/post-decks";
 import { StickerEditorSheet } from "@/components/community/sticker-editor";
 import { LessonEditors, LessonStoryPlayer, StoryThumb, previewPost } from "@/components/community/lesson-story-player";
 import { openCommunityPost } from "@/components/community/shared-comment";
@@ -514,7 +516,12 @@ export function LessonSheet({ row, data, onClose, onPlay }: { row: LessonPlanRow
                     <div className="h-8 w-8 shrink-0 rounded-full bg-muted" aria-hidden />
                     <div className="min-w-0 text-[13px] font-bold">{data.author?.name ?? "Coach"}</div>
                   </div>
-                  {/* as the crew sees it: the lesson's card edge to edge (the picture Save image and Instagram get), his photos after it, then his words */}
+                  {/* as the crew sees it: its slides (a deck) or the lesson's card edge to edge (the picture Save image and Instagram get), his photos after it, then his words */}
+                  {deckOf(preview) ? (
+                    <div data-lesson-preview-deck>
+                      <AutoPostHero post={preview} thumbUrl={null} unit="lb" full />
+                    </div>
+                  ) : (
                   <div className="relative">
                     <div className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                       <div className="w-full shrink-0 snap-center">
@@ -532,6 +539,7 @@ export function LessonSheet({ row, data, onClose, onPlay }: { row: LessonPlanRow
                       </span>
                     )}
                   </div>
+                  )}
                   <p className="whitespace-pre-wrap px-3.5 pb-3 pt-3 text-[15px] leading-[1.45]">
                     <span className="font-bold">{data.author?.name ?? "Coach"}</span> {preview.caption}
                   </p>

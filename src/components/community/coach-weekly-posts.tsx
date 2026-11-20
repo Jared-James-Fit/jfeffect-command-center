@@ -13,6 +13,8 @@ import { picturedByItself } from "@/lib/post-pictures";
 import { useAuth } from "@/lib/auth";
 import { CompareBars } from "@/components/community/series-cards";
 import { PostArtImage } from "@/components/community/post-art";
+import { AutoPostHero } from "@/components/community/post-card";
+import { deckOf } from "@/lib/post-decks";
 import { SpiritScene, isSpiritScene } from "@/components/community/spirit-scenes";
 import { NoteEditor } from "@/components/community/note-editor";
 
@@ -231,6 +233,7 @@ export function CoachWeeklyPosts({ focus = null }: { focus?: string | null } = {
                 )}
               </button>
             )}
+            {library && next && deckOf({ series_data: next.data }) && <NextDeck item={next} series={series} />}
             {library && next && picturedByItself(series) && <NextPicture item={next} series={series} on={on} />}
             {library && !next && <p className="text-[12px] text-muted-foreground">Nothing left in this one's library.</p>}
             {series === "try_it_thursday" && next?.data?.habit && (
@@ -442,6 +445,36 @@ function NextPicture({ item, series, on }: { item: SeriesItem; series: Community
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The next library post's slides, as the crew will swipe them (its deck,
+ * post-decks.ts), and the caption that goes with them: what goes out is
+ * what's shown here.
+ */
+function NextDeck({ item, series }: { item: SeriesItem; series: LibrarySeries }) {
+  const deck = deckOf({ series_data: item.data });
+  if (!deck) return null;
+  const post = {
+    id: `deck-preview-${item.id}`,
+    created_at: new Date().toISOString(),
+    kind: "note",
+    series,
+    caption: deck.caption,
+    deck,
+    series_extra: item.data,
+    mentions: [],
+    media_type: null,
+    media_path: null,
+  } as unknown as CommunityPost;
+  return (
+    <div className="max-w-[300px] space-y-1.5" data-next-deck>
+      <div className="overflow-hidden rounded-xl">
+        <AutoPostHero post={post} thumbUrl={null} unit="lb" full />
+      </div>
+      <p className="line-clamp-4 whitespace-pre-line text-[12px] text-muted-foreground">{deck.caption}</p>
     </div>
   );
 }

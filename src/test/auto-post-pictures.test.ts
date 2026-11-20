@@ -325,9 +325,9 @@ describe("in the app", () => {
   it("the coach's Save image hands over the very file on screen; Share to Instagram sends the same one", () => {
     const actions = read("src/components/community/post-actions.tsx");
     expect(actions).toContain(
-      "const art = artCard ? peekPostArt(postArtKey(post, artCard, unit)) : null;",
+      "const arts = artCard ? Array.from({ length: count }, (_, i) => peekPostArt(postArtKey(post, artCard, unit, i))) : [];",
     );
-    expect(actions).toContain("void sendToInstagram([art.file], null)");
+    expect(actions).toContain("void sendToInstagram(arts.map((a) => a!.file), null)");
     expect(actions).toContain("<DropdownMenuItem onSelect={act(saveImage)} data-save-image>");
     const sheet = read("src/components/community/instagram-share-sheet.tsx");
     expect(sheet).toContain(

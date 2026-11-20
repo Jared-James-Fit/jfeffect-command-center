@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import type { CommunityAuthor, CommunityPost, PostSlide } from "@/lib/community";
 import { STORY_PREVIEW_INSETS, coachTimeLabel, dayLabel, lessonStatusLabel, stickerSpot, stickerY, type LessonPlanRow, type LessonsOverview, type StickerSpec } from "@/lib/lessons";
 import { useLessonAct, type LessonAction } from "@/lib/lessons.queries";
+import { deckOf } from "@/lib/post-decks";
 import { LessonStoryFrame } from "@/components/community/lesson-card";
 import { StickerPreview } from "@/components/community/story-sticker";
 import { StickerEditorSheet } from "@/components/community/sticker-editor";
@@ -24,7 +25,9 @@ export function previewPost(row: LessonPlanRow, data: LessonsOverview): Communit
     id: `preview-${row.id}`,
     created_at: row.post_at,
     visibility: "community",
-    caption: row.body ?? it?.body ?? "",
+    // the deck's own caption goes out with its slides (unless he wrote his own for the day)
+    caption: (row.edited ? row.body : deckOf({ deck: it?.deck })?.caption ?? row.body ?? it?.body) || "",
+    deck: it?.deck ?? null,
     media_path: null,
     media_thumb_path: null,
     media_type: null,

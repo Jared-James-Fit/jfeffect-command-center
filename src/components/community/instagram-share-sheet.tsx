@@ -6,6 +6,7 @@ import { cardArtElement, paintCardFile } from "@/components/community/post-art";
 import { type CommunityPost, type PostSlide } from "@/lib/community";
 import { signCommunityPaths } from "@/lib/community-media";
 import { loadPostArt, postArtKey } from "@/lib/post-art";
+import { deckOf } from "@/lib/post-decks";
 import { useWeightUnit } from "@/lib/use-weight-unit";
 import { cn } from "@/lib/utils";
 import {
@@ -107,7 +108,9 @@ export function InstagramShareSheet({ post, open, onOpenChange, unit: shownUnit 
   }, [open, post.id]);
 
   // A lesson's diagram / Saturday's scene: drawn here off screen, then copied as a picture for the card.
-  const drawing = useMemo(() => (plan.card ? cardArtElement(post, plan.card) : null), [plan, post]);
+  // a deck: only its diagram slide (if it has one) carries the drawing
+  const diagramAt = useMemo(() => (plan.card === "deck" ? (deckOf(post)?.slides.findIndex((sl) => sl.type === "diagram") ?? -1) : -1), [plan, post]);
+  const drawing = useMemo(() => (plan.card ? cardArtElement(post, plan.card, Math.max(0, diagramAt)) : null), [plan, post, diagramAt]);
   // the sheet's content mounts a frame after it opens (its portal), so the drawing is read once its host is there
   const [artHost, setArtHost] = useState<HTMLDivElement | null>(null);
   const hostReady = !drawing || !!artHost;
@@ -128,7 +131,18 @@ export function InstagramShareSheet({ post, open, onOpenChange, unit: shownUnit 
       const slideItems: Prepared[] = [];
       // the card goes first, or after the photos when it carries the numbers (plan.cardLast)
       const cardAt = plan.cardLast ? plan.slides.length : 0;
-      if (plan.card) {
+      if (plan.card === "deck") {
+        // a deck: every slide, the cover first, each the feed's own picture for 4:5
+        for (let i = 0; i < (plan.cards ?? 1); i++) {
+          const host = i === diagramAt ? artHost : null;
+          const file =
+            format === "feed"
+              ? (await loadPostArt(postArtKey(post, "deck", unit, i), instagramFileName(post, i, "image/jpeg"), () => paintCardFile(post, "deck", "feed", unit, host, i, undefined, i)))?.file
+              : await paintCardFile(post, "deck", format, unit, host, i, undefined, i);
+          if (!file) throw new Error("card");
+          cardItems.push({ file, url: "", video: false, aspect: `${IG_SIZES[format].w} / ${IG_SIZES[format].h}` });
+        }
+      } else if (plan.card) {
         const card = plan.card;
         // 4:5: the feed's own picture (kept, or painted once for both); 9:16: painted for the story
         const file =
@@ -140,7 +154,7 @@ export function InstagramShareSheet({ post, open, onOpenChange, unit: shownUnit 
       }
       if (plan.slides.length) {
         const key = `${post.id}:${attempt}`;
-        if (slidesRef.current?.key !== key) slidesRef.current = { key, files: slideFiles(post, plan.slides, plan.card && !plan.cardLast ? 1 : 0) };
+        if (slidesRef.current?.key !== key) slidesRef.current = { key, files: slideFiles(post, plan.slides, plan.card && !plan.cardLast ? (plan.card === "deck" ? plan.cards ?? 1 : 1) : 0) };
         const files = await slidesRef.current.files;
         files.forEach((file, i) => slideItems.push({ file, url: "", video: file.type.startsWith("video/"), aspect: slideAspect(plan.slides[i]) }));
       }
@@ -164,7 +178,7 @@ export function InstagramShareSheet({ post, open, onOpenChange, unit: shownUnit 
       // a beat later, so the previews on screen don't blank before the next ones land
       window.setTimeout(() => made.forEach((u) => URL.revokeObjectURL(u)), 1500);
     };
-  }, [open, plan, format, post, unit, hostReady, artHost, attempt, prepKey]);
+  }, [open, plan, format, post, unit, hostReady, artHost, attempt, prepKey, diagramAt]);
 
   const items = prepared?.items ?? null;
   const files = items?.map((i) => i.file) ?? [];
