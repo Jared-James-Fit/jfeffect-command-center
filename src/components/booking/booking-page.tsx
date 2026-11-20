@@ -43,6 +43,8 @@ type Prefill = {
   phone: string;
   applicationId: string;
   invite: string;
+  /** The length the coach picked when he sent the link (minutes); it's set, not a choice. */
+  duration?: number | null;
 };
 type Result = {
   kind: "session" | "appointment";
@@ -135,7 +137,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
   });
 
   // Signed in as a client? Then they book as themselves, no form.
-  const { data: me } = useQuery({
+  const { data: me, isFetched: meChecked } = useQuery({
     queryKey: ["booking-me"],
     enabled: !!tz,
     retry: false,
@@ -150,6 +152,13 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
     },
   });
 
+  // How long: the coach's pick from his link (fixed), else theirs from the type's lengths.
+  const options = page?.durationOptions ?? [];
+  const coachLength = prefill.duration && options.includes(prefill.duration) ? prefill.duration : null;
+  const [picked, setPicked] = useState<number | null>(null);
+  const duration = coachLength ?? (picked && options.includes(picked) ? picked : page?.durationMin ?? null);
+  const choosesLength = !coachLength && options.length > 1;
+
   const [month, setMonth] = useState<string | null>(null);
   useEffect(() => {
     if (today && !month) setMonth(monthKey(today));
@@ -161,8 +170,10 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
     isFetching: slotsLoading,
     refetch: refetchSlots,
   } = useQuery({
-    queryKey: ["booking-slots", slug, month],
-    enabled: !!page && !!month && page.hasHours,
+    queryKey: ["booking-slots", slug, month, duration],
+    // A clients-only type shows its times only to someone who can book it.
+    enabled:
+      !!page && !!month && page.hasHours && !!duration && (!page.clientsOnly || !!page.invitee?.canBook || !!me?.coaching),
     staleTime: 30_000,
     queryFn: () =>
       slotsFn({
@@ -170,6 +181,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
           slug,
           from: addDaysISO(monthStart(month!), -1),
           to: addDaysISO(monthEnd(month!), 1),
+          duration,
         },
       }),
   });
@@ -223,7 +235,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
       if (!slot) throw new Error("Pick a time first.");
       if (me)
         return (await bookMeFn({
-          data: { slug, start: slot.start, notes: form.notes || null },
+          data: { slug, start: slot.start, notes: form.notes || null, duration },
         })) as Result;
       return (await bookFn({
         data: {
@@ -235,6 +247,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
           notes: form.notes || null,
           applicationId: prefill.applicationId || null,
           invite: prefill.invite || null,
+          duration,
         },
       })) as Result;
     },
@@ -288,7 +301,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
       <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{page.name}</h1>
       <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
-          <Clock className="h-4 w-4" /> {page.durationMin} min
+          <Clock className="h-4 w-4" /> {duration ?? page.durationMin} min
         </span>
         <span className="inline-flex min-w-0 items-center gap-1.5">
           <WhereIcon mode={page.locationMode} className="h-4 w-4 shrink-0" />{" "}
@@ -307,6 +320,49 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
       )}
     </div>
   );
+
+  // ── Clients only (General Call) ─────────────────────────────────────────────
+  // Signed in as a coaching client, or the coach's personal link for one. Anyone
+  // else is told who it's for instead of picking a time it would refuse.
+  if (page.clientsOnly && !page.invitee?.canBook && !me?.coaching) {
+    if (!meChecked) {
+      return (
+        <Shell>
+          <div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
+          </div>
+        </Shell>
+      );
+    }
+    const member = !!me || !!page.invitee;
+    return (
+      <Shell>
+        <div className="overflow-hidden rounded-2xl border border-border bg-card" data-booking-clients-only>
+          {header}
+          <div className="space-y-3 p-5 sm:p-6">
+            <p className="text-[15px] font-semibold">For JF Effect coaching clients</p>
+            <p className="text-sm text-muted-foreground">
+              {member
+                ? "Your account doesn't include calls with a coach. Coaching does: a coach, a program written for you, and calls like this one."
+                : "Sign in with your client account to pick a time."}
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {!member && (
+                <Button asChild className="h-11 font-semibold">
+                  <Link to="/auth" search={{ next: `/book/${slug}` }}>
+                    Sign in
+                  </Link>
+                </Button>
+              )}
+              <Button asChild variant="outline" className="h-11">
+                <Link to="/coaching/apply">Apply for coaching</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
 
   // ── Done ──────────────────────────────────────────────────────────────────
   if (step === "done" && result) {
@@ -331,7 +387,9 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
               <h1 className="text-2xl font-bold tracking-tight">You're booked</h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 {result.kind === "session"
-                  ? "It's in your JF Effect app, with a reminder text the evening before."
+                  ? page.isCall
+                    ? "It's in your JF Effect app, and your coach has it in your chat."
+                    : "It's in your JF Effect app, with a reminder text the evening before."
                   : "Check your email for the calendar invite."}
               </p>
             </div>
@@ -491,7 +549,9 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
             )}
             {page.collectNotes && (
               <div className="space-y-1.5">
-                <Label htmlFor="b-notes">Anything to share? (optional)</Label>
+                <Label htmlFor="b-notes">
+                  {page.isCall ? "What do you want to talk about? (optional)" : "Anything to share? (optional)"}
+                </Label>
                 <Textarea
                   id="b-notes"
                   rows={3}
@@ -555,6 +615,38 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
             >
               Sign in
             </Link>
+          </div>
+        )}
+        {choosesLength && page.hasHours && (
+          <div className="space-y-2 border-b border-border px-5 py-4 sm:px-6" data-booking-length>
+            <h2 className="text-sm font-semibold">How long do you need?</h2>
+            <div
+              className={cn("grid gap-2", options.length === 4 ? "grid-cols-4" : "grid-cols-3")}
+              role="radiogroup"
+              aria-label="Call length"
+            >
+              {options.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  role="radio"
+                  aria-checked={duration === n}
+                  onClick={() => {
+                    if (duration === n) return;
+                    setPicked(n);
+                    setSlot(null);
+                  }}
+                  className={cn(
+                    "h-11 rounded-full border px-2 text-sm font-semibold tabular-nums transition",
+                    duration === n
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border bg-card text-foreground hover:bg-secondary",
+                  )}
+                >
+                  {n} min
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {!page.hasHours ? (

@@ -9,15 +9,11 @@ import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { useCommunityProfile, usePostMediaUrls } from "@/lib/community.queries";
 import { useRepost } from "@/lib/community-saves";
 import { REPOST_NOTE_EMOJI, REPOST_NOTE_MAX, cleanRepostNote, fitRepostNoteDraft, isEmojiOnly, type CommunityPost } from "@/lib/community";
+import { haptic } from "@/platform/haptics";
 
 const PLACEHOLDER = "Add a note…";
-const buzz = () => {
-  try {
-    navigator.vibrate?.(8);
-  } catch {
-    /* no haptics here */
-  }
-};
+/** The note is full: a small bump instead of the character. */
+const buzz = () => haptic("light");
 /** Taps on these never take the keyboard down (the note keeps its caret). */
 const keepFocus = { onPointerDown: (e: React.PointerEvent) => e.preventDefault(), onMouseDown: (e: React.MouseEvent) => e.preventDefault() };
 

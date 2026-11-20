@@ -38,6 +38,8 @@ import { readinessLine } from "@/lib/form-checklist";
 import { ChecklistAnswers, ReadinessSummary, relativeTime, useFormReadiness, verdictTone } from "@/components/forms/readiness-view";
 import { CompetitionPlanSummary } from "@/components/forms/competition-plan-summary";
 import { NativeAnswers } from "@/components/clients/intake-answers-dialog";
+import { OpenInChatButton } from "@/components/forms/open-in-chat";
+import { refreshReviewQueries } from "@/lib/checkin-review";
 
 const db = supabase as any;
 
@@ -166,12 +168,15 @@ export function FormResponsesView({
   submissionId,
   clientId,
   initialView,
+  onLeave,
 }: {
   formId: string;
   submissionId?: string | null;
   /** Open on this person (a client's profile), whether or not they've sent it. */
   clientId?: string | null;
   initialView?: View;
+  /** Called as "Open in chat" leaves for the chat (the sheet closes itself). */
+  onLeave?: () => void;
 }) {
   const { data, isLoading, isError, refetch } = useFormResponses(formId);
   const [view, setView] = useState<View | null>(initialView ?? (submissionId || clientId ? "individual" : null));
@@ -250,7 +255,7 @@ export function FormResponsesView({
 
       {view === "summary" && data && <SummaryView data={data} onOpen={open} />}
       {view === "individual" && data && focus && (
-        <IndividualView data={data} focus={focus} onFocus={setFocus} />
+        <IndividualView data={data} focus={focus} onFocus={setFocus} onLeave={onLeave} />
       )}
       {view === "table" && data && <TableView data={data} onOpen={open} />}
     </div>
@@ -392,10 +397,12 @@ function IndividualView({
   data,
   focus,
   onFocus,
+  onLeave,
 }: {
   data: FormResponsesData;
   focus: { clientId: string; submissionId: string | null };
   onFocus: (f: { clientId: string; submissionId: string | null }) => void;
+  onLeave?: () => void;
 }) {
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -457,6 +464,8 @@ function IndividualView({
       void qc.invalidateQueries({ queryKey: ["form-library-stats"] });
       void qc.invalidateQueries({ queryKey: ["form-submissions"] });
       void qc.invalidateQueries({ queryKey: ["chat-form-request-status"] });
+      // the dashboard's Check-ins to review, the Messages inbox and the Clients list too
+      refreshReviewQueries(qc);
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't mark it reviewed");
     } finally {
@@ -537,12 +546,21 @@ function IndividualView({
               <Check className="mr-1.5 h-4 w-4" /> Mark reviewed
             </Button>
           )}
-          <Button asChild size="sm" variant="outline" className="h-10">
-            <Link to="/admin/messages" search={{ client: person.clientId } as any} aria-label={`Message ${person.name}`}>
-              <MessageCircle className="h-4 w-4 sm:mr-1.5" />
-              <span className="hidden sm:inline">Message</span>
-            </Link>
-          </Button>
+          {response ? (
+            // the chat, on the card this response sits on (scrolled to and highlighted)
+            <OpenInChatButton
+              subRef={{ source: "native", id: response.id, clientId: person.clientId, formId: data.form?.id ?? "", submittedAt: response.at }}
+              onLeave={onLeave}
+              size="sm"
+              className="h-10"
+            />
+          ) : (
+            <Button asChild size="sm" variant="outline" className="h-10">
+              <Link to="/admin/messages" search={{ client: person.clientId } as any} onClick={() => onLeave?.()} aria-label={`Message ${person.name}`}>
+                <MessageCircle className="mr-1.5 h-4 w-4" /> Message
+              </Link>
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline" className="h-10 w-10 px-0" aria-label="More">
@@ -744,7 +762,7 @@ export function FormResponsesSheet({
           </div>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-4">
-          <FormResponsesView key={`${formId}:${submissionId ?? ""}:${clientId ?? ""}`} formId={formId} submissionId={submissionId} clientId={clientId} />
+          <FormResponsesView key={`${formId}:${submissionId ?? ""}:${clientId ?? ""}`} formId={formId} submissionId={submissionId} clientId={clientId} onLeave={() => onOpenChange(false)} />
         </div>
       </DialogContent>
     </Dialog>

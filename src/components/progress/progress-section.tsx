@@ -41,6 +41,8 @@ import { convertWeight, type ProgressMetric } from "@/lib/progress-metrics";
 import { compressImage } from "@/lib/image-compress";
 import { useVideoTrimmer } from "@/components/video-trimmer";
 import { looksLikeVideo, pickVideo } from "@/lib/video-edit/pick";
+import { videoLimit } from "@/lib/video-edit/limits";
+import { useFilmCamera } from "@/components/camera/use-film-camera";
 import { PoseFigure, PoseGuideButton } from "@/components/progress/pose-guide";
 import { POSE_CUES, SINGLE_VIDEO_CUE } from "@/lib/progress-pose-guide";
 
@@ -993,6 +995,14 @@ function AngleUploadCard({
 }) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
+  // a video is filmed in the app's own camera (1080p, the phone's own mic, no call processing), not iOS's
+  // "Take Video" (480 × 360, squeezed sound); Library inside it opens the phone's picker
+  const camera = useFilmCamera({
+    maxSeconds: videoLimit("coach"),
+    title: angle === "all" ? "Progress video" : `${ANGLE_LABEL[angle]} · progress video`,
+    onClip: (f) => void onFile(f),
+    onLibrary: () => fileRef.current?.click(),
+  });
   const [progress, setProgress] = useState<number | null>(null);
   // a video is trimmed (longer than 10 minutes, or what this phone can send) and shrunk before it uploads
   const [phase, setPhase] = useState<"preparing" | "uploading">("uploading");
@@ -1123,7 +1133,10 @@ function AngleUploadCard({
     <div className="space-y-1">
       <button
         type="button"
-        onClick={() => fileRef.current?.click()}
+        onClick={() => {
+          if (mediaType === "video" && camera.start()) return;
+          fileRef.current?.click();
+        }}
         className="group relative block aspect-square w-full overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/60 transition active:scale-[0.98] hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         aria-label={existing ? `Replace ${ANGLE_LABEL[angle]} photo` : `Upload ${ANGLE_LABEL[angle]} photo`}
       >
@@ -1199,6 +1212,7 @@ function AngleUploadCard({
       />
       {err && <p className="text-xs text-destructive">{err}</p>}
       {trimmer.element}
+      {camera.element}
     </div>
   );
 }

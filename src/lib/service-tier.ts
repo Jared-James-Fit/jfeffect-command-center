@@ -132,6 +132,8 @@ export function useServiceTier() {
     tier,
     isSelfServe: tier === "self_serve",
     isCoaching: tier === "coaching",
+    /** The read answered and this login has no athlete record (not approved yet: membership-pending-gate.tsx). */
+    noAccount: !known.loading && known.data === null && !isImpersonating,
   };
 }
 

@@ -13,7 +13,7 @@ import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
 import { AlertTriangle, ArrowLeft, Check, Dumbbell, X, MoreHorizontal, Smartphone, Search, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight, Video, VideoOff } from "lucide-react";
 import { useEditorBack } from "@/lib/editor-back";
 import { ProgramSheet } from "@/components/program-editor/program-sheet";
-import { Table2 } from "lucide-react";
+import { Table2, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
@@ -26,6 +26,9 @@ import { ExerciseOrderBadge } from "@/components/exercise-order-badge";
 import { derivePurposeLabels, deriveWeeklyPurposeLabelByRowId, defaultRestSeconds, effectiveRestSeconds, PURPOSE_LABEL_OPTIONS, resolveCategory, purposeLabelBadgeClass, purposeLabelText } from "@/lib/exercise-metadata";
 import { validateDay } from "@/lib/pl-template-validation";
 import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shortcuts";
+import { WeekPickerSheet } from "@/components/program-editor/week-picker-sheet";
+import { ProgressAcrossWeeksSheet } from "@/components/program-editor/progress-across-weeks";
+import { rowAtSlot } from "@/lib/program-sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -447,6 +450,13 @@ export function useClientMaxesCtx() { return useContext(MaxesContext); }
 // exercises added and swapped from a searchable sheet instead of tiny
 // popovers and a 2,000-item dropdown. Desktop is unchanged.
 const BuilderPhoneContext = createContext(false);
+/**
+ * "Progress across weeks" on an exercise's ⋯: the week editor knows the block
+ * (it opens the sheet for a day and a place in it), the day knows its index,
+ * the row only its place. Absent where there are no weeks (a day or week template).
+ */
+const ProgressWeekContext = createContext<((dayIndex: number, pos: number) => void) | null>(null);
+const ProgressRowContext = createContext<((pos: number) => void) | null>(null);
 const useBuilderPhone = () => useContext(BuilderPhoneContext);
 const inRowMenu = (t: EventTarget | null) =>
   t instanceof Element && !!t.closest("[data-row-menu]");
@@ -1643,38 +1653,53 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
     next.week_index = (weeksData[weeksData.length - 1]?.week_index ?? 0) + 1;
     setWeeksData([...weeksData, next]);
   };
+  // Deleting a week is one tap with Undo (never a browser confirm), like the member builder.
   const delWeek = (i: number) => {
-    if (!confirm("Remove this week?")) return;
+    const before = weeksData;
+    const label = weeksData[i]?.week_index ?? i + 1;
     setWeeksData(weeksData.filter((_, j) => j !== i));
     if (activeIdx >= weeksData.length - 1) setActiveIdx(Math.max(0, activeIdx - 1));
+    toast(`Deleted week ${label}`, { action: { label: "Undo", onClick: () => setWeeksData(before) }, duration: 6000 });
   };
-  const copyWeekToFuture = (i: number) => {
+  // Copy a week (or one of its days) onto the weeks the coach picks, the same
+  // picker as the member builder (WeekPickerSheet); Undo puts them back.
+  const [copyPick, setCopyPick] = useState<null | { week: number; day: number | null }>(null);
+  // one exercise followed week to week (its ⋯ → Progress across weeks)
+  const [progressAt, setProgressAt] = useState<null | { week: number; dayIndex: number; pos: number }>(null);
+  const progressAtRow = progressAt ? rowAtSlot(weeksData[progressAt.week], progressAt) : null;
+  const progressName = progressAtRow
+    ? ((exercises as any[]).find((e) => e.id === progressAtRow.exercise_id)?.name ?? progressAtRow.exercise_name_override ?? "")
+    : "";
+  const copyWeekTo = (i: number, targets: number[]) => {
     const src = weeksData[i];
-    if (!src) return;
-    const next = weeksData.map((w, j) => {
-      if (j <= i) return w;
+    if (!src || !targets.length) return;
+    const before = weeksData;
+    const hit = new Set(targets);
+    setWeeksData(weeksData.map((w, j) => {
+      if (!hit.has(j) || j === i) return w;
       const c = JSON.parse(JSON.stringify(src));
       c.week_index = w.week_index;
       return c;
-    });
-    setWeeksData(next);
-    toast.success(`Copied Week ${src.week_index} → future weeks`);
+    }));
+    toast(`Copied week ${src.week_index} to ${hit.size} ${hit.size === 1 ? "week" : "weeks"}`, { action: { label: "Undo", onClick: () => setWeeksData(before) }, duration: 6000 });
   };
-  const copyDayToFuture = (weekIdx: number, dayIdx: number) => {
+  const copyDayTo = (weekIdx: number, dayIdx: number, targets: number[]) => {
     const srcDay = weeksData[weekIdx]?.days?.[dayIdx];
-    if (!srcDay) return;
-    const next = weeksData.map((w, j) => {
-      if (j <= weekIdx) return w;
+    if (!srcDay || !targets.length) return;
+    const before = weeksData;
+    const hit = new Set(targets);
+    setWeeksData(weeksData.map((w, j) => {
+      if (!hit.has(j) || j === weekIdx) return w;
       const days = [...(w.days || [])];
       const clone = JSON.parse(JSON.stringify(srcDay));
       const existing = days.findIndex((d: any) => d.day_index === srcDay.day_index);
       if (existing >= 0) days[existing] = clone;
       else days.push(clone);
       return { ...w, days };
-    });
-    setWeeksData(next);
-    toast.success(`Copied Day ${srcDay.day_index} → future weeks`);
+    }));
+    toast(`Copied day ${srcDay.day_index} to ${hit.size} ${hit.size === 1 ? "week" : "weeks"}`, { action: { label: "Undo", onClick: () => setWeeksData(before) }, duration: 6000 });
   };
+  const copyDayToFuture = (weekIdx: number, dayIdx: number) => setCopyPick({ week: weekIdx, day: dayIdx });
   // Week notes / phase: opened from the week's ⋯, edited in place.
   const [weekDetailsOpen, setWeekDetailsOpen] = useState(false);
   const weekNavSlot = useContext(WeekNavSlotContext);
@@ -1707,8 +1732,8 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
           <DropdownMenuItem onSelect={() => dupWeek(i)}>
             <Copy className="mr-2 h-4 w-4" /> Duplicate week
           </DropdownMenuItem>
-          <DropdownMenuItem disabled={i >= weeksData.length - 1} onSelect={() => copyWeekToFuture(i)}>
-            <ArrowRight className="mr-2 h-4 w-4" /> Copy to later weeks
+          <DropdownMenuItem disabled={weeksData.length < 2} onSelect={() => setCopyPick({ week: i, day: null })}>
+            <ArrowRight className="mr-2 h-4 w-4" /> Copy to weeks…
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem className="text-destructive" onSelect={() => delWeek(i)}>
@@ -1807,8 +1832,42 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
     const s = weekStats[i] ?? { days: 0, rows: 0, minutes: 0 };
     return `${s.days} day${s.days === 1 ? "" : "s"}${s.minutes > 0 ? ` · about ${fmtDur(s.minutes)}` : ""}`;
   };
+  const pickFrom = copyPick ? weeksData[copyPick.week] : null;
+  const pickDay = copyPick && copyPick.day != null ? pickFrom?.days?.[copyPick.day] : null;
+  const weekPicker = (
+    <WeekPickerSheet
+      open={!!copyPick && !!pickFrom}
+      onOpenChange={(o) => !o && setCopyPick(null)}
+      title={pickDay ? `Copy day ${pickDay.day_index} to other weeks` : `Copy week ${pickFrom?.week_index ?? ""} to other weeks`}
+      description={pickDay
+        ? `Day ${pickDay.day_index} in each week you pick becomes exactly like week ${pickFrom?.week_index}'s.`
+        : `Each week you pick becomes exactly like week ${pickFrom?.week_index}: every day, exercise and number.`}
+      groups={[{ weeks: weeksData.map((w: any, j: number) => ({ id: String(j), label: String(w.week_index ?? j + 1) })) }]}
+      fromId={String(copyPick?.week ?? -1)}
+      quick={copyPick ? [
+        { label: "Every later week", ids: weeksData.map((_: any, j: number) => j).filter((j: number) => j > copyPick.week).map(String) },
+        { label: "Every week", ids: weeksData.map((_: any, j: number) => String(j)) },
+      ] : []}
+      onConfirm={(ids) => {
+        if (!copyPick) return;
+        const targets = ids.map(Number);
+        if (copyPick.day != null) copyDayTo(copyPick.week, copyPick.day, targets);
+        else copyWeekTo(copyPick.week, targets);
+      }}
+    />
+  );
   return (
     <div className="space-y-2">
+      {weekPicker}
+      <ProgressAcrossWeeksSheet
+        open={!!progressAt}
+        onOpenChange={(o) => !o && setProgressAt(null)}
+        weeksData={weeksData}
+        setWeeksData={setWeeksData}
+        slot={progressAt}
+        activeIdx={progressAt?.week ?? activeIdx}
+        name={progressName}
+      />
       {weekNavSlot ? createPortal(weekNav, weekNavSlot) : (
         <div className="sticky top-0 z-20 -mx-2 mb-2 flex items-center border-b border-border bg-background px-2 py-1 max-md:mx-0">{weekNav}</div>
       )}
@@ -1860,6 +1919,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                 )}
                 {weekDetailsOpen && weekNotesEditor(activeIdx, () => setWeekDetailsOpen(false))}
               </div>
+              <ProgressWeekContext.Provider value={(dayIndex, pos) => setProgressAt({ week: activeIdx, dayIndex, pos })}>
               <WeekEditor
                 week={aw}
                 setWeek={(w) => { const copy = [...weeksData]; copy[activeIdx] = w; setWeeksData(copy); }}
@@ -1875,6 +1935,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                 dayScheduleStatus={dayScheduleStatus}
                 onFixCalendarIssue={onFixCalendarIssue}
               />
+              </ProgressWeekContext.Provider>
             </>
           );
         })()
@@ -1911,6 +1972,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                   </div>
                 )}
                 <div className={compact ? "px-2 pb-2" : "px-2.5 pb-3"}>
+                  <ProgressWeekContext.Provider value={(dayIndex, pos) => setProgressAt({ week: wi, dayIndex, pos })}>
                   <WeekEditor
                     week={w}
                     setWeek={(nw) => { const c = [...weeksData]; c[wi] = nw; setWeeksData(c); }}
@@ -1926,6 +1988,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                     dayScheduleStatus={dayScheduleStatus}
                     onFixCalendarIssue={onFixCalendarIssue}
                   />
+                  </ProgressWeekContext.Provider>
                 </div>
               </section>
             ))}
@@ -1983,7 +2046,13 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSum
     copy.scheduled_date = null;
     setWeek({ ...week, days: [...days, copy] });
   };
-  const delDay = (i: number) => { if (!confirm("Remove day?")) return; setWeek({ ...week, days: days.filter((_: any, j: number) => j !== i) }); };
+  // one tap with Undo, never a browser confirm
+  const delDay = (i: number) => {
+    const before = week;
+    const name = days[i]?.title || `Day ${days[i]?.day_index ?? i + 1}`;
+    setWeek({ ...week, days: days.filter((_: any, j: number) => j !== i) });
+    toast(`Deleted ${name}`, { action: { label: "Undo", onClick: () => setWeek(before) }, duration: 6000 });
+  };
   const pasteInto = (i: number) => {
     if (!clip || clip.kind !== "rows") return;
     const d = days[i];
@@ -2140,7 +2209,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSum
                 )}
                 {onCopyDayToFuture && (
                   <DropdownMenuItem onSelect={() => onCopyDayToFuture(i)}>
-                    <ArrowRight className="mr-2 h-4 w-4" /> Copy to later weeks
+                    <ArrowRight className="mr-2 h-4 w-4" /> Copy to weeks…
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onSelect={() => dupDay(i)}>
@@ -2191,6 +2260,11 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
   standalone?: boolean;
 }) {
   const rows = day.rows || [];
+  const progressWeek = useContext(ProgressWeekContext);
+  const progressRow = useMemo(
+    () => (progressWeek ? (pos: number) => progressWeek(Number(day.day_index ?? 0), pos) : null),
+    [progressWeek, day.day_index],
+  );
   // Derive ordered purpose labels (Primary / Secondary / Tertiary / Quaternary
   // for competition + variation rows; Assistance for everything else). Manual
   // `purpose_label` on a row wins. Recomputes whenever rows are reordered.
@@ -2375,6 +2449,7 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
         </p>
       )}
       {rows.length > 0 && (
+        <ProgressRowContext.Provider value={progressRow}>
         <div data-pb-day>
           {rows.map((r: any, i: number) => (
             <Fragment key={i}>
@@ -2454,6 +2529,7 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
             </Fragment>
           ))}
         </div>
+        </ProgressRowContext.Provider>
       )}
       <InlineAddExerciseButton
         exercises={exercises}
@@ -2817,6 +2893,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   // A phone: every field is a 44px box with 16px text (no iOS zoom on focus),
   // every button a 40px tap.
   const phone = useBuilderPhone();
+  const progressRow = useContext(ProgressRowContext);
   // Inputs follow the theme: a well on the card, never a white box in dark mode.
   const inputCls =
     "rounded-lg border border-input bg-background text-foreground shadow-none " +
@@ -3110,6 +3187,11 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           <DropdownMenuItem onSelect={() => setPickerOpen(true)}>
             <ArrowLeftRight className="mr-2 h-4 w-4" /> Swap exercise
           </DropdownMenuItem>
+          {progressRow && typeof index === "number" && (
+            <DropdownMenuItem onSelect={() => progressRow(index)} data-row-progress>
+              <TrendingUp className="mr-2 h-4 w-4" /> Progress across weeks…
+            </DropdownMenuItem>
+          )}
           {onMoveUp && (
             <DropdownMenuItem disabled={canMoveUp === false} onSelect={onMoveUp}>
               <ChevronUp className="mr-2 h-4 w-4" /> Move up

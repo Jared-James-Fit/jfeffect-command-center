@@ -2206,6 +2206,7 @@ export type Database = {
       }
       booking_cards: {
         Row: {
+          audience: string
           buffer_minutes: number
           client_visible_notes: boolean
           collect_notes: boolean
@@ -2217,6 +2218,7 @@ export type Database = {
           default_notes: string | null
           description: string | null
           duration_minutes: number
+          duration_options: number[] | null
           follows_smart: boolean
           id: string
           is_active: boolean
@@ -2239,6 +2241,7 @@ export type Database = {
           visible_to_client: boolean
         }
         Insert: {
+          audience?: string
           buffer_minutes?: number
           client_visible_notes?: boolean
           collect_notes?: boolean
@@ -2250,6 +2253,7 @@ export type Database = {
           default_notes?: string | null
           description?: string | null
           duration_minutes?: number
+          duration_options?: number[] | null
           follows_smart?: boolean
           id?: string
           is_active?: boolean
@@ -2272,6 +2276,7 @@ export type Database = {
           visible_to_client?: boolean
         }
         Update: {
+          audience?: string
           buffer_minutes?: number
           client_visible_notes?: boolean
           collect_notes?: boolean
@@ -2283,6 +2288,7 @@ export type Database = {
           default_notes?: string | null
           description?: string | null
           duration_minutes?: number
+          duration_options?: number[] | null
           follows_smart?: boolean
           id?: string
           is_active?: boolean

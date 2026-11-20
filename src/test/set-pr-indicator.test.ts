@@ -25,8 +25,8 @@ describe("a set's PR indicator", () => {
   it("names the scope it actually is, never a bigger one", () => {
     expect(setPrItems({ record: rec({ block_pr: true, prev_block_kg: 135 }), unit: "kg" })[0].title).toBe("5-rep block PR");
   });
-  it("shows the athlete's unit", () => {
-    expect(setPrItems({ record: rec({ atpr: true, prev_all_kg: 140 }), unit: "lb" })[0].detail).toBe("319.5 lb × 5 · was 308.5 lb");
+  it("shows the athlete's unit, converted exactly (never rounded to a plate, like History)", () => {
+    expect(setPrItems({ record: rec({ atpr: true, prev_all_kg: 140 }), unit: "lb" })[0].detail).toBe("319.7 lb × 5 · was 308.6 lb");
   });
   it("leaves out 'was' when there's no earlier record on file", () => {
     expect(setPrItems({ record: rec({ atpr: true }), unit: "kg" })[0].detail).toBe("145 kg × 5");
@@ -54,7 +54,7 @@ describe("set row look", () => {
   it("PRs are one indicator under the set, not the old pills", () => {
     expect(view).toContain("<SetPrIndicator items={prItems} celebrate={prFresh} />");
     expect(view).not.toContain("<SetRecordBadge");
-    // the PR sound and haptic stay
-    expect(view).toContain('playAppSound("pr")');
+    // the PR sound and haptic stay (one feedback() call gives both)
+    expect(view).toContain('feedback("pr")');
   });
 });

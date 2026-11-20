@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { isThreadOpen, playAppSound } from "@/lib/app-sounds";
+import { isThreadOpen } from "@/lib/app-sounds";
+import { feedback } from "@/lib/feedback";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -251,17 +252,17 @@ function acquireNotificationsChannel(userId: string, qc: QC): () => void {
       const row = payload.new ?? {};
       if (table === "messages") {
         if (row.sender_id === userId || row.is_internal_note || isThreadOpen(row.client_id)) return;
-        playAppSound("message");
+        feedback("message");
       } else if (table === "group_messages") {
         qc.invalidateQueries({ queryKey: ["direct-threads"] });
         qc.invalidateQueries({ queryKey: ["crew-threads"] });
         if (row.sender_id === userId || isThreadOpen(`group:${row.group_id}`)) return;
-        playAppSound("message");
+        feedback("message");
       } else if (table === "lift_video_comments") {
         if (row.author_id === userId) return;
-        playAppSound("notify");
+        feedback("notify");
       } else if (table === "manual_check_in_reviews") {
-        playAppSound("notify");
+        feedback("notify");
       }
     };
     entry.ch = listenChannel(`notifications-${userId}`)

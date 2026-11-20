@@ -45,6 +45,9 @@ describe("check-in reviewed state", () => {
     expect(read("src/components/clients/clients-status.ts")).toContain('actions: ["reviews", "mark_reviewed"]');
     expect(read("src/components/clients/client-row.tsx")).toContain("markClientReviewsReviewed");
     expect(read("src/components/clients/quick-actions.tsx")).toContain("Mark check-in reviewed");
-    expect(read("src/route-pages/_authenticated/admin/messages.tsx")).toContain('.is("reviewed_at", null)');
+    // reviewed ones are read too (a newer reviewed one retires an older), and never count (review-queue.ts)
+    const inbox = read("src/route-pages/_authenticated/admin/messages.tsx");
+    expect(inbox).toContain('reviewed: !!p.reviewed_at || p.status === "reviewed"');
+    expect(read("src/lib/inbox-requests.ts")).toContain("reviewed: r.reviewed ?? false");
   });
 });

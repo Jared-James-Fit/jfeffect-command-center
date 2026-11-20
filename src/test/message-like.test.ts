@@ -32,7 +32,7 @@ describe("liking a message, Instagram style", () => {
       expect(src, f).not.toContain("void onToggleReaction(m.id, defaultReaction);");
       expect(src, f).toContain("if (doubleTapAdds(mine, defaultReaction)) onToggleReaction(messageId, defaultReaction);");
       expect(src, f).toContain('popping ? "animate-like-pop" : "animate-reaction-pop"');
-      expect(src, f).toContain('haptic("light");');
+      expect(src, f).toContain('feedback("like");');
     }
     expect(read("src/styles.css")).toContain("@keyframes like-pop");
   });

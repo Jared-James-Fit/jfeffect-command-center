@@ -5,7 +5,8 @@ import { shareMeta } from "@/lib/share-meta";
 /**
  * Public booking page for a booking type (Calendar → Booking → Send link).
  * Accepts prefill from a coach's "send to a client" link and the coaching
- * application flow: ?name=&email=&phone=&application_id=
+ * application flow: ?name=&email=&phone=&application_id=, and the length the
+ * coach picked for a call (?d=30).
  */
 export const Route = createFileRoute("/book/$slug")({
   head: ({ params }) => ({
@@ -15,14 +16,21 @@ export const Route = createFileRoute("/book/$slug")({
       ...shareMeta({ title: "Book a time with JF Effect", description: "Pick a time that works for you.", path: `/book/${params.slug}` }),
     ],
   }),
-  validateSearch: (search: Record<string, unknown>) => ({
-    name: typeof search.name === "string" ? search.name : "",
-    email: typeof search.email === "string" ? search.email : "",
-    phone: typeof search.phone === "string" ? search.phone : "",
-    application_id: typeof search.application_id === "string" ? search.application_id : "",
-    // Personal link from the coach: books as that client.
-    i: typeof search.i === "string" ? search.i : "",
-  }),
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { name: string; email: string; phone: string; application_id: string; i: string; d?: number } => {
+    // The length the coach picked when he sent the link (a General Call): set, not a choice.
+    const d = Number(search.d);
+    return {
+      name: typeof search.name === "string" ? search.name : "",
+      email: typeof search.email === "string" ? search.email : "",
+      phone: typeof search.phone === "string" ? search.phone : "",
+      application_id: typeof search.application_id === "string" ? search.application_id : "",
+      // Personal link from the coach: books as that client.
+      i: typeof search.i === "string" ? search.i : "",
+      ...(Number.isInteger(d) && d >= 5 && d <= 480 ? { d } : {}),
+    };
+  },
   component: BookingRoute,
 });
 
@@ -38,6 +46,7 @@ function BookingRoute() {
         phone: s.phone,
         applicationId: s.application_id,
         invite: s.i,
+        duration: s.d ?? null,
       }}
     />
   );

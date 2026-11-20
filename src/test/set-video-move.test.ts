@@ -66,3 +66,76 @@ describe("moving it", () => {
     expect(cell).toContain("!(data ?? []).some((v) => v.id === j.setVideoId)");
   });
 });
+
+/**
+ * Nov 20 2026: the coach put a clip on the wrong exercise and found the move
+ * picker offered only working sets; warm-ups (set 0) weren't destinations, and
+ * an exercise on two cards (a top set, then back-offs) read the same twice.
+ */
+describe("warm-ups and repeated exercises", () => {
+  const rows = [
+    { id: "top", sort_order: 0, sets: 1, reps_text: "3", name: "Competition Squat" },
+    { id: "back", sort_order: 1, sets: 2, reps_text: "4", purpose_label: "Backoff", name: "Competition Squat" },
+    { id: "curl", sort_order: 2, sets: 3, reps_text: "12", name: "Cable Curl" },
+    { id: "walk", sort_order: 3, sets: 1, name: "Treadmill Walk" },
+  ];
+  const warmups = [
+    { id: "w2", row_id: "top", load: 315, unit: "lb", reps: 1, rpe: 7, created_at: "2026-11-20T10:05:00Z" },
+    { id: "w1", row_id: "top", load: 275, unit: "lb", reps: 3, rpe: null, created_at: "2026-11-20T10:00:00Z" },
+  ];
+  const choices = moveChoices(rows, [], warmups);
+
+  it("names a repeated exercise by its role there, and keeps the exercise itself for the clip", () => {
+    expect(choices.map((e) => e.name)).toEqual(["Competition Squat · Top set", "Competition Squat · Backoff", "Cable Curl", "Treadmill Walk"]);
+    expect(choices[1].exercise).toBe("Competition Squat");
+  });
+  it("offers each logged warm-up in the order they were done, with its numbers", () => {
+    expect(choices[0].warmups).toEqual([
+      { id: "w1", logged: true, label: "275 lb × 3" },
+      { id: "w2", logged: true, label: "315 lb × 1 · RPE 7" },
+    ]);
+  });
+  it("offers the warm-up still to log on a lift with nothing logged yet, never on cardio done for time", () => {
+    expect(choices[1].warmups).toEqual([{ id: null, logged: false, label: "" }]);
+    expect(choices[3].warmups).toEqual([]);
+  });
+  it("a lift done with no weight takes no warm-up", () => {
+    const bw = moveChoices([{ id: "pu", sort_order: 0, sets: 3, name: "Pull Up" }], [{ row_id: "pu", set_index: 1, actual_reps: 8, load_type: "bodyweight" } as any]);
+    expect(bw[0].warmups).toEqual([]);
+  });
+
+  const sql = read("supabase/migrations/20270420090000_set_video_move_warmups.sql");
+  const picker = read("src/components/workout-day/set-video-move.tsx");
+  it("the move takes a warm-up: one of this athlete's on that exercise, or the one still to log", () => {
+    expect(sql).toContain("IF _set_index IS NULL OR _set_index NOT BETWEEN 0 AND 50 THEN");
+    expect(sql).toContain("WHERE w.id = _warmup_id AND w.row_id = _row_id AND w.client_id = v.client_id;");
+    expect(sql).toContain("SET row_id = _row_id, result_id = v_result, warmup_id = v_warmup, set_index = _set_index,");
+    expect(sql).toContain("v_name := 'Warm-up';");
+  });
+  it("its chat card says it's a warm-up, the film never holds one, and Undo knows where it came from", () => {
+    expect(sql).toContain("(a -> 'set_video') - 'label' - 'warmup'");
+    expect(sql).toContain("'warmup', CASE WHEN _set_index = 0 THEN true END");
+    expect(sql).toContain("WHERE _set_index > 0 OR NOT (f ->> 'path' LIKE '%/' || v.id::text || '%')) AS new_film");
+    expect(sql).toContain("'warmup_id', v.warmup_id));");
+  });
+  it("is the same function for every app version, guarded on the one it replaces", () => {
+    expect(sql).toContain("IS DISTINCT FROM '23fbf99cbe3a6ec5dea5cc96735decdd' THEN");
+    expect(sql).toContain("DROP FUNCTION IF EXISTS public.set_video_move(uuid, uuid, integer, text, text);");
+    expect(sql).toContain("_warmup_id uuid DEFAULT NULL");
+    expect(sql).toContain("GRANT EXECUTE ON FUNCTION public.set_video_move(uuid, uuid, integer, text, text, uuid) TO authenticated, service_role;");
+  });
+  it("the picker sends the warm-up and puts a warm-up's clip back on its warm-up", () => {
+    expect(picker).toContain("...(spot.n === 0 ? { _warmup_id: spot.warmupId } : {}),");
+    expect(picker).toContain('return { n: 0, label: w?.label ?? video.label ?? "", labelNoLoad: "", warmupId: video.warmup_id ?? null };');
+    expect(picker).toContain("data-move-warmup");
+  });
+});
+
+describe("an older clip only goes onto a logged set", () => {
+  const picker = read("src/components/workout-day/set-video-move.tsx");
+  it("leaves sets and warm-ups not logged yet out for a clip past the time it can wait on one", () => {
+    expect(picker).toContain("const waitsOk = Date.now() - Date.parse(video.created_at) < UNLINKED_SET_VIDEO_MS;");
+    expect(picker).toContain("disabled={here || !!busy || (!w.logged && !waitsOk)}");
+    expect(picker).toContain("disabled={here || !!busy || (!s.logged && !waitsOk)}");
+  });
+});

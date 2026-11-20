@@ -489,7 +489,13 @@ html[data-pov-banner-on] .ios-status-band {
 html[data-camera-open],
 html[data-camera-open] body,
 html[data-camera-open] [data-shell-root] { background-color: #000; }
-html[data-camera-open]:not([data-pov-banner-on]) .ios-status-band { background-color: #000; }/* When keyboard is open, collapse the topbar height so the messenger
+html[data-camera-open]:not([data-pov-banner-on]) .ios-status-band { background-color: #000; }
+/* "/" renders both jfeffect.com's landing page and the app's launch splash; the head
+   script (landing-launch.ts) picks one before the first paint, so the installed app
+   never flashes a marketing page and a visitor never sees a loading splash. */
+html[data-launch="app"] [data-landing] { display: none !important; }
+html:not([data-launch="app"]) [data-launch-splash] { display: none !important; }
+/* When keyboard is open, collapse the topbar height so the messenger
    container fills the full visual viewport without dead space at the top. */
 html[data-keyboard-open="true"] {
   --shell-topbar-h: 0px;
@@ -1329,6 +1335,17 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
    (Crew's bar's behaviour). While typing it steps aside: iOS pans fixed bars with the
    keyboard, and full-height chats rise to the notch then (--shell-topbar-h: 0). */
 .shell-bar { transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+/* Rows that scroll sideways without a bar under them. */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+/* A member's program builder owns a phone's screen: its own header at the notch
+   and its week bar where the tab bar was (both step aside for nothing else). */
+@variant max-md {
+  html[data-program-builder] .shell-bar,
+  html[data-program-builder] [data-shell-bar-room],
+  html[data-program-builder] [data-mobile-bottom-nav] { display: none !important; }
+}
+.pb-header { top: var(--app-chrome-top); padding-top: var(--app-safe-top); }
 /* The program editor's header on a phone: fixed under the app's bar (sticky can't
    hold while <main> clips sideways), moving up to the notch when the bar slides
    away or the keyboard is up. */

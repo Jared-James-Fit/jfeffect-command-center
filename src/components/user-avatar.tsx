@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { createSignedUrlCache, localSignedUrlStorage } from "@/lib/signed-url-cache";
 import { cn } from "@/lib/utils";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { AvatarImage } from "@/components/ui/avatar";
+import { useMediaViewer } from "@/components/media-viewer";
+import { fullAvatarPath } from "@/lib/photo-zoom";
 
 /**
  * Photos' links (the private `avatars` bucket): signed for a day and kept on
@@ -115,7 +116,11 @@ export interface UserAvatarProps {
   /** Add a thin border ring. */
   ring?: boolean;
   className?: string;
-  /** Tap the avatar to open a full-size lightbox. Default true. */
+  /**
+   * Tap the avatar to open the photo viewer (photo-viewer.tsx: full screen,
+   * pinch and double-tap to zoom, swipe away). Default true; off where a tap
+   * means something else (opens their profile, a story, a list row).
+   */
   expandable?: boolean;
 }
 
@@ -136,7 +141,7 @@ export function UserAvatar({
   const [url, setUrl] = useState<string | null>(() => readyAvatarUrl(src));
   const [failed, setFailed] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
-  const [open, setOpen] = useState(false);
+  const viewer = useMediaViewer();
 
   useEffect(() => {
     let cancelled = false;
@@ -171,10 +176,24 @@ export function UserAvatar({
   const Tag: any = canExpand ? "button" : "div";
 
   const handleClick = canExpand
-    ? (e: React.MouseEvent) => {
+    ? (e: React.MouseEvent<HTMLElement>) => {
         e.preventDefault();
         e.stopPropagation();
-        setOpen(true);
+        // where the face sits, without the press's own shrink
+        const el = e.currentTarget;
+        const r = el.getBoundingClientRect();
+        const w = el.offsetWidth || r.width;
+        const h = el.offsetHeight || r.height;
+        const full = fullAvatarPath(src);
+        viewer.open(url!, {
+          alt: name ? `${name}'s photo` : "Profile photo",
+          shape: "circle",
+          from: { left: r.left + r.width / 2 - w / 2, top: r.top + r.height / 2 - h / 2, width: w, height: h },
+          caption: name ?? null,
+          fallback: initials,
+          // a Crew photo's full-size copy, when it has one (the 512 px face stays until it's in)
+          better: full ? () => resolveAvatarUrl(full) : null,
+        });
       }
     : undefined;
 
@@ -187,11 +206,11 @@ export function UserAvatar({
           "relative shrink-0 overflow-hidden rounded-full",
           ring && "ring-1 ring-border",
           canExpand &&
-            "cursor-zoom-in transition-transform hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+            "cursor-zoom-in transition-transform duration-150 hover:scale-[1.04] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
           className,
         )}
         style={{ width: size, height: size }}
-        aria-label={canExpand ? `View ${name ?? "profile"} photo` : name ?? "User"}
+        aria-label={canExpand ? (name ? `View ${name}'s photo` : "View profile photo") : name ?? "User"}
       >
         {/* Base initials — always rendered so there's never a blank state */}
         <div
@@ -234,22 +253,6 @@ export function UserAvatar({
           />
         )}
       </Tag>
-      {canExpand && (
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent className="max-w-[92vw] border-0 bg-transparent p-0 shadow-none sm:max-w-lg">
-            <img loading="lazy"
-              src={url!}
-              alt={name ?? "Profile picture"}
-              className="mx-auto max-h-[80vh] w-auto rounded-2xl object-contain shadow-2xl"
-            />
-            {name && (
-              <div className="mt-3 text-center text-sm font-semibold text-white drop-shadow">
-                {name}
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
-      )}
     </>
   );
 }

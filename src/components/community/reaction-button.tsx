@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { REACTION, REACTIONS, reactionEmoji, reactionTotal, type CommunityPost, type ReactionKey } from "@/lib/community";
+import { feedback } from "@/lib/feedback";
+import { HapticTap } from "@/components/haptic-tap";
 
 /** How long a press has to be to open the other reactions. */
 const HOLD_MS = 380;
@@ -49,14 +51,9 @@ export function ReactionButton({
   useEffect(() => cancel, []);
   const choose = (next: ReactionKey | null) => {
     setOpen(false);
-    if (next) {
-      setPop((n) => n + 1);
-      try {
-        navigator.vibrate?.(8);
-      } catch {
-        /* no haptics here */
-      }
-    }
+    if (next) setPop((n) => n + 1);
+    // the heart's pop and its tap land together (taking a like back is a tap too, Instagram's)
+    feedback("like");
     onReact(post, next);
   };
 
@@ -72,11 +69,7 @@ export function ReactionButton({
             timer.current = null;
             held.current = true;
             setOpen(true);
-            try {
-              navigator.vibrate?.(10);
-            } catch {
-              /* no haptics here */
-            }
+            feedback("press");
           }, HOLD_MS);
         }}
         onPointerUp={cancel}
@@ -101,7 +94,7 @@ export function ReactionButton({
         aria-expanded={open}
         aria-label={`${mine ? `You reacted ${reactionEmoji(mine) ?? ""}. Tap to remove` : "Like"}${total && !split ? `, ${total}` : ""}. Hold for more reactions`}
         className={cn(
-          "flex select-none items-center justify-center rounded-full transition-transform [-webkit-touch-callout:none] [touch-action:manipulation] hover:bg-muted active:scale-90",
+          "relative flex select-none items-center justify-center rounded-full transition-transform [-webkit-touch-callout:none] [touch-action:manipulation] hover:bg-muted active:scale-90",
           split
             ? sm ? "h-10 w-10" : "h-11 w-11"
             : stacked ? "min-h-11 min-w-11 flex-col gap-0.5 px-1 py-1" : sm ? "h-10 min-w-10 gap-1 px-2" : "h-11 min-w-11 gap-1.5 px-2.5",
@@ -117,6 +110,7 @@ export function ReactionButton({
           )}
         </span>
         {!split && count}
+        <HapticTap />
       </button>
       {split && (
         <button
@@ -200,6 +194,8 @@ export function useBurst() {
       y = Math.round(e.clientY - r.top);
     }
     setBurst((b) => ({ n: b.n + 1, x, y }));
+    // every double-tap is a like: its tap lands with the heart
+    feedback("like");
   }, []);
   return [burst, fire] as const;
 }

@@ -45,11 +45,11 @@ describe("selectExerciseNoteHistory", () => {
     expect(out).toHaveLength(1);
   });
 
-  it("sorts newest first", () => {
+  it("sorts newest first, by the day each note was written", () => {
     const rows = [
-      note({ id: "old", updated_at: "2026-07-01T10:00:00Z" }),
-      note({ id: "new", updated_at: "2026-08-17T10:00:00Z" }),
-      note({ id: "mid", updated_at: "2026-08-09T10:00:00Z" }),
+      note({ id: "old", created_at: "2026-07-01T10:00:00Z", updated_at: "2026-08-20T10:00:00Z" }),
+      note({ id: "new", created_at: "2026-08-17T10:00:00Z", updated_at: "2026-08-17T10:00:00Z" }),
+      note({ id: "mid", created_at: "2026-08-09T10:00:00Z", updated_at: "2026-08-09T10:00:00Z" }),
     ];
     const out = selectExerciseNoteHistory(rows, { exerciseId: "ex-1" });
     expect(out.map((n: any) => n.id)).toEqual(["new", "mid", "old"]);
@@ -57,8 +57,8 @@ describe("selectExerciseNoteHistory", () => {
 
   it("excludes the current day's note (the editable one) from history", () => {
     const rows = [
-      note({ id: "current", day_id: "day-today", updated_at: "2026-08-26T10:00:00Z" }),
-      note({ id: "past", day_id: "day-last-week", updated_at: "2026-08-17T10:00:00Z" }),
+      note({ id: "current", day_id: "day-today", created_at: "2026-08-26T10:00:00Z" }),
+      note({ id: "past", day_id: "day-last-week", created_at: "2026-08-17T10:00:00Z" }),
     ];
     const out = selectExerciseNoteHistory(rows, {
       exerciseId: "ex-1",
@@ -70,7 +70,7 @@ describe("selectExerciseNoteHistory", () => {
 
   it("respects the limit", () => {
     const rows = Array.from({ length: 30 }, (_, i) =>
-      note({ id: `n${i}`, updated_at: `2026-08-${String(i + 1).padStart(2, "0")}T10:00:00Z` }),
+      note({ id: `n${i}`, created_at: `2026-08-${String(i + 1).padStart(2, "0")}T10:00:00Z` }),
     );
     expect(selectExerciseNoteHistory(rows, { exerciseId: "ex-1", limit: 20 })).toHaveLength(20);
   });

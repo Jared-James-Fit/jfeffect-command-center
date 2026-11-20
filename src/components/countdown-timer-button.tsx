@@ -1,9 +1,9 @@
-import { playAppSound } from "@/lib/app-sounds";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, RotateCcw, Timer, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDurationShort } from "@/lib/duration";
+import { feedback } from "@/lib/feedback";
 
 type Props = {
   /** Total seconds to count down from. If null/<=0 the button is disabled. */
@@ -50,8 +50,7 @@ export function CountdownTimerButton({ seconds, onComplete, compact, className, 
         setRunning(false);
         setDone(true);
         endsAtRef.current = null;
-        playAppSound("timer");
-        if (navigator?.vibrate) { try { navigator.vibrate([100, 60, 100]); } catch { /* no-op */ } }
+        feedback("timer");
         onComplete?.();
       }
     };

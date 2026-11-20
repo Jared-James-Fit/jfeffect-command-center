@@ -5,7 +5,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { HelpCircle, Search } from "lucide-react";
+import { ChevronRight, HelpCircle, Search, SlidersHorizontal, Zap } from "lucide-react";
+import { EquipmentSetupTips } from "@/components/equipment/setup-tips";
+import { QuickLogTips } from "@/components/workout-day/quick-log-tips";
 import { usePortalUserId } from "@/lib/client-impersonation";
 
 const CATEGORY_ORDER = [
@@ -69,6 +71,12 @@ export function TrainingHelpSheet({
   onOpenChange: (v: boolean) => void;
 }) {
   const portalUserId = usePortalUserId();
+  // Guides: the app's walkthroughs, any time (they open over the page once this sheet closes).
+  const [guide, setGuide] = useState<"equipment" | "logging" | null>(null);
+  const openGuide = (g: "equipment" | "logging") => {
+    onOpenChange(false);
+    window.setTimeout(() => setGuide(g), 250);
+  };
 
   // Detect role flags so visibility filters apply correctly. Both default queries
   // are cheap and cached; the sheet still renders instantly using `visible_everyone`.
@@ -147,6 +155,9 @@ export function TrainingHelpSheet({
   }, [filtered]);
 
   return (
+    <>
+    {guide === "equipment" && <EquipmentSetupTips onClose={() => setGuide(null)} />}
+    {guide === "logging" && <QuickLogTips onClose={() => setGuide(null)} />}
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col p-0">
         <SheetHeader className="px-5 pt-5 pb-3 border-b">
@@ -188,6 +199,32 @@ export function TrainingHelpSheet({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 pb-[max(env(safe-area-inset-bottom),1rem)] space-y-5">
+          {!search.trim() && activeCat === "All" && (
+            <section aria-label="Guides" data-help-guides>
+              <div className="mb-1.5 text-[13px] font-semibold text-muted-foreground">Guides</div>
+              <div className="overflow-hidden rounded-xl border border-border">
+                {[
+                  { key: "logging" as const, icon: Zap, title: "Fastest way to log", sub: "One tap logs a whole exercise" },
+                  { key: "equipment" as const, icon: SlidersHorizontal, title: "Save your equipment setup", sub: "Rack heights, seats and machines, per gym" },
+                ].map((g, k) => (
+                  <button
+                    key={g.key}
+                    type="button"
+                    onClick={() => openGuide(g.key)}
+                    className={`flex w-full items-center gap-3 px-3 py-2.5 text-left active:bg-muted ${k ? "border-t border-border" : ""}`}
+                    data-help-guide={g.key}
+                  >
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted"><g.icon className="h-4 w-4" aria-hidden /></span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[15px] font-medium text-foreground">{g.title}</span>
+                      <span className="block text-[12px] text-muted-foreground">{g.sub}</span>
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
           {grouped.length === 0 && (
             <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
               No matching help article.
@@ -227,5 +264,6 @@ export function TrainingHelpSheet({
         </div>
       </SheetContent>
     </Sheet>
+    </>
   );
 }

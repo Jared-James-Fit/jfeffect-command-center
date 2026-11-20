@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ActivitySpinner } from "@/components/activity-spinner";
 import { MIN_SPIN_MS, PULL_RECENT_MS, RECENT_MS, TAB_REFRESH_EVENT, canStartPull, needsRefresh, pullProgress } from "@/lib/tab-refresh";
+import { feedback } from "@/lib/feedback";
 
 type Phase = "idle" | "pulling" | "refreshing" | "done";
 /** The room the page makes for the spinner while it loads. */
@@ -112,6 +113,8 @@ export function TabRefresh({ pull: pullEnabled, top }: {
         pulling = true;
       }
       const p = pullProgress(dy - SLOP);
+      // the moment letting go will refresh: the detent tick (iOS's own pull to refresh)
+      if (p >= 1 && pullRef.current < 1) feedback("detent");
       pullRef.current = p;
       setPull(p);
       setPhase("pulling");

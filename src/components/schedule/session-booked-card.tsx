@@ -23,10 +23,22 @@ type BookedRow = ClientSession & {
 /**
  * "You're booked in" (`kind: "session_booked"`, session-booked.server.ts):
  * the sessions the coach booked, read live, so one moved or cancelled since
- * shows as it is now. The client taps one for its details (ClientSessionSheet:
+ * shows as it is now. Also a call the client booked themselves
+ * (`booked_by: "client"`, booking.server.ts), posted from them. The client taps one for its details (ClientSessionSheet:
  * where, the video link, Change time); a video session has Join right here.
  */
-export function SessionBookedCard({ ids, staff, clientId }: { ids: string[]; staff: boolean; clientId: string }) {
+export function SessionBookedCard({
+  ids,
+  staff,
+  clientId,
+  bookedByClient = false,
+}: {
+  ids: string[];
+  staff: boolean;
+  clientId: string;
+  /** The client booked it themselves (a call from their app): nobody had to tell them. */
+  bookedByClient?: boolean;
+}) {
   const [open, setOpen] = useState<BookedRow | null>(null);
   const [all, setAll] = useState(false);
   const { data: rows, isLoading } = useQuery<BookedRow[]>({
@@ -62,7 +74,7 @@ export function SessionBookedCard({ ids, staff, clientId }: { ids: string[]; sta
           <CalendarCheck2 className="h-4 w-4" />
         </span>
         <div className="min-w-0">
-          <div className="text-xs text-muted-foreground">{staff ? "Booked · they've been told" : "You're booked in"}</div>
+          <div className="text-xs text-muted-foreground">{bookedByClient ? (staff ? "They booked" : "You booked") : staff ? "Booked · they've been told" : "You're booked in"}</div>
           <div className="truncate text-sm font-semibold">{sessions.length ? heading : "No longer booked"}</div>
         </div>
       </div>

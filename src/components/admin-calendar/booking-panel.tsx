@@ -55,6 +55,9 @@ import { useBookingTypes } from "@/components/booking/use-booking-types";
 import {
   TYPE_TEMPLATES,
   bookingUrl,
+  clientsOnly,
+  durationChoices,
+  durationLabel,
   publicOrigin,
   shortPlace,
   type BookingType,
@@ -284,7 +287,7 @@ export function AdminBookingPanel() {
                       <div className="min-w-0">
                         <div className="truncate text-[15px] font-bold">{t.name}</div>
                         <div className="truncate text-xs text-muted-foreground">
-                          {fmtDuration(t.duration_minutes)} · {shortPlace(t)}
+                          {durationChoices(t).length > 1 ? durationLabel(t) : fmtDuration(t.duration_minutes)} · {shortPlace(t)}
                         </div>
                       </div>
                       <Badge variant="outline" className={cn("shrink-0 text-[10px]", status.tone)}>
@@ -305,6 +308,11 @@ export function AdminBookingPanel() {
                       {t.online_enabled && t.show_in_app && (
                         <Badge variant="outline" className="border-border text-muted-foreground">
                           In clients' app
+                        </Badge>
+                      )}
+                      {t.online_enabled && clientsOnly(t) && (
+                        <Badge variant="outline" className="border-border text-muted-foreground">
+                          Coaching clients only
                         </Badge>
                       )}
                     </div>

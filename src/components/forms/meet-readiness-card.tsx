@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { readinessLine, type Readiness } from "@/lib/form-checklist";
 import { daysOutLabel, daysUntil, weightCheck, MEET_CHECKLIST_FORM_TYPE, type MeetFacts } from "@/lib/meet-checklist";
 import { computeFormReadiness, relativeTime, todayLocal, verdictTone } from "@/components/forms/readiness-view";
+import { UPCOMING_MEET_DAYS, athleteMeets, coachingAthletes, meetLine, type AthleteMeet } from "@/lib/meet-board";
 
 const db = supabase as any;
 
@@ -20,22 +21,31 @@ export type MeetBoardRow = {
   facts: MeetFacts | null;
   updatedAt: string | null;
   sentAt: string | null;
-  /** A meet on their meet prep with no checklist out yet (the dashboard's only other view of meets coming up). */
+  /** A meet on their meet prep or approved plan with no checklist out yet (the dashboard's only other view of meets coming up). */
   noChecklist?: boolean;
+  /** From their competition plan, when it says. */
+  registered?: boolean | null;
+  /** Their other meets inside the window, after this one. */
+  later?: AthleteMeet[];
 };
 
-/** How far ahead a meet on a meet prep shows, checklist or not. */
-export const UPCOMING_MEET_DAYS = 56;
+/** How far ahead a meet shows, checklist or not (meet-board.ts: 16 weeks, a full peak block). */
+export { UPCOMING_MEET_DAYS };
+/** Inside this, a meet they haven't registered for is flagged (registration usually closes weeks out). */
+const REGISTER_BY_DAYS = 56;
 /** Inside this, a meet with no checklist out says to send it (formSuggestions offers it in the chat from here too). */
 const CHECKLIST_DUE_DAYS = 28;
 
 /**
- * Every athlete with a meet coming up, soonest first: with a meet checklist
- * out, where they stand, the critical items still open, a weight concern, the
- * handler, and when they last changed it (read live from their answers); with
- * a meet on their meet prep in the next 8 weeks and no checklist, the meet and
+ * Every athlete with a meet coming up, soonest first, a coach's or admin's own
+ * athlete account included: with a meet checklist out, where they stand, the
+ * critical items still open, a weight concern, the handler, and when they last
+ * changed it (read live from their answers); with a meet on their meet prep or
+ * approved competition plan in the next 16 weeks and no checklist, the meet and
  * a nudge to send it inside 4 weeks (this card replaced Training Intel's
- * "Event approaching"). Hidden when nobody has a meet coming up.
+ * "Event approaching"). Each row also names their later meets in the window and
+ * a meet their plan says they haven't registered for. Hidden when nobody has a
+ * meet coming up.
  */
 export function useMeetBoard() {
   return useQuery({
@@ -45,8 +55,8 @@ export function useMeetBoard() {
       const today = todayLocal();
       const { data: forms } = await db.from("nf_forms").select("id, form_type, settings").eq("form_type", MEET_CHECKLIST_FORM_TYPE).eq("archived", false);
       const formIds = ((forms ?? []) as any[]).map((f) => f.id);
-      const preps = await upcomingPreps(today);
-      if (!formIds.length) return preps;
+      const upcoming = await upcomingMeets(today);
+      if (!formIds.length) return upcoming.rows;
       const since = new Date(Date.now() - 120 * 86_400_000).toISOString();
       const [{ data: subs }, { data: asg }, { data: qs }] = await Promise.all([
         db
@@ -109,48 +119,63 @@ export function useMeetBoard() {
       }
       // Meets still ahead (or yesterday's), and undated ones touched in the last 3 weeks.
       const recent = (iso: string | null) => !!iso && Date.now() - Date.parse(iso) < 21 * 86_400_000;
-      const withChecklist = rows.filter((r) => (r.days != null ? r.days >= -1 : recent(r.updatedAt ?? r.sentAt)));
+      const withChecklist = rows
+        .filter((r) => (r.days != null ? r.days >= -1 : recent(r.updatedAt ?? r.sentAt)))
+        .map((r) => {
+          // their other meets after the checklist's one
+          const others = (upcoming.meetsBy.get(r.clientId) ?? []).filter((m) => m.date !== r.meetDate && (!r.meetDate || m.date > r.meetDate));
+          const same = (upcoming.meetsBy.get(r.clientId) ?? []).find((m) => m.date === r.meetDate);
+          return { ...r, registered: same?.registered ?? null, later: others };
+        });
       const covered = new Set(withChecklist.map((r) => r.clientId));
-      return [...withChecklist, ...preps.filter((p) => !covered.has(p.clientId))]
+      return [...withChecklist, ...upcoming.rows.filter((p) => !covered.has(p.clientId))]
         .sort((a, b) => (a.days ?? 999) - (b.days ?? 999) || a.name.localeCompare(b.name));
     },
   });
 }
 
-/** Coaching clients with a meet on their meet prep in the next UPCOMING_MEET_DAYS (RLS: an admin's all, a coach's own). */
-async function upcomingPreps(today: string): Promise<MeetBoardRow[]> {
+/**
+ * Coaching clients' meets in the next UPCOMING_MEET_DAYS, from their meet preps
+ * and approved competition plans (meet-board.ts), read as the coach (RLS: an
+ * admin's all, a coach's own). One row per athlete on their soonest meet.
+ */
+async function upcomingMeets(today: string): Promise<{ rows: MeetBoardRow[]; meetsBy: Map<string, AthleteMeet[]> }> {
   const until = new Date(Date.parse(`${today}T12:00:00Z`) + UPCOMING_MEET_DAYS * 86_400_000).toISOString().slice(0, 10);
-  const { data: preps } = await db
-    .from("pl_preps")
-    .select("client_id, title, event_name, event_date, status, archived")
-    .in("status", ["Active", "Planned"])
-    .gte("event_date", today)
-    .lte("event_date", until)
-    .order("event_date");
-  const live = ((preps ?? []) as any[]).filter((p) => !p.archived);
-  const ids = [...new Set(live.map((p) => p.client_id))];
-  if (!ids.length) return [];
+  const [{ data: preps }, { data: plans }] = await Promise.all([
+    db
+      .from("pl_preps")
+      .select("client_id, title, event_name, event_date, status, archived")
+      .in("status", ["Active", "Planned"])
+      .gte("event_date", today)
+      .lte("event_date", until)
+      .order("event_date"),
+    db.from("athlete_competition_plans").select("client_id, status, created_at, plan").eq("status", "approved"),
+  ]);
+  const all = athleteMeets({ preps: (preps ?? []) as any[], plans: (plans ?? []) as any[], today });
+  const ids = [...all.keys()];
+  if (!ids.length) return { rows: [], meetsBy: new Map() };
   const { data: clients } = await db.from("clients").select("id, full_name, archived, service_tier").in("id", ids);
-  const who = new Map(((clients ?? []) as any[]).filter((c) => !c.archived && c.service_tier !== "self_serve").map((c) => [c.id, c.full_name as string]));
-  const seen = new Set<string>();
-  const out: MeetBoardRow[] = [];
-  for (const p of live) {
-    if (!who.has(p.client_id) || seen.has(p.client_id)) continue;
-    seen.add(p.client_id);
-    out.push({
-      clientId: p.client_id,
-      name: who.get(p.client_id) ?? "Athlete",
-      meetName: (p.event_name || p.title || "").trim() || null,
-      meetDate: p.event_date,
-      days: daysUntil(p.event_date, today),
+  const who = coachingAthletes((clients ?? []) as any[]);
+  const meetsBy = new Map([...all].filter(([id]) => who.has(id)));
+  const rows: MeetBoardRow[] = [];
+  for (const [clientId, meets] of meetsBy) {
+    const [next, ...later] = meets;
+    rows.push({
+      clientId,
+      name: who.get(clientId) ?? "Athlete",
+      meetName: next.name,
+      meetDate: next.date,
+      days: next.days,
       readiness: null,
       facts: null,
       updatedAt: null,
       sentAt: null,
       noChecklist: true,
+      registered: next.registered,
+      later,
     });
   }
-  return out;
+  return { rows, meetsBy };
 }
 
 export function MeetReadinessCard() {
@@ -181,8 +206,11 @@ export function MeetReadinessCard() {
                     {daysOutLabel(r.days) ?? "Date not set"}
                   </span>
                 </div>
-                <p className="truncate text-[13px] text-muted-foreground">
+                <p className="break-words text-[13px] text-muted-foreground">
                   {[r.meetName, r.meetDate ? new Date(`${r.meetDate}T00:00:00`).toLocaleDateString("en-CA", { month: "short", day: "numeric" }) : null].filter(Boolean).join(" · ") || "Meet not named yet"}
+                  {r.registered === false && (
+                    <span className={cn((r.days ?? 999) <= REGISTER_BY_DAYS && "font-medium text-warning")}> · not registered</span>
+                  )}
                 </p>
                 <p className={cn("text-[13px] font-medium", r.readiness ? verdictTone(r.readiness) : r.noChecklist && (r.days ?? 99) <= CHECKLIST_DUE_DAYS ? "text-warning" : "text-muted-foreground")}>
                   {r.readiness
@@ -195,6 +223,11 @@ export function MeetReadinessCard() {
                 {critical.length > 0 && <p className="text-[13px] text-destructive">Still need: {critical.map((i) => i.label).join(", ")}</p>}
                 {(weight || concern) && <p className="text-[13px] text-warning">Weight: {weight ? weight.line : concern}</p>}
                 {handlerOpen && <p className="text-[13px] text-warning">Handler: {r.facts?.handler ?? "not confirmed"}</p>}
+                {(r.later ?? []).slice(0, 2).map((m) => (
+                  <p key={m.date} className="break-words text-[13px] text-muted-foreground" data-meet-later>
+                    Then {meetLine(m)}
+                  </p>
+                ))}
               </Link>
             </li>
           );

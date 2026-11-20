@@ -8,15 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { fmtDuration } from "@/lib/booking-cards";
-import { locationLabel, type BookingType } from "@/lib/booking-types";
+import { clientsOnly, durationChoices, durationLabel, locationLabel, type BookingType } from "@/lib/booking-types";
 import { fmtClock, fmtDayLabel } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
 
 /**
  * A booking invite in a coach chat: the coach picks a booking type that's
- * taking online bookings and the client gets a card that opens its booking
- * page, signed in as themselves, with the times his availability offers right
- * now. Once they book, the card shows the booking it led to (read live).
+ * taking online bookings (General Call first, at the length he picks) and the
+ * client gets a card that opens its booking page, signed in as themselves,
+ * with the times his availability offers right now. Once they book, the card
+ * shows the booking it led to (read live).
  */
 
 export type BookingInviteAttachment = {
@@ -31,17 +32,47 @@ export type BookingInviteAttachment = {
   client_id: string;
   sent_at: string;
   request_note?: string;
+  /** The length the coach picked (the page opens on it, not a choice). */
+  duration_fixed?: number;
 };
 
-export function bookingInviteAttachment(t: BookingType, clientId: string, note: string): BookingInviteAttachment {
+/**
+ * What a coach sends an existing client from their chat: calls for clients
+ * first (General Call), then anything else they can book; types made for new
+ * people (the discovery call: open to anyone, kept out of clients' apps) last.
+ */
+export function inviteTypeGroups(types: BookingType[]): { forClients: BookingType[]; forNew: BookingType[] } {
+  const forNew = (t: BookingType) => !clientsOnly(t) && !t.show_in_app;
+  return {
+    forClients: [...types.filter((t) => !forNew(t) && clientsOnly(t)), ...types.filter((t) => !forNew(t) && !clientsOnly(t))],
+    forNew: types.filter(forNew),
+  };
+}
+
+/** The same order as one list (the client profile's Send booking link). */
+export function inviteOrder(types: BookingType[]): BookingType[] {
+  const g = inviteTypeGroups(types);
+  return [...g.forClients, ...g.forNew];
+}
+
+export function bookingInviteAttachment(
+  t: BookingType,
+  clientId: string,
+  note: string,
+  /** The length the coach picked, for a type that offers several (a General Call). */
+  length?: number | null,
+): BookingInviteAttachment {
+  const choices = durationChoices(t);
+  const fixed = choices.length > 1 && length && choices.includes(length) ? length : null;
   return {
     kind: "booking_invite",
     type: "link",
-    url: `/book/${t.slug}`,
+    url: fixed ? `/book/${t.slug}?d=${fixed}` : `/book/${t.slug}`,
     booking_slug: t.slug!,
     booking_card_id: t.id,
     request_title: t.name,
-    duration_min: t.duration_minutes,
+    duration_min: fixed ?? t.duration_minutes,
+    duration_fixed: fixed ?? undefined,
     where: locationLabel(t),
     client_id: clientId,
     sent_at: new Date().toISOString(),
@@ -60,7 +91,8 @@ export function BookingInvitePicker({
   clientId: string;
   onSend: (att: BookingInviteAttachment, body: string) => void | Promise<void>;
 }) {
-  const [picked, setPicked] = useState<BookingType | null>(null);
+  const [chosen, setChosen] = useState<BookingType | null>(null);
+  const [length, setLength] = useState<number | null>(null);
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
   const { data: types = [], isLoading } = useQuery({
@@ -78,15 +110,25 @@ export function BookingInvitePicker({
       return (data ?? []) as BookingType[];
     },
   });
+  const groups = inviteTypeGroups(types);
+  // A call for clients is what a coach sends most: picked to start with.
+  const picked = chosen ?? groups.forClients[0] ?? null;
+  const lengths = picked ? durationChoices(picked) : [];
+  const pickedLength = picked && length && lengths.includes(length) ? length : picked?.duration_minutes ?? null;
 
   const send = async () => {
     if (!picked) return;
     setSending(true);
     try {
-      const att = bookingInviteAttachment(picked, clientId, note);
-      await onSend(att, note.trim() || `Book a ${picked.name}: pick a time that works for you.`);
+      const att = bookingInviteAttachment(picked, clientId, note, lengths.length > 1 ? pickedLength : null);
+      await onSend(
+        att,
+        note.trim() ||
+          `Book a ${lengths.length > 1 ? `${pickedLength}-min ` : ""}${picked.name}: pick a time that works for you.`,
+      );
       onOpenChange(false);
-      setPicked(null);
+      setChosen(null);
+      setLength(null);
       setNote("");
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't send it");
@@ -110,22 +152,56 @@ export function BookingInvitePicker({
               Nothing is taking online bookings yet. Turn it on for a type under Calendar → Booking.
             </p>
           ) : (
-            <div className="grid gap-2" role="radiogroup" aria-label="What they're booking">
-              {types.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={picked?.id === t.id}
-                  onClick={() => setPicked(t)}
-                  className={cn("rounded-xl border p-3 text-left", picked?.id === t.id ? "border-foreground" : "border-border")}
-                >
-                  <span className="block text-sm font-semibold">{t.name}</span>
-                  <span className="block text-[13px] text-muted-foreground">
-                    {fmtDuration(t.duration_minutes)} · {locationLabel(t)}
-                  </span>
-                </button>
+            <div className="space-y-2" role="radiogroup" aria-label="What they're booking">
+              {[...groups.forClients, ...groups.forNew].map((t, i) => (
+                <div key={t.id}>
+                  {i === groups.forClients.length && groups.forNew.length > 0 && (
+                    <p className="px-1 pb-1.5 pt-1 text-xs text-muted-foreground">For new people</p>
+                  )}
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={picked?.id === t.id}
+                    onClick={() => {
+                      setChosen(t);
+                      setLength(null);
+                    }}
+                    className={cn("w-full rounded-xl border p-3 text-left", picked?.id === t.id ? "border-foreground" : "border-border")}
+                    data-invite-type={t.slug ?? undefined}
+                  >
+                    <span className="block text-sm font-semibold">{t.name}</span>
+                    <span className="block text-[13px] text-muted-foreground">
+                      {durationLabel(t)} · {locationLabel(t)}
+                    </span>
+                  </button>
+                </div>
               ))}
+            </div>
+          )}
+          {picked && lengths.length > 1 && (
+            <div className="space-y-1.5" data-invite-length>
+              <p className="text-sm font-semibold">How long?</p>
+              <div
+                className={cn("grid gap-2", lengths.length === 4 ? "grid-cols-4" : "grid-cols-3")}
+                role="radiogroup"
+                aria-label="Call length"
+              >
+                {lengths.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    role="radio"
+                    aria-checked={pickedLength === n}
+                    onClick={() => setLength(n)}
+                    className={cn(
+                      "h-11 rounded-full border px-2 text-sm font-semibold tabular-nums",
+                      pickedLength === n ? "border-foreground bg-foreground text-background" : "border-border text-foreground",
+                    )}
+                  >
+                    {n} min
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note (optional)" className="text-base" />
@@ -207,7 +283,11 @@ export function BookingInviteCard({ att, mine }: { att: Partial<BookingInviteAtt
           <p className="text-[13px] text-muted-foreground">{cancelled ? `Was booked ${when}, then cancelled` : "Waiting for them to pick a time"}</p>
         ) : (
           <Button asChild className="h-10 w-full">
-            <Link to="/book/$slug" params={{ slug: att.booking_slug ?? "" }} search={{ name: "", email: "", phone: "", application_id: "", i: "" } as any}>
+            <Link
+              to="/book/$slug"
+              params={{ slug: att.booking_slug ?? "" }}
+              search={{ name: "", email: "", phone: "", application_id: "", i: "", ...(att.duration_fixed ? { d: att.duration_fixed } : {}) }}
+            >
               {cancelled ? "Pick a new time" : "Choose a time"} <ChevronRight className="ml-1 h-4 w-4" />
             </Link>
           </Button>

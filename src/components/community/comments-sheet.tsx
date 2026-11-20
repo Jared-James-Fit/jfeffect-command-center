@@ -36,6 +36,8 @@ import {
   useShareComment,
   useSyncCommentCount,
 } from "@/lib/community.queries";
+import { feedback } from "@/lib/feedback";
+import { HapticTap } from "@/components/haptic-tap";
 
 const NOTE_MAX = 1200;
 /** Replies shown under a comment before "View all". */
@@ -465,8 +467,9 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
                   </button>
                   {/* nothing to send yet: the mic, to say it instead */}
                   {canSend ? (
-                    <Button type="button" size="icon" className="ml-0.5 h-9 w-9 shrink-0 rounded-full" onClick={send} aria-label="Send comment" data-comment-send>
+                    <Button type="button" size="icon" className="relative ml-0.5 h-9 w-9 shrink-0 rounded-full" onClick={send} aria-label="Send comment" data-comment-send>
                       <ArrowUp className="h-5 w-5" strokeWidth={2.25} />
+                      <HapticTap />
                     </Button>
                   ) : (
                     <MicButton onClick={() => void recorder.start()} disabled={!user?.id || picking} quiet />
@@ -588,11 +591,7 @@ function useHold(onHold: () => void, disabled: boolean) {
   const fire = () => {
     cancel();
     held.current = true;
-    try {
-      navigator.vibrate?.(8);
-    } catch {
-      /* no haptics */
-    }
+    feedback("press");
     onHold();
   };
   return {

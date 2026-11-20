@@ -16,7 +16,7 @@ import {
   editMessage, deleteMessageForEveryone, adminDeleteMessages, replyMediaFor,
   makeReplyPreview, replyPreviewText, mediaAttachments, keepReplyClip,
   listReactions, toggleReaction, REACTION_EMOJIS,
-  listOlderMessages, listMessageHistory,
+  listOlderMessages, listMessageHistory, listMessagesBetween, getMessageStamp,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
   type MessageReaction,
 } from "@/lib/messages";
@@ -72,8 +72,6 @@ import {
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { runJob } from "@/lib/progress-jobs";
 import { toast } from "sonner";
-import { playUiSound } from "@/lib/ui-sounds";
-import { haptic } from "@/platform/haptics";
 import { doubleTapAdds, useLikePops } from "@/lib/message-like";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
@@ -95,12 +93,16 @@ import {
   MessengerCheckinSubmissionCard,
 } from "@/components/messages/messenger-checkin-card";
 import { groupFormHistory, planFormMessages } from "@/lib/form-message-presentation";
-import { playAppSound, registerOpenThread } from "@/lib/app-sounds";
+import { registerOpenThread } from "@/lib/app-sounds";
 import { ensureDueMessengerCheckins } from "@/lib/messenger-checkins.functions";
 import { StaffInviteChatCard } from "@/components/staff-invite-chat-card";
 import { listenChannel } from "@/lib/realtime-channel";
 import { SaveMediaButton, useSaveMedia } from "@/components/messages/save-media";
 import { saveItemsOf, saveLabel, warmSave } from "@/lib/save-media";
+import { useFilmCamera } from "@/components/camera/use-film-camera";
+import { videoLimit } from "@/lib/video-edit/limits";
+import { feedback } from "@/lib/feedback";
+import { HapticTap } from "@/components/haptic-tap";
 
 function attachIcon(t: MessageAttachment["type"]) {
   if (t === "image") return ImageIcon;
@@ -496,7 +498,7 @@ function AttachmentView({
 }) {
   // what an athlete told their coach in a workout (pain, a review note, an exercise note)
   if (att.kind === "workout_note" && message) {
-    return <WorkoutNoteCard att={att as unknown as WorkoutNoteCardAttachment} messageId={message.id} role={role === "client" ? "client" : "admin"} clientId={clientId} />;
+    return <WorkoutNoteCard att={att as unknown as WorkoutNoteCardAttachment} messageId={message.id} role={role === "client" ? "client" : "admin"} clientId={clientId} version={message.updated_at ?? null} />;
   }
   if (att.kind === "community_post" && att.post_id) {
     return <CommunityPostChatCard att={att as PostCardAttachment} mine={mine} staff={role !== "client"} />;
@@ -508,7 +510,7 @@ function AttachmentView({
     return <SessionChangeCard requestId={att.change_request_id} staff={role !== "client"} clientId={clientId} />;
   }
   if (att.kind === "session_booked" && att.session_ids?.length) {
-    return <SessionBookedCard ids={att.session_ids} staff={role !== "client"} clientId={clientId} />;
+    return <SessionBookedCard ids={att.session_ids} staff={role !== "client"} clientId={clientId} bookedByClient={att.booked_by === "client"} />;
   }
   if (att.kind === "staff_invite") {
     return <StaffInviteChatCard att={att as any} mine={mine} />;
@@ -774,6 +776,9 @@ function LiveWaveform({ levels }: { levels: number[] }) {
   );
 }
 
+/** A message the chat was opened on (or a reply's source): highlighted for a moment. */
+const FLASH_ROW = "bg-primary/10 ring-2 ring-primary/25 ring-offset-2 ring-offset-background";
+
 /**
  * Query options for a 1:1 thread's latest page. Shared with the inbox so a
  * row can prefetch on press and the thread opens with history already there.
@@ -813,9 +818,16 @@ export function MessageThread({
   fullBleed = false,
   peerName,
   peerAvatarPath,
+  focusMessageId = null,
 }: {
   clientId: string;
   role: SenderRole;
+  /**
+   * Open on this message instead of the latest: loaded back to if it's older
+   * than what's on screen, centred and highlighted (a check-in opened from the
+   * dashboard or Forms, `?msg=`).
+   */
+  focusMessageId?: string | null;
   conversationState?: ConversationState | null;
   hideControls?: boolean;
   /** When true, render as full-height chat (no card border) and let the
@@ -861,6 +873,12 @@ export function MessageThread({
   const uploads = useDraftUploads<MessageAttachment>();
   // a video longer than 10 minutes opens the trimmer before it becomes a chip
   const trimmer = useVideoTrimmer();
+  // the + menu's Video: filmed in the app's own camera, then sent like a picked video (Library inside it)
+  const filmCamera = useFilmCamera({
+    maxSeconds: videoLimit("coach"),
+    onClip: (f) => void onPickFiles([f]),
+    onLibrary: () => photoInputRef.current?.click(),
+  });
   // Messages already sent from the composer but still waiting on their media.
   const [queuedUploadSends, setQueuedUploadSends] = useState(0);
   const [sending, setSending] = useState(false);
@@ -1225,7 +1243,7 @@ export function MessageThread({
   // double-tap never takes it back (tap the heart under the message for that).
   const onDoubleTapLike = (messageId: string) => {
     if (!user || !likePops.pop(messageId)) return;
-    haptic("light");
+    feedback("like");
     const mine = (qc.getQueryData<MessageReaction[]>(["message-reactions", clientId]) ?? reactions).filter(
       (r) => r.user_id === user.id && r.message_id === messageId,
     );
@@ -1280,7 +1298,7 @@ export function MessageThread({
           }
           return [...existing, newMsg];
         });
-        if (newMsg.sender_role !== role && !(newMsg as any).is_internal_note) playAppSound("message");
+        if (newMsg.sender_role !== role && !(newMsg as any).is_internal_note) feedback("message");
         // Still update conversation state and notification counts. If this is
         // a submitted messenger check-in, also refresh its shared check-in
         // query immediately so an already-open request card never stays in a
@@ -1494,6 +1512,102 @@ export function MessageThread({
     [formPlan, visibleMessages],
   );
 
+  // Opened on one message (?msg=): load back to it when it's older than what's
+  // on screen, then centre and highlight it. Once per message per chat; the
+  // reader scrolling takes over (no re-centring after that).
+  const focusRef = useRef<{ key: string; loaded: boolean; done: boolean } | null>(null);
+  useEffect(() => {
+    if (!focusMessageId || messagesPending || !messages.length) return;
+    const key = `${clientId}:${focusMessageId}`;
+    if (focusRef.current?.key !== key) focusRef.current = { key, loaded: false, done: false };
+    const f = focusRef.current;
+    if (f.done) return;
+    if (messageById.has(focusMessageId)) {
+      f.done = true;
+      landOnMessage(focusMessageId);
+      return;
+    }
+    if (f.loaded) {
+      f.done = true;
+      toast.message("Couldn't find that message in this chat.");
+      return;
+    }
+    f.loaded = true;
+    const earliest = olderMessages[0] ?? messages[0];
+    void (async () => {
+      try {
+        const stamp = await getMessageStamp(focusMessageId);
+        if (focusRef.current?.key !== key) return;
+        if (!stamp || stamp.client_id !== clientId) {
+          f.done = true;
+          toast.message("That message isn't in this chat any more.");
+          return;
+        }
+        const range = await listMessagesBetween(clientId, stamp.created_at, earliest.created_at, { includeInternal: role === "admin" });
+        if (focusRef.current?.key !== key) return;
+        if (!range.length) {
+          f.done = true;
+          toast.message("Couldn't find that message in this chat.");
+          return;
+        }
+        // Prepended like "Load earlier messages"; the effect runs again and lands on it.
+        setOlderMessages((prev) => {
+          const seen = new Set([...prev, ...messages].map((m) => m.id));
+          return [...range.filter((m) => !seen.has(m.id)), ...prev];
+        });
+      } catch {
+        f.done = true;
+        toast.message("Couldn't load that message.");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusMessageId, clientId, messagesPending, messageById]);
+
+  /** The row a message shows as: itself, its check-in's visible card, or the history row it's folded into. */
+  const shownRowFor = (id: string): string => {
+    const visible = new Set(visibleMessages.map((m) => m.id));
+    if (visible.has(id) && !formHistory.hidden.has(id)) return id;
+    const unit = formPlan.get(id)?.submissionId;
+    if (unit) {
+      const twin = visibleMessages.find((m) => m.id !== id && formPlan.get(m.id)?.submissionId === unit);
+      if (twin && !formHistory.hidden.has(twin.id)) return twin.id;
+      for (const [leader, group] of formHistory.leaders) {
+        if (group.units.some((u) => u.submissionId === unit)) return leader;
+      }
+    }
+    return id;
+  };
+
+  const landOnMessage = (id: string) => {
+    const rowId = shownRowFor(id);
+    // Stop following the bottom: the reader is here for this message.
+    pinnedRef.current = false;
+    requestAnimationFrame(() => {
+      const el = scrollerRef.current;
+      const node = document.getElementById(`message-${rowId}`);
+      if (!el || !node) {
+        toast.message("Couldn't find that message in this chat.");
+        return;
+      }
+      node.scrollIntoView({ block: "center", behavior: "auto" });
+      pinnedRef.current = false;
+      setFlashMessageId(rowId);
+      window.setTimeout(() => setFlashMessageId((cur) => (cur === rowId ? null : cur)), 2600);
+      // Photos above it can still be loading and push it down: centre it again,
+      // unless the reader has scrolled since.
+      let setTop = el.scrollTop;
+      for (const ms of [250, 700, 1400]) {
+        window.setTimeout(() => {
+          const n = document.getElementById(`message-${rowId}`);
+          if (!n || Math.abs(el.scrollTop - setTop) > 2) return;
+          n.scrollIntoView({ block: "center", behavior: "auto" });
+          pinnedRef.current = false;
+          setTop = el.scrollTop;
+        }, ms);
+      }
+    });
+  };
+
   // Id of the latest message I sent (for inline "Read/Sent" receipt).
   const lastOwnMessageId = useMemo(() => {
     for (let i = visibleMessages.length - 1; i >= 0; i--) {
@@ -1674,7 +1788,7 @@ export function MessageThread({
       releasePress(el);
       // The finger is still down: its release must not also tap whatever is under it (e.g. play a video).
       suppressClickRef.current = true;
-      haptic("medium");
+      feedback("press");
       if (selectionMode) toggleSelected(id);
       else { setSheetClip(clip); setSheetForId(id); }
     }, 450);
@@ -1783,7 +1897,7 @@ export function MessageThread({
     exitSelection();
   };
 
-  const onPickFiles = async (files: FileList | null) => {
+  const onPickFiles = async (files: FileList | File[] | null) => {
     if (!files || !files.length) return;
     // (read now: the input is cleared right after this is called)
     const list = await prepareChatFiles(Array.from(files), "coach", trimmer.request);
@@ -1950,8 +2064,7 @@ export function MessageThread({
         // Nothing was sent: put the caption back so the coach can re-attach and retry.
         if (text) setBody((b) => b || text);
         if (replyTarget) setReply((r) => r ?? { to: replyTarget, att: replyClip });
-        playUiSound("error");
-        haptic("error");
+        feedback("error");
         toast.error(`Upload failed: ${e?.message ?? "try again"}`);
         return null;
       } finally {
@@ -1975,7 +2088,8 @@ export function MessageThread({
         replyToMessageId: replyTarget?.id ?? null,
         replyPreview,
       });
-      playAppSound("sent");
+      // sent: the quick "sent" tick and a light tap, once
+      feedback("send");
       patchInbox((prev) => resolveOptimistic(prev, tempId, sent));
       // Swap the optimistic row for the persisted row (dedupe if realtime
       // already delivered it via INSERT).
@@ -1989,8 +2103,6 @@ export function MessageThread({
         }
         return [...withoutTemp, sent];
       });
-      playUiSound("message");
-      haptic("light");
       releaseDrafts();
       return sent;
     } catch (e: any) {
@@ -2002,8 +2114,7 @@ export function MessageThread({
           : m),
       );
       if (replyTarget) setReply({ to: replyTarget, att: replyClip });
-      playUiSound("error");
-      haptic("error");
+      feedback("error");
       toast.error(e?.message ?? "Failed to send");
       releaseDrafts();
       return null;
@@ -2088,7 +2199,7 @@ export function MessageThread({
           const historyGroup = formHistory.leaders.get(m.id);
           if (historyGroup) {
             return (
-              <div key={m.id} id={`message-${m.id}`} className="w-full min-w-0">
+              <div key={m.id} id={`message-${m.id}`} className={cn("w-full min-w-0 rounded-2xl transition-[background-color,box-shadow] duration-500", flashMessageId === m.id && FLASH_ROW)}>
                 <FormHistoryGroup group={historyGroup} role={role === "admin" ? "admin" : "client"} />
               </div>
             );
@@ -2129,7 +2240,7 @@ export function MessageThread({
                 </div>
               )}
               {formPlan.get(m.id)?.mode === "compact" ? (
-                <div id={`message-${m.id}`} className="w-full min-w-0">
+                <div id={`message-${m.id}`} className={cn("w-full min-w-0 rounded-2xl transition-[background-color,box-shadow] duration-500", flashMessageId === m.id && FLASH_ROW)}>
                   <FormHistoryRow p={formPlan.get(m.id)!} role={role === "admin" ? "admin" : "client"} />
                 </div>
               ) : (
@@ -2137,7 +2248,7 @@ export function MessageThread({
               id={`message-${m.id}`}
               className={cn(
                 "relative flex w-full min-w-0 items-end gap-2 will-change-transform rounded-2xl transition-[background-color,box-shadow] duration-500",
-                flashMessageId === m.id && "bg-primary/10 ring-2 ring-primary/25 ring-offset-2 ring-offset-background",
+                flashMessageId === m.id && FLASH_ROW,
                 mine ? "justify-end" : "justify-start",
                 selectionMode && "cursor-pointer",
                 (() => {
@@ -2808,6 +2919,7 @@ export function MessageThread({
 
         <DraftUploadChips drafts={uploads.drafts} store={uploads.store} onRemove={uploads.cancel} />
         {trimmer.element}
+        {filmCamera.element}
 
         {/* Hidden file inputs */}
         <input ref={fileInputRef} type="file" multiple className="hidden"
@@ -2878,6 +2990,10 @@ export function MessageThread({
               canSendGifs={canSendGifs}
               canSendSounds={canSendSounds}
               onPickCamera={() => cameraInputRef.current?.click()}
+              onPickVideo={() => {
+                // where a web page can't film, the phone's own camera, as before
+                if (!filmCamera.start()) cameraInputRef.current?.click();
+              }}
               onPickPhotos={() => photoInputRef.current?.click()}
               onPickFiles={() => fileInputRef.current?.click()}
               onInsertText={role === "admin" ? (text) =>
@@ -3015,13 +3131,14 @@ export function MessageThread({
                 disabled={sending || uploading}
                 aria-busy={sending || uploading || undefined}
                 size="icon"
-                className="h-9 w-9 shrink-0 rounded-full bg-primary transition-transform active:scale-90"
+                className="relative h-9 w-9 shrink-0 rounded-full bg-primary transition-transform active:scale-90"
               >
                 {sending || uploading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Send className="h-4 w-4" />
                 )}
+                {!(sending || uploading) && <HapticTap />}
               </Button>
               </>
             ) : (

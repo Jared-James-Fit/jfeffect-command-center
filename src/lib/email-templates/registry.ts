@@ -3,6 +3,7 @@ import { template as membershipOnboarding } from './membership-onboarding'
 import { template as setupReminder } from './setup-reminder'
 import { template as agreementSigned } from './agreement-signed'
 import { template as agreementRequested } from './agreement-requested'
+import { approvedTemplate, codeTemplate, receivedTemplate } from './membership-emails'
 
 export interface TemplateEntry {
   component: ComponentType<any>
@@ -26,4 +27,7 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   'setup-reminder': setupReminder,
   'agreement-signed': agreementSigned,
   'agreement-requested': agreementRequested,
+  'membership-received': receivedTemplate,
+  'membership-approved': approvedTemplate,
+  'membership-code': codeTemplate,
 }

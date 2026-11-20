@@ -6,6 +6,8 @@ import { useShowLoadSuggestions } from "@/lib/load-suggestion-visibility";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { audibleStep, BACKOFF_FATIGUE, loadStep, roundToStep, type LoadModel, type LoadSuggestion } from "@/lib/load-suggestion";
 import type { PlannedLoadView } from "@/lib/workouts/planned-load";
+import { WARMUP_TOO_EASY } from "@/lib/final-warmup";
+import { HapticTap } from "@/components/haptic-tap";
 
 function fmtNum(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
@@ -63,10 +65,16 @@ export function LoadSuggestionCard({
 }) {
   if (model.status === "calibrating" || !hint) {
     // Suggest is on but there's no number yet: say when there will be one, and why in the info.
-    const why = model.historySessions === 0 ? "No logs of this lift yet" : "No recent logs of this lift with an RPE";
-    const next = warmup
-      ? "Log your last warm-up and it sets today's weight."
-      : "Log your first set with an RPE and the rest get a live suggestion.";
+    // A warm-up too easy to read never becomes a made-up number (load-suggestion.ts note 8).
+    const tooEasy = !!model.warmupTooEasy;
+    const why = tooEasy
+      ? `${WARMUP_TOO_EASY} from your last warm-up, and no logs of this lift yet`
+      : model.historySessions === 0 ? "No logs of this lift yet" : "No recent logs of this lift with an RPE";
+    const next = tooEasy
+      ? "Log your first set with an RPE and the rest get a live suggestion. A heavier last warm-up (RPE 6 or more) would set it now."
+      : warmup
+        ? "Log your last warm-up and it sets today's weight."
+        : "Log your first set with an RPE and the rest get a live suggestion.";
     return (
       <SuggestionPopover
         label={`Suggested: none yet. ${why}`}
@@ -74,7 +82,9 @@ export function LoadSuggestionCard({
         cell={
           <>
             <span className={REF_LABEL}>Suggested <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></span>
-            <span className="text-[13px] leading-snug text-muted-foreground">{warmup ? "After your warm-up" : "After your first set"}</span>
+            <span className="text-[13px] leading-snug text-muted-foreground" data-load-pending={tooEasy ? "warmup-too-easy" : undefined}>
+              {tooEasy ? "Warm-up too easy · after your first set" : warmup ? "After your warm-up" : "After your first set"}
+            </span>
           </>
         }
       >
@@ -182,12 +192,14 @@ function FillChip({ load, unit, shown, small = false, ariaLabel, title = "Tap to
       title={title}
       data-testid="load-apply"
       className={cn(
-        "inline-flex min-h-9 max-w-full items-center gap-1 whitespace-nowrap rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-1 font-semibold leading-tight tabular-nums text-foreground transition active:scale-[0.97] active:bg-blue-500/20 disabled:opacity-60",
+        "relative inline-flex min-h-9 max-w-full items-center gap-1 whitespace-nowrap rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-1 font-semibold leading-tight tabular-nums text-foreground transition active:scale-[0.97] active:bg-blue-500/20 disabled:opacity-60",
         small ? "text-[13px]" : "text-sm",
       )}
     >
       <ArrowDownToLine className="h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
       <span data-testid="load-target">{shown}{"\u00a0"}{unit}</span>
+      {/* the iPhone's tap as the finger logs the sets (haptic-tap.tsx) */}
+      {!busy && <HapticTap />}
     </button>
   );
 }
@@ -330,7 +342,9 @@ function suggestionParts({ hint, model, fromName, picks }: {
     model.source === "warmup"
       ? "your final warm-up (first time on this lift, so kept conservative)"
       : model.source === "history_warmup"
-        ? "your recent sessions, nudged by your final warm-up"
+        ? hint.warmup === "too_easy"
+          ? `your recent sessions. Your last warm-up was easy enough that it can't say much about today (${WARMUP_TOO_EASY.toLowerCase()}), so it didn't change the number`
+          : "your recent sessions, nudged by your final warm-up"
         : model.source === "history"
       ? model.early
         ? `your ${model.historySessions === 1 ? "one recent session" : "recent sessions"} of this lift, an early estimate that sharpens every session`
@@ -351,7 +365,8 @@ function suggestionParts({ hint, model, fromName, picks }: {
   // Says when the number is live: moved by what's been logged today.
   const badge: { text: string; live: boolean } | null =
     model.source === "warmup" ? { text: "From warm-up", live: false }
-      : model.source === "history_warmup" ? { text: "Warm-up tuned", live: false }
+      : model.source === "history_warmup"
+        ? hint.warmup === "too_easy" ? { text: `${WARMUP_TOO_EASY} · from your history`, live: false } : { text: "Warm-up tuned", live: false }
       : model.source === "today" || model.source === "blend" ? { text: "Live", live: true }
       : model.early ? { text: "Early estimate", live: false }
       : dayPct !== 0 ? { text: `Live ${daySigned}`, live: true }

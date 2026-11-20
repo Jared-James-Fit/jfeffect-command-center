@@ -56,16 +56,19 @@ describe("warm-up rows in the set table", () => {
     expect(render({ canEdit: false, prompt: { suggested: null, tunes: true } })).not.toContain("warmup-prompt");
   });
 
-  it("open: suggested warm-up pre-filled, four feel taps (Smooth by default), the answer set 1's tap logs, one Save", () => {
+  it("open: the suggested warm-up is a chip to tap, never typed into the box; how it felt is optional; one Save", () => {
     const html = render({ form: "new", seed: { load: 100, reps: 2 }, prompt: { suggested: { load: 100, reps: 2 }, tunes: true }, ...tuneProps });
-    expect(html).toContain('value="100"');
+    // what's in a box is what was lifted: the suggestion sits apart, one tap to use it
+    expect(html).toContain('name="warmup-load" value=""');
+    expect(html).toContain("data-warmup-use-suggested");
+    expect(html).toContain("Use 100 kg × 2");
     expect(html).toContain('value="2"');
     for (const f of ["Easy", "Smooth", "Heavy", "Grind"]) expect(html).toContain(f);
-    expect(html).toMatch(/aria-checked="true"[^>]*>Smooth/);
-    expect(html).toContain("Today: 7 reps @ RPE 4");
-    expect(html).toMatch(/data-testid="warmup-target"[^>]*>155 kg</);
-    expect(html).toContain("(150–160)");
-    expect(html).toContain("save, then tap set 1 to log it");
+    // nothing picked for them: a blank warm-up reads as a normal one
+    expect(html).not.toContain('aria-checked="true"');
+    expect(html).toContain("How did it feel? Optional");
+    // nothing to answer until a weight is in
+    expect(html).not.toContain("Today: 7 reps @ RPE 4");
     expect(html).toContain('data-testid="warmup-save"');
     // never a button that fills the sets with drafts
     expect(html).not.toContain("Use for");
@@ -73,6 +76,13 @@ describe("warm-up rows in the set table", () => {
     // no mode tabs, no typed RPE, no e1RM in here
     expect(html).not.toContain("e1RM");
     expect(html).not.toContain('name="warmup-rpe"');
+  });
+
+  it("with a weight in, the answer is what set 1's tap logs", () => {
+    const html = render({ sets: [set], form: "a", prompt: { suggested: null, tunes: true }, ...tuneProps });
+    expect(html).toContain("Today: 7 reps @ RPE 4");
+    expect(html).toMatch(/data-testid="warmup-target"[^>]*>217 kg</);
+    expect(html).toContain("save, then tap set 1 to log it");
   });
 
   it("no target (after working sets / coach load): just log it", () => {
@@ -96,7 +106,7 @@ describe("warm-up rows in the set table", () => {
     expect(rows).toBeLessThan(wdv.indexOf("<SetRow\n"));
     expect(wdv).toContain('!hideWeight && rowLoadType === "external" && !readonly && adapter?.kind !== "member" && !!clientId;');
     expect(wdv).toContain("const warmupGauge = warmupPromptable && loadModel && !workedToday ?");
-    expect(wdv).toContain("const model = buildLoadModel({ history: loadHistory, today: [], unit: activeUnit, readiness, warmup: w, bodyweightKg, lift: liftKind });");
+    expect(wdv).toContain("const model = buildLoadModel({ history: loadHistory, today: [], unit: activeUnit, readiness, warmups: [...others, w], bodyweightKg, lift: liftKind });");
   });
 
   it("a logged warm-up's weight is what set 1's tap logs, Suggest on or off (never drafts in the boxes)", () => {
@@ -136,8 +146,8 @@ describe("reset is always in the workout menu", () => {
 
 describe("the warm-up answer adds up", () => {
   it("the answer is the weight, with no Use button", () => {
-    const html = render({ form: "new", seed: { load: 100, reps: 2 }, prompt: { suggested: null, tunes: true }, ...tuneProps });
-    expect(html).toMatch(/data-testid="warmup-target"[^>]*>155 kg</);
+    const html = render({ sets: [set], form: "a", prompt: { suggested: null, tunes: true }, ...tuneProps });
+    expect(html).toMatch(/data-testid="warmup-target"[^>]*>217 kg</);
     expect(html).not.toContain(">Use<");
   });
 

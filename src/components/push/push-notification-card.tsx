@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Bell, BellOff, Smartphone, Share, Plus, CheckCircle2, AlertCircle, Loader2, Volume2, VolumeX, Moon } from "lucide-react";
+import { Bell, BellOff, Smartphone, Share, Plus, CheckCircle2, AlertCircle, Loader2, Volume2, VolumeX, Moon, Vibrate } from "lucide-react";
 import { appSoundsEnabled, setAppSoundsEnabled, subscribeAppSounds } from "@/lib/app-sounds";
+import { hapticRoute, hapticsEnabled, setHapticsEnabled, subscribeHaptics, type HapticRoute } from "@/platform/haptics";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -83,22 +84,51 @@ function Panel({ bare, className, children }: { bare?: boolean; className?: stri
   return <Card className={"border-border bg-card p-5" + (className ? ` ${className}` : "")}>{children}</Card>;
 }
 
+/**
+ * Sounds & haptics: two switches, each this device's own (feedback.ts decides
+ * what each moment gets). The haptics row shows only where the phone can give
+ * a tap at all, and says what an iPhone's web view allows.
+ */
 function AppSoundsCard({ bare = false }: { bare?: boolean }) {
   const [on, setOn] = useState(true);
+  const [haptics, setHaptics] = useState(true);
+  const [route, setRoute] = useState<HapticRoute>("none");
   useEffect(() => {
     setOn(appSoundsEnabled());
-    return subscribeAppSounds(setOn);
+    setHaptics(hapticsEnabled());
+    setRoute(hapticRoute());
+    const a = subscribeAppSounds(setOn);
+    const b = subscribeHaptics(setHaptics);
+    return () => {
+      a();
+      b();
+    };
   }, []);
   return (
     <Panel bare={bare}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <Header icon={on ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />} title="In-App Sounds" />
-          <p className="mt-1 text-xs text-muted-foreground">
-            Soft sounds for new messages, submissions and PRs while the app is open. Follows your phone's silent switch.
-          </p>
+      <div className="space-y-4" data-sounds-haptics>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <Header icon={on ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />} title="Sounds" />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Soft sounds for sets, PRs, timers and messages while the app is open. Follows your phone's silent switch.
+            </p>
+          </div>
+          <Switch checked={on} onCheckedChange={(v) => setAppSoundsEnabled(v)} aria-label="Sounds" data-sounds-switch />
         </div>
-        <Switch checked={on} onCheckedChange={(v) => setAppSoundsEnabled(v)} aria-label="In-app sounds" />
+        {route !== "none" && (
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <Header icon={<Vibrate className="h-4 w-4" />} title="Haptics" />
+              <p className="mt-1 text-xs text-muted-foreground">
+                {route === "ios"
+                  ? "A light tap when you like, follow, save, log a set or flip a switch. On iPhone, the web allows a tap only right as you touch."
+                  : "A light tap when you like, follow or log a set, a stronger one for PRs and finished workouts."}
+              </p>
+            </div>
+            <Switch checked={haptics} onCheckedChange={(v) => setHapticsEnabled(v)} aria-label="Haptics" data-haptics-switch />
+          </div>
+        )}
       </div>
     </Panel>
   );

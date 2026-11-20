@@ -14,13 +14,15 @@
  * Reads the same canonical schedule as the client's own calendar
  * (useClientTrainingSchedule), so a finished block never shows as running.
  */
+import { EquipmentManager, equipmentSummaryLine } from "@/components/equipment/equipment-manager";
+import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import {
   AlertTriangle, Archive, BarChart3, Trash2, BookOpen, BrainCircuit, CalendarDays, CalendarPlus, ChevronDown, ChevronRight,
-  Download, Dumbbell, Flame, FlagOff, HeartPulse, History, Layers, Loader2, MoreHorizontal, Pencil, Plus, Sparkles, Trophy, Wand2,
+  Download, Dumbbell, Flame, FlagOff, HeartPulse, History, Layers, Loader2, MoreHorizontal, Pencil, Plus, SlidersHorizontal, Sparkles, Trophy, Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -714,7 +716,7 @@ function NewBlockDialog({
 
 /* ───────────────────────────── Setup ───────────────────────────── */
 
-type SetupSheet = "days" | "maxes" | "warmup" | "health" | "competition" | null;
+type SetupSheet = "days" | "maxes" | "warmup" | "health" | "competition" | "equipment" | null;
 
 function AthleteSetupCard({ clientId, client }: { clientId: string; client: ClientRow | null }) {
   const [sheet, setSheet] = useState<SetupSheet>(null);
@@ -724,6 +726,9 @@ function AthleteSetupCard({ clientId, client }: { clientId: string; client: Clie
     enabled: !!clientId,
   });
   const { data: health } = useHealthProfile(clientId);
+  // their racks and machines and how they set each one up (they see it on their workout cards)
+  const { data: equipment } = useAthleteEquipment(clientId);
+  const equipmentValue = equipmentSummaryLine(equipment);
   // the classes they compete in (their powerlifting forms start from it and write back to it)
   const competes = useCompetes(clientId);
   const { data: competition } = useCompetitionProfile(clientId);
@@ -752,6 +757,7 @@ function AthleteSetupCard({ clientId, client }: { clientId: string; client: Clie
       <SetupRow icon={<Dumbbell className="h-4 w-4" />} title="Maxes" value={maxesValue} empty="None yet: % loads can't be worked out" onClick={() => setSheet("maxes")} />
       <SetupRow icon={<Flame className="h-4 w-4" />} title="Warm-up" value={warmup?.warmup_protocol_id ? "Their own protocol" : "Program default"} onClick={() => setSheet("warmup")} />
       <SetupRow icon={<HeartPulse className="h-4 w-4" />} title="Health & injuries" value={health ? healthSummary(health) : null} empty="Nothing on file" onClick={() => setSheet("health")} />
+      <SetupRow icon={<SlidersHorizontal className="h-4 w-4" />} title="Equipment & setups" value={equipmentValue ?? "None saved yet"} onClick={() => setSheet("equipment")} />
       {competes && (
         <SetupRow icon={<Trophy className="h-4 w-4" />} title="Competition" value={profileSummary(competition)} empty="Weight class and age classes not set" onClick={() => setSheet("competition")} />
       )}
@@ -759,7 +765,7 @@ function AthleteSetupCard({ clientId, client }: { clientId: string; client: Clie
       <Sheet open={sheet !== null} onOpenChange={(v) => !v && setSheet(null)}>
         <SheetContent side="bottom" className="max-h-[90dvh] overflow-y-auto rounded-t-[24px] pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:mx-auto sm:max-w-lg">
           <SheetHeader className="mb-3 text-left">
-            <SheetTitle>{sheet === "days" ? "Training days" : sheet === "maxes" ? "Maxes" : sheet === "health" ? "Health & injuries" : sheet === "competition" ? "Competition" : "Warm-up"}</SheetTitle>
+            <SheetTitle>{sheet === "days" ? "Training days" : sheet === "maxes" ? "Maxes" : sheet === "health" ? "Health & injuries" : sheet === "competition" ? "Competition" : sheet === "equipment" ? "Equipment & setups" : "Warm-up"}</SheetTitle>
             <SheetDescription>
               {sheet === "days"
                 ? "Their upcoming workouts move onto the days you pick."
@@ -769,7 +775,9 @@ function AthleteSetupCard({ clientId, client }: { clientId: string; client: Clie
                     ? "Generate Next Program and Edit with AI train around everything here."
                     : sheet === "competition"
                       ? "Their powerlifting forms start from this, and what they send updates it."
-                      : "Which warm-up they get before each workout."}
+                      : sheet === "equipment"
+                        ? "Their racks and machines and how they set each one up. A setup you add shows on their workout card."
+                        : "Which warm-up they get before each workout."}
             </SheetDescription>
           </SheetHeader>
           <Suspense fallback={<div className="py-6 text-sm text-muted-foreground">Loading…</div>}>
@@ -787,6 +795,9 @@ function AthleteSetupCard({ clientId, client }: { clientId: string; client: Clie
             {sheet === "warmup" && <ClientWarmupCard clientId={clientId} embedded onSaved={() => setSheet(null)} />}
             {sheet === "health" && <HealthCard clientId={clientId} bare />}
             {sheet === "competition" && <CompetitionProfileEditor clientId={clientId} as="coach" />}
+            {sheet === "equipment" && (
+              <EquipmentManager clientId={clientId} coachView athleteFirstName={(client?.full_name as string | null)?.split(" ")[0] ?? null} />
+            )}
           </Suspense>
         </SheetContent>
       </Sheet>
