@@ -112,6 +112,20 @@ import { RestTimer } from "@/components/workout-day/RestTimerButton";
 import { SwipeToReveal } from "@/components/workout-day/swipe-to-reveal";
 import { ExerciseActionRow } from "@/components/workout-day/exercise-action-row";
 import { CardMenuItem, CardMenuSeparator } from "@/components/workout-day/card-menu";
+import { SetupLine, SetupSheet, type SetupSheetMode } from "@/components/equipment/setup-sheet";
+import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
+import {
+  LIVE_WINDOW_MS,
+  cardEquipment,
+  comparesAcrossEquipment,
+  currentSetup,
+  equipmentName,
+  loadEquipmentId,
+  settingsFromNote,
+  setupFor,
+  setupSummary,
+} from "@/lib/equipment/equipment";
+import { useViewingAsClient } from "@/lib/client-impersonation";
 import { setGridTemplate } from "@/components/workout-day/set-grid";
 import { SetNumberBadge } from "@/components/workout-day/set-number-badge";
 import { SetPrIndicator } from "@/components/workout-day/set-pr-indicator";
@@ -968,6 +982,20 @@ function WorkoutDay({
     : scheduledWorkoutId
       ? `instance:${scheduledWorkoutId}`
       : `day:${dayId}`;
+  // The machine each card is on (when it changes what a weight means): "Last
+  // time" and the suggestions read history on it, never another machine's.
+  const { data: dayEquipment } = useAthleteEquipment(adapter?.kind === "member" ? null : client?.id ?? null);
+  const loadEquipmentByRow = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const row of rows as any[]) {
+      const exId = row.exercises?.id ?? row.exercise_id ?? null;
+      if (!exId) continue;
+      const shown = cardEquipment((results as any[]).filter((x) => x.row_id === row.id), currentSetup(dayEquipment, exId));
+      const eq = shown.equipmentId ? dayEquipment.equipment.find((e) => e.id === shown.equipmentId) ?? null : null;
+      map.set(row.id, loadEquipmentId(eq));
+    }
+    return map;
+  }, [rows, results, dayEquipment]);
   const previousLiftIdentities = useMemo<PreviousLiftIdentity[]>(
     () => (rows as any[]).map((row) => {
       const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
@@ -981,9 +1009,10 @@ function WorkoutDay({
         purposeLabel: row.purpose_label ?? null,
         // a walk or a bike: last time is its time, calories and effort; a plank: its longest hold
         timed: isTimedCardio(name) ? "cardio" : timedRow ? "hold" : null,
+        equipmentId: loadEquipmentByRow.get(row.id) ?? null,
       };
     }),
-    [rows],
+    [rows, loadEquipmentByRow],
   );
   const previousLiftIdentityKey = useMemo(
     () => previousLiftIdentities
@@ -1060,7 +1089,7 @@ function WorkoutDay({
       const columns = `id, row_id, scheduled_workout_id, completed_at, updated_at, created_at,
           actual_reps, actual_rpe, actual_rir, entered_value, entered_unit,
           normalized_kg, normalized_lb, actual_load, actual_load_unit, is_working_set,
-          is_bodyweight, load_type, completed_duration_seconds, actual_calories, actual_distance_m,
+          is_bodyweight, load_type, completed_duration_seconds, actual_calories, actual_distance_m, equipment_id,
           pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, purpose_label, sort_order, exercises(name))`;
       // Confirmed sets only (drafts from "apply to remaining" are not history),
       // newest first, paged past the 1,000-row response cap so long-term
@@ -1108,6 +1137,7 @@ function WorkoutDay({
           durationSeconds: log.completed_duration_seconds ?? null,
           calories: log.actual_calories ?? null,
           distanceM: log.actual_distance_m != null ? Number(log.actual_distance_m) : null,
+          equipmentId: log.equipment_id ?? null,
         };
       });
     },
@@ -3587,11 +3617,13 @@ function lastTimeText(data: PreviousLift, displayUnit: "kg" | "lb"): string | nu
  * button into its history: a history icon, a chevron, a press state. With
  * nothing logged yet it still opens the history ("None yet").
  */
-function PreviousLiftChip({ data, displayUnit, onOpen }: {
+function PreviousLiftChip({ data, displayUnit, onOpen, otherOn = null }: {
   data: PreviousLift | null;
   displayUnit: "kg" | "lb";
   /** Tapping it opens this exercise's History (it is the History button). */
   onOpen?: () => void;
+  /** Nothing logged on this card's machine yet: the machine last time was on. */
+  otherOn?: string | null;
 }) {
   const text = data ? lastTimeText(data, displayUnit) : null;
   const when = data && text ? lastTimeWhen(data.occurredAt) : "";
@@ -3605,6 +3637,7 @@ function PreviousLiftChip({ data, displayUnit, onOpen }: {
       {text
         ? <span className={REF_VALUE} data-last-time-timed={data?.timed?.kind}>{text}</span>
         : <span className="text-[13px] leading-snug text-muted-foreground">None yet</span>}
+      {text && otherOn && <span className="truncate text-[11px] leading-tight text-muted-foreground" data-last-time-other-equipment>on {otherOn}</span>}
     </>
   );
   if (!onOpen) return <div className={REF_CELL}>{inner}</div>;
@@ -3631,6 +3664,32 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
   // temporarily absent (RLS/cache/network). History identity must not depend
   // on the optional display-details join resolving successfully.
   const exerciseId = exercise?.id ?? row.exercise_id ?? null;
+  // Equipment & setup: the rack or machine this card is on and how it's set up
+  // (equipment.ts). Its own sets say what a finished workout was done on; a
+  // workout being logged shows the exercise's current pick. One quiet line when
+  // something's saved, the sheet from it or the ⋯ menu.
+  const equipmentOn = !!clientId && !!exerciseId && adapter?.kind !== "member";
+  const { data: equipmentData } = useAthleteEquipment(equipmentOn ? clientId : null);
+  const viewingAsClient = useViewingAsClient();
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [noteForSetup, setNoteForSetup] = useState<string | null>(null);
+  const cardSetup = useMemo(() => {
+    if (!equipmentOn) return null;
+    const current = currentSetup(equipmentData, exerciseId);
+    const shown = cardEquipment(existingResults as any[], current);
+    const eq = shown.equipmentId ? equipmentData.equipment.find((e) => e.id === shown.equipmentId) ?? null : null;
+    const setup = shown.source === "current" ? current : shown.equipmentId ? setupFor(equipmentData, exerciseId, shown.equipmentId) : null;
+    const past = (existingResults as any[]).some((r) => r?.completed_at && Date.now() - Date.parse(r.completed_at) > LIVE_WINDOW_MS);
+    return {
+      equipmentId: shown.equipmentId,
+      equipment: eq,
+      summary: setupSummary(setup, eq),
+      mode: (readonly ? "view" : past ? "past" : "live") as SetupSheetMode,
+      // a PR on a machine says which (its weight means nothing on another one)
+      prOn: eq && !comparesAcrossEquipment(eq.kind) ? equipmentName(eq) : null,
+      instance: ((existingResults as any[]).find((r) => r?.completed_at)?.scheduled_workout_id as string | undefined) ?? null,
+    };
+  }, [equipmentOn, equipmentData, exerciseId, existingResults, readonly]);
   // Local mirror of the active unit so the per-exercise KG/LB toggle is always
   // instantly responsive — even if the parent's resolved-unit state takes a
   // tick to recompute or the persistence call is slow. Stays in sync with the
@@ -4781,6 +4840,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
         <span data-exercise-role>{purposeLabelText(purposeLabel || category)}</span>
         {lastWeekSwap && <LastWeekSwapChip swap={lastWeekSwap} unit={activeUnit} />}
       </div>
+      {cardSetup?.summary && (
+        <SetupLine text={cardSetup.summary} retired={!!cardSetup.equipment?.archived_at} onOpen={() => setSetupOpen(true)} />
+      )}
       {/* Standardized prescription line: Sets × Reps @ Weight | RPE (a run reads as a run:
           "3 × 8 min · 2 min easy jog between | RPE 6–7") */}
       <div className="mt-2.5 flex items-center justify-between gap-3">
@@ -4836,6 +4898,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
                 data={previousLift}
                 displayUnit={activeUnit}
                 onOpen={clientId ? () => setHistoryOpen(true) : undefined}
+                otherOn={previousLift?.otherEquipment && previousLift.equipmentId
+                  ? equipmentName(equipmentData.equipment.find((e) => e.id === previousLift.equipmentId)) || "another machine"
+                  : null}
               />
               {right && <span aria-hidden="true" className={REF_DIVIDER} />}
               {right}
@@ -4857,6 +4922,20 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
           // Fix a past day's sets right here, without leaving the workout.
           editable={!readonly}
           onClose={() => setHistoryOpen(false)}
+        />
+      )}
+      {setupOpen && equipmentOn && cardSetup && (
+        <SetupSheet
+          open={setupOpen}
+          onOpenChange={setSetupOpen}
+          clientId={clientId!}
+          exercise={{ id: exerciseId!, name, equipment: (exercise as any)?.equipment ?? null }}
+          mode={cardSetup.mode}
+          dayId={dayId}
+          instance={cardSetup.instance}
+          shownEquipmentId={cardSetup.equipmentId}
+          noteText={noteForSetup ?? existingNote?.content ?? null}
+          coachView={viewingAsClient}
         />
       )}
       {canSuggest && !readonly && suggestNudge && !showSuggestionCard && <LoadSuggestionsNudge onDismiss={suggestNudge} />}
@@ -4971,6 +5050,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
                 {clientId && (
                   <CardMenuItem onSelect={() => setHistoryOpen(true)} className="rounded-lg" data-testid="card-history">
                     <LineChart className="mr-2 h-4 w-4" /> History & progress
+                  </CardMenuItem>
+                )}
+                {equipmentOn && (
+                  <CardMenuItem onSelect={() => setSetupOpen(true)} className="rounded-lg" data-testid="card-setup">
+                    <SlidersHorizontal className="mr-2 h-4 w-4" /> {cardSetup?.summary ? "Setup & equipment" : "Save your setup"}
                   </CardMenuItem>
                 )}
                 {canSuggest && !readonly && (
@@ -5302,6 +5386,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
           return (
             <SetRow
               key={i}
+              prOn={cardSetup?.prOn ?? null}
               rowId={row.id}
               workoutId={dayId}
               startsWorkout={startsWorkout}
@@ -5427,7 +5512,21 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
         exerciseName={name}
         existingNote={existingNote}
         loading={notesLoading}
-        onSaved={onNoteChange}
+        onSaved={(content) => {
+          onNoteChange();
+          // "Rack height 30" typed into a note: offer to keep it as the card's setup
+          if (!equipmentOn || readonly || !content) return;
+          const found = settingsFromNote(content);
+          if (!found.length) return;
+          const saved = cardSetup?.summary ?? "";
+          if (found.every((f) => saved.toLowerCase().includes(`${f.label} ${f.value}`.toLowerCase()))) return;
+          setNoteForSetup(content);
+          toast("Save it as your setup?", {
+            description: `${found.map((f) => `${f.label} ${f.value}`).join(" · ")} shows on this card every time.`,
+            action: { label: "Save", onClick: () => setSetupOpen(true) },
+            duration: 6000,
+          });
+        }}
       />
     </Card>
   );
@@ -5481,7 +5580,8 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   exerciseName: string;
   existingNote?: any;
   loading?: boolean;
-  onSaved: () => void;
+  /** After a save, with what was saved. */
+  onSaved: (content?: string) => void;
 }) {
   const [draft, setDraft] = useState(existingNote?.content ?? "");
   // Only re-hydrate the draft when the sheet (re)opens or the underlying
@@ -5696,7 +5796,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
                   if (data?.coach_message_id && data.coach_message_id !== cardBefore) await pushWorkoutNote(data.coach_message_id);
                 })().catch(() => {});
               }
-              onSaved();
+              onSaved(trimmed);
             }}
           >
             <StickyNote className="mr-2 h-4 w-4" /> {existingNote ? "Update Note" : "Save Note"}
@@ -5841,7 +5941,10 @@ function SetRow({
   registerHandle,
   dayTitle = "",
   onSwitchUnit,
+  prOn = null,
 }: {
+  /** The machine the set was done on, when its weight means nothing on another one (a PR says which). */
+  prOn?: string | null;
   loadHint?: LoadSuggestion | null;
   /** The card's KG / LB switch: a weight typed in the other unit switches it, then saves. */
   onSwitchUnit?: (u: "kg" | "lb") => void;
@@ -7032,8 +7135,9 @@ function SetRow({
       localPr: prBadge && (!hasRecords || assistedSet) ? prBadge : null,
       assisted: assistedSet,
       unit,
+      equipment: prOn,
     }),
-    [recordForBadge, loadRecordForBadge, prBadge, hasRecords, assistedSet, unit],
+    [recordForBadge, loadRecordForBadge, prBadge, hasRecords, assistedSet, unit, prOn],
   );
   // It pops in once when it's just been earned, never on reopening an old workout.
   const prFresh = useMemo(() => {
