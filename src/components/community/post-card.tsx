@@ -130,10 +130,48 @@ export function isPhotoPost(post: Pick<CommunityPost, "kind" | "media_type" | "s
 export function AutoPostHero({ post, thumbUrl, unit, full = false, page = false }: { post: CommunityPost; thumbUrl: string | null; unit: "kg" | "lb"; full?: boolean; page?: boolean }) {
   const plan = instagramPlan(post);
   const card = isAutoPost(post) ? plan.card : null;
+  if (card === "deck") return <DeckHero post={post} thumbUrl={thumbUrl} unit={unit} full={full} page={page} count={plan.cards ?? 1} />;
   // `page`: a post's own screen in the feed, where the card it opens on holds the post's words until it's ready (all at once)
   if (post.media_type && card && !plan.cardLast) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} lead={<PostArtImage post={post} card={card} unit={unit} fill eager={full} page={page} hold={page} />} />;
   if (post.media_type) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} trail={card ? <PostArtImage post={post} card={card} unit={unit} fill page={page} /> : undefined} />;
   return card ? <PostArtImage post={post} card={card} unit={unit} eager={full} page={page} hold={page} /> : null;
+}
+
+/**
+ * A deck's slides (post-decks.ts) as the post's picture: one painted card,
+ * or a carousel of them that swipes like a photo post's (PostCarousel: the
+ * browser keeps a vertical swipe the feed's), with a photo of its own after
+ * the slides. The cover is painted first and holds the post's words on its
+ * screen (all at once); once the post is within three screens every slide is
+ * asked for (`near`), so a swipe never lands on a slide still being drawn
+ * (a slide off to the side is clipped by the carousel, which an observer on
+ * the slide itself would never call near).
+ */
+function DeckHero({ post, thumbUrl, unit, full, page, count }: { post: CommunityPost; thumbUrl: string | null; unit: "kg" | "lb"; full: boolean; page: boolean; count: number }) {
+  const box = useRef<HTMLDivElement | null>(null);
+  const [near, setNear] = useState(full);
+  useEffect(() => {
+    if (near || count < 2) return;
+    const el = box.current;
+    if (!el || typeof IntersectionObserver === "undefined") return setNear(true);
+    const io = new IntersectionObserver((es) => {
+      if (es.some((e) => e.isIntersecting)) {
+        setNear(true);
+        io.disconnect();
+      }
+    }, { rootMargin: "300%" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [near, count]);
+  if (count < 2 && !post.media_type) return <PostArtImage post={post} card="deck" unit={unit} eager={full} page={page} hold={page} />;
+  const slides = Array.from({ length: count }, (_, i) => (
+    <PostArtImage key={i} post={post} card="deck" slide={i} unit={unit} fill eager={i === 0 ? full : near} page={page} hold={page && i === 0} />
+  ));
+  return (
+    <div ref={box} data-deck={count}>
+      <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} lead={slides} />
+    </div>
+  );
 }
 
 /**
@@ -732,15 +770,15 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
               full={false}
               page
               bare
-              lead={
-                <div className={cn("absolute", sheetOpen ? "inset-0 p-2.5 pr-12" : "inset-x-0 pl-3 pr-16")} style={sheetOpen ? undefined : RECAP_ROOM} data-page-body>
+              leads={[
+                <div key="cover" className={cn("absolute", sheetOpen ? "inset-0 p-2.5 pr-12" : "inset-x-0 pl-3 pr-16")} style={sheetOpen ? undefined : RECAP_ROOM} data-page-body>
                   <FitScale>
                     <WorkoutCoverCard post={post} onRecap={toRecap}>
                       <WorkoutHero stats={s} unit={unit} />
                     </WorkoutCoverCard>
                   </FitScale>
-                </div>
-              }
+                </div>,
+              ]}
               pageTrail={recapSlide}
               control={recapCtl}
               hint={!!openHint && !under && !sheetOpen}
@@ -1294,7 +1332,8 @@ export function PostMedia({
   post: CommunityPost;
   thumbUrl: string | null;
   full?: boolean;
-  lead?: ReactNode;
+  /** Slides before the post's own: an automated post's card, or a deck's painted slides. */
+  lead?: ReactNode | ReactNode[];
   trail?: ReactNode;
   ratio?: number;
   /** On a post's screen: which of its slides is on screen (its words say that slide's set). */
@@ -1334,7 +1373,7 @@ export function PostMedia({
   // `lead` / `trail`: a slide before / after the post's own (an automated post's 4:5 card), whose shape it takes.
   // `ratio`: a fixed shape (an automated post is always 4:5, like the card that may follow its photo).
   const clipCover = !fixed && !lead && cover?.type === "video";
-  const ratio = fixed ?? postMediaRatio(post, !!lead);
+  const ratio = fixed ?? postMediaRatio(post, lead != null);
   const frame: CSSProperties = clipCover && !page ? { aspectRatio: String(ratio), maxHeight: FEED_VIDEO_MAX_HEIGHT } : { aspectRatio: String(ratio) };
   if (page) {
     const fits = slides.map((sl) => screenFit(sl, screenRatio));
@@ -1364,7 +1403,9 @@ export function PostMedia({
       </FitBox>
     );
   }
-  if (slides.length > 1 || lead || trail) return <PostCarousel slides={slides} coverUrl={thumbUrl} frame={frame} full={full} lead={lead} trail={trail} />;
+  const leads = lead == null ? [] : Array.isArray(lead) ? lead : [lead];
+  if (slides.length + leads.length > 1 || trail) return <PostCarousel slides={slides} coverUrl={thumbUrl} frame={frame} full={full} leads={leads} trail={trail} />;
+  if (leads.length) return <div className="relative w-full overflow-hidden bg-muted" style={frame}>{leads[0]}</div>;
   return (
     <div className={cn("relative w-full overflow-hidden", clipCover ? "bg-black" : "bg-muted")} style={frame} data-clip-frame={clipCover ? "" : undefined}>
       {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page={page} /> : <div className="h-full w-full animate-pulse bg-muted" />}
@@ -1634,7 +1675,7 @@ function PostCarousel({
   coverUrl,
   frame,
   full,
-  lead,
+  leads = [],
   trail,
   page = false,
   screenRef,
@@ -1651,7 +1692,8 @@ function PostCarousel({
   coverUrl: string | null;
   frame: CSSProperties;
   full: boolean;
-  lead?: ReactNode;
+  /** Slides before the post's own (an automated post's card, a deck's slides). */
+  leads?: ReactNode[];
   trail?: ReactNode;
   /** On a post's screen: the carousel is the screen (each slide filling it or whole on black, `fits`), "2/4" says where you are. */
   page?: boolean;
@@ -1683,8 +1725,8 @@ function PostCarousel({
     [page, screenRef],
   );
   const urls = useSlideThumbUrls(slides.slice(1));
-  // with a lead slide, the post's own slides start one along
-  const off = lead ? 1 : 0;
+  // with lead slides, the post's own slides start that many along
+  const off = leads.length;
   const hasTrail = !!trail || !!pageTrail;
   const count = slides.length + off + (hasTrail ? 1 : 0);
   const last = count - 1;
@@ -1748,11 +1790,11 @@ function PostCarousel({
         className="flex h-full w-full snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         style={{ overscrollBehaviorX: "none", WebkitOverflowScrolling: "touch" }}
       >
-        {lead && (
-          <div className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`1 of ${count}`}>
-            {lead}
+        {leads.map((node, i) => (
+          <div key={`lead-${i}`} className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`${i + 1} of ${count}`} data-carousel-lead={i}>
+            {node}
           </div>
-        )}
+        ))}
         {slides.map((sl, j) => {
           const i = j + off;
           const near = Math.abs(i - index) <= 1 || i < seen;

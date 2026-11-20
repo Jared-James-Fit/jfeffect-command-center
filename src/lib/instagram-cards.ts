@@ -53,6 +53,8 @@ import {
 } from "@/lib/community";
 import { extraLesson, hookLine } from "@/lib/lessons";
 import { IG_SIZES, plainMentions, type IgCard, type IgFormat } from "@/lib/instagram-export";
+import { deckOf } from "@/lib/post-decks";
+import { ensureDeckFonts, paintDeckSlide } from "@/lib/deck-cards";
 
 type Ctx = CanvasRenderingContext2D;
 type Picture = CanvasImageSource & { width: number; height: number };
@@ -75,6 +77,8 @@ export type IgCardInput = {
   unit: "kg" | "lb";
   /** A lesson's diagram or Saturday's scene (svgPicture). */
   art?: Picture | null;
+  /** A deck's slide (0 = its cover). */
+  slide?: number;
 };
 
 /** Paint the post's card onto `canvas` (sized here). */
@@ -93,6 +97,15 @@ export async function paintInstagramCard(canvas: HTMLCanvasElement, input: IgCar
   if (!ctx) return;
   const L: Layout = { W: size.w, H: size.h, top: size.safeTop, bottom: size.h - size.safeBottom, format };
   switch (input.card) {
+    case "deck": {
+      const deck = deckOf(post);
+      if (deck) {
+        await ensureDeckFonts();
+        paintDeckSlide(ctx, L, deck, input.slide ?? 0, logo, input.art ?? null);
+        return;
+      }
+      break;
+    }
     case "lesson":
       return paintLesson(ctx, L, post, logo, input.art ?? null);
     case "wins":
@@ -902,29 +915,10 @@ export function wordsCardText(post: CommunityPost): { kicker: string | null; hea
   return { kicker: kicker && !head.toLowerCase().startsWith(kicker.toLowerCase()) ? kicker : null, head, body, by: null };
 }
 
-/**
- * The words under a headline: whole sentences of the first paragraph, as
- * many as fit in `maxLines` (one sentence too long is cut with "…").
- */
-function bodyLines(c: Ctx, text: string, w: number, maxLines: number): string[] {
-  const para = text.split(/\n+/).map((t) => t.trim()).find(Boolean) ?? "";
-  const sentences = para.match(/[^.!?]+[.!?]+["”’)]*\s*|[^.!?]+$/g) ?? [para];
-  let kept = "";
-  for (const sentence of sentences) {
-    const next = `${kept}${sentence}`.trim();
-    if (wrapLines(c, next, w, 99).length > maxLines) break;
-    kept = `${next} `;
-  }
-  if (kept.trim()) return wrapLines(c, kept.trim(), w, maxLines);
-  const cut = wrapLines(c, para, w, maxLines);
-  if (cut.length === maxLines) cut[maxLines - 1] = ellipsize(c, `${cut[maxLines - 1]}…`, w);
-  return cut;
-}
-
 function paintWords(ctx: Ctx, L: Layout, post: CommunityPost, logo: HTMLImageElement | null) {
   const { W } = L;
   backdrop(ctx, W, L.H);
-  const { kicker: label, head, body, by } = wordsCardText(post);
+  const { kicker: label, head, by } = wordsCardText(post);
   placeBlock(
     ctx,
     (c, w) => {
@@ -936,14 +930,12 @@ function paintWords(ctx: Ctx, L: Layout, post: CommunityPost, logo: HTMLImageEle
         c.fill();
         y = 52;
       }
-      const h = fitWrap(c, head, w, 900, 88, 54, 6);
+      const h = fitWrap(c, head, w, 900, 96, 58, 6);
       c.font = font(900, h.size);
-      y = textLines(c, h.lines, 0, y, h.size, 1.1, INK);
+      y = textLines(c, h.lines, 0, y, h.size, 1.08, INK);
       if (by) y = kicker(c, by, 0, y + 30, ACCENT, 28) + 8;
-      if (body) {
-        c.font = font(600, 42);
-        y = textLines(c, bodyLines(c, body, w, 5), 0, y + 40, 42, 1.3, BODY);
-      }
+      // only the headline: the caption under the picture has the rest (a card that repeated it read as the caption twice);
+      // a post with something to build is a deck (post-decks.ts) and never reaches this card
       return y + 10;
     },
     PAD,

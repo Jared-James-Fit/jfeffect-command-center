@@ -272,6 +272,7 @@ import { Route as ApiPublicHooksNutritionPlansTickRouteImport } from './routes/a
 import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/public/hooks/nutrition-tick'
 import { Route as ApiPublicHooksPaymentProofImportRouteImport } from './routes/api/public/hooks/payment-proof-import'
 import { Route as ApiPublicHooksPaymentReminderSmsRouteImport } from './routes/api/public/hooks/payment-reminder-sms'
+import { Route as ApiPublicHooksPostDecksTickRouteImport } from './routes/api/public/hooks/post-decks-tick'
 import { Route as ApiPublicHooksPostPicturesTickRouteImport } from './routes/api/public/hooks/post-pictures-tick'
 import { Route as ApiPublicHooksProgramAiTickRouteImport } from './routes/api/public/hooks/program-ai-tick'
 import { Route as ApiPublicHooksProgramGapsTickRouteImport } from './routes/api/public/hooks/program-gaps-tick'
@@ -1818,6 +1819,12 @@ const ApiPublicHooksPaymentReminderSmsRoute =
     path: '/api/public/hooks/payment-reminder-sms',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksPostDecksTickRoute =
+  ApiPublicHooksPostDecksTickRouteImport.update({
+    id: '/api/public/hooks/post-decks-tick',
+    path: '/api/public/hooks/post-decks-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksPostPicturesTickRoute =
   ApiPublicHooksPostPicturesTickRouteImport.update({
     id: '/api/public/hooks/post-pictures-tick',
@@ -2278,6 +2285,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
+  '/api/public/hooks/post-decks-tick': typeof ApiPublicHooksPostDecksTickRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
   '/api/public/hooks/program-gaps-tick': typeof ApiPublicHooksProgramGapsTickRoute
@@ -2574,6 +2582,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
+  '/api/public/hooks/post-decks-tick': typeof ApiPublicHooksPostDecksTickRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
   '/api/public/hooks/program-gaps-tick': typeof ApiPublicHooksProgramGapsTickRoute
@@ -2876,6 +2885,7 @@ export interface FileRoutesById {
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
+  '/api/public/hooks/post-decks-tick': typeof ApiPublicHooksPostDecksTickRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
   '/api/public/hooks/program-gaps-tick': typeof ApiPublicHooksProgramGapsTickRoute
@@ -3178,6 +3188,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
+    | '/api/public/hooks/post-decks-tick'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
     | '/api/public/hooks/program-gaps-tick'
@@ -3474,6 +3485,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
+    | '/api/public/hooks/post-decks-tick'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
     | '/api/public/hooks/program-gaps-tick'
@@ -3775,6 +3787,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
+    | '/api/public/hooks/post-decks-tick'
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
     | '/api/public/hooks/program-gaps-tick'
@@ -3907,6 +3920,7 @@ export interface RootRouteChildren {
   ApiPublicHooksNutritionTickRoute: typeof ApiPublicHooksNutritionTickRoute
   ApiPublicHooksPaymentProofImportRoute: typeof ApiPublicHooksPaymentProofImportRoute
   ApiPublicHooksPaymentReminderSmsRoute: typeof ApiPublicHooksPaymentReminderSmsRoute
+  ApiPublicHooksPostDecksTickRoute: typeof ApiPublicHooksPostDecksTickRoute
   ApiPublicHooksPostPicturesTickRoute: typeof ApiPublicHooksPostPicturesTickRoute
   ApiPublicHooksProgramAiTickRoute: typeof ApiPublicHooksProgramAiTickRoute
   ApiPublicHooksProgramGapsTickRoute: typeof ApiPublicHooksProgramGapsTickRoute
@@ -5775,6 +5789,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksPaymentReminderSmsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/post-decks-tick': {
+      id: '/api/public/hooks/post-decks-tick'
+      path: '/api/public/hooks/post-decks-tick'
+      fullPath: '/api/public/hooks/post-decks-tick'
+      preLoaderRoute: typeof ApiPublicHooksPostDecksTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/post-pictures-tick': {
       id: '/api/public/hooks/post-pictures-tick'
       path: '/api/public/hooks/post-pictures-tick'
@@ -6760,6 +6781,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksNutritionTickRoute: ApiPublicHooksNutritionTickRoute,
   ApiPublicHooksPaymentProofImportRoute: ApiPublicHooksPaymentProofImportRoute,
   ApiPublicHooksPaymentReminderSmsRoute: ApiPublicHooksPaymentReminderSmsRoute,
+  ApiPublicHooksPostDecksTickRoute: ApiPublicHooksPostDecksTickRoute,
   ApiPublicHooksPostPicturesTickRoute: ApiPublicHooksPostPicturesTickRoute,
   ApiPublicHooksProgramAiTickRoute: ApiPublicHooksProgramAiTickRoute,
   ApiPublicHooksProgramGapsTickRoute: ApiPublicHooksProgramGapsTickRoute,

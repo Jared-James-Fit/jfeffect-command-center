@@ -109,7 +109,7 @@ describe("a swipe never lands on a half-painted post", () => {
   it("the feed's cards wait for a still screen, nearest first, and pause again before encoding", () => {
     const art = read("src/components/community/post-art.tsx");
     expect(art).toContain(
-      'paintCardFile(postRef.current, card, "feed", unit, host, 0, whenStill), { whenStill: true, rank }',
+      'paintCardFile(postRef.current, card, "feed", unit, host, slide, whenStill, slide), { whenStill: true, rank }',
     );
     expect(art).toContain("if (pause) await pause();");
     // Share to Instagram asks right away (a tap), never waiting on the screen

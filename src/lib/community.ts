@@ -195,6 +195,8 @@ export type CommunityPost = {
   series_data?: WinsStats | RecapStats | BirthdayMark | null;
   /** Tuesday / Thursday / Saturday: what the post shows besides its words. */
   series_extra?: SeriesExtra | null;
+  /** An automated post's slides and its own caption (post-decks.ts `deckOf` reads it, wherever it rides). */
+  deck?: unknown;
   /** A note that is someone's comment, shared to the feed. */
   shared_comment?: SharedComment | null;
   edited_at?: string | null;

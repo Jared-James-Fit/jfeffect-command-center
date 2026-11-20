@@ -38,20 +38,21 @@ import {
 } from "@/lib/community";
 import { extraLesson, type LessonTrack } from "@/lib/lessons";
 import { canShareFiles, downloadFiles, isTouchDevice } from "@/lib/file-share";
+import { deckOf } from "@/lib/post-decks";
 
 export { canShareFiles, downloadFiles, isTouchDevice };
 
 export type IgFormat = "feed" | "story";
 
 /** A card painted from the post (instagram-cards.ts). */
-export type IgCard = "lesson" | "wins" | "recap" | "compare" | "feature" | "birthday" | "workout" | "holiday" | "scene" | "words";
+export type IgCard = "lesson" | "wins" | "recap" | "compare" | "feature" | "birthday" | "workout" | "holiday" | "scene" | "words" | "deck";
 
 /**
  * What goes to Instagram: the post's own photos / clips, then a painted card
  * when it carries what the words don't (`cardLast`); with no photo, the card
  * alone.
  */
-export type IgPlan = { card: IgCard | null; slides: PostSlide[]; cardLast?: boolean };
+export type IgPlan = { card: IgCard | null; slides: PostSlide[]; cardLast?: boolean; /** A deck: how many slides it paints (each its own picture, the cover first). */ cards?: number };
 
 export const IG_CAPTION_MAX = 2200;
 
@@ -78,6 +79,9 @@ export function infoCard(post: CommunityPost): IgCard | null {
 
 export function instagramPlan(post: CommunityPost): IgPlan {
   const slides = postSlides(post);
+  // a deck (post-decks.ts): its slides are the post's picture, a photo of its own after them
+  const deck = isAutoPost(post) ? deckOf(post) : null;
+  if (deck) return { card: "deck", slides, cards: deck.slides.length };
   const info = infoCard(post);
   // a lesson's diagram leads, the photos after it; for the others a photo leads and the numbers card follows
   if (slides.length) return { card: info, slides, cardLast: !!info && info !== "lesson" };
