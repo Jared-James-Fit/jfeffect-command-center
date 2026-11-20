@@ -211,10 +211,24 @@ describe("the bar on every Crew clip, and nothing it does reaches the post", () 
   it("is a thin line, no handle and no bubble: thicker with its time only while it's in hand", () => {
     expect(bar).not.toContain("rounded-full bg-white shadow");
     expect(bar).not.toContain("bg-black/55");
-    expect(bar).toContain("inset-x-3 bottom-1.5 h-1");
+    expect(bar).toContain("inset-x-3 bottom-1.5 overflow-hidden rounded-full");
+    // 2px at rest, 4px awake, 6px in hand (Reels')
+    expect(bar).toContain('? "h-1.5 bg-white/35"');
+    expect(bar).toContain(': "h-0.5 bg-white/25');
     expect(bar).toContain('mode === "scrub" ? "opacity-100" : "opacity-0"');
     // a clip post's words sit a lane above the bar's strip
     expect(read("src/styles.css")).toContain("[data-feed-page-post][data-has-clip] { --feed-scrub-lane: 12px; }");
+  });
+
+  it("shows the frame under the finger above it, Reels', from the clip's own frame (never a second video)", () => {
+    expect(bar).toContain('c.getContext("2d")?.drawImage(v, 0, 0, c.width, c.height);');
+    expect(bar).toContain("data-scrub-preview");
+    expect(bar).not.toContain("<video");
+    // drawn as each seek lands, a frame at most per animation frame
+    expect(bar).toContain("if (grip?.scrubbing) drawPreview();");
+    expect(bar).toContain("if (!drawRaf) drawRaf = requestAnimationFrame(drawNow);");
+    // it and its time ride above the finger, never past the clip's sides
+    expect(bar).toContain("f.style.transform = `translate3d(${Math.round(left)}px,0,0)`;");
   });
 
   it("holds the clip still while it's in hand and plays it on after only if it was playing", () => {

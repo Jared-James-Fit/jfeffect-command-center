@@ -20,6 +20,14 @@ import {
 
 /** How long a seek's landing time is kept on the bar while the clip catches up to it. */
 const LANDING_HOLD_MS = 1500;
+/** The frame preview's long side, at most (Reels': about 128pt for a phone's 9:16 clip). */
+const PREVIEW_LONG_PX = 128;
+/** …and never more of the clip's height than this, so it fits a short card. */
+const PREVIEW_MAX_SHARE = 0.42;
+/** The preview and its time never come closer than this to the clip's sides. */
+const FLOAT_EDGE_PX = 8;
+/** Room for the time under the preview until it's measured ("0:12 / 0:45"). */
+const FLOAT_MIN_W = 88;
 
 /** At rest a line; a finger on it wakes it (thicker); scrubbing it, thicker with its time over it. */
 type Mode = "rest" | "wake" | "scrub";
@@ -34,9 +42,12 @@ type Mode = "rest" | "wake" | "scrub";
  * post's screen, a full-screen clip), and a tap on the strip right at the bar
  * (SCRUB_TAP_PX, the element itself) jumps there. A finger resting on the bar
  * wakes it (thicker) within WAKE_MS; dragging, the clip holds still and
- * follows the finger (fast seeks, one in flight) under its time ("0:12 /
- * 0:45", plain words, no bubble, no handle), the exact time is set on
- * release, and the line goes back to a line. Up or down from the band is the
+ * follows the finger (fast seeks, one in flight), the exact time is set on
+ * release, and the line goes back to a line. While it's in hand a small
+ * preview of the frame rides above the finger with the time under it ("0:12
+ * / 0:45", plain words, no bubble, no handle), Reels': it's the clip's own
+ * frame copied onto a canvas as each seek lands, never a second video, so it
+ * costs no decoding and never lags the clip. Up or down from the band is the
  * feed's swipe; nothing it does reaches the post (no ❤️, sound, hold-to-pause,
  * carousel or full-screen clips). A mouse drags or clicks it at once, and the
  * keyboard's arrows move 5 s.
@@ -69,6 +80,9 @@ export function VideoScrubber({
   const zone = useRef<HTMLDivElement | null>(null);
   const track = useRef<HTMLDivElement | null>(null);
   const fill = useRef<HTMLDivElement | null>(null);
+  const float = useRef<HTMLDivElement | null>(null);
+  const preview = useRef<HTMLCanvasElement | null>(null);
+  const clock = useRef<HTMLDivElement | null>(null);
   const now = useRef<HTMLSpanElement | null>(null);
   const total = useRef<HTMLSpanElement | null>(null);
   const [length, setLength] = useState<number | null>(null);
@@ -96,6 +110,12 @@ export function VideoScrubber({
     let wakeTimer = 0;
     let lastSecond = -1;
     let current: Mode = "rest";
+    // the frame preview: sized when a scrub starts, drawn as each seek lands (a frame at most per animation frame)
+    let zoneLeft = 0;
+    let zoneWidth = 0;
+    let floatWidth = FLOAT_MIN_W;
+    let canPreview = true;
+    let drawRaf = 0;
     type Grip = {
       kind: "touch" | "pointer";
       id: number;
@@ -154,9 +174,70 @@ export function VideoScrubber({
       settle();
       paint();
     };
+    // the clip's own frame onto the preview (never a second decoder): a canvas that can't take it is left out
+    const drawNow = () => {
+      drawRaf = 0;
+      const c = preview.current;
+      if (!c || !canPreview || current !== "scrub" || v.readyState < 2) return;
+      try {
+        c.getContext("2d")?.drawImage(v, 0, 0, c.width, c.height);
+      } catch {
+        canPreview = false;
+        c.style.display = "none";
+      }
+    };
+    const drawPreview = () => {
+      if (!drawRaf) drawRaf = requestAnimationFrame(drawNow);
+    };
+    // the preview at the clip's own shape, its long side PREVIEW_LONG_PX (less on a short card)
+    const sizePreview = () => {
+      const zr = z.getBoundingClientRect();
+      zoneLeft = zr.left;
+      zoneWidth = zr.width;
+      // as wide as the wider of the preview and its time, so either can come right up to the edge
+      const clockWidth = Math.ceil(clock.current?.offsetWidth ?? 0) || FLOAT_MIN_W;
+      const c = preview.current;
+      if (!c || !canPreview) {
+        floatWidth = clockWidth;
+        if (float.current) float.current.style.width = `${floatWidth}px`;
+        return;
+      }
+      const boxH = (z.parentElement ?? z).getBoundingClientRect().height || 400;
+      const aspect = v.videoWidth > 0 && v.videoHeight > 0 ? v.videoWidth / v.videoHeight : 9 / 16;
+      const long = Math.min(PREVIEW_LONG_PX, boxH * PREVIEW_MAX_SHARE);
+      let w = aspect >= 1 ? long : long * aspect;
+      let h = aspect >= 1 ? long / aspect : long;
+      const maxW = zoneWidth * 0.5;
+      if (w > maxW) {
+        const k = maxW / w;
+        w *= k;
+        h *= k;
+      }
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      const pw = Math.round(w * dpr);
+      const ph = Math.round(h * dpr);
+      if (c.width !== pw || c.height !== ph) {
+        c.width = pw;
+        c.height = ph;
+      }
+      c.style.width = `${Math.round(w)}px`;
+      c.style.height = `${Math.round(h)}px`;
+      floatWidth = Math.max(Math.round(w), clockWidth);
+      if (float.current) float.current.style.width = `${floatWidth}px`;
+    };
+    // the preview and its time ride above the finger, never past the clip's sides
+    const placeFloat = (x: number) => {
+      const f = float.current;
+      if (!f || !zoneWidth) return;
+      const want = x - zoneLeft - floatWidth / 2;
+      const max = Math.max(FLOAT_EDGE_PX, zoneWidth - floatWidth - FLOAT_EDGE_PX);
+      const left = Math.min(max, Math.max(FLOAT_EDGE_PX, want));
+      f.style.transform = `translate3d(${Math.round(left)}px,0,0)`;
+    };
     const onSeeked = () => {
       settle();
       paint();
+      if (grip?.scrubbing) drawPreview();
     };
     const onTime = () => {
       if (v.paused) onSeeked();
@@ -205,6 +286,7 @@ export function VideoScrubber({
       pinnedUntil = Infinity;
       seeker.preview(t);
       paint(t);
+      placeFloat(x);
     };
     const begin = (x: number) => {
       if (!grip || grip.scrubbing) return;
@@ -214,8 +296,11 @@ export function VideoScrubber({
       grip.from = v.currentTime;
       // the clip holds still while it's in hand (the caller plays it again after, if it was playing)
       cbs.current.onHold?.(true);
+      sizePreview();
       toMode("scrub");
       follow(x);
+      // the frame it's on now, until the first seek lands
+      drawPreview();
     };
     // the finger's done: a scrub lands where it let go (or back where it was, `x` null), a wake goes back to a line
     const finish = (x: number | null) => {
@@ -422,6 +507,7 @@ export function VideoScrubber({
       z.removeEventListener("contextmenu", onContext);
       z.removeEventListener("keydown", onKey);
       if (raf) cancelAnimationFrame(raf);
+      if (drawRaf) cancelAnimationFrame(drawRaf);
       window.clearTimeout(lingerTimer);
       window.clearTimeout(wakeTimer);
       seeker.dispose();
@@ -453,14 +539,16 @@ export function VideoScrubber({
       style={{ height: SCRUB_TAP_PX, ...style }}
       data-video-scrubber={mode === "rest" ? "" : mode}
     >
-      {/* the line: nearly the clip's width, 2px, clear of the bottom edge; awake or scrubbing, 4px */}
+      {/* the line: nearly the clip's width, clear of the bottom edge; 2px at rest, 4px awake, 6px in hand */}
       <div
         ref={track}
         className={cn(
-          "pointer-events-none absolute inset-x-3 bottom-1.5 h-1 origin-bottom overflow-hidden rounded-full transition-[transform,background-color] duration-150 ease-out motion-reduce:transition-none",
-          big
-            ? "scale-y-100 bg-white/35"
-            : "scale-y-50 bg-white/25 [@media(hover:hover)]:group-hover/scrub:scale-y-100",
+          "pointer-events-none absolute inset-x-3 bottom-1.5 overflow-hidden rounded-full transition-[height,background-color] duration-150 ease-out motion-reduce:transition-none",
+          mode === "scrub"
+            ? "h-1.5 bg-white/35"
+            : mode === "wake"
+              ? "h-1 bg-white/35"
+              : "h-0.5 bg-white/25 [@media(hover:hover)]:group-hover/scrub:h-1",
         )}
         aria-hidden
         data-scrub-track
@@ -474,20 +562,35 @@ export function VideoScrubber({
           style={{ transform: "scaleX(0)" }}
         />
       </div>
-      {/* scrubbing: where it is of how long, plain words over the clip (no bubble) */}
+      {/* scrubbing: the frame under the finger and where it is of how long, riding above the finger (no bubble) */}
       <div
+        ref={float}
         className={cn(
-          "pointer-events-none absolute inset-x-0 bottom-9 text-center text-[15px] font-semibold leading-none tabular-nums text-white transition-opacity duration-150 [text-shadow:0_1px_3px_rgb(0_0_0/0.6)] motion-reduce:transition-none",
+          "pointer-events-none absolute bottom-6 left-0 flex flex-col items-center gap-2 transition-opacity duration-150 motion-reduce:transition-none",
           mode === "scrub" ? "opacity-100" : "opacity-0",
         )}
+        style={{ width: FLOAT_MIN_W }}
         aria-hidden
-        data-scrub-time
+        data-scrub-float
       >
-        <span ref={now}>0:00</span>
-        <span className="text-white/65">
-          {" / "}
-          <span ref={total} />
-        </span>
+        <canvas
+          ref={preview}
+          width={0}
+          height={0}
+          className="block rounded-xl bg-black shadow-[0_2px_12px_rgb(0_0_0/0.35)] ring-1 ring-white/20"
+          data-scrub-preview
+        />
+        <div
+          ref={clock}
+          className="whitespace-nowrap text-center text-[15px] font-semibold leading-none tabular-nums text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.6)]"
+          data-scrub-time
+        >
+          <span ref={now}>0:00</span>
+          <span className="text-white/70">
+            {" / "}
+            <span ref={total} />
+          </span>
+        </div>
       </div>
     </div>
   );
