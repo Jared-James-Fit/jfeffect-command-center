@@ -23,7 +23,7 @@ export function weekRangeLabel(weekStart: Date): string {
 }
 
 export function WeekStrip({
-  selectedDate, onSelectDate, byDate, dnd, sessionDays,
+  selectedDate, onSelectDate, byDate, dnd, sessionDays, flat = false,
 }: {
   selectedDate: Date;
   onSelectDate: (d: Date) => void;
@@ -31,14 +31,17 @@ export function WeekStrip({
   dnd?: CalendarDnd;
   /** yyyy-mm-dd days with a session or appointment (client view): a violet dot by the workout mark. */
   sessionDays?: Set<string>;
+  /** On the page itself, no card around it (Workouts: the calendar picks the day, the day's card is the thing). */
+  flat?: boolean;
 }) {
   // Week the selected date belongs to. Mon-first to match existing schedule UI.
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const today = localStartOfToday();
   // Dates only: where this week sits in the program (block, week) is the Program card's.
+  const Wrap = flat ? "div" : Card;
   return (
-    <Card className="px-2 pb-2 pt-1.5">
+    <Wrap className={flat ? "-mx-2" : "px-2 pb-2 pt-1.5"} data-week-strip={flat ? "flat" : "card"}>
       <div className="mb-0.5 flex items-center justify-between">
         <button
           type="button"
@@ -123,6 +126,6 @@ export function WeekStrip({
 
         })}
       </div>
-    </Card>
+    </Wrap>
   );
 }

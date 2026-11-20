@@ -38,6 +38,8 @@ interface Props {
   analyticsTo: string;
   /** Nothing until there's a score: no "finish a few workouts to unlock it" card on the athlete's own Workouts. */
   hideWhenEmpty?: boolean;
+  /** A row inside another card (Workouts groups it with the month): no card of its own. */
+  bare?: boolean;
 }
 
 type Tier = "Ready" | "Good" | "Take It Easy" | "Low";
@@ -95,7 +97,7 @@ const statusColor: Record<FactorStatus, { ring: string; soft: string; text: stri
   },
 };
 
-export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false }: Props) {
+export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false, bare = false }: Props) {
   const { data, isLoading } = useQuery({
     queryKey: ["training-readiness", clientId],
     enabled: !!clientId,
@@ -525,14 +527,18 @@ export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false }: Props) 
     ? `From your ${age.fromLabel} workout · ${lead.replace(/[.!?]$/, "")}`
     : bd.limiter ? `${lead.replace(/[.!?]$/, "")} · Limiter: ${bd.limiter.label}` : lead;
 
+  const Wrap = bare ? "div" : Card;
   return (
     <section aria-label="Training Readiness">
       {/* One compact row in the page; the score's breakdown opens in a sheet. */}
-      <Card className="p-0">
+      <Wrap className="p-0">
         <button
           type="button"
           onClick={() => setView("overview")}
-          className="flex min-h-[68px] w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition active:bg-muted/50"
+          className={cn(
+            "flex min-h-[64px] w-full items-center gap-3 px-4 py-3 text-left transition active:bg-muted/50",
+            !bare && "rounded-2xl",
+          )}
           aria-haspopup="dialog"
           data-testid="readiness-row"
         >
@@ -552,7 +558,7 @@ export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false }: Props) 
           </div>
           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         </button>
-      </Card>
+      </Wrap>
 
       <Sheet
         open={view != null}

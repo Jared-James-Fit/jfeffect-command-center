@@ -3,18 +3,24 @@ import { describe, expect, it } from "vitest";
 
 describe("Workouts page: program roadmap under the calendar", () => {
   const src = readFileSync("src/components/workouts/WorkoutsExperience.tsx", "utf8");
-  it("renders after the calendar / Block view, before cardio and analytics", () => {
+  it("renders after the day (calendar / Block view), before readiness and the month", () => {
     const blockView = src.indexOf("<BlockViewTab");
     const card = src.indexOf("<ProgramRoadmapCard");
     expect(blockView).toBeGreaterThan(-1);
     expect(card).toBeGreaterThan(blockView);
-    expect(card).toBeLessThan(src.indexOf("<ClientCardioSection"));
+    expect(card).toBeLessThan(src.indexOf("data-workouts-progress"));
+    // the day's cardio is the day's (useDayCardio in SelectedDayList), never a section at the bottom
+    expect(src).not.toContain("<ClientCardioSection");
   });
   it("is compact by default with an expandable roadmap; one bar, no week pills on top of it", () => {
     const card = readFileSync("src/components/workouts/program-roadmap.tsx", "utf8");
     // the roadmap folds under one row; a block opens Block View from inside it
     expect(card).toContain("data-roadmap-toggle");
-    expect(card).toContain('{multi ? "Roadmap" : "All weeks"}');
+    // what this week is for (the coach's or Cleo's paragraph) folds under Plan details with the roadmap;
+    // the card itself says the block and the week's focus in a few words
+    expect(card).toContain("<span>Plan details</span>");
+    expect(card).toContain("data-roadmap-week-detail");
+    expect(card).toContain('This week: <span className="text-foreground/80">{thisWeek.label}</span>');
     expect(card).toContain("Open workouts in Block View");
     expect(card).toContain("<ProgramBar blocks={blocks} />");
     expect(card).not.toContain("WeekPills");
