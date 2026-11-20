@@ -244,6 +244,6 @@ describe("on a post's screen a clip's sound is a tap, Instagram's Reels", () => 
     expect(card).toContain('(sheetOpen || under || holding) && "opacity-0",');
     // never the phone's long-press menu
     expect(card).toContain("[-webkit-touch-callout:none]");
-    expect(inline).toContain("const shouldPlay = active && visible && !held && !holdPaused && !!el && (auto || tapped) && !failed;");
+    expect(inline).toContain("const shouldPlay = active && visible && !held && !holdPaused && !scrubbing && !!el && (auto || tapped) && !failed;");
   });
 });
