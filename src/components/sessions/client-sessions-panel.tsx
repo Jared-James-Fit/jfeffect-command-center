@@ -360,6 +360,7 @@ export function SessionsTrackerBody({
           p={payments}
           today={today}
           nextSession={upcoming[0] ?? null}
+          sessions={sessions}
           onOpenBilling={onOpenBilling}
           showMoney={false}
           showCoaching={false}
@@ -395,7 +396,7 @@ export function SessionsTrackerBody({
       ))}
 
       {upcoming.length > 0 && (
-        <Folder title="Upcoming sessions" summary={`${upcoming.length} · from ${shortDay(upcoming[0].session_date)}`} data-upcoming>
+        <Folder title="Upcoming sessions" summary={upcoming.length === 1 ? `1 · ${shortDay(upcoming[0].session_date)}` : `${upcoming.length} · ${shortDay(upcoming[0].session_date)} – ${shortDay(upcoming[upcoming.length - 1].session_date)}`} data-upcoming>
           <ul className="divide-y divide-border rounded-lg border border-border">{upcoming.map((s) => sessionRow(s))}</ul>
         </Folder>
       )}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { buildClientPayments, type ScheduleSale } from "@/lib/payment-schedule";
-import { coverageWords, dueWords, orderPackages, packageGlance, paymentPlans } from "@/lib/package-view";
+import { awayWords, coverageWords, dueWords, finalSession, orderPackages, packageGlance, paymentPlans } from "@/lib/package-view";
 import type { MoneyLedgerRow } from "@/lib/sale-money";
 
 // Marc Asugui's real records the evening of Nov 13 2026, once that night's
@@ -194,5 +194,70 @@ describe("the screens use them", () => {
     expect(tabs).not.toContain("backdrop-blur");
     expect(tabs).not.toContain("item.icon");
     expect(tabs).toContain("row.scrollTo");
+  });
+});
+
+// Colten Murray on Nov 20 2026: one package of 72 (Jun 22 – Dec 6), 45 done, every one of the
+// other 27 booked Mon / Wed / Fri at noon from Nov 23, the last on Mon Jan 25 (booked that morning
+// by Book ahead, the package's last credit). His repeating Google event carries on past it on its own.
+describe("their final session", () => {
+  const today = "2026-11-20";
+  const sale = { ...base, id: "c1", package_number: 1, offer_name: "Personal Training — 72 Sessions", sessions_purchased: 72, contract_value_cents: 630000, payment_status: "Paid", term_start_date: "2026-06-22", term_end_date: "2026-12-06", amount_paid_cents: 630000 } as any;
+  const mwf = (from: string, to: string, status: string) => {
+    const out: any[] = [];
+    for (let d = new Date(`${from}T12:00:00Z`); d.toISOString().slice(0, 10) <= to; d.setUTCDate(d.getUTCDate() + 1)) {
+      const iso = d.toISOString().slice(0, 10);
+      if ([1, 3, 5].includes(d.getUTCDay()) && iso !== "2027-01-01") out.push({ session_date: iso, start_time: "12:00:00", end_time: "13:00:00", status, title: "1:1 Training" });
+    }
+    return out;
+  };
+  const booked = mwf("2026-11-23", "2027-01-25", "Scheduled");
+  const done = mwf("2026-09-14", "2026-11-18", "Completed");
+  const colten = (remaining: number, reserved = 27) =>
+    buildClientPayments({ sales: [sale], ledger: [], balance: [{ purchase_id: "c1", granted: 72, used: 45, reserved, remaining, expired: 0, transferred: 0 }] as any, events: [], today });
+
+  it("fully booked: the last one booked, Mon Jan 25, 9 weeks out, after the package's Dec 6 end date", () => {
+    expect(booked).toHaveLength(27);
+    const f = finalSession(colten(0), [...done, ...booked, { session_date: "2026-11-20", start_time: "12:00:00", status: "Cancelled" }], today);
+    expect(f).toEqual({ kind: "booked", date: "2027-01-25", start: "12:00", daysAway: 66, pastEnd: { label: "Package 1", to: "2026-12-06" } });
+    expect(awayWords(66)).toBe("in 9 weeks");
+  });
+
+  it("a call that takes no credit is never their final training session", () => {
+    const call = { session_date: "2027-02-10", start_time: "09:00:00", status: "Scheduled", uses_credit: false };
+    expect(finalSession(colten(0), [...done, ...booked, call], today)).toMatchObject({ kind: "booked", date: "2027-01-25" });
+  });
+
+  it("sessions still to book: where the last lands on his Mon, Wed & Fri, holidays skipped", () => {
+    // 3 left after Mon Jan 25: Wed Jan 27, Fri Jan 29, Mon Feb 1.
+    const f = finalSession(colten(3, 24), [...done, ...booked], today);
+    expect(f).toMatchObject({ kind: "projected", date: "2027-02-01", left: 3, days: "Mon, Wed & Fri" });
+    // Booked only through Wed Dec 23: Fri Dec 25 is Christmas, so the 2 left go Mon Dec 28 and Wed Dec 30.
+    const f2 = finalSession(colten(2, 25), [...done, ...booked.filter((s) => s.session_date <= "2026-12-23")], today);
+    expect(f2).toMatchObject({ kind: "projected", date: "2026-12-30", left: 2 });
+  });
+
+  it("no rhythm to go by: says nothing rather than guess", () => {
+    expect(finalSession(colten(5, 0), [{ session_date: "2026-11-18", start_time: "12:00:00", end_time: "13:00:00", status: "Completed" }], today)).toBeNull();
+  });
+
+  it("nothing booked and nothing left: the last day they trained", () => {
+    expect(finalSession(colten(0, 0), done, today)).toEqual({ kind: "done", date: "2026-11-18" });
+  });
+
+  it("a renewal added ahead counts: Marc's package 4 dates end Nov 29, his last booked session is on it", () => {
+    const sessions = [
+      { session_date: "2026-11-16", start_time: "10:30:00", end_time: "11:30:00", status: "Scheduled" },
+      { session_date: "2026-11-27", start_time: "10:30:00", end_time: "11:30:00", status: "Scheduled" },
+    ];
+    expect(finalSession(p, sessions, TODAY)).toMatchObject({ kind: "booked", date: "2026-11-27", pastEnd: null });
+  });
+
+  it("the glance says it on Summary, Sessions and Billing, read from the Sessions tab's own sessions", () => {
+    const snap = readFileSync("src/components/billing/package-snapshot.tsx", "utf8");
+    expect(snap).toContain("<FinalSessionLine");
+    expect(snap).toContain("ptSessionsQuery(clientId)");
+    const sessionsTab = readFileSync("src/components/sessions/client-sessions-panel.tsx", "utf8");
+    expect(sessionsTab).toContain("sessions={sessions}");
   });
 });
