@@ -1194,7 +1194,7 @@ export function womenLine(casts: readonly DailyCast[], day: string): string {
     .map((k) => [k, womanBuildFor(k, day)] as const)
     .filter((x): x is readonly [DailyCast, WomanBuild] => !!x[1])
     .map(([k, b]) => `${k} = ${WOMAN_BUILDS[b]}`);
-  return `WOMEN IN IT (as many women as men across the feed): if a woman is in it, she's built like this for her cast, written in "visual" in these words: ${each.join("; ")}. A training group's women each have a different build (slim, curvy, athletic, soft). ${WOMEN_LOOK}`;
+  return `IF A WOMAN IS IN IT (whoever fits the post: a man or a woman, never a woman just because of this line; across the feed men and women about equally), she's built like this for her cast, written in "visual" in these words: ${each.join("; ")}. A training group's women each have a different build (slim, curvy, athletic, soft). ${WOMEN_LOOK}`;
 }
 
 export function conceptPrompt(o: {
@@ -1246,8 +1246,8 @@ export function conceptPrompt(o: {
     `PALETTE, as "palette" (pick one; these weren't in the last few pictures): ${(o.choices.palettes ?? DAILY_PALETTE_KEYS).map((k) => `${k} = ${DAILY_PALETTES[k].look}`).join("; ")}`,
     settingLine(o.choices.settings ?? DAILY_SETTING_KEYS, o.recent, o.day),
     `WHO'S IN IT, as "cast" (pick who the post is about, the first ones not in the last two pictures; "no_people" or "hands" whenever the read says people aren't needed): ${(o.choices.casts ?? DAILY_CAST_KEYS).map((k) => `${k} = ${DAILY_CASTS[k].look}`).join("; ")}`,
+    o.lead ? `THE PERSON THE POST IS ABOUT IS A ${o.lead.toUpperCase()}: write them as one in "visual".` : null,
     womenLine(o.choices.casts ?? DAILY_CAST_KEYS, o.day),
-    o.lead ? `THE PERSON THE POST IS ABOUT IS A ${o.lead.toUpperCase()}.` : null,
     `TREATMENT, as "rendering" (anime key art for most posts; another only when the read calls for it): ${(o.choices.renderings ?? DAILY_RENDERING_KEYS).map((k) => `${k} = ${DAILY_RENDERINGS[k].name}, for ${DAILY_RENDERINGS[k].use}`).join("; ")}`,
     o.art
       ? `DIRECTION, as "art": ${o.art} (${ART_STYLES[o.art].name})`
@@ -1309,11 +1309,12 @@ export function parseRead(v: unknown): DailyRead | undefined {
 export function castFor(cast: unknown, read: DailyRead | undefined, allowed: readonly DailyCast[] = DAILY_CAST_KEYS): DailyCast {
   if (read?.people === "none") return "no_people";
   if (read?.people === "hands") return "hands";
-  const picked = typeof cast === "string" && (DAILY_CAST_KEYS as string[]).includes(cast) ? (cast as DailyCast) : null;
+  // only a cast it was offered (every cast on a real day; one when a test asks for one)
+  const picked = typeof cast === "string" && (allowed as string[]).includes(cast) ? (cast as DailyCast) : null;
   // a picture the read says has people never comes back empty
   if (picked && !(read && (picked === "no_people" || picked === "hands"))) return picked;
-  if (read?.people === "two") return "coach_athlete";
-  if (read?.people === "group") return "crew";
+  if (read?.people === "two" && allowed.includes("coach_athlete")) return "coach_athlete";
+  if (read?.people === "group" && allowed.includes("crew")) return "crew";
   return allowed.find((k) => k !== "no_people" && k !== "hands") ?? "everyday";
 }
 
