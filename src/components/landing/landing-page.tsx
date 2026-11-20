@@ -1,38 +1,31 @@
 /**
- * jfeffect.com's front door (signed-out visitors on "/"): what JF Effect is,
- * why it's worth joining, that it's free, and one button to apply. Real app
- * screens (a made-up athlete, never a client: scripts/coaching-screenshots),
- * real numbers, Jared's own words. Coaching is offered, never pushed.
+ * jfeffect.com's front door (signed-out visitors on "/"). Two products, said
+ * apart from the first screen: the app is free (by application, no card) and
+ * 1:1 coaching with Jared is paid (by application, priced on a call).
  *
- * Order follows how someone decides: what it is and the button; why listen;
- * what you get, shown on the real screens; the crew; free vs coaching; how
- * joining works (and why there's an application); who's behind it; their
- * questions; the button again.
+ * Order follows how someone decides: who's behind it, what it is and what
+ * costs money, with both ways in; why listen; the two side by side; the free
+ * app on its real screens; coaching and its real results; their questions;
+ * both ways in again.
+ *
+ * Every claim is checked against the product and the database (Nov 20 2026):
+ * 15 published JF Effect programs (strength, muscle, running, home; 4 for
+ * beginners, 3 for home), 2,050
+ * exercises (1,969 with a how-to video), 13,730 sets logged; Jared's record
+ * and credentials as the About and Coaching pages state them; client words
+ * and photos from the Coaching page. App screens are a made-up athlete, never
+ * a client (scripts/coaching-screenshots).
  */
 import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import {
-  CalendarCheck2,
-  CheckCircle2,
-  Dumbbell,
-  Flame,
-  MessageCircle,
-  Trophy,
-  Users,
-} from "lucide-react";
+import { Check, Quote } from "lucide-react";
 import { SalesPageShell } from "@/components/sales/sales-page-shell";
 import { PhoneShot } from "@/components/sales/coaching-hero";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
 import { Reveal } from "@/components/sales/reveal";
-import {
-  Block,
-  Group,
-  Heading,
-  IconTile,
-  PrimaryCta,
-  Surface,
-  TextLink,
-} from "@/components/sales/apple";
+import { TRANSFORMATION_PHOTOS } from "@/components/sales/transformations-strip";
+import { CLIENT_QUOTES } from "@/components/sales/client-quotes";
+import { Block, Group, Heading, PrimaryCta, Rail, Surface, TextLink } from "@/components/sales/apple";
 import {
   Accordion,
   AccordionContent,
@@ -42,119 +35,139 @@ import {
 import { COACH_NAME } from "@/lib/social-links";
 import { trackJoin } from "@/lib/join-funnel";
 import { currentLaunchMode } from "@/lib/landing-launch";
+import { cn } from "@/lib/utils";
 import jaredAsset from "@/assets/athletes/jared-napf-2026.jpg.asset.json";
+import jaredFace from "@/assets/landing/jared-face.jpg";
 import shotLog from "@/assets/landing/app-log.webp";
 import shotWeek from "@/assets/landing/app-week.webp";
 import shotInsights from "@/assets/landing/app-insights.webp";
 
 export const JOIN_TO = "/join" as const;
-const CTA = "Get started free";
+/** Straight into the coaching application (seven questions, then a call). */
+export const COACHING_APPLY_TO = "/coaching/apply" as const;
+/** The full coaching page, for anyone who wants to read before applying. */
+export const COACHING_TO = "/coaching" as const;
+export const JOIN_CTA = "Join free";
+export const COACHING_CTA = "Apply for coaching";
 
-/** What a member gets, each on the screen it lives on (the program screen is the hero's). */
-const FEATURES: Array<{ title: string; body: string; src: string; alt: string }> = [
+/** Who's behind it, in numbers that are true and easy to check. */
+const PROOF: Array<[string, string, string]> = [
+  ["8", "International medals", "For Team Canada, 7 of them gold"],
+  ["2×", "International champion", "NAPF + Commonwealth, 2026"],
+  ["100+", "People coached", "First workout to world level"],
+  ["13,000+", "Sets logged in the app", "And counting"],
+];
+
+/** What the free app is. Each line is a feature a member has today. */
+const FREE: string[] = [
+  "15 full programs: strength, muscle, running and home",
+  "Or build your own, week by week",
+  "A log that fills in your reps and remembers last time",
+  "PRs, estimated maxes and progress, worked out for you",
+  "Nutrition targets and a food log",
+  "The Crew, and a League that resets every month",
+];
+
+/** What coaching adds. Each line is something a coaching client gets today. */
+const COACHING: string[] = [
+  "Everything in the app",
+  "Training written for you and adjusted as you go",
+  "Nutrition and a meal plan you can actually prep",
+  "A weekly check-in I read and answer myself",
+  "Film a set and get feedback in your chat",
+  "Message me directly, and book a call when you need one",
+  "Online from anywhere, or in person in Selkirk, MB",
+];
+
+/** The free app on its real screens. */
+const SCREENS: Array<{ title: string; body: string; src: string; alt: string }> = [
   {
-    title: "Log every set in seconds",
-    body: "Reps and RPE come from your program, so most sets only need a weight. Last time and a suggested weight sit right on the card.",
+    title: "Your week, planned",
+    body: "Pick a program and the workouts land on the days you train. Busy Tuesday? Move it.",
+    src: shotWeek,
+    alt: "The Workouts screen: this week's calendar, today's lower body workout in progress, and the program at week 7 of 13",
+  },
+  {
+    title: "Log a set in seconds",
+    body: "Your reps and RPE are already filled in. Type the weight and you're done, with last time right on the card.",
     src: shotLog,
     alt: "The workout logger: back squat, 4 × 5 at RPE 7, last time 290 lb × 5, three sets logged at 295 lb",
   },
   {
     title: "Proof it's working",
-    body: "PRs, estimated maxes and volume, worked out for you from what you log. No spreadsheets, no guessing.",
+    body: "PRs, estimated maxes and volume, worked out from what you log. No spreadsheet.",
     src: shotInsights,
     alt: "Training analytics: squat, bench and deadlift estimated maxes up 10 to 14 percent over 12 weeks",
   },
 ];
 
-const HERO = {
-  src: shotWeek,
-  alt: "The Workouts screen: this week's calendar, today's lower body workout in progress, and the program at week 7 of 13",
-};
-
-const ALSO = [
-  {
-    icon: CalendarCheck2,
-    title: "Programs that run your week",
-    body: "Coach-written for your goal and level, or build your own. Workouts land on your training days.",
-  },
-  {
-    icon: Dumbbell,
-    title: "2,000+ exercises",
-    body: "Almost every one with a how-to video, so you know you're doing it right.",
-  },
-  { icon: Flame, title: "Nutrition", body: "Set your calories and macros, and log what you eat." },
-];
-
-const CREW = [
-  {
-    icon: Users,
-    title: "Share your wins",
-    body: "Post a PR or a workout and the crew sees it. Follow the people you train with.",
-  },
-  {
-    icon: Trophy,
-    title: "Monthly League",
-    body: "Points for showing up and logging your training. See where you rank every month.",
-  },
-  {
-    icon: MessageCircle,
-    title: "Copy what works",
-    body: "Members share the programs they build. Save one and make it yours.",
-  },
-];
-
-const STEPS = [
-  {
-    title: "Apply in about a minute",
-    body: "Your goal, your experience, and the best way to reach you. No account, no card.",
-  },
-  {
-    title: "Jared reads it",
-    body: "Usually within a day. He might send you a quick message to say hi. No call needed unless you want one.",
-  },
-  {
-    title: "You get your invite",
-    body: "Tap the link, set a password, and pick your first program.",
-  },
-];
-
 const FAQ: Array<{ q: string; a: string }> = [
   {
-    q: "Is it really free?",
-    a: "Yes. Programs, logging, progress, nutrition and the Crew are free. No card, no trial that turns into a charge.",
+    q: "What's actually free?",
+    a: "The whole app: programs, the log, your PRs and progress, nutrition targets, the food log and the Crew. No card, no trial, nothing that turns into a charge later.",
   },
   {
-    q: "Why do I have to apply?",
-    a: "I read every application myself. It keeps the Crew made of people who actually train, and it lets me point you to the right program from day one. It takes about a minute.",
+    q: "What does coaching cost?",
+    a: "It depends on what you need: online, in person in Selkirk, or both. Apply, and we'll go over the options and the price on a call before you commit to anything.",
   },
   {
-    q: "How long until I'm in?",
-    a: "Usually within a day. You'll get an email with your link, and I might message you first to say hi.",
+    q: "Why do I have to apply for a free app?",
+    a: "I read every application myself. It keeps the Crew made of people who actually train, and it means I can point you to the right program on day one. Most people are in within a day.",
   },
   {
-    q: "I'm a beginner. Is this for me?",
-    a: "Yes. There are programs built for people who are brand new, and the app tells you exactly what to do each day.",
+    q: "I'm new to lifting. Is this for me?",
+    a: "Yes. Four of the programs are built for beginners, and the app tells you exactly what to do each day.",
   },
   {
     q: "Do I need a gym?",
-    a: "No. There are programs for a full gym and for training at home, and you can build your own around what you have.",
+    a: "No. Three programs are built for home: bodyweight only, one pair of dumbbells, or a basic home setup.",
   },
   {
-    q: "What's the difference between free and coaching?",
-    a: "Free gets you the app and the Crew, and you run your own training. Coaching is paid and optional: I write your program and nutrition, read your weekly check-in and review your lifts.",
+    q: "Can I start free and get coaching later?",
+    a: "Yes, and it's a good way to do it. Your training history stays, so when you move to coaching I start from everything you've already logged.",
   },
 ];
 
-function CheckList({ items }: { items: string[] }) {
+function Ticks({ items, tone = "default" }: { items: string[]; tone?: "default" | "inverse" }) {
   return (
-    <ul className="space-y-2.5 text-[15px]">
+    <ul className="space-y-2.5 text-[15px] leading-snug">
       {items.map((t) => (
         <li key={t} className="flex items-start gap-3">
-          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden />
+          <Check
+            className={cn(
+              "mt-0.5 h-[18px] w-[18px] shrink-0",
+              tone === "inverse" ? "text-background/70" : "text-success",
+            )}
+            strokeWidth={2.5}
+            aria-hidden
+          />
           <span>{t}</span>
         </li>
       ))}
     </ul>
+  );
+}
+
+/** The quiet second way in: same size as the primary, never red. */
+function SecondaryCta({
+  to,
+  children,
+  className,
+}: {
+  to: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <Link
+      to={to as any}
+      className={cn(
+        "inline-flex h-[54px] items-center justify-center gap-1.5 rounded-2xl px-7 text-[17px] font-semibold text-foreground ring-1 ring-inset ring-foreground/20 transition hover:bg-secondary active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        className,
+      )}
+    >
+      {children}
+    </Link>
   );
 }
 
@@ -166,50 +179,65 @@ export function LandingPage() {
 
   return (
     <SalesPageShell pageId="landing" joinCta>
-      {/* 1. What it is, and the one button */}
-      <section className="mx-auto grid max-w-5xl gap-10 px-5 pb-12 pt-6 md:pb-16 md:pt-14 lg:grid-cols-[1.1fr_.9fr] lg:items-center">
+      {/* 1. Who's behind it, what it is, what costs money, and both ways in */}
+      <section
+        className="mx-auto grid max-w-5xl gap-12 px-5 pb-14 pt-6 md:pt-14 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:gap-10 lg:pb-20"
+        data-landing-hero
+      >
         <div className="jf-auth-rise text-center lg:text-left">
-          <div className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-[13px] font-semibold">
-            <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
-            Free to join · No card
-          </div>
-          <h1 className="mx-auto mt-4 max-w-[15ch] text-balance text-[40px] font-semibold leading-[1.04] tracking-[-0.03em] md:text-[60px] lg:mx-0">
-            Train with a plan. Watch it work.
-          </h1>
-          <p className="mx-auto mt-4 max-w-xl text-[18px] leading-relaxed text-muted-foreground md:text-[19px] lg:mx-0">
-            JF Effect is a free training app and crew, built by Team Canada powerlifter {COACH_NAME}
-            . Real programs, a log that tracks every set and PR, and people who notice when you hit
-            one.
+          <p className="text-[13px] font-semibold text-muted-foreground">
+            {COACH_NAME} · Team Canada powerlifter
           </p>
-          <div className="mt-7 flex flex-col items-stretch sm:items-center lg:items-start">
-            <PrimaryCta to={JOIN_TO} className="sm:min-w-[280px]">
-              {CTA}
+          <h1 className="mx-auto mt-3 max-w-[13ch] text-balance text-[44px] font-semibold leading-[1.02] tracking-[-0.035em] md:text-[64px] lg:mx-0">
+            Structure beats motivation.
+          </h1>
+          <p className="mx-auto mt-5 max-w-xl text-[18px] leading-relaxed text-muted-foreground md:text-[19px] lg:mx-0">
+            JF Effect is the app I coach in. Real programs, a log that remembers every set, and a
+            crew that notices your PRs.
+          </p>
+          <p
+            className="mx-auto mt-3 max-w-xl text-[18px] font-semibold leading-snug md:text-[19px] lg:mx-0"
+            data-landing-split
+          >
+            The app is free. Coaching with me is the paid part.
+          </p>
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
+            <PrimaryCta to={JOIN_TO} className="sm:min-w-[200px]">
+              {JOIN_CTA}
             </PrimaryCta>
+            <SecondaryCta to={COACHING_TO} className="sm:min-w-[200px]">
+              Coaching with Jared
+            </SecondaryCta>
           </div>
           <p className="mt-3 text-[13px] text-muted-foreground">
-            About a minute to apply · Jared reads every one
+            Joining takes about a minute. No card.
           </p>
         </div>
-        <div className="relative mx-auto w-full max-w-[290px] md:max-w-[320px]">
-          <PhoneShot src={HERO.src} alt={HERO.alt} priority className="relative z-10" />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -right-24 top-16 hidden w-[230px] opacity-90 lg:block"
-          >
-            <PhoneShot src={shotInsights} alt="" />
+
+        {/* The athlete, and the app he coaches in */}
+        <div className="relative mx-auto w-full max-w-[380px] pb-10 lg:max-w-[440px] lg:pb-12">
+          <img
+            src={jaredAsset.url}
+            alt={`${COACH_NAME} deadlifting for Team Canada at an IPF competition`}
+            width={1536}
+            height={1536}
+            decoding="async"
+            fetchPriority="high"
+            className="aspect-[4/5] w-[86%] rounded-3xl object-cover object-[center_28%] ring-1 ring-border/70"
+          />
+          <div className="absolute bottom-0 right-0 w-[42%]">
+            <PhoneShot src={shotWeek} alt="" />
           </div>
         </div>
       </section>
 
       {/* 2. Why listen */}
       <div className="mx-auto max-w-5xl px-5">
-        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border/70 ring-1 ring-border/70 md:grid-cols-4">
-          {[
-            ["Team Canada", "2× international champion", "Powerlifting · 2026"],
-            ["100+", "Athletes coached", "Fat loss to world level"],
-            ["13,000+", "Sets logged in the app", "And counting"],
-            ["$0", "To join", "No card, no trial"],
-          ].map(([value, label, detail]) => (
+        <div
+          className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border/70 ring-1 ring-border/70 md:grid-cols-4"
+          data-landing-proof
+        >
+          {PROOF.map(([value, label, detail]) => (
             <div key={label} className="bg-card px-4 py-5 text-center">
               <div className="text-[24px] font-semibold leading-none tracking-[-0.02em] md:text-[30px]">
                 {value}
@@ -221,189 +249,175 @@ export function LandingPage() {
         </div>
       </div>
 
-      {/* 3. What you get, on the real screens */}
+      {/* 3. The two, side by side */}
       <Reveal>
-        <Block id="features">
+        <Block id="choose">
           <Heading
-            eyebrow="What you get"
-            title="Everything you need to get stronger."
-            sub="One app for your program, your log and your progress. Here's what it looks like."
+            eyebrow="Two ways to train"
+            title="Same app. Different level of help."
+            sub="Everyone trains in the same app. Coaching adds me: your plan, your nutrition, and someone checking your work every week."
           />
-          <div className="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-auto md:grid md:max-w-3xl md:grid-cols-2 md:gap-10 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
-            {FEATURES.map((f) => (
-              <div
-                key={f.title}
-                className="w-[78vw] max-w-[320px] shrink-0 snap-start md:w-auto md:max-w-none"
+          <div className="mx-auto grid max-w-4xl gap-4 md:grid-cols-2 md:gap-5">
+            <div
+              className="flex flex-col rounded-2xl bg-card p-6 ring-1 ring-border/70 md:p-7"
+              data-landing-plan="free"
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <h3 className="text-[19px] font-semibold tracking-[-0.01em]">The app</h3>
+                <div className="text-[26px] font-semibold tracking-[-0.02em]">Free</div>
+              </div>
+              <p className="mt-1.5 text-[15px] text-muted-foreground">
+                You run your training. The app keeps you honest.
+              </p>
+              <div className="mt-5 flex-1">
+                <Ticks items={FREE} />
+              </div>
+              <PrimaryCta to={JOIN_TO} full className="mt-7">
+                {JOIN_CTA}
+              </PrimaryCta>
+              <p className="mt-2.5 text-center text-[13px] text-muted-foreground">
+                About a minute to apply. No card.
+              </p>
+            </div>
+
+            <div
+              className="flex flex-col rounded-2xl bg-foreground p-6 text-background md:p-7"
+              data-landing-plan="coaching"
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <h3 className="text-[19px] font-semibold tracking-[-0.01em]">1:1 coaching</h3>
+                <div className="text-[26px] font-semibold tracking-[-0.02em]">Paid</div>
+              </div>
+              <p className="mt-1.5 text-[15px] text-background/70">
+                I write it, check it every week, and change it when it needs changing.
+              </p>
+              <div className="mt-5 flex-1">
+                <Ticks items={COACHING} tone="inverse" />
+              </div>
+              <Link
+                to={COACHING_APPLY_TO}
+                className="mt-7 inline-flex h-[54px] w-full items-center justify-center rounded-2xl bg-background text-[17px] font-semibold text-foreground transition active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <PhoneShot src={f.src} alt={f.alt} className="max-w-[230px]" />
-                <h3 className="mt-5 text-[19px] font-semibold leading-snug tracking-[-0.01em]">
-                  {f.title}
+                {COACHING_CTA}
+              </Link>
+              <p className="mt-2.5 text-center text-[13px] text-background/70">
+                Free to apply. We talk price before you commit.
+              </p>
+            </div>
+          </div>
+        </Block>
+      </Reveal>
+
+      {/* 4. The free app, on its real screens */}
+      <Reveal>
+        <Block id="app" tint>
+          <Heading
+            eyebrow="The free app"
+            title="Free doesn't mean watered down."
+            sub="It's the same app my coaching clients train in. Over 2,000 exercises, almost every one with a how-to video."
+          />
+          <div className="-mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:gap-8 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
+            {SCREENS.map((s) => (
+              <div
+                key={s.title}
+                className="w-[70vw] max-w-[280px] shrink-0 snap-start md:w-auto md:max-w-none"
+              >
+                <PhoneShot src={s.src} alt={s.alt} className="max-w-[230px]" />
+                <h3 className="mt-5 text-[18px] font-semibold leading-snug tracking-[-0.01em]">
+                  {s.title}
                 </h3>
-                <p className="mt-1.5 text-[15px] leading-relaxed text-muted-foreground">{f.body}</p>
+                <p className="mt-1.5 text-[15px] leading-relaxed text-muted-foreground">{s.body}</p>
               </div>
             ))}
           </div>
-          <div className="mx-auto mt-10 grid max-w-4xl gap-3 md:grid-cols-3">
-            {ALSO.map(({ icon: Icon, title, body }) => (
-              <Surface key={title} className="flex items-start gap-3 p-4">
-                <IconTile>
-                  <Icon className="h-5 w-5" aria-hidden />
-                </IconTile>
-                <div className="min-w-0">
-                  <div className="text-[15px] font-semibold">{title}</div>
-                  <p className="mt-0.5 text-[14px] leading-snug text-muted-foreground">{body}</p>
+          <div className="mt-10 flex flex-col items-center">
+            <PrimaryCta to={JOIN_TO} className="w-full sm:w-auto sm:min-w-[260px]">
+              {JOIN_CTA}
+            </PrimaryCta>
+          </div>
+        </Block>
+      </Reveal>
+
+      {/* 5. Coaching, and what it's done for people */}
+      <Reveal>
+        <Block id="coaching">
+          <div className="mx-auto max-w-2xl text-center">
+            <div className="flex items-center justify-center gap-3">
+              <img
+                src={jaredFace}
+                alt=""
+                width={256}
+                height={256}
+                loading="lazy"
+                decoding="async"
+                className="h-11 w-11 rounded-full object-cover ring-1 ring-border/70"
+              />
+              <div className="text-left">
+                <div className="text-[15px] font-semibold leading-tight">Coaching with {COACH_NAME.split(" ")[0]}</div>
+                <div className="text-[13px] text-muted-foreground">Training people since 2017 · Drug-tested athlete</div>
+              </div>
+            </div>
+            <h2 className="mt-6 text-balance text-[28px] font-semibold leading-[1.12] tracking-[-0.02em] md:text-[40px]">
+              The app tells you what to do. I tell you what to change.
+            </h2>
+            <p className="mt-4 text-[17px] leading-relaxed text-muted-foreground">
+              Most people who come to me have already tried hard, more than once. What they were
+              missing was a plan built for them and someone watching it every week.
+            </p>
+          </div>
+
+          <div className="mt-10">
+            <Rail label="Coaching client results">
+              {TRANSFORMATION_PHOTOS.slice(0, 8).map((photo, i) => (
+                <div
+                  key={i}
+                  className="w-[58vw] max-w-[240px] shrink-0 snap-start overflow-hidden rounded-2xl bg-muted ring-1 ring-border/70"
+                >
+                  <img
+                    src={photo.url}
+                    alt="A coaching client's before and after"
+                    loading="lazy"
+                    decoding="async"
+                    width={400}
+                    height={400}
+                    className="aspect-square w-full scale-[1.18] object-cover object-top"
+                  />
+                </div>
+              ))}
+            </Rail>
+          </div>
+
+          <div className="-mx-5 mt-6 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
+            {CLIENT_QUOTES.map((c) => (
+              <Surface
+                key={c.name}
+                className="flex w-[80vw] max-w-[330px] shrink-0 snap-start flex-col p-5 md:w-auto md:max-w-none"
+              >
+                <Quote className="h-5 w-5 text-muted-foreground" aria-hidden />
+                <p className="mt-3 flex-1 text-[15px] leading-relaxed">“{c.quote}”</p>
+                <div className="mt-4 border-t border-border/70 pt-3">
+                  <div className="text-[15px] font-semibold">{c.name}</div>
+                  <div className="text-[13px] text-muted-foreground">
+                    {c.result} · {c.role}
+                  </div>
                 </div>
               </Surface>
             ))}
           </div>
-        </Block>
-      </Reveal>
+          <p className="mt-4 text-center text-[12px] leading-relaxed text-muted-foreground">
+            Real coaching clients. Results depend on where you start and the work you put in.
+          </p>
 
-      {/* 4. The crew */}
-      <Reveal>
-        <Block tint>
-          <Heading
-            eyebrow="The Crew"
-            title="You don't have to train alone."
-            sub="Everyone here is chasing something. Show up, log it, and people notice."
-          />
-          <Group className="mx-auto max-w-2xl">
-            {CREW.map(({ icon: Icon, title, body }) => (
-              <div key={title} className="flex items-start gap-4 px-5 py-4">
-                <IconTile>
-                  <Icon className="h-5 w-5" aria-hidden />
-                </IconTile>
-                <div className="min-w-0">
-                  <div className="text-[17px] font-semibold leading-snug">{title}</div>
-                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">{body}</p>
-                </div>
-              </div>
-            ))}
-          </Group>
-        </Block>
-      </Reveal>
-
-      {/* 5. Free vs coaching */}
-      <Reveal>
-        <Block>
-          <Heading eyebrow="Free, or coached" title="Start free. Get a coach if you want one." />
-          <div className="mx-auto grid max-w-3xl gap-4 md:grid-cols-2">
-            <Surface className="flex flex-col p-6 ring-2 ring-foreground/15">
-              <div className="flex items-baseline justify-between">
-                <div className="text-[17px] font-semibold">Free membership</div>
-                <div className="text-[22px] font-semibold tracking-[-0.02em]">$0</div>
-              </div>
-              <p className="mt-1 text-[14px] text-muted-foreground">
-                You run your training. The app keeps you honest.
-              </p>
-              <div className="mt-4 flex-1">
-                <CheckList
-                  items={[
-                    "Coach-written programs, or build your own",
-                    "Log every set, PR and estimated max",
-                    "Progress and analytics",
-                    "Nutrition targets and a food log",
-                    "The Crew and the monthly League",
-                  ]}
-                />
-              </div>
-              <PrimaryCta to={JOIN_TO} full className="mt-6">
-                {CTA}
-              </PrimaryCta>
-            </Surface>
-            <Surface className="flex flex-col p-6">
-              <div className="flex items-baseline justify-between">
-                <div className="text-[17px] font-semibold">1:1 Coaching</div>
-                <div className="text-[14px] font-medium text-muted-foreground">Paid · optional</div>
-              </div>
-              <p className="mt-1 text-[14px] text-muted-foreground">
-                Jared runs your training with you.
-              </p>
-              <div className="mt-4 flex-1">
-                <CheckList
-                  items={[
-                    "Everything in free",
-                    "Training written for you, adjusted every week",
-                    "Nutrition and a meal plan you can follow",
-                    "A weekly check-in Jared reads and answers",
-                    "Lift video reviews in your chat",
-                  ]}
-                />
-              </div>
-              <div className="mt-6 text-center">
-                <TextLink to="/coaching">Learn about coaching</TextLink>
-              </div>
-            </Surface>
+          <div className="mt-9 flex flex-col items-center gap-4">
+            <SecondaryCta to={COACHING_APPLY_TO} className="w-full sm:w-auto sm:min-w-[260px]">
+              {COACHING_CTA}
+            </SecondaryCta>
+            <TextLink to={COACHING_TO}>How coaching works</TextLink>
           </div>
-          <p className="mt-5 text-center text-[13px] text-muted-foreground">
-            Coaching is never required. Most people start free.
-          </p>
         </Block>
       </Reveal>
 
-      {/* 6. How joining works, and why there's an application */}
-      <Reveal>
-        <Block id="how" tint narrow>
-          <Heading eyebrow="How joining works" title="Three steps, and you're training." />
-          <Group>
-            {STEPS.map((st, i) => (
-              <div key={st.title} className="flex items-start gap-4 px-5 py-4">
-                <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-secondary text-[14px] font-semibold">
-                  {i + 1}
-                </span>
-                <div className="min-w-0">
-                  <div className="text-[17px] font-semibold leading-snug">{st.title}</div>
-                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">
-                    {st.body}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </Group>
-          <p className="mx-auto mt-5 max-w-lg text-center text-[15px] leading-relaxed text-muted-foreground">
-            Why an application? I read every one and say hi to the people who join. It keeps the
-            Crew real.
-          </p>
-        </Block>
-      </Reveal>
-
-      {/* 7. Who's behind it */}
-      <Reveal>
-        <Block>
-          <Surface className="mx-auto max-w-4xl overflow-hidden md:grid md:grid-cols-2">
-            <div className="relative md:min-h-[420px]">
-              <img
-                src={jaredAsset.url}
-                alt={`${COACH_NAME} deadlifting for Team Canada at an IPF competition`}
-                loading="lazy"
-                decoding="async"
-                width={1536}
-                height={1536}
-                className="aspect-square h-auto w-full object-cover object-[center_31%] md:absolute md:inset-0 md:aspect-auto md:h-full"
-              />
-            </div>
-            <div className="p-6 md:self-center md:p-8">
-              <div className="text-[13px] font-semibold text-muted-foreground">Built by</div>
-              <h2 className="mt-1 text-[26px] font-semibold leading-tight tracking-[-0.02em]">
-                {COACH_NAME}
-              </h2>
-              <p className="mt-1 text-[15px] text-muted-foreground">
-                Team Canada powerlifter · 2× international champion
-              </p>
-              <p className="mt-4 text-[17px] leading-relaxed text-muted-foreground">
-                I've coached 100+ people, from their first workout to world championships, and I
-                still compete myself. JF Effect is everything I use to coach, built so you can use
-                it too. Structure and standards beat motivation every time.
-              </p>
-              <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2">
-                <TextLink to="/about">Read my story</TextLink>
-              </div>
-            </div>
-          </Surface>
-        </Block>
-      </Reveal>
-
-      {/* 8. Their questions */}
+      {/* 6. Their questions */}
       <Reveal>
         <Block narrow tint>
           <Heading eyebrow="Questions" title="Straight answers." />
@@ -428,22 +442,25 @@ export function LandingPage() {
         </Block>
       </Reveal>
 
-      {/* 9. The button again */}
+      {/* 7. Both ways in, once more */}
       <Reveal>
         <Block narrow>
           <div className="text-center">
             <h2 className="text-balance text-[30px] font-semibold leading-[1.1] tracking-[-0.02em] md:text-[40px]">
-              Done guessing? Start here.
+              Start with the app. Or start with me.
             </h2>
             <p className="mx-auto mt-3 max-w-md text-[17px] leading-relaxed text-muted-foreground">
-              Free to join. About a minute to apply. Jared reads every one.
+              Either way, I read your application.
             </p>
-            <div className="mt-7 flex justify-center">
-              <PrimaryCta to={JOIN_TO} className="w-full sm:w-auto sm:min-w-[280px]">
-                {CTA}
+            <div className="mx-auto mt-7 flex max-w-md flex-col gap-3 sm:max-w-none sm:flex-row sm:justify-center">
+              <PrimaryCta to={JOIN_TO} className="sm:min-w-[220px]">
+                {JOIN_CTA}
               </PrimaryCta>
+              <SecondaryCta to={COACHING_APPLY_TO} className="sm:min-w-[220px]">
+                {COACHING_CTA}
+              </SecondaryCta>
             </div>
-            <p className="mt-4 text-[14px] text-muted-foreground">
+            <p className="mt-5 text-[14px] text-muted-foreground">
               Already a member?{" "}
               <Link
                 to="/auth"
@@ -457,7 +474,11 @@ export function LandingPage() {
       </Reveal>
 
       <div className="pb-24 md:pb-0" />
-      <StickyMobileCta label={CTA} href={JOIN_TO} />
+      <StickyMobileCta label={JOIN_CTA} href={JOIN_TO} />
     </SalesPageShell>
   );
 }
+
+/** For the tests: what the page promises, kept with the page. */
+export const LANDING_COPY = { FREE, COACHING, FAQ, PROOF } as const;
+
