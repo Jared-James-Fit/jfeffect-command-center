@@ -128,10 +128,10 @@ function tokensOf(text: string): Token[] {
     // glued only when nothing separates it from the run before ("*again*." → "again.")
     const glued = tokens.length > 0 && !endsWithSpace && !/^\s/.test(r.text);
     endsWithSpace = /\s$/.test(r.text);
-    r.text
-      .split(/\s+/)
-      .filter(Boolean)
-      .forEach((w, i) => tokens.push({ text: w, accent: r.accent, glue: i === 0 && glued }));
+    const words = r.text.split(/\s+/).filter(Boolean);
+    // a short accented phrase ("1 g/lb", "two left") stays on one line: a no-break space holds it together
+    if (r.accent && words.length > 1 && words.join(" ").length <= 16) tokens.push({ text: words.join("\u00a0"), accent: true, glue: glued });
+    else words.forEach((w, i) => tokens.push({ text: w, accent: r.accent, glue: i === 0 && glued }));
   }
   return tokens;
 }

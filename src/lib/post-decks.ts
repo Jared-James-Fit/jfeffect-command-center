@@ -237,11 +237,12 @@ function hash(s: string): number {
 }
 
 /**
- * A deck's theme: never one of the last two posts' (`recent`, newest first),
- * else the seed's pick, so a run of posts never looks the same twice in a row.
+ * A deck's theme: never one of `recent` (the decks just before it, newest
+ * first, three at most), else the seed's pick, so a run of posts never looks
+ * the same twice in a row.
  */
 export function pickDeckTheme(seed: string, recent: readonly (DeckTheme | null | undefined)[] = []): DeckTheme {
-  const avoid = new Set(recent.slice(0, 2).filter(Boolean));
+  const avoid = new Set(recent.slice(0, 3).filter(Boolean));
   const open = DECK_THEMES.filter((t) => !avoid.has(t));
   const pool = open.length ? open : [...DECK_THEMES];
   return pool[hash(seed) % pool.length];
