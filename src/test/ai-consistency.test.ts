@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_ROUTES, resolveRoute } from "@/lib/ai/routing";
 import { nutritionNowLine } from "@/lib/program-intel/context";
-import { TARGETS_PROMPT } from "@/lib/nutrition-ai-prompts";
+import { TARGETS_PROMPT } from "@/lib/nutrition-ai-prompts.server";
 import { MAX_STEP_KCAL } from "@/lib/weight-management/decision";
 import { TRAIN_MINUTES_MAX, TRAIN_MINUTES_MAX_PL } from "@/lib/weight-management/treadmill";
 

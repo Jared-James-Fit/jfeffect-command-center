@@ -161,6 +161,10 @@ const FAQ: Array<{ q: string; a: string }> = [
     a: "Applying is free and there's no card. Coaching is a paid service, and we go over the options and the price on your call, before you commit to anything.",
   },
   {
+    q: "Is there a free option?",
+    a: "Yes. The JF Effect app is free: programs, the training log, your progress and the Crew. A lot of people start there and move to coaching later, and their training history comes with them.",
+  },
+  {
     q: "What if it isn't a good fit?",
     a: "Then we'll tell you. We only take on people we're confident we can help. The call is to find that out, not a pressure pitch.",
   },

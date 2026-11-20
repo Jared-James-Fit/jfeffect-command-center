@@ -27,7 +27,7 @@ import { aiTargetFor, parseAiTargets, planTotalsIssues } from "@/lib/nutrition-t
 import { parseMealPlan } from "@/lib/nutrition-targets/meal-plan-parse";
 import { planAsMealPlanText, readEditedPlan, type PlanEditPlan } from "@/lib/nutrition-targets/plan-edit";
 import { withPrepFix } from "@/lib/nutrition-ai-plans.server";
-import { REVISE_MAX_CHARS } from "@/lib/nutrition-ai-prompts";
+import { REVISE_MAX_CHARS } from "@/lib/nutrition-request";
 
 import { createHash } from "node:crypto";
 import {

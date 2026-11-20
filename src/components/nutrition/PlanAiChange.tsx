@@ -22,7 +22,7 @@ import {
   getFoodHistoryFn,
   undoPlanEditFn,
 } from "@/lib/nutrition-ai-plans.functions";
-import { REVISE_MAX_CHARS } from "@/lib/nutrition-ai-prompts";
+import { REVISE_MAX_CHARS } from "@/lib/nutrition-request";
 import { PLAN_AI_PREFILL_EVENT } from "@/lib/weight-management/handoff";
 import { coachCoverageLine, dayCoverage } from "@/lib/nutrition-targets/plan-coverage";
 import {

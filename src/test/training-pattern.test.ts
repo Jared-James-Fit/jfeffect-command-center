@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { summarizeTrainingTimes, formatClock, bucketFor } from "@/lib/nutrition-targets/training-pattern";
-import { classifyTrainingTime, effectiveTrainingTime, mealPlanUserPrompt } from "@/lib/nutrition-ai-prompts";
+import { classifyTrainingTime, effectiveTrainingTime, mealPlanUserPrompt } from "@/lib/nutrition-ai-prompts.server";
 
 const TZ = "America/Winnipeg"; // CDT = UTC-5 in Sept/Oct
 // Weekday sessions starting 5:05pm–6:50pm local, like a real evening lifter.

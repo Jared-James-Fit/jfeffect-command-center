@@ -5,7 +5,7 @@ import {
   mealPlanUserPrompt,
   quickPastePrompt,
   type QA,
-} from "@/lib/nutrition-ai-prompts";
+} from "@/lib/nutrition-ai-prompts.server";
 
 const QAS: QA[] = [
   { label: "Sex", value: "Male" },
@@ -80,7 +80,10 @@ describe("Copy ChatGPT prompt (Quick Paste)", () => {
   it("the paste box no longer has its own blank copy of the prompt", () => {
     const src = readFileSync("src/components/nutrition/MealPlanBulkPaste.tsx", "utf8");
     expect(src).not.toContain("CHATGPT_PROMPT");
-    expect(src).toContain("quickPastePrompt(");
+    // The prompt is quickPastePrompt, built on the server (the AI's prompts
+    // never ship to a phone: nutrition-ai-prompts.server.ts).
+    expect(src).toContain('kind: "quick_paste"');
+    expect(src).toContain("getManualNutritionPromptFn");
     const dialog = readFileSync("src/components/nutrition-target-dialog.tsx", "utf8");
     expect(dialog).toMatch(/<MealPlanBulkPaste\s+clientId=/);
   });

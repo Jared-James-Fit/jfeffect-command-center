@@ -376,7 +376,7 @@ describe("carrying only when the last update can carry it", () => {
   });
 
   it("the chat's copy of the form id is the prompts' one", async () => {
-    const { NUTRITION_REQUEST_FORM_ID } = await import("@/lib/nutrition-ai-prompts");
+    const { NUTRITION_REQUEST_FORM_ID } = await import("@/lib/nutrition-request");
     expect(readFileSync("src/components/messages/messenger-checkin-card.tsx", "utf8")).toContain(`const NUTRITION_FORM_ID = "${NUTRITION_REQUEST_FORM_ID}"`);
   });
 });

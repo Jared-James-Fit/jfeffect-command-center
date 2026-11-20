@@ -223,6 +223,9 @@ const PublicBookInput = z.object({
   duration: DurationInput,
 });
 
+/** Public bookings (no known client) one connection can make in an hour. */
+const PUBLIC_BOOKINGS_PER_IP_PER_HOUR = 4;
+
 /**
  * Booking from the page. Who it's for is the server's call (bookingContext):
  * signed in as a client, they book as themselves; with a personal link that
@@ -230,6 +233,7 @@ const PublicBookInput = z.object({
  * anyone else gets an appointment for whoever filled in the form, and typing a
  * client's email never books against their package.
  */
+
 export const bookOnline = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => PublicBookInput.parse(d))
   .handler(async ({ data }) => {
@@ -253,6 +257,17 @@ export const bookOnline = createServerFn({ method: "POST" })
     const phone = data.phone?.trim() || client?.phone || null;
     if (type.location_mode === "phone" && !phone) {
       throw new Error("Add a phone number so we can call you.");
+    }
+    // A public booking sends a calendar invitation from the coach's Google and
+    // texts a reminder: a few per connection, so one caller can't fill the
+    // calendar or use up the page's hourly allowance for everyone. (A known
+    // client, signed in or on their personal link, books one at a time per link.)
+    if (!client) {
+      const { rateOk, callerIp } = await import("@/lib/public-rate-limit.server");
+      const ip = callerIp();
+      if (ip && !(await rateOk(db as any, `book:ip:${ip}`, PUBLIC_BOOKINGS_PER_IP_PER_HOUR, "1 hour"))) {
+        throw new Error("Too many bookings from this connection. Try again in a little while.");
+      }
     }
     const { claimInvite, finishInvite } = await import("@/lib/booking-invite.server");
     const inviteId = identity.inviteApplies && invite?.id ? invite.id : null;

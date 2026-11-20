@@ -3,6 +3,9 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
+/** Voice memos are short; the transcription model is paid per second of audio. */
+const VOICE_MAX_BYTES = 25 * 1024 * 1024;
+
 const Input = z.object({
   messageId: z.string().uuid(),
   storagePath: z.string().min(1),
@@ -17,7 +20,7 @@ export const transcribeVoiceMessage = createServerFn({ method: "POST" })
     // Verify caller can access this message (RLS-scoped client)
     const { data: msg, error: mErr } = await supabase
       .from("messages")
-      .select("id, client_id, attachments")
+      .select("id, client_id, attachments, transcript, transcript_status")
       .eq("id", data.messageId)
       .maybeSingle();
     if (mErr || !msg) throw new Error("Message not found or access denied");
@@ -31,6 +34,29 @@ export const transcribeVoiceMessage = createServerFn({ method: "POST" })
       (a) => typeof a?.storage_path === "string" && a.storage_path === data.storagePath,
     );
     if (!pathAllowed) throw new Error("Storage path does not belong to this message");
+    // The attachments list is the sender's own words, so the path must also be
+    // inside this chat's own folder (message-attachments/<client id>/…).
+    const clientFolder = `${(msg as any).client_id}/`;
+    if (!(msg as any).client_id || !data.storagePath.startsWith(clientFolder) || data.storagePath.includes("..")) {
+      throw new Error("Storage path does not belong to this message");
+    }
+
+    // One transcription per message: a done or running one is never paid for again.
+    const status = (msg as any).transcript_status as string | null;
+    if (status === "ready" || status === "empty") {
+      return { ok: true as const, transcript: ((msg as any).transcript as string | null) ?? "" };
+    }
+    if (status === "processing") return { ok: false as const, status: 409 };
+
+    // Coach chats are the coaching layer; a member's account has none.
+    const { data: chatClient } = await supabaseAdmin
+      .from("clients")
+      .select("service_tier")
+      .eq("id", (msg as any).client_id)
+      .maybeSingle();
+    if ((chatClient as any)?.service_tier !== "coaching") {
+      throw new Error("Voice transcription is part of coaching chats.");
+    }
 
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) {
@@ -47,6 +73,8 @@ export const transcribeVoiceMessage = createServerFn({ method: "POST" })
         .from("message-attachments")
         .download(data.storagePath);
       if (dErr || !blob) throw new Error(dErr?.message ?? "Download failed");
+      // A voice memo is a few MB at most; anything far bigger isn't one.
+      if (blob.size > VOICE_MAX_BYTES) throw new Error("That recording is too long to transcribe.");
       const buf = new Uint8Array(await blob.arrayBuffer());
       // base64 encode
       let bin = "";

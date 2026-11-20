@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseFoodWeighingRules, parseMealPlan } from "@/components/nutrition/MealPlanBulkPaste";
 import { phaseFromPlanText } from "@/lib/nutrition-cardio";
-import { answerFor, cleanAiText, mealPlanUserPrompt, TARGETS_PROMPT } from "@/lib/nutrition-ai-prompts";
+import { answerFor, cleanAiText, mealPlanUserPrompt, TARGETS_PROMPT } from "@/lib/nutrition-ai-prompts.server";
 
 const PLAN = `TRAINING-DAY MENU
 Meal 1
