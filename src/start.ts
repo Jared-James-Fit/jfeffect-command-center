@@ -34,7 +34,19 @@ const teamPreviewGuard = createMiddleware({ type: "function" })
     return next();
   });
 
+/**
+ * Two-step sign-in (src/lib/mfa-rules.ts): a session from a login that has an
+ * authenticator, without its code yet, is refused before any server function
+ * runs (many check admin rights themselves and then act as the server).
+ */
+const staffMfaGuard = createMiddleware({ type: "function" }).server(async ({ next }) => {
+  const { getRequest } = await import("@tanstack/react-start/server");
+  const { checkStaffMfa } = await import("@/lib/mfa-guard.server");
+  await checkStaffMfa(getRequest()?.headers.get("authorization"));
+  return next();
+});
+
 export const startInstance = createStart(() => ({
-  functionMiddleware: [attachSupabaseAuth, teamPreviewGuard],
+  functionMiddleware: [attachSupabaseAuth, staffMfaGuard, teamPreviewGuard],
   requestMiddleware: [errorMiddleware],
 }));

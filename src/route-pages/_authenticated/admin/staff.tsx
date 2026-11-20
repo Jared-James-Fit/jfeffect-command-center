@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { roleRequiresMfa } from "@/lib/mfa-rules";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -609,7 +610,7 @@ function AddStaffDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenC
               <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">What happens next</div>
               <ol className="space-y-2 text-sm">
                 <li className="flex gap-2"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-secondary text-[11px] font-bold">1</span>They tap the link and create a password for {form.email.trim().toLowerCase()}.</li>
-                <li className="flex gap-2"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-secondary text-[11px] font-bold">2</span>They land straight in {role === "finance" ? "the admin app, view-only" : "their area"}. You'll see them under Team.</li>
+                <li className="flex gap-2"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-secondary text-[11px] font-bold">2</span>{roleRequiresMfa(role) ? "They set up an authenticator app (one tap on their phone), then land" : "They land"} straight in {role === "finance" ? "the admin app, view-only" : "their area"}. You'll see them under Team.</li>
               </ol>
             </div>
             <div className="flex gap-2">

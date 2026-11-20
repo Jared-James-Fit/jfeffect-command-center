@@ -165,3 +165,24 @@ No measurable performance cost: the new checks are one indexed lookup each, the 
   - The public "new setup link" request can reset the password of the one confirmed non-staff login with no client record (the owner gets the email).
   - Two unescaped email `ilike` lookups (nutrition dashboard, Stripe member provisioning).
   - Program Intelligence method text, Cleo's tones, Athlete Insights topics, lesson tracks and the coach-voice default still ship in admin chunks (no credentials or client data).
+
+## 11. Deployed (Nov 20 2026)
+
+- PR #1038 merged and published. `20270423090000_security_hardening.sql` was applied by hand (production doesn't run repo migrations on sync) and checked: every function it recreates matches the file, and a set of rolled-back tests on production passed. A coaching client can post in their chat, a free member can't, a client can't write their own legal acceptance, and the server's acceptance is stamped with the published text and can't be edited or deleted. The worker function is refused to users. `20270422090000_set_video_analyses.sql` (#1087, merged just before) was applied the same way so the published code had its table.
+- The live site serves `frame-ancestors 'self'` and the Permissions-Policy. Recovery and setup texts are back on (`sms_settings.security_texts_enabled`). The retired checkout stays off (`public_checkout_enabled = false`).
+
+## 12. Two-step sign-in (admin and finance logins)
+
+- **What it does.** The admin and finance logins set up an authenticator app (TOTP) the first time they open the app after this ships. After that they enter a 6-digit code once per sign-in on each device. Supabase keeps the session at that level ("aal2") through its refreshes, so it isn't asked on every open. Clients and members see nothing new.
+- **Why it's real and not just a screen.** Once a login has an authenticator, a password alone (a stolen one) gets no staff rights anywhere.
+  - **The app** shows only the code screen (`StaffMfaGate`).
+  - **Every server function** refuses the session (`staffMfaGuard` in `src/start.ts` → `mfa-guard.server.ts`). This covers the roughly 70 admin checks that read `user_roles` themselves and then act as the service role.
+  - **The database** says no in `has_role`, `has_permission`, `is_admin_viewer` and `is_business_owner` (`caller_mfa_ok`, `20270424091500_staff_mfa.sql`), so direct API calls and realtime are covered too.
+  - **Cost and timing.** The rule only applies to logins that have an authenticator, so nothing changes for anyone until they set one up. It costs clients nothing: the server reads the two-person list once a minute per instance, and the database checks only after a staff role is found.
+- **Backups.** Account → Two-step sign-in adds a second authenticator, such as a password manager or another phone. Add one: Supabase TOTP has no recovery codes.
+- **Locked out.** If a login has lost every authenticator, the owner (or Claude, through Lovable's database access) removes its factors and the person sets up a new one on their next open:
+  `DELETE FROM auth.mfa_factors WHERE user_id = '<login id>';`
+- **Known friction.**
+  - Changing your password re-checks it by signing in again, so you'll be asked for a code afterwards.
+  - The finance login had this step until Oct 9 2026 and it was removed at the owner's request. It's back for the finance login because the owner asked for MFA on both logins on Nov 17 2026.
+- **Rollback.** `docs/rollback/2026-11-20-staff-mfa-rollback.sql` puts the four functions back as production had them on Nov 20 2026 and drops the two new ones (tested on the local copy). Then take `staffMfaGuard` out of `src/start.ts` and `<StaffMfaGate>` out of `src/routes/_authenticated/route.tsx`.
