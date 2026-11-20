@@ -13,6 +13,9 @@ import {
   setE1rm,
   suggestSetLoad,
   warmupE1rm,
+  warmupReliability,
+  warmupSpread,
+  readWarmups,
   WARMUP_COLD_START_MAX_RATIO,
   audibleStep,
   MIN_RPE,
@@ -155,10 +158,10 @@ describe("final warm-up (SBD) → working-set suggestion", () => {
     buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW, warmup: w, lift: "competition", ...extra });
 
   describe("warmupE1rm", () => {
-    it("floors the RPE at 6 so a claimed 'easy' warm-up can never inflate the estimate", () => {
+    it("reads an easy rating as given (it reads light, measured), and how much it counts is the reliability's call", () => {
       const at6 = warmupE1rm({ load: 120, reps: 2, rpe: 6 })!;
-      expect(warmupE1rm({ load: 120, reps: 2, rpe: 3 })).toBeCloseTo(at6, 6);
-      expect(warmupE1rm({ load: 120, reps: 2, rpe: 5 })).toBeCloseTo(at6, 6);
+      expect(warmupE1rm({ load: 120, reps: 2, rpe: 5 })!).toBeGreaterThan(at6);
+      expect(warmupE1rm({ load: 120, reps: 2, rpe: 3 })!).toBeGreaterThan(warmupE1rm({ load: 120, reps: 2, rpe: 5 })!);
     });
     it("a harder-feeling warm-up implies a LOWER e1RM; unspecified RPE assumes a typical warm-up (7)", () => {
       expect(warmupE1rm({ load: 120, reps: 2, rpe: 8 })!).toBeLessThan(warmupE1rm({ load: 120, reps: 2, rpe: 7 })!);
@@ -199,7 +202,7 @@ describe("final warm-up (SBD) → working-set suggestion", () => {
     it("backing off is allowed more than pushing up (asymmetric, safety first) — on the unrounded estimate", () => {
       const raw = (w: { load: number; reps: number; rpe: number }) => estimateFor(withWarm(w), 5, 8)!.load;
       const h = estimateFor(base(), 5, 8)!.load;
-      const down = raw({ load: 60, reps: 1, rpe: 7 }); // implausibly weak -> clamped
+      const down = raw({ load: 125, reps: 3, rpe: 7 }); // near the working weight, but weak -> clamped
       const up = raw({ load: 300, reps: 1, rpe: 6 }); // implausibly strong -> clamped
       expect(down / h).toBeCloseTo(0.97, 3); // −3%
       expect(up / h).toBeCloseTo(1.015, 3); // +1.5%
@@ -208,8 +211,8 @@ describe("final warm-up (SBD) → working-set suggestion", () => {
 
     it("a hard (RPE 8+) warm-up is read like a set: down as far as it says, never above the same warm-up rated a normal 7", () => {
       const h = estimateFor(base(), 5, 8)!.load;
-      const weak = estimateFor(withWarm({ load: 90, reps: 3, rpe: 9 }), 5, 8)!.load;
-      expect(weak).toBeCloseTo(warmupE1rm({ load: 90, reps: 3, rpe: 9 })! * percentOf1RM(5, 2)!, 6);
+      const weak = estimateFor(withWarm({ load: 125, reps: 3, rpe: 9 }), 5, 8)!.load;
+      expect(weak).toBeCloseTo(warmupE1rm({ load: 125, reps: 3, rpe: 9 })! * percentOf1RM(5, 2)!, 6);
       const strong = estimateFor(withWarm({ load: 300, reps: 1, rpe: 8 }), 5, 8)!.load;
       const strongNormal = estimateFor(withWarm({ load: 300, reps: 1, rpe: 7 }), 5, 8)!.load;
       expect(strong).toBeLessThanOrEqual(strongNormal + 1e-9);
@@ -357,11 +360,14 @@ describe("a hard last warm-up sets today's weight", () => {
     suggestSetLoad(buildLoadModel({ history, today: [], unit: "kg", warmup: { load: 210, reps: 1, rpe }, now }), { reps: 5, rpe: 4.5 });
 
   it("RPE 8 single: the warm-up's own chart math wins", () => {
-    expect(at(8)).toEqual({ low: 157.5, high: 172.5, target: 165, unit: "kg" });
+    expect(at(8)).toEqual({ low: 157.5, high: 172.5, target: 165, unit: "kg", warmup: "tuned" });
   });
 
   it("easier or unrated warm-ups still only nudge recent sessions", () => {
-    expect(at(6)!.target).toBe(185);
+    // RPE 6 is believed about a third as much as a 7 when it reads lighter: between the 7's 185 and history's own
+    const plain = suggestSetLoad(buildLoadModel({ history, today: [], unit: "kg", now }), { reps: 5, rpe: 4.5 })!.target;
+    expect(at(6)!.target).toBeGreaterThanOrEqual(185);
+    expect(at(6)!.target).toBeLessThanOrEqual(plain);
     expect(at(null)!.target).toBe(185);
     expect(at(7)!.target).toBe(185);
     expect(at(7.5)!.target).toBeGreaterThan(165);
@@ -528,5 +534,135 @@ describe("effort is monotonic: the same set rated easier never lowers the sugges
     expect(at(5)).toBeCloseTo(at(6), 6);
     expect(at(3)).toBeCloseTo(at(6), 6);
     expect(at(6.5)).toBeLessThan(at(6));
+  });
+});
+
+
+/**
+ * Nov 20 2026: the suggestion must not depend on the order weight, reps and RPE
+ * were typed in, and an easy warm-up must not be read as precise (it was floored
+ * at RPE 6, so a warm-up called easy pulled today's weight down by up to 3%).
+ */
+describe("low-RPE warm-ups: a reliability model, not a floor", () => {
+  const plan = { reps: 5, rpe: 8 };
+  const hist = () => buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW, lift: "competition" });
+  const withWarm = (warmups: Array<{ load: number; reps: number; rpe?: number | null }>, unit: "kg" | "lb" = "kg", history = twoWeeks) =>
+    buildLoadModel({ history, today: [], unit, now: NOW, warmups, lift: "competition" });
+
+  it("the spread grows with reps in reserve (measured ~3.5% a rep) and reliability ramps 0 → 1 between RPE 5 and 7", () => {
+    expect(warmupSpread(9)).toBeCloseTo(0.035, 6);
+    expect(warmupSpread(7)).toBeCloseTo(0.105, 6);
+    expect(warmupSpread(4)).toBeCloseTo(0.21, 6);
+    expect(warmupSpread(null)).toBeCloseTo(warmupSpread(7), 9);
+    expect(warmupReliability(4)).toBe(0);
+    expect(warmupReliability(5)).toBe(0);
+    expect(warmupReliability(7)).toBe(1);
+    expect(warmupReliability(9)).toBe(1);
+    expect(warmupReliability(null)).toBe(1); // unrated = a normal last warm-up
+    let prev = -1;
+    for (let r = 3; r <= 10; r += 0.01) {
+      const k = warmupReliability(r);
+      expect(k).toBeGreaterThanOrEqual(prev);
+      expect(k - Math.max(prev, 0)).toBeLessThan(0.02); // continuous: no jumps
+      prev = k;
+    }
+  });
+
+  it("an easy warm-up that reads lighter than history leaves history's number alone, and says why", () => {
+    const h = estimateFor(hist(), 5, 8)!.load;
+    for (const rpe of [3, 4, 5]) {
+      const e = estimateFor(withWarm([{ load: 100, reps: 3, rpe }]), 5, 8)!;
+      expect(e.load).toBeCloseTo(h, 9);
+      expect(e.warmup).toBe("too_easy");
+      expect(suggestSetLoad(withWarm([{ load: 100, reps: 3, rpe }]), plan)!.warmup).toBe("too_easy");
+    }
+    // a normal one that reads light still backs it off (as before), and says it tuned it
+    const normal = estimateFor(withWarm([{ load: 100, reps: 3, rpe: 7 }]), 5, 8)!;
+    expect(normal.load).toBeLessThan(h);
+    expect(normal.warmup).toBe("tuned");
+  });
+
+  it("an easy warm-up that reads heavier than history is a lower bound: a small up, never more than +1.5%", () => {
+    const h = estimateFor(hist(), 5, 8)!.load;
+    const up = estimateFor(withWarm([{ load: 150, reps: 3, rpe: 4 }]), 5, 8)!;
+    expect(up.load).toBeGreaterThan(h);
+    expect(up.load / h).toBeLessThanOrEqual(1.015 + 1e-9);
+    expect(up.warmup).toBe("tuned");
+  });
+
+  it("rating the same warm-up harder never raises the weight, and moving the rating never jumps it", () => {
+    for (const w of [{ load: 100, reps: 3 }, { load: 130, reps: 2 }, { load: 150, reps: 1 }, { load: 160, reps: 3 }]) {
+      let prev = Infinity;
+      for (let r = 3; r <= 10; r += 0.5) {
+        const load = estimateFor(withWarm([{ ...w, rpe: r }]), 5, 8)!.load;
+        expect(load).toBeLessThanOrEqual(prev + 1e-9);
+        // smooth through the reliability ramp (RPE 7 to 8 is the hard-set ramp, note 8)
+        if (prev !== Infinity && r <= 7) expect(prev - load).toBeLessThan(prev * 0.025);
+        prev = load;
+      }
+    }
+  });
+
+  it("no history and a warm-up too easy to read: no number is made up, the card is told why", () => {
+    const cold = (rpe: number) => buildLoadModel({ history: [], today: [], unit: "kg", now: NOW, warmups: [{ load: 100, reps: 3, rpe }] });
+    for (const rpe of [3, 4, 5]) {
+      const m = cold(rpe);
+      expect(m.status).toBe("calibrating");
+      expect(m.warmupTooEasy).toBe(true);
+      expect(suggestSetLoad(m, plan)).toBeNull();
+    }
+    const ok = cold(6);
+    expect(ok.status).toBe("ready");
+    expect(ok.source).toBe("warmup");
+    // the range is as wide as the rating is believable (RPE 6: ±14%), never narrower than the old ±8%
+    expect(estimateFor(ok, 5, 8)!.spread).toBeCloseTo(warmupSpread(6), 6);
+    expect(estimateFor(cold(9), 5, 8)!.spread).toBeGreaterThanOrEqual(0.035 - 1e-9);
+  });
+
+  it("several warm-ups read the same in any order; lighter ramp sets don't drag it down", () => {
+    const ramp = [
+      { load: 60, reps: 5, rpe: 7 },   // the bar and a light set, rated at the default
+      { load: 100, reps: 3, rpe: 7 },
+      { load: 135, reps: 2, rpe: 7 },
+      { load: 140, reps: 1, rpe: 7.5 },
+    ];
+    const perms = [ramp, [...ramp].reverse(), [ramp[2], ramp[0], ramp[3], ramp[1]], [ramp[1], ramp[3], ramp[0], ramp[2]]];
+    const reads = perms.map((p) => readWarmups(p)!);
+    for (const r of reads) expect(r).toEqual(reads[0]);
+    const loads = perms.map((p) => estimateFor(withWarm(p), 5, 8)!.load);
+    for (const l of loads) expect(l).toBeCloseTo(loads[0], 9);
+    // only the top two (within 7.5% of the heaviest) are read
+    expect(reads[0].count).toBe(2);
+    expect(reads[0].load).toBe(140);
+    // the bar and the 100 kg triple change nothing: it's the top sets that speak
+    expect(loads[0]).toBeCloseTo(estimateFor(withWarm([ramp[2], ramp[3]]), 5, 8)!.load, 9);
+  });
+
+  it("a tie on weight is broken by the rating, then the reps, never by which was logged last", () => {
+    const a = { load: 140, reps: 1, rpe: 7 };
+    const b = { load: 140, reps: 2, rpe: 7 };
+    const c = { load: 140, reps: 1, rpe: 8 };
+    expect(readWarmups([a, b])).toEqual(readWarmups([b, a]));
+    expect(readWarmups([a, c])!.rpe).toBe(8);
+    expect(readWarmups([c, a])!.rpe).toBe(8);
+  });
+
+  it("singles and multi-rep warm-ups are read through the chart, and kg / lb give the same weight", () => {
+    const kg = suggestSetLoad(withWarm([{ load: 140, reps: 1, rpe: 7 }]), plan)!;
+    const lbHistory = twoWeeks.map((l) => ({ ...l, enteredUnit: "lb" as const, enteredValue: l.normalizedLb }));
+    const lb = suggestSetLoad(withWarm([{ load: 140 * 2.2046226218, reps: 1, rpe: 7 }], "lb", lbHistory), plan)!;
+    expect(Math.abs(lb.target / 2.2046226218 - kg.target)).toBeLessThanOrEqual(2.5); // a plate step either way
+    const triple = estimateFor(withWarm([{ load: 125, reps: 3, rpe: 7 }]), 5, 8)!.load;
+    const single = estimateFor(withWarm([{ load: 140, reps: 1, rpe: 7 }]), 5, 8)!.load;
+    expect(Math.abs(triple / single - 1)).toBeLessThan(0.03);
+  });
+
+  it("strength level doesn't matter: the same warm-up relative to history moves the number by the same share", () => {
+    const scaled = (k: number) => twoWeeks.map((l) => ({ ...l, normalizedKg: l.normalizedKg! * k, enteredValue: l.normalizedKg! * k, normalizedLb: l.normalizedLb! * k }));
+    const share = (k: number, rpe: number) => {
+      const h = estimateFor(buildLoadModel({ history: scaled(k), today: [], unit: "kg", now: NOW, lift: "competition" }), 5, 8)!.load;
+      return estimateFor(withWarm([{ load: 120 * k, reps: 2, rpe }], "kg", scaled(k)), 5, 8)!.load / h;
+    };
+    for (const rpe of [4, 6, 7, 8]) expect(share(0.5, rpe)).toBeCloseTo(share(1.6, rpe), 6);
   });
 });

@@ -4,9 +4,10 @@
  * each login sees; staff only.
  */
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts";
-import { nativeKind, type FormSubmission } from "@/lib/form-submissions";
+import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-request";
+import { TO_REVIEW_DAYS, nativeKind, type FormSubmission } from "@/lib/form-submissions";
 
 /** A year back: the list is small (a few hundred rows a year), so it loads whole and filters on the phone. */
 const WINDOW_DAYS = 365;
@@ -22,12 +23,19 @@ async function isStaff(sb: any, userId: string): Promise<boolean> {
 
 const unit = (u: string | null | undefined) => (String(u ?? "").toLowerCase().startsWith("kg") ? "kg" : "lb");
 
+/**
+ * `scope: "review"` (the dashboard's Check-ins to review): only check-ins and
+ * native forms from the to-review window, everything else is never asked for.
+ */
 export const listFormSubmissionsFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<FormSubmission[]> => {
+  .inputValidator((d: unknown) => z.object({ scope: z.enum(["all", "review"]).optional() }).optional().parse(d ?? undefined))
+  .handler(async ({ data, context }): Promise<FormSubmission[]> => {
     const sb = context.supabase as any;
     if (!(await isStaff(sb, context.userId))) throw new Error("Coach access required");
-    const since = new Date(Date.now() - WINDOW_DAYS * 86_400_000).toISOString();
+    const review = data?.scope === "review";
+    const since = new Date(Date.now() - (review ? TO_REVIEW_DAYS : WINDOW_DAYS) * 86_400_000).toISOString();
+    const none = Promise.resolve([] as any[]);
 
     // Each source on its own: one that fails (or that this login can't read) never empties the list.
     const safe = async (q: PromiseLike<{ data: any[] | null; error: any }>) => {
@@ -35,18 +43,18 @@ export const listFormSubmissionsFn = createServerFn({ method: "POST" })
       return error ? [] : (data ?? []);
     };
     const [checkins, natives, progress, fillout, applications] = await Promise.all([
-      safe(sb.from("messenger_checkins").select("id, client_id, task_type, submitted_at, reviewed_at")
+      safe(sb.from("messenger_checkins").select("id, client_id, task_type, submitted_at, reviewed_at, superseded_at")
         .eq("status", "completed").not("submitted_at", "is", null).gte("submitted_at", since)
         .order("submitted_at", { ascending: false }).limit(LIMIT)),
       safe(sb.from("nf_submissions").select("id, client_id, form_id, submitted_at, reviewed_at, status")
         .not("submitted_at", "is", null).gte("submitted_at", since)
         .order("submitted_at", { ascending: false }).limit(LIMIT)),
-      safe(sb.from("progress_submissions").select("id, client_id, submission_type, submitted_at, created_at, bodyweight, weight_unit, check_in_label, review_status")
+      review ? none : safe(sb.from("progress_submissions").select("id, client_id, submission_type, submitted_at, created_at, bodyweight, weight_unit, check_in_label, review_status")
         .not("client_id", "is", null).neq("review_status", "draft").gte("created_at", since)
         .order("created_at", { ascending: false }).limit(LIMIT)),
-      safe(sb.from("fillout_submissions").select("id, client_id, form_id, form_name, submitted_at, created_at, unread, unmatched")
+      review ? none : safe(sb.from("fillout_submissions").select("id, client_id, form_id, form_name, submitted_at, created_at, unread, unmatched")
         .gte("created_at", since).order("created_at", { ascending: false }).limit(LIMIT)),
-      safe(sb.from("coaching_applications").select("id, client_id, full_name, form_name, application_source, submitted_at, created_at, application_status, is_test")
+      review ? none : safe(sb.from("coaching_applications").select("id, client_id, full_name, form_name, application_source, submitted_at, created_at, application_status, is_test")
         .gte("created_at", since).order("created_at", { ascending: false }).limit(LIMIT)),
     ]);
 
@@ -71,7 +79,7 @@ export const listFormSubmissionsFn = createServerFn({ method: "POST" })
         key: `checkin:${c.id}`, source: "checkin", kind: weekly ? "weekly_checkin" : "nutrition_update", id: c.id,
         title: weekly ? "Weekly Check-In" : "Nutrition Review",
         clientId: c.client_id, clientName: name(c.client_id), photo: photo(c.client_id), submittedAt: c.submitted_at,
-        reviewed: !!c.reviewed_at, detail: null, formId: null,
+        reviewed: !!c.reviewed_at, superseded: !!c.superseded_at, detail: null, formId: null,
       });
     }
     for (const s of natives) {

@@ -154,3 +154,27 @@ export function listDays(days: readonly string[]): string {
   if (short.length <= 1) return short.join("");
   return `${short.slice(0, -1).join(", ")} and ${short[short.length - 1]}`;
 }
+
+/**
+ * Resuming a program: the workouts left in the week it picks up in (Day
+ * `fromDay` to `perWeek`), each on the next training day from `startISO`, the
+ * way the calendar places them once it's back (member_program_resume moves
+ * the week so the next one lands on the first training day from the start).
+ */
+export function resumePreview(
+  startISO: string,
+  days: readonly WeekDay[],
+  fromDay: number,
+  perWeek: number | null | undefined,
+): Array<{ day: number; date: string }> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startISO) || !days.length || fromDay < 1) return [];
+  const left = Math.max(1, (perWeek ?? fromDay) - fromDay + 1);
+  const set = new Set(days.map(idx));
+  const start = parseISO(startISO);
+  const out: Array<{ day: number; date: string }> = [];
+  for (let i = 0; i < 14 && out.length < left; i++) {
+    const dt = addDays(start, i);
+    if (set.has((dt.getDay() + 6) % 7)) out.push({ day: fromDay + out.length, date: format(dt, "yyyy-MM-dd") });
+  }
+  return out;
+}

@@ -403,19 +403,20 @@ export function WeightValueInput({
               cellHeight,
               loadType === "bodyweight" && "text-[10px] font-semibold uppercase tracking-tight",
               loadType === "assisted" && "border-amber-500/50 bg-amber-500/10",
-              isEmpty
-                // an empty weight box is blue: where the weight goes (Fill or a tap puts it in);
-                // a plain one (the optional warm-up) stays a neutral well
-                ? plain
-                  ? "border-border/60 bg-muted/40 text-muted-foreground/60"
-                  : "border-blue-500/40 bg-blue-500/10 text-muted-foreground"
-                : "border-border/60 bg-muted/40 text-foreground",
+              plain
+                // the optional warm-up's box: lighter than a working set's, so the sets lead
+                ? cn("border-border/40 bg-transparent", isEmpty ? "text-muted-foreground/50" : "text-foreground/80")
+                : isEmpty
+                  // an empty weight box is an open field (where the weight goes: a tap on
+                  // Suggested or set 1's number puts it in); a filled one is a well like reps / RPE
+                  ? "border-muted-foreground/40 bg-background text-muted-foreground"
+                  : "border-border/60 bg-muted/40 text-foreground",
               !disabled && "cursor-pointer hover:bg-muted/60",
             )}
           >
             {ghost != null ? (
-              // the weight a tap on the set's number logs: the Suggested chip's blue
-              <span className="inline-flex items-center gap-1 font-semibold tabular-nums text-blue-700/80 dark:text-blue-300/90" data-testid="weight-suggested">
+              // the weight a tap on the set's number logs: said quietly, never as if typed
+              <span className="inline-flex items-center gap-1 font-semibold tabular-nums text-muted-foreground" data-testid="weight-suggested">
                 <Target className="h-3 w-3 shrink-0" aria-hidden="true" />
                 {ghost}
               </span>

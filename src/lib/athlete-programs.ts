@@ -225,6 +225,14 @@ export function useProgramActions() {
     },
     onSuccess: refresh,
   });
+  // Undo a delete (within 30 days): it comes back exactly as it was, sharing included
+  const restore = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await rpc("athlete_program_restore", { _id: id });
+      if (error) throw error;
+    },
+    onSuccess: refresh,
+  });
   const moderate = useMutation({
     mutationFn: async ({ id, hide, reason }: { id: string; hide: boolean; reason?: string }) => {
       const { error } = await rpc("athlete_program_moderate", {
@@ -236,7 +244,7 @@ export function useProgramActions() {
     },
     onSuccess: refresh,
   });
-  return { save, share, copy, remove, moderate };
+  return { save, share, copy, remove, restore, moderate };
 }
 
 /** "12 weeks · 3 blocks · 4 days a week · 18 exercises" */

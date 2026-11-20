@@ -134,15 +134,26 @@ export const sendAuthLinkBySms = createServerFn({ method: "POST" })
       // signed in, with or without an email on file.
       const { signSetupInvite } = await import("@/lib/setup-invite.server");
       url = setupInviteUrl(data.redirectTo, signSetupInvite(client.id));
-    } else if (client.email) {
+    } else {
+      // A sign-in or reset link is only ever for the login this record belongs
+      // to, by that login's own email, never the record's email (a coach can
+      // edit it, so it could name someone else's login, the admin's included),
+      // and never for a team login.
+      if (!client.user_id) throw new Error("They don't have a login yet. Text them a setup link instead.");
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { isStaffLogin } = await import("@/lib/account-recovery-lookup.server");
+      if (await isStaffLogin(supabaseAdmin as any, client.user_id)) {
+        throw new Error("Refusing to text a sign-in link: this record is linked to a team account.");
+      }
+      const { data: owner } = await supabaseAdmin.auth.admin.getUserById(client.user_id);
+      const loginEmail = owner?.user?.email?.trim().toLowerCase();
+      if (!loginEmail) throw new Error("Couldn't find the email on their login.");
       url = await generateAuthLink({
-        clientEmail: client.email,
-        clientUserId: client.user_id ?? null,
+        clientEmail: loginEmail,
+        clientUserId: client.user_id,
         kind: data.kind,
         redirectTo: data.redirectTo,
       });
-    } else {
-      throw new Error("Client has no email on file. Add one first, or text them a setup link.");
     }
 
     const first = client.preferred_name || client.first_name || client.full_name?.split(" ")[0] || "there";
@@ -327,7 +338,7 @@ export const autoSendPaymentRequestMessage = createServerFn({ method: "POST" })
       .from("messages")
       .select("id")
       .eq("client_id", rec.client_id)
-      .contains("attachments", [{ kind: "payment_request", purchase_id: rec.id }])
+      .contains("attachments", JSON.stringify([{ kind: "payment_request", purchase_id: rec.id }]))
       .limit(1);
     if ((existing ?? []).length) return { sent: false, reason: "already_sent" as const };
 

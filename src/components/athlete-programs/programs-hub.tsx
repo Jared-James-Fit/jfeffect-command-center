@@ -19,13 +19,14 @@ import { useServiceTier } from "@/lib/service-tier";
 import { cn } from "@/lib/utils";
 import { todayLocalISO } from "@/lib/today";
 import { GOALS, usePrograms, type BrowseFilters, type ProgramGoal } from "@/lib/athlete-programs";
-import { splitOwnPrograms } from "@/lib/my-program";
+import { pausedProgram, splitOwnPrograms } from "@/lib/my-program";
 import { roadmapProgressLine } from "@/lib/training-roadmap";
 import { ActiveProgramHeader, programHeading } from "@/components/workouts/program-roadmap";
 import { PlanLibraryBody } from "@/route-pages/_authenticated/portal/plans";
 import { ProgramListCard } from "./program-list-card";
 import { ManageProgramSheet } from "./manage-program-sheet";
-import { useMyCurrentProgram } from "./use-my-program";
+import { useMyCurrentProgram, useProgramHistory } from "./use-my-program";
+import { PausedProgramCard, ProgramHistoryRow } from "./program-history";
 import { useSavedPlans, type SavedPlan } from "./use-saved-plans";
 
 export type ProgramsTab = "mine" | "jf" | "crew";
@@ -51,8 +52,9 @@ const TAB_LINE: Record<ProgramsTab, string> = {
 
 /**
  * Programs: one page for every program, each tab saying where they come from.
- * My programs is what's on your calendar (with Manage: edit, switch, end) and
- * everything you built, copied or saved, in sections by source; JF Effect is
+ * My programs is what's on your calendar (with Manage: edit, switch, pause,
+ * end; a paused one with Resume) and everything you built, copied or saved,
+ * in sections by source, then Program history; JF Effect is
  * the coach-written library (members only: a coaching client's coach writes
  * their program); Crew is what the crew shares. The tab rides in the address,
  * so Back from a program lands on the tab it was opened from.
@@ -163,6 +165,8 @@ function MyPrograms({
   const current = useMyCurrentProgram(clientId, userId);
   const own = usePrograms("mine", {});
   const saved = useSavedPlans(isSelfServe);
+  // programs they paused, ended or switched from (members only)
+  const history = useProgramHistory(isSelfServe);
 
   const { built, copied } = splitOwnPrograms(own.data ?? []);
   const savedPlans = isSelfServe ? saved.plans : [];
@@ -170,13 +174,19 @@ function MyPrograms({
     current.origin.origin.kind === "own" ? current.origin.origin.programId : null;
   const runningPlanId = current.origin.planId;
   const hasRunning = !!current.roadmap;
+  const paused = pausedProgram(history.data, hasRunning);
+  const pastCount = history.data?.length ?? 0;
   const nothingSaved = !built.length && !copied.length && !savedPlans.length;
 
-  if (current.isLoading || own.isLoading || (isSelfServe && saved.loading)) return <ListSkeleton />;
+  if (current.isLoading || own.isLoading || (isSelfServe && (saved.loading || history.isLoading))) return <ListSkeleton />;
 
   return (
     <div className="space-y-6" data-my-programs>
       {hasRunning && <OnYourCalendar current={current} isSelfServe={isSelfServe} />}
+      {/* nothing on their calendar but a program they paused: it comes back with one tap */}
+      {!hasRunning && paused && (
+        <PausedProgramCard entry={paused} chooseAnother={false} />
+      )}
 
       {own.isError && (
         <Empty
@@ -225,8 +235,11 @@ function MyPrograms({
       )}
 
       {nothingSaved && !own.isError && (
-        <FindPrograms isSelfServe={isSelfServe} onTab={onTab} hasRunning={hasRunning} />
+        <FindPrograms isSelfServe={isSelfServe} onTab={onTab} hasRunning={hasRunning || !!paused} />
       )}
+
+      {/* every program they paused, ended or switched from: resume, start over or remove */}
+      {isSelfServe && pastCount > 0 && <ProgramHistoryRow count={pastCount} />}
     </div>
   );
 }

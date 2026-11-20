@@ -5,9 +5,10 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Plus, Camera, Image as ImageIcon, FileText, Sparkles,
-  ClipboardList, FileSignature, UtensilsCrossed, Video, CalendarPlus, CalendarClock, ListChecks,
+  ClipboardList, FileSignature, UtensilsCrossed, Video, CalendarPlus, ListChecks,
 } from "lucide-react";
-import { BookingInvitePicker } from "@/components/messages/booking-invite";
+import { ScheduleSheet } from "@/components/messages/booking-invite";
+import type { BookingCard } from "@/lib/booking-cards";
 import { BookSessionFromChat, ChatBookingDialog } from "@/components/messages/book-session-from-chat";
 import { cn } from "@/lib/utils";
 import { preloadVideoEngine } from "@/lib/video-edit/pick";
@@ -41,6 +42,7 @@ export function ComposerPlusMenu({
   canSendGifs,
   canSendSounds,
   onPickCamera,
+  onPickVideo,
   onPickPhotos,
   onPickFiles,
   onPickGif,
@@ -57,6 +59,8 @@ export function ComposerPlusMenu({
   canSendGifs?: boolean;
   canSendSounds?: boolean;
   onPickCamera: () => void;
+  /** Film a video in the app's own camera (use-film-camera.tsx); no tile without it. */
+  onPickVideo?: () => void;
   onPickPhotos: () => void;
   onPickFiles: () => void;
   onPickGif?: (g: ChatGif) => void | Promise<void>;
@@ -75,8 +79,9 @@ export function ComposerPlusMenu({
   const [recipeOpen, setRecipeOpen] = useState(false);
   const [creatingMeet, setCreatingMeet] = useState(false);
   const [bookOpen, setBookOpen] = useState(false);
+  const [bookCard, setBookCard] = useState<BookingCard | null>(null);
   const [formOpen, setFormOpen] = useState(false);
-  const [inviteOpen, setInviteOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const createMeet = useServerFn(createMeetLink);
 
   const isAdmin = role === "admin";
@@ -90,6 +95,16 @@ export function ComposerPlusMenu({
       label: "Camera",
       icon: <Camera className="h-6 w-6" />,
       onClick: () => { setOpen(false); preloadVideoEngine(); onPickCamera(); },
+    },
+    {
+      // a video filmed in the app's own camera: 1080p with the phone's own mic and no call processing,
+      // where the Camera tile's iOS picker records 480 × 360 with squeezed sound
+      key: "video",
+      section: "attach",
+      label: "Video",
+      icon: <Video className="h-6 w-6" />,
+      onClick: () => { setOpen(false); preloadVideoEngine(); onPickVideo?.(); },
+      hidden: !onPickVideo,
     },
     {
       key: "photo",
@@ -115,11 +130,16 @@ export function ComposerPlusMenu({
       tone: "accent",
     },
     {
-      key: "book",
+      // One place to get a time on the calendar: send a link they pick from, or book it yourself.
+      key: "schedule",
       section: "send",
-      label: "Book Session",
+      label: "Schedule",
       icon: <CalendarPlus className="h-6 w-6" />,
-      onClick: () => { setOpen(false); setBookOpen(true); },
+      onClick: () => {
+        setOpen(false);
+        if (onAttach) setScheduleOpen(true);
+        else { setBookCard(null); setBookOpen(true); }
+      },
       hidden: !canBook,
       tone: "primary",
     },
@@ -142,15 +162,6 @@ export function ComposerPlusMenu({
       hidden: !canSendRequests,
       tone: "primary",
       disabled: clientIds.length === 0,
-    },
-    {
-      key: "booking-link",
-      section: "send",
-      label: "Booking Link",
-      icon: <CalendarClock className="h-6 w-6" />,
-      onClick: () => { setOpen(false); setInviteOpen(true); },
-      hidden: !canBook || !onAttach,
-      tone: "primary",
     },
     {
       key: "sig",
@@ -268,7 +279,7 @@ export function ComposerPlusMenu({
       </Popover>
 
       {canBook && defaultClientId && (
-        <BookSessionFromChat clientId={defaultClientId} open={bookOpen} onOpenChange={setBookOpen} />
+        <BookSessionFromChat clientId={defaultClientId} open={bookOpen} onOpenChange={setBookOpen} initialCard={bookCard} />
       )}
 
       {isAdmin && surface === "dm" && defaultClientId && (
@@ -311,11 +322,15 @@ export function ComposerPlusMenu({
       )}
 
       {canBook && defaultClientId && onAttach && (
-        <BookingInvitePicker
-          open={inviteOpen}
-          onOpenChange={setInviteOpen}
+        <ScheduleSheet
+          open={scheduleOpen}
+          onOpenChange={setScheduleOpen}
           clientId={defaultClientId}
-          onSend={(att, body) => onAttach(att as any, body)}
+          onSendInChat={(att, body) => onAttach(att as any, body)}
+          onBookYourself={(t) => {
+            setBookCard(t as unknown as BookingCard);
+            setBookOpen(true);
+          }}
         />
       )}
     </>

@@ -241,7 +241,7 @@ export function KeyboardBar() {
   }
   return (
     <div
-      className="fixed inset-x-0 z-[60] flex items-center gap-2 border-t border-border bg-background px-2 py-1.5 md:hidden"
+      className="phone-column fixed inset-x-0 z-[60] flex items-center gap-2 border-t border-border bg-background px-2 py-1.5 md:hidden"
       style={{ top: box.top + box.height - 52 }}
       data-keyboard-bar
     >

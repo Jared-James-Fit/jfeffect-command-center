@@ -6,7 +6,6 @@ import {
   Copy,
   Flag,
   Globe2,
-  MoreHorizontal,
   Pencil,
   Play,
   ShieldOff,
@@ -17,13 +16,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { CardMenu, CardMenuItem, CardMenuSeparator } from "@/components/workout-day/card-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,9 +34,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { startMyProgram } from "@/lib/athlete-programs.functions";
 import { useServiceTier } from "@/lib/service-tier";
 import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
-import { programProgressLine, replacesLine } from "@/lib/my-program";
+import { deleteSavedProgramCopy, programProgressLine, replacesLine } from "@/lib/my-program";
 import { todayLocalISO } from "@/lib/today";
-import { programName } from "@/components/workouts/program-roadmap";
+import { programHeading } from "@/components/workouts/program-roadmap";
 import { ManageProgramSheet } from "./manage-program-sheet";
 import { useMyCurrentProgram } from "./use-my-program";
 import {
@@ -118,7 +111,7 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
   const { isSelfServe, clientId } = useServiceTier();
   const { isImpersonating } = useClientImpersonation();
   const userId = usePortalUserId();
-  const { share, copy, remove, moderate } = useProgramActions();
+  const { share, copy, remove, restore, moderate } = useProgramActions();
   const startFn = useServerFn(startMyProgram);
   const [reporting, setReporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -130,7 +123,7 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
     p.is_mine && current.origin.origin.kind === "own" && current.origin.origin.programId === p.id && !!current.roadmap;
   // another program they started is on their calendar: starting this one switches
   const replaces =
-    !running && current.roadmap && current.origin.owned ? programName(current.roadmap.program) : null;
+    !running && current.roadmap && current.origin.owned ? programHeading(current.roadmap.program) : null;
   // "Save a copy and start" lands here on the new copy: open the days picker once the tier is known
   const autoOpened = useRef(false);
   useEffect(() => {
@@ -169,12 +162,29 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
   const onDelete = async () => {
     try {
       await remove.mutateAsync(p.id);
-      toast.success("Program deleted");
-      navigate({ to: "/portal/programs", replace: true });
+      const id = p.id;
+      const title = p.title;
+      toast.success(`${title} deleted.`, {
+        duration: 8000,
+        action: {
+          label: "Undo",
+          onClick: () =>
+            void restore
+              .mutateAsync(id)
+              .then(() => toast.success(`${title} is back in My programs.`))
+              .catch((e) => toast.error(programError(e, "Couldn't undo it."))),
+        },
+      });
+      navigate({ to: "/portal/programs", search: { tab: "mine" }, replace: true } as any);
     } catch (e) {
       toast.error(programError(e, "Couldn't delete it."));
     }
   };
+  const deleteCopy = deleteSavedProgramCopy({
+    title: p.title,
+    shared: p.visibility === "community" && !p.hidden,
+    running,
+  });
 
   const onModerate = async (hide: boolean) => {
     try {
@@ -200,47 +210,50 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
         backTo="/portal/programs"
         actionsInline
         actions={
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="More" className="h-10 w-10">
-                <MoreHorizontal className="h-5 w-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {p.is_mine ? (
-                <>
-                  <DropdownMenuItem
-                    onSelect={() =>
-                      navigate({ to: "/portal/programs/new", search: { edit: p.id } } as any)
-                    }
-                  >
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Edit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => onCopy()}>
-                    <Copy className="mr-2 h-4 w-4" />
-                    Duplicate
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive" onSelect={() => setDeleting(true)}>
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete
-                  </DropdownMenuItem>
-                </>
-              ) : (
-                <DropdownMenuItem onSelect={() => setReporting(true)}>
-                  <Flag className="mr-2 h-4 w-4" />
-                  Report
-                </DropdownMenuItem>
-              )}
-              {p.can_moderate && !p.is_mine && (
-                <DropdownMenuItem onSelect={() => onModerate(!p.hidden)}>
-                  <ShieldOff className="mr-2 h-4 w-4" />
-                  {p.hidden ? "Put it back up" : "Take it down"}
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <CardMenu
+            name={p.title}
+            ariaLabel="More"
+            description="What you can do with this program"
+            align="end"
+            iconClassName="h-5 w-5"
+            buttonClassName="h-10 w-10 p-0"
+          >
+            {p.is_mine ? (
+              <>
+                <CardMenuItem
+                  onSelect={() => navigate({ to: "/portal/programs/new", search: { edit: p.id } } as any)}
+                >
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit program
+                </CardMenuItem>
+                <CardMenuItem onSelect={() => onCopy()}>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Duplicate
+                </CardMenuItem>
+                <CardMenuSeparator />
+                {/* deletes the saved program; what's on the calendar is ended from Manage */}
+                <CardMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={() => (preview ? toast.message("Preview only: this is how it looks to them.") : setDeleting(true))}
+                  data-testid="program-delete"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete program
+                </CardMenuItem>
+              </>
+            ) : (
+              <CardMenuItem onSelect={() => setReporting(true)}>
+                <Flag className="mr-2 h-4 w-4" />
+                Report
+              </CardMenuItem>
+            )}
+            {p.can_moderate && !p.is_mine && (
+              <CardMenuItem onSelect={() => onModerate(!p.hidden)}>
+                <ShieldOff className="mr-2 h-4 w-4" />
+                {p.hidden ? "Put it back up" : "Take it down"}
+              </CardMenuItem>
+            )}
+          </CardMenu>
         }
       />
 
@@ -393,7 +406,7 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
         <ManageProgramSheet
           open={managing}
           onOpenChange={setManaging}
-          name={programName(current.roadmap.program)}
+          name={programHeading(current.roadmap.program)}
           progressLine={programProgressLine({
             programWeek: current.roadmap.programWeek,
             totalWeeks: current.roadmap.totalWeeks,
@@ -413,11 +426,13 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
       <AlertDialog open={deleting} onOpenChange={setDeleting}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {p.title}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              It leaves your programs and the crew. Workouts you already logged stay in your
-              history, and copies other people saved stay theirs.
-              {running ? " It stays on your calendar as it is until you end it from Manage." : ""}
+            <AlertDialogTitle>{deleteCopy.title}</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2" data-delete-lines>
+                {deleteCopy.lines.map((l) => (
+                  <p key={l}>{l}</p>
+                ))}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -426,7 +441,7 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
               className="bg-destructive text-destructive-foreground"
               onClick={onDelete}
             >
-              Delete
+              {deleteCopy.action}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

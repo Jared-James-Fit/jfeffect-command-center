@@ -104,40 +104,64 @@ export function ReactorsSheet({
  * Instagram's "Liked by" line: up to three faces, the other reactions once
  * it isn't only hearts, then "Liked by Marc and 12 others" in plain words.
  * A tap opens the Likes (`onOpen`). Nothing when nobody has liked it. The
- * post card's row has it under its buttons; a post's sheet, under its words.
+ * post card's row has it under its buttons; a post's sheet, under its words;
+ * a post's own screen in the feed (`variant="page"`), in the one quiet line
+ * under its words, where the names give way before the faces and the count.
  */
-export function LikedBy({ post, onOpen, highlight = false, className }: { post: CommunityPost; onOpen: () => void; highlight?: boolean; className?: string }) {
+export function LikedBy({ post, onOpen, highlight = false, className, variant = "row" }: { post: CommunityPost; onOpen: () => void; highlight?: boolean; className?: string; variant?: "row" | "page" }) {
   const pov = usePovViewer();
   const prefetch = usePrefetchPostReactors();
   const people = reactorsSeenAs(post.reactors ?? [], pov, (r) => r.user_id);
   const line = likedByLine({ ...post, reactors: people });
   if (!line) return null;
+  const onScreen = variant === "page";
   // the little ❤️🔥😂 beside the names, once it's not just hearts
   const kinds = reactionKinds(post);
-  const showKinds = kinds.length > 1 || (kinds.length === 1 && kinds[0] !== REACTION.emoji);
+  // (not on a post's screen: its reactions rise out of the heart there, and the width is the names')
+  const showKinds = !onScreen && (kinds.length > 1 || (kinds.length === 1 && kinds[0] !== REACTION.emoji));
   const faces = [...people].sort((a, b) => Number(!!b.is_me) - Number(!!a.is_me)).slice(0, 3);
+  // on a post's screen: "marc and 12 others" can lose its tail to the width, never the "and N others" that is the count
+  const tail = onScreen ? line.who.match(/^(.*?)( and \d[\d,]* others?)$/) : null;
   return (
     <button
       type="button"
       onPointerDown={() => prefetch(post.id)}
-      onClick={onOpen}
-      className={cn("flex max-w-full min-w-0 items-center gap-1.5 rounded-full py-1 pl-1.5 pr-2 text-left hover:bg-muted active:opacity-70", highlight && "engage-chip", className)}
+      onClick={(e) => {
+        // on a post's screen the tap is the Likes', never the post's (no like, no pause)
+        e.stopPropagation();
+        onOpen();
+      }}
+      className={cn(
+        "flex max-w-full min-w-0 items-center gap-1.5 rounded-full text-left active:opacity-70",
+        onScreen ? "relative -my-1 py-1 pr-1 after:absolute after:-inset-y-1.5 after:inset-x-0 after:content-['']" : "py-1 pl-1.5 pr-2 hover:bg-muted",
+        highlight && "engage-chip",
+        className,
+      )}
       aria-label={`${line.lead} ${line.who}. See who liked this`}
       data-who-reacted
+      data-liked-by={variant}
     >
       {faces.length > 0 && (
         <span className="flex shrink-0 -space-x-1.5">
           {faces.map((r) => (
-            <span key={r.user_id} className="rounded-full ring-2 ring-card">
-              <UserAvatar src={r.avatar_url} name={r.is_me ? "You" : r.name} size={22} expandable={false} />
+            <span key={r.user_id} className={cn("rounded-full ring-2", onScreen ? "ring-black/60" : "ring-card")}>
+              <UserAvatar src={r.avatar_url} name={r.is_me ? "You" : r.name} size={onScreen ? 20 : 22} expandable={false} />
             </span>
           ))}
         </span>
       )}
       {showKinds && <span className="shrink-0 text-[13px] leading-none tracking-[-0.15em]">{kinds.join("")}</span>}
-      <span className="truncate text-[13px] text-muted-foreground">
-        {line.lead} <span className="font-semibold text-foreground">{line.who}</span>
-      </span>
+      {tail ? (
+        <span className="flex min-w-0 items-baseline text-[13px] text-foreground/75">
+          <span className="shrink-0">{line.lead}&nbsp;</span>
+          <span className="min-w-0 truncate font-semibold text-foreground">{tail[1]}</span>
+          <span className="shrink-0 whitespace-pre font-semibold text-foreground">{tail[2]}</span>
+        </span>
+      ) : (
+        <span className={cn("truncate text-[13px]", onScreen ? "text-foreground/75" : "text-muted-foreground")}>
+          {line.lead} <span className="font-semibold text-foreground">{line.who}</span>
+        </span>
+      )}
     </button>
   );
 }

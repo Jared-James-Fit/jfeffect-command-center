@@ -60,12 +60,15 @@ import {
 import { SaveMediaButton, useSaveMedia } from "@/components/messages/save-media";
 import { saveItemsOf, saveLabel, warmSave } from "@/lib/save-media";
 import { toast } from "sonner";
-import { haptic } from "@/platform/haptics";
+import { feedback } from "@/lib/feedback";
 import { doubleTapAdds, useLikePops } from "@/lib/message-like";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { listenChannel } from "@/lib/realtime-channel";
 import { useVideoTrimmer } from "@/components/video-trimmer";
 import type { VideoContext } from "@/lib/video-edit/limits";
+import { useFilmCamera } from "@/components/camera/use-film-camera";
+import { videoLimit } from "@/lib/video-edit/limits";
+import { HapticTap } from "@/components/haptic-tap";
 
 async function uploadGroupFile(
   groupId: string,
@@ -114,6 +117,12 @@ export function GroupMessageThread({
   // away and the message posts once its uploads land.
   const uploads = useDraftUploads<GroupAttachment>();
   const trimmer = useVideoTrimmer();
+  // the + menu's Video: filmed in the app's own camera, then sent like a picked video (Library inside it)
+  const filmCamera = useFilmCamera({
+    maxSeconds: videoLimit(videoContext),
+    onClip: (f) => void onPickFiles([f]),
+    onLibrary: () => photoInputRef.current?.click(),
+  });
   const [queuedUploadIds, setQueuedUploadIds] = useState<string[]>([]);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -402,7 +411,7 @@ export function GroupMessageThread({
   // double-tap never takes it back (tap the heart under the message for that).
   const onDoubleTapLike = (messageId: string) => {
     if (!user || !canReact || !likePops.pop(messageId)) return;
-    haptic("light");
+    feedback("like");
     const mine = (qc.getQueryData<GroupReaction[]>(["group-reactions", groupId]) ?? reactions).filter(
       (r) => r.user_id === user.id && r.message_id === messageId,
     );
@@ -443,7 +452,7 @@ export function GroupMessageThread({
     if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
     const t = setTimeout(() => {
       suppressClickRef.current = true;
-      try { (navigator as any).vibrate?.(10); } catch {}
+      feedback("press");
       if (selectionMode) toggleSelected(id);
       else setSheetForId(id);
     }, 450);
@@ -533,7 +542,7 @@ export function GroupMessageThread({
 
   /* ---------------- Composer actions ---------------- */
 
-  const onPickFiles = async (files: FileList | null) => {
+  const onPickFiles = async (files: FileList | File[] | null) => {
     if (!files || !files.length) return;
     const ok = Array.from(files).filter((f) => {
       // Videos are trimmed and shrunk on the phone before upload, so only other files are capped.
@@ -625,6 +634,8 @@ export function GroupMessageThread({
         body: text,
         attachments: [...ready, ...uploaded, ...linkAtts],
       });
+      // sent: the same tick and tap as the coach chat's
+      feedback("send");
       qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
       qc.invalidateQueries({ queryKey: ["chat-groups"] });
     } catch (e: any) {
@@ -632,6 +643,7 @@ export function GroupMessageThread({
       // Nothing posted: hand the text back so it can be retried.
       if (text) setBody((b) => b || text);
       if (ready.length) setAttachments((a) => (a.length ? a : ready));
+      feedback("error");
       toast.error(e?.message ?? "Failed to send");
     } finally {
       drafts.forEach(releaseDraft);
@@ -1021,6 +1033,7 @@ export function GroupMessageThread({
           )}
           <DraftUploadChips drafts={uploads.drafts} store={uploads.store} onRemove={uploads.cancel} />
           {trimmer.element}
+          {filmCamera.element}
 
           <input ref={fileInputRef} type="file" multiple className="hidden"
             onChange={(e) => { void onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
@@ -1080,6 +1093,10 @@ export function GroupMessageThread({
                 canSendGifs={canSendGifs}
                 canSendSounds={canSendSounds}
                 onPickCamera={() => cameraInputRef.current?.click()}
+                onPickVideo={() => {
+                  // where a web page can't film, the phone's own camera, as before
+                  if (!filmCamera.start()) cameraInputRef.current?.click();
+                }}
                 onPickPhotos={() => photoInputRef.current?.click()}
                 onPickFiles={() => fileInputRef.current?.click()}
                 onAttach={canManage ? async (att, noteBody) => {
@@ -1197,13 +1214,14 @@ export function GroupMessageThread({
                   disabled={sending || uploading}
                   aria-busy={sending || uploading || undefined}
                   size="icon"
-                  className="h-10 w-10 shrink-0 rounded-full bg-primary transition-transform active:scale-90"
+                  className="relative h-10 w-10 shrink-0 rounded-full bg-primary transition-transform active:scale-90"
                 >
                   {sending || uploading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Send className="h-4 w-4" />
                   )}
+                  {!(sending || uploading) && <HapticTap />}
                 </Button>
               ) : textOnly ? (
                 <Button type="button" size="icon" disabled className="h-10 w-10 shrink-0 rounded-full bg-primary" aria-label="Send">
@@ -1230,7 +1248,7 @@ export function GroupMessageThread({
       {/* Bulk selection action bar */}
       {selectionMode && (
         <div
-          className="fixed inset-x-0 z-40 flex items-center gap-2 border-t border-border bg-background/95 px-3 py-2 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85"
+          className="phone-column fixed inset-x-0 z-40 flex items-center gap-2 border-t border-border bg-background/95 px-3 py-2 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85"
           style={{ bottom: 0, paddingBottom: "calc(max(env(safe-area-inset-bottom), 0.5rem))" }}
         >
           <Button type="button" variant="ghost" size="sm" className="h-9" onClick={exitSelection}>

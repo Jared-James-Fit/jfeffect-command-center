@@ -34,7 +34,7 @@ export async function postPlanMessage(
       .from("messages")
       .select("id, created_at, attachments")
       .eq("client_id", input.clientId)
-      .contains("attachments", [{ kind: PLAN_MESSAGE_KIND, target_id: plan.id }])
+      .contains("attachments", JSON.stringify([{ kind: PLAN_MESSAGE_KIND, target_id: plan.id }]))
       .order("created_at", { ascending: false })
       .limit(1);
     const last = earlier?.[0];

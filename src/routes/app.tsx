@@ -80,7 +80,7 @@ function AppEntry() {
           </Button>
           {/* Free to join, so it's offered inside the app too (no purchase). */}
           <Button asChild variant="outline" className="w-full" size="lg">
-            <Link to="/join">Create a free account</Link>
+            <Link to="/join">Apply to join free</Link>
           </Button>
         </Card>
 

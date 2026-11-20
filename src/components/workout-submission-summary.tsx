@@ -28,6 +28,7 @@ import { WorkoutFilmRow } from "@/components/workout/shared/workout-film";
 import { PhoneCopyReminder } from "@/components/workout-day/set-video-phone-copy";
 import { useCompletionPreview, usePublicSessionTitle } from "@/lib/community.queries";
 import { SoundToggleButton } from "@/components/sound-toggle";
+import { feedback } from "@/lib/feedback";
 
 // The share studio (camera, cards, upload) is only fetched the first time
 // someone taps Share workout, so the recap itself stays light.
@@ -132,6 +133,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     const fire = () => {
       if (stingPlayedRef.current) return;
       stingPlayedRef.current = true;
+      // the finish's tap lands with the reveal (a headline PR its success tap); the sting is its sound
+      feedback(stingRef.current === "pr" ? "pr" : "workout", { sound: false });
       void import("@/lib/achievement-music").then(({ playSting }) => {
         if (stingPlayedRef.current) stopStingRef.current = playSting(stingRef.current);
       });

@@ -280,7 +280,7 @@ function ProfileBox({ entry }: { entry: EntryPublic }) {
       ) : (
         <div className="mt-4 grid grid-cols-2 gap-2">
           <Button asChild className="h-11">
-            <Link to="/join">Create a free account</Link>
+            <Link to="/join">Apply to join free</Link>
           </Button>
           <Button asChild variant="outline" className="h-11">
             <Link to="/auth" search={{ next: here }}>

@@ -129,7 +129,7 @@ describe("carousel viewer", () => {
     expect(card).toMatch(/snap-x snap-mandatory overflow-x-auto/);
     // an automated post's painted card can lead the post's own slides, or follow them
     expect(card).toMatch(/\{index \+ 1\}\/\{count\}/);
-    expect(card).toContain("const count = slides.length + off + (trail ? 1 : 0);");
+    expect(card).toContain("const count = slides.length + off + (hasTrail ? 1 : 0);");
     expect(card).toMatch(/const near = Math\.abs\(i - index\) <= 1 \|\| i < seen;/);
     // no rubber-band at the ends, so a back swipe on slide 1 is clean
     expect(card).toMatch(/overscrollBehaviorX: "none"/);

@@ -118,7 +118,7 @@ describe("the planned weight is the same blue fill chip as Suggested", () => {
     const ready = plannedLoadView({ percentage: 92.5, basis: "top_set", rpe: "6", unit: "lb", planned: 400, open: 400, linked: { value: 435, unit: "lb" } })!;
     const chip = renderToStaticMarkup(createElement(PlannedLoadCell, { view: ready, onApply: async () => 2 }));
     expect(chip).toContain('data-testid="load-apply"');
-    expect(chip).toContain("border-blue-500/40 bg-blue-500/10");
+    expect(chip).toContain("rounded-md border border-border bg-background");
     expect(chip).toContain("Log your open sets at 400 lb");
     expect(chip).toContain('data-testid="load-planned-info"');
     // nothing to fill (read-only, every set logged): the value, the whole half opens the explanation

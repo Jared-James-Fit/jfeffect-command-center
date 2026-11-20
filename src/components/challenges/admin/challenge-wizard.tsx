@@ -101,7 +101,7 @@ const TIMEZONES = [
  * on wider screens it sits at the end of the form. The form keeps room for it.
  */
 const ACTION_BAR =
-  "fixed inset-x-0 z-30 flex gap-2 border-t border-border bg-background px-4 py-3 md:static md:mt-8 md:border-0 md:bg-transparent md:px-0 md:py-0";
+  "phone-column fixed inset-x-0 z-30 flex gap-2 border-t border-border bg-background px-4 py-3 md:static md:mt-8 md:border-0 md:bg-transparent md:px-0 md:py-0";
 const ACTION_BAR_STYLE = { bottom: "calc(var(--bottom-nav-clearance, 0px) + env(safe-area-inset-bottom))" };
 const ACTION_BAR_ROOM = <div className="h-24 md:hidden" aria-hidden />;
 

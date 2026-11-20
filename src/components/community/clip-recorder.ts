@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { baseMediaType } from "@/lib/community";
 import { RECORD_MAX_SECONDS } from "@/lib/video-edit/limits";
-import { getMicStream } from "@/lib/audio-session";
+import { micRefused, openVideoMic } from "@/lib/video-mic";
 import { pickType, recorderBitrate, recorderTypes } from "@/lib/camera/film-settings";
 
 /** The longest clip the camera records (a story's length; longer clips come from the library and get trimmed). */
@@ -91,15 +91,20 @@ export function useClipRecorder({ getStream, onClip }: { getStream: () => MediaS
     starting.current = true;
     released.current = false;
     // The mic, for the clip's sound, with iOS's audio session switched to recording first
-    // (on "ambient" WebKit refuses the mic and the clip came out silent). A no still films, silently.
+    // (on "ambient" WebKit refuses the mic and the clip came out silent), and the room as it
+    // sounds from the phone's own mic, never a call's processing (video-mic.ts). A no still films, silently.
     let audio: MediaStream | null = null;
     let restore: (() => void) | null = null;
-    try {
-      const got = await getMicStream(true);
-      audio = got.stream;
-      restore = got.restore;
-    } catch {
-      audio = null;
+    // asked inside the hold, so a mic already allowed is used without asking again; a
+    // "Don't Allow" this visit films silently instead of asking on every clip
+    if (!micRefused()) {
+      try {
+        const got = await openVideoMic();
+        audio = got.stream;
+        restore = got.restore;
+      } catch {
+        audio = null;
+      }
     }
     starting.current = false;
     if (getStream() !== stream) {

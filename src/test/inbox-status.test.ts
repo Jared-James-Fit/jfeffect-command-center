@@ -104,20 +104,25 @@ describe("missed requests", () => {
 });
 
 describe("latestToReview", () => {
-  const row = (client: string, h: number, type = "weekly_checkin", kind: "checkin" | "form" = "checkin") =>
-    ({ client_id: client, kind, type, submitted_at: ago(h) });
-  it("counts only the latest filled check-in per type, not the whole history", () => {
+  const row = (client: string, h: number, type = "weekly_checkin", kind: "checkin" | "form" = "checkin", reviewed = false) =>
+    ({ client_id: client, kind, type, submitted_at: ago(h), reviewed });
+  it("counts only the client's newest of each type, not the whole history", () => {
     const rows = [row("a", 24 * 2), row("a", 24 * 9), row("a", 24 * 12)];
-    expect(latestToReview(rows, new Map(), now)).toHaveLength(1);
+    expect(latestToReview(rows, now)).toHaveLength(1);
   });
-  it("a check-in stops needing review once I reply after it, or after 14 days", () => {
-    expect(latestToReview([row("a", 30)], new Map([["a", ago(10)]]), now)).toHaveLength(0);
-    expect(latestToReview([row("a", 30)], new Map([["a", ago(40)]]), now)).toHaveLength(1);
-    expect(latestToReview([row("a", 24 * 15)], new Map(), now)).toHaveLength(0);
+  it("reviewing the newest never brings an older one back", () => {
+    const rows = [row("a", 24 * 2, "weekly_checkin", "checkin", true), row("a", 24 * 9)];
+    expect(latestToReview(rows, now)).toHaveLength(0);
   });
-  it("forms rely on reviewed_at (filtered upstream): latest per form, no reply rule", () => {
-    const rows = [row("a", 5, "f1", "form"), row("a", 50, "f1", "form"), row("a", 6, "f2", "form")];
-    expect(latestToReview(rows, new Map([["a", ago(1)]]), now)).toHaveLength(2);
+  it("stops waiting once reviewed (a staff reply marks it), or after the 30-day window", () => {
+    expect(latestToReview([row("a", 30, "weekly_checkin", "checkin", true)], now)).toHaveLength(0);
+    expect(latestToReview([row("a", 24 * 20)], now)).toHaveLength(1);
+    expect(latestToReview([row("a", 24 * 31)], now)).toHaveLength(0);
+    expect(latestToReview([{ ...row("a", 5), superseded: true }], now)).toHaveLength(0);
+  });
+  it("each form is its own type; a check-in and a form never replace each other", () => {
+    const rows = [row("a", 5, "f1", "form"), row("a", 50, "f1", "form"), row("a", 6, "f2", "form"), row("a", 7)];
+    expect(latestToReview(rows, now)).toHaveLength(3);
   });
 });
 

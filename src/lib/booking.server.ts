@@ -23,7 +23,13 @@ import {
   type BusyInterval,
   type Slot,
 } from "@/lib/booking-slots";
-import { bookedLocation, isTrainingSessionType, locationLabel, type BookingType } from "@/lib/booking-types";
+import {
+  audienceAllows,
+  bookedLocation,
+  isTrainingSessionType,
+  locationLabel,
+  type BookingType,
+} from "@/lib/booking-types";
 import {
   isHardOpen,
   planAvailability,
@@ -34,6 +40,7 @@ import {
   type BusyItem,
 } from "@/lib/smart-availability";
 import { googleBusyForBooking } from "@/lib/session-conflicts";
+import { INVITE_DAYS } from "@/lib/booking-invite";
 import {
   addDaysISO,
   DEFAULT_TZ,
@@ -82,7 +89,18 @@ export async function loadBookingType(admin: Admin, slug: string): Promise<Booki
     .toLowerCase();
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(clean)) return null;
   const { data } = await admin.from("booking_cards").select("*").eq("slug", clean).maybeSingle();
-  if (!data || !(data as any).is_active || !(data as any).online_enabled) return null;
+  return liveType(admin, data);
+}
+
+/** A live booking type by its id (a personal link names its type by id, so a renamed link still works). */
+export async function loadBookingTypeById(admin: Admin, id: string): Promise<BookingType | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const { data } = await admin.from("booking_cards").select("*").eq("id", id).maybeSingle();
+  return liveType(admin, data);
+}
+
+async function liveType(admin: Admin, data: unknown): Promise<BookingType | null> {
+  if (!data || !(data as any).is_active || !(data as any).online_enabled || !(data as any).slug) return null;
   const [{ data: hours }, settings] = await Promise.all([
     admin
       .from("booking_card_hours" as any)
@@ -419,6 +437,10 @@ export type BookingClient = {
   full_name: string | null;
   email: string | null;
   phone: string | null;
+  /** 'coaching' or 'self_serve' (a JF member, no coach). */
+  service_tier?: string | null;
+  /** Their login: a call they book shows in their coach chat, from them. */
+  user_id?: string | null;
 };
 
 export type BookingResult = {
@@ -452,13 +474,35 @@ export async function clientIdByEmail(admin: Admin, email: string): Promise<stri
   return rows.length === 1 ? (rows[0].id as string) : null;
 }
 
+/**
+ * Who's signed in, when someone is (the page's server calls carry their token):
+ * staff or not, and their own client record (null for a coach with no athlete
+ * account, a JF member still waiting on approval, or anyone archived).
+ */
+export async function loadBookingViewer(
+  admin: Admin,
+  userId: string,
+): Promise<{ userId: string; staff: boolean; client: BookingClient | null }> {
+  const [{ data: roles }, { data: c }] = await Promise.all([
+    admin.from("user_roles").select("role").eq("user_id", userId),
+    admin
+      .from("clients")
+      .select("id, full_name, email, phone, archived, service_tier, user_id")
+      .eq("user_id", userId)
+      .limit(2),
+  ]);
+  const staff = ((roles ?? []) as any[]).some((r) => r.role === "admin" || r.role === "coach");
+  const rows = ((c ?? []) as any[]).filter((r) => !r.archived);
+  return { userId, staff, client: rows.length === 1 ? (rows[0] as BookingClient) : null };
+}
+
 export async function loadBookingClient(
   admin: Admin,
   clientId: string,
 ): Promise<BookingClient | null> {
   const { data } = await admin
     .from("clients")
-    .select("id, full_name, email, phone, archived")
+    .select("id, full_name, email, phone, archived, service_tier, user_id")
     .eq("id", clientId)
     .maybeSingle();
   return data && !(data as any).archived ? (data as BookingClient) : null;
@@ -535,6 +579,11 @@ export async function createOnlineBooking(
   const tz = type.timezone || DEFAULT_TZ;
   const when = new Date(opts.startISO);
   if (Number.isNaN(when.getTime())) throw new BookingError("invalid", "Pick a time first.");
+  // A clients-only type (General Call) is never booked by the public or a JF member,
+  // whichever way the request came in.
+  if (!audienceAllows(type, trustedClient ? { serviceTier: trustedClient.service_tier } : null)) {
+    throw new BookingError("invalid", "This booking is for JF Effect coaching clients. Sign in with your client account to book it.");
+  }
 
   if (!trustedClient) {
     // A shared link can't be used to fill the calendar.
@@ -602,13 +651,26 @@ export async function createOnlineBooking(
       .eq("id", claimId);
   }
 
+  // A call a client booked, or anything booked from the coach's personal link (a text or an
+  // email reaches no chat), shows in their coach chat, unless the coach's invite card already does.
+  const inChat =
+    !!trustedClient &&
+    result.kind === "session" &&
+    (!isTrainingSessionType(type.session_type) || opts.via === "booking_page")
+      ? await postSelfBookedCall(admin, { client: trustedClient, type, sessionId: result.id, now })
+      : false;
+
   await notifyCoaches(admin, {
     who: trustedClient?.full_name || booker.name,
     typeName: type.name,
     start: new Date(result.start),
     tz,
     noCredit: !!result.noCreditLeft,
-    url: trustedClient ? `/admin/clients/${trustedClient.id}` : "/admin/calendar?tab=upcoming",
+    url: trustedClient
+      ? inChat
+        ? `/admin/messages?client=${trustedClient.id}`
+        : `/admin/clients/${trustedClient.id}`
+      : "/admin/calendar?tab=upcoming",
     eventKey: `booking:${result.id}`,
   });
   return result;
@@ -814,6 +876,88 @@ async function bookAppointment(
     durationMin: type.duration_minutes,
   };
 }
+
+/**
+ * A call a client booked themselves (their app, or a personal link) goes in
+ * their coach chat as a message from them with the call as a card, read live,
+ * so the coach sees it where they talk. Skipped when it came from the coach's
+ * booking invite: that card already shows it as booked. Never fails the
+ * booking (it's saved; the coach's push still goes). True when it posted.
+ */
+async function postSelfBookedCall(
+  admin: Admin,
+  o: { client: BookingClient; type: BookingType; sessionId: string; now: Date },
+): Promise<boolean> {
+  try {
+    const { client, type, sessionId, now } = o;
+    if (!client.user_id) return false; // no login, no chat
+    const { selfBookedMessageBody, bookedCard, inviteCoversBooking } = await import("@/lib/session-booked");
+    const { data: invites } = await admin
+      .from("messages")
+      .select("attachments, created_at")
+      .eq("client_id", client.id)
+      // JSON text, never a JS array: supabase-js sends an array as a Postgres array literal, which jsonb refuses (HTTP 400)
+      .contains("attachments", JSON.stringify([{ kind: "booking_invite", booking_card_id: type.id }]))
+      .gt("created_at", new Date(now.getTime() - INVITE_CARD_DAYS * 86_400_000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const invite = ((invites ?? []) as any[])[0];
+    const sentAt: string | null =
+      ((invite?.attachments ?? []) as any[]).find(
+        (a) => a?.kind === "booking_invite" && a?.booking_card_id === type.id,
+      )?.sent_at ?? invite?.created_at ?? null;
+    if (sentAt) {
+      // The invite card shows the first booking of this type made after it was sent.
+      const [s, a] = await Promise.all([
+        admin
+          .from("pt_sessions")
+          .select("id, created_at")
+          .eq("client_id", client.id)
+          .eq("booking_card_id", type.id)
+          .gte("created_at", sentAt),
+        admin
+          .from("appointments")
+          .select("id, created_at")
+          .eq("client_id", client.id)
+          .eq("booking_card_id", type.id)
+          .gte("created_at", sentAt),
+      ]);
+      const since = [...((s.data ?? []) as any[]), ...((a.data ?? []) as any[])];
+      if (inviteCoversBooking(sessionId, since)) return false;
+    }
+
+    const { data: row } = await admin
+      .from("pt_sessions")
+      .select("id, title, session_type, session_date, start_time, end_time, location, wants_meet")
+      .eq("id", sessionId)
+      .maybeSingle();
+    if (!row) return false;
+    const at = now.toISOString();
+    const { error } = await admin.from("messages").insert({
+      client_id: client.id,
+      sender_id: client.user_id,
+      sender_role: "client",
+      body: selfBookedMessageBody(row as any),
+      attachments: [{ ...bookedCard([row as any]), booked_by: "client" }],
+      message_type: "Scheduling",
+      is_internal_note: false,
+      delivery_status: "sent",
+      sent_at: at,
+      read_by_client_at: at,
+    } as any);
+    if (error) {
+      console.warn("[booking] chat message failed", error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn("[booking] chat message failed", e);
+    return false;
+  }
+}
+
+/** A booking invite older than this (a personal link's life) no longer stands in for the chat message. */
+const INVITE_CARD_DAYS = INVITE_DAYS;
 
 /** Coaching application flow: tie the booked call back to the application. */
 async function linkApplication(

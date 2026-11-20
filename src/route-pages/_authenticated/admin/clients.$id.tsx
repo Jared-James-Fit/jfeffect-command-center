@@ -18,8 +18,7 @@ import { ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2
 import { adminClientAgreementDetail } from "@/lib/coaching-agreement.functions";
 import { ADMIN_AGREEMENT_QUERY_ROOT } from "@/components/coaching-agreement/admin-agreement-parts";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ShareBookingSheet } from "@/components/booking/share-booking-sheet";
-import { useBookingTypes } from "@/components/booking/use-booking-types";
+import { ClientScheduleSheet } from "@/components/messages/booking-invite";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -193,8 +192,9 @@ export function ClientProfileWorkspace({
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [priceCardOpen, setPriceCardOpen] = useState(false);
   const [bookingLinkOpen, setBookingLinkOpen] = useState(false);
-  const { data: bookingTypes = [] } = useBookingTypes(bookingLinkOpen);
   const [quickBookOpen, setQuickBookOpen] = useState(false);
+  // Schedule's "Pick the time yourself": the booking dialog on the type (and length) picked there.
+  const [quickBookCard, setQuickBookCard] = useState<any>(null);
   const [checkInResponseOpen, setCheckInResponseOpen] = useState(false);
   const inviteFn = useServerFn(inviteClient);
   const deleteFn = useServerFn(deleteClient);
@@ -535,7 +535,7 @@ export function ClientProfileWorkspace({
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Scheduling & Offers</DropdownMenuLabel>
-        <DropdownMenuItem onSelect={() => setQuickBookOpen(true)}><Calendar className="mr-2 h-4 w-4" />Book 1:1</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => { setQuickBookCard(null); setQuickBookOpen(true); }}><Calendar className="mr-2 h-4 w-4" />Book 1:1</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send booking link</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign offer / price card</DropdownMenuItem>
         {form.drive_folder_link && (
@@ -1217,7 +1217,7 @@ export function ClientProfileWorkspace({
           Sits above the mobile bottom nav with safe-area padding. */}
       {isDirty && (
         <div
-          className="fixed inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.4)]"
+          className="phone-column fixed inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.4)]"
           style={{ bottom: 0, paddingBottom: "env(safe-area-inset-bottom)" }}
         >
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 md:px-8">
@@ -1272,17 +1272,18 @@ export function ClientProfileWorkspace({
       <PtSessionDialog
         open={quickBookOpen}
         onOpenChange={setQuickBookOpen}
+        initialCard={quickBookCard}
         clientId={id}
         clients={[{ id, full_name: form.full_name, timezone: form.timezone, default_session_location: form.default_session_location, package_tracking_enabled: form.package_tracking_enabled, sessions_purchased: form.sessions_purchased, sessions_used: form.sessions_used }]}
       />
-      <ShareBookingSheet
-        target={null}
-        choices={bookingTypes
-          .filter((t) => t.is_active && t.online_enabled && t.slug && (t.hours ?? []).length)
-          .map((t) => ({ name: t.name, slug: t.slug! }))}
+      <ClientScheduleSheet
+        clientId={id}
         open={bookingLinkOpen}
         onOpenChange={setBookingLinkOpen}
-        client={{ id, full_name: form.full_name ?? null, email: form.email ?? null, phone: form.phone ?? null }}
+        onBookYourself={(t) => {
+          setQuickBookCard(t);
+          setQuickBookOpen(true);
+        }}
       />
 
       <ManualCheckInReviewComposer

@@ -209,8 +209,10 @@ describe("filming a set opens the app's camera, never iOS's 480p Take Video", ()
   });
   it("records the person's settings at a phone camera's bitrate, the mic only when filming and only with sound on", () => {
     expect(cam).toContain("videoBitsPerSecond: rate");
-    expect(cam).toContain("if (settingsRef.current.sound) {");
-    expect(cam).toContain("await getMicStream(true)");
+    expect(cam).toContain("if (settingsRef.current.sound && !micRefused()) {");
+    // the room as it sounds, from the phone's own mic (video-mic.ts), never a call's processing
+    expect(cam).toContain("const got = await openVideoMic();");
+    expect(cam).not.toContain("getMicStream(true)");
     expect(cam).toContain('wl.request("screen")');
     expect(cam).toContain("data-film-lenses");
     expect(cam).toContain("data-film-torch");
@@ -220,13 +222,15 @@ describe("filming a set opens the app's camera, never iOS's 480p Take Video", ()
   it("the phone can turn on its side to film while the camera is up", () => {
     const portrait = read("src/components/portrait-only.tsx");
     // the lock is let go while the camera's up, and put back when it closes
-    expect(portrait).toContain("if (isCameraOpen()) unlockPortrait();");
+    expect(portrait).toContain("const free = () => isCameraOpen() || fullscreenNow();");
+    expect(portrait).toContain("if (free()) unlockPortrait();");
     expect(portrait).toContain("window.addEventListener(CAMERA_OPEN_EVENT, onCamera);");
   });
   it("the Crew studio records at the picture's bitrate with the mic asked for the iOS way", () => {
     const rec = read("src/components/community/clip-recorder.ts");
     expect(rec).not.toContain("videoBitsPerSecond: 3_000_000");
     expect(rec).toContain("videoBitsPerSecond: recorderBitrate(w, h, fps)");
-    expect(rec).toContain("const got = await getMicStream(true);");
+    expect(rec).toContain("const got = await openVideoMic();");
+    expect(rec).not.toContain("getMicStream(true)");
   });
 });

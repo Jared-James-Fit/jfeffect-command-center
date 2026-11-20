@@ -6,7 +6,8 @@
  * chat). A clip filmed in the app and never saved says so before it's
  * removed, with Save to Photos first: removing it would leave it nowhere. A
  * clip on its way shows how far it's got, with Try again / Cancel when it
- * didn't send.
+ * didn't send. Under a clip, its bar path & speed (lift-analysis-entry.tsx:
+ * read by itself after a barbell set is sent, one line, the full view a tap).
  */
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -17,6 +18,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SetVideoMovePicker } from "@/components/workout-day/set-video-move";
+import { LiftAnalysisEntry } from "@/components/lift-analysis/lift-analysis-entry";
 import { ChatVideoTile } from "@/components/chat-video-tile";
 import { useChatSignedUrls } from "@/hooks/use-chat-signed-urls";
 import { supabase } from "@/integrations/supabase/client";
@@ -343,6 +345,15 @@ export default function SetVideoSheet({
                     </DropdownMenu>
                   )}
                 </div>
+                {!busyHere && (
+                  <LiftAnalysisEntry
+                    setVideoId={v.id}
+                    src={urls[v.storage_path]}
+                    poster={v.thumbnail_path ? urls[v.thumbnail_path] : undefined}
+                    exerciseName={exerciseName}
+                    setLabel={v.label || setTitle(setIndex)}
+                  />
+                )}
                 {canMove && moving === v.id && (
                   <SetVideoMovePicker
                     video={v}

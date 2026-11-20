@@ -1,4 +1,3 @@
-import { playAppSound } from "@/lib/app-sounds";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pause, Play, RotateCcw, Timer, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,6 +14,7 @@ import {
   subscribeRestTimer,
   type RestTimerState,
 } from "@/lib/rest-timer-store";
+import { feedback } from "@/lib/feedback";
 
 /**
  * Compact rest-timer chip.
@@ -84,9 +84,9 @@ function useRestTimer({ seconds, onStart, scopeKey, timerId }: RestTimerProps) {
     vibratedRef.current = mine.startedAt;
     // Only buzz if the finish just happened while we're looking at it.
     if (Date.now() - mine.endsAt > 3000) return;
-    try { navigator?.vibrate?.([180, 80, 180]); } catch { /* no-op */ }
-    // iPhone web can't vibrate: two gentle chimes say rest is over.
-    playAppSound("timer");
+    // rest is over: the timer's long buzz and two gentle chimes (an iPhone's web view can't
+    // buzz from a timer, so there the chimes say it)
+    feedback("timer");
   }, [mine, mine && restRemainingMs(mine)]);
 
   const disabled = !seconds || seconds <= 0;

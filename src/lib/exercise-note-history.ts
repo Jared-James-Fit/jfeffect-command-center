@@ -18,6 +18,8 @@ export interface ExerciseNoteHistoryRow {
   status: string;
   created_at: string;
   updated_at: string;
+  /** When its words last changed (null: never edited). */
+  edited_at?: string | null;
   day_id: string | null;
   pl_days?: {
     title?: string | null;
@@ -43,8 +45,10 @@ export interface NoteHistoryFilter {
 
 /**
  * Newest-first history for one exercise, excluding the current workout's
- * note. Pure — takes already-fetched rows so callers control caching
- * (TanStack Query) and no N+1 fetch happens during workout render.
+ * note, by the day each note was written (`created_at`): editing an old note
+ * never moves it up the list. Blank notes are left out. Pure — takes
+ * already-fetched rows so callers control caching (TanStack Query) and no
+ * N+1 fetch happens during workout render.
  */
 export function selectExerciseNoteHistory(
   rows: readonly ExerciseNoteHistoryRow[] | null | undefined,
@@ -56,13 +60,14 @@ export function selectExerciseNoteHistory(
   return (rows ?? [])
     .filter((n) => {
       if (!n?.id) return false;
+      if (!(n.content ?? "").trim()) return false;
       if (opts.excludeNoteId && n.id === opts.excludeNoteId) return false;
       if (opts.excludeDayId && n.day_id && n.day_id === opts.excludeDayId) return false;
       if (id) return n.exercise_id === id;
       if (!name) return false;
       return (n.exercise_name ?? "").trim().toLowerCase() === name;
     })
-    .sort((a, b) => Date.parse(b.updated_at ?? "") - Date.parse(a.updated_at ?? ""))
+    .sort((a, b) => Date.parse(b.created_at ?? b.updated_at ?? "") - Date.parse(a.created_at ?? a.updated_at ?? ""))
     .slice(0, limit);
 }
 

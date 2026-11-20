@@ -74,6 +74,7 @@ import {
   type SetVideoJob,
 } from "@/lib/set-videos/jobs";
 import { linkFilmed } from "@/lib/set-videos/phone-copy";
+import { clipMicNote } from "@/lib/video-mic";
 import {
   outboxDelete,
   outboxForUser,
@@ -428,6 +429,8 @@ async function runJob(id: string) {
         orig_mb: mb(picked.file.size),
         sent_mb: mb(prepared.size),
         ua: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 160) : null,
+        // filmed in the app: what its sound came from ("raw 2ch 48k own"), so a real phone's recording can be checked
+        mic: clipMicNote(picked.file.name),
       };
       const clip = {
         file: prepared,
@@ -520,6 +523,15 @@ async function runJob(id: string) {
       posterRec.posterUploaded ? (posterRec.posterPath ?? null) : null,
       signal,
     );
+    // bar path and speed, read on this phone from the very file just sent (lift-analysis/auto.ts:
+    // barbell lifts only, a quiet moment, nothing downloaded again)
+    const sentFile = preparedFiles.get(id) ?? rec.file ?? null;
+    if (sentFile && res.id && !res.existed) {
+      const setVideoId = res.id;
+      void import("@/lib/lift-analysis/auto")
+        .then((m) => m.queueLiftAnalysis({ setVideoId, file: sentFile, exerciseName: job.exerciseName }))
+        .catch(() => {});
+    }
     await outboxDelete(id);
     attempts.delete(id);
     posterSends.delete(id);

@@ -184,10 +184,46 @@ async function ensureClientFolder(supabase: any, clientId: string) {
   return payload;
 }
 
+/**
+ * The caller may add media for this client: an admin, the client's active
+ * assigned coach, or the client themselves (createSubmission's rule, used by
+ * every Drive upload step so none of them can be pointed at someone else).
+ */
+async function assertCanUploadForClient(context: { supabase: any; userId: string }, clientId: string) {
+  const supabaseAdmin = await getAdminClient();
+  const isAdmin = await context.supabase
+    .from("user_roles" as any)
+    .select("role")
+    .eq("user_id", context.userId)
+    .then(({ data: roles }: any) => roles?.some((r: any) => r.role === "admin"));
+  if (isAdmin) return;
+  const { data: client, error: clientError } = await (supabaseAdmin as any)
+    .from("clients")
+    .select("id,user_id,assigned_coach_id")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (clientError) throw clientError;
+  const isAssignedCoach = client?.assigned_coach_id
+    ? await (supabaseAdmin as any)
+      .from("coaches")
+      .select("id")
+      .eq("id", client.assigned_coach_id)
+      .eq("user_id", context.userId)
+      .eq("archived", false)
+      .eq("status", "Active")
+      .maybeSingle()
+      .then(({ data: coach }: any) => !!coach)
+    : false;
+  if (!isAssignedCoach && (!client || client.user_id !== context.userId)) {
+    throw new Error("You can only add media for your own client profile.");
+  }
+}
+
 export const provisionClientFolder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { clientId: string }) => z.object({ clientId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
+    await assertCanUploadForClient(context, data.clientId);
     return ensureClientFolder(context.supabase, data.clientId);
   });
 
@@ -204,6 +240,7 @@ export const initMediaUpload = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
+    await assertCanUploadForClient(context, data.clientId);
     const { driveInitResumableUpload } = await getDriveHelpers();
     // Hard-block uploads if Drive isn't Ready so clients never hit a broken pipeline.
     const s = await loadSettings(context.supabase);
@@ -235,6 +272,7 @@ export const finalizeMediaUpload = createServerFn({ method: "POST" })
     driveFolderId?: string | null; fileName?: string | null; mimeType?: string | null; sizeBytes?: number | null;
   }) => d)
   .handler(async ({ data, context }) => {
+    await assertCanUploadForClient(context, data.clientId);
     const supabaseAdmin = await getAdminClient();
     const { driveGetFile, driveShareAnyoneReader, driveEmbedUrl, driveViewUrl } = await getDriveHelpers();
     let meta: any = null;
@@ -280,33 +318,8 @@ export const createSubmission = createServerFn({ method: "POST" })
     urgent?: boolean; painNote?: string | null; clipCount: number; role: "admin" | "client";
   }) => d)
   .handler(async ({ data, context }) => {
+    await assertCanUploadForClient(context, data.clientId);
     const supabaseAdmin = await getAdminClient();
-    const isAdmin = await context.supabase
-      .from("user_roles" as any)
-      .select("role")
-      .eq("user_id", context.userId)
-      .then(({ data: roles }: any) => roles?.some((r: any) => r.role === "admin"));
-    const { data: client, error: clientError } = await (supabaseAdmin as any)
-      .from("clients")
-      .select("id,user_id,assigned_coach_id")
-      .eq("id", data.clientId)
-      .maybeSingle();
-    const isAssignedCoach = client?.assigned_coach_id
-      ? await (supabaseAdmin as any)
-        .from("coaches")
-        .select("id")
-        .eq("id", client.assigned_coach_id)
-        .eq("user_id", context.userId)
-        .eq("archived", false)
-        .eq("status", "Active")
-        .maybeSingle()
-        .then(({ data: coach }: any) => !!coach)
-      : false;
-
-    if (clientError) throw clientError;
-    if (!isAdmin && !isAssignedCoach && (!client || client.user_id !== context.userId)) {
-      throw new Error("You can only create submissions for your own client profile.");
-    }
 
     const { data: row, error } = await ((supabaseAdmin as any).from("media_submissions") as any).insert({
       client_id: data.clientId,

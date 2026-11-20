@@ -5,7 +5,7 @@
  * Best-effort: a table that can't be read leaves that part out, never the
  * check-in itself.
  */
-import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts";
+import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-request";
 import { planCheckin, type CheckinPlan, type PlanInput, type ProgressSchedule } from "@/lib/checkin-coordination/plan";
 import { foldGaps, foldOptions, type FoldQuestion } from "@/lib/checkin-coordination/nutrition-fold";
 
@@ -30,7 +30,7 @@ export async function loadNutritionSide(sb: any, clientId: string, due: string, 
           .select("created_at")
           .eq("client_id", clientId)
           .gte("created_at", `${addDays(due, -14)}T00:00:00Z`)
-          .contains("attachments", [{ kind: "form_request", form_id: NUTRITION_REQUEST_FORM_ID }])
+          .contains("attachments", JSON.stringify([{ kind: "form_request", form_id: NUTRITION_REQUEST_FORM_ID }]))
           .order("created_at", { ascending: false })
           .limit(1),
       [],

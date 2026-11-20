@@ -460,6 +460,13 @@ jobs:
             echo "✅ $k: $v"
           done
           grep -o '"appendUserAgent": *"[^"]*"' "$APP/capacitor.config.json" || echo "::warning::No build number stamp in capacitor.config.json"
+          # And that the iPhone app going to TestFlight is portrait only (Capacitor's
+          # CAPBridgeViewController reads this list for supportedInterfaceOrientations).
+          ORI=$(/usr/libexec/PlistBuddy -c "Print :UISupportedInterfaceOrientations" "$APP/Info.plist" 2>/dev/null) || { echo "::error::UISupportedInterfaceOrientations is missing from the built app"; exit 1; }
+          echo "$ORI"
+          if echo "$ORI" | grep -q "Landscape\|PortraitUpsideDown"; then echo "::error::The built iPhone app can turn sideways"; exit 1; fi
+          echo "$ORI" | grep -q "UIInterfaceOrientationPortrait" || { echo "::error::The built iPhone app has no portrait orientation"; exit 1; }
+          echo "✅ iPhone app: portrait only"
 
       - name: Export and Upload to TestFlight
         run: |

@@ -31,6 +31,8 @@ export function freeSignupRedirect(origin: string): string {
 
 export type FreeJoinStatus =
   | "member"
+  | "pending"
+  | "not_approved"
   | "athlete"
   | "staff"
   | "coach_account"
@@ -42,8 +44,21 @@ export type FreeJoinStatus =
 /** What /welcome says for each answer of member_free_join (null = go into the app). */
 export function freeJoinMessage(
   status: FreeJoinStatus | string | null | undefined,
-): { title: string; body: string } | null {
+): { title: string; body: string; cta?: { to: string; label: string } } | null {
   switch (status) {
+    // free membership is by application (membership-apply.ts)
+    case "pending":
+      return {
+        title: "Your application is in",
+        body: "You'll get an email with your link as soon as it's approved, usually within a day.",
+        cta: { to: "/", label: "Back to JF Effect" },
+      };
+    case "not_approved":
+      return {
+        title: "JF Effect is by application",
+        body: "Applying is free and takes about a minute. I read every one and send your invite once you're approved.",
+        cta: { to: "/join", label: "Apply free" },
+      };
     case "coach_account":
       return {
         title: "Your coach already set you up",

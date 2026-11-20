@@ -108,7 +108,7 @@ async function leagueParticipants(db: any, month: string): Promise<Set<string>> 
 }
 
 async function clientDigest(db: any, clientId: string, today: string) {
-  const { NUTRITION_REQUEST_FORM_ID } = await import("@/lib/nutrition-ai-prompts");
+  const { NUTRITION_REQUEST_FORM_ID } = await import("@/lib/nutrition-request");
   const since14 = new Date(Date.now() - 14 * 86_400_000).toISOString();
   const [{ data: sched }, { data: pending }, { data: asked }, { data: meet }, { data: cl }] = await Promise.all([
     db.from("pl_scheduled_workouts").select("id, source_day_id").eq("client_id", clientId).eq("scheduled_date", today),
@@ -117,7 +117,7 @@ async function clientDigest(db: any, clientId: string, today: string) {
       .gte("created_at", new Date(Date.now() - 4 * 86_400_000).toISOString()).limit(1),
     // the Nutrition Update rides on the same push: one line, never its own reminder
     db.from("messages").select("created_at").eq("client_id", clientId).gte("created_at", since14)
-      .contains("attachments", [{ kind: "form_request", form_id: NUTRITION_REQUEST_FORM_ID }])
+      .contains("attachments", JSON.stringify([{ kind: "form_request", form_id: NUTRITION_REQUEST_FORM_ID }]))
       .order("created_at", { ascending: false }).limit(1),
     db.from("pl_preps").select("event_date, weight_class, archived").eq("client_id", clientId).gte("event_date", today).order("event_date").limit(1),
     db.from("clients").select("user_id").eq("id", clientId).maybeSingle(),

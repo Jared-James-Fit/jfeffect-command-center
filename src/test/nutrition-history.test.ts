@@ -19,7 +19,7 @@ import {
   wantsFreeMeal,
   type PreviousPlan,
 } from "@/lib/nutrition-history";
-import { mealPlanUserPrompt, targetsUserPrompt } from "@/lib/nutrition-ai-prompts";
+import { mealPlanUserPrompt, targetsUserPrompt } from "@/lib/nutrition-ai-prompts.server";
 import { prefillAnswer } from "@/lib/form-prefill";
 
 const LB = 2.2046226;
@@ -118,7 +118,7 @@ describe("previous plan", () => {
   });
 
   it("the targets prompt adjusts from the last plan by rate of change, and doesn't chase early water weight", async () => {
-    const { TARGETS_PROMPT } = await import("@/lib/nutrition-ai-prompts");
+    const { TARGETS_PROMPT } = await import("@/lib/nutrition-ai-prompts.server");
     for (const rule of ["start from the previous plan's numbers", "fat loss: aim for 0.5–1% per week", "muscle gain: aim for 0.25–0.5% per week", "adherence under 4/5 = keep calories the same", "water and glycogen", "CHANGES FROM LAST PLAN", "a free meal on the high day fits inside the high day calories"]) {
       expect(TARGETS_PROMPT).toContain(rule);
     }

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -69,13 +69,38 @@ export function CardMenuSeparator() {
   return mode?.sheet ? <div role="separator" className="mx-1 my-1.5 h-px bg-border" /> : <DropdownMenuSeparator />;
 }
 
-/** The round ⋯ on the card and its menu: a bottom sheet on a phone, a dropdown elsewhere. */
-export function CardMenu({ name, buttonClassName, children }: { name: string; buttonClassName: string; children: ReactNode }) {
+/**
+ * The round ⋯ on the card and its menu: a bottom sheet on a phone, a dropdown
+ * elsewhere. Pages use it too (Workouts' ⋯, a program's ⋯): `ariaLabel`,
+ * `vertical` and `align` fit it to a page header, `description` says what the
+ * sheet is for to a screen reader.
+ */
+export function CardMenu({
+  name,
+  buttonClassName,
+  children,
+  ariaLabel,
+  vertical = false,
+  align = "start",
+  description = "Options for this exercise",
+  iconClassName = "h-4 w-4",
+}: {
+  name: string;
+  buttonClassName: string;
+  children: ReactNode;
+  ariaLabel?: string;
+  /** ⋮ instead of ⋯ */
+  vertical?: boolean;
+  align?: "start" | "end";
+  description?: string;
+  iconClassName?: string;
+}) {
   const phone = useIsMobile();
   const [open, setOpen] = useState(false);
+  const Icon = vertical ? MoreVertical : MoreHorizontal;
   const button = (props: Record<string, unknown> = {}) => (
-    <Button type="button" size="sm" variant="ghost" data-no-swipe className={buttonClassName} aria-label={`More options for ${name}`} {...props}>
-      <MoreHorizontal className="h-4 w-4" />
+    <Button type="button" size="sm" variant="ghost" data-no-swipe className={buttonClassName} aria-label={ariaLabel ?? `More options for ${name}`} {...props}>
+      <Icon className={iconClassName} />
     </Button>
   );
 
@@ -93,7 +118,7 @@ export function CardMenu({ name, buttonClassName, children }: { name: string; bu
           >
             <div aria-hidden className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted-foreground/30" />
             <SheetTitle className="truncate px-3 pb-1 text-base font-semibold">{name}</SheetTitle>
-            <SheetDescription className="sr-only">Options for this exercise</SheetDescription>
+            <SheetDescription className="sr-only">{description}</SheetDescription>
             <CardMenuContext.Provider value={{ sheet: true, close: () => setOpen(false) }}>{children}</CardMenuContext.Provider>
           </SheetContent>
         </Sheet>
@@ -105,7 +130,7 @@ export function CardMenu({ name, buttonClassName, children }: { name: string; bu
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{button()}</DropdownMenuTrigger>
       <DropdownMenuContent
-        align="start"
+        align={align}
         collisionPadding={8}
         className="max-h-[var(--radix-dropdown-menu-content-available-height)] w-80 max-w-[calc(100vw-16px)] overflow-y-auto rounded-xl p-1.5"
       >

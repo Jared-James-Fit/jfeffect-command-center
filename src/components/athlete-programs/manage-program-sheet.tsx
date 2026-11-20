@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { BookOpen, CalendarDays, ChevronRight, Loader2, Pencil, Repeat, StopCircle } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { BookOpen, ChevronRight, Loader2, Pause, Pencil, Repeat, StopCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -21,21 +23,30 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { programError } from "@/lib/athlete-programs";
-import { endProgramCopy, endedToast, type EndCopy, type EndFacts } from "@/lib/my-program";
+import {
+  endProgramCopy,
+  endedToast,
+  pausedToast,
+  type EndCopy,
+  type EndFacts,
+} from "@/lib/my-program";
+import { resumeMyProgram } from "@/lib/member-program-lifecycle.functions";
 import { cn } from "@/lib/utils";
-import { useEndProgram, type ProgramOriginInfo } from "./use-my-program";
+import { refreshAfterProgramChange, useEndProgram, type ProgramOriginInfo } from "./use-my-program";
 
 const PREVIEW = "Preview only: this is how it looks to them.";
 
 /**
- * Everything a member can do with the program on their calendar, in one
- * sheet (Nov 19 2026): the program's name and where it stands at the top,
- * then what changes it safely (edit a program they built, where the upcoming
- * workouts follow; see the JF Effect plan it came from; their training days;
- * switch to another), and End program on its own below them, so a thumb
- * reaching for Switch never lands on it; ending still asks first and says
- * what stays (logged workouts stay in their history). Only for a program they
- * own. A grip and a swipe down close it, like every sheet with one.
+ * The program on a member's calendar, managed in one sheet (Nov 20 2026): its
+ * name and where it stands, then the everyday choices (edit a program they
+ * built or see the JF Effect plan it came from, switch to another, pause it),
+ * and End program on its own below them. Nothing here deletes anything:
+ * pausing, ending and switching all move the program to their program
+ * history (resume or start it over from there), and what they logged stays
+ * in their history, PRs and progress. Pause and End each have Undo on the
+ * toast after; End asks first, saying what comes off the calendar. Training
+ * days live in Workouts' ⋯ (one door). Only for a program they own; a grip
+ * and a swipe down close it.
  */
 export function ManageProgramSheet({
   open,
@@ -44,25 +55,44 @@ export function ManageProgramSheet({
   progressLine,
   origin,
   onEnded,
-  onTrainingDays,
-  daysLabel,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   name: string;
   progressLine?: string | null;
   origin: ProgramOriginInfo;
-  /** after the program ended (the sheet is already closed) */
+  /** after the program was paused or ended (the sheet is already closed) */
   onEnded?: () => void;
-  /** Opens the training days editor in place; without it the row goes to Workouts' own editor. */
-  onTrainingDays?: () => void;
-  /** Their days, beside the row ("Mon, Wed, Fri"). */
-  daysLabel?: string | null;
 }) {
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const resumeFn = useServerFn(resumeMyProgram);
   const { isImpersonating } = useClientImpersonation();
   const { preview, end } = useEndProgram();
   const [confirm, setConfirm] = useState<{ facts: EndFacts; copy: EndCopy } | null>(null);
+  const [pausing, setPausing] = useState(false);
+
+  // Undo after a pause or an end: the same program, back where it was
+  const undo = (key: string | null | undefined, label: string) =>
+    key
+      ? {
+          action: {
+            label: "Undo",
+            onClick: () => {
+              void resumeFn({ data: { key, startDate: null } })
+                .then(() => {
+                  refreshAfterProgramChange(qc);
+                  toast.success(`${label} is back on your calendar.`);
+                })
+                .catch((e) =>
+                  toast.error(
+                    programError(e, "Couldn't undo. Resume it from your program history."),
+                  ),
+                );
+            },
+          },
+        }
+      : {};
 
   const askEnd = async () => {
     if (isImpersonating) return toast.message(PREVIEW);
@@ -78,24 +108,45 @@ export function ManageProgramSheet({
   const doEnd = async () => {
     if (!origin.blockId || !confirm) return;
     try {
-      const done = await end.mutateAsync(origin.blockId);
+      const done = await end.mutateAsync({ blockId: origin.blockId, reason: "ended" });
       setConfirm(null);
       onOpenChange(false);
-      toast.success(endedToast({ name: done.name || name, logged: done.logged }), {
-        action: { label: "Pick a program", onClick: () => navigate({ to: "/portal/programs" }) },
-      });
+      const label = done.name || name;
+      toast.success(endedToast({ name: label }), { duration: 8000, ...undo(done.key, label) });
       onEnded?.();
     } catch (e) {
       toast.error(programError(e, "Couldn't end it. Try again."));
     }
   };
 
+  // Pausing is one tap: nothing is lost and Undo is right there
+  const doPause = async () => {
+    if (isImpersonating) return toast.message(PREVIEW);
+    if (!origin.blockId) return;
+    setPausing(true);
+    try {
+      const done = await end.mutateAsync({ blockId: origin.blockId, reason: "paused" });
+      onOpenChange(false);
+      const label = done.name || name;
+      toast.success(pausedToast({ name: label, upcoming: done.upcoming }), {
+        duration: 8000,
+        ...undo(done.key, label),
+      });
+      onEnded?.();
+    } catch (e) {
+      toast.error(programError(e, "Couldn't pause it. Try again."));
+    } finally {
+      setPausing(false);
+    }
+  };
+
   const editable = origin.origin.kind === "own" && !!origin.programId;
   const planId = origin.origin.kind === "jf" ? origin.planId : null;
+  const busy = pausing || preview.isPending || end.isPending;
 
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
+      <Sheet open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
         <SheetContent
           side="bottom"
           hideCloseButton
@@ -106,7 +157,9 @@ export function ManageProgramSheet({
           <div aria-hidden className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/30" />
           <div className="flex items-start gap-3 pb-4">
             <SheetHeader className="min-w-0 flex-1 space-y-0.5 p-0 text-left">
-              <SheetTitle className="break-words text-[20px] font-semibold leading-tight">{name}</SheetTitle>
+              <SheetTitle className="break-words text-[20px] font-semibold leading-tight">
+                {name}
+              </SheetTitle>
               <SheetDescription className="text-[13px] tabular-nums">
                 {[origin.label, progressLine].filter(Boolean).join(" · ")}
               </SheetDescription>
@@ -121,7 +174,7 @@ export function ManageProgramSheet({
             </button>
           </div>
 
-          {/* What changes it, safely. */}
+          {/* The everyday choices. */}
           <div className="overflow-hidden rounded-2xl border border-border bg-card">
             {editable && (
               <Row
@@ -147,24 +200,20 @@ export function ManageProgramSheet({
               />
             )}
             <Row
-              icon={CalendarDays}
-              title="Training days"
-              value={daysLabel ?? null}
-              {...(onTrainingDays
-                ? {
-                    onClick: () => {
-                      onOpenChange(false);
-                      onTrainingDays();
-                    },
-                  }
-                : { asLink: { to: "/portal/workouts", search: { days: "1" } }, onClick: () => onOpenChange(false) })}
-            />
-            <Row
               icon={Repeat}
               title="Switch program"
-              sub="Starting another one ends this one."
-              asLink={{ to: "/portal/programs" }}
+              sub="Pick another. This one moves to your program history."
+              asLink={{ to: "/portal/programs", search: { tab: "mine" } }}
               onClick={() => onOpenChange(false)}
+            />
+            <Row
+              icon={Pause}
+              title="Pause program"
+              sub="Take a break, then resume right where you left off."
+              pending={pausing}
+              disabled={busy}
+              onClick={() => void doPause()}
+              data-manage-pause
             />
           </div>
 
@@ -174,24 +223,25 @@ export function ManageProgramSheet({
               <Row
                 icon={StopCircle}
                 title="End program"
-                destructive
+                plain
                 pending={preview.isPending}
+                disabled={busy}
                 onClick={() => void askEnd()}
               />
             </div>
             <p className="mt-2 px-1 text-[12px] leading-snug text-muted-foreground">
-              Takes it off your calendar. Workouts you've logged stay in your history and PRs.
+              It moves to your program history. Workouts you've logged stay in your history and PRs.
             </p>
           </div>
         </SheetContent>
       </Sheet>
 
-      <AlertDialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
+      <AlertDialog open={!!confirm} onOpenChange={(o) => !o && !end.isPending && setConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{confirm?.copy.title}</AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-2">
+              <div className="space-y-2" data-end-lines>
                 {confirm?.copy.lines.map((l) => (
                   <p key={l}>{l}</p>
                 ))}
@@ -201,7 +251,6 @@ export function ManageProgramSheet({
           <AlertDialogFooter>
             <AlertDialogCancel disabled={end.isPending}>Keep it</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={end.isPending}
               onClick={(e) => {
                 e.preventDefault();
@@ -222,30 +271,27 @@ function Row({
   icon: Icon,
   title,
   sub,
-  value,
   onClick,
   asLink,
-  destructive,
+  plain,
   pending,
+  disabled,
+  ...rest
 }: {
   icon: typeof Pencil;
   title: string;
   sub?: string;
-  /** what it's set to, on the right ("Mon, Wed, Fri") */
-  value?: string | null;
   onClick?: () => void;
   asLink?: { to: string; params?: Record<string, string>; search?: Record<string, string> };
-  destructive?: boolean;
+  /** an action that happens here (no chevron) */
+  plain?: boolean;
   pending?: boolean;
+  disabled?: boolean;
+  "data-manage-pause"?: boolean;
 }) {
   const body = (
     <>
-      <span
-        className={cn(
-          "grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted",
-          destructive ? "text-destructive" : "text-foreground",
-        )}
-      >
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-foreground">
         {pending ? (
           <Loader2 className="h-[18px] w-[18px] animate-spin" aria-hidden />
         ) : (
@@ -253,19 +299,17 @@ function Row({
         )}
       </span>
       <span className="min-w-0 flex-1">
-        <span className={cn("block text-[15px] font-medium", destructive && "text-destructive")}>
-          {title}
-        </span>
+        <span className="block text-[15px] font-medium">{title}</span>
         {sub && <span className="block text-[13px] leading-snug text-muted-foreground">{sub}</span>}
       </span>
-      {value && <span className="max-w-[45%] truncate text-[13px] text-muted-foreground">{value}</span>}
-      {!destructive && (
+      {asLink && !plain && (
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       )}
     </>
   );
-  const cls =
-    "flex min-h-14 w-full items-center gap-3 border-b border-border px-4 py-2.5 text-left transition last:border-b-0 hover:bg-secondary/40 active:bg-secondary/60 disabled:opacity-60";
+  const cls = cn(
+    "flex min-h-14 w-full items-center gap-3 border-b border-border px-4 py-2.5 text-left transition last:border-b-0 hover:bg-secondary/40 active:bg-secondary/60 disabled:opacity-60",
+  );
   if (asLink) {
     return (
       <Link
@@ -280,7 +324,13 @@ function Row({
     );
   }
   return (
-    <button type="button" onClick={onClick} disabled={pending} className={cls}>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || pending}
+      className={cls}
+      {...rest}
+    >
       {body}
     </button>
   );

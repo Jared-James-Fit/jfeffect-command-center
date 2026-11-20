@@ -55,6 +55,9 @@ import { useBookingTypes } from "@/components/booking/use-booking-types";
 import {
   TYPE_TEMPLATES,
   bookingUrl,
+  clientsOnly,
+  durationChoices,
+  durationLabel,
   publicOrigin,
   shortPlace,
   type BookingType,
@@ -284,7 +287,7 @@ export function AdminBookingPanel() {
                       <div className="min-w-0">
                         <div className="truncate text-[15px] font-bold">{t.name}</div>
                         <div className="truncate text-xs text-muted-foreground">
-                          {fmtDuration(t.duration_minutes)} · {shortPlace(t)}
+                          {durationChoices(t).length > 1 ? durationLabel(t) : fmtDuration(t.duration_minutes)} · {shortPlace(t)}
                         </div>
                       </div>
                       <Badge variant="outline" className={cn("shrink-0 text-[10px]", status.tone)}>
@@ -307,6 +310,11 @@ export function AdminBookingPanel() {
                           In clients' app
                         </Badge>
                       )}
+                      {t.online_enabled && clientsOnly(t) && (
+                        <Badge variant="outline" className="border-border text-muted-foreground">
+                          Coaching clients only
+                        </Badge>
+                      )}
                     </div>
                     {t.online_enabled && (
                       <div className="mt-2 space-y-0.5">
@@ -325,7 +333,7 @@ export function AdminBookingPanel() {
                         <Button
                           size="sm"
                           className="h-9 bg-primary font-semibold"
-                          onClick={() => setShare({ name: t.name, slug: t.slug! })}
+                          onClick={() => setShare({ id: t.id, name: t.name, slug: t.slug! })}
                         >
                           <Send className="mr-1.5 h-3.5 w-3.5" /> Send link
                         </Button>
@@ -482,7 +490,7 @@ export function AdminBookingPanel() {
         onSaved={(t) => {
           // A new type with online booking on: offer to send it straight away.
           if (!editor?.initial && t.online_enabled && t.slug)
-            setShare({ name: t.name, slug: t.slug });
+            setShare({ id: t.id, name: t.name, slug: t.slug });
         }}
       />
       <ShareBookingSheet target={share} open={!!share} onOpenChange={(o) => !o && setShare(null)} />

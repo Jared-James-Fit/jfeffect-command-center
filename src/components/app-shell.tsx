@@ -46,6 +46,7 @@ import { pageScrolledPx, requestTabRefresh, scrollPageToTop, topFirstPage, topFi
 import { TabRefresh } from "@/components/tab-refresh";
 import { useBarHidden } from "@/components/community/crew-header";
 import { onPhoneLayoutChange, phoneLayoutNow } from "@/lib/portrait-only";
+import { onRotationSettle } from "@/lib/rotation-settle";
 
 export interface NavItem {
   to: string;
@@ -453,12 +454,13 @@ export function AppShell({
     vv.addEventListener("resize", schedule);
     vv.addEventListener("scroll", schedule);
     window.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("orientationchange", schedule);
+    // a turn of the phone settles over half a second or more (rotation-settle.ts)
+    const stopSettle = onRotationSettle(schedule);
     return () => {
+      stopSettle();
       vv.removeEventListener("resize", schedule);
       vv.removeEventListener("scroll", schedule);
       window.removeEventListener("scroll", schedule);
-      window.removeEventListener("orientationchange", schedule);
       if (rafId) window.cancelAnimationFrame(rafId);
     };
   }, []);

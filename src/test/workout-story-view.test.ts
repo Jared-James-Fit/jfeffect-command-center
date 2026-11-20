@@ -280,7 +280,7 @@ describe("Focus view (stored as story): easy to read, sets by the thumb", () => 
   });
   it("one row under the bars: ←, where you are (whole on any phone) over Done · clock · workout, ? and List", () => {
     // the bars (16) + 6 + the row (40) + 8 + the border: the cards start just under it
-    expect(story).toContain('"fixed inset-x-0 top-0 z-[41] border-b border-border/60 bg-background px-3 pb-2 pt-[calc(var(--focus-top)+6px)]"');
+    expect(story).toContain('"phone-column fixed inset-x-0 top-0 z-[41] border-b border-border/60 bg-background px-3 pb-2 pt-[calc(var(--focus-top)+6px)]"');
     expect(story).toContain('<div className="mt-1.5 flex h-10 items-center gap-2">');
     expect(css).toContain("padding: calc(var(--focus-top) + 86px) 12px");
     expect(story).toContain('data-testid="story-count" className="truncate text-[15px] font-bold');

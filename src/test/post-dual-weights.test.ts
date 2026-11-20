@@ -204,7 +204,8 @@ describe("every surface goes through it", () => {
     expect(card).toContain("<SubLine sub={n.sub} row={nums}");
     expect(card).toContain("<SetDetail detail={slideSet.detail} other={slideSet.other}");
     expect(card).toContain("<SetDetail detail={caption.detail} other={caption.other}");
-    expect(read("src/components/community/post-detail.tsx")).toContain("dualTotal(s.tonnage_kg, recordedUnit(s.unit, unit))");
+    expect(read("src/components/community/post-detail.tsx")).toContain("const stats = summaryStats(s, unit);");
+    expect(read("src/lib/workout-recap.ts")).toContain("dualTotal(s.tonnage_kg, recordedUnit(s.unit, unit))");
     expect(read("src/components/community/crew-stories.tsx")).toContain("{win.other && <span data-weight-other");
     expect(read("src/components/community/community-entry.tsx")).toContain("formatTopSetDual(lift.detail, unit)");
     expect(read("src/lib/story-reply.ts")).toContain("withOther(win.detail, win.other)");

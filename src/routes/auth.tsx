@@ -82,7 +82,7 @@ function AuthPage() {
         <p className="text-[13px] text-muted-foreground">
           New here?{" "}
           <Link to="/join" className="font-medium text-primary active:opacity-60">
-            Create a free account
+            Apply to join free
           </Link>
         </p>
       }

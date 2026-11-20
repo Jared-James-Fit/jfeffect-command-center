@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseMealPlan } from "@/components/nutrition/MealPlanBulkPaste";
 import { listMealHeaders } from "@/lib/nutrition-targets/meal-timing";
-import { manualMealPlanPrompt, mealPlanUserPrompt, workoutTimingRule } from "@/lib/nutrition-ai-prompts";
+import { manualMealPlanPrompt, mealPlanUserPrompt, workoutTimingRule } from "@/lib/nutrition-ai-prompts.server";
 import { workoutMealExplainerText } from "@/lib/nutrition-targets/meal-timing";
 
 const PLAN = `PHASE: Fat Loss

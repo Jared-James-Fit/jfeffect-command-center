@@ -221,9 +221,13 @@ export const saveDraftVersion = createServerFn({ method: "POST" })
           legal_review_note: data.legal_review_note ?? null,
         })
         .eq("id", data.id)
+        // Only a draft is edited in place: a version that was published (even
+        // one archived since) is what people accepted, so it never changes.
+        .eq("status", "draft")
         .select()
-        .single();
+        .maybeSingle();
       if (error) throw new Error(error.message);
+      if (!row) throw new Error("Only a draft can be edited. Create a new version instead.");
       return row;
     }
     // New draft → next version number for this document
@@ -337,7 +341,10 @@ export const recordAcceptance = createServerFn({ method: "POST" })
       if (xff) ipAddress = xff.split(",")[0]?.trim() || null;
     } catch { /* ignore — not available in some runtimes */ }
 
-    const { data: row, error } = await context.supabase
+    // Only the server writes acceptance records (the database stamps the time
+    // and the published text; 20270423090000_security_hardening.sql).
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row, error } = await (supabaseAdmin as any)
       .from("legal_acceptances")
       .insert({
         user_id: context.userId,

@@ -23,7 +23,9 @@ import { NotificationSetupPrompt } from "@/components/notification-setup-prompt"
 import { cn } from "@/lib/utils";
 import { onDashboardClickCapture } from "@/components/return-to-dashboard";
 import { NewLeadsCard } from "@/components/leads/new-leads-card";
+import { NewApplicationsCard } from "@/components/applications/member-applications-entry";
 import { MeetReadinessCard } from "@/components/forms/meet-readiness-card";
+import { CheckinsToReviewCard, useReviewQueue } from "@/components/forms/checkins-to-review-card";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
@@ -74,7 +76,7 @@ const TILE_TONE: Record<SnapshotTile["tone"], string> = {
  * Only the numbers that have something in them: a zero is nothing to do, so it
  * isn't a tile. With every number at zero the grid is one calm line.
  */
-function SnapshotGrid({ tiles, loading }: { tiles: SnapshotTile[]; loading: boolean }) {
+function SnapshotGrid({ tiles, loading, otherWaiting = 0 }: { tiles: SnapshotTile[]; loading: boolean; otherWaiting?: number }) {
   if (loading) {
     return (
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2" aria-busy="true">
@@ -83,6 +85,8 @@ function SnapshotGrid({ tiles, loading }: { tiles: SnapshotTile[]; loading: bool
     );
   }
   const open = tiles.filter((t) => t.value > 0);
+  // Check-ins waiting are their own card above: never "All caught up" under it.
+  if (open.length === 0 && otherWaiting > 0) return null;
   if (open.length === 0) {
     return (
       <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground" data-dashboard-caught-up>
@@ -222,6 +226,8 @@ function AdminDashboard() {
     ...liveQueueQuery,
   });
   const waiting = useMemo(() => waitingOnMe(inbox), [inbox]);
+  // Check-ins and forms waiting on review (the card lists them; the same query).
+  const { waiting: toReview } = useReviewQueue();
 
   // Today's training: the one thing here no other page summarises.
   const { data: overview, isLoading: overviewLoading } = useQuery({
@@ -257,8 +263,14 @@ function AdminDashboard() {
           <DashboardScheduleCard />
         </SectionErrorBoundary>
 
+        {/* ---------------- CHECK-INS: what clients sent that's waiting on a review (hidden when none) ---------------- */}
+        <SectionErrorBoundary label="Check-ins to review">
+          <CheckinsToReviewCard />
+        </SectionErrorBoundary>
+
         {/* ---------------- LEADS: new applications waiting on a text (admin; hidden when none) ---------------- */}
         <SectionErrorBoundary label="Leads">
+          <NewApplicationsCard />
           <NewLeadsCard />
         </SectionErrorBoundary>
 
@@ -271,7 +283,7 @@ function AdminDashboard() {
         <NotificationSetupPrompt problemsOnly />
 
         {/* ---------------- SNAPSHOT: tap any number to open that list in Clients / Messages ---------------- */}
-        <SnapshotGrid tiles={snapshot} loading={directoryLoading} />
+        <SnapshotGrid tiles={snapshot} loading={directoryLoading} otherWaiting={toReview.length} />
 
         {/* ---------------- TODAY: who trains today and who already has ---------------- */}
         <TrainingTodayCard overview={overview} loading={overviewLoading} />

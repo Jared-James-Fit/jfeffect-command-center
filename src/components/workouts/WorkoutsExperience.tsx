@@ -11,7 +11,7 @@ import {
 import {
   Calendar as CalendarIcon, CalendarCheck, ChevronLeft, ChevronRight, ClipboardList, Clock,
   History, Loader2, Move, MoreVertical, Play, Pencil, Sun, Activity, Download,
-  RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot, Heart, Check,
+  RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot, Heart, Check, Archive,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -21,10 +21,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
 } from "@/components/ui/sheet";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { clientWorkoutsQuery, PAGE_CACHE_MS } from "@/lib/client-workouts-query";
 import { useArrivalClass } from "@/hooks/use-arrival";
@@ -93,8 +89,10 @@ import { buildWorkoutDateMap } from "@/lib/workout-calendar";
 import { ProgramRoadmapCard, programHeading, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
 import type { ProgramRoadmap } from "@/lib/training-roadmap";
 import { ManageProgramSheet } from "@/components/athlete-programs/manage-program-sheet";
-import { useProgramOrigin } from "@/components/athlete-programs/use-my-program";
-import { programProgressLine } from "@/lib/my-program";
+import { useProgramHistory, useProgramOrigin } from "@/components/athlete-programs/use-my-program";
+import { PausedProgramCard } from "@/components/athlete-programs/program-history";
+import { CardMenu, CardMenuItem, CardMenuSeparator } from "@/components/workout-day/card-menu";
+import { pausedProgram, programProgressLine } from "@/lib/my-program";
 
 type Mode = "self" | "coach";
 
@@ -220,6 +218,10 @@ export function WorkoutsExperience({
   // Month / Block switch, training-days chip or empty readiness and month cards
   // around a calendar with nothing on it).
   const noProgram = mode === "self" && isSelfServe && !isLoading && dayItems.length === 0;
+  // A member's past programs: a paused one is offered back in place of the
+  // empty state (Resume), and the ⋯ opens them all (Program history).
+  const history = useProgramHistory(mode === "self" && isSelfServe);
+  const paused = noProgram ? pausedProgram(history.data, false) : null;
 
   // One control for the three ways to look at the schedule: this week, the
   // month, or the block's workouts in order.
@@ -318,58 +320,65 @@ export function WorkoutsExperience({
                 control, not the first thing on the page (the calendar and
                 today's workout are). */}
             {mode === "self" && !noProgram && <ScheduleViewSwitch view={view} onChange={setView} compact />}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="ghost" className="h-9 w-9 p-0" aria-label="More actions">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {mode === "self" && (
-                  <DropdownMenuItem asChild>
-                    <Link to={"/portal/workouts/analytics" as any}>
-                      <Activity className="mr-2 h-4 w-4" /> Training analytics
-                    </Link>
-                  </DropdownMenuItem>
-                )}
-                {/* Coaching clients always have a way to their appointments, even on a week with none. */}
-                {showAppointmentsLink && (
-                  <DropdownMenuItem asChild>
-                    <Link
-                      to="/portal/calendar"
-                      search={{ date: toLocalISO(selectedDate) } as any}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" /> Appointments
-                    </Link>
-                  </DropdownMenuItem>
-                )}
-                {/* The athlete's training days, once set: the same editor the chip opened. */}
-                {mode === "self" && daysState?.set && (
-                  <DropdownMenuItem onSelect={() => setDaysOpen(true)}>
-                    <CalendarCheck className="mr-2 h-4 w-4" /> Training days
-                    <span className="ml-auto pl-3 text-xs text-muted-foreground">{daysState.label}</span>
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem
+            {/* A bottom sheet on a phone (within a thumb's reach), a dropdown elsewhere. */}
+            <CardMenu
+              name="Workouts"
+              ariaLabel="More actions"
+              description="Workout tools and settings"
+              vertical
+              align="end"
+              buttonClassName="h-9 w-9 p-0"
+            >
+              {mode === "self" && (
+                <CardMenuItem onSelect={() => navigate({ to: "/portal/workouts/analytics" as any })}>
+                  <Activity className="mr-2 h-4 w-4" /> Training analytics
+                </CardMenuItem>
+              )}
+              {/* A member's paused, ended and switched programs: resume, start over or remove. */}
+              {mode === "self" && isSelfServe && (
+                <CardMenuItem onSelect={() => navigate({ to: "/portal/programs/history" as any })} data-testid="menu-program-history">
+                  <Archive className="mr-2 h-4 w-4" /> Program history
+                  {!!history.data?.length && (
+                    <span className="ml-auto pl-3 text-xs tabular-nums text-muted-foreground">{history.data.length}</span>
+                  )}
+                </CardMenuItem>
+              )}
+              {/* Coaching clients always have a way to their appointments, even on a week with none. */}
+              {showAppointmentsLink && (
+                <CardMenuItem
                   onSelect={() =>
-                    navigate({
-                      to: (mode === "coach" ? "/admin/clients/$id/schedule" : "/portal/schedule") as any,
-                      params: mode === "coach" ? ({ id: clientId } as any) : (undefined as any),
-                    } as any)
+                    navigate({ to: "/portal/calendar", search: { date: toLocalISO(selectedDate) } as any })
                   }
                 >
-                  <Move className="mr-2 h-4 w-4" /> Move several workouts
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setHistoryOpen(true)}>
-                  <History className="mr-2 h-4 w-4" /> Schedule history
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => setReportOpen(true)}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Training report (PDF)
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <CalendarIcon className="mr-2 h-4 w-4" /> Appointments
+                </CardMenuItem>
+              )}
+              {/* The athlete's training days, once set: the same editor the chip opened. */}
+              {mode === "self" && daysState?.set && (
+                <CardMenuItem onSelect={() => setDaysOpen(true)}>
+                  <CalendarCheck className="mr-2 h-4 w-4" /> Training days
+                  <span className="ml-auto pl-3 text-xs text-muted-foreground">{daysState.label}</span>
+                </CardMenuItem>
+              )}
+              <CardMenuItem
+                onSelect={() =>
+                  navigate({
+                    to: (mode === "coach" ? "/admin/clients/$id/schedule" : "/portal/schedule") as any,
+                    params: mode === "coach" ? ({ id: clientId } as any) : (undefined as any),
+                  } as any)
+                }
+              >
+                <Move className="mr-2 h-4 w-4" /> Move several workouts
+              </CardMenuItem>
+              <CardMenuItem onSelect={() => setHistoryOpen(true)}>
+                <History className="mr-2 h-4 w-4" /> Schedule changes
+              </CardMenuItem>
+              <CardMenuSeparator />
+              <CardMenuItem onSelect={() => setReportOpen(true)}>
+                <Download className="mr-2 h-4 w-4" />
+                Training report (PDF)
+              </CardMenuItem>
+            </CardMenu>
           </div>
         }
       />
@@ -395,7 +404,11 @@ export function WorkoutsExperience({
                 <Button variant="outline" className="mt-4" onClick={() => void refetchWorkouts()}>Try again</Button>
               </Card>
             ) : dayItems.length === 0 ? (
-              <EmptyState mode={mode} />
+              paused ? (
+                <PausedProgramCard entry={paused} />
+              ) : (
+                <EmptyState mode={mode} hasHistory={!!history.data?.length} />
+              )
             ) : (
               <div className={cn("space-y-4", arrived)}>
                 <CalendarDndProvider dnd={dnd}>
@@ -544,8 +557,6 @@ export function WorkoutsExperience({
             today: toLocalISO(today),
           })}
           origin={origin}
-          onTrainingDays={client ? () => setDaysOpen(true) : undefined}
-          daysLabel={daysState?.set ? daysState.label : null}
         />
       )}
     </>
@@ -908,6 +919,7 @@ function SelectedDayCard({
   /** The block the page's header names (the card names only another block). */
   pageBlockId?: string | null;
 }) {
+  const navigate = useNavigate();
   const [previewOpen, setPreviewOpen] = useState(false);
   // Preview open state is keyed by stable workout identity and lives outside
   // this component so refetches / remounts / navigation can't collapse it.
@@ -1160,99 +1172,85 @@ function SelectedDayCard({
             })()}
           </div>
           {hasMenuActions && (!readonly || canEditHere) && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="icon" variant="ghost" className="-mr-2 -mt-1.5 h-10 w-10 shrink-0 text-muted-foreground" aria-label="Workout actions">
-                  <MoreVertical className="h-5 w-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[13rem]">
+            <CardMenu
+              name={title}
+              ariaLabel="Workout actions"
+              description="Actions for this workout"
+              vertical
+              align="end"
+              iconClassName="h-5 w-5"
+              buttonClassName="-mr-2 -mt-1.5 h-10 w-10 shrink-0 text-muted-foreground"
+            >
                 {canManageBackupLifecycle && backupState?.lifecycle === "in_progress" && (
-                  <DropdownMenuItem asChild>
-                    <Link
-                      to="/portal/workouts/$dayId"
-                      params={{ dayId: item.day.id }}
-                      search={{ ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any}
-                    >
-                      <Play className="mr-2 h-4 w-4" /> Resume workout
-                    </Link>
-                  </DropdownMenuItem>
+                  <CardMenuItem
+                    onSelect={() =>
+                      navigate({
+                        to: "/portal/workouts/$dayId",
+                        params: { dayId: item.day.id },
+                        search: { ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any,
+                      })
+                    }
+                  >
+                    <Play className="mr-2 h-4 w-4" /> Resume workout
+                  </CardMenuItem>
                 )}
                 {canManageBackupLifecycle && backupState?.lifecycle === "empty" && (
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onSelect={(event) => {
-                      event.preventDefault();
-                      setBackupAction("remove");
-                    }}
-                  >
+                  <CardMenuItem className="text-destructive focus:text-destructive" onSelect={() => setBackupAction("remove")}>
                     <RotateCcw className="mr-2 h-4 w-4" /> Remove Backup
-                  </DropdownMenuItem>
+                  </CardMenuItem>
                 )}
                 {canManageBackupLifecycle && backupState?.lifecycle === "in_progress" && (
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onSelect={(event) => {
-                      event.preventDefault();
-                      setBackupAction("cancel");
-                    }}
-                  >
+                  <CardMenuItem className="text-destructive focus:text-destructive" onSelect={() => setBackupAction("cancel")}>
                     <RotateCcw className="mr-2 h-4 w-4" /> Cancel Backup
-                  </DropdownMenuItem>
+                  </CardMenuItem>
                 )}
                 {canReschedule && (
-                  <DropdownMenuItem onSelect={() => setMoveOpen(true)}>
+                  <CardMenuItem onSelect={() => setMoveOpen(true)}>
                     <Move className="mr-2 h-4 w-4" /> Reschedule
-                  </DropdownMenuItem>
+                  </CardMenuItem>
                 )}
                 {canChangeWorkoutStatus && (
-                  <DropdownMenuItem onSelect={() => setStatusOpen(true)}>
+                  <CardMenuItem onSelect={() => setStatusOpen(true)}>
                     <CircleDot className="mr-2 h-4 w-4" /> Change status
-                  </DropdownMenuItem>
+                  </CardMenuItem>
                 )}
                 {canEditHere && (
-                  <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+                  <CardMenuItem onSelect={() => setEditOpen(true)}>
                     <Pencil className="mr-2 h-4 w-4" /> Edit workout
-                  </DropdownMenuItem>
+                  </CardMenuItem>
                 )}
                 {isCompleted && !readonly && (
-                  <DropdownMenuItem onSelect={() => setReviewOpen(true)}>
-                    {hasReview ? (
-                      <><MessageSquare className="mr-2 h-4 w-4" /> View workout review</>
-                    ) : (
-                      <><MessageSquare className="mr-2 h-4 w-4" /> Add workout review</>
-                    )}
-                  </DropdownMenuItem>
+                  <CardMenuItem onSelect={() => setReviewOpen(true)}>
+                    <MessageSquare className="mr-2 h-4 w-4" /> {hasReview ? "View workout review" : "Add workout review"}
+                  </CardMenuItem>
                 )}
                 {isCompleted && !readonly && (
-                  <DropdownMenuItem asChild>
-                    <Link
-                      to="/portal/workouts/$dayId"
-                      params={{ dayId: item.day.id }}
-                      search={{ recap: 1, ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any}
-                    >
-                      <Trophy className="mr-2 h-4 w-4" /> View workout recap
-                    </Link>
-                  </DropdownMenuItem>
+                  <CardMenuItem
+                    onSelect={() =>
+                      navigate({
+                        to: "/portal/workouts/$dayId",
+                        params: { dayId: item.day.id },
+                        search: { recap: 1, ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any,
+                      })
+                    }
+                  >
+                    <Trophy className="mr-2 h-4 w-4" /> View workout recap
+                  </CardMenuItem>
                 )}
                 {canChangeWorkoutStatus && (
-                  <DropdownMenuItem onSelect={() => setHistoryOpen(true)}>
+                  <CardMenuItem onSelect={() => setHistoryOpen(true)}>
                     <History className="mr-2 h-4 w-4" /> Version history
-                  </DropdownMenuItem>
+                  </CardMenuItem>
                 )}
                 {canReset && (
                   <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={() => setResetOpen(true)}
-                    className="text-destructive focus:text-destructive"
-                  >
+                  <CardMenuSeparator />
+                  <CardMenuItem onSelect={() => setResetOpen(true)} className="text-destructive focus:text-destructive">
                     <RotateCcw className="mr-2 h-4 w-4" /> Reset workout
-                  </DropdownMenuItem>
+                  </CardMenuItem>
                   </>
                 )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            </CardMenu>
           )}
         </div>
 
@@ -1672,8 +1670,8 @@ function BlockViewTab({
 /* Empty state                                                            */
 /* ---------------------------------------------------------------------- */
 
-function EmptyState({ mode }: { mode?: string }) {
-  if (mode === "self") return <SelfEmptyState />;
+function EmptyState({ mode, hasHistory = false }: { mode?: string; hasHistory?: boolean }) {
+  if (mode === "self") return <SelfEmptyState hasHistory={hasHistory} />;
   return <CoachedEmptyState />;
 }
 
@@ -1691,7 +1689,7 @@ function CoachedEmptyState() {
 }
 
 /** The athlete's own Workouts page: a JF member picks a plan; a coaching client waits on their coach. */
-function SelfEmptyState() {
+function SelfEmptyState({ hasHistory = false }: { hasHistory?: boolean }) {
   const { isSelfServe } = useServiceTier();
   if (!isSelfServe) return <CoachedEmptyState />;
   return (
@@ -1711,6 +1709,16 @@ function SelfEmptyState() {
           <Link to="/portal/programs/new">Build your own</Link>
         </Button>
       </div>
+      {/* a program they ended or switched from can come back where they left off */}
+      {hasHistory && (
+        <Link
+          to={"/portal/programs/history" as any}
+          className="mt-4 inline-flex min-h-10 items-center gap-1 text-[14px] font-medium text-muted-foreground hover:text-foreground"
+          data-empty-history
+        >
+          Resume a past program <ChevronRight className="h-4 w-4" aria-hidden />
+        </Link>
+      )}
     </Card>
   );
 }

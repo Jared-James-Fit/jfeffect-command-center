@@ -17,19 +17,20 @@ import shotChat from "@/assets/coaching/app-coach-chat.webp";
 import shotNutrition from "@/assets/coaching/app-nutrition.webp";
 import { shareMeta } from "@/lib/share-meta";
 
+const DESCRIPTION =
+  "1:1 online coaching for strength, fat loss, muscle and powerlifting with Jared McIntyre, Team Canada powerlifter. Your program, nutrition and a weekly check-in, run through the JF Effect app wherever you train. By application.";
+
 export const Route = createFileRoute("/coaching/")({
   component: CoachingPage,
   head: () => ({
     meta: [
-      { title: "Online Fitness Coaching Selkirk & Winnipeg MB | Private 1:1 Coaching | JF Effect" },
-      { name: "description", content: "Private 1:1 online fitness coaching serving Selkirk, Winnipeg, and all of Manitoba. Strength, fat loss, muscle building, and powerlifting coaching by Jared McIntyre. Weekly check-ins, custom programming, and nutrition coaching. By application." },
+      { title: "Online Coaching with Jared McIntyre | Strength, Muscle, Fat Loss, Powerlifting | JF Effect" },
+      { name: "description", content: DESCRIPTION },
       ...shareMeta({
         title: "JF Effect Coaching",
-        description: "Private 1:1 coaching for strength, fat loss, muscle and powerlifting. A plan built around your life, weekly check-ins, and a coach who knows your numbers.",
+        description: "1:1 online coaching with Jared McIntyre: your program, nutrition and a weekly check-in, all in the JF Effect app.",
         path: "/coaching",
       }),
-      { name: "geo.region", content: "CA-MB" },
-      { name: "geo.placename", content: "Selkirk, Manitoba" },
     ],
     links: [{ rel: "canonical", href: "https://jfeffect.com/coaching" }],
     scripts: [
@@ -38,22 +39,13 @@ export const Route = createFileRoute("/coaching/")({
         children: JSON.stringify({
           "@context": "https://schema.org",
           "@type": "Service",
-          name: "JF Effect Private Online Fitness Coaching",
-          serviceType: ["Online Fitness Coaching", "Personal Training", "Powerlifting Coaching", "Nutrition Coaching"],
-          provider: {
-            "@type": "LocalBusiness",
-            "@id": "https://jfeffect.com/#business",
-            name: "JF Effect",
-            url: "https://jfeffect.com",
-            address: { "@type": "PostalAddress", addressLocality: "Selkirk", addressRegion: "MB", addressCountry: "CA" },
-          },
-          areaServed: [
-            { "@type": "City", name: "Selkirk", containedInPlace: { "@type": "State", name: "Manitoba" } },
-            { "@type": "City", name: "Winnipeg", containedInPlace: { "@type": "State", name: "Manitoba" } },
-            { "@type": "Country", name: "Canada" },
-          ],
+          name: "JF Effect Online Coaching",
+          serviceType: ["Online Fitness Coaching", "Online Strength Coaching", "Powerlifting Coaching", "Nutrition Coaching"],
+          provider: { "@type": "Organization", "@id": "https://jfeffect.com/#organization", name: "JF Effect", url: "https://jfeffect.com" },
+          areaServed: "Worldwide",
+          availableChannel: { "@type": "ServiceChannel", serviceUrl: "https://jfeffect.com/coaching/apply" },
           url: "https://jfeffect.com/coaching",
-          description: "Private 1:1 online fitness coaching serving Selkirk, Winnipeg, and all of Manitoba. Strength, fat loss, muscle building, and powerlifting coaching by Jared McIntyre.",
+          description: DESCRIPTION,
         }),
       },
       {
@@ -75,33 +67,34 @@ const APPLY_TO = "/coaching/apply" as const;
 const CTA = "Apply for coaching";
 
 /*
- * The coaching sales page. Its words live here, not in Sales → Sales pages:
- * that editor's coaching copy had gone stale (FAQs still sold "JF
- * Membership"), and one place to change the page is easier to keep honest.
+ * The online coaching page. Its words live here, not in Sales → Sales pages:
+ * that editor's coaching copy had gone stale, and one place to change the page
+ * is easier to keep honest. Coaching is online only on every public page.
  *
  * Order follows how someone decides: what it is and the one button, proof,
- * why it hasn't worked before, exactly what they get (shown with real app
- * screens), how it starts, who's coaching them, who it's for, their questions,
- * then the first question of the application itself.
+ * why it hasn't worked before, what's included (shown with real app screens),
+ * how it starts, who's coaching them, who it's for, their questions, then the
+ * first question of the application itself. Every button here is the
+ * application; the free app is only an answer in the questions.
  */
 
-/** What you get, each shown with the screen it lives on. Screenshots: a demo athlete, no client data. */
+/** What's included, each shown with the screen it lives on. Screenshots: a demo athlete, no client data. */
 const OFFER: Array<{ title: string; body: string; src: string; alt: string }> = [
   {
     title: "A program written for you",
-    body: "Built around your goal, your schedule and the equipment you have. Every set you log counts, so your PRs and estimated maxes are tracked for you and you can see it working.",
+    body: "Built around your goal, your schedule and the equipment you have. Every set you log feeds your PRs and estimated maxes, so we both see what's working.",
     src: shotPrs,
     alt: "Recent PRs in the app's training analytics: each lift's new estimated max and the best it beat",
   },
   {
-    title: "A coach who reads your check-in",
-    body: "You check in from the app every week. Your coach reads it, tells you what's changing and why, and adjusts the plan. Questions in between? Message anytime.",
+    title: "Weekly check-ins",
+    body: "You check in from the app. I read it with your numbers, tell you what's changing and why, and adjust the plan.",
     src: shotChat,
     alt: "A weekly check-in and the coach's reply in the app's chat",
   },
   {
-    title: "Nutrition you can actually follow",
-    body: "Calories and macros for training and rest days, plus a simple meal plan you can shop for and prep. No crash diets.",
+    title: "Nutrition",
+    body: "Calories and macros for training and rest days, and a meal plan built around the food you eat. No crash diets.",
     src: shotNutrition,
     alt: "The Nutrition screen: a training-day meal plan with each meal's foods and macros",
   },
@@ -111,22 +104,22 @@ const OFFER: Array<{ title: string; body: string; src: string; alt: string }> = 
 const GOAL_ORDER = ["fat_loss", "build_muscle", "powerlifting", "general_fitness"] as const;
 
 const ALSO_INCLUDED = [
-  "Lift video reviews in the chat",
-  "How-to videos for your exercises",
-  "PRs, bodyweight and progress photos in one place",
-  "The JF Effect Crew: train alongside other athletes",
+  "Video feedback on your lifts in our chat",
+  "Message me in the app. I usually reply within a day",
+  "Meet prep and weight class planning if you compete",
+  "Your PRs, bodyweight and progress photos in one place",
 ];
 
 const STEPS: Array<{ title: string; body: string }> = [
-  { title: "Apply", body: "Seven quick questions about you and your goal. Free, no card." },
-  { title: "Book your call", body: "Pick a time right after you apply. We talk through your goal and whether coaching is the right fit. No pressure." },
-  { title: "Start training", body: "If it's a fit, you're set up in the app with your program, your nutrition and your first check-in." },
+  { title: "Apply", body: "Seven questions about you and your goal. Free, no card." },
+  { title: "Book a call", body: "Pick a time right after you apply. We talk about your goal, how I'd coach you, and price." },
+  { title: "Start training", body: "If we're a fit, you're set up in the app with your program, your nutrition and your first check-in." },
 ];
 
 const FOR_YOU = [
-  "You'll follow a plan if someone builds it for you",
+  "You'll follow a plan when it's written for you",
   "You want someone checking your progress every week",
-  "You're done guessing and starting over",
+  "You're tired of guessing and starting over",
 ];
 const NOT_FOR_YOU = [
   "You want a quick fix",
@@ -134,35 +127,39 @@ const NOT_FOR_YOU = [
   "You only want a PDF program",
 ];
 
-// The questions people quietly ask themselves before they apply, answered straight.
+// The questions people ask themselves before they apply.
 const FAQ: Array<{ q: string; a: string }> = [
   {
     q: "I've tried before and it didn't stick. Why would this be different?",
-    a: "Most plans fail for two reasons: they're generic, and nobody is watching. Here your plan is built around your schedule and your life, your coach reads your check-in every week, and the plan changes when life happens.",
+    a: "Most plans fail because they're generic and nobody is checking. Yours is built around your schedule, I read your check-in every week, and the plan changes when your life does.",
+  },
+  {
+    q: "Is it all online?",
+    a: "Yes. Your program, nutrition, check-ins, video feedback and our chat all live in the JF Effect app, so it works wherever you live and train. When something is easier to talk through, we do it on a video call.",
   },
   {
     q: "I'm busy. Can I make this work?",
-    a: "That's who it's built for. Your plan fits the days and time you actually have, and when a week goes sideways we adjust it instead of letting one rough week turn into a lost month.",
+    a: "Yes. The plan fits the days and time you have, and when a week goes sideways we adjust it so one rough week doesn't turn into a lost month.",
   },
   {
     q: "I'm a beginner, or out of shape. Is that okay?",
-    a: "Yes. You don't need to be fit to start. The plan starts where you are right now.",
+    a: "Yes. The plan starts where you are now.",
   },
   {
     q: "Do I need a gym?",
-    a: "No. The plan is built around your setup, whether that's a full gym or training at home.",
-  },
-  {
-    q: "How is this different from an app or a PDF program?",
-    a: "An app or a PDF gives you a plan. Coaching gives you a person: someone who looks at your numbers and check-ins, changes the plan when it needs changing, and holds you to it when motivation dips.",
+    a: "No. I build the plan around your setup, whether that's a full gym or a few dumbbells at home.",
   },
   {
     q: "What does it cost?",
     a: "Applying is free and there's no card. Coaching is a paid service, and we go over the options and the price on your call, before you commit to anything.",
   },
   {
+    q: "Is there a free option?",
+    a: "Yes. The JF Effect app is free: my programs, the training log, your progress and the Crew. A lot of people start there and move to coaching later, and their training history comes with them.",
+  },
+  {
     q: "What if it isn't a good fit?",
-    a: "Then we'll tell you. We only take on people we're confident we can help. The call is to find that out, not a pressure pitch.",
+    a: "Then I'll tell you on the call. I only take on people I'm confident I can help.",
   },
 ];
 
@@ -182,23 +179,27 @@ function CheckList({ items }: { items: string[] }) {
 function CoachingPage() {
   return (
     <SalesPageShell pageId="coaching">
-      {/* 1 — What it is, and the one button */}
+      {/* 1. What it is, and the one button */}
       <CoachingHero
-        eyebrow="1:1 online coaching · By application"
-        headline="Get stronger and leaner without guessing what to do."
-        sub="Training and nutrition written for you, a coach who reads your check-in every week, and one app that holds it all."
-        primary={<PrimaryCta to={APPLY_TO}>{CTA}</PrimaryCta>}
-        note="Free · 7 quick questions · Pick your call time right after"
+        eyebrow="Online coaching with Jared McIntyre"
+        headline="I'll coach you, wherever you train."
+        sub="I write your training and nutrition, read your check-in every week, and change the plan when it needs changing. It all runs through the JF Effect app."
+        primary={
+          <div data-inline-cta className="flex flex-col items-stretch sm:items-center lg:items-start">
+            <PrimaryCta to={APPLY_TO}>{CTA}</PrimaryCta>
+          </div>
+        }
+        note="Free to apply. Seven questions, then pick a time for a call."
         image={{ src: shotProgress, alt: "Training analytics in the JF Effect app: an athlete's back squat estimated max climbing week by week over 12 weeks" }}
       />
 
-      {/* 2 — Why listen */}
+      {/* 2. Why listen */}
       <div className="mx-auto max-w-5xl px-5">
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border/70 ring-1 ring-border/70 md:grid-cols-4">
           {[
-            ["100+", "Clients coached", "Fat loss to powerlifting"],
-            ["8", "International medals", "Team Canada · 7 gold, 1 silver"],
-            ["2×", "International champion", "NAPF + Commonwealth · 2026"],
+            ["100+", "People coached", "Beginners to IPF Worlds"],
+            ["8", "International medals", "Team Canada, 7 of them gold"],
+            ["2×", "International champion", "NAPF and Commonwealth, 2026"],
             ["Top 50", "All-time world ranking", "66 kg powerlifting"],
           ].map(([value, label, detail]) => (
             <div key={label} className="bg-card">
@@ -208,11 +209,11 @@ function CoachingPage() {
         </div>
       </div>
 
-      {/* 3 — Proof first */}
+      {/* 3. Proof first */}
       <Reveal>
         <Block>
-          <Heading eyebrow="Real results" title="People who did the work." sub="A few of the 100+ people I've coached. Swipe to see more." />
-          <Rail label="Client transformations">
+          <Heading eyebrow="Client results" title="Some of the people I've coached." sub="Fat loss, muscle and strength. Swipe for more." />
+          <Rail label="Client results">
             {TRANSFORMATION_PHOTOS.slice(0, 12).map((photo, i) => (
               <div key={i} className="w-[68vw] max-w-[280px] shrink-0 snap-start overflow-hidden rounded-2xl bg-muted ring-1 ring-border/70">
                 <img
@@ -245,26 +246,25 @@ function CoachingPage() {
         </Block>
       </Reveal>
 
-      {/* 4 — Why it hasn't worked yet, in one breath */}
+      {/* 4. Why it hasn't worked yet, in one breath */}
       <Reveal>
         <Block tint narrow>
           <div className="text-center">
-            <div className="text-[13px] font-semibold text-muted-foreground">Why it hasn't stuck</div>
-            <h2 className="mt-1.5 text-balance text-[28px] font-semibold leading-[1.12] tracking-[-0.02em] md:text-[40px]">
-              You don't need more motivation.
+            <h2 className="text-balance text-[28px] font-semibold leading-[1.12] tracking-[-0.02em] md:text-[40px]">
+              Most people I coach tried on their own first.
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-[17px] leading-relaxed text-muted-foreground">
-              Most people who come to me have tried hard, more than once. What they were missing was a plan made for them, someone adjusting it as they go, and someone who notices when they slip.
+              They put the effort in. What they didn't have was a plan written for them and someone
+              checking every week whether it was working. That's the part I take on.
             </p>
-            <p className="mx-auto mt-3 max-w-xl text-[17px] font-medium leading-relaxed">That's what coaching is.</p>
           </div>
         </Block>
       </Reveal>
 
-      {/* 5 — Exactly what they get, shown on the real screens */}
+      {/* 5. What's included, shown on the real screens */}
       <Reveal>
         <Block id="what-you-get">
-          <Heading eyebrow="What you get" title="Here's exactly what you get." sub="All of it lives in the JF Effect app, on your phone." />
+          <Heading eyebrow="What's included" title="Everything runs through the app." sub="Your plan, your check-ins and our chat, in one place on your phone." />
           <div className="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
             {OFFER.map((o) => (
               <div key={o.title} className="w-[78vw] max-w-[320px] shrink-0 snap-start md:w-auto md:max-w-none">
@@ -281,16 +281,16 @@ function CoachingPage() {
               <CheckList items={ALSO_INCLUDED.slice(2)} />
             </div>
           </Surface>
-          <div className="mt-8 flex justify-center">
+          <div className="mt-8 flex justify-center" data-inline-cta>
             <PrimaryCta to={APPLY_TO} className="w-full sm:w-auto sm:min-w-[280px]">{CTA}</PrimaryCta>
           </div>
         </Block>
       </Reveal>
 
-      {/* 6 — How it starts */}
+      {/* 6. How it starts */}
       <Reveal>
         <Block id="how" tint narrow>
-          <Heading eyebrow="How it works" title="Three steps to start." sub="Applying takes about a minute." />
+          <Heading eyebrow="How it starts" title="Three steps." sub="Applying takes about a minute." />
           <Group>
             {STEPS.map((st, i) => (
               <div key={st.title} className="flex items-start gap-4 px-5 py-4">
@@ -307,7 +307,7 @@ function CoachingPage() {
         </Block>
       </Reveal>
 
-      {/* 7 — The person behind it */}
+      {/* 7. The person behind it */}
       <Reveal>
         <Block>
           {/* The photo is a 4:5 portrait: shown square from 31% down it keeps the Canada
@@ -329,31 +329,32 @@ function CoachingPage() {
             <div className="p-6 md:self-center md:p-8">
               <div className="text-[13px] font-semibold text-muted-foreground">Your coach</div>
               <h2 className="mt-1 text-[26px] font-semibold leading-tight tracking-[-0.02em]">{COACH_NAME}</h2>
-              <p className="mt-1 text-[15px] text-muted-foreground">Team Canada powerlifter · 2× International Champion</p>
+              <p className="mt-1 text-[15px] text-muted-foreground">Team Canada powerlifter · 2× international champion</p>
               <p className="mt-4 text-[17px] leading-relaxed text-muted-foreground">
-                I coach from both sides of the bar: responsible for other people's progress, and still competing under pressure myself. JF Effect is built on one belief: structure and standards outlast motivation.
+                I've coached since 2017 and full-time since 2021, from people's first workouts to
+                IPF Worlds. I still compete, so I hold myself to the standard I ask of my clients.
               </p>
               <div className="mt-4">
                 <CheckList
                   items={[
-                    "Personal trainer since 2017, full-time coaching since 2021",
                     "Certified: GLPTI, DTS Level 1, ISSA CPT",
-                    "Drug-tested athlete. I hold myself to what I ask of clients",
+                    "Drug-tested athlete",
+                    "100+ people coached since 2017",
                   ]}
                 />
               </div>
               <div className="mt-5">
-                <TextLink to="/about">Read my full story</TextLink>
+                <TextLink to="/about">My full story and results</TextLink>
               </div>
             </div>
           </Surface>
         </Block>
       </Reveal>
 
-      {/* 8 — Honest fit check */}
+      {/* 8. Honest fit check */}
       <Reveal>
         <Block tint>
-          <Heading eyebrow="Is it for you?" title="Coaching isn't for everyone." sub="It works when both sides take it seriously. Better to know now." />
+          <Heading eyebrow="Is it for you?" title="It works when we both take it seriously." />
           <div className="mx-auto grid max-w-3xl gap-4 md:grid-cols-2">
             <Surface className="p-5">
               <div className="mb-3 text-[15px] font-semibold">This is for you if</div>
@@ -374,10 +375,10 @@ function CoachingPage() {
         </Block>
       </Reveal>
 
-      {/* 9 — Their questions, answered straight */}
+      {/* 9. Their questions */}
       <Reveal>
         <Block narrow>
-          <Heading eyebrow="Questions" title="Straight answers." sub="What people ask before they apply." />
+          <Heading eyebrow="Questions" title="What people ask before they apply." />
           <Group>
             <Accordion type="single" collapsible>
               {FAQ.map((it, i) => (
@@ -391,7 +392,7 @@ function CoachingPage() {
         </Block>
       </Reveal>
 
-      {/* 10 — The application's first question, right here */}
+      {/* 10. The application's first question, right here */}
       <Reveal>
         <Block id="start" tint narrow>
           <div className="text-center">
@@ -402,7 +403,7 @@ function CoachingPage() {
               Pick one to start your application. It takes about a minute.
             </p>
           </div>
-          <div className="mx-auto mt-7 grid max-w-md gap-3 sm:grid-cols-2">
+          <div className="mx-auto mt-7 grid max-w-md gap-3 sm:grid-cols-2" data-inline-cta>
             {GOAL_ORDER.map((v) => APPLY_GOALS.find((g) => g.v === v)!).map((g) => (
               <Link
                 key={g.v}
@@ -422,13 +423,13 @@ function CoachingPage() {
           <div className="mx-auto mt-8 max-w-sm">
             <CheckList
               items={[
-                "Free to apply: no payment, no card",
-                "A real person reads it, not an auto-reply",
-                "A no-pressure call, and we only start if it's a fit",
+                "Free to apply, no card",
+                "I read every application myself",
+                "A short call first, and we only start if it's a fit",
               ]}
             />
           </div>
-          <p className="mt-6 text-center text-[13px] text-muted-foreground">By application · Spots are limited</p>
+          <p className="mt-6 text-center text-[13px] text-muted-foreground">By application. I keep my client list small.</p>
 
           <Surface className="mt-10 p-5">
             <div className="flex items-start gap-4">
@@ -447,7 +448,7 @@ function CoachingPage() {
       </Reveal>
 
       <div className="pb-24 md:pb-0" />
-      <StickyMobileCta label={CTA} href={APPLY_TO} />
+      <StickyMobileCta label={CTA} href={APPLY_TO} hideWhenInline />
     </SalesPageShell>
   );
 }

@@ -85,9 +85,7 @@ describe("a film post's set is said in its words, the slide on screen's", () => 
     expect(card).toContain(
       'const slideSet = layout === "page" ? (postSlides(post)[screenSlide.id === post.id ? screenSlide.i : 0]?.caption ?? null) : null;',
     );
-    expect(card).toContain(
-      "<PostMedia post={post} thumbUrl={thumbUrl} page shrunk={sheetOpen} onSlide={showSlide} />",
-    );
+    expect(card).toMatch(/<PostMedia\s+post=\{post\}\s+thumbUrl=\{thumbUrl\}\s+page\s+shrunk=\{sheetOpen\}\s+onSlide=\{showSlide\}/);
     expect(card).toContain("onSlideRef.current?.(index - off);");
     expect(card).toContain(
       "{slide.caption && !shrunk && !page && <SlideCaption caption={slide.caption} withDots={withDots} />}",

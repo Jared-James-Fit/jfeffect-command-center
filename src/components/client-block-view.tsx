@@ -673,7 +673,7 @@ export function ClientBlockView({
               size="sm" variant="outline"
               className="h-6 px-2 text-[11px]"
               onClick={() => setHistoryOpen(true)}
-              aria-label="Schedule history"
+              aria-label="Schedule changes"
             >
               <History className="mr-1 h-3 w-3" /> History
             </Button>

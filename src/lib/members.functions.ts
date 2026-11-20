@@ -385,7 +385,7 @@ export const updateMyMarketingPrefs = createServerFn({ method: "POST" })
 
 const RedeemInput = z.object({
   token: z.string().min(20).max(128),
-  password: z.string().min(1).max(72),
+  password: z.string().min(8).max(72),
 });
 
 export const redeemSetupToken = createServerFn({ method: "POST" })
@@ -412,6 +412,10 @@ export const redeemSetupToken = createServerFn({ method: "POST" })
       const { data: list } = await supabaseAdmin.auth.admin.listUsers();
       const existing = list.users.find((u: any) => (u.email || "").toLowerCase() === member.email.toLowerCase());
       if (existing) {
+        // Never reset a team login's password from a member setup link.
+        const { STAFF_ROLES } = await import("@/lib/account-recovery-lookup.server");
+        const { data: staff } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", existing.id).in("role", [...STAFF_ROLES] as any).limit(1);
+        if (staff && staff.length) throw new Error("This setup link can't be used for that email. Ask the admin for a new one.");
         userId = existing.id;
         await supabaseAdmin.auth.admin.updateUserById(existing.id, { password: data.password });
       } else {

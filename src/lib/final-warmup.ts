@@ -3,11 +3,14 @@
  *
  * They live in their own table (pl_warmup_sets), never in pl_row_results: that
  * table feeds records, tonnage, league points, completion and coach review, none
- * of which should ever see a warm-up. The load-suggestion engine reads only the
- * heaviest warm-up of the day (the "final" one) — see load-suggestion.ts, note 8.
+ * of which should ever see a warm-up. The load-suggestion engine reads the
+ * heaviest warm-up of the day (the "final" one) with any others close to its
+ * weight, whatever order they were logged in (readWarmups, load-suggestion.ts,
+ * note 8).
  */
 import { classifyExercise, type MovementPattern } from "@/lib/exercise-classifier";
 import { percentOf1RM } from "@/lib/load-suggestion";
+import { rangeLift } from "@/lib/workouts/pick-range";
 
 export type WarmupUnit = "kg" | "lb";
 
@@ -22,6 +25,13 @@ export interface WarmupSetRow {
 }
 
 const KG_PER_LB = 0.45359237;
+
+/**
+ * The most reps a warm-up can be logged with (pl_warmup_sets_reps_check): an
+ * accessory's warm-up is often 10–15 easy reps. The suggestion engine reads only
+ * warm-ups of WARMUP_MAX_REPS (8) or fewer; longer ones are logged, never read.
+ */
+export const WARMUP_LOG_MAX_REPS = 30;
 
 export function warmupInUnit(
   w: Pick<WarmupSetRow, "load" | "unit" | "reps" | "rpe">,
@@ -47,18 +57,56 @@ export function normalizeWarmupRow(r: any): WarmupSetRow | null {
   };
 }
 
-/** The "final" warm-up = the heaviest one logged (ties: the latest), in the display unit. */
+/**
+ * Which warm-up is the "final" one: the heaviest, compared across units; a tie
+ * goes to the harder-rated (a missing rating counts as 7), then the one with
+ * more reps, then the id. Never the order they were logged in, so the same
+ * warm-ups typed in any order are read the same (readWarmups does the same).
+ */
+function isMoreFinal(a: WarmupSetRow, b: WarmupSetRow): boolean {
+  const kg = (w: WarmupSetRow) => (w.unit === "kg" ? w.load : w.load * KG_PER_LB);
+  const d = kg(a) - kg(b);
+  if (Math.abs(d) > 1e-6) return d > 0;
+  const ra = a.rpe ?? 7;
+  const rb = b.rpe ?? 7;
+  if (ra !== rb) return ra > rb;
+  if (a.reps !== b.reps) return a.reps > b.reps;
+  return String(a.id) > String(b.id);
+}
+
+/** The final warm-up's row (isMoreFinal), or null. */
+export function finalWarmupRow(sets: WarmupSetRow[]): WarmupSetRow | null {
+  let best: WarmupSetRow | null = null;
+  for (const s of sets) if (!best || isMoreFinal(s, best)) best = s;
+  return best;
+}
+
+/** The final warm-up in the display unit (isMoreFinal), or null. */
 export function pickFinalWarmup(
   sets: WarmupSetRow[],
   unit: WarmupUnit,
 ): { load: number; reps: number; rpe: number | null } | null {
-  let best: { load: number; reps: number; rpe: number | null } | null = null;
-  for (const s of sets) {
-    const c = warmupInUnit(s, unit);
-    if (!best || c.load >= best.load) best = c;
-  }
-  return best;
+  const best = finalWarmupRow(sets);
+  return best ? warmupInUnit(best, unit) : null;
 }
+
+/**
+ * Every warm-up in the display unit for the suggestion engine (readWarmups),
+ * in one fixed order (heaviest first) so the screen's memo sees the same list
+ * however they were logged.
+ */
+export function warmupsForModel(sets: WarmupSetRow[], unit: WarmupUnit): Array<{ load: number; reps: number; rpe: number | null }> {
+  return [...sets]
+    .sort((a, b) => (isMoreFinal(a, b) ? -1 : isMoreFinal(b, a) ? 1 : 0))
+    .map((s) => warmupInUnit(s, unit));
+}
+
+/**
+ * Said when the last warm-up was too easy to read (RPE 5 or easier, header
+ * note 8 in load-suggestion.ts): the number stays history's, or, with no
+ * history, waits for the first set. Never a made-up weight.
+ */
+export const WARMUP_TOO_EASY = "RPE too low for a reliable estimate";
 
 /** Human summary: "140 kg × 2 · RPE 7". */
 export function describeWarmup(
@@ -95,6 +143,33 @@ export function offersLastWarmup(family: string, exerciseName: string | null | u
   // Squat / bench / deadlift families always ramp up.
   if (family !== "accessory") return true;
   return !!exerciseName && RAMP_PATTERNS.has(classifyExercise(exerciseName).pattern);
+}
+
+/** The heavy compound patterns a lifter ramps up to on a bar. */
+const HEAVY_PATTERNS: ReadonlySet<MovementPattern> = new Set<MovementPattern>([
+  "squat",
+  "hinge",
+  "hip_thrust",
+  "horizontal_press",
+  "incline_press",
+  "vertical_press",
+]);
+/** A barbell (or bar-like) implement: plates go on, a last warm-up is a real read. */
+const BAR = /\b(barbell|bb|trap bar|hex bar|safety (squat )?bar|ssb|cambered|axle|smith)\b/i;
+const NOT_BAR = /\b(dumbbells?|db|cables?|bands?|kettlebells?|kb|landmine|goblet|machine)\b/i;
+/**
+ * How a card offers warm-ups (WarmupRows): "last" for a heavy barbell compound
+ * (the squat, bench and deadlift and their barbell variations, and any barbell /
+ * trap-bar / Smith squat, hinge, hip thrust or press), where the last warm-up
+ * reads the day well enough to set the working weight, so it's an open row before
+ * set 1; "secondary" for everything else (bodybuilding accessories, dumbbell and
+ * machine work): + Warm-up under the sets, folded away once logged.
+ */
+export function warmupStyleOf(family: string, exerciseName: string | null | undefined, equipment?: string | null): "last" | "secondary" {
+  const text = `${exerciseName ?? ""} ${equipment ?? ""}`;
+  if (family === "squat" || family === "bench" || family === "deadlift") return rangeLift(family, exerciseName, equipment) ? "last" : "secondary";
+  if (!exerciseName || NOT_BAR.test(text) || !BAR.test(text)) return "secondary";
+  return HEAVY_PATTERNS.has(classifyExercise(exerciseName).pattern) ? "last" : "secondary";
 }
 
 /** Lowest RPE a 1RM estimate is shown for — easier sets are rated too loosely to say much. */

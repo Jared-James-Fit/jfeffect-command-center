@@ -25,11 +25,13 @@ describe("smart availability wiring", () => {
   });
 });
 
-describe("chat: Send Form and Booking Link", () => {
+describe("chat: Send Form and Schedule", () => {
   it("the coach's + menu has both, and a booking invite renders as its own card", () => {
     const menu = readFileSync("src/components/composer-plus-menu.tsx", "utf8");
     expect(menu).toContain('label: "Send Form"');
-    expect(menu).toContain('label: "Booking Link"');
+    expect(menu).toContain('label: "Schedule"');
+    expect(menu).not.toContain('label: "Booking Link"');
+    expect(menu).not.toContain('label: "Book Session"');
     expect(menu).toContain("externalOpen={{ form: formOpen, sig: sigOpen, recipe: recipeOpen }}");
     const shared = readFileSync("src/components/chat-shared.tsx", "utf8");
     expect(shared).toContain('if (att.kind === "booking_invite") {');
@@ -40,8 +42,18 @@ describe("chat: Send Form and Booking Link", () => {
       { id: "t1", slug: "coaching-discovery", name: "Coaching Discovery Call", duration_minutes: 20, location_mode: "video", location: null } as any,
       "c1",
       "  ",
+      null,
+      { inviteId: "i1", path: "/b/AbCdEfGhIjKlMnOpQrStUvWxYz012345", expiresAt: "2026-12-20T00:00:00Z", durationMin: 20 },
     );
-    expect(att).toMatchObject({ kind: "booking_invite", url: "/book/coaching-discovery", booking_card_id: "t1", client_id: "c1", duration_min: 20, where: "Google Meet video call" });
+    expect(att).toMatchObject({
+      kind: "booking_invite",
+      url: "/b/AbCdEfGhIjKlMnOpQrStUvWxYz012345",
+      booking_card_id: "t1",
+      client_id: "c1",
+      duration_min: 20,
+      where: "Google Meet video call",
+      invite_id: "i1",
+    });
     expect(att.request_note).toBeUndefined();
     expect(Date.parse(att.sent_at)).not.toBeNaN();
   });

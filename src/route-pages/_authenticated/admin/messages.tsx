@@ -1,5 +1,6 @@
 import { Link, redirect, useNavigate } from "@tanstack/react-router";
 import { LeadsInboxRow } from "@/components/leads/leads-inbox-row";
+import { MemberApplicationsInboxRow } from "@/components/applications/member-applications-entry";
 import { useProgramGaps } from "@/components/program-gaps/use-program-gaps";
 import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { useEffect, useMemo, useState } from "react";
@@ -39,6 +40,7 @@ import { formatReadReceipt } from "@/lib/read-receipt";
 import { applyMessageChange, INBOX_MESSAGE_COLUMNS } from "@/lib/inbox-cache";
 import { waitingState, type WaitingState } from "@/lib/inbox-waiting";
 import { deriveRequests, latestToReview, oldestPending, requestChip } from "@/lib/inbox-requests";
+import { TO_REVIEW_DAYS } from "@/lib/review-queue";
 import { Check, ChevronRight, MessageCircle, Mic, Sparkles } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { openSummer } from "@/components/summer/summer-assistant";
@@ -207,10 +209,18 @@ function inFilter(it: FilterRow, filter: Filter): boolean {
 
 export function MessagesInbox({
   initialClient,
+  initialMessage,
   initialSupport,
   embedded = false,
   view,
-}: { initialClient?: string; initialSupport?: string; embedded?: boolean; view?: "chats" | "groups" } = {}) {
+}: {
+  initialClient?: string;
+  /** A message in initialClient's chat to open on, scrolled to and highlighted (a check-in from the dashboard). */
+  initialMessage?: string;
+  initialSupport?: string;
+  embedded?: boolean;
+  view?: "chats" | "groups";
+} = {}) {
   const selectedFromUrl = initialClient;
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -338,9 +348,12 @@ export function MessagesInbox({
     queryKey: ["message-form-checkin-inbox"],
     staleTime: 15_000,
     queryFn: async () => {
+      // The to-review window, reviewed or not: review-queue.ts needs the newer
+      // reviewed ones to know an older one was replaced.
+      const since = new Date(Date.now() - TO_REVIEW_DAYS * 86_400_000).toISOString();
       const [native, checkins] = await Promise.all([
-        (supabase.from("nf_submissions") as any).select("id, client_id, form_id, submitted_at, reviewed_at").not("submitted_at", "is", null).is("reviewed_at", null).limit(1000),
-        (supabase.from("messenger_checkins") as any).select("id, client_id, task_type, submitted_at, status").eq("status", "completed").is("reviewed_at", null).not("submitted_at", "is", null).limit(1000),
+        (supabase.from("nf_submissions") as any).select("id, client_id, form_id, submitted_at, reviewed_at, status").not("submitted_at", "is", null).gte("submitted_at", since).limit(2000),
+        (supabase.from("messenger_checkins") as any).select("id, client_id, task_type, submitted_at, status, reviewed_at, superseded_at").eq("status", "completed").not("submitted_at", "is", null).gte("submitted_at", since).limit(2000),
       ]);
       if (native.error) throw native.error;
       if (checkins.error) throw checkins.error;
@@ -512,8 +525,7 @@ export function MessagesInbox({
     return m;
   }, [lastMessages]);
 
-  // When I (staff) last replied in each chat: a chat check-in has no reviewed
-  // flag, so a reply after it is what counts as reviewing it.
+  // When I (staff) last replied in each chat (the Brief's "since").
   const lastStaffReplyByClient = useMemo(() => {
     const m = new Map<string, string>();
     for (const msg of lastMessages) {
@@ -532,10 +544,11 @@ export function MessagesInbox({
         kind: p.kind,
         submitted_at: p.submitted_at,
         type: p.kind === "form" ? p.form_id : p.task_type,
+        reviewed: !!p.reviewed_at || p.status === "reviewed",
+        superseded: !!p.superseded_at,
       })),
-      lastStaffReplyByClient,
     ),
-    [pendingSubmissions, lastStaffReplyByClient],
+    [pendingSubmissions],
   );
   const requestsByClient = useMemo(
     () =>
@@ -1031,6 +1044,8 @@ export function MessagesInbox({
           )}
           {/* New coaching applications, with the AI's read and a text to send (admin). */}
           {role === "admin" && !search && filter === "Inbox" && <LeadsInboxRow />}
+          {/* Free membership applications waiting on a decision (admin). */}
+          {role === "admin" && !search && filter === "Inbox" && <MemberApplicationsInboxRow />}
           {listRows.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No conversations.</div>
           ) : listRows.map((row) => row.kind === "support" ? (
@@ -1324,6 +1339,7 @@ export function MessagesInbox({
             <MessageThread
               clientId={selected.id}
               role="admin"
+              focusMessageId={selected.id === initialClient ? initialMessage ?? null : null}
               conversationState={selectedState ?? null}
               hideControls
               fullBleed

@@ -4,8 +4,10 @@ import { ArrowDownToLine, Check, Info, Target, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useShowLoadSuggestions } from "@/lib/load-suggestion-visibility";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { audibleStep, BACKOFF_FATIGUE, loadStep, roundToStep, type LoadModel, type LoadSuggestion } from "@/lib/load-suggestion";
+import { audibleStep, BACKOFF_FATIGUE, loadStep, roundToStep, type LoadModel, type LoadSuggestion, type RepProgression } from "@/lib/load-suggestion";
 import type { PlannedLoadView } from "@/lib/workouts/planned-load";
+import { WARMUP_TOO_EASY } from "@/lib/final-warmup";
+import { HapticTap } from "@/components/haptic-tap";
 
 function fmtNum(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
@@ -63,10 +65,16 @@ export function LoadSuggestionCard({
 }) {
   if (model.status === "calibrating" || !hint) {
     // Suggest is on but there's no number yet: say when there will be one, and why in the info.
-    const why = model.historySessions === 0 ? "No logs of this lift yet" : "No recent logs of this lift with an RPE";
-    const next = warmup
-      ? "Log your last warm-up and it sets today's weight."
-      : "Log your first set with an RPE and the rest get a live suggestion.";
+    // A warm-up too easy to read never becomes a made-up number (load-suggestion.ts note 8).
+    const tooEasy = !!model.warmupTooEasy;
+    const why = tooEasy
+      ? `${WARMUP_TOO_EASY} from your last warm-up, and no logs of this lift yet`
+      : model.historySessions === 0 ? "No logs of this lift yet" : "No recent logs of this lift with an RPE";
+    const next = tooEasy
+      ? "Log your first set with an RPE and the rest get a live suggestion. A heavier last warm-up (RPE 6 or more) would set it now."
+      : warmup
+        ? "Log your last warm-up and it sets today's weight."
+        : "Log your first set with an RPE and the rest get a live suggestion.";
     return (
       <SuggestionPopover
         label={`Suggested: none yet. ${why}`}
@@ -74,7 +82,9 @@ export function LoadSuggestionCard({
         cell={
           <>
             <span className={REF_LABEL}>Suggested <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></span>
-            <span className="text-[13px] leading-snug text-muted-foreground">{warmup ? "After your warm-up" : "After your first set"}</span>
+            <span className="text-[13px] leading-snug text-muted-foreground" data-load-pending={tooEasy ? "warmup-too-easy" : undefined}>
+              {tooEasy ? "Warm-up too easy · after your first set" : warmup ? "After your warm-up" : "After your first set"}
+            </span>
           </>
         }
       >
@@ -117,7 +127,9 @@ export function LoadSuggestionCard({
             title={picks ? "Pick your weight: tap to type it" : "Tap to log your sets at this weight"}
             onApply={onApply}
           />
-          {showPlan && <span className="text-[13px] tabular-nums text-muted-foreground">{planText.trim()}</span>}
+          {hint.progression ? (
+            <span className="text-[13px] tabular-nums text-muted-foreground" data-progression={hint.progression.action}>{progressionChange(hint.progression, hint.unit)}</span>
+          ) : showPlan && <span className="text-[13px] tabular-nums text-muted-foreground">{planText.trim()}</span>}
         </span>
       </div>
     );
@@ -135,6 +147,7 @@ export function LoadSuggestionCard({
             <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           </span>
           {value}
+          {hint.progression && <span className="text-[13px] tabular-nums text-muted-foreground" data-progression={hint.progression.action}>{progressionChange(hint.progression, hint.unit)}</span>}
         </>
       }
     >
@@ -143,11 +156,30 @@ export function LoadSuggestionCard({
   );
 }
 
+/** A double-progression suggestion's change from last time, in a few words ("+5 lb", "same weight · build to 12", "−5 lb"). */
+export function progressionChange(p: RepProgression, unit: string): string {
+  const d = Math.round((p.load - p.from) * 100) / 100;
+  if (Math.abs(d) < 0.01) return `same weight · build to ${p.range.hi}`;
+  return `${d > 0 ? "+" : "−"}${fmtNum(Math.abs(d))} ${unit}`;
+}
+
+/** Why a double-progression suggestion is what it is, in a coach's words. */
+export function progressionWhy(p: RepProgression, unit: string): string {
+  const reps = p.reps.join(", ");
+  const top = p.range.hi;
+  const from = `${fmtNum(p.from)} ${unit}`;
+  if (p.action === "add") return `Last time: ${from} for ${reps}, the top of ${p.range.lo}–${top} on every set. So it goes up the smallest step (${progressionChange(p, unit)}). Aim for ${p.range.lo}+ reps, then build back to ${top}.`;
+  if (p.action === "drop") return `Last time: ${from} for ${reps}, short of ${p.range.lo} on every set. So it comes down a step (${progressionChange(p, unit)}). Build back up to ${top}.`;
+  if (p.bigJump) return `Last time: ${from} for ${reps}. The next weight up is a big jump, so stay at ${from} and add reps past ${top} before you move up.`;
+  return `Last time: ${from} for ${reps}. Stay at ${from} until every set reaches ${top} reps at the target effort, then it goes up.`;
+}
+
 /**
- * The weight as a blue chip with a fill-down arrow, the same blue as the empty
- * weight boxes: one tap logs the first open set at it and the untouched sets
- * below fill in and log too (the card says how many, with Undo). Suggested and
- * a coach's planned % both use it.
+ * The weight as a quiet chip with a fill-down arrow (information first, never a
+ * competing primary action: the card's one accent stays the set you log): one
+ * tap logs the first open set at it and the untouched sets below fill in and log
+ * too (the card says how many, with Undo). Suggested and a coach's planned %
+ * both use it.
  */
 function FillChip({ load, unit, shown, small = false, ariaLabel, title = "Tap to log your sets at this weight", onApply }: {
   load: number;
@@ -182,12 +214,14 @@ function FillChip({ load, unit, shown, small = false, ariaLabel, title = "Tap to
       title={title}
       data-testid="load-apply"
       className={cn(
-        "inline-flex min-h-9 max-w-full items-center gap-1 whitespace-nowrap rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-1 font-semibold leading-tight tabular-nums text-foreground transition active:scale-[0.97] active:bg-blue-500/20 disabled:opacity-60",
+        "relative inline-flex min-h-9 max-w-full items-center gap-1 whitespace-nowrap rounded-md border border-border bg-background px-2 py-1 font-semibold leading-tight tabular-nums text-foreground transition hover:bg-muted active:scale-[0.97] active:bg-muted disabled:opacity-60",
         small ? "text-[13px]" : "text-sm",
       )}
     >
-      <ArrowDownToLine className="h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+      <ArrowDownToLine className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
       <span data-testid="load-target">{shown}{"\u00a0"}{unit}</span>
+      {/* the iPhone's tap as the finger logs the sets (haptic-tap.tsx) */}
+      {!busy && <HapticTap />}
     </button>
   );
 }
@@ -215,7 +249,7 @@ function InfoButton({ label, testId, children }: { label: string; testId: string
 
 /**
  * The right half when the coach planned the load as a % (planned-load.ts): what
- * the % is of, and the weight it means today as the same blue chip as Suggested
+ * the % is of, and the weight it means today as the same quiet chip as Suggested
  * (one tap logs the open sets at it; the boxes stay empty until then), or what it
  * waits on ("After your top set"). The ⓘ says how it's worked out and that the
  * RPE is its cap.
@@ -327,10 +361,16 @@ function suggestionParts({ hint, model, fromName, picks }: {
   const dayPct = model.dayFactor ? Math.round((model.dayFactor - 1) * 100) : 0;
   const daySigned = `${dayPct > 0 ? "+" : "−"}${Math.abs(dayPct)}%`;
   const why =
-    model.source === "warmup"
+    hint.progression
+      ? progressionWhy(hint.progression, hint.unit)
+      : model.source === "warmup"
       ? "your final warm-up (first time on this lift, so kept conservative)"
       : model.source === "history_warmup"
-        ? "your recent sessions, nudged by your final warm-up"
+        ? hint.warmup === "too_easy"
+          ? `your recent sessions. Your last warm-up was easy enough that it can't say much about today (${WARMUP_TOO_EASY.toLowerCase()}), so it didn't change the number`
+          : hint.warmup === "light"
+            ? "your recent sessions. Your heaviest warm-up was too far under today's working weight to say how today feels, so it didn't change the number (log one near it, about 85–90%)"
+            : "your recent sessions, nudged by your final warm-up"
         : model.source === "history"
       ? model.early
         ? `your ${model.historySessions === 1 ? "one recent session" : "recent sessions"} of this lift, an early estimate that sharpens every session`
@@ -350,8 +390,12 @@ function suggestionParts({ hint, model, fromName, picks }: {
           : "the sets you've logged today";
   // Says when the number is live: moved by what's been logged today.
   const badge: { text: string; live: boolean } | null =
-    model.source === "warmup" ? { text: "From warm-up", live: false }
-      : model.source === "history_warmup" ? { text: "Warm-up tuned", live: false }
+    hint.progression ? { text: hint.progression.action === "add" ? "Earned the next step" : hint.progression.action === "drop" ? "Down a step" : "Build reps", live: false }
+    : model.source === "warmup" ? { text: "From warm-up", live: false }
+      : model.source === "history_warmup"
+        ? hint.warmup === "too_easy" ? { text: `${WARMUP_TOO_EASY} · from your history`, live: false }
+          : hint.warmup === "light" ? { text: "Warm-up too light to tune · from your history", live: false }
+          : { text: "Warm-up tuned", live: false }
       : model.source === "today" || model.source === "blend" ? { text: "Live", live: true }
       : model.early ? { text: "Early estimate", live: false }
       : dayPct !== 0 ? { text: `Live ${daySigned}`, live: true }
@@ -386,7 +430,9 @@ function SuggestionWhyBody({ hint, why, model, warmup, audible, range, picks, rp
           </p>
         )}
         <p className="text-foreground" data-testid="load-range">
-          {picks ? (
+          {hint.progression ? (
+            <>{why}</>
+          ) : picks ? (
             <>
               Pick within{" "}
               <span className="font-semibold tabular-nums">{fmtNum(picks.low)}–{fmtNum(picks.high)} {hint.unit}</span>{" "}
@@ -410,7 +456,9 @@ function SuggestionWhyBody({ hint, why, model, warmup, audible, range, picks, rp
             <span className="text-muted-foreground transition group-open:rotate-180" aria-hidden="true">⌄</span>
           </summary>
           <p className="mt-1 text-muted-foreground">
-            From {why}.
+            {hint.progression
+              ? "Double progression: the same weight until every set reaches the top of the range at the target effort, then the smallest step you load on this exercise."
+              : <>From {why}.</>}
             {Math.abs((model.bodyweightScale ?? 1) - 1) >= 0.01 &&
               ` Adjusted ${model.bodyweightScale > 1 ? "up" : "down"} ${Math.abs(Math.round((model.bodyweightScale - 1) * 1000) / 10)}% for your bodyweight change (strength doesn't move one-for-one with bodyweight, so it's about two thirds of the change).`}
             {!picks && range && <> A good day lands anywhere in <span className="tabular-nums">{range} {hint.unit}</span>.</>}
