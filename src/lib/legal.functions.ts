@@ -342,7 +342,7 @@ export const recordAcceptance = createServerFn({ method: "POST" })
     } catch { /* ignore — not available in some runtimes */ }
 
     // Only the server writes acceptance records (the database stamps the time
-    // and the published text; 20270422090000_security_hardening.sql).
+    // and the published text; 20270423090000_security_hardening.sql).
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await (supabaseAdmin as any)
       .from("legal_acceptances")

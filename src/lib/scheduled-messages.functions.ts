@@ -154,7 +154,7 @@ export const retryFailedMessage = createServerFn({ method: "POST" })
     }
 
     // The caller is checked above; the worker functions below are the
-    // server's only (20270422090000_security_hardening.sql), so they run as it.
+    // server's only (20270423090000_security_hardening.sql), so they run as it.
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Atomically grab the row (race-safe). Second simultaneous click finds
