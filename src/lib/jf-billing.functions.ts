@@ -227,7 +227,7 @@ export const createJfSignupCheckout = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     // Retired: JF Effect is free to join (/join). This reused any existing
     // login with the typed email and, once a checkout finished, handed back a
-    // sign-in link for it, so it stays off (20270403093000_security_hardening.sql).
+    // sign-in link for it, so it stays off (20270422090000_security_hardening.sql).
     if (!PAID_SIGNUP_ENABLED) throw new Error(PAID_SIGNUP_RETIRED);
     const s = await loadSettings();
     if (!s.monthly_price_id) throw new Error("Membership pricing isn't configured yet. Please contact support.");
