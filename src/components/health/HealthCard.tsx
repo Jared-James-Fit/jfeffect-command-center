@@ -27,6 +27,7 @@ import { getHealthProfileFn } from "@/lib/health/health.functions";
 import { BUDGET_LABELS, healthProfileKey, PAIN_WEEKS, type HealthEntry, type HealthProfile, type SupplementBudget } from "@/lib/health/health-profile";
 import { foodHistoryKey } from "@/lib/nutrition-targets/food-history";
 import { cn } from "@/lib/utils";
+import { PainReviewSheet } from "@/components/pain/pain-review-sheet";
 
 const shortDate = (d?: string | null) =>
   d ? new Date(d.length === 10 ? `${d}T12:00:00Z` : d).toLocaleDateString([], { month: "short", day: "numeric", timeZone: d.length === 10 ? "UTC" : undefined }) : null;
@@ -43,6 +44,7 @@ export function useHealthProfile(clientId: string) {
 export function HealthCard({ clientId, className, bare }: { clientId: string; className?: string; bare?: boolean }) {
   const qc = useQueryClient();
   const { data: p, isLoading } = useHealthProfile(clientId);
+  const [painOpen, setPainOpen] = useState(false);
   const [target, setTarget] = useState<HealthSheetTarget>(null);
   const [settingsOpen, setSettingsOpen] = useState<string[]>([]);
 
@@ -120,13 +122,22 @@ export function HealthCard({ clientId, className, bare }: { clientId: string; cl
                       <li key={a.area}>
                         <div className="first-letter:uppercase">{a.area}</div>
                         <div className="text-[13px] leading-5 text-muted-foreground">
-                          {a.count}× after workouts · last {shortDate(a.last)}
-                          {a.worst != null ? ` · worst ${a.worst}/10` : ""}
+                          {a.summary ?? (
+                            <>
+                              {a.count}× after workouts · last {shortDate(a.last)}
+                              {a.worst != null ? ` · worst ${a.worst}/10` : ""}
+                            </>
+                          )}
                         </div>
                       </li>
                     ))}
                   </ul>
-                  <p className="mt-1 text-[12px] text-muted-foreground">Last {PAIN_WEEKS} weeks of check-outs.</p>
+                  <p className="mt-1 text-[12px] text-muted-foreground">
+                    Last {PAIN_WEEKS} weeks of check-outs ·{" "}
+                    <button type="button" onClick={() => setPainOpen(true)} className="font-semibold text-foreground underline-offset-2 hover:underline" data-health-pain-history>
+                      Pain history
+                    </button>
+                  </p>
                 </Row>
               )}
               {p.conditions.length > 0 && (
@@ -185,6 +196,7 @@ export function HealthCard({ clientId, className, bare }: { clientId: string; cl
       )}
 
       <HealthItemSheet clientId={clientId} mode="coach" target={target} onClose={() => setTarget(null)} onSaved={refresh} />
+      <PainReviewSheet clientId={painOpen ? clientId : null} onClose={() => setPainOpen(false)} />
     </>
   );
 

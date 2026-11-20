@@ -78,6 +78,9 @@ describe("quick check-out (review v2)", () => {
     expect(checkoutCta({ ...base, effort: null }).enabled).toBe(false);
     expect(checkoutCta({ ...base, pain: true }).enabled).toBe(false);
     expect(checkoutCta({ ...base, isEdit: true }).label).toBe("Save changes");
+    // the body map: every place needs a how bad, and "somewhere else" needs words
+    expect(checkoutCta({ ...base, pain: true, painArea: "Knee (R)", painUnrated: true })).toEqual({ label: "Pick how bad it is", enabled: false });
+    expect(checkoutCta({ ...base, pain: true, painArea: "Other", painUnnamed: true })).toEqual({ label: "Say where it hurts", enabled: false });
     const editor = readFileSync("src/components/workout/shared/workout-review-editor.tsx", "utf8");
     expect(editor).toContain(
       "useState<boolean | null>(initial?.submittedAt ? !!initial.pain : null)",

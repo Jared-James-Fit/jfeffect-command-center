@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { AlertTriangle, ArrowDown, ChevronRight, NotebookPen, StickyNote } from "lucide-react";
+import { AlertTriangle, ArrowDown, ChevronRight, History, NotebookPen, StickyNote } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { painLine, type WorkoutNoteCardAttachment, type WorkoutNotePain } from "@/lib/workout-notes";
@@ -10,12 +10,19 @@ import { ClientNotesSheet } from "@/components/messages/client-notes-log";
 import { OpenWorkout } from "@/components/messages/open-client-workout";
 import { EditedToggle, NoteVersions } from "@/components/workout/shared/note-edit-history";
 import type { NoteDates } from "@/lib/exercise-note-versions";
+import { PainReviewSheet } from "@/components/pain/pain-review-sheet";
+import { FEELS, reportLine, type Severity } from "@/lib/pain/report";
 
 const sb = supabase as any;
+
+/** One place from the review's body map (pain_reports), as the card shows it. */
+type Place = { line: string; extra: string | null };
 
 type Live = {
   note: string | null;
   pain: WorkoutNotePain | null;
+  /** The review's places, each with what they added (none for a review from before the body map). */
+  places?: Place[];
   edited: boolean;
   latestMessageId: string | null;
   exercise: string | null;
@@ -44,6 +51,7 @@ export function WorkoutNoteCard({ att, messageId, role, clientId, version }: {
   const staff = role === "admin";
   const [log, setLog] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  const [painOpen, setPainOpen] = useState(false);
   const source = att.source === "exercise" ? "exercise" : "review";
   const sourceId = source === "exercise" ? att.note_id : att.feedback_id;
   const { data: live } = useQuery({
@@ -65,11 +73,15 @@ export function WorkoutNoteCard({ att, messageId, role, clientId, version }: {
           dates: { created_at: data.created_at, updated_at: data.updated_at, edited_at: data.edited_at ?? null, status: data.status },
         };
       }
-      const { data } = await sb.from("pl_workout_feedback").select("client_note, pain, pain_area, pain_level, review_edit_count, coach_message_id").eq("id", sourceId).maybeSingle();
+      const [{ data }, { data: reports }] = await Promise.all([
+        sb.from("pl_workout_feedback").select("client_note, pain, pain_area, pain_level, review_edit_count, coach_message_id").eq("id", sourceId).maybeSingle(),
+        sb.from("pain_reports").select("region, side, severity, exercise_name, feel, impact, same_issue, change, note").eq("feedback_id", sourceId).order("created_at"),
+      ]);
       if (!data) return null;
       return {
         note: (data.client_note ?? "").trim() || null,
         pain: data.pain ? { area: data.pain_area ?? null, level: data.pain_level ?? null } : null,
+        places: data.pain ? ((reports ?? []) as any[]).map(placeOf) : [],
         edited: (data.review_edit_count ?? 0) > 0,
         latestMessageId: data.coach_message_id ?? null,
         exercise: null,
@@ -99,7 +111,18 @@ export function WorkoutNoteCard({ att, messageId, role, clientId, version }: {
         <span className="text-[11px] font-bold uppercase tracking-[0.12em]">{pain ? "Pain flagged" : source === "exercise" ? "Exercise note" : "Workout note"}</span>
       </div>
       <div className="space-y-1.5 px-3.5 py-2.5">
-        {pain && <div className="text-[15px] font-bold leading-snug" data-workout-note-pain>{painLine(pain)}</div>}
+        {pain && (live?.places?.length ? (
+          <ul className="space-y-1" data-workout-note-pain>
+            {live.places.map((p, i) => (
+              <li key={i} className="leading-snug">
+                <span className="text-[15px] font-bold">{p.line}</span>
+                {p.extra && <span className="block text-[12px] text-muted-foreground">{p.extra}</span>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="text-[15px] font-bold leading-snug" data-workout-note-pain>{painLine(pain)}</div>
+        ))}
         {exercise && <div className="text-[13px] font-bold">{exercise}</div>}
         {removed ? (
           <p className="text-[13px] italic text-muted-foreground">{staff ? "They removed this note." : "You removed this note."}</p>
@@ -123,10 +146,18 @@ export function WorkoutNoteCard({ att, messageId, role, clientId, version }: {
         {staff ? (
           <>
             <OpenWorkout clientId={clientId} dayId={att.day_id ?? null} rowId={att.row_id ?? null} />
-            <button type="button" onClick={() => setLog(true)} className="ml-auto inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] font-bold text-muted-foreground active:bg-muted" data-workout-note-log>
-              All notes <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+            {pain && (
+              <button type="button" onClick={() => setPainOpen(true)} className="ml-auto inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] font-bold text-muted-foreground active:bg-muted" data-workout-note-pain-history>
+                <History className="h-3.5 w-3.5" /> Pain history
+              </button>
+            )}
+            {!pain && (
+              <button type="button" onClick={() => setLog(true)} className="ml-auto inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] font-bold text-muted-foreground active:bg-muted" data-workout-note-log>
+                All notes <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            )}
             <ClientNotesSheet clientId={log ? clientId : null} onClose={() => setLog(false)} coachNotes />
+            {pain && <PainReviewSheet clientId={painOpen ? clientId : null} onClose={() => setPainOpen(false)} inChat />}
           </>
         ) : (
           <>
@@ -141,6 +172,17 @@ export function WorkoutNoteCard({ att, messageId, role, clientId, version }: {
       </div>
     </div>
   );
+}
+
+function placeOf(r: any): Place {
+  const feel = ((r.feel ?? []) as string[]).map((f) => FEELS.find((x) => x.v === f)?.label.toLowerCase() ?? f);
+  const extra = [
+    r.same_issue && r.change ? `${r.change} than last time` : r.same_issue === false ? "new" : null,
+    feel.length ? feel.join(", ") : null,
+    r.impact === "stopped" ? "had to stop" : r.impact === "modified" ? "changed the session" : null,
+    r.region !== "other" && r.note ? `“${r.note}”` : null,
+  ].filter(Boolean).join(" · ");
+  return { line: reportLine({ region: r.region, side: r.side ?? null, severity: (r.severity as Severity) ?? null, exerciseName: r.exercise_name, note: r.note }), extra: extra || null };
 }
 
 function safeDate(s: string): Date | null {

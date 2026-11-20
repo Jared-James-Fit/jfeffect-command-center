@@ -73,12 +73,16 @@ describe("where it hurts in the review", () => {
     expect(checkoutCta({ ...base, painArea: null }).label).toBe("Pick where it hurts");
   });
 
-  it("the editor takes any number of places, a side for each paired one, and one severity", () => {
+  it("the editor takes any number of places from the body map, each with its own severity, and sends them structured", () => {
     const ed = readFileSync("src/components/workout/shared/workout-review-editor.tsx", "utf8");
-    expect(ed).toContain('{placeCount ? "Where" : "Where? Tap all that apply"}');
-    expect(ed).toContain("const storedArea = composePainAreas(painPicks, otherAreas);");
-    expect(ed).toContain("sidedPicks.map((p) =>");
-    expect(ed).toContain('{placeCount > 1 ? "How bad? The worst one" : "How bad?"}');
-    expect(ed).toContain("painArea: pain ? storedArea : null,");
+    expect(ed).toContain("<PainReporter picks={painPicks} onChange={setPainPicks} ctx={painContext} />");
+    expect(ed).toContain("painReports: pain ? painReports : [],");
+    expect(ed).toContain("painArea: pain ? painCols.painArea : null,");
+    // a place with no "how bad" holds the button
+    expect(ed).toContain("painUnrated: painPicks.some((p) => !p.severity)");
+    expect(ed).toContain('painUnnamed: painPicks.some((p) => p.region === "other" && !p.note?.trim())');
+    const rep = readFileSync("src/components/pain/pain-reporter.tsx", "utf8");
+    expect(rep).toContain("<BodyMap");
+    expect(rep).toContain("<PlaceList");
   });
 });

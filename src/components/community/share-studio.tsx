@@ -101,6 +101,12 @@ export type StudioPost = {
   allowStory?: boolean;
   /** Runs before a story goes up (a lock in's story starts the session, like its post does). */
   beforeStory?: () => Promise<void>;
+  /**
+   * A finished workout: a post to anyone but them needs a photo or clip of
+   * their own (Crew is what people post, not an activity log); the card on
+   * its own can still go on their story (community_save_post refuses it too).
+   */
+  needsMedia?: boolean;
 };
 
 /** A reply to a question response (ShareStudio's `reply`). */
@@ -1016,6 +1022,8 @@ export function ShareStudio({
 
   // something to post: the card, or (a plain post) a photo or a slide
   const hasContent = !!card || !!shot || tray.items.length > 0;
+  // a workout's post to the crew needs a photo or clip of their own: the card alone is a story's
+  const needsMedia = !story && !!post?.needsMedia && visibility !== "private" && !shot && tray.items.length === 0 && !post.hasCover;
   const qc = useQueryClient();
   const { user } = useAuth();
   /** STORY: the picture (or the clip) goes to your story, never the feed. */
@@ -1052,7 +1060,7 @@ export function ShareStudio({
     toast.success(audience === "close_friends" ? "Added to your Close friends story" : "Added to your story", { description: "It's in the story row for 24 hours." });
   };
   const doPost = async () => {
-    if (!post || busy || posted || !hasContent) return;
+    if (!post || busy || posted || !hasContent || needsMedia) return;
     setBusy("post");
     try {
       if (story) {
@@ -1586,6 +1594,18 @@ export function ShareStudio({
                     onLibrary={() => libRef.current?.click()}
                   />
                   <AttachPreview a={att} dark />
+                  {needsMedia && (
+                    <div className="flex items-center gap-3 rounded-2xl bg-white/10 px-3.5 py-2.5" data-studio-needs-media>
+                      <p className="min-w-0 flex-1 text-[13px] leading-snug text-white/85">
+                        Add a photo or clip to post this to Crew. The card on its own can go on your story.
+                      </p>
+                      {storyable && (
+                        <button type="button" onClick={() => pickKind("story")} className="h-9 shrink-0 rounded-full bg-white px-3.5 text-[13px] font-bold text-black active:scale-95">
+                          Your story
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <div className="min-w-0 flex-1">
                       <CaptionField value={caption} onOpen={openCaption} />
@@ -1633,13 +1653,13 @@ export function ShareStudio({
                 )}
                 <button
                   type="button"
-                  disabled={!!busy || posted || !post || !hasContent || att.recorder.recording}
+                  disabled={!!busy || posted || !post || !hasContent || needsMedia || att.recorder.recording}
                   onClick={() => void doPost()}
                   className={cn(
                     // the app's own primary button: JF red, solid
                     "inline-flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl text-[16px] font-bold shadow-lg shadow-primary/25 active:scale-[0.98] disabled:opacity-100",
                     posted ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground",
-                    !post && "opacity-60",
+                    (!post || needsMedia) && "opacity-60",
                   )}
                 >
                   {posted ? <Check className="h-5 w-5" /> : <Send className="h-5 w-5" />}
