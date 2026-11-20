@@ -55,6 +55,15 @@ export const createCheckinThread = createServerFn({ method: "POST" })
     const memberId = await getMyMemberId(supabase, userId);
     if (!clientId && !memberId) throw new Error("No client or member account found.");
 
+    // The submission has to be one the caller can see (their own, or a
+    // client's they coach): RLS decides, before anything is written as the server.
+    const { data: mySubmission } = await supabase
+      .from("nf_submissions")
+      .select("id")
+      .eq("id", data.submissionId)
+      .maybeSingle();
+    if (!mySubmission) throw new Error("Submission not found.");
+
     const autoArchiveAt = new Date(Date.now() + AUTO_ARCHIVE_DAYS * 86_400_000).toISOString();
 
     // Check if thread already exists for this submission
@@ -65,6 +74,10 @@ export const createCheckinThread = createServerFn({ method: "POST" })
       .maybeSingle();
 
     let threadId = existing?.id;
+    if (threadId) {
+      const { data: visible } = await supabase.from("weekly_checkin_threads").select("id").eq("id", threadId).maybeSingle();
+      if (!visible) throw new Error("Thread not found.");
+    }
 
     if (!threadId) {
       const { data: thread, error } = await supabaseAdmin
@@ -163,6 +176,14 @@ export const replyToCheckinThread = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     const supabaseAdmin = (await import("@/integrations/supabase/client.server")).supabaseAdmin as any;
 
+    // Only a thread the caller can see (their own, or a client's they coach).
+    const { data: thread } = await supabase
+      .from("weekly_checkin_threads")
+      .select("id")
+      .eq("id", data.threadId)
+      .maybeSingle();
+    if (!thread) throw new Error("Thread not found.");
+
     // Determine sender role
     const { data: profile } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
     const isAdminOrCoach = profile && ["admin", "coach"].includes(profile.role);
@@ -191,6 +212,20 @@ export const archiveCheckinThread = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => ArchiveInput.parse(d))
   .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    // Only a thread the caller can see; archiving it for the coach's side is staff's.
+    const { data: thread } = await supabase
+      .from("weekly_checkin_threads")
+      .select("id")
+      .eq("id", data.threadId)
+      .maybeSingle();
+    if (!thread) throw new Error("Thread not found.");
+    if (data.archiveFor === "admin") {
+      const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+      if (!(roles ?? []).some((r: any) => r.role === "admin" || r.role === "coach")) {
+        throw new Error("Only your coach can archive this for the team.");
+      }
+    }
     const supabaseAdmin = (await import("@/integrations/supabase/client.server")).supabaseAdmin as any;
     const field = data.archiveFor === "client" ? "client_archived_at" : "admin_archived_at";
     const { error } = await supabaseAdmin

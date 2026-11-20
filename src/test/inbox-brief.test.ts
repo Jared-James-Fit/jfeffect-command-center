@@ -4,7 +4,7 @@ import {
   briefWaitingLines, formKindTags, formTitles, matchesSignal, mediaWaitingByClient, painWaitingByClient, reviewItemsByClient,
   signalTags, splitRequests, waitingCount, type ClientSignals, type InboxMsg,
 } from "@/lib/inbox-brief";
-import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts";
+import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts.server";
 
 const now = Date.parse("2026-10-27T18:00:00Z");
 const ago = (h: number) => new Date(now - h * 3_600_000).toISOString();

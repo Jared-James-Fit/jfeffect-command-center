@@ -3,36 +3,36 @@ import { describe, expect, it } from "vitest";
 
 const read = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
 
-describe("View workout in Crew: the workout card is the way in (Nov 15 2026)", () => {
+describe("The workout in Crew: the post's last swipe, never a page it sends you to (Nov 20 2026, was Nov 15)", () => {
   const card = read("src/components/community/post-card.tsx");
 
-  it("on a post's screen the workout is one card whose last row is View workout, not a card plus a separate bar", () => {
-    expect(card).toContain("<WorkoutOpenCard post={post} onOpen={() => onOpen(post)} hint={!!openHint}>\n                    <WorkoutHero stats={s} unit={unit} />");
+  it("on a post's screen with no picture the workout's card is the first swipe and its recap the second; its row slides there", () => {
+    expect(card).toMatch(/<FitScale>\s*<WorkoutCoverCard post=\{post\} onRecap=\{toRecap\}>\s*<WorkoutHero stats=\{s\} unit=\{unit\} \/>/);
+    expect(card).not.toContain("WorkoutOpenCard");
     // the old bar under the card is gone from the page (the card feed and a story's pulse keep theirs)
     expect(card.match(/<ViewWorkoutRow post=\{post\}/g)?.length).toBe(2);
     expect(card).toContain("data-view-workout");
-    expect(card).toContain('className={cn("flex h-11 w-full items-center justify-between');
-    expect(card).toContain('{prs > 1 ? `${prs} PRs` : "Every exercise"}');
-    expect(card).toContain("👇 Tap to see the whole workout");
+    expect(card).toContain('{prs > 1 ? `${prs} PRs · Swipe` : "Every exercise · Swipe"}');
+    // the first-time tip is the swipe's ("Swipe for workout" by the carousel's counter), never a bouncing "tap"
+    expect(card).not.toContain("👇 Tap to see the whole workout");
+    expect(card).toContain("Swipe for workout");
   });
 
-  it("a tap anywhere on the card opens it once the double-tap window has passed (two taps still ❤️); its row opens at once", () => {
-    const tap = card.indexOf('closest?.("[data-workout-open]")');
-    const clip = card.indexOf('const clip = (e.target as Element | null)?.closest?.("[data-inline-video]");');
-    expect(tap).toBeGreaterThan(0);
-    // after the double-tap check and the "bring the first post up" tap, before a clip's own tap
-    expect(tap).toBeGreaterThan(card.indexOf("if (now - lastTap.current < 300)"));
-    expect(tap).toBeGreaterThan(card.indexOf("const below = belowSnap(articleRef.current);"));
-    expect(tap).toBeLessThan(clip);
-    expect(card).toContain("singleTimer.current = null;\n        onOpen(post);\n      }, 300);");
-    expect(card).toContain("e.stopPropagation();\n            onOpen();");
+  it("a tap on the card never leaves the post (two taps still ❤️); only its buttons move it, at once", () => {
+    expect(card).not.toContain('closest?.("[data-workout-open]")');
+    // the card's row and the recap's button take their own tap straight away (the post waits out a double tap)
+    expect(card).toContain("e.stopPropagation();\n          onRecap();");
+    expect(card).toContain("const toRecap = () => (recapCtl.current ? recapCtl.current.toEnd() : onOpen(post));");
   });
 
-  it("a picture or film post's way in is one small chip under the set, its PRs first, never a pill row competing with the caption (Nov 17 2026)", () => {
+  it("a picture or film post's workout is one small chip under the set, its PRs first, sliding to the recap (Nov 17 2026, Nov 20 2026)", () => {
     expect(card).toContain("after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']\"\n                    data-page-workout");
     expect(card).toContain('className="relative inline-flex h-7 max-w-full items-center gap-1.5 rounded-md bg-secondary/70 pl-2 pr-1.5 text-[12px] leading-none text-foreground');
-    expect(card).toContain('aria-label={`View workout: ${workoutHeadline(s)}${prLabel ? `, ${prLabel}` : ""}`}');
+    expect(card).toContain('aria-label={`Workout recap: ${workoutHeadline(s)}${prLabel ? `, ${prLabel}` : ""}`}');
+    expect(card).toContain("onClick={toRecap}");
     expect(card).toContain("data-page-prs");
+    // gone while the recap itself is on screen
+    expect(card).toContain("{visual && s && !onRecap && (");
     // the workout's name lives in the chip; no separate name line, no "View workout" pill
     expect(card).not.toContain("data-page-workout-name");
     expect(card).not.toContain("View workout\n                  <ChevronRight");
@@ -55,7 +55,9 @@ describe("View workout in Crew: the workout card is the way in (Nov 15 2026)", (
     expect(detail).toContain('<h2 className="break-words text-[20px] font-semibold leading-tight tracking-[-0.01em]">{workoutHeadline(s)}</h2>');
     expect(detail).toContain("const meta = [workoutSubtitle(s), monthWorkoutLine(s)].filter(Boolean).join(\" · \");");
     expect(detail).toContain('<dl className="mt-4 flex flex-wrap gap-x-4 gap-y-3 min-[375px]:gap-x-6" data-workout-stats>');
-    for (const label of ['"Time"', '"Working sets"', '"Volume"', '"PRs"']) expect(detail).toContain(label);
+    expect(detail).toContain("const stats = summaryStats(s, unit);");
+    const recap = read("src/lib/workout-recap.ts");
+    for (const label of ['"Time"', '"Working sets"', '"Volume"', '"PRs"']) expect(recap).toContain(label);
     // each exercise: its name, its working sets and record, its best set in the viewer's unit over the other
     expect(detail).toContain("const best = exerciseBestLines(e, unit);");
     expect(detail).toContain("{best.other && <div");

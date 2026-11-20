@@ -40,6 +40,7 @@ import {
   type BusyItem,
 } from "@/lib/smart-availability";
 import { googleBusyForBooking } from "@/lib/session-conflicts";
+import { INVITE_DAYS } from "@/lib/booking-invite";
 import {
   addDaysISO,
   DEFAULT_TZ,
@@ -88,7 +89,18 @@ export async function loadBookingType(admin: Admin, slug: string): Promise<Booki
     .toLowerCase();
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(clean)) return null;
   const { data } = await admin.from("booking_cards").select("*").eq("slug", clean).maybeSingle();
-  if (!data || !(data as any).is_active || !(data as any).online_enabled) return null;
+  return liveType(admin, data);
+}
+
+/** A live booking type by its id (a personal link names its type by id, so a renamed link still works). */
+export async function loadBookingTypeById(admin: Admin, id: string): Promise<BookingType | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const { data } = await admin.from("booking_cards").select("*").eq("id", id).maybeSingle();
+  return liveType(admin, data);
+}
+
+async function liveType(admin: Admin, data: unknown): Promise<BookingType | null> {
+  if (!data || !(data as any).is_active || !(data as any).online_enabled || !(data as any).slug) return null;
   const [{ data: hours }, settings] = await Promise.all([
     admin
       .from("booking_card_hours" as any)
@@ -462,6 +474,28 @@ export async function clientIdByEmail(admin: Admin, email: string): Promise<stri
   return rows.length === 1 ? (rows[0].id as string) : null;
 }
 
+/**
+ * Who's signed in, when someone is (the page's server calls carry their token):
+ * staff or not, and their own client record (null for a coach with no athlete
+ * account, a JF member still waiting on approval, or anyone archived).
+ */
+export async function loadBookingViewer(
+  admin: Admin,
+  userId: string,
+): Promise<{ userId: string; staff: boolean; client: BookingClient | null }> {
+  const [{ data: roles }, { data: c }] = await Promise.all([
+    admin.from("user_roles").select("role").eq("user_id", userId),
+    admin
+      .from("clients")
+      .select("id, full_name, email, phone, archived, service_tier, user_id")
+      .eq("user_id", userId)
+      .limit(2),
+  ]);
+  const staff = ((roles ?? []) as any[]).some((r) => r.role === "admin" || r.role === "coach");
+  const rows = ((c ?? []) as any[]).filter((r) => !r.archived);
+  return { userId, staff, client: rows.length === 1 ? (rows[0] as BookingClient) : null };
+}
+
 export async function loadBookingClient(
   admin: Admin,
   clientId: string,
@@ -617,9 +651,12 @@ export async function createOnlineBooking(
       .eq("id", claimId);
   }
 
-  // A call a client booked shows in their coach chat (unless the coach's invite card already does).
+  // A call a client booked, or anything booked from the coach's personal link (a text or an
+  // email reaches no chat), shows in their coach chat, unless the coach's invite card already does.
   const inChat =
-    !!trustedClient && result.kind === "session" && !isTrainingSessionType(type.session_type)
+    !!trustedClient &&
+    result.kind === "session" &&
+    (!isTrainingSessionType(type.session_type) || opts.via === "booking_page")
       ? await postSelfBookedCall(admin, { client: trustedClient, type, sessionId: result.id, now })
       : false;
 
@@ -919,8 +956,8 @@ async function postSelfBookedCall(
   }
 }
 
-/** A booking invite older than this (the personal link's life) no longer stands in for the chat message. */
-const INVITE_CARD_DAYS = 45;
+/** A booking invite older than this (a personal link's life) no longer stands in for the chat message. */
+const INVITE_CARD_DAYS = INVITE_DAYS;
 
 /** Coaching application flow: tie the booked call back to the application. */
 async function linkApplication(

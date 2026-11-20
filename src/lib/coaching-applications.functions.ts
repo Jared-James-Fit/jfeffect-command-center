@@ -97,10 +97,27 @@ export function scoreApplication(d: Submission) {
 
 /* ─────────── Public submit endpoint ─────────── */
 
+/** Public application limits (public-rate-limit.server.ts). A real applicant sends one. */
+const APPLY_PER_IP_PER_HOUR = 5;
+const APPLY_PER_EMAIL_PER_DAY = 3;
+const DRAFTS_PER_IP_PER_HOUR = 60;
+
 export const submitCoachingApplication = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => publicCoachingApplicationSchema.parse(i))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Each application texts and emails the coach, emails the applicant and
+    // writes an AI reply: a few per connection and per email, never a flood.
+    const { allRatesOk, callerIp } = await import("@/lib/public-rate-limit.server");
+    const ip = callerIp();
+    const emailKey = String(data.email ?? "").trim().toLowerCase();
+    const allowed = await allRatesOk(supabaseAdmin as any, [
+      { key: ip ? `apply:ip:${ip}` : null, max: APPLY_PER_IP_PER_HOUR, window: "1 hour" },
+      { key: emailKey ? `apply:email:${emailKey}` : null, max: APPLY_PER_EMAIL_PER_DAY, window: "1 day" },
+    ]);
+    if (!allowed) {
+      throw new Error("We've already got your application. If you need to change something, message us on Instagram or try again tomorrow.");
+    }
     const scored = scoreApplication(data);
     const attribution = resolveAttribution({
       from: data.source_page || null,
@@ -316,8 +333,6 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
     return {
       ok: true,
       id: inserted.id,
-      client_id: upsert.client_id,
-      conflict: upsert.conflict,
       lead_score: scored.score,
       lead_temperature: scored.temperature,
       qualification_label: scored.qualification_label,
@@ -479,6 +494,10 @@ export const saveApplicationDraft = createServerFn({ method: "POST" })
     if (data.honeypot || !hasContact(data)) return { saved: false };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
+    // A draft saves on every answer; a few dozen an hour is a person, more is a script.
+    const { rateOk, callerIp } = await import("@/lib/public-rate-limit.server");
+    const ip = callerIp();
+    if (ip && !(await rateOk(db, `apply-draft:ip:${ip}`, DRAFTS_PER_IP_PER_HOUR, "1 hour"))) return { saved: false };
     const { data: existing } = await db
       .from("coaching_application_drafts")
       .select("id, submitted_at")

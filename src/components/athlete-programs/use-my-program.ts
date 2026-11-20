@@ -6,12 +6,15 @@ import {
   programOwnership,
   originLabel,
   type EndFacts,
+  type HistoryEntry,
   type ProgramOwnership,
 } from "@/lib/my-program";
 import { useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
 import type { ProgramRoadmap } from "@/lib/training-roadmap";
 
 const rpc = (fn: string, args?: Record<string, unknown>) => (supabase as any).rpc(fn, args);
+
+export const PROGRAM_HISTORY_KEY = ["member-program-history"] as const;
 
 export type ProgramOriginInfo = ProgramOwnership & {
   /** "JF Effect plan", "Built by you", "Your copy of @jane's program" */
@@ -80,9 +83,10 @@ export function useMyCurrentProgram(
 }
 
 /**
- * End a program (member_program_end): `preview` says what will happen, `end`
- * does it. Ending touches the calendar, today, Home and analytics, so every
- * query refreshes after.
+ * End or pause a program (member_program_end): `preview` says what will
+ * happen, `end` does it ("ended" or "paused"). Either way the program is
+ * archived into their program history, never deleted. It touches the
+ * calendar, today, Home and analytics, so every query refreshes after.
  */
 export function useEndProgram() {
   const qc = useQueryClient();
@@ -97,20 +101,51 @@ export function useEndProgram() {
     },
   });
   const end = useMutation({
-    mutationFn: async (blockId: string): Promise<EndFacts> => {
+    mutationFn: async (args: string | { blockId: string; reason?: "ended" | "paused" }): Promise<EndFacts> => {
+      const { blockId, reason = "ended" } = typeof args === "string" ? { blockId: args } : args;
       const { data, error } = await rpc("member_program_end", {
         _block_id: blockId,
         _confirm: true,
+        _reason: reason,
       });
       if (error) throw error;
       return data as EndFacts;
     },
     // the ended program's days leave the list at once (its placeholder, then
     // what's left), never shown as still on the calendar while it refetches
-    onSuccess: () => {
-      void qc.resetQueries({ queryKey: ["my-workouts"] });
-      void qc.invalidateQueries();
-    },
+    onSuccess: () => refreshAfterProgramChange(qc),
   });
   return { preview, end };
+}
+
+/** After a program starts, ends, pauses or resumes: the calendar is re-read from scratch, the rest refreshes. */
+export function refreshAfterProgramChange(qc: ReturnType<typeof useQueryClient>) {
+  void qc.resetQueries({ queryKey: ["my-workouts"] });
+  void qc.invalidateQueries();
+}
+
+/** Their past programs (member_program_history), newest first. Members only. */
+export function useProgramHistory(enabled = true) {
+  return useQuery({
+    queryKey: PROGRAM_HISTORY_KEY,
+    enabled,
+    staleTime: 30_000,
+    queryFn: async (): Promise<HistoryEntry[]> => {
+      const { data, error } = await rpc("member_program_history");
+      if (error) throw error;
+      return (Array.isArray(data) ? data : []) as HistoryEntry[];
+    },
+  });
+}
+
+/** Remove a past program from the history list, or put it back (Undo). Its blocks and logs never change. */
+export function useHideFromHistory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ key, hidden }: { key: string; hidden: boolean }) => {
+      const { error } = await rpc("member_program_history_hide", { _key: key, _hidden: hidden });
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: PROGRAM_HISTORY_KEY }),
+  });
 }

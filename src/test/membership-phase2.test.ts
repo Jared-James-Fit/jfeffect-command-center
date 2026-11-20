@@ -47,7 +47,9 @@ describe("one program system: a member's Start plan runs the coach's assign engi
     expect(fn).toContain('.update({ created_by: userId } as any).eq("prep_id", result.prep_id)');
     expect(fn).toContain('.eq("created_by", userId)');
     expect(fn).toContain("return { conflict: true as const, currentName: running[0].name };");
-    expect(fn).toContain('status: "Archived", archived: true');
+    // the plan it replaces goes to their program history as a switch (archived, never deleted)
+    expect(fn).toContain('rpc("_member_program_archive", {');
+    expect(fn).toContain('_reason: "switched",');
     expect(fn).not.toMatch(/\.delete\(/);
     expect(fn).toContain("realignClientToCommittedDays({ clientId: (client as any).id, userId, role: \"client\", includePinned: false })");
   });
@@ -79,7 +81,7 @@ describe("the Plan Library lives in the portal", () => {
     const dialog = read("src/components/programs/start-plan-dialog.tsx");
     expect(dialog).toContain("startLibraryPlan");
     expect(dialog).toContain('navigate({ to: "/portal/workouts", replace: true });');
-    expect(dialog).toContain("disabled={pending || isImpersonating || !plan || !daysReady}");
+    expect(dialog).toContain("disabled={pending || isImpersonating || (!plan && !resume) || !daysReady}");
   });
 
   it("a plan starts on the days they train: fitted to its workouts a week, saved as the committed schedule", () => {
@@ -102,7 +104,7 @@ describe("the Plan Library lives in the portal", () => {
     const home = read("src/routes/_authenticated/portal/index.tsx");
     expect(home).toMatch(/\{client\?\.id && isSelfServe && \(\s*<SectionErrorBoundary label="Pick a plan">/);
     const workouts = read("src/components/workouts/WorkoutsExperience.tsx");
-    expect(workouts).toContain('if (mode === "self") return <SelfEmptyState />;');
+    expect(workouts).toContain('if (mode === "self") return <SelfEmptyState hasHistory={hasHistory} />;');
     expect(workouts).toContain("Your coach will publish your block soon.");
     expect(workouts).toContain('<Link to="/portal/programs" search={{ tab: "mine" }}>Find a program</Link>');
     expect(workouts).toContain('<Link to="/portal/programs/new">Build your own</Link>');

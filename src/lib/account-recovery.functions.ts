@@ -39,6 +39,10 @@ function randomToken(bytes = 32): string {
 }
 
 function getClientIp(): string | null {
+  // Cloudflare sets cf-connecting-ip itself; the first x-forwarded-for value
+  // is whatever the caller typed, so it's only a fallback off Cloudflare.
+  const cf = getRequestHeader("cf-connecting-ip");
+  if (cf) return cf.trim();
   const xff = getRequestHeader("x-forwarded-for");
   if (xff) return xff.split(",")[0].trim();
   return getRequestHeader("x-real-ip") ?? null;
@@ -53,10 +57,10 @@ async function sendSecuritySms(supabaseAdmin: any, toPhone: string, body: string
 }
 
 /**
- * Look up a user (across clients/app_members/coaches) by either email or phone.
- * Returns the best-guess Supabase auth user id, the verified email and verified
- * phone (both optional). Never throws if not found — recovery is intentionally
- * silent about account existence.
+ * Who a recovery request is for: the login first, exactly, and only ever a
+ * phone saved on that login's own records (account-recovery-lookup.server.ts).
+ * Staff logins get no text. Never throws if not found: recovery is
+ * intentionally silent about account existence.
  */
 async function lookupUser(
   supabaseAdmin: any,
@@ -66,87 +70,8 @@ async function lookupUser(
   email: string | null;
   phoneE164: string | null;
 }> {
-  const isEmail = looksLikeEmail(identifier);
-  let email: string | null = null;
-  let phoneE164: string | null = null;
-  let userId: string | null = null;
-
-  if (isEmail) {
-    email = identifier.trim().toLowerCase();
-    // app_members / clients / coaches may store a phone for this email
-    const { data: m } = await supabaseAdmin
-      .from("app_members")
-      .select("user_id, phone")
-      .ilike("email", email)
-      .maybeSingle();
-    if (m?.user_id) userId = m.user_id;
-    if (m?.phone) phoneE164 = normalizePhoneE164(m.phone);
-
-    if (!phoneE164) {
-      const { data: c } = await supabaseAdmin
-        .from("clients")
-        .select("user_id, phone")
-        .eq("normalized_email", email)
-        .maybeSingle();
-      if (!userId && c?.user_id) userId = c.user_id;
-      if (!phoneE164 && c?.phone) phoneE164 = normalizePhoneE164(c.phone);
-    }
-    if (!phoneE164) {
-      const { data: co } = await supabaseAdmin
-        .from("coaches")
-        .select("user_id, phone")
-        .ilike("email", email)
-        .maybeSingle();
-      if (!userId && co?.user_id) userId = co.user_id;
-      if (!phoneE164 && co?.phone) phoneE164 = normalizePhoneE164(co.phone);
-    }
-    // Fallback to auth.users for the canonical user id when role tables don't carry one
-    if (!userId) {
-      const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
-      const u = (list?.users ?? []).find(
-        (x: any) => (x.email ?? "").toLowerCase() === email,
-      );
-      if (u) userId = u.id;
-    }
-  } else {
-    phoneE164 = normalizePhoneE164(identifier);
-    if (!phoneE164) return { userId: null, email: null, phoneE164: null };
-    const digits = phoneE164.replace(/\D/g, "");
-
-    const { data: c } = await supabaseAdmin
-      .from("clients")
-      .select("user_id, email, phone")
-      .eq("normalized_phone", digits)
-      .maybeSingle();
-    if (c) {
-      userId = c.user_id ?? null;
-      email = (c.email ?? "").toLowerCase() || null;
-    }
-    if (!userId) {
-      const { data: m } = await supabaseAdmin
-        .from("app_members")
-        .select("user_id, email, phone")
-        .ilike("phone", `%${digits.slice(-10)}%`)
-        .maybeSingle();
-      if (m) {
-        userId = m.user_id ?? null;
-        if (!email && m.email) email = m.email.toLowerCase();
-      }
-    }
-    if (!userId) {
-      const { data: co } = await supabaseAdmin
-        .from("coaches")
-        .select("user_id, email, phone")
-        .ilike("phone", `%${digits.slice(-10)}%`)
-        .maybeSingle();
-      if (co) {
-        userId = co.user_id ?? null;
-        if (!email && co.email) email = co.email.toLowerCase();
-      }
-    }
-  }
-
-  return { userId, email, phoneE164 };
+  const { lookupRecoveryTarget } = await import("./account-recovery-lookup.server");
+  return lookupRecoveryTarget(supabaseAdmin, identifier, looksLikeEmail(identifier));
 }
 
 /** Increment + return the count for a (identifier, kind, window-bucket) combo. */

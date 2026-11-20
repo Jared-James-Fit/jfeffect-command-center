@@ -1,6 +1,6 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode } from "react";
 import { LiveDot } from "@/components/live-indicator";
-import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
+import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, ChevronsLeft, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
 import { CLIP_HOLD_EVENT, InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
 import { justGaveSound } from "@/lib/video-pool";
 import { UserAvatar } from "@/components/user-avatar";
@@ -63,6 +63,9 @@ import { isFilmSummary, isOwnFilmCaption } from "@/lib/workout-film";
 import { POST_SHEET_HEIGHT } from "@/lib/post-sheet";
 import { RepostButton, RepostedHeader, SaveButton, useRepostNote } from "@/components/community/repost-save";
 import { WeightOther } from "@/components/dual-weight";
+import { WorkoutRecap } from "@/components/community/workout-recap";
+import { FitScale } from "@/components/community/fit-scale";
+import { recapIndex } from "@/lib/workout-recap";
 import { splitAtWeight } from "@/lib/dual-weight";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
@@ -426,8 +429,13 @@ type Props = {
   onDoubleTap?: () => void;
   /** The tip finished playing. */
   onTipDone?: () => void;
-  /** First-time demo on "View full workout" (until they open one). */
+  /**
+   * First-time tip on the workout: on a post's screen, "Swipe for workout" on
+   * its recap (until they reach one); on the card feed, "View full workout".
+   */
   openHint?: boolean;
+  /** They reached a workout's recap (the swipe tip can go). */
+  onRecapSeen?: () => void;
   /** A tap on one of its clips: open the clips full screen there (the feed's ReelsViewer). Without it, a tap toggles the sound. */
   onOpenReel?: (post: CommunityPost, path: string) => void;
   /**
@@ -449,7 +457,7 @@ type Props = {
   pageFirst?: boolean;
 };
 
-function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone, openHint, onOpenReel, layout = "card", onOpenCaption, sheetOpen = false, pageFirst = false }: Props) {
+function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone, openHint, onRecapSeen, onOpenReel, layout = "card", onOpenCaption, sheetOpen = false, pageFirst = false }: Props) {
   const [burst, fireBurst] = useBurst();
   const lastTap = useRef(0);
   // half on screen for two seconds = a view (never your own)
@@ -533,6 +541,19 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const slideSet = layout === "page" ? (postSlides(post)[screenSlide.id === post.id ? screenSlide.i : 0]?.caption ?? null) : null;
   const showSlide = (i: number) => setScreenSlide((v) => (v.id === post.id && v.i === i ? v : { id: post.id, i }));
   const s = post.stats;
+  // a workout's recap is the post's last swipe on its screen (after its photos and clips, or after the workout's card
+  // when it has none): never a page it sends you to. Not on a Pulse or a coach's note
+  const recapOn = layout === "page" && !!s && !post.auto && post.kind !== "note";
+  const onRecap = recapOn && screenSlide.id === post.id && screenSlide.i === recapIndex(postSlides(post).length);
+  const recapCtl = useRef<CarouselControl | null>(null);
+  const toRecap = () => (recapCtl.current ? recapCtl.current.toEnd() : onOpen(post));
+  const recapSlide = recapOn
+    ? ({ load, active }: { load: boolean; active: boolean }) => (
+        <WorkoutRecap post={post} unit={unit} load={load || active} shrunk={sheetOpen} onOpenWorkout={() => onOpen(post)} />
+      )
+    : undefined;
+  // who liked it: the "Liked by" line under the words and the number by the heart open the same Likes
+  const [likesOpen, setLikesOpen] = useState(false);
   const lift = s ? featuredLift(s) : null;
   const stats = s ? workoutStats(s, unit) : [];
   // a workout's PRs as one pill: "3 PRs", else the one record's scope ("All-time PR"); amber with the
@@ -583,14 +604,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         return;
       }
     }
-    // a workout's card on its own screen: a tap opens the whole workout, once it's clear this wasn't the first of two taps
-    if (s && (e.target as Element | null)?.closest?.("[data-workout-open]")) {
-      singleTimer.current = window.setTimeout(() => {
-        singleTimer.current = null;
-        onOpen(post);
-      }, 300);
-      return;
-    }
+    // a workout's card or recap on its own screen: a tap does nothing (the swipe is the way to the recap, its button the
+    // way to every set), so a tap that misses a button never sends anyone off the post
     // a clip: full screen (or sound on / off), once it's clear this wasn't the first of two taps
     const clip = (e.target as Element | null)?.closest?.("[data-inline-video]");
     if (!clip) return;
@@ -640,6 +655,9 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   if (layout === "page") {
     // a picture, a clip or an automated post's card: on black, as big as the screen allows
     const visual = auto || !!post.media_type;
+    const liked = reactionTotal(post) > 0;
+    // the coach among the "Liked by" faces (its first three), so the line already says it
+    const coachInFaces = (post.reactors ?? []).slice(0, 3).some((r) => r.is_coach);
     return (
       <article
         ref={articleRef}
@@ -675,8 +693,43 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
             ) : (
               // its own photos and clips: the screen is the canvas (TikTok's), PostMedia page;
               // its sheet open, a rounded card at its own shape above it (Instagram's)
-              <PostMedia post={post} thumbUrl={thumbUrl} page shrunk={sheetOpen} onSlide={showSlide} />
+              // a workout's recap rides after them as the last swipe
+              <PostMedia
+                post={post}
+                thumbUrl={thumbUrl}
+                page
+                shrunk={sheetOpen}
+                onSlide={showSlide}
+                pageTrail={recapSlide}
+                control={recapCtl}
+                hint={!!openHint && recapOn && !under && !sheetOpen && !holding}
+                onReachEnd={onRecapSeen}
+              />
             )
+          ) : recapOn && s ? (
+            // a workout with no picture: its card, then one swipe to the recap (the same two screens as a clip and its recap)
+            <PostCarousel
+              slides={[]}
+              coverUrl={null}
+              frame={{}}
+              full={false}
+              page
+              bare
+              lead={
+                <div className={cn("absolute", sheetOpen ? "inset-0 p-2.5 pr-12" : "inset-x-0 pl-3 pr-16")} style={sheetOpen ? undefined : RECAP_ROOM} data-page-body>
+                  <FitScale>
+                    <WorkoutCoverCard post={post} onRecap={toRecap}>
+                      <WorkoutHero stats={s} unit={unit} />
+                    </WorkoutCoverCard>
+                  </FitScale>
+                </div>
+              }
+              pageTrail={recapSlide}
+              control={recapCtl}
+              hint={!!openHint && !under && !sheetOpen}
+              onSlide={showSlide}
+              onReachEnd={onRecapSeen}
+            />
           ) : (
             // words, a workout, a lock in: centred, clear of the words and buttons around it (it scrolls when it's long)
             <div className="absolute inset-0 overflow-y-auto pl-3 pr-16" style={sheetOpen ? PAGE_BODY_SHRUNK : PAGE_BODY_ROOM} data-page-body>
@@ -691,11 +744,6 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
                     <PulseHero post={post} stats={s} unit={unit} />
                     <ViewWorkoutRow post={post} onOpen={() => onOpen(post)} hint={!!openHint} />
                   </>
-                ) : s ? (
-                  // the workout is the way in: a tap anywhere on it opens the whole workout (onHeroTap), its last row says so
-                  <WorkoutOpenCard post={post} onOpen={() => onOpen(post)} hint={!!openHint}>
-                    <WorkoutHero stats={s} unit={unit} />
-                  </WorkoutOpenCard>
                 ) : post.locked_in_at ? (
                   <LockInHero post={post} />
                 ) : (
@@ -753,9 +801,9 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
               post.caption && (!isNote || visual) && <FeedCaption name={post.author.name} caption={post.caption} mentions={post.mentions} onOpenPerson={onOpenAuthor} className="px-0 pt-0" />
             )}
             {(!isNote || visual) && !auto && <PostExtras post={post} />}
-            {(slideSet || (visual && s)) && (
+            {(slideSet || (visual && s && !onRecap)) && (
               // the workout's context, one quiet group under their own words (their caption leads, the clip is the show):
-              // the set on screen, then the workout as a small chip that opens it
+              // the set on screen, then the workout as a small chip that slides to its recap (gone while the recap is up)
               <div className="space-y-1.5 pt-0.5" data-page-workout-context>
                 {slideSet && (
                   // the set on screen (a workout film's clip): the exercise, then which set and what was lifted;
@@ -765,13 +813,14 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
                     {slideSet.detail && <SetDetail detail={slideSet.detail} other={slideSet.other} className="truncate text-[13px] tabular-nums text-foreground/70" otherClassName="text-[12px] font-medium text-foreground/50" />}
                   </div>
                 )}
-                {visual && s && (
-                  // the workout, and the way into it: one small chip (its PRs first, in amber), 28px to see and 44px to tap
-                  // (the tap reaches 8px above and below); the theme's dark grey, so it reads on black and over a bright clip
+                {visual && s && !onRecap && (
+                  // the workout, and the way to it: one small chip (its PRs first, in amber), 28px to see and 44px to tap
+                  // (the tap reaches 8px above and below); the theme's dark grey, so it reads on black and over a bright clip.
+                  // It slides the post to its recap, the same as a swipe (never a page of its own)
                   <button
                     type="button"
-                    onClick={() => onOpen(post)}
-                    aria-label={`View workout: ${workoutHeadline(s)}${prLabel ? `, ${prLabel}` : ""}`}
+                    onClick={toRecap}
+                    aria-label={`Workout recap: ${workoutHeadline(s)}${prLabel ? `, ${prLabel}` : ""}`}
                     className="relative inline-flex h-7 max-w-full items-center gap-1.5 rounded-md bg-secondary/70 pl-2 pr-1.5 text-[12px] leading-none text-foreground transition-opacity active:opacity-70 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
                     data-page-workout
                   >
@@ -797,16 +846,27 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
                 Locked in {isTrainingNow(post) ? <TrainingNowPill /> : <span className="text-muted-foreground">{lockInTimeLabel(post.locked_in_at)}</span>}
               </button>
             )}
-            {/* one line, never two: the views, then the coach's ❤️ or reply, and a coach's own score (every line here is room the picture loses) */}
-            {((post.views?.count ?? 0) > 0 || post.coach_reactions.length > 0 || post.coach_commented || viewerIsStaff) && (
+            {/* one line, never two (every line here is room the picture loses): who liked it (Instagram's "Liked by"
+                faces and names, a tap: the Likes), the views, the coach's ❤️ or reply, and a coach's own score */}
+            {(liked || (post.views?.count ?? 0) > 0 || post.coach_reactions.length > 0 || post.coach_commented || viewerIsStaff) && (
               <div className="flex min-w-0 items-center gap-2 [&_[data-post-views]]:mx-0 [&_[data-post-views]]:mb-0 [&_[data-post-views]]:shrink-0" data-page-meta>
-                <PostViewsRow post={post} onOpenAuthor={onOpenAuthor} />
-                {(post.coach_reactions.length > 0 || post.coach_commented) && (
-                  <div className="inline-flex min-w-0 items-center rounded-full bg-primary/15 px-2 py-0.5 text-[12px] font-bold text-primary" data-page-coach>
+                {liked && <LikedBy post={post} onOpen={() => setLikesOpen(true)} variant="page" />}
+                <PostViewsRow post={post} onOpenAuthor={onOpenAuthor} compact={liked} />
+                {/* the coach's ❤️ or reply (beside the likes, the ❤️ only when the coach isn't already among its faces) */}
+                {(liked ? post.coach_commented || (post.coach_reactions.length > 0 && !coachInFaces) : post.coach_reactions.length > 0 || post.coach_commented) && (
+                  <div className={cn("inline-flex items-center rounded-full bg-primary/15 px-2 py-0.5 text-[12px] font-bold text-primary", liked ? "shrink-0" : "min-w-0")} data-page-coach>
                     <span className="truncate">
-                      Coach {post.coach_reactions[0]?.name ?? ""}
-                      {post.coach_reactions[0] ? ` ${reactionEmoji(post.coach_reactions[0].emoji) ?? ""}` : ""}
-                      {post.coach_commented ? `${post.coach_reactions[0] ? " · " : " "}replied` : ""}
+                      {liked ? (
+                        [post.coach_reactions.length > 0 && !coachInFaces ? `Coach ${reactionEmoji(post.coach_reactions[0].emoji) ?? ""}`.trim() : null, post.coach_commented ? (post.coach_reactions.length > 0 && !coachInFaces ? "replied" : "Coach replied") : null]
+                          .filter(Boolean)
+                          .join(" · ")
+                      ) : (
+                        <>
+                          Coach {post.coach_reactions[0]?.name ?? ""}
+                          {post.coach_reactions[0] ? ` ${reactionEmoji(post.coach_reactions[0].emoji) ?? ""}` : ""}
+                          {post.coach_commented ? `${post.coach_reactions[0] ? " · " : " "}replied` : ""}
+                        </>
+                      )}
                     </span>
                   </div>
                 )}
@@ -826,9 +886,11 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
           style={{ bottom: "var(--feed-actions-bottom)" }}
           data-page-actions
         >
-          <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} unit={unit} column hidden={sheetOpen || under || holding} />
+          <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} onOpenLikes={() => setLikesOpen(true)} unit={unit} column hidden={sheetOpen || under || holding} />
           <PostActions post={post} viewerIsStaff={viewerIsStaff} unit={unit} className="grid h-11 w-11 place-items-center rounded-full text-foreground active:scale-90 [&>svg]:h-6 [&>svg]:w-6" />
         </div>
+        {/* the Likes, from the "Liked by" line or the number under the heart */}
+        <ReactorsSheet postId={likesOpen ? post.id : null} onClose={() => setLikesOpen(false)} onOpenAuthor={onOpenAuthor} />
       </article>
     );
   }
@@ -961,45 +1023,34 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
 export const PostCard = memo(PostCardInner);
 
 /**
- * A workout on its own screen of the feed: the workout card is the way in.
- * A tap anywhere on it opens the whole workout (onHeroTap waits out the
- * double-tap window, so two taps still ❤️), and its last row says so,
- * "View workout · Every exercise ›" (or how many PRs, when there's more than
- * the one the card shows), a button of its own that opens at once.
- * The first time someone sees the feed it carries the "Tap to see the whole
- * workout" tip until they open one (remembered on the account).
+ * A workout with no picture on its own screen of the feed: its card (what it
+ * was, the lift that leads it, its numbers), the first of the post's two
+ * swipes; the second is its recap (WorkoutRecap). The card's last row says
+ * so, "Workout recap · Swipe", and a tap on it slides there too. A tap
+ * anywhere else does nothing (two taps ❤️), so the post never sends anyone
+ * to another page by accident.
  */
-function WorkoutOpenCard({ post, onOpen, hint, children }: { post: CommunityPost; onOpen: () => void; hint: boolean; children: React.ReactNode }) {
+function WorkoutCoverCard({ post, onRecap, children }: { post: CommunityPost; onRecap: () => void; children: React.ReactNode }) {
   const prs = post.stats?.pr_count ?? 0;
   return (
-    <div className={cn("relative", hint && "z-[1]")}>
-      {hint && (
-        <div className="pointer-events-none absolute -top-10 left-1/2 z-10 -translate-x-1/2 animate-bounce" aria-hidden>
-          <div className="relative whitespace-nowrap rounded-full bg-primary px-3 py-1.5 text-[12px] font-bold text-primary-foreground shadow-lg">
-            👇 Tap to see the whole workout
-            <span className="absolute left-1/2 top-full -mt-1 h-2 w-2 -translate-x-1/2 rotate-45 bg-primary" />
-          </div>
-        </div>
-      )}
-      <div data-workout-open className={cn("cursor-pointer overflow-hidden rounded-2xl bg-muted", hint && "ring-2 ring-primary")}>
-        {children}
-        <button
-          type="button"
-          // its own tap opens at once (the card around it waits out a double tap)
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpen();
-          }}
-          className={cn("flex h-11 w-full items-center justify-between gap-2 border-t border-border px-5 text-left transition-colors active:bg-foreground/5", hint && "bg-primary/10")}
-          data-view-workout
-        >
-          <span className="shrink-0 whitespace-nowrap text-[13px] font-semibold">View workout</span>
-          <span className="flex min-w-0 items-center gap-1 text-[12px] text-muted-foreground">
-            <span className="truncate">{prs > 1 ? `${prs} PRs` : "Every exercise"}</span>
-            <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />
-          </span>
-        </button>
-      </div>
+    <div className="mx-auto w-full max-w-[440px] overflow-hidden rounded-2xl bg-muted" data-workout-cover>
+      {children}
+      <button
+        type="button"
+        // its own tap goes at once (the post around it waits out a double tap)
+        onClick={(e) => {
+          e.stopPropagation();
+          onRecap();
+        }}
+        className="flex h-11 w-full items-center justify-between gap-2 border-t border-border px-5 text-left transition-colors active:bg-foreground/5"
+        data-view-workout
+      >
+        <span className="shrink-0 whitespace-nowrap text-[13px] font-semibold">Workout recap</span>
+        <span className="flex min-w-0 items-center gap-1 text-[12px] text-muted-foreground">
+          <span className="truncate">{prs > 1 ? `${prs} PRs · Swipe` : "Every exercise · Swipe"}</span>
+          <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />
+        </span>
+      </button>
     </div>
   );
 }
@@ -1077,6 +1128,7 @@ export function ReactionBar({
   onOpenComments,
   onOpenAuthor,
   onReposted,
+  onOpenLikes,
   unit,
   column = false,
   hidden = false,
@@ -1087,6 +1139,8 @@ export function ReactionBar({
   onOpenAuthor?: (a: CommunityAuthor) => void;
   /** Just reposted: the card floats "Add a note…" on the post. */
   onReposted?: () => void;
+  /** Who liked it opens here instead (the post's screen keeps one Likes for its "Liked by" line and the heart's number). */
+  onOpenLikes?: () => void;
   /** A post's own screen in the feed (TikTok's): the same buttons down the right side, each count under its icon. */
   column?: boolean;
   /** The unit the feed painted an automated post's picture in (Share to Instagram sends that one). */
@@ -1105,7 +1159,7 @@ export function ReactionBar({
   const [ig, setIg] = useState<boolean | null>(null);
   // the reactions that rise out of the heart
   const kinds = reactionKinds(post);
-  const openLikes = () => setListFor(post.id);
+  const openLikes = onOpenLikes ?? (() => setListFor(post.id));
   const prefetchLikes = usePrefetchPostReactors();
   const likesPress = () => prefetchLikes(post.id);
   // People are reacting to this one: a moment after it's on screen, its
@@ -1215,6 +1269,10 @@ export function PostMedia({
   page = false,
   shrunk = false,
   onSlide,
+  pageTrail,
+  control,
+  hint = false,
+  onReachEnd,
 }: {
   post: CommunityPost;
   thumbUrl: string | null;
@@ -1224,6 +1282,14 @@ export function PostMedia({
   ratio?: number;
   /** On a post's screen: which of its slides is on screen (its words say that slide's set). */
   onSlide?: (i: number) => void;
+  /** On a post's screen: a last slide after its own (a workout's recap), drawn once it's needed. */
+  pageTrail?: TrailRender;
+  /** Lets the post slide its carousel to that last slide. */
+  control?: MutableRefObject<CarouselControl | null>;
+  /** The one-time "Swipe for workout" tip on the last slide. */
+  hint?: boolean;
+  /** The last slide came on screen. */
+  onReachEnd?: () => void;
   /**
    * On a post's own screen in the feed: the screen is the canvas (TikTok's).
    * Each slide fills it or sits whole across it with black above and below
@@ -1257,8 +1323,22 @@ export function PostMedia({
     const fits = slides.map((sl) => screenFit(sl, screenRatio));
     return (
       <FitBox ratio={ratio} screen shrunk={shrunk}>
-        {slides.length > 1 ? (
-          <PostCarousel slides={slides} coverUrl={thumbUrl} frame={frame} full={full} page screenRef={screenRef} fits={fits} shrunk={shrunk} onSlide={onSlide} />
+        {slides.length > 1 || pageTrail ? (
+          <PostCarousel
+            slides={slides}
+            coverUrl={thumbUrl}
+            frame={frame}
+            full={full}
+            page
+            screenRef={screenRef}
+            fits={fits}
+            shrunk={shrunk}
+            onSlide={onSlide}
+            pageTrail={pageTrail}
+            control={control}
+            hint={hint}
+            onReachEnd={onReachEnd}
+          />
         ) : (
           <div ref={screenRef} className="absolute inset-0 overflow-hidden bg-black" data-screen-canvas data-fit={fits[0]}>
             {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page fit={fits[0]} shrunk={shrunk} /> : <div className="h-full w-full animate-pulse bg-muted" />}
@@ -1295,6 +1375,8 @@ function belowBar(el: HTMLElement): number {
 
 /** Words, a workout or a lock in on its screen: clear of Crew's bar above and the words and tab bar below. */
 const PAGE_BODY_ROOM = { paddingTop: "calc(var(--feed-bar-room) + 1.5rem)", paddingBottom: "calc(var(--feed-words-bottom) + 8rem)" } as const;
+/** A workout's card or recap on its screen: between Crew's bar and the post's words, wherever those settle. */
+const RECAP_ROOM = { top: "calc(var(--feed-bar-room) + 0.75rem)", bottom: "var(--feed-words-room, 0px)" } as const;
 /** Its sheet open, the words and buttons are gone: the room above the sheet is all its own. */
 const PAGE_BODY_SHRUNK = { paddingTop: "1rem", paddingBottom: "1rem" } as const;
 
@@ -1498,10 +1580,23 @@ function FadeImg({ src, position, whole = false }: { src: string; position?: str
   );
 }
 
+/** Slide a post's carousel from outside it (its words' workout chip, its card's recap row). */
+export type CarouselControl = { toEnd: () => void };
+
+/**
+ * A slide drawn after the post's own (a workout's recap): `load` once the
+ * post is on screen and the slide is the next swipe (so its data is ready by
+ * the time it's there), `active` while it's the slide on screen.
+ */
+export type TrailRender = (state: { load: boolean; active: boolean }) => ReactNode;
+
 /**
  * Up to 10 photos / videos: swipe sideways (it snaps one at a time), "2/5"
  * and the dots say where you are. Only the slide you're on and its
  * neighbours load; the rest wait. Taps still reach the post (double-tap ❤️, a clip's sound).
+ * On a post's screen, a vertical swipe is always the feed's (the browser
+ * locks a swipe to the way it started), a sideways one the carousel's, and
+ * nothing on a slide scrolls on its own.
  */
 function PostCarousel({
   slides,
@@ -1515,6 +1610,11 @@ function PostCarousel({
   fits,
   shrunk = false,
   onSlide,
+  pageTrail,
+  control,
+  hint = false,
+  onReachEnd,
+  bare = false,
 }: {
   slides: PostSlide[];
   coverUrl: string | null;
@@ -1530,19 +1630,45 @@ function PostCarousel({
   shrunk?: boolean;
   /** Which of `slides` is on screen, as it changes (and on mounting): the post's words follow it. */
   onSlide?: (i: number) => void;
+  /** On a post's screen: its last slide (a workout's recap), drawn when it's needed. */
+  pageTrail?: TrailRender;
+  control?: MutableRefObject<CarouselControl | null>;
+  /** The one-time "Swipe for workout" tip, once the carousel has been still on screen a moment. */
+  hint?: boolean;
+  /** The last slide came on screen. */
+  onReachEnd?: () => void;
+  /** No black of its own: the post's screen shows through (a workout's card on words). */
+  bare?: boolean;
 }) {
   const [index, setIndex] = useState(0);
   const [seen, setSeen] = useState(1);
   const track = useRef<HTMLDivElement | null>(null);
+  const root = useRef<HTMLDivElement | null>(null);
+  const setRoot = useCallback(
+    (el: HTMLDivElement | null) => {
+      root.current = el;
+      if (page) screenRef?.(el);
+    },
+    [page, screenRef],
+  );
   const urls = useSlideThumbUrls(slides.slice(1));
   // with a lead slide, the post's own slides start one along
   const off = lead ? 1 : 0;
-  const count = slides.length + off + (trail ? 1 : 0);
+  const hasTrail = !!trail || !!pageTrail;
+  const count = slides.length + off + (hasTrail ? 1 : 0);
+  const last = count - 1;
   const onSlideRef = useRef(onSlide);
   onSlideRef.current = onSlide;
   useLayoutEffect(() => {
     onSlideRef.current?.(index - off);
   }, [index, off]);
+  const endRef = useRef(onReachEnd);
+  endRef.current = onReachEnd;
+  useEffect(() => {
+    if (pageTrail && index === last) endRef.current?.();
+  }, [pageTrail, index, last]);
+  // the post on screen (half of it at least): only then does its last slide load what it needs
+  const onScreen = useOnScreen(root, !!pageTrail);
   const onScroll = () => {
     const el = track.current;
     if (!el || !el.clientWidth) return;
@@ -1554,14 +1680,35 @@ function PostCarousel({
     const el = track.current;
     if (el) el.scrollBy({ left: dir * el.clientWidth, behavior: "smooth" });
   };
+  useEffect(() => {
+    if (!control) return;
+    control.current = {
+      toEnd: () => {
+        const el = track.current;
+        if (el) el.scrollTo({ left: last * el.clientWidth, behavior: "smooth" });
+      },
+    };
+    return () => {
+      control.current = null;
+    };
+  }, [control, last]);
+  // "Swipe for workout": the first time, once the post has been still on screen a moment, a small pill by the counter
+  // nudges toward the last slide (only the pill moves, never the screen), until they get there
+  const [tip, setTip] = useState(false);
+  useEffect(() => {
+    if (!hint || !onScreen || index === last) return setTip(false);
+    const t = window.setTimeout(() => setTip(true), 700);
+    return () => window.clearTimeout(t);
+  }, [hint, onScreen, index, last]);
+  const trailNear = index >= count - 2 || seen >= count - 1;
   return (
     <div
-      ref={page ? screenRef : undefined}
-      className={cn("group/carousel overflow-hidden", page ? "absolute inset-0 bg-black" : "relative w-full bg-muted")}
+      ref={setRoot}
+      className={cn("group/carousel overflow-hidden", page ? cn("absolute inset-0", !bare && "bg-black") : "relative w-full bg-muted")}
       style={page ? undefined : frame}
       aria-roledescription="carousel"
-      aria-label={`${count} photos and videos`}
-      data-screen-canvas={page ? "" : undefined}
+      aria-label={pageTrail ? `${count} slides, the last the workout recap` : `${count} photos and videos`}
+      data-screen-canvas={page && !bare ? "" : undefined}
     >
       <div
         ref={track}
@@ -1585,16 +1732,40 @@ function PostCarousel({
             </div>
           );
         })}
-        {trail && (
-          <div className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`${count} of ${count}`}>
+        {hasTrail && (
+          <div className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`${count} of ${count}`} data-carousel-trail>
             {/* painted once it's next to the one on screen */}
-            {index >= count - 2 || seen >= count - 1 ? trail : <div className="h-full w-full bg-muted" />}
+            {pageTrail
+              ? pageTrail({ load: onScreen && trailNear, active: index === last })
+              : trailNear
+                ? trail
+                : <div className="h-full w-full bg-muted" />}
           </div>
         )}
       </div>
-      <span className={cn("pointer-events-none absolute right-2.5 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white backdrop-blur", page ? "top-[calc(var(--feed-bar-room)+0.625rem)]" : "top-2.5")}>
-        {index + 1}/{count}
-      </span>
+      {tip ? (
+        // the first time: the counter itself says where to go, and a tap there goes (never another pill over the post)
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            control?.current?.toEnd();
+          }}
+          className={cn("absolute right-2.5 inline-flex items-center gap-1 rounded-full bg-black/60 py-0.5 pl-1.5 pr-2 text-[11px] font-bold text-white backdrop-blur animate-in fade-in", page ? "top-[calc(var(--feed-bar-room)+0.625rem)]" : "top-2.5")}
+          data-carousel-count
+          data-recap-tip
+        >
+          <ChevronsLeft className="jf-recap-nudge h-3.5 w-3.5" aria-hidden />
+          Swipe for workout
+          <span className="ml-0.5 font-bold tabular-nums text-white/70">
+            {index + 1}/{count}
+          </span>
+        </button>
+      ) : (
+        <span className={cn("pointer-events-none absolute right-2.5 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white backdrop-blur", page ? "top-[calc(var(--feed-bar-room)+0.625rem)]" : "top-2.5")} data-carousel-count>
+          {index + 1}/{count}
+        </span>
+      )}
       {/* the dots; on a post's screen its words and buttons sit at the bottom, so "2/4" up top says it */}
       {!page && (
         <div className="pointer-events-none absolute inset-x-0 bottom-2.5 flex justify-center gap-1" aria-hidden>
@@ -1616,4 +1787,26 @@ function PostCarousel({
       )}
     </div>
   );
+}
+
+/** At least half of `ref` on screen (latched: once it's loaded what it needs, it keeps it). Only while `active`. */
+function useOnScreen(ref: React.RefObject<HTMLElement | null>, active: boolean): boolean {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!active || !el) return;
+    if (typeof IntersectionObserver === "undefined") return setOn(true);
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e?.isIntersecting && e.intersectionRatio >= 0.5) {
+          setOn(true);
+          io.disconnect();
+        }
+      },
+      { threshold: [0, 0.5, 1] },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [ref, active]);
+  return on;
 }

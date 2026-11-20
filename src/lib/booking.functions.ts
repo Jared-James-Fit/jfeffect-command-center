@@ -21,23 +21,86 @@ const CLIENTS_ONLY_MESSAGE = "This booking is for JF Effect coaching clients. Si
  * Online booking server functions.
  *   Public (no sign-in): the booking page, its open times, and booking. A
  *     public booking is an appointment; it never touches anyone's credits.
- *   Personal link (?i=…, minted by staff for one client): books as that client.
- *   Signed-in client: book as yourself (no form), and the types you can book in the app.
+ *   Personal link (/b/<token>, minted by staff for one client and one type):
+ *     books as that client with no sign-in; the server resolves the token
+ *     (booking-invite.server.ts) and decides who's booking (pickBookingIdentity).
+ *   Signed in as a client: books as themselves (their sessions and credits).
  * All database work runs with the service role inside booking.server.ts, after
  * the type has been checked live (active + online).
  */
 
 const SlugInput = z.object({ slug: z.string().trim().min(1).max(80) });
+const OptionalSlug = z.string().trim().min(1).max(80).optional().nullable();
 const InviteInput = z.string().trim().max(120).optional().nullable();
 
-/** The client a personal link names (valid, unexpired, still a client), or null. */
-async function inviteClient(db: any, invite: string | null | undefined) {
-  if (!invite) return null;
-  const { verifyBookingInvite } = await import("@/lib/booking-invite.server");
-  const clientId = verifyBookingInvite(invite);
-  if (!clientId) return null;
-  const { loadBookingClient } = await import("@/lib/booking.server");
-  return loadBookingClient(db, clientId);
+/** The signed-in user's id when the call carries a valid token; null when signed out (never an error). */
+async function viewerUserId(): Promise<string | null> {
+  try {
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const h = getRequest()?.headers.get("authorization") ?? "";
+    if (!h.startsWith("Bearer ")) return null;
+    const token = h.slice(7).trim();
+    const url = process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_PUBLISHABLE_KEY;
+    if (!token || !url || !key) return null;
+    const { createClient } = await import("@supabase/supabase-js");
+    const sb = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, storage: undefined } });
+    const { data, error } = await sb.auth.getClaims(token);
+    return !error && data?.claims?.sub ? String(data.claims.sub) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Everything a booking request needs to know, worked out on the server: the
+ * type (a personal link names its own; else the page's slug), the link and
+ * where it stands, who's signed in, and so who the booking is for.
+ */
+async function bookingContext(
+  db: any,
+  input: { slug?: string | null; invite?: string | null; applicationId?: string | null },
+) {
+  const S = await import("@/lib/booking.server");
+  const { resolveBookingInvite } = await import("@/lib/booking-invite.server");
+  const { pickBookingIdentity } = await import("@/lib/booking-invite");
+  // A coaching application's call is always the public kind (an appointment tied to the
+  // application), whoever happens to be signed in, as it was before personal links.
+  const publicOnly = !!input.applicationId && !input.invite;
+  const [invite, uid] = await Promise.all([
+    input.invite ? resolveBookingInvite(db, input.invite) : Promise.resolve(null),
+    publicOnly ? Promise.resolve(null) : viewerUserId(),
+  ]);
+  const viewer = uid ? await S.loadBookingViewer(db, uid) : null;
+  let type = invite?.bookingCardId ? await S.loadBookingTypeById(db, invite.bookingCardId) : null;
+  if (!type && input.slug) type = await S.loadBookingType(db, input.slug);
+  const identity = pickBookingIdentity({
+    invite: invite ? { state: invite.state, clientId: invite.clientId } : null,
+    signedIn: viewer ? { clientId: viewer.client?.id ?? null, staff: viewer.staff } : null,
+  });
+  const client =
+    identity.clientId == null
+      ? null
+      : viewer?.client?.id === identity.clientId
+        ? viewer.client
+        : await S.loadBookingClient(db, identity.clientId);
+  return { type, invite, viewer, identity, client };
+}
+
+/** Why a link can't book right now, in words. */
+function blockedMessage(state: string): string {
+  switch (state) {
+    case "booked":
+      return "This link already has a booking. Change it in your JF Effect app, or ask your coach for a new link.";
+    case "busy":
+      return "That booking is already going through. Give it a moment.";
+    case "expired":
+      return "This booking link has expired. Ask your coach for a new one.";
+    case "revoked":
+      return "This booking link isn't active anymore. Ask your coach for a new one.";
+    default:
+      return "This booking link doesn't work. Ask your coach for a new one.";
+  }
 }
 const DateISO = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 /** A length the booker picked (minutes); the type decides whether it's one it offers. */
@@ -75,22 +138,49 @@ function publicView(t: BookingType, hostName: string) {
 export type PublicBookingType = ReturnType<typeof publicView>;
 
 export const getBookingPage = createServerFn({ method: "GET" })
-  .inputValidator((d: unknown) => SlugInput.extend({ invite: InviteInput }).parse(d))
+  .inputValidator((d: unknown) =>
+    z.object({ slug: OptionalSlug, invite: InviteInput, applicationId: z.string().uuid().optional().nullable() }).parse(d),
+  )
   .handler(async ({ data }) => {
-    const { loadBookingType, bookingHost } = await import("@/lib/booking.server");
+    const { bookingHost } = await import("@/lib/booking.server");
     const db = await admin();
-    const type = await loadBookingType(db, data.slug);
+    const { type, invite, viewer, identity, client } = await bookingContext(db, data);
+    // Nothing bookable: no such page, a paused type, or a link that names nothing at all.
     if (!type) return null;
-    const [host, invitee] = await Promise.all([bookingHost(db), inviteClient(db, data.invite)]);
+    const host = await bookingHost(db);
+    // Someone opened the link (never the coach himself): his card says so.
+    if (identity.inviteApplies && invite?.id && !viewer?.staff) {
+      const { noteInviteOpened } = await import("@/lib/booking-invite.server");
+      await noteInviteOpened(db, invite.id);
+    }
+    // The booking the link already has, while it stands (only to someone the link books for).
+    let booked: { start: string; end: string; timezone: string | null; done: boolean } | null = null;
+    if (identity.blockedBy === "booked" && invite?.bookedSessionId) {
+      const { data: s } = await db
+        .from("pt_sessions")
+        .select("starts_at, ends_at, timezone, status")
+        .eq("id", invite.bookedSessionId)
+        .maybeSingle();
+      if (s) booked = { start: s.starts_at, end: s.ends_at, timezone: s.timezone ?? null, done: s.status !== "Scheduled" };
+    }
+    const who = client
+      ? {
+          // Only the first name: the link's holder already knows who it's for.
+          firstName: (client.full_name ?? "").trim().split(/\s+/)[0] || "you",
+          canBook: audienceAllows(type, { serviceTier: client.service_tier }),
+          signedIn: identity.via === "client_app",
+        }
+      : null;
     return {
       ...publicView(type, host.name),
-      // Only the first name: the link's holder already knows who it's for.
-      invitee: invitee
-        ? {
-            firstName: (invitee.full_name ?? "").trim().split(/\s+/)[0] || "you",
-            canBook: audienceAllows(type, { serviceTier: invitee.service_tier }),
-          }
-        : null,
+      who,
+      /** Older pages read this. */
+      invitee: who ? { firstName: who.firstName, canBook: who.canBook } : null,
+      /** The length the coach picked for this link (set, not a choice). */
+      fixedDuration: identity.inviteApplies ? (invite?.durationMin ?? null) : null,
+      /** The link's state when it can't book (and nobody signed in can instead). */
+      linkState: identity.blockedBy,
+      booked,
     };
   });
 
@@ -121,7 +211,8 @@ export const getBookingSlots = createServerFn({ method: "GET" })
     }
   });
 
-const PublicBookInput = SlugInput.extend({
+const PublicBookInput = z.object({
+  slug: OptionalSlug,
   start: z.string().min(10).max(40),
   name: z.string().trim().max(120).optional().nullable(),
   email: z.string().trim().max(200).optional().nullable(),
@@ -132,72 +223,145 @@ const PublicBookInput = SlugInput.extend({
   duration: DurationInput,
 });
 
+/** Public bookings (no known client) one connection can make in an hour. */
+const PUBLIC_BOOKINGS_PER_IP_PER_HOUR = 4;
+
 /**
- * Booking from the link. With a valid personal link it books as that client
- * (a session, their credits). Otherwise it's an appointment for whoever filled
- * in the form; typing a client's email never books against their package.
+ * Booking from the page. Who it's for is the server's call (bookingContext):
+ * signed in as a client, they book as themselves; with a personal link that
+ * works, as its client (a session, their credits), held one booking at a time;
+ * anyone else gets an appointment for whoever filled in the form, and typing a
+ * client's email never books against their package.
  */
+
 export const bookOnline = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => PublicBookInput.parse(d))
   .handler(async ({ data }) => {
-    const { loadBookingType, createOnlineBooking, BookingError } =
-      await import("@/lib/booking.server");
+    const { createOnlineBooking, BookingError } = await import("@/lib/booking.server");
     const db = await admin();
-    const loaded = await loadBookingType(db, data.slug);
-    if (!loaded) throw new Error("This booking page isn't taking bookings right now.");
-    const type = withDuration(loaded, data.duration);
-    const invitee = await inviteClient(db, data.invite);
+    const { type: loaded, invite, identity, client } = await bookingContext(db, data);
+    if (!loaded) throw new Error(invite ? blockedMessage(invite.state) : "This booking page isn't taking bookings right now.");
+    if (identity.blockedBy) throw new Error(blockedMessage(identity.blockedBy));
+    // The coach's length for this link wins over anything the page sends.
+    const type = withDuration(loaded, identity.inviteApplies && invite?.durationMin ? invite.durationMin : data.duration);
     // A clients-only type (General Call) takes a coaching client we know is them; never the public.
-    if (!audienceAllows(type, invitee ? { serviceTier: invitee.service_tier } : null)) {
+    if (!audienceAllows(type, client ? { serviceTier: client.service_tier } : null)) {
       throw new Error(CLIENTS_ONLY_MESSAGE);
     }
-    const name = data.name?.trim() || invitee?.full_name || "";
-    const email = data.email?.trim() || invitee?.email || "";
-    if (!invitee) {
+    const name = data.name?.trim() || client?.full_name || "";
+    const email = data.email?.trim() || client?.email || "";
+    if (!client) {
       if (!name) throw new Error("Add your name.");
       if (!z.string().email().safeParse(email).success) throw new Error("Add a valid email.");
     }
-    const phone = data.phone?.trim() || invitee?.phone || null;
+    const phone = data.phone?.trim() || client?.phone || null;
     if (type.location_mode === "phone" && !phone) {
       throw new Error("Add a phone number so we can call you.");
+    }
+    // A public booking sends a calendar invitation from the coach's Google and
+    // texts a reminder: a few per connection, so one caller can't fill the
+    // calendar or use up the page's hourly allowance for everyone. (A known
+    // client, signed in or on their personal link, books one at a time per link.)
+    if (!client) {
+      const { rateOk, callerIp } = await import("@/lib/public-rate-limit.server");
+      const ip = callerIp();
+      if (ip && !(await rateOk(db as any, `book:ip:${ip}`, PUBLIC_BOOKINGS_PER_IP_PER_HOUR, "1 hour"))) {
+        throw new Error("Too many bookings from this connection. Try again in a little while.");
+      }
+    }
+    const { claimInvite, finishInvite } = await import("@/lib/booking-invite.server");
+    const inviteId = identity.inviteApplies && invite?.id ? invite.id : null;
+    if (inviteId) {
+      const claim = await claimInvite(db, inviteId);
+      if (claim !== "ok") throw new Error(blockedMessage(claim));
     }
     try {
       const result = await createOnlineBooking(db, {
         type,
         startISO: data.start,
-        via: "booking_page",
-        trustedClient: invitee,
+        via: identity.via,
+        trustedClient: client,
         booker: { name, email, phone, notes: data.notes },
-        applicationId: invitee ? null : (data.applicationId ?? null),
+        applicationId: client ? null : (data.applicationId ?? null),
       });
+      if (inviteId) await finishInvite(db, inviteId, result.kind === "session" ? result.id : null);
       return result;
     } catch (e) {
+      if (inviteId) await finishInvite(db, inviteId, null).catch(() => {});
       if (e instanceof BookingError) throw new Error(e.message);
       throw e;
     }
   });
 
+/** Staff only, and only for a client their own login can see (RLS). */
+async function assertStaffFor(supabase: any, userId: string, clientId: string) {
+  const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+  const staff = ((roles ?? []) as any[]).some((r) => r.role === "admin" || r.role === "coach");
+  if (!staff) throw new Error("Only coaches can send personal booking links.");
+  const { data: c } = await supabase.from("clients").select("id, archived").eq("id", clientId).maybeSingle();
+  if (!c) throw new Error("Client not found.");
+  if ((c as any).archived) throw new Error("This client's account isn't active.");
+}
+
 /**
- * Staff: a personal booking link for one client. They book as themselves
- * (their sessions and calendar) without signing in.
+ * Staff: a personal booking link for one client and one booking type
+ * (jfeffect.com/b/<token>). They open it anywhere, signed in or not, and pick
+ * a time; it books as them. The token names nobody, runs out after
+ * INVITE_DAYS and can be cancelled.
  */
-export const getClientBookingLink = createServerFn({ method: "POST" })
+export const createBookingInvite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ clientId: z.string().uuid() }).parse(d))
+  .inputValidator((d: unknown) =>
+    z.object({ clientId: z.string().uuid(), bookingCardId: z.string().uuid(), duration: DurationInput }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-    const staff = ((roles ?? []) as any[]).some((r) => r.role === "admin" || r.role === "coach");
-    if (!staff) throw new Error("Only coaches can send personal booking links.");
-    // RLS: the coach must be able to see this client.
-    const { data: c } = await supabase
-      .from("clients")
-      .select("id")
-      .eq("id", data.clientId)
+    await assertStaffFor(supabase, userId, data.clientId);
+    const db = await admin();
+    const { loadBookingTypeById } = await import("@/lib/booking.server");
+    const type = await loadBookingTypeById(db, data.bookingCardId);
+    if (!type) throw new Error("That booking type isn't taking online bookings.");
+    const choices = durationChoices(type);
+    const durationMin = choices.length > 1 && data.duration && choices.includes(data.duration) ? data.duration : null;
+    const { mintBookingInvite } = await import("@/lib/booking-invite.server");
+    const { invitePath } = await import("@/lib/booking-invite");
+    const minted = await mintBookingInvite(db, {
+      clientId: data.clientId,
+      bookingCardId: type.id,
+      durationMin,
+      createdBy: userId,
+    });
+    return {
+      inviteId: minted.id,
+      path: invitePath(minted.token),
+      expiresAt: minted.expiresAt,
+      durationMin: durationMin ?? type.duration_minutes,
+    };
+  });
+
+/** Staff: cancel a personal link (it stops booking at once; a booking it made stays). */
+export const revokeBookingInvite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ inviteId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    // RLS: only staff who can see this client's links read the row.
+    const { data: row } = await supabase
+      .from("booking_invites")
+      .select("id, client_id, revoked_at")
+      .eq("id", data.inviteId)
       .maybeSingle();
-    if (!c) throw new Error("Client not found.");
-    const { signBookingInvite } = await import("@/lib/booking-invite.server");
-    return { invite: signBookingInvite(data.clientId) };
+    if (!row) throw new Error("Link not found.");
+    await assertStaffFor(supabase, userId, (row as any).client_id);
+    if ((row as any).revoked_at) return { ok: true };
+    const db = await admin();
+    const { error } = await db
+      .from("booking_invites")
+      .update({ revoked_at: new Date().toISOString(), revoked_by: userId })
+      .eq("id", data.inviteId)
+      .is("revoked_at", null);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 async function myClient(supabase: any, userId: string) {

@@ -25,13 +25,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  bookOnline,
-  bookOnlineAsMe,
-  getBookingPage,
-  getBookingSlots,
-  getMyBookingIdentity,
-} from "@/lib/booking.functions";
+import { bookOnline, getBookingPage, getBookingSlots } from "@/lib/booking.functions";
+import { inviteStateMessage, type InviteState } from "@/lib/booking-invite";
 import { googleCalendarLink, icsDataLink, outlookCalendarLink } from "@/lib/add-to-calendar";
 import { addDaysISO, localDateISO } from "@/lib/schedule-time";
 import type { Slot } from "@/lib/booking-slots";
@@ -78,6 +73,18 @@ function zoneName(tz: string): string {
     return tz;
   }
 }
+/** "CST", "GMT+1": the zone a time is in, short, for beside a time. */
+function zoneShort(tz: string, at: Date = new Date()): string {
+  try {
+    return (
+      new Intl.DateTimeFormat(undefined, { timeZone: tz, timeZoneName: "short" })
+        .formatToParts(at)
+        .find((p) => p.type === "timeZoneName")?.value ?? ""
+    );
+  } catch {
+    return "";
+  }
+}
 function monthKey(dateISO: string) {
   return dateISO.slice(0, 7);
 }
@@ -115,46 +122,56 @@ function WhereIcon({ mode, className }: { mode: string; className?: string }) {
 }
 
 /**
- * The booking page: pick a day, pick a time, confirm. Signed-in clients skip
- * the form entirely. Times show in the visitor's own time zone.
+ * The booking page: pick a day, pick a time, confirm. Who's booking is the
+ * server's call (getBookingPage): signed in as a client, or the coach's
+ * personal link (/b/<token>), they book as themselves with no form and no
+ * sign-in; anyone else fills in a name and email. Times show in the visitor's
+ * own time zone, labelled.
  */
-export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill }) {
+export function BookingPage({
+  slug: givenSlug,
+  prefill,
+  preview = false,
+}: {
+  /** null on a personal link (/b/<token>): the link names its type. */
+  slug: string | null;
+  prefill: Prefill;
+  /** The coach's View as client: everything shows, nothing books. */
+  preview?: boolean;
+}) {
   const pageFn = useServerFn(getBookingPage);
   const slotsFn = useServerFn(getBookingSlots);
   const bookFn = useServerFn(bookOnline);
-  const bookMeFn = useServerFn(bookOnlineAsMe);
-  const meFn = useServerFn(getMyBookingIdentity);
 
   // Time zone and "today" only exist in the browser.
   const [tz, setTz] = useState<string | null>(null);
   useEffect(() => setTz(deviceTz()), []);
   const today = tz ? localDateISO(new Date(), tz) : null;
 
-  const { data: page, isLoading: pageLoading } = useQuery({
-    queryKey: ["booking-page", slug, prefill.invite],
-    queryFn: () => pageFn({ data: { slug, invite: prefill.invite || null } }),
-    staleTime: 60_000,
-  });
-
-  // Signed in as a client? Then they book as themselves, no form.
-  const { data: me, isFetched: meChecked } = useQuery({
-    queryKey: ["booking-me"],
-    enabled: !!tz,
+  // Who's signed in on this device (the server decides what that means for this page).
+  const { data: viewerId, isFetched: viewerChecked } = useQuery({
+    queryKey: ["booking-viewer"],
     retry: false,
-    queryFn: async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) return null;
-      try {
-        return await meFn();
-      } catch {
-        return null;
-      }
-    },
+    staleTime: 30_000,
+    queryFn: async () => (await supabase.auth.getSession()).data.session?.user.id ?? null,
   });
+  // Signed in as the link's own client with its booking standing: "Book another time" books as them without it.
+  const [skipInvite, setSkipInvite] = useState(false);
+  const invite = skipInvite ? null : prefill.invite || null;
 
-  // How long: the coach's pick from his link (fixed), else theirs from the type's lengths.
+  const { data: page, isLoading: pageLoading } = useQuery({
+    queryKey: ["booking-page", givenSlug, invite, viewerId ?? null, prefill.applicationId || null],
+    enabled: viewerChecked,
+    queryFn: () => pageFn({ data: { slug: givenSlug, invite, applicationId: prefill.applicationId || null } }),
+    staleTime: 30_000,
+  });
+  const slug = page?.slug ?? givenSlug ?? "";
+  const who = page?.who ?? null;
+
+  // How long: the coach's pick for his link (fixed), else theirs from the type's lengths.
   const options = page?.durationOptions ?? [];
-  const coachLength = prefill.duration && options.includes(prefill.duration) ? prefill.duration : null;
+  const wanted = page?.fixedDuration ?? prefill.duration ?? null;
+  const coachLength = wanted && options.includes(wanted) ? wanted : null;
   const [picked, setPicked] = useState<number | null>(null);
   const duration = coachLength ?? (picked && options.includes(picked) ? picked : page?.durationMin ?? null);
   const choosesLength = !coachLength && options.length > 1;
@@ -171,9 +188,9 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
     refetch: refetchSlots,
   } = useQuery({
     queryKey: ["booking-slots", slug, month, duration],
-    // A clients-only type shows its times only to someone who can book it.
+    // A clients-only type shows its times only to someone who can book it; a link that can't book shows none.
     enabled:
-      !!page && !!month && page.hasHours && !!duration && (!page.clientsOnly || !!page.invitee?.canBook || !!me?.coaching),
+      !!page && !!slug && !!month && page.hasHours && !!duration && !page.linkState && (!page.clientsOnly || !!who?.canBook),
     staleTime: 30_000,
     queryFn: () =>
       slotsFn({
@@ -223,30 +240,21 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
     }
   }, [byDay, month, slotData, slotsLoading, day, lastDay]);
 
-  // Who's booking, when we know: signed in as a client, or a personal link from the coach.
-  const who = me
-    ? { name: me.name || me.email }
-    : page?.invitee
-      ? { name: page.invitee.firstName }
-      : null;
-
   const book = useMutation({
     mutationFn: async () => {
       if (!slot) throw new Error("Pick a time first.");
-      if (me)
-        return (await bookMeFn({
-          data: { slug, start: slot.start, notes: form.notes || null, duration },
-        })) as Result;
+      if (preview) throw new Error("Preview only: they confirm it here.");
+      // The server works out who it's for again; the page's view of it is never trusted.
       return (await bookFn({
         data: {
           slug,
           start: slot.start,
-          name: form.name,
-          email: form.email,
-          phone: form.phone || null,
+          name: who ? null : form.name,
+          email: who ? null : form.email,
+          phone: who ? null : form.phone || null,
           notes: form.notes || null,
           applicationId: prefill.applicationId || null,
-          invite: prefill.invite || null,
+          invite,
           duration,
         },
       })) as Result;
@@ -267,7 +275,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
     },
   });
 
-  if (pageLoading || !tz) {
+  if (pageLoading || !tz || !viewerChecked) {
     return (
       <Shell>
         <div className="flex min-h-[50vh] flex-col items-center justify-center gap-1 text-center text-sm text-muted-foreground">
@@ -280,9 +288,13 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
   if (!page) {
     return (
       <Shell>
-        <div className="rounded-2xl border border-border bg-card p-8 text-center">
-          <h1 className="text-lg font-bold">This booking page isn't taking bookings right now</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Message your coach for a new link.</p>
+        <div className="rounded-2xl border border-border bg-card p-8 text-center" data-booking-unavailable>
+          <h1 className="text-lg font-semibold">
+            {invite ? "This booking link isn't working" : "This booking page isn't taking bookings right now"}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {invite ? "Check you have the whole link, or ask your coach for a new one." : "Message your coach for a new link."}
+          </p>
         </div>
       </Shell>
     );
@@ -290,6 +302,15 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
 
   const coachTz = page.timezone;
   const sameZone = coachTz === tz;
+  // "Ask Jared for a new one" (never "Ask JF", when no coach is named).
+  const coachFirst = page.hostName && page.hostName !== "JF Effect" ? page.hostName.trim().split(/\s+/)[0] : "";
+  const signInLink = (
+    <Button asChild className="h-11 font-semibold">
+      <Link to="/auth" search={{ next: typeof window !== "undefined" ? window.location.pathname : `/book/${slug}` }}>
+        Sign in
+      </Link>
+    </Button>
+  );
   const header = (
     <div className="space-y-3 border-b border-border p-5 sm:p-6">
       <div className="flex items-center gap-2.5">
@@ -321,20 +342,67 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
     </div>
   );
 
+  // ── A personal link that can't book ──────────────────────────────────────────
+  // Run out, cancelled or not a link: say so, with Sign in (signed in as a client, the
+  // server would already have booked them as themselves and there'd be no state here).
+  const linkSaid = page.linkState && page.linkState !== "booked" ? inviteStateMessage(page.linkState as InviteState, coachFirst) : null;
+  if (linkSaid) {
+    return (
+      <Shell>
+        <div className="overflow-hidden rounded-2xl border border-border bg-card" data-booking-link-state={page.linkState}>
+          {header}
+          <div className="space-y-3 p-5 sm:p-6">
+            <p className="text-[15px] font-semibold">{linkSaid.title}</p>
+            <p className="text-sm text-muted-foreground">{linkSaid.body}</p>
+            <div className="flex flex-col gap-2 sm:flex-row">{signInLink}</div>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
+  // ── The link already has its booking ───────────────────────────────────────
+  if (page.linkState === "booked") {
+    const b = page.booked;
+    const at = b ? new Date(b.start) : null;
+    return (
+      <Shell>
+        <div className="overflow-hidden rounded-2xl border border-border bg-card" data-booking-link-state="booked">
+          {header}
+          <div className="space-y-4 p-5 sm:p-6">
+            <div>
+              <p className="text-[15px] font-semibold">{b?.done ? "You had this one" : "You're booked"}</p>
+              {at && b && (
+                <p className="mt-1 text-sm" data-booking-booked-when>
+                  {longDay(localDateISO(at, tz))} · {clockIn(b.start, tz)} – {clockIn(b.end, tz)} {zoneShort(tz, at)}
+                </p>
+              )}
+              <p className="mt-2 text-sm text-muted-foreground">
+                {b?.done
+                  ? `Need another? Ask ${coachFirst || "your coach"} for a new link.`
+                  : "Change or cancel it in your JF Effect app."}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button asChild className="h-11 font-semibold">
+                <Link to="/portal/calendar">Open the app</Link>
+              </Button>
+              {who?.signedIn && (
+                <Button variant="outline" className="h-11" onClick={() => setSkipInvite(true)}>
+                  Book another time
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
   // ── Clients only (General Call) ─────────────────────────────────────────────
   // Signed in as a coaching client, or the coach's personal link for one. Anyone
   // else is told who it's for instead of picking a time it would refuse.
-  if (page.clientsOnly && !page.invitee?.canBook && !me?.coaching) {
-    if (!meChecked) {
-      return (
-        <Shell>
-          <div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
-          </div>
-        </Shell>
-      );
-    }
-    const member = !!me || !!page.invitee;
+  if (page.clientsOnly && !who?.canBook) {
     return (
       <Shell>
         <div className="overflow-hidden rounded-2xl border border-border bg-card" data-booking-clients-only>
@@ -342,18 +410,12 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
           <div className="space-y-3 p-5 sm:p-6">
             <p className="text-[15px] font-semibold">For JF Effect coaching clients</p>
             <p className="text-sm text-muted-foreground">
-              {member
+              {who
                 ? "Your account doesn't include calls with a coach. Coaching does: a coach, a program written for you, and calls like this one."
                 : "Sign in with your client account to pick a time."}
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
-              {!member && (
-                <Button asChild className="h-11 font-semibold">
-                  <Link to="/auth" search={{ next: `/book/${slug}` }}>
-                    Sign in
-                  </Link>
-                </Button>
-              )}
+              {!who && signInLink}
               <Button asChild variant="outline" className="h-11">
                 <Link to="/coaching/apply">Apply for coaching</Link>
               </Button>
@@ -401,7 +463,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" /> {clockIn(result.start, tz)} –{" "}
-                {clockIn(result.end, tz)}
+                {clockIn(result.end, tz)} {zoneShort(tz, start)}
               </div>
               <div className="flex items-center gap-2">
                 <WhereIcon
@@ -489,23 +551,21 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
             >
               <ArrowLeft className="h-3.5 w-3.5" /> Change time
             </button>
-            <div className="rounded-xl border border-primary/40 bg-primary/10 p-4">
-              <div className="text-lg font-bold">
+            <div className="rounded-xl bg-muted p-4" data-booking-confirm-time>
+              <div className="text-lg font-semibold">
                 {longDay(localDateISO(new Date(slot.start), tz))}
               </div>
-              <div className="text-sm font-semibold text-foreground/90">
-                {clockIn(slot.start, tz)} – {clockIn(slot.end, tz)}
+              <div className="text-sm text-foreground/90">
+                {clockIn(slot.start, tz)} – {clockIn(slot.end, tz)} {zoneShort(tz, new Date(slot.start))}
               </div>
+              {who && (
+                <div className="mt-2 text-sm text-muted-foreground" data-booking-as>
+                  Booking as <span className="font-semibold text-foreground">{who.firstName}</span>
+                </div>
+              )}
             </div>
 
-            {who ? (
-              <div className="rounded-xl border border-border bg-secondary/30 p-3 text-sm">
-                <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-                  Booking as
-                </div>
-                <div className="font-bold">{who.name}</div>
-              </div>
-            ) : (
+            {who ? null : (
               <div className="grid gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="b-name">Your name</Label>
@@ -560,9 +620,14 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
                 />
               </div>
             )}
+            {preview && (
+              <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground" data-booking-preview>
+                Preview: this is what they see. Only they can confirm it.
+              </p>
+            )}
             <Button
               className="h-12 w-full bg-primary text-base font-semibold"
-              disabled={!valid || book.isPending}
+              disabled={!valid || book.isPending || preview}
               onClick={() => book.mutate()}
             >
               {book.isPending ? (
@@ -600,10 +665,10 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
   const error = slotData?.error;
 
   return (
-    <Shell back={me ? "/portal/calendar" : null}>
+    <Shell back={who?.signedIn ? "/portal/calendar" : null}>
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
         {header}
-        {!who && page.usesCredit && (
+        {!who && !invite && page.usesCredit && (
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-primary/5 px-5 py-3 text-xs sm:px-6">
             <span className="text-foreground/85">
               Already training with us? Sign in so it comes off your sessions.

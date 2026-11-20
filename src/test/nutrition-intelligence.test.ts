@@ -70,7 +70,7 @@ import { planResults, previousPlanText } from "@/lib/nutrition-history";
 import { dayCoverage, withHonestTotals } from "@/lib/nutrition-targets/plan-coverage";
 import { parseMealPlan } from "@/lib/nutrition-targets/meal-plan-parse";
 import { ALIGNED_PLAN_TEXT, DEVIN_AI_TARGETS, DEVIN_PLAN_TEXT } from "@/test/fixtures/devin-nov-2026";
-import { TARGETS_PROMPT, targetsUserPrompt } from "@/lib/nutrition-ai-prompts";
+import { TARGETS_PROMPT, targetsUserPrompt } from "@/lib/nutrition-ai-prompts.server";
 import { DEFAULT_ROUTES, STRONG_MODELS, resolveRoute } from "@/lib/ai/routing";
 import { developmentText } from "@/lib/program-intel/athlete-development";
 import { nutritionAthleteText } from "@/lib/nutrition-targets/nutrition-athlete";

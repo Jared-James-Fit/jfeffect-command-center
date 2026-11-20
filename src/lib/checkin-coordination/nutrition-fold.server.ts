@@ -7,7 +7,7 @@
  * publishes. Never throws; a fold that can't happen leaves the check-in sent,
  * and the Nutrition Update sender offers the form itself instead.
  */
-import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts";
+import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-request";
 import { answeredNutrition, foldNutritionAnswers, type FoldAnswer, type FoldQuestion } from "@/lib/checkin-coordination/nutrition-fold";
 import { loadNutritionSide } from "@/lib/checkin-coordination/plan.server";
 import { TRAINING_TIME_DAYS, TRAINING_TIME_RECENT, workoutStartHours, type PrefillProfile } from "@/lib/form-prefill";

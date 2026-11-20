@@ -150,9 +150,10 @@ describe("the sale's plumbing", () => {
     expect(dialog).toContain('{isNewBooking && form.uses_credit !== false && form.status === "Scheduled" && (\n            <div className="md:col-span-2">\n              <SessionSalePicker');
     // a session can be booked (and charged) straight from the coach's chat with the client
     const plus = read("src/components/composer-plus-menu.tsx");
-    expect(plus).toContain('label: "Book Session"');
+    expect(plus).toContain('label: "Schedule"');
+    expect(plus).toContain("initialCard={bookCard}");
     expect(plus).toContain("const canBook = isAdmin && surface === \"dm\" && !!defaultClientId;");
-    expect(read("src/components/messages/book-session-from-chat.tsx")).toContain("clientId={clientId} clients={client ? [client] : []}");
+    expect(read("src/components/messages/book-session-from-chat.tsx")).toContain("clientId={clientId} clients={client ? [client] : []} initialCard={initialCard}");
     // and when an already-booked session is opened to edit (Manage Session)
     expect(read("src/components/pt-session-dialog.tsx")).toContain("<SessionPaymentLine session={form} first=");
   });

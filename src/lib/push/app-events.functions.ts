@@ -7,7 +7,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts";
+import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-request";
+
+/** Automatic Nutrition Update plans: at most one per client in this long. */
+const AUTO_PLAN_GAP_MS = 24 * 60 * 60 * 1000;
 
 const Input = z.object({
   event: z.enum([
@@ -68,6 +71,18 @@ export const notifyAppEventFn = createServerFn({ method: "POST" })
         }
         if (s.form_id === NUTRITION_REQUEST_FORM_ID) {
           await notifyAppEvent(sb, "nutrition_submitted", { clientId: s.client_id, sourceId: data.id, actorUserId: userId });
+          // One automatic plan per client a day: a phone can send any number of
+          // submissions, and each plan is a top-tier AI run. A second one the
+          // same day is written when the coach opens it (the panel writes a
+          // missing plan itself).
+          const { data: recentPlan } = await sb
+            .from("nutrition_ai_plans")
+            .select("id")
+            .eq("client_id", s.client_id)
+            .neq("submission_id", data.id)
+            .gte("created_at", new Date(Date.now() - AUTO_PLAN_GAP_MS).toISOString())
+            .limit(1);
+          if (recentPlan && recentPlan.length) return { skipped: true, reason: "plan_recent" as const };
           const { startNutritionPlan } = await import("@/lib/nutrition-ai-plans.server");
           return startNutritionPlan(sb, data.id);
         }

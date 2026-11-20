@@ -377,7 +377,7 @@ describe("wired in", () => {
     expect(server).toMatch(/supplements,\n/);
     // decided again with the written meal plan, which is what says they eat no dairy or fish
     expect(server).toMatch(/planGiven: !!mealPlanText\.trim\(\)/);
-    const prompt = read("src/lib/nutrition-ai-prompts.ts");
+    const prompt = read("src/lib/nutrition-ai-prompts.server.ts");
     expect(prompt).toMatch(/GUT HEALTH \+ SUPPLEMENTS/);
     expect(prompt).toMatch(/never write supplements, doses or brands into your answer/);
   });
