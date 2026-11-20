@@ -436,8 +436,8 @@ describe("every preview matches the post: no glow anywhere a post is drawn", () 
       "src/components/community/repost-note-editor.tsx",
     ])
       expect(read(f), f).not.toMatch(/radial-gradient/);
-    // the grid's placeholder is the card's paper, and a lesson illustration sits on the same paper
-    expect(read("src/components/community/post-tile.tsx")).toContain('bg-[#f6f3ee]" aria-hidden');
+    // the grid's placeholder is neutral (no blank paper card that fills in later), and a lesson illustration sits on the card's paper
+    expect(read("src/components/community/post-tile.tsx")).toContain('bg-muted" aria-hidden');
     expect(read("src/lib/lessons.ts")).toContain("clean off-white paper background (#f6f3ee)");
   });
 });

@@ -1514,6 +1514,10 @@ html.feed-paging:not([data-pov-banner-on]) .ios-status-band { @variant max-md { 
 }
 .feed-item[data-shown] .caught-up-ring { animation: caught-up-pop 520ms cubic-bezier(.2,.8,.2,1) 120ms both; }
 /* photos fade in as they arrive instead of popping */
+/* An automated post appears all at once on its screen: its words and buttons wait for the card it opens on
+   (PostArtImage page + hold sets data-pending until the card is decoded, at most ART_HOLD_MS on screen).
+   Visibility only: never an opacity or transform on a whole screen (a layer an iPhone paints in strips). */
+.feed-page:has([data-post-art][data-pending]) :is([data-page-words], [data-page-actions]) { visibility: hidden; }
 .media-fade { opacity: 0; transition: opacity 280ms ease-out; }
 .media-fade[data-loaded] { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
