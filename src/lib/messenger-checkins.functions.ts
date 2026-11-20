@@ -1,3 +1,4 @@
+import { PAIN_RULES } from "@/lib/pain/rules";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -639,6 +640,7 @@ async function generateAnalysis(
   clientId?: string | null,
   programText = "",
   weightText = "",
+  painText = "",
 ): Promise<MessengerCheckinAnalysis> {
   const fallback = fallbackAnalysis(taskType, answers as any);
   try {
@@ -667,6 +669,10 @@ async function generateAnalysis(
       weightText
         ? "WEIGHT MANAGEMENT is computed from their records: use its numbers for bodyweight, cardio, water and digestion, never your own. Don't promise a calorie, cardio or water change: say the coach is looking at it (every change needs the coach's OK). Never suggest dehydration, water loading, sodium tricks or a crash cut. Digestion it flags for a doctor goes in red_flags."
         : "",
+      painText ? PAIN_RULES : "",
+      painText
+        ? "Pain in the suggested response: only when PAIN HISTORY shows something worth saying (recurring, worse, limiting, severe or a warning sign), in a sentence or two, specific to the place and what it came up on, the way the coach talks; nothing for a one-off mild soreness. Anything flagged for the coach also goes in coach_notes."
+        : "",
       voice,
       "Return ONLY JSON matching:",
       '{"summary":string,"wins":string[],"focus":string[],"goals":string[],"red_flags":string[],"coach_notes":string[],"suggested_response":string,"urgency":"low"|"normal"|"high"|"urgent"}',
@@ -685,6 +691,7 @@ async function generateAnalysis(
       "",
       ...(programText ? ["PROGRAM CONTEXT:", programText, ""] : []),
       ...(weightText ? [weightText, ""] : []),
+      ...(painText ? [painText, ""] : []),
       "Produce a coach-facing recap and suggested reply.",
     ].join("\n");
 
@@ -934,7 +941,30 @@ export const analyzeMessengerCheckin = createServerFn({ method: "POST" })
       const loaded = await recordCheckinReview(sb, row.client_id, row.id);
       if (loaded) weightText = assessmentText(loaded.assessment);
     }
-    const analysis = await generateAnalysis(sb, taskType, row.answers ?? {}, snapshot, row.client_id, programContextText(program), weightText);
+    // Pain over time (src/lib/pain/): what they reported after workouts and in
+    // check-ins, what's changing and what lines up with it, with the recovery
+    // options their history earns (never one the coach already used recently).
+    let painText = "";
+    if (taskType === "weekly_checkin") {
+      try {
+        const { loadPainEntries, loadPainSessions, loadGivenSuggestions, todayIn } = await import("@/lib/pain/load");
+        const { buildPainHistory } = await import("@/lib/pain/history");
+        const { recoverySuggestions } = await import("@/lib/pain/recovery");
+        const { painHistoryForAi } = await import("@/lib/pain/ai");
+        const { data: c } = await sb.from("clients").select("timezone").eq("id", row.client_id).maybeSingle();
+        const tz = c?.timezone ?? null;
+        const [byClient, sessions, given] = await Promise.all([
+          loadPainEntries(sb, [row.client_id], { tz: new Map([[row.client_id, tz]]) }),
+          loadPainSessions(sb, row.client_id, tz).catch(() => []),
+          loadGivenSuggestions(sb, row.client_id),
+        ]);
+        const history = buildPainHistory(byClient.get(row.client_id) ?? [], todayIn(tz));
+        painText = painHistoryForAi(history, { sessions, suggestions: recoverySuggestions(history, sessions, given.given) }) ?? "";
+      } catch (e: any) {
+        console.error("[checkin] pain history unavailable", e?.message);
+      }
+    }
+    const analysis = await generateAnalysis(sb, taskType, row.answers ?? {}, snapshot, row.client_id, programContextText(program), weightText, painText);
     await sb
       .from("messenger_checkins")
       .update({
