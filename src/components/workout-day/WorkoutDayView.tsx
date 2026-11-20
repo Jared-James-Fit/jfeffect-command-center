@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Component, Fragment, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { flushSync } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader, usePageBack } from "@/components/app-shell";
@@ -90,7 +91,7 @@ import {
 import { WorkoutUndoProvider } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData, cachedUpdatedAt } from "@/lib/workout-plan-cache";
-import { WarmupRows, bestE1rm, useWarmupSets } from "@/components/workout-day/final-warmup-input";
+import { WarmupRows, bestE1rm, useWarmupSets, type WarmupRead } from "@/components/workout-day/final-warmup-input";
 import { planRestore, setPayload, snapshotOf, type CardSet, type CardSnapshot } from "@/lib/card-history";
 import { matchPreviousWeekSlots, type SlotRow } from "@/lib/previous-week-slot";
 import { LastWeekSwapChip, type LastWeekSwap } from "@/components/workout-day/last-week-swap";
@@ -105,7 +106,7 @@ import { EffortScaleHeader } from "@/components/workout-day/effort-scale-help";
 import { applyOptimisticSetResult } from "@/lib/optimistic-set-result";
 import { fetchAllPages } from "@/lib/supabase-paginate";
 import { getClientBodyweightKgSeries, smoothedBodyweightKgAt, type BodyweightKgPoint } from "@/lib/bodyweight";
-import { finalWarmupRow, offersLastWarmup, warmupInUnit, warmupsForModel } from "@/lib/final-warmup";
+import { finalWarmupRow, offersLastWarmup, warmupInUnit, warmupStyleOf, warmupsForModel } from "@/lib/final-warmup";
 import { enqueueOfflineWrite, registerQueueHandler, supersedeOfflineWrite } from "@/lib/workout-offline-queue";
 import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
@@ -155,6 +156,7 @@ import { computeRepMaxBests, computeAssistedBests, detectAssistedSetPR, detectSe
 import { trustedSessionRpe } from "@/lib/workout-review";
 import {
   buildLoadModel,
+  equipmentKindOf,
   liftKindOf,
   parseRpe,
   planningTarget,
@@ -1091,7 +1093,7 @@ function WorkoutDay({
           actual_reps, actual_rpe, actual_rir, entered_value, entered_unit,
           normalized_kg, normalized_lb, actual_load, actual_load_unit, is_working_set,
           is_bodyweight, load_type, completed_duration_seconds, actual_calories, actual_distance_m, equipment_id,
-          pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, purpose_label, sort_order, exercises(name), pl_days(scheduled_date))`;
+          pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, purpose_label, sort_order, reps_text, exercises(name), pl_days(scheduled_date))`;
       // Confirmed sets only (drafts from "apply to remaining" are not history),
       // newest first, paged past the 1,000-row response cap so long-term
       // clients keep their full rep-max baselines.
@@ -1142,6 +1144,7 @@ function WorkoutDay({
           isWorkingSet: log.is_working_set ?? null,
           loadType: resolveLoadType(log.load_type, log.is_bodyweight),
           purposeLabel: historyRow?.purpose_label ?? null,
+          repsText: historyRow?.reps_text ?? null,
           rowId: log.row_id ?? null,
           rowOrder: historyRow?.sort_order ?? null,
           durationSeconds: log.completed_duration_seconds ?? null,
@@ -4250,22 +4253,40 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     if (relabelIntent(activeUnit) && !readonly) void relabelWarmups(activeUnit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeUnit]);
-  const [warmupForm, setWarmupForm] = useState<string | null>(null);
+  // + Warm-up: a new row to type into (its weight box opens inside the tap).
+  const [warmupAddToken, setWarmupAddToken] = useState(0);
+  const warmupDraftEditRef = useRef<(() => void) | null>(null);
+  const warmupStyle = useMemo(() => warmupStyleOf(family, name, exercise?.equipment), [family, name, exercise?.equipment]);
+  // How this lift's history is read: the competition lifts and everything else differ (HISTORY_PROFILES).
+  const liftKind = liftKindOf(row.exercises);
+  // Double progression (load-suggestion.ts note 12): an accessory or variation on a
+  // rep range starts from last session's weight and whether it earned the next
+  // step. Never a barbell squat / bench / deadlift (RPE-led) or a back-off card.
+  const progressionPlan = useMemo(
+    () => (liftKind !== "competition" && !rangeLift(family, name, exercise?.equipment) && !followsSameExercise &&
+      repTarget.min != null && repTarget.max != null && repTarget.max > repTarget.min && loadPlan
+      ? { range: { lo: repTarget.min, hi: repTarget.max }, rpe: loadPlan.rpe }
+      : null),
+    [liftKind, family, name, exercise?.equipment, followsSameExercise, repTarget.min, repTarget.max, loadPlan],
+  );
   // Only the first card of a lift asks for the last warm-up (see warmedUpRowIds).
   const rampsUp = useMemo(() => !warmedUp && offersLastWarmup(family, name), [warmedUp, family, name]);
-  const warmupPromptable = warmupEligible && rampsUp;
   // Every warm-up logged on this card, read as one by the engine (readWarmups):
   // the same list, and the same suggestion, whatever order they were typed in.
-  const warmupsForModelKey = warmupEligible
+  // Only a heavy barbell lift's warm-ups set today's weight, and only where the
+  // weight is RPE-led: on an accessory (a curl, a leg press, a row) or a rep range
+  // coached by double progression a warm-up is logged, never read.
+  const warmupsRead = warmupEligible && warmupStyle === "last" && !progressionPlan;
+  const warmupPromptable = warmupsRead && rampsUp;
+  const warmupsForModelKey = warmupsRead
     ? warmupsForModel(warmupSets, activeUnit).map((w) => `${w.load}x${w.reps}@${w.rpe ?? ""}`).join(",")
     : "";
   const warmupsList = useMemo(
-    () => (warmupEligible ? warmupsForModel(warmupSets, activeUnit) : []),
+    () => (warmupsRead ? warmupsForModel(warmupSets, activeUnit) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [warmupsForModelKey],
   );
-  // How this lift's history is read: the competition lifts and everything else differ (HISTORY_PROFILES).
-  const liftKind = liftKindOf(row.exercises);
+  const equipmentKind = useMemo(() => equipmentKindOf(name, exercise?.equipment), [name, exercise?.equipment]);
   const loadModel = useMemo<LoadModel | null>(() => {
     if (!loadHistory || hideWeight || coachOwnsLoad || rowLoadType !== "external" || !loadPlan) return null;
     const today = existingResults
@@ -4287,8 +4308,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
       // top set they imply (that's for a fresh first set): until today's top
       // set carries (it's rated), its number is a back-off's (note 11).
       backoffs: followsSameExercise ? "as_logged" : undefined,
+      progression: progressionPlan,
+      equipment: equipmentKind,
     });
-  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness, warmupsList, bodyweightKg, dayRead, liftKind, followsSameExercise]);
+  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness, warmupsList, bodyweightKg, dayRead, liftKind, followsSameExercise, progressionPlan, equipmentKind]);
   // Every card that can suggest gets the on/off chip (one switch for the whole
   // workout). Doesn't wait for history so the chip never pops in late.
   const canSuggest = !hideWeight && !coachOwnsLoad && rowLoadType === "external" && !!loadPlan;
@@ -4300,6 +4323,12 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     () => (loadModel && loadPlan ? suggestSetLoad(loadModel, loadPlan) : null),
     [loadModel, loadPlan],
   );
+  // Once the card is done: where next time starts. On a rep range it's the same
+  // double-progression read of today's sets (add a step once every set hit the top).
+  const nextTimeHint = useMemo<LoadSuggestion | null>(() => {
+    const p = loadModel?.progressionNext;
+    return p ? { low: p.load, high: p.load, target: p.load, unit: loadModel!.unit, progression: p } : loadHint;
+  }, [loadModel, loadHint]);
   // The first heavy set of a main lift, by feel: a few weights to choose from by
   // how the warm-ups move (suggestionPicks); everything else stays one number.
   const loadPicks = useMemo(
@@ -4344,11 +4373,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
   const heaviestWarmupId = useMemo(() => finalWarmupRow(warmupSets)?.id ?? null, [warmupSets]);
   // Tuning only happens before the first working set.
   const warmupGauge = warmupPromptable && loadModel && !workedToday ? { suggested: warmupGaugeSuggested } : null;
-  // The W prompt row: on lifts that ramp up, offered any time — it tunes the
-  // weight while it still can, and always gives a rough 1RM estimate.
-  const warmupPrompt = warmupAllowed && rampsUp
-    ? { suggested: warmupGauge?.suggested ?? null, tunes: !!warmupGauge }
-    : null;
   // Today's best set for Workout Tools → e1RM: logged working sets and
   // warm-ups (external load only), one tap to fill it in.
   const e1rmSets = useMemo(() => {
@@ -4370,13 +4394,21 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toolsActions, row.id, name, movePosition, position, activeUnit, e1rmBest?.e1rm, e1rmBest?.from.load, e1rmBest?.from.reps, e1rmBest?.from.rpe]);
   useEffect(() => () => toolsActions?.reportE1rm(row.id, null), [toolsActions, row.id]);
-  // A warm-up too easy to read (RPE 5 or easier) is said so, and the number stays history's (or waits for set 1).
+  // What the warm-ups did to today's weight, said in the warm-up header: tuned it,
+  // too easy to read (RPE 5 or easier: history's number stands, or set 1 sets it),
+  // or too far under the working weight to say anything.
   const warmupTooEasyFrom: "history" | "cold" | null = !warmupGauge
     ? null
     : loadHint?.warmup === "too_easy" ? "history" : loadModel?.warmupTooEasy ? "cold" : null;
   const warmupTooEasy = warmupTooEasyFrom != null;
   const tunedWarmupId =
-    warmupGauge && !warmupTooEasy && (loadModel?.source === "warmup" || loadModel?.source === "history_warmup") ? heaviestWarmupId : null;
+    warmupGauge && !warmupTooEasy && loadHint?.warmup !== "light" && (loadModel?.source === "warmup" || loadModel?.source === "history_warmup") ? heaviestWarmupId : null;
+  const warmupRead: WarmupRead = !warmupGauge ? null
+    : loadHint?.warmup === "light" ? "light"
+    : warmupTooEasyFrom === "history" ? "too_easy"
+    : warmupTooEasyFrom === "cold" ? "too_easy_cold"
+    : tunedWarmupId ? "tuned"
+    : null;
   // With Suggest off, a last warm-up logged before set 1 still sets today's
   // weight: it's what set 1's tap logs, said under the warm-up (never in a box).
   // (A warm-up too easy to read leaves it at history's number: that's still today's.)
@@ -4385,19 +4417,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     loadModel.status !== "calibrating" && !loadPicks ? loadHint.target : null;
   const quickLoad: number | null = quickLoadFromStrip ?? warmupTodayLoad;
 
-  // Warm-up → working weight: what the card will suggest once this warm-up is
-  // saved, computed by the same engine (only while it can still tune: before
-  // the first working set, history loaded, a reps @ RPE target).
-  const previewWarmupTarget = useCallback(
-    (w: { load: number; reps: number; rpe: number | null }, replacingId?: string | null): LoadSuggestion | null => {
-      if (!warmupGauge || !loadHistory || !loadPlan) return null;
-      // read with the other warm-ups, as the card will once it's saved (the one being edited replaced)
-      const others = warmupsForModel(warmupSets.filter((x) => x.id !== replacingId), activeUnit);
-      const model = buildLoadModel({ history: loadHistory, today: [], unit: activeUnit, readiness, warmups: [...others, w], bodyweightKg, lift: liftKind });
-      return suggestSetLoad(model, loadPlan);
-    },
-    [!!warmupGauge, loadHistory, loadPlan, activeUnit, readiness, bodyweightKg, liftKind, warmupSets],
-  );
   // Logging feedback: one soft "tock" and a medium tap each time this card gains
   // a completed set — however it was completed (typed, tapped, filled down,
   // timed), in the same render its number turns green — and a warmer cue when
@@ -4973,7 +4992,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
           ? <div className={cn(REF_CELL, "items-start")}><LoadSuggestionsChip highlight={!!suggestNudge} /></div>
           : showSuggestionCard && loadModel && loadPlan
             ? done
-              ? <LoadSuggestionsDone next={loadHint} plan={loadPlan} />
+              ? <LoadSuggestionsDone next={nextTimeHint} plan={nextTimeHint?.progression ? null : loadPlan} />
               : <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} picks={loadPicks} showPlan={!rxSaysPlan} onApply={!readonly && clientId && openSetCount > 0 ? logOpenSetsAt : null} />
             : null;
         return (
@@ -4991,7 +5010,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
               {right}
             </div>
             {showSuggestionCard && loadModel && loadPlan && done && (
-              <LoadSuggestionsDoneNote own={dayRead?.own ?? null} next={loadHint} plan={loadPlan} today={todayRead} />
+              <LoadSuggestionsDoneNote own={dayRead?.own ?? null} next={nextTimeHint} plan={loadPlan} today={todayRead} />
             )}
           </>
         );
@@ -5418,14 +5437,12 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
             </span>
           )}
         </div>
-        {(warmupSets.length > 0 || (warmupAllowed && (!!warmupForm || !!warmupPrompt || looseWarmupClip))) && (
+        {(warmupSets.length > 0 || warmupAllowed) && (
           <WarmupRows
             sets={warmupSets}
             unit={activeUnit}
             gridTemplate={gridTemplate}
-            form={warmupAllowed ? warmupForm : null}
             canEdit={warmupAllowed}
-            onFormChange={setWarmupForm}
             onSave={async (v) => {
               const id = await saveWarmup(v);
               // a clip filmed on the open warm-up is tied to it as it saves: read it back
@@ -5433,21 +5450,23 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
               return id;
             }}
             onRemove={removeWarmup}
-            prompt={warmupPrompt}
+            // an open "Last warm-up" row on a heavy barbell compound (only the lift's first card,
+            // while it can still set today's weight); + Warm-up and folded everywhere else
+            style={rampsUp ? warmupStyle : "secondary"}
+            ramp={!workedToday}
+            tunes={!!warmupGauge}
             seed={warmupGauge?.suggested ?? null}
-            tunedId={tunedWarmupId}
-            target={warmupGauge && loadPlan ? loadPlan : null}
-            preview={warmupGauge ? previewWarmupTarget : null}
-            // the weight set 1's tap logs once this warm-up is in (Suggest off: it's said under the warm-up)
+            read={warmupRead}
+            suggestOn={showSuggestionCard}
+            // the weight set 1's tap logs once this warm-up is in (Suggest off: it's said in the header)
             todayLoad={warmupTodayLoad}
-            // the open last warm-up lines up with the set table's columns
+            target={warmupGauge && loadPlan ? loadPlan : null}
+            // the rows line up with the set table's columns
             columns={{ focusMode, showReps, showTimer, showDistance, showCalories, showVelocity, videoColumn }}
             effortKind={showRir ? "rir" : "rpe"}
             looseClip={looseWarmupClip}
-            tooEasy={warmupTooEasyFrom}
-            suggestOn={showSuggestionCard}
-            // open on a barbell squat, bench or deadlift; a one-line prompt elsewhere
-            openRow={rangeLift(family, name, exercise?.equipment)}
+            addToken={warmupAddToken}
+            draftEditRef={warmupDraftEditRef}
             // a video for the coach on the warm-up, like a working set's (set 0)
             video={videoColumn ? ({ warmupId, logged, label }) => (
               <SetVideoCell
@@ -5501,10 +5520,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
               targetRpe={row.rpe}
               targetRir={row.rir}
               suggestedWeight={openSetWeight}
-              // While the warm-up form is setting today's weight, its answer is
-              // the only suggestion on screen (no stale ghost in the set row).
-              loadHint={warmupForm && warmupGauge ? null : loadHint}
-              quickLoad={warmupForm && warmupGauge ? null : quickLoad}
+              loadHint={loadHint}
+              quickLoad={quickLoad}
               lastTimeWeight={activeUnit === "kg" ? (previousLift?.normalizedKg ?? null) : (previousLift?.normalizedLb ?? null)}
               repTarget={repTarget}
               rpeTarget={rpeTarget}
@@ -5577,10 +5594,14 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
                 type="button"
                 variant="ghost"
                 className="h-10 rounded-full px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
-                onClick={() => setWarmupForm("new")}
+                onClick={() => {
+                  // the new row mounts now, so its weight box opens inside this tap (keyboard up)
+                  flushSync(() => setWarmupAddToken((t) => t + 1));
+                  warmupDraftEditRef.current?.();
+                }}
                 disabled={warmupAtLimit}
                 aria-label={`Add warm-up set to ${name}`}
-                title={workedToday ? "A warm-up still gives a rough 1RM" : "A warm-up sharpens today's suggestion"}
+                title={warmupsRead && !workedToday ? "Your last warm-up sets today's weight" : "Logged, never counted as a set"}
               >
                 + Warm-up
               </Button>

@@ -43,8 +43,8 @@ describe("suggestions: a switch on every exercise card, one state for the workou
     expect(next).toContain(">Next time<");
     expect(next).toMatch(/50(<!-- -->)? (<!-- -->)?lb/);
     expect(next).toMatch(/15(<!-- -->)? @ (<!-- -->)?9.5/);
-    expect(wdv).toContain("<LoadSuggestionsDone next={loadHint} plan={loadPlan} />");
-    expect(wdv).toContain("<LoadSuggestionsDoneNote own={dayRead?.own ?? null} next={loadHint} plan={loadPlan} today={todayRead} />");
+    expect(wdv).toContain("<LoadSuggestionsDone next={nextTimeHint} plan={nextTimeHint?.progression ? null : loadPlan} />");
+    expect(wdv).toContain("<LoadSuggestionsDoneNote own={dayRead?.own ?? null} next={nextTimeHint} plan={loadPlan} today={todayRead} />");
   });
 
   it("says why next time's number moved: the change and how the sets felt vs the plan", () => {

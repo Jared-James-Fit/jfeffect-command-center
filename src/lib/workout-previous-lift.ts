@@ -46,6 +46,8 @@ export type PreviousLiftLog = {
   bodyweightKg?: number | null;
   /** Role of the card it was logged on, when the program named one. */
   purposeLabel?: string | null;
+  /** That card's prescribed reps ("8-12"): double progression compares like with like (load-suggestion.ts note 12). */
+  repsText?: string | null;
   /** The card (exercise row) it was logged on and that card's place in the workout. */
   rowId?: string | null;
   rowOrder?: number | null;

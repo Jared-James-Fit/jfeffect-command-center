@@ -33,13 +33,16 @@ describe("the final warm-up is the same whatever order they were logged in", () 
 
 describe("the last warm-up row saves what's on screen, in any order", () => {
   it("stays mounted while its first save turns it from new into a saved warm-up", () => {
-    expect(rows).toContain('key="last-warmup"');
-    expect(rows).not.toContain('key={inlineRow?.id ?? "new"}');
+    // the row being typed keeps its key through its first save (the saved warm-up rides on it)
+    expect(rows).toContain("key={`draft-${draftKey}`}");
+    expect(rows).toContain("existing={draftExisting}");
+    expect(rows).toContain("onFirstSave={(id) => setSaved({ token: addToken, id })}");
+    expect(rows).toContain("const listed = sets.filter((s) => s.id !== draftSavedId);");
   });
   it("runs its saves one at a time with what's shown when each runs, onto the warm-up its first save made", () => {
     expect(rows).toContain("queue.current = queue.current");
     expect(rows).toContain("const v = shown.current;");
-    expect(rows).toContain('if (typeof id === "string" && !idRef.current) idRef.current = id;');
+    expect(rows).toContain('if (typeof id === "string" && !idRef.current) {\n          idRef.current = id;');
     // reps or effort typed after the weight save, saved or still out
     expect(rows).not.toContain("if (existing) save({ reps: v });");
     expect(rows).not.toContain("if (existing) save({ effort: v });");

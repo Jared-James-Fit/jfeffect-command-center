@@ -1,4 +1,5 @@
 import { logLoadInUnit } from "@/lib/workout-pr";
+import { parseRepTarget } from "@/lib/set-input-cascade";
 import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -88,6 +89,23 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 //      too-heavy suggestions in both halves of the time range and for 6 athletes
 //      with 5+ cards (none got more); top-set cards keep note 11 (6.25% off
 //      read as top sets vs 7.70% as logged on the same days).
+//  12. ACCESSORIES ON A REP RANGE ARE COACHED BY DOUBLE PROGRESSION, not an
+//      estimated max (repProgression): last session's working weight goes up
+//      the smallest step the athlete loads once every set at it reached the top
+//      of the range at the target effort, stays while they build reps, and
+//      comes down a step only when every set fell short of the range. Read at
+//      the range's middle through the chart (alpha 0.3) the old estimate kept a
+//      lifter who hit 12 of 8–12 on the same weight. Weights round to the steps
+//      the athlete loads on that exercise (loadIncrement: their own gaps, a
+//      dumbbell rack's 5 lb) and land on a weight they've used (snapLoad); the
+//      competition lifts keep plate steps. A warm-up far under today's working
+//      weight (a bar, a 50% ramp set) is read as nothing (warmupRelevance).
+//      Backtested Nov 20 2026 on 1,754 real rep-range accessory sessions:
+//      median error 6.25% → 5.56%; "hold" suggestions on a weight they actually
+//      use 77.7% → 98.9% (error 5.41% → 2.22%); other accessory cards 65.3% →
+//      91.1% (6.25% → 3.77%); after a top-of-range session the old engine kept
+//      66% on the same weight, and when athletes went up 97.5% still reached the
+//      range (holding instead hit the top again 92% of the time, 972 pairs).
 // Back-off history (note 11), backtested Nov 15 2026 on 674 real first sets of
 // a squat / bench / deadlift-family session (19 athletes, Jun–Nov 2026),
 // predicted from history alone at the reps and RPE logged: competition lifts
@@ -291,6 +309,23 @@ export function warmupTrust(rpe: number | string | null | undefined): number {
   if (r == null) return 0;
   return Math.min(1, Math.max(0, (r - WARMUP_TRUST_FROM_RPE) / (WARMUP_TRUST_FULL_RPE - WARMUP_TRUST_FROM_RPE)));
 }
+/**
+ * A warm-up only says something about today when it's near the working weight
+ * (header note 8): a final warm-up sits ~85–90% of the top set, while a bar or a
+ * 50% ramp set rated "7" is a number typed past, not a read of the day (it reads
+ * ~half of history's max and would pull every suggestion down). Relevance ramps
+ * from 0 at WARMUP_RELEVANT_FROM of history's working load for today's target to
+ * full at WARMUP_RELEVANT_FULL, so moving the weight never jumps the number. Of
+ * the 38 warm-ups logged to Nov 20 2026, the heaviest of each card ran 77–100%
+ * of that day's first working set, so none of them changes.
+ */
+export const WARMUP_RELEVANT_FROM = 0.6;
+export const WARMUP_RELEVANT_FULL = 0.75;
+export function warmupRelevance(warmupLoad: number, workingLoad: number): number {
+  if (!(warmupLoad > 0) || !(workingLoad > 0)) return 0;
+  const r = warmupLoad / workingLoad;
+  return Math.min(1, Math.max(0, (r - WARMUP_RELEVANT_FROM) / (WARMUP_RELEVANT_FULL - WARMUP_RELEVANT_FROM)));
+}
 /** No history at all: trim the warm-up's own estimate, widen the range, never suggest > 1.25× the warm-up load. */
 export const WARMUP_COLD_START_FACTOR = 0.96;
 export const WARMUP_COLD_START_SPREAD = 0.08;
@@ -465,8 +500,8 @@ export interface ModelSample {
 export interface LoadModel {
   status: "ready" | "calibrating";
   unit: "kg" | "lb";
-  /** Where the estimate comes from. */
-  source: "history" | "today" | "blend" | "warmup" | "history_warmup" | null;
+  /** Where the estimate comes from ("progression": double progression on a rep range, header note 12). */
+  source: "history" | "today" | "blend" | "warmup" | "history_warmup" | "progression" | null;
   historySessions: number;
   /** Past sets of this lift (recency-weighted, readiness/staleness applied). */
   history: ModelSample[];
@@ -497,6 +532,158 @@ export interface LoadModel {
   lift: LiftKind;
   /** Past back-off sets read as the top set they imply for this cold suggestion (note 11). */
   backoffsAsTopSet?: number;
+  /** Double progression from the last session (note 12): this card's first set, before anything is logged today. */
+  progression?: RepProgression | null;
+  /** The same read of TODAY's sets: what next time starts at, once the card is done. */
+  progressionNext?: RepProgression | null;
+  /**
+   * The weights they've loaded on this exercise lately, in this unit as typed
+   * (only for lifts that aren't the competition squat, bench or deadlift, which
+   * keep plate steps): the target rounds to their own steps (loadIncrement) and
+   * lands on a weight they've used (snapLoad).
+   */
+  ladder?: number[];
+  /** What it's loaded on (equipmentKindOf), for the default step. */
+  equipment?: EquipmentKind | null;
+}
+
+// ── Rep-range progression (header note 12) ────────────────────────────────
+/** A prescribed rep range ("8–12"). */
+export interface RepRange { lo: number; hi: number }
+/** A card's prescribed reps as a range ("8-12" → 8–12, "10" → 10–10), or null (timed, a scheme). */
+export function repRangeOf(text: string | null | undefined): RepRange | null {
+  const t = parseRepTarget(text);
+  if (t.min != null && t.max != null && t.max >= t.min) return { lo: t.min, hi: t.max };
+  if (t.exact != null) return { lo: t.exact, hi: t.exact };
+  return null;
+}
+export interface RepProgression {
+  /** add the smallest step / stay and build reps / come down a step */
+  action: "add" | "hold" | "drop";
+  /** Today's weight (model unit). */
+  load: number;
+  /** The weight the last session was done at (its working load). */
+  from: number;
+  /** The step used to add or drop (loadIncrement). */
+  step: number;
+  /** That session's reps at its working load, in set order. */
+  reps: number[];
+  /** Its hardest rating at that load, when rated. */
+  rpe: number | null;
+  range: RepRange;
+  /** Hit the top, but the next weight would be a jump of over PROGRESSION_MAX_JUMP they've never lifted: stay and add reps. */
+  bigJump?: boolean;
+}
+/** The last session counts for double progression only when this recent (else the history model and its layoff ease decide). */
+export const PROGRESSION_MAX_DAYS = 28;
+/** A step up over this share of the weight is held unless they've lifted that weight before (a 10 → 15 lb dumbbell is +50%). */
+export const PROGRESSION_MAX_JUMP = 0.25;
+/** Reps at the top of the range count as earned only up to this much over the target effort. */
+export const PROGRESSION_EFFORT_SLACK = 0.5;
+
+/**
+ * Double progression (note 12): the way accessories are coached. The last
+ * session's working weight (the heaviest it did for reps inside the range)
+ * goes up by the smallest step they load once every set at it reached the top
+ * of the range at no more than the target effort; it stays while they build
+ * reps; it comes down a step when every set at it fell short of the bottom of
+ * the range rated at or over the target (or unrated, since short reps are typed
+ * by hand). Null when the last session isn't comparable: a different rep range
+ * (reps far outside this one), nothing loaded.
+ */
+export function repProgression(input: {
+  sets: Array<{ load: number; reps: number; rpe: number | null }>;
+  range: RepRange;
+  targetRpe: number;
+  step: number;
+  ladder?: number[];
+  /**
+   * The range those sets were prescribed: double progression only compares a
+   * range with itself (12 reps at the top of 10–12 isn't short of 15–20). Another
+   * range → null, and the RPE model translates across. Unknown (older history):
+   * judged on this range, but never a drop.
+   */
+  lastRange?: RepRange | null;
+}): RepProgression | null {
+  const { range, step } = input;
+  const sets = input.sets.filter((s) => s.load > 0 && s.reps >= 1);
+  if (!sets.length || !(step > 0) || !(range.lo >= 1) || !(range.hi >= range.lo)) return null;
+  const last = input.lastRange ?? null;
+  if (last && (last.lo !== range.lo || last.hi !== range.hi)) return null;
+  const maxReps = Math.max(...sets.map((s) => s.reps));
+  // Another rep range last time (a 20-rep pump set, a heavy 5): this one's rule doesn't read it.
+  if (maxReps > range.hi + 4 || maxReps < range.lo - 3) return null;
+  const same = (a: number, b: number) => Math.abs(a - b) < 0.01;
+  const inRange = sets.filter((s) => s.reps >= range.lo);
+  const from = Math.max(...(inRange.length ? inRange : sets).map((s) => s.load));
+  const at = sets.filter((s) => same(s.load, from));
+  const rated = at.map((s) => s.rpe).filter((r): r is number => r != null);
+  const rpe = rated.length ? Math.max(...rated) : null;
+  const ladder = [...new Set((input.ladder ?? []).filter((x) => x > 0).map((x) => Math.round(x * 100) / 100))].sort((a, b) => a - b);
+  const base = { from, step, reps: at.map((s) => s.reps), rpe, range };
+  const hitTop = at.every((s) => s.reps >= range.hi) && (rpe == null || rpe <= input.targetRpe + PROGRESSION_EFFORT_SLACK);
+  if (hitTop) {
+    const next = snapLoad(from + step, step, ladder);
+    const known = ladder.some((x) => same(x, next));
+    if (next > from && ((next - from) / from <= PROGRESSION_MAX_JUMP || known)) return { ...base, action: "add", load: next };
+    return { ...base, action: "hold", load: from, bigJump: true };
+  }
+  const allShort = !!last && at.every((s) => s.reps < range.lo) && (rpe == null || rpe >= input.targetRpe);
+  if (allShort) {
+    const next = snapLoad(from - step, step, ladder);
+    if (next > 0 && next < from) return { ...base, action: "drop", load: next };
+  }
+  return { ...base, action: "hold", load: from };
+}
+
+/**
+ * The smallest step this athlete loads on an exercise: the smallest gap between
+ * the weights they've used on it (typed, in this unit), when it's a believable
+ * step for the equipment (half to three times the default: a 2.3 kg cable stack,
+ * 5 lb dumbbells, a 10 lb machine stack), else the default. Measured Nov 20 2026
+ * on 13,000 accessory sets: lb dumbbells are 96% whole pounds but only 72% on a
+ * 5 lb grid, kg cables only 49% on a 2.5 kg grid, so one grid for everyone puts
+ * a target on a weight their gym doesn't have.
+ */
+export function loadIncrement(input: { ladder?: number[]; unit: "kg" | "lb"; load: number; kind?: EquipmentKind | null }): number {
+  const base = defaultIncrement(input.unit, input.load, input.kind ?? null);
+  const loads = [...new Set((input.ladder ?? []).filter((x) => x > 0).map((x) => Math.round(x * 100) / 100))].sort((a, b) => a - b);
+  let gap = Infinity;
+  for (let i = 1; i < loads.length; i++) gap = Math.min(gap, loads[i] - loads[i - 1]);
+  // Finer than the default always counts (microplates, a 1 kg dumbbell rack);
+  // coarser only on a stack or a dumbbell rack, never on a bar (plates load in
+  // the default step whatever jumps they happened to make).
+  const coarse = input.kind === "dumbbell" || input.kind === "machine" || input.kind === "cable";
+  if (Number.isFinite(gap) && gap >= base * 0.5 - 1e-9 && gap <= base * (coarse ? 3 : 1) + 1e-9) return Math.round(gap * 100) / 100;
+  return base;
+}
+export type EquipmentKind = "barbell" | "dumbbell" | "machine" | "cable" | "other";
+/** The step a gym usually has: plates for a bar, the dumbbell rack (5 lb / 2.5 kg past the light ones) for dumbbells. */
+export function defaultIncrement(unit: "kg" | "lb", load: number, kind: EquipmentKind | null): number {
+  if (kind === "dumbbell") return unit === "lb" ? (load < 15 ? 2.5 : 5) : load < 10 ? 1 : 2.5;
+  return loadStep(unit, load);
+}
+/** Which kind of equipment an exercise is loaded on, from its name and library equipment (only the dumbbell rack changes the step). */
+export function equipmentKindOf(name: string | null | undefined, equipment?: string | null): EquipmentKind {
+  const s = `${name ?? ""} ${equipment ?? ""}`;
+  if (/\b(dumbbells?|db)\b/i.test(s)) return "dumbbell";
+  if (/\bcables?\b/i.test(s)) return "cable";
+  if (/\b(machine|smith|leg press|hack squat|pec deck|selectorized)\b/i.test(s)) return "machine";
+  if (/\b(barbell|trap bar|hex bar|ez[- ]?bar|safety (squat )?bar|ssb)\b/i.test(s)) return "barbell";
+  return "other";
+}
+/**
+ * A target onto a weight that exists: a weight they've used within half a step
+ * of it, else the step's grid counted from the nearest weight they've used
+ * (a 2.3 kg stack stays on 11.3, 13.6, 15.9), else plain multiples of the step.
+ */
+export function snapLoad(raw: number, step: number, ladder: number[] = []): number {
+  if (!(step > 0)) return raw;
+  let anchor: number | null = null;
+  for (const x of ladder) if (x > 0 && (anchor == null || Math.abs(x - raw) < Math.abs(anchor - raw))) anchor = x;
+  if (anchor == null || Math.abs(anchor - raw) > step * 3) return roundToStep(raw, step);
+  if (Math.abs(anchor - raw) <= step / 2 + 1e-9) return anchor;
+  return Math.round((anchor + Math.round((raw - anchor) / step) * step) * 100) / 100;
 }
 
 function weightedMean(values: Array<{ v: number; w: number }>): number | null {
@@ -534,6 +721,14 @@ export function buildLoadModel(input: {
    * which compares today's sets of every card with history).
    */
   backoffs?: "as_top_set" | "as_logged";
+  /**
+   * Double progression (note 12): the card's rep range and target effort. Pass it
+   * only for a card coached that way: an accessory or variation on a range, not
+   * a barbell squat / bench / deadlift (RPE-led), not a back-off card.
+   */
+  progression?: { range: RepRange; rpe: number } | null;
+  /** What it's loaded on, for the default step (equipmentKindOf). Competition lifts keep plate steps. */
+  equipment?: EquipmentKind | null;
   now?: Date;
 }): LoadModel {
   const { unit } = input;
@@ -580,6 +775,40 @@ export function buildLoadModel(input: {
     s.sets.push({ e1rm: est.e1rm * bw, load: load * bw, reps, rpe: rpe == null ? 8.5 : Math.max(MIN_RPE, rpe), trust: est.trust, backoff: onBackoffCard(log) });
     bySession.set(log.sessionKey, s);
   }
+  // ── The athlete's own weights and the last session as done (note 12) ──
+  // Weights as typed in this unit (a kg set converted to lb is no weight their
+  // gym has); the last session's sets on its first card of the exercise, as
+  // logged (no bodyweight or layoff scaling: it's the weight they'll load).
+  const ladderSet = new Set<number>();
+  let lastKey: string | null = null;
+  let lastAt = -Infinity;
+  for (const log of input.history) {
+    if ((log.loadType ?? "external") !== "external" || log.isWorkingSet === false) continue;
+    const at = log.occurredAt ? Date.parse(log.occurredAt) : NaN;
+    if (!Number.isFinite(at) || now - at > HISTORY_WINDOW_DAYS * DAY_MS || at > now + DAY_MS || !(Number(log.reps) >= 1)) continue;
+    const typed = log.enteredUnit
+      ? (log.enteredUnit === unit && Number(log.enteredValue) > 0 ? Number(log.enteredValue) : null)
+      : logLoadInUnit(log, unit);
+    if (typed != null && typed > 0) ladderSet.add(Math.round(typed * 100) / 100);
+    if (at > lastAt) { lastAt = at; lastKey = log.sessionKey; }
+  }
+  const ladder = lift === "competition" ? [] : [...ladderSet].sort((a, b) => a - b);
+  const lastFirstCard = lastKey ? firstCard.get(lastKey)?.rowId ?? null : null;
+  const lastLogs = lastKey && (now - lastAt) / DAY_MS <= PROGRESSION_MAX_DAYS
+    ? input.history.filter((log) => log.sessionKey === lastKey && (log.loadType ?? "external") === "external" && log.isWorkingSet !== false &&
+        (!lastFirstCard || !log.rowId || log.rowId === lastFirstCard))
+    : [];
+  const lastRange = repRangeOf(lastLogs.find((log) => log.repsText)?.repsText ?? null);
+  const lastSets = lastLogs.length
+    ? lastLogs
+        .map((log) => ({
+          load: (log.enteredUnit === unit && Number(log.enteredValue) > 0 ? Number(log.enteredValue) : logLoadInUnit(log, unit)) ?? 0,
+          reps: Number(log.reps),
+          rpe: parseRpe(log.rpe) ?? (log.rir != null && log.rir !== "" ? parseRpe(10 - Number(log.rir)) : null),
+        }))
+        .filter((s) => s.load > 0 && s.reps >= 1)
+    : [];
+
   const sessions = Array.from(bySession.values()).sort((a, b) => b.at - a.at).slice(0, MAX_SESSIONS);
   const spanDays = sessions.length > 1 ? (sessions[0].at - sessions[sessions.length - 1].at) / DAY_MS : 0;
   const historyReady = sessions.length >= MIN_HISTORY_SESSIONS && spanDays >= MIN_HISTORY_SPAN_DAYS;
@@ -652,15 +881,37 @@ export function buildLoadModel(input: {
 
   const warmup = today.length === 0 ? readWarmups([...(input.warmups ?? []), input.warmup]) : null;
   const bodyweightScaleMean = bwScales.length ? bwScales.reduce((a, b) => a + b, 0) / bwScales.length : 1;
+  // Double progression (note 12): a card coached on a rep range starts from the
+  // last session's weight and whether it earned the next step, never from a
+  // chart estimate that, read at the range's middle, keeps a lifter who hit the
+  // top on the same weight. Not once today's sets are in (they lead), not over
+  // a warm-up read (a ramped compound), not for a back-off read from a top set.
+  const equipment = lift === "competition" ? null : input.equipment ?? null;
+  const prog = input.progression ?? null;
+  const progressionFrom = (sets: Array<{ load: number; reps: number; rpe: number | null }>, lastRange: RepRange | null) => {
+    if (!prog || lift === "competition" || !sets.length) return null;
+    const ref = Math.max(...sets.map((s) => s.load));
+    return repProgression({ sets, range: prog.range, targetRpe: prog.rpe, step: loadIncrement({ ladder, unit, load: ref, kind: equipment }), ladder, lastRange });
+  };
+  const progression = !carried && !warmup && input.today.length === 0 ? progressionFrom(lastSets, lastRange) : null;
+  // Today's sets as the last session (prescribed this range): where next time starts once the card is done.
+  const progressionNext = input.today.length > 0 && !carried ? progressionFrom(input.today, prog?.range ?? null) : null;
   const base = {
     unit, historySessions: sessions.length, staleDays, warmup, bodyweightScale: bodyweightScaleMean,
-    early: historyEarly && today.length === 0,
-    dayFactor: historyReady && today.length === 0 ? dayFactor : null,
+    early: historyEarly && today.length === 0 && !progression,
+    dayFactor: historyReady && today.length === 0 && !progression ? dayFactor : null,
     carried,
     carriedTop,
     lift,
     backoffsAsTopSet,
+    progression,
+    progressionNext,
+    ladder,
+    equipment,
   };
+  if (progression) {
+    return { ...base, status: "ready", source: "progression", history, today: [], readiness: NEUTRAL_READINESS };
+  }
   if (today.length > 0) {
     return {
       ...base, status: "ready",
@@ -736,9 +987,10 @@ export interface LoadEstimate {
   spread: number;
   /**
    * What the last warm-up did to it (only when one was read): "tuned" it moved
-   * the number, "too_easy" it was too easy to read and the number is history's.
+   * the number, "too_easy" it was too easy to read and "light" too far under the
+   * working weight to say anything (warmupRelevance): the number is history's.
    */
-  warmup?: "tuned" | "too_easy";
+  warmup?: "tuned" | "too_easy" | "light";
 }
 
 export function estimateFor(model: LoadModel, reps: number, rpe: number): LoadEstimate | null {
@@ -782,10 +1034,15 @@ export function estimateFor(model: LoadModel, reps: number, rpe: number): LoadEs
   // a conservative first suggestion. See header note 8.
   if (model.warmup && !t) {
     const wu = model.warmup;
+    // A warm-up far under today's working weight (a bar, a 50% ramp set) says
+    // nothing about the day, however it was rated: history's number stands, and
+    // the card says why. Near the working weight it counts in full (warmupRelevance).
+    const relevance = h ? warmupRelevance(wu.load, h.load) : 1;
+    if (h && relevance === 0) return { load: h.load, spread: clamp(h.spread / 2, HISTORY_SPREAD, 0.07), warmup: "light" };
     // Lighter than history: by as much as the rating can be believed
     // (warmupReliability, 0 at RPE 5 and easier). Heavier: a lower bound however
     // easy it was, so its full (small) say.
-    const nudge = (x: number) => (x < 0 ? Math.max(x, WARMUP_NUDGE_DOWN) * wu.reliability : Math.min(x, WARMUP_NUDGE_UP));
+    const nudge = (x: number) => relevance * (x < 0 ? Math.max(x, WARMUP_NUDGE_DOWN) * wu.reliability : Math.min(x, WARMUP_NUDGE_UP));
     const softFor = (w: number) =>
       h
         ? {
@@ -802,7 +1059,8 @@ export function estimateFor(model: LoadModel, reps: number, rpe: number): LoadEs
     // A hard warm-up is read like a set done today (header note 8).
     // Down as far as it says (backing off is the safe side), up by at most
     // WARMUP_HARD_MAX_UP over the soft estimate (a typo'd warm-up can't load the bar).
-    const k = wu.trust;
+    // (a hard rating counts only as far as the warm-up is near the working weight)
+    const k = wu.trust * relevance;
     const hard = Math.min(w, soft.load * (1 + WARMUP_HARD_MAX_UP));
     let load = k * hard + (1 - k) * soft.load;
     // Monotonic: the same warm-up rated harder never suggests MORE than rated a
@@ -836,8 +1094,13 @@ export interface LoadSuggestion {
   high: number;
   target: number;
   unit: "kg" | "lb";
-  /** What the last warm-up did to it (LoadEstimate.warmup): only when one was read. */
-  warmup?: "tuned" | "too_easy";
+  /**
+   * What the last warm-up did to it (LoadEstimate.warmup): only when one was
+   * read. "light": too far under the working weight to say anything (warmupRelevance).
+   */
+  warmup?: "tuned" | "too_easy" | "light";
+  /** Double progression decided it (note 12): add a step, stay and build reps, or come down a step. */
+  progression?: RepProgression;
 }
 
 export function roundToStep(value: number, step: number): number {
@@ -858,6 +1121,11 @@ export function suggestSetLoad(
   model: LoadModel,
   target: { reps: number; rpe: number },
 ): LoadSuggestion | null {
+  // Double progression (note 12): one weight, the last session's or the next step.
+  if (model.progression && model.today.length === 0) {
+    const p = model.progression;
+    return { low: p.load, high: p.load, target: p.load, unit: model.unit, progression: p };
+  }
   const reps = Math.round(target.reps);
   const rpe = Math.min(10, Math.max(MIN_RPE, target.rpe));
   const est = estimateFor(model, reps, rpe);
@@ -867,13 +1135,17 @@ export function suggestSetLoad(
   const highPct = percentOf1RM(reps, 10 - Math.min(10, rpe + 0.5));
   if (!mid || !lowPct || !highPct) return null;
   const raw = est.load;
-  const step = loadStep(model.unit, raw);
-  const targetLoad = roundToStep(raw, step);
+  // Plate steps for the competition lifts; anything else rounds to the steps this
+  // athlete loads on it and lands on a weight they've used (loadIncrement, snapLoad).
+  const own = !!(model.ladder?.length || model.equipment);
+  const step = own ? loadIncrement({ ladder: model.ladder, unit: model.unit, load: raw, kind: model.equipment }) : loadStep(model.unit, raw);
+  const snap = (x: number) => (model.ladder?.length ? snapLoad(x, step, model.ladder) : roundToStep(x, step));
+  const targetLoad = snap(raw);
   // ±0.5 RPE window (shrunk like the estimate), widened by history noise.
   const lowRatio = Math.pow(lowPct / mid, HISTORY_ALPHA);
   const highRatio = Math.pow(highPct / mid, HISTORY_ALPHA);
-  let low = roundToStep(raw * lowRatio * (1 - est.spread), step);
-  let high = roundToStep(raw * highRatio * (1 + est.spread), step);
+  let low = snap(raw * lowRatio * (1 - est.spread));
+  let high = snap(raw * highRatio * (1 + est.spread));
   low = Math.min(low, targetLoad);
   high = Math.max(high, targetLoad);
   if (!(targetLoad > 0) || !(low > 0)) return null;

@@ -10,6 +10,7 @@
  */
 import { classifyExercise, type MovementPattern } from "@/lib/exercise-classifier";
 import { percentOf1RM } from "@/lib/load-suggestion";
+import { rangeLift } from "@/lib/workouts/pick-range";
 
 export type WarmupUnit = "kg" | "lb";
 
@@ -24,6 +25,13 @@ export interface WarmupSetRow {
 }
 
 const KG_PER_LB = 0.45359237;
+
+/**
+ * The most reps a warm-up can be logged with (pl_warmup_sets_reps_check): an
+ * accessory's warm-up is often 10–15 easy reps. The suggestion engine reads only
+ * warm-ups of WARMUP_MAX_REPS (8) or fewer; longer ones are logged, never read.
+ */
+export const WARMUP_LOG_MAX_REPS = 30;
 
 export function warmupInUnit(
   w: Pick<WarmupSetRow, "load" | "unit" | "reps" | "rpe">,
@@ -135,6 +143,33 @@ export function offersLastWarmup(family: string, exerciseName: string | null | u
   // Squat / bench / deadlift families always ramp up.
   if (family !== "accessory") return true;
   return !!exerciseName && RAMP_PATTERNS.has(classifyExercise(exerciseName).pattern);
+}
+
+/** The heavy compound patterns a lifter ramps up to on a bar. */
+const HEAVY_PATTERNS: ReadonlySet<MovementPattern> = new Set<MovementPattern>([
+  "squat",
+  "hinge",
+  "hip_thrust",
+  "horizontal_press",
+  "incline_press",
+  "vertical_press",
+]);
+/** A barbell (or bar-like) implement: plates go on, a last warm-up is a real read. */
+const BAR = /\b(barbell|bb|trap bar|hex bar|safety (squat )?bar|ssb|cambered|axle|smith)\b/i;
+const NOT_BAR = /\b(dumbbells?|db|cables?|bands?|kettlebells?|kb|landmine|goblet|machine)\b/i;
+/**
+ * How a card offers warm-ups (WarmupRows): "last" for a heavy barbell compound
+ * (the squat, bench and deadlift and their barbell variations, and any barbell /
+ * trap-bar / Smith squat, hinge, hip thrust or press), where the last warm-up
+ * reads the day well enough to set the working weight, so it's an open row before
+ * set 1; "secondary" for everything else (bodybuilding accessories, dumbbell and
+ * machine work): + Warm-up under the sets, folded away once logged.
+ */
+export function warmupStyleOf(family: string, exerciseName: string | null | undefined, equipment?: string | null): "last" | "secondary" {
+  const text = `${exerciseName ?? ""} ${equipment ?? ""}`;
+  if (family === "squat" || family === "bench" || family === "deadlift") return rangeLift(family, exerciseName, equipment) ? "last" : "secondary";
+  if (!exerciseName || NOT_BAR.test(text) || !BAR.test(text)) return "secondary";
+  return HEAVY_PATTERNS.has(classifyExercise(exerciseName).pattern) ? "last" : "secondary";
 }
 
 /** Lowest RPE a 1RM estimate is shown for — easier sets are rated too loosely to say much. */

@@ -51,18 +51,23 @@ describe("warm-up fields type like the set cells", () => {
     onRemove() {},
     canEdit: true,
   };
-  it("shows the stored values; tapping one makes it the placeholder so typing replaces it", () => {
+  it("a warm-up is typed in the set table's own cells: the stored values show, a tap types over them", () => {
     const html = renderToStaticMarkup(
-      createElement(WarmupRows, { ...base, sets: [{ id: "a", load: 95, unit: "lb", reps: 8, rpe: 6 }], form: "a" } as any),
+      createElement(WarmupRows, {
+        ...base,
+        style: "last", ramp: true, tunes: true,
+        columns: { showReps: true, showTimer: false, showCalories: false, showVelocity: false, videoColumn: false },
+        sets: [{ id: "a", load: 95, unit: "lb", reps: 8, rpe: 6 }],
+      } as any),
     );
-    expect(html).toContain('value="95"');
-    expect(html).toContain('value="8"');
+    expect(html).toContain(">95<");
+    expect(html).toContain(">8<");
+    expect(html).toContain(">6<");
     const src = readFileSync("src/components/workout-day/final-warmup-input.tsx", "utf8");
+    expect(src).toContain("<TypedValueInput");
+    expect(src).toContain("<WeightValueInput");
+    // the tools' number boxes still type like the set cells
     expect(src).toContain("before.current = value;");
     expect(src).toContain("onValue(v || before.current);");
-  });
-  it("keyboard Done closes the keyboard instead of saving before the RPE is picked", () => {
-    const src = readFileSync("src/components/workout-day/final-warmup-input.tsx", "utf8");
-    expect(src).toContain("(document.activeElement as HTMLElement | null)?.blur();");
   });
 });

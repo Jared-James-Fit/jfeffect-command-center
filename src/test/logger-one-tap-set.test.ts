@@ -11,8 +11,7 @@ describe("a set done as suggested is one tap on its number", () => {
     expect(wdv).toContain(": plannedView ? (plannedView.load != null && plannedView.value ? plannedView.load : null)");
     // a range is picked by feel: it never logs on a tap
     expect(wdv).toContain(': showSuggestionCard && canSuggest && loadHint && loadModel && loadModel.status !== "calibrating" && !loadPicks ? loadHint.target');
-    // never while the warm-up form is setting today's weight
-    expect(wdv).toContain("quickLoad={warmupForm && warmupGauge ? null : quickLoad}");
+    expect(wdv).toContain("quickLoad={quickLoad}");
   });
 
   it("the weight box stays blank, and the set's number logs the set at the strip's weight", () => {
@@ -34,7 +33,9 @@ describe("a set done as suggested is one tap on its number", () => {
     }));
     expect(ghost).toContain('data-testid="weight-suggested"');
     expect(ghost).toContain("195");
-    expect(ghost).toContain("text-blue-700/80");
+    // said quietly, never as if typed, never a colour
+    expect(ghost).toContain("text-muted-foreground");
+    expect(ghost).not.toContain("blue-");
     expect(ghost).toContain("Set 2 weight in lb, suggested 195 lb");
     const typed = renderToStaticMarkup(createElement(WeightValueInput, {
       value: "185", isBodyweight: false, unit: "lb", onPick: () => {}, ariaLabel: "Set 2 weight in lb", suggested: 195,

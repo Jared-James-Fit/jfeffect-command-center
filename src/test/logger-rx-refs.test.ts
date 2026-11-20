@@ -43,7 +43,9 @@ describe("the card's top: name, role, the prescription, then Last / Suggested", 
   it("one tap on Suggested logs the open sets (no weight buttons); its ⓘ is its own button", () => {
     const html = render({ onApply: async () => 1 });
     expect(html).toContain("Tap to log your sets at this weight");
-    expect(html).toContain("border-blue-500/40 bg-blue-500/10");
+    // information, not a competing primary action: a quiet neutral chip
+    expect(html).toContain("rounded-md border border-border bg-background");
+    expect(html).not.toMatch(/blue-|bg-primary/);
     expect(html).toContain('data-testid="load-apply"');
     expect(html).toContain("Log your open sets at 250 lb");
     expect(html).toContain('data-testid="load-suggestion-info"');
@@ -60,11 +62,12 @@ describe("the card's top: name, role, the prescription, then Last / Suggested", 
     expect(wdv).toContain("onApply={!readonly && clientId && openSetCount > 0 ? logOpenSetsAt : null}");
   });
 
-  it("an empty weight box is blue: where the weight goes", () => {
+  it("an empty weight box is an open neutral field: where the weight goes, never a colour", () => {
     const input = readFileSync("src/components/workout-day/weight-value-input.tsx", "utf8");
-    expect(input).toContain(': "border-blue-500/40 bg-blue-500/10 text-muted-foreground"');
-    // the optional last warm-up's box (plain) stays a neutral well
-    expect(input).toContain('? "border-border/60 bg-muted/40 text-muted-foreground/60"');
+    expect(input).toContain('? "border-muted-foreground/40 bg-background text-muted-foreground"');
+    expect(input).not.toMatch(/blue-/);
+    // the optional warm-up's box (plain) is lighter than a working set's
+    expect(input).toContain('? cn("border-border/40 bg-transparent", isEmpty ? "text-muted-foreground/50" : "text-foreground/80")');
   });
 
   it("says the reps and RPE only when the prescription above doesn't", () => {

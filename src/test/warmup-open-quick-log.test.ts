@@ -64,67 +64,55 @@ describe("the last warm-up is open on the card, and optional", () => {
     sets: [],
     unit: "lb" as const,
     gridTemplate: "34px 1fr 1fr 1.35fr 30px",
-    form: null,
-    onFormChange: () => {},
     onSave: () => {},
     onRemove: () => {},
     canEdit: true,
-    prompt: { suggested: { load: 250, reps: 2 }, tunes: true },
+    style: "last" as const,
+    ramp: true,
+    tunes: true,
     seed: { load: 250, reps: 2 },
     columns: { showReps: true, showTimer: false, showCalories: false, showVelocity: false, videoColumn: true },
     video: () => createElement("span", { "data-video-cell": "" }),
   };
 
-  it("before set 1 on a barbell main lift: under a Warm-up label with ⓘ, reps pre-filled, RPE and the weight blank, a camera", () => {
-    const html = renderToStaticMarkup(createElement(WarmupRows, { ...base, openRow: true, suggestOn: true }));
+  it("before set 1 on a heavy barbell lift: under its header, reps pre-filled, RPE and the weight blank, a camera", () => {
+    const html = renderToStaticMarkup(createElement(WarmupRows, { ...base, suggestOn: true }));
     expect(html).toContain('data-testid="warmup-open"');
     expect(html).toContain('data-warmup-saved="false"');
-    // said once, above its rows: never a bare "W" to guess at
+    // said once, above its row: never a bare "W" to guess at
     expect(html).toContain("data-warmup-label");
-    expect(html).toContain(">Warm-up<");
-    expect(html).toContain("optional, not counted as a set");
-    expect(html).toContain('aria-label="How warm-ups work"');
+    expect(html).toContain("Last warm-up");
+    expect(html).toContain("optional");
     expect(html.indexOf("data-warmup-label")).toBeLessThan(html.indexOf('data-testid="warmup-open"'));
-    expect(html).toContain("Last warm-up reps");
+    expect(html).toContain("Warm-up reps");
     expect(html).toContain(">2<");
     // no pre-filled RPE 7: a blank warm-up already reads as a normal one
     expect(html).not.toContain(">7<");
-    expect(html).toContain("Last warm-up weight in lb");
+    expect(html).toContain("Warm-up weight in lb");
     expect(html).toContain("data-video-cell");
-    expect(html).toContain("Your last warm-up");
-    expect(html).toContain("tunes Suggested");
-    // never the old one-line prompt beside it
-    expect(html).not.toContain('data-testid="warmup-prompt"');
+    expect(html).toContain("about 250 lb × 2");
   });
 
-  it("with Suggest off it says it sets today's weight", () => {
-    const html = renderToStaticMarkup(createElement(WarmupRows, { ...base, openRow: true, suggestOn: false }));
-    expect(html).toContain("sets today&#x27;s weight");
+  it("other lifts get no open row: + Warm-up under the sets adds one", () => {
+    const html = renderToStaticMarkup(createElement(WarmupRows, { ...base, style: "secondary" }));
+    expect(html).toBe("");
   });
 
-  it("other compound lifts keep the one-line prompt, so a workout isn't a stack of open rows", () => {
-    const html = renderToStaticMarkup(createElement(WarmupRows, { ...base, openRow: false }));
-    expect(html).not.toContain('data-testid="warmup-open"');
-    expect(html).toContain('data-testid="warmup-prompt"');
-  });
-
-  it("once it can't tune today's weight (a working set is in), there's no open row to fill", () => {
-    const html = renderToStaticMarkup(createElement(WarmupRows, { ...base, openRow: true, prompt: { suggested: null, tunes: false } }));
+  it("once a working set is in, there's no open row to fill", () => {
+    const html = renderToStaticMarkup(createElement(WarmupRows, { ...base, ramp: false, tunes: false }));
     expect(html).not.toContain('data-testid="warmup-open"');
   });
 
-  it("a saved warm-up keeps its own camera in the video column", () => {
+  it("a saved warm-up keeps its own camera in the video column (once opened)", () => {
     const html = renderToStaticMarkup(
       createElement(WarmupRows, {
         ...base,
-        openRow: false,
-        prompt: { suggested: null, tunes: false },
+        ramp: true,
         sets: [{ id: "w1", row_id: "r1", load: 245, unit: "lb", reps: 3, rpe: 7, created_at: recent } as any],
       }),
     );
     expect(html).toContain('data-testid="warmup-row"');
     expect(html).toContain("data-video-cell");
-    expect(html).toContain("grid-column:2 / -2");
   });
 
   it("an RIR card shows RIR and stores the RPE it means", () => {
@@ -135,9 +123,9 @@ describe("the last warm-up is open on the card, and optional", () => {
     expect(warmupRpeFrom("", "rpe")).toBeNull();
   });
 
-  it("the card opens it only on a barbell squat, bench or deadlift, and keeps a clip filmed on it", () => {
+  it("the card opens it on a heavy barbell compound, and keeps a clip filmed on it", () => {
     const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
-    expect(wdv).toContain("openRow={rangeLift(family, name, exercise?.equipment)}");
+    expect(wdv).toContain("const warmupStyle = useMemo(() => warmupStyleOf(family, name, exercise?.equipment), [family, name, exercise?.equipment]);");
     expect(wdv).toContain("suggestOn={showSuggestionCard}");
     expect(wdv).toContain("looseClip={looseWarmupClip}");
     expect(wdv).toContain("setIndex={0}");
