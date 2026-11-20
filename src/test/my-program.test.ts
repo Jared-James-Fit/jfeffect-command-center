@@ -167,7 +167,7 @@ describe("saving an edit to a running program", () => {
 describe("the database lets a member manage only their own program, and never loses history", () => {
   const sql = readFileSync("supabase/migrations/20270225090000_member_program_manage.sql", "utf8");
   const history = readFileSync(
-    "supabase/migrations/20270422090000_member_program_history.sql",
+    "supabase/migrations/20270424090000_member_program_history.sql",
     "utf8",
   );
   it("ending or pausing checks ownership and archives the whole program, never deleting a block", () => {
