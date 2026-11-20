@@ -1251,4 +1251,10 @@ describe("women who train (Nov 20 2026)", () => {
     expect(server).toContain("woman_build: concept.womanBuild ?? null,");
     expect(server).toContain("parseConcept(t.text, { ...choices, art: force.art ?? null, crowd, classify, day: r.day })");
   });
+
+  it("a test can ask for one kind of person, to check how she or he is drawn", () => {
+    expect(conceptPrompt({ day: "2026-11-20", theme: "courage", audience: "everyone", crowd: "everyone", faith: false, choices: { pillar: "mindset", topics: ["long_game"], formats: ["coach_note"], styles: ["medium_candid"], lights: ["big_windows"], casts: ["powerlifter"] }, learnings: "", best: [], worst: [], recent: [], lead: "woman" } as any)).toContain("THE PERSON THE POST IS ABOUT IS A WOMAN.");
+    expect(server).toContain("casts: force.cast ? [force.cast] : picked.casts,");
+    expect(server).toContain('lead: pick(["woman", "man"] as const, spec.lead),');
+  });
 });

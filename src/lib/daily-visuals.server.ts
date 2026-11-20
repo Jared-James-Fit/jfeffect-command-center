@@ -39,6 +39,7 @@ import {
   CAPTION_FIX_PROMPT,
   CONCEPT_PROMPT,
   DAILY_ART_KEYS,
+  DAILY_CAST_KEYS,
   DAILY_FORMAT_KEYS,
   DAILY_PILLAR_KEYS,
   DAILY_STYLE_KEYS,
@@ -79,6 +80,7 @@ import {
   type DailyAudience,
   type DailyConcept,
   type DailyArt,
+  type DailyCast,
   type DailyCrowd,
   type DailyFormat,
   type DailyLearnings,
@@ -444,7 +446,16 @@ function dataUrl(bytes: Uint8Array, mime: string): string {
 /* ------------------------------------------------------------------ */
 
 /** The concept and caption for a day (or a test), checked, not saved. */
-type Force = { pillar?: DailyPillar | null; topic?: DailyTopic | null; format?: DailyFormat | null; art?: DailyArt | null; crowd?: DailyCrowd | null };
+type Force = {
+  pillar?: DailyPillar | null;
+  topic?: DailyTopic | null;
+  format?: DailyFormat | null;
+  art?: DailyArt | null;
+  crowd?: DailyCrowd | null;
+  /** A test of one kind of person: who's in it, and whether the person it's about is a woman or a man. */
+  cast?: DailyCast | null;
+  lead?: "woman" | "man" | null;
+};
 
 /** Writer attempts per concept step (each one: a concept with three drafts, the hard checks, then the editor). */
 const WRITER_TRIES = 3;
@@ -466,6 +477,7 @@ async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
     ...picked,
     topics: force.topic ? [force.topic] : classify ? DAILY_TOPIC_KEYS : picked.topics,
     formats: force.format ? [force.format] : classify ? DAILY_FORMAT_KEYS : picked.formats,
+    casts: force.cast ? [force.cast] : picked.casts,
   };
   const crowd: DailyCrowd = force.crowd ?? crowdForDay(r.day);
 
@@ -506,6 +518,7 @@ async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
         editorNotes: attempt ? notes : undefined,
         noWords: ctx.noWords && !keepPicture,
         classify,
+        lead: force.lead ?? null,
       }),
     );
     model = t.model;
@@ -860,6 +873,9 @@ export type TestSpec = {
   crowd?: DailyCrowd | null;
   /** Just the writer and the editor: no picture, nothing saved (the result is the answer). */
   captionOnly?: boolean;
+  /** Who's in it (one cast), and whether the person it's about is a woman or a man: to check how a kind of person is drawn. */
+  cast?: DailyCast | null;
+  lead?: "woman" | "man" | null;
 };
 const NO_DAY = "00000000-0000-0000-0000-000000000000";
 
@@ -912,6 +928,8 @@ export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<
     format: pick(DAILY_FORMAT_KEYS, spec.format),
     art: pick(DAILY_ART_KEYS, spec.art),
     crowd: pick(["everyone", "beginners", "lifestyle", "lifters"] as const, spec.crowd),
+    cast: pick(DAILY_CAST_KEYS, spec.cast),
+    lead: pick(["woman", "man"] as const, spec.lead),
   });
   if (spec.captionOnly) {
     const k = c.concept!;

@@ -1222,6 +1222,8 @@ export function conceptPrompt(o: {
   noWords?: boolean;
   /** A kept caption from before the categories: its angle (and so its category) is read from its words. */
   classify?: boolean;
+  /** The person the post is about is a woman or a man (a test of how one is drawn); else the writer picks. */
+  lead?: "woman" | "man" | null;
 }): string {
   const t = DAILY_THEMES[o.theme];
   const p = DAILY_PILLARS[o.choices.pillar];
@@ -1245,6 +1247,7 @@ export function conceptPrompt(o: {
     settingLine(o.choices.settings ?? DAILY_SETTING_KEYS, o.recent, o.day),
     `WHO'S IN IT, as "cast" (pick who the post is about, the first ones not in the last two pictures; "no_people" or "hands" whenever the read says people aren't needed): ${(o.choices.casts ?? DAILY_CAST_KEYS).map((k) => `${k} = ${DAILY_CASTS[k].look}`).join("; ")}`,
     womenLine(o.choices.casts ?? DAILY_CAST_KEYS, o.day),
+    o.lead ? `THE PERSON THE POST IS ABOUT IS A ${o.lead.toUpperCase()}.` : null,
     `TREATMENT, as "rendering" (anime key art for most posts; another only when the read calls for it): ${(o.choices.renderings ?? DAILY_RENDERING_KEYS).map((k) => `${k} = ${DAILY_RENDERINGS[k].name}, for ${DAILY_RENDERINGS[k].use}`).join("; ")}`,
     o.art
       ? `DIRECTION, as "art": ${o.art} (${ART_STYLES[o.art].name})`
