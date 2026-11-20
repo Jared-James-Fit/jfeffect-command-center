@@ -145,7 +145,7 @@ describe("stories (STORY on the camera)", () => {
     expect(inFeed({ auto: true, stats: {} })).toBe(false);
     expect(inFeed({})).toBe(true);
     expect(read("src/components/community/community-screen.tsx")).toContain("const ownPosts = useMemo(() => rankedPosts.filter(inFeed), [rankedPosts]);");
-    expect(read("src/components/community/profile-view.tsx")).toContain(".filter((p) => !p.story)");
+    expect(read("src/components/community/profile-view.tsx")).toContain(".filter((p) => !p.story && !isWorkoutCard(p))");
   });
   it("are flagged in the same insert, for the crew or Close friends only, and left out of counts", () => {
     const sql = read("supabase/migrations/20261207100000_crew_stories_and_framing.sql");
