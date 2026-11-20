@@ -50,7 +50,7 @@ import {
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { getClientTodayItems } from "@/lib/today-dashboard.functions";
 import { cleanDayTitle, computeTodayState } from "@/lib/workout-today";
-import { cachedCommunityUrls, pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, uploadPicked, uploadVoiceMemo, type PickedMedia, type UploadedMedia } from "@/lib/community-media";
+import { cachedCommunityUrls, communityAvatarFiles, pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, uploadPicked, uploadVoiceMemo, type PickedMedia, type UploadedMedia } from "@/lib/community-media";
 import { onRealtimeRejoin, useResyncOnResume } from "@/hooks/use-resync-on-resume";
 import { feedAnchor } from "@/lib/feed-anchor";
 import { feedback } from "@/lib/feedback";
@@ -1502,11 +1502,12 @@ export function useSetCommunityAvatar(userId: string | null) {
       const path = file ? await uploadCommunityAvatar(file, userId) : null;
       const { data, error } = await db.rpc("community_set_avatar", { _path: path });
       if (error) {
-        if (path) await db.storage.from("avatars").remove([path]).catch(() => {});
+        if (path) await db.storage.from("avatars").remove(communityAvatarFiles(path)).catch(() => {});
         throw error;
       }
+      // the photo it replaced goes, with its full-size copy
       const previous = (data as { previous?: string | null } | null)?.previous;
-      if (previous && previous !== path) await db.storage.from("avatars").remove([previous]).catch(() => {});
+      if (previous && previous !== path) await db.storage.from("avatars").remove(communityAvatarFiles(previous)).catch(() => {});
     },
     onSuccess: () => invalidateCommunity(qc),
   });

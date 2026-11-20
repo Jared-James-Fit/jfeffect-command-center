@@ -1,10 +1,14 @@
 /**
- * Leads (/admin/leads): everyone who applied for coaching, the ones waiting
- * on you first (a first text to send, or a follow-up that's due), then the
- * ones who started applying and stopped, then everyone earlier. `?id=` opens
- * and scrolls to one lead (the push, the SMS / email alert, Home's card).
+ * Applications (/admin/leads): two kinds, one page. Members: free membership
+ * applications to read, say hi to and approve (member-applications.tsx,
+ * `?app=` opens one). Coaching: everyone who applied for coaching, the ones
+ * waiting on you first (a first text to send, or a follow-up that's due),
+ * then the ones who started applying and stopped, then everyone earlier.
+ * `?id=` opens and scrolls to one lead (the push, the SMS / email alert,
+ * Home's card).
  */
 import { useEffect, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,8 +16,53 @@ import { cn } from "@/lib/utils";
 import { leadLine, leadNeeds, leadStage } from "@/lib/coaching-leads";
 import { DraftLeadCard, LeadCard } from "@/components/leads/lead-card";
 import { useLeads } from "@/components/leads/use-leads";
+import { MemberApplicationsPanel } from "@/components/applications/member-applications";
+import { useMemberApplications } from "@/components/applications/use-member-applications";
 
-export function LeadsPage({ focusId }: { focusId?: string }) {
+type Tab = "members" | "coaching";
+
+export function LeadsPage({ focusId, appId, tab }: { focusId?: string; appId?: string; tab?: Tab }) {
+  const navigate = useNavigate();
+  const coaching = useLeads();
+  const members = useMemberApplications();
+  // a link picks the tab; else wherever someone is waiting, members first
+  const active: Tab =
+    tab ?? (appId ? "members" : focusId ? "coaching" : members.pending.length === 0 && coaching.waiting.length > 0 ? "coaching" : "members");
+  const setTab = (t: Tab) => navigate({ to: "/admin/leads", search: { tab: t } as any, replace: true });
+  const tabs: Array<{ t: Tab; label: string; count: number }> = [
+    { t: "members", label: "Members", count: members.pending.length },
+    { t: "coaching", label: "Coaching", count: coaching.waiting.length },
+  ];
+  return (
+    <>
+      <PageHeader title="Applications" backTo="/admin/communication" backLabel="Messages" />
+      <div className="mx-auto w-full max-w-2xl space-y-5 p-4 md:p-6" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 6rem)" }}>
+        <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1" role="tablist" aria-label="Applications">
+          {tabs.map(({ t, label, count }) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={active === t}
+              onClick={() => setTab(t)}
+              className={cn(
+                "h-10 rounded-lg text-[15px] font-medium transition",
+                active === t ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
+              )}
+              data-applications-tab={t}
+            >
+              {label}
+              {count > 0 && <span className="ml-1.5 tabular-nums text-muted-foreground">{count}</span>}
+            </button>
+          ))}
+        </div>
+        {active === "members" ? <MemberApplicationsPanel focusId={appId} /> : <CoachingLeads focusId={focusId} />}
+      </div>
+    </>
+  );
+}
+
+function CoachingLeads({ focusId }: { focusId?: string }) {
   const { leads, drafts, bookingUrl, isLoading, enabled } = useLeads();
   const [openEarlier, setOpenEarlier] = useState<string | null>(null);
   const now = Date.now();
@@ -31,8 +80,7 @@ export function LeadsPage({ focusId }: { focusId?: string }) {
 
   return (
     <>
-      <PageHeader title="Leads" backTo="/admin/communication" backLabel="Messages" />
-      <div className="mx-auto w-full max-w-2xl space-y-6 p-4 md:p-6" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 6rem)" }}>
+      <div className="space-y-6">
         {!enabled ? (
           <p className="text-sm text-muted-foreground">Leads are for the admin login.</p>
         ) : isLoading ? (

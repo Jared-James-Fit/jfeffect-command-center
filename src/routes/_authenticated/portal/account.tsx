@@ -17,6 +17,7 @@ import {
   Bell,
   CheckCircle2,
   ChevronRight,
+  Camera,
   CreditCard,
   FileSignature,
   HeartPulse,
@@ -33,7 +34,11 @@ import {
   Trophy,
   User,
   Watch,
+  SlidersHorizontal,
 } from "lucide-react";
+import { EquipmentManager, equipmentSummaryLine } from "@/components/equipment/equipment-manager";
+import { EquipmentSetupTips } from "@/components/equipment/setup-tips";
+import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
 import { AiCreditsPanel, useAiCredits } from "@/components/ai-credits/ai-credits";
 import { chipLabel } from "@/lib/ai-credits/packs";
 import { isBasicInfoComplete } from "@/lib/basic-info";
@@ -81,6 +86,7 @@ const PROFILE_FIELDS = ["first_name", "last_name", "preferred_name", "phone", "a
  */
 type SectionId =
   | "units"
+  | "equipment"
   | "notifications"
   | "coaching-agreement"
   | "health"
@@ -100,6 +106,9 @@ const SECTION_ALIASES: Record<string, SectionId> = {
   "training-schedule": "units",
   schedule: "units",
   notifications: "notifications",
+  equipment: "equipment",
+  setups: "equipment",
+  "equipment-setups": "equipment",
   "coaching-agreement": "coaching-agreement",
   agreement: "coaching-agreement",
   health: "health",
@@ -155,6 +164,11 @@ function AccountPage() {
       return data;
     },
   });
+
+  // Equipment & setups: everyone who trains (the summary on its row).
+  const { data: equipmentData } = useAthleteEquipment(client?.id ?? null);
+  const equipmentSummary = equipmentSummaryLine(equipmentData);
+  const [equipmentGuide, setEquipmentGuide] = useState(false);
 
   // Health & injuries: a coaching client's (their coach plans around it).
   const { data: healthItems = [] } = useMyHealthItems(goalsOn ? client?.id : null, isImpersonating);
@@ -415,16 +429,31 @@ function AccountPage() {
     <>
       <PageHeader title="Account Settings" actions={<SavedIndicator state={saveState} />} actionsInline />
       <div className="w-full max-w-2xl space-y-4 px-4 pb-[max(6rem,env(safe-area-inset-bottom))] pt-4 md:px-5 xl:px-6">
-        {/* Who this is: photo (a tap opens the photo section), name, email. */}
+        {/* Who this is: photo (a tap opens it big; the camera badge, or a tap while there's none, opens the photo section), name, email. */}
         <div className="flex items-center gap-3 px-1">
-          <button
-            type="button"
-            onClick={() => openSection("profile-picture")}
-            aria-label="Change your profile photo"
-            className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <UserAvatar src={form.profile_picture_url} name={displayName} size={56} expandable={false} />
-          </button>
+          <div className="relative shrink-0">
+            {form.profile_picture_url ? (
+              <UserAvatar src={form.profile_picture_url} name={displayName} size={56} />
+            ) : (
+              <button
+                type="button"
+                onClick={() => openSection("profile-picture")}
+                aria-label="Add your profile photo"
+                className="block rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <UserAvatar src={null} name={displayName} size={56} expandable={false} />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => openSection("profile-picture")}
+              data-account-photo-change
+              aria-label={form.profile_picture_url ? "Change your profile photo" : "Add your profile photo"}
+              className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full border-2 border-background bg-foreground text-background after:absolute after:-inset-2.5 after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-95"
+            >
+              <Camera className="h-3 w-3" />
+            </button>
+          </div>
           <div className="min-w-0">
             <div className="truncate text-lg font-semibold leading-tight">{displayName}</div>
             {email && <div className="truncate text-sm text-muted-foreground">{email}</div>}
@@ -469,6 +498,15 @@ function AccountPage() {
                 </SectionErrorBoundary>
               </div>
             </SettingsSection>
+
+            {client?.id && (
+              <SettingsSection id="equipment" icon={SlidersHorizontal} title="Equipment & setups" summary={equipmentSummary ? { text: equipmentSummary } : null}>
+                <SectionErrorBoundary label="Equipment & setups">
+                  <EquipmentManager clientId={client.id} coachView={isImpersonating} onShowGuide={() => setEquipmentGuide(true)} />
+                </SectionErrorBoundary>
+                {equipmentGuide && <EquipmentSetupTips onClose={() => setEquipmentGuide(false)} unit={client?.preferred_weight_unit === "kg" ? "kg" : "lb"} />}
+              </SettingsSection>
+            )}
 
             <SettingsSection id="notifications" icon={Bell} title="Notifications, sounds & haptics">
               <SectionErrorBoundary label="Push Notifications">

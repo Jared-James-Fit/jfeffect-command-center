@@ -1,5 +1,6 @@
 import { Link, redirect, useNavigate } from "@tanstack/react-router";
 import { LeadsInboxRow } from "@/components/leads/leads-inbox-row";
+import { MemberApplicationsInboxRow } from "@/components/applications/member-applications-entry";
 import { useProgramGaps } from "@/components/program-gaps/use-program-gaps";
 import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { useEffect, useMemo, useState } from "react";
@@ -1043,6 +1044,8 @@ export function MessagesInbox({
           )}
           {/* New coaching applications, with the AI's read and a text to send (admin). */}
           {role === "admin" && !search && filter === "Inbox" && <LeadsInboxRow />}
+          {/* Free membership applications waiting on a decision (admin). */}
+          {role === "admin" && !search && filter === "Inbox" && <MemberApplicationsInboxRow />}
           {listRows.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No conversations.</div>
           ) : listRows.map((row) => row.kind === "support" ? (

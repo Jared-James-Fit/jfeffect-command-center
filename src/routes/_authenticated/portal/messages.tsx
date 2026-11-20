@@ -170,7 +170,6 @@ function ClientMessages() {
             name={coachName}
             size={40}
             ring
-            expandable={false}
           />
         </LiveAvatar>
         <div className="min-w-0 flex-1">

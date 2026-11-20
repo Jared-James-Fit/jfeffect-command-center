@@ -5,6 +5,7 @@ import { ArrowDownToLine, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSaveMedia } from "@/components/messages/save-media";
 import { saveLabel, warmSave, type SaveItem } from "@/lib/save-media";
+import { PhotoViewer, type FromRect } from "@/components/photo-viewer";
 
 /**
  * Global full-screen media viewer.
@@ -27,6 +28,14 @@ type OpenOptions = {
   kind?: "image" | "video";
   /** Offer Save (top left), iMessage style: chat photos and videos. */
   save?: SaveItem | null;
+  /** A profile photo: a big circle that grows out of the avatar tapped (`from`), with `caption` under it. */
+  shape?: "circle" | "rect";
+  from?: FromRect | null;
+  caption?: string | null;
+  /** Their initials, while the photo loads and if it can't. */
+  fallback?: string | null;
+  /** A sharper copy to swap in once loaded (a Crew photo's full-size file). */
+  better?: (() => Promise<string | null>) | null;
 };
 type ViewerState = {
   src: string;
@@ -34,6 +43,11 @@ type ViewerState = {
   previewSrc?: string | null;
   kind: "image" | "video";
   save?: SaveItem | null;
+  shape?: "circle" | "rect";
+  from?: FromRect | null;
+  caption?: string | null;
+  fallback?: string | null;
+  better?: (() => Promise<string | null>) | null;
 } | null;
 
 type Ctx = {
@@ -60,7 +74,18 @@ export function MediaViewerProvider({ children }: { children: React.ReactNode })
   const api = useMemo<Ctx>(
     () => ({
       open: (src, opts) =>
-        setState({ src, alt: opts?.alt ?? null, previewSrc: opts?.previewSrc ?? null, kind: opts?.kind ?? "image", save: opts?.save ?? null }),
+        setState({
+          src,
+          alt: opts?.alt ?? null,
+          previewSrc: opts?.previewSrc ?? null,
+          kind: opts?.kind ?? "image",
+          save: opts?.save ?? null,
+          shape: opts?.shape ?? "rect",
+          from: opts?.from ?? null,
+          caption: opts?.caption ?? null,
+          fallback: opts?.fallback ?? null,
+          better: opts?.better ?? null,
+        }),
       close: () => setState(null),
     }),
     [],
@@ -84,7 +109,22 @@ export function MediaViewerRoot() {
 
 function Viewer({ state, onClose }: { state: NonNullable<ViewerState>; onClose: () => void }) {
   if (state.kind === "video") return <VideoViewer state={state} onClose={onClose} />;
-  return <ImageViewer state={state} onClose={onClose} />;
+  // the app's one photo viewer (pinch, double-tap, pull away), photo-viewer.tsx
+  return (
+    <PhotoViewer
+      key={state.src}
+      src={state.src}
+      alt={state.alt}
+      previewSrc={state.previewSrc}
+      shape={state.shape}
+      from={state.from}
+      caption={state.caption}
+      fallback={state.fallback}
+      better={state.better}
+      topLeft={state.save ? <ViewerSaveButton item={state.save} /> : null}
+      onClose={onClose}
+    />
+  );
 }
 
 /**
@@ -210,135 +250,6 @@ function VideoViewer({ state, onClose }: { state: NonNullable<ViewerState>; onCl
               void e.currentTarget.play().catch(() => { /* controls are visible */ });
             }}
             className="max-h-full max-w-full bg-black object-contain"
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ImageViewer({ state, onClose }: { state: NonNullable<ViewerState>; onClose: () => void }) {
-  const [loaded, setLoaded] = useState(false);
-  const [errored, setErrored] = useState(false);
-  const [retry, setRetry] = useState(0);
-  const touchStart = useRef<{ x: number; y: number; t: number } | null>(null);
-
-  // Reset per-image state when the src changes (opening a second image replaces the first).
-  useEffect(() => {
-    setLoaded(false);
-    setErrored(false);
-    setRetry(0);
-  }, [state.src]);
-
-  // Escape closes + prevent background scroll while open.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [onClose]);
-
-  const src = retry > 0 ? `${state.src}${state.src.includes("?") ? "&" : "?"}_r=${retry}` : state.src;
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={state.alt ?? "Image"}
-      className="fixed inset-0 z-[2147483000] flex items-center justify-center bg-black"
-      onClick={onClose}
-      onTouchStart={(e) => {
-        const t = e.touches[0];
-        touchStart.current = { x: t.clientX, y: t.clientY, t: Date.now() };
-      }}
-      onTouchEnd={(e) => {
-        const s = touchStart.current;
-        touchStart.current = null;
-        if (!s) return;
-        const t = e.changedTouches[0];
-        const dy = t.clientY - s.y;
-        const dx = Math.abs(t.clientX - s.x);
-        // Downward swipe (>80px, mostly vertical) closes.
-        if (dy > 80 && dx < 60 && Date.now() - s.t < 700) onClose();
-      }}
-      style={{
-        paddingTop: "env(safe-area-inset-top)",
-        paddingBottom: "env(safe-area-inset-bottom)",
-        paddingLeft: "env(safe-area-inset-left)",
-        paddingRight: "env(safe-area-inset-right)",
-      }}
-    >
-      <button
-        type="button"
-        aria-label="Close image"
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-        className="absolute right-3 top-3 z-10 inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-black/70 text-white shadow-lg ring-1 ring-white/20 hover:bg-black/90"
-        style={{ top: "calc(env(safe-area-inset-top) + 12px)", right: "calc(env(safe-area-inset-right) + 12px)" }}
-      >
-        <X className="h-5 w-5" />
-      </button>
-      {state.save && <ViewerSaveButton item={state.save} />}
-
-      <div
-        className="relative flex h-full w-full items-center justify-center overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-        style={{ touchAction: "pinch-zoom" }}
-      >
-        {/* Blurred thumbnail preview while full-res loads */}
-        {!loaded && !errored && state.previewSrc && (
-          <img
-            src={state.previewSrc}
-            alt=""
-            aria-hidden="true"
-            className="pointer-events-none absolute max-h-full max-w-full object-contain opacity-70 blur-md"
-            draggable={false}
-          />
-        )}
-
-        {!loaded && !errored && (
-          <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1.5 text-xs text-white/85">
-            Loading image…
-          </div>
-        )}
-
-        {errored ? (
-          <div className="flex flex-col items-center gap-3 text-white/85">
-            <div className="text-sm">Image couldn't load</div>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setErrored(false);
-                setLoaded(false);
-                setRetry((r) => r + 1);
-              }}
-              className="rounded-md border border-white/40 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-white/10"
-            >
-              Retry
-            </button>
-          </div>
-        ) : (
-          <img
-            key={src}
-            src={src}
-            alt={state.alt ?? ""}
-            onLoad={() => setLoaded(true)}
-            onError={() => setErrored(true)}
-            className={cn(
-              "max-h-full max-w-full select-none object-contain transition-opacity",
-              loaded ? "opacity-100" : "opacity-0",
-            )}
-            style={{ imageOrientation: "from-image" as any }}
-            draggable={false}
           />
         )}
       </div>

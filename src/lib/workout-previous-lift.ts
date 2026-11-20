@@ -1,3 +1,5 @@
+import { preferSameEquipment } from "@/lib/equipment/equipment";
+
 export type PreviousLiftIdentity = {
   rowId: string;
   exerciseId: string | null;
@@ -10,6 +12,12 @@ export type PreviousLiftIdentity = {
    * "cardio" (a walk, a bike: the session added up) or "hold" (a plank: the longest set).
    */
   timed?: "cardio" | "hold" | null;
+  /**
+   * The machine (or cable, Smith…) the card is on when it changes what a weight
+   * means (equipment.ts loadEquipmentId): history is read on it when there is
+   * some, never another machine's. Null / absent: every session counts.
+   */
+  equipmentId?: string | null;
 };
 
 export type PreviousLiftLog = {
@@ -18,6 +26,12 @@ export type PreviousLiftLog = {
   exerciseName: string | null;
   sessionKey: string;
   occurredAt: string | null;
+  /**
+   * The day its session was trained ("2026-09-20", trainedOn in
+   * exercise-history.ts): which session is the latest, and the date "Last
+   * time" says. occurredAt (when the set was saved) stays the engine's clock.
+   */
+  trainedOn?: string | null;
   reps: number | null;
   rpe: number | string | null;
   rir: number | string | null;
@@ -40,6 +54,8 @@ export type PreviousLiftLog = {
   calories?: number | null;
   /** A run's distance, in metres. */
   distanceM?: number | null;
+  /** The athlete_equipment the set was done on, when it was stamped. */
+  equipmentId?: string | null;
 };
 
 /** Last time for an exercise done for time. */
@@ -57,7 +73,12 @@ export type PreviousTimed = {
   sets: number;
 };
 
-export type PreviousLift = PreviousLiftLog & { match: "exercise_id" | "name"; timed?: PreviousTimed };
+export type PreviousLift = PreviousLiftLog & {
+  match: "exercise_id" | "name";
+  timed?: PreviousTimed;
+  /** Nothing logged on the card's machine yet: this came from another one (the card says which). */
+  otherEquipment?: boolean;
+};
 
 const COMPETITION_WORDS = new Set(["competition", "comp"]);
 
@@ -123,6 +144,14 @@ function occurredAtMs(log: PreviousLiftLog): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+/** Newest session first: by the day it was trained, then by when it was saved. */
+function newestFirst(a: PreviousLiftLog, b: PreviousLiftLog): number {
+  const da = a.trainedOn ?? "";
+  const db = b.trainedOn ?? "";
+  if (da !== db && da && db) return da < db ? 1 : -1;
+  return occurredAtMs(b) - occurredAtMs(a);
+}
+
 function hasUsefulPerformance(log: PreviousLiftLog, repsOnly: boolean): boolean {
   const reps = finitePositive(log.reps);
   if (!reps) return false;
@@ -174,7 +203,10 @@ export function matchHistoryLogs(
   // history is thin and often light (a top set wave-loaded at RPE 4 predicted
   // 243 lb for 5 @ 5.5 when 315 @ 6 was the truth). The engine's reps/RPE
   // kernel already leans on the most similar sets.
-  return matches.filter((log) => log.sessionKey !== currentSessionKey && occurredAtMs(log) > 0);
+  // On a machine: its own sessions (and ones that never said), never another
+  // machine's weights, when there are any (equipment.ts preferSameEquipment).
+  const own = matches.filter((log) => log.sessionKey !== currentSessionKey && occurredAtMs(log) > 0);
+  return preferSameEquipment(own, identity.equipmentId).logs;
 }
 
 function hasTimedPerformance(log: PreviousLiftLog): boolean {
@@ -240,18 +272,21 @@ export function selectPreviousLifts(
       (identity.timed ? hasTimedPerformance(log) : hasUsefulPerformance(log, identity.repsOnly === true)),
     );
     if (valid.length === 0) continue;
+    const onMachine = preferSameEquipment(valid, identity.equipmentId);
+    const otherEquipment = onMachine.other;
     if (identity.timed) {
       // the same kind of session when there is one: a threshold run's last time
       // is the last threshold session, not last Sunday's long run
       const timedRole = normalizeRole(identity.purposeLabel);
-      const sameKind = timedRole ? valid.filter((log) => normalizeRole(log.purposeLabel) === timedRole) : [];
-      const pool = sameKind.length > 0 ? sameKind : valid;
-      const latest = pool.slice().sort((a, b) => occurredAtMs(b) - occurredAtMs(a))[0];
+      const sameKind = timedRole ? onMachine.logs.filter((log) => normalizeRole(log.purposeLabel) === timedRole) : [];
+      const pool = sameKind.length > 0 ? sameKind : onMachine.logs;
+      const latest = pool.slice().sort(newestFirst)[0];
       const session = pool.filter((log) => log.sessionKey === latest.sessionKey);
       result.set(identity.rowId, {
         ...latest,
         match: idMatches.length > 0 ? "exercise_id" : "name",
         timed: summarizeTimedSession(identity.timed, session),
+        ...(otherEquipment ? { otherEquipment } : {}),
       });
       continue;
     }
@@ -262,9 +297,9 @@ export function selectPreviousLifts(
     // didn't (a back-off card after a heavy-singles day still reads its own
     // back-offs); with no history in this role, the lift's latest session.
     const role = normalizeRole(identity.purposeLabel);
-    const inRole = role ? valid.filter((log) => normalizeRole(log.purposeLabel) === role) : [];
-    const pool = inRole.length > 0 ? inRole : valid;
-    const latestSession = pool.slice().sort((a, b) => occurredAtMs(b) - occurredAtMs(a))[0]?.sessionKey;
+    const inRole = role ? onMachine.logs.filter((log) => normalizeRole(log.purposeLabel) === role) : [];
+    const pool = inRole.length > 0 ? inRole : onMachine.logs;
+    const latestSession = pool.slice().sort(newestFirst)[0]?.sessionKey;
     if (!latestSession) continue;
     const lastSession = pool.filter((log) => log.sessionKey === latestSession);
     // Working sets only: warm-ups live in their own table (pl_warmup_sets) and
@@ -274,6 +309,7 @@ export function selectPreviousLifts(
     result.set(identity.rowId, {
       ...top,
       match: idMatches.length > 0 ? "exercise_id" : "name",
+      ...(otherEquipment ? { otherEquipment } : {}),
     });
   }
   return result;

@@ -6,6 +6,7 @@ import { portalWorkoutsClientQuery } from "@/lib/portal-page-queries";
 import { WorkoutsBodySkeleton } from "@/components/workouts/workouts-skeleton";
 import { WorkoutsExperience } from "@/components/workouts/WorkoutsExperience";
 import { WorkoutArchiveSection } from "@/components/workout-archive-section";
+import { EquipmentIntroGate } from "@/components/equipment/setup-tips";
 
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/")({
@@ -55,6 +56,8 @@ function WorkoutsPage() {
         openDays={days === 1}
         footer={<WorkoutArchiveSection clientId={client.id} mode="client" />}
       />
+      {/* Equipment & setups' one-time walkthrough: here, never inside a workout. */}
+      <EquipmentIntroGate clientId={client.id} unit={(client as any).preferred_weight_unit === "kg" ? "kg" : "lb"} />
     </>
   );
 }
