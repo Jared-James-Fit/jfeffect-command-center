@@ -49,14 +49,14 @@ export function freeJoinMessage(
     // free membership is by application (membership-apply.ts)
     case "pending":
       return {
-        title: "Your application is with Jared",
+        title: "Your application is in",
         body: "You'll get an email with your link as soon as it's approved, usually within a day.",
         cta: { to: "/", label: "Back to JF Effect" },
       };
     case "not_approved":
       return {
         title: "JF Effect is by application",
-        body: "Applying is free and takes about a minute. Jared reads every one and sends your invite once you're approved.",
+        body: "Applying is free and takes about a minute. I read every one and send your invite once you're approved.",
         cta: { to: "/join", label: "Apply free" },
       };
     case "coach_account":

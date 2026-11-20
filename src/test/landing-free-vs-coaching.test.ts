@@ -20,6 +20,11 @@ const visible = visibleOf(page);
 /** Every public marketing page a visitor can read. */
 const PUBLIC_PAGES = [
   "src/components/landing/landing-page.tsx",
+  "src/components/join/activate-page.tsx",
+  "src/components/member/membership-pending-gate.tsx",
+  "src/lib/free-signup.ts",
+  "src/lib/membership-apply.ts",
+  "src/routes/challenges.index.tsx",
   "src/routes/coaching.index.tsx",
   "src/routes/about.tsx",
   "src/routes/coaching.apply.tsx",
@@ -34,7 +39,8 @@ describe("the landing page sells the free app first and online coaching as its o
       visible.indexOf("data-landing-hero"),
       visible.indexOf("data-landing-proof"),
     );
-    expect(LANDING_COPY.HERO.title).toBe("The training app built by a Team Canada powerlifter.");
+    expect(LANDING_COPY.HERO.title).toBe("Train in the same app my clients use.");
+    expect(hero).toContain("{COACH_NAME} · Team Canada powerlifter");
     expect(LANDING_COPY.HERO.body).toContain("Use it free, or hire me to coach you online.");
     expect(hero.indexOf("<PrimaryCta to={JOIN_TO}")).toBeGreaterThan(-1);
     expect(hero.indexOf("<SecondaryCta to={COACHING_TO}")).toBeGreaterThan(
@@ -62,7 +68,7 @@ describe("the landing page sells the free app first and online coaching as its o
       "Meet prep",
     ]);
     expect(visible).toContain("I'll run your training.");
-    expect(visible).toContain("We go over price on a short call before you commit.");
+    expect(visible).toContain("We'll go over price on a quick call before you commit");
     // replies are what the app's own coach chat promises, never "unlimited"
     expect(LANDING_COPY.COACHING.map((c) => c.body).join(" ")).toContain(
       "I usually reply within a day.",
@@ -116,6 +122,9 @@ describe("the public site reads like Jared wrote it", () => {
       /Visible proof/i,
       /your result could be next/i,
       /Spots are limited/i,
+      // Jared: "remove real from your vocabulary"
+      /\breal(ly)?\b/i,
+      /\bactually\b/i,
       /\bunlock/i,
       /\belevate/i,
       /\bjourney/i,
@@ -128,6 +137,13 @@ describe("the public site reads like Jared wrote it", () => {
     ]) {
       expect(words).not.toMatch(line);
     }
+  });
+
+  it("is in Jared's own voice: he talks about himself as I, never as Jared in the third person", () => {
+    for (const third of [/Jared reads/, /Jared can/, /Jared know/, /reach you, Jared/, /Message Jared/, /with Jared\?/, /He reads/, /He might/]) {
+      expect(words).not.toMatch(third);
+    }
+    expect(visibleOf(read("src/routes/about.tsx"))).toContain("Hey, I'm Jared.");
   });
 
   it("uses no dashes in what a visitor reads on the landing page", () => {

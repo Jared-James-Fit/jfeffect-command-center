@@ -289,7 +289,7 @@ export function ActivatePage({
             {view.firstName ? `Welcome, ${view.firstName}` : "Welcome"}
           </h1>
           <p className="mx-auto mt-2 max-w-[320px] text-[15px] leading-relaxed text-muted-foreground">
-            Jared approved your membership. First, confirm it's you: we'll email a code to{" "}
+            I approved your membership. First, confirm it's you: I'll email a code to{" "}
             <span className="font-medium text-foreground">{view.emailHint ?? "your email"}</span>.
           </p>
         </div>
@@ -305,7 +305,7 @@ export function ActivatePage({
             {busy ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : "Email me a code"}
           </button>
           <p className="text-center text-[13px] text-muted-foreground">
-            Not your email? Message Jared and he'll fix it.
+            Not your email? Message me and I'll fix it.
           </p>
         </div>
       </AuthShell>
@@ -318,12 +318,12 @@ export function ActivatePage({
   > = {
     invalid: {
       title: "This link doesn't work",
-      body: "It may have expired or been replaced by a newer one. Message Jared and he'll send you a fresh link.",
+      body: "It may have expired or been replaced by a newer one. Message me and I'll send you a fresh link.",
       cta: "dm",
     },
     pending: {
       title: "Not approved yet",
-      body: "Your application is still with Jared. You'll get an email the moment it's approved.",
+      body: "I haven't approved your application yet. You'll get an email the moment I do.",
       cta: "dm",
     },
     joined: {
@@ -338,7 +338,7 @@ export function ActivatePage({
     },
     coach_record: {
       title: "Your coach already set you up",
-      body: "There's an account waiting for this email. Ask Jared to send your setup link.",
+      body: "There's an account waiting for this email. Message me and I'll send your setup link.",
       cta: "dm",
     },
   };
@@ -369,7 +369,7 @@ export function ActivatePage({
           ) : (
             <>
               <a href={SOCIAL.instagram.url} className={BTN}>
-                Message Jared
+                Message me
               </a>
               <Link
                 to="/auth"

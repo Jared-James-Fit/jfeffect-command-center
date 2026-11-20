@@ -13,7 +13,7 @@ export function ProofWall({
   if (t.length === 0 && i.length === 0) return null;
   return (
     <Section>
-      <SectionTitle eyebrow="Results" title="Real clients. Real progress." />
+      <SectionTitle eyebrow="Results" title="Clients I've coached." />
       {i.length > 0 && (
         <div className="mb-6 grid grid-cols-2 gap-2 md:grid-cols-4">
           {i.map((x, idx) => (

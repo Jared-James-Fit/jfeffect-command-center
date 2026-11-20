@@ -38,9 +38,9 @@ export const PUBLIC_NAV: PublicNavItem[] = [
     key: "coaching",
     label: "Online coaching",
     to: "/coaching",
-    hint: "1:1 with Jared. Paid, by application.",
+    hint: "1:1 coaching with me. Paid, by application.",
   },
-  { key: "about", label: "About", to: "/about", hint: "Team Canada powerlifter and coach." },
+  { key: "about", label: "About", to: "/about", hint: "Who I am and what I've done." },
 ];
 
 export const JOIN_CHOICE: CtaChoice = { label: "Join free", href: "/join" };

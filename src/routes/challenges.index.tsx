@@ -28,7 +28,7 @@ export const Route = createFileRoute("/challenges/")({
       {
         name: "description",
         content:
-          "Real strength and fitness competitions with live leaderboards and verified results. Enter, compete, and share your result.",
+          "Strength and fitness competitions with live leaderboards and verified results. Enter, compete, and see where you finish.",
       },
       ...shareMeta({
         title: "JF Effect Challenges",
@@ -62,7 +62,7 @@ function Hub() {
     <ChallengeShell>
       <h1 className="font-display text-4xl uppercase leading-[0.9] tracking-wide">Challenges</h1>
       <p className="mt-2 max-w-md text-sm text-muted-foreground">
-        Real competitions, judged rep by rep, on a live leaderboard.
+        Competitions judged rep by rep, on a live leaderboard.
       </p>
 
       {!list ? (

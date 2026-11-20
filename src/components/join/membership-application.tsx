@@ -80,14 +80,14 @@ const QUESTION: Record<MemberStepKey, { title: (first: string) => string; hint?:
   goal: { title: () => "What do you want from your training?" },
   experience: { title: () => "How long have you been lifting?" },
   coaching_interest: {
-    title: () => "Interested in online coaching with Jared?",
+    title: () => "Interested in online coaching with me?",
     hint: "Online coaching is paid and optional. The app is free either way.",
   },
   full_name: { title: () => "What's your name?" },
   contact_method: {
     title: (first) =>
-      first ? `How should Jared reach you, ${first}?` : "How should Jared reach you?",
-    hint: "He reads every application and might say hi before approving you.",
+      first ? `How should I reach you, ${first}?` : "How should I reach you?",
+    hint: "I read every application myself, and I might say hi before I approve you.",
   },
   contact: { title: () => "Where can we reach you?" },
 };
@@ -328,7 +328,7 @@ export function MembershipApplication() {
                 Join JF Effect · Free
               </p>
               <p className="mt-1 text-[15px] leading-relaxed text-muted-foreground">
-                A few quick taps, about a minute. Jared reads every application himself.
+                A few quick taps, about a minute. I read every application myself.
               </p>
             </div>
           )}
@@ -397,8 +397,8 @@ export function MembershipApplication() {
                     label="Instagram"
                     note={
                       needs.instagram === "required"
-                        ? "So Jared can DM you."
-                        : "Optional, but it helps Jared know who you are."
+                        ? "So I can DM you."
+                        : "Optional, but it helps me know who you are."
                     }
                     inputRef={igRef}
                     placeholder="@username"
@@ -411,7 +411,7 @@ export function MembershipApplication() {
                     <ContactField
                       id="join-phone"
                       label="Phone"
-                      note="For Jared's text. Any format works."
+                      note="So I can text you. Any format works."
                       inputRef={phoneRef}
                       type="tel"
                       autoComplete="tel"
@@ -558,10 +558,10 @@ function ContactField({
 const REACH: Record<string, (a: MemberAnswers) => string> = {
   instagram: (a) => {
     const h = instagramHandle(a.instagram);
-    return `He might DM you on Instagram${h ? ` (${h})` : ""} to say hi and hear about your goals.`;
+    return `I might DM you on Instagram${h ? ` (${h})` : ""} to say hi and hear about your goals.`;
   },
-  text: () => "He might text you to say hi and hear about your goals.",
-  email: () => "He might email you to say hi and hear about your goals.",
+  text: () => "I might text you to say hi and hear about your goals.",
+  email: () => "I might email you to say hi and hear about your goals.",
 };
 
 function JoinResult({ result, answers }: { result: ApplyResult; answers: MemberAnswers }) {
@@ -588,10 +588,10 @@ function JoinResult({ result, answers }: { result: ApplyResult; answers: MemberA
       <ResultShell icon="check" title={`You're already approved${first ? `, ${first}` : ""}`}>
         <p className="text-[16px] leading-relaxed text-muted-foreground">
           Your invite is in your email. Tap the link in it, set a password, and you're in. Can't
-          find it? Check spam, or message Jared on Instagram.
+          find it? Check spam, or message me on Instagram.
         </p>
         <div className="mt-6">
-          <TextLink href={SOCIAL.instagram.url}>Message Jared on Instagram</TextLink>
+          <TextLink href={SOCIAL.instagram.url}>Message me on Instagram</TextLink>
         </div>
       </ResultShell>
     );
@@ -600,7 +600,7 @@ function JoinResult({ result, answers }: { result: ApplyResult; answers: MemberA
   const steps: Array<{ title: string; body: string; done?: boolean }> = [
     { title: "Application sent", body: "Nothing to pay, no card.", done: true },
     {
-      title: "Jared reads it",
+      title: "I read it",
       body: `Usually within a day. ${(REACH[result.contactMethod] ?? REACH.email)(answers)}`,
     },
     {
@@ -655,8 +655,8 @@ function JoinResult({ result, answers }: { result: ApplyResult; answers: MemberA
       <div className="mt-8 border-t border-border/70 pt-6">
         <div className="text-[15px] font-semibold">While you wait</div>
         <div className="mt-3 flex flex-col items-center gap-3">
-          <TextLink href={SOCIAL.instagram.url}>See how Jared trains on Instagram</TextLink>
-          <TextLink to="/about">Read Jared's story</TextLink>
+          <TextLink href={SOCIAL.instagram.url}>See how I train on Instagram</TextLink>
+          <TextLink to="/about">More about me</TextLink>
         </div>
       </div>
     </ResultShell>

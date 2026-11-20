@@ -181,9 +181,9 @@ function CoachingPage() {
     <SalesPageShell pageId="coaching">
       {/* 1. What it is, and the one button */}
       <CoachingHero
-        eyebrow="Online coaching · By application"
-        headline="Online coaching from a Team Canada powerlifter."
-        sub="I write your training and nutrition, read your check-in every week, and change the plan when it needs changing. It all runs through the JF Effect app, wherever you train."
+        eyebrow="Online coaching with Jared McIntyre"
+        headline="I'll coach you, wherever you train."
+        sub="I write your training and nutrition, read your check-in every week, and change the plan when it needs changing. It all runs through the JF Effect app."
         primary={
           <div data-inline-cta className="flex flex-col items-stretch sm:items-center lg:items-start">
             <PrimaryCta to={APPLY_TO}>{CTA}</PrimaryCta>

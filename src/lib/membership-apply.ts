@@ -130,7 +130,7 @@ export function memberStepProblem(step: MemberStepKey, a: MemberAnswers): FieldP
     case "full_name": {
       const n = a.full_name.trim();
       if (n.length < 2)
-        return { field: "full_name", message: "Add your name so Jared knows who he's talking to." };
+        return { field: "full_name", message: "Add your name so I know who I'm talking to." };
       if (n.length > 120) return { field: "full_name", message: "That name is too long." };
       return null;
     }
@@ -149,7 +149,7 @@ export function memberStepProblem(step: MemberStepKey, a: MemberAnswers): FieldP
       const needs = contactNeeds(a.contact_method);
       const ig = a.instagram.trim();
       if (needs.instagram === "required" && !ig)
-        return { field: "instagram", message: "Add your Instagram so Jared can DM you." };
+        return { field: "instagram", message: "Add your Instagram so I can DM you." };
       if (ig && !instagramHandle(ig))
         return {
           field: "instagram",
