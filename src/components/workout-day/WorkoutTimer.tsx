@@ -280,9 +280,6 @@ export function resetWorkoutSession(dayId: string, at: number = Date.now()): Wor
   };
   writeWorkoutSession(dayId, next);
   setActiveWorkoutDay(dayId, at);
-  // The workout's clock starts (the first set, a rest, Start): its own cue, once,
-  // which also takes the place of that first set's tock (app-sounds spacing).
-  playAppSound("start");
   return next;
 }
 
@@ -483,7 +480,7 @@ export function WorkoutTimer({
         {!readonly && (
           <button
             type="button"
-            onClick={() => { sync(resetWorkoutSession(dayId)); playAppSound("start"); }}
+            onClick={() => sync(resetWorkoutSession(dayId))}
             className="inline-flex h-7 items-center gap-1 rounded-md bg-secondary px-2 text-[11px] font-bold text-foreground"
           >
             <RotateCcw className="h-3 w-3" /> Restart
@@ -533,10 +530,7 @@ export function WorkoutTimer({
       {!readonly && !stopped && (
         <button
           type="button"
-          onClick={() => {
-            sync(paused ? resumeWorkoutSession(dayId) : pauseWorkoutSession(dayId));
-            playAppSound(paused ? "resume" : "pause");
-          }}
+          onClick={() => sync(paused ? resumeWorkoutSession(dayId) : pauseWorkoutSession(dayId))}
           className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           aria-label={paused ? "Resume workout session" : "Pause workout session"}
           title={paused ? "Resume" : "Pause"}

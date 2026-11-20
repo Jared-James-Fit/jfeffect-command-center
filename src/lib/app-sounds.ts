@@ -29,7 +29,7 @@ export type AppSound =
   // Workout logging — short and soft, so a session full of them never nags.
   | "tick" | "set" | "exercise" | "pr" | "timer" | "milestone" | "error"
   // The workout clock, the timers' last seconds, a daily goal reached.
-  | "start" | "pause" | "resume" | "count" | "go" | "goal";
+  | "start" | "count" | "go" | "goal";
 
 // ------------------------------------------------------------------ settings
 
@@ -41,7 +41,7 @@ const CATEGORY: Record<AppSound, SoundCategory> = {
   timer: "timers", count: "timers", go: "timers",
   sent: "effects", success: "effects", celebrate: "effects", tick: "effects", set: "effects",
   exercise: "effects", pr: "effects", milestone: "effects", error: "effects",
-  start: "effects", pause: "effects", resume: "effects", goal: "effects",
+  start: "effects", goal: "effects",
 };
 export function soundCategory(name: AppSound): SoundCategory {
   return CATEGORY[name];
@@ -446,16 +446,6 @@ const PATTERNS: Record<AppSound, (c: BaseAudioContext, out: AudioNode, t: number
     bell(c, o, t + 0.18, C5, 0.45, 0.065, { index: 1 });
     bell(c, o, t + 0.25, G5, 0.65, 0.075, { index: 1.1, bright: 0.3 });
   },
-  // Paused: the same fifth, falling and soft (G → C).
-  pause: (c, o, t) => {
-    bell(c, o, t, G5, 0.24, 0.05, { index: 0.5 });
-    bell(c, o, t + 0.1, C5, 0.38, 0.05, { index: 0.4 });
-  },
-  // Resumed: rising and soft (C → G).
-  resume: (c, o, t) => {
-    bell(c, o, t, C5, 0.22, 0.045, { index: 0.5 });
-    bell(c, o, t + 0.09, G5, 0.38, 0.06, { index: 0.6 });
-  },
   // Something failed: low, short, not alarming.
   error: (c, o, t) => { tone(c, o, t, 300, 0.12, 0.08, "triangle", 240); tone(c, o, t + 0.12, 220, 0.16, 0.07, "triangle"); },
 };
@@ -479,7 +469,7 @@ const PRIORITY: Partial<Record<AppSound, number>> = {
   timer: 0.5, go: 0.5, start: 0.5,
 };
 /** Same-sound spacing: fast cues may repeat sooner than the 2.5 s default. */
-const MIN_GAP: Partial<Record<AppSound, number>> = { tick: 90, set: 450, exercise: 900, error: 900, pause: 400, resume: 400, count: 600 };
+const MIN_GAP: Partial<Record<AppSound, number>> = { tick: 90, set: 450, exercise: 900, error: 900, count: 600 };
 /** How long a sound keeps quieter ones from playing over it (default 0.6 s). */
 const CROWD_MS: Partial<Record<AppSound, number>> = { start: 1500, timer: 1200, go: 1200 };
 const DEFAULT_CROWD_MS = 600;

@@ -104,10 +104,8 @@ describe("countdown: 3, 2, 1 and the go, on the audio clock", () => {
     expect(admitSound("set", 101_600, gate)).toBe(true);
   });
 
-  it("pause and resume can follow each other quickly; a PR is never swallowed", () => {
+  it("a PR right after a set's tock is never swallowed", () => {
     const gate = { lastAny: 0, lastAnyPriority: 0, lastBy: {} };
-    expect(admitSound("pause", 1_000, gate)).toBe(true);
-    expect(admitSound("resume", 1_700, gate)).toBe(true);
     expect(admitSound("set", 5_000, gate)).toBe(true);
     expect(admitSound("pr", 5_150, gate)).toBe(true);
   });
@@ -142,7 +140,7 @@ describe("the sounds themselves: synthesized, short, one family", () => {
   }
 
   it("every new cue schedules and is gone within a second and a half", () => {
-    for (const name of ["start", "pause", "resume", "count", "go", "goal", "pr", "exercise", "timer", "milestone"] as const) {
+    for (const name of ["start", "count", "go", "goal", "pr", "exercise", "timer", "milestone"] as const) {
       const f = fakeContext();
       scheduleAppSound(f.c, f.c.destination, 0, name);
       expect(f.nodes(), name).toBeGreaterThan(1);
@@ -182,10 +180,12 @@ describe("where the new sounds play", () => {
     expect(tools).toContain('if (!countdownSoundedEnd(countdownKey, state.timer.endsAt)) playAppSound("timer");');
   });
 
-  it("the workout clock: start once on a fresh session, pause / resume on their controls", () => {
+  it("the workout clock: one start cue, only when a fresh session begins (there is no pause control in the logger, so no pause sounds)", () => {
     const timer = read("src/components/workout-day/WorkoutTimer.tsx");
-    expect(timer).toContain('playAppSound("start");\n  return next;');
-    expect(timer).toContain('playAppSound(paused ? "resume" : "pause");');
+    expect(timer.split('playAppSound("start");').length - 1).toBe(1);
+    const begin = timer.slice(timer.indexOf("export function beginWorkoutSession("), timer.indexOf("export function pauseWorkoutSession("));
+    expect(begin).toContain('playAppSound("start");\n  return next;');
+    expect(read("src/lib/app-sounds.ts")).not.toMatch(/\b(pause|resume): \(c, o, t\)/);
     // a finished workout's sets never start the clock again
     expect(read("src/components/workout-day/WorkoutDayView.tsx")).toContain("startsWorkout={!cardioRow && !completion?.completed_at}");
   });
