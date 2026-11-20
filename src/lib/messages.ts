@@ -15,6 +15,8 @@ export type MessageAttachment = {
   thumbnail_storage_path?: string;
   /** Videos: how the upload went on the sender's phone (compressed or not, why, timings). */
   transfer?: Record<string, string | number | null>;
+  /** Videos: the logged set this clip is of (pl_set_videos, set_video_attach). */
+  set_video?: { id: string; exercise?: string; set?: number; label?: string; workout?: string; day_id?: string; row_id?: string };
   width?: number;
   height?: number;
   peaks?: number[];

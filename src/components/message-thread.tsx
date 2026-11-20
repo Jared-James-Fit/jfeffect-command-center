@@ -82,6 +82,7 @@ import { belongsInInbox, resolveOptimistic, upsertRow } from "@/lib/inbox-cache"
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
 import { ChatVideoTile } from "@/components/chat-video-tile";
+import { LiftAnalysisEntry } from "@/components/lift-analysis/lift-analysis-entry";
 import { ReplyThumb } from "@/components/messages/reply-thumb";
 import { COMPOSER_INSERT_EVENT, type ComposerInsertDetail } from "@/lib/composer-insert";
 import {
@@ -171,13 +172,11 @@ function ImageAttachment({ att, messageId }: { att: MessageAttachment; messageId
   return <ChatImageAttachment att={att} messageId={messageId} initialSignedUrl={signed} deferSign={!signed && pending} />;
 }
 
-function VideoAttachment({ att }: { att: MessageAttachment }) {
+function VideoAttachment({ att, mine }: { att: MessageAttachment; mine?: boolean }) {
   const signed = useSignedUrlFor(att.storage_path);
   const poster = useSignedUrlFor(att.thumbnail_storage_path);
   const src = att.storage_path ? signed : att.url;
-  // One tap plays it full screen. The tile shows (and reserves room for) the poster
-  // immediately, even while the video's own link is still being signed.
-  return (
+  const tile = (
     <ChatVideoTile
       src={src}
       poster={poster}
@@ -190,6 +189,23 @@ function VideoAttachment({ att }: { att: MessageAttachment }) {
       size={att.size}
       name={att.name}
     />
+  );
+  // One tap plays it full screen. The tile shows (and reserves room for) the poster
+  // immediately, even while the video's own link is still being signed.
+  // A set video: its bar path & speed one line under it.
+  if (!att.set_video?.id) return tile;
+  return (
+    <div className="space-y-1">
+      {tile}
+      <LiftAnalysisEntry
+        setVideoId={att.set_video.id}
+        src={src}
+        poster={poster}
+        exerciseName={att.set_video.exercise ?? "Set video"}
+        setLabel={att.set_video.label}
+        className={mine ? "text-current hover:text-current" : undefined}
+      />
+    </div>
   );
 }
 
@@ -570,7 +586,7 @@ function AttachmentView({
     );
   }
   if (att.type === "image") return <ImageAttachment att={att} messageId={message?.id} />;
-  if (att.type === "video") return <VideoAttachment att={att} />;
+  if (att.type === "video") return <VideoAttachment att={att} mine={mine} />;
   if (att.type === "audio") return <AudioAttachment att={att} mine={mine} message={message} />;
   if (att.type === "pdf" || att.type === "file") return <FileAttachment att={att} mine={mine} />;
   return <LinkAttachment att={att} mine={mine} />;
