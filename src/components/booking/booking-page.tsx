@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SlowLoadHint } from "@/components/slow-load-hint";
 import { Link } from "@tanstack/react-router";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -139,6 +139,7 @@ export function BookingPage({
   /** The coach's View as client: everything shows, nothing books. */
   preview?: boolean;
 }) {
+  const qc = useQueryClient();
   const pageFn = useServerFn(getBookingPage);
   const slotsFn = useServerFn(getBookingSlots);
   const bookFn = useServerFn(bookOnline);
@@ -262,6 +263,9 @@ export function BookingPage({
     onSuccess: (r) => {
       setResult(r);
       setStep("done");
+      // The link now has its booking and that time is gone: never show the old state again.
+      void qc.invalidateQueries({ queryKey: ["booking-page"] });
+      void qc.invalidateQueries({ queryKey: ["booking-slots"] });
       window.scrollTo({ top: 0, behavior: "smooth" });
     },
     onError: (e: any) => {

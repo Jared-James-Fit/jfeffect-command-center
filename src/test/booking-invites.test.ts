@@ -376,6 +376,21 @@ describe("wiring", () => {
     expect(sql).not.toMatch(/CREATE POLICY[^;]*FOR (INSERT|UPDATE|DELETE|ALL)/);
   });
 
+  it("booking pages and minted links are never kept in the phone's saved cache", async () => {
+    const { shouldPersistQueryKey } = await import("@/lib/query-persister");
+    for (const key of [
+      "booking-page",
+      "booking-slots",
+      "booking-viewer",
+      "booking-link",
+      "booking-invite-row",
+      "schedule-sheet-client",
+    ])
+      expect(shouldPersistQueryKey([key])).toBe(false);
+    const page = read("src/components/booking/booking-page.tsx");
+    expect(page).toContain('void qc.invalidateQueries({ queryKey: ["booking-page"] });');
+  });
+
   it("the link's page sends no referrer (the token never leaks to a site it links to)", () => {
     const route = read("src/routes/b.$token.tsx");
     expect(route).toContain('{ name: "referrer", content: "no-referrer" }');
