@@ -1087,7 +1087,7 @@ THE PICTURE
 - Tell it with the camera: an interesting angle and perspective (side-on for a lift, over the shoulder toward the platform, a tight insert on hands, a two-shot of coach and athlete, a still life from above), never a flat, centred, posed shot.
 - The people (when there are any): pick who they are first ("cast"), and their body follows from that. A newer lifter or an everyday member has an ordinary, healthy build; a powerlifter is sturdy and thick through the middle, not shredded; a physique athlete is lean with natural muscle; a masters lifter looks their age. Natural arm and shoulder size, no veins mapped across them. Say their age range, gender, hair, skin tone and training clothes (in colour, never everyone in black), what they're doing and their expression. Across the feed there are as many women as men, every age from 20s to 60s and every body type. Never the same person, cast, place, palette or composition as a recent post.
 - Mature and grounded, made for adults: never cute, childish or comedic in a cartoon way, never a teenager or a school uniform, never fanservice, never an exaggerated or bodybuilding-show physique, never undressed, measuring their body or on a scale outside a meet weigh-in, never a lifestyle scene with no training in it.
-- No readable words anywhere in the frame (no speech bubbles, captions, labels or signs; a phone or laptop screen is blank or turned away; no brand names). "typography" is always "".
+- No readable words anywhere in the frame (no speech bubbles, captions, labels or signs; a training log's, clipboard's or whiteboard's writing is unreadable scribbles and boxes; a phone or laptop screen is blank or turned away; no brand names). Never plan words into the picture ("the word REST written in"): "typography" is always "".
 
 Answer with JSON only:
 {"topic": "the angle", "mood": "...", "situation": "the moment", "idea": "the point, in one sentence", "read": {"kind": "educational, technical, motivational, conversational or humorous", "discipline": "...", "for": "who it speaks to most", "show": "the best way to show it, in a sentence", "people": "none, hands, one, two or group"}, "rendering": "...", "art": "...", "style": "the shot", "light": "...", "palette": "...", "setting": "the place", "cast": "...", "visual": "...", "typography": "...", "captions": [{"form": "...", "text": "..."}, {"form": "...", "text": "..."}, {"form": "...", "text": "..."}]}`;
@@ -1991,7 +1991,7 @@ export function picturePrompt(
     o.faith ? "Calm and focused, still a place to train, with no Bible, cross or other religious object or symbol in it." : null,
     words
       ? `The only readable words are exactly these: ${words}. No other text, brand names or logos anywhere.`
-      : "No readable text, speech bubbles, labels, subtitles, brand names, logos or watermarks anywhere: any screen is blank or turned away, plate markings small and unreadable.",
+      : "No readable text, speech bubbles, labels, subtitles, brand names, logos or watermarks anywhere: a training log's, clipboard's or whiteboard's writing is unreadable scribbles and boxes, any screen is blank or turned away, plate markings small and unreadable.",
     "Vertical portrait. One clear focal point that reads at a glance on a phone; keep it well inside the middle 80% of the height and away from every edge (the feed crops the top and bottom).",
     FILM_AVOID,
     o.fix ? `Fix from the last try: ${o.fix}` : null,
@@ -2170,8 +2170,9 @@ export function reviewVerdict(r: Review, typography: string, scene = "", o: { re
   const caption: string[] = [];
   const want = letters(typography);
   const seen = letters(r.text_seen);
-  // words the planned scene itself names (an alarm's "5:30 AM", a note that says "tomorrow") aren't stray text
-  const planned = new Set([...letters(typography).split(" "), ...letters(scene).split(" ")].filter(Boolean));
+  // words the planned scene itself names (an alarm's "5:30 AM", a note that says "tomorrow") aren't stray text, but only in a
+  // picture meant to carry words: with none planned, a word the scene happens to name ("REST" in a log) is still a word
+  const planned = new Set([...letters(typography).split(" "), ...(want ? letters(scene).split(" ") : [])].filter(Boolean));
   // a phone's clock, a date or a plate's weight ("11:23", "6 am", "20 kg") can't be misspelled and tells no other story
   const stray = seen
     .replace(want, " ")

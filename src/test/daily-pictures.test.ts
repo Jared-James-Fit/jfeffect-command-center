@@ -735,6 +735,11 @@ describe("the review: concrete checks before any score", () => {
     expect(reviewVerdict(review({ defects: ["the barbell has different plates on each side"] }), "").image).toContain("the barbell has different plates on each side");
     // a brand on a plate is stray text
     expect(reviewVerdict(review({ text_seen: "ROGUE" }), "").image[0]).toContain("words that shouldn't be there");
+    // with no words planned, a word the scene happens to name is still a word in the picture (a log that read "Squat Bench Deadlift REST")
+    expect(reviewVerdict(review({ text_seen: "Squat\nBench\nDeadlift\nREST" }), "", "an open training log with the word REST written in").image[0]).toContain("words that shouldn't be there");
+    expect(reviewVerdict(review({ text_seen: "25\n20\n15" }), "", "plates on a tree").pass).toBe(true);
+    expect(CONCEPT_PROMPT).toContain("a training log's, clipboard's or whiteboard's writing is unreadable scribbles and boxes");
+    expect(picturePrompt({ style: "still_life", visual: "an open log", typography: "", message: "m" })).toContain("a training log's, clipboard's or whiteboard's writing is unreadable scribbles and boxes");
     const low = reviewVerdict(review({ scores: { ...review().scores, writing: 2, aesthetic: 3 }, fix_caption: "say it plainer" }), "");
     expect(low.pass).toBe(false);
     expect(low.caption).toEqual(["writing 2/5", "fix: say it plainer"]);
