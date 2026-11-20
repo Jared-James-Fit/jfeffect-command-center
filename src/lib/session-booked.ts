@@ -140,3 +140,25 @@ export function bookedToast(count: number, first: string, tellsClient: boolean):
   const what = count > 1 ? `Booked ${count} sessions` : "Session booked";
   return tellsClient && first ? `${what} · ${first} gets a message in their chat` : what;
 }
+
+/**
+ * A call the client booked themselves, in their own words in the coach chat
+ * (the inbox preview, and all an older app shows; the card carries the call):
+ * "Booked a General Call: Thu, Nov 20 · 3:00–3:30 PM · Video call."
+ */
+export function selfBookedMessageBody(s: Pick<BookedSessionRow, "title" | "session_type" | "session_date" | "start_time" | "end_time" | "location" | "wants_meet">): string {
+  const title = s.title || s.session_type || "call";
+  const place = bookedPlace(s);
+  return `Booked a ${title}: ${bookedDay(s.session_date)} · ${bookedTimes(s.start_time, s.end_time)}${place ? ` · ${place}` : ""}.`;
+}
+
+/**
+ * Does the coach's booking invite already show this booking? Its card shows the
+ * first booking of that type made after it was sent (`useInviteBooking`), so a
+ * booking is covered only when it's that first one.
+ */
+export function inviteCoversBooking(bookingId: string, sinceInvite: Array<{ id: string; created_at: string }>): boolean {
+  if (!sinceInvite.length) return false;
+  const first = [...sinceInvite].sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
+  return first.id === bookingId;
+}

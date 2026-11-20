@@ -25,6 +25,8 @@ export type MessageAttachment = {
   change_request_id?: string;
   /** kind "session_booked": the sessions the coach booked for them, earliest first (pt_sessions.id). */
   session_ids?: string[];
+  /** kind "session_booked": "client" when the client booked it themselves (a call from their app). */
+  booked_by?: "client";
   /** kind "community_post": the post it opens (e.g. a birthday post). */
   post_id?: string;
   fallback_emoji?: string;

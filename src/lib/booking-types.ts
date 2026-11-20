@@ -6,6 +6,7 @@
 import type { HoursWindow } from "@/lib/booking-slots";
 
 export type LocationMode = "in_person" | "video" | "phone";
+export type BookingAudience = "anyone" | "clients";
 
 export type BookingType = {
   id: string;
@@ -37,6 +38,10 @@ export type BookingType = {
   collect_notes: boolean;
   /** Online times come from the coach's smart availability (calls and meetings). */
   follows_smart?: boolean;
+  /** Lengths a booker can pick (null = only duration_minutes, which is the default either way). */
+  duration_options?: number[] | null;
+  /** Who can book it online: anyone with the link, or only coaching clients. */
+  audience?: BookingAudience;
   /** Set by the server: follows it and he has confirmed his boundaries, so it's live. */
   smart?: boolean;
   hours?: HoursWindow[];
@@ -54,6 +59,68 @@ const TRAINING_TYPES = new Set([
 
 export function isTrainingSessionType(sessionType: string | null | undefined): boolean {
   return TRAINING_TYPES.has(String(sessionType ?? ""));
+}
+
+/** A call or meeting (anything that isn't training). */
+export function isCallType(t: { session_type?: string | null }): boolean {
+  return !isTrainingSessionType(t.session_type);
+}
+
+/** The lengths a coach picks between for a call. */
+export const CALL_LENGTHS = [15, 30, 45, 60] as const;
+
+/**
+ * Every length a booker can pick, shortest first: the type's options plus its
+ * default, so the default is always one of them. One entry = a fixed length.
+ */
+export function durationChoices(t: { duration_minutes: number; duration_options?: readonly number[] | null }): number[] {
+  const all = [t.duration_minutes, ...(t.duration_options ?? [])]
+    .map((n) => Math.round(Number(n)))
+    .filter((n) => Number.isFinite(n) && n >= 5 && n <= 480);
+  return Array.from(new Set(all)).sort((a, b) => a - b);
+}
+
+/** The length asked for when the type offers it, else its default. Never one it doesn't offer. */
+export function pickDuration(
+  t: { duration_minutes: number; duration_options?: readonly number[] | null },
+  asked?: number | string | null,
+): number {
+  const n = Math.round(Number(asked));
+  return asked != null && asked !== "" && durationChoices(t).includes(n) ? n : t.duration_minutes;
+}
+
+/** The same type, booked at another of its lengths (slots and the booking follow it). */
+export function withDuration<T extends { duration_minutes: number; duration_options?: readonly number[] | null }>(
+  t: T,
+  asked?: number | string | null,
+): T {
+  const d = pickDuration(t, asked);
+  return d === t.duration_minutes ? t : { ...t, duration_minutes: d };
+}
+
+/** "30 min", or "15–60 min" when they pick. */
+export function durationLabel(t: { duration_minutes: number; duration_options?: readonly number[] | null }): string {
+  const c = durationChoices(t);
+  if (c.length <= 1) return `${t.duration_minutes} min`;
+  return `${c[0]}–${c[c.length - 1]} min`;
+}
+
+/** Only coaching clients can book it online. */
+export function clientsOnly(t: { audience?: string | null }): boolean {
+  return t.audience === "clients";
+}
+
+/**
+ * Can this person book this type? A clients-only type takes a coaching client
+ * we know is them (signed in, or a personal link); never the public, never a
+ * JF member (no coach). Anyone can book an "anyone" type.
+ */
+export function audienceAllows(
+  t: { audience?: string | null },
+  who: { serviceTier?: string | null } | null,
+): boolean {
+  if (!clientsOnly(t)) return true;
+  return !!who && who.serviceTier !== "self_serve";
 }
 
 /** Training uses a session credit by default; calls and meetings don't. */
@@ -125,27 +192,30 @@ export const TYPE_TEMPLATES: Array<{
     },
   },
   {
-    id: "checkin",
-    label: "Check-in call",
-    blurb: "30 min · video · free",
+    id: "general",
+    label: "General call",
+    blurb: "15–60 min · video · your clients",
     values: {
-      name: "Check-in Call",
-      session_type: "Check-In Session",
+      name: "General Call",
+      session_type: "Consultation",
       duration_minutes: 30,
+      duration_options: [...CALL_LENGTHS],
+      audience: "clients",
       location_mode: "video",
       uses_credit: false,
       color: "green",
       min_notice_hours: 12,
       buffer_minutes: 10,
       follows_smart: true,
+      collect_phone: false,
     },
   },
   {
     id: "intro",
-    label: "Intro call",
+    label: "Discovery call",
     blurb: "20 min · video · free, for new people",
     values: {
-      name: "Free Intro Call",
+      name: "Coaching Discovery Call",
       session_type: "Consultation",
       duration_minutes: 20,
       location_mode: "video",
