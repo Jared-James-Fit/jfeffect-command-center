@@ -24,6 +24,8 @@ import {
   TOPIC_GAP_DAYS,
   ART_STYLES,
   LEGACY_ART_NAMES,
+  LEGACY_LIGHT_NAMES,
+  peopleLine,
   FILM_LOOK_VERSION,
   REVIEW_PROMPT,
   contrastCount,
@@ -39,6 +41,15 @@ import {
   FILM_LOOK,
   DAILY_LIGHTS,
   DAILY_SETTINGS,
+  DAILY_RENDERINGS,
+  DAILY_PALETTES,
+  DAILY_CASTS,
+  DAILY_CAST_KEYS,
+  DAILY_PALETTE_KEYS,
+  parseRead,
+  castFor,
+  propRepeat,
+  propsLine,
   DAILY_SETTING_KEYS,
   SETTING_GAP_DAYS,
   settingLine,
@@ -86,6 +97,7 @@ const sql = readFileSync("supabase/migrations/20270125090000_daily_pictures_rebu
 const film = readFileSync("supabase/migrations/20270126090000_daily_pictures_2d_film.sql", "utf8");
 const vivid = readFileSync("supabase/migrations/20270127090000_daily_pictures_vivid.sql", "utf8");
 const insights = readFileSync("supabase/migrations/20270211090000_athlete_insights.sql", "utf8");
+const brightLook = readFileSync("supabase/migrations/20270426090000_insights_bright_look.sql", "utf8");
 const server = readFileSync("src/lib/daily-visuals.server.ts", "utf8");
 
 const stat = (o: Partial<VisualStat>): VisualStat => ({
@@ -107,14 +119,15 @@ const stat = (o: Partial<VisualStat>): VisualStat => ({
 });
 
 const review = (o: Partial<Review> = {}): Review => ({
-  colour: "cinematic",
+  colour: "bright",
+  physique: "realistic",
   clarity: "clean",
   medium: "anime",
   maturity: "mature",
   description: "",
   text_seen: "",
   defects: [],
-  scores: { relatable: 5, original: 4, writing: 4, audience_fit: 4, aesthetic: 5, storytelling: 4, match: 5, engaging: 4, uplift: 5, on_topic: 5, teaches: 5, technique: 5 },
+  scores: { relatable: 5, original: 4, writing: 4, audience_fit: 4, aesthetic: 5, storytelling: 4, match: 5, engaging: 4, uplift: 5, on_topic: 5, teaches: 5, technique: 5, readable: 5 },
   fix_image: "",
   fix_caption: "",
   ...o,
@@ -155,11 +168,14 @@ describe("the week: a mood a day, women, men and everyone in turn", () => {
     for (const gendered of ["for him", "for her", "AUDIENCE["]) expect(card, gendered).not.toContain(gendered);
   });
 
-  it("twelve shots and six coaching forms, about 25 to 100 words, never past the database's 600 characters", () => {
-    // one look (a hand-drawn 2D film frame), the variety in the shot and the light
-    expect(DAILY_STYLE_KEYS).toHaveLength(12);
+  it("thirteen shots and six coaching forms, about 25 to 100 words, never past the database's 600 characters", () => {
+    // one look, the variety in the shot, the light, the palette, the place and the people
+    expect(DAILY_STYLE_KEYS).toHaveLength(13);
     expect(Object.keys(DAILY_LIGHTS)).toHaveLength(8);
-    for (const k of DAILY_STYLE_KEYS) expect(vivid, k).toContain(`'${k}'`);
+    // every shot is one the database takes, and the ones days were made with before still are
+    for (const k of DAILY_STYLE_KEYS) expect(brightLook, k).toContain(`'${k}'`);
+    expect(brightLook).toContain("'backlit'");
+    expect(vivid).toContain("'backlit'");
     expect(Object.keys(DAILY_FORMATS)).toEqual(["coach_note", "breakdown", "mistake", "take", "observation", "question"]);
     for (const p of DAILY_PILLAR_KEYS) for (const f of DAILY_PILLARS[p].formats) expect(Object.keys(DAILY_FORMATS), `${p} ${f}`).toContain(f);
     // the database holds 600 characters for a caption (and the coach's Edit words says so)
@@ -494,15 +510,20 @@ describe("the editor reads every caption before a picture is made", () => {
 });
 
 describe("the concept comes first: the point, the picture, then three drafts", () => {
-  const choices = { pillar: "recovery" as const, styles: ["backlit", "two_frames"] as any, lights: ["night_session", "dawn_shafts"] as any, formats: ["coach_note", "take"] as any, topics: ["sleep_performance", "lighter_weeks"] as any, settings: ["garage_gym", "meet_platform"] as any };
+  const choices = { pillar: "recovery" as const, styles: ["side_profile", "two_frames"] as any, lights: ["big_windows", "fresh_morning"] as any, formats: ["coach_note", "take"] as any, topics: ["sleep_performance", "lighter_weeks"] as any, settings: ["garage_gym", "meet_platform"] as any };
 
   it("reads the concept, holding its choices to the lists it was given", () => {
     const c = parseConcept(
-      '```json\n{"topic": "sleep_performance", "mood": "angry", "situation": "s", "idea": "m", "format": "essay", "style": "oil painting", "light": "dawn_shafts", "setting": "a beach", "visual": "v", "typography": "\\"RPE 8\\"", "captions": ["\\"one\\"", "two", "", "four"]}\n```',
+      '```json\n{"topic": "sleep_performance", "mood": "angry", "situation": "s", "idea": "m", "format": "essay", "style": "oil painting", "light": "fresh_morning", "setting": "a beach", "visual": "v", "typography": "\\"RPE 8\\"", "captions": ["\\"one\\"", "two", "", "four"]}\n```',
       { ...choices, crowd: "lifters" },
     );
     // no direction given: recovery leans to a character moment; a frame carries no words, whatever the writer sent; a place that isn't a gym is the first one offered
-    expect(c).toMatchObject({ pillar: "recovery", topic: "sleep_performance", crowd: "lifters", mood: "analytical", format: "coach_note", style: "backlit", light: "dawn_shafts", art: "drama", setting: "garage_gym", typography: "", message: "m", drafts: ["one", "two", "four"] });
+    expect(c).toMatchObject({ pillar: "recovery", topic: "sleep_performance", crowd: "lifters", mood: "analytical", format: "coach_note", style: "side_profile", light: "fresh_morning", art: "drama", setting: "garage_gym", typography: "", message: "m", drafts: ["one", "two", "four"] });
+    // no read, treatment, palette or cast sent: anime key art, the first palette, someone in it
+    expect(c).toMatchObject({ rendering: "anime", palette: "crisp_white", cast: "newer_lifter" });
+    expect(c!.read).toBeUndefined();
+    // a light from an older look isn't one any more: the first one offered
+    expect(parseConcept('{"topic": "lighter_weeks", "idea": "m", "visual": "v", "light": "night_session", "captions": ["a"]}', choices)!.light).toBe("big_windows");
     // any real place goes, offered first or not (a meet angle can go back to the meet)
     expect(parseConcept('{"topic": "lighter_weeks", "idea": "m", "visual": "v", "setting": "meet_warm_up", "captions": ["a"]}', choices)!.setting).toBe("meet_warm_up");
     expect(parseConcept("no json", choices)).toBeNull();
@@ -550,7 +571,11 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     expect(p).toContain("THE COACH THREW THESE OUT (never write like them):\n- thrown out line");
     // the place is picked like the light, the ones not used lately first
     expect(p).toContain('PLACE, as "setting" (pick the one that fits the moment, the first ones not used lately): garage_gym = ');
-    expect(p).toContain('ANIME DIRECTION, as "art"');
+    expect(p).toContain('DIRECTION, as "art"');
+    // the palette, who's in it and the treatment are offered like the light
+    expect(p).toContain('PALETTE, as "palette"');
+    expect(p).toContain(`WHO'S IN IT, as "cast"`);
+    expect(p).toContain('TREATMENT, as "rendering" (anime key art for most posts; another only when the read calls for it)');
     expect(p).toContain("THE EDITOR TURNED DOWN YOUR LAST DRAFTS: substance 3/5.");
     const kept = conceptPrompt({ day: "2026-11-02", theme: "courage", audience: "men", crowd: "everyone", faith: false, choices, learnings: "", best: [], worst: [], recent: [], keep: { caption: "keep me" } });
     expect(kept).toContain("KEEP THIS CAPTION EXACTLY, word for word");
@@ -596,7 +621,14 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     expect(CONCEPT_PROMPT).toContain('"every little bit counts", "give yourself grace", "remember to listen to your body", "you got this", "movement is medicine", "there are worse places to spend your time"');
     expect(CONCEPT_PROMPT).not.toContain("Normal sentence case");
     // the picture is a frame from a serious powerlifting anime, of the lesson, the gear right, never a lifestyle scene
-    expect(CONCEPT_PROMPT).toContain("A still frame from a premium, serious Japanese sports anime about powerlifting, in JF Effect's house style");
+    expect(CONCEPT_PROMPT).toContain("JF Effect's illustrated house style: a clean, bright 2D frame in the tradition of modern Japanese sports anime");
+    // the post is read before its picture is planned, and people aren't always needed
+    expect(CONCEPT_PROMPT).toContain('3. Read the post like an art director before you plan any picture ("read")');
+    expect(CONCEPT_PROMPT).toContain("whether people are needed at all (often they aren't");
+    expect(CONCEPT_PROMPT).toContain("Never dark, moody, orange, amber or golden, never a dim gym under hanging lamps");
+    expect(CONCEPT_PROMPT).toContain("pick who they are first (\"cast\"), and their body follows from that");
+    expect(CONCEPT_PROMPT).toContain("Across the feed there are as many women as men, every age from 20s to 60s and every body type.");
+    expect(CONCEPT_PROMPT).toContain('"read": {"kind": "educational, technical, motivational, conversational or humorous"');
     expect(CONCEPT_PROMPT).toContain("It teaches the post's point");
     expect(CONCEPT_PROMPT).toContain("fatigue management, an athlete resting between heavy squat sets");
     expect(CONCEPT_PROMPT).toContain("one straight barbell, the same plates on both sides with collars");
@@ -604,8 +636,8 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     expect(CONCEPT_PROMPT).toContain("No readable words anywhere in the frame (no speech bubbles");
     expect(CONCEPT_PROMPT).toContain("calibrated plates (red 25, blue 20, yellow 15, green 10)");
     // a different athlete, place and composition every time, and never childish
-    expect(CONCEPT_PROMPT).toContain("Never the same athlete or coach as a recent post (change who they are: gender, age, build, hair, skin tone, kit colours), and never the same place or composition as a recent post.");
-    expect(CONCEPT_PROMPT).toContain("never cute, childish or comedic, never a teenager or a school uniform, never fanservice");
+    expect(CONCEPT_PROMPT).toContain("Never the same person, cast, place, palette or composition as a recent post.");
+    expect(CONCEPT_PROMPT).toContain("never cute, childish or comedic in a cartoon way, never a teenager or a school uniform, never fanservice");
     expect(CONCEPT_PROMPT).toContain("never a flat, centred, posed shot");
     expect(CONCEPT_PROMPT).not.toMatch(/photograph|photo\b/);
     // not every post is technical, and still never a story he didn't live
@@ -618,35 +650,66 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     expect(server).toContain('words in the picture again (a post just before had some): leave them out today');
   });
 
-  it("the picture: a frame from a serious powerlifting anime in the house style, of the lesson, its shot, light and place, the gear and technique right, no readable words", () => {
-    const p = picturePrompt({ style: "low_angle", light: "night_session", art: "key_frame", setting: "basement_gym", visual: "a conventional deadlift setup, side-on", typography: "", message: "m" });
+  it("the picture: a bright frame in the house style, read first, of the lesson, its shot, light, palette, place and people, the gear and technique right, no readable words", () => {
+    const read = { kind: "technical" as const, discipline: "powerlifting", audience: "lifters learning to pull", show: "the setup side-on, large and clear", people: "one" as const };
+    const p = picturePrompt({ style: "side_profile", light: "big_windows", art: "explainer", setting: "garage_gym", rendering: "graphic", cast: "masters", palette: "cool_blue", read, visual: "a conventional deadlift setup, side-on", typography: "", message: "m" });
     // the same house style, word for word, at the start of every prompt
     expect(p.startsWith(FILM_LOOK)).toBe(true);
-    expect(FILM_LOOK).toContain("JF Effect's house style: a still frame from a premium, beautifully animated Japanese sports anime series about powerlifting, a mature, grounded sports drama");
-    expect(FILM_LOOK).toContain("Hand-drawn 2D: clean, confident line art");
-    expect(FILM_LOOK).toContain("realistic adult proportions and anatomy");
-    expect(p).toContain(`The shot: ${DAILY_STYLES.low_angle.look}`);
-    expect(p).toContain(`Light: ${DAILY_LIGHTS.night_session.look}.`);
-    expect(p).toContain(`The place: ${DAILY_SETTINGS.basement_gym.look}.`);
-    expect(p).toContain(ART_STYLES.key_frame.look);
+    expect(FILM_LOOK).toContain("JF Effect's illustrated house style: a clean, bright, hand-drawn 2D illustration in the tradition of modern Japanese sports anime");
+    expect(FILM_LOOK).toContain("a neutral white balance (whites read white, steel reads grey, skin reads as skin), soft open shadows that keep their detail");
+    expect(FILM_LOOK).toContain("Made for a phone screen: one clear subject that reads at a glance");
+    expect(p).toContain(DAILY_RENDERINGS.graphic.look);
+    expect(p).toContain(ART_STYLES.explainer.look);
+    expect(p).toContain("The post is a technical post about powerlifting for lifters learning to pull: the frame should feel precise");
+    expect(p).toContain("Show it this way: the setup side-on, large and clear");
+    expect(p).toContain(`The shot: ${DAILY_STYLES.side_profile.look}`);
+    expect(p).toContain(`Light: ${DAILY_LIGHTS.big_windows.look}. Exposure bright and even, a neutral white balance, shadows soft and open.`);
+    expect(p).toContain(`Colours: ${DAILY_PALETTES.cool_blue.look}, with one small JF Effect red accent.`);
+    expect(p).toContain(`The place: ${DAILY_SETTINGS.garage_gym.look}.`);
+    expect(p).toContain(`Who's in it: ${DAILY_CASTS.masters.look}.`);
+    expect(p).toContain("natural arm and shoulder size, no veins mapped across the skin, never exaggerated or bodybuilding-show muscle");
     expect(p).toContain("one straight barbell with the same plates loaded on both sides and collars on");
     expect(p).toContain("calibrated plates in their real colours and sizes (red 25, blue 20, yellow 15, green 10)");
-    expect(p).toContain("never exaggerated, show-ready or steroid-looking");
-    expect(p).toContain("No readable text, speech bubbles, subtitles, brand names, logos or watermarks anywhere");
+    expect(p).toContain("No readable text, speech bubbles, labels, subtitles, brand names, logos or watermarks anywhere");
     expect(p).toContain(FILM_AVOID);
     for (const bad of ["photorealism", "3D render", "generic AI-art sheen", "chibi", "under 20", "fanservice", "lifestyle scenes with no training", "stock-photo"]) expect(FILM_AVOID, bad).toContain(bad);
+    // what made the first anime look dark, orange and heavy is ruled out by name
+    for (const bad of ["orange, amber, golden, sepia or yellow colour cast", "a spotlight in darkness", "hanging lamps over a dim room", "exaggerated muscles, oversized arms or shoulders, visible vein maps", "every person in a black t-shirt"]) expect(FILM_AVOID, bad).toContain(bad);
     const none = picturePrompt({ style: "wide_moment", visual: "a platform at a meet", typography: "", message: "m" }, { faith: true, fix: "the hands looked wrong" });
-    // no direction or place given: the lift as a key frame, no place line
+    // no direction, treatment or place given: anime key art, the lift as a key frame, a bright light, no place line
+    expect(none).toContain(DAILY_RENDERINGS.anime.look);
     expect(none).toContain(ART_STYLES.key_frame.look);
+    expect(none).toContain(`Light: ${DAILY_LIGHTS.big_windows.look}.`);
     expect(none).not.toContain("The place:");
+    expect(none).not.toContain("Colours:");
     expect(none).toContain("never posing for the viewer");
     expect(none).toContain("with no Bible, cross or other religious object or symbol in it");
     expect(none).toContain("Fix from the last try: the hands looked wrong");
     expect(none).toContain("middle 80% of the height");
-    // every angle carries the picture that teaches it
+    // nobody in it: no people line, and no barbell rules for a still life of food
+    const food = picturePrompt({ style: "still_life", cast: "no_people", setting: "meal_prep", visual: "meal containers of rice and chicken beside a gym bag", typography: "", message: "m" });
+    expect(food).toContain("No people in the frame: the objects and the place tell it.");
+    expect(food).not.toContain("Who's in it:");
+    expect(food).not.toContain("one straight barbell");
+    // every angle carries the picture that teaches it, and not every one reaches for a notebook
     for (const k of DAILY_TOPIC_KEYS) expect(DAILY_TOPICS[k].picture.length, k).toBeGreaterThan(30);
     expect(DAILY_TOPICS.fatigue_masks_fitness.picture).toContain("resting between heavy squat sets");
-    expect(DAILY_TOPICS.long_game.picture).toContain("training log");
+    expect(DAILY_TOPICS.long_game.picture).toContain("worn lifting shoes");
+    expect(DAILY_TOPIC_KEYS.filter((k) => /\b(training log|log ?book|notebook|program sheet)\b/.test(DAILY_TOPICS[k].picture)).length).toBeLessThanOrEqual(3);
+  });
+
+  it("the post's read decides who's in it: nobody when it says no people, and someone when it says people", () => {
+    expect(parseRead({ kind: "Humorous", discipline: "powerlifting", for: "everyone", show: "s", people: "none" })).toEqual({ kind: "humorous", discipline: "powerlifting", audience: "everyone", show: "s", people: "none" });
+    expect(parseRead({ kind: "a sermon", people: "crowds" })).toMatchObject({ kind: "educational", people: "one" });
+    expect(parseRead(null)).toBeUndefined();
+    expect(castFor("powerlifter", parseRead({ people: "none" }))).toBe("no_people");
+    expect(castFor("powerlifter", parseRead({ people: "hands" }))).toBe("hands");
+    expect(castFor("masters", parseRead({ people: "one" }))).toBe("masters");
+    expect(castFor("no_people", parseRead({ people: "two" }))).toBe("coach_athlete");
+    expect(castFor("no_people", parseRead({ people: "group" }))).toBe("crew");
+    expect(castFor("nonsense", undefined, ["no_people", "physique"])).toBe("physique");
+    const c = parseConcept('{"topic": "lighter_weeks", "idea": "m", "visual": "v", "rendering": "soft_anime", "palette": "sage_cream", "cast": "masters", "read": {"kind": "conversational", "people": "one"}, "captions": ["a"]}', { pillar: "recovery", styles: ["side_profile"], lights: ["big_windows"], formats: ["coach_note"], topics: ["lighter_weeks"] } as any)!;
+    expect(c).toMatchObject({ rendering: "soft_anime", palette: "sage_cream", cast: "masters", read: { kind: "conversational", people: "one" } });
   });
 });
 
@@ -676,7 +739,7 @@ describe("the review: concrete checks before any score", () => {
   it("a picture that isn't about strength training is remade, its caption kept", () => {
     expect(reviewVerdict(review({ scores: { ...review().scores, on_topic: 2 } }), "").image).toEqual(["on_topic 2/5"]);
     expect(REVIEW_BARS.on_topic).toBe(4);
-    expect(REVIEW_PROMPT).toContain("a lifestyle scene with no training in it (a picnic, a beach, brunch, a party, a park) is 2 or less");
+    expect(REVIEW_PROMPT).toContain("a lifestyle scene with no training in it (a picnic, a beach, brunch, a party, a stroll in a park) is 2 or less");
     expect(REVIEW_PROMPT).toContain("equipment or technique that's wrong (a bent or broken barbell, different plates on each side");
     // and the picture has to show the lesson, not just look good
     expect(reviewVerdict(review({ scores: { ...review().scores, teaches: 2 } }), "").image).toEqual(["teaches 2/5"]);
@@ -702,19 +765,42 @@ describe("the review: concrete checks before any score", () => {
     expect(parseReview('{"medium": "Anime", "scores": {}}')?.medium).toBe("anime");
     expect(parseReview('{"medium": "3D render", "scores": {}}')?.medium).toBe("3d_render");
     // serious and adult, never chibi, cutesy or teenage
-    expect(reviewVerdict(review({ maturity: "childish" }), "").image[0]).toBe("it reads as childish, not a mature sports drama");
+    expect(reviewVerdict(review({ maturity: "childish" }), "").image[0]).toBe("it reads as childish, not a mature sports story");
     expect(parseReview('{"medium": "anime", "maturity": "Mature, adult", "scores": {}}')?.maturity).toBe("mature");
     expect(parseReview('{"medium": "anime", "scores": {}}')?.maturity).toBe("mature");
     expect(REVIEW_PROMPT).toContain("childish (chibi, cutesy, moe, a kids' cartoon, giant eyes, comedic faces, anyone who looks under 20, school uniforms, fanservice)");
-    // muddy or murky colour and messy linework fail too
-    expect(reviewVerdict(review({ colour: "flat" }), "").image[0]).toBe("its colour reads as flat, not cinematic");
+    // a clean drawn illustration passes only when that treatment was asked for
+    expect(reviewVerdict(review({ medium: "illustration" }), "", "", { rendering: "graphic" }).pass).toBe(true);
+    expect(reviewVerdict(review({ medium: "illustration" }), "", "", { rendering: "manga_colour" }).pass).toBe(true);
+    expect(reviewVerdict(review({ medium: "illustration" }), "", "", { rendering: "soft_anime" }).pass).toBe(false);
+    expect(reviewVerdict(review({ medium: "painting" }), "", "", { rendering: "graphic" }).image[0]).toBe("it reads as painting, not a clean 2D illustration");
+    expect(parseReview('{"medium": "flat graphic illustration", "scores": {}}')?.medium).toBe("illustration");
+    expect(parseReview('{"medium": "manga ink", "scores": {}}')?.medium).toBe("illustration");
+    // only a bright frame with a neutral white balance passes: dark, an orange cast, muddy all fail, and so does messy linework
+    expect(reviewVerdict(review({ colour: "flat" }), "").image[0]).toBe("its colour reads as flat, not bright with a neutral white balance");
     expect(reviewVerdict(review({ colour: "dark" }), "").pass).toBe(false);
+    expect(reviewVerdict(review({ colour: "tinted" }), "").image[0]).toBe("its colour reads as tinted, not bright with a neutral white balance");
+    expect(reviewVerdict(review({ colour: "cinematic" }), "").pass).toBe(false);
     expect(reviewVerdict(review({ clarity: "messy" }), "").image[0]).toBe("its linework reads as messy, not clean");
-    expect(parseReview('{"medium": "anime", "colour": "Cinematic", "clarity": "clean, crisp", "scores": {}}')).toMatchObject({ colour: "cinematic", clarity: "clean" });
+    expect(parseReview('{"medium": "anime", "colour": "Bright, well exposed", "clarity": "clean, crisp", "scores": {}}')).toMatchObject({ colour: "bright", clarity: "clean" });
+    expect(parseReview('{"medium": "anime", "colour": "Balanced", "scores": {}}')?.colour).toBe("bright");
+    expect(parseReview('{"medium": "anime", "colour": "orange cast", "scores": {}}')?.colour).toBe("tinted");
+    expect(parseReview('{"medium": "anime", "colour": "amber", "scores": {}}')?.colour).toBe("tinted");
+    expect(REVIEW_PROMPT).toContain("tinted (an orange, amber, golden, sepia, yellow or other single colour cast over the whole frame)");
+    // real bodies: exaggerated muscle fails, no people passes, and a review from before the check reads as realistic
+    expect(reviewVerdict(review({ physique: "exaggerated" }), "").image[0]).toBe("the physiques are exaggerated, not realistic for who they are");
+    expect(reviewVerdict(review({ physique: "none" }), "").pass).toBe(true);
+    expect(parseReview('{"medium": "anime", "scores": {}}')?.physique).toBe("realistic");
+    expect(parseReview('{"medium": "anime", "physique": "None (only hands)", "scores": {}}')?.physique).toBe("none");
+    expect(REVIEW_PROMPT).toContain("exaggerated (oversized arms or shoulders, bodybuilder size on an everyday lifter, veins mapped across the skin, impossible muscle)");
+    // and it has to read on a phone
+    expect(reviewVerdict(review({ scores: { ...review().scores, readable: 3 } }), "").image).toEqual(["readable 3/5"]);
+    expect(REVIEW_BARS.readable).toBe(4);
+    expect(parseReview('{"scores": {}}')?.scores.readable).toBe(4);
   });
 
   it("a defect is an objective error, never taste (taste is scored and goes in the fix)", () => {
-    expect(REVIEW_PROMPT).toContain("Taste is never a defect (the framing, the lighting, empty space, what could be clearer)");
+    expect(REVIEW_PROMPT).toContain("Taste is never a defect (the framing, empty space, what could be clearer)");
     expect(REVIEW_PROMPT).toContain("4 = good enough to publish");
     // the caption and the picture tell one story: a contradiction in the details fails match
     expect(REVIEW_PROMPT).toContain("any contradiction, like another place, time or person than the caption says, is 3 or less");
@@ -740,15 +826,22 @@ describe("it learns what the crew likes, and never repeats itself", () => {
   it("doesn't reuse a shot from the last 4 days, light from the last 3 or an angle from the last 4 weeks, and offers a form from the last 2 days last", () => {
     const l = learnDailyVisuals([]);
     const recent = [
-      { day: "2026-11-01", style: "backlit", light: "dawn_shafts", format: "coach_note", topic: "sleep_performance", setting: "garage_gym" },
-      { day: "2026-11-02", style: "two_frames", light: "night_session", format: "take", topic: "bar_path", setting: "meet_platform" },
+      { day: "2026-11-01", style: "side_profile", light: "fresh_morning", format: "coach_note", topic: "sleep_performance", setting: "garage_gym", cast: "powerlifter", palette: "cool_blue", rendering: "graphic" },
+      { day: "2026-11-02", style: "two_frames", light: "big_windows", format: "take", topic: "bar_path", setting: "meet_platform", cast: "everyday", palette: "sage_cream", rendering: "anime" },
     ];
     const c = pickChoices(l, { day: "2026-11-03", recent, rand: () => 0.9, pillar: "recovery" });
     expect(c.pillar).toBe("recovery");
-    expect(c.styles).not.toContain("backlit");
+    expect(c.styles).not.toContain("side_profile");
     expect(c.styles).not.toContain("two_frames");
-    expect(c.lights).not.toContain("dawn_shafts");
+    expect(c.lights).not.toContain("fresh_morning");
     expect(c.lights).toHaveLength(6);
+    // the people in the last two pictures go to the back, their palettes are out, and a treatment other than anime waits its turn
+    expect(c.casts).toHaveLength(DAILY_CAST_KEYS.length);
+    expect(c.casts!.slice(-2).sort()).toEqual(["everyday", "powerlifter"]);
+    expect(c.palettes).not.toContain("cool_blue");
+    expect(c.palettes).not.toContain("sage_cream");
+    expect(c.palettes).toHaveLength(DAILY_PALETTE_KEYS.length - 2);
+    expect(c.renderings).toEqual(["anime", "soft_anime", "manga_colour"]);
     // a place used in the last week goes to the back of the list, never off it (a meet angle can go back to the meet)
     expect(SETTING_GAP_DAYS).toBe(8);
     expect(c.settings).toHaveLength(DAILY_SETTING_KEYS.length);
@@ -768,19 +861,19 @@ describe("it learns what the crew likes, and never repeats itself", () => {
     expect(pickChoices(l, { day: "2026-12-05", recent, rand: () => 0.9, pillar: "recovery" }).topics).toContain("sleep_performance");
     expect(c.topics.every((t) => DAILY_TOPICS[t].pillar === "recovery")).toBe(true);
     // the coach's pick wins, and with no category asked it's picked for the day (never yesterday's)
-    expect(pickChoices(l, { day: "2026-11-03", recent, rand: () => 0.9, style: "backlit" }).styles).toEqual(["backlit"]);
+    expect(pickChoices(l, { day: "2026-11-03", recent, rand: () => 0.9, style: "still_life" }).styles).toEqual(["still_life"]);
     expect(pickChoices(l, { day: "2026-11-03", recent: [{ ...recent[1], pillar: "powerlifting_iq" }], rand: () => 0.9 }).pillar).not.toBe("powerlifting_iq");
     expect(learningsText(l)).toContain("Not enough posted yet");
   });
 
   it("goes with what's working once it has posts, and still tries the untried sometimes", () => {
-    const stats = [1, 2, 3].map((i) => stat({ day: `2026-10-0${i}`, style: "backlit", likers: 4, commenters: 1 }));
+    const stats = [1, 2, 3].map((i) => stat({ day: `2026-10-0${i}`, style: "side_profile", likers: 4, commenters: 1 }));
     stats.push(...[4, 5, 6].map((i) => stat({ day: `2026-10-0${i}`, style: "two_frames", likers: 0, stopped: 0 })));
     const l = learnDailyVisuals(stats);
-    expect(pickChoices(l, { day: "2026-11-03", recent: [], rand: () => 0.9, pillar: "mistakes" }).styles[0]).toBe("backlit");
+    expect(pickChoices(l, { day: "2026-11-03", recent: [], rand: () => 0.9, pillar: "mistakes" }).styles[0]).toBe("side_profile");
     expect(pickChoices(l, { day: "2026-11-03", recent: [], rand: () => 0.9, pillar: "mistakes" }).styles.at(-1)).toBe("two_frames");
-    expect(pickChoices(l, { day: "2026-11-03", recent: [], rand: () => 0.01, pillar: "mistakes" }).styles[0]).not.toBe("backlit");
-    expect(learningsText(l)).toContain("Best shots so far: silhouette and rim light");
+    expect(pickChoices(l, { day: "2026-11-03", recent: [], rand: () => 0.01, pillar: "mistakes" }).styles[0]).not.toBe("side_profile");
+    expect(learningsText(l)).toContain("Best shots so far: side-on");
   });
 
   it("a comment, a save or a share counts more than a like (a real comment more again), and stopping on it counts", () => {
@@ -885,30 +978,61 @@ describe("the 2D film look reaches every day, tested first", () => {
   });
 });
 
-describe("the anime look: one house style, a serious powerlifting anime, never a photo or anything childish", () => {
-  it("the house style is a premium, mature sports anime, and nothing in the look asks for a photo or a lifestyle scene", () => {
-    for (const want of ["Japanese sports anime", "mature, grounded sports drama", "cel shading", "highly detailed background art of a real strength gym", "cinematic lighting"]) expect(FILM_LOOK, want).toContain(want);
+describe("the bright look: one house style, bright and true, real people, never a photo, a dark or orange frame or anything childish", () => {
+  it("the house style is a clean, bright 2D frame, and nothing in the look asks for a photo, darkness, an orange cast or a lifestyle scene", () => {
+    for (const want of ["Japanese sports anime", "made for adults", "cel colour", "bright and evenly exposed", "a neutral white balance", "no colour grade over it", "one clear subject that reads at a glance"]) expect(FILM_LOOK, want).toContain(want);
     for (const bad of ["photograph", "35mm", "50mm", "documentary", "camera"]) {
       expect(FILM_LOOK, bad).not.toContain(bad);
       for (const l of Object.values(DAILY_LIGHTS)) expect(l.look, bad).not.toContain(bad);
       for (const s of Object.values(DAILY_STYLES)) expect(s.look, bad).not.toContain(bad);
     }
+    // what made the first anime look dark and orange is gone from the look and the lights
+    for (const bad of ["rim light", "bloom", "deep but readable shadows", "warm red accent", "thick, athletic"]) expect(FILM_LOOK, bad).not.toContain(bad);
+    for (const l of Object.values(DAILY_LIGHTS)) expect(l.look).not.toMatch(/\b(dark|night|dim|spotlights?|golden|sunset|late-afternoon|rim|silhouette|overcast|muddy|gloomy)\b/);
+    for (const k of ["dawn_shafts", "late_sun", "night_session", "meet_spotlights", "rim_backlight"]) expect(LEGACY_LIGHT_NAMES[k], k).toBeTruthy();
     for (const s of Object.values(DAILY_STYLES)) expect(s.look).not.toMatch(/\b(beach|brunch|picnic|park|rooftop|lake)\b/);
-    for (const p of Object.values(DAILY_SETTINGS)) expect(p.look).not.toMatch(/\b(beach|brunch|picnic|park|rooftop|lake|street|kitchen)\b/);
-    // nothing murky
-    for (const l of Object.values(DAILY_LIGHTS)) expect(l.look).not.toMatch(/\b(dark room|overcast|muddy|gloomy)\b/);
-    expect(FILM_LOOK_VERSION).toBe("anime_v1");
+    for (const p of Object.values(DAILY_SETTINGS)) expect(p.look).not.toMatch(/\b(beach|brunch|picnic|park|rooftop|lake|street|basement|warehouse)\b/);
+    // food is a place only for a post about food
+    expect(DAILY_SETTINGS.meal_prep.look).toContain("(only for a post about food)");
+    // every palette is bright and true; none is an orange cast
+    for (const p of Object.values(DAILY_PALETTES)) expect(p.look).not.toMatch(/\b(orange|amber|golden|sepia|dark)\b/);
+    expect(FILM_LOOK_VERSION).toBe("anime_v2");
   });
 
-  it("three anime directions, each for its kind of point; old looks keep their names", async () => {
+  it("who's in it decides how they're built: everyday people look everyday, and nobody is a bodybuilder unless they are one", () => {
+    expect(DAILY_CASTS.newer_lifter.look).toContain("an ordinary, healthy everyday build with little visible muscle definition");
+    expect(DAILY_CASTS.powerlifter.look).toContain("never a bodybuilder");
+    expect(DAILY_CASTS.physique.look).toContain("never stage-ready or oversized");
+    expect(DAILY_CASTS.masters.look).toContain("40s to 60s");
+    expect(Object.keys(DAILY_CASTS)).toEqual(expect.arrayContaining(["no_people", "hands"]));
+    expect(peopleLine("everyday")).toContain("their own faces, hair, skin tones and training clothes in colour");
+  });
+
+  it("four directions and four treatments, each for its kind of point; old looks keep their names", async () => {
     const { ART_STYLES, artForPillar } = await import("@/lib/daily-visuals");
-    expect(Object.keys(ART_STYLES)).toEqual(["key_frame", "drama", "insert"]);
-    expect(artForPillar("powerlifting_iq")).toBe("key_frame");
+    expect(Object.keys(ART_STYLES)).toEqual(["key_frame", "drama", "insert", "explainer"]);
+    expect(Object.keys(DAILY_RENDERINGS)).toEqual(["anime", "soft_anime", "graphic", "manga_colour"]);
+    expect(artForPillar("powerlifting_iq")).toBe("explainer");
     expect(artForPillar("mistakes")).toBe("key_frame");
     expect(artForPillar("recovery")).toBe("drama");
     expect(artForPillar("mindset")).toBe("drama");
     expect(LEGACY_ART_NAMES.anime).toContain("old look");
     expect(LEGACY_ART_NAMES.documentary).toContain("old look");
+  });
+
+  it("a prop that crept into the last few pictures is left out of the next, unless the post is about it", () => {
+    const recent = [
+      { day: "2026-11-06", visual: "A lifter writing in a training log on a bench." },
+      { day: "2026-11-07", visual: "Close-up of a notebook resting on a plate." },
+      { day: "2026-11-08", visual: "A coach and lifter at the platform." },
+    ];
+    expect(propsLine(recent, "2026-11-09")).toContain("LEAVE OUT OF THE PICTURE (in too many recent ones): a training log, notebook, clipboard or program sheet");
+    expect(propRepeat("A lifter flipping through her training log by the rack.", recent, "2026-11-09", "small jumps add up")).toContain("leans on a training log, notebook, clipboard or program sheet again");
+    // a post about logging can show the log
+    expect(propRepeat("A lifter flipping through her training log by the rack.", recent, "2026-11-09", "skipping the log means no evidence")).toBeNull();
+    expect(propRepeat("A lifter sliding small plates onto the bar.", recent, "2026-11-09", "small jumps")).toBeNull();
+    expect(propsLine([recent[2]], "2026-11-09")).toBeNull();
+    expect(server).toContain("const tiredProp = keepPicture ? null : propRepeat(");
   });
 
   it("the place changes post to post: real gyms and meets only, stored with the concept", () => {
@@ -958,7 +1082,7 @@ describe("a review never copies the picture into memory", () => {
   });
 });
 
-describe("the coach's seven questions", () => {
+describe("the coach's questions", () => {
   it("each is answered from the editor's and the review's scores, and an older day reads as not checked", () => {
     const pass = qualityChecks(
       { scores: { natural: 5, substance: 4, accuracy: 5, clarity: 5, match: 4, fresh: 4, worth_it: 4 } },
@@ -972,6 +1096,7 @@ describe("the coach's seven questions", () => {
       "Technically accurate",
       "Different from recent posts",
       "Worth saving or discussing",
+      "Bright and clear on a phone",
     ]);
     expect(pass.every((c) => c.pass === true)).toBe(true);
     const weak = qualityChecks({ scores: { natural: 5, substance: 3, accuracy: 3, fresh: 2, worth_it: 3 } }, { scores: { ...review().scores, teaches: 2 } });

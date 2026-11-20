@@ -16,8 +16,8 @@ import type { SpiritSceneKey } from "@/components/community/spirit-scenes";
  */
 export const PICTURE_STYLE = [
   "Style: a real photograph, like one a good photographer took on a modern camera for a strength coach's Instagram.",
-  "Natural daylight, bright and airy, true-to-life colours, clean and uncluttered background, shallow depth of field. Not dark, not moody, no black background, no neon, not an illustration, not CGI.",
-  "Real people only from behind, from the side or as hands, candid and never posed or looking at the camera.",
+  "Natural daylight, bright and airy, true-to-life colours with a neutral white balance, clean and uncluttered background, shallow depth of field. Not dark, not moody, no black background, no orange, golden or sepia cast, no neon, not an illustration, not CGI.",
+  "Real people only from behind, from the side or as hands, candid and never posed or looking at the camera; everyday, varied builds, ages and genders in colourful training clothes, never exaggerated muscle.",
   "Vertical portrait composition (4:5) with the subject centred and room around it.",
   "Absolutely no text, letters, numbers, logos or watermarks anywhere in the image.",
 ].join(" ");
@@ -41,7 +41,7 @@ export const SCENE_PICTURE: Record<SpiritSceneKey, string> = {
   switchback:
     "A zigzag switchback trail up a steep green mountain at sunrise, a single hiker most of the way up, the summit lit gold.",
   sunrise_rack:
-    "An empty, quiet strength gym at sunrise, golden light streaming through tall windows onto a loaded barbell resting in a squat rack.",
+    "An empty, quiet strength gym early in the morning, soft bright daylight through tall windows onto a loaded barbell resting in a squat rack.",
   seed_to_tree:
     "A row across rich soil in soft morning light showing a seed, a sprout, a young sapling and a full-grown tree, like a time-lapse in a single frame.",
 };
