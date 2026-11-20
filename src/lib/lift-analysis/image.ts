@@ -29,6 +29,46 @@ export function rgbaToGray(d: Uint8ClampedArray | Uint8Array, n: number): Uint8A
 }
 
 /**
+ * RGBA at twice the size (2w × 2h) to grey at w × h, each pixel the mean of
+ * its 2 × 2 block: an anti-aliased downscale. A browser's canvas scales a
+ * video frame down without averaging, so a plate's rim stair-steps and its
+ * picture shimmers frame to frame; decoding at twice the working size and
+ * averaging here gives the clean edges the tracker needs (what ffmpeg's
+ * scaler gives the validation harness).
+ */
+export function rgbaToGrayHalf(
+  d: Uint8ClampedArray | Uint8Array,
+  w: number,
+  h: number,
+): Uint8Array {
+  const px = new Uint8Array(w * h);
+  const W2 = 2 * w;
+  for (let y = 0; y < h; y++) {
+    const r0 = 2 * y * W2 * 4;
+    const r1 = r0 + W2 * 4;
+    for (let x = 0; x < w; x++) {
+      const a = r0 + 8 * x;
+      const b = r1 + 8 * x;
+      const sum =
+        d[a] * 77 +
+        d[a + 1] * 150 +
+        d[a + 2] * 29 +
+        d[a + 4] * 77 +
+        d[a + 5] * 150 +
+        d[a + 6] * 29 +
+        d[b] * 77 +
+        d[b + 1] * 150 +
+        d[b + 2] * 29 +
+        d[b + 4] * 77 +
+        d[b + 5] * 150 +
+        d[b + 6] * 29;
+      px[y * w + x] = (sum + 512) >> 10;
+    }
+  }
+  return px;
+}
+
+/**
  * Sobel gradients of the region [x0, x1] × [y0, y1] (clipped to the frame),
  * after a 3 × 3 binomial blur that takes off sensor noise. A step of H grey
  * levels gives a magnitude of about 4H at the edge.

@@ -8,14 +8,28 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { LiftAnalysis } from "@/lib/lift-analysis/analyze";
 import type { LvPoint } from "@/lib/lift-analysis/profile";
+import type { LoggedSet } from "@/lib/lift-analysis/verdict";
 import { announceChanged, LIFT_ANALYSIS_CHANGED } from "@/lib/lift-analysis/store";
 
 const db = supabase as any;
 
+/** A read that found no plate on its own (status needs_tap) or couldn't open the video (failed). */
+export type NotRead = {
+  engine: string;
+  status: "needs_tap" | "failed";
+  why: string;
+  suggestions?: { t: number; fx: number; fy: number; fr: number }[];
+};
+
 export type StoredAnalysis = {
   set_video_id: string;
   client_id: string;
+  /** done: `result` is the read; needs_tap / failed: it's a NotRead (older rows have no status: done). */
+  status?: "done" | "needs_tap" | "failed";
   result: LiftAnalysis;
+  /** The average of every rep, when the server put it on the set (velocity_accepted). */
+  set_mcv?: number | null;
+  velocity_accepted?: boolean;
   source: "auto" | "tap";
   units: "mm" | "px";
   best_mcv: number | null;
@@ -40,9 +54,8 @@ export function useSetVideoAnalyses(setVideoIds: string[], opts: { enabled?: boo
     queryFn: async (): Promise<Record<string, StoredAnalysis>> => {
       const { data, error } = await db
         .from("pl_set_video_analyses")
-        .select(
-          "set_video_id, client_id, result, source, units, best_mcv, best_mcv_tier, velocity_loss_pct, reps, exercise_id, created_by, updated_at",
-        )
+        // every column: an app newer than the database never asks for one it doesn't have yet
+        .select("*")
         .in("set_video_id", ids);
       if (error) throw error;
       const out: Record<string, StoredAnalysis> = {};
@@ -57,7 +70,12 @@ export function useSetVideoAnalyses(setVideoIds: string[], opts: { enabled?: boo
       const id = (e as CustomEvent<{ setVideoId: string }>).detail?.setVideoId;
       if (!id || !ids.includes(id)) return;
       // the set's own read, and everything built from analyses (load–velocity, History's speeds)
-      for (const key of ["lift-analyses", "lift-analyses-lv", "lift-analyses-by-result"])
+      for (const key of [
+        "lift-analyses",
+        "lift-analyses-lv",
+        "lift-analyses-by-result",
+        "lift-analysis-set",
+      ])
         void qc.invalidateQueries({ queryKey: [key] });
     };
     window.addEventListener(LIFT_ANALYSIS_CHANGED, on);
@@ -67,6 +85,32 @@ export function useSetVideoAnalyses(setVideoIds: string[], opts: { enabled?: boo
   return q;
 }
 
+/** The logged set a set video is on (its velocity, reps and load), or null before the set is logged. */
+export function useSetForVideo(setVideoId: string | null | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["lift-analysis-set", setVideoId],
+    enabled: enabled && !!setVideoId,
+    staleTime: 30_000,
+    queryFn: async (): Promise<LoggedSet | null> => {
+      const { data: sv, error } = await db
+        .from("pl_set_videos")
+        .select("result_id")
+        .eq("id", setVideoId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!sv?.result_id) return null;
+      // every column: an app newer than the database never asks for one it doesn't have yet
+      const { data: r, error: e2 } = await db
+        .from("pl_row_results")
+        .select("*")
+        .eq("id", sv.result_id)
+        .maybeSingle();
+      if (e2) throw e2;
+      return (r as LoggedSet | null) ?? null;
+    },
+  });
+}
+
 export async function saveAnalysis(setVideoId: string, analysis: LiftAnalysis): Promise<void> {
   const { error } = await db.rpc("set_video_analysis_save", {
     _set_video_id: setVideoId,
@@ -74,6 +118,21 @@ export async function saveAnalysis(setVideoId: string, analysis: LiftAnalysis): 
   });
   if (error) throw error;
   announceChanged(setVideoId);
+}
+
+/** Keep that this video was tried and how it went, so it isn't read again by itself. */
+export async function saveNotRead(setVideoId: string, notRead: NotRead): Promise<void> {
+  const { error } = await db.rpc("set_video_analysis_save", {
+    _set_video_id: setVideoId,
+    _result: notRead,
+  });
+  if (error) throw error;
+  announceChanged(setVideoId);
+}
+
+/** A stored row that holds a read (not a "needs a tap" / "couldn't read" note). */
+export function isRead(a: StoredAnalysis | null | undefined): a is StoredAnalysis {
+  return !!a && (a.status ?? "done") === "done" && Array.isArray((a.result as any)?.reps);
 }
 
 export async function deleteAnalysis(setVideoId: string): Promise<void> {
@@ -137,12 +196,12 @@ export function useLoadVelocityPoints(
   });
 }
 
-export type VideoSpeed = { v: number; tier: "measured" | "estimated"; loss: number | null };
+export type VideoSpeed = { v: number; reps: number };
 
 /**
- * The bar speed read from set videos, by logged set (pl_row_results.id), for
- * an athlete's exercise(s): what an exercise's History shows beside a set
- * when no speed was typed in from a device.
+ * The bar speeds set videos put on their sets (the average of every rep,
+ * accepted by the server's rule: set_video_analysis_save), by logged set
+ * (pl_row_results.id): what an exercise's History marks "video".
  */
 export function useVideoSpeedsByResult(
   clientId: string | null | undefined,
@@ -157,21 +216,17 @@ export function useVideoSpeedsByResult(
     queryFn: async (): Promise<Record<string, VideoSpeed>> => {
       const { data, error } = await db
         .from("pl_set_video_analyses")
-        .select("result_id, best_mcv, best_mcv_tier, velocity_loss_pct")
+        .select("result_id, set_mcv, reps")
         .eq("client_id", clientId)
         .in("exercise_id", ids)
+        .eq("velocity_accepted", true)
         .not("result_id", "is", null)
-        .not("best_mcv", "is", null)
+        .not("set_mcv", "is", null)
         .limit(1000);
       if (error) throw error;
       const out: Record<string, VideoSpeed> = {};
-      for (const r of (data ?? []) as any[]) {
-        out[r.result_id] = {
-          v: Number(r.best_mcv),
-          tier: r.best_mcv_tier === "measured" ? "measured" : "estimated",
-          loss: r.velocity_loss_pct != null ? Number(r.velocity_loss_pct) : null,
-        };
-      }
+      for (const r of (data ?? []) as any[])
+        out[r.result_id] = { v: Number(r.set_mcv), reps: Number(r.reps) };
       return out;
     },
   });

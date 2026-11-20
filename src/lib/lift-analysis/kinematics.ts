@@ -301,6 +301,78 @@ export function phaseTimes(s: Smoothed, leg: Leg, vth: number): PhaseTimes | nul
 }
 
 /**
+ * The phase as the lift's own movement, not every twitch in the leg: the
+ * unbroken run of movement around the leg's fastest moment. A bounce or a
+ * settle at the start of a pause isn't its start (a paused bench is timed
+ * from when the press begins), a stall at the sticking point doesn't end it
+ * (short dips under the threshold are bridged while the bar is still well
+ * short of the top), and once the bar is nearly at the top a slow creep (the
+ * walk back to the hooks, settling at lockout) isn't part of it: the end
+ * threshold rises to a tenth of the rep's top speed there.
+ */
+export function mainPhase(s: Smoothed, leg: Leg, vth: number): PhaseTimes | null {
+  const sign = leg.dir === "up" ? 1 : -1;
+  let ip = -1;
+  for (let i = leg.from; i <= leg.to; i++) {
+    if (!s.ok[i]) continue;
+    if (ip < 0 || sign * s.v[i] > sign * s.v[ip]) ip = i;
+  }
+  if (ip < 0 || sign * s.v[ip] <= vth) return null;
+  const peak = sign * s.v[ip];
+  const y0 = s.y[leg.from];
+  const rise = sign * (s.y[leg.to] - y0);
+  const progress = (i: number) => (rise > 0 ? (sign * (s.y[i] - y0)) / rise : 1);
+  const v = (i: number) => (s.ok[i] ? sign * s.v[i] : -Infinity);
+  // back from the peak: the run's start (a dip of a few frames is noise, a longer one is a pause)
+  let first = ip;
+  for (let i = ip - 1; i >= leg.from; i--) {
+    if (v(i) > vth) {
+      first = i;
+      continue;
+    }
+    let j = i;
+    while (j >= leg.from && v(j) <= vth && s.t[i] - s.t[j] <= 0.1) j--;
+    if (j >= leg.from && v(j) > vth && s.t[i] - s.t[j] <= 0.1) {
+      i = j + 1;
+      continue;
+    }
+    break;
+  }
+  // forward from the peak: the run's end
+  let last = ip;
+  for (let i = ip + 1; i <= leg.to; i++) {
+    const nearTop = progress(i) >= 0.85;
+    const th = nearTop ? Math.max(vth, 0.1 * peak) : vth;
+    if (v(i) > th) {
+      last = i;
+      continue;
+    }
+    if (nearTop) break;
+    // a stall at the sticking point: bridged when the bar moves on within 0.35 s
+    let j = i;
+    while (j <= leg.to && v(j) <= vth && s.t[j] - s.t[i] <= 0.35) j++;
+    if (j <= leg.to && v(j) > vth && s.t[j] - s.t[i] <= 0.35) {
+      i = j - 1;
+      continue;
+    }
+    break;
+  }
+  if (last <= first) return null;
+  const thEnd = progress(last) >= 0.85 ? Math.max(vth, 0.1 * peak) : vth;
+  const cross = (i: number, j: number, th: number) => {
+    const vi = sign * s.v[i];
+    const vj = sign * s.v[j];
+    const f = vj !== vi ? (th - vi) / (vj - vi) : 0;
+    return lerp(s.t[i], s.t[j], Math.max(0, Math.min(1, f)));
+  };
+  const prev = first > leg.from && s.ok[first - 1] ? first - 1 : -1;
+  const next = last < leg.to && s.ok[last + 1] ? last + 1 : -1;
+  const start = prev >= 0 ? cross(prev, first, vth) : s.t[first];
+  const end = next >= 0 ? cross(next, last, thEnd) : s.t[last];
+  return { start, end, iStart: first, iEnd: last };
+}
+
+/**
  * Sub-frame start of a move from rest (or stop into rest), from the raw
  * positions: at 30 fps the bar can be still in one frame and moving in the
  * next, and any smoothing puts the start somewhere in that 33 ms gap, early.
@@ -475,6 +547,31 @@ export type RepInput = {
   minRom: number;
 };
 
+/**
+ * Which way a rep goes, read from where the bar rests: before and after a set
+ * lowered first (squat, bench) it sits up in the hooks or at lockout; a set
+ * lifted first (deadlift) starts and ends on the floor. Only when that's
+ * unclear, the first big move decides.
+ */
+export function restingDirection(s: Smoothed, allLegs: Leg[]): "lower_first" | "lift_first" {
+  const idx: number[] = [];
+  for (let i = 0; i < s.y.length; i++) if (s.ok[i] && Number.isFinite(s.y[i])) idx.push(i);
+  const fallback = allLegs[0]?.dir === "down" ? "lower_first" : "lift_first";
+  if (idx.length < 20) return fallback;
+  const ys = idx.map((i) => s.y[i]).sort((a, b) => a - b);
+  const lo = ys[Math.floor(ys.length * 0.05)];
+  const hi = ys[Math.floor(ys.length * 0.95)];
+  if (!(hi > lo)) return fallback;
+  const edge = Math.max(3, Math.floor(idx.length * 0.12));
+  const ends = [...idx.slice(0, edge), ...idx.slice(-edge)]
+    .map((i) => s.y[i])
+    .sort((a, b) => a - b);
+  const rest = (ends[ends.length >> 1] - lo) / (hi - lo);
+  if (rest >= 0.65) return "lower_first";
+  if (rest <= 0.35) return "lift_first";
+  return fallback;
+}
+
 export function analyzeReps(input: RepInput): RepMetrics[] {
   const { s, sx, sigma, fps, scale, units, found } = input;
   const sb = input.sb ?? s;
@@ -497,10 +594,40 @@ export function analyzeReps(input: RepInput): RepMetrics[] {
   const sigmaVb = sigma * Math.sqrt(vvb[vvb.length >> 1] ?? 0);
   const vthB =
     units === "mm" ? Math.max(MOVE_MM_S, 3 * sigmaVb) : Math.max(3 * sigmaVb, 0.04 * peakAll);
-  const dir: "lower_first" | "lift_first" =
-    input.dirHint ?? (allLegs[0].dir === "down" ? "lower_first" : "lift_first");
+  const dir: "lower_first" | "lift_first" = input.dirHint ?? restingDirection(s, allLegs);
   const dt = 1 / Math.max(1, fps);
-  const ups = allLegs.map((l, k) => ({ l, k })).filter((x) => x.l.dir === "up");
+  // the reps: for a lift lowered first, a rise right after a descent (the unrack before the first
+  // descent, the walk back to the hooks after the last rise aren't reps); either way a rep moves
+  // at least about half as far as the set's typical rep
+  const cands = allLegs
+    .map((l, k) => ({ l, k }))
+    .filter(
+      (x) =>
+        x.l.dir === "up" && (dir !== "lower_first" || (x.k > 0 && allLegs[x.k - 1].dir === "down")),
+    );
+  const riseOf = (l: Leg) => s.y[l.to] - s.y[l.from];
+  const typical = [...cands.map((x) => riseOf(x.l))].sort((a, b) => a - b)[cands.length >> 1] ?? 0;
+  const dropBefore = (k: number) =>
+    k > 0 && allLegs[k - 1].dir === "down" ? s.y[allLegs[k - 1].from] - s.y[allLegs[k - 1].to] : 0;
+  const full = cands.filter(
+    (x) =>
+      riseOf(x.l) >= 0.55 * typical && (dir !== "lower_first" || dropBefore(x.k) >= 0.55 * typical),
+  );
+  // a missed rep: the bar went all the way down (or left the floor, lifted first), came up part
+  // way and went back down; counted (and never complete), so a set with one is never averaged
+  const bottoms = full.map(({ l }) => s.y[l.from]).sort((a, b) => a - b);
+  const bottomRef = bottoms[bottoms.length >> 1];
+  const missed = cands.filter((x) => {
+    if (full.includes(x)) return false;
+    const rise = riseOf(x.l);
+    if (rise < 0.3 * typical || bottomRef == null) return false;
+    const fellBack = x.k + 1 < allLegs.length && allLegs[x.k + 1].dir === "down";
+    if (!fellBack) return false;
+    return dir === "lower_first"
+      ? dropBefore(x.k) >= 0.55 * typical
+      : Math.abs(s.y[x.l.from] - bottomRef) <= 0.15 * typical;
+  });
+  const ups = [...full, ...missed].sort((a, b) => a.k - b.k);
   const tops = ups.map(({ l }) => s.y[l.to]);
   const sortedTops = [...tops].sort((a, b) => a - b);
   const topRef = sortedTops[Math.floor(sortedTops.length * 0.75)] ?? 0;
@@ -509,7 +636,7 @@ export function analyzeReps(input: RepInput): RepMetrics[] {
   const out: RepMetrics[] = [];
   const toMs = units === "mm" ? 0.001 : 1; // mm/s → m/s; px/s stays px/s
   for (const { l, k } of ups) {
-    const ph0 = phaseTimes(sb, l, vthB);
+    const ph0 = mainPhase(sb, l, vthB);
     if (!ph0) continue;
     let ph = ph0;
     let refinedStart = false;
@@ -546,6 +673,17 @@ export function analyzeReps(input: RepInput): RepMetrics[] {
     const coverage = total ? seen / total : 0;
     const gapS = longestGap * dt;
     const trackedOk = coverage >= 0.75 && gapS <= 0.15;
+    // where the rep starts and stops has to be seen: a plate lost around either end means the
+    // time or the height is a guess, and a mean velocity from a guessed end is no number at all
+    const endSeen = (time: number) => {
+      let i0 = 0;
+      while (i0 < s.t.length - 1 && s.t[i0 + 1] <= time) i0++;
+      if (i0 < s.t.length - 1 && Math.abs(s.t[i0 + 1] - time) < Math.abs(s.t[i0] - time)) i0++;
+      for (let i = Math.max(0, i0 - 2); i <= Math.min(s.t.length - 1, i0 + 2); i++)
+        if (!found[i]) return false;
+      return true;
+    };
+    const endsSeen = endSeen(ph.start) && endSeen(ph.end);
     // uncertainty: the position at both ends, when each end happened, the scale
     const sd = sigma * Math.sqrt((at(s, s.vy, ph.start) || 0) + (at(s, s.vy, ph.end) || 0));
     // a boundary is good to about half a frame from the smoothing (a fifth when the hinge found it)
@@ -565,13 +703,15 @@ export function analyzeReps(input: RepInput): RepMetrics[] {
     const mcv: Metric =
       units !== "mm"
         ? NONE("not_calibrated")
-        : notTracked
-          ? {
-              ...metric(mcvV, relMcv, { forceEstimate: notTracked }),
-              tier: "estimated",
-              why: notTracked,
-            }
-          : metric(mcvV, relMcv);
+        : !endsSeen
+          ? NONE("plate_hidden")
+          : notTracked
+            ? {
+                ...metric(mcvV, relMcv, { forceEstimate: notTracked }),
+                tier: "estimated",
+                why: notTracked,
+              }
+            : metric(mcvV, relMcv);
     // peak: the fastest smoothed velocity; smoothing takes a little off a sharp peak, more at low frame rates
     let pi = ph.iStart;
     for (let i = ph.iStart; i <= ph.iEnd; i++)
@@ -625,7 +765,7 @@ export function analyzeReps(input: RepInput): RepMetrics[] {
     let eccSpeed: Metric = NONE("no_eccentric");
     let pause: Metric = NONE("no_eccentric");
     if (eLeg && eLeg.dir === "down") {
-      const ep0 = phaseTimes(sb, eLeg, vthB);
+      const ep0 = mainPhase(sb, eLeg, vthB);
       let ep = ep0;
       let eRefS = false;
       let eRefE = false;
@@ -666,10 +806,12 @@ export function analyzeReps(input: RepInput): RepMetrics[] {
         }
       }
     }
-    const bottom = s.y[l.from];
-    const top = s.y[l.to];
+    // the rep's range: what the bar travelled while pressing (a VBT device's concentric
+    // displacement), not the leg's extremes, which take in a settle at the bottom or a creep at the top
+    const bottom = yStart;
+    const top = yEnd;
     const romV = top - bottom;
-    const romSd = sigma * Math.sqrt((s.vy[l.from] || 0) + (s.vy[l.to] || 0));
+    const romSd = sd;
     const rom =
       units === "mm"
         ? metric(romV, Math.sqrt((romSd / romV) ** 2 + scaleRel ** 2), {

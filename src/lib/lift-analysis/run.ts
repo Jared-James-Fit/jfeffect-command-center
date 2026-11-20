@@ -2,12 +2,13 @@
  * Lift analysis in the browser: decode the clip on the device (mediabunny +
  * the phone's own hardware decoder, as the trimmer does), at a small working
  * size, and run the engine on the way through. Nothing leaves the device;
- * no frame is kept past its turn (the tracker sees each frame once).
+ * only the sample frames are kept (the tracker sees every other frame once).
  *
- *   1. a dozen frames spread over the clip: where the plate is (detect.ts),
- *      or the plate under the person's tap
- *   2. every frame in order: the plate followed (track.ts), the camera's own
- *      movement measured (motion.ts)
+ *   1. four frames a second spread over the clip (12–40): the plate found
+ *      as the big circle that moves up and down (find.ts), or the plate
+ *      under the person's tap; its reference picture cut where it shows best
+ *   2. every frame in order: the plate followed by its own picture
+ *      (follow.ts), the camera's own movement measured (motion.ts)
  *   3. the lift read from the track (analyze.ts)
  *
  * The work yields to the page every few milliseconds, so logging carries on
@@ -15,11 +16,17 @@
  */
 import { analyzeTrack, type LiftAnalysis } from "@/lib/lift-analysis/analyze";
 import type { PlateSize } from "@/lib/lift-analysis/calibrate";
-import { locatePlate, SAMPLE_FRAMES, type Seed } from "@/lib/lift-analysis/engine";
-import type { PlateDetection } from "@/lib/lift-analysis/detect";
-import { rgbaToGray, type Frame } from "@/lib/lift-analysis/image";
+import {
+  locatePlate,
+  rimNeverMeasured,
+  sampleCount,
+  shakeExclusion,
+  type Seed,
+} from "@/lib/lift-analysis/engine";
+import type { PlateFind } from "@/lib/lift-analysis/find";
+import { PlateFollower } from "@/lib/lift-analysis/follow";
+import { rgbaToGray, rgbaToGrayHalf, type Frame } from "@/lib/lift-analysis/image";
 import { cameraShift } from "@/lib/lift-analysis/motion";
-import { PlateTracker } from "@/lib/lift-analysis/track";
 import { loadMediabunny } from "@/lib/video-edit/probe";
 
 /** The long side frames are analysed at: the plate's rim spans ~60–100 px, plenty for sub-pixel fits. */
@@ -44,11 +51,11 @@ export type RunInput = {
 };
 
 export type RunResult =
-  | { ok: true; analysis: LiftAnalysis; detection: PlateDetection | null }
+  | { ok: true; analysis: LiftAnalysis; find: PlateFind | null }
   | {
       ok: false;
       why: "no_plate" | "ambiguous" | "no_plate_at_tap" | "unreadable" | "too_short" | "cancelled";
-      detection: PlateDetection | null;
+      find: PlateFind | null;
       /** Circles worth offering for a tap (shares of the frame), when the plate wasn't clear. */
       suggestions?: { t: number; fx: number; fy: number; fr: number }[];
     };
@@ -81,20 +88,21 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
     const inp = new mb.Input({ source: src, formats: mb.ALL_FORMATS });
     disposable = inp;
     const track = await inp.getPrimaryVideoTrack();
-    if (!track || !(await track.canDecode()))
-      return { ok: false, why: "unreadable", detection: null };
+    if (!track || !(await track.canDecode())) return { ok: false, why: "unreadable", find: null };
     const duration = await inp.computeDuration();
     const first = await track.getFirstTimestamp().catch(() => 0);
     check();
     const start = Math.max(first, input.window?.start ?? first);
     const end = Math.min(duration, input.window?.end ?? duration, start + MAX_ANALYSIS_SECONDS);
-    if (!(end - start > 1)) return { ok: false, why: "too_short", detection: null };
+    if (!(end - start > 1)) return { ok: false, why: "too_short", find: null };
     // the frame's shape as shown (a phone's portrait clip is stored on its side)
     const dw = track.displayWidth || 9;
     const dh = track.displayHeight || 16;
     const L = Math.min(WORKING_LONG_SIDE, Math.max(dw, dh));
     const w = dw >= dh ? L : Math.max(16, Math.round((L * dw) / dh));
     const h = dw >= dh ? Math.max(16, Math.round((L * dh) / dw)) : L;
+    // decoded at twice the working size where the clip has the pixels, and averaged down (image.ts)
+    const scale = Math.max(dw, dh) > 1.25 * L ? 2 : 1;
     const toFrame = (wc: {
       canvas: HTMLCanvasElement | OffscreenCanvas;
       timestamp: number;
@@ -104,17 +112,26 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
         | OffscreenCanvasRenderingContext2D
         | null;
       if (!ctx) return null;
-      return { w, h, t: wc.timestamp, px: rgbaToGray(ctx.getImageData(0, 0, w, h).data, w * h) };
+      const data = ctx.getImageData(0, 0, scale * w, scale * h).data;
+      return {
+        w,
+        h,
+        t: wc.timestamp,
+        px: scale === 2 ? rgbaToGrayHalf(data, w, h) : rgbaToGray(data, w * h),
+      };
     };
 
     // 1. the plate
     report("finding", 0);
-    const sink = new mb.CanvasSink(track, { width: w, height: h, fit: "fill", poolSize: 1 });
+    const sink = new mb.CanvasSink(track, {
+      width: scale * w,
+      height: scale * h,
+      fit: "fill",
+      poolSize: 1,
+    });
     const span = end - start;
-    const sampleTimes = Array.from(
-      { length: SAMPLE_FRAMES },
-      (_, i) => start + (span * (i + 0.5)) / SAMPLE_FRAMES,
-    );
+    const n = sampleCount(span);
+    const sampleTimes = Array.from({ length: n }, (_, i) => start + (span * (i + 0.5)) / n);
     const samples: Frame[] = [];
     let k = 0;
     for await (const wc of sink.canvasesAtTimestamps(sampleTimes)) {
@@ -123,7 +140,7 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
       if (!wc) continue;
       const f = toFrame(wc);
       if (f) samples.push(f);
-      report("finding", (0.5 * k) / sampleTimes.length);
+      report("finding", (0.6 * k) / sampleTimes.length);
       await yieldToPage();
     }
     let tapFrame: Frame | undefined;
@@ -135,22 +152,22 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
       seed = { kind: "tap", t: input.tap.t, x: input.tap.fx * w, y: input.tap.fy * h };
     }
     check();
+    await yieldToPage();
     const loc = locatePlate(samples, seed, tapFrame);
     report("finding", 1);
     if ("why" in loc) {
-      const suggestions = (loc.detection?.candidates ?? [])
-        .filter((c) => c.travel >= 0.3)
-        .slice(0, 4)
-        .map((c) => {
-          const hit = c.hits[Math.floor(c.hits.length / 2)];
-          return { t: hit.t, fx: hit.x / w, fy: hit.y / h, fr: c.r / w };
-        });
-      return { ok: false, why: loc.why, detection: loc.detection, suggestions };
+      // the moving circles worth offering for a tap
+      const suggestions = (loc.find?.others ?? []).slice(0, 4).map((c) => {
+        const hit = c.hits[Math.floor(c.hits.length / 2)];
+        return { t: hit.t, fx: hit.x / w, fy: hit.y / h, fr: c.r / w };
+      });
+      return { ok: false, why: loc.why, find: loc.find, suggestions };
     }
+    samples.length = 0;
 
     // 2. every frame
     report("tracking", 0);
-    const tracker = new PlateTracker({ r: loc.r, anchors: loc.anchors, q: loc.q });
+    const fol = new PlateFollower(loc.seed, loc.track, loc.decoys);
     const shake: number[] = [];
     let prev: Frame | null = null;
     let slice = now();
@@ -158,14 +175,9 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
       check();
       const f = toFrame(wc);
       if (!f) continue;
-      const p = tracker.push(f);
-      if (prev) {
-        const sh = cameraShift(prev, f, {
-          x0: p.x - 1.6 * loc.r,
-          x1: p.x + 1.6 * loc.r,
-          y0: p.y - 3 * loc.r,
-          y1: p.y + 3 * loc.r,
-        });
+      const p = fol.push(f);
+      if (prev && p.found) {
+        const sh = cameraShift(prev, f, shakeExclusion(p.x, p.y, loc.seed.r));
         if (sh.ok) shake.push(Math.hypot(sh.dx, sh.dy));
       }
       prev = f;
@@ -179,20 +191,27 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
 
     // 3. the lift
     report("reading", 0);
-    const analysis = analyzeTrack(tracker.points(), {
+    const analysis = analyzeTrack(fol.points(), {
       plate: input.plate,
       source: loc.source,
-      seed: { x: loc.x, y: loc.y, r: loc.r, t: loc.t },
+      seed: { x: loc.seed.x, y: loc.seed.y, r: loc.seed.r, t: loc.seed.frame.t },
       frame: { w, h },
       dirHint: input.dirHint,
       shake,
     });
     report("reading", 1);
-    return { ok: true, analysis, detection: loc.detection };
+    if (rimNeverMeasured(analysis, loc.source)) {
+      const suggestions = (loc.find?.others ?? []).slice(0, 4).map((c) => {
+        const hit = c.hits[Math.floor(c.hits.length / 2)];
+        return { t: hit.t, fx: hit.x / w, fy: hit.y / h, fr: c.r / w };
+      });
+      return { ok: false, why: "no_plate", find: loc.find, suggestions };
+    }
+    return { ok: true, analysis, find: loc.find };
   } catch (e) {
     if (e instanceof Cancelled || input.signal?.aborted)
-      return { ok: false, why: "cancelled", detection: null };
-    return { ok: false, why: "unreadable", detection: null };
+      return { ok: false, why: "cancelled", find: null };
+    return { ok: false, why: "unreadable", find: null };
   } finally {
     try {
       disposable?.dispose?.();

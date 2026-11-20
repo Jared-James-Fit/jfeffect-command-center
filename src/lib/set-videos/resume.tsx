@@ -10,6 +10,10 @@
  * nothing. It looks again when the app comes back on screen (an iPhone's
  * home-screen app is brought back far more often than it's launched) and
  * when a workout's film asks (FEED_COPY_CATCH_UP_EVENT).
+ *
+ * And a set video's bar path read that the app closing cut off is read
+ * again from its link (lift-analysis/auto.ts resumeLiftAnalyses), once the
+ * launch has settled.
  */
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth";
@@ -21,6 +25,8 @@ const RESUME_AFTER_MS = 2_500;
 const CATCH_UP_AFTER_MS = 20_000;
 /** Back on screen: a moment for the screen to settle first. */
 const CATCH_UP_ON_RETURN_MS = 5_000;
+/** Bar path reads the app didn't finish: after the first screens have loaded. */
+const LIFT_RESUME_AFTER_MS = 12_000;
 
 export function SetVideoResume() {
   const { user } = useAuth();
@@ -55,6 +61,15 @@ export function SetVideoResume() {
       else void fn().catch(() => {});
     };
     const t = window.setTimeout(() => whenIdle(run), RESUME_AFTER_MS);
+    const lift = window.setTimeout(
+      () =>
+        whenIdle(async () => {
+          if (cancelled) return;
+          const m = await import("@/lib/lift-analysis/auto");
+          if (!cancelled) await m.resumeLiftAnalyses(uid);
+        }),
+      LIFT_RESUME_AFTER_MS,
+    );
     let c = window.setTimeout(() => whenIdle(catchUp), CATCH_UP_AFTER_MS);
     const later = (ms: number) => {
       window.clearTimeout(c);
@@ -69,6 +84,7 @@ export function SetVideoResume() {
     return () => {
       cancelled = true;
       window.clearTimeout(t);
+      window.clearTimeout(lift);
       window.clearTimeout(c);
       document.removeEventListener("visibilitychange", onReturn);
       window.removeEventListener(FEED_COPY_CATCH_UP_EVENT, onAsk);
