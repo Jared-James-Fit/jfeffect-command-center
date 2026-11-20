@@ -668,7 +668,9 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     expect(p).toContain(`The place: ${DAILY_SETTINGS.garage_gym.look}.`);
     expect(p).toContain(`Who's in it: ${DAILY_CASTS.masters.look}.`);
     expect(p).toContain("natural arm and shoulder size, no veins mapped across the skin, never exaggerated or bodybuilding-show muscle");
-    expect(p).toContain("one straight barbell with the same plates loaded on both sides and collars on");
+    // the plates match end to end (the far end too), the miss the first bright tests showed
+    expect(p).toContain("one straight barbell with identical plates on both ends (the same colours in the same order from the collar out, including the far end seen across the frame) and collars on");
+    expect(REVIEW_PROMPT).toContain("different plates on each side (check both ends: the same colours in the same order, the far end included)");
     expect(p).toContain("calibrated plates in their real colours and sizes (red 25, blue 20, yellow 15, green 10)");
     expect(p).toContain("No readable text, speech bubbles, labels, subtitles, brand names, logos or watermarks anywhere");
     expect(p).toContain(FILM_AVOID);
@@ -1005,7 +1007,10 @@ describe("the bright look: one house style, bright and true, real people, never 
     expect(DAILY_CASTS.physique.look).toContain("never stage-ready or oversized");
     expect(DAILY_CASTS.masters.look).toContain("40s to 60s");
     expect(Object.keys(DAILY_CASTS)).toEqual(expect.arrayContaining(["no_people", "hands"]));
-    expect(peopleLine("everyday")).toContain("their own faces, hair, skin tones and training clothes in colour");
+    expect(peopleLine("everyday")).toContain("training clothes in real colours that suit the palette (a plain black t-shirt at most once in a frame, never on the main person)");
+    // a kitchen is for food, never a rack
+    expect(DAILY_SETTINGS.meal_prep.look).toContain("no rack, barbell or plates in a kitchen");
+    expect(FILM_AVOID).toContain("equipment where it couldn't be (a rack or barbell in a kitchen");
   });
 
   it("four directions and four treatments, each for its kind of point; old looks keep their names", async () => {
