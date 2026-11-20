@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { bookingUrl, publicOrigin } from "@/lib/booking-types";
-import { getClientBookingLink } from "@/lib/booking.functions";
+import { createBookingInvite } from "@/lib/booking.functions";
 
 type ClientLite = {
   id: string;
@@ -23,50 +23,38 @@ type ClientLite = {
   phone: string | null;
 };
 
-export type ShareTarget = { name: string; slug: string };
+export type ShareTarget = { id: string; name: string; slug: string };
 
 /**
- * Send a booking link: copy, share sheet, text or email. Sent to a client, it's
- * their personal link: they book as themselves (their sessions, their
- * calendar) with no form and no sign-in.
+ * Send a booking type's link (Calendar → Booking): copy, share sheet, text or
+ * email. The public link takes anyone; picked for a client, it's their personal
+ * link (jfeffect.com/b/<token>): it books as them with no form and no sign-in.
+ * From a client's chat or profile it's Schedule (messages/booking-invite.tsx).
  */
 export function ShareBookingSheet({
-  target: givenTarget,
-  choices,
+  target,
   open,
   onOpenChange,
-  client: presetClient,
 }: {
   target: ShareTarget | null;
-  /** With no target: the types to pick from first (e.g. from a client's profile). */
-  choices?: ShareTarget[];
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  /** Start with this client picked (from a client's profile). */
-  client?: ClientLite | null;
 }) {
   const [search, setSearch] = useState("");
-  const [client, setClient] = useState<ClientLite | null>(presetClient ?? null);
-  const [picked, setPicked] = useState<ShareTarget | null>(null);
+  const [client, setClient] = useState<ClientLite | null>(null);
   useEffect(() => {
     if (open) {
-      setClient(presetClient ?? null);
+      setClient(null);
       setSearch("");
-      setPicked(choices?.length === 1 ? choices[0] : null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, presetClient?.id]);
-  // Only one type to send: skip the picker (choices can arrive after opening).
-  useEffect(() => {
-    if (open && !picked && choices?.length === 1) setPicked(choices[0]);
-  }, [open, picked, choices]);
-  const target = givenTarget ?? picked;
-  const linkFn = useServerFn(getClientBookingLink);
+  }, [open]);
+  const mint = useServerFn(createBookingInvite);
   const { data: invite, isFetching: inviteLoading } = useQuery({
-    queryKey: ["client-booking-invite", client?.id ?? null],
-    enabled: open && !!client?.id,
-    staleTime: 10 * 60_000,
-    queryFn: async () => (await linkFn({ data: { clientId: client!.id } })).invite,
+    queryKey: ["booking-link", client?.id ?? null, target?.id ?? null, null],
+    enabled: open && !!client?.id && !!target?.id,
+    staleTime: Infinity,
+    gcTime: 10 * 60_000,
+    queryFn: async () => (await mint({ data: { clientId: client!.id, bookingCardId: target!.id, duration: null } })) as { path: string },
   });
 
   const { data: clients = [] } = useQuery<ClientLite[]>({
@@ -89,48 +77,10 @@ export function ShareBookingSheet({
     return clients.filter((c) => (c.full_name ?? "").toLowerCase().includes(q)).slice(0, 6);
   }, [clients, search]);
 
-  if (!target) {
-    if (!choices) return null;
-    return (
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent
-          side="bottom"
-          className="max-h-[92dvh] overflow-y-auto rounded-t-2xl pb-[max(1.25rem,env(safe-area-inset-bottom))]"
-        >
-          <div className="mx-auto w-full max-w-lg space-y-3">
-            <SheetHeader className="text-left">
-              <SheetTitle className="text-left">
-                Send a booking link{presetClient?.full_name ? ` to ${presetClient.full_name}` : ""}
-              </SheetTitle>
-              <SheetDescription className="text-left">Pick what they're booking.</SheetDescription>
-            </SheetHeader>
-            {choices.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-                No booking types are taking online bookings yet. Turn one on under Calendar →
-                Booking.
-              </p>
-            ) : (
-              <div className="grid gap-2">
-                {choices.map((c) => (
-                  <Button
-                    key={c.slug}
-                    variant="outline"
-                    className="h-12 justify-start font-bold"
-                    onClick={() => setPicked(c)}
-                  >
-                    {c.name}
-                  </Button>
-                ))}
-              </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
-    );
-  }
+  if (!target) return null;
   const base = bookingUrl(publicOrigin(), target.slug);
   // A client's link carries their personal invite; until it's ready, the plain link.
-  const url = client && invite ? `${base}?i=${encodeURIComponent(invite)}` : base;
+  const url = client && invite ? `${publicOrigin()}${invite.path}` : base;
   const waiting = !!client && inviteLoading && !invite;
   const first = (client?.full_name ?? "").split(/\s+/)[0];
   const message = client

@@ -334,12 +334,15 @@ export const cancelAppointment = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     const { data: existing } = await supabase.from("appointments").select("*").eq("id", data.id).maybeSingle();
     if (!existing) throw new Error("Appointment not found");
-    const { error } = await supabase.from("appointments").update({
+    const { data: changed, error } = await supabase.from("appointments").update({
       status: "Cancelled",
       cancelled_at: new Date().toISOString(),
       cancelled_reason: data.reason || null,
-    }).eq("id", data.id);
+    }).eq("id", data.id).select("id");
     if (error) throw new Error(error.message);
+    // Someone who can only see the appointment (its client) changes nothing,
+    // and nothing below (credit, Google, reminders) may run for them either.
+    if (!changed?.length) throw new Error("You can't cancel this appointment.");
     // Return any previously-deducted session credit
     await reverseAppointmentCredit(data.id);
     if (existing.google_event_id) {
@@ -368,8 +371,9 @@ export const markAppointmentStatus = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     const { data: before } = await supabase.from("appointments").select("*").eq("id", data.id).maybeSingle();
     if (!before) throw new Error("Appointment not found");
-    const { error } = await supabase.from("appointments").update({ status: data.status }).eq("id", data.id);
+    const { data: changed, error } = await supabase.from("appointments").update({ status: data.status }).eq("id", data.id).select("id");
     if (error) throw new Error(error.message);
+    if (!changed?.length) throw new Error("You can't change this appointment.");
     // Session credit side-effects (only act when explicit package linked; never auto on imports)
     if (data.status === "Completed" && before.status !== "Completed") {
       try { await applyAppointmentCredit(data.id); } catch (e) { console.error("applyAppointmentCredit failed", e); }
@@ -550,6 +554,14 @@ export const resyncAppointmentToGoogle = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .maybeSingle();
     if (!appt) throw new Error("Appointment not found");
+    // Writing to the coach's Google is the host coach's or an admin's, never
+    // the client's (who can read the appointment).
+    if (!(await isAdmin(supabase, userId))) {
+      const myCoachId = await getCoachIdForUser(supabase, userId);
+      if (!myCoachId || myCoachId !== appt.host_coach_id) {
+        throw new Error("You can't sync this appointment.");
+      }
+    }
 
     // If already synced, just update it
     const { gcalCreateEvent, gcalUpdateEvent } = await import("./google-cal.server");

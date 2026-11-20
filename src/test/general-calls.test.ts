@@ -97,11 +97,11 @@ describe("who can book a General Call", () => {
 
   it("the server checks it on every way in, and a member's app never lists it", () => {
     const fns = read("src/lib/booking.functions.ts");
-    expect(fns).toContain("if (!audienceAllows(type, invitee ? { serviceTier: invitee.service_tier } : null)) {");
+    expect(fns).toContain("if (!audienceAllows(type, client ? { serviceTier: client.service_tier } : null)) {");
     expect(fns).toContain("if (!audienceAllows(type, { serviceTier: me.service_tier })) throw new Error(CLIENTS_ONLY_MESSAGE);");
     expect(fns).toContain("rows = rows.filter((t) => audienceAllows(t, { serviceTier: tier }));");
     // Slots and bookings follow the length they picked, only when the type offers it.
-    expect(fns).toContain("const type = withDuration(loaded, data.duration);");
+    expect(fns).toContain("const type = withDuration(loaded, identity.inviteApplies && invite?.durationMin ? invite.durationMin : data.duration);");
     const server = read("src/lib/booking.server.ts");
     expect(server).toContain("if (!audienceAllows(type, trustedClient ? { serviceTier: trustedClient.service_tier } : null)) {");
   });
@@ -115,21 +115,22 @@ describe("sending a call from a chat", () => {
     expect(inviteOrder([discovery, training, general]).map((t) => t.id)).toEqual(["g", "t", "d"]);
   });
 
-  it("carries the length the coach picked, and a fixed-length type's link is unchanged", () => {
-    const att = bookingInviteAttachment(general, "c1", "", 45);
-    expect(att).toMatchObject({ url: "/book/general-call?d=45", duration_min: 45, duration_fixed: 45, booking_card_id: "g" });
-    const def = bookingInviteAttachment(general, "c1", "", null);
-    expect(def).toMatchObject({ url: "/book/general-call", duration_min: 30 });
+  it("carries the length the coach picked on its personal link, and a fixed-length type's is its own", () => {
+    const link = { inviteId: "i1", path: "/b/AbCdEfGhIjKlMnOpQrStUvWxYz012345", expiresAt: "2026-12-20T00:00:00Z", durationMin: 45 };
+    const att = bookingInviteAttachment(general, "c1", "", 45, link);
+    expect(att).toMatchObject({ url: link.path, duration_min: 45, duration_fixed: 45, booking_card_id: "g", invite_id: "i1" });
+    const def = bookingInviteAttachment(general, "c1", "", null, link);
+    expect(def).toMatchObject({ url: link.path, duration_min: 30 });
     expect(def.duration_fixed).toBeUndefined();
-    const fixed = bookingInviteAttachment(discovery, "c1", "", 45);
-    expect(fixed).toMatchObject({ url: "/book/coaching-discovery", duration_min: 20 });
+    const fixed = bookingInviteAttachment(discovery, "c1", "", 45, link);
+    expect(fixed).toMatchObject({ duration_min: 20 });
   });
 
-  it("the booking page takes the coach's length from ?d=", () => {
+  it("the booking page takes the coach's length from his link (old links: ?d=)", () => {
     const route = read("src/routes/book.$slug.tsx");
     expect(route).toContain("duration: s.d ?? null,");
     const page = read("src/components/booking/booking-page.tsx");
-    expect(page).toContain("const coachLength = prefill.duration && options.includes(prefill.duration) ? prefill.duration : null;");
+    expect(page).toContain("const wanted = page?.fixedDuration ?? prefill.duration ?? null;");
     expect(page).toContain('queryKey: ["booking-slots", slug, month, duration],');
   });
 });

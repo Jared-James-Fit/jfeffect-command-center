@@ -333,7 +333,7 @@ export function AdminBookingPanel() {
                         <Button
                           size="sm"
                           className="h-9 bg-primary font-semibold"
-                          onClick={() => setShare({ name: t.name, slug: t.slug! })}
+                          onClick={() => setShare({ id: t.id, name: t.name, slug: t.slug! })}
                         >
                           <Send className="mr-1.5 h-3.5 w-3.5" /> Send link
                         </Button>
@@ -490,7 +490,7 @@ export function AdminBookingPanel() {
         onSaved={(t) => {
           // A new type with online booking on: offer to send it straight away.
           if (!editor?.initial && t.online_enabled && t.slug)
-            setShare({ name: t.name, slug: t.slug });
+            setShare({ id: t.id, name: t.name, slug: t.slug });
         }}
       />
       <ShareBookingSheet target={share} open={!!share} onOpenChange={(o) => !o && setShare(null)} />

@@ -5,7 +5,7 @@ import {
   TARGETS_PROMPT,
   mealPrepFixPrompt,
   manualRevisePrompt,
-} from "@/lib/nutrition-ai-prompts";
+} from "@/lib/nutrition-ai-prompts.server";
 import { freeMealRule } from "@/lib/nutrition-history";
 import { planMenus, prepDrift, prepDriftLine } from "@/lib/nutrition-targets/plan-foods";
 import { withPrepFix } from "@/lib/nutrition-ai-plans.server";

@@ -131,12 +131,16 @@ export async function upsertApplicantClient(
 
   const patch: Record<string, any> = {};
 
-  // Only set blanks → values; never overwrite existing data.
-  if (!matched.first_name) patch.first_name = input.first_name;
-  if (!matched.last_name) patch.last_name = input.last_name;
-  if (!matched.full_name) patch.full_name = full_name;
-  if (!matched.phone && input.phone) patch.phone = input.phone;
-  if (!matched.instagram && input.instagram) patch.instagram = input.instagram;
+  // Only set blanks → values; never overwrite existing data. A public form
+  // never writes contact details (phone, Instagram) onto a record that already
+  // exists: anyone can apply with anyone's email, and a phone planted there
+  // would receive that person's setup link or reset text. What they typed is
+  // kept on the application itself for the coach to see.
+  if (!matched.user_id) {
+    if (!matched.first_name) patch.first_name = input.first_name;
+    if (!matched.last_name) patch.last_name = input.last_name;
+    if (!matched.full_name) patch.full_name = full_name;
+  }
   if (!matched.source && input.source) patch.source = input.source;
 
   // Lead intelligence is always refreshed for non-active clients (latest signal wins).

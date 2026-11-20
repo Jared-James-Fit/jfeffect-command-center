@@ -20,7 +20,7 @@
  *
  * Pure, so it's tested and both sides agree.
  */
-import { answerFor, type QA } from "@/lib/nutrition-ai-prompts";
+import { answerFor, type QA } from "@/lib/nutrition-request";
 import { normalizeDayLabel } from "@/lib/client-nutrition-day";
 import { safetyNotes, weeklyAverageKcal, weightTrend, type WeighIn } from "@/lib/nutrition-targets/nutrition-intel";
 import { dietTags, isNoneAnswer, type FoodGoals } from "@/lib/nutrition-targets/food-notes";

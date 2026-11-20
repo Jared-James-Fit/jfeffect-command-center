@@ -9,7 +9,7 @@
  * "no longer applies" marks, for callers without a food history of their own
  * (Program Intelligence). The nutrition AI passes its own food history instead.
  */
-import { NUTRITION_REQUEST_FORM_ID, type QA } from "@/lib/nutrition-ai-prompts";
+import { NUTRITION_REQUEST_FORM_ID, type QA } from "@/lib/nutrition-request";
 import { formAnswerText } from "@/lib/form-answer-text";
 import { buildFoodHistory, type FoodHistory } from "@/lib/nutrition-targets/food-history";
 import { buildHealthProfile, PAIN_WEEKS, type HealthItem, type HealthProfile, type HealthSettings } from "@/lib/health/health-profile";
