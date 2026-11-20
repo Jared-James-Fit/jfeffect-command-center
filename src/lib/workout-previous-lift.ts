@@ -26,6 +26,12 @@ export type PreviousLiftLog = {
   exerciseName: string | null;
   sessionKey: string;
   occurredAt: string | null;
+  /**
+   * The day its session was trained ("2026-09-20", trainedOn in
+   * exercise-history.ts): which session is the latest, and the date "Last
+   * time" says. occurredAt (when the set was saved) stays the engine's clock.
+   */
+  trainedOn?: string | null;
   reps: number | null;
   rpe: number | string | null;
   rir: number | string | null;
@@ -136,6 +142,14 @@ function finitePositive(value: unknown): number | null {
 function occurredAtMs(log: PreviousLiftLog): number {
   const value = log.occurredAt ? Date.parse(log.occurredAt) : Number.NaN;
   return Number.isFinite(value) ? value : 0;
+}
+
+/** Newest session first: by the day it was trained, then by when it was saved. */
+function newestFirst(a: PreviousLiftLog, b: PreviousLiftLog): number {
+  const da = a.trainedOn ?? "";
+  const db = b.trainedOn ?? "";
+  if (da !== db && da && db) return da < db ? 1 : -1;
+  return occurredAtMs(b) - occurredAtMs(a);
 }
 
 function hasUsefulPerformance(log: PreviousLiftLog, repsOnly: boolean): boolean {
@@ -266,7 +280,7 @@ export function selectPreviousLifts(
       const timedRole = normalizeRole(identity.purposeLabel);
       const sameKind = timedRole ? onMachine.logs.filter((log) => normalizeRole(log.purposeLabel) === timedRole) : [];
       const pool = sameKind.length > 0 ? sameKind : onMachine.logs;
-      const latest = pool.slice().sort((a, b) => occurredAtMs(b) - occurredAtMs(a))[0];
+      const latest = pool.slice().sort(newestFirst)[0];
       const session = pool.filter((log) => log.sessionKey === latest.sessionKey);
       result.set(identity.rowId, {
         ...latest,
@@ -285,7 +299,7 @@ export function selectPreviousLifts(
     const role = normalizeRole(identity.purposeLabel);
     const inRole = role ? onMachine.logs.filter((log) => normalizeRole(log.purposeLabel) === role) : [];
     const pool = inRole.length > 0 ? inRole : onMachine.logs;
-    const latestSession = pool.slice().sort((a, b) => occurredAtMs(b) - occurredAtMs(a))[0]?.sessionKey;
+    const latestSession = pool.slice().sort(newestFirst)[0]?.sessionKey;
     if (!latestSession) continue;
     const lastSession = pool.filter((log) => log.sessionKey === latestSession);
     // Working sets only: warm-ups live in their own table (pl_warmup_sets) and

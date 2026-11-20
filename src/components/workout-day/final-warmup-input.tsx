@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Flame, Pencil, X } from "lucide-react";
+import { Flame, Info, Pencil, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -264,15 +265,19 @@ export function WarmupRows({
       onRemove={editing ? async () => { onFormChange(null); await onRemove(editing.id); } : null}
     />
   );
+  // The warm-up section says what it is once, above its rows (never a bare "W"
+  // a first-timer has to guess at), with ⓘ for how it works.
+  const labelled = sets.length > 0 || inline || (formOpen && !editingId);
   return (
     <div data-testid="warmup-rows">
+      {labelled && <WarmupLabel tunes={!!prompt?.tunes} suggestOn={suggestOn} />}
       {sets.map((s) =>
         editingId === s.id ? (
           <div key={s.id}>{warmupForm(s)}</div>
         ) : inline && inlineRow?.id === s.id ? null : (
           <div
             key={s.id}
-            className="grid items-center gap-1.5 border-t border-builder-card-border/70 bg-orange-500/[0.05] px-2 py-1"
+            className="grid items-center gap-1.5 bg-orange-500/[0.04] px-2 py-1"
             style={{ gridTemplateColumns: gridTemplate }}
             data-testid="warmup-row"
           >
@@ -408,9 +413,10 @@ function LastWarmupRow({
 }) {
   const [load, setLoad] = useState(existing ? String(warmupDisplay(existing, unit)) : "");
   const [reps, setReps] = useState(existing ? String(existing.reps) : seed ? String(seed.reps) : "");
-  const [effort, setEffort] = useState(
-    existing ? warmupEffortText(existing.rpe, effortKind) : effortKind === "rir" ? "3" : "7",
-  );
+  // Effort is optional and starts blank: a blank warm-up is read as a normal one
+  // (RPE 7, the engine's own assumption), so a pre-filled "7" only added noise
+  // (25 of the first 37 warm-ups saved it untouched).
+  const [effort, setEffort] = useState(existing ? warmupEffortText(existing.rpe, effortKind) : "");
   // The suggested warm-up loads after the row: take its reps until they're typed or saved.
   const repsTyped = useRef(!!existing);
   useEffect(() => {
@@ -428,7 +434,7 @@ function LastWarmupRow({
   const blank = <div aria-hidden />;
 
   return (
-    <div className="border-t border-builder-card-border/70" data-testid="warmup-open" data-warmup-saved={existing ? "true" : "false"}>
+    <div className="bg-orange-500/[0.04]" data-testid="warmup-open" data-warmup-saved={existing ? "true" : "false"}>
       <div className="grid items-center gap-1.5 px-2 py-1.5" style={{ gridTemplateColumns: gridTemplate }}>
         {onOpenForm ? (
           <button
@@ -440,7 +446,7 @@ function LastWarmupRow({
             <WBadge />
           </button>
         ) : (
-          <span className="text-center text-sm font-semibold text-muted-foreground" title="Last warm-up (optional)">W</span>
+          <span className="text-center text-sm font-semibold text-orange-500/60" aria-hidden="true">W</span>
         )}
         <TypedValueInput
           value={reps}
@@ -496,12 +502,12 @@ function LastWarmupRow({
           "Last warm-up logged"
         ) : canTune ? (
           <>
-            Last warm-up · optional
+            Your last warm-up
             {seed ? <span className="tabular-nums text-foreground">{` · about ${fmt(seed.load)} ${unit} × ${seed.reps}`}</span> : null}
             {suggestOn ? " · tunes Suggested" : " · sets today's weight"}
           </>
         ) : (
-          "Last warm-up · optional"
+          "Your last warm-up"
         )}
       </p>
     </div>
@@ -510,9 +516,47 @@ function LastWarmupRow({
 
 function WBadge() {
   return (
-    <span className="text-center text-sm font-bold text-orange-500" title="Warm-up — not counted as a working set">
+    <span className="text-center text-sm font-bold text-orange-500" title="Warm-up: not counted as a working set">
       W
     </span>
+  );
+}
+
+/**
+ * "Warm-up · not counted ⓘ": the section's one label, over its rows. ⓘ says
+ * what a warm-up does here in four lines: optional, never counted as work, the
+ * last one sets today's weight (on the lifts where it can), RPE optional, and
+ * how to change or add one.
+ */
+export function WarmupLabel({ tunes, suggestOn }: { tunes: boolean; suggestOn: boolean }) {
+  return (
+    <div className="flex min-h-8 items-center gap-1.5 border-t border-builder-card-border/70 bg-orange-500/[0.04] pl-2 pr-1 text-xs" data-warmup-label>
+      <span className="font-semibold text-orange-600 dark:text-orange-400">Warm-up</span>
+      <span className="text-muted-foreground">· optional, not counted as a set</span>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label="How warm-ups work"
+            data-warmup-help
+            className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/10"
+          >
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent side="bottom" align="end" className="w-72 space-y-1.5 text-xs leading-relaxed text-muted-foreground" data-warmup-help-text>
+          <p className="text-[13px] font-semibold text-foreground">Warm-ups (W)</p>
+          <p>The sets that get you ready. Logging them is optional, and they never count as work: no volume, records or League points.</p>
+          {tunes ? (
+            <p>
+              <span className="font-semibold text-foreground">Your last warm-up matters.</span> Type its weight and {suggestOn ? "Suggested is tuned" : "today's weight is worked out"} from how it moved.
+            </p>
+          ) : null}
+          <p>RPE is optional: leave it blank for a normal warm-up.</p>
+          <p>Tap a logged warm-up to change or remove it. + Warm-up adds another.</p>
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }
 
@@ -546,14 +590,16 @@ function WarmupForm({
   onRemove: (() => void | Promise<void>) | null;
 }) {
   const tuning = !!target && !!preview;
-  const [load, setLoad] = useState(editing ? String(warmupDisplay(editing, unit)) : seed ? fmt(seed.load) : "");
+  // The suggested warm-up is a chip to tap, never typed into the box for them:
+  // what's in a box is what they lifted.
+  const [load, setLoad] = useState(editing ? String(warmupDisplay(editing, unit)) : "");
   const [reps, setReps] = useState(editing ? String(editing.reps) : seed ? String(seed.reps) : "");
-  // A normal final warm-up is RPE 7 — the engine's own assumption — so leaving it is honest.
-  const [rpe, setRpe] = useState<number | null>(editing ? editing.rpe : 7);
+  // How it felt is optional: blank reads as a normal final warm-up (RPE 7, the engine's own assumption).
+  const [rpe, setRpe] = useState<number | null>(editing ? editing.rpe : null);
   const loadRef = useRef<HTMLInputElement | null>(null);
 
-  // Nothing to pre-fill: start on the weight.
-  const blankNew = !editing && !seed;
+  // A new warm-up starts on the weight.
+  const blankNew = !editing;
   useEffect(() => {
     if (!blankNew) return;
     const focus = () => { if (document.activeElement !== loadRef.current) loadRef.current?.focus(); };
@@ -572,7 +618,7 @@ function WarmupForm({
   const range = hint && hint.low !== hint.high ? `${fmt(hint.low)}–${fmt(hint.high)}` : null;
 
   return (
-    <div className="border-t border-orange-500/30 bg-orange-500/[0.06] px-2 pb-2 pt-1.5" data-testid="warmup-form">
+    <div className="bg-orange-500/[0.04] px-2 pb-2 pt-1.5" data-testid="warmup-form">
       {/* Row 1: W | weight × reps | close — lined up with the set table. */}
       <form
         className="grid items-center gap-1.5"
@@ -581,7 +627,6 @@ function WarmupForm({
       >
         <WBadge />
         <div className="flex min-w-0 items-center gap-1.5" style={{ gridColumn: "2 / -1" }}>
-          <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{editing ? "Warm-up" : "Last warm-up"}</span>
           <ReplaceInput
             name="warmup-load"
             inputMode="decimal"
@@ -615,28 +660,43 @@ function WarmupForm({
         </div>
       </form>
 
-      {/* Row 2: how it felt — one tap. */}
-      <div className="mt-1.5 grid grid-cols-4 gap-1" role="radiogroup" aria-label="How did it feel?">
+      {/* The suggested warm-up, apart from what's typed: one tap uses it. */}
+      {!editing && seed && !load && (
+        <button
+          type="button"
+          onClick={() => { setLoad(fmt(seed.load)); setReps(String(seed.reps)); }}
+          data-warmup-use-suggested
+          className="mt-1.5 inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-500/10 px-2.5 text-[13px] font-semibold tabular-nums text-blue-700 active:scale-[0.98] dark:text-blue-300"
+        >
+          Use {fmt(seed.load)} {unit} × {seed.reps}
+          <span className="font-normal text-blue-700/70 dark:text-blue-300/70">suggested</span>
+        </button>
+      )}
+
+      {/* Row 2: how it felt, optional: one tap, a second tap clears it. */}
+      <p className="mt-1.5 text-[11px] text-muted-foreground">How did it feel? Optional</p>
+      <div className="mt-1 grid grid-cols-4 gap-1" role="radiogroup" aria-label="How did it feel? (optional)">
         {WARMUP_FEELS.map((f) => (
           <button
             key={f.rpe}
             type="button"
             role="radio"
             aria-checked={rpe === f.rpe}
-            onClick={() => setRpe(f.rpe)}
+            onClick={() => setRpe((cur) => (cur === f.rpe ? null : f.rpe))}
             className={cn(
               "flex h-10 flex-col items-center justify-center rounded-md border text-xs font-bold leading-none transition active:scale-[0.97]",
-              rpe === f.rpe ? "border-orange-500 bg-orange-500 text-white" : "border-border bg-background text-foreground",
+              rpe === f.rpe ? "border-foreground bg-foreground text-background" : "border-border bg-background text-foreground",
             )}
           >
             {f.label}
-            <span className={cn("mt-0.5 text-[9px] font-semibold", rpe === f.rpe ? "text-white/80" : "text-muted-foreground")}>RPE {f.rpe}</span>
+            <span className={cn("mt-0.5 text-[9px] font-semibold", rpe === f.rpe ? "text-background/75" : "text-muted-foreground")}>RPE {f.rpe}</span>
           </button>
         ))}
       </div>
 
       {/* Row 3: the answer: what set 1's tap logs once this warm-up is in. */}
-      {tuning ? (
+      {/* Once there's a weight: what set 1's tap logs from it (nothing to read before). */}
+      {tuning && valid ? (
         <div className="mt-1.5 flex items-center gap-2" aria-live="polite">
           <div className="min-w-0 flex-1 leading-tight">
             <div className="text-[11px] text-muted-foreground">

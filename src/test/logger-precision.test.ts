@@ -141,6 +141,6 @@ describe("a quieter card", () => {
     const w = read("src/components/workout-day/final-warmup-input.tsx");
     const prompt = w.slice(w.indexOf('data-testid="warmup-prompt"'), w.indexOf('data-testid="warmup-prompt"') + 1200);
     expect(prompt).not.toContain("orange");
-    expect(w).toContain('className="text-center text-sm font-bold text-orange-500" title="Warm-up — not counted as a working set"');
+    expect(w).toContain('className="text-center text-sm font-bold text-orange-500" title="Warm-up: not counted as a working set"');
   });
 });

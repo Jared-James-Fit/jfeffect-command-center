@@ -290,12 +290,16 @@ function MockCard({ step, beat, unit, videoOn }: { step: StepKey; beat: number; 
         {videoOn && <span className="flex justify-center"><Camera className="h-3 w-3" /></span>}
       </div>
 
-      {/* the last warm-up, open and optional */}
-      <div className={cn("mt-1 border-t border-border/70 transition-colors", step === "warmup" && "bg-muted/30")}>
+      {/* the last warm-up, open and optional, under its own label (WarmupLabel) */}
+      <div className={cn("mt-1 border-t border-border/70 bg-orange-500/[0.04] transition-colors")}>
+        <div className="flex min-h-7 items-center gap-1.5 px-2 text-[11px]">
+          <span className="font-semibold text-orange-600 dark:text-orange-400">Warm-up</span>
+          <span className="text-muted-foreground">· optional, not counted as a set</span>
+        </div>
         <div className="grid items-center gap-1.5 px-2 py-1.5" style={{ gridTemplateColumns: grid }}>
-          <span className={cn("text-center text-sm font-semibold", warmLogged ? "text-orange-500" : "text-muted-foreground")}>W</span>
+          <span className={cn("text-center text-sm font-semibold", warmLogged ? "text-orange-500" : "text-orange-500/60")}>W</span>
           <span className={cn(CELL, WELL)}>3</span>
-          <span className={cn(CELL, WELL)}>7</span>
+          <span className={cn(CELL, WELL, "text-muted-foreground/60")}>—</span>
           <span className={cn(CELL, step === "warmup" && beat === 1 ? FOCUSED : WELL, !warmWeight && "text-muted-foreground/60")}>
             {warmWeight || "—"}
             <Finger on={step === "warmup" && beat === 1} />
@@ -307,7 +311,7 @@ function MockCard({ step, beat, unit, videoOn }: { step: StepKey; beat: number; 
           )}
         </div>
         <div className="px-2 pb-1.5 pl-[42px] text-[11px] text-muted-foreground">
-          {warmLogged ? <span className="font-medium text-success">✓ Suggested is tuned from this warm-up</span> : "Last warm-up · optional"}
+          {warmLogged ? <span className="font-medium text-success">✓ Suggested is tuned from this warm-up</span> : "Your last warm-up · tunes Suggested"}
         </div>
       </div>
 
