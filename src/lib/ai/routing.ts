@@ -77,9 +77,10 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
    * Exercise search's "describe it" (exercise-identify): a lifter describes an exercise instead of
    * naming it and the model names what it most likely is (a few short names and how sure it is),
    * which the app then finds in its own library. One short answer someone is waiting on
-   * (callModelNow); only ever a suggestion, never chosen for them.
+   * (callModelNow) at GPT-5's minimal effort (6-10 s at low in production on Nov 20 2026, too
+   * slow for a search box); only ever a suggestion, never chosen for them.
    */
-  exercise_identify: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "low", maxOutputTokens: 1_200, strongOnly: false },
+  exercise_identify: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "minimal", maxOutputTokens: 600, strongOnly: false },
   form_draft: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "low", maxOutputTokens: 8_000, strongOnly: false },
   /**
    * Coach-side writing a person reads before anything reaches a client (Nov 18 2026): the weekly

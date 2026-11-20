@@ -126,3 +126,16 @@ describe("finding the AI's names in the library", () => {
     expect(m.filter((x) => x.guess === "Lat Pulldown").length).toBeLessThanOrEqual(2);
   });
 });
+
+describe("the describe call's speed setting", () => {
+  it("asks GPT-5 mini for minimal effort, and any model without it for low", async () => {
+    const { effortFor } = await import("@/lib/ai/model-client.server");
+    const { DEFAULT_ROUTES } = await import("@/lib/ai/routing");
+    expect(DEFAULT_ROUTES.exercise_identify.effort).toBe("minimal");
+    expect(effortFor("gpt-5-mini", "minimal")).toBe("minimal");
+    expect(effortFor("openai/gpt-5-nano", "minimal")).toBe("minimal");
+    expect(effortFor("gpt-5.5", "minimal")).toBe("low");
+    expect(effortFor("gpt-6-astra", "minimal")).toBe("low");
+    expect(effortFor("gpt-5.5", "high")).toBe("high");
+  });
+});
