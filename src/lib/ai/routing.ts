@@ -15,7 +15,7 @@
  */
 import type { Effort } from "./model-client.server";
 
-export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant";
+export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify";
 export type Route = {
   /** Tried in order. */
   models: string[];
@@ -73,6 +73,13 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
    * A coach's "Draft with AI" form (form-draft.ts): a list of questions from what they asked for,
    * read by code (parseFormDraft) and saved as a draft only the coach sees until they send it.
    */
+  /**
+   * Exercise search's "describe it" (exercise-identify): a lifter describes an exercise instead of
+   * naming it and the model names what it most likely is (a few short names and how sure it is),
+   * which the app then finds in its own library. One short answer someone is waiting on
+   * (callModelNow); only ever a suggestion, never chosen for them.
+   */
+  exercise_identify: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "low", maxOutputTokens: 1_200, strongOnly: false },
   form_draft: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "low", maxOutputTokens: 8_000, strongOnly: false },
   /**
    * Coach-side writing a person reads before anything reaches a client (Nov 18 2026): the weekly

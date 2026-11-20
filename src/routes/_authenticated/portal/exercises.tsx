@@ -9,7 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Play } from "lucide-react";
 import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { useExerciseVideoSetGlobal } from "@/hooks/use-exercise-video-set";
-import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
+import { type SearchableExercise } from "@/lib/exercise-search";
+import { resultsNote, useExerciseSearch } from "@/hooks/use-exercise-search";
+import { DescribedMatches } from "@/components/exercise-search/described-matches";
 import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 import { ExerciseDemoVideo } from "@/components/exercise-demo-video";
 
@@ -31,15 +33,22 @@ function ExerciseLibrary() {
 
   // Debounce search input (300ms) so filtering doesn't run on every keystroke
   useEffect(() => {
-    const t = setTimeout(() => setSearch(searchInput), 300);
+    const t = setTimeout(() => setSearch(searchInput), 150);
     return () => clearTimeout(t);
   }, [searchInput]);
 
   const { data: exercises = [], isLoading: exercisesLoading } = useQuery({
     queryKey: ["exercises"],
     queryFn: async () => {
-      const { data } = await supabase.from("exercises").select("*").eq("archived", false).order("name").limit(10000);
-      return data ?? [];
+      // page by page: one request stops at the server's 1,000-row cap
+      const all: any[] = [];
+      for (let from = 0; from < 20_000; from += 1000) {
+        const { data, error } = await supabase.from("exercises").select("*").eq("archived", false).order("name").order("id").range(from, from + 999);
+        if (error) throw error;
+        all.push(...(data ?? []));
+        if (!data || data.length < 1000) break;
+      }
+      return all;
     },
     staleTime: 5 * 60_000,
   });
@@ -55,15 +64,15 @@ function ExerciseLibrary() {
 
   // Category filter first, then the shared keyword ranker — so filters and
   // search always combine, and the best keyword match sorts to the top.
-  const searched = useMemo(() => {
-    const scoped = exercises.filter(
-      (e: any) => category === "all" || e.category === category,
-    ) as unknown as SearchableExercise[];
-    return searchExercises(scoped, search, { limit: 5000 });
-  }, [exercises, category, search]);
-  const filtered = searched.results.map((r) => r.exercise) as any[];
-  const highlightTerms = searched.highlightTerms;
-  const showingClosest = search.trim().length > 0 && !searched.hasExactMatches && filtered.length > 0;
+  const scoped = useMemo(
+    () => exercises.filter((e: any) => category === "all" || e.category === category) as unknown as SearchableExercise[],
+    [exercises, category],
+  );
+  const exerciseSearch = useExerciseSearch(scoped, search, { limit: 5000, minChars: 1 });
+  const searched = exerciseSearch.local;
+  const describedIds = new Set(exerciseSearch.described.map((d) => d.exercise.id));
+  const filtered = (searched ? searched.results.map((r) => r.exercise) : scoped).filter((e) => !describedIds.has(e.id)) as any[];
+  const highlightTerms = searched?.highlightTerms ?? [];
 
   // Windowed rendering — only render a slice at a time. Load more on scroll
   // via IntersectionObserver. Keeps the 1700+ exercise library snappy.
@@ -92,7 +101,7 @@ function ExerciseLibrary() {
           <div className="flex flex-wrap gap-3">
             <div className="relative flex-1 min-w-[240px]">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Search exercises…" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
+              <Input className="pl-9" placeholder="Search or describe an exercise…" aria-label="Search exercises" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
             </div>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
@@ -119,10 +128,14 @@ function ExerciseLibrary() {
           </Card>
         )}
 
-        {showingClosest && (
-          <p className="text-xs text-muted-foreground">
-            No exact matches. Showing closest results.
-          </p>
+        <DescribedMatches
+          state={exerciseSearch.describeState}
+          matches={exerciseSearch.described}
+          onPick={(ex) => setSelected(ex)}
+          className="max-w-xl"
+        />
+        {resultsNote(searched, exerciseSearch.described.length) && filtered.length > 0 && (
+          <p className="text-xs text-muted-foreground">{resultsNote(searched, exerciseSearch.described.length)}</p>
         )}
 
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
@@ -153,7 +166,7 @@ function ExerciseLibrary() {
               </Card>
             </button>
           ))}
-          {!exercisesLoading && filtered.length === 0 && (
+          {!exercisesLoading && filtered.length === 0 && exerciseSearch.described.length === 0 && exerciseSearch.describeState !== "loading" && (
             <div className="col-span-full rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
               {search.trim() ? `No exercises match “${search.trim()}”.` : "No exercises yet."}
             </div>

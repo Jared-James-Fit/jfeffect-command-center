@@ -14,7 +14,7 @@ describe("in-workout swap sheet — mobile search layout", () => {
   });
 
   it("renders the search header outside the scrolling result area", () => {
-    const headerIdx = src.indexOf('placeholder="Search exercises…"');
+    const headerIdx = src.indexOf('placeholder="Search or describe an exercise…"');
     const scrollIdx = src.indexOf("min-h-0 flex-1 overflow-y-auto overscroll-contain");
     expect(headerIdx).toBeGreaterThan(0);
     expect(scrollIdx).toBeGreaterThan(headerIdx);

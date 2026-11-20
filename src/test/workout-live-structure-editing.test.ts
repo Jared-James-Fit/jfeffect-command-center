@@ -14,7 +14,7 @@ describe("live workout structure editing", () => {
     expect(logger).toContain("rowIndex + 1");
     expect(logger).toContain("ordered.splice(target, 0, created.rowId)");
     expect(logger).toContain("subtle");
-    expect(picker).toContain("Search exercises…");
+    expect(picker).toContain("Search or describe an exercise…");
     expect(picker).toContain("Add it here without leaving the workout.");
     expect(actions).toContain("export const addExerciseToWorkout");
   });

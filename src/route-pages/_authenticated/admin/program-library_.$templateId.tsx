@@ -21,6 +21,8 @@ import {
 } from "@/lib/pl-programs";
 import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, exerciseAccent, HighlightedText, usePbDragging, beginPbDrag, endPbDrag } from "@/components/program-builder";
 import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
+import { resultsNote, useExerciseSearch } from "@/hooks/use-exercise-search";
+import { DescribedMatches } from "@/components/exercise-search/described-matches";
 import { resolveMovementFamily } from "@/lib/exercise-family";
 import { ExerciseOrderBadge } from "@/components/exercise-order-badge";
 import { derivePurposeLabels, deriveWeeklyPurposeLabelByRowId, defaultRestSeconds, effectiveRestSeconds, PURPOSE_LABEL_OPTIONS, resolveCategory, purposeLabelBadgeClass, purposeLabelText } from "@/lib/exercise-metadata";
@@ -2625,11 +2627,14 @@ function PhoneExercisePickerSheet({
   // the same sheet on a computer, from the side
   const phone = useBuilderPhone();
   const [q, setQ] = useState("");
-  const searched = useMemo(() => {
-    const list = (exercises as SearchableExercise[]).filter((e) => !excludeId || e.id !== excludeId);
-    return searchExercises(list, q, { limit: q.trim() ? 200 : 100 });
-  }, [exercises, q, excludeId]);
-  const filtered = searched.results.map((r) => r.exercise) as any[];
+  const pool = useMemo(
+    () => (exercises as SearchableExercise[]).filter((e) => !excludeId || e.id !== excludeId),
+    [exercises, excludeId],
+  );
+  const search = useExerciseSearch(pool, q, { limit: 200, minChars: 1, describe: open });
+  const searched = search.local ?? searchExercises(pool, "", { limit: 100 });
+  const describedIds = new Set(search.described.map((d) => d.exercise.id));
+  const filtered = searched.results.map((r) => r.exercise).filter((e) => !describedIds.has(e.id)) as any[];
   const terms = searched.highlightTerms;
   const close = (next: boolean) => {
     if (!next) setQ("");
@@ -2663,7 +2668,7 @@ function PhoneExercisePickerSheet({
               onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
               enterKeyHint="search"
               type="search"
-              placeholder="Search exercises"
+              placeholder="Search or describe an exercise"
               aria-label="Search exercises"
               autoComplete="off"
               autoCorrect="off"
@@ -2673,10 +2678,16 @@ function PhoneExercisePickerSheet({
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
-          {q.trim() && !searched.hasExactMatches && filtered.length > 0 && (
-            <p className="pb-2 text-[12px] text-muted-foreground">No exact matches. Showing the closest.</p>
+          <DescribedMatches
+            state={search.describeState}
+            matches={search.described}
+            onPick={(ex) => { onPick(ex); close(false); }}
+            className="pb-3"
+          />
+          {resultsNote(search.local, search.described.length) && filtered.length > 0 && (
+            <p className="pb-2 text-[12px] text-muted-foreground">{resultsNote(search.local, search.described.length)}</p>
           )}
-          {filtered.length === 0 ? (
+          {filtered.length === 0 && search.described.length === 0 && search.describeState !== "loading" ? (
             <p className="py-10 text-center text-sm text-muted-foreground">Nothing matches that. Try another word.</p>
           ) : (
             <ul className="space-y-1.5">
@@ -2733,11 +2744,10 @@ function InlineAddExercisePopover({
   const pbDragging = usePbDragging();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const searched = useMemo(
-    () => searchExercises(exercises as SearchableExercise[], q, { limit: q.trim() ? 200 : 100 }),
-    [exercises, q],
-  );
-  const filtered = searched.results.map((r) => r.exercise) as any[];
+  const search = useExerciseSearch(exercises as SearchableExercise[], q, { limit: 200, minChars: 1, describe: open });
+  const searched = search.local ?? searchExercises(exercises as SearchableExercise[], "", { limit: 100 });
+  const describedIds = new Set(search.described.map((d) => d.exercise.id));
+  const filtered = searched.results.map((r) => r.exercise).filter((e) => !describedIds.has(e.id)) as any[];
   const terms = searched.highlightTerms;
 
   const pick = (exId: string) => {
@@ -2823,18 +2833,23 @@ function InlineAddExercisePopover({
         </div>
         <Input
           ref={inputRef}
-          placeholder="Search exercises…"
+          placeholder="Search or describe an exercise…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           className="mb-2 h-8 text-xs"
         />
         <div className="max-h-64 overflow-y-auto">
-          {q.trim() && !searched.hasExactMatches && filtered.length > 0 && (
-            <div className="px-2 pb-1 text-[10px] text-muted-foreground">
-              No exact matches. Showing closest results.
-            </div>
+          <DescribedMatches
+            compact
+            state={search.describeState}
+            matches={search.described}
+            onPick={(ex) => pick(ex.id)}
+            className="pb-2"
+          />
+          {resultsNote(search.local, search.described.length) && filtered.length > 0 && (
+            <div className="px-2 pb-1 text-[10px] text-muted-foreground">{resultsNote(search.local, search.described.length)}</div>
           )}
-          {filtered.length === 0 ? (
+          {filtered.length === 0 && search.described.length === 0 && search.describeState !== "loading" ? (
             <div className="px-2 py-3 text-center text-xs text-muted-foreground">
               No matches
             </div>
