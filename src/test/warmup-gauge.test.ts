@@ -19,14 +19,14 @@ describe("suggested last warm-up", () => {
   });
 });
 
-describe("suggestion card with the warm-up row", () => {
+describe("suggestion card (no warm-up row, no warm-up weight)", () => {
   const model: any = { status: "ready", unit: "lb", source: "history", historySessions: 6, history: [], today: [], readiness: { multiplier: 1, reasons: [] }, staleDays: null, warmup: null, bodyweightScale: 1 };
   const hint = { low: 215, high: 235, target: 225, unit: "lb" as const };
   const plan = { reps: 5, rpe: 6 };
-  const render = (warmup: any, m = model, h: any = hint) => renderToStaticMarkup(createElement(LoadSuggestionCard, { hint: h, model: m, plan, warmup }));
+  const render = (warmupReads: boolean, m = model, h: any = hint) => renderToStaticMarkup(createElement(LoadSuggestionCard, { hint: h, model: m, plan, warmupReads }));
 
-  it("leaves the warm-up to the set table (no second prompt on the card)", () => {
-    const html = render({ suggested: { load: 195, reps: 2 } });
+  it("never prompts a warm-up or suggests its weight", () => {
+    const html = render(true);
     expect(html).toMatch(/data-testid="load-target">225(<!-- -->)? (<!-- -->)?lb</);
     // one line: what to load and what for; the range lives behind ⓘ
     expect(html).toContain("Suggested");
@@ -34,24 +34,26 @@ describe("suggestion card with the warm-up row", () => {
     expect(html).not.toContain("215–235");
     expect(html).not.toContain('data-testid="load-badge"');
     expect(html).not.toContain("warmup-gauge");
+    expect(html).not.toContain("Work up to about");
   });
   it("says when a logged warm-up tuned the number", () => {
-    expect(render({ suggested: null }, { ...model, source: "history_warmup" })).toContain("Warm-up tuned");
-    expect(render({ suggested: null }, { ...model, source: "warmup", historySessions: 0 })).toContain("From warm-up");
+    expect(render(true, { ...model, source: "history_warmup" })).toContain("Warm-up tuned");
+    expect(render(true, { ...model, source: "warmup", historySessions: 0 })).toContain("From warm-up");
   });
-  it("Suggest on but no number yet: never blank — points at the warm-up row when it's offered", () => {
-    const html = render({ suggested: null }, { ...model, status: "calibrating", historySessions: 0 }, null);
+  it("Suggest on but no number yet: never blank, and it waits for the first set (never a warm-up prompt)", () => {
+    const html = render(true, { ...model, status: "calibrating", historySessions: 0 }, null);
     expect(html).toContain('data-testid="load-suggestion-pending"');
     expect(html).toContain("No logs of this lift yet");
     // the cell says when a number comes; the why is one tap away
-    expect(html).toContain("After your warm-up");
+    expect(html).toContain("After your first set");
+    expect(html).not.toContain("After your warm-up");
   });
   it("no warm-up offered: the first logged set unlocks live suggestions", () => {
-    const html = render(null, { ...model, status: "calibrating", historySessions: 3 }, null);
+    const html = render(false, { ...model, status: "calibrating", historySessions: 3 }, null);
     expect(html).toContain("No recent logs of this lift with an RPE");
     expect(html).toContain("After your first set");
   });
   it("an early estimate says so", () => {
-    expect(render(null, { ...model, early: true, historySessions: 1 })).toContain("Early estimate");
+    expect(render(false, { ...model, early: true, historySessions: 1 })).toContain("Early estimate");
   });
 });

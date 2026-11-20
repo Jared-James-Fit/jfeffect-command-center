@@ -161,7 +161,6 @@ import {
   parseRpe,
   planningTarget,
   predictReadiness,
-  suggestFinalWarmup,
   suggestionPicks,
   suggestSetLoad,
   NEUTRAL_READINESS,
@@ -228,6 +227,8 @@ import {
 } from "@/components/workout-day/WorkoutTimer";
 import { listenChannel } from "@/lib/realtime-channel";
 import { feedback } from "@/lib/feedback";
+import { afterAdd, afterRemove, getSetSession, putBackWrites, rowsWithSkips, setKindAt, setRemoval, setSetSession, shownSetCount, takeOutWrites, withLoggedShown } from "@/lib/workouts/set-session";
+import { useSetSessionsVersion } from "@/lib/workouts/use-set-session";
 import { HapticTap } from "@/components/haptic-tap";
 
 /* -------------------------------------------------------------------------- */
@@ -2528,12 +2529,21 @@ function WorkoutDay({
   // the finish review all read this one (workout-set-progress.ts), so the
   // review can't pop early (an extra set on one exercise standing in for a
   // missing one on another) or never (bodyweight, reps-only, weight-only sets).
-  const loggedProgress = useMemo(() => workoutSetProgress(rows as any[], results as any[]), [rows, results]);
+  // A program set skipped today (set-session.ts) is nothing left to do here,
+  // though the prescription (and every summary of it) still counts it.
+  const setSessionsVersion = useSetSessionsVersion();
+  const setScope = client?.id ? `${client.id}:${scheduledWorkoutId ?? dayId}` : null;
+  const progressRows = useMemo(
+    () => rowsWithSkips(rows as any[], (id) => getSetSession(setScope, id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, setScope, setSessionsVersion],
+  );
+  const loggedProgress = useMemo(() => workoutSetProgress(progressRows, results as any[]), [progressRows, results]);
   // The lifting alone: the day's cardio is done before, during or after it (or
   // later that day), so the ring and the Finish button never wait on it (workout-cardio.ts).
   const liftLogged = useMemo(
-    () => (liftRows > 0 && liftRows < (rows as any[]).length ? workoutSetProgress((rows as any[]).slice(0, liftRows), results as any[]) : loggedProgress),
-    [rows, results, liftRows, loggedProgress],
+    () => (liftRows > 0 && liftRows < progressRows.length ? workoutSetProgress(progressRows.slice(0, liftRows), results as any[]) : loggedProgress),
+    [progressRows, results, liftRows, loggedProgress],
   );
   // When every set is logged, the day's cardio too, there's no extra "Finish
   // Workout" tap: the review opens as the athlete's last step and saving it
@@ -3148,6 +3158,7 @@ function WorkoutDay({
                     dayTitle={cleanDayTitle(day.title, day.day_index)}
                     dayIndex={day?.day_index ?? null}
                     clientId={client?.id}
+                    setScope={setScope}
                     previousLift={previousLiftByRow.get(r.id) ?? null}
                       warmedUp={warmedUpRowIds.has(r.id)}
                       firstHeavySet={firstHeavyRowIds.has(r.id)}
@@ -3675,7 +3686,7 @@ function PreviousLiftChip({ data, displayUnit, onOpen, otherOn = null }: {
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, startsWorkout = true, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, weekIndex = null, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; /** Logging here starts the workout's clock (false: the day's cardio, done any time). */ startsWorkout?: boolean; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: TopSetBasis | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb", opts?: { relabel?: boolean }) => void; focusMode?: boolean; /** The program week this workout is in (a generated note's "Week 1: …" line shows only in week 1). */ weekIndex?: number | null; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setScope = null, startsWorkout = true, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, weekIndex = null, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; /** This client and workout instance: where the card's added / skipped sets are kept (set-session.ts). */ setScope?: string | null; /** Logging here starts the workout's clock (false: the day's cardio, done any time). */ startsWorkout?: boolean; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: TopSetBasis | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb", opts?: { relabel?: boolean }) => void; focusMode?: boolean; /** The program week this workout is in (a generated note's "Week 1: …" line shows only in week 1). */ weekIndex?: number | null; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
   // What the card says of the coach's note (coach-notes.ts): a coach's words as written, a generated note without its boilerplate.
   const athleteNote = exerciseNoteForAthlete(row?.notes, weekIndex);
   const adapter = useOptionalAdapter();
@@ -3760,76 +3771,171 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
   const cues = exercise?.cues ?? null;
   const [sessionSetCount, setSessionSetCount] = useState(() => Math.max(1, Number(row.sets) || 1));
   useEffect(() => { setSessionSetCount(Math.max(1, Number(row.sets) || 1)); }, [row.id, row.sets]);
-  const setCount = sessionSetCount;
+  // The row's own count (pl_exercise_rows.sets) and what the card shows: the
+  // same, less the program's sets skipped today (set-session.ts, this phone).
+  useSetSessionsVersion();
+  const dbSetCount = sessionSetCount;
+  // A skip never hides a set with numbers on it (withLoggedShown: an undo from
+  // the ⋯, another phone logging it), read only from settled sets and never
+  // while this card is moving its own sets (they're mid-write).
+  const setsMovingRef = useRef(false);
+  const highestLogged = existingResults.reduce(
+    (m: number, x: any) => (x.completed_at || x.actual_load != null || x.completed_duration_seconds != null ? Math.max(m, Number(x.set_index) || 0) : m),
+    0,
+  );
+  const storedSetSession = getSetSession(setScope, row.id);
+  const setSession = resultsReady && !setsMovingRef.current ? withLoggedShown(dbSetCount, storedSetSession, highestLogged) : storedSetSession;
+  useEffect(() => {
+    if (setSession !== storedSetSession) setSetSession(setScope, row.id, setSession);
+  }, [setSession, storedSetSession, setScope, row.id]);
+  const setCount = shownSetCount(dbSetCount, setSession);
+  const skippedToday = dbSetCount - setCount;
+  const canEditSets = !readonly && adapter?.kind !== "member" && !!clientId;
+  const canAddSet = canEditSets && (skippedToday > 0 || dbSetCount < 20);
 
+  // + Add set: a set skipped today comes back first (it's the program's:
+  // nothing to write); else one more set, remembered as added (it can be
+  // deleted later; the program's sets only ever skip).
   const addSet = async () => {
-    if (readonly || adapter?.kind === "member" || !clientId || setCount >= 20) return;
-    const previous = setCount;
+    if (!canAddSet) return;
+    const { session: nextSession, write } = afterAdd(dbSetCount, setSession);
+    if (!write) {
+      setSetSession(setScope, row.id, nextSession);
+      toast.success(`Set ${setCount + 1} is back`);
+      return;
+    }
+    const previous = dbSetCount;
     const next = previous + 1;
     setSessionSetCount(next);
+    setSetSession(setScope, row.id, nextSession);
     try {
       const { error } = await sb.from("pl_exercise_rows").update({ sets: next }).eq("id", row.id);
       if (error) throw error;
       await qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] });
       onChange();
-      toast.success(`Set ${next} added`);
+      toast.success(`Set ${setCount + 1} added`);
     } catch (error: any) {
       setSessionSetCount(previous);
+      setSetSession(setScope, row.id, setSession);
       toast.error(error?.message ?? "Could not add set");
     }
   };
 
-  const removeSet = async (setIndex: number) => {
-    if (readonly || adapter?.kind === "member" || !clientId || setCount <= 1) return;
-    const removing = existingResults.find((x: any) => x.set_index === setIndex);
-    const detail = removing?.completed_at || removing
-      ? " This set has logged data and it will be deleted."
-      : "";
-    if (!window.confirm(`Remove set ${setIndex} from ${name}?${detail} (Undo is in this exercise's ⋯ menu.)`)) return;
+  /** This card's sets as they're stored now (after a write, before the refetch lands). */
+  const readCardResults = async (): Promise<any[]> => {
+    const { data, error } = await sb.from("pl_row_results").select("*").eq("row_id", row.id).eq("client_id", clientId);
+    if (error) throw error;
+    return (data ?? []) as any[];
+  };
+  /** Show the stored sets straight away (a row's recent-save guard would keep old numbers on screen). */
+  const showCardResults = (results: any[], count: number, from: number) => {
+    shownFieldRef.current.reps.clear();
+    shownFieldRef.current.rpe.clear();
+    cascadeOriginRef.current.clear();
+    setRestore((r) => ({ token: (r?.token ?? 0) + 1, sets: snapshotOf(results, count).sets }));
+    for (let i = from; i <= Math.max(count, dbSetCount) + 1; i++) clearLocalDraft(`workout-set:${row.id}:${clientId}:${i}`);
+  };
 
-    const previous = setCount;
-    const next = previous - 1;
-    setSessionSetCount(next);
+  /**
+   * Take one set out (a swipe left on it, or the card's ⋯): a set the athlete
+   * added is deleted (the row's count goes down), one of the program's is
+   * skipped for today (the prescription stays: the coach still sees it was
+   * planned). Either way its logged numbers go, the sets after it move up a
+   * number, and Undo on the toast puts it all back exactly (by row, so a set's
+   * video stays with it). Never asks first: Undo is the safety net.
+   */
+  const takeOutSet = async (setIndex: number) => {
+    if (!canEditSets) return;
+    const kind = setRemoval(setIndex, dbSetCount, setSession);
+    if (!kind) return;
+    const before = existingResults as any[];
+    const removed = before.find((x: any) => Number(x.set_index) === setIndex) ?? null;
+    const { shifts: shifted } = takeOutWrites(before, setIndex);
+    const previous = dbSetCount;
+    const next = kind === "delete" ? previous - 1 : previous;
+    const sessionBefore = setSession;
+    const logged = !!removed?.completed_at;
+    setsMovingRef.current = true;
+    // shown at once: the set goes and the ones after it move up
+    if (kind === "delete") setSessionSetCount(next);
+    setSetSession(setScope, row.id, afterRemove(kind, previous, sessionBefore));
     try {
-      // Delete the selected set, then shift every later result up one position
-      // so visible set numbering stays contiguous.
-      const { error: deleteError } = await sb.from("pl_row_results")
-        .delete()
-        .eq("row_id", row.id)
-        .eq("client_id", clientId)
-        .eq("set_index", setIndex);
-      if (deleteError) throw deleteError;
-
-      const later = existingResults
-        .filter((x: any) => Number(x.set_index) > setIndex)
-        .sort((a: any, b: any) => Number(a.set_index) - Number(b.set_index));
-      for (const result of later) {
-        const { error: shiftError } = await sb.from("pl_row_results")
-          .update({ set_index: Number(result.set_index) - 1 })
-          .eq("id", result.id);
-        if (shiftError) throw shiftError;
+      if (removed) {
+        const { error } = await sb.from("pl_row_results").delete().eq("id", removed.id).eq("client_id", clientId);
+        if (error) throw error;
       }
-
-      const { error: rowError } = await sb.from("pl_exercise_rows").update({ sets: next }).eq("id", row.id);
-      if (rowError) throw rowError;
-      // The rows below moved up a slot: show their values now. A row's
-      // recent-save guard would otherwise keep the removed set's numbers on
-      // screen (set 2 still showing the old set 2 over what is now set 3).
-      const shifted = existingResults
-        .filter((x: any) => Number(x.set_index) !== setIndex)
-        .map((x: any) => (Number(x.set_index) > setIndex ? { ...x, set_index: Number(x.set_index) - 1 } : x));
-      shownFieldRef.current.reps.clear();
-      shownFieldRef.current.rpe.clear();
-      setRestore((r) => ({ token: (r?.token ?? 0) + 1, sets: snapshotOf(shifted, next).sets }));
-      for (let i = setIndex; i <= previous; i++) clearLocalDraft(`workout-set:${row.id}:${clientId}:${i}`);
-      await qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] });
-      await qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
+      for (const r of shifted) {
+        const { error } = await sb.from("pl_row_results").update({ set_index: r.to }).eq("id", r.id).eq("client_id", clientId);
+        if (error) throw error;
+      }
+      if (kind === "delete") {
+        const { error } = await sb.from("pl_exercise_rows").update({ sets: next }).eq("id", row.id);
+        if (error) throw error;
+      }
+      showCardResults(
+        before
+          .filter((x: any) => Number(x.set_index) !== setIndex)
+          .map((x: any) => (Number(x.set_index) > setIndex ? { ...x, set_index: Number(x.set_index) - 1 } : x)),
+        next,
+        setIndex,
+      );
+      await Promise.all([
+        kind === "delete" ? qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] }) : null,
+        qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] }),
+      ]);
       onChange();
-      toast.success(`Set ${setIndex} removed`);
+      feedback("tap");
+      toast(kind === "delete" ? `Set ${setIndex} deleted` : `Set ${setIndex} skipped`, {
+        description: kind === "skip"
+          ? `Still in your program${logged ? ", its numbers cleared" : ""}. Only today changes.`
+          : logged ? "Its logged numbers went with it." : undefined,
+        duration: 6000,
+        action: { label: "Undo", onClick: () => void putSetBack({ kind, setIndex, removed, shifted, previous }) },
+      });
     } catch (error: any) {
       setSessionSetCount(previous);
+      setSetSession(setScope, row.id, sessionBefore);
       await qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
       toast.error(error?.message ?? "Could not remove set");
+    } finally {
+      setsMovingRef.current = false;
+    }
+  };
+  /** Undo for takeOutSet: the sets move back down by row, the removed one comes back as it was. */
+  const putSetBack = async (r: { kind: "delete" | "skip"; setIndex: number; removed: any | null; shifted: Array<{ id: string; from: number; to: number }>; previous: number }) => {
+    if (!clientId) return;
+    setsMovingRef.current = true;
+    try {
+      if (r.kind === "delete") {
+        const { error } = await sb.from("pl_exercise_rows").update({ sets: r.previous }).eq("id", row.id);
+        if (error) throw error;
+        setSessionSetCount(r.previous);
+      } else {
+        const now = getSetSession(setScope, row.id);
+        setSetSession(setScope, row.id, { ...now, skipped: Math.max(0, now.skipped - 1) });
+      }
+      // highest first, so no two sets ever share a number on the way
+      for (const s of putBackWrites(r.shifted)) {
+        const { error } = await sb.from("pl_row_results").update({ set_index: s.to }).eq("id", s.id).eq("client_id", clientId);
+        if (error) throw error;
+      }
+      if (r.removed) {
+        const set = snapshotOf([r.removed], r.previous).sets[0];
+        const body: Record<string, any> = withMemberWorkoutIndexes({ row_id: row.id, client_id: clientId, ...setPayload(set) }, adapter, dayId);
+        const { error } = await sb.from("pl_row_results").upsert(body, { onConflict: "client_id,row_id,set_index" });
+        if (error) throw error;
+      }
+      showCardResults(await readCardResults(), r.previous, r.setIndex);
+      await Promise.all([
+        r.kind === "delete" ? qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] }) : null,
+        qc.refetchQueries({ queryKey: ["pl-day-results", dayId] }),
+      ]);
+      onChange();
+    } catch (error: any) {
+      await qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
+      toast.error(error?.message ?? "Couldn't bring the set back. Try again.");
+    } finally {
+      setsMovingRef.current = false;
     }
   };
   // Tracking type resolution priority:
@@ -3954,7 +4060,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
   // Phone-first: 44px-tall cells. The set number is the done button (no
   // status column), so reps / effort / weight get the width; a coaching
   // client's sets end in a slim video column (set-video-cell.tsx).
-  const canRemoveSet = !readonly && adapter?.kind !== "member" && setCount > 1;
   const setVideosOn = useEntitlement("lift_review") && adapter?.kind !== "member" && !!clientId;
   const rowHasVideos = useRowHasSetVideos(dayId, row.id, setVideosOn);
   const looseWarmupClip = useLooseWarmupClip(dayId, row.id, setVideosOn);
@@ -4350,29 +4455,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     : plannedView ? (plannedView.load != null && plannedView.value ? plannedView.load : null)
     : showSuggestionCard && canSuggest && loadHint && loadModel && loadModel.status !== "calibrating" && !loadPicks ? loadHint.target
     : null;
-  // "Last warm-up" row at the top of the set table (compound lifts, before the
-  // first working set): says what to warm up to, then reads how it felt to set
-  // or tune the working weight. Opens the warm-up form pre-filled.
-  // It ramps to the weight they mean to use: one they've put in the first open
-  // set (picked from the suggestion, or typed), else the suggestion itself.
-  const intendedLoad = useMemo(() => {
-    const open = existingResults
-      .filter((r: any) => !r.completed_at && resolveLoadType(r.load_type, r.is_bodyweight) === "external")
-      .sort((a: any, b: any) => a.set_index - b.set_index);
-    for (const r of open) {
-      const v = Number(displayLoadInUnit(r, activeUnit));
-      if (v > 0) return v;
-    }
-    return null;
-  }, [existingResults, activeUnit]);
-  const warmupGaugeSuggested = useMemo(
-    () => (loadHint && loadPlan ? suggestFinalWarmup(intendedLoad ?? loadHint.target, loadPlan.reps, activeUnit) : null),
-    [loadHint?.target, intendedLoad, loadPlan?.reps, activeUnit],
-  );
   // The warm-up today's number is read from (the heaviest; ties by rating, then reps: finalWarmupRow).
   const heaviestWarmupId = useMemo(() => finalWarmupRow(warmupSets)?.id ?? null, [warmupSets]);
-  // Tuning only happens before the first working set.
-  const warmupGauge = warmupPromptable && loadModel && !workedToday ? { suggested: warmupGaugeSuggested } : null;
+  // Tuning only happens before the first working set. Nothing prompts a warm-up
+  // or suggests its weight: one logged with + Warm-up is simply read.
+  const warmupTunes = !!(warmupPromptable && loadModel && !workedToday);
   // Today's best set for Workout Tools → e1RM: logged working sets and
   // warm-ups (external load only), one tap to fill it in.
   const e1rmSets = useMemo(() => {
@@ -4397,13 +4484,13 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
   // What the warm-ups did to today's weight, said in the warm-up header: tuned it,
   // too easy to read (RPE 5 or easier: history's number stands, or set 1 sets it),
   // or too far under the working weight to say anything.
-  const warmupTooEasyFrom: "history" | "cold" | null = !warmupGauge
+  const warmupTooEasyFrom: "history" | "cold" | null = !warmupTunes
     ? null
     : loadHint?.warmup === "too_easy" ? "history" : loadModel?.warmupTooEasy ? "cold" : null;
   const warmupTooEasy = warmupTooEasyFrom != null;
   const tunedWarmupId =
-    warmupGauge && !warmupTooEasy && loadHint?.warmup !== "light" && (loadModel?.source === "warmup" || loadModel?.source === "history_warmup") ? heaviestWarmupId : null;
-  const warmupRead: WarmupRead = !warmupGauge ? null
+    warmupTunes && !warmupTooEasy && loadHint?.warmup !== "light" && (loadModel?.source === "warmup" || loadModel?.source === "history_warmup") ? heaviestWarmupId : null;
+  const warmupRead: WarmupRead = !warmupTunes ? null
     : loadHint?.warmup === "light" ? "light"
     : warmupTooEasyFrom === "history" ? "too_easy"
     : warmupTooEasyFrom === "cold" ? "too_easy_cold"
@@ -4548,9 +4635,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
   // snapshot back through the same paths as logging, and the rows show it
   // straight away (`restore`) instead of waiting on the refetch.
   const [restore, setRestore] = useState<{ token: number; sets: CardSet[] } | null>(null);
+  // The row's own count (never the shown one): a restore writes it back to pl_exercise_rows.
   const cardSnapshot = useMemo(
-    () => snapshotOf(existingResults, setCount, warmupSets),
-    [existingResults, setCount, warmupSets],
+    () => snapshotOf(existingResults, dbSetCount, warmupSets),
+    [existingResults, dbSetCount, warmupSets],
   );
   const applyCardSnapshot = async (target: CardSnapshot, current: CardSnapshot) => {
     if (!clientId) return;
@@ -4602,6 +4690,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
     try {
       if (!(await cardHistory.run(action))) return;
       if (action === "reset") {
+        // back to how it started: the program's sets skipped today come back too
+        if (setSession.skipped) setSetSession(setScope, row.id, { ...setSession, skipped: 0 });
         toast.success(`${name} reset`, {
           description: "Cleared back to how it started.",
           action: { label: "Undo", onClick: () => void runCardHistory("undo") },
@@ -4993,7 +5083,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
           : showSuggestionCard && loadModel && loadPlan
             ? done
               ? <LoadSuggestionsDone next={nextTimeHint} plan={nextTimeHint?.progression ? null : loadPlan} />
-              : <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} picks={loadPicks} showPlan={!rxSaysPlan} onApply={!readonly && clientId && openSetCount > 0 ? logOpenSetsAt : null} />
+              : <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmupReads={warmupTunes} fromName={dayRead?.fromName ?? null} picks={loadPicks} showPlan={!rxSaysPlan} onApply={!readonly && clientId && openSetCount > 0 ? logOpenSetsAt : null} />
             : null;
         return (
           <>
@@ -5209,26 +5299,45 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
                     )}
                   </>
                 )}
-                {canRemoveSet && (
-                  <>
-                    {/* Remove one set (it used to be a − on every row): later sets
-                        move up, and its confirm says if it has logged numbers. */}
-                    <CardMenuSeparator />
-                    <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Remove a set (later sets move up)</div>
-                    <div className="grid grid-cols-5 gap-1 p-1" data-testid="card-remove-set">
-                      {Array.from({ length: setCount }, (_, i) => i + 1).map((n) => (
-                        <CardMenuItem
-                          key={n}
-                          onSelect={() => void removeSet(n)}
-                          aria-label={`Remove set ${n} from ${name}`}
-                          className="h-10 justify-center rounded-lg border border-border p-0 font-semibold tabular-nums"
-                        >
-                          {n}
-                        </CardMenuItem>
-                      ))}
-                    </div>
-                  </>
-                )}
+                {canEditSets && setCount > 1 && (() => {
+                  // The swipe's twin for anyone who doesn't swipe (or uses a
+                  // keyboard / screen reader): the program's sets skip for
+                  // today, sets they added delete. Later sets move up; Undo on
+                  // the toast puts it back.
+                  const all = Array.from({ length: setCount }, (_, i) => i + 1);
+                  const planned = all.filter((n) => setKindAt(n, dbSetCount, setSession) === "planned");
+                  const added = all.filter((n) => setKindAt(n, dbSetCount, setSession) === "added");
+                  const chip = "h-10 justify-center rounded-lg border border-border p-0 font-semibold tabular-nums";
+                  return (
+                    <>
+                      <CardMenuSeparator />
+                      {planned.length > 0 && (
+                        <>
+                          <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Skip a set today (stays in your program)</div>
+                          <div className="grid grid-cols-5 gap-1 p-1" data-testid="card-skip-set">
+                            {planned.map((n) => (
+                              <CardMenuItem key={n} onSelect={() => void takeOutSet(n)} aria-label={`Skip set ${n} of ${name} today`} className={chip}>
+                                {n}
+                              </CardMenuItem>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                      {added.length > 0 && (
+                        <>
+                          <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Delete a set you added</div>
+                          <div className="grid grid-cols-5 gap-1 p-1" data-testid="card-delete-set">
+                            {added.map((n) => (
+                              <CardMenuItem key={n} onSelect={() => void takeOutSet(n)} aria-label={`Delete set ${n} of ${name}`} className={cn(chip, "text-destructive focus:text-destructive")}>
+                                {n}
+                              </CardMenuItem>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
                 {onRemove && (
                   <>
                     <CardMenuSeparator />
@@ -5450,17 +5559,16 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
               return id;
             }}
             onRemove={removeWarmup}
-            // an open "Last warm-up" row on a heavy barbell compound (only the lift's first card,
-            // while it can still set today's weight); + Warm-up and folded everywhere else
+            // added only with + Warm-up; a heavy barbell lift's logged warm-ups stay open before set 1
+            // (they can still tune today's weight), folded everywhere else
             style={rampsUp ? warmupStyle : "secondary"}
             ramp={!workedToday}
-            tunes={!!warmupGauge}
-            seed={warmupGauge?.suggested ?? null}
+            tunes={warmupTunes}
             read={warmupRead}
             suggestOn={showSuggestionCard}
             // the weight set 1's tap logs once this warm-up is in (Suggest off: it's said in the header)
             todayLoad={warmupTodayLoad}
-            target={warmupGauge && loadPlan ? loadPlan : null}
+            target={warmupTunes && loadPlan ? loadPlan : null}
             // the rows line up with the set table's columns
             columns={{ focusMode, showReps, showTimer, showDistance, showCalories, showVelocity, videoColumn }}
             effortKind={showRir ? "rir" : "rpe"}
@@ -5489,9 +5597,20 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
         {Array.from({ length: setCount }).map((_, i) => {
           const existing = existingResults.find((x) => x.set_index === i + 1);
           const prevExisting = i > 0 ? existingResults.find((x) => x.set_index === i) : undefined;
+          // A swipe left takes the set out: Delete one they added, Skip one of
+          // the program's (the card's ⋯ has the same for anyone who doesn't swipe).
+          const removal = canEditSets ? setRemoval(i + 1, dbSetCount, setSession) : null;
           return (
-            <SetRow
+            <SwipeToReveal
               key={i}
+              variant="row"
+              enabled={!!removal}
+              actionText={removal === "skip" ? "Skip" : "Delete"}
+              tone={removal === "skip" ? "neutral" : "destructive"}
+              actionLabel={removal === "skip" ? `Skip set ${i + 1} of ${name} today` : `Delete set ${i + 1} of ${name}`}
+              onAction={() => void takeOutSet(i + 1)}
+            >
+            <SetRow
               prOn={cardSetup?.prOn ?? null}
               rowId={row.id}
               workoutId={dayId}
@@ -5549,8 +5668,15 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
               dayTitle={dayTitle}
               registerHandle={registerSetRow}
             />
+            </SwipeToReveal>
           );
         })}
+        {/* Program sets skipped today: said once, quietly (+ Add set brings one back). */}
+        {skippedToday > 0 && (
+          <p className="px-3 py-1.5 text-[12px] text-muted-foreground" data-sets-skipped={skippedToday}>
+            {skippedToday === 1 ? "1 set" : `${skippedToday} sets`} skipped today, still in your program
+          </p>
+        )}
         {/* A set went over the RPE cap: the open sets start lighter (their cells
             already hold it when untouched). Quiet, and only while sets are left. */}
         {runLine && (
@@ -5583,7 +5709,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
               variant="ghost"
               className="h-10 rounded-full px-4 text-[13px] font-semibold text-muted-foreground hover:text-foreground"
               onClick={() => void addSet()}
-              disabled={setCount >= 20}
+              disabled={!canAddSet}
               aria-label={`Add set to ${name}`}
             >
               <span className="text-base font-medium leading-none" aria-hidden>+</span>

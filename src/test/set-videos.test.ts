@@ -185,9 +185,10 @@ describe("set row: the number is the done button", () => {
     const near = src.slice(Math.max(0, at - 1200), at + 1200);
     expect(near).toContain("saveCompletionStatus()");
   });
-  it("moves Remove a set into the card's ⋯", () => {
-    expect(src).toContain('data-testid="card-remove-set"');
-    expect(src).toContain("removeSet(n)");
+  it("taking a set out is a swipe on the set, or the card's ⋯ (never a − on every row)", () => {
+    expect(src).toContain('data-testid="card-skip-set"');
+    expect(src).toContain('data-testid="card-delete-set"');
+    expect(src).toContain("onSelect={() => void takeOutSet(n)}");
   });
   it("shows the video column for coaching clients only", () => {
     expect(src).toContain('useEntitlement("lift_review") && adapter?.kind !== "member"');

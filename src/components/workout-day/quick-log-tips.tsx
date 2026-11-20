@@ -6,7 +6,8 @@
  *      with it and log too; change any set that went differently);
  *   3. or Suggest picks the weight, and one tap on set 1's number logs the
  *      exercise at it (the same fill-down as a typed weight);
- *   4. the last warm-up (optional) tunes today's weight;
+ *   4. a swipe left takes a set out: Delete one they added (or a warm-up),
+ *      Skip one of the program's (it stays in their plan), with Undo;
  *   5. (a coaching client's) the camera sends a set or warm-up to the coach.
  * It opens by itself once per account, the first time someone logs their own
  * workout after it shipped (`workout_view_prefs.logging_tips_at`, see
@@ -15,10 +16,10 @@
  * motion holds each step on its last beat.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Check, Flame, Play, X, Zap } from "lucide-react";
+import { Camera, Check, Play, X, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type StepKey = "prefilled" | "type" | "suggest" | "warmup" | "video";
+type StepKey = "prefilled" | "type" | "suggest" | "remove" | "video";
 type Step = { key: StepKey; title: string; body: string };
 
 const STEPS: Step[] = [
@@ -38,9 +39,9 @@ const STEPS: Step[] = [
     body: "Turn on Suggest and it works out today's weight from your history. Tap set 1's number and the whole exercise logs at it.",
   },
   {
-    key: "warmup",
-    title: "Your last warm-up (optional)",
-    body: "Type it before set 1 and today's weight is tuned to how you're moving. Skip it any time.",
+    key: "remove",
+    title: "Swipe a set left to take it out",
+    body: "A set or warm-up you added: Delete. A set from your program: Skip, so it stays in your plan. Undo puts it back, and the exercise's ⋯ does the same.",
   },
   {
     key: "video",
@@ -59,7 +60,7 @@ export const QUICK_LOG_BEATS: Record<StepKey, readonly number[]> = {
   prefilled: [2400],
   type: [1000, 750, 1900],
   suggest: [900, 600, 900, 600, 1700],
-  warmup: [1000, 750, 1900],
+  remove: [1000, 700, 1900],
   video: [1000, 600, 1700],
 };
 
@@ -218,22 +219,20 @@ const FOCUSED = "border-primary bg-background ring-2 ring-primary/30";
 
 /**
  * A small exercise card in the logger's own look: the Last time · Suggested
- * strip, the set table's header, the last warm-up row and two sets.
+ * strip, the set table's header and two sets (the second swipes left to Skip).
  */
 function MockCard({ step, beat, unit, videoOn }: { step: StepKey; beat: number; unit: "kg" | "lb"; videoOn: boolean }) {
   const kg = unit === "kg";
   const n = (lb: number, kgv: number) => String(kg ? kgv : lb);
   const suggested = n(185, 85);
-  const tuned = n(190, 87.5);
-  const warm = n(165, 75);
   const typed = n(190, 87.5);
   const finalBeat = QUICK_LOG_BEATS[step].length - 1;
   const after = beat === finalBeat;
 
   // Suggest: off until the finger turns it on (the suggest step), else on
   const suggestOn = step !== "suggest" || beat >= 2;
-  const warmLogged = step === "warmup" && after;
-  const shownSuggested = warmLogged ? tuned : suggested;
+  // the swipe: set 2 follows the finger, then sits open on Skip
+  const swipe = step === "remove" ? (beat === 0 ? 0 : beat === 1 ? -36 : -64) : 0;
   // set 1 (and, for a typed weight, set 2 with it)
   const typing = step === "type" && beat === 1;
   const typedAll = step === "type" && after;
@@ -244,7 +243,6 @@ function MockCard({ step, beat, unit, videoOn }: { step: StepKey; beat: number; 
     if (tapped) return { weight: suggested, done: true, focused: false };
     return { weight: "", done: false, focused: false };
   };
-  const warmWeight = step === "warmup" && beat >= 1 ? (beat === 1 ? warm.slice(0, -1) : warm) : "";
   const filmed = step === "video" && after;
   const grid = videoOn ? "30px 1fr 1fr 1.35fr 28px" : "30px 1fr 1fr 1.35fr";
   const ring = "ring-2 ring-foreground/40 ring-offset-1 ring-offset-card";
@@ -264,12 +262,9 @@ function MockCard({ step, beat, unit, videoOn }: { step: StepKey; beat: number; 
         <div className="relative flex flex-1 items-center px-2.5 py-1.5">
           {suggestOn ? (
             <div>
-              <div className="flex items-center gap-1 text-muted-foreground">
-                Suggested
-                {warmLogged && <span className="h-1.5 w-1.5 rounded-full bg-success" data-testid="mock-tuned" />}
-              </div>
-              <div className={cn("inline-flex rounded-md border px-1.5 font-semibold tabular-nums transition-colors duration-300", warmLogged ? "border-success/40 text-success" : "border-border bg-background text-foreground")}>
-                {shownSuggested} {unit}
+              <div className="flex items-center gap-1 text-muted-foreground">Suggested</div>
+              <div className="inline-flex rounded-md border border-border bg-background px-1.5 font-semibold tabular-nums text-foreground">
+                {suggested} {unit}
               </div>
             </div>
           ) : (
@@ -290,40 +285,26 @@ function MockCard({ step, beat, unit, videoOn }: { step: StepKey; beat: number; 
         {videoOn && <span className="flex justify-center"><Camera className="h-3 w-3" /></span>}
       </div>
 
-      {/* the last warm-up, open and optional, under its own quiet header (WarmupRows) */}
-      <div className="mt-1 border-t border-border/70 transition-colors">
-        <div className="flex min-h-7 items-center gap-1.5 px-2 text-[11px]">
-          <span className="font-medium text-foreground/80">{warmLogged ? "Warm-up" : "Last warm-up"}</span>
-          <span className="text-muted-foreground">
-            {warmLogged ? " · 1 set" : " · optional"}
-            {warmLogged && <span className="font-medium text-success"> · ✓ Suggested tuned</span>}
-          </span>
-        </div>
-        <div className="grid items-center gap-1.5 px-2 py-1.5" style={{ gridTemplateColumns: grid }}>
-          <span className="flex justify-center">
-            <span className={cn("inline-flex h-7 w-7 items-center justify-center rounded-full border text-muted-foreground", warmLogged ? "border-border bg-muted/40" : "border-dashed border-muted-foreground/40")}>
-              <Flame className="h-3.5 w-3.5" />
-            </span>
-          </span>
-          <span className={cn(CELL, WELL)}>3</span>
-          <span className={cn(CELL, WELL, "text-muted-foreground/60")}>—</span>
-          <span className={cn(CELL, step === "warmup" && beat === 1 ? FOCUSED : WELL, !warmWeight && "text-muted-foreground/60")}>
-            {warmWeight || "—"}
-            <Finger on={step === "warmup" && beat === 1} />
-          </span>
-          {videoOn && (
-            <span className="relative grid h-9 place-items-center text-muted-foreground/70">
-              <Camera className="h-4 w-4" />
-            </span>
-          )}
-        </div>
-      </div>
-
+      <div className="mt-1" />
       {[1, 2].map((k) => {
         const st = setState(k);
+        const dx = k === 2 ? swipe : 0;
         return (
-          <div key={k} className={cn("border-t border-border/70 transition-colors duration-300", st.done && "bg-success/[0.06]")}>
-            <div className="grid items-center gap-1.5 px-2 py-1.5" style={{ gridTemplateColumns: grid }}>
+          <div key={k} className="relative overflow-hidden border-t border-border/70">
+            {k === 2 && step === "remove" && (
+              <span
+                className="absolute inset-y-0 right-0 flex w-16 items-center justify-center bg-secondary text-[12px] font-semibold text-foreground transition-opacity duration-300"
+                style={{ opacity: Math.min(1, -dx / 64) }}
+                data-testid="mock-skip"
+              >
+                Skip
+              </span>
+            )}
+            <div
+              className={cn("relative grid items-center gap-1.5 bg-background px-2 py-1.5 transition-transform duration-300", st.done && "bg-success/[0.06]")}
+              style={{ gridTemplateColumns: grid, transform: dx ? `translateX(${dx}px)` : undefined }}
+            >
+              {k === 2 && <Finger on={step === "remove" && beat === 1} />}
               <span className="relative flex h-9 items-center justify-center">
                 <span
                   className={cn(

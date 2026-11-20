@@ -59,9 +59,10 @@ describe("suggested: a weight to choose from only where the lifter chooses by fe
     // the engine (and so the range) only runs when the coach doesn't own the load
     expect(wdv).toContain("if (!loadHistory || hideWeight || coachOwnsLoad || rowLoadType !== \"external\" || !loadPlan) return null;");
   });
-  it("the last warm-up ramps to the weight they mean to use", () => {
+  it("no warm-up weight is ever suggested: a warm-up is only what they log with + Warm-up", () => {
     const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
-    expect(wdv).toContain("suggestFinalWarmup(intendedLoad ?? loadHint.target, loadPlan.reps, activeUnit)");
+    expect(wdv).not.toContain("suggestFinalWarmup(");
+    expect(wdv).toContain("const warmupTunes = !!(warmupPromptable && loadModel && !workedToday);");
   });
 });
 
