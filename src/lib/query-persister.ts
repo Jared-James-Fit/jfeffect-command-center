@@ -83,6 +83,12 @@ const DO_NOT_PERSIST_PREFIXES = [
   // (megabytes for a long-term client): read when the sheet opens, never
   // written to the phone's storage, where it would crowd out the pages' copies.
   "training-report-",
+  // Booking pages and personal booking links: whether a time is still open or a link
+  // already has its booking must come from the server, never a disk copy (a reload
+  // after booking showed the times again), and a coach's minted link (its token)
+  // never sits in the phone's storage.
+  "booking-",
+  "schedule-sheet-",
 ];
 
 export function shouldPersistQueryKey(queryKey: readonly unknown[]): boolean {
