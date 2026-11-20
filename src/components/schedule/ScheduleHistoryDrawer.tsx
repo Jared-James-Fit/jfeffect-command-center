@@ -66,7 +66,7 @@ export function ScheduleHistoryDrawer({
       <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <History className="h-5 w-5" /> Schedule history
+            <History className="h-5 w-5" /> Schedule changes
           </SheetTitle>
           <SheetDescription>
             Every schedule change for this account — newest first.

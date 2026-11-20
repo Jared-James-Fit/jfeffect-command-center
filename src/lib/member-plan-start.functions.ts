@@ -116,21 +116,16 @@ export const startLibraryPlan = createServerFn({ method: "POST" })
       await supabaseAdmin.from("pl_blocks").update({ created_by: userId } as any).eq("id", result.block_id);
     }
 
-    // only now (the new plan exists) does the one they started before make way
+    // only now (the new plan exists) does the one they started before make way:
+    // archived as a switch, into their program history (never deleted)
     if (running.length) {
-      const now = new Date().toISOString();
-      await supabaseAdmin
-        .from("pl_blocks")
-        .update({ status: "Archived", archived: true, archived_at: now, archived_by: userId } as any)
-        .in("id", running.map((b) => b.id));
-      const prepIds = Array.from(new Set(running.map((b) => b.prep_id).filter((x): x is string => !!x)));
-      if (prepIds.length) {
-        await supabaseAdmin
-          .from("pl_preps")
-          .update({ status: "Archived", archived: true, archived_at: now, archived_by: userId } as any)
-          .in("id", prepIds)
-          .eq("created_by", userId);
-      }
+      const { error: archiveError } = await (supabaseAdmin as any).rpc("_member_program_archive", {
+        _client: (client as any).id,
+        _uid: userId,
+        _block_ids: running.map((b) => b.id),
+        _reason: "switched",
+      });
+      if (archiveError) console.error("[startLibraryPlan] archive failed", archiveError);
     }
 
     // the plan's days become their committed schedule (one schedule, so the
@@ -166,7 +161,16 @@ export const startLibraryPlan = createServerFn({ method: "POST" })
       console.error("[startLibraryPlan] stats failed", e);
     }
 
-    return { conflict: false as const, blockId: result.block_id ?? null, prepId: result.prep_id ?? null, days, unplaced };
+    return {
+      conflict: false as const,
+      blockId: result.block_id ?? null,
+      prepId: result.prep_id ?? null,
+      days,
+      unplaced,
+      // for Undo: the program it replaced (its history key) and the days they had
+      replacedKey: running.length ? running[0].prep_id ?? running[0].id : null,
+      previousDays: committed,
+    };
   });
 
 /** The plan a member is running, if they started one (for the library's "Current plan" badge). */

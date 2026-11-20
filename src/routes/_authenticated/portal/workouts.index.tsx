@@ -7,6 +7,7 @@ import { WorkoutsBodySkeleton } from "@/components/workouts/workouts-skeleton";
 import { WorkoutsExperience } from "@/components/workouts/WorkoutsExperience";
 import { WorkoutArchiveSection } from "@/components/workout-archive-section";
 import { EquipmentIntroGate } from "@/components/equipment/setup-tips";
+import { useServiceTier } from "@/lib/service-tier";
 
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/")({
@@ -54,10 +55,20 @@ function WorkoutsPage() {
         mode="self"
         openDate={open ?? null}
         openDays={days === 1}
-        footer={<WorkoutArchiveSection clientId={client.id} mode="client" />}
+        footer={<PastPrograms clientId={client.id} />}
       />
       {/* Equipment & setups' one-time walkthrough: here, never inside a workout. */}
       <EquipmentIntroGate clientId={client.id} unit={(client as any).preferred_weight_unit === "kg" ? "kg" : "lb"} />
     </>
   );
+}
+/**
+ * A coaching client's past blocks stay listed at the bottom (their coach
+ * manages them). A JF member's past programs are Program history instead,
+ * in the ⋯ (resume, start over, remove), so nothing is listed twice.
+ */
+function PastPrograms({ clientId }: { clientId: string }) {
+  const { isSelfServe, loading } = useServiceTier();
+  if (loading || isSelfServe) return null;
+  return <WorkoutArchiveSection clientId={clientId} mode="client" />;
 }

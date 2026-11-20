@@ -237,6 +237,7 @@ import { Route as AuthenticatedPortalPlansIndexRouteImport } from './routes/_aut
 import { Route as AuthenticatedPortalPlansPlanIdRouteImport } from './routes/_authenticated/portal/plans.$planId'
 import { Route as AuthenticatedPortalProgramsIndexRouteImport } from './routes/_authenticated/portal/programs.index'
 import { Route as AuthenticatedPortalProgramsProgramIdRouteImport } from './routes/_authenticated/portal/programs.$programId'
+import { Route as AuthenticatedPortalProgramsHistoryRouteImport } from './routes/_authenticated/portal/programs.history'
 import { Route as AuthenticatedPortalProgramsNewRouteImport } from './routes/_authenticated/portal/programs.new'
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
 import { Route as AuthenticatedPortalRecipesIndexRouteImport } from './routes/_authenticated/portal/recipes.index'
@@ -1609,6 +1610,12 @@ const AuthenticatedPortalProgramsProgramIdRoute =
     path: '/programs/$programId',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedPortalProgramsHistoryRoute =
+  AuthenticatedPortalProgramsHistoryRouteImport.update({
+    id: '/programs/history',
+    path: '/programs/history',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
 const AuthenticatedPortalProgramsNewRoute =
   AuthenticatedPortalProgramsNewRouteImport.update({
     id: '/programs/new',
@@ -2239,6 +2246,7 @@ export interface FileRoutesByFullPath {
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/portal/plans/$planId': typeof AuthenticatedPortalPlansPlanIdRoute
   '/portal/programs/$programId': typeof AuthenticatedPortalProgramsProgramIdRoute
+  '/portal/programs/history': typeof AuthenticatedPortalProgramsHistoryRoute
   '/portal/programs/new': typeof AuthenticatedPortalProgramsNewRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
@@ -2534,6 +2542,7 @@ export interface FileRoutesByTo {
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/portal/plans/$planId': typeof AuthenticatedPortalPlansPlanIdRoute
   '/portal/programs/$programId': typeof AuthenticatedPortalProgramsProgramIdRoute
+  '/portal/programs/history': typeof AuthenticatedPortalProgramsHistoryRoute
   '/portal/programs/new': typeof AuthenticatedPortalProgramsNewRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
@@ -2835,6 +2844,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/_authenticated/portal/plans/$planId': typeof AuthenticatedPortalPlansPlanIdRoute
   '/_authenticated/portal/programs/$programId': typeof AuthenticatedPortalProgramsProgramIdRoute
+  '/_authenticated/portal/programs/history': typeof AuthenticatedPortalProgramsHistoryRoute
   '/_authenticated/portal/programs/new': typeof AuthenticatedPortalProgramsNewRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/_authenticated/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
@@ -3136,6 +3146,7 @@ export interface FileRouteTypes {
     | '/portal/events/$id'
     | '/portal/plans/$planId'
     | '/portal/programs/$programId'
+    | '/portal/programs/history'
     | '/portal/programs/new'
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
@@ -3431,6 +3442,7 @@ export interface FileRouteTypes {
     | '/portal/events/$id'
     | '/portal/plans/$planId'
     | '/portal/programs/$programId'
+    | '/portal/programs/history'
     | '/portal/programs/new'
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
@@ -3731,6 +3743,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/events/$id'
     | '/_authenticated/portal/plans/$planId'
     | '/_authenticated/portal/programs/$programId'
+    | '/_authenticated/portal/programs/history'
     | '/_authenticated/portal/programs/new'
     | '/_authenticated/portal/purchases/$id'
     | '/_authenticated/portal/recipes/$recipeId'
@@ -5517,6 +5530,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalProgramsProgramIdRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/portal/programs/history': {
+      id: '/_authenticated/portal/programs/history'
+      path: '/programs/history'
+      fullPath: '/portal/programs/history'
+      preLoaderRoute: typeof AuthenticatedPortalProgramsHistoryRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
     '/_authenticated/portal/programs/new': {
       id: '/_authenticated/portal/programs/new'
       path: '/programs/new'
@@ -6541,6 +6561,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalEventsIdRoute: typeof AuthenticatedPortalEventsIdRoute
   AuthenticatedPortalPlansPlanIdRoute: typeof AuthenticatedPortalPlansPlanIdRoute
   AuthenticatedPortalProgramsProgramIdRoute: typeof AuthenticatedPortalProgramsProgramIdRoute
+  AuthenticatedPortalProgramsHistoryRoute: typeof AuthenticatedPortalProgramsHistoryRoute
   AuthenticatedPortalProgramsNewRoute: typeof AuthenticatedPortalProgramsNewRoute
   AuthenticatedPortalRecipesRecipeIdRoute: typeof AuthenticatedPortalRecipesRecipeIdRoute
   AuthenticatedPortalResourcesSlugRoute: typeof AuthenticatedPortalResourcesSlugRoute
@@ -6592,6 +6613,8 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalPlansPlanIdRoute: AuthenticatedPortalPlansPlanIdRoute,
     AuthenticatedPortalProgramsProgramIdRoute:
       AuthenticatedPortalProgramsProgramIdRoute,
+    AuthenticatedPortalProgramsHistoryRoute:
+      AuthenticatedPortalProgramsHistoryRoute,
     AuthenticatedPortalProgramsNewRoute: AuthenticatedPortalProgramsNewRoute,
     AuthenticatedPortalRecipesRecipeIdRoute:
       AuthenticatedPortalRecipesRecipeIdRoute,
