@@ -30,11 +30,14 @@ export function TrainingAnalyticsPreviewCard({
   clientId,
   unit: unitProp,
   hideWhenEmpty = false,
+  bare = false,
 }: {
   clientId: string;
   unit?: Unit;
   /** Nothing until there's a workout to count (analytics stays in Workouts' ⋯). */
   hideWhenEmpty?: boolean;
+  /** Rows inside another card (Workouts groups them with readiness): no card of its own. */
+  bare?: boolean;
 }) {
   const { data: results = [], isLoading } = useQuery({
     queryKey: ["pl-results-preview", clientId],
@@ -97,18 +100,43 @@ export function TrainingAnalyticsPreviewCard({
 
   if (hideWhenEmpty && (isLoading || empty)) return null;
 
+  // The month in one line: what happened, nothing at zero ("12 workouts · 3 PRs · 4-week streak").
+  const monthParts: { text: string; record?: boolean }[] = isLoading
+    ? [{ text: "…" }]
+    : [
+        { text: `${h.workouts} workout${h.workouts === 1 ? "" : "s"}` },
+        ...(h.prLifts > 0 ? [{ text: `${h.prLifts} PR${h.prLifts === 1 ? "" : "s"}`, record: true }] : []),
+        ...(h.streakWeeks > 0 ? [{ text: `${h.streakWeeks}-week streak` }] : []),
+      ];
+  const Wrap = bare ? "div" : Card;
+
   return (
     <section aria-label={`Your ${h.monthLabel}`}>
-      <Card className="overflow-hidden p-0">
-        {/* The header is the way in: the whole row opens Training analytics. */}
+      <Wrap className={bare ? "divide-y divide-border" : "divide-y divide-border overflow-hidden p-0"}>
+        {/* The row is the way in: it opens Training analytics. */}
         <Link
           to="/portal/workouts/analytics"
-          className="flex min-h-12 items-center gap-2 px-4 pt-3 transition active:bg-muted/40"
+          className="flex min-h-[64px] items-center gap-3 px-4 py-3 transition active:bg-muted/50"
           data-analytics-entry
         >
-          <BarChart3 className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-          <h2 className="text-base font-semibold">Training analytics</h2>
-          <span className="ml-auto text-xs text-muted-foreground">{h.monthLabel}</span>
+          <span className="grid h-10 w-10 shrink-0 place-items-center" aria-hidden>
+            <BarChart3 className="h-5 w-5 text-muted-foreground" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-semibold leading-tight">
+              Training <span className="font-normal text-muted-foreground">· {h.monthLabel}</span>
+            </span>
+            {!empty && (
+              <span className="mt-0.5 block truncate text-[13px] text-muted-foreground" data-month-line>
+                {monthParts.map((p, i) => (
+                  <span key={p.text}>
+                    {i > 0 && " · "}
+                    <span className={p.record ? "font-medium text-amber-600 dark:text-amber-400" : undefined}>{p.text}</span>
+                  </span>
+                ))}
+              </span>
+            )}
+          </span>
           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         </Link>
         <Collapsible open={moreOpen} onOpenChange={setMoreOpen}>
@@ -122,31 +150,24 @@ export function TrainingAnalyticsPreviewCard({
             </div>
           ) : (
             <>
-              {/* The three numbers that matter, in one row */}
-              <div className="grid grid-cols-3 divide-x divide-border/60 px-2 pb-3.5 pt-3">
-                <Tile label="Workouts" value={isLoading ? "…" : String(h.workouts)} />
-                <Tile label="PRs" value={isLoading ? "…" : String(h.prLifts)} record={h.prLifts > 0} />
-                <Tile label="Week streak" value={isLoading ? "…" : String(h.streakWeeks)} />
-              </div>
-
               {/* A glance at the trend: working sets a week for 8 weeks, and the one thing that stands out. */}
               {!isLoading && spark.some((w) => w.sets > 0) && (
                 <Link
                   to="/portal/workouts/analytics"
                   search={{ view: "volume" } as any}
-                  className="mx-4 mb-3.5 flex items-center gap-3 rounded-xl bg-muted/50 px-3 py-2.5 transition active:bg-muted"
+                  className="flex min-h-[56px] items-center gap-3 px-4 py-2.5 transition active:bg-muted/50"
                   aria-label={`Working sets the last 8 weeks: ${spark.map((w) => w.sets).join(", ")}. Open volume.`}
                   data-analytics-spark
                 >
-                  <span className="flex h-8 shrink-0 items-end gap-[3px]" aria-hidden>
+                  <span className="flex h-7 w-10 shrink-0 items-end justify-center gap-[2px]" aria-hidden>
                     {spark.map((w) => (
                       <span
                         key={w.key}
-                        className="w-[6px] rounded-t-[2px]"
-                        style={{
-                          height: `${Math.max(8, (w.sets / sparkMax) * 100)}%`,
-                          background: w.sets > 0 ? (w.current ? "color-mix(in oklch, var(--chart-4) 45%, transparent)" : "var(--chart-4)") : "var(--border)",
-                        }}
+                        className={
+                          "w-[3px] rounded-t-[1px] " +
+                          (w.sets > 0 ? (w.current ? "bg-foreground/35" : "bg-foreground/70") : "bg-border")
+                        }
+                        style={{ height: `${Math.max(10, (w.sets / sparkMax) * 100)}%` }}
                       />
                     ))}
                   </span>
@@ -163,7 +184,7 @@ export function TrainingAnalyticsPreviewCard({
               )}
 
               {/* The rest of the month, one tap away: weight lifted and the athlete rows. */}
-              <CollapsibleContent className="border-t border-border/60 px-4 pb-4 pt-3">
+              <CollapsibleContent className="px-4 pb-4 pt-3">
                 <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
                   Total weight lifted
                   <InfoTip label="About total weight lifted" title="Total weight lifted" align="start">
@@ -240,34 +261,16 @@ export function TrainingAnalyticsPreviewCard({
           )}
 
           {!empty && (
-            <div className="flex items-center border-t border-border/60">
-              <CollapsibleTrigger className="inline-flex h-11 items-center gap-1 px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground active:bg-muted/40">
+            <div className="flex items-center border-t border-border">
+              <CollapsibleTrigger className="inline-flex h-11 items-center gap-1 px-4 text-[13px] font-medium text-muted-foreground transition hover:text-foreground active:bg-muted/40">
                 {moreOpen ? "Less" : `More about ${h.monthLabel}`}
                 <ChevronDown className={"h-4 w-4 transition-transform " + (moreOpen ? "rotate-180" : "")} aria-hidden />
               </CollapsibleTrigger>
             </div>
           )}
         </Collapsible>
-      </Card>
+      </Wrap>
     </section>
-  );
-}
-
-function Tile({
-  label,
-  value,
-  record = false,
-}: {
-  label: string;
-  value: string;
-  /** A PR count above zero: amber, the app's colour for records. */
-  record?: boolean;
-}) {
-  return (
-    <div className="px-2 text-center">
-      <div className={"text-2xl font-semibold leading-none tabular-nums " + (record ? "text-amber-600 dark:text-amber-400" : "")}>{value}</div>
-      <div className="mt-1 text-xs text-muted-foreground">{label}</div>
-    </div>
   );
 }
 

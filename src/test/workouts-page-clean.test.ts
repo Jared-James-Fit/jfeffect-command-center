@@ -28,10 +28,13 @@ describe("Workouts page: one card per section, nothing said twice", () => {
     }
   });
 
-  it("the month card is one row of three numbers; weight lifted and the athlete rows fold under More", () => {
-    expect(month).toContain('<Tile label="Workouts"');
-    expect(month).toContain('<Tile label="PRs"');
-    expect(month).toContain('<Tile label="Week streak"');
+  it("the month is one line (nothing at zero); weight lifted and the athlete rows fold under More", () => {
+    expect(month).toContain("data-month-line");
+    expect(month).toContain("...(h.prLifts > 0 ?");
+    expect(month).toContain("...(h.streakWeeks > 0 ?");
+    expect(month).not.toContain("<Tile ");
+    // neutral bars: colour on Workouts only ever means something
+    expect(month).not.toContain("var(--chart-4)");
     // the analytics page reads by block, so the month's own numbers stay one tap away here
     expect(month).toContain("<CollapsibleContent");
     expect(month).toContain('data-testid="month-weight-line"');

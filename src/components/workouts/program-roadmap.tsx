@@ -197,8 +197,9 @@ export function ProgramRoadmapCard({
           onManage={!browsing && !(allDone && nextProgramTo) ? onManage : undefined}
         />
 
-        {/* This block and this week: the one part worth reading every day. */}
-        {(blockLine || line) && (
+        {/* Where you are, at a glance: this block and this week's focus in a few words.
+            What the week is for and the whole roadmap are one tap down, under Plan details. */}
+        {(blockLine || thisWeek?.label) && !allDone && (
           <div className="mt-3.5" data-roadmap-now>
             {blockLine && (
               <div className="flex items-baseline justify-between gap-3">
@@ -206,10 +207,9 @@ export function ProgramRoadmapCard({
                 {blockWhere && <span className="shrink-0 text-[12px] text-muted-foreground tabular-nums" data-roadmap-position>{blockWhere}</span>}
               </div>
             )}
-            {line && (
-              <p className={cn("text-[14px] leading-relaxed text-foreground/75", blockLine && "mt-0.5")}>
-                {thisWeek?.label && <span className="font-medium text-foreground">{thisWeek.label}. </span>}
-                {line}
+            {thisWeek?.label && (
+              <p className={cn("truncate text-[13px] text-muted-foreground", blockLine && "mt-0.5")} data-roadmap-week>
+                This week: <span className="text-foreground/80">{thisWeek.label}</span>
               </p>
             )}
           </div>
@@ -229,15 +229,25 @@ export function ProgramRoadmapCard({
           className="flex min-h-11 w-full items-center justify-between gap-2 border-t border-border/60 px-4 py-3 text-[13px] font-semibold transition hover:bg-secondary/40"
           data-roadmap-toggle
         >
-          <span>{multi ? "Roadmap" : "All weeks"}</span>
+          <span>Plan details</span>
           <span className="inline-flex items-center gap-1 font-medium text-muted-foreground tabular-nums">
             {multi ? `${blocks.length} blocks` : weeksLabel(blocks[0].weekCount)}
             <ChevronDown className={cn("h-4 w-4 transition-transform", showAll && "rotate-180")} />
           </span>
         </button>
       )}
+      {showAll && line && (
+        // what this week is for, in the coach's (or Cleo's) words
+        <div className="px-4 pb-3" data-roadmap-week-detail>
+          <div className="text-[12px] font-medium text-muted-foreground">This week</div>
+          <p className="mt-0.5 text-[14px] leading-relaxed text-foreground/80">
+            {thisWeek?.label && <span className="font-medium text-foreground">{thisWeek.label}. </span>}
+            {line}
+          </p>
+        </div>
+      )}
       {showAll && (
-        <ol className="space-y-0 px-4 pb-3" aria-label="Blocks in this program">
+        <ol className={cn("space-y-0 px-4 pb-3", line && "border-t border-border/60 pt-3")} aria-label="Blocks in this program">
           {blocks.map((b, i) => (
             <RoadmapStep
               key={b.id}

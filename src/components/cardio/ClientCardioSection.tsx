@@ -4,7 +4,7 @@
  * One place per day: on a training day the cardio plan's session is the last
  * exercise of that day's workout (program_cardio_sync), so it's logged there and
  * nothing else shows it as a card (the Workouts tab and the workout page step
- * aside); on a day off this card is where it's logged (the Workouts tab).
+ * aside); on a day off it's the day's card on the Workouts tab, logged there.
  * `variant="line"` (Nutrition) is a one-line status that opens where it's logged.
  *
  * Day-type filtering:
@@ -12,8 +12,10 @@
  *   - "rest"     → shows "Rest Day" and "General" targets
  *   - "unknown"  → shows all targets (no filter)
  *
- * Each target shows a CardioCompletionCard with a one-tap complete toggle
- * and an expandable log form (duration, type, RPE, notes).
+ * Each target shows a CardioCompletionCard: Done as planned in one tap, or
+ * Log details (time, calories, heart rate, distance, steps, RPE, notes).
+ * The Workouts page reads the same day through useDayCardio and lays the card
+ * out itself (a day off's cardio is that day's main card).
  *
  * Admin/coach view is read-only.
  */
@@ -21,7 +23,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
-import { Loader2, Heart, Check, ChevronRight } from "lucide-react";
+import { Activity, Loader2, Check, ChevronRight } from "lucide-react";
 import { cardioStatus } from "@/lib/cardio-plan";
 import { supabase } from "@/integrations/supabase/client";
 import { CardioCompletionCard } from "./CardioCompletionCard";
@@ -31,6 +33,113 @@ import { mondayWeekDates, resolveClientWeekDays, resolveWorkoutDatesFromItems } 
 import { parseLocalDate, todayLocalISO, toLocalISO } from "@/lib/today";
 
 type DayContext = "training" | "rest" | "unknown";
+
+/**
+ * The day's cardio plan session for a client: which target (if any) the day
+ * resolves to, its day type, and whether that day's workout already holds it
+ * as its last exercise (then it's logged there, never as a second card).
+ * One read for the Workouts page's day, this card and Nutrition's line.
+ */
+export function useDayCardio(
+  clientId: string | null | undefined,
+  date?: Date,
+  { workoutDayId, enabled = true }: { workoutDayId?: string; enabled?: boolean } = {},
+) {
+  const dateStr = date ? toLocalISO(date) : todayLocalISO();
+  const qc = useQueryClient();
+  const { data: resolved, isLoading, isError } = useQuery({
+    queryKey: ["client-cardio-resolved", clientId, dateStr],
+    enabled: !!clientId && enabled,
+    queryFn: async () => {
+      const cid = clientId as string; // enabled only with a client
+      const [targetsRes, clientRes, overridesRes, workouts] = await Promise.all([
+        supabase
+          .from("cardio_targets")
+          .select(
+            "id,cardio_type,custom_type,day_type,custom_day_type,scheduled_weekdays,frequency_per_week,duration_minutes,intensity,heart_rate_zone,machine_preference,goal,step_target,step_target_mode,calorie_target_min,calorie_target_max,calorie_target_mode,show_calories_to_client,incline,speed_min_mph,speed_max_mph,completion_rule,client_notes,program_name,start_date,end_date,status,enabled,visible_to_client",
+          )
+          .eq("client_id", cid)
+          .eq("visible_to_client", true)
+          .eq("enabled", true)
+          .eq("status", "Active")
+          .is("program_name", null)
+          .order("start_date", { ascending: false }),
+        supabase
+          .from("clients")
+          .select("committed_training_days,preferred_high_days,full_cardio_rest_days")
+          .eq("id", cid)
+          .maybeSingle(),
+        (supabase.from("nutrition_day_overrides") as any)
+          .select("override_date,day_label")
+          .eq("client_id", cid),
+        // The Workouts screen's own list (same key and loader): a cached copy is
+        // reused instead of re-running the whole program chain for every date.
+        qc.fetchQuery(clientWorkoutsQuery(cid)).then((items) => primaryWorkouts(items as WorkoutItem[])),
+      ]);
+      if (targetsRes.error) throw targetsRes.error;
+      const targetDate = parseLocalDate(dateStr) ?? new Date();
+      const monday = new Date(targetDate);
+      monday.setDate(targetDate.getDate() - ((targetDate.getDay() + 6) % 7));
+      const weekDates = mondayWeekDates(monday);
+      const client = clientRes.data as any;
+      const workoutDates = resolveWorkoutDatesFromItems(workouts as any[], client?.committed_training_days ?? null);
+      const weekDays = resolveClientWeekDays({
+        clientId: cid,
+        weekDates,
+        workouts: workoutDates,
+        recurringHighDays: client?.preferred_high_days ?? null,
+        highDayOverrides: (overridesRes.data ?? []) as any[],
+        fullCardioRestDays: client?.full_cardio_rest_days ?? null,
+        cardioTargets: (targetsRes.data ?? []) as any[],
+      });
+      const targetFor = (d: { cardioTargetId?: string | null } | null) => d?.cardioTargetId
+        ? ((targetsRes.data ?? []) as any[]).find((t) => t.id === d.cardioTargetId) ?? null
+        : null;
+      // On a training day the plan's cardio is the last exercise of that day's workout
+      // (program_cardio_sync): it's logged there, and that log is this card's too.
+      // One read for the whole week's workouts, so every day of the week is answered at once.
+      const weekSet = new Set(weekDates);
+      const weekWorkouts = workoutDates.filter((w) => weekSet.has(w.date));
+      const allIds = [...new Set([...weekWorkouts.map((w) => w.workoutId), ...(workoutDayId ? [workoutDayId] : [])])];
+      let linkedDays = new Set<string>();
+      if (allIds.length) {
+        const { data: linked } = await (supabase as any)
+          .from("pl_exercise_rows")
+          .select("day_id")
+          .in("day_id", allIds)
+          .not("cardio_target_id", "is", null);
+        linkedDays = new Set(((linked ?? []) as any[]).map((r) => String(r.day_id)));
+      }
+      const valueFor = (iso: string, withWorkout?: string) => {
+        const d = weekDays.find((x) => x.date === iso) ?? null;
+        // the day's workouts, plus the workout this is shown inside (whatever date it's on)
+        const ids = [...weekWorkouts.filter((w) => w.date === iso).map((w) => w.workoutId), ...(withWorkout ? [withWorkout] : [])];
+        const hit = ids.find((id) => linkedDays.has(id)) ?? null;
+        return { day: d, target: targetFor(d), inWorkout: hit ? { dayId: hit } : null };
+      };
+      // the rest of the week, for the next tap on the strip (never over a fresher copy)
+      if (!workoutDayId) {
+        for (const iso of weekDates) {
+          if (iso === dateStr) continue;
+          const key = ["client-cardio-resolved", clientId, iso];
+          if (qc.getQueryData(key) === undefined) qc.setQueryData(key, valueFor(iso));
+        }
+      }
+      return valueFor(dateStr, workoutDayId);
+    },
+    // every cardio / schedule edit invalidates this key, so a minute is safe
+    staleTime: 60_000,
+  });
+
+  return {
+    dateStr,
+    isLoading: !!clientId && enabled && isLoading,
+    isError,
+    day: resolved?.day ?? null,
+    target: (resolved?.target ?? null) as any,
+    inWorkout: (resolved?.inWorkout ?? null) as { dayId: string } | null,
+  };
+}
 
 export function ClientCardioSection({
   clientId,
@@ -52,77 +161,9 @@ export function ClientCardioSection({
   /** "line": a one-line status (Nutrition) that opens where the cardio is logged; never a second card. */
   variant?: "card" | "line";
 }) {
-  const dateStr = date ? toLocalISO(date) : todayLocalISO();
-  const qc = useQueryClient();
-  const { data: resolved, isLoading } = useQuery({
-    queryKey: ["client-cardio-resolved", clientId, dateStr],
-    enabled: !!clientId,
-    queryFn: async () => {
-      const [targetsRes, clientRes, overridesRes, workouts] = await Promise.all([
-        supabase
-          .from("cardio_targets")
-          .select(
-            "id,cardio_type,custom_type,day_type,custom_day_type,scheduled_weekdays,frequency_per_week,duration_minutes,intensity,heart_rate_zone,machine_preference,goal,step_target,step_target_mode,calorie_target_min,calorie_target_max,calorie_target_mode,show_calories_to_client,incline,speed_min_mph,speed_max_mph,completion_rule,client_notes,program_name,start_date,end_date,status,enabled,visible_to_client",
-          )
-          .eq("client_id", clientId)
-          .eq("visible_to_client", true)
-          .eq("enabled", true)
-          .eq("status", "Active")
-          .is("program_name", null)
-          .order("start_date", { ascending: false }),
-        supabase
-          .from("clients")
-          .select("committed_training_days,preferred_high_days,full_cardio_rest_days")
-          .eq("id", clientId)
-          .maybeSingle(),
-        (supabase.from("nutrition_day_overrides") as any)
-          .select("override_date,day_label")
-          .eq("client_id", clientId),
-        // The Workouts screen's own list (same key and loader): a cached copy is
-        // reused instead of re-running the whole program chain for every date.
-        qc.fetchQuery(clientWorkoutsQuery(clientId)).then((items) => primaryWorkouts(items as WorkoutItem[])),
-      ]);
-      if (targetsRes.error) throw targetsRes.error;
-      const targetDate = parseLocalDate(dateStr) ?? new Date();
-      const monday = new Date(targetDate);
-      monday.setDate(targetDate.getDate() - ((targetDate.getDay() + 6) % 7));
-      const weekDates = mondayWeekDates(monday);
-      const client = clientRes.data as any;
-      const workoutDates = resolveWorkoutDatesFromItems(workouts as any[], client?.committed_training_days ?? null);
-      const day = resolveClientWeekDays({
-        clientId,
-        weekDates,
-        workouts: workoutDates,
-        recurringHighDays: client?.preferred_high_days ?? null,
-        highDayOverrides: (overridesRes.data ?? []) as any[],
-        fullCardioRestDays: client?.full_cardio_rest_days ?? null,
-        cardioTargets: (targetsRes.data ?? []) as any[],
-      }).find((d) => d.date === dateStr) ?? null;
-      const target = day?.cardioTargetId
-        ? ((targetsRes.data ?? []) as any[]).find((t) => t.id === day.cardioTargetId) ?? null
-        : null;
-      // On a training day the plan's cardio is the last exercise of that day's workout
-      // (program_cardio_sync): it's logged there, and that log is this card's too.
-      let inWorkout: { dayId: string } | null = null;
-      // the day's workouts, plus the workout this is shown inside (whatever date it's on)
-      const dayIds = [...new Set([...workoutDates.filter((w) => w.date === dateStr).map((w) => w.workoutId), ...(workoutDayId ? [workoutDayId] : [])])];
-      if (dayIds.length) {
-        const { data: linked } = await (supabase as any)
-          .from("pl_exercise_rows")
-          .select("day_id")
-          .in("day_id", dayIds)
-          .not("cardio_target_id", "is", null)
-          .limit(1);
-        inWorkout = linked?.[0]?.day_id ? { dayId: linked[0].day_id as string } : null;
-      }
-      return { day, target, inWorkout };
-    },
-    // every cardio / schedule edit invalidates this key, so a minute is safe
-    staleTime: 60_000,
-  });
-
+  const { dateStr, isLoading, day: resolvedDay, target, inWorkout } = useDayCardio(clientId, date, { workoutDayId });
+  const resolved = { day: resolvedDay, target };
   const filteredTargets = resolved?.target ? [resolved.target] : [];
-  const inWorkout = resolved?.inWorkout ?? null;
   // In the workout itself the cardio is its last exercise: never a second card under it.
   if (workoutDayId && inWorkout?.dayId === workoutDayId) return null;
   // On the Workouts tab a training day's cardio is inside that day's workout: shown and logged there only.
@@ -131,16 +172,6 @@ export function ClientCardioSection({
     if (isLoading || !resolved?.target) return null;
     return <CardioStatusLine clientId={clientId} target={resolved.target} dateStr={dateStr} inWorkoutDayId={inWorkout?.dayId ?? null} />;
   }
-  // Day classification is nutrition/day context — it is never part of the
-  // cardio activity name, so it renders as subtle secondary text only.
-  const resolvedLabel = resolved?.day?.cardioDayType === "high"
-    ? "High Day"
-    : resolved?.day?.cardioDayType === "training"
-      ? "Training Day"
-      : resolved?.day?.cardioDayType === "rest"
-        ? "Full Cardio Rest"
-        : "Non-Training Day";
-
   if (isLoading) {
     return (
       <Card className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
@@ -152,29 +183,21 @@ export function ClientCardioSection({
   if (!filteredTargets.length) {
     if (hideWhenEmpty) return null;
     return (
-      <Card className="p-4 sm:p-6">
+      <Card className="p-4">
         <h2 className="flex items-center gap-2 text-base font-semibold">
-          <Heart className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden /> Cardio
+          <Activity className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden /> Cardio
         </h2>
-        {resolved?.day?.cardioDayType === "rest" ? (
-          <p className="mt-3 text-sm text-muted-foreground">Full Cardio Rest — no cardio scheduled.</p>
-        ) : dayContext === "rest" ? (
-          <p className="mt-3 text-sm text-muted-foreground">No cardio scheduled for this date.</p>
-        ) : (
-          <p className="mt-3 text-sm text-muted-foreground">No cardio assigned.</p>
-        )}
+        <p className="mt-1 text-sm text-muted-foreground">
+          {resolved?.day?.cardioDayType === "rest" || dayContext === "rest" ? "No cardio on this day." : "No cardio assigned."}
+        </p>
       </Card>
     );
   }
 
+  // The card says what it is (its title, a pulse line): no second "Cardio" header over it.
+  // Inside a workout, its Finish is the red button, so the cardio's Done is the secondary one.
   return (
     <div className="space-y-3">
-      <div className="px-0.5">
-        <h2 className="flex items-center gap-2 text-base font-semibold">
-          <Heart className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden /> Cardio
-        </h2>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">Today's plan: {resolvedLabel}</p>
-      </div>
       {filteredTargets.map((t: any) => (
         <CardioCompletionCard
           key={t.id}
@@ -182,6 +205,7 @@ export function ClientCardioSection({
           clientId={clientId}
           date={date}
           readonly={readonly}
+          emphasis={workoutDayId ? "secondary" : "primary"}
         />
       ))}
     </div>
@@ -214,12 +238,12 @@ function CardioStatusLine({ clientId, target, dateStr, inWorkoutDayId }: { clien
   const where = inWorkoutDayId ? "Last exercise of today's workout" : "Log it in Workouts";
   const body = (
     <>
-      <Heart className={status === "logged" ? "h-4 w-4 shrink-0 text-emerald-500" : "h-4 w-4 shrink-0 text-muted-foreground"} />
+      <Activity className={status === "logged" ? "h-4 w-4 shrink-0 text-success" : "h-4 w-4 shrink-0 text-muted-foreground"} aria-hidden />
       <span className="min-w-0 flex-1 text-[13px] leading-snug">
         <span className="block truncate font-semibold">Cardio today · {what}</span>
         <span className="block text-muted-foreground">{status === "logged" ? "Done" : status === "skipped" ? "Skipped" : where}</span>
       </span>
-      {status === "logged" ? <Check className="h-4 w-4 shrink-0 text-emerald-500" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+      {status === "logged" ? <Check className="h-4 w-4 shrink-0 text-success" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
     </>
   );
   const cls = "flex items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-3 text-left transition active:scale-[0.99]";
