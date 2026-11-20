@@ -361,7 +361,7 @@ export function InlineVideo({
         </>
       )}
       {/* its progress bar along the bottom (on a post's screen, right above the tab bar): a finger scrubs it */}
-      <VideoScrubber video={el} onHold={setScrubbing} disabled={failed} />
+      <VideoScrubber video={el} onHold={setScrubbing} enabled={active} disabled={failed} />
       {!auto && !tapped && (
         <button
           type="button"
@@ -396,7 +396,8 @@ export function InlineVideo({
           className={cn(
             "absolute right-2.5 z-[2] flex h-8 items-center justify-center gap-1.5 rounded-full bg-black/55 text-white backdrop-blur active:scale-90",
             askTap ? "px-3 text-[13px] font-semibold" : "w-8",
-            controls === "top" ? "top-[calc(var(--feed-bar-room,0px)+3rem)]" : "bottom-2.5",
+            // clear of the progress bar along the bottom
+            controls === "top" ? "top-[calc(var(--feed-bar-room,0px)+3rem)]" : "bottom-4",
           )}
           aria-label={soundOn ? "Mute" : "Turn sound on"}
           aria-pressed={soundOn}

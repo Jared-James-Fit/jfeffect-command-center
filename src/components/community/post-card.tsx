@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type C
 import { LiveDot } from "@/components/live-indicator";
 import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, ChevronsLeft, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
 import { CLIP_HOLD_EVENT, InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
-import { CLIP_SCRUB_EVENT } from "@/lib/video-scrub";
+import { CLIP_SCRUB_EVENT, inClipScrubBand } from "@/lib/video-scrub";
 import { justGaveSound } from "@/lib/video-pool";
 import { UserAvatar } from "@/components/user-avatar";
 import { WIN_STYLE } from "@/components/community/pulse-style";
@@ -526,7 +526,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       if (sheetOpen) return null;
       const t = e.target as Element | null;
       const clip = t?.closest?.("[data-inline-video]");
-      return clip && !t?.closest?.("button") ? clip : null;
+      // the bottom of a clip is its progress bar's: a finger resting there is about to scrub, never a pause
+      return clip && !t?.closest?.("button") && !inClipScrubBand(clip, e.clientX, e.clientY) ? clip : null;
     },
     (clip, on) => clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: on })),
   );
@@ -669,11 +670,16 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     const liked = reactionTotal(post) > 0;
     // the coach among the "Liked by" faces (its first three), so the line already says it
     const coachInFaces = (post.reactors ?? []).slice(0, 3).some((r) => r.is_coach);
+    // a clip has its progress bar along the screen's bottom: the words and buttons sit a lane above it (styles.css)
+    const hasClip = visual && !auto && postSlides(post).some((sl) => sl.type === "video");
     return (
       <article
         ref={articleRef}
         data-feed-post
         data-feed-page-post={visual ? "visual" : "words"}
+        // a drag that starts low on the screen, over the words too, can scrub the clip (VideoScrubber's band)
+        data-scrub-band
+        data-has-clip={hasClip ? "" : undefined}
         className={cn(
           "relative h-full w-full text-foreground",
           raise > 0 ? "z-[1] overflow-visible" : "overflow-hidden",
@@ -781,7 +787,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
             "pointer-events-none absolute inset-x-0 bottom-0 z-[2] pt-16 transition-opacity duration-200",
             (sheetOpen || under || holding) && "opacity-0",
           )}
-          style={{ paddingBottom: "var(--feed-words-bottom)" }}
+          style={{ paddingBottom: "calc(var(--feed-words-bottom) + var(--feed-scrub-lane, 0px))" }}
           data-page-words
         >
           <div ref={wordsRef} className={cn("mr-16 space-y-1.5 px-3 [text-shadow:0_1px_3px_rgb(0_0_0/0.5)]", !sheetOpen && !under && !holding && "pointer-events-auto")} data-page-words-body>
@@ -894,7 +900,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
             visual && "[filter:drop-shadow(0_1px_2px_rgb(0_0_0/0.55))]",
             (sheetOpen || under || holding) && "pointer-events-none opacity-0",
           )}
-          style={{ bottom: "var(--feed-actions-bottom)" }}
+          style={{ bottom: "calc(var(--feed-actions-bottom) + var(--feed-scrub-lane, 0px))" }}
           data-page-actions
         >
           <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} onOpenLikes={() => setLikesOpen(true)} unit={unit} column hidden={sheetOpen || under || holding} />

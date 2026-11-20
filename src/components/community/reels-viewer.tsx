@@ -8,6 +8,7 @@ import { ReactionBurst, useBurst } from "@/components/community/reaction-button"
 import { useHoldToPause, useSoundFlash } from "@/components/community/clip-gestures";
 import { holdFeedVideos } from "@/components/community/inline-video";
 import { VideoScrubber } from "@/components/community/video-scrubber";
+import { inClipScrubBand } from "@/lib/video-scrub";
 import {
   REACTION,
   reactionTotal,
@@ -257,7 +258,12 @@ function ReelPage({
   const [burst, fireBurst] = useBurst();
   const [soundFlash, flashSound] = useSoundFlash();
   const hold = useHoldToPause<true>(
-    (e) => ((e.target as Element | null)?.closest?.("button") ? null : true),
+    (e) => {
+      const t = e.target as Element | null;
+      // the bottom of the page is the progress bar's: a finger resting there is about to scrub, never a pause
+      if (t?.closest?.("button") || inClipScrubBand(t?.closest?.("[data-reel]"), e.clientX, e.clientY)) return null;
+      return true;
+    },
     (_t, on) => setPaused(on),
   );
   const lastTap = useRef(0);
@@ -421,6 +427,8 @@ function ReelPage({
       }
       data-reel={item.key}
       data-reel-active={active ? "" : undefined}
+      // a sideways drag low on the page, over the words too, scrubs the clip (VideoScrubber's band)
+      data-scrub-band
     >
       {frame ? (
         // framed in the studio: just that part, whole on black
@@ -568,6 +576,7 @@ function ReelPage({
       {/* how far through, along the bottom: a finger scrubs it (Reels') */}
       <VideoScrubber
         video={attached}
+        enabled={active}
         onHold={setScrubbing}
         onActive={setScrubShown}
         disabled={failed}

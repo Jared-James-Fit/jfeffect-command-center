@@ -44,7 +44,7 @@ describe("every post fills the screen, TikTok's way", () => {
     expect(card).toContain("<div ref={wordsRef} className=");
     // the room they take: their height, how far up they sit, less where the hero ends (the tab bar), and 8px;
     // the last two both move with --feed-gap, so the room is the same however the screen reads
-    expect(css).toContain("[data-feed-page-post] { --feed-words-room: calc(var(--page-words-h, 0px) + var(--feed-words-bottom) - var(--feed-nav-room) + 8px); }");
+    expect(css).toContain("[data-feed-page-post] { --feed-words-room: calc(var(--page-words-h, 0px) + var(--feed-words-bottom) + var(--feed-scrub-lane, 0px) - var(--feed-nav-room) + 8px); }");
     // photos, cards and clips shown whole all sit in it
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain('const BETWEEN_BARS = { top: "var(--feed-bar-room, 0px)", bottom: "var(--feed-words-room, 0px)" } as const;');

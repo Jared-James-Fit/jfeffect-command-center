@@ -10,9 +10,10 @@
  * - Where a finger can take it: inside the clip, a hair before its end (a
  *   looping clip sent to its very end wraps straight back to the start), and
  *   inside the ranges the browser says it can seek to.
- * - What a finger on the bar means: sideways first is a scrub, up or down
- *   first is the feed's swipe (the browser keeps that one), still and quick is
- *   a tap that jumps there, still and held grabs it where the finger is.
+ * - What a finger on the bar means: sideways first is a scrub (from anywhere in
+ *   the band, the bottom SCRUB_BAND_PX), up or down first is the feed's swipe
+ *   (the browser keeps that one), still and quick on the bar is a tap that
+ *   jumps there.
  */
 
 /**
@@ -108,16 +109,27 @@ export function clipClockText(t: number, length: number): string {
   return `${clipClock(t, length)} of ${clipClock(length, length)}`;
 }
 
+/**
+ * The bar's two sizes for a finger (Nov 20 2026): what's drawn is a 2px line, but
+ * a drag can start anywhere in the bottom SCRUB_BAND_PX of the clip (the size of
+ * a finger, Apple's 44pt), even over the post's words, which keep their taps; a
+ * tap seeks only on the strip right at the bar, SCRUB_TAP_PX tall, which nothing
+ * else covers (a post's words sit above it, `--feed-scrub-lane`).
+ */
+export const SCRUB_BAND_PX = 44;
+export const SCRUB_TAP_PX = 24;
+
 /** A finger that moves this far sideways (more than up or down) is scrubbing. */
 export const SCRUB_START_PX = 4;
 /** A finger that moves this far up or down first is the feed's swipe: the bar lets it go. */
 export const SWIPE_START_PX = 8;
-/** A finger that stays within this and lifts before GRAB_MS is a tap: the clip jumps there. */
+/** A finger that stays within this and lifts before TAP_MAX_MS is a tap: the clip jumps there. */
 export const TAP_SLOP_PX = 8;
-/** A finger held still this long grabs the bar where it is (thicker, the time showing, the clip paused). */
-export const GRAB_MS = 220;
-/** After a scrub or a tap the bar stays big with its time showing this long, so you see where it landed. */
-export const LINGER_MS = 650;
+export const TAP_MAX_MS = 500;
+/** A finger resting on the bar this long wakes it (thicker), so it plainly has hold of it before it moves. */
+export const WAKE_MS = 90;
+/** After a scrub the bar stays thick with its time this long, so you see where it landed, then goes back to its line. */
+export const LINGER_MS = 300;
 /** Keyboard: an arrow key moves this far. */
 export const KEY_STEP_SECONDS = 5;
 
@@ -132,7 +144,29 @@ export function scrubIntent(dx: number, dy: number): "scrub" | "swipe" | "wait" 
 
 /** A finger that went down and came up without moving, quickly: a tap on the bar. */
 export function isBarTap(dx: number, dy: number, ms: number): boolean {
-  return Math.hypot(dx, dy) < TAP_SLOP_PX && ms < GRAB_MS;
+  return Math.hypot(dx, dy) < TAP_SLOP_PX && ms < TAP_MAX_MS;
+}
+
+/** A rect's edges, as `getBoundingClientRect` gives them. */
+export type Box = { left: number; right: number; top: number; bottom: number };
+
+/**
+ * Whether a finger at (x, y) is in a bar's band: across the bar's width and
+ * within `band` px of the bottom of the bar's strip (`zone`, which sits at the
+ * clip's bottom edge).
+ */
+export function inScrubBand(x: number, y: number, zone: Box, band = SCRUB_BAND_PX): boolean {
+  return x >= zone.left && x <= zone.right && y <= zone.bottom && y >= zone.bottom - band;
+}
+
+/**
+ * Whether a finger at (x, y) is in the band of a bar inside `el` (a clip, a
+ * full-screen page): there, a finger held still is the bar's, never the clip's
+ * press-and-hold pause.
+ */
+export function inClipScrubBand(el: Element | null | undefined, x: number, y: number): boolean {
+  const zone = el?.querySelector?.("[data-video-scrubber]:not([aria-hidden])");
+  return !!zone && inScrubBand(x, y, zone.getBoundingClientRect());
 }
 
 /** The parts of a video the seeker uses (a fake one in the tests). */
@@ -171,7 +205,8 @@ export function makeScrubSeeker(v: SeekableVideo, now: () => number = Date.now) 
     inFlight = false;
     const next = want;
     want = null;
-    if (next != null && (issued == null || Math.abs(next - issued) >= PREVIEW_MIN_STEP)) issue(next);
+    if (next != null && (issued == null || Math.abs(next - issued) >= PREVIEW_MIN_STEP))
+      issue(next);
   };
   v.addEventListener("seeked", onSeeked);
   return {

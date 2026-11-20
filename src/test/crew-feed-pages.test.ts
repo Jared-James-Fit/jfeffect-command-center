@@ -87,8 +87,8 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
     );
     // the whole screen, the bars floating over it; the words just above the tab bar
     expect(card).toContain("style={{ top: -raise, bottom: sheetOpen ? `calc(${POST_SHEET_HEIGHT} - var(--feed-gap, 0px))` : \"var(--feed-nav-room)\" }}");
-    expect(card).toContain('style={{ paddingBottom: "var(--feed-words-bottom)" }}');
-    expect(card).toContain('style={{ bottom: "var(--feed-actions-bottom)" }}');
+    expect(card).toContain('style={{ paddingBottom: "calc(var(--feed-words-bottom) + var(--feed-scrub-lane, 0px))" }}');
+    expect(card).toContain('style={{ bottom: "calc(var(--feed-actions-bottom) + var(--feed-scrub-lane, 0px))" }}');
     // pictures sit on black; the whole paged feed is dark whatever the theme
     expect(card).toContain('visual ? "dark bg-black" : "bg-background"');
     expect(screen).toContain('<div ref={pager} className="dark bg-black text-foreground" data-feed-pager>');
@@ -102,7 +102,7 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
     expect(inline).toContain("if (!visible || !active) setHoldPaused(false);");
     // its speaker sits at the top, clear of the words and buttons; its set is said in the words (data-page-set), never over the clip
     expect(card).toContain("{slide.caption && !shrunk && !page && <SlideCaption caption={slide.caption} withDots={withDots} />}");
-    expect(inline).toContain('controls === "top" ? "top-[calc(var(--feed-bar-room,0px)+3rem)]" : "bottom-2.5"');
+    expect(inline).toContain('controls === "top" ? "top-[calc(var(--feed-bar-room,0px)+3rem)]" : "bottom-4"');
   });
 
   it("a picture's shape on its screen is the feed's own: a clip its own (9:16 to 16:9), a photo 4:5 to 16:9", () => {
