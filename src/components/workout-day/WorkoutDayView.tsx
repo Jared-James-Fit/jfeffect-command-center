@@ -94,7 +94,8 @@ import { matchPreviousWeekSlots, type SlotRow } from "@/lib/previous-week-slot";
 import { LastWeekSwapChip, type LastWeekSwap } from "@/components/workout-day/last-week-swap";
 import { useCardHistory, type CardHistoryAction } from "@/components/workout-day/use-card-history";
 import { LoadSuggestionCard, PlannedLoadCell, LoadSuggestionsChip, LoadSuggestionsDone, LoadSuggestionsDoneNote, LoadSuggestionsNudge, REF_BAR, REF_CELL, REF_DIVIDER, REF_LABEL, REF_TAP, REF_VALUE } from "@/components/workout-day/load-suggestion-card";
-import { lastTimeLoad } from "@/lib/workouts/exercise-history";
+import { lastTimeLoad, trainedOn, ymdMs } from "@/lib/workouts/exercise-history";
+import { instanceDates } from "@/lib/workouts/history-reads";
 import { effortRange, loggedRpe, setGuidance } from "@/lib/workouts/plan-vs-actual";
 import { dismissSuggestionsNudgeForNow, suggestionsNudgeDismissed, useShowLoadSuggestions, LOAD_SUGGESTIONS_TRIED_KEY } from "@/lib/load-suggestion-visibility";
 import { TypedValueInput } from "@/components/workout-day/typed-value-input";
@@ -177,7 +178,7 @@ import { formatClockSeconds, formatDuration } from "@/lib/duration";
 import {
   getTimerTarget, setTimerTarget, getRowInputs, setRowInputs, getVelocityDefault, setVelocityDefault, type RowInputOverrides,
 } from "@/lib/log-as-override";
-import { Timer, Heart, Activity, History as HistoryIcon, ChevronRight } from "lucide-react";
+import { Timer, Heart, Activity, ChevronRight } from "lucide-react";
 import { DayCoachNotes, ScheduledDayLine, loggerMeta, loggerTitle } from "@/components/workout-day/logger-top";
 import { exerciseNoteForAthlete } from "@/lib/workouts/coach-notes";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
@@ -1059,7 +1060,7 @@ function WorkoutDay({
           actual_reps, actual_rpe, actual_rir, entered_value, entered_unit,
           normalized_kg, normalized_lb, actual_load, actual_load_unit, is_working_set,
           is_bodyweight, load_type, completed_duration_seconds, actual_calories, actual_distance_m,
-          pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, purpose_label, sort_order, exercises(name))`;
+          pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, purpose_label, sort_order, exercises(name), pl_days(scheduled_date))`;
       // Confirmed sets only (drafts from "apply to remaining" are not history),
       // newest first, paged past the 1,000-row response cap so long-term
       // clients keep their full rep-max baselines.
@@ -1076,6 +1077,10 @@ function WorkoutDay({
       const uniqueLogs = Array.from(
         new Map(batches.flat().map((log: any) => [log.id, log])).values(),
       );
+      // The day each session was trained (trainedOn: its calendar day, a moved
+      // workout's new one, never after it was logged), so "Last time · Sep 20"
+      // says the same day as the History sheet.
+      const instDates = await instanceDates(uniqueLogs.map((log: any) => log.scheduled_workout_id)).catch(() => new Map<string, string>());
       return uniqueLogs.map((log: any) => {
         const historyRow = log.pl_exercise_rows;
         const enteredUnit = log.entered_unit === "kg" || log.entered_unit === "lb"
@@ -1091,6 +1096,11 @@ function WorkoutDay({
             ? `instance:${log.scheduled_workout_id}`
             : `day:${historyRow?.day_id ?? "unknown"}`,
           occurredAt: log.completed_at ?? log.updated_at ?? log.created_at ?? null,
+          trainedOn: trainedOn({
+            instanceDate: log.scheduled_workout_id ? instDates.get(log.scheduled_workout_id) ?? null : null,
+            dayDate: historyRow?.pl_days?.scheduled_date ?? null,
+            loggedAt: log.completed_at ?? log.created_at ?? null,
+          }),
           reps: log.actual_reps ?? null,
           rpe: log.actual_rpe ?? null,
           rir: log.actual_rir ?? null,
@@ -3544,12 +3554,18 @@ function ExerciseNotesBlock({ notes }: { notes: string }) {
   );
 }
 
-/** When "Last time" was, short enough to sit beside its label on a phone: "today", "yesterday", "3d", else "Nov 3". */
-function lastTimeWhen(occurredAt: string | null): string {
-  if (!occurredAt) return "";
-  const d = new Date(occurredAt);
-  const days = Math.round((Date.now() - d.getTime()) / 86400000);
-  return days <= 0 ? "today" : days === 1 ? "yesterday" : days < 7 ? `${days}d` : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+/**
+ * When "Last time" was, short enough to sit beside its label on a phone:
+ * "today", "yesterday", "3d", else "Sep 20". The day it was trained
+ * (trainedOn: the History sheet's own date), never when the sets were typed.
+ */
+function lastTimeWhen(data: { trainedOn?: string | null; occurredAt: string | null }): string {
+  const ms = data.trainedOn ? ymdMs(data.trainedOn) : data.occurredAt ? new Date(data.occurredAt).getTime() : 0;
+  if (!ms) return "";
+  const d = new Date(ms);
+  const now = new Date();
+  const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86400000);
+  return days <= 0 ? "today" : days === 1 ? "yesterday" : days < 7 ? `${days}d` : d.toLocaleDateString(undefined, { month: "short", day: "numeric", ...(d.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}) });
 }
 
 /** " @ 7" from a logged RPE, " · 2 RIR" from a logged RIR, else nothing. */
@@ -3592,12 +3608,14 @@ function PreviousLiftChip({ data, displayUnit, onOpen }: {
   onOpen?: () => void;
 }) {
   const text = data ? lastTimeText(data, displayUnit) : null;
-  const when = data && text ? lastTimeWhen(data.occurredAt) : "";
+  const when = data && text ? lastTimeWhen(data) : "";
   const inner = (
     <>
+      {/* "Last time · Sep 20 ›": the date is never the part that's cut (a phone's
+          half is ~136pt; with a history icon too it read "Last time · Sep …"). */}
       <span className={REF_LABEL}>
-        <HistoryIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        <span className="truncate">Last time{when ? ` · ${when}` : ""}</span>
+        <span className="truncate">Last time</span>
+        {when && <span className="shrink-0 whitespace-nowrap" data-last-time-when>· {when}</span>}
         {onOpen && <ChevronRight className="-mr-1 ml-auto h-4 w-4 shrink-0" aria-hidden="true" />}
       </span>
       {text
