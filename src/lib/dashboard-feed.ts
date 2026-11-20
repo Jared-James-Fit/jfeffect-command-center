@@ -3,7 +3,8 @@
  *
  * The dashboard is an overview, not another inbox: the Clients page and Messages already
  * organise the to-do list. Here we only summarise (snapshot tiles that open those pages,
- * already filtered) and show what those pages don't: today's training
+ * already filtered; check-ins to review list themselves, checkins-to-review-card.tsx)
+ * and show what those pages don't: today's training
  * (admin_dashboard_overview). This week's records live in Crew (props, Wednesday Wins)
  * and adherence in Training Intel, so neither is repeated here.
  */
@@ -23,7 +24,7 @@ export function waitingOnMe(inbox: InboxRow[]): InboxRow[] {
 }
 
 export type SnapshotTile = {
-  key: "replies" | "checkins" | "payments" | "agreements" | "ending" | "missed";
+  key: "replies" | "payments" | "agreements" | "ending" | "missed";
   label: string;
   value: number;
   hint: string;
@@ -32,7 +33,12 @@ export type SnapshotTile = {
   tone: "danger" | "warn" | "info";
 };
 
-/** The six numbers worth seeing every morning. Each tile opens the matching filtered list. */
+/**
+ * The numbers worth seeing every morning. Each tile opens the matching filtered
+ * list. Check-ins to review are a card of their own (the check-ins themselves,
+ * each one tap from its answers and its message in the chat), not a tile that
+ * opens a list of clients.
+ */
 export function buildSnapshot(input: {
   waitingReplies: number;
   counts: Partial<Record<string, number>>;
@@ -43,7 +49,6 @@ export function buildSnapshot(input: {
   const pending = n("payment_pending");
   return [
     { key: "replies", label: "Replies waiting", value: input.waitingReplies, hint: "Conversations waiting on you", flag: null, tone: "warn" },
-    { key: "checkins", label: "Check-ins to review", value: n("needs_review"), hint: "Check-ins and forms nobody has reviewed", flag: "needs_review", tone: "warn" },
     {
       key: "payments", label: "Payments to fix", value: payIssues + noPay + pending,
       hint: [payIssues && `${payIssues} failed`, noPay && `${noPay} not set up`, pending && `${pending} awaiting`].filter(Boolean).join(" · ") || "All set",

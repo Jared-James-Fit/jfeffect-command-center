@@ -42,7 +42,7 @@ function isTab(v: unknown): v is TabKey {
   return typeof v === "string" && TABS.some((t) => t.value === v);
 }
 
-type Search = { tab: TabKey; client?: string; sub?: string; support?: string };
+type Search = { tab: TabKey; client?: string; sub?: string; support?: string; msg?: string };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -50,15 +50,17 @@ export const Route = createFileRoute("/_authenticated/admin/communication")({
   validateSearch: (raw: Record<string, unknown>): Search => {
     const t = typeof raw?.tab === "string" && LEGACY_TABS[raw.tab] ? LEGACY_TABS[raw.tab] : raw?.tab;
     const client = typeof raw?.client === "string" ? (raw.client as string) : undefined;
+    // A message in that client's chat to open on (scrolled to and highlighted).
+    const msg = client && typeof raw?.msg === "string" && UUID.test(raw.msg) ? raw.msg : undefined;
     const sub = typeof raw?.sub === "string" ? (raw.sub as string) : undefined;
     // A member's Support chat (a push, or an old Support-tab ticket link "t:<id>") opens in 1:1 Chats.
     const ticket = /^t:(.+)$/.exec(sub ?? "")?.[1];
     const support = typeof raw?.support === "string" && UUID.test(raw.support) ? raw.support
       : ticket && UUID.test(ticket) ? ticket : undefined;
     if (support) return { tab: "messages", support };
-    if (isTab(t)) return { tab: t, client, sub };
+    if (isTab(t)) return { tab: t, client, sub, ...(msg && t === "messages" ? { msg } : {}) };
     // No ?tab= opens Chats, never whichever tab was used last.
-    return { tab: "messages", client, sub };
+    return { tab: "messages", client, sub, ...(msg ? { msg } : {}) };
   },
   beforeLoad: ({ location }) => {
     const raw = (location.search as Record<string, unknown>)?.tab;
@@ -71,7 +73,7 @@ export const Route = createFileRoute("/_authenticated/admin/communication")({
 });
 
 function CommunicationWorkspace() {
-  const { tab, client, sub, support } = Route.useSearch();
+  const { tab, client, sub, support, msg } = Route.useSearch();
   const navigate = useNavigate();
   const viewportLockedTab = tab === "messages" || tab === "groups" || tab === "support";
   const { data: badgeCounts } = useAdminNavBadgeCounts();
@@ -222,7 +224,7 @@ function CommunicationWorkspace() {
           messenger header/sidebar to drift as the outer container scrolls. */}
       {viewportLockedTab && (
         <div className="min-h-0 flex-1 overflow-hidden">
-          {tab === "messages" && <MessagesInbox key="chats" initialClient={client} initialSupport={support} embedded view="chats" />}
+          {tab === "messages" && <MessagesInbox key="chats" initialClient={client} initialMessage={msg} initialSupport={support} embedded view="chats" />}
           {tab === "groups" && <MessagesInbox key="groups" embedded view="groups" />}
           {tab === "support" && (
             <Suspense fallback={<TabFallback />}>

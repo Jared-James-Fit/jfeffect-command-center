@@ -3,6 +3,7 @@
 // I haven't reviewed. Pure so it can be tested; the inbox feeds it its queries.
 
 import { OVERDUE_HOURS } from "@/lib/inbox-waiting";
+import { waitingForReview } from "@/lib/review-queue";
 
 export type CheckinRow = { client_id: string; task_type: string; status: string; created_at: string };
 export type SubmissionRow = { client_id: string; form_id: string; submitted_at: string | null };
@@ -15,41 +16,34 @@ export type ToReviewRow = {
   client_id: string;
   kind: "form" | "checkin";
   submitted_at: string | null;
-  /** Form id (forms) or check-in task type (check-ins): "latest" is per this. */
+  /** Form id (forms) or check-in task type (check-ins): "newest" is per this. */
   type?: string | null;
+  /** Its reviewed mark (a staff reply sets it by trigger). Missing = not reviewed. */
+  reviewed?: boolean | null;
+  superseded?: boolean;
 };
 
-/** A filled-in check-in older than this stops asking for review (no reviewed flag exists for chat check-ins). */
-export const REVIEW_WINDOW_DAYS = 14;
 /** Missed requests older than this stop counting against a client. */
 export const MISSED_WINDOW_DAYS = 28;
 
 /**
- * Filled-in requests that still need my review. Only the LATEST per client and
- * form type counts (older ones are stale, not a backlog). Forms use their
- * reviewed_at (already filtered upstream). Chat check-ins have no reviewed
- * flag, so one counts until I reply after it, or it's older than
- * REVIEW_WINDOW_DAYS.
+ * Filled-in check-ins and forms still waiting on my review: review-queue.ts's
+ * rule, the same as the dashboard's and Forms → Submissions' (not reviewed,
+ * last TO_REVIEW_DAYS, the client's newest of its type). Give it the recent
+ * rows reviewed or not, so a newer reviewed one retires an older one.
  */
-export function latestToReview(
-  rows: ToReviewRow[],
-  lastStaffReplyAt: Map<string, string>,
-  now = Date.now(),
-): ToReviewRow[] {
-  const newest = new Map<string, ToReviewRow>();
-  for (const r of rows) {
-    if (!r.submitted_at) continue;
-    const k = `${r.client_id}|${r.kind}|${r.type ?? ""}`;
-    const cur = newest.get(k);
-    if (!cur || r.submitted_at > (cur.submitted_at as string)) newest.set(k, r);
-  }
-  return [...newest.values()].filter((r) => {
-    if (r.kind !== "checkin") return true;
-    const at = r.submitted_at as string;
-    if (now - new Date(at).getTime() > REVIEW_WINDOW_DAYS * 86_400_000) return false;
-    const reply = lastStaffReplyAt.get(r.client_id);
-    return !(reply && reply >= at);
-  });
+export function latestToReview(rows: ToReviewRow[], now = Date.now()): ToReviewRow[] {
+  return waitingForReview(
+    rows.map((r) => ({
+      row: r,
+      clientId: r.client_id,
+      type: `${r.kind}:${r.type ?? ""}`,
+      submittedAt: r.submitted_at,
+      reviewed: r.reviewed ?? false,
+      superseded: r.superseded,
+    })),
+    now,
+  ).map((x) => x.row);
 }
 
 export type PendingRequest = {

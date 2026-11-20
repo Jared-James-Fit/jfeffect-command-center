@@ -80,4 +80,18 @@ describe("dashboard snapshot", () => {
     expect(by.payments.hint).toBe("6 not set up · 5 awaiting");
     expect(by.agreements).toMatchObject({ value: 13, flag: "no_contract", label: "Unsigned agreements" });
   });
+
+  it("check-ins to review are a card of the check-ins themselves, never a tile opening a list of clients", () => {
+    const tiles = buildSnapshot({ waitingReplies: 0, counts: { needs_review: 4 } });
+    expect(tiles.map((t) => t.key)).not.toContain("checkins");
+    const src = readFileSync("src/routes/_authenticated/admin/index.tsx", "utf8");
+    expect(src).toContain("<CheckinsToReviewCard />");
+    // "All caught up" never sits under check-ins still waiting
+    expect(src).toContain("if (open.length === 0 && otherWaiting > 0) return null;");
+    const card = readFileSync("src/components/forms/checkins-to-review-card.tsx", "utf8");
+    expect(card).toContain('list({ data: { scope: "review" } })');
+    expect(card).toContain("data-review-chat");
+    expect(card).toContain("data-review-mark");
+    expect(card).toContain("<SubmissionSheet");
+  });
 });

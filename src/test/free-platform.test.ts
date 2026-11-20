@@ -232,7 +232,7 @@ describe("free platform hardening", () => {
     expect(HARD).toContain("AFTER INSERT ON public.exercise_dedupe_audit");
     expect(fn("athlete_program_clean_days")).toContain("is no longer in the library");
     expect(readFileSync("src/lib/exercise-admin.functions.ts", "utf8")).toContain(
-      '.contains("days", [{ exercises: [{ exercise_id: exerciseId }] }])',
+      '.contains("days", JSON.stringify([{ exercises: [{ exercise_id: exerciseId }] }]))',
     );
   });
 });
