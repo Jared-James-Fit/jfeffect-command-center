@@ -1,9 +1,20 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  deleteSavedProgramCopy,
   endProgramCopy,
   endedToast,
+  historyActions,
+  historyCompleted,
+  historyNextLine,
+  historyProgressLine,
+  historyStatus,
   originLabel,
+  pausedProgram,
+  pausedToast,
+  removeFromHistoryCopy,
+  resumeCopy,
+  type HistoryEntry,
   programOwnership,
   programProgress,
   programProgressLine,
@@ -109,25 +120,35 @@ describe("progress line", () => {
   });
 });
 
-describe("ending a program, said before the tap", () => {
-  it("logged workouts stay; upcoming ones come off the calendar", () => {
+describe("ending or pausing a program, said before the tap: nothing is ever deleted", () => {
+  it("upcoming workouts come off the calendar, it moves to the history, logged ones stay", () => {
     const c = endProgramCopy({ name: "Foundation Hypertrophy", logged: 9, upcoming: 27 });
     expect(c.title).toBe("End Foundation Hypertrophy?");
-    expect(c.lines[0]).toBe("Its 27 upcoming workouts come off your calendar.");
-    expect(c.lines[1]).toBe("The 9 workouts you logged stay in your history and PRs.");
+    expect(c.lines).toEqual([
+      "Its 27 upcoming workouts come off your calendar.",
+      "It moves to your program history, where you can resume it or start it over.",
+      "The 9 workouts you logged stay in your history, PRs and progress.",
+    ]);
     expect(c.action).toBe("End program");
   });
-  it("nothing logged: it's removed, and singulars read right", () => {
+  it("nothing logged is still kept (never 'removed completely'), and singulars read right", () => {
     const c = endProgramCopy({ name: "", logged: 0, upcoming: 1 });
     expect(c.title).toBe("End this program?");
     expect(c.lines[0]).toBe("Its 1 upcoming workout comes off your calendar.");
-    expect(c.lines[1]).toBe("You haven't logged anything in it, so it's removed completely.");
+    expect(c.lines[2]).toBe("You haven't logged a workout in it yet.");
+    expect(c.lines.join(" ")).not.toMatch(/removed completely|deleted/);
     expect(endedToast({ name: "Push Pull", logged: 0 })).toBe(
-      "Push Pull removed from your calendar.",
+      "Push Pull ended. It's in your program history.",
     );
-    expect(endedToast({ name: "Push Pull", logged: 1 })).toBe(
-      "Push Pull ended. Your logged workouts are in your history.",
+  });
+  it("pausing says the workouts are off until they resume", () => {
+    expect(pausedToast({ name: "Apex", upcoming: 18 })).toBe(
+      "Apex paused. Its 18 upcoming workouts are off your calendar until you resume.",
     );
+    expect(pausedToast({ name: "Apex", upcoming: 1 })).toBe(
+      "Apex paused. Its 1 upcoming workout is off your calendar until you resume.",
+    );
+    expect(pausedToast({ name: "Apex", upcoming: 0 })).toBe("Apex paused. Resume it any time.");
   });
 });
 
@@ -145,17 +166,91 @@ describe("saving an edit to a running program", () => {
 
 describe("the database lets a member manage only their own program, and never loses history", () => {
   const sql = readFileSync("supabase/migrations/20270225090000_member_program_manage.sql", "utf8");
-  it("ending checks ownership, keeps logged blocks (archived) and only removes untouched ones", () => {
-    expect(sql).toContain(
+  const history = readFileSync(
+    "supabase/migrations/20270422090000_member_program_history.sql",
+    "utf8",
+  );
+  it("ending or pausing checks ownership and archives the whole program, never deleting a block", () => {
+    const end = history.slice(
+      history.indexOf("CREATE OR REPLACE FUNCTION public.member_program_end("),
+    );
+    const body = end.slice(0, end.indexOf("$$;"));
+    expect(body).toContain(
       "WHERE id = _block_id AND client_id = v_client AND created_by = v_uid AND archived = false;",
     );
-    expect(sql).toMatch(
-      /IF EXISTS \(SELECT 1 FROM public\.pl_weeks w JOIN public\.pl_days d ON d\.week_id = w\.id\s+WHERE w\.block_id = v_id AND public\.pl_day_logged\(d\.id\)\) THEN\s+UPDATE public\.pl_blocks SET status = 'Archived'/,
+    expect(body).toContain(
+      "PERFORM public._member_program_archive(v_client, v_uid, v_ids, v_reason);",
     );
-    // asked without _confirm it only reports
-    expect(sql).toContain("IF NOT coalesce(_confirm, false) THEN");
-    expect(sql).toContain(
-      "GRANT EXECUTE ON FUNCTION public.member_program_end(uuid, boolean) TO authenticated;",
+    expect(body).not.toMatch(/DELETE FROM public\.pl_blocks/);
+    // asked without _confirm it only reports; older apps' two arguments still work
+    expect(body).toContain("IF NOT coalesce(_confirm, false) THEN");
+    expect(history).toContain(
+      "_confirm boolean DEFAULT false,\n                                                     _reason text DEFAULT 'ended')",
+    );
+    expect(history).toContain(
+      "GRANT EXECUTE ON FUNCTION public.member_program_end(uuid, boolean, text) TO authenticated;",
+    );
+    // the archive helper only ever sets archived; it never deletes
+    const helper = history.slice(
+      history.indexOf("FUNCTION public._member_program_archive("),
+      history.indexOf("-- 2. End or pause"),
+    );
+    expect(helper).not.toMatch(/DELETE/);
+    expect(helper).toContain(
+      "GRANT EXECUTE ON FUNCTION public._member_program_archive(uuid, uuid, uuid[], text) TO service_role;",
+    );
+    expect(helper).toContain(
+      "REVOKE ALL ON FUNCTION public._member_program_archive(uuid, uuid, uuid[], text) FROM PUBLIC, anon, authenticated;",
+    );
+  });
+  it("every archive of a member's own program lands in their history; a coach's never does", () => {
+    expect(history).toContain("AFTER UPDATE OF archived ON public.pl_blocks");
+    expect(history).toContain(
+      "IF v_owner IS NULL OR NEW.created_by IS DISTINCT FROM v_owner THEN RETURN NULL; END IF;",
+    );
+    // a switch from either start path is recorded as a switch
+    expect(history).toContain(
+      "v_reason := CASE WHEN auth.uid() = v_owner THEN 'switched' ELSE 'ended' END;",
+    );
+    const start = readFileSync("src/lib/member-plan-start.functions.ts", "utf8");
+    expect(start).toContain('rpc("_member_program_archive", {');
+    expect(start).toContain('_reason: "switched",');
+  });
+  it("the history and its table are the member's own: read through RLS, written only by the functions", () => {
+    expect(history).toContain("FOR SELECT TO authenticated USING (user_id = (SELECT auth.uid()));");
+    expect(history).toContain(
+      "REVOKE ALL ON public.member_program_history FROM anon, authenticated;",
+    );
+    expect(history).toContain("GRANT SELECT ON public.member_program_history TO authenticated;");
+    // resume: members with access only; the program they run now moves to the history first
+    expect(history).toContain(
+      "WHERE c.user_id = _uid AND c.service_tier = 'self_serve' AND coalesce(c.archived, false) = false;",
+    );
+    expect(history).toContain("IF NOT public.member_can_consume(_uid) THEN");
+    expect(history).toContain(
+      "PERFORM public._member_program_archive(v_client, _uid, v_running, 'switched');",
+    );
+    // undo only removes a program nothing in it was opened or logged in, and only right after
+    expect(history).toContain("created_at < now() - interval '30 minutes'");
+    expect(history).toMatch(
+      /public\.pl_day_logged\(d\.id\) OR EXISTS \(SELECT 1 FROM public\.pl_day_completions c WHERE c\.day_id = d\.id\)/,
+    );
+    // removing from the history only hides it
+    const hide = history.slice(
+      history.indexOf("FUNCTION public.member_program_history_hide("),
+      history.indexOf("-- 7. Deleting"),
+    );
+    expect(hide).not.toMatch(/DELETE|UPDATE public\.pl_/);
+  });
+  it("a deleted program can be undone exactly: the running copy keeps its link and its sharing is kept", () => {
+    const del = history.slice(
+      history.indexOf("FUNCTION public.athlete_program_delete("),
+      history.indexOf("FUNCTION public.athlete_program_restore("),
+    );
+    expect(del).not.toContain("source_athlete_program_id = NULL");
+    expect(del).not.toContain("visibility = 'private'");
+    expect(history).toContain(
+      "GRANT EXECUTE ON FUNCTION public.athlete_program_restore(uuid) TO authenticated;",
     );
   });
   it("a running copy follows edits only on workouts nobody has touched, and keeps the cardio row", () => {
@@ -165,9 +260,11 @@ describe("the database lets a member manage only their own program, and never lo
     );
     expect(sql).toContain("source_athlete_program_id = _id AND archived = false");
   });
-  it("today is read through the Manitoba-aware helper, never a bare AT TIME ZONE", () => {
+  it("today is read through the Manitoba-aware helpers, never a bare AT TIME ZONE", () => {
     expect(sql).toContain("public.pt_local_today(coalesce(v_tz, 'America/Winnipeg'))");
-    expect(sql).not.toMatch(/AT TIME ZONE 'America\/Winnipeg'/);
+    expect(history).toContain("public.pt_local_today(coalesce(v_tz, 'America/Winnipeg'))");
+    expect(history).toContain("public.instant_to_local(");
+    for (const f of [sql, history]) expect(f).not.toMatch(/AT TIME ZONE/);
   });
 });
 
@@ -209,20 +306,24 @@ describe("the screens: one Programs page, every program says where it's from, an
     expect(card).toContain("data-manage-program");
     expect(card).not.toContain("data-manage-program-row");
     expect(card).not.toContain('aria-label="Manage program"');
-    expect(card).toContain("onManage={!browsing && !(allDone && nextProgramTo) ? onManage : undefined}");
+    expect(card).toContain(
+      "onManage={!browsing && !(allDone && nextProgramTo) ? onManage : undefined}",
+    );
     // the Programs page's running program is the same heading, with one way to Workouts
     expect(hub).toContain("<ActiveProgramHeader");
     expect(hub).toContain("onManage={canManage ? () => setManageOpen(true) : undefined}");
     expect(hub).toContain("data-open-workouts");
-    // Training days is in Manage, through the same sheet as the ⋯ on Workouts
-    expect(workouts).toContain("onTrainingDays={client ? () => setDaysOpen(true) : undefined}");
-    expect(sheet).toContain('title="Training days"');
+    // Training days has one door on Workouts (its ⋯), never a second one in Manage
+    expect(sheet).not.toContain('title="Training days"');
+    expect(workouts).toContain('<CalendarCheck className="mr-2 h-4 w-4" /> Training days');
   });
 
   it("a finished program of their own points at the next one; a one-block program's weeks fold like a roadmap", () => {
     expect(card).toContain("{!browsing && nextProgramTo && allDone && (");
     expect(card).toContain("<span>Choose your next program</span>");
-    expect(workouts).toContain('nextProgramTo={mode === "self" && isSelfServe ? "/portal/programs" : undefined}');
+    expect(workouts).toContain(
+      'nextProgramTo={mode === "self" && isSelfServe ? "/portal/programs" : undefined}',
+    );
     expect(card).toContain('{multi ? "Roadmap" : "All weeks"}');
     expect(card).toContain("{showAll && (");
     expect(card).not.toContain("(showAll || blocks.length === 1)");
@@ -235,27 +336,41 @@ describe("the screens: one Programs page, every program says where it's from, an
       'const noProgram = mode === "self" && isSelfServe && !isLoading && dayItems.length === 0;',
     );
     expect(workouts).toContain("{!noProgram && (");
-    // Past programs sits in the page's own flow, never after its tab-bar padding (a dead band above it)
+    // a coaching client's past blocks sit in the page's own flow, never after its tab-bar
+    // padding; a member's past programs are Program history (in the ⋯), never listed twice
     const page = readFileSync("src/routes/_authenticated/portal/workouts.index.tsx", "utf8");
-    expect(page).toContain('footer={<WorkoutArchiveSection clientId={client.id} mode="client" />}');
+    expect(page).toContain("footer={<PastPrograms clientId={client.id} />}");
+    expect(page).toContain("if (loading || isSelfServe) return null;");
     expect(workouts).toContain("        {footer}\n      </div>");
   });
 
-  it("Manage: edit (own programs), see the plan (JF Effect), switch, end, with what ending does said before the tap", () => {
+  it("Manage: edit (own programs), see the plan (JF Effect), switch, pause, then end set apart", () => {
     for (const label of [
       'title="Edit program"',
       'title="See the plan"',
       'title="Switch program"',
+      'title="Pause program"',
       'title="End program"',
     ]) {
       expect(sheet).toContain(label);
     }
     expect(sheet).toContain("const facts = await preview.mutateAsync(origin.blockId);");
     expect(sheet).toContain("if (isImpersonating) return toast.message(PREVIEW);");
-    // End is set apart from the everyday rows and says what stays before the tap
-    expect(sheet.indexOf('title="Switch program"')).toBeLessThan(sheet.indexOf('title="End program"'));
+    // End is set apart from the everyday rows and says where it goes before the tap
+    expect(sheet.indexOf('title="Pause program"')).toBeLessThan(
+      sheet.indexOf('title="End program"'),
+    );
     expect(sheet).toContain("data-manage-end");
-    expect(sheet).toContain("Workouts you've logged stay in your history and PRs.");
+    expect(sheet).toContain(
+      "It moves to your program history. Workouts you've logged stay in your history and PRs.",
+    );
+    // pausing and ending both have Undo (resume the same program right where it was)
+    expect(sheet).toContain('end.mutateAsync({ blockId: origin.blockId, reason: "paused" })');
+    expect(sheet).toContain('end.mutateAsync({ blockId: origin.blockId, reason: "ended" })');
+    expect(sheet).toContain("void resumeFn({ data: { key, startDate: null } })");
+    expect(sheet.match(/\.\.\.undo\(done\.key, label\)/g)?.length).toBe(2);
+    // End isn't a delete any more: no destructive red on it
+    expect(sheet).not.toContain("bg-destructive");
   });
 
   it("saving an edit to the running program updates the calendar's untouched workouts", () => {
@@ -276,12 +391,17 @@ describe("starting or switching a program, said before the tap", () => {
       action: "Start program",
     });
   });
-  it("switching says what ends, what comes off the calendar and what stays", () => {
-    const c = switchCopy({ title: "Strength 4 Day", current: "Upper Lower Basics", logged: 4, upcoming: 9 });
+  it("switching says where the current one goes, what comes off the calendar and what stays", () => {
+    const c = switchCopy({
+      title: "Strength 4 Day",
+      current: "Upper Lower Basics",
+      logged: 4,
+      upcoming: 9,
+    });
     expect(c.kind).toBe("switch");
     expect(c.title).toBe("Switch to Strength 4 Day");
     expect(c.lines).toEqual([
-      "Upper Lower Basics ends. Its 9 upcoming workouts come off your calendar.",
+      "Upper Lower Basics moves to your program history. Its 9 upcoming workouts come off your calendar.",
       "The 4 workouts you finished stay in your history and PRs.",
     ]);
     expect(c.action).toBe("Switch program");
@@ -289,7 +409,7 @@ describe("starting or switching a program, said before the tap", () => {
   it("a finished program moves to the past; unknown counts still promise the history", () => {
     const c = switchCopy({ title: "B", current: "A", currentFinished: true });
     expect(c.lines).toEqual([
-      "A is finished and moves to your past programs.",
+      "A is finished and moves to your program history.",
       "Every workout you finished stays in your history and PRs.",
     ]);
   });
@@ -301,7 +421,7 @@ describe("starting or switching a program, said before the tap", () => {
   });
   it("the line under a program's button names what it replaces", () => {
     expect(replacesLine("Upper Lower Basics")).toBe(
-      "Replaces Upper Lower Basics. Workouts you've finished stay in your history.",
+      "Replaces Upper Lower Basics, which moves to your program history.",
     );
     expect(replacesLine(null)).toBeNull();
   });
@@ -345,13 +465,17 @@ describe("Workouts reads today first, and every page under it has a way back", (
     expect(workouts).toContain(
       '{mode === "self" && !noProgram && <ScheduleViewSwitch view={view} onChange={setView} compact />}',
     );
-    expect(workouts).toContain('{mode === "coach" && <ScheduleViewSwitch view={view} onChange={setView} />}');
+    expect(workouts).toContain(
+      '{mode === "coach" && <ScheduleViewSwitch view={view} onChange={setView} />}',
+    );
     expect(workouts.match(/aria-label="Schedule view"/g)?.length).toBe(1);
   });
 
   it("no empty readiness or month card before there's anything in them", () => {
     expect(workouts).toMatch(/<RecoveryPreviewCard[\s\S]{0,160}hideWhenEmpty/);
-    expect(workouts).toContain("<TrainingAnalyticsPreviewCard clientId={clientId} hideWhenEmpty />");
+    expect(workouts).toContain(
+      "<TrainingAnalyticsPreviewCard clientId={clientId} hideWhenEmpty />",
+    );
     const ready = readFileSync("src/components/analytics/recovery-preview-card.tsx", "utf8");
     expect(ready.match(/if \(hideWhenEmpty\) return null;/g)?.length).toBe(2);
     const month = readFileSync("src/components/training-analytics-preview-card.tsx", "utf8");
@@ -363,5 +487,159 @@ describe("Workouts reads today first, and every page under it has a way back", (
     expect(hub).toMatch(/title="Programs"\s+backTo="\/portal\/workouts"/);
     const move = readFileSync("src/routes/_authenticated/portal/schedule.tsx", "utf8");
     expect(move).toContain('backTo="/portal/workouts"');
+  });
+});
+
+const entry = (over: Partial<HistoryEntry> = {}): HistoryEntry => ({
+  key: "k1",
+  name: "Apex Hypertrophy",
+  reason: "paused",
+  off_on: "2026-11-18",
+  start: "2026-11-02",
+  end: "2026-11-29",
+  blocks: 1,
+  weeks: 4,
+  total: 12,
+  done: 6,
+  remaining: 5,
+  last_trained: "2026-11-16T23:00:00Z",
+  next: { week: 3, day: 2, title: "Day 2" },
+  days_per_week: 3,
+  template_id: null,
+  plan_id: null,
+  program_id: null,
+  origin: "jf",
+  copied: false,
+  can_resume: true,
+  ...over,
+});
+
+describe("program history, in words", () => {
+  const today = "2026-12-02";
+  it("says why it came off the calendar and when", () => {
+    expect(historyStatus(entry(), today)).toBe("Paused Nov 18");
+    expect(historyStatus(entry({ reason: "switched" }), today)).toBe("Switched Nov 18");
+    expect(historyStatus(entry({ reason: "ended" }), today)).toBe("Ended Nov 18");
+    // a paused program with nothing left to do isn't "paused" any more
+    expect(historyStatus(entry({ remaining: 0 }), today)).toBe("Ended Nov 18");
+    expect(historyStatus(entry({ remaining: 0, done: 12 }), today)).toBe("Completed Nov 18");
+    expect(historyCompleted(entry({ remaining: 0, done: 12 }))).toBe(true);
+    // last year's say the year
+    expect(historyStatus(entry({ off_on: "2025-06-01", reason: "ended" }), today)).toBe(
+      "Ended Jun 1, 2025",
+    );
+  });
+  it("says how far they got and over which days, ending where it came off", () => {
+    expect(historyProgressLine(entry(), today)).toBe("6 of 12 workouts done · Nov 2 – Nov 18");
+    expect(historyProgressLine(entry({ off_on: "2026-12-20" }), today)).toBe(
+      "6 of 12 workouts done · Nov 2 – Nov 29",
+    );
+  });
+  it("says where it picks up, naming the workout only when it says more than its number", () => {
+    expect(historyNextLine(entry())).toBe("Picks up at Week 3 · Day 2");
+    expect(historyNextLine(entry({ next: { week: 3, day: 2, title: "Lower A" } }))).toBe(
+      "Picks up at Week 3 · Day 2 (Lower A)",
+    );
+    expect(historyNextLine(entry({ next: null }))).toBeNull();
+  });
+  it("offers Resume while there's work left, Start over while its source still exists, nothing to a coaching client", () => {
+    expect(historyActions(entry({ plan_id: "p" }), { member: true })).toEqual({
+      resume: true,
+      restart: "plan",
+    });
+    expect(historyActions(entry({ program_id: "x" }), { member: true })).toEqual({
+      resume: true,
+      restart: "program",
+    });
+    expect(historyActions(entry({ remaining: 0, can_resume: false }), { member: true })).toEqual({
+      resume: false,
+      restart: null,
+    });
+    expect(historyActions(entry({ plan_id: "p" }), { member: false })).toEqual({
+      resume: false,
+      restart: null,
+    });
+  });
+  it("Workouts offers back only a paused program, only while nothing else runs", () => {
+    const list = [entry({ key: "a", reason: "switched" }), entry({ key: "b" })];
+    expect(pausedProgram(list, false)?.key).toBe("b");
+    expect(pausedProgram(list, true)).toBeNull();
+    expect(pausedProgram([entry({ remaining: 0 })], false)).toBeNull();
+    expect(pausedProgram(null, false)).toBeNull();
+  });
+  it("the resume sheet says where it picks up, what's left, and where the current one goes", () => {
+    const c = resumeCopy({
+      name: "Apex",
+      next: { week: 3, day: 2, title: null },
+      remaining: 5,
+      current: "Builder",
+    });
+    expect(c.title).toBe("Resume Apex");
+    expect(c.lines).toEqual([
+      "Picks up at Week 3 · Day 2. 5 workouts left.",
+      "Builder moves to your program history.",
+      "Workouts you already did keep their dates.",
+    ]);
+    expect(c.action).toBe("Resume program");
+  });
+  it("removing from the history and deleting a saved program each say exactly what goes and what stays", () => {
+    const r = removeFromHistoryCopy({ name: "Apex", done: 6 });
+    expect(r.title).toBe("Remove Apex from your history?");
+    expect(r.lines[1]).toBe(
+      "The 6 workouts you logged in it stay in your training history, PRs and progress.",
+    );
+    const d = deleteSavedProgramCopy({ title: "My Split", shared: true, running: true });
+    expect(d.title).toBe("Delete My Split?");
+    expect(d.lines).toEqual([
+      "It's removed from My programs and from the crew.",
+      "Workouts you logged from it stay in your history and PRs. Copies other people saved stay theirs.",
+      "It stays on your calendar. To take it off, use End program in Manage.",
+    ]);
+    expect(d.action).toBe("Delete program");
+    expect(
+      deleteSavedProgramCopy({ title: "X", shared: false, running: false }).lines,
+    ).toHaveLength(2);
+  });
+});
+
+describe("program history screens", () => {
+  const workouts = readFileSync("src/components/workouts/WorkoutsExperience.tsx", "utf8");
+  const hub = readFileSync("src/components/athlete-programs/programs-hub.tsx", "utf8");
+  const page = readFileSync("src/components/athlete-programs/program-history.tsx", "utf8");
+  const dialog = readFileSync("src/components/programs/start-plan-dialog.tsx", "utf8");
+  it("Workouts: a paused program comes back with one tap where the empty state was; the ⋯ opens the history", () => {
+    expect(workouts).toContain(
+      "const paused = noProgram ? pausedProgram(history.data, false) : null;",
+    );
+    expect(workouts).toContain("<PausedProgramCard entry={paused} />");
+    expect(workouts).toContain('navigate({ to: "/portal/programs/history" as any })');
+    // every ⋯ on the page is a bottom sheet on a phone, never a corner dropdown
+    expect(workouts).not.toContain("DropdownMenu");
+    expect(workouts.match(/<CardMenu\b/g)?.length).toBe(2);
+  });
+  it("My programs: a paused program in place of what's on the calendar, and one row to the history", () => {
+    expect(hub).toContain("{!hasRunning && paused && (");
+    expect(hub).toContain(
+      "{isSelfServe && pastCount > 0 && <ProgramHistoryRow count={pastCount} />}",
+    );
+  });
+  it("a past program's sheet: Resume, Start over, then Remove set apart with Undo", () => {
+    expect(page.indexOf("data-history-resume")).toBeLessThan(page.indexOf("data-history-restart"));
+    expect(page.indexOf("data-history-restart")).toBeLessThan(page.indexOf("data-history-remove"));
+    expect(page).toContain(
+      "void hide\n              .mutateAsync({ key: target.key, hidden: false })",
+    );
+    expect(page).toContain(
+      "Only takes it off this list. Your logged workouts, PRs and progress stay.",
+    );
+  });
+  it("switching has Undo, and resuming goes through the same sheet as starting", () => {
+    expect(dialog).toContain("res.replacedKey && res.blockId");
+    expect(dialog).toContain(
+      "data: { blockId: res.blockId!, restoreKey: res.replacedKey, previousDays: res.previousDays ?? null },",
+    );
+    expect(dialog).toContain(
+      "const r = await resumeFn({ data: { key: resume.key, startDate: startDate || null, trainingDays: days } });",
+    );
   });
 });

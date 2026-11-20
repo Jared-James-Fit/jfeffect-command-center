@@ -74,7 +74,7 @@ export const startMyProgram = createServerFn({ method: "POST" })
       _start: startDate,
     });
     if (error) throw new Error(error.message);
-    // athlete_program_start also archived the program they ran before (never deleted)
+    // athlete_program_start also archived the program they ran before (into their program history, never deleted)
     const blockId = (res as any)?.block_id as string | undefined;
 
     let unplaced = 0;
@@ -97,7 +97,15 @@ export const startMyProgram = createServerFn({ method: "POST" })
       console.error("[startMyProgram] schedule failed", e);
     }
 
-    return { conflict: false as const, blockId: blockId ?? null, days, unplaced };
+    return {
+      conflict: false as const,
+      blockId: blockId ?? null,
+      days,
+      unplaced,
+      // for Undo: the program it replaced (its history key) and the days they had
+      replacedKey: running.length ? running[0].prep_id ?? running[0].id : null,
+      previousDays: committed,
+    };
   });
 
 /**

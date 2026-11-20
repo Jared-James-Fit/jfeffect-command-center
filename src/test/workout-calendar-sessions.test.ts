@@ -32,7 +32,7 @@ describe("sessions show on the Workouts calendar too", () => {
     // Coaching clients always get a way to their appointments, even on a week with none:
     // Appointments in the header's ⋯ (a quiet menu row, not a violet link under the strip).
     expect(exp).toContain('const showAppointmentsLink = mode === "self" && isCoaching;');
-    expect(exp).toMatch(/\{showAppointmentsLink && \(\s*<DropdownMenuItem asChild>\s*<Link\s+to="\/portal\/calendar"/);
+    expect(exp).toMatch(/\{showAppointmentsLink && \(\s*<CardMenuItem[\s\S]{0,120}navigate\(\{ to: "\/portal\/calendar"/);
     expect(exp).not.toContain("text-violet-400");
     const strip = read("src/components/workouts/week-strip.tsx");
     expect(strip).toContain("{hasSession && <SessionDot />}");

@@ -15,20 +15,28 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { startLibraryPlan } from "@/lib/member-plan-start.functions";
+import { resumeMyProgram, undoProgramStart } from "@/lib/member-program-lifecycle.functions";
 import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
-import { switchCopy } from "@/lib/my-program";
-import { useMyCurrentProgram } from "@/components/athlete-programs/use-my-program";
-import { programName } from "@/components/workouts/program-roadmap";
+import { resumeCopy, switchCopy, type HistoryEntry } from "@/lib/my-program";
+import { refreshAfterProgramChange, useMyCurrentProgram } from "@/components/athlete-programs/use-my-program";
+import { programHeading } from "@/components/workouts/program-roadmap";
 import { useServiceTier } from "@/lib/service-tier";
 import { localStartOfToday, toLocalISO } from "@/lib/today";
 import { cn } from "@/lib/utils";
 import { SHORT_DAY, WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
 import { normalizeCommittedDays } from "@/lib/committed-schedule-realign";
-import { fitTrainingDays, listDays, weekOnePreview, type DaysFit } from "@/lib/plan-days-fit";
+import { fitTrainingDays, listDays, resumePreview, weekOnePreview, type DaysFit } from "@/lib/plan-days-fit";
 
 export type StartPlanFn = (args: {
   data: { planId: string; startDate: string | null; trainingDays: WeekDay[]; confirmReplace: boolean };
-}) => Promise<{ conflict: boolean; currentName?: string | null }>;
+}) => Promise<{
+  conflict: boolean;
+  currentName?: string | null;
+  /** the program that started, and what it replaced, for Undo */
+  blockId?: string | null;
+  replacedKey?: string | null;
+  previousDays?: string[] | null;
+}>;
 
 export type StartablePlan = {
   id: string;
@@ -49,17 +57,27 @@ export type StartablePlan = {
  * The days they train come in from their committed schedule, fitted to the
  * program's workouts a week (every workout gets its own day), and become
  * their committed schedule. Then they land on Workouts with Week 1 on it.
+ * A switch has Undo on the toast after (the new program goes while nothing
+ * in it is opened, the old one comes back as it was).
+ *
+ * `resume` puts a past program back instead (member_program_resume): the
+ * same days and start date, a "picks up at Week 3 · Day 2" line, and the
+ * workouts left that week on the days they'll land on.
  */
 export function StartPlanDialog({
-  plan, open, onOpenChange, startWith,
+  plan, open, onOpenChange, startWith, resume,
 }: {
   plan: StartablePlan | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Start something other than a library plan (a program they built or copied): same days, same replace check. */
   startWith?: StartPlanFn;
+  /** Resume this past program where they left off, instead of starting `plan`. */
+  resume?: HistoryEntry | null;
 }) {
   const startLibrary = useServerFn(startLibraryPlan);
+  const resumeFn = useServerFn(resumeMyProgram);
+  const undoFn = useServerFn(undoProgramStart);
   const start: StartPlanFn = startWith ?? startLibrary;
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -93,7 +111,7 @@ export function StartPlanDialog({
   // what's on their calendar now, and what switching does to it (read-only preview)
   const current = useMyCurrentProgram(open ? clientId : null, userId);
   // only a program they started themselves makes way (the start functions archive their own blocks)
-  const currentName = current.roadmap && current.origin.owned ? programName(current.roadmap.program) : null;
+  const currentName = current.roadmap && current.origin.owned ? programHeading(current.roadmap.program) : null;
   const ownedBlock = current.origin.owned ? current.origin.blockId : null;
   const { data: facts } = useQuery({
     queryKey: ["member-program-end-preview", ownedBlock],
@@ -106,21 +124,23 @@ export function StartPlanDialog({
     },
   });
 
-  const title = plan ? plan.public_title || plan.name : "";
-  const perWeek = plan?.days_per_week ?? null;
+  const title = resume ? resume.name : plan ? plan.public_title || plan.name : "";
+  const perWeek = resume ? resume.days_per_week ?? null : plan?.days_per_week ?? null;
   const mine = committed ?? [];
   const same =
     !!plan &&
     ((current.origin.origin.kind === "own" && current.origin.origin.programId === plan.id) ||
       (current.origin.origin.kind === "jf" && current.origin.planId === plan.id));
-  const copy = switchCopy({
-    title,
-    current: currentName,
-    same,
-    currentFinished: current.roadmap?.program.status === "completed",
-    logged: facts?.logged ?? null,
-    upcoming: facts?.upcoming ?? null,
-  });
+  const copy = resume
+    ? resumeCopy({ name: resume.name, next: resume.next, remaining: resume.remaining, current: currentName })
+    : switchCopy({
+        title,
+        current: currentName,
+        same,
+        currentFinished: current.roadmap?.program.status === "completed",
+        logged: facts?.logged ?? null,
+        upcoming: facts?.upcoming ?? null,
+      });
 
   useEffect(() => {
     if (!open) return;
@@ -139,11 +159,38 @@ export function StartPlanDialog({
   const short = perWeek ? perWeek - days.length : 0;
   const daysReady = perWeek ? short === 0 : true;
   const changesSchedule = mine.length > 0 && days.length > 0 && days.join() !== mine.join();
-  const preview = useMemo(() => weekOnePreview(startDate, days), [startDate, days]);
+  const preview = useMemo(
+    () =>
+      resume?.next
+        ? resumePreview(startDate, days, resume.next.day, perWeek)
+        : weekOnePreview(startDate, days),
+    [startDate, days, resume, perWeek],
+  );
   // starting the plan they're already running is starting it over
   const sameAgain = !!replaceName && replaceName.trim().toLowerCase() === title.trim().toLowerCase();
 
+  const submitResume = async () => {
+    if (!resume || !daysReady) return;
+    setPending(true);
+    try {
+      const r = await resumeFn({ data: { key: resume.key, startDate: startDate || null, trainingDays: days } });
+      onOpenChange(false);
+      const when = r.nextDate ? format(parseISO(r.nextDate), "EEE, MMM d") : null;
+      toast.success(
+        `${resume.name} is back on your calendar.${when ? ` Next workout ${when}.` : ""}${currentName ? ` ${currentName} is in your program history.` : ""}`,
+        { duration: 7000 },
+      );
+      refreshAfterProgramChange(qc);
+      navigate({ to: "/portal/workouts", replace: true });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't resume this program");
+    } finally {
+      setPending(false);
+    }
+  };
+
   const submit = async (confirmReplace = false) => {
+    if (resume) return submitResume();
     if (!plan || !daysReady) return;
     setPending(true);
     try {
@@ -159,10 +206,30 @@ export function StartPlanDialog({
       onOpenChange(false);
       setReplaceName(null);
       const when = preview[0] ? format(parseISO(preview[0].date), "EEE, MMM d") : null;
-      const ended = copy.kind === "switch" && currentName ? ` ${currentName} ended; your finished workouts stay in your history.` : "";
+      const replaced = res.replacedKey && currentName ? currentName : null;
+      const ended = replaced ? ` ${replaced} is in your program history.` : "";
+      // a switch can be taken back while nothing in the new program is opened
+      const undo =
+        res.replacedKey && res.blockId
+          ? {
+              action: {
+                label: "Undo",
+                onClick: () => {
+                  void undoFn({
+                    data: { blockId: res.blockId!, restoreKey: res.replacedKey, previousDays: res.previousDays ?? null },
+                  })
+                    .then(() => {
+                      refreshAfterProgramChange(qc);
+                      toast.success(replaced ? `Back to ${replaced}.` : "Undone.");
+                    })
+                    .catch((e: any) => toast.error(e?.message ?? "Couldn't undo it."));
+                },
+              },
+            }
+          : {};
       toast.success(
         `${title} is on your calendar${days.length ? `: ${listDays(days)}` : ""}${when ? `, from ${when}` : ""}.${ended}`,
-        { duration: 7000 },
+        { duration: 9000, ...undo },
       );
       // a new program touches the schedule, today, workouts, analytics. The
       // program list is dropped, not just marked old: Workouts shows its
@@ -183,17 +250,34 @@ export function StartPlanDialog({
       <Sheet open={open} onOpenChange={(o) => !pending && onOpenChange(o)}>
         <SheetContent
           side="bottom"
-          className="flex max-h-[92dvh] flex-col gap-0 rounded-t-2xl p-0 sm:mx-auto sm:max-w-lg"
+          hideCloseButton
+          swipeToClose
+          className="flex max-h-[92dvh] flex-col gap-0 rounded-t-[24px] p-0 sm:mx-auto sm:max-w-lg"
           data-start-program-sheet
         >
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-4">
-            <SheetHeader className="space-y-0.5 pr-2 text-left">
-              <SheetTitle className="text-left text-lg leading-tight">{copy.title}</SheetTitle>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-2">
+            <div aria-hidden className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/30" />
+            <div className="flex items-start gap-3">
+            <SheetHeader className="min-h-0 min-w-0 flex-1 space-y-0.5 p-0 text-left">
+              <SheetTitle className="break-words text-left text-lg leading-tight">{copy.title}</SheetTitle>
               <SheetDescription className="text-left">
-                {plan?.weeks ? `${plan.weeks} weeks` : "Your plan"}
+                {resume
+                  ? `${resume.done} of ${resume.total} workouts done`
+                  : plan?.weeks
+                    ? `${plan.weeks} weeks`
+                    : "Your plan"}
                 {perWeek ? ` · ${perWeek} workouts a week` : ""}
               </SheetDescription>
             </SheetHeader>
+            <button
+              type="button"
+              onClick={() => !pending && onOpenChange(false)}
+              className="-mr-2 inline-flex h-10 shrink-0 items-center rounded-full px-3 text-[15px] font-semibold text-foreground transition hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              data-start-cancel
+            >
+              Cancel
+            </button>
+            </div>
 
             {copy.lines.length > 0 && (
               <div className="mt-4 space-y-1 rounded-xl bg-muted px-3.5 py-3 text-[14px] leading-snug" data-switch-note>
@@ -245,7 +329,7 @@ export function StartPlanDialog({
             </div>
 
             <div className="mt-5">
-              <Label className="text-[15px] font-semibold" htmlFor="plan-start-date">Starts</Label>
+              <Label className="text-[15px] font-semibold" htmlFor="plan-start-date">{resume ? "Pick up on" : "Starts"}</Label>
               <Input
                 id="plan-start-date"
                 type="date"
@@ -258,7 +342,7 @@ export function StartPlanDialog({
 
             {daysReady && preview.length > 0 && (
               <div className="mt-5">
-                <p className="text-[15px] font-semibold">Week 1</p>
+                <p className="text-[15px] font-semibold">{resume?.next ? `Week ${resume.next.week}` : "Week 1"}</p>
                 <ol className="mt-2 flex flex-wrap gap-1.5">
                   {preview.map((p) => (
                     <li key={p.date} className="rounded-lg bg-muted px-2.5 py-1.5 text-xs">
@@ -272,7 +356,7 @@ export function StartPlanDialog({
 
             {isImpersonating && (
               <p className="mt-4 rounded-md border border-dashed p-2 text-xs text-muted-foreground">
-                You're viewing as this member. Only they can start a plan.
+                You're viewing as this member. Only they can {resume ? "resume" : "start"} a plan.
               </p>
             )}
           </div>
@@ -280,7 +364,7 @@ export function StartPlanDialog({
             <Button
               className="h-12 w-full text-[16px]"
               onClick={() => void submit(false)}
-              disabled={pending || isImpersonating || !plan || !daysReady}
+              disabled={pending || isImpersonating || (!plan && !resume) || !daysReady}
             >
               {pending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
               {copy.action}
