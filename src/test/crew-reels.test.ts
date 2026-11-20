@@ -175,7 +175,7 @@ describe("the feed loads ahead of the scroll", () => {
     expect(q).toContain("queryFn: () => signCommunityPaths([...covers, ...extras]),");
   });
 
-  it("a clip's link and header two screens away, the whole clip within a screen; a card painted two screens ahead; photos never held back", () => {
+  it("a clip's link and header two screens away, the whole clip within a screen; a card painted three screens ahead; photos never held back", () => {
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain('{ rootMargin: "200% 0px" }');
     expect(inline).toContain('{ rootMargin: "100% 0px" }');
@@ -183,7 +183,7 @@ describe("the feed loads ahead of the scroll", () => {
       'if (el) el.preload = soon && active && (auto || tapped) ? "auto" : "metadata";',
     );
     expect(inline).toContain("useFullMediaUrl(path, near);");
-    expect(read("src/components/community/post-art.tsx")).toContain('{ rootMargin: "200%" },');
+    expect(read("src/components/community/post-art.tsx")).toContain('{ rootMargin: "300%" },');
     const card = read("src/components/community/post-card.tsx");
     const fade = card.slice(
       card.indexOf("function FadeImg"),

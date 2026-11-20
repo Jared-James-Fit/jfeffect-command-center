@@ -5,7 +5,8 @@ import { extraScene, type CommunityPost } from "@/lib/community";
 import { extraLesson } from "@/lib/lessons";
 import { canvasFile, paintInstagramCard, standaloneSvg, svgPicture } from "@/lib/instagram-cards";
 import { instagramFileName, postArtCard, type IgCard, type IgFormat } from "@/lib/instagram-export";
-import { findPostArt, loadPostArt, peekPostArt, postArtAlt, postArtKey, whenStill, type PostArt } from "@/lib/post-art";
+import { decodePostArt, findPostArt, isPostArtDecoded, loadPostArt, peekPostArt, postArtAlt, postArtKey, whenStill, type PostArt } from "@/lib/post-art";
+import { cardLogo, ensureDisplayFont } from "@/lib/workout-share-card";
 import { cn } from "@/lib/utils";
 
 /** The drawing a card paints in (a lesson's diagram, Saturday's scene), drawn off screen first; null when it has none. */
@@ -40,7 +41,7 @@ export async function paintCardFile(post: CommunityPost, card: IgCard, format: I
   return file;
 }
 
-/** True once the box is within two screens of being seen (and from then on), so a card is painted before it's scrolled to. */
+/** True once the box is within three screens of being seen (and from then on), so a card is painted and decoded before it's scrolled to. */
 function useNearScreen(ref: RefObject<HTMLElement | null>, eager: boolean): boolean {
   const [near, setNear] = useState(eager);
   useEffect(() => {
@@ -55,7 +56,7 @@ function useNearScreen(ref: RefObject<HTMLElement | null>, eager: boolean): bool
           io.disconnect();
         }
       },
-      { rootMargin: "200%" },
+      { rootMargin: "300%" },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -93,26 +94,39 @@ export function usePostArt(post: CommunityPost, card: IgCard, unit: "kg" | "lb",
   const postRef = useRef(post);
   postRef.current = post;
 
+  const [missing, setMissing] = useState(false);
+
   // a different picture (the caption was edited, another unit): start over
   useEffect(() => {
     setArt(peekPostArt(key));
     setPainting(false);
     setFailed(false);
+    setMissing(false);
   }, [key]);
 
-  // near the screen: the one kept on the phone, else paint it
+  // as soon as the post is on the page: the one kept on the phone (a read, nothing drawn), so it's ready long before it's seen
   useEffect(() => {
-    if (!near || art?.key === key) return;
+    if (art?.key === key) return;
     let alive = true;
     void findPostArt(key, name).then((found) => {
       if (!alive) return;
       if (found) setArt(found);
-      else setPainting(true);
+      else {
+        setMissing(true);
+        // what painting it needs, fetched now rather than when it's on screen
+        void ensureDisplayFont();
+        void cardLogo();
+      }
     });
     return () => {
       alive = false;
     };
-  }, [near, key, name, art]);
+  }, [key, name, art]);
+
+  // not kept: painted once it's near the screen (only while the screen is still, nearest first)
+  useEffect(() => {
+    if (near && missing && art?.key !== key) setPainting(true);
+  }, [near, missing, art, key]);
 
   useEffect(() => {
     if (!painting || (drawing && !host)) return;
@@ -141,30 +155,86 @@ export function usePostArt(post: CommunityPost, card: IgCard, unit: "kg" | "lb",
   };
 }
 
+/** The picture once it's decoded (decodePostArt), never before: it goes on the page whole, in one frame. Decoded only near the screen (memory). */
+function useDecodedArt(art: PostArt | null, near: boolean): PostArt | null {
+  const [done, setDone] = useState<string | null>(() => (art && isPostArtDecoded(art.key) ? art.key : null));
+  useEffect(() => {
+    if (!art || !near || done === art.key) return;
+    if (isPostArtDecoded(art.key)) return setDone(art.key);
+    let alive = true;
+    void decodePostArt(art).then(() => {
+      if (alive) setDone(art.key);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [art, near, done]);
+  return art && (done === art.key || isPostArtDecoded(art.key)) ? art : null;
+}
+
+/** How long a post's words wait on screen for its card before showing anyway (a slow phone, a card that won't paint). */
+export const ART_HOLD_MS = 1500;
+
+/** True once the box has been on screen `ms` while `active` (from then on, until `active` ends). */
+function useOnScreenFor(ref: RefObject<HTMLElement | null>, active: boolean, ms: number): boolean {
+  const [over, setOver] = useState(false);
+  useEffect(() => {
+    if (!active) return setOver(false);
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const seen = entries.some((e) => e.isIntersecting);
+        if (seen && timer === null) timer = setTimeout(() => setOver(true), ms);
+        else if (!seen && timer !== null) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      },
+      { threshold: 0.5 },
+    );
+    io.observe(el);
+    return () => {
+      io.disconnect();
+      if (timer !== null) clearTimeout(timer);
+    };
+  }, [ref, active, ms]);
+  return over;
+}
+
 /**
  * An automated post's picture, 4:5 like a photo in the feed: its painted
- * card, exactly what Save image and Share to Instagram send. Dark, with the
- * cards' glow, until it's ready (painted once, then kept on the phone).
- * `fill`: fill the box it's in (a grid tile) instead of keeping 4:5.
- * `zoom`: a pinch lifts it like a photo (useMediaPinchZoom); off for grid tiles.
+ * card, exactly what Save image and Share to Instagram send, put on the page
+ * whole once it's decoded (painted once, then kept on the phone), never blank
+ * paper whose words fill in. `fill`: fill the box it's in (a grid tile)
+ * instead of keeping 4:5. `zoom`: a pinch lifts it like a photo
+ * (useMediaPinchZoom); off for grid tiles. `page`: on a post's own screen in
+ * the feed, black (nothing) until it's ready; with `hold` (the picture the
+ * post opens on) the post's words and buttons wait for it too (styles.css,
+ * `data-pending`, at most ART_HOLD_MS on screen), so the post appears all at once.
  */
-export function PostArtImage({ post, card, unit, eager = false, fill = false, zoom = true, className }: { post: CommunityPost; card: IgCard; unit: "kg" | "lb"; eager?: boolean; fill?: boolean; zoom?: boolean; className?: string }) {
+export function PostArtImage({ post, card, unit, eager = false, fill = false, zoom = true, page = false, hold = false, className }: { post: CommunityPost; card: IgCard; unit: "kg" | "lb"; eager?: boolean; fill?: boolean; zoom?: boolean; page?: boolean; hold?: boolean; className?: string }) {
   const box = useRef<HTMLDivElement | null>(null);
   const near = useNearScreen(box, eager);
   const { art, failed, host } = usePostArt(post, card, unit, near, box);
+  const shown = useDecodedArt(art, near || eager);
   const alt = postArtAlt(post, card);
+  const pending = !shown && !failed;
+  const gaveUp = useOnScreenFor(box, page && hold && pending, ART_HOLD_MS);
   return (
     <div
       ref={box}
-      className={cn("relative w-full overflow-hidden bg-[#f6f3ee]", fill && "h-full", className)}
+      className={cn("relative w-full overflow-hidden", shown || failed ? "bg-[#f6f3ee]" : page ? "bg-transparent" : "bg-muted", fill && "h-full", className)}
       style={fill ? undefined : { aspectRatio: "4 / 5" }}
       data-post-art={card}
-      data-ready={art ? "" : undefined}
+      data-ready={shown ? "" : undefined}
+      data-pending={page && hold && pending && !gaveUp ? "" : undefined}
     >
-      {art ? (
+      {shown ? (
         // data-pinch-zoom: pinch lifts just the picture, the same as a photo post's (SlideMedia)
         <div data-pinch-zoom={zoom ? "" : undefined} className="absolute inset-0">
-          <ArtImg src={art.url} alt={alt} />
+          <ArtImg src={shown.url} alt={alt} />
         </div>
       ) : failed ? (
         // couldn't paint it on this phone: its words, on the same paper card
@@ -172,30 +242,17 @@ export function PostArtImage({ post, card, unit, eager = false, fill = false, zo
           <p className="line-clamp-6 text-balance text-[22px] font-bold leading-tight">{alt}</p>
         </div>
       ) : (
-        <div className="absolute inset-0 animate-pulse bg-[#ece8e0]" aria-label="Loading picture" role="img" />
+        // nothing while it's coming (no blank paper that fills in): it lands whole
+        <div className="absolute inset-0" aria-label="Loading picture" role="img" />
       )}
       {host}
     </div>
   );
 }
 
-/** The painted picture: fades in once it's decoded (a kept one shows at once). */
+/** The painted picture: already decoded (useDecodedArt), so it's on the page whole the frame it lands, no fade. */
 function ArtImg({ src, alt }: { src: string; alt: string }) {
-  const [loaded, setLoaded] = useState(false);
-  return (
-    <img
-      src={src}
-      alt={alt}
-      decoding="async"
-      draggable={false}
-      onLoad={() => setLoaded(true)}
-      ref={(el) => {
-        if (el?.complete && el.naturalWidth > 0 && !loaded) setLoaded(true);
-      }}
-      data-loaded={loaded ? "" : undefined}
-      className="media-fade absolute inset-0 h-full w-full object-cover"
-    />
-  );
+  return <img src={src} alt={alt} decoding="sync" draggable={false} className="absolute inset-0 h-full w-full object-cover" />;
 }
 
 /**

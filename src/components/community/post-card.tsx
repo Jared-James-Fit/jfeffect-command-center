@@ -127,12 +127,13 @@ export function isPhotoPost(post: Pick<CommunityPost, "kind" | "media_type" | "s
  * send); a photo on it (Saturday's made scene, or one the coach added) is the
  * picture instead, with a numbers card after it and a lesson's card before it.
  */
-export function AutoPostHero({ post, thumbUrl, unit, full = false }: { post: CommunityPost; thumbUrl: string | null; unit: "kg" | "lb"; full?: boolean }) {
+export function AutoPostHero({ post, thumbUrl, unit, full = false, page = false }: { post: CommunityPost; thumbUrl: string | null; unit: "kg" | "lb"; full?: boolean; page?: boolean }) {
   const plan = instagramPlan(post);
   const card = isAutoPost(post) ? plan.card : null;
-  if (post.media_type && card && !plan.cardLast) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} lead={<PostArtImage post={post} card={card} unit={unit} fill eager={full} />} />;
-  if (post.media_type) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} trail={card ? <PostArtImage post={post} card={card} unit={unit} fill /> : undefined} />;
-  return card ? <PostArtImage post={post} card={card} unit={unit} eager={full} /> : null;
+  // `page`: a post's own screen in the feed, where the card it opens on holds the post's words until it's ready (all at once)
+  if (post.media_type && card && !plan.cardLast) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} lead={<PostArtImage post={post} card={card} unit={unit} fill eager={full} page={page} hold={page} />} />;
+  if (post.media_type) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} trail={card ? <PostArtImage post={post} card={card} unit={unit} fill page={page} /> : undefined} />;
+  return card ? <PostArtImage post={post} card={card} unit={unit} eager={full} page={page} hold={page} /> : null;
 }
 
 /**
@@ -698,7 +699,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
               // an automated post's 4:5 card: the full width, black above and below, centred between the bars
               // (its sheet open: a rounded card above it, Instagram's)
               <FitBox ratio={0.8} page shrunk={sheetOpen}>
-                <AutoPostHero post={post} thumbUrl={thumbUrl} unit={unit} />
+                <AutoPostHero post={post} thumbUrl={thumbUrl} unit={unit} page />
               </FitBox>
             ) : (
               // its own photos and clips: the screen is the canvas (TikTok's), PostMedia page;

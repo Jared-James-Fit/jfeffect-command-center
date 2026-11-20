@@ -10,6 +10,9 @@
  * that's busy while a swipe lands leaves the rest of that post unpainted
  * (black) until it's free. The same File is what Save image and Share to
  * Instagram send (those ask `urgent`: painted at once, whatever the screen).
+ * A kept picture is read from the phone as soon as its post is on the page
+ * and decoded before it's shown (decodePostArt), so a card appears whole in
+ * one frame, never blank paper whose words fill in after.
  *
  * Small on purpose (no painters here): the grid and Home's shelf read it.
  */
@@ -105,10 +108,54 @@ function remember(art: PostArt): PostArt {
     const [oldest] = memory.keys();
     const gone = memory.get(oldest);
     memory.delete(oldest);
+    decoded.delete(oldest);
     // a picture already on screen keeps showing (it's decoded); a new one is read again
     if (gone) URL.revokeObjectURL(gone.url);
   }
   return art;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Decoded before it's shown                                          */
+/* ------------------------------------------------------------------ */
+
+const decoded = new Set<string>();
+const decoding = new Map<string, Promise<void>>();
+
+/** Whether the picture has been decoded here, so it shows whole the frame it's put on the page. */
+export function isPostArtDecoded(key: string): boolean {
+  return decoded.has(key);
+}
+
+/**
+ * Decode the picture before it goes on the page: loaded once in this
+ * document, an <img> with the same address is complete at once (the HTML
+ * spec's list of available images), so the card appears whole in one frame,
+ * never blank paper that fills in. A picture that won't decode here counts as
+ * done (it then shows as it loads).
+ */
+export function decodePostArt(art: PostArt): Promise<void> {
+  if (decoded.has(art.key)) return Promise.resolve();
+  const inflight = decoding.get(art.key);
+  if (inflight) return inflight;
+  const job = (async () => {
+    try {
+      if (typeof Image === "undefined") return;
+      const img = new Image();
+      img.src = art.url;
+      if (typeof img.decode === "function") await img.decode();
+      else
+        await new Promise<void>((res) => {
+          img.onload = () => res();
+          img.onerror = () => res();
+        });
+    } catch {
+      // shown as it loads
+    }
+    if (memory.get(art.key) === art) decoded.add(art.key);
+  })().finally(() => decoding.delete(art.key));
+  decoding.set(art.key, job);
+  return job;
 }
 
 /** The picture, if it's ready right now (Save image needs it inside the tap). */
@@ -377,6 +424,8 @@ export function loadPostArt(key: string, name: string, paint: () => Promise<Blob
 export function resetPostArt() {
   memory.forEach((a) => URL.revokeObjectURL(a.url));
   memory.clear();
+  decoded.clear();
+  decoding.clear();
   pending.clear();
   storeOpen = null;
   waiting.length = 0;
