@@ -17,6 +17,7 @@
  */
 import type { ClientPayments, Installment, PackageAccount, SaleSchedule } from "@/lib/payment-schedule";
 import type { PaymentStatus, TrainingStatus } from "@/lib/package-status";
+import { patternDays, planPrebook, type PrebookSession } from "@/lib/session-prebook";
 
 /* ---------------- The glance ---------------- */
 
@@ -154,6 +155,101 @@ export function dueWords(i: Installment, day: (iso: string) => string): string {
   if (i.state === "overdue") return `overdue since ${day(i.date)}`;
   if (i.state === "due_today" || i.state === "unconfirmed") return "today";
   return day(i.date);
+}
+
+/* ---------------- Their final session ---------------- */
+
+export type FinalSessionSource = {
+  id?: string;
+  session_date: string;
+  start_time: string;
+  end_time?: string | null;
+  status: string;
+  location?: string | null;
+  title?: string | null;
+  timezone?: string | null;
+  /** False for a booking that never takes a credit (a call): never their final training session. */
+  uses_credit?: boolean | null;
+};
+
+export type FinalSession =
+  /** Nothing left to book on their packages: the last session booked. */
+  | { kind: "booked"; date: string; start: string; daysAway: number; pastEnd: { label: string; to: string } | null }
+  /**
+   * Sessions still to book: the day the last one lands if they keep their usual
+   * days (Book ahead's own plan: their weekly rhythm, after their last booking,
+   * holidays and days already taken skipped).
+   */
+  | { kind: "projected"; date: string; left: number; days: string; daysAway: number; pastEnd: { label: string; to: string } | null }
+  /** Nothing booked and nothing left: the last day they trained. */
+  | { kind: "done"; date: string };
+
+function daysFrom(today: string, date: string): number {
+  const ms = (iso: string) => Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)));
+  return Math.round((ms(date) - ms(today)) / 86_400_000);
+}
+
+/** "today", "tomorrow", "in 12 days", "in 9 weeks". */
+export function awayWords(days: number): string {
+  if (days <= 0) return "today";
+  if (days === 1) return "tomorrow";
+  if (days < 14) return `in ${days} days`;
+  return `in ${Math.round(days / 7)} weeks`;
+}
+
+/**
+ * When a client's sessions run out: the last one booked once every session on
+ * their packages is booked, else where the last one lands at their usual
+ * days and times, else (nothing booked, nothing left) the last day they
+ * trained. Counts every package they hold, so a renewal added ahead moves the
+ * day out. `pastEnd` names the package it lands on when its dates end
+ * earlier (the package's own period, not a use-by date: the ledger's expiry
+ * already takes expired sessions out of what's left). Null with no package.
+ */
+export function finalSession(p: ClientPayments, sessions: FinalSessionSource[], today: string): FinalSession | null {
+  if (p.packages.length === 0) return null;
+  const training = sessions.filter((s) => s.uses_credit !== false);
+  const open = p.packages.filter((x) => x.granted && x.state !== "ended");
+  const left = open.reduce((t, x) => t + x.sessions.available, 0);
+  const upcoming = training
+    .filter((s) => s.status === "Scheduled" && String(s.session_date).slice(0, 10) >= today)
+    .sort((a, b) => `${a.session_date}${a.start_time}`.localeCompare(`${b.session_date}${b.start_time}`));
+
+  // The package the last session lands on: the last one still holding sessions to train.
+  const holder = [...open].filter((x) => x.sessions.booked + x.sessions.available > 0).sort(byNumber).pop() ?? null;
+  const pastEndOf = (date: string) =>
+    holder?.to && !p.notBilled && date > holder.to ? { label: holder.label, to: holder.to } : null;
+
+  if (left === 0) {
+    const last = upcoming[upcoming.length - 1];
+    if (last) {
+      const date = String(last.session_date).slice(0, 10);
+      return { kind: "booked", date, start: String(last.start_time).slice(0, 5), daysAway: daysFrom(today, date), pastEnd: pastEndOf(date) };
+    }
+    const trained = training
+      .filter((s) => (s.status === "Completed" || s.status === "Missed") && String(s.session_date).slice(0, 10) <= today)
+      .map((s) => String(s.session_date).slice(0, 10))
+      .sort();
+    return trained.length ? { kind: "done", date: trained[trained.length - 1] } : null;
+  }
+
+  const plan = planPrebook({
+    sessions: training.map((s): PrebookSession => ({
+      session_date: String(s.session_date).slice(0, 10),
+      start_time: String(s.start_time).slice(0, 5),
+      end_time: String(s.end_time ?? s.start_time).slice(0, 5),
+      status: s.status,
+      location: s.location ?? null,
+      title: s.title ?? null,
+      timezone: s.timezone ?? null,
+    })),
+    available: left,
+    today,
+  });
+  // No rhythm to go by (too few sessions to read one): say nothing rather than guess.
+  if (plan.slots.length < left) return null;
+  const date = plan.slots[plan.slots.length - 1].date;
+  return { kind: "projected", date, left, days: patternDays(plan.pattern), daysAway: daysFrom(today, date), pastEnd: pastEndOf(date) };
 }
 
 /* ---------------- The package list's order ---------------- */
