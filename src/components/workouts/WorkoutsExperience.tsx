@@ -11,7 +11,7 @@ import {
 import {
   Calendar as CalendarIcon, CalendarCheck, ChevronLeft, ChevronRight, ClipboardList, Clock,
   History, Loader2, Move, MoreVertical, Play, Pencil, Sun, Activity, Download,
-  RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot, Heart, Check, Archive,
+  RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot, Check, Archive,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -45,7 +45,8 @@ import { WorkoutProgressRing } from "@/components/workout/shared/workout-progres
 import { useWorkoutProgress } from "@/lib/workout-progress";
 import { TrainingDaysSheet, TrainingScheduleChip, trainingDaysState } from "@/components/training-schedule-card";
 import { toast } from "sonner";
-import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
+import { useDayCardio } from "@/components/cardio/ClientCardioSection";
+import { CardioCompletionCard } from "@/components/cardio/CardioCompletionCard";
 import {
   WorkoutReviewEditor,
   type ReviewInitial,
@@ -499,32 +500,23 @@ export function WorkoutsExperience({
           </div>
         )}
 
-        {mode === "self" && (
-          // The same rhythm as the cards above: each card carries its own header.
-          <div className="space-y-4">
-            <ClientCardioSection
+        {/* How it's going, quieter than the day and the program: readiness and the
+            month's numbers share one card (each opens its own detail). The day's
+            cardio lives in the day card above, never a section of its own. */}
+        {mode === "self" && !noProgram && (
+          <Card
+            className="overflow-hidden p-0 [&:not(:has(section))]:hidden [&>*+*]:border-t [&>*+*]:border-border/60"
+            aria-label="Progress"
+            data-progress-card
+          >
+            <RecoveryPreviewCard
               clientId={clientId}
+              analyticsTo={"/portal/workouts/analytics"}
               hideWhenEmpty
-              // Cardio is resolved by the selected calendar date via
-              // resolveClientWeekDays — pass selectedDate so tapping a
-              // different day updates the cardio target/label. dayContext is
-              // only a fallback hint for empty-state copy.
-              dayContext={
-                (byDate.get(toLocalISO(selectedDate))?.length ?? 0) > 0 ? "training" : "rest"
-              }
-              date={selectedDate}
+              bare
             />
-            {!noProgram && (
-              <>
-                <RecoveryPreviewCard
-                  clientId={clientId}
-                  analyticsTo={"/portal/workouts/analytics"}
-                  hideWhenEmpty
-                />
-                <DeferredAnalytics clientId={clientId} />
-              </>
-            )}
-          </div>
+            <DeferredAnalytics clientId={clientId} />
+          </Card>
         )}
         {footer}
       </div>
@@ -576,7 +568,7 @@ function DeferredAnalytics({ clientId }: { clientId: string }) {
     // (empty:hidden, so an empty wrapper takes no gap in the column either)
     <div className="empty:hidden">
       <Suspense fallback={null}>
-        <TrainingAnalyticsPreviewCard clientId={clientId} hideWhenEmpty />
+        <TrainingAnalyticsPreviewCard clientId={clientId} hideWhenEmpty bare />
       </Suspense>
     </div>
   );
@@ -757,7 +749,8 @@ function ScheduleViewSwitch({
           aria-pressed={view === v}
           className={cn(
             "font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            compact ? "h-9 rounded-md px-2.5 text-[13px]" : "h-9 rounded-lg text-sm",
+            // a little tighter on a 320px phone, so "Workouts" beside it is never cut short
+            compact ? "h-9 rounded-md px-1.5 text-[13px] min-[360px]:px-2.5" : "h-9 rounded-lg text-sm",
             view === v ? "bg-background text-foreground shadow-sm dark:bg-[oklch(0.34_0.008_280)]" : "text-muted-foreground hover:text-foreground",
           )}
         >
@@ -806,6 +799,11 @@ function SelectedDayList({
   // first, and the chooser is available only while no backup exists that day.
   const primaryItems = items.filter((item) => !isAtHomeBackupSessionBlock(item.block));
   const backupItems = items.filter((item) => isAtHomeBackupSessionBlock(item.block));
+  // The day's cardio is part of the day (the athlete's own view): a workout that
+  // carries the plan's row says it under its buttons (item.cardio); otherwise a
+  // day off leads with it and a workout without the row holds it inside its card.
+  const dayCardio = useDayCardio(mode === "self" ? clientId : "", date);
+  const cardioTarget = dayCardio.data?.target && !dayCardio.data.inWorkout ? dayCardio.data.target : null;
   const card = (item: WorkoutItem, index: number) => (
     <SelectedDayCard
       key={`${item.scheduledWorkoutId ?? "legacy"}:${item.day?.id ?? `idx-${index}`}`}
@@ -815,15 +813,25 @@ function SelectedDayList({
       clientId={clientId}
       mode={mode}
       pageBlockId={pageBlockId}
+      cardio={index === 0 && !item.cardio ? cardioTarget : null}
     />
   );
+  const emptyDay = primaryItems.length === 0 && backupItems.length === 0;
 
   return (
     <div className="space-y-3">
-      {primaryItems.length === 0 && backupItems.length === 0 && (
-        <SelectedDayCard item={null} date={date} readonly={readonly} clientId={clientId} mode={mode} next={next} onSelectDate={onSelectDate} />
+      {emptyDay && (
+        // a day off waits for its cardio before it says "Rest day", so it never flips
+        dayCardio.isLoading ? (
+          <WorkoutCardSkeleton />
+        ) : (
+          <SelectedDayCard item={null} date={date} readonly={readonly} clientId={clientId} mode={mode} next={next} onSelectDate={onSelectDate} cardio={cardioTarget} />
+        )
       )}
       {primaryItems.map(card)}
+      {primaryItems.length === 0 && backupItems.length > 0 && cardioTarget && (
+        <CardioCompletionCard target={cardioTarget} clientId={clientId} date={date} readonly={readonly} />
+      )}
       {backupEnabled && mode === "self" && backupItems.length === 0 && (
         <AtHomeBackupCard
           clientId={clientId}
@@ -907,9 +915,11 @@ function dayCardStatusLabel(status: string, label: string): string {
 }
 
 function SelectedDayCard({
-  item, date, readonly, clientId, mode, pageBlockId = null, next = null, onSelectDate,
+  item, date, readonly, clientId, mode, pageBlockId = null, next = null, onSelectDate, cardio = null,
 }: {
   item: WorkoutItem | null;
+  /** The plan's cardio for the day when no workout carries it: a day off leads with it, a workout holds it under its buttons. */
+  cardio?: any | null;
   next?: NextWorkout | null;
   onSelectDate?: (d: Date) => void;
   date: Date;
@@ -1057,30 +1067,46 @@ function SelectedDayCard({
   const hasMenuActions = canReschedule || canEditHere || canChangeWorkoutStatus || isCompleted
     || (canManageBackupLifecycle && (backupState?.lifecycle === "in_progress" || backupState?.lifecycle === "empty"));
 
+  // The day picked, said the same way on every card: "Today" or "Sat, Nov 21".
+  const dayText = isSameDay(date, localStartOfToday()) ? "Today" : format(date, "EEE, MMM d");
+
   if (!item) {
+    // A day with nothing on it points at the next workout, one tap to its day.
+    const nextRow = next && onSelectDate ? (
+      <button
+        type="button"
+        onClick={() => onSelectDate(next.date)}
+        className="mt-3 flex min-h-12 w-full items-center justify-between gap-2 rounded-xl bg-secondary px-3.5 py-2.5 text-left transition hover:bg-secondary/70 active:scale-[0.99]"
+        data-next-workout
+      >
+        <span className="min-w-0">
+          <span className="block text-[12px] text-muted-foreground">Next workout · {format(next.date, "EEE, MMM d")}</span>
+          <span className="block truncate text-[14px] font-semibold">{next.title}</span>
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+      </button>
+    ) : null;
+    // A cardio day: the session is the day's one thing to do.
+    if (cardio) {
+      return (
+        <Card className="p-4 md:p-5" data-day-kind="cardio">
+          <CardioCompletionCard target={cardio} clientId={clientId} date={date} readonly={readonly} layout="day" dayLabel={dayText} />
+          {nextRow && <div className="mt-4 border-t border-border pt-1">{nextRow}</div>}
+        </Card>
+      );
+    }
     return (
-      <Card className="p-6 text-center">
-        <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-muted">
-          <Sun className="h-5 w-5 text-muted-foreground" />
+      <Card className="p-4" data-day-kind="rest">
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-muted">
+            <Sun className="h-5 w-5 text-muted-foreground" aria-hidden />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-base font-semibold leading-tight">{next ? "Rest day" : "No workout"}</span>
+            <span className="block text-[13px] text-muted-foreground">{dayText === "Today" ? `Today · ${format(date, "EEEE, MMMM d")}` : format(date, "EEEE, MMMM d")}</span>
+          </span>
         </div>
-        <div className="mt-3 text-base font-semibold">{next ? "Rest day" : "No workout"}</div>
-        <div className="text-xs text-muted-foreground">
-          {format(date, "EEEE, MMMM d")}
-        </div>
-        {next && onSelectDate && (
-          <button
-            type="button"
-            onClick={() => onSelectDate(next.date)}
-            className="mx-auto mt-4 flex min-h-11 w-full max-w-xs items-center justify-between gap-2 rounded-xl bg-secondary px-3.5 py-2.5 text-left transition hover:bg-secondary/70"
-            data-next-workout
-          >
-            <span className="min-w-0">
-              <span className="block text-[12px] text-muted-foreground">Next workout · {format(next.date, "EEE, MMM d")}</span>
-              <span className="block truncate text-[14px] font-semibold">{next.title}</span>
-            </span>
-            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-          </button>
-        )}
+        {nextRow}
       </Card>
     );
   }
@@ -1106,7 +1132,6 @@ function SelectedDayCard({
   // A badge only when it's news (done, missed, in progress, review): "Today" /
   // "Upcoming" just repeat the day line under the title.
   const showBadge = !QUIET_DAY_STATUSES.includes(visibleStatus.status);
-  const dayText = isSameDay(date, localStartOfToday()) ? "Today" : format(date, "EEE, MMM d");
   const cta: WorkoutCta = needsReviewToFinish
     ? {
         label: "Finish Review",
@@ -1294,7 +1319,7 @@ function SelectedDayCard({
             className="mt-3 flex min-h-11 items-center gap-2.5 border-t border-border pt-3 text-sm"
             data-day-cardio={cardioDone ? "done" : "open"}
           >
-            <Heart className={cn("h-4 w-4 shrink-0", cardioDone ? "fill-current text-success" : "text-muted-foreground")} aria-hidden />
+            <Activity className={cn("h-4 w-4 shrink-0", cardioDone ? "text-success" : "text-muted-foreground")} aria-hidden />
             <span className="min-w-0 flex-1">
               <span className="font-semibold">Cardio</span>
               <span className="text-muted-foreground">
@@ -1310,6 +1335,11 @@ function SelectedDayCard({
           </Link>
           );
         })()}
+        {/* The plan's cardio when this workout doesn't carry it as its last exercise:
+            in the day's card all the same, logged right here. */}
+        {!item.cardio && cardio && (
+          <CardioCompletionCard target={cardio} clientId={clientId} date={date} readonly={readonly} layout="row" />
+        )}
         {inlineOpen && item.day?.id && (
           <div className="mt-3">
             <InlineWorkoutPreview

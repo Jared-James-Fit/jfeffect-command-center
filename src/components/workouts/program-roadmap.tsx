@@ -197,20 +197,20 @@ export function ProgramRoadmapCard({
           onManage={!browsing && !(allDone && nextProgramTo) ? onManage : undefined}
         />
 
-        {/* This block and this week: the one part worth reading every day. */}
-        {(blockLine || line) && (
-          <div className="mt-3.5" data-roadmap-now>
+        {/* This block and this week, by name only: the week's explanation and the
+            roadmap fold under one row below, so the card stays a glance. */}
+        {(blockLine || thisWeek?.label) && !allDone && (
+          <div className="mt-3" data-roadmap-now>
             {blockLine && (
               <div className="flex items-baseline justify-between gap-3">
                 <span className="min-w-0 truncate text-[15px] font-semibold leading-snug">{blockLine}</span>
                 {blockWhere && <span className="shrink-0 text-[12px] text-muted-foreground tabular-nums" data-roadmap-position>{blockWhere}</span>}
               </div>
             )}
-            {line && (
-              <p className={cn("text-[14px] leading-relaxed text-foreground/75", blockLine && "mt-0.5")}>
-                {thisWeek?.label && <span className="font-medium text-foreground">{thisWeek.label}. </span>}
-                {line}
-              </p>
+            {thisWeek?.label && (
+              <div className={cn("truncate text-[13px] text-muted-foreground", blockLine && "mt-0.5")} data-roadmap-week>
+                {thisWeek.label}
+              </div>
             )}
           </div>
         )}
@@ -229,12 +229,19 @@ export function ProgramRoadmapCard({
           className="flex min-h-11 w-full items-center justify-between gap-2 border-t border-border/60 px-4 py-3 text-[13px] font-semibold transition hover:bg-secondary/40"
           data-roadmap-toggle
         >
-          <span>{multi ? "Roadmap" : "All weeks"}</span>
+          <span>{line ? (multi ? "Week focus & roadmap" : "Week focus & all weeks") : multi ? "Roadmap" : "All weeks"}</span>
           <span className="inline-flex items-center gap-1 font-medium text-muted-foreground tabular-nums">
             {multi ? `${blocks.length} blocks` : weeksLabel(blocks[0].weekCount)}
             <ChevronDown className={cn("h-4 w-4 transition-transform", showAll && "rotate-180")} />
           </span>
         </button>
+      )}
+      {/* This week's explanation first (the coach's words, else Cleo's), then every block. */}
+      {showAll && line && (
+        <p className="px-4 pb-1 text-[14px] leading-relaxed text-foreground/80" data-roadmap-focus>
+          {thisWeek?.label && <span className="font-medium text-foreground">{thisWeek.label}. </span>}
+          {line}
+        </p>
       )}
       {showAll && (
         <ol className="space-y-0 px-4 pb-3" aria-label="Blocks in this program">

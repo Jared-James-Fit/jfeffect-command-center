@@ -30,11 +30,14 @@ export function TrainingAnalyticsPreviewCard({
   clientId,
   unit: unitProp,
   hideWhenEmpty = false,
+  bare = false,
 }: {
   clientId: string;
   unit?: Unit;
   /** Nothing until there's a workout to count (analytics stays in Workouts' ⋯). */
   hideWhenEmpty?: boolean;
+  /** Inside another card (the Workouts tab's Progress card): no card of its own. */
+  bare?: boolean;
 }) {
   const { data: results = [], isLoading } = useQuery({
     queryKey: ["pl-results-preview", clientId],
@@ -99,7 +102,7 @@ export function TrainingAnalyticsPreviewCard({
 
   return (
     <section aria-label={`Your ${h.monthLabel}`}>
-      <Card className="overflow-hidden p-0">
+      <Card className={bare ? "overflow-hidden rounded-none border-0 bg-transparent p-0" : "overflow-hidden p-0"}>
         {/* The header is the way in: the whole row opens Training analytics. */}
         <Link
           to="/portal/workouts/analytics"
@@ -145,7 +148,7 @@ export function TrainingAnalyticsPreviewCard({
                         className="w-[6px] rounded-t-[2px]"
                         style={{
                           height: `${Math.max(8, (w.sets / sparkMax) * 100)}%`,
-                          background: w.sets > 0 ? (w.current ? "color-mix(in oklch, var(--chart-4) 45%, transparent)" : "var(--chart-4)") : "var(--border)",
+                          background: w.sets > 0 ? (w.current ? "color-mix(in oklch, var(--muted-foreground) 45%, transparent)" : "var(--muted-foreground)") : "var(--border)",
                         }}
                       />
                     ))}

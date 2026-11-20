@@ -38,6 +38,8 @@ interface Props {
   analyticsTo: string;
   /** Nothing until there's a score: no "finish a few workouts to unlock it" card on the athlete's own Workouts. */
   hideWhenEmpty?: boolean;
+  /** Inside another card (the Workouts tab's Progress card): just the row, no card of its own. */
+  bare?: boolean;
 }
 
 type Tier = "Ready" | "Good" | "Take It Easy" | "Low";
@@ -95,7 +97,7 @@ const statusColor: Record<FactorStatus, { ring: string; soft: string; text: stri
   },
 };
 
-export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false }: Props) {
+export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false, bare = false }: Props) {
   const { data, isLoading } = useQuery({
     queryKey: ["training-readiness", clientId],
     enabled: !!clientId,
@@ -528,11 +530,14 @@ export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false }: Props) 
   return (
     <section aria-label="Training Readiness">
       {/* One compact row in the page; the score's breakdown opens in a sheet. */}
-      <Card className="p-0">
+      <Card className={cn("p-0", bare && "rounded-none border-0 bg-transparent")}>
         <button
           type="button"
           onClick={() => setView("overview")}
-          className="flex min-h-[68px] w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition active:bg-muted/50"
+          className={cn(
+            "flex w-full items-center gap-3 px-4 text-left transition active:bg-muted/50",
+            bare ? "min-h-[60px] py-2.5" : "min-h-[68px] rounded-2xl py-3",
+          )}
           aria-haspopup="dialog"
           data-testid="readiness-row"
         >
@@ -657,8 +662,8 @@ function ReadinessRing({
   /** The page row's small ring: the number only (the tier is said beside it). */
   compact?: boolean;
 }) {
-  const size = compact ? 44 : 96;
-  const stroke = compact ? 4.5 : 9;
+  const size = compact ? 40 : 96;
+  const stroke = compact ? 4 : 9;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const pct = Math.max(0, Math.min(100, score));

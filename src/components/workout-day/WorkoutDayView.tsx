@@ -196,7 +196,7 @@ import { formatClockSeconds, formatDuration } from "@/lib/duration";
 import {
   getTimerTarget, setTimerTarget, getRowInputs, setRowInputs, getVelocityDefault, setVelocityDefault, type RowInputOverrides,
 } from "@/lib/log-as-override";
-import { Timer, Heart, Activity, ChevronRight } from "lucide-react";
+import { Timer, Activity, ChevronRight } from "lucide-react";
 import { DayCoachNotes, ScheduledDayLine, loggerMeta, loggerTitle } from "@/components/workout-day/logger-top";
 import { exerciseNoteForAthlete } from "@/lib/workouts/coach-notes";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
@@ -3122,7 +3122,7 @@ function WorkoutDay({
                   there it's the card's own "Cardio" in the top bar instead. */}
               {cardioRow && rowIndex === liftRows && !storyOpen && (
                 <div className="flex items-center gap-2 px-1 pt-3 lg:col-span-2" data-cardio-section>
-                  <Heart className="h-4 w-4 text-muted-foreground" aria-hidden />
+                  <Activity className="h-4 w-4 text-muted-foreground" aria-hidden />
                   <h2 className="text-base font-semibold">Cardio</h2>
                   <span className="text-xs text-muted-foreground">Before, after or later in the day</span>
                 </div>
@@ -5072,7 +5072,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, star
         // the client's cardio plan, added after the lifting (program_cardio_sync): logging it here is the day's cardio.
         // The list says it once under its Cardio heading; Focus has no heading, so the card says it.
         <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-muted-foreground" data-cardio-plan-row>
-          <Heart className="h-3.5 w-3.5 shrink-0" aria-hidden /> Your cardio plan · now or later today
+          <Activity className="h-3.5 w-3.5 shrink-0" aria-hidden /> Your cardio plan · now or later today
         </p>
       )}
       {/* The note as the athlete should read it: a coach's words as written, a generated one without its boilerplate (coach-notes.ts). */}

@@ -324,7 +324,7 @@ describe("the screens: one Programs page, every program says where it's from, an
     expect(workouts).toContain(
       'nextProgramTo={mode === "self" && isSelfServe ? "/portal/programs" : undefined}',
     );
-    expect(card).toContain('{multi ? "Roadmap" : "All weeks"}');
+    expect(card).toContain(': multi ? "Roadmap" : "All weeks"}');
     expect(card).toContain("{showAll && (");
     expect(card).not.toContain("(showAll || blocks.length === 1)");
   });
@@ -335,7 +335,7 @@ describe("the screens: one Programs page, every program says where it's from, an
     expect(workouts).toContain(
       'const noProgram = mode === "self" && isSelfServe && !isLoading && dayItems.length === 0;',
     );
-    expect(workouts).toContain("{!noProgram && (");
+    expect(workouts).toContain('{mode === "self" && !noProgram && (');
     // a coaching client's past blocks sit in the page's own flow, never after its tab-bar
     // padding; a member's past programs are Program history (in the ⋯), never listed twice
     const page = readFileSync("src/routes/_authenticated/portal/workouts.index.tsx", "utf8");
@@ -474,7 +474,7 @@ describe("Workouts reads today first, and every page under it has a way back", (
   it("no empty readiness or month card before there's anything in them", () => {
     expect(workouts).toMatch(/<RecoveryPreviewCard[\s\S]{0,160}hideWhenEmpty/);
     expect(workouts).toContain(
-      "<TrainingAnalyticsPreviewCard clientId={clientId} hideWhenEmpty />",
+      "<TrainingAnalyticsPreviewCard clientId={clientId} hideWhenEmpty bare />",
     );
     const ready = readFileSync("src/components/analytics/recovery-preview-card.tsx", "utf8");
     expect(ready.match(/if \(hideWhenEmpty\) return null;/g)?.length).toBe(2);

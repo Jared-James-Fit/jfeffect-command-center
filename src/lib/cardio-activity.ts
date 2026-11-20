@@ -127,3 +127,50 @@ export function completionTargetParts(input: {
   if (input.showCalories !== false && Number(input.calories) > 0) parts.push(`~${Number(input.calories)} kcal`);
   return parts;
 }
+
+/** The session's name in plain words: "Treadmill walk", "Outdoor walk", "Bike". */
+export function cardioSessionTitle(view: CardioActivityView): string {
+  if (view.isWalk) {
+    if (view.mode === "treadmill") return "Treadmill walk";
+    if (view.mode === "outdoor") return "Outdoor walk";
+    return "Walk";
+  }
+  return view.activity;
+}
+
+/**
+ * What to do, in one line's parts: the time, the treadmill's incline and speed
+ * (mph, then km/h), then the effort and heart-rate zone, each said once (a
+ * coach who wrote "Zone 2" in both fields gets one "Zone 2").
+ */
+export function cardioSpecParts(
+  target: {
+    duration_minutes?: number | null;
+    incline?: number | null;
+    speed_min_mph?: number | null;
+    speed_max_mph?: number | null;
+    intensity?: string | null;
+    heart_rate_zone?: string | null;
+  },
+  view: Pick<CardioActivityView, "isTreadmill">,
+): string[] {
+  const parts: string[] = [];
+  if (Number(target.duration_minutes) > 0) parts.push(`${Number(target.duration_minutes)} min`);
+  if (view.isTreadmill && Number(target.incline) > 0) parts.push(`${Number(target.incline)}% incline`);
+  const mph = view.isTreadmill ? formatSpeedRange(target.speed_min_mph, target.speed_max_mph) : null;
+  if (mph) {
+    const kph = formatSpeedRange(target.speed_min_mph, target.speed_max_mph, "kph");
+    parts.push(kph ? `${mph} (${kph})` : mph);
+  }
+  const effort = String(target.intensity ?? "").trim();
+  const zone = String(target.heart_rate_zone ?? "").trim();
+  const norm = (v: string) => v.toLowerCase().replace(/\s+/g, " ");
+  if (effort && zone && (norm(effort).includes(norm(zone)) || norm(zone).includes(norm(effort)))) {
+    // "Zone 2" in both fields, or "Zone 2" beside "Zone 2 (easy)": the longer one says both
+    parts.push(effort.length >= zone.length ? effort : zone);
+  } else {
+    if (effort) parts.push(effort);
+    if (zone) parts.push(zone);
+  }
+  return parts;
+}
