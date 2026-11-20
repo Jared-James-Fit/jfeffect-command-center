@@ -7,7 +7,7 @@
  * Update, Goals & Setup, the coach's notes), never guessed. Pure, so it's
  * tested and both sides agree.
  */
-import { answerFor, type QA } from "@/lib/nutrition-ai-prompts";
+import { answerFor, type QA } from "@/lib/nutrition-request";
 import { safetyNotes } from "@/lib/nutrition-targets/nutrition-intel";
 
 /** The Goals & Setup answers this reads (client_goals_setup). */

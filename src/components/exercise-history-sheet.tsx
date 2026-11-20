@@ -25,6 +25,7 @@ import {
 import { cardioClock, cardioHistorySummary, isCardioHistory } from "@/lib/cardio-history";
 import { formatDistance, formatPace, isRunningExercise, paceSeconds, readDistanceUnit } from "@/lib/running/run-log";
 import { LiftProgressCard, type LiftHistory } from "@/components/analytics/lift-progress-card";
+import { useVideoSpeedsByResult } from "@/lib/lift-analysis/queries";
 import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
 import { comparesAcrossEquipment, equipmentName, type Equipment } from "@/lib/equipment/equipment";
 import { liftHistoryFromRows } from "@/lib/analytics/exercise-progress";
@@ -202,6 +203,8 @@ export function ExerciseHistorySheet({
       return matchingHistoryExerciseIds(exerciseId, exerciseName, catalog);
     },
   });
+  // bar speed read from set videos (lift analysis), beside a set with no speed typed in
+  const { data: videoSpeeds = {} } = useVideoSpeedsByResult(clientId, identityIds.length ? identityIds : exerciseId ? [exerciseId] : [], open);
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["exercise-history", clientId, exerciseId ?? null, exerciseName, identityIds.join(",")],
@@ -769,7 +772,7 @@ export function ExerciseHistorySheet({
               const rel = g.at ? relativeDay(g.at) : null;
               const lines = cardio ? [] : sessionLines(g.hsets, displayUnit);
               const roled = lines.some((x) => x.role);
-              const hasVelocity = g.sets.some((s: any) => s.mean_concentric_velocity_mps != null);
+              const hasVelocity = g.sets.some((s: any) => s.mean_concentric_velocity_mps != null || videoSpeeds[s.id]);
               // The block once, over its run of sessions, not on every session.
               const blockName = blockShortName(g.block?.name);
               const newBlock = gi === 0 || (arr[gi - 1].block?.id ?? null) !== (g.block?.id ?? null);
@@ -1060,6 +1063,11 @@ export function ExerciseHistorySheet({
                                   <span className="text-foreground/80"> {repsEffort(h)}</span>
                                   {hasVelocity && s.mean_concentric_velocity_mps != null && (
                                     <span className="text-xs text-muted-foreground"> · {Number(s.mean_concentric_velocity_mps).toFixed(2)} m/s</span>
+                                  )}
+                                  {hasVelocity && s.mean_concentric_velocity_mps == null && videoSpeeds[s.id] && (
+                                    <span className="text-xs text-muted-foreground" data-history-video-speed title="Fastest rep, read from the set's video">
+                                      {" · "}{videoSpeeds[s.id].tier === "estimated" ? "≈" : ""}{videoSpeeds[s.id].v.toFixed(2)} m/s · video
+                                    </span>
                                   )}
                                 </span>
                                 <span className="text-xs text-muted-foreground">{tag}</span>

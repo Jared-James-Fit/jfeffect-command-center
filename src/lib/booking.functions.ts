@@ -137,6 +137,9 @@ const PublicBookInput = SlugInput.extend({
  * (a session, their credits). Otherwise it's an appointment for whoever filled
  * in the form; typing a client's email never books against their package.
  */
+/** Public bookings (no personal invite) one connection can make in an hour. */
+const PUBLIC_BOOKINGS_PER_IP_PER_HOUR = 4;
+
 export const bookOnline = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => PublicBookInput.parse(d))
   .handler(async ({ data }) => {
@@ -160,6 +163,16 @@ export const bookOnline = createServerFn({ method: "POST" })
     const phone = data.phone?.trim() || invitee?.phone || null;
     if (type.location_mode === "phone" && !phone) {
       throw new Error("Add a phone number so we can call you.");
+    }
+    // A public booking sends a calendar invitation from the coach's Google and
+    // texts a reminder: a few per connection, so one caller can't fill the
+    // calendar or use up the page's hourly allowance for everyone.
+    if (!invitee) {
+      const { rateOk, callerIp } = await import("@/lib/public-rate-limit.server");
+      const ip = callerIp();
+      if (ip && !(await rateOk(db as any, `book:ip:${ip}`, PUBLIC_BOOKINGS_PER_IP_PER_HOUR, "1 hour"))) {
+        throw new Error("Too many bookings from this connection. Try again in a little while.");
+      }
     }
     try {
       const result = await createOnlineBooking(db, {

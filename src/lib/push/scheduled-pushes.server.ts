@@ -108,7 +108,7 @@ async function leagueParticipants(db: any, month: string): Promise<Set<string>> 
 }
 
 async function clientDigest(db: any, clientId: string, today: string) {
-  const { NUTRITION_REQUEST_FORM_ID } = await import("@/lib/nutrition-ai-prompts");
+  const { NUTRITION_REQUEST_FORM_ID } = await import("@/lib/nutrition-request");
   const since14 = new Date(Date.now() - 14 * 86_400_000).toISOString();
   const [{ data: sched }, { data: pending }, { data: asked }, { data: meet }, { data: cl }] = await Promise.all([
     db.from("pl_scheduled_workouts").select("id, source_day_id").eq("client_id", clientId).eq("scheduled_date", today),

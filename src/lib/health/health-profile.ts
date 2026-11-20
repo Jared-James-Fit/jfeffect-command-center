@@ -23,7 +23,7 @@
 import type { FactKind, FoodHistory, StickyFact } from "@/lib/nutrition-targets/food-history";
 import { saidWhen, splitHealthParts } from "@/lib/nutrition-targets/food-history";
 import { isNoneAnswer } from "@/lib/nutrition-targets/food-notes";
-import { answerFor, type QA } from "@/lib/nutrition-ai-prompts";
+import { answerFor, type QA } from "@/lib/nutrition-request";
 import { painAreaParts } from "@/lib/workout-review";
 
 export type HealthKind = "injury" | "condition" | "medication" | "supplement" | "allergy";

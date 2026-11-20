@@ -3,7 +3,7 @@
 // testable; the data comes from form-requests.functions.ts.
 
 import { OVERDUE_HOURS } from "@/lib/inbox-waiting";
-import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts";
+import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-request";
 
 /** The retired monthly "Nutrition Review" form. Never shown or sent again. */
 export const RETIRED_NUTRITION_REVIEW_FORM_ID = "0cbd5e2c-ed47-48ea-93fd-20c341013444";

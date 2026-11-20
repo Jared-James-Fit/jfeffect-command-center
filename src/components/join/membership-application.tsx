@@ -81,7 +81,7 @@ const QUESTION: Record<MemberStepKey, { title: (first: string) => string; hint?:
   experience: { title: () => "How long have you been lifting?" },
   coaching_interest: {
     title: () => "Interested in 1:1 coaching with Jared?",
-    hint: "Totally optional. Free membership doesn't need it.",
+    hint: "Coaching is paid and optional. The app is free either way.",
   },
   full_name: { title: () => "What's your name?" },
   contact_method: {
