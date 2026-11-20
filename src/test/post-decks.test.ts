@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { DECK_THEMES, deckHeadline, deckOf, deckSlideAlt, emphasisRuns, parseDeck, pickDeckTheme, stripEmphasis, type PostDeck } from "@/lib/post-decks";
 import { captionOverlap, deckProblems, likeness, namesIn, numbersIn } from "@/lib/post-deck-checks";
-import { DECK_TRIES, deckSource, parseEditor, sourceText, writeDeck } from "@/lib/post-decks.server";
+import { DECK_TRIES, deckSource, parseEditor, sourceText, tidyText, writeDeck } from "@/lib/post-decks.server";
 import { instagramPlan, postArtCard } from "@/lib/instagram-export";
 import { postArtKey } from "@/lib/post-art";
 import type { CommunityPost } from "@/lib/community";
@@ -105,6 +105,20 @@ describe("decks: the checks", () => {
     expect(p("huge one — really")).toMatch(/dash/);
   });
 
+  it("never lets a caption open on a formula, the way a recent one did, or in office talk", () => {
+    const p = (caption: string, recentCaptions: string[] = []) => deckProblems({ ...GOOD, caption }, { ...ctx, recentCaptions }).join(" | ");
+    expect(p(`I care about this because ${GOOD.caption}`)).toMatch(/opens with a formula/);
+    expect(p(`i care because ${GOOD.caption}`)).toMatch(/opens with a formula/);
+    expect(p(GOOD.caption, ["most people think about protein all wrong and it shows"])).toMatch(/opens the way a recent one did/);
+    expect(p(`${GOOD.caption}, it frees up bandwidth for the hard sets`)).toMatch(/office talk/);
+    expect(p(GOOD.caption, ["your warm ups are telling you something"])).toBe("");
+  });
+
+  it("wants a number's label to say what it means", () => {
+    const thin = { ...GOOD, slides: GOOD.slides.map((s, i) => (i === 1 ? { ...s, label: "per day" } : s)) as PostDeck["slides"] };
+    expect(deckProblems(thin, ctx).join(" | ")).toMatch(/needs a label that says what it means/);
+  });
+
   it("keeps slides phone-sized and a carousel varied, ending on a takeaway that isn't the hook", () => {
     const long = { ...GOOD, slides: GOOD.slides.map((s, i) => (i === 2 ? { type: "point" as const, title: "That's about 0.7 g per lb", body: "word ".repeat(40).trim() } : s)) };
     expect(deckProblems(long, ctx).join(" | ")).toMatch(/slide 3's words is too long/);
@@ -174,6 +188,11 @@ describe("decks: the editor and the writer", () => {
     const failed = await writeDeck(src, { ask: never, theme: "paper", recentCovers: [] });
     expect(failed.ok).toBe(false);
     expect(failed.attempts).toHaveLength(DECK_TRIES);
+  });
+
+  it("fixes a dash in code instead of spending a draft on it", () => {
+    expect(tidyText("leave 1–2 reps")).toBe("leave 1 to 2 reps");
+    expect(tidyText("short — and slow")).toBe("short, and slow");
   });
 
   it("reads a lesson's card and diagram into the source, and never names its authors as fact", () => {

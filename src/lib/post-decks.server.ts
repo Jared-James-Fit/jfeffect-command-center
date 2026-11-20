@@ -29,7 +29,7 @@ import { deckProblems } from "@/lib/post-deck-checks";
 type Admin = any;
 
 /** How many drafts a deck gets before the job gives up (and the post keeps what it had). */
-export const DECK_TRIES = 3;
+export const DECK_TRIES = 4;
 /** A job left `running` this long was cut off (a deploy, a timeout): it can be claimed again. */
 const STALE_MS = 12 * 60_000;
 
@@ -51,9 +51,9 @@ THE SLIDES
 - A kicker over the hook, at most ${L.kicker.words} words, saying what it is the way he would: "Bench fix", "Hypertrophy", "Meet prep", "Recovery", "Uncomfortable truth", "Programming".
 - The slides after it each do one job and earn the next swipe: the mechanism, the evidence with its limits, how to tell which case you're in, what to do. One idea a slide, few words, big. A slide is read in about two seconds.
 - Pick the kind of slide that fits what it says, and mix them (a carousel of one kind reads as a template):
-  point: a numbered idea or step (title, short body)
-  stat: a number that carries the point, painted huge, with a short label; "bars" (exactly two, short labels) when two numbers are being compared; a "note" saying where it's from ("A 2018 review of 49 studies")
-  compare: the belief and the truth ("myth": true, the belief struck out), or two options side by side
+  point: an idea or a step (title, short body); give "n" only to two or more points that are steps in order, else leave it out
+  stat: a number that carries the point, painted huge, with a label that says what it means in 4 to 14 words ("is where muscle gains stopped climbing", never just "per day"); "bars" (exactly two, short labels) when two numbers are being compared; a "note" saying where it's from ("A 2018 review of 49 studies")
+  compare: the belief and the truth ("myth": true, the belief struck out), or two options side by side; labels in sentence case that name each side ("The belief" / "What's true", "Most lifters" / "What works", "Grinding" / "Stopping short"), never "bad" / "good" or "old" / "new"
   list: 2 to 4 short items (checks, steps or don'ts)
   quote: only a quote that's in the source, word for word, with who said it
   diagram: only when the source has a diagram (a line over the lesson's drawing, and a short note under it)
@@ -65,7 +65,8 @@ LIMITS (words): kicker ${L.kicker.words}; cover title ${L.coverTitle.words}, sub
 
 THE CAPTION
 - Jared talking about it, under the post, in his voice. Whoever reads it has just seen the slides, so it never repeats them: no sentence from a slide, not the hook again, not a summary of the slides.
-- Give what the slides don't: why he cares about this as a coach and a lifter, when it matters and when it doesn't, who it doesn't apply to, the mistake he sees people make with it, or a sharper instruction for this week's training.
+- Give what the slides don't, one angle, picked for this post (vary it post to post): the mistake he sees lifters make with this, who should ignore it, when it matters and when it doesn't, how it plays out in a meet prep or a cut, or exactly what he'd change in this week's training.
+- Open with the thought itself, the way he'd start typing: never a preamble ("I care about this because", "this matters because", "here's why", "let me", "quick one"), and never the way a recent caption opened (they're listed).
 - 2 to 5 short sentences, ${L.caption.min} to ${Math.min(L.caption.max, 550)} characters.
 - Never ask for engagement ("what's yours?", "thoughts?", "let me know", "drop a…", "save this", "tag a friend", "who else"). End on the useful thought. A specific question is fine only when a real answer would teach the crew something.
 
@@ -79,6 +80,7 @@ HIS VOICE
 - Slides: clean, plain, sentence case, no filler. Caption: casual, like he typed it on his phone (contractions, a lowercase start sometimes, a fragment is fine, apostrophes kept), never misspelled on purpose.
 - Plain words; lifter terms are fine (RPE, top set, back-off sets, bar speed, lockout, hypertrophy), anything past that explained in a few words.
 - No dashes or semicolons, no hashtags, no exclamation hype, no emoji on slides, at most one in the caption (usually none).
+- Never office talk ("bandwidth", "actionable", "move the needle", "unpack", "holistic", "best practices").
 - Never: "here's the thing", "the truth is", "let that sink in", "at the end of the day", "game changer", "dive into", "journey", "unlock", "key takeaway", "the bottom line", "trust the process", "you got this", "listen to your body", "give yourself grace", "consistency is key", "level up", "no excuses", "unpopular opinion", "hot take", "nobody talks about", "signs you're", "it's not about".
 - No stories, clients or results that aren't in the source. His opinion as his ("my take", "i think") when it's his.
 
@@ -105,7 +107,7 @@ Score each from 1 to 5 and be hard to please (4 means you'd publish it as is):
 - caption: adds something the slides don't (his take, when it applies, who it doesn't) and doesn't repeat them or beg for engagement
 - flow: the slides build in order, each one idea, a phone-sized amount of words, and the takeaway lands somewhere the cover didn't
 
-Then "verdict": "publish" only if every score is 4 or 5 and accuracy is 5, else "revise", with "notes": the specific fixes (quote the words to change, say what to change them to or what to cut). Never ask for a fact the source doesn't have.
+Then "verdict": "publish" only if every score is 4 or 5 and accuracy is 5, else "revise", with "notes": the specific fixes (quote the words to change, say what to change them to or what to cut). Never ask for a fact the source doesn't have. Anything you suggest stays inside the slides' limits (in words): cover ${L.coverTitle.words}, kicker ${L.kicker.words}, point title ${L.pointTitle.words} and body ${L.pointBody.words}, stat label ${L.statLabel.words} and note ${L.statNote.words}, compare side ${L.compareText.words}, list items ${L.listItem.words}, takeaway ${L.takeawayTitle.words} and its line ${L.takeawayBody.words}; no dashes.
 
 Answer with JSON only: {"scores": {"hook": n, "value": n, "accuracy": n, "voice": n, "caption": n, "flow": n}, "verdict": "publish" | "revise", "notes": ["..."]}`;
 
@@ -173,10 +175,10 @@ export function deckSource(series: string, body: string, data: unknown): DeckSou
 
 /** Everything a deck's facts may come from (the checks read numbers and names against it). */
 export function sourceText(s: DeckSource): string {
-  return [s.about, s.body, s.card ?? "", ...s.refs].join("\n");
+  return [s.about, s.body, s.card ?? "", s.diagram ? `Its diagram shows: ${s.diagram}` : "", ...s.refs].join("\n");
 }
 
-export function writerPrompt(s: DeckSource, o: { recentCovers: string[]; notes: string[]; previous?: string | null }): string {
+export function writerPrompt(s: DeckSource, o: { recentCovers: string[]; recentCaptions?: string[]; notes: string[]; previous?: string | null }): string {
   return [
     `WHAT IT IS: ${s.about}`,
     `THE SOURCE (Jared's own post: every fact comes from here):\n"""\n${s.body}\n"""`,
@@ -184,6 +186,7 @@ export function writerPrompt(s: DeckSource, o: { recentCovers: string[]; notes: 
     s.refs.length ? `ITS SOURCES (for checking only; never name authors):\n${s.refs.map((r) => `- ${r}`).join("\n")}` : null,
     s.diagram ? `IT HAS A DIAGRAM: ${s.diagram}. Give it one "diagram" slide where it helps the point most.` : "IT HAS NO DIAGRAM: no diagram slide.",
     o.recentCovers.length ? `RECENT COVERS IN THE FEED (don't open the same way or make the same point):\n${o.recentCovers.map((c) => `- ${c}`).join("\n")}` : null,
+    o.recentCaptions?.length ? `HOW RECENT CAPTIONS OPENED (never open the same way):\n${o.recentCaptions.map((c) => `- ${c.split(/\s+/).slice(0, 6).join(" ")}…`).join("\n")}` : null,
     o.previous ? `YOUR LAST DRAFT:\n${o.previous}` : null,
     o.notes.length ? `FIX THESE IN THIS DRAFT:\n${o.notes.map((n) => `- ${n}`).join("\n")}` : null,
   ]
@@ -236,6 +239,23 @@ function looseJson(text: string): unknown {
   }
 }
 
+/**
+ * What code can fix without a redraft: a dash between numbers is "to"
+ * ("1–2" → "1 to 2"), any other dash a comma (he never types one).
+ */
+export function tidyText(t: string): string {
+  return t
+    .replace(/(\d)\s*[–—]\s*(\d)/g, "$1 to $2")
+    .replace(/\s+[–—]\s+/g, ", ")
+    .replace(/[–—]/g, ", ")
+    .replace(/,\s*,/g, ",");
+}
+
+function tidyDeck(deck: PostDeck): PostDeck {
+  const walk = (v: unknown): unknown => (typeof v === "string" ? tidyText(v) : Array.isArray(v) ? v.map(walk) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)])) : v);
+  return { ...deck, slides: walk(deck.slides) as PostDeck["slides"], caption: tidyText(deck.caption) };
+}
+
 export type DeckAttempt = { deck: PostDeck | null; problems: string[]; editor: EditorRead | null; model: string | null };
 export type DeckResult = { ok: true; deck: PostDeck; attempts: DeckAttempt[] } | { ok: false; error: string; attempts: DeckAttempt[]; best: DeckAttempt | null };
 
@@ -264,7 +284,7 @@ export function routeAsker(override: Parameters<typeof resolveRoute>[1]): Ask {
  * anything wrong goes back with the next draft (DECK_TRIES at most). Only a
  * draft that passes both is returned.
  */
-export async function writeDeck(src: DeckSource, o: { ask: Ask; theme: DeckTheme; recentCovers: string[] }): Promise<DeckResult> {
+export async function writeDeck(src: DeckSource, o: { ask: Ask; theme: DeckTheme; recentCovers: string[]; recentCaptions?: string[] }): Promise<DeckResult> {
   const attempts: DeckAttempt[] = [];
   let notes: string[] = [];
   let previous: string | null = null;
@@ -272,18 +292,19 @@ export async function writeDeck(src: DeckSource, o: { ask: Ask; theme: DeckTheme
   for (let i = 0; i < DECK_TRIES; i++) {
     let reply: { text: string; model: string };
     try {
-      reply = await o.ask(DECK_PROMPT, writerPrompt(src, { recentCovers: o.recentCovers, notes, previous }), "medium");
+      reply = await o.ask(DECK_PROMPT, writerPrompt(src, { recentCovers: o.recentCovers, recentCaptions: o.recentCaptions, notes, previous }), "medium");
     } catch (e: any) {
       return { ok: false, error: String(e?.message ?? e), attempts, best: bestOf(attempts) };
     }
-    const deck = parseDeck(looseJson(reply.text), o.theme);
+    const parsed = parseDeck(looseJson(reply.text), o.theme);
+    const deck = parsed ? tidyDeck(parsed) : null;
     if (!deck) {
       attempts.push({ deck: null, problems: ["the answer wasn't a deck (JSON with a cover first and a caption)"], editor: null, model: reply.model });
       notes = ["answer with the JSON asked for: slides with the cover first, and a caption"];
       continue;
     }
     deck.theme = o.theme;
-    const problems = deckProblems(deck, { source, diagram: !!src.diagram, recentCovers: o.recentCovers });
+    const problems = deckProblems(deck, { source, diagram: !!src.diagram, recentCovers: o.recentCovers, recentCaptions: o.recentCaptions });
     if (problems.length) {
       attempts.push({ deck, problems, editor: null, model: reply.model });
       notes = problems;
@@ -343,18 +364,20 @@ async function claim(admin: Admin, jobId: string | null): Promise<Job | null> {
 }
 
 /** The covers and themes of the decks around this one (newest first): a new deck is never the same look or the same hook. */
-async function neighbours(admin: Admin, at: string | null): Promise<{ themes: (DeckTheme | null)[]; covers: string[] }> {
+async function neighbours(admin: Admin, at: string | null): Promise<{ themes: (DeckTheme | null)[]; covers: string[]; captions: string[] }> {
   let q = admin.from("community_posts").select("series_data, created_at").not("series_data->deck", "is", null).is("archived_at", null).order("created_at", { ascending: false }).limit(12);
   if (at) q = q.lt("created_at", at);
   const { data: posts } = await q;
   const { data: items } = await admin.from("community_series_items").select("data, updated_at").not("data->deck", "is", null).order("updated_at", { ascending: false }).limit(12);
   const themes = (posts ?? []).map((p: any) => (isDeckTheme(p.series_data?.deck?.theme) ? p.series_data.deck.theme : null));
-  const covers = [...(posts ?? []).map((p: any) => p.series_data?.deck), ...(items ?? []).map((i: any) => i.data?.deck)]
+  // what's been made most recently, posts and library alike (and the drafts waiting for a read)
+  const { data: drafts } = await admin.from("community_post_decks").select("result").not("result", "is", null).order("updated_at", { ascending: false }).limit(12);
+  const decks = [...(posts ?? []).map((p: any) => p.series_data?.deck), ...(items ?? []).map((i: any) => i.data?.deck), ...(drafts ?? []).map((d: any) => d.result)]
     .map((d) => (d ? parseDeck(d) : null))
-    .filter((d): d is PostDeck => !!d)
-    .map(deckHeadline)
-    .filter(Boolean);
-  return { themes, covers: [...new Set(covers)].slice(0, 16) };
+    .filter((d): d is PostDeck => !!d);
+  const covers = decks.map(deckHeadline).filter(Boolean);
+  const captions = decks.map((d) => d.caption).filter(Boolean);
+  return { themes, covers: [...new Set(covers)].slice(0, 16), captions: [...new Set(captions)].slice(0, 12) };
 }
 
 /** The theme of the deck most recently made for the library (an upcoming post's neighbours aren't posted yet). */
@@ -402,8 +425,10 @@ export async function runDeckJob(admin: Admin, jobId: string | null = null, o: {
       await finish(admin, job.id, { status: "skipped", error: "Nothing to make it from" });
       return { status: "skipped", job: job.id, detail: "empty" };
     }
-    // a post the coach edited (or wrote differently from its library item) stays his
-    if (post && (post.edited_at || (item && item.body?.trim() !== body))) {
+    // a post the coach edited, or a lesson he wrote his own caption for that day, stays his
+    // (a caption that differs from its library text otherwise came from an earlier library rewrite, not from him)
+    const ownDay = post?.series === "lesson" ? (await admin.from("community_lesson_plan").select("id").eq("post_id", post.id).not("body", "is", null).limit(1)).data?.length : 0;
+    if (post && (post.edited_at || ownDay)) {
       await finish(admin, job.id, { status: "skipped", error: "The coach's own words: left as they are" });
       return { status: "skipped", job: job.id, detail: "edited" };
     }
@@ -411,7 +436,7 @@ export async function runDeckJob(admin: Admin, jobId: string | null = null, o: {
     const near = await neighbours(admin, post?.created_at ?? null);
     const themes = post ? near.themes : await lastItemThemes(admin);
     const theme = pickDeckTheme(`${job.post_id ?? job.item_id}`, themes);
-    const made = await writeDeck(src, { ask, theme, recentCovers: near.covers });
+    const made = await writeDeck(src, { ask, theme, recentCovers: near.covers, recentCaptions: near.captions });
     const trail = made.attempts.map((a) => ({ problems: a.problems, editor: a.editor, model: a.model }));
     if (!made.ok) {
       await finish(admin, job.id, { status: "failed", error: made.error, problems: trail, best: made.best?.deck ?? null });
