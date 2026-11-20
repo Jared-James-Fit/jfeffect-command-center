@@ -37,10 +37,12 @@ export function mfaGateStep(input: {
   /** How many verified authenticators the login has. */
   verifiedFactors: number;
 }): MfaGateStep {
-  // A session that has had its code is done, even while the user object it
-  // carries hasn't caught up with an authenticator just added.
-  if (input.aal === "aal2") return "pass";
-  if (input.verifiedFactors > 0) return "verify";
+  if (input.verifiedFactors > 0) return input.aal === "aal2" ? "pass" : "verify";
+  // A login that needs one and has none sets one up, whatever the session's
+  // level: a session verified with an authenticator since removed (the
+  // finance login's, from before Oct 9 2026) still reads aal2. The gate asks
+  // Supabase before showing the setup, so a user object that hasn't caught up
+  // with one just added never asks twice.
   return roleRequiresMfa(input.accountRole) ? "enroll" : "pass";
 }
 

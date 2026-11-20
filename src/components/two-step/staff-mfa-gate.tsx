@@ -23,18 +23,27 @@ export function StaffMfaGate({ children }: { children: ReactNode }) {
   const { session, accountRole } = useAuth();
   const aal = useMemo(() => decodeJwtClaims(session?.access_token)?.aal ?? null, [session?.access_token]);
   const step = mfaGateStep({ accountRole, aal, verifiedFactors: verifiedFactorCount(session?.user as any) });
-  // Supabase said there's no authenticator after all and this login doesn't need one.
-  const [notNeededFor, setNotNeededFor] = useState<string | null>(null);
-  if (!session || step === "pass" || notNeededFor === session.user.id) return <>{children}</>;
+  // Supabase's own answer overrides a session that hasn't caught up: no
+  // authenticator after all (and none needed), or one just added in a
+  // session that has already had its code.
+  const [clearedFor, setClearedFor] = useState<string | null>(null);
+  if (!session || step === "pass" || clearedFor === session.user.id) return <>{children}</>;
   return (
     <TwoStepScreen
       step={step}
-      onNotNeeded={roleRequiresMfa(accountRole) ? undefined : () => setNotNeededFor(session.user.id)}
+      sessionVerified={aal === "aal2"}
+      onNotNeeded={roleRequiresMfa(accountRole) ? undefined : () => setClearedFor(session.user.id)}
+      onAlreadyDone={() => setClearedFor(session.user.id)}
     />
   );
 }
 
-function TwoStepScreen({ step, onNotNeeded }: { step: "verify" | "enroll"; onNotNeeded?: () => void }) {
+function TwoStepScreen({ step, sessionVerified, onNotNeeded, onAlreadyDone }: {
+  step: "verify" | "enroll";
+  sessionVerified: boolean;
+  onNotNeeded?: () => void;
+  onAlreadyDone: () => void;
+}) {
   const { user, accountRole, signOut } = useAuth();
   const qc = useQueryClient();
   // The session's own list can be a step behind (an authenticator added on
@@ -51,6 +60,8 @@ function TwoStepScreen({ step, onNotNeeded }: { step: "verify" | "enroll"; onNot
       .then((id) => {
         if (cancelled) return;
         if (!id && onNotNeeded) return onNotNeeded();
+        // One just added, in a session that has had its code: nothing to ask.
+        if (id && sessionVerified) return onAlreadyDone();
         setFactorId(id);
         setMode(id ? "verify" : "enroll");
       })

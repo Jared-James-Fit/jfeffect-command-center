@@ -44,9 +44,17 @@ describe("who has to set up or enter a code", () => {
     expect(mfaGateStep({ accountRole: "admin", aal: "aal2", verifiedFactors: 1 })).toBe("pass");
   });
 
-  it("never asks again in a session that has had its code, even before its user object lists the new authenticator", () => {
-    expect(mfaGateStep({ accountRole: "admin", aal: "aal2", verifiedFactors: 0 })).toBe("pass");
-    expect(mfaGateStep({ accountRole: "finance", aal: "aal2", verifiedFactors: 0 })).toBe("pass");
+  it("asks a login that needs one to set one up even when its session still reads verified from an authenticator since removed", () => {
+    // The finance login's Oct 10 session is still aal2, from the code step removed Oct 9 2026.
+    expect(mfaGateStep({ accountRole: "finance", aal: "aal2", verifiedFactors: 0 })).toBe("enroll");
+    expect(mfaGateStep({ accountRole: "admin", aal: "aal2", verifiedFactors: 0 })).toBe("enroll");
+    expect(mfaGateStep({ accountRole: "client", aal: "aal2", verifiedFactors: 0 })).toBe("pass");
+  });
+
+  it("checks with Supabase before showing setup, so one just added in a verified session never asks twice", () => {
+    const gate = readFileSync("src/components/two-step/staff-mfa-gate.tsx", "utf8");
+    expect(gate).toContain("firstAuthenticatorId()");
+    expect(gate).toContain("if (id && sessionVerified) return onAlreadyDone();");
   });
 
   it("counts only verified authenticators (a half-finished setup is none)", () => {
