@@ -40,7 +40,7 @@ export function MembershipPendingGate() {
   }
   const msg = freeJoinMessage(status) ?? {
     title: "We couldn't find your membership",
-    body: "Your login works, but there's no JF Effect membership on it yet. Message Jared and he'll sort it out.",
+    body: "Your login works, but there's no JF Effect membership on it yet. Message me and I'll sort it out.",
   };
   return (
     <AuthShell>
@@ -72,7 +72,7 @@ export function MembershipPendingGate() {
                   href={SOCIAL.instagram.url}
                   className="flex h-[54px] w-full items-center justify-center rounded-2xl bg-secondary text-[17px] font-semibold"
                 >
-                  Message Jared
+                  Message me
                 </a>
               )}
               <button

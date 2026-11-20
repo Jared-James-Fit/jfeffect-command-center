@@ -430,9 +430,9 @@ function AboutJaredPage() {
           <div className="jf-auth-rise text-center lg:text-left">
             <div className="text-[13px] font-semibold text-muted-foreground">About Jared McIntyre</div>
             <h1 className="mx-auto mt-3 max-w-[18ch] text-balance text-[38px] font-semibold leading-[1.05] tracking-[-0.03em] md:text-[56px] lg:mx-0">
-              Coach. Team Canada powerlifter. 2× international champion.
+              Hey, I'm Jared.
             </h1>
-            <p className="mt-4 text-[17px] font-semibold">Top 50 all-time in the world · 66 kg powerlifting</p>
+            <p className="mt-4 text-[17px] font-semibold">Team Canada powerlifter · 2× international champion · Top 50 all-time at 66 kg</p>
             <p className="mx-auto mt-4 max-w-xl text-[19px] leading-relaxed text-muted-foreground lg:mx-0">
               I coach people online through JF Effect, and I still compete for Team Canada. Whatever I ask of my clients, I'm doing myself.
             </p>
@@ -514,8 +514,8 @@ function AboutJaredPage() {
           <Heading eyebrow="What to expect" title="Before you apply." />
           <Group>
             {[
-              { title: "Honest about what's realistic", body: "Results depend on your starting point, consistency and effort. I don't promise overnight changes, and I won't sell you a shortcut." },
-              { title: "Standards, not hype", body: "I hold clients to the same standards I hold myself to: preparation, execution, honest feedback and adjustment." },
+              { title: "No overnight promises", body: "How fast you get there depends on where you start, how consistent you are and how hard you work. I won't sell you a shortcut." },
+              { title: "No hype", body: "I hold my clients to the same standard I hold myself: show up prepared, do the work, tell me how it went, and we adjust." },
               { title: "Me, every time", body: "I read your check-ins and adjust your plan myself, with your numbers in front of me." },
               { title: "If I'm not the right fit, I'll say so", body: "I only take on people I'm confident I can help. A no-pressure call comes before any commitment." },
             ].map((item) => (
@@ -621,7 +621,7 @@ function AboutJaredPage() {
       {/* Coached athletes */}
       <Reveal>
         <Block id="athletes">
-          <Heading eyebrow="Coached athletes" title="Athlete results under JF Effect." sub="Competitive achievements earned by athletes I coach, separate from my own résumé." />
+          <Heading eyebrow="Coached athletes" title="Athletes I coach." sub="Their results. Mine are further down." />
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border/70 ring-1 ring-border/70 lg:grid-cols-5">
             {[
               ["1", "IPF Worlds athlete", "Costa Rica · 2025"],
@@ -685,7 +685,7 @@ function AboutJaredPage() {
       {/* Credentials */}
       <Reveal>
         <Block id="credentials" narrow>
-          <Heading eyebrow="Education + experience" title="Coaching credentials" sub="Formal education backed by years of hands-on coaching and competition." />
+          <Heading eyebrow="Education" title="Certifications" />
           <Group>
             {[
               ["GoodLife Personal Training Institute (GLPTI)", "Professional personal training certification", BadgeCheck],
@@ -725,7 +725,7 @@ function AboutJaredPage() {
       {/* Timeline */}
       <Reveal>
         <Block tint narrow>
-          <Heading eyebrow="Timeline" title="How it got here." />
+          <Heading eyebrow="Timeline" title="How I got here." />
           <Group>
             {timeline.map((item) => (
               <div key={item.year} className="grid gap-1 px-5 py-4 sm:grid-cols-[72px_1fr] sm:gap-4">

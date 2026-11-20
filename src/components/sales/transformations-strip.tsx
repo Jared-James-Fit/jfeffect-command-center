@@ -27,8 +27,8 @@ export const TRANSFORMATION_PHOTOS = [
 ];
 
 export function TransformationsStrip({
-  eyebrow = "REAL RESULTS",
-  headline = "100+ clients coached. Real transformations.",
+  eyebrow = "CLIENT RESULTS",
+  headline = "100+ people coached.",
   sub = "Members and 1:1 clients who showed up and did the work.",
   ctaLabel,
   ctaHref,

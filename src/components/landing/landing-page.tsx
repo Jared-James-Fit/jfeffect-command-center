@@ -54,7 +54,7 @@ export const JOIN_CTA = "Join free";
 export const COACHING_CTA = "Apply for coaching";
 
 const HERO = {
-  title: "The training app built by a Team Canada powerlifter.",
+  title: "Train in the same app my clients use.",
   body: "My programs, a log that keeps every set and PR, and a crew to train with. Use it free, or hire me to coach you online.",
 };
 
@@ -184,7 +184,10 @@ export function LandingPage() {
         data-landing-hero
       >
         <div className="jf-auth-rise text-center lg:text-left">
-          <h1 className="mx-auto max-w-[16ch] text-balance text-[40px] font-semibold leading-[1.04] tracking-[-0.035em] md:text-[58px] lg:mx-0">
+          <p className="text-[13px] font-semibold text-muted-foreground">
+            {COACH_NAME} · Team Canada powerlifter
+          </p>
+          <h1 className="mx-auto mt-3 max-w-[16ch] text-balance text-[40px] font-semibold leading-[1.04] tracking-[-0.035em] md:text-[58px] lg:mx-0">
             {HERO.title}
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-[18px] leading-relaxed text-muted-foreground md:text-[19px] lg:mx-0">
@@ -244,7 +247,7 @@ export function LandingPage() {
       {/* 3. The app: free, on its real screens */}
       <Reveal>
         <Block id="app" tint>
-          <Heading eyebrow="The app" title="Free, and the same app my clients train in." />
+          <Heading eyebrow="The app" title="Here's what you get, free." />
           <div className="-mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:gap-8 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
             {SCREENS.map((s) => (
               <div
@@ -332,8 +335,8 @@ export function LandingPage() {
                     </Link>
                   </div>
                   <p className="mt-4 text-[13px] leading-relaxed text-background/60">
-                    By application. We go over price on a short call before you commit. I keep my
-                    client list small so every check-in gets read properly.
+                    It's by application. We'll go over price on a quick call before you commit to
+                    anything. I keep my client list small so every check-in gets my full attention.
                   </p>
                 </div>
 

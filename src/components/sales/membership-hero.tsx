@@ -54,12 +54,12 @@ export function MembershipHero({
               {
                 Icon: LineChart,
                 title: "See the Work Pay Off",
-                body: "Log every set, watch your PRs climb, and actually see whether what you're doing is working.",
+                body: "Log every set, watch your PRs climb, and see whether what you're doing is working.",
               },
               {
                 Icon: Sparkles,
                 title: "Everything in One Place",
-                body: "Demos, recipes, nutrition, education \u2014 everything you need so the plan actually sticks.",
+                body: "Demos, recipes, nutrition and education, so the plan sticks.",
               },
             ].map(({ Icon, title, body }) => (
               <li key={title} className="flex items-start gap-3">
