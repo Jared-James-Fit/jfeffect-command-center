@@ -7,6 +7,7 @@ import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
 import { attentionHide, attentionShow, onScreenEnough } from "@/lib/post-attention";
 import { type CommunityAuthor, type CommunityPost } from "@/lib/community";
+import { cn } from "@/lib/utils";
 
 const db = supabase as any;
 
@@ -100,11 +101,16 @@ export function useViewOnOpen(post: Pick<CommunityPost, "id" | "is_mine"> | null
  * also shows who (3 faces); tap for its Activity (views, likes, shares,
  * reposts and who), which only you can open. Nothing shows until someone has.
  */
-export function PostViewsRow({ post, onOpenAuthor }: { post: CommunityPost; onOpenAuthor?: (a: CommunityAuthor) => void }) {
+export function PostViewsRow({ post, onOpenAuthor, compact = false }: { post: CommunityPost; onOpenAuthor?: (a: CommunityAuthor) => void; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const v = post.views;
   if (!v || v.count <= 0) return null;
-  const label = (
+  // `compact`: beside "Liked by …" on a post's screen, just 👁 and the number (the line is the likes')
+  const label = compact ? (
+    <span className="font-bold tabular-nums text-foreground" aria-label={`${v.count} ${v.count === 1 ? "view" : "views"}`}>
+      {v.count}
+    </span>
+  ) : (
     <span>
       <span className="font-bold text-foreground">{v.count}</span> {v.count === 1 ? "view" : "views"}
     </span>
@@ -112,7 +118,7 @@ export function PostViewsRow({ post, onOpenAuthor }: { post: CommunityPost; onOp
   // someone else's post: just the number
   if (!post.is_mine)
     return (
-      <div data-post-views className="mx-3.5 mb-2 flex items-center gap-2 py-1 text-[12px] text-muted-foreground">
+      <div data-post-views className={cn("mx-3.5 mb-2 flex items-center py-1 text-[12px] text-muted-foreground", compact ? "gap-1" : "gap-2")}>
         <Eye className="h-4 w-4 shrink-0" />
         {label}
       </div>
@@ -123,10 +129,10 @@ export function PostViewsRow({ post, onOpenAuthor }: { post: CommunityPost; onOp
         type="button"
         data-post-views
         onClick={() => setOpen(true)}
-        className="mx-3.5 mb-2 flex items-center gap-2 rounded-full py-1 text-left text-[12px] text-muted-foreground active:opacity-70"
+        className={cn("mx-3.5 mb-2 flex items-center rounded-full py-1 text-left text-[12px] text-muted-foreground active:opacity-70", compact ? "gap-1" : "gap-2")}
         aria-label={`Seen by ${v.count}. See activity`}
       >
-        {v.faces.length > 0 ? (
+        {v.faces.length > 0 && !compact ? (
           <span className="flex shrink-0 -space-x-1.5">
             {v.faces.slice(0, 3).map((a) => (
               <span key={a.user_id} className="rounded-full ring-2 ring-card">

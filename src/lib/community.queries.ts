@@ -269,6 +269,14 @@ export function useVotePoll(post: CommunityPost) {
 
 /* ---- reactions ------------------------------------------------------ */
 
+/** Your own person card from a Crew profile already on the phone (your photo for "Liked by you" the moment you like). */
+function myCachedAuthor(qc: ReturnType<typeof useQueryClient>): CommunityAuthor | null {
+  for (const [, data] of qc.getQueriesData<CommunityProfile | null>({ queryKey: ["community-profile"] })) {
+    if (data?.is_me && data.author?.user_id) return data.author;
+  }
+  return null;
+}
+
 export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
   const qc = useQueryClient();
   return useMutation({
@@ -283,15 +291,16 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
     onMutate: async (next) => {
       await qc.cancelQueries({ queryKey: ["community-feed"] });
       const snapshot = qc.getQueriesData<InfiniteData<CommunityFeedPage>>({ queryKey: ["community-feed"] });
+      const me = myCachedAuthor(qc);
       patchPost(qc, post.id, (p) => {
         const reactions = { ...p.reactions };
         if (p.my_reaction) reactions[p.my_reaction] = Math.max(0, (reactions[p.my_reaction] ?? 1) - 1);
         if (next) reactions[next] = (reactions[next] ?? 0) + 1;
         const had = !!p.my_reaction;
         const total = reactionTotal(p) + (next && !had ? 1 : !next && had ? -1 : 0);
-        // "You" shows up in the who-reacted line straight away
+        // "You" shows up in the who-reacted line straight away, with your own photo when it's on the phone
         const others = (p.reactors ?? []).filter((r) => !r.is_me);
-        const reactors = next ? [{ user_id: "me", name: "You", avatar_url: null, is_coach: false, is_me: true } as Reactor, ...others] : others;
+        const reactors = next ? [{ ...(me ?? { user_id: "me", avatar_url: null, is_coach: false }), name: "You", is_me: true } as Reactor, ...others] : others;
         return { ...p, reactions, my_reaction: next, reaction_count: Math.max(0, total), reactors };
       });
       return { snapshot };

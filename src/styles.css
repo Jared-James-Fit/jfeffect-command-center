@@ -618,9 +618,17 @@ html, body { @variant max-md { overflow-x: hidden; } }
   to { opacity: 1; }
 }
 .jf-arrive { animation: jf-arrive 240ms ease-out both; }
+/* "Swipe for workout" (a workout post's recap tip): the chevrons lean the way to swipe, twice, then rest.
+   Only the little icon moves, never the post's screen (a moving screen is a layer an iPhone paints in strips). */
+@keyframes jf-recap-nudge {
+  0%, 60%, 100% { transform: translateX(0); }
+  15%, 40% { transform: translateX(-4px); }
+}
+.jf-recap-nudge { animation: jf-recap-nudge 1.6s ease-in-out 2; }
 @media (prefers-reduced-motion: reduce) {
   .jf-skeleton::after { animation: none; opacity: 0; }
   .jf-arrive { animation: none; }
+  .jf-recap-nudge { animation: none; }
 }
 
 /* Avatar shimmer — lightweight CSS-only loading state */

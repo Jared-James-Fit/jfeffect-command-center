@@ -17,7 +17,6 @@ import {
   REACTION,
   SCOPE_WORD,
   exerciseBestLines,
-  formatWorkoutDuration,
   isTrainingNow,
   lockInTimeLabel,
   monthWorkoutLine,
@@ -33,7 +32,7 @@ import { PostViewsRow, useViewOnOpen } from "@/components/community/post-views";
 import { PostScoreRow } from "@/components/community/post-score";
 import { PostExtras } from "@/components/community/post-attach";
 import { useMarkHintSeen, usePostDetail, usePostMediaUrls, useReact } from "@/lib/community.queries";
-import { dualTotal, recordedUnit } from "@/lib/dual-weight";
+import { summaryStats } from "@/lib/workout-recap";
 import { WeightOther } from "@/components/dual-weight";
 import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 
@@ -276,17 +275,8 @@ const WorkoutSummary = forwardRef<
 >(function WorkoutSummary({ post, unit, heroTap, burst }, ref) {
   const s = post.stats!;
   const meta = [workoutSubtitle(s), monthWorkoutLine(s)].filter(Boolean).join(" · ");
-  const dur = formatWorkoutDuration(s.duration_min);
-  const stats = [
-    dur && { label: "Time", value: dur },
-    s.working_sets > 0 && { label: s.working_sets === 1 ? "Working set" : "Working sets", value: String(s.working_sets) },
-    // the volume in the unit most of its weights were typed in, the other under it (the same for every viewer)
-    s.tonnage_kg > 0 && (() => {
-      const t = dualTotal(s.tonnage_kg, recordedUnit(s.unit, unit));
-      return { label: "Volume", value: t.primary, sub: t.secondary };
-    })(),
-    s.pr_count > 0 && { label: s.pr_count === 1 ? "PR" : "PRs", value: String(s.pr_count), pr: true },
-  ].filter(Boolean) as { label: string; value: string; sub?: string; pr?: boolean }[];
+  // Time · Working sets · Volume (both units) · PRs, the same numbers as the feed's recap
+  const stats = summaryStats(s, unit);
   return (
     <section ref={ref} className="pt-5" data-workout-section>
       <div className={cn("relative px-4", heroTap && "select-none [-webkit-touch-callout:none]")} onClick={heroTap} data-workout-head>
