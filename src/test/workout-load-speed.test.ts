@@ -22,7 +22,7 @@ describe("workout screens load without repeat downloads", () => {
   it("cardio reuses the Workouts list instead of loading the program again", () => {
     const src = read("src/components/cardio/ClientCardioSection.tsx");
     // the Workouts screen's own query (["my-workouts", clientId], client-workouts-query.ts)
-    expect(src).toContain("qc.fetchQuery(clientWorkoutsQuery(clientId))");
+    expect(src).toContain("qc.fetchQuery(clientWorkoutsQuery(cid))");
     expect(src).not.toContain('refetchOnMount: "always"');
   });
 
