@@ -1314,7 +1314,9 @@ describe("captions: Instagram-length, written on their own screen", () => {
   it("the folded caption shows your line breaks", () => {
     expect(editor).toContain('line-clamp-2 whitespace-pre-wrap');
     expect(read("src/components/community/feed-caption.tsx")).toContain("whitespace-pre-line");
-    expect(read("src/components/community/post-detail.tsx")).toContain('<p className="whitespace-pre-line');
+    // the post page shows the caption's paragraphs as written (CaptionText: pre-line inside each paragraph)
+    expect(read("src/components/community/post-detail.tsx")).toContain("<CaptionText");
+    expect(read("src/components/community/caption-text.tsx")).toContain('<p key={i} className="whitespace-pre-line break-words">');
   });
   it("the preview on the caption screen includes the stickers and text", () => {
     expect(read("src/components/community/share-studio.tsx")).toContain("setThumb(smallFrame((ctx, w, h) => drawStickers(ctx, items, w, h)));");

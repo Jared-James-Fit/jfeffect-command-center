@@ -52,7 +52,7 @@ describe("who liked a post, Instagram's way", () => {
 
   it("a post's sheet says who liked it under its words and opens the Likes over the sheet", () => {
     const sheet = read("src/components/community/post-sheet.tsx");
-    expect(sheet).toContain('{likes && <LikedBy post={post} onOpen={onOpenLikes} className="-ml-1.5 mt-1.5" />}');
+    expect(sheet).toContain('{likes && <LikedBy post={post} onOpen={onOpenLikes} className="-ml-1.5 mt-2.5" />}');
     expect(sheet).toContain("<ReactorsSheet postId={likesFor} onClose={() => setLikesFor(null)} onOpenAuthor={openAuthor} />");
     // a post with no words still shows who liked it
     expect(sheet).toContain("data-post-sheet-likes");
