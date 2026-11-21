@@ -1,16 +1,23 @@
 /**
  * Bar path & speed for one set video, full screen (lazy: opened from the set
- * video's sheet or its card in the coach chat). The video with the bar's path
- * drawn over it on top; under it, in this order and only what the footage
- * supports: the set's headline speed and velocity loss, each rep's speed
- * (tap one for its details), how consistent the reps were, how this set
- * compares with the athlete's other sets of the exercise (load–velocity), and
- * what limited the reading with how to film it better. "How it's measured"
- * is folded at the end.
+ * video's sheet or its card in the coach chat). Four steps, one main button
+ * each:
  *
- * Opened on a video with no analysis yet it reads it at once (on this
- * device); when the plate isn't clear it asks for one tap on the end of the
- * bar. The athlete, their coach and admins can read, redo or remove it.
+ *   1. Find: the bar's plate is looked for on this device (a second or two).
+ *   2. Confirm: the video paused on the plate with a ring on it. Drag the
+ *      ring onto the plate (the picture under the finger magnified), drag
+ *      its edge dot to the plate's rim, or tap the plate anywhere and the
+ *      ring snaps to it. The plate's size is one row, changed only if it
+ *      isn't a standard 450 mm plate. What about the footage will cost
+ *      accuracy is said here, with how to film it better. Analyze.
+ *   3. Analyze: followed through every frame, both ways from the marker.
+ *   4. Results: the path over the video, the set and each rep. Where the
+ *      plate was lost, Fix tracking puts the ring back on it on that frame
+ *      and reads it again from the same marker, never from scratch.
+ *
+ * A set video read by itself after it was sent (auto.ts) opens straight on
+ * its results, or on Confirm with the ring already where it found the plate.
+ * The athlete, their coach and admins can read, redo or remove it.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -22,6 +29,7 @@ import {
   RotateCcw,
   Ruler,
   Trash2,
+  Video,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -32,7 +40,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { BarPathPlayer, type PickSuggestion } from "@/components/lift-analysis/bar-path-player";
+import {
+  BarPathPlayer,
+  type Marker,
+  type PickSuggestion,
+} from "@/components/lift-analysis/bar-path-player";
+import { FilmingGuide } from "@/components/lift-analysis/filming-guide";
 import {
   LoadVelocityChart,
   RepSpeedBars,
@@ -41,7 +54,8 @@ import {
 import { useClientWeightUnit } from "@/hooks/use-client-weight-unit";
 import type { LiftAnalysis } from "@/lib/lift-analysis/analyze";
 import { DEFAULT_PLATE, STANDARD_PLATE_MM } from "@/lib/lift-analysis/calibrate";
-import { repDirection } from "@/lib/lift-analysis/exercise";
+import { guideLift, repDirection } from "@/lib/lift-analysis/exercise";
+import { FOOTAGE_WORDS, type FootageIssue } from "@/lib/lift-analysis/footage";
 import {
   cm,
   noteWords,
@@ -59,14 +73,23 @@ import { compareToProfile, fitProfile } from "@/lib/lift-analysis/profile";
 import {
   deleteAnalysis,
   isRead,
+  preselectOf,
   saveAnalysis,
-  saveNotRead,
+  type Suggestion,
   useLoadVelocityPoints,
   useSetForVideo,
   useSetVideoAnalyses,
 } from "@/lib/lift-analysis/queries";
 import { loggedState, type LoggedSet } from "@/lib/lift-analysis/verdict";
-import { analyzeVideo, type RunProgress } from "@/lib/lift-analysis/run";
+import {
+  analyzeVideo,
+  locatePlate,
+  overallProgress,
+  toShownKey,
+  type RunProgress,
+  type ShownProposal,
+  type ShownSeed,
+} from "@/lib/lift-analysis/run";
 import { useRunningAnalysis } from "@/lib/lift-analysis/store";
 import { cn } from "@/lib/utils";
 
@@ -80,16 +103,26 @@ type Props = {
   exerciseName: string;
   /** "Top set · 455 lb × 1", or "". */
   setLabel?: string;
-  /** Read it straight away when there's no analysis yet. */
+  /** Start finding the bar straight away when there's no analysis yet. */
   startOnOpen?: boolean;
 };
 
 const STAGE_WORDS: Record<RunProgress["stage"], string> = {
   opening: "Opening the video",
   finding: "Finding the bar",
-  tracking: "Following the bar",
+  tracking: "Following the bar through every frame",
+  measuring: "Measuring the plate",
   reading: "Reading the reps",
 };
+
+/** The plates a bar can carry, by diameter. */
+const PLATE_SIZES = [
+  { mm: 450, label: "450 mm", sub: "20 kg / 45 lb, every bumper" },
+  { mm: 400, label: "400 mm", sub: "15 kg calibrated" },
+  { mm: 325, label: "325 mm", sub: "10 kg calibrated" },
+] as const;
+
+type Step = "idle" | "detecting" | "confirm" | "analyzing" | "results" | "fix" | "failed";
 
 export default function LiftAnalysisView(props: Props) {
   const { open, onOpenChange } = props;
@@ -122,43 +155,96 @@ function Body({
   const { data: storedMap, isLoading } = useSetVideoAnalyses([setVideoId]);
   const stored = storedMap?.[setVideoId] ?? null;
   const saved = isRead(stored) ? stored : null;
-  // tried by itself after it was sent: the plate needs a tap (with the circles worth offering), or it couldn't be read
+  // tried by itself after it was sent: the bar needs confirming (with where it thinks it is), or it couldn't be read
   const notRead = stored && !saved ? stored : null;
   const { data: loggedSet } = useSetForVideo(setVideoId);
   const autoRun = useRunningAnalysis(setVideoId);
   const [fresh, setFresh] = useState<LiftAnalysis | null>(null);
-  const [mode, setMode] = useState<"idle" | "running" | "pick" | "failed">("idle");
+  const [step, setStep] = useState<Step>("idle");
+  const [guide, setGuide] = useState(false);
   const [progress, setProgress] = useState<RunProgress | null>(null);
-  const [suggestions, setSuggestions] = useState<PickSuggestion[]>([]);
-  const [failure, setFailure] = useState<string>("");
+  const [proposal, setProposal] = useState<ShownProposal | null>(null);
+  const [candidates, setCandidates] = useState<PickSuggestion[]>([]);
+  const [marker, setMarker] = useState<Marker | null>(null);
+  const [locating, setLocating] = useState(false);
+  /** The clip's width ÷ height (a ring's height as a share of the frame follows from its width). */
+  const [aspect, setAspect] = useState(9 / 16);
+  const [corrections, setCorrections] = useState<Marker[]>([]);
+  const [failure, setFailure] = useState("");
   const [selected, setSelected] = useState<number | null>(null);
   const [plateMm, setPlateMm] = useState<number | null>(null);
-  const [plateOpen, setPlateOpen] = useState(false);
   const ctrl = useRef<AbortController | null>(null);
+  const panel = useRef<HTMLDivElement | null>(null);
   const analysis = fresh ?? saved?.result ?? null;
   const dirHint = repDirection(exerciseName) ?? undefined;
+  const lift = guideLift(exerciseName);
 
   useEffect(() => () => ctrl.current?.abort(), []);
+  // each step (and the guide) starts at its own top
+  useEffect(() => {
+    if (panel.current) panel.current.scrollTop = 0;
+  }, [step, guide]);
 
-  const run = async (
-    opts: { tap?: { t: number; fx: number; fy: number }; plate?: number | null } = {},
-  ) => {
-    if (!src) return;
+  // the plate's size: the athlete's pick, else a size confirmed on an earlier read, else the standard one (unconfirmed)
+  const plateFor = (mm: number | null) =>
+    mm == null ? DEFAULT_PLATE : { mm, rel: 0.005, confirmed: true };
+  const knownPlate = plateMm ?? (analysis?.plate.confirmed ? analysis.plate.mm : null);
+
+  const abortable = () => {
     ctrl.current?.abort();
     const c = new AbortController();
     ctrl.current = c;
-    setMode("running");
+    return c;
+  };
+
+  /** 1. Find the bar (detection only) and show it to confirm. */
+  const detect = async () => {
+    if (!src) return;
+    const c = abortable();
+    setStep("detecting");
     setProgress({ stage: "opening", progress: 0 });
-    setSelected(null);
-    const mm = opts.plate ?? plateMm ?? analysis?.plate.mm ?? STANDARD_PLATE_MM;
-    const plate =
-      mm === STANDARD_PLATE_MM && !(opts.plate || plateMm)
-        ? DEFAULT_PLATE
-        : { mm, rel: 0.005, confirmed: true };
     const res = await analyzeVideo({
       source: src,
-      tap: opts.tap,
-      plate,
+      detectOnly: true,
+      signal: c.signal,
+      onProgress: setProgress,
+    });
+    if (c.signal.aborted) return;
+    setProgress(null);
+    if (res.ok) return; // detectOnly never reads
+    if (res.why === "cancelled") return setStep(analysis ? "results" : "idle");
+    if (res.why === "unreadable" || res.why === "too_short") {
+      setFailure(
+        res.why === "too_short"
+          ? "This clip is too short to read a rep from."
+          : "This video couldn't be opened on this device.",
+      );
+      return setStep("failed");
+    }
+    if (res.clip) setAspect(res.clip.width / Math.max(1, res.clip.height));
+    setProposal(res.proposal);
+    setCandidates(res.proposal?.candidates ?? []);
+    const k = res.proposal?.key;
+    setMarker(
+      k && res.proposal!.confidence !== "low"
+        ? { t: k.t, fx: k.fx, fy: k.fy, fa: k.fa, fb: k.fb }
+        : null,
+    );
+    setStep("confirm");
+  };
+
+  /** 3. Follow it through the set and read it. */
+  const analyze = async (seed: ShownSeed, extra: { fx: number; fy: number; t: number }[] = []) => {
+    if (!src) return;
+    const c = abortable();
+    setStep("analyzing");
+    setSelected(null);
+    setProgress({ stage: "opening", progress: 0 });
+    const res = await analyzeVideo({
+      source: src,
+      seed,
+      corrections: extra,
+      plate: plateFor(knownPlate),
       dirHint,
       signal: c.signal,
       onProgress: setProgress,
@@ -167,11 +253,8 @@ function Body({
     setProgress(null);
     if (res.ok) {
       setFresh(res.analysis);
-      setMode("idle");
-      if (!res.analysis.reps.length) {
-        toast.message("No reps found. Try tapping the end of the bar.");
-        return;
-      }
+      setCorrections([]);
+      setStep("results");
       try {
         await saveAnalysis(setVideoId, res.analysis);
       } catch (e) {
@@ -179,45 +262,109 @@ function Body({
       }
       return;
     }
-    if (res.why === "cancelled") return setMode("idle");
-    if (res.why === "ambiguous" || res.why === "no_plate" || res.why === "no_plate_at_tap") {
-      setSuggestions(res.suggestions ?? []);
-      setMode("pick");
-      if (!saved && !opts.tap)
-        void saveNotRead(setVideoId, {
-          engine: "bar-path/2",
-          status: "needs_tap",
-          why: res.why,
-          suggestions: res.suggestions ?? [],
-        }).catch(() => {});
-      if (res.why === "no_plate_at_tap")
-        toast.message("No plate there. Tap the round end of the bar.");
-      return;
+    if (res.why === "cancelled") return setStep(seed.kind === "keys" ? "fix" : "confirm");
+    if (res.why === "unreadable" || res.why === "too_short") {
+      setFailure("This video couldn't be read on this device.");
+      return setStep("failed");
     }
-    setFailure(
-      res.why === "too_short"
-        ? "This clip is too short to read a rep from."
-        : "This video couldn't be read on this device.",
+    // never a dead end: back to the marker, with what the plate looked like
+    toast.message(
+      res.why === "no_plate_at_tap"
+        ? "No plate under the marker. Put the ring on the end of the bar."
+        : "The plate couldn't be followed from there. Put the ring on the plate where it's easy to see.",
     );
-    setMode("failed");
+    if (res.proposal) setCandidates(res.proposal.candidates);
+    setStep("confirm");
   };
 
-  // opened to analyse: start once the stored read is known to be missing (and no auto run is going);
-  // one that found no plate by itself opens straight on the tap, with the circles it saw
+  // opening: results if there's a read; confirm straight away when it was found by itself but needs a look
   const started = useRef(false);
   useEffect(() => {
-    if (started.current || isLoading || saved || autoRun || !src) return;
-    if (notRead?.status === "needs_tap") {
+    if (started.current || isLoading || autoRun) return;
+    if (saved) {
       started.current = true;
-      setSuggestions(((notRead.result as any)?.suggestions ?? []) as PickSuggestion[]);
-      setMode("pick");
+      setStep("results");
       return;
     }
-    if (!startOnOpen || notRead) return;
+    if (!src) return;
+    if (notRead?.status === "needs_tap") {
+      started.current = true;
+      const s = (notRead.result as unknown as { suggestions?: Suggestion[] })?.suggestions ?? [];
+      const pre = preselectOf(s);
+      setCandidates(s.filter((x) => !x.preselect));
+      setMarker(pre);
+      setStep("confirm");
+      return;
+    }
+    if (!startOnOpen && notRead) return;
+    if (!startOnOpen) return;
     started.current = true;
-    void run();
+    void detect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startOnOpen, isLoading, saved, notRead?.status, autoRun, src]);
+  }, [startOnOpen, isLoading, !!saved, notRead?.status, autoRun, src]);
+
+  // a read by itself landed while this was open
+  useEffect(() => {
+    if (saved && step === "idle") setStep("results");
+  }, [saved, step]);
+
+  const placeAt = async (t: number, fx: number, fy: number) => {
+    if (!src) return;
+    // a ringed circle: take it as it is
+    const hit = candidates.find((c) => Math.hypot(c.fx - fx, (c.fy - fy) / aspect) <= c.fr * 1.1);
+    setLocating(true);
+    const found = await locatePlate({ source: src, t, fx: hit?.fx ?? fx, fy: hit?.fy ?? fy });
+    setLocating(false);
+    if (found) {
+      setMarker({
+        t: found.key.t,
+        fx: found.key.fx,
+        fy: found.key.fy,
+        fa: found.key.fa,
+        fb: found.key.fb,
+      });
+      return;
+    }
+    // nothing round there: the ring goes where the finger was, for the athlete to size
+    const size = marker
+      ? { fa: marker.fa, fb: marker.fb }
+      : hit
+        ? { fa: hit.fr, fb: hit.fr * aspect }
+        : { fa: 0.09, fb: 0.09 * aspect };
+    setMarker({ t, fx, fy, ...size });
+    toast.message(
+      "Couldn't find the plate's edge there. Drag the ring's dot out to the plate's rim.",
+    );
+  };
+
+  const startFix = () => {
+    if (!analysis) return;
+    setCorrections([]);
+    setSelected(null);
+    setStep("fix");
+  };
+
+  const reanalyzeWithFixes = () => {
+    if (!analysis) return;
+    const w = analysis.frame.w;
+    const h = analysis.frame.h;
+    const keys = analysis.track?.keys?.length
+      ? analysis.track.keys.map((k) => toShownKey(k, w, h))
+      : [
+          {
+            t: analysis.plate.t,
+            fx: analysis.plate.x / w,
+            fy: analysis.plate.y / h,
+            fa: analysis.plate.r / w,
+            fb: analysis.plate.r / h,
+            source: "confirmed" as const,
+          },
+        ];
+    void analyze(
+      { kind: "keys", keys },
+      corrections.map((c) => ({ t: c.t, fx: c.fx, fy: c.fy })),
+    );
+  };
 
   const remove = async () => {
     try {
@@ -230,8 +377,40 @@ function Body({
     }
   };
 
-  const busy = mode === "running" || !!autoRun;
+  const running = step === "detecting" || step === "analyzing" || (!!autoRun && !saved);
   const shownProgress = progress ?? autoRun;
+  const fixSize = useMemo(() => {
+    if (!analysis) return undefined;
+    const k = analysis.track?.keys?.[0];
+    const w = analysis.frame.w;
+    const h = analysis.frame.h;
+    return k
+      ? { fa: k.a / w, fb: k.b / h }
+      : { fa: analysis.plate.r / w, fb: analysis.plate.r / h };
+  }, [analysis]);
+  const lostStretches = analysis?.track?.lost ?? [];
+
+  const playerMarker =
+    step === "confirm"
+      ? {
+          value: marker,
+          onChange: setMarker,
+          onTap: (t: number, fx: number, fy: number) => void placeAt(t, fx, fy),
+          candidates,
+          busy: locating,
+        }
+      : step === "fix"
+        ? {
+            value: null,
+            corrections,
+            size: fixSize,
+            onChange: (m: Marker) =>
+              setCorrections((cs) => [
+                ...cs.filter((c) => Math.abs(c.t - m.t) > 0.6 / Math.max(1, analysis?.fps ?? 30)),
+                m,
+              ]),
+          }
+        : null;
 
   return (
     <>
@@ -241,7 +420,11 @@ function Body({
       >
         <button
           type="button"
-          onClick={() => onOpenChange(false)}
+          onClick={() => {
+            if (guide) return setGuide(false);
+            if (step === "fix") return setStep("results");
+            onOpenChange(false);
+          }}
           className="grid h-11 w-11 place-items-center rounded-full hover:bg-muted"
           aria-label="Back"
         >
@@ -261,7 +444,7 @@ function Body({
             </span>
           </div>
         </div>
-        {!busy && (
+        {step === "results" && analysis && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -274,29 +457,21 @@ function Body({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[14rem]">
-              <DropdownMenuItem className="h-11 gap-2" onSelect={() => void run()}>
-                <RotateCcw className="h-4 w-4" /> Read it again
+              <DropdownMenuItem className="h-11 gap-2" onSelect={startFix}>
+                <Crosshair className="h-4 w-4" /> Fix tracking
+              </DropdownMenuItem>
+              <DropdownMenuItem className="h-11 gap-2" onSelect={() => void detect()}>
+                <RotateCcw className="h-4 w-4" /> Start over
+              </DropdownMenuItem>
+              <DropdownMenuItem className="h-11 gap-2" onSelect={() => setGuide(true)}>
+                <Video className="h-4 w-4" /> How to film it
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="h-11 gap-2"
-                onSelect={() => {
-                  setSuggestions([]);
-                  setMode("pick");
-                }}
+                className="h-11 gap-2 text-destructive focus:text-destructive"
+                onSelect={() => void remove()}
               >
-                <Crosshair className="h-4 w-4" /> Pick the bar myself
+                <Trash2 className="h-4 w-4" /> Remove analysis
               </DropdownMenuItem>
-              <DropdownMenuItem className="h-11 gap-2" onSelect={() => setPlateOpen(true)}>
-                <Ruler className="h-4 w-4" /> Plate size
-              </DropdownMenuItem>
-              {(saved || fresh) && (
-                <DropdownMenuItem
-                  className="h-11 gap-2 text-destructive focus:text-destructive"
-                  onSelect={() => void remove()}
-                >
-                  <Trash2 className="h-4 w-4" /> Remove analysis
-                </DropdownMenuItem>
-              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -305,106 +480,85 @@ function Body({
       <BarPathPlayer
         src={src}
         poster={poster}
-        analysis={mode === "pick" ? null : analysis}
+        analysis={step === "results" || step === "fix" ? analysis : null}
         selectedRep={selected}
         onSelectRep={setSelected}
-        pick={
-          mode === "pick"
-            ? { suggestions, onPick: (t, fx, fy) => void run({ tap: { t, fx, fy } }) }
-            : null
+        marker={playerMarker}
+        lost={step === "results" || step === "fix" ? lostStretches : undefined}
+        initialTime={
+          step === "confirm"
+            ? (marker?.t ?? candidates[0]?.t ?? null)
+            : step === "fix"
+              ? (lostStretches[0]?.start ?? analysis?.window.start ?? null)
+              : null
         }
-        className="h-[min(50dvh,460px)] shrink-0"
+        className="h-[min(56dvh,520px)] shrink-0"
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-2">
-        {plateOpen && (
-          <PlateSizeCard
-            current={plateMm ?? analysis?.plate.mm ?? STANDARD_PLATE_MM}
-            onCancel={() => setPlateOpen(false)}
-            onApply={(mm) => {
-              setPlateOpen(false);
-              setPlateMm(mm);
-              void run({ plate: mm });
-            }}
-          />
-        )}
-        {busy && shownProgress && (
-          <div className="rounded-2xl border border-border p-4" data-lift-analysis-progress>
-            <div className="flex items-center justify-between text-sm">
-              <span className="font-medium">{STAGE_WORDS[shownProgress.stage]}…</span>
-              {mode === "running" && (
-                <button
-                  type="button"
-                  className="text-muted-foreground hover:text-foreground"
-                  onClick={() => {
-                    ctrl.current?.abort();
-                    setMode("idle");
-                    setProgress(null);
-                  }}
-                >
-                  Cancel
-                </button>
-              )}
+      <div
+        ref={panel}
+        className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3"
+      >
+        {guide ? (
+          <section data-guide-panel>
+            <h3 className="text-[16px] font-semibold">How to film a set for bar speed</h3>
+            <div className="mt-3">
+              <FilmingGuide lift={lift} />
             </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-foreground transition-[width] duration-300"
-                style={{
-                  width: `${Math.round(100 * ((["opening", "finding", "tracking", "reading"].indexOf(shownProgress.stage) + shownProgress.progress) / 4))}%`,
-                }}
-              />
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Read on this device. Nothing is uploaded.
-            </p>
-          </div>
-        )}
-        {mode === "pick" && (
-          <div className="rounded-2xl border border-border p-4" data-lift-analysis-pick>
-            <p className="text-sm font-semibold">Tap the end of the bar</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {suggestions.length
-                ? "The plate wasn't clear on its own. Tap the plate on the end of the bar (a ringed circle if it's the one)."
-                : "Pause where the plate is easy to see, then tap the plate on the end of the bar."}
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Works when the camera is side-on to the bar, with the plate in view.
-            </p>
-            <Button
-              variant="ghost"
-              className="mt-2 h-10 px-2 text-muted-foreground"
-              onClick={() => setMode("idle")}
-            >
-              Cancel
+            <Button variant="outline" className="mt-4 h-11 w-full" onClick={() => setGuide(false)}>
+              Done
             </Button>
-          </div>
-        )}
-        {mode === "failed" && (
+          </section>
+        ) : running && shownProgress ? (
+          <ProgressPanel
+            progress={shownProgress}
+            onCancel={
+              step === "detecting" || step === "analyzing"
+                ? () => {
+                    ctrl.current?.abort();
+                    setProgress(null);
+                    setStep(step === "analyzing" ? "confirm" : analysis ? "results" : "idle");
+                  }
+                : undefined
+            }
+          />
+        ) : step === "confirm" ? (
+          <ConfirmPanel
+            marker={marker}
+            proposal={proposal}
+            locating={locating}
+            plateMm={knownPlate ?? STANDARD_PLATE_MM}
+            plateSet={knownPlate != null}
+            onPlate={setPlateMm}
+            onGuide={() => setGuide(true)}
+            onAnalyze={() =>
+              marker &&
+              void analyze({
+                kind: "marker",
+                t: marker.t,
+                fx: marker.fx,
+                fy: marker.fy,
+                fa: marker.fa,
+                fb: marker.fb,
+              })
+            }
+          />
+        ) : step === "fix" ? (
+          <FixPanel
+            count={corrections.length}
+            lost={lostStretches.length}
+            onUndo={() => setCorrections((cs) => cs.slice(0, -1))}
+            onCancel={() => setStep("results")}
+            onAnalyze={reanalyzeWithFixes}
+          />
+        ) : step === "failed" ? (
           <div className="rounded-2xl border border-border p-4">
             <p className="text-sm">{failure}</p>
-            <Button variant="outline" className="mt-3 h-10" onClick={() => void run()}>
+            <Button variant="outline" className="mt-3 h-10" onClick={() => void detect()}>
               Try again
             </Button>
           </div>
-        )}
-        {!busy && mode !== "pick" && !analysis && !isLoading && mode !== "failed" && (
-          <div className="rounded-2xl border border-border p-4">
-            <p className="text-sm text-muted-foreground">
-              {notRead?.status === "failed"
-                ? "This video couldn't be read on the phone that sent it. Try it here."
-                : "Reads the bar's path and speed from the video, on this device: film side-on with the end of the bar in view."}
-            </p>
-            <Button
-              className="mt-3 h-11"
-              onClick={() => void run()}
-              disabled={!src}
-              data-lift-analysis-start
-            >
-              Analyze bar path
-            </Button>
-          </div>
-        )}
-        {analysis && mode !== "pick" && !busy && (
+        ) : step === "results" && analysis ? (
           <Results
             analysis={analysis}
             selected={selected}
@@ -414,69 +568,263 @@ function Body({
             exerciseId={saved?.exercise_id ?? null}
             loggedSet={loggedSet ?? null}
             fresh={!!fresh}
+            onFix={startFix}
+            onGuide={() => setGuide(true)}
+            exerciseName={exerciseName}
           />
-        )}
+        ) : !isLoading ? (
+          <div className="rounded-2xl border border-border p-4">
+            <p className="text-sm text-muted-foreground">
+              {notRead?.status === "failed"
+                ? "This video couldn't be read on the phone that sent it. Try it here."
+                : "Reads the bar's path and speed from the video, on this device. Nothing is uploaded."}
+            </p>
+            <Button
+              className="mt-3 h-11 w-full"
+              onClick={() => void detect()}
+              disabled={!src}
+              data-lift-analysis-start
+            >
+              Find the bar
+            </Button>
+            <button
+              type="button"
+              className="mt-2 h-10 w-full text-sm text-muted-foreground hover:text-foreground"
+              onClick={() => setGuide(true)}
+            >
+              How to film it
+            </button>
+          </div>
+        ) : null}
       </div>
     </>
   );
 }
 
-function PlateSizeCard({
-  current,
-  onCancel,
-  onApply,
-}: {
-  current: number;
-  onCancel: () => void;
-  onApply: (mm: number) => void;
-}) {
-  const [value, setValue] = useState(String(Math.round(current)));
-  const presets = [
-    { mm: 450, label: "45 lb / 20 kg+ or bumper · 450 mm" },
-    { mm: 400, label: "15 kg calibrated · 400 mm" },
-    { mm: 325, label: "10 kg calibrated · 325 mm" },
-  ];
-  const n = Number(value);
-  const ok = Number.isFinite(n) && n >= 150 && n <= 500;
+function ProgressPanel({ progress, onCancel }: { progress: RunProgress; onCancel?: () => void }) {
   return (
-    <div className="mb-3 rounded-2xl border border-border p-4" data-plate-size>
-      <p className="text-sm font-semibold">The biggest plate on the bar</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Its size is the ruler every speed is measured with.
-      </p>
-      <div className="mt-3 flex flex-col gap-1.5">
-        {presets.map((p) => (
+    <div className="rounded-2xl border border-border p-4" data-lift-analysis-progress>
+      <div className="flex items-center justify-between text-sm">
+        <span className="font-medium">{STAGE_WORDS[progress.stage]}…</span>
+        {onCancel && (
           <button
-            key={p.mm}
             type="button"
-            onClick={() => setValue(String(p.mm))}
-            className={cn(
-              "h-11 rounded-lg border px-3 text-left text-sm",
-              Number(value) === p.mm ? "border-foreground" : "border-border",
-            )}
+            className="text-muted-foreground hover:text-foreground"
+            onClick={onCancel}
           >
-            {p.label}
+            Cancel
           </button>
-        ))}
+        )}
       </div>
-      <label className="mt-3 flex items-center gap-2 text-sm">
-        <span className="text-muted-foreground">Other</span>
-        <input
-          inputMode="decimal"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          className="h-10 w-24 rounded-lg border border-border bg-transparent px-2 text-base"
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-foreground transition-[width] duration-300"
+          style={{ width: `${Math.round(100 * overallProgress(progress))}%` }}
         />
-        <span className="text-muted-foreground">mm across</span>
-      </label>
-      <div className="mt-3 flex gap-2">
-        <Button className="h-10" disabled={!ok} onClick={() => onApply(n)}>
-          Use and read again
-        </Button>
-        <Button variant="ghost" className="h-10" onClick={onCancel}>
-          Cancel
-        </Button>
       </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Read on this device. Nothing is uploaded.
+      </p>
+    </div>
+  );
+}
+
+function ConfirmPanel({
+  marker,
+  proposal,
+  locating,
+  plateMm,
+  plateSet,
+  onPlate,
+  onGuide,
+  onAnalyze,
+}: {
+  marker: Marker | null;
+  proposal: ShownProposal | null;
+  locating: boolean;
+  plateMm: number;
+  plateSet: boolean;
+  onPlate: (mm: number | null) => void;
+  onGuide: () => void;
+  onAnalyze: () => void;
+}) {
+  const [plateOpen, setPlateOpen] = useState(false);
+  const [other, setOther] = useState("");
+  const issues: FootageIssue[] = proposal?.footage ?? [];
+  const sure = proposal?.confidence === "high" && !!marker;
+  const otherMm = Number(other);
+  const otherOk = Number.isFinite(otherMm) && otherMm >= 150 && otherMm <= 500;
+  return (
+    <div className="space-y-3" data-lift-analysis-confirm>
+      <div>
+        <p className="text-[16px] font-semibold">
+          {marker
+            ? sure
+              ? "Is the ring on the end of the bar?"
+              : "Check the ring"
+            : "Tap the end of the bar"}
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {locating
+            ? "Finding the plate there…"
+            : marker
+              ? "Drag it onto the plate if it's off, and its dot out to the plate's rim. Or tap the plate anywhere."
+              : "Pause where the plate is easy to see, then tap the plate on the end of the bar."}
+        </p>
+      </div>
+
+      {issues.length > 0 && (
+        <div className="rounded-xl bg-muted/50 p-3" data-footage-issues>
+          <p className="text-sm font-medium">This video will be less exact</p>
+          <ul className="mt-1.5 space-y-1.5">
+            {issues.map((k) => (
+              <li key={k} className="text-xs leading-snug text-muted-foreground">
+                <span className="font-medium text-foreground">{FOOTAGE_WORDS[k].title}.</span>{" "}
+                {FOOTAGE_WORDS[k].fix}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-border" data-plate-size>
+        <button
+          type="button"
+          className="flex h-12 w-full items-center gap-2 px-3 text-left text-sm"
+          onClick={() => setPlateOpen((o) => !o)}
+          aria-expanded={plateOpen}
+        >
+          <Ruler className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1">
+            Biggest plate: <span className="font-medium">{Math.round(plateMm)} mm</span>
+            {!plateSet && plateMm === STANDARD_PLATE_MM && (
+              <span className="text-muted-foreground"> · standard</span>
+            )}
+          </span>
+          <span className="text-muted-foreground">Change</span>
+        </button>
+        {plateOpen && (
+          <div className="space-y-1.5 border-t border-border p-3">
+            <p className="text-xs text-muted-foreground">
+              Its diameter is the ruler every speed is measured with. Pick it from the plate, never
+              its look.
+            </p>
+            {PLATE_SIZES.map((p) => (
+              <button
+                key={p.mm}
+                type="button"
+                onClick={() => {
+                  onPlate(p.mm);
+                  setPlateOpen(false);
+                }}
+                className={cn(
+                  "flex h-11 w-full items-center justify-between rounded-lg border px-3 text-left text-sm",
+                  plateMm === p.mm && plateSet ? "border-foreground" : "border-border",
+                )}
+              >
+                <span className="font-medium">{p.label}</span>
+                <span className="text-xs text-muted-foreground">{p.sub}</span>
+              </button>
+            ))}
+            <label className="flex items-center gap-2 pt-1 text-sm">
+              <span className="text-muted-foreground">Other</span>
+              <input
+                inputMode="decimal"
+                value={other}
+                onChange={(e) => setOther(e.target.value)}
+                placeholder="mm"
+                className="h-10 w-24 rounded-lg border border-border bg-transparent px-2 text-base"
+                aria-label="Plate diameter in millimetres"
+              />
+              <span className="text-muted-foreground">mm across</span>
+              <Button
+                variant="outline"
+                className="ml-auto h-10"
+                disabled={!otherOk}
+                onClick={() => {
+                  onPlate(otherMm);
+                  setPlateOpen(false);
+                }}
+              >
+                Use
+              </Button>
+            </label>
+          </div>
+        )}
+      </div>
+
+      <Button
+        className="h-12 w-full"
+        disabled={!marker || locating}
+        onClick={onAnalyze}
+        data-lift-analysis-analyze
+      >
+        Analyze
+      </Button>
+      <button
+        type="button"
+        className="h-10 w-full text-sm text-muted-foreground hover:text-foreground"
+        onClick={onGuide}
+      >
+        How to film it
+      </button>
+    </div>
+  );
+}
+
+function FixPanel({
+  count,
+  lost,
+  onUndo,
+  onCancel,
+  onAnalyze,
+}: {
+  count: number;
+  lost: number;
+  onUndo: () => void;
+  onCancel: () => void;
+  onAnalyze: () => void;
+}) {
+  return (
+    <div className="space-y-3" data-lift-analysis-fix>
+      <div>
+        <p className="text-[16px] font-semibold">Fix tracking</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {lost
+            ? "Amber on the timeline is where the plate was lost. Go there, and drag the ring onto the plate."
+            : "Move the video to where the ring is off the plate, and drag it back onto the plate."}{" "}
+          Everything else stays as it was.
+        </p>
+      </div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">
+          {count ? `${count} ${count === 1 ? "frame" : "frames"} fixed` : "No frames fixed yet"}
+        </span>
+        {count > 0 && (
+          <button
+            type="button"
+            className="h-10 px-2 text-muted-foreground hover:text-foreground"
+            onClick={onUndo}
+          >
+            Undo
+          </button>
+        )}
+      </div>
+      <Button
+        className="h-12 w-full"
+        disabled={!count}
+        onClick={onAnalyze}
+        data-lift-analysis-reanalyze
+      >
+        Analyze again
+      </Button>
+      <button
+        type="button"
+        className="h-10 w-full text-sm text-muted-foreground hover:text-foreground"
+        onClick={onCancel}
+      >
+        Cancel
+      </button>
     </div>
   );
 }
@@ -523,7 +871,11 @@ function Results({
   exerciseId,
   loggedSet,
   fresh,
+  onFix,
+  onGuide,
+  exerciseName,
 }: {
+  exerciseName: string;
   analysis: LiftAnalysis;
   selected: number | null;
   onSelect: (i: number | null) => void;
@@ -533,6 +885,8 @@ function Results({
   loggedSet: LoggedSet | null;
   /** Read just now, on this device (the set is read again once the save lands). */
   fresh: boolean;
+  onFix: () => void;
+  onGuide: () => void;
 }) {
   const calibrated = a.units === "mm";
   const headline = a.set.reps > 1 ? a.set.bestMcv : a.set.firstMcv;
@@ -551,11 +905,18 @@ function Results({
   const logged = a.velocity ? loggedState(a, loggedSet, setVideoId) : null;
   const notLogged = logged && !logged.logged ? logged.text : null;
 
+  const lost = a.track?.lost?.length ?? 0;
   if (!a.reps.length) {
     return (
       <div className="rounded-2xl border border-border p-4">
         <p className="text-sm font-semibold">No reps found</p>
-        <p className="mt-1 text-sm text-muted-foreground">{noteWords("no_reps").tip}</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          The bar didn't move up and down enough to count a rep, or the plate was lost. Fix tracking
+          puts the ring back on the plate where it went wrong.
+        </p>
+        <Button variant="outline" className="mt-3 h-10" onClick={onFix}>
+          Fix tracking
+        </Button>
       </div>
     );
   }
@@ -637,14 +998,8 @@ function Results({
             onSelect={(i) => onSelect(selected === i ? null : i)}
           />
         )}
-        {rep && <RepDetail analysis={a} index={repIdx} />}
+        {rep && <RepDetail analysis={a} index={repIdx} lift={guideLift(exerciseName)} />}
       </section>
-
-      <Consistency analysis={a} />
-
-      {clientId && exerciseId && calibrated && (
-        <Compare setVideoId={setVideoId} clientId={clientId} exerciseId={exerciseId} />
-      )}
 
       {notes.length > 0 && (
         <section className="space-y-2" data-quality-notes>
@@ -654,13 +1009,78 @@ function Results({
               <div className="mt-0.5 text-xs leading-snug text-muted-foreground">
                 {noteWords(n).tip}
               </div>
+              {(n === "tracking_gaps" || n === "plate_hidden") && (
+                <button
+                  type="button"
+                  className="mt-1.5 h-9 text-sm font-medium underline-offset-2 hover:underline"
+                  onClick={onFix}
+                >
+                  Fix tracking
+                </button>
+              )}
             </div>
           ))}
+          {notes.some((n) => FILMING_NOTES.has(n)) && (
+            <button
+              type="button"
+              className="h-10 text-sm text-muted-foreground hover:text-foreground"
+              onClick={onGuide}
+            >
+              How to film it next time
+            </button>
+          )}
         </section>
       )}
 
-      <HowMeasured analysis={a} />
+      {lost > 0 && !notes.includes("tracking_gaps") && (
+        <button
+          type="button"
+          className="flex h-11 w-full items-center gap-2 rounded-xl border border-border px-3 text-left text-sm"
+          onClick={onFix}
+        >
+          <Crosshair className="h-4 w-4 text-muted-foreground" />
+          <span className="flex-1">
+            The plate was lost {lost === 1 ? "once" : `${lost} times`}. Fix tracking
+          </span>
+        </button>
+      )}
+
+      <MoreDetail>
+        <Consistency analysis={a} />
+        {clientId && exerciseId && calibrated && (
+          <Compare setVideoId={setVideoId} clientId={clientId} exerciseId={exerciseId} />
+        )}
+        <HowMeasured analysis={a} />
+      </MoreDetail>
     </div>
+  );
+}
+
+/** Notes a better video would fix. */
+const FILMING_NOTES = new Set([
+  "camera_moved",
+  "camera_tilted",
+  "camera_turned",
+  "plate_small",
+  "low_fps",
+  "plate_edge_faint",
+  "not_calibrated",
+]);
+
+/** Rep to rep, compared with other sets and how it's measured: folded until asked for. */
+function MoreDetail({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger
+        className="flex h-11 w-full items-center justify-between border-t border-border text-sm font-medium"
+        data-more-detail
+      >
+        More detail
+        <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-4 pb-2">{children}</CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -700,11 +1120,48 @@ function SetAverage({
   );
 }
 
-function RepDetail({ analysis: a, index }: { analysis: LiftAnalysis; index: number }) {
+/** Each phase of a rep in the lift's own words. */
+const PHASE_WORDS: Record<
+  ReturnType<typeof guideLift>,
+  { down: string; pause: string; up: string; lowering: string }
+> = {
+  bench: {
+    down: "Down to the chest",
+    pause: "Pause on the chest",
+    up: "Press up",
+    lowering: "Lowering",
+  },
+  squat: { down: "Down", pause: "Pause at the bottom", up: "Up", lowering: "Lowering" },
+  deadlift: {
+    down: "Down",
+    pause: "Pause at the bottom",
+    up: "Pull up",
+    lowering: "Lowering to the floor",
+  },
+  other: {
+    down: "Down (eccentric)",
+    pause: "Pause at the bottom",
+    up: "Up (concentric)",
+    lowering: "Lowering",
+  },
+};
+
+function RepDetail({
+  analysis: a,
+  index,
+  lift,
+}: {
+  analysis: LiftAnalysis;
+  index: number;
+  lift: ReturnType<typeof guideLift>;
+}) {
   const r = a.reps[index];
   const calibrated = a.units === "mm";
   const lowerFirst = r.dir === "lower_first";
+  const words = PHASE_WORDS[lift];
   const stick = r.sticking;
+  // a sticking point is said only when a dip could have been seen: the peak read, at 50 fps or more
+  const stickReadable = !!stick || (r.peak.tier !== "unavailable" && a.fps >= 50);
   return (
     <div className="mt-2 border-t border-border/60 pt-3" data-rep-detail={index + 1}>
       <div className="mb-2 text-sm font-semibold">
@@ -739,19 +1196,16 @@ function RepDetail({ analysis: a, index }: { analysis: LiftAnalysis; index: numb
           }
           testId="peak"
         />
-        <Stat label="Up (concentric)" value={seconds(r.conDur)} testId="con" />
-        <Stat
-          label={lowerFirst ? "Down (eccentric)" : "Lowering"}
-          value={seconds(r.eccDur)}
-          testId="ecc"
-        />
+        {lowerFirst && <Stat label={words.down} value={seconds(r.eccDur)} testId="ecc" />}
         {lowerFirst && r.pause.v != null && r.pause.tier !== "unavailable" && (
           <Stat
-            label="Pause at the bottom"
+            label={words.pause}
             value={r.pause.v < 0.08 ? "None" : seconds(r.pause)}
             testId="pause"
           />
         )}
+        <Stat label={words.up} value={seconds(r.conDur)} testId="con" />
+        {!lowerFirst && <Stat label={words.lowering} value={seconds(r.eccDur)} testId="ecc" />}
         <Stat label="Range of motion" value={cm(r.rom)} testId="rep-rom" />
         <Stat
           label="Bar drift (up)"
@@ -759,18 +1213,18 @@ function RepDetail({ analysis: a, index }: { analysis: LiftAnalysis; index: numb
           sub={r.xDev.tier !== "unavailable" ? "most the bar moved sideways" : undefined}
           testId="drift"
         />
-        <Stat
-          label="Sticking point"
-          value={stick ? `${Math.round(stick.at * 100)}% up` : "None"}
-          sub={
-            stick
-              ? `${stick.height.tier !== "unavailable" ? `${cm(stick.height)} off the bottom · ` : ""}${Math.round(stick.dip * 100)}% slower`
-              : r.peak.tier === "unavailable" && r.peak.why === "plate_hidden"
-                ? "plate hidden"
+        {stickReadable && (
+          <Stat
+            label="Sticking point"
+            value={stick ? `${Math.round(stick.at * 100)}% up` : "None"}
+            sub={
+              stick
+                ? `${stick.height.tier !== "unavailable" ? `${cm(stick.height)} off the bottom · ` : ""}${Math.round(stick.dip * 100)}% slower`
                 : "speed built without a dip"
-          }
-          testId="sticking"
-        />
+            }
+            testId="sticking"
+          />
+        )}
       </div>
     </div>
   );

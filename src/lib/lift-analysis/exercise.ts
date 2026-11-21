@@ -39,3 +39,14 @@ export function repDirection(name: string | null | undefined): "lower_first" | "
   if (LOWER_FIRST.test(s)) return "lower_first";
   return null;
 }
+
+/** Which of the three lifts the filming guide and the phase words speak to (pure). */
+export type GuideLift = "squat" | "bench" | "deadlift" | "other";
+
+export function guideLift(name: string | null | undefined): GuideLift {
+  const s = name ?? "";
+  if (/\b(bench|floor press|larsen|spoto|pin press)\b/i.test(s)) return "bench";
+  if (/\b(dead\s?lifts?|dl|rack pulls?|block pulls?|rdls?|romanian)\b/i.test(s)) return "deadlift";
+  if (/\bsquats?\b/i.test(s)) return "squat";
+  return "other";
+}

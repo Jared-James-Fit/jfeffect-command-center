@@ -459,6 +459,114 @@ export const ENCLOSED_PLATE = {
   minRoundnessGain: 0.25,
 } as const;
 
+/**
+ * A "track" that only ever sits in one or two fixed places: two identical
+ * plates stacked on a tree (or on a bar in the rack behind) linked into one
+ * circle that seems to move up and down by a plate's height. A bar passes
+ * through the heights in between; this never does. The spots, when it is one
+ * (each a still circle of its own), else null.
+ */
+export const FIXED_SPOT_SHARE = 0.9;
+export function fixedSpots(t: CircleTrack): CircleTrack[] | null {
+  const tol = 0.2 * t.r;
+  const spots: { x: number; y: number; hits: Sighting[] }[] = [];
+  for (const h of t.hits) {
+    const s = spots.find((p) => Math.hypot(p.x - h.x, p.y - h.y) <= tol);
+    if (s) s.hits.push(h);
+    else spots.push({ x: h.x, y: h.y, hits: [h] });
+  }
+  spots.sort((a, b) => b.hits.length - a.hits.length);
+  const top = spots.slice(0, 2);
+  const inTop = top.reduce((n, p) => n + p.hits.length, 0);
+  // a real plate rests at the top and pauses at the bottom, but always passes through in between
+  if (
+    t.hits.length < 6 ||
+    inTop < FIXED_SPOT_SHARE * t.hits.length ||
+    top.some((p) => p.hits.length < 2)
+  )
+    return null;
+  return top.map((p) => ({
+    ...t,
+    hits: p.hits,
+    travelY: 0,
+    travelX: 0,
+    seen: (t.seen * p.hits.length) / t.hits.length,
+  }));
+}
+
+/**
+ * Whether a track passes through the heights between its lowest and highest
+ * (at least 4 of 6 even bands of its range hold a sighting), the way a bar
+ * does on every rep.
+ */
+export function passesThrough(t: CircleTrack): boolean {
+  const ys = t.hits.map((h) => h.y);
+  const lo = Math.min(...ys);
+  const hi = Math.max(...ys);
+  if (!(hi - lo > 0)) return false;
+  const bins = new Set(ys.map((y) => Math.min(5, Math.floor(((y - lo) / (hi - lo)) * 6))));
+  return bins.size >= 4;
+}
+
+/**
+ * How much the picture changes where a track's circle is (pure): for each
+ * sighting, the disc there against the same spot in the other sampled frames
+ * (each frame's overall brightness taken out: a phone re-metering changes
+ * every pixel), the 90th percentile of those differences, the median over the
+ * sightings. Where a bar plate is, the spot is empty for part of the clip; a
+ * plate on a tree is there in every frame.
+ */
+export function motionEnergy(t: CircleTrack, samples: Frame[]): number {
+  const means = samples.map((f) => {
+    let s = 0;
+    let n = 0;
+    for (let i = 0; i < f.px.length; i += 97) {
+      s += f.px[i];
+      n++;
+    }
+    return s / Math.max(1, n);
+  });
+  const vals: number[] = [];
+  const step = Math.max(1, Math.floor(t.hits.length / 10));
+  for (let i = 0; i < t.hits.length; i += step) {
+    const h = t.hits[i];
+    const fi = h.fi;
+    const f = samples[fi];
+    if (!f) continue;
+    const r = 0.8 * h.r;
+    const diffs: number[] = [];
+    for (let j = 0; j < samples.length; j++) {
+      if (j === fi) continue;
+      const g = samples[j];
+      const shift = means[j] - means[fi];
+      let sum = 0;
+      let n = 0;
+      for (let dy = -r; dy <= r; dy += 2)
+        for (let dx = -r; dx <= r; dx += 2) {
+          if (dx * dx + dy * dy > r * r) continue;
+          const x = Math.round(h.x + dx);
+          const y = Math.round(h.y + dy);
+          if (x < 0 || y < 0 || x >= f.w || y >= f.h) continue;
+          const k = y * f.w + x;
+          sum += Math.abs(g.px[k] - shift - f.px[k]);
+          n++;
+        }
+      if (n) diffs.push(sum / n);
+    }
+    if (diffs.length) vals.push(percentile(diffs, 0.9));
+  }
+  return vals.length ? median(vals) : 0;
+}
+
+/**
+ * A moving track whose picture changes less than this share of the most-changing one's, or less
+ * than STILL_OVER_FLOOR times a circle that never moved, never moved either. Measured on the 21
+ * validation clips: a bar plate changes 2.4x (a handheld phone) to 30x the still floor and at least
+ * 0.29 of the top (the lifter's head on a deadlift changes most of all); a tree pair at most 1.3x.
+ */
+export const STILL_PICTURE = 0.15;
+export const STILL_OVER_FLOOR = 1.6;
+
 /** The plate's track: the biggest circle seen often that moves up and down. */
 export function pickPlate(tracks: CircleTrack[], nFrames: number, samples?: Frame[]): PlateFind {
   if (!tracks.length) return { track: null, confident: false, why: "no_circles", others: [] };
@@ -466,7 +574,38 @@ export function pickPlate(tracks: CircleTrack[], nFrames: number, samples?: Fram
   const still = stillCircles(tracks, nFrames);
   const moving = tracks
     .filter((t) => t.seen >= minSeen && t.travelY >= MIN_TRAVEL)
+    .filter((t) => {
+      const spots = fixedSpots(t);
+      if (spots) still.push(...spots);
+      return !spots;
+    })
     .sort((a, b) => score(b) - score(a));
+  // a circle that jumps between a few heights (a pair of plates on a tree, read as one now here and now
+  // there) never passes through the heights in between the way a bar does: when one that does is there
+  // too, it goes first, and the jumping one is never its rival
+  if (moving.some(passesThrough)) {
+    const jumpers = moving.filter((t) => !passesThrough(t));
+    for (const j of jumpers) {
+      moving.splice(moving.indexOf(j), 1);
+      still.push(j);
+    }
+  }
+  // and where nothing in the picture ever changes, nothing moved: a tree's plates read as a circle that
+  // wobbles between them can pass through a few heights, but the picture there stays the same all clip
+  if (samples?.length && moving.length > 1) {
+    const energy = new Map(moving.map((t) => [t, motionEnergy(t, samples)]));
+    const top = Math.max(...energy.values());
+    // the noise floor: the stillest circle that never moved (compression, sensor noise, a shaky hand)
+    const fixed = tracks.filter((t) => t.seen >= minSeen && t.travelY < MIN_TRAVEL);
+    const floor = fixed.length ? Math.min(...fixed.map((t) => motionEnergy(t, samples))) : 0;
+    const bar = Math.max(STILL_PICTURE * top, STILL_OVER_FLOOR * floor);
+    for (const t of [...moving]) {
+      if (energy.get(t)! < bar) {
+        moving.splice(moving.indexOf(t), 1);
+        still.push(t);
+      }
+    }
+  }
   if (!moving.length) {
     const seen = tracks.filter((t) => t.seen >= minSeen);
     return {

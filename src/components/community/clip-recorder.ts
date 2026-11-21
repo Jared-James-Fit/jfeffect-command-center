@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { baseMediaType } from "@/lib/community";
 import { RECORD_MAX_SECONDS } from "@/lib/video-edit/limits";
 import { micRefused, openVideoMic } from "@/lib/video-mic";
-import { pickType, recorderBitrate, recorderTypes } from "@/lib/camera/film-settings";
+import { pickType, recorderBitrate, recorderKeyframes, recorderTypes } from "@/lib/camera/film-settings";
 
 /** The longest clip the camera records (a story's length; longer clips come from the library and get trimmed). */
 export const MAX_RECORD_MS = RECORD_MAX_SECONDS * 1000;
@@ -42,12 +42,22 @@ type Rec = { recorder: MediaRecorder; audio: MediaStream | null; restore: (() =>
 
 /**
  * Hold the shutter to film (Instagram's camera): the live camera's picture and,
- * when the phone allows it, the mic. Recording starts once the hold is clear
+ * when sound is on and the phone allows it, the mic (`withSound`: off keeps the
+ * music in their earbuds playing, film-settings.ts). Recording starts once the hold is clear
  * of a tap and stops when the finger lifts, or at the clip limit. The mic is
  * only asked for the first time someone films: if that question takes the
  * finger off the button, it keeps recording until the shutter's tapped again.
  */
-export function useClipRecorder({ getStream, onClip }: { getStream: () => MediaStream | null; onClip: (file: File) => void }) {
+export function useClipRecorder({
+  getStream,
+  onClip,
+  withSound = () => true,
+}: {
+  getStream: () => MediaStream | null;
+  onClip: (file: File) => void;
+  /** Read when a clip starts: record the mic (pauses their music) or film without it. */
+  withSound?: () => boolean;
+}) {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [locked, setLocked] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -58,6 +68,8 @@ export function useClipRecorder({ getStream, onClip }: { getStream: () => MediaS
   const limit = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onClipRef = useRef(onClip);
   onClipRef.current = onClip;
+  const withSoundRef = useRef(withSound);
+  withSoundRef.current = withSound;
 
   const stop = useCallback((keep = true) => {
     const r = rec.current;
@@ -97,7 +109,7 @@ export function useClipRecorder({ getStream, onClip }: { getStream: () => MediaS
     let restore: (() => void) | null = null;
     // asked inside the hold, so a mic already allowed is used without asking again; a
     // "Don't Allow" this visit films silently instead of asking on every clip
-    if (!micRefused()) {
+    if (withSoundRef.current() && !micRefused()) {
       try {
         const got = await openVideoMic();
         audio = got.stream;
@@ -115,7 +127,7 @@ export function useClipRecorder({ getStream, onClip }: { getStream: () => MediaS
     const mixed = new MediaStream([...stream.getVideoTracks(), ...(audio?.getAudioTracks() ?? [])]);
     let recorder: MediaRecorder;
     try {
-      recorder = new MediaRecorder(mixed, { mimeType: type, videoBitsPerSecond: recorderBitrate(w, h, fps), audioBitsPerSecond: 128_000 });
+      recorder = new MediaRecorder(mixed, { mimeType: type, videoBitsPerSecond: recorderBitrate(w, h, fps), audioBitsPerSecond: 128_000, ...recorderKeyframes() });
     } catch {
       try {
         recorder = new MediaRecorder(mixed);

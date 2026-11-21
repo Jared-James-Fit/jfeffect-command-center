@@ -30,7 +30,13 @@ export type Facing = "environment" | "user";
 export type FilmSettings = {
   quality: FilmQuality;
   fps: FilmFps;
-  /** Record the mic (off keeps their music playing: iOS stops it to record sound). */
+  /**
+   * Record the mic. Off keeps their music playing: while a page's mic is open
+   * iOS (WebKit puts the audio session in PlayAndRecord, which can't mix) and
+   * Chrome on Android (it takes audio focus) pause Spotify / Apple Music in
+   * their earbuds, and nothing a page can do changes that. So a phone films
+   * without it unless they turn sound on (`defaultFilmSound`).
+   */
   sound: boolean;
   /** Rule-of-thirds lines over the picture. */
   grid: boolean;
@@ -38,6 +44,24 @@ export type FilmSettings = {
 };
 
 export const DEFAULT_FILM_SETTINGS: FilmSettings = { quality: "1080p", fps: 30, sound: true, grid: false, facing: "environment" };
+
+/**
+ * Sound on or off before anyone picks (Nov 21 2026): off on a phone or tablet,
+ * where people lift with music in their earbuds and recording sound would
+ * pause it; on at a computer, where nothing's playing in earbuds to lose.
+ */
+export function defaultFilmSound(touch: boolean): boolean {
+  return !touch;
+}
+
+/** A phone or tablet (a finger is the only pointer). */
+export function touchFirst(): boolean {
+  try {
+    return typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches && !window.matchMedia("(pointer: fine)").matches;
+  } catch {
+    return false;
+  }
+}
 
 export const FILM_QUALITIES: Record<FilmQuality, { long: number; short: number; label: string }> = {
   "720p": { long: 1280, short: 720, label: "720p" },
@@ -57,29 +81,43 @@ export const FILM_SETTINGS_KEY = "jf-film-camera-v1";
 const QUALITY_KEYS = Object.keys(FILM_QUALITIES) as FilmQuality[];
 
 /** Anything stored that isn't a setting falls back to the default, field by field. */
-export function sanitizeFilmSettings(raw: unknown): FilmSettings {
+export function sanitizeFilmSettings(raw: unknown, soundDefault: boolean = DEFAULT_FILM_SETTINGS.sound): FilmSettings {
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   return {
     quality: QUALITY_KEYS.includes(r.quality as FilmQuality) ? (r.quality as FilmQuality) : DEFAULT_FILM_SETTINGS.quality,
     fps: r.fps === 60 ? 60 : 30,
-    sound: typeof r.sound === "boolean" ? r.sound : DEFAULT_FILM_SETTINGS.sound,
+    sound: typeof r.sound === "boolean" ? r.sound : soundDefault,
     grid: typeof r.grid === "boolean" ? r.grid : DEFAULT_FILM_SETTINGS.grid,
     facing: r.facing === "user" ? "user" : "environment",
   };
 }
 
-export function readFilmSettings(storage: Pick<Storage, "getItem"> | null = safeStorage()): FilmSettings {
+export function readFilmSettings(storage: Pick<Storage, "getItem"> | null = safeStorage(), touch: boolean = touchFirst()): FilmSettings {
+  const soundDefault = defaultFilmSound(touch);
   try {
     const raw = storage?.getItem(FILM_SETTINGS_KEY);
-    return sanitizeFilmSettings(raw ? JSON.parse(raw) : null);
+    return sanitizeFilmSettings(storedSoundChoice(raw ? JSON.parse(raw) : null), soundDefault);
   } catch {
-    return { ...DEFAULT_FILM_SETTINGS };
+    return { ...DEFAULT_FILM_SETTINGS, sound: soundDefault };
   }
+}
+
+/**
+ * What was picked for sound. Saves from Nov 21 2026 say it (`audio`); before
+ * that `sound` was saved with every other setting and was nearly always the
+ * old default (on), never a choice, so only an "off" counts as one.
+ */
+function storedSoundChoice(parsed: unknown): unknown {
+  if (!parsed || typeof parsed !== "object") return parsed;
+  const { sound, audio, ...rest } = parsed as Record<string, unknown>;
+  if (audio === "sound" || audio === "music") return { ...rest, sound: audio === "sound" };
+  return sound === false ? { ...rest, sound: false } : rest;
 }
 
 export function saveFilmSettings(s: FilmSettings, storage: Pick<Storage, "setItem"> | null = safeStorage()): void {
   try {
-    storage?.setItem(FILM_SETTINGS_KEY, JSON.stringify(sanitizeFilmSettings(s)));
+    const clean = sanitizeFilmSettings(s);
+    storage?.setItem(FILM_SETTINGS_KEY, JSON.stringify({ ...clean, audio: clean.sound ? "sound" : "music" }));
   } catch {
     /* private mode / blocked storage: the settings last for this visit */
   }
@@ -190,6 +228,17 @@ export function recorderBitrate(width: number, height: number, fps: number): num
   // bits per pixel: less for a big picture (it compresses better)
   const bpp = px >= 1920 * 1080 * 0.9 ? 0.1 : 0.17;
   return Math.round(Math.min(40_000_000, Math.max(4_000_000, px * rate * bpp)));
+}
+
+/**
+ * A keyframe a second, like a phone's own camera, where the browser's
+ * recorder takes the setting (Chrome does; one that doesn't ignores it and
+ * keeps its own, every few seconds): a clip can then be read a frame a second
+ * without decoding all of it (the lift finder), and cut at any second.
+ */
+export const RECORDER_KEYFRAME_MS = 1000;
+export function recorderKeyframes(): MediaRecorderOptions {
+  return { videoKeyFrameIntervalDuration: RECORDER_KEYFRAME_MS } as MediaRecorderOptions;
 }
 
 /** The longest this recording can run: the place's limit, or what fits in memory at this bitrate. */

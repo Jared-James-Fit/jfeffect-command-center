@@ -148,8 +148,11 @@ export function bandwidthFor(fps: number): number {
  * half frames either side.
  */
 export function boundaryBandwidthFor(fps: number): number {
-  return Math.max(0.04, 2.6 / Math.max(1, fps));
+  // the same slice of time at any frame rate (30 fps's two and a half frames): narrower at 60 fps its
+  // noise overshot the peak and cut the slow last part of the lockout, so the same rep read ~5 % faster
+  return Math.max(BOUNDARY_SLICE_S, 2.6 / Math.max(1, fps));
 }
+export const BOUNDARY_SLICE_S = 2.6 / 30;
 
 /**
  * Bridge stretches the smoothing couldn't fill (the plate hidden for a
@@ -534,6 +537,12 @@ export type RepInput = {
   sx: Smoothed;
   /** Raw position noise (1 σ, in the series' units). */
   sigma: number;
+  /**
+   * The position noise the start / stop thresholds are set from (default
+   * sigma): the measured scatter, without the floor the margins carry, so a
+   * floor that widens a margin never moves where a rep starts or ends.
+   */
+  sigmaMove?: number;
   fps: number;
   scale: Scale;
   /** Units of the series: "mm" when calibrated, "px" otherwise. */
@@ -586,12 +595,13 @@ export function analyzeReps(input: RepInput): RepMetrics[] {
   if (!allLegs.length) return [];
   // the velocity noise: from the smoothing's own variance where the bar is tracked
   const vvs = s.vv.filter((v, i) => s.ok[i] && Number.isFinite(v)).sort((a, b) => a - b);
-  const sigmaV = sigma * Math.sqrt(vvs[vvs.length >> 1] ?? 0);
+  const sigmaMove = input.sigmaMove ?? sigma;
+  const sigmaV = sigmaMove * Math.sqrt(vvs[vvs.length >> 1] ?? 0);
   const peakAll = Math.max(...s.v.filter((v, i) => s.ok[i] && Number.isFinite(v)).map(Math.abs));
   const vth =
     units === "mm" ? Math.max(MOVE_MM_S, 3 * sigmaV) : Math.max(3 * sigmaV, 0.04 * peakAll);
   const vvb = sb.vv.filter((v, i) => sb.ok[i] && Number.isFinite(v)).sort((a, b) => a - b);
-  const sigmaVb = sigma * Math.sqrt(vvb[vvb.length >> 1] ?? 0);
+  const sigmaVb = sigmaMove * Math.sqrt(vvb[vvb.length >> 1] ?? 0);
   const vthB =
     units === "mm" ? Math.max(MOVE_MM_S, 3 * sigmaVb) : Math.max(3 * sigmaVb, 0.04 * peakAll);
   const dir: "lower_first" | "lift_first" = input.dirHint ?? restingDirection(s, allLegs);
