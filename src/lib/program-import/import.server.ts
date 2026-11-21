@@ -13,7 +13,8 @@
  * when it finishes and given back if it fails.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { IMPORT_SYSTEM, importPrompt, readAiImport, UnreadableAnswer } from "./ai";
+import { readAiImport, UnreadableAnswer } from "./ai";
+import { IMPORT_SYSTEM, importPrompt } from "./ai-prompt.server";
 import { IMPORT_FILE_DAYS, IMPORT_ROW_DAYS } from "./rights";
 import type { ImportedProgram } from "./types";
 
