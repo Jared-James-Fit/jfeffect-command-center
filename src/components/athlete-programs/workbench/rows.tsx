@@ -72,13 +72,25 @@ export function ExerciseRow({
   desktop: boolean;
 }) {
   const backoff = e.pct != null && e.pct_of === "top_set";
+  // an imported exercise still waiting for its library pick says so; one matched under
+  // another name says what the file called it (both only while it's being reviewed)
+  const unmatched = !e.exercise_id;
+  const fromFile = !unmatched && e.source_name ? `From your file: ${e.source_name}` : null;
   const name = (
     <>
-      <span className="block truncate text-[15px] font-medium leading-snug">{e.name ?? "Exercise"}</span>
-      {(backoff || e.notes || e.tempo) && (
-        <span className="block truncate text-[12px] text-muted-foreground">
-          {[backoff ? "Back-off sets" : null, e.tempo ? `Tempo ${e.tempo}` : null, e.notes].filter(Boolean).join(" · ")}
+      <span className={cn("block truncate text-[15px] font-medium leading-snug", unmatched && "text-warning")}>
+        {unmatched ? e.source_name ?? e.name ?? "Exercise" : e.name ?? "Exercise"}
+      </span>
+      {unmatched ? (
+        <span className="block truncate text-[12px] font-medium text-warning" data-pb-unmatched>
+          Not matched yet · tap to pick the exercise
         </span>
+      ) : (
+        (fromFile || backoff || e.notes || e.tempo) && (
+          <span className="block truncate text-[12px] text-muted-foreground">
+            {[fromFile, backoff ? "Back-off sets" : null, e.tempo ? `Tempo ${e.tempo}` : null, e.notes].filter(Boolean).join(" · ")}
+          </span>
+        )
       )}
     </>
   );

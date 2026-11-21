@@ -34,6 +34,8 @@ export type PlanExercise = {
   notes?: string | null;
   /** read back from the library (never saved) */
   name?: string | null;
+  /** An imported exercise's name as its file wrote it, while the person reviews the import (never saved). */
+  source_name?: string | null;
   muscle_group?: string | null;
   equipment?: string | null;
 };
@@ -114,9 +116,9 @@ const cloneDay = (d: PlanDay): PlanDay => ({ ...d, exercises: d.exercises.map(cl
 /** A copy of a week with the same day and exercise keys (it stays linked to the original). */
 const cloneWeek = (w: PlanWeek): PlanWeek => ({ key: makeKey(), days: w.days.map(cloneDay) });
 
-/** A new program: one block of `weeks` weeks (12 by default), each with one empty day. */
-export function newPlan(weeks = DEFAULT_WEEKS): ProgramPlan {
-  const first: PlanWeek = { key: makeKey(), days: [newPlanDay(0)] };
+/** A new program: one block of `weeks` weeks (12 by default), each with `days` empty days (1 by default). */
+export function newPlan(weeks = DEFAULT_WEEKS, days = 1): ProgramPlan {
+  const first: PlanWeek = { key: makeKey(), days: range(clampInt(days, 1, MAX_DAYS)).map((i) => newPlanDay(i)) };
   const n = clampInt(weeks, 1, MAX_WEEKS);
   return {
     v: 1,
@@ -222,6 +224,7 @@ export function normalizePlan(
             tempo: e.tempo ? str(e.tempo) : null,
             notes: e.notes ? str(e.notes) : null,
             name: e.name ?? lib?.name ?? null,
+            source_name: e.source_name ?? null,
             muscle_group: e.muscle_group ?? lib?.muscle_group ?? null,
             equipment: e.equipment ?? lib?.equipment ?? null,
           });
@@ -747,9 +750,12 @@ export function planIssue(title: string, plan: ProgramPlan): PlanIssue | null {
       if (!day.exercises.length) return at(`Add an exercise to ${name}.`);
       if (day.exercises.length > MAX_EXERCISES) return at(`${name} has more than ${MAX_EXERCISES} exercises.`);
       for (const e of day.exercises) {
+        if (!e.exercise_id) return at(`Pick the library exercise for "${e.source_name ?? e.name ?? "an exercise"}" (${name}).`);
         const sets = Number(e.sets);
+        const what = e.name ?? "An exercise";
+        if (!sets) return at(`Add the sets for ${what} (${name}).`);
         if (!Number.isInteger(sets) || sets < 1 || sets > MAX_SETS) return at(`Sets must be 1 to ${MAX_SETS} (${name}).`);
-        if (!String(e.reps ?? "").trim()) return at(`Every exercise needs reps (${name}).`);
+        if (!String(e.reps ?? "").trim()) return at(`Add the reps for ${what} (${name}).`);
         if (e.rpe && !RPE_RE.test(String(e.rpe).trim())) return at(`RPE is 1 to 10, like 8 or 7-8 (${name}).`);
         if (e.rir && !RIR_RE.test(String(e.rir).trim())) return at(`RIR is 0 to 10, like 2 or 1-2 (${name}).`);
         if (e.load != null && !(e.load > 0 && e.load <= 1500)) return at(`Check the weight (${name}).`);

@@ -1704,3 +1704,10 @@ html[data-holding] *:not(input):not(textarea):not([contenteditable="true"]) {
    (CVD ΔE ≥ 9.2) on the light card and stepped for the dark one. */
 :root { --money-in: #2a78d6; --money-out: #eb6834; --money-profit: #1baf7a; }
 .dark { --money-in: #3987e5; --money-out: #d95926; --money-profit: #199e70; }
+
+/* The builder: an exercise a review flag pointed at, lit for a moment (program-workbench goTo). */
+[data-pb-row][data-pb-flash] {
+  background-color: color-mix(in oklch, var(--warning) 16%, transparent);
+  border-radius: 0.75rem;
+  transition: background-color 0.4s ease;
+}

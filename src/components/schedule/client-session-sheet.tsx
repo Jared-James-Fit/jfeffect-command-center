@@ -243,7 +243,7 @@ export function ClientSessionSheet({
             )}
 
             <SheetHeader className="space-y-1 text-left">
-              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-violet-400">
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                 <CalendarDays className="h-3.5 w-3.5" /> {mode === "move" ? "Change time" : mode === "cancel" ? "Can't make it?" : "Session with your coach"}
               </div>
               <SheetTitle className="text-left text-xl font-bold leading-tight">{title}</SheetTitle>
@@ -388,7 +388,7 @@ export function ClientSessionSheet({
 function InfoRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3">
-      <span className="mt-0.5 shrink-0 text-violet-400">{icon}</span>
+      <span className="mt-0.5 shrink-0 text-muted-foreground">{icon}</span>
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
