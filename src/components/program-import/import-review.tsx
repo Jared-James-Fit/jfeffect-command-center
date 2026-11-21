@@ -589,13 +589,28 @@ function SourceSheet({ open, onOpenChange, row }: { open: boolean; onOpenChange:
   });
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" swipeToClose className="max-h-[85svh] overflow-y-auto rounded-t-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-        <SheetHeader className="mb-3 text-left">
-          <SheetTitle>{importLabel(row)}</SheetTitle>
-          <SheetDescription>
-            {row.source_text ? "What was read from it, to check the program against." : "The file you uploaded."}
-          </SheetDescription>
-        </SheetHeader>
+      <SheetContent
+        side="bottom"
+        hideCloseButton
+        swipeToClose
+        className="max-h-[85dvh] gap-0 overflow-y-auto rounded-t-[24px] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-2 sm:mx-auto sm:max-w-2xl"
+      >
+        <div aria-hidden className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/30" />
+        <div className="flex items-start gap-3 pb-3">
+          <SheetHeader className="min-w-0 flex-1 space-y-0.5 p-0 text-left">
+            <SheetTitle className="break-words text-[18px] font-semibold leading-tight">{importLabel(row)}</SheetTitle>
+            <SheetDescription className="text-[13px]">
+              {row.source_text ? "What was read from it, to check the program against." : "The file you uploaded."}
+            </SheetDescription>
+          </SheetHeader>
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="-mr-1 inline-flex h-10 shrink-0 items-center rounded-full px-3 text-[15px] font-semibold transition hover:bg-secondary"
+          >
+            Done
+          </button>
+        </div>
         {row.source_text ? (
           <pre className="whitespace-pre-wrap break-words rounded-xl bg-muted/50 p-3 font-mono text-[13px] leading-relaxed">
             {row.source_text}

@@ -461,7 +461,7 @@ describe("the draft the builder opens on", () => {
     const lp = d.plan.blocks[0].weeks[0].days[0].exercises.find((e) => e.exercise_id === "lp")!;
     expect(lp.sets).toBe(0);
     expect(lp.reps).toBe("");
-    expect(planIssue("x y", d.plan)?.message).toMatch(/Sets|reps/);
+    expect(planIssue("x y", d.plan)?.message).toBe("Add the sets for Leg Press (Day 1).");
   });
   it("runs a one-week program for more weeks, linked", () => {
     const one = parseSource({ kind: "text", name: "", text: "Day 1\nBack Squat 3x5\nDay 2\nBench Press 3x5" });

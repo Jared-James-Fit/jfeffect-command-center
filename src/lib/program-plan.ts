@@ -752,8 +752,10 @@ export function planIssue(title: string, plan: ProgramPlan): PlanIssue | null {
       for (const e of day.exercises) {
         if (!e.exercise_id) return at(`Pick the library exercise for "${e.source_name ?? e.name ?? "an exercise"}" (${name}).`);
         const sets = Number(e.sets);
+        const what = e.name ?? "An exercise";
+        if (!sets) return at(`Add the sets for ${what} (${name}).`);
         if (!Number.isInteger(sets) || sets < 1 || sets > MAX_SETS) return at(`Sets must be 1 to ${MAX_SETS} (${name}).`);
-        if (!String(e.reps ?? "").trim()) return at(`Every exercise needs reps (${name}).`);
+        if (!String(e.reps ?? "").trim()) return at(`Add the reps for ${what} (${name}).`);
         if (e.rpe && !RPE_RE.test(String(e.rpe).trim())) return at(`RPE is 1 to 10, like 8 or 7-8 (${name}).`);
         if (e.rir && !RIR_RE.test(String(e.rir).trim())) return at(`RIR is 0 to 10, like 2 or 1-2 (${name}).`);
         if (e.load != null && !(e.load > 0 && e.load <= 1500)) return at(`Check the weight (${name}).`);

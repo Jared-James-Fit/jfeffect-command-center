@@ -140,11 +140,27 @@ export function ProgramsHub({ initialTab }: { initialTab?: ProgramsTab }) {
         )}
       </div>
       <Sheet open={startOpen} onOpenChange={setStartOpen}>
-        <SheetContent side="bottom" swipeToClose className="rounded-t-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-          <SheetHeader className="mb-3 text-left">
-            <SheetTitle>New program</SheetTitle>
-            <SheetDescription>Every way ends in a program you can edit and track.</SheetDescription>
-          </SheetHeader>
+        <SheetContent
+          side="bottom"
+          hideCloseButton
+          swipeToClose
+          className="max-h-[90dvh] gap-0 overflow-y-auto rounded-t-[24px] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-2 sm:mx-auto sm:max-w-lg"
+          data-new-program-sheet
+        >
+          <div aria-hidden className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/30" />
+          <div className="flex items-start gap-3 pb-4">
+            <SheetHeader className="min-w-0 flex-1 space-y-0.5 p-0 text-left">
+              <SheetTitle className="text-[20px] font-semibold leading-tight">New program</SheetTitle>
+              <SheetDescription className="text-[13px]">Every way ends in a program you can edit and track.</SheetDescription>
+            </SheetHeader>
+            <button
+              type="button"
+              onClick={() => setStartOpen(false)}
+              className="-mr-1 inline-flex h-10 shrink-0 items-center rounded-full px-3 text-[15px] font-semibold transition hover:bg-secondary"
+            >
+              Done
+            </button>
+          </div>
           <ProgramStartOptions
             ways={isSelfServe ? ["follow", "build", "import"] : ["build", "import"]}
             onFollow={() => {
@@ -358,8 +374,8 @@ function FindPrograms({
           <div className="text-[16px] font-semibold">No programs yet</div>
           <p className="text-[14px] text-muted-foreground">
             {isSelfServe
-              ? "Start a JF Effect plan, copy one from the crew or build your own. Whatever you save or start shows up here."
-              : "Copy one from the crew or build your own. Whatever you save shows up here."}
+              ? "Follow one of our plans, build your own, import one you already have, or copy one from the crew. Whatever you save or start shows up here."
+              : "Build your own, import one you already have, or copy one from the crew. Whatever you save shows up here."}
           </p>
         </div>
       )}
