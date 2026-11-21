@@ -5,7 +5,8 @@
  * sessions.ts, recovery.ts); the model only words them.
  */
 import { reasonWords, shortDay, sidesLine, type PainArea, type PainHistory } from "@/lib/pain/history";
-import { FEELS, severityLabel } from "@/lib/pain/report";
+import { FEELS, TIMINGS, severityLabel } from "@/lib/pain/report";
+import { siteAnatomy, siteOf } from "@/lib/pain/sites";
 import { associations, associationLine, sessionContext, type PainSession } from "@/lib/pain/sessions";
 import { redFlags, URGENT_SIGNS } from "@/lib/pain/safety";
 import type { RecoverySuggestion } from "@/lib/pain/recovery";
@@ -22,13 +23,20 @@ export function areaLines(a: PainArea, sessions: PainSession[] = []): string[] {
   const head = [
     `${a.label}${sidesLine(a) ? ` (${sidesLine(a)})` : ""}:`,
     a.days === 1 ? `reported once, ${shortDay(a.last)}` : `${a.days} reports since ${shortDay(a.first)}, ${a.recentDays} in the last 6 weeks across ${a.recentWeeks} week${a.recentWeeks === 1 ? "" : "s"}, last ${shortDay(a.last)}`,
-    a.latestSeverity ? `latest ${severityLabel(a.latestSeverity)!.toLowerCase()}` : null,
+    a.latestScore != null ? `latest ${a.latestScore}/10` : a.latestSeverity ? `latest ${severityLabel(a.latestSeverity)!.toLowerCase()}` : null,
     a.status === "quiet" ? "nothing since (gone quiet)" : null,
   ].filter(Boolean).join(" ");
   const lines = [`- ${head}`];
   const facts: string[] = [];
   if (a.trend) facts.push(a.trendFrom === "client" ? `they said it's ${a.trend} than last time (same issue, their word)` : `rated ${a.trend === "worse" ? "worse" : a.trend === "better" ? "milder" : "the same"} than the report before`);
+  if (a.sites.length)
+    facts.push(
+      `where exactly (their tap on the body map, where they feel it, not what's injured): ${a.sites
+        .map((x) => `${siteOf(x.site)?.label.toLowerCase() ?? x.site}${siteAnatomy(x.site) ? ` (${siteAnatomy(x.site)!.toLowerCase()})` : ""}${x.count > 1 ? ` ${x.count}×` : ""}`)
+        .join(", ")}`,
+    );
   if (a.feel.length) facts.push(`feels: ${a.feel.map(feelWord).join(", ")}`);
+  if (a.timing.length) facts.push(`hurts: ${a.timing.map((t) => TIMINGS.find((x) => x.v === t)?.label.toLowerCase() ?? t).join(", ")}`);
   if (a.limiting.stopped || a.limiting.modified) facts.push(`in the last 4 weeks it ${[a.limiting.stopped ? `stopped ${a.limiting.stopped} session${a.limiting.stopped > 1 ? "s" : ""}` : null, a.limiting.modified ? `changed ${a.limiting.modified}` : null].filter(Boolean).join(" and ")}`);
   if (a.named.length) facts.push(`exercise they named: ${a.named.map((n) => `${n.name}${n.count > 1 ? ` ${n.count}×` : ""}`).join(", ")}`);
   for (const as of associations(a, sessions)) facts.push(associationLine(as));

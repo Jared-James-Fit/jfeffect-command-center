@@ -18,7 +18,8 @@
  * only when its note names a body part.
  */
 import { areaLabel, regionFromName, regionOf, regionsInText, type PainSide } from "@/lib/pain/regions";
-import { severityOf, severityRank, type Change, type Feel, type Impact, type Severity, type Trigger } from "@/lib/pain/report";
+import { severityOf, severityRank, type Change, type Feel, type Impact, type Severity, type Timing, type Trigger } from "@/lib/pain/report";
+import { siteOf } from "@/lib/pain/sites";
 
 export type PainEntry = {
   /** pain_reports.id, or a made-up id for an older report ("fb:<feedback id>:0"). */
@@ -34,7 +35,13 @@ export type PainEntry = {
   dayId: string | null;
   region: string;
   side: PainSide | null;
+  /** The exact spot on the body map (sites.ts), when they picked one. */
+  site: string | null;
   severity: Severity | null;
+  /** 0–10 (the review from Nov 21 2026). */
+  score: number | null;
+  /** When it hurts: during exercise, after training, at rest, certain movements. */
+  timing: Timing[];
   trigger: Trigger | null;
   exerciseName: string | null;
   feel: Feel[];
@@ -65,7 +72,10 @@ export type PainReportRow = {
   source: string;
   region: string;
   side: string | null;
+  site?: string | null;
   severity: string;
+  score?: number | null;
+  timing?: string[] | null;
   trigger: string | null;
   exercise_name: string | null;
   feel: string[] | null;
@@ -89,7 +99,10 @@ export function entriesFromReports(rows: PainReportRow[]): PainEntry[] {
     dayId: r.day_id,
     region: regionOf(r.region) ? r.region : "other",
     side: asSide(r.side),
+    site: siteOf(r.site) ? r.site! : null,
     severity: (["mild", "moderate", "severe"] as const).includes(r.severity as Severity) ? (r.severity as Severity) : null,
+    score: typeof r.score === "number" ? r.score : null,
+    timing: ((r.timing ?? []) as Timing[]).filter((t) => ["during", "after", "rest", "movement"].includes(t)),
     trigger: (r.trigger as Trigger) ?? null,
     exerciseName: r.exercise_name ?? null,
     feel: (r.feel ?? []) as Feel[],
@@ -166,7 +179,10 @@ export function entriesFromLegacyFeedback(rows: LegacyFeedbackRow[], opts: { tz?
         dayId: f.day_id,
         region: p.region,
         side: p.side,
+        site: null,
         severity: severityOf(f.pain_level),
+        score: null,
+        timing: [],
         trigger: null,
         exerciseName: null,
         feel: [],
@@ -204,7 +220,10 @@ export function entriesFromCheckinText(rows: LegacyCheckinRow[], opts: { tz?: st
         dayId: null,
         region: p.region,
         side: p.side,
+        site: null,
         severity: null,
+        score: null,
+        timing: [],
         trigger: null,
         exerciseName: null,
         feel: [],
@@ -262,6 +281,12 @@ export type PainArea = {
   /** Exercises they named for it, most named first. */
   named: { name: string; count: number }[];
   feel: Feel[];
+  /** The spots they picked in it, most reported first ("side_delt" 3×). */
+  sites: { site: string; count: number }[];
+  /** The latest 0–10 (when the latest report had one). */
+  latestScore: number | null;
+  /** When it hurts, across the recent reports. */
+  timing: Timing[];
   /** Reasons the coach should look, most pressing first (empty = nothing to act on). */
   reasons: CoachReason[];
   /** One report, mild or sore, nothing else: an isolated discomfort. */
@@ -299,7 +324,13 @@ export function hasRedFlag(e: PainEntry): boolean {
   if (e.feel.includes("pop") && (e.severity === "severe" || e.feel.includes("swollen") || e.impact === "stopped")) return true;
   if (e.feel.includes("swollen") && e.severity === "severe") return true;
   if (e.region === "chest" && (e.trigger === "daily" || e.trigger === "unsure") && severityRank(e.severity) >= 2) return true;
+  if (severeAtRest(e)) return true;
   return false;
+}
+
+/** Severe pain that's there at rest, not only when training: worth an assessment. */
+export function severeAtRest(e: Pick<PainEntry, "timing" | "severity" | "score">): boolean {
+  return e.timing.includes("rest") && (e.score != null ? e.score >= 7 : e.severity === "severe");
 }
 
 function trendOf(list: PainEntry[]): { trend: Trend; from: "client" | "severity" | null } {
@@ -361,6 +392,10 @@ export function buildPainHistory(entries: PainEntry[], today: string): PainHisto
     for (const e of list) if (e.exerciseName) namedMap.set(e.exerciseName, (namedMap.get(e.exerciseName) ?? 0) + 1);
     const named = [...namedMap.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
     const feel = [...new Set(recent.flatMap((e) => e.feel))];
+    const siteMap = new Map<string, number>();
+    for (const e of list) if (e.site) siteMap.set(e.site, (siteMap.get(e.site) ?? 0) + 1);
+    const sites = [...siteMap.entries()].map(([site, count]) => ({ site, count })).sort((a, b) => b.count - a.count || a.site.localeCompare(b.site));
+    const timing = [...new Set(recent.flatMap((e) => e.timing))];
 
     // why the coach should look: only what's recent, and nothing for a place gone quiet
     const reasons = new Set<CoachReason>();
@@ -396,6 +431,9 @@ export function buildPainHistory(entries: PainEntry[], today: string): PainHisto
       limiting,
       named,
       feel,
+      sites,
+      latestScore: latest.score,
+      timing,
       reasons: REASON_ORDER.filter((r) => reasons.has(r)),
       minor,
     });
@@ -471,6 +509,9 @@ export type FollowUp = {
   id: string;
   stored: boolean;
   date: string;
+  /** The spot it was about, when they picked one. */
+  site: string | null;
+  score: number | null;
   severity: Severity | null;
   trigger: Trigger | null;
   exerciseName: string | null;
@@ -482,16 +523,27 @@ export type FollowUp = {
  * review), so the review can ask "Same as Nov 16?" instead of the whole form.
  * A side must match, or either one not said.
  */
-export function followUpFor(entries: PainEntry[], region: string, side: PainSide | null, opts: { today: string; feedbackId?: string | null }): FollowUp | null {
+export function followUpFor(
+  entries: PainEntry[],
+  region: string,
+  side: PainSide | null,
+  opts: { today: string; feedbackId?: string | null; site?: string | null },
+): FollowUp | null {
   if (region === "other") return null;
   const from = addDays(opts.today, -RECENT_DAYS);
   let best: PainEntry | null = null;
+  let bestSame = false;
   for (const e of entries) {
     if (e.region !== region || e.date < from || e.date > opts.today) continue;
     if (opts.feedbackId && e.feedbackId === opts.feedbackId) continue;
     if (side && e.side && e.side !== side) continue;
-    if (!best || e.at > best.at) best = e;
+    // the same spot beats another spot in the region; then the latest
+    const same = !!opts.site && e.site === opts.site;
+    if (!best || (same && !bestSame) || (same === bestSame && e.at > best.at)) {
+      best = e;
+      bestSame = same;
+    }
   }
   if (!best) return null;
-  return { id: best.id, stored: best.stored, date: best.date, severity: best.severity, trigger: best.trigger, exerciseName: best.exerciseName, feel: best.feel };
+  return { id: best.id, stored: best.stored, date: best.date, site: best.site, score: best.score, severity: best.severity, trigger: best.trigger, exerciseName: best.exerciseName, feel: best.feel };
 }

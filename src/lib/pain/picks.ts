@@ -4,7 +4,8 @@
  * the server saves. Kept apart from the sheet so the rules are tested once.
  */
 import { regionFromName, regionOf, type PainSide } from "@/lib/pain/regions";
-import { cleanReports, severityOf, type Change, type PainReportInput, type Severity } from "@/lib/pain/report";
+import { cleanReports, severityFromScore, severityLevel, severityOf, type Change, type PainReportInput, type Severity } from "@/lib/pain/report";
+import { siteOf } from "@/lib/pain/sites";
 import type { FollowUp, PainEntry } from "@/lib/pain/history";
 
 export type PainPick = Omit<PainReportInput, "severity"> & {
@@ -17,18 +18,51 @@ export type PainPick = Omit<PainReportInput, "severity"> & {
 let seq = 0;
 const uid = () => `p${Date.now().toString(36)}${(seq++).toString(36)}`;
 
-export function newPick(region: string, side: PainSide | null): PainPick {
-  return { uid: uid(), region, side, severity: null, feel: [], open: region === "other" };
+export type PainPlace = { region: string; side: PainSide | null; site?: string | null };
+
+export function newPick(region: string, side: PainSide | null, site: string | null = null): PainPick {
+  return { uid: uid(), region, side, site, severity: null, score: null, timing: [], feel: [], open: region === "other" };
+}
+
+/** The same place: region, side and spot. */
+export function samePlace(p: PainPlace, q: PainPlace): boolean {
+  return p.region === q.region && (p.side ?? null) === (q.side ?? null) && (p.site ?? null) === (q.site ?? null);
+}
+
+/**
+ * A tap on a spot of the body map or a row of the list: the place is added (or,
+ * if it's there already, found), and its id comes back so its details open.
+ * A tap never takes a place off: that's the ✕ on it (a slip of the thumb
+ * shouldn't throw away what was rated).
+ */
+export function addPick(picks: PainPick[], place: PainPlace): { picks: PainPick[]; uid: string } {
+  const site = siteOf(place.site);
+  const norm: PainPlace = { region: place.region, side: site?.midline ? null : place.side ?? null, site: site ? site.key : null };
+  const found = picks.find((p) => samePlace(p, norm));
+  if (found) return { picks, uid: found.uid };
+  const p = newPick(norm.region, norm.side, norm.site ?? null);
+  return { picks: [...picks, p], uid: p.uid };
+}
+
+/** How bad, 0–10: the stored band follows it. */
+export function scorePatch(score: number): Partial<PainPick> {
+  return { score, severity: severityFromScore(score) };
+}
+
+/** The 0–10 to show for a place: its own, else its band's (an older report). */
+export function pickScore(p: Pick<PainPick, "score" | "severity">): number | null {
+  if (typeof p.score === "number") return p.score;
+  return p.severity ? severityLevel(p.severity) : null;
 }
 
 /** A tap on the map or the list: add the place, or take it off if it's there. */
-export function togglePick(picks: PainPick[], place: { region: string; side: PainSide | null }): PainPick[] {
-  const i = picks.findIndex((p) => p.region === place.region && (p.side ?? null) === (place.side ?? null));
+export function togglePick(picks: PainPick[], place: PainPlace): PainPick[] {
+  const i = picks.findIndex((p) => samePlace(p, place));
   if (i >= 0) return picks.filter((_, j) => j !== i);
   // a midline place is one pick whatever side its details say
   const r = regionOf(place.region);
   if (r && !r.sided && place.region !== "other" && picks.some((p) => p.region === place.region)) return picks.filter((p) => p.region !== place.region);
-  return [...picks, newPick(place.region, place.side)];
+  return [...picks, newPick(place.region, place.side, place.site ?? null)];
 }
 
 export function updatePick(picks: PainPick[], id: string, patch: Partial<PainPick>): PainPick[] {
@@ -54,9 +88,18 @@ export function answerFollowUp(p: PainPick, choice: Change | "new", prior: Follo
   };
 }
 
-/** The picks to send (places with a severity; the sheet won't finish with one missing). */
+/** The picks to send (places rated, 0–10 or a band; the review won't finish with one missing). */
 export function picksToReports(picks: PainPick[]): PainReportInput[] {
-  return cleanReports(picks.filter((p) => p.severity).map(({ uid: _uid, open: _open, ...p }) => ({ ...p, severity: p.severity! })));
+  return cleanReports(
+    picks
+      .filter((p) => p.severity || typeof p.score === "number")
+      .map(({ uid: _uid, open: _open, ...p }) => ({ ...p, severity: typeof p.score === "number" ? severityFromScore(p.score) : p.severity! })),
+  );
+}
+
+/** A place still waiting for how bad. */
+export function unrated(p: Pick<PainPick, "score" | "severity">): boolean {
+  return typeof p.score !== "number" && !p.severity;
 }
 
 /** Editing a review: its saved places. */
@@ -67,7 +110,10 @@ export function picksFromEntries(entries: PainEntry[], feedbackId: string): Pain
       uid: uid(),
       region: e.region,
       side: e.side,
+      site: e.site,
       severity: e.severity,
+      score: e.score,
+      timing: e.timing,
       trigger: e.trigger,
       exerciseName: e.exerciseName,
       feel: e.feel,
@@ -109,6 +155,17 @@ export function recentPlaces(entries: PainEntry[], feedbackId?: string | null): 
       out.add(`${e.region}:L`);
       out.add(`${e.region}:R`);
     } else out.add(`${e.region}:${r.sided ? e.side : "-"}`);
+  }
+  return out;
+}
+
+/** "site:side" keys of spots reported recently (the map's dots). */
+export function recentSites(entries: PainEntry[], feedbackId?: string | null): Set<string> {
+  const out = new Set<string>();
+  for (const e of entries) {
+    if (feedbackId && e.feedbackId === feedbackId) continue;
+    if (!e.site) continue;
+    out.add(`${e.site}:${siteOf(e.site)?.midline ? "-" : e.side ?? "-"}`);
   }
   return out;
 }

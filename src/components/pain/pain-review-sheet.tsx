@@ -26,7 +26,8 @@ import { areaSummary, buildPainHistory, reasonWords, shortDay, sidesLine, type P
 import { recoverySuggestions } from "@/lib/pain/recovery";
 import { associations, associationLine, sessionContext } from "@/lib/pain/sessions";
 import { redFlags, URGENT_SIGNS } from "@/lib/pain/safety";
-import { FEELS, severityLabel } from "@/lib/pain/report";
+import { FEELS, TIMINGS, placeLabel, severityLabel } from "@/lib/pain/report";
+import { siteAnatomy } from "@/lib/pain/sites";
 import { areaLabel } from "@/lib/pain/regions";
 import { insertIntoComposer, queueComposerInsert } from "@/lib/composer-insert";
 
@@ -65,8 +66,9 @@ function AreaCard({ a, sessions }: { a: PainArea; sessions: Parameters<typeof as
             <span className="text-muted-foreground">
               {" · "}
               {[
-                e.side && a.region !== "other" ? areaLabel(e.region, e.side) : null,
-                severityLabel(e.severity)?.toLowerCase(),
+                e.site ? `${placeLabel(e)}${siteAnatomy(e.site) ? ` (${siteAnatomy(e.site)!.toLowerCase()})` : ""}` : e.side && a.region !== "other" ? areaLabel(e.region, e.side) : null,
+                e.score != null ? `${e.score}/10` : severityLabel(e.severity)?.toLowerCase(),
+                e.timing.length ? e.timing.map((t) => TIMINGS.find((x) => x.v === t)?.label.toLowerCase() ?? t).join(", ") : null,
                 e.sameIssue && e.change ? `${e.change} (their word)` : e.sameIssue === false ? "said it's new" : null,
                 e.exerciseName,
                 e.feel.length ? e.feel.map(feelWord).join(", ") : null,

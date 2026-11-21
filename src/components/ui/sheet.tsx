@@ -6,7 +6,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { ChevronLeft } from "lucide-react";
 
 import { useSwipeDownToClose } from "@/hooks/use-swipe-down-to-close";
-import { focusOverlayOnOpen } from "@/lib/overlay-focus";
+import { focusOverlayOnOpen, keepOpenForToasts } from "@/lib/overlay-focus";
 import { cn } from "@/lib/utils";
 
 const Sheet = SheetPrimitive.Root;
@@ -73,7 +73,7 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, hideCloseButton, safeTopClose, swipeToClose, onOpenAutoFocus, ...props }, ref) => {
+>(({ side = "right", className, children, hideCloseButton, safeTopClose, swipeToClose, onOpenAutoFocus, onPointerDownOutside, ...props }, ref) => {
   // swipe down to close: the sheet's own element, closed through Radix (a Close it holds) so onOpenChange runs as for ✕
   const [node, setNode] = React.useState<HTMLDivElement | null>(null);
   const dragClose = React.useRef<HTMLButtonElement | null>(null);
@@ -107,6 +107,7 @@ const SheetContent = React.forwardRef<
         ref={setRefs}
         className={cn(sheetVariants({ side }), className)}
         onOpenAutoFocus={(e) => focusOverlayOnOpen(e, onOpenAutoFocus)}
+        onPointerDownOutside={(e) => keepOpenForToasts(e, onPointerDownOutside)}
         {...props}
       >
         {!hideCloseButton && (

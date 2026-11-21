@@ -1038,6 +1038,14 @@ html.jf-story-vt::view-transition-group(jf-story-card) {
   }
 }
 
+/* A toast's Undo must work over an open sheet or dialog: a modal Radix layer
+   sets pointer-events: none on <body>, which the toaster inherits, so every
+   Undo shown while a sheet was up couldn't be tapped. A hidden toast keeps
+   Sonner's own none. */
+[data-sonner-toast]:not([data-visible="false"]) {
+  pointer-events: auto;
+}
+
 .notifications-page-shell {
   @variant sm {
     padding-top: 1.5rem;

@@ -21,3 +21,17 @@ export function focusOverlayOnOpen(e: Event, userHandler?: (e: Event) => void) {
   e.preventDefault();
   container.focus({ preventScroll: true });
 }
+
+/**
+ * A tap on a toast (its Undo) is never a tap outside the sheet or dialog
+ * that's open: without this, undoing something from inside a sheet closed
+ * the sheet (or asked to discard it) in the same tap.
+ */
+export function keepOpenForToasts<E extends { target: EventTarget | null; preventDefault: () => void }>(e: E, next?: (e: E) => void): void {
+  const t = e.target as Element | null;
+  if (t && typeof t.closest === "function" && t.closest("[data-sonner-toaster]")) {
+    e.preventDefault();
+    return;
+  }
+  next?.(e);
+}

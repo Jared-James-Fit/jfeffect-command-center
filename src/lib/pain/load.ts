@@ -17,8 +17,15 @@ import {
 import type { PainSession } from "@/lib/pain/sessions";
 import type { GivenSuggestion } from "@/lib/pain/recovery";
 
-const REPORT_COLS =
+const REPORT_COLS_BASE =
   "id, client_id, feedback_id, checkin_id, day_id, reported_on, reported_at, source, region, side, severity, trigger, exercise_name, feel, impact, same_issue, change, continues_id, note";
+/** With the spot, 0–10 and when it hurts (20270430091000_pain_sites.sql); the base set while that isn't in yet. */
+const REPORT_COLS = `${REPORT_COLS_BASE}, site, score, timing`;
+
+/** Did the read fail only because a newer column isn't in this database yet? */
+function missingColumn(error: any): boolean {
+  return error?.code === "42703" || /column .* does not exist/i.test(String(error?.message ?? ""));
+}
 
 export function daysAgo(today: string, n: number): string {
   return new Date(Date.parse(`${today}T00:00:00Z`) - n * 86_400_000).toISOString().slice(0, 10);
@@ -61,8 +68,9 @@ export async function loadPainEntries(
   const feedback: any[] = [];
   const checkins: any[] = [];
   for (const ids of chunks(clientIds)) {
-    const [r, f, c] = await Promise.all([
-      sb.from("pain_reports").select(REPORT_COLS).in("client_id", ids).gte("reported_on", since).order("reported_at", { ascending: true }).limit(2000),
+    const reportsQuery = (cols: string) => sb.from("pain_reports").select(cols).in("client_id", ids).gte("reported_on", since).order("reported_at", { ascending: true }).limit(2000);
+    const [r0, f, c] = await Promise.all([
+      reportsQuery(REPORT_COLS),
       sb
         .from("pl_workout_feedback")
         .select("id, client_id, day_id, created_at, pain_area, pain_level, client_note, pain_note, review_version")
@@ -80,6 +88,7 @@ export async function loadPainEntries(
         .contains("answers", { recovery_flags: ["Pain / injury"] })
         .limit(1000),
     ]);
+    const r = r0.error && missingColumn(r0.error) ? await reportsQuery(REPORT_COLS_BASE) : r0;
     if (r.error) throw r.error;
     if (f.error) throw f.error;
     reports.push(...((r.data ?? []) as PainReportRow[]));
