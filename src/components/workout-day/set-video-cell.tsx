@@ -242,6 +242,12 @@ export type SetVideoCellProps = {
   focusMode?: boolean;
   /** "100 kg × 5 @ RPE 8": what the coach's card says about the set. */
   label: string;
+  /**
+   * What the set is to lift, for the camera's screen: the weight in its box,
+   * else the one a tap on its number logs, with its reps and effort (`label`
+   * when not given). Never sent to the coach: an unlogged set's numbers are targets.
+   */
+  aim?: string;
 };
 
 export function SetVideoCell(props: SetVideoCellProps) {
@@ -574,6 +580,7 @@ export function SetVideoCell(props: SetVideoCellProps) {
       {cameraOpen && FilmCam && (
         <FilmCam
           title={`${props.exerciseName} · ${setTitle(setIndex)}`}
+          detail={props.aim ?? props.label}
           maxSeconds={SET_RECORD_MAX_SECONDS}
           onClose={() => setCameraOpen(false)}
           onLibrary={() => {

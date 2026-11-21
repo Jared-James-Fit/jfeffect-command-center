@@ -89,6 +89,7 @@ export function FilmCamera({
   onLibrary,
   maxSeconds,
   title,
+  detail,
 }: {
   onClose: () => void;
   onClip: (file: File) => void;
@@ -98,6 +99,8 @@ export function FilmCamera({
   maxSeconds: number;
   /** What's being filmed ("Competition Squat · Top set"). */
   title?: string;
+  /** The set to lift, "140 kg × 3 @ RPE 7": big enough to read from the bench, and kept on screen while it films. */
+  detail?: string;
 }) {
   const [settings, setSettings] = useState<FilmSettings>(() => readFilmSettings());
   const [lensId, setLensId] = useState<string | null>(null);
@@ -600,6 +603,14 @@ export function FilmCamera({
           </div>
         </div>
         {title && !recording && <p className="mt-1 truncate text-center text-[13px] font-medium text-white/80">{title}</p>}
+        {detail && (
+          <p
+            className="mt-1 truncate text-center text-[20px] font-semibold tabular-nums text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]"
+            data-film-detail
+          >
+            {detail}
+          </p>
+        )}
       </div>
 
       {/* settings: what to film at, all remembered on this phone */}

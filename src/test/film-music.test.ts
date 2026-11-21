@@ -8,6 +8,7 @@ import {
   saveFilmSettings,
 } from "@/lib/camera/film-settings";
 import { installMediaPlaybackSession } from "@/lib/audio-session";
+import { setVideoLabel } from "@/lib/set-videos/label";
 
 const read = (p: string) => readFileSync(p, "utf8");
 
@@ -64,6 +65,28 @@ describe("the cameras keep the music playing by themselves", () => {
   it("the Crew studio's held clips follow the same setting, read when the clip starts", () => {
     expect(studio).toContain("withSound: () => readFilmSettings().sound,");
     expect(recorder).toContain("if (withSoundRef.current() && !micRefused()) {");
+  });
+});
+
+describe("the camera shows the set they're about to lift", () => {
+  it("weight × reps @ effort under the exercise and set, kept on screen while it films", () => {
+    const cam = read("src/components/camera/film-camera.tsx");
+    expect(cam).toContain("data-film-detail");
+    // the exercise line hides while filming; the numbers stay
+    expect(cam).toContain("{title && !recording && <p");
+    expect(cam).toContain("{detail && (");
+    const cell = read("src/components/workout-day/set-video-cell.tsx");
+    expect(cell).toContain("detail={props.aim ?? props.label}");
+    // an empty weight box shows the weight a tap on the set's number would log
+    const row = read("src/components/workout-day/WorkoutDayView.tsx");
+    expect(row).toContain("load ? Number(load) : quickWeight && quickLoad != null ? quickLoad : null,");
+    expect(
+      setVideoLabel({ load: 140, unit: "kg", reps: 3, rpe: 7, rir: null, loadType: "external", durationSec: null }),
+    ).toBe("140 kg × 3 @ RPE 7");
+    // no weight yet and nothing to log at: still the reps and effort to aim for
+    expect(
+      setVideoLabel({ load: null, unit: "lb", reps: 3, rpe: 7, rir: null, loadType: "external", durationSec: null }),
+    ).toBe("3 reps @ RPE 7");
   });
 });
 
