@@ -112,8 +112,7 @@ describe("holiday posts", () => {
     const card = read("src/components/community/post-card.tsx");
     expect(card).toContain("<NoteCaption text={post.caption}");
     expect(card).not.toContain("text-[17px] font-semibold");
-    expect(read("src/components/community/note-caption.tsx")).toContain(
-      '"whitespace-pre-line text-[15px] leading-[1.45]"',
-    );
+    // shown in its paragraphs at the regular post size (CaptionText)
+    expect(read("src/components/community/note-caption.tsx")).toContain('className="text-[15px] leading-[1.5]"');
   });
 });
