@@ -245,6 +245,9 @@ function looseJson(text: string): unknown {
  */
 export function tidyText(t: string): string {
   return t
+    // markdown a model slips in (~~struck~~, **bold**): the painter has its own marks
+    .replace(/~~/g, "")
+    .replace(/\*\*([^*]+)\*\*/g, "*$1*")
     .replace(/(\d)\s*[–—]\s*(\d)/g, "$1 to $2")
     .replace(/\s+[–—]\s+/g, ", ")
     .replace(/[–—]/g, ", ")
@@ -380,10 +383,18 @@ async function neighbours(admin: Admin, at: string | null): Promise<{ themes: (D
   return { themes, covers: [...new Set(covers)].slice(0, 16), captions: [...new Set(captions)].slice(0, 12) };
 }
 
-/** The theme of the deck most recently made for the library (an upcoming post's neighbours aren't posted yet). */
+/**
+ * The themes an upcoming post's deck stays clear of: the last two decks
+ * posted (what the feed shows now) and the one most recently made for the
+ * library (the next to go out), so posts in a row never share a look.
+ */
 async function lastItemThemes(admin: Admin): Promise<(DeckTheme | null)[]> {
-  const { data } = await admin.from("community_series_items").select("data").not("data->deck", "is", null).order("updated_at", { ascending: false }).limit(2);
-  return (data ?? []).map((i: any) => (isDeckTheme(i.data?.deck?.theme) ? i.data.deck.theme : null));
+  const [{ data: posts }, { data: items }] = await Promise.all([
+    admin.from("community_posts").select("series_data").not("series_data->deck", "is", null).is("archived_at", null).order("created_at", { ascending: false }).limit(2),
+    admin.from("community_series_items").select("data").not("data->deck", "is", null).eq("use_count", 0).order("updated_at", { ascending: false }).limit(1),
+  ]);
+  const theme = (d: any) => (isDeckTheme(d?.deck?.theme) ? d.deck.theme : null);
+  return [...(items ?? []).map((i: any) => theme(i.data)), ...(posts ?? []).map((p: any) => theme(p.series_data))];
 }
 
 export type RunResult = { status: "idle" } | { status: "done" | "failed" | "skipped"; job: string; detail?: string; deck?: PostDeck | null };

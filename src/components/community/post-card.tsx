@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode } from "react";
 import { LiveDot } from "@/components/live-indicator";
-import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, ChevronsLeft, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
+import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, ChevronsLeft, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
 import { CLIP_HOLD_EVENT, InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
 import { CLIP_SCRUB_EVENT, inClipScrubBand } from "@/lib/video-scrub";
 import { justGaveSound } from "@/lib/video-pool";
@@ -495,9 +495,15 @@ type Props = {
   sheetOpen?: boolean;
   /** "page" only: the feed's first post, under the stories (TikTok's Friends): its top corners are rounded, like a card coming up. */
   pageFirst?: boolean;
+  /**
+   * "page" only: a workout's every set, from its recap (the last swipe): the
+   * post's sheet on its Workout tab, over the post, so closing it lands back on
+   * the same slide. Without it the recap opens the workout page (`onOpen`).
+   */
+  onOpenWorkout?: (post: CommunityPost) => void;
 };
 
-function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone, openHint, onRecapSeen, onOpenReel, layout = "card", onOpenCaption, sheetOpen = false, pageFirst = false }: Props) {
+function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone, openHint, onRecapSeen, onOpenReel, layout = "card", onOpenCaption, sheetOpen = false, pageFirst = false, onOpenWorkout }: Props) {
   const [burst, fireBurst] = useBurst();
   const lastTap = useRef(0);
   // half on screen for two seconds = a view (never your own)
@@ -594,23 +600,19 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   // a workout's recap is the post's last swipe on its screen (after its photos and clips, or after the workout's card
   // when it has none): never a page it sends you to. Not on a Pulse or a coach's note
   const recapOn = layout === "page" && !!s && !post.auto && post.kind !== "note";
-  const onRecap = recapOn && screenSlide.id === post.id && screenSlide.i === recapIndex(postSlides(post).length);
   const recapCtl = useRef<CarouselControl | null>(null);
-  const toRecap = () => (recapCtl.current ? recapCtl.current.toEnd() : onOpen(post));
+  // every set: the post's sheet on its Workout tab (over the post), else the workout page
+  const openSets = () => (onOpenWorkout ? onOpenWorkout(post) : onOpen(post));
+  const toRecap = () => (recapCtl.current ? recapCtl.current.toEnd() : openSets());
   const recapSlide = recapOn
     ? ({ load, active }: { load: boolean; active: boolean }) => (
-        <WorkoutRecap post={post} unit={unit} load={load || active} shrunk={sheetOpen} onOpenWorkout={() => onOpen(post)} />
+        <WorkoutRecap post={post} unit={unit} load={load || active} shrunk={sheetOpen} onOpenWorkout={openSets} />
       )
     : undefined;
   // who liked it: the "Liked by" line under the words and the number by the heart open the same Likes
   const [likesOpen, setLikesOpen] = useState(false);
   const lift = s ? featuredLift(s) : null;
   const stats = s ? workoutStats(s, unit) : [];
-  // a workout's PRs as one pill: "3 PRs", else the one record's scope ("All-time PR"); amber with the
-  // trophy only when one is the headline PR (headlinePr: the main lift's, or a barbell squat / bench /
-  // deadlift's, at 10 reps or fewer), else said quietly (an accessory's rep best is progress, not news)
-  const prLabel = !s ? null : s.pr_count > 1 ? `${s.pr_count} PRs` : lift?.pr ? SCOPE_WORD[lift.pr] : s.pr_count === 1 ? "PR" : null;
-  const prLoud = !!lift?.pr;
   const isNote = post.kind === "note";
   // the daily series, lessons, holidays, birthdays: a picture, then the words (Instagram's layout)
   const auto = isAutoPost(post);
@@ -654,8 +656,15 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         return;
       }
     }
-    // a workout's card or recap on its own screen: a tap does nothing (the swipe is the way to the recap, its button the
-    // way to every set), so a tap that misses a button never sends anyone off the post
+    // a workout's recap on its own screen: a tap anywhere on its card opens every set in the post's sheet, over the post
+    // (once it's clear this wasn't the first of two taps); its card before it does nothing (the swipe is the way there)
+    if (layout === "page" && !sheetOpen && (e.target as Element | null)?.closest?.("[data-recap-card]")) {
+      singleTimer.current = window.setTimeout(() => {
+        singleTimer.current = null;
+        openSets();
+      }, 300);
+      return;
+    }
     // a clip: full screen (or sound on / off), once it's clear this wasn't the first of two taps
     const clip = (e.target as Element | null)?.closest?.("[data-inline-video]");
     if (!clip) return;
@@ -856,44 +865,14 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
               post.caption && (!isNote || visual) && <FeedCaption name={post.author.name} caption={post.caption} mentions={post.mentions} onOpenPerson={onOpenAuthor} className="px-0 pt-0" />
             )}
             {(!isNote || visual) && !auto && <PostExtras post={post} />}
-            {(slideSet || (visual && s && !onRecap)) && (
-              // the workout's context, one quiet group under their own words (their caption leads, the clip is the show):
-              // the set on screen, then the workout as a small chip that slides to its recap (gone while the recap is up)
-              <div className="space-y-1.5 pt-0.5" data-page-workout-context>
-                {slideSet && (
-                  // the set on screen (a workout film's clip): the exercise, then which set and what was lifted;
-                  // each swipe its own, never the first clip's on every slide (a photo or a clip with no set says nothing)
-                  <div className="min-w-0 leading-snug" data-page-set>
-                    <div className="line-clamp-2 break-words text-[14px] font-medium">{slideSet.title}</div>
-                    {slideSet.detail && <SetDetail detail={slideSet.detail} other={slideSet.other} className="truncate text-[13px] tabular-nums text-foreground/70" otherClassName="text-[12px] font-medium text-foreground/50" />}
-                  </div>
-                )}
-                {visual && s && !onRecap && (
-                  // the workout, and the way to it: one small chip (its PRs first, in amber), 28px to see and 44px to tap
-                  // (the tap reaches 8px above and below); the theme's dark grey, so it reads on black and over a bright clip.
-                  // It slides the post to its recap, the same as a swipe (never a page of its own)
-                  <button
-                    type="button"
-                    onClick={toRecap}
-                    aria-label={`Workout recap: ${workoutHeadline(s)}${prLabel ? `, ${prLabel}` : ""}`}
-                    className="relative inline-flex h-7 max-w-full items-center gap-1.5 rounded-md bg-secondary/70 pl-2 pr-1.5 text-[12px] leading-none text-foreground transition-opacity active:opacity-70 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
-                    data-page-workout
-                  >
-                    {prLabel ? (
-                      <>
-                        <span className={cn("inline-flex shrink-0 items-center gap-1 font-semibold", prLoud ? "text-warning" : "text-foreground/80")} data-page-prs={prLoud ? "headline" : "quiet"}>
-                          {prLoud ? <Trophy className="h-3.5 w-3.5" aria-hidden /> : <Dumbbell className="h-3.5 w-3.5 opacity-80" aria-hidden />}
-                          {prLabel}
-                        </span>
-                        <span className="shrink-0 opacity-40" aria-hidden>·</span>
-                      </>
-                    ) : (
-                      <Dumbbell className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
-                    )}
-                    <span className="min-w-0 truncate font-medium">{workoutHeadline(s)}</span>
-                    <ChevronRight className="-ml-0.5 h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
-                  </button>
-                )}
+            {slideSet && (
+              // the set on screen (a workout film's clip): the exercise, then which set and what was lifted, under their
+              // own words; each swipe its own, never the first clip's on every slide (a photo or a clip with no set says
+              // nothing). The workout itself is the post's last swipe (its recap), with the carousel's "2/7" saying so:
+              // no chip or button for it here, so the clip keeps the room
+              <div className="min-w-0 pt-0.5 leading-snug" data-page-workout-context data-page-set>
+                <div className="line-clamp-2 break-words text-[14px] font-medium">{slideSet.title}</div>
+                {slideSet.detail && <SetDetail detail={slideSet.detail} other={slideSet.other} className="truncate text-[13px] tabular-nums text-foreground/70" otherClassName="text-[12px] font-medium text-foreground/50" />}
               </div>
             )}
             {visual && !s && post.locked_in_at && (
@@ -1555,6 +1534,7 @@ function SlideMedia({
             controls={shrunk ? "corner" : page ? "top" : "bottom"}
             frame={clipFrame(slide.focus)}
             media={slide.width && slide.height ? slide.width / slide.height : null}
+            focusY={cleanFocus(slide.focus)?.y ?? 0.5}
           />
         </div>
       ) : page && !shrunk && fit === "cover" ? (

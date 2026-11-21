@@ -11,10 +11,10 @@ const hub = read("src/components/community/league-hub.tsx");
 const screen = read("src/components/community/community-screen.tsx");
 const crew = read("src/components/community/crew-list.tsx");
 
-describe("the centre tab is Crew: the feed and the rankings in one place", () => {
-  it("the centre tab says Crew, and the menu finds it by any name", () => {
-    const centre = clientBottomNav[2];
-    expect(centre).toMatchObject({ to: "/portal/community", label: "Crew" });
+describe("the first tab is Crew: the feed and the rankings in one place", () => {
+  it("the first tab says Crew, and the menu finds it by any name", () => {
+    const first = clientBottomNav[0];
+    expect(first).toMatchObject({ to: "/portal/community", label: "Crew" });
     const menu = clientNav.find((i) => i.to === "/portal/community");
     expect(menu?.label).toBe("Crew");
     expect(menu?.keywords).toEqual(expect.arrayContaining(["league", "leaderboard", "rankings", "community", "feed", "crew", "members"]));

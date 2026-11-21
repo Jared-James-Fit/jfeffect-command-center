@@ -358,6 +358,8 @@ export function CommunityScreen({
   const [sheet, setSheet] = useState<{ post: CommunityPost; at: PostSheetAt } | null>(null);
   const openCaptionSheet = useCallback((p: CommunityPost) => setSheet({ post: p, at: "caption" }), []);
   const openCommentsSheet = useCallback((p: CommunityPost) => setSheet({ post: p, at: "comments" }), []);
+  // a workout's every set, from its recap: the same sheet on its Workout tab, over the post (it stays on the slide it was on)
+  const openWorkoutSheet = useCallback((p: CommunityPost) => setSheet({ post: p, at: "workout" }), []);
   useEffect(() => {
     if (!paging) setSheet(null);
   }, [paging]);
@@ -821,6 +823,7 @@ export function CommunityScreen({
                   onOpen={openWorkout}
                   onOpenComments={openCommentsSheet}
                   onOpenCaption={openCaptionSheet}
+                  onOpenWorkout={openWorkoutSheet}
                   sheetOpen={sheet?.post.id === p.id}
                   onOpenAuthor={openAuthor}
                   doubleTapHint={p.id === hintId}
@@ -938,7 +941,7 @@ export function CommunityScreen({
       )}
       <ReelsViewer start={reel} posts={feedPosts} viewerIsStaff={viewerIsStaff} onClose={() => setReel(null)} onOpenComments={setCommentsFor} onOpenAuthor={openAuthor} />
       <CommentsSheet post={commentsFor} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsFor(null)} onOpenAuthor={openAuthor} />
-      {paging && <PostSheet post={sheetPost} at={sheet?.at ?? "caption"} viewerIsStaff={viewerIsStaff} onClose={() => setSheet(null)} onOpenAuthor={openAuthor} />}
+      {paging && <PostSheet post={sheetPost} at={sheet?.at ?? "caption"} viewerIsStaff={viewerIsStaff} onClose={() => setSheet(null)} onOpenAuthor={openAuthor} unit={unit} />}
       {/* answering a question response on your story (never while viewing as a client) */}
       {!previewOnly && <StoryReplyHost unit={unit} />}
       <PostDetailDialog postId={detailId} unit={unit} viewerIsStaff={viewerIsStaff} onClose={closeDetail} onOpenAuthor={openAuthor} at={detailAt?.id === detailId ? detailAt.at : undefined} />
@@ -1258,6 +1261,7 @@ function PostRow(props: {
   onOpenCaption?: (p: CommunityPost) => void;
   sheetOpen?: boolean;
   pageFirst?: boolean;
+  onOpenWorkout?: (p: CommunityPost) => void;
 }) {
   const react = useReact(props.post, props.viewerIsStaff);
   return (

@@ -1,42 +1,41 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { FitScale } from "@/components/community/fit-scale";
-import { CalendarCheck, ChevronRight, Trophy } from "lucide-react";
+import { ChevronRight, Trophy } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { WeightOther } from "@/components/dual-weight";
 import { cn } from "@/lib/utils";
-import {
-  SCOPE_WORD,
-  exerciseBestLines,
-  workoutHeadline,
-  workoutSubtitle,
-  type CommunityPost,
-} from "@/lib/community";
+import { exerciseBestLines, workoutHeadline, type CommunityPost } from "@/lib/community";
 import { usePostDetail } from "@/lib/community.queries";
 import { useArrivalClass } from "@/hooks/use-arrival";
 import {
-  recapButtonLabel,
-  recapDay,
+  RECAP_MAX_LIFTS,
   recapExercises,
-  recapFit,
-  recapHighlights,
-  shortStatLabel,
-  summaryStats,
+  recapKeyLifts,
+  recapMeta,
+  recapMoreLabel,
+  recapPr,
+  splitBestSet,
 } from "@/lib/workout-recap";
 
-/** Every exercise row is this tall, so how many fit is a division (recapFit), never a scroll. */
-const ROW_H = 48;
+/** A lift row's height on the slide, between these: more room gives each lift more air, never more lifts than fit. */
+const ROW_MIN = 60;
+const ROW_MAX = 92;
+/** At most this many exercises and the slide shows them big (one or two lifts), never a short list in a tall space. */
+const FEATURE_MAX = 2;
 
 /**
- * A workout post's last swipe (Nov 20 2026): the workout itself, as part of
- * the post rather than a page it sends you to. What it was and where it sits
- * in the program, its numbers once each (Time · Sets · Volume · PRs), what it
- * earned, then every exercise with its best set and its records, as many as
- * fit the screen without scrolling (a vertical swipe stays the feed's); the
- * rest, and every set, one tap away on the full workout. The numbers come
- * with the post; the exercises load once the recap is next to the slide on
- * screen (`load`), from the same read the full workout uses, so opening it
- * afterwards is instant. A tap on it does nothing but its button; two taps ❤️
- * like anywhere on the post.
+ * A workout post's last swipe (Nov 20 2026; full canvas Nov 21 2026): a slide
+ * of the post like its clips, the whole screen edge to edge (Crew's bar and
+ * the "7/7" over its top, the post's words and buttons over its foot), never a
+ * card floating in it. Its name and one quiet line (how long, how many sets)
+ * at the top; its key lifts in the middle, each with its best set as the big
+ * number in the unit it was typed in (the other unit is in the sheet), the
+ * headline PR loud in amber and any other record quiet, as many as fit (at
+ * most four), spaced to the room the screen has; one or two exercises are
+ * shown big instead of as a short list. Every set is one tap away at its foot
+ * ("All 6 exercises ›"), in the post's sheet (Workout | Comments) over the
+ * post, so closing it lands back on this slide; a tap anywhere on it opens the
+ * same (after the double-tap window, so two taps still ❤️). Its exercises load
+ * once it's the next swipe (`load`), from the read the sheet uses.
  */
 export function WorkoutRecap({
   post,
@@ -50,7 +49,7 @@ export function WorkoutRecap({
   /** Load its exercises (it's on screen, or the next swipe). */
   load: boolean;
   onOpenWorkout: () => void;
-  /** Its post's sheet is open: it sits in the small card above it. */
+  /** Its post's sheet is open: it sits in the small card above it (the name and its line only). */
   shrunk?: boolean;
 }) {
   const s = post.stats;
@@ -58,245 +57,247 @@ export function WorkoutRecap({
   const exercises = recapExercises(detail.data?.exercises);
   const loading = detail.isLoading || (!detail.data && !detail.isError);
   const arrive = useArrivalClass(loading && load);
-  // how many exercise rows fit: the room its box has, less everything on the card but the list (none of which depends
-  // on the list), so rendering fewer rows never changes the answer
-  const boxRef = useRef<HTMLDivElement | null>(null);
-  const cardRef = useRef<HTMLElement | null>(null);
-  const listRef = useRef<HTMLUListElement | null>(null);
+  const feature = exercises.length > 0 && exercises.length <= FEATURE_MAX;
+
+  // how many lifts fit, and how tall each is: the room the middle has, divided among them (ROW_MIN–ROW_MAX); a row
+  // that doesn't fit whole is left for the sheet. Read from the middle's own box, which never depends on its rows
+  const middle = useRef<HTMLDivElement | null>(null);
+  const list = useRef<HTMLUListElement | null>(null);
   const [room, setRoom] = useState(0);
+  // lifts dropped because the list still ran past its room (a long name on two lines): never a row cut in half
+  const [over, setOver] = useState(0);
   useLayoutEffect(() => {
-    const box = boxRef.current;
-    const card = cardRef.current;
-    if (!box || !card || shrunk) return;
+    const el = middle.current;
+    if (!el || shrunk) return;
     const read = () => {
-      const cs = getComputedStyle(box);
-      const inner =
-        box.clientHeight - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0);
-      const rest = card.offsetHeight - (listRef.current?.offsetHeight ?? 0);
-      setRoom(Math.max(0, Math.floor(inner - rest)));
+      setRoom(el.clientHeight);
+      setOver(0);
     };
     read();
     if (typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(read);
-    ro.observe(box);
-    ro.observe(card);
+    ro.observe(el);
     return () => ro.disconnect();
-  }, [shrunk, loading]);
+  }, [shrunk]);
+  // a list row may take two lines for a long name: count on the taller row so nothing is cut
+  const cap = Math.max(
+    1,
+    (room > 0 ? Math.min(RECAP_MAX_LIFTS, Math.floor(room / ROW_MIN)) : RECAP_MAX_LIFTS) - over,
+  );
+  const lifts = s ? recapKeyLifts(exercises, s, feature ? FEATURE_MAX : cap) : [];
+  const rowH =
+    lifts.length && room > 0
+      ? Math.min(ROW_MAX, Math.max(ROW_MIN, Math.floor(room / lifts.length)))
+      : ROW_MIN;
+  useLayoutEffect(() => {
+    const ul = list.current;
+    if (!ul || feature || room <= 0 || lifts.length <= 1) return;
+    if (ul.offsetHeight > room + 1) setOver((o) => o + 1);
+    // each drop is a smaller list, so this stops (at one lift at most)
+  }, [feature, room, lifts.length, loading]);
+
   if (!s) return null;
-  const stats = summaryStats(s, unit);
-  const highlights = recapHighlights(s);
-  const sub = workoutSubtitle(s);
-  const day = recapDay(s.completed_at);
-  const { shown, hidden } = recapFit(room, ROW_H, exercises.length);
-  const anySub = stats.some((t) => t.sub);
-  const box: CSSProperties = shrunk
-    ? { inset: 0 }
-    : {
-        top: "calc(var(--feed-bar-room) + 0.75rem)",
-        bottom: "var(--feed-words-room, 0px)",
-        left: 0,
-        right: 0,
-      };
-  return (
-    // its post's sheet open: the small card above it holds what it was and its numbers (the exercises come back with
-    // the screen), clear of the "2/2" in its corner
-    <div
-      ref={boxRef}
-      className={cn("absolute flex flex-col justify-center", shrunk ? "p-2.5 pr-12" : "pl-3 pr-16")}
-      style={box}
-      data-workout-recap={shrunk ? "compact" : "full"}
-    >
-      <Shrink on={shrunk}>
-        <section
-          ref={cardRef}
-          className="mx-auto flex max-h-full w-full max-w-[440px] flex-col overflow-hidden rounded-2xl bg-muted text-foreground"
-          aria-label={`Workout recap: ${workoutHeadline(s)}`}
-        >
-          <header className="shrink-0 px-4 pt-3.5">
-            <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-muted-foreground">
-              <span className="inline-flex items-center gap-1 text-success" data-recap-eyebrow>
-                <CalendarCheck className="h-3.5 w-3.5" aria-hidden />
-                Workout recap
-              </span>
-              {day && <span className="truncate">{day}</span>}
-            </div>
-            <h3 className="mt-1.5 line-clamp-2 break-words text-[18px] font-semibold leading-snug tracking-[-0.01em]">
-              {workoutHeadline(s)}
+  const meta = recapMeta(s);
+  const title = workoutHeadline(s);
+
+  if (shrunk) {
+    // its post's sheet open: the small card above it is the name and its line, laid out at a phone card's width and
+    // scaled to fit, under the "7/7" at its top
+    return (
+      <div
+        className="absolute inset-0 bg-card px-2.5 pb-2.5 pt-8 text-foreground"
+        data-workout-recap="compact"
+      >
+        <FitScale width={300}>
+          <div className="px-1" data-recap-card>
+            <h3
+              className="line-clamp-2 break-words text-[20px] font-semibold leading-tight tracking-[-0.01em]"
+              data-recap-title
+            >
+              {title}
             </h3>
-            {sub && <p className="mt-0.5 truncate text-[12.5px] text-muted-foreground">{sub}</p>}
-          </header>
-
-          {stats.length > 0 && (
-            // the numbers in one row at their own widths, a step closer together on a small phone so four still fit
-            <dl
-              className="mx-4 mt-3 flex shrink-0 flex-wrap gap-x-4 gap-y-2 border-t border-border/70 pt-2.5 min-[380px]:gap-x-5"
-              data-recap-stats
-            >
-              {stats.map((t) => (
-                <div key={t.label} className="flex min-w-0 flex-col-reverse">
-                  <dt className="text-[11px] text-muted-foreground">{shortStatLabel(t.label)}</dt>
-                  {t.sub ? (
-                    <WeightOther className="text-[11px] font-medium leading-tight">
-                      {t.sub}
-                    </WeightOther>
-                  ) : anySub ? (
-                    <span aria-hidden className="text-[11px] leading-tight">
-                      {" "}
-                    </span>
-                  ) : null}
-                  <dd
-                    className={cn(
-                      "whitespace-nowrap text-[16px] font-semibold leading-tight tabular-nums",
-                      t.pr && "text-warning",
-                    )}
-                  >
-                    {t.value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          )}
-
-          {highlights.length > 0 && !shrunk && (
-            <div
-              className="mx-4 mt-2.5 flex shrink-0 flex-wrap gap-1.5 overflow-hidden [max-height:26px]"
-              data-recap-highlights
-            >
-              {highlights.map((h) => (
-                <span
-                  key={h.kind}
-                  className={cn(
-                    "inline-flex h-[26px] max-w-full items-center gap-1 truncate rounded-full px-2.5 text-[12px] font-medium",
-                    h.kind === "pr"
-                      ? "bg-warning/15 text-warning"
-                      : "bg-background/60 text-foreground/80",
-                  )}
-                  data-recap-highlight={h.kind}
-                >
-                  {h.kind === "pr" && <Trophy className="h-3.5 w-3.5 shrink-0" aria-hidden />}
-                  <span className="truncate">{h.text}</span>
-                </span>
-              ))}
-            </div>
-          )}
-
-          {!shrunk && (
-            <>
-              <div className="mx-4 mt-3 flex shrink-0 items-baseline justify-between gap-3 border-b border-border/70 pb-1.5 text-[12px]">
-                <span className="font-semibold">
-                  Exercises
-                  {exercises.length > 0 && (
-                    <span className="ml-1 font-normal text-muted-foreground">
-                      {exercises.length}
-                    </span>
-                  )}
-                </span>
-                <span className="text-muted-foreground">Best set</span>
-              </div>
-              <ul
-                ref={listRef}
-                className={cn("min-h-0 shrink overflow-hidden px-4", arrive)}
-                data-recap-exercises
-              >
-                {loading || !load ? (
-                  [0, 1, 2, 3].map((i) => (
-                    <li
-                      key={i}
-                      className="flex items-center gap-3"
-                      style={{ height: ROW_H }}
-                      aria-hidden
-                    >
-                      <div className="min-w-0 flex-1 space-y-1.5">
-                        <Skeleton className="h-3.5 w-3/5 rounded" />
-                        <Skeleton className="h-3 w-1/4 rounded" />
-                      </div>
-                      <Skeleton className="h-3.5 w-16 rounded" />
-                    </li>
-                  ))
-                ) : detail.isError ? (
-                  <li
-                    className="flex items-center text-[13px] text-muted-foreground"
-                    style={{ height: ROW_H }}
-                  >
-                    Couldn't load the exercises.
-                  </li>
-                ) : exercises.length === 0 ? (
-                  <li
-                    className="flex items-center text-[13px] text-muted-foreground"
-                    style={{ height: ROW_H }}
-                  >
-                    Every set is on the full workout.
-                  </li>
-                ) : (
-                  // only the rows that fit whole; the rest are counted on the button
-                  exercises.slice(0, shown).map((e, i) => {
-                    const best = exerciseBestLines(e, unit);
-                    return (
-                      <li
-                        key={`${e.name}-${i}`}
-                        className="flex items-center gap-3"
-                        style={{ height: ROW_H }}
-                        data-recap-exercise
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-[14px] font-medium leading-tight">
-                            {e.name}
-                          </div>
-                          <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[12px] leading-tight text-muted-foreground">
-                            <span className="shrink-0">
-                              {e.sets} {e.sets === 1 ? "set" : "sets"}
-                            </span>
-                            {e.pr && (
-                              <span
-                                className="inline-flex min-w-0 items-center gap-1 font-medium text-warning"
-                                data-recap-pr
-                              >
-                                <Trophy className="h-3 w-3 shrink-0" aria-hidden />
-                                <span className="truncate">{SCOPE_WORD[e.pr]}</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <div className="whitespace-nowrap text-[14px] font-semibold leading-tight tabular-nums">
-                            {best.main}
-                          </div>
-                          {best.other && (
-                            <div className="mt-0.5 whitespace-nowrap text-[11px] leading-tight tabular-nums text-muted-foreground">
-                              {best.other}
-                            </div>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })
-                )}
-              </ul>
-            </>
-          )}
-
-          <div className="shrink-0 px-3 pb-3 pt-2">
-            <button
-              type="button"
-              // its own tap opens at once; the post around it waits out a double tap (❤️)
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenWorkout();
-              }}
-              className="flex h-10 w-full items-center justify-center gap-1 rounded-xl bg-background/60 text-[13px] font-semibold text-foreground transition-colors active:bg-background/90"
-              data-recap-open
-            >
-              {recapButtonLabel(exercises.length, loading ? 0 : hidden)}
-              <ChevronRight className="h-4 w-4 opacity-70" aria-hidden />
-            </button>
+            {meta && (
+              <p className="mt-1 text-[14px] text-muted-foreground" data-recap-meta>
+                {meta}
+              </p>
+            )}
           </div>
-        </section>
-      </Shrink>
+        </FitScale>
+      </div>
+    );
+  }
+
+  return (
+    // the whole slide, edge to edge like a clip that fills the screen; what's on it sits between Crew's bar and the
+    // post's words, clear of the buttons down the right
+    <div
+      className="absolute inset-0 bg-card text-foreground"
+      data-workout-recap="full"
+      data-recap-card
+      aria-label={`Workout: ${title}`}
+    >
+      <div
+        className="absolute inset-x-0 flex flex-col pl-5 pr-16"
+        style={{
+          top: "calc(var(--feed-bar-room) + 0.75rem)",
+          bottom: "calc(var(--feed-words-room, 0px) + 0.25rem)",
+        }}
+      >
+        <header className="shrink-0">
+          <h3
+            className="line-clamp-3 break-words text-[26px] font-semibold leading-[1.12] tracking-[-0.02em]"
+            data-recap-title
+          >
+            {title}
+          </h3>
+          {meta && (
+            <p className="mt-2 text-[15px] text-muted-foreground" data-recap-meta>
+              {meta}
+            </p>
+          )}
+        </header>
+
+        {/* the key lifts, in the room between the name and the way to every set */}
+        <div
+          ref={middle}
+          className="mt-6 flex min-h-0 flex-1 flex-col overflow-hidden"
+          data-recap-exercises
+        >
+          {loading || !load ? (
+            <ul aria-hidden className="space-y-6 pt-2">
+              {[0, 1, 2].map((i) => (
+                <li key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-4 w-2/5 rounded" />
+                  <span className="flex-1" />
+                  <Skeleton className="h-5 w-20 rounded" />
+                </li>
+              ))}
+            </ul>
+          ) : detail.isError ? (
+            <p className="pt-2 text-[15px] text-muted-foreground">
+              Couldn't load the lifts. Tap to see the workout.
+            </p>
+          ) : feature ? (
+            // one or two exercises: each its own block, the best set big
+            <ul className={cn("my-auto flex flex-col gap-9", arrive)}>
+              {lifts.map(({ exercise: e, index }) => {
+                const best = splitBestSet(exerciseBestLines(e, unit).main);
+                const pr = recapPr(e, s);
+                return (
+                  <li key={`${e.name}-${index}`} data-recap-exercise>
+                    <div className="break-words text-[18px] font-medium leading-snug text-foreground/80">
+                      {e.name}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 tabular-nums">
+                      <Load
+                        text={best.big}
+                        className={cn(
+                          "font-semibold leading-none tracking-[-0.02em]",
+                          lifts.length === 1 ? "text-[56px]" : "text-[44px]",
+                        )}
+                        unitClassName={lifts.length === 1 ? "text-[24px]" : "text-[20px]"}
+                      />
+                      {best.small && (
+                        <span className="text-[22px] font-medium text-foreground/70">
+                          {best.small}
+                        </span>
+                      )}
+                    </div>
+                    {pr && <PrTag pr={pr} className="mt-2.5" />}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            // three or more: the ones that matter most, one row each, given the room there is
+            <ul ref={list} className={cn("my-auto", arrive)}>
+              {lifts.map(({ exercise: e, index }) => {
+                const best = splitBestSet(exerciseBestLines(e, unit).main);
+                const pr = recapPr(e, s);
+                return (
+                  <li
+                    key={`${e.name}-${index}`}
+                    className="flex items-center gap-4 border-t border-border/50 first:border-t-0"
+                    style={{ minHeight: rowH }}
+                    data-recap-exercise
+                  >
+                    <div className="min-w-0 flex-1 py-2">
+                      <div className="line-clamp-2 break-words text-[17px] font-medium leading-snug">
+                        {e.name}
+                      </div>
+                      {pr && <PrTag pr={pr} className="mt-1" />}
+                    </div>
+                    <div className="shrink-0 whitespace-nowrap text-right tabular-nums">
+                      <Load
+                        text={best.big}
+                        className="text-[24px] font-semibold leading-none tracking-[-0.01em]"
+                        unitClassName="text-[15px]"
+                      />
+                      {best.small && (
+                        <span className="ml-1.5 text-[16px] font-medium text-foreground/70">
+                          {best.small}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* the way to every set, quiet, just above the post's words */}
+        <button
+          type="button"
+          // its own tap opens at once; the rest of the slide waits out a double tap (❤️), PostCard's onHeroTap
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenWorkout();
+          }}
+          className="-ml-1 mt-3 inline-flex h-11 shrink-0 items-center gap-1 self-start rounded-full px-1 text-[15px] font-medium text-foreground/75 transition-colors active:text-foreground"
+          data-recap-open
+        >
+          {recapMoreLabel(exercises.length, loading ? exercises.length : lifts.length)}
+          <ChevronRight className="h-[18px] w-[18px]" aria-hidden />
+        </button>
+      </div>
     </div>
   );
 }
 
-/** The compact card above an open sheet scales to its room (FitScale); on the screen the card fits its rows instead. */
-function Shrink({ on, children }: { on: boolean; children: ReactNode }) {
-  return on ? <FitScale>{children}</FitScale> : <>{children}</>;
+/** A load as the big number with its unit a step smaller ("455" "lb"); anything else as it is. */
+function Load({
+  text,
+  className,
+  unitClassName,
+}: {
+  text: string;
+  className: string;
+  unitClassName: string;
+}) {
+  const m = /^(.*\d)\s(lb|kg)$/.exec(text);
+  if (!m) return <span className={className}>{text}</span>;
+  return (
+    <span className={className}>
+      {m[1]}
+      <span className={cn("ml-1 font-medium text-foreground/80", unitClassName)}>{m[2]}</span>
+    </span>
+  );
+}
+
+/** A record on the slide: the workout's headline PR in amber with the trophy, any other record said quietly. */
+function PrTag({ pr, className }: { pr: { label: string; loud: boolean }; className?: string }) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-1 text-[13px] leading-tight",
+        pr.loud ? "font-semibold text-warning" : "text-muted-foreground",
+        className,
+      )}
+      data-recap-pr={pr.loud ? "headline" : "quiet"}
+    >
+      {pr.loud && <Trophy className="h-3.5 w-3.5 shrink-0" aria-hidden />}
+      {pr.label}
+    </div>
+  );
 }

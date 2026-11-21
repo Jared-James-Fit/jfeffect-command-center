@@ -382,7 +382,7 @@ describe("community is easy to find without taking over", () => {
   });
 });
 
-describe("community is the centre tab and a shelf on Home; Nutrition keeps its tab", () => {
+describe("community is the first tab and a shelf on Home; Nutrition keeps its tab", () => {
   const workouts = read("src/routes/_authenticated/portal/workouts.index.tsx");
   const page = read("src/routes/_authenticated/portal/community.tsx");
   const entry = read("src/components/community/community-entry.tsx");
@@ -391,12 +391,12 @@ describe("community is the centre tab and a shelf on Home; Nutrition keeps its t
   const recent = read("supabase/migrations/20261006170000_community_recent_sessions.sql");
   const screen = read("src/components/community/community-screen.tsx");
 
-  it("bottom bar is Home, Workouts, Crew (centre), Messages, Nutrition; More opens from the top bar", () => {
+  it("bottom bar is Crew (far left), Home, Workouts, Messages, Nutrition; More opens from the top bar", () => {
     const nav = read("src/lib/admin-nav.ts");
     const bottom = nav.slice(nav.indexOf("export const clientBottomNav"), nav.indexOf("];", nav.indexOf("export const clientBottomNav")));
     // the tabs (one per line), Crew among them like any other
     expect(bottom.match(/^\s*\{ to: "[^"]+"/gm)?.map((m) => m.trim())).toEqual([
-      '{ to: "/portal"', '{ to: "/portal/workouts"', '{ to: "/portal/community"', '{ to: "/portal/messages"', '{ to: "/portal/nutrition-targets"',
+      '{ to: "/portal/community"', '{ to: "/portal"', '{ to: "/portal/workouts"', '{ to: "/portal/messages"', '{ to: "/portal/nutrition-targets"',
     ]);
     expect(bottom).toContain('{ to: "/portal/community", label: "Crew", icon: UsersRound },');
     // the count of new posts rides on Crew's tab

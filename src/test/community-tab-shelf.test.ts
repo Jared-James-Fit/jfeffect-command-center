@@ -15,9 +15,9 @@ const screen = read("src/components/community/community-screen.tsx");
 const item = (to: string): NavItem => ({ to, label: to, icon: Home });
 
 describe("the tab bar: TikTok's / Instagram's", () => {
-  it("five equal tabs, Crew in the middle", () => {
+  it("five equal tabs, Crew first (far left, where the app opens)", () => {
     const visible = resolveVisibleBarItems(clientBottomNav, { more: false });
-    expect(visible.map((i) => i.label)).toEqual(["Home", "Workouts", "Crew", "Messages", "Nutrition"]);
+    expect(visible.map((i) => i.label)).toEqual(["Crew", "Home", "Workouts", "Messages", "Nutrition"]);
     expect(visible.some((i) => i.to === MORE_BAR_TO)).toBe(false);
     // no raised disc, no satellite: Crew is a tab like the others
     expect(shell).not.toContain("data-featured-tab");
@@ -114,7 +114,7 @@ describe("the tab bar: TikTok's / Instagram's", () => {
     expect(screen).toContain('if (k === "feed" && /^#(rankings|league|you|tab=)/.test(window.location.hash)) void navigate({ to: ".", hash: "", replace: true, resetScroll: false });');
   });
 
-  it("no community for this account: no centre button", () => {
+  it("no community for this account: no Crew tab", () => {
     // (members get their own bar, same rule)
     expect(portal).toContain("const base = isSelfServe ? selfServeBottomNav : clientBottomNav;");
     expect(portal).toContain('community?.enabled === false ? base.filter((i) => i.to !== "/portal/community") : base');

@@ -309,13 +309,14 @@ const REGISTRY: Entry[] = [
 
 /**
  * Every staff account's phone bar (admin, coach), laid out like the client
- * app: five equal tabs with Crew in the middle (the League is the trophy
- * bubble at the start of Crew's stories, and in More). More opens from the header.
+ * app: five equal tabs, Crew first, far left, where the app opens
+ * (launch-home.ts), then Dashboard, Clients, Messages and Tasks. More opens
+ * from the header.
  */
 export const STAFF_BAR: NavItem[] = [
+  { to: "/admin/community", label: "Crew", icon: UsersRound },
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/clients", label: "Clients", icon: Contact },
-  { to: "/admin/community", label: "Crew", icon: UsersRound },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
   { to: "/admin/tasks", label: "Tasks", icon: ListChecks },
 ];
@@ -332,9 +333,9 @@ export const FINANCE_BOOKS: NavItem = { to: "/admin/finance/books", label: "Book
 export const FINANCE_PAYMENTS: NavItem = { to: "/admin/finance/payments", label: "Payments", icon: CreditCard, group: "Finance" };
 
 /**
- * The finance login's phone bar, laid out like every staff bar: its home,
- * Money (Books and Payments, switched at the top of the page), Crew as the
- * raised centre button, Clients and Tasks. More opens from the header.
+ * The finance login's phone bar: its home first (where it opens, launch-home.ts),
+ * Money (Books and Payments, switched at the top of the page), Crew, Clients
+ * and Tasks, the same tabs as the staff bar. More opens from the header.
  */
 export const FINANCE_BAR: NavItem[] = [
   { to: FINANCE_HOME.to, label: "Home", icon: Wallet },

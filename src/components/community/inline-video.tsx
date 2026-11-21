@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Play, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ClipFrame } from "@/lib/photo-frame";
+import { CLIP_ZOOM_MAX_TRIM, photoZoomBox, type ClipFrame } from "@/lib/photo-frame";
 import { ClipFrameBox } from "@/components/community/clip-frame-box";
 import { useFullMediaUrl } from "@/lib/community.queries";
 import { preferAmbientAudio } from "@/lib/audio-session";
@@ -134,6 +134,7 @@ export function InlineVideo({
   controls = "bottom",
   frame = null,
   media = null,
+  focusY = 0.5,
 }: {
   path: string;
   poster: string | null;
@@ -147,6 +148,8 @@ export function InlineVideo({
    */
   frame?: ClipFrame | null;
   media?: number | null;
+  /** Which part of a clip zoomed to the room's width stays (0 its top, 1 its bottom): its focus, else the middle. */
+  focusY?: number;
   /**
    * Where its speaker sits: "top" on a post's own screen in the feed (its words
    * and buttons are at the bottom); "corner" in the small card above a post's
@@ -319,6 +322,9 @@ export function InlineVideo({
   const askTap = sound && blocked && !silent && controls !== "corner";
   // on a post's screen (controls up top), shown whole: between the bars
   const between = controls === "top" && fit === "contain";
+  // shown whole there, a clip a little taller than the room fills its width instead of leaving black down both sides
+  // (photoZoomBox at CLIP_ZOOM_MAX_TRIM, the photo's rule): the element and its poster sit in a box at its own shape
+  const zoom = between && !frame ? photoZoomBox(media, focusY, CLIP_ZOOM_MAX_TRIM) : null;
   return (
     <div ref={wrap} className="absolute inset-0 bg-black" data-inline-video={playing ? "playing" : "poster"} data-slide-path={path} data-fit={fit} data-silent={silent ? "" : undefined}>
       {frame ? (
@@ -341,6 +347,20 @@ export function InlineVideo({
         >
           {(style) => <div ref={host} style={style} data-clip-frame-host />}
         </ClipFrameBox>
+      ) : zoom ? (
+        <div className="absolute inset-0 overflow-hidden" style={{ ...BETWEEN_BARS, containerType: "size" }} data-clip-fit="zoom">
+          <div className="absolute" style={zoom}>
+            <div ref={host} className="absolute inset-0" />
+            {poster && (
+              <img
+                src={poster}
+                alt=""
+                draggable={false}
+                className={cn("pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-200", shown ? "opacity-0" : "opacity-100")}
+              />
+            )}
+          </div>
+        </div>
       ) : (
         <>
           {/* on a post's screen a clip shown whole sits between Crew's bar and the tab bar; one that fills it runs up under Crew's bar */}
