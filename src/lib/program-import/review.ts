@@ -105,6 +105,21 @@ export function toDraft<T extends SearchableExercise & { muscle_group?: string |
     flags.push({ level: "check", code: "weeks_cut", text: `Your program has ${totalIn} weeks; the app runs up to ${MAX_WEEKS}. Weeks ${MAX_WEEKS + 1} to ${totalIn} weren't brought in. Import them as a second program.` });
   }
 
+  // a note about an exercise is made once however many weeks repeat it ("… (in 8 places)")
+  const repeated = new Map<string, { flag: ImportFlag; base: string; n: number }>();
+  const once = (level: ImportFlag["level"], code: string, key: string, base: string, where: string, at: ImportFlag["at"]) => {
+    const k = `${code}|${key}|${base}`;
+    const hit = repeated.get(k);
+    if (hit) {
+      hit.n++;
+      hit.flag.text = `${hit.base} (in ${hit.n} places)`;
+      return;
+    }
+    const flag: ImportFlag = { level, code, text: `${base} (${where})`, at };
+    repeated.set(k, { flag, base, n: 1 });
+    flags.push(flag);
+  };
+
   const out: PlanBlock[] = [];
   let g = 0;
   for (const [bi, b] of blocks.entries()) {
@@ -137,16 +152,17 @@ export function toDraft<T extends SearchableExercise & { muscle_group?: string |
           const m = opts.matches.get(nameKey(e.name));
           const lib = m?.exercise ?? null;
           const where = `${dayTitle(d.title, di)}${totalIn > 1 ? `, week ${g}` : ""}`;
-          if (!lib) flags.push({ level: "fix", code: "unmatched", text: `Pick the library exercise for "${e.name}" (${where}).`, at: at(ei) });
-          else if (m?.status === "close") flags.push({ level: "check", code: "close_match", text: `"${e.name}" was matched to ${lib.name} (${where}).`, at: at(ei) });
-          if (e.sets == null) flags.push({ level: "fix", code: "no_sets", text: `${e.name}: the file doesn't say how many sets (${where}).`, at: at(ei) });
-          else if (e.sets > 20) flags.push({ level: "fix", code: "too_many_sets", text: `${e.name}: ${e.sets} sets; the app takes up to 20 (${where}).`, at: at(ei) });
-          if (!e.reps) flags.push({ level: "fix", code: "no_reps", text: `${e.name}: the file doesn't say how many reps (${where}).`, at: at(ei) });
-          if (e.load != null && !e.unit) flags.push({ level: "check", code: "no_unit", text: `${e.name}: ${e.load} has no unit in the file; it's set to ${p.unit ?? "lb"} (${where}).`, at: at(ei) });
-          if (e.unsure) flags.push({ level: "check", code: "unsure", text: `${e.name}: ${e.unsure} (${where}).`, at: at(ei) });
-          if (opts.method === "ai") for (const t of groundingFlags(e, opts.source)) flags.push({ level: "check", code: "not_in_file", text: `${e.name}: ${t} (${where}).`, at: at(ei) });
+          const nk = nameKey(e.name);
+          if (!lib) once("fix", "unmatched", nk, `Pick the library exercise for "${e.name}"`, where, at(ei));
+          else if (m?.status === "close") once("check", "close_match", nk, `"${e.name}" was matched to ${lib.name}`, where, at(ei));
+          if (e.sets == null) once("fix", "no_sets", nk, `${e.name}: the file doesn't say how many sets`, where, at(ei));
+          else if (e.sets > 20) once("fix", "too_many_sets", nk, `${e.name}: ${e.sets} sets; the app takes up to 20`, where, at(ei));
+          if (!e.reps) once("fix", "no_reps", nk, `${e.name}: the file doesn't say how many reps`, where, at(ei));
+          if (e.load != null && !e.unit) once("check", "no_unit", nk, `${e.name}: ${e.load} has no unit in the file; it's set to ${p.unit ?? "lb"}`, where, at(ei));
+          if (e.unsure) once("check", "unsure", nk, `${e.name}: ${e.unsure}`, where, at(ei));
+          if (opts.method === "ai") for (const t of groundingFlags(e, opts.source)) once("check", "not_in_file", nk, `${e.name}: ${t}`, where, at(ei));
           const note = exerciseNote(e);
-          if (note.cut) flags.push({ level: "info", code: "note_cut", text: `${e.name}: its note was shortened to fit (${where}).`, at: at(ei) });
+          if (note.cut) once("info", "note_cut", nk, `${e.name}: its note was shortened to fit`, where, at(ei));
           return {
             key: keyFor(e.name),
             exercise_id: lib?.id ?? "",

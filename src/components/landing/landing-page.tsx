@@ -6,7 +6,7 @@
  * premium offer, never as a row in a price table.
  *
  * Order: who built it and both ways in; why listen; the app on its real
- * screens; online coaching (what Jared does for you, shown in the chat where
+ * screens; your own program (built in the app or uploaded); online coaching (what Jared does for you, shown in the chat where
  * it happens) and client results; questions; one last way in.
  *
  * Words are Jared's: plain, short, first person, no fitness-marketing lines
@@ -20,7 +20,7 @@
  */
 import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { Apple, Dumbbell, PencilLine, Quote, Users } from "lucide-react";
+import { Apple, Dumbbell, Gauge, Quote, Users } from "lucide-react";
 import { SalesPageShell } from "@/components/sales/sales-page-shell";
 import { PhoneShot } from "@/components/sales/coaching-hero";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
@@ -43,6 +43,8 @@ import jaredAsset from "@/assets/athletes/jared-napf-2026.jpg.asset.json";
 import shotLog from "@/assets/landing/app-log.webp";
 import shotWeek from "@/assets/landing/app-week.webp";
 import shotInsights from "@/assets/landing/app-insights.webp";
+import shotBuild from "@/assets/landing/app-build.webp";
+import shotImport from "@/assets/landing/app-import.webp";
 import shotChat from "@/assets/coaching/app-coach-chat.webp";
 
 export const JOIN_TO = "/join" as const;
@@ -55,7 +57,7 @@ export const COACHING_CTA = "Apply for coaching";
 
 const HERO = {
   title: "Train in the same app my clients use.",
-  body: "My programs, a log that keeps every set and PR, and a crew to train with. Use it free, or hire me to coach you online.",
+  body: "Follow my programs, build your own, or upload a plan you already have. Track every workout, PR and progression in one place. Use it free, or hire me to coach you online.",
 };
 
 /** Who's behind it, in numbers that are true and easy to check. */
@@ -69,14 +71,14 @@ const PROOF: Array<[string, string, string]> = [
 /** The free app on its real screens. */
 const SCREENS: Array<{ title: string; body: string; src: string; alt: string }> = [
   {
-    title: "Your program, on your calendar",
-    body: "Pick one of my programs and the workouts land on the days you train. If your week changes, move them.",
+    title: "Follow my programs",
+    body: "Pick one and the workouts land on the days you train. If your week changes, move them.",
     src: shotWeek,
     alt: "The Workouts screen: this week's calendar, today's lower body workout in progress, and the program at week 7 of 13",
   },
   {
     title: "Log a set in seconds",
-    body: "Reps and RPE are filled in from the program. Type the weight and it's logged, with last time on the same card.",
+    body: "Reps and RPE come filled in from the program. Type the weight and it's logged, with last time on the same card.",
     src: shotLog,
     alt: "The workout logger: back squat, 4 × 5 at RPE 7, last time 290 lb × 5, three sets logged at 295 lb",
   },
@@ -88,10 +90,28 @@ const SCREENS: Array<{ title: string; body: string; src: string; alt: string }> 
   },
 ];
 
+/** Your own program: built in the app, or brought in from a file. Both are in the free app today. */
+const OWN: Array<{ title: string; body: string; note: string; src: string; alt: string }> = [
+  {
+    title: "Build your own",
+    body: "Pick how many weeks and days, add exercises from the library, and set the sets, reps, RPE and load. Change one week or every week at once.",
+    note: "Save it, start it, and it lands on your calendar like any of mine.",
+    src: shotBuild,
+    alt: "The program builder: a 12 week upper and lower program, day 1's exercises with their sets, reps, RPE and rest, and the weeks along the bottom",
+  },
+  {
+    title: "Upload one you already have",
+    body: "A spreadsheet, a Word doc, a PDF or photos of it. It comes in with its weeks, days and numbers, matched to the exercise library, and you check every line before it's saved.",
+    note: "Most files are read in seconds. PDFs and photos are read with AI. What you upload stays private to you.",
+    src: shotImport,
+    alt: "An imported program being checked: read from a spreadsheet, 8 weeks, 4 days a week, one exercise left to pick from the library",
+  },
+];
+
 /** The rest of the free app, one line each. Each is something a member has today. */
 const FREE: Array<{ icon: typeof Dumbbell; text: string }> = [
   { icon: Dumbbell, text: "2,000+ exercises, almost all with a how-to video" },
-  { icon: PencilLine, text: "Write your own program, week by week" },
+  { icon: Gauge, text: "Bar speed on any set, if you train with a velocity tracker" },
   { icon: Apple, text: "Nutrition targets and a food log" },
   { icon: Users, text: "The Crew, and a League that resets every month" },
 ];
@@ -112,7 +132,7 @@ const COACHING: Array<{ title: string; body: string }> = [
   },
   {
     title: "Technique and questions",
-    body: "Film a set or ask me something in our chat. I usually reply within a day.",
+    body: "Film a set and I see it with its weight, reps and RPE, plus the bar path and speed the app reads from the video. Ask me anything in our chat. I usually reply within a day.",
   },
   {
     title: "Meet prep",
@@ -123,7 +143,11 @@ const COACHING: Array<{ title: string; body: string }> = [
 const FAQ: Array<{ q: string; a: string }> = [
   {
     q: "What's free?",
-    a: "The app: my programs, the training log, your PRs and progress, nutrition targets, the food log and the Crew. No card, and nothing turns into a charge later.",
+    a: "The app: my programs, building or uploading your own, the training log, your PRs and progress, nutrition targets, the food log and the Crew. No card, and nothing turns into a charge later.",
+  },
+  {
+    q: "Can I bring a program I already follow?",
+    a: "Yes. Upload the spreadsheet, Word doc, PDF or photos, or paste it in. You check it before it's saved and it stays private to you. Reading a PDF or photos uses some of your free monthly AI credits. Only upload programs you wrote or have permission to use.",
   },
   {
     q: "Why do I have to apply for a free app?",
@@ -279,6 +303,27 @@ export function LandingPage() {
             <PrimaryCta to={JOIN_TO} className="w-full sm:w-auto sm:min-w-[260px]">
               {JOIN_CTA}
             </PrimaryCta>
+          </div>
+        </Block>
+      </Reveal>
+
+      {/* 3b. Your own program: built in the app, or uploaded */}
+      <Reveal>
+        <Block id="own">
+          <Heading
+            eyebrow="Your own program"
+            title="Build one, or bring the one you have."
+            sub="Either way it's tracked like my programs: every set, PR and week."
+          />
+          <div className="mx-auto grid max-w-4xl gap-12 md:grid-cols-2 md:gap-10" data-landing-own>
+            {OWN.map((o) => (
+              <div key={o.title} className="flex flex-col items-center text-center md:items-start md:text-left">
+                <PhoneShot src={o.src} alt={o.alt} className="max-w-[230px]" />
+                <h3 className="mt-5 text-[20px] font-semibold leading-snug tracking-[-0.01em]">{o.title}</h3>
+                <p className="mt-1.5 max-w-md text-[15px] leading-relaxed text-muted-foreground">{o.body}</p>
+                <p className="mt-2 max-w-md text-[13px] leading-relaxed text-muted-foreground">{o.note}</p>
+              </div>
+            ))}
           </div>
         </Block>
       </Reveal>
@@ -470,4 +515,4 @@ export function LandingPage() {
 }
 
 /** For the tests: what the page promises, kept with the page. */
-export const LANDING_COPY = { HERO, FREE, COACHING, FAQ, PROOF, SCREENS } as const;
+export const LANDING_COPY = { HERO, FREE, COACHING, FAQ, PROOF, SCREENS, OWN } as const;
