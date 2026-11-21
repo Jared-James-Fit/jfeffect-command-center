@@ -180,12 +180,14 @@ describe("asked inside the tap, once", () => {
     expect(micRefused()).toBe(false);
   });
 
-  it("the recorders don't ask again after a no, and the camera's settings offer Ask again", () => {
+  it("the recorders don't ask again after a no; tapping the camera's mic asks again inside the tap", () => {
     const cam = read("src/components/camera/film-camera.tsx");
     expect(cam).toContain("if (settingsRef.current.sound && !micRefused()) {");
-    expect(cam).toContain("askForMicAgain()");
-    expect(cam).toContain("data-mic-refused");
-    expect(read("src/components/community/clip-recorder.ts")).toContain("if (!micRefused()) {");
+    expect(cam).toContain("sound={settings.sound && !micBlocked}");
+    const toggle = read("src/components/camera/film-sound-toggle.tsx");
+    expect(toggle).toContain("if (next && micRefused()) {");
+    expect(toggle).toContain("void askForMicAgain().then(");
+    expect(read("src/components/community/clip-recorder.ts")).toContain("if (withSoundRef.current() && !micRefused()) {");
   });
 });
 

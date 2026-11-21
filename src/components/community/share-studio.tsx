@@ -24,6 +24,9 @@ import { getPlatform, iosAppTooOldForCamera, isNative, openAppSettings, openTest
 import { reportCameraTrouble } from "@/lib/camera-report";
 import { LookCarousel, lookItems, type LookItem } from "@/components/community/look-carousel";
 import { canRecordClips, useClipRecorder } from "@/components/community/clip-recorder";
+import { FilmSoundToggle } from "@/components/camera/film-sound-toggle";
+import { readFilmSettings, saveFilmSound } from "@/lib/camera/film-settings";
+import { micRefused } from "@/lib/video-mic";
 import { createCommunityPost, useHintsSeen, useMarkHintSeen } from "@/lib/community.queries";
 import { useAuth } from "@/lib/auth";
 import {
@@ -819,8 +822,14 @@ export function ShareStudio({
   const recordable = useMemo(() => canRecordClips(), []) && !card && status === "live" && canShoot && count == null;
   const hints = useHintsSeen();
   const markHint = useMarkHintSeen();
+  // music or sound for a held clip: the same choice as the set camera (film-settings.ts), off on a
+  // phone so the music in their earbuds keeps playing
+  const [filmSound, setFilmSound] = useState(() => readFilmSettings().sound);
+  const filmSoundRef = useRef(filmSound);
+  filmSoundRef.current = filmSound;
   const recorder = useClipRecorder({
     getStream: () => streamRef.current,
+    withSound: () => filmSoundRef.current,
     onClip: (file) => {
       markHint("hold_to_film");
       // a clip is the post (or the next slide): it starts uploading now, and plays while you write the caption
@@ -1452,6 +1461,17 @@ export function ShareStudio({
                       <Timer className="h-5 w-5" />
                       {timer ? `${timer}s` : null}
                     </button>
+                  )}
+                  {/* holding films a clip: with sound (pauses their music) or without (it keeps playing) */}
+                  {recordable && !recorder.recording && (
+                    <FilmSoundToggle
+                      sound={filmSound && !micRefused()}
+                      onChange={(on) => {
+                        setFilmSound(on);
+                        saveFilmSound(on);
+                      }}
+                      className="h-11 w-11 backdrop-blur"
+                    />
                   )}
                   <div className="ml-auto flex items-center gap-2">
                     {canShoot && !adding && (card && allowNoPhoto ? (
