@@ -811,6 +811,15 @@ html[data-focus-open] [data-pov-banner] { visibility: hidden; }
      workout · ? · List) and the ‹ / Next bar */
   padding: calc(var(--focus-top) + 86px) 12px calc(env(safe-area-inset-bottom, 0px) + 82px);
 }
+/* Typing a set's number in Focus: the bars step aside for the keyboard (the
+   set keyboard bar has ‹ › Done) and their room goes to the card, so the row
+   being typed in stays on screen; they're back the moment the keyboard closes. */
+html[data-keyboard-open="true"] [data-testid="story-top"],
+html[data-keyboard-open="true"] [data-testid="story-bottom"] { visibility: hidden; transition: none; }
+html[data-keyboard-open="true"] .workout-story > * {
+  padding-top: calc(var(--focus-top) + 12px);
+  padding-bottom: 12px;
+}
 /* the card at its own height, right under the top bar like the list (a long
    one scrolls); the room under it is just more space to swipe */
 .workout-story > * > * {

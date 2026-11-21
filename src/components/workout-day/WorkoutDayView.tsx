@@ -109,11 +109,12 @@ import { getClientBodyweightKgSeries, smoothedBodyweightKgAt, type BodyweightKgP
 import { finalWarmupRow, offersLastWarmup, warmupInUnit, warmupStyleOf, warmupsForModel } from "@/lib/final-warmup";
 import { enqueueOfflineWrite, registerQueueHandler, supersedeOfflineWrite } from "@/lib/workout-offline-queue";
 import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
-import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
-import { RestTimer } from "@/components/workout-day/RestTimerButton";
+import { RestLine, useRestAutoStart } from "@/components/workout-day/RestTimerButton";
+import { clearRestTimer, restHosts, startRestTimer as startWorkoutRest } from "@/lib/rest-timer-store";
 import { SwipeToReveal } from "@/components/workout-day/swipe-to-reveal";
-import { ExerciseActionRow } from "@/components/workout-day/exercise-action-row";
-import { CardMenuItem, CardMenuSeparator } from "@/components/workout-day/card-menu";
+import { ExerciseQuickActions } from "@/components/workout-day/exercise-action-row";
+import { SetKeyboardBar } from "@/components/workout-day/set-keyboard-bar";
+import { CardMenu, CardMenuItem, CardMenuSeparator } from "@/components/workout-day/card-menu";
 import { SetupLine, SetupSheet, type SetupSheetMode } from "@/components/equipment/setup-sheet";
 import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
 import {
@@ -123,6 +124,7 @@ import {
   currentSetup,
   equipmentName,
   loadEquipmentId,
+  offersSetup,
   settingsFromNote,
   setupFor,
   setupSummary,
@@ -462,13 +464,11 @@ export function WorkoutDayView({
     <WorkoutNavigationContext.Provider value={navigation}>
       <WorkoutAdapterContext.Provider value={adapter ?? null}>
         <WorkoutUndoProvider>
-          <ActiveRestTimerProvider>
-            <WorkoutToolsProvider scopeKey={dayId}>
-              <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation}>
-                {children}
-              </WorkoutDay>
-            </WorkoutToolsProvider>
-          </ActiveRestTimerProvider>
+          <WorkoutToolsProvider scopeKey={dayId}>
+            <WorkoutDay dayId={dayId} search={search} adapter={adapter} navigation={navigation}>
+              {children}
+            </WorkoutDay>
+          </WorkoutToolsProvider>
         </WorkoutUndoProvider>
       </WorkoutAdapterContext.Provider>
     </WorkoutNavigationContext.Provider>
@@ -2561,11 +2561,16 @@ function WorkoutDay({
   // never pops over the cardio (the next card, done right after or later that
   // day): Finish is the review, one tap (`reviewReady`), and logging the cardio
   // pops it like any last set.
+  // The workout's lifting in order and which still has sets to log: a rest
+  // that finishes an exercise shows on the next one up too (restHosts).
+  const restOrder = useMemo(
+    () => (rows as any[]).slice(0, liftRows).map((r) => ({ id: String(r.id), open: !loggedProgress.doneRowIds.has(String(r.id)) })),
+    [rows, liftRows, loggedProgress],
+  );
   const autoFinishReady = loggedProgress.allDone;
   const reviewReady = liftLogged.allDone;
 
   const online = useOnlineStatus();
-  const { dismissRestTimer } = useRestTimer();
   const reviewPromptedRef = useRef<string | null>(null);
   // Re-armed whenever the workout isn't fully logged (a set cleared or added).
   if (!autoFinishReady && reviewPromptedRef.current === promptKey) reviewPromptedRef.current = null;
@@ -2604,7 +2609,7 @@ function WorkoutDay({
         reviewPromptedRef.current = promptKey;
         setQuickFinishReviewOpen(true);
         // nothing left to rest for: no countdown or beep over the review
-        dismissRestTimer();
+        clearRestTimer(dayId);
         // never waits on the network: the session's start is stamped behind it
         void markInProgress();
       }, wait);
@@ -3189,6 +3194,7 @@ function WorkoutDay({
                     blockId={blockId}
                       topSetBasis={topSetBasisForRow(viewRows.get(r.id) ?? r, rowIndex)}
                     existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
+                      restOrder={cardioRow ? null : restOrder}
                       resultsReady={resultsLoaded && !resultsFetching}
                     existingNote={notesByRowId.get(r.id)}
                     notesLoading={notesLoading}
@@ -3232,6 +3238,8 @@ function WorkoutDay({
             })}
           </div>
         </WorkoutLoadBoundary>
+        {/* typing a set's number on a phone: ‹ › Done over the keyboard, the row kept in view */}
+        {!readonly && <SetKeyboardBar />}
 
         {removedExercises.length > 0 && !storyOpen && (
           <div data-testid="removed-exercises" className="rounded-xl border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
@@ -3695,7 +3703,7 @@ function PreviousLiftChip({ data, displayUnit, onOpen, otherOn = null }: {
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setScope = null, startsWorkout = true, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, weekIndex = null, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; /** This client and workout instance: where the card's added / skipped sets are kept (set-session.ts). */ setScope?: string | null; /** Logging here starts the workout's clock (false: the day's cardio, done any time). */ startsWorkout?: boolean; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: TopSetBasis | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb", opts?: { relabel?: boolean }) => void; focusMode?: boolean; /** The program week this workout is in (a generated note's "Week 1: …" line shows only in week 1). */ weekIndex?: number | null; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setScope = null, startsWorkout = true, existingResults, restOrder = null, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, firstHeavySet = true, followsSameExercise = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, weekIndex = null, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; /** This client and workout instance: where the card's added / skipped sets are kept (set-session.ts). */ setScope?: string | null; /** Logging here starts the workout's clock (false: the day's cardio, done any time). */ startsWorkout?: boolean; existingResults: any[]; /** The workout's lifting in order, open while a card has sets to log (where a rest shows, restHosts); null on the cardio. */ restOrder?: ReadonlyArray<{ id: string; open: boolean }> | null; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: TopSetBasis | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; /** The day's first heavy set of a barbell main lift: its card may offer a few weights to choose from (firstHeavyCards). */ firstHeavySet?: boolean; /** An earlier card today holds the same exercise: this card is its back-offs. */ followsSameExercise?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb", opts?: { relabel?: boolean }) => void; focusMode?: boolean; /** The program week this workout is in (a generated note's "Week 1: …" line shows only in week 1). */ weekIndex?: number | null; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
   // What the card says of the coach's note (coach-notes.ts): a coach's words as written, a generated note without its boilerplate.
   const athleteNote = exerciseNoteForAthlete(row?.notes, weekIndex);
   const adapter = useOptionalAdapter();
@@ -4134,20 +4142,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
   const [cuesOpen, setCuesOpen] = useState(false);
   const hasNote = Boolean(existingNote?.id);
 
-  // Rest timer trigger: SetRow calls bumpRestTimer() when a set is marked complete,
-  // which auto-starts the single page-level active rest timer.
-  const { startRestTimer } = useRestTimer();
-  const bumpRestTimer = (setIndex: number) => {
-    startRestTimer({
-      exerciseName: name,
-      setIndex,
-      seconds: effectiveRest,
-      category,
-      // signalKey must change for each genuinely-newly-completed set so the
-      // provider can dedupe idempotent re-saves of the same set.
-      signalKey: `${row.id}:${setIndex}:${Date.now()}`,
-    });
-  };
+  // The rest starts by itself when a working set is logged (the completion
+  // watcher below hears every way one is), unless turned off in the ⋯.
+  const [restAuto, setRestAuto] = useRestAutoStart();
+  const restRowId = String(row.id ?? exerciseId ?? name);
+  const restShows = (owner: string) => restHosts(restOrder ?? [], owner).includes(restRowId);
 
   const { data: maxes = [], isPending: maxesPending } = useQuery({
     queryKey: ["pl-client-maxes", clientId, blockId ?? null],
@@ -4529,6 +4528,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
     soundedCountRef.current = completedSetCount;
     if (before == null || completedSetCount <= before) return;
     feedback(completedSetCount >= setCount ? "exercise" : "set");
+    // a working set in: its rest starts (warm-ups never count; the cardio has none)
+    if (restAuto && restOrder && effectiveRest && effectiveRest > 0) startWorkoutRest(dayId, restRowId, effectiveRest);
   }, [completedSetCount, resultsReady, readonly, setCount]);
 
   // For the finished card's "why": the last working weight and how the sets felt.
@@ -5017,6 +5018,195 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
     toast.success(`Applied to ${tasks.length} remaining set${tasks.length === 1 ? "" : "s"} as draft`);
   };
 
+  // The card's ⋯ (top right, beside the name): everything that isn't logging a set.
+  const cardMenu = (
+    <>
+      {/* Workout Tools, one tap each, over the workout (list or Focus) */}
+      {toolsActions && (
+        <>
+          <CardToolsRow unit={activeUnit} />
+          <CardMenuSeparator />
+        </>
+      )}
+      {!readonly && clientId && (
+        <>
+          {/* Undo / Redo stay open so a few taps walk back several steps. */}
+          <div className="grid grid-cols-2 gap-1">
+            <CardMenuItem
+              data-testid="card-undo"
+              disabled={!cardHistory.canUndo || cardHistory.busy}
+              onSelect={(e) => { e.preventDefault(); void runCardHistory("undo"); }}
+              aria-label={`Undo last change to ${name}`}
+              className="h-10 justify-center rounded-lg font-semibold"
+            >
+              <Undo2 className="mr-1.5 h-4 w-4" /> Undo
+            </CardMenuItem>
+            <CardMenuItem
+              data-testid="card-redo"
+              disabled={!cardHistory.canRedo || cardHistory.busy}
+              onSelect={(e) => { e.preventDefault(); void runCardHistory("redo"); }}
+              aria-label={`Redo change to ${name}`}
+              className="h-10 justify-center rounded-lg font-semibold"
+            >
+              <Redo2 className="mr-1.5 h-4 w-4" /> Redo
+            </CardMenuItem>
+          </div>
+          <CardMenuItem
+            data-testid="card-reset"
+            disabled={!cardHistory.canReset || cardHistory.busy}
+            onSelect={() => void runCardHistory("reset")}
+            className="items-start rounded-lg py-2"
+          >
+            <RotateCcw className="mr-2 mt-0.5 h-4 w-4 shrink-0" />
+            <span className="flex flex-col leading-tight">
+              <span>Reset exercise</span>
+              <span className="text-[11px] text-muted-foreground">Clear everything logged here</span>
+            </span>
+          </CardMenuItem>
+          <CardMenuSeparator />
+        </>
+      )}
+      <CardMenuItem onSelect={() => setSwapOpen(true)} className="rounded-lg">
+        <ArrowLeftRight className="mr-2 h-4 w-4" /> Swap exercise
+      </CardMenuItem>
+      {clientId && (
+        <CardMenuItem onSelect={() => setHistoryOpen(true)} className="rounded-lg" data-testid="card-history">
+          <LineChart className="mr-2 h-4 w-4" /> History & progress
+        </CardMenuItem>
+      )}
+      {equipmentOn && (
+        <CardMenuItem onSelect={() => setSetupOpen(true)} className="rounded-lg" data-testid="card-setup">
+          <SlidersHorizontal className="mr-2 h-4 w-4" /> {cardSetup?.summary ? "Setup & equipment" : "Save your setup"}
+        </CardMenuItem>
+      )}
+      {canSuggest && !readonly && (
+        // One switch for every card (the line's ⓘ has it too).
+        <CardMenuItem onSelect={() => setShowSuggestionCard(!showSuggestionCard)} className="rounded-lg" data-testid="card-suggestions">
+          <Target className="mr-2 h-4 w-4" /> {showSuggestionCard ? "Turn off weight suggestions" : "Suggest weights"}
+        </CardMenuItem>
+      )}
+      {!readonly && restOrder && effectiveRest != null && effectiveRest > 0 && (
+        // every card's rest (this phone): the line above the sets starts it either way
+        <CardMenuItem onSelect={() => setRestAuto(!restAuto)} className="rounded-lg" data-testid="card-rest-auto">
+          <Timer className="mr-2 h-4 w-4" /> Start rest after each set
+          <span className="ml-auto pl-3 text-sm text-muted-foreground" data-rest-auto-state>{restAuto ? "On" : "Off"}</span>
+        </CardMenuItem>
+      )}
+      {cues && (
+        <CardMenuItem onSelect={() => setCuesOpen((v) => !v)} className="rounded-lg">
+          {cuesOpen ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
+          {cuesOpen ? "Hide cues" : "Show cues"}
+        </CardMenuItem>
+      )}
+      <CardMenuItem onSelect={() => setHelpOpen(true)} className="rounded-lg">
+        <HelpCircle className="mr-2 h-4 w-4" /> Training help
+      </CardMenuItem>
+      {(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) && (
+        <>
+          <CardMenuSeparator />
+          <div className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Exercise {movePosition} of {moveCount}
+          </div>
+          <div className="grid grid-cols-2 gap-1">
+            <CardMenuItem disabled={!canMoveUp} onSelect={onMoveUp} aria-label="Move exercise up" className="h-10 justify-center rounded-lg">
+              <ArrowUp className="mr-1.5 h-4 w-4" /> Up
+            </CardMenuItem>
+            <CardMenuItem disabled={!canMoveDown} onSelect={onMoveDown} aria-label="Move exercise down" className="h-10 justify-center rounded-lg">
+              <ArrowDown className="mr-1.5 h-4 w-4" /> Down
+            </CardMenuItem>
+          </div>
+          {(moveCount ?? 0) > 2 && (
+            <>
+              <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Move to position</div>
+              <div className="grid grid-cols-4 gap-1 p-1">
+                {Array.from({ length: moveCount ?? 0 }, (_, i) => i + 1).map((position) => (
+                  <CardMenuItem
+                    key={position}
+                    disabled={position === movePosition}
+                    onSelect={() => onMoveTo?.(position)}
+                    className="h-10 justify-center rounded-lg p-0 font-semibold"
+                  >
+                    {position}
+                  </CardMenuItem>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+      {canEditSets && setCount > 1 && (() => {
+        // The swipe's twin for anyone who doesn't swipe (or uses a
+        // keyboard / screen reader): the program's sets skip for
+        // today, sets they added delete. Later sets move up; Undo on
+        // the toast puts it back.
+        const all = Array.from({ length: setCount }, (_, i) => i + 1);
+        const planned = all.filter((n) => setKindAt(n, dbSetCount, setSession) === "planned");
+        const added = all.filter((n) => setKindAt(n, dbSetCount, setSession) === "added");
+        const chip = "h-10 justify-center rounded-lg border border-border p-0 font-semibold tabular-nums";
+        return (
+          <>
+            <CardMenuSeparator />
+            {planned.length > 0 && (
+              <>
+                <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Skip a set today (stays in your program)</div>
+                <div className="grid grid-cols-5 gap-1 p-1" data-testid="card-skip-set">
+                  {planned.map((n) => (
+                    <CardMenuItem key={n} onSelect={() => void takeOutSet(n)} aria-label={`Skip set ${n} of ${name} today`} className={chip}>
+                      {n}
+                    </CardMenuItem>
+                  ))}
+                </div>
+              </>
+            )}
+            {added.length > 0 && (
+              <>
+                <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Delete a set you added</div>
+                <div className="grid grid-cols-5 gap-1 p-1" data-testid="card-delete-set">
+                  {added.map((n) => (
+                    <CardMenuItem key={n} onSelect={() => void takeOutSet(n)} aria-label={`Delete set ${n} of ${name}`} className={cn(chip, "text-destructive focus:text-destructive")}>
+                      {n}
+                    </CardMenuItem>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        );
+      })()}
+      {onRemove && (
+        <>
+          <CardMenuSeparator />
+          <CardMenuItem
+            data-testid="card-remove"
+            onSelect={onRemove}
+            className="items-start rounded-lg py-2 text-destructive focus:bg-destructive/10 focus:text-destructive"
+          >
+            <Trash2 className="mr-2 mt-0.5 h-4 w-4 shrink-0" />
+            <span className="flex flex-col leading-tight">
+              <span className="font-semibold">Remove from this workout</span>
+              <span className="text-[11px] text-muted-foreground">Only this workout. You can undo it.</span>
+            </span>
+          </CardMenuItem>
+        </>
+      )}
+    </>
+  );
+  const quickActions = (
+    <ExerciseQuickActions
+      name={name}
+      howTo={hasGuide ? (
+        <ExerciseHowToButton
+          exerciseId={exerciseId}
+          fallbackName={name}
+          iconOnly
+          className="h-10 w-10 shrink-0 rounded-full border-0 bg-transparent p-0 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground dark:bg-transparent dark:hover:bg-muted [&_svg]:size-[22px]"
+        />
+      ) : null}
+      hasNote={hasNote}
+      onOpenNote={() => setNotesOpen(true)}
+    />
+  );
+
   return (
     <Card
       data-workout-exercise
@@ -5025,13 +5215,21 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
         "workout-card-surface relative scroll-mt-24 overflow-hidden p-3.5 transition-[colors,box-shadow] hover:border-builder-card-border-strong sm:p-5",
       )}
     >
-      {/* The name, with the card's unit top right as a small kg | lb switch;
-          its role in the day under it in plain words. The order lives in
-          Focus's "Exercise N of M" and the list's own order. */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 text-xl font-bold leading-tight tracking-tight break-words" data-exercise-name>{name}</div>
+      {/* The name, with the card's unit (a small kg | lb switch) and its ⋯ top
+          right; its role in the day under it in plain words, then its setup.
+          The order lives in Focus's "Exercise N of M" and the list's own order. */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1 pt-1 text-xl font-bold leading-tight tracking-tight break-words" data-exercise-name>{name}</div>
         {/* No weight to log (a walk, a plank): no kg / lb switch either. */}
-        {!readonly && onUnitChange && !hideWeight && <UnitSwitch unit={activeUnit} onChange={handleUnitToggle} />}
+        {!readonly && onUnitChange && !hideWeight && <div className="pt-1"><UnitSwitch unit={activeUnit} onChange={handleUnitToggle} /></div>}
+        {(exerciseId || name) && (
+          <CardMenu
+            name={name}
+            buttonClassName="-mr-2 -mt-0.5 h-10 w-10 shrink-0 rounded-full p-0 text-muted-foreground hover:bg-muted hover:text-foreground [&_svg]:size-[22px]"
+          >
+            {cardMenu}
+          </CardMenu>
+        )}
         {unitAsk && (
           <UnitSwitchSheet
             ask={unitAsk}
@@ -5045,7 +5243,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
         <span data-exercise-role>{purposeLabelText(purposeLabel || category)}</span>
         {lastWeekSwap && <LastWeekSwapChip swap={lastWeekSwap} unit={activeUnit} />}
       </div>
-      {cardSetup?.summary && (
+      {cardSetup && (cardSetup.summary || (cardSetup.mode === "live" && completedSetCount === 0 && offersSetup({ name, equipment: (exercise as any)?.equipment ?? null }))) && (
         <SetupLine text={cardSetup.summary} retired={!!cardSetup.equipment?.archived_at} onOpen={() => setSetupOpen(true)} />
       )}
       {/* Standardized prescription line: Sets × Reps @ Weight | RPE (a run reads as a run:
@@ -5178,200 +5376,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
       )}
       {/* The note as the athlete should read it: a coach's words as written, a generated one without its boilerplate (coach-notes.ts). */}
       {athleteNote && <ExerciseNotesBlock notes={athleteNote} />}
-      {/* Logging actions: keep the common actions visible and quiet.
-          Structural editing is isolated behind one compact reorder control. */}
-      {/* Rest on the left ("Rest 5 min", the countdown while it runs), the timer
-          among the icons: one RestTimer for both, so its chime plays once. */}
-      <RestTimer
-        seconds={effectiveRest ?? null}
-        auto={!restIsExplicit}
-        scopeKey={dayId}
-        timerId={String(row.id ?? exerciseId ?? name)}
-        onStart={() => { if (startsWorkout) beginWorkoutSession(dayId); }}
-      >
-        {(restParts) => (
-          <ExerciseActionRow
-            name={name}
-            howTo={hasGuide ? (
-              <ExerciseHowToButton
-                exerciseId={exerciseId}
-                fallbackName={name}
-                iconOnly
-                className="h-10 w-10 shrink-0 rounded-full border-0 bg-transparent p-0 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground dark:bg-transparent dark:hover:bg-muted [&_svg]:size-[22px]"
-              />
-            ) : null}
-            hasNote={hasNote}
-            onOpenNote={() => setNotesOpen(true)}
-            moreMenu={(
-              <>
-                {/* Workout Tools, one tap each, over the workout (list or Focus) */}
-                {toolsActions && (
-                  <>
-                    <CardToolsRow unit={activeUnit} />
-                    <CardMenuSeparator />
-                  </>
-                )}
-                {!readonly && clientId && (
-                  <>
-                    {/* Undo / Redo stay open so a few taps walk back several steps. */}
-                    <div className="grid grid-cols-2 gap-1">
-                      <CardMenuItem
-                        data-testid="card-undo"
-                        disabled={!cardHistory.canUndo || cardHistory.busy}
-                        onSelect={(e) => { e.preventDefault(); void runCardHistory("undo"); }}
-                        aria-label={`Undo last change to ${name}`}
-                        className="h-10 justify-center rounded-lg font-semibold"
-                      >
-                        <Undo2 className="mr-1.5 h-4 w-4" /> Undo
-                      </CardMenuItem>
-                      <CardMenuItem
-                        data-testid="card-redo"
-                        disabled={!cardHistory.canRedo || cardHistory.busy}
-                        onSelect={(e) => { e.preventDefault(); void runCardHistory("redo"); }}
-                        aria-label={`Redo change to ${name}`}
-                        className="h-10 justify-center rounded-lg font-semibold"
-                      >
-                        <Redo2 className="mr-1.5 h-4 w-4" /> Redo
-                      </CardMenuItem>
-                    </div>
-                    <CardMenuItem
-                      data-testid="card-reset"
-                      disabled={!cardHistory.canReset || cardHistory.busy}
-                      onSelect={() => void runCardHistory("reset")}
-                      className="items-start rounded-lg py-2"
-                    >
-                      <RotateCcw className="mr-2 mt-0.5 h-4 w-4 shrink-0" />
-                      <span className="flex flex-col leading-tight">
-                        <span>Reset exercise</span>
-                        <span className="text-[11px] text-muted-foreground">Clear everything logged here</span>
-                      </span>
-                    </CardMenuItem>
-                    <CardMenuSeparator />
-                  </>
-                )}
-                <CardMenuItem onSelect={() => setSwapOpen(true)} className="rounded-lg">
-                  <ArrowLeftRight className="mr-2 h-4 w-4" /> Swap exercise
-                </CardMenuItem>
-                {clientId && (
-                  <CardMenuItem onSelect={() => setHistoryOpen(true)} className="rounded-lg" data-testid="card-history">
-                    <LineChart className="mr-2 h-4 w-4" /> History & progress
-                  </CardMenuItem>
-                )}
-                {equipmentOn && (
-                  <CardMenuItem onSelect={() => setSetupOpen(true)} className="rounded-lg" data-testid="card-setup">
-                    <SlidersHorizontal className="mr-2 h-4 w-4" /> {cardSetup?.summary ? "Setup & equipment" : "Save your setup"}
-                  </CardMenuItem>
-                )}
-                {canSuggest && !readonly && (
-                  // One switch for every card (the line's ⓘ has it too).
-                  <CardMenuItem onSelect={() => setShowSuggestionCard(!showSuggestionCard)} className="rounded-lg" data-testid="card-suggestions">
-                    <Target className="mr-2 h-4 w-4" /> {showSuggestionCard ? "Turn off weight suggestions" : "Suggest weights"}
-                  </CardMenuItem>
-                )}
-                {cues && (
-                  <CardMenuItem onSelect={() => setCuesOpen((v) => !v)} className="rounded-lg">
-                    {cuesOpen ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
-                    {cuesOpen ? "Hide cues" : "Show cues"}
-                  </CardMenuItem>
-                )}
-                <CardMenuItem onSelect={() => setHelpOpen(true)} className="rounded-lg">
-                  <HelpCircle className="mr-2 h-4 w-4" /> Training help
-                </CardMenuItem>
-                {(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) && (
-                  <>
-                    <CardMenuSeparator />
-                    <div className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                      Exercise {movePosition} of {moveCount}
-                    </div>
-                    <div className="grid grid-cols-2 gap-1">
-                      <CardMenuItem disabled={!canMoveUp} onSelect={onMoveUp} aria-label="Move exercise up" className="h-10 justify-center rounded-lg">
-                        <ArrowUp className="mr-1.5 h-4 w-4" /> Up
-                      </CardMenuItem>
-                      <CardMenuItem disabled={!canMoveDown} onSelect={onMoveDown} aria-label="Move exercise down" className="h-10 justify-center rounded-lg">
-                        <ArrowDown className="mr-1.5 h-4 w-4" /> Down
-                      </CardMenuItem>
-                    </div>
-                    {(moveCount ?? 0) > 2 && (
-                      <>
-                        <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Move to position</div>
-                        <div className="grid grid-cols-4 gap-1 p-1">
-                          {Array.from({ length: moveCount ?? 0 }, (_, i) => i + 1).map((position) => (
-                            <CardMenuItem
-                              key={position}
-                              disabled={position === movePosition}
-                              onSelect={() => onMoveTo?.(position)}
-                              className="h-10 justify-center rounded-lg p-0 font-semibold"
-                            >
-                              {position}
-                            </CardMenuItem>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </>
-                )}
-                {canEditSets && setCount > 1 && (() => {
-                  // The swipe's twin for anyone who doesn't swipe (or uses a
-                  // keyboard / screen reader): the program's sets skip for
-                  // today, sets they added delete. Later sets move up; Undo on
-                  // the toast puts it back.
-                  const all = Array.from({ length: setCount }, (_, i) => i + 1);
-                  const planned = all.filter((n) => setKindAt(n, dbSetCount, setSession) === "planned");
-                  const added = all.filter((n) => setKindAt(n, dbSetCount, setSession) === "added");
-                  const chip = "h-10 justify-center rounded-lg border border-border p-0 font-semibold tabular-nums";
-                  return (
-                    <>
-                      <CardMenuSeparator />
-                      {planned.length > 0 && (
-                        <>
-                          <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Skip a set today (stays in your program)</div>
-                          <div className="grid grid-cols-5 gap-1 p-1" data-testid="card-skip-set">
-                            {planned.map((n) => (
-                              <CardMenuItem key={n} onSelect={() => void takeOutSet(n)} aria-label={`Skip set ${n} of ${name} today`} className={chip}>
-                                {n}
-                              </CardMenuItem>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                      {added.length > 0 && (
-                        <>
-                          <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Delete a set you added</div>
-                          <div className="grid grid-cols-5 gap-1 p-1" data-testid="card-delete-set">
-                            {added.map((n) => (
-                              <CardMenuItem key={n} onSelect={() => void takeOutSet(n)} aria-label={`Delete set ${n} of ${name}`} className={cn(chip, "text-destructive focus:text-destructive")}>
-                                {n}
-                              </CardMenuItem>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </>
-                  );
-                })()}
-                {onRemove && (
-                  <>
-                    <CardMenuSeparator />
-                    <CardMenuItem
-                      data-testid="card-remove"
-                      onSelect={onRemove}
-                      className="items-start rounded-lg py-2 text-destructive focus:bg-destructive/10 focus:text-destructive"
-                    >
-                      <Trash2 className="mr-2 mt-0.5 h-4 w-4 shrink-0" />
-                      <span className="flex flex-col leading-tight">
-                        <span className="font-semibold">Remove from this workout</span>
-                        <span className="text-[11px] text-muted-foreground">Only this workout. You can undo it.</span>
-                      </span>
-                    </CardMenuItem>
-                  </>
-                )}
-              </>
-            )}
-            rest={(exerciseId || name) ? restParts.button : null}
-            restLabel={(exerciseId || name) ? restParts.label : null}
-          />
-        )}
-      </RestTimer>
       <DeferredQuickSwapSheet
         open={swapOpen}
         onOpenChange={setSwapOpen}
@@ -5466,7 +5470,22 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
         </p>
       )}
 
-      <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
+      {/* Right above the sets: the rest ("Rest 3 min", the countdown while it
+          runs, on the next exercise too once this one's done) and How To ·
+          Note. One rest for the workout (RestLine). */}
+      <RestLine
+        seconds={restOrder && !readonly ? effectiveRest ?? null : null}
+        auto={!restIsExplicit}
+        scopeKey={dayId}
+        timerId={restRowId}
+        shows={restShows}
+        // before the sets are all in; a finished card shows a rest only while it runs
+        idle={!readonly && openSetCount > 0}
+        onStart={() => { if (startsWorkout) beginWorkoutSession(dayId); }}
+      >
+        {quickActions}
+      </RestLine>
+      <div className={cn("mt-1 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
         <div
           className={cn(
             "grid items-center justify-items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2 py-1.5 text-xs font-medium text-muted-foreground",
@@ -5673,7 +5692,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
               hideWeight={hideWeight}
               focusMode={focusMode}
               onChange={onChange}
-              onSetCompleted={bumpRestTimer}
               onSwitchUnit={!readonly && onUnitChange && !hideWeight ? switchUnitNow : undefined}
               videoColumn={videoColumn}
               dayTitle={dayTitle}
@@ -6178,7 +6196,7 @@ function SetRow({
   onCascadeFromSet,
   fieldCascade = null,
   onFieldCascade,
-  readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
+  readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange,
   setCount, showReps = true, showTimer = false, showDistance = false, distanceUnit = "km", showCalories = false, showVelocity = false, gridTemplate, prescribedDurationSeconds = null,
   onTimerTargetChange,
   onTimerCascade,
@@ -6280,7 +6298,6 @@ function SetRow({
   hideWeight?: boolean;
   focusMode?: boolean;
   onChange: () => void;
-  onSetCompleted?: (setIndex: number) => void;
   /** The set ends in a video cell (a coaching client: film or attach this set for the coach). */
   videoColumn?: boolean;
   /** The workout's name, for the set video's chat card. */
@@ -7253,7 +7270,6 @@ function SetRow({
       onChange();
       // the weight it logged at came back from the server: it's saved, not a new edit
       if (quick) adoptShownAsSaved(true);
-      if (nextCompletedAt) onSetCompleted?.(setIndex);
       return nextCompletedAt ? 1 + below : 0;
     } catch (err: any) {
       const message = err?.message ?? "Set status failed to save";
@@ -7499,7 +7515,6 @@ function SetRow({
       supersedeOfflineWrite(`portal_set_time:${rowId}:${clientId}:${setIndex}`);
       await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();
-      if (!existing?.completed_at) onSetCompleted?.(setIndex);
       // The card gives the set's tock and tap (it hears every way a set completes).
       toast.success(
         opts.finishedEarly && prescribedSec

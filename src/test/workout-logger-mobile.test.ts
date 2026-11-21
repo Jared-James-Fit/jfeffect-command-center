@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { displayLoadInUnit } from "@/lib/workout-unit-persistence";
-import { ExerciseActionRow } from "@/components/workout-day/exercise-action-row";
+import { ExerciseQuickActions } from "@/components/workout-day/exercise-action-row";
 
 const logger = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
 
@@ -25,15 +25,16 @@ describe("set rows saved without a weight", () => {
 describe("exercise action row", () => {
   const render = (hasNote: boolean) =>
     renderToStaticMarkup(
-      createElement(ExerciseActionRow, {
-        name: "Squat", howTo: null, hasNote, onOpenNote() {}, moreMenu: null, rest: null,
+      createElement(ExerciseQuickActions, {
+        name: "Squat", howTo: null, hasNote, onOpenNote() {},
       }),
     );
-  it("is How To · Note · More · Rest — reorder lives in More", () => {
+  it("is How To · Note over the sets; the ⋯ (reorder in it) sits beside the name", () => {
     const html = render(false);
     expect(html).toContain('aria-label="Add note for Squat"');
-    expect(html).toContain('aria-label="More options for Squat"');
     expect(html).not.toContain("Reorder");
+    expect(logger).toContain("<CardMenu\n            name={name}");
+    expect(logger).toContain("Move to position");
   });
   it("marks an existing note with a dot instead of a label", () => {
     expect(render(true)).toContain('aria-label="Notes for Squat"');

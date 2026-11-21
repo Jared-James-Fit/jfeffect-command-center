@@ -35,7 +35,7 @@ describe("live workout structure editing", () => {
     expect(picker).toContain('aria-label="Add exercise here"');
     expect(picker).not.toContain('>\n            Add\n');
     // the ⋯ and its menu (a bottom sheet on a phone) live in card-menu.tsx
-    expect(actionRow).toContain("<CardMenu name={name} buttonClassName={round}>{moreMenu}</CardMenu>");
+    expect(logger).toContain("{cardMenu}\n          </CardMenu>");
     const cardMenu = readFileSync("src/components/workout-day/card-menu.tsx", "utf8");
     expect(cardMenu).toContain("More options for");
     expect(cardMenu).toContain("const Icon = vertical ? MoreVertical : MoreHorizontal;");

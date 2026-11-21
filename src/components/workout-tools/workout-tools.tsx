@@ -10,7 +10,7 @@
  * tally also keeps a pill on screen to get back to it.
  *
  * Deliberately isolated from the prescribed Rest timer
- * (`RestTimerButton` + `ActiveRestTimerProvider`): separate provider,
+ * (`RestLine` + rest-timer-store.ts): separate provider,
  * separate storage namespace (`jf.workout-tools.*`), no shared hooks. These
  * tools are scratchpad aids only — they never write workout data, results,
  * completion, PRs or analytics.
