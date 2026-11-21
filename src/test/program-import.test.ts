@@ -332,6 +332,45 @@ describe("files", () => {
   });
 });
 
+describe("what the parser can't be sure of goes to AI or to the person, never dropped", () => {
+  it("brings in a bare exercise name for its numbers to be filled in", () => {
+    const o = parseSource({ kind: "text", name: "", text: "Day 1\nBack Squat 3x5\nLeg Press" });
+    const ex = allExercises(o.program);
+    expect(ex.map((e) => e.name)).toEqual(["Back Squat", "Leg Press"]);
+    expect(ex[1]).toMatchObject({ sets: null, reps: null });
+    expect(ex[1].unsure).toMatch(/No sets or reps/);
+  });
+  it("repeats a week written once for a range, and says so", () => {
+    const o = parseSource({ kind: "text", name: "", text: "Weeks 1-4\nDay A\nSquat 3x8 @ 70%\nDay B\nDeadlift 3x5 @ 75%" });
+    const weeks = weeksOf(o.program);
+    expect(weeks.map((w) => w.label)).toEqual(["Week 1", "Week 2", "Week 3", "Week 4"]);
+    expect(weeks[3].days[1].exercises[0]).toMatchObject({ name: "Deadlift", sets: 3, reps: "5", pct: 75 });
+    expect(o.program.issues.some((i) => /Written once for 4 weeks/.test(i.text))).toBe(true);
+  });
+  it("sends a program it can only half read to AI rather than guessing", () => {
+    const o = parseSource({
+      kind: "text",
+      name: "",
+      text: "MONDAY\n1. Comp Squat: work up to a top single @8, then 3x3 @ 85% of the single\nPaused Bench 4 sets of 4 reps @ RPE 7\nWEDNESDAY\nDeadlift 5/3/1 week 1: 65%x5, 75%x5, 85%x5+",
+    });
+    expect(o.confident).toBe(false);
+  });
+  it("finds nothing in a paragraph of prose", () => {
+    const o = parseSource({ kind: "text", name: "", text: "This program runs for 8 weeks. You squat for five sets of five with a moderately heavy weight." });
+    expect(o.exercises).toBe(0);
+    expect(o.confident).toBe(false);
+  });
+  it("never drops a number in a column it doesn't know", () => {
+    const sheet = parseCsv("Exercise,Sets,Reps,Mystery\nBench Press,3,5,82");
+    const o = parseSource({ kind: "csv", name: "x.csv", text: sheetsToText([sheet]), sheets: [sheet] });
+    expect(allExercises(o.program)[0].unsure).toMatch(/82/);
+  });
+  it("reads an AI week range the same way", () => {
+    const p = readAiImport(JSON.stringify({ blocks: [{ weeks: [{ label: "Weeks 5-8", repeat: 4, days: [{ title: "A", exercises: [{ name: "Squat", sets: 3, reps: "5" }] }] }] }] }));
+    expect(weeksOf(p).map((w) => w.label)).toEqual(["Week 5", "Week 6", "Week 7", "Week 8"]);
+  });
+});
+
 /* ---------------- the AI's answer ---------------- */
 
 const SOURCE = `Week 1
@@ -419,12 +458,10 @@ describe("the draft the builder opens on", () => {
   it("leaves a missing number missing (never a guess)", () => {
     const p = parseSource({ kind: "text", name: "", text: "Day 1\nBack Squat 3x5\nLeg Press" });
     const d = toDraft(p.program, { matches: matchExerciseNames(LIB, importNames(p.program)), source: null, method: "parsed" });
-    const lp = d.plan.blocks[0].weeks[0].days[0].exercises.find((e) => e.exercise_id === "lp");
-    if (lp) {
-      expect(lp.sets).toBe(0);
-      expect(lp.reps).toBe("");
-      expect(planIssue("x y", d.plan)?.message).toMatch(/Sets|reps/);
-    }
+    const lp = d.plan.blocks[0].weeks[0].days[0].exercises.find((e) => e.exercise_id === "lp")!;
+    expect(lp.sets).toBe(0);
+    expect(lp.reps).toBe("");
+    expect(planIssue("x y", d.plan)?.message).toMatch(/Sets|reps/);
   });
   it("runs a one-week program for more weeks, linked", () => {
     const one = parseSource({ kind: "text", name: "", text: "Day 1\nBack Squat 3x5\nDay 2\nBench Press 3x5" });

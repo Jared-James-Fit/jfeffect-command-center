@@ -313,6 +313,19 @@ function parseLines(lines: string[], b: ProgramBuilder, unit: WeightUnit | null,
       acc.understood++;
       continue;
     }
+    // a bare name inside a day ("Leg Press") is an exercise with nothing written for it:
+    // brought in for its numbers to be filled in, never dropped as a note
+    const bare = bareExercise(line);
+    if (bare && b.currentDay) {
+      const e = blankExercise(bare.name);
+      e.group = bare.group;
+      e.src = line.slice(0, 200);
+      e.unsure = "No sets or reps written for it";
+      b.exercise(e);
+      acc.exercises++;
+      acc.understood++;
+      continue;
+    }
     if (/\d/.test(line) && looksLikeWork(line)) {
       acc.unread.push(line);
       b.note(line);
@@ -321,6 +334,25 @@ function parseLines(lines: string[], b: ProgramBuilder, unit: WeightUnit | null,
     b.note(line);
     acc.understood++;
   }
+}
+
+const NOTE_START =
+  /^(superset|circuit|optional|focus|notes?|tip|cue|remember|make sure|don'?t|no\b|not\b|then|and|or|with|rest|warm|cool|stretch|finish|total|time|duration|goal|week|day)\b/i;
+
+/** A line that's only an exercise's name (short, no prescription, not a sentence), or null. */
+function bareExercise(line: string): { name: string; group: string | null } | null {
+  let t = line.trim();
+  let group: string | null = null;
+  const mark = LIST_MARK.exec(t);
+  if (mark) {
+    group = (mark[2] ?? mark[3] ?? null)?.toUpperCase() ?? null;
+    t = t.slice(mark[0].length).trim();
+  }
+  t = t.replace(/[:\-–—]+$/, "").trim();
+  if (!t || t.length > 50 || words(t) > 6 || !NAME_OK(t)) return null;
+  if (/[.!?;]$/.test(t) || /[,;]/.test(t) || RX_START.test(t) || SENTENCE_START.test(t) || NOTE_START.test(t)) return null;
+  if (!/^[A-Z0-9(]/.test(t)) return null;
+  return { name: t, group };
 }
 
 /** A line with numbers that reads like training rather than a note (it should have been an exercise). */
@@ -693,6 +725,12 @@ function parseTable(sheet: SourceSheet, layout: Layout, b: ProgramBuilder, unitH
       const res = readCell(c, row[i] ?? "", unitHint, e);
       if (!res.ok) bad = true;
     }
+    // a number in a column with no header the parser knows: never dropped silently
+    const stray = filled.filter(([i, c]) => !cols.has(i) && /\d/.test(c)).map(([, c]) => c);
+    if (stray.length) {
+      bad = true;
+      e.unsure = `Couldn't place "${cap(stray.join(", "), 60)}"`;
+    }
     if (bad) {
       e.unsure = e.unsure ?? "Part of this row wasn't clear";
       acc.unread.push(e.src);
@@ -765,7 +803,7 @@ export function parseSource(doc: SourceDoc): ParseOutcome {
   let why: string | null = null;
   if (!all.length) why = "no exercises found";
   else if (coverage < 0.9) why = `read ${Math.round(coverage * 100)}% of the lines`;
-  else if (missing) why = `${missing} exercises without sets and reps`;
+  else if (missing > Math.max(1, all.length * 0.2)) why = `${missing} exercises without sets and reps`;
   else if (crowded) why = "a day with more than 20 exercises (the layout may be misread)";
   else if (weeks > 24) why = "more than 24 weeks";
   else if (all.filter((e) => e.unsure).length > Math.max(2, all.length * 0.1)) why = "too many unclear rows";
