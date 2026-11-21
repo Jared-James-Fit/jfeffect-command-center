@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import type { NavItem } from "@/components/app-shell";
 import { Search, Eye, MoreHorizontal } from "lucide-react";
 
-// v4: every staff bar was reset to Dashboard, Clients, League (raised centre),
-// Messages, Tasks (More in the header), so bars saved before that start fresh.
-const KEY = "jf-floating-bar-v4";
+// v5: every staff bar was reset to Crew (far left, where the app opens),
+// Dashboard, Clients, Messages, Tasks (More in the header), so bars saved
+// before that start fresh.
+const KEY = "jf-floating-bar-v5";
 const EVT = "floating-bar-updated";
 
 /**

@@ -52,8 +52,8 @@ function AdminLayout() {
   const barScope = isCoach ? "coach" : "admin";
   const customLayout = useBarLayout(barScope);
 
-  // Every staff phone bar is five plain tabs with Crew raised in the
-  // middle; More opens from the header (AppShell `moreInHeader`), the same as
+  // Every staff phone bar is five plain tabs with Crew first, where the app
+  // opens; More opens from the header (AppShell `moreInHeader`), the same as
   // the client app.
   // The finance login's bar starts on its home (snap, record, collect, Cleo).
   const defaultBottom = viewOnly ? FINANCE_BAR : STAFF_BAR;

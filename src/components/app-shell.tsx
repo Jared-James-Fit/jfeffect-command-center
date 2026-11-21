@@ -40,6 +40,7 @@ import { useExerciseLibraryRealtime } from "@/hooks/use-exercise-library-realtim
 import { useExerciseAliasIndex } from "@/hooks/use-exercise-alias-index";
 import { useSalesRealtime } from "@/hooks/use-sales-realtime";
 import { MORE_BAR_TO, barPrefixMatch, onPages, resolveVisibleBarItems } from "@/lib/floating-bar";
+import { useTabPlaces } from "@/lib/tab-places";
 import { touchActiveWorkoutSession } from "@/components/workout-day/WorkoutTimer";
 import { OPEN_MORE_EVENT, pageOwnsTopBar } from "@/lib/shell-events";
 import { pageScrolledPx, requestTabRefresh, scrollPageToTop, topFirstPage, topFirstTap } from "@/lib/tab-refresh";
@@ -510,6 +511,9 @@ export function AppShell({
   const barItems = useMemo(() => resolveVisibleBarItems(bottomItems, { more: !moreInHeader }), [bottomItems, moreInHeader]);
   // More lists what isn't already a tab under your thumb (its search still finds those)
   const barPages = useMemo(() => new Set(barItems.map((i) => i.to)), [barItems]);
+  // Each tab keeps your place: back on a tab from the bar is where you left it (tab-places.ts).
+  const barTabs = useMemo(() => new Set(barItems.map((i) => i.to).filter((to) => to.startsWith("/"))), [barItems]);
+  const tabTap = useTabPlaces(barTabs);
   // The tabs people flip between: their code is fetched ahead of the first tap
   // (pages only; bar actions like Search or More aren't routes).
   usePreloadTabs(bottomItems.map((i) => i.to).filter((to) => to.startsWith("/")));
@@ -1034,7 +1038,10 @@ export function AppShell({
           search={search}
           hash={hash}
           navBadges={navBadges}
-          onNavigate={(to) => markNavSeen(user?.id, to)}
+          onNavigate={(to) => {
+            tabTap(to);
+            markNavSeen(user?.id, to);
+          }}
           onRetap={retapTab}
           moreOpen={moreOpen}
           onOpenMore={() => setMoreOpen(true)}
@@ -1721,6 +1728,9 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
     return (
       <Link
         to={item.to}
+        // the router's own "active" is any page under the tab's address, so every portal
+        // page read as Home to a screen reader; the tab says it's current only when `active` does
+        activeOptions={{ exact: true, includeSearch: false }}
         onClick={(e) => {
           // Tapping the tab you're already on goes back to the top and refreshes
           // the page, like every app with a feed. With nothing in the URL to clear
