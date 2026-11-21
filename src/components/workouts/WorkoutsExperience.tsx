@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, Suspense } from "react";
+import { ProgramStartOptions } from "@/components/program-import/program-start-options";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { displayExerciseName } from "@/lib/exercise-display-name";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -889,7 +890,7 @@ function NextWorkoutRow({ next, onSelectDate }: { next: NextWorkout; onSelectDat
 
 /**
  * That day's sessions with the coach, under the workout: the same row as on
- * Home (violet line, time, what and where). Each opens the Calendar on that
+ * Home (a hairline, time, what and where). Each opens the Calendar on that
  * day, where they can see the details or ask to change it.
  */
 function DaySessionsCard({ sessions, date, clientId }: { sessions: CalendarItem[]; date: Date; clientId: string }) {
@@ -900,8 +901,7 @@ function DaySessionsCard({ sessions, date, clientId }: { sessions: CalendarItem[
     <Card className="px-3.5 pb-1.5 pt-3">
       <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
         <h3 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-          {/* violet = sessions with the coach, as on the week strip's dot */}
-          <CalendarIcon className="h-4 w-4 text-violet-500" />
+          <CalendarIcon className="h-4 w-4 text-foreground" />
           {sessions.length === 1 ? "Session with your coach" : "Sessions with your coach"}
         </h3>
         <Link to="/portal/calendar" search={{ date: day } as any} className="inline-flex shrink-0 items-center text-xs font-semibold text-muted-foreground hover:text-foreground">
@@ -1757,22 +1757,15 @@ function SelfEmptyState({ hasHistory = false }: { hasHistory?: boolean }) {
   const { isSelfServe } = useServiceTier();
   if (!isSelfServe) return <CoachedEmptyState />;
   return (
-    <Card className="p-10 text-center">
+    <Card className="p-5 text-center sm:p-8" data-self-empty>
       <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-muted">
         <ClipboardList className="h-6 w-6 text-muted-foreground" />
       </div>
       <div className="mt-3 text-base font-semibold">No program yet</div>
       <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
-        Start a JF Effect plan, copy one from the crew or build your own. Its workouts land on your training days here.
+        Follow one of ours, build your own or bring one you already have. Its workouts land on your training days here.
       </p>
-      <div className="mt-4 flex flex-wrap justify-center gap-2">
-        <Button asChild>
-          <Link to="/portal/programs" search={{ tab: "mine" }}>Find a program</Link>
-        </Button>
-        <Button asChild variant="secondary">
-          <Link to="/portal/programs/new">Build your own</Link>
-        </Button>
-      </div>
+      <ProgramStartOptions className="mx-auto mt-4 max-w-md" />
       {/* a program they ended or switched from can come back where they left off */}
       {hasHistory && (
         <Link

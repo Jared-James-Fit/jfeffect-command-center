@@ -41,6 +41,29 @@ export type Calibration = {
   relErrX: number;
   frames: number;
   why: "ok" | "too_few_frames" | "plate_too_small" | "not_side_on";
+  /** The plate's edge barely showed (black on black): the scale is known less well. */
+  faint?: boolean;
+};
+
+/**
+ * The plate's measured size from its outer edge (rim-outer.ts `rimSize`):
+ * semi-axes in analysed px and their relative 1-σ uncertainty (edge
+ * position and frame-to-frame spread included).
+ */
+export type RimSizeInput = {
+  a: number;
+  b: number;
+  relA: number;
+  relB: number;
+  frames: number;
+  faint: boolean;
+  /**
+   * A phone tilted up or down sees the plate bigger at one end of the rep
+   * than the other (perspective): its vertical semi-axis at height y is
+   * b + k·(y − y0) (working px). Only when the rims measured at the two ends
+   * of the travel say so; b is then the size at y0.
+   */
+  grad?: { y0: number; k: number };
 };
 
 export type PlateSize = {
@@ -52,7 +75,12 @@ export type PlateSize = {
 /** The default: a standard plate, unconfirmed (iron 45s and bumpers differ by up to ~1 %). */
 export const DEFAULT_PLATE: PlateSize = { mm: STANDARD_PLATE_MM, rel: 0.01 };
 
-export function calibrate(points: TrackPoint[], plate: PlateSize = DEFAULT_PLATE): Calibration {
+export function calibrate(
+  points: TrackPoint[],
+  plate: PlateSize = DEFAULT_PLATE,
+  size?: RimSizeInput | null,
+): Calibration {
+  if (size) return fromSize(plate, size);
   const good = points.filter((p) => p.found && p.conf >= 0.6);
   const base = {
     plateMm: plate.mm,
@@ -108,4 +136,34 @@ export function calibrate(points: TrackPoint[], plate: PlateSize = DEFAULT_PLATE
   if (wide < 8) return { ...out, ok: false, why: "plate_too_small" };
   if (ratio < 0.7) return { ...out, ok: false, why: "not_side_on" };
   return { ...out, ok: true, why: "ok" };
+}
+
+/** The scale from the plate's outer edge, measured in still frames (the engine's own way since bar-path/3). */
+function fromSize(plate: PlateSize, size: RimSizeInput): Calibration {
+  const { a, b } = size;
+  const wide = Math.max(a, b);
+  const ratio = Math.min(a, b) / wide;
+  const view: View = ratio >= 0.96 ? "side" : a < b ? "turned" : "tilted";
+  const offDeg = (Math.acos(Math.min(1, ratio)) * 180) / Math.PI;
+  const viewY = view === "tilted" ? 0.4 * (1 - ratio) : view === "turned" ? 0.05 * (1 - ratio) : 0;
+  const viewX = view === "turned" ? 0.25 * (1 - ratio) : view === "tilted" ? 0.1 * (1 - ratio) : 0;
+  const out: Calibration = {
+    ok: true,
+    plateMm: plate.mm,
+    mmPerPxX: plate.mm / (2 * a),
+    mmPerPxY: plate.mm / (2 * b),
+    a,
+    b,
+    ratio,
+    view,
+    offDeg,
+    relErr: Math.sqrt(plate.rel ** 2 + size.relB ** 2 + viewY ** 2),
+    relErrX: Math.sqrt(plate.rel ** 2 + size.relA ** 2 + viewX ** 2),
+    frames: size.frames,
+    why: "ok",
+    faint: size.faint,
+  };
+  if (wide < 8) return { ...out, ok: false, why: "plate_too_small" };
+  if (ratio < 0.7) return { ...out, ok: false, why: "not_side_on" };
+  return out;
 }

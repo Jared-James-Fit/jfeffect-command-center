@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { KindFamily } from "@/lib/calendar-sources";
+import { FAMILY_MONTH_CHIP, statusMark } from "@/lib/calendar-palette";
 import type { HomeView } from "@/lib/calendar-prefs";
 import { dayTag, monthGridDays } from "@/lib/home-calendar";
 import { chipTime } from "@/lib/calendar-labels";
@@ -106,12 +107,7 @@ export function HomeViewBar({
 }
 
 /** A month chip per family: the timeline blocks' colours, smaller. */
-const MONTH_CHIP: Record<KindFamily, string> = {
-  people: "border-violet-500 bg-violet-500/15",
-  coach: "border-amber-500 bg-amber-500/15",
-  training: "border-foreground/50 bg-foreground/[0.07]",
-  google: "border-muted-foreground/40 bg-muted text-foreground/75",
-};
+const MONTH_CHIP: Record<KindFamily, string> = FAMILY_MONTH_CHIP;
 
 /**
  * The month as whole weeks: each day's date (today filled) and what's on it,
@@ -171,6 +167,7 @@ export function HomeMonth({
                     d < today && "opacity-55",
                   )}
                 >
+                  {statusMark(r.status) === "done" && <Check className="mr-px inline h-[1em] w-[1em] -translate-y-px stroke-[3]" aria-hidden />}
                   <span className="hidden font-normal tabular-nums text-foreground/70 sm:inline">{r.startsAt ? `${chipTime(r.startsAt)} ` : ""}</span>
                   {r.tiny ? (
                     <>
@@ -228,7 +225,12 @@ export function HomeWeekList({
                     dayText={firstOfDay ? dayTag(r.date, today) : ""}
                     accent={FAMILY_ACCENT[r.family]}
                     time={r.timeText !== undefined ? r.timeText : r.startsAt ? startLabel(r.startsAt) : "All day"}
-                    title={<span className={cn(STRUCK_STATUSES.has(r.status ?? "") && "text-muted-foreground line-through")}>{r.title}</span>}
+                    title={
+                      <span className={cn(STRUCK_STATUSES.has(r.status ?? "") && "text-muted-foreground line-through")}>
+                        {statusMark(r.status) === "done" && <Check className="mr-1 inline h-3.5 w-3.5 -translate-y-px stroke-[2.5]" aria-label="Done" />}
+                        {r.title}
+                      </span>
+                    }
                     quiet={r.family === "google"}
                     suffix={r.what ? <span className="font-normal text-muted-foreground"> · {r.what}</span> : null}
                   />,

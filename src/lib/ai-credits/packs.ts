@@ -23,15 +23,22 @@
  * biggest is well under what AI food logging apps charge a month.
  */
 
-export type AiFeature = "meal_estimate";
+export type AiFeature = "meal_estimate" | "program_import";
 
-/** Credits per use. Must match `public.ai_credit_cost`. */
+/**
+ * Credits per use. Must match `public.ai_credit_cost`. A program import read by AI (a PDF,
+ * photos, a layout the parser can't read) is 10: GPT-5.5 over a whole multi-week program is
+ * roughly 20k tokens in and up to 30k out, about US$0.25-0.35, and it's given back if the
+ * read fails. A file the parser reads on its own costs nothing.
+ */
 export const FEATURE_COSTS: Record<AiFeature, number> = {
   meal_estimate: 1,
+  program_import: 10,
 };
 
 export const FEATURE_LABEL: Record<AiFeature, { one: string; many: string }> = {
   meal_estimate: { one: "AI food log", many: "AI food logs" },
+  program_import: { one: "program import", many: "program imports" },
 };
 
 export type CreditPack = {

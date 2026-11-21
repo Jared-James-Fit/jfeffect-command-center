@@ -4,6 +4,7 @@ import { CalendarDays, Check, ChevronRight, List } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { weekDays } from "@/components/calendar/week-strip";
 import type { KindFamily } from "@/lib/calendar-sources";
+import { FAMILY_ACCENT as PALETTE_ACCENT } from "@/lib/calendar-palette";
 import { cn } from "@/lib/utils";
 
 /**
@@ -21,16 +22,10 @@ import { cn } from "@/lib/utils";
 export type AgendaLink = { to: string; search?: Record<string, unknown> };
 
 /**
- * A hairline per item. Training is neutral (it's most of what's there, and a
- * colour on every workout said nothing); sessions with the coach keep violet
- * and coach events amber, the colours they carry everywhere else.
+ * A hairline per item, in the calendar's black / white / grey
+ * (calendar-palette.ts): a session the full ink, training lighter, Google grey.
  */
-export const FAMILY_ACCENT: Record<KindFamily, string> = {
-  training: "bg-foreground/60",
-  people: "bg-violet-500",
-  coach: "bg-amber-500",
-  google: "bg-muted-foreground/35",
-};
+export const FAMILY_ACCENT: Record<KindFamily, string> = PALETTE_ACCENT;
 
 /** Tap target for a row, whatever element it is. */
 export const AGENDA_ROW = "block w-full rounded-lg py-1 text-left transition active:bg-secondary/40";

@@ -106,10 +106,13 @@ describe("the Plan Library lives in the portal", () => {
     const workouts = read("src/components/workouts/WorkoutsExperience.tsx");
     expect(workouts).toContain('if (mode === "self") return <SelfEmptyState hasHistory={hasHistory} />;');
     expect(workouts).toContain("Your coach will publish your block soon.");
-    expect(workouts).toContain('<Link to="/portal/programs" search={{ tab: "mine" }}>Find a program</Link>');
-    expect(workouts).toContain('<Link to="/portal/programs/new">Build your own</Link>');
+    // Follow a program · Build my own · Import a program, one tap each (program-start-options.tsx)
+    expect(workouts).toContain('<ProgramStartOptions className="mx-auto mt-4 max-w-md" />');
     const pick = read("src/components/portal/pick-plan-card.tsx");
-    expect(pick).toContain('<Link to="/portal/programs" search={{ tab: "mine" }}>');
-    expect(pick).toContain('<Link to="/portal/programs/new">Build your own</Link>');
+    expect(pick).toContain('<ProgramStartOptions className="mt-3" />');
+    const ways = read("src/components/program-import/program-start-options.tsx");
+    expect(ways).toContain('"/portal/programs/new"');
+    expect(ways).toContain('"/portal/programs/import"');
+    expect(ways).toContain('{ tab: "jf" }');
   });
 });

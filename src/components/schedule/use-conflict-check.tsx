@@ -123,7 +123,7 @@ export function ConflictNotice({
                 <span
                   className={cn(
                     "mt-px shrink-0 rounded px-1 text-[9px] font-bold uppercase tracking-wider",
-                    it.source === "google" ? "bg-sky-500/20 text-sky-300" : "bg-violet-500/20 text-violet-300",
+                    it.source === "google" ? "bg-muted text-muted-foreground" : "bg-foreground/10 text-foreground",
                   )}
                 >
                   {it.source === "google" ? "Google" : "App"}

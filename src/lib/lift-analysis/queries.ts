@@ -10,15 +10,21 @@ import type { LiftAnalysis } from "@/lib/lift-analysis/analyze";
 import type { LvPoint } from "@/lib/lift-analysis/profile";
 import type { LoggedSet } from "@/lib/lift-analysis/verdict";
 import { announceChanged, LIFT_ANALYSIS_CHANGED } from "@/lib/lift-analysis/store";
+import type { Suggestion } from "@/lib/lift-analysis/suggestions";
+export { preselectOf, proposalSuggestions, type Suggestion } from "@/lib/lift-analysis/suggestions";
 
 const db = supabase as any;
 
-/** A read that found no plate on its own (status needs_tap) or couldn't open the video (failed). */
+/**
+ * A read that didn't go ahead by itself (status needs_tap: the bar needs
+ * confirming, with where detection thinks it is when it has a guess) or
+ * couldn't open the video (failed).
+ */
 export type NotRead = {
   engine: string;
   status: "needs_tap" | "failed";
   why: string;
-  suggestions?: { t: number; fx: number; fy: number; fr: number }[];
+  suggestions?: Suggestion[];
 };
 
 export type StoredAnalysis = {

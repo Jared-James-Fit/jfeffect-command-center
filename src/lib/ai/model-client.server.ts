@@ -27,9 +27,14 @@ export function effortFor(id: string, effort: Effort | undefined): Exclude<Effor
 }
 export type ModelUsage = { input: number | null; output: number | null; reasoning: number | null };
 export type ModelReply = { text: string; model: string; usage: ModelUsage; ms: number };
+/** A file a model reads alongside the prompt (OpenAI direct only): a PDF, or a picture of a page. */
+export type ModelFile = { kind: "pdf" | "image"; name: string; mime: string; base64: string };
+
 export type ModelRequest = {
   system: string;
   prompt: string;
+  /** PDFs and page photos the model reads (an `openai:` model; a gateway model is refused). */
+  files?: ModelFile[];
   /** Reasoning effort for models that take one (OpenAI reasoning models, Claude thinking). */
   effort?: Effort;
   maxOutputTokens?: number;
@@ -186,11 +191,29 @@ function responseText(j: any): string {
 function responseUsage(j: any): ModelUsage {
   return { input: j?.usage?.input_tokens ?? null, output: j?.usage?.output_tokens ?? null, reasoning: j?.usage?.output_tokens_details?.reasoning_tokens ?? null };
 }
+/** The Responses API's input: the prompt, or the prompt and its files as one user turn. */
+function openaiInput(r: ModelRequest): unknown {
+  if (!r.files?.length) return r.prompt;
+  return [
+    {
+      role: "user",
+      content: [
+        { type: "input_text", text: r.prompt },
+        ...r.files.map((f) =>
+          f.kind === "pdf"
+            ? { type: "input_file", filename: f.name, file_data: `data:${f.mime};base64,${f.base64}` }
+            : { type: "input_image", image_url: `data:${f.mime};base64,${f.base64}`, detail: "high" },
+        ),
+      ],
+    },
+  ];
+}
+
 function openaiBody(id: string, r: ModelRequest, background: boolean): Record<string, unknown> {
   return {
     model: id,
     instructions: r.system,
-    input: r.prompt,
+    input: openaiInput(r),
     ...(isReasoning(id) ? { reasoning: { effort: effortFor(id, r.effort) ?? "medium" } } : r.temperature != null ? { temperature: r.temperature } : {}),
     ...(r.maxOutputTokens ? { max_output_tokens: r.maxOutputTokens } : {}),
     ...(background ? { background: true, store: true } : {}),
@@ -236,7 +259,8 @@ export async function callModel(ref: string, r: ModelRequest): Promise<ModelRepl
       if (st.status === "failed") throw new Error(`${ref}: ${st.error}`);
       if (Date.now() - t0 > limit) throw new Error(`${ref}: no answer within ${Math.round(limit / 1000)}s`);
     }
-  } else if (m.family === "anthropic") out = await gatewayMessages(m.id, r);
+  } else if (r.files?.length) throw new Error(`${ref} can't read files; it needs an openai: model.`);
+  else if (m.family === "anthropic") out = await gatewayMessages(m.id, r);
   else out = await gatewayChat(m.id, r);
   return { ...out, model: ref, ms: Date.now() - t0 };
 }

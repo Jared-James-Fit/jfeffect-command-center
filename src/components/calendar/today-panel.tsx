@@ -103,7 +103,7 @@ export function ClientTodayPanel({
   if (nextPt) {
     tiles.push({
       icon: <CalendarClock className="h-4 w-4" />,
-      tone: "violet",
+      tone: "session",
       eyebrow: `Next PT Session · ${whenLabel(nextPt.date, nextPt.startsAt)}`,
       title: nextPt.title,
       meta: nextPt.subtitle ?? undefined,
@@ -153,7 +153,7 @@ export function ClientTodayPanel({
   );
 }
 
-type Tone = "emerald" | "rose" | "amber" | "violet" | "blue" | "sky";
+type Tone = "emerald" | "rose" | "amber" | "session" | "blue" | "sky";
 type TileSpec = {
   icon: React.ReactNode;
   tone: Tone;
@@ -168,9 +168,10 @@ const TONE_CLASSES: Record<Tone, { border: string; eyebrow: string; iconBg: stri
   emerald: { border: "border-emerald-500/30 hover:border-emerald-500/60", eyebrow: "text-emerald-300", iconBg: "bg-emerald-500/15 text-emerald-300" },
   rose:    { border: "border-rose-500/40 hover:border-rose-500/70",       eyebrow: "text-rose-300",    iconBg: "bg-rose-500/15 text-rose-300" },
   amber:   { border: "border-amber-500/30 hover:border-amber-500/60",     eyebrow: "text-amber-300",   iconBg: "bg-amber-500/15 text-amber-300" },
-  violet:  { border: "border-violet-500/30 hover:border-violet-500/60",   eyebrow: "text-violet-300",  iconBg: "bg-violet-500/15 text-violet-300" },
+  // sessions: the calendar's own ink, never a brand colour (calendar-palette.ts)
+  session: { border: "border-border hover:border-foreground/40",          eyebrow: "text-foreground/80", iconBg: "bg-muted text-foreground" },
   blue:    { border: "border-blue-500/30 hover:border-blue-500/60",       eyebrow: "text-blue-300",    iconBg: "bg-blue-500/15 text-blue-300" },
-  sky:     { border: "border-sky-500/30 hover:border-sky-500/60",         eyebrow: "text-sky-300",     iconBg: "bg-sky-500/15 text-sky-300" },
+  sky:     { border: "border-border hover:border-foreground/30",          eyebrow: "text-muted-foreground", iconBg: "bg-muted text-muted-foreground" },
 };
 
 function Tile({ spec }: { spec: TileSpec }) {

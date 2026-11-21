@@ -11,9 +11,9 @@ import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
 import { CalendarDayCell, type CalendarDnd } from "@/components/workouts/calendar-day-dnd";
 import { WorkoutStatusMark, dayMark } from "@/components/workouts/workout-status-mark";
 
-/** A session or appointment with the coach that day: violet, like everywhere else sessions show. */
+/** A session or appointment with the coach that day: the calendar's own ink, like everywhere else sessions show (calendar-palette.ts). */
 export function SessionDot({ className }: { className?: string }) {
-  return <span aria-hidden className={cn("inline-block h-2 w-2 shrink-0 rounded-full bg-violet-500", className)} />;
+  return <span aria-hidden className={cn("inline-block h-2 w-2 shrink-0 rounded-full bg-foreground", className)} />;
 }
 
 /** "Nov 2 – 8", or "Oct 26 – Nov 1" across a month: the strip is a calendar, so it says dates. */
@@ -29,7 +29,7 @@ export function WeekStrip({
   onSelectDate: (d: Date) => void;
   byDate: Map<string, WorkoutItem[]>;
   dnd?: CalendarDnd;
-  /** yyyy-mm-dd days with a session or appointment (client view): a violet dot by the workout mark. */
+  /** yyyy-mm-dd days with a session or appointment (client view): a dot by the workout mark. */
   sessionDays?: Set<string>;
   /** On the page itself, no card around it (Workouts: the calendar picks the day, the day's card is the thing). */
   flat?: boolean;

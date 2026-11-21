@@ -10,7 +10,8 @@
  * stands and no phone reads the same video again and again:
  *   - a read: saved (set_video_analysis_save), and the server puts the set's
  *     average velocity on the set when the read passes its rule;
- *   - no clear plate: "needs a tap", with the circles worth offering;
+ *   - not sure of the plate: "needs a look", with the ring it would have
+ *     used (opening it is one look and Analyze) and the circles worth offering;
  *   - a video this phone can't decode: "couldn't read".
  *
  * A read cut off by the app closing (iOS ends a backgrounded web app) is
@@ -21,7 +22,12 @@
 import { supabase } from "@/integrations/supabase/client";
 import { analyzeVideo } from "@/lib/lift-analysis/run";
 import { analysableExercise, repDirection } from "@/lib/lift-analysis/exercise";
-import { hasAnalysis, saveAnalysis, saveNotRead } from "@/lib/lift-analysis/queries";
+import {
+  hasAnalysis,
+  proposalSuggestions,
+  saveAnalysis,
+  saveNotRead,
+} from "@/lib/lift-analysis/queries";
 import { setRunning } from "@/lib/lift-analysis/store";
 import { ENGINE_VERSION } from "@/lib/lift-analysis/analyze";
 import { getSetVideoJobs, isActiveJob } from "@/lib/set-videos/jobs";
@@ -76,12 +82,22 @@ async function pump() {
         });
         if (res.ok) {
           await saveAnalysis(job.setVideoId, res.analysis);
-        } else if (res.why === "no_plate" || res.why === "ambiguous") {
+        } else if (
+          res.why === "needs_confirm" ||
+          res.why === "no_plate" ||
+          res.why === "ambiguous"
+        ) {
+          // not sure enough to read it alone: kept with where it thinks the bar is, so opening it is one
+          // look at the ring and Analyze
           await saveNotRead(job.setVideoId, {
             engine: ENGINE_VERSION,
             status: "needs_tap",
             why: res.why,
-            suggestions: res.suggestions ?? [],
+            suggestions: proposalSuggestions(
+              res.why === "needs_confirm"
+                ? res.proposal
+                : res.proposal && { ...res.proposal, key: null },
+            ),
           });
         } else if (res.why === "unreadable" || res.why === "too_short") {
           await saveNotRead(job.setVideoId, {

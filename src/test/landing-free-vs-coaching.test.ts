@@ -83,6 +83,19 @@ describe("the landing page sells the free app first and online coaching as its o
     );
   });
 
+  it("says what the app does: follow, build, upload, track, and bar speed (Nov 21 2026)", () => {
+    expect(LANDING_COPY.HERO.body).toContain("Follow my programs, build your own, or upload a plan you already have.");
+    expect(LANDING_COPY.OWN.map((o) => o.title)).toEqual(["Build your own", "Upload one you already have"]);
+    expect(visible).toContain("data-landing-own");
+    // uploads say they're private and that PDFs and photos are read with AI
+    expect(LANDING_COPY.OWN[1].note).toMatch(/PDFs and photos are read with AI/);
+    expect(LANDING_COPY.OWN[1].note).toMatch(/private to you/);
+    // bar speed for everyone is typed from a tracker; read from video only in coaching
+    expect(LANDING_COPY.FREE.map((f) => f.text)).toContain("Bar speed on any set, if you train with a velocity tracker");
+    expect(LANDING_COPY.COACHING.find((c) => c.title === "Technique and questions")?.body).toMatch(/bar path and speed/);
+    expect(LANDING_COPY.FAQ.find((f) => f.q === "Can I bring a program I already follow?")?.a).toMatch(/permission/);
+  });
+
   it("asks for the coaching application while coaching is on screen", () => {
     expect(visible).toContain('data-cta-zone="coaching"');
     expect(visible).toContain("zones={HOME_CTA_ZONES} hideWhenInline");

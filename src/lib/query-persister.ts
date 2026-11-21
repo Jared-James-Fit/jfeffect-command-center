@@ -33,6 +33,8 @@ const DO_NOT_PERSIST_PREFIXES = [
   "exercise-search-pool-lite",
   // AI reads of a described exercise: a session's worth, never worth a disk copy.
   "exercise-identify",
+  // A program being imported: its file's text can be large and its status moves on the server.
+  "program-import",
   // Tasks are edited from several devices at once. A 24h-old disk snapshot
   // made the phone show an outdated (or empty) list after a desktop edit.
   "tasks",

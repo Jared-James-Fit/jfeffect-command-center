@@ -2,9 +2,9 @@
  * The way into a set video's bar path & speed: one quiet line under the clip
  * (the set video's sheet, its card in the coach chat). It says the set's
  * read once there is one ("Bar path · 5 reps · avg 0.21 m/s · 18% velocity
- * loss"), how far a read on this phone has got while it runs, that the
- * plate needs a tap when it wasn't clear on its own, or offers "Analyze bar
- * path" for a barbell lift. Nothing for an exercise without a
+ * loss"), how far a read on this phone has got while it runs, that the bar
+ * needs a look when it wasn't sure on its own, or offers "Analyze bar path"
+ * for a barbell lift. Nothing for an exercise without a
  * bar. The full view loads only when it's opened.
  */
 import { useState } from "react";
@@ -14,6 +14,7 @@ import { importWithRetry } from "@/lib/chunk-import";
 import { analysableExercise } from "@/lib/lift-analysis/exercise";
 import { summaryLine } from "@/lib/lift-analysis/format";
 import { isRead, useSetVideoAnalyses } from "@/lib/lift-analysis/queries";
+import { overallProgress } from "@/lib/lift-analysis/progress";
 import { useRunningAnalysis } from "@/lib/lift-analysis/store";
 import { cn } from "@/lib/utils";
 
@@ -66,11 +67,11 @@ export function LiftAnalysisEntry({
   };
 
   const label = running
-    ? `Reading bar path… ${Math.round(100 * ((["opening", "finding", "tracking", "reading"].indexOf(running.stage) + running.progress) / 4))}%`
+    ? `Reading bar path… ${Math.round(100 * overallProgress(running))}%`
     : saved
       ? `Bar path · ${summaryLine(saved.result)}`
       : notRead === "needs_tap"
-        ? "Bar path · tap the plate to read it"
+        ? "Bar path · check the bar to read it"
         : notRead === "failed"
           ? "Bar path · couldn't read this video"
           : "Analyze bar path";

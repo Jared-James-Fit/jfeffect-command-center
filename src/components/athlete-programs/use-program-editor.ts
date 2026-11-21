@@ -73,13 +73,26 @@ function clearBackup(key: string | null) {
  * nothing half-built is ever lost). Saving checks it, writes it, and moves the
  * untouched workouts of a program that's running.
  */
-export function useProgramEditor(initial: ProgramDraft, base: string | null): ProgramEditor {
+export type ProgramEditorOptions = {
+  /** Where the device copy is kept (an import keeps its own, per import). */
+  backupKey?: (userId: string) => string;
+  /** Starts unsaved (an imported program isn't a program until it's saved). */
+  startDirty?: boolean;
+  /** Runs once a new program is saved, before the program opens. */
+  onSaved?: (programId: string) => Promise<void> | void;
+  /** What a new program's save says. */
+  savedMessage?: string;
+  /** Where Back goes for a new program. */
+  backTo?: string;
+};
+
+export function useProgramEditor(initial: ProgramDraft, base: string | null, opts: ProgramEditorOptions = {}): ProgramEditor {
   const navigate = useNavigate();
   const { save: saveMutation } = useProgramActions();
   const syncRunning = useServerFn(syncRunningProgram);
   const qc = useQueryClient();
   const { user } = useAuth();
-  const key = user?.id ? draftBackupKey(user.id, initial.id ?? null) : null;
+  const key = user?.id ? (opts.backupKey ? opts.backupKey(user.id) : draftBackupKey(user.id, initial.id ?? null)) : null;
   const editing = !!initial.id;
 
   const [restored] = useState(() => {
@@ -93,7 +106,7 @@ export function useProgramEditor(initial: ProgramDraft, base: string | null): Pr
   const [d, setD] = useState<ProgramDraft>(() =>
     restored ? { ...restored, id: initial.id ?? null } : initial,
   );
-  const [dirty, setDirty] = useState(!!restored);
+  const [dirty, setDirty] = useState(!!restored || !!opts.startDirty);
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
 
@@ -119,7 +132,7 @@ export function useProgramEditor(initial: ProgramDraft, base: string | null): Pr
           future.current = [];
           dRef.current = initial;
           setD(initial);
-          setDirty(false);
+          setDirty(!!opts.startDirty);
           bump((n) => n + 1);
         },
       },
@@ -206,10 +219,17 @@ export function useProgramEditor(initial: ProgramDraft, base: string | null): Pr
       dirtyRef.current = false;
       clearBackup(key);
       setDirty(false);
+      if (!editing && opts.onSaved) {
+        try {
+          await opts.onSaved(id);
+        } catch {
+          /* the program is saved; what it was made from catches up on its own */
+        }
+      }
       // the builder makes way for the program: Back from it never lands in the builder again
       navigate({ to: "/portal/programs/$programId", params: { programId: id }, replace: true });
       if (!editing) {
-        toast.success("Program saved to My programs. Start it or share it from here.");
+        toast.success(opts.savedMessage ?? "Program saved to My programs. Start it or share it from here.");
         return { ok: true };
       }
       // a program on their calendar: the workouts they haven't done follow the edit
@@ -246,7 +266,7 @@ export function useProgramEditor(initial: ProgramDraft, base: string | null): Pr
   return {
     d,
     editing,
-    backTo: editing ? `/portal/programs/${initial.id}` : "/portal/programs",
+    backTo: editing ? `/portal/programs/${initial.id}` : (opts.backTo ?? "/portal/programs"),
     saving: saveMutation.isPending,
     dirty,
     updateMeta,

@@ -106,6 +106,28 @@ export type FollowPoint = TrackPoint & {
   score: number;
 };
 
+/**
+ * Strict following, once the plate's centre and size are known for sure (the
+ * athlete confirmed them, or detection was certain): the plate is the same
+ * size in every frame of a propped-up clip, and a loaded bar has limits on
+ * how fast it can go. Finding it again after losing it then needs its rim
+ * there at its own size (±RESIZE_TOLERANCE), never a picture match alone: a
+ * picture match alone took the far end's plate (the same plate, half the
+ * size, moving at half the bar's travel) on a real bench clip, and a head,
+ * and another bar's plate. And no match may sit further from the last place
+ * the plate was seen than the bar could have moved since.
+ */
+export type FollowOptions = {
+  strict?: boolean;
+  /** mm per px at the analysed size (from the plate's size), for the speed limits. */
+  mmPerPx?: number;
+};
+
+/** The plate's rim must measure within this share of its known size to take it back after a loss. */
+export const RESIZE_TOLERANCE = 0.12;
+/** The fastest a loaded bar moves: up or down (a light speed pull or a fast eccentric) and sideways (a walk-out, a re-rack). */
+export const MAX_BAR_SPEED_MM_S = { y: 2800, x: 1600 };
+
 export class PlateFollower {
   private readonly ref: Template;
   private readonly refHalf: Template;
@@ -122,8 +144,15 @@ export class PlateFollower {
   private readonly decoys: Decoy[];
   private readonly views: [Template, Template][] = [];
   private rimOff: ({ t: number; dx: number; dy: number } | null)[] = [];
+  private readonly opts: FollowOptions;
 
-  constructor(seed: FollowSeed, backbone: CircleTrack | null, decoys: Decoy[] = []) {
+  constructor(
+    seed: FollowSeed,
+    backbone: CircleTrack | null,
+    decoys: Decoy[] = [],
+    opts: FollowOptions = {},
+  ) {
+    this.opts = opts;
     const ref = makeTemplate(seed.frame, seed.x, seed.y, seed.r);
     const small = halfSize(seed.frame);
     const refHalf = makeTemplate(small, (seed.x - 0.5) / 2, (seed.y - 0.5) / 2, seed.r / 2);
@@ -161,6 +190,16 @@ export class PlateFollower {
     return correctRim(this.pts, this.rimOff);
   }
 
+  /**
+   * The frame the plate is known in (a key: confirmed by the athlete, or
+   * where detection saw it best): recorded where it is, no search. Every
+   * other frame is found from here.
+   */
+  seedAt(f: Frame, x: number, y: number): FollowPoint {
+    const rim = this.rimAt(f, x, y);
+    return this.record(f, { x, y, score: 1 }, 1, rim);
+  }
+
   /** The last frames' positions, for the camera-shake read and the prediction. */
   last(): FollowPoint | null {
     return this.pts.length ? this.pts[this.pts.length - 1] : null;
@@ -193,8 +232,11 @@ export class PlateFollower {
         vy = (p.y - good[1].y) / dt0;
       }
       const dt = Math.max(0, f.t - p.t);
-      px = p.x + vx * dt;
-      py = p.y + vy * dt;
+      // strict: after a gap the bar's last speed is carried on only briefly (it slows to a stop at
+      // lockout or in the hooks; carried on for half a second it was looked for far past where it was)
+      const carry = this.opts.strict ? Math.min(dt, 0.12) : dt;
+      px = p.x + vx * carry;
+      py = p.y + vy * carry;
       s = Math.max(4, 0.2 * R) + 0.3 * Math.hypot(vx, vy) * dt + 0.5 * 133 * R * dt * dt;
       if (bb && Math.hypot(px - bb.x, py - bb.y) > bb.slack + s) {
         // the plate can't be there: the backbone wins
@@ -235,11 +277,31 @@ export class PlateFollower {
     // the plate's own track saw it right here just now: a second, independent sighting
     const bbClose =
       !!bb && bb.slack <= 1.2 * R && Math.hypot(fine.x - bb.x, fine.y - bb.y) <= 0.5 * R;
-    let ok = tracking
-      ? fine.score >= STRONG ||
-        (fine.score >= ACCEPT && ((!!rim && rim.coverage >= 0.3) || bbClose))
-      : fine.score >= SURE ||
-        (fine.score >= REACQUIRE && ((!!rim && rim.coverage >= 0.4) || bbClose));
+    // strict: the rim there at the plate's own size (a far plate or a head is a different size)
+    const sized = !!rim && Math.abs(rim.r / R - 1) <= RESIZE_TOLERANCE;
+    let ok: boolean;
+    if (this.opts.strict) {
+      ok = tracking
+        ? fine.score >= STRONG ||
+          (fine.score >= ACCEPT && ((sized && rim!.coverage >= 0.3) || bbClose))
+        : fine.score >= REACQUIRE &&
+          ((sized && rim!.coverage >= 0.4) || (bbClose && fine.score >= SURE));
+      // never further from where it was last seen than the bar could have moved since
+      if (ok && good.length) {
+        const g0 = good[0];
+        const dt = Math.max(0, f.t - g0.t);
+        const mm = this.opts.mmPerPx ?? 225 / R;
+        const reachX = (MAX_BAR_SPEED_MM_S.x / mm) * dt + 0.25 * R;
+        const reachY = (MAX_BAR_SPEED_MM_S.y / mm) * dt + 0.25 * R;
+        if (Math.abs(fine.x - g0.x) > reachX || Math.abs(fine.y - g0.y) > reachY) ok = false;
+      }
+    } else {
+      ok = tracking
+        ? fine.score >= STRONG ||
+          (fine.score >= ACCEPT && ((!!rim && rim.coverage >= 0.3) || bbClose))
+        : fine.score >= SURE ||
+          (fine.score >= REACQUIRE && ((!!rim && rim.coverage >= 0.4) || bbClose));
+    }
     if (ok && bb && Math.hypot(fine.x - bb.x, fine.y - bb.y) > bb.slack + 0.6 * R) ok = false;
     // an identical plate that sat still the whole clip (the tree next to the rack) is never the bar's
     if (ok && this.decoys.some((d) => Math.hypot(fine.x - d.x, fine.y - d.y) < 0.5 * R)) ok = false;
