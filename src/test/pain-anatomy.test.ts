@@ -4,7 +4,7 @@ import { PAIN_SITES, SITE_KEYS, searchSites, siteAnatomy, siteLabel, siteOf, sit
 import { REGION_KEYS } from "@/lib/pain/regions";
 import { atlasView, hasDeep, layerParts, partAt, regionBox, sitesOnView, type ViewKey } from "@/lib/pain/anatomy/atlas";
 import { VIEW_H, VIEW_W, inside, parsePoints, smoothPath } from "@/lib/pain/anatomy/geometry";
-import { DETAIL_SCALE, IDENTITY, MAX_SCALE, clampXf, fitView, frameBox, layoutCallouts, toDrawing, toScreen, zoomAt } from "@/lib/pain/anatomy/stage";
+import { DETAIL_SCALE, IDENTITY, MAX_SCALE, clampXf, fitView, frameBox, labelHeight, layoutCallouts, toDrawing, toScreen, wrapLines, zoomAt } from "@/lib/pain/anatomy/stage";
 import { cleanReports, legacyColumns, placeLabel, reportLine, scoreWord, severityFromScore, type PainReportInput } from "@/lib/pain/report";
 import { addPick, newPick, picksFromEntries, picksToReports, scorePatch, unrated, updatePick } from "@/lib/pain/picks";
 import { needsSafetyNotice, redFlags } from "@/lib/pain/safety";
@@ -190,6 +190,37 @@ describe("the stage", () => {
       }
     }
   });
+
+  it("gives a long name the lines it needs instead of cutting it off", () => {
+    // a stub font: 7px a character
+    const m = (t: string) => t.length * 7;
+    expect(wrapLines("Side delt", 110, m)).toBe(1);
+    expect(wrapLines("Above the kneecap", 110, m)).toBe(2);
+    expect(wrapLines("High hamstring, near the sit bone", 110, m)).toBe(3);
+    // the "R" tag takes room on the first line only
+    expect(wrapLines("Inside of knee", 100, m)).toBe(1);
+    expect(wrapLines("Inside of knee", 100, m, 14)).toBe(2);
+    // one word too wide for a line breaks inside itself
+    expect(wrapLines("Sternocleidomastoid", 70, m)).toBe(2);
+    // the anatomical name goes when the plain name needs every line
+    expect(labelHeight(1, true)).toEqual({ h: 40, lines: 1, anat: true });
+    expect(labelHeight(2, true)).toEqual({ h: 53, lines: 2, anat: true });
+    expect(labelHeight(5, true)).toEqual({ h: 55, lines: 3, anat: false });
+  });
+
+  it("stacks labels of different heights without overlap, inside the room", () => {
+    const hs = [40, 53, 40, 55, 53, 40];
+    const anchors = hs.map((h, i) => ({ id: `a${i}`, x: 120, y: 120 + i * 8, h }));
+    const out = layoutCallouts(anchors, size, { labelW: 110, labelH: 40, top: 52, bottom: 12 });
+    const col = out.filter((c) => c.side === "l").sort((a, b) => a.y - b.y);
+    expect(out.length).toBeGreaterThan(2);
+    for (const c of out) {
+      expect(c.h).toBe(hs[Number(c.id.slice(1))]);
+      expect(c.y).toBeGreaterThanOrEqual(52);
+      expect(c.y + c.h).toBeLessThanOrEqual(size.h - 12);
+    }
+    for (let i = 1; i < col.length; i++) expect(col[i].y).toBeGreaterThanOrEqual(col[i - 1].y + col[i - 1].h + 6);
+  });
 });
 
 describe("rating a spot", () => {
@@ -359,5 +390,28 @@ describe("the review keeps what's being typed", () => {
     expect(map).toContain("data-pain-map");
     expect(map).toMatch(/onEscapeKeyDown/);
     expect(map).toMatch(/onPointerDownOutside/);
+  });
+  it("holds the scroll lock itself, so its details, list and tray scroll over the review sheet", () => {
+    // Radix puts RemoveScroll on the overlay: with none, the review sheet's lock
+    // cancelled every touchmove on the map (Nov 21 2026: the details wouldn't scroll)
+    const map = readFileSync("src/components/pain/pain-map.tsx", "utf8");
+    expect(map).toContain("<DialogPrimitive.Overlay");
+    // the details sheet is the height the map frames around, so no label sits under it
+    expect(map).toContain("height: `${DETAILS_SHARE * 100}%`");
+    expect(map.match(/size\.h \* DETAILS_SHARE/g)?.length).toBe(2);
+    expect(map).not.toMatch(/size\.h \* 0\.\d+/);
+    // a swipe up or down that starts on the 0–10 row scrolls the sheet
+    expect(map).toContain("touch-pan-y grid-cols-11");
+  });
+  it("typing keeps the box in view above the keyboard, and a pinch never zooms the page", () => {
+    const map = readFileSync("src/components/pain/pain-map.tsx", "utf8");
+    // the details pin to the visible part of the screen, the Setup sheet's way
+    expect(map).toContain("useVisualViewportBox(open)");
+    expect(map).toContain("top: vv.top + 8, height: vv.height - 8");
+    expect(map).toContain("useSwipeDownToClose(panel, !kb, onDone)");
+    expect(map).toContain("revealDelta(");
+    // two fingers anywhere on the map are the map's
+    expect(map).toContain("e.touches.length > 1 && e.cancelable");
+    expect(map).toContain('addEventListener("gesturestart", stop)');
   });
 });
