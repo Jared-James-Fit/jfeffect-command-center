@@ -36,7 +36,8 @@ const state = (over: Partial<CreditState> = {}): CreditState => ({
 
 describe("AI credit costs", () => {
   it("match the database's ai_credit_cost, feature by feature", () => {
-    const sql = readFileSync("supabase/migrations/20270313090000_ai_credits.sql", "utf8");
+    // the newest migration that defines it is the one in force
+    const sql = readFileSync("supabase/migrations/20270427090000_program_imports.sql", "utf8");
     const body = sql.slice(
       sql.indexOf("FUNCTION public.ai_credit_cost"),
       sql.indexOf("FUNCTION public.ai_credit_period_start"),

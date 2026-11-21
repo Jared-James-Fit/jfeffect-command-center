@@ -355,7 +355,7 @@ function toLocalDate(ms: number, tz: string): string {
 
 const OPEN = "bg-success/70";
 const SUGGESTED = "border border-dashed border-success bg-success/10";
-const SESSION = "bg-violet-500/70";
+const SESSION = "bg-foreground/70";
 const BUSY = "bg-muted-foreground/45";
 const PROTECTED = "bg-[repeating-linear-gradient(135deg,var(--muted-foreground)_0_2px,transparent_2px_6px)] opacity-40";
 

@@ -139,8 +139,10 @@ describe("program builder: one screen for phones and computers", () => {
   const cells = read("src/components/athlete-programs/workbench/cells.tsx");
   const css = read("src/styles.css");
 
-  it("a new program starts as 12 weeks; an existing one opens on its plan", () => {
-    expect(builder).toContain("plan: newPlan(12)");
+  it("a new program starts from its shape (12 weeks unless they pick another); an existing one opens on its plan", () => {
+    expect(builder).toContain("plan: newPlan(shape?.weeks ?? DEFAULT_WEEKS, shape?.days ?? 1)");
+    expect(builder).toContain("const WEEK_CHOICES = [4, 8, 12, 16];");
+    expect(builder).toContain("hasKeptDraft(user?.id)");
     expect(builder).toContain("plan: detailPlan(existing)");
     expect(builder).toContain("return <ProgramWorkbench editor={editor} />;");
   });

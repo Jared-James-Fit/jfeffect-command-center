@@ -38,7 +38,8 @@ const num = (n: number) => String(Number(n.toFixed(2)));
 export function cellText(e: PlanExercise, f: CellField): { value: string; unit?: string } {
   switch (f) {
     case "sets":
-      return { value: String(e.sets ?? "") };
+      // a set count the file didn't give (an import) is an empty cell to fill, never "0"
+      return { value: e.sets ? String(e.sets) : "" };
     case "reps":
       return { value: e.reps ?? "" };
     case "effort":
