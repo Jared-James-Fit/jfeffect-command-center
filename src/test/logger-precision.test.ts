@@ -41,9 +41,9 @@ describe("suggested: a weight to choose from only where the lifter chooses by fe
     expect(picks(h, {}, false)).toBeNull();
     expect(picks(h, {}, true, false)).toBeNull();
   });
-  it("one tap fills the open sets as drafts (a range fills its middle, no weight buttons), and a coach's load never reaches it", () => {
+  it("one tap logs the open sets (a range at its middle, no weight buttons), and a coach's load never reaches it", () => {
     const card = read("src/components/workout-day/load-suggestion-card.tsx");
-    // one tap logs the open sets (a range opens set 1's weight box); never a row of weight buttons
+    // one tap logs the open sets (a range at its middle); never a row of weight buttons
     expect(card).toContain('data-testid="load-apply"');
     expect(card).not.toContain('data-testid="load-pick"');
     expect(card).toContain("Pick within");
@@ -51,10 +51,10 @@ describe("suggested: a weight to choose from only where the lifter chooses by fe
     expect(wdv).toContain("picks={loadPicks} showPlan={!rxSaysPlan} onApply={!readonly && clientId && openSetCount > 0 ? logOpenSetsAt : null}");
     expect(wdv).toContain("mainLift: rangeLift(family, name, exercise?.equipment), effortPrescribed: rpeTarget != null || rirTarget != null");
     expect(wdv).toContain("firstOfLift: firstHeavySet, loggedHere: workedToday,");
-    // the chip logs through the first open set's own number; a range opens its weight box instead
+    // the chip logs through the first open set's own number, a range too (Nov 21 2026: opening an empty box read as broken)
     const chip = wdv.slice(wdv.indexOf("const logOpenSetsAt"), wdv.indexOf("const logOpenSetsAt") + 600);
     expect(chip).toContain("if (!ex?.completed_at) { first = i; break; }");
-    expect(chip).toContain("if (loadPicks) { h.editWeight(); return 0; }");
+    expect(chip).not.toContain("editWeight");
     expect(chip).toContain("return h.logAt(load);");
     // the engine (and so the range) only runs when the coach doesn't own the load
     expect(wdv).toContain("if (!loadHistory || hideWeight || coachOwnsLoad || rowLoadType !== \"external\" || !loadPlan) return null;");

@@ -18,9 +18,9 @@ function fmtNum(n: number): string {
  * reference row under the prescription (ExerciseBlock's data-rx-refs), beside
  * "Last time" on the left. One tap on it logs the first open set at the weight
  * and the untouched sets below fill in with it and log too, the same as a tap on
- * set 1's number (a range is picked by feel: the tap opens the first open set's
- * weight box instead); its ⓘ opens how it's worked out (the range, the
- * "audible", the why, the off switch). No weight buttons.
+ * set 1's number (a range logs at its middle, the engine's estimate; a weight
+ * picked by feel inside it is typed in set 1); its ⓘ opens how it's worked out
+ * (the range, the "audible", the why, the off switch). No weight buttons.
  */
 
 /** The reference row and its halves: one quiet strip, never a card. */
@@ -56,11 +56,11 @@ export function LoadSuggestionCard({
   warmupReads?: boolean;
   /** The card today's adjustment comes from (model.dayFactor), e.g. "Competition Squat". */
   fromName?: string | null;
-  /** A range to pick within by feel (suggestionPicks): the first set of a main lift. Shown, never offered as buttons. */
+  /** A range to pick within by feel (suggestionPicks): the first set of a main lift. Shown, never offered as buttons; the chip logs its middle. */
   picks?: { low: number; high: number; loads: number[] } | null;
   /** Say "× 5 @ 6" after the weight: only when the prescription right above it doesn't already (a range of reps or RPE, or RIR). */
   showPlan?: boolean;
-  /** Logs the open sets at a weight (a range: opens the first open set's weight box); resolves to how many it logged. Null: nothing to log. */
+  /** Logs the open sets at a weight (a range: at its middle, hint.target); resolves to how many it logged. Null: nothing to log. */
   onApply?: ((load: number) => Promise<number>) | null;
 }) {
   if (model.status === "calibrating" || !hint) {
@@ -105,7 +105,7 @@ export function LoadSuggestionCard({
   );
   const why = <SuggestionWhyBody hint={hint} model={model} warmupReads={warmupReads} picks={picks} rpe={plan.rpe} canApply={!!onApply} {...parts} />;
   if (onApply) {
-    // One tap logs the open sets at it (a range opens set 1's weight box); the ⓘ beside it explains.
+    // One tap logs the open sets at it (a range at its middle); the ⓘ beside it explains.
     return (
       <div className={REF_CELL} data-testid="load-suggestion" data-picks={picks ? "" : undefined}>
         <span className={cn(REF_LABEL, "justify-between")}>
@@ -121,10 +121,8 @@ export function LoadSuggestionCard({
             unit={hint.unit}
             shown={shown}
             small={!!picks}
-            ariaLabel={picks
-              ? `Suggested ${shown} ${hint.unit}${planText}${note}. Type the weight you pick in your first open set`
-              : `Suggested ${shown} ${hint.unit}${planText}${note}. Log your open sets at ${fmtNum(hint.target)} ${hint.unit}`}
-            title={picks ? "Pick your weight: tap to type it" : "Tap to log your sets at this weight"}
+            ariaLabel={`Suggested ${shown} ${hint.unit}${planText}${note}. Log your open sets at ${fmtNum(hint.target)} ${hint.unit}`}
+            title={picks ? `Tap to log your sets at ${fmtNum(hint.target)} ${hint.unit}` : "Tap to log your sets at this weight"}
             onApply={onApply}
           />
           {hint.progression ? (
@@ -197,7 +195,6 @@ function FillChip({ load, unit, shown, small = false, ariaLabel, title = "Tap to
     if (busy) return;
     setBusy(true);
     try {
-      // runs inside the tap: a range opens the weight box with the keyboard up
       await onApply(load);
     } catch {
       toast.error("Couldn't log your sets. Try again");
@@ -446,9 +443,11 @@ function SuggestionWhyBody({ hint, why, model, warmupReads, audible, range, pick
           Bar flying? +{fmtNum(audible)} {hint.unit} next set. Slow? −{fmtNum(audible)}. Pain? Stop and tell your coach.
         </p>
         <p className="mt-1 text-muted-foreground">
-          {canApply && !picks
-            ? `Tap Suggested (or set 1's number) and your sets log at ${fmtNum(hint.target)} ${hint.unit}. A set that went differently? Change its box.`
-            : "Type the weight you pick in set 1: the sets below fill in with it and log too. A set that went differently? Change its box."}
+          {canApply && picks
+            ? `Tap Suggested (or set 1's number) and your sets log at ${fmtNum(hint.target)} ${hint.unit}, the middle. Warm-ups say lighter or heavier? Type that weight in set 1 instead: the sets below fill in with it. A set that went differently? Change its box.`
+            : canApply
+              ? `Tap Suggested (or set 1's number) and your sets log at ${fmtNum(hint.target)} ${hint.unit}. A set that went differently? Change its box.`
+              : "Type the weight you pick in set 1: the sets below fill in with it and log too. A set that went differently? Change its box."}
         </p>
         <details className="group mt-1.5 border-t border-border pt-1.5" data-testid="load-why">
           <summary className="flex cursor-pointer list-none items-center justify-between py-1 font-semibold text-foreground [&::-webkit-details-marker]:hidden">

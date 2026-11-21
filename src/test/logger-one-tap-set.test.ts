@@ -9,8 +9,9 @@ const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8"
 describe("a set done as suggested is one tap on its number", () => {
   it("the card works out the weight a tap logs: the coach's planned weight, else Suggested while it's on", () => {
     expect(wdv).toContain(": plannedView ? (plannedView.load != null && plannedView.value ? plannedView.load : null)");
-    // a range is picked by feel: it never logs on a tap
-    expect(wdv).toContain(': showSuggestionCard && canSuggest && loadHint && loadModel && loadModel.status !== "calibrating" && !loadPicks ? loadHint.target');
+    // a range logs at its middle, the engine's own estimate (Nov 21 2026: a range that only opened the box read as broken)
+    expect(wdv).toContain(': showSuggestionCard && canSuggest && loadHint && loadModel && loadModel.status !== "calibrating" ? loadHint.target');
+    expect(wdv).not.toContain('loadModel.status !== "calibrating" && !loadPicks ? loadHint.target\n    : null;');
     expect(wdv).toContain("quickLoad={quickLoad}");
   });
 
