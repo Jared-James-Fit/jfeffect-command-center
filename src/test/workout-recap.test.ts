@@ -5,12 +5,12 @@ import {
   exerciseSetRows,
   recapDay,
   recapExercises,
-  recapFit,
   recapIndex,
   recapKeyLifts,
   recapMeta,
   recapMoreLabel,
   recapPr,
+  splitBestSet,
   setLoad,
   setText,
   summaryStats,
@@ -57,18 +57,7 @@ describe("summaryStats", () => {
   });
 });
 
-describe("recapFit", () => {
-  it("shows the rows that fit whole, never half of one, and counts the rest", () => {
-    expect(recapFit(48 * 4 + 20, 48, 9)).toEqual({ shown: 4, hidden: 5 });
-    expect(recapFit(48 * 9, 48, 9)).toEqual({ shown: 9, hidden: 0 });
-  });
-
-  it("always shows one row, and everything before it's been measured", () => {
-    expect(recapFit(10, 48, 6)).toEqual({ shown: 1, hidden: 5 });
-    expect(recapFit(0, 48, 6)).toEqual({ shown: 6, hidden: 0 });
-    expect(recapFit(300, 48, 0)).toEqual({ shown: 0, hidden: 0 });
-  });
-
+describe("the recap's last row", () => {
   it("says how many exercises the sheet has when some aren't on the recap, else that every set is there", () => {
     expect(recapMoreLabel(9, 4)).toBe("All 9 exercises");
     expect(recapMoreLabel(3, 3)).toBe("Every set");
@@ -122,11 +111,16 @@ const ex = (name: string, over: Partial<CommunityExercise> = {}): CommunityExerc
 });
 
 describe("the compact recap (Nov 21 2026)", () => {
-  it("says the day, how long and how many sets in one line, leaving out what isn't there", () => {
-    expect(recapMeta(stats())).toMatch(/^Thu, Nov 19 · 1h 12m · 18 sets$/);
-    expect(recapMeta(stats({ duration_min: null, working_sets: 1 }))).toMatch(
-      /^Thu, Nov 19 · 1 set$/,
-    );
+  it("says how long and how many sets in one line (the day is the post's own), leaving out what isn't there", () => {
+    expect(recapMeta(stats())).toBe("1h 12m · 18 sets");
+    expect(recapMeta(stats({ duration_min: null, working_sets: 1 }))).toBe("1 set");
+  });
+
+  it("splits a best set into the load (the big number) and its reps", () => {
+    expect(splitBestSet("455 lb × 1")).toEqual({ big: "455 lb", small: "× 1" });
+    expect(splitBestSet("BW + 20 kg × 8")).toEqual({ big: "BW + 20 kg", small: "× 8" });
+    expect(splitBestSet("12 reps")).toEqual({ big: "12 reps", small: null });
+    expect(splitBestSet("1:15")).toEqual({ big: "1:15", small: null });
   });
 
   it("shows at most four key lifts, in training order, the headline PR and any record always making the cut", () => {
@@ -301,11 +295,16 @@ describe("the post's screen wiring (Nov 20 2026, Nov 21 2026)", () => {
     expect(recap).not.toContain("data-recap-highlights");
     expect(recap).not.toContain("Best set");
     expect(recap).toContain("data-recap-meta");
-    expect(recap).toContain("const lifts = recapKeyLifts(exercises, s, shown);");
-    // its last row is a quiet line, not a filled button
-    expect(recap).toMatch(
-      /border-t border-border\/60 px-4 text-\[13px\] font-medium text-muted-foreground[\s\S]{0,200}data-recap-open/,
-    );
+    expect(recap).toContain("recapKeyLifts(exercises, s, feature ? FEATURE_MAX : cap)");
+    // the whole slide, edge to edge like a clip, never a card floating in it (Nov 21 2026)
+    expect(recap).toContain('className="absolute inset-0 bg-card text-foreground"');
+    expect(recap).not.toContain("rounded-2xl");
+    expect(recap).not.toContain("max-w-[420px]");
+    // between Crew's bar and the post's words, clear of the buttons down the right
+    expect(recap).toContain('top: "calc(var(--feed-bar-room) + 0.75rem)"');
+    expect(recap).toContain('bottom: "calc(var(--feed-words-room, 0px) + 0.25rem)"');
+    // one unit on the slide (as typed); both are in the sheet
+    expect(recap).not.toContain("best.other");
   });
 
   it("opens every set in the post's sheet over the post (its Workout tab), never a page, from a tap on the card or its last row", () => {

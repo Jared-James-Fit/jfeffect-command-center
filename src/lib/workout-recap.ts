@@ -50,23 +50,6 @@ export function summaryStats(s: WorkoutShareStats, unit: "kg" | "lb"): SummarySt
   return out;
 }
 
-/**
- * How many lift rows fit the recap's list (`height` px, every row
- * `rowHeight` px) without scrolling: a vertical swipe on the post is always
- * the feed's, so the list never scrolls on its own. The rest are in the
- * post's sheet (its last row says how many).
- */
-export function recapFit(
-  height: number,
-  rowHeight: number,
-  total: number,
-): { shown: number; hidden: number } {
-  if (!(total > 0)) return { shown: 0, hidden: 0 };
-  if (!(height > 0) || !(rowHeight > 0)) return { shown: total, hidden: 0 };
-  const shown = Math.max(1, Math.min(total, Math.floor((height + 0.5) / rowHeight)));
-  return { shown, hidden: total - shown };
-}
-
 /** "Thu, Nov 19": the day it was trained. */
 export function recapDay(iso: string | null | undefined): string | null {
   if (!iso) return null;
@@ -91,16 +74,26 @@ export function recapExercises(list: CommunityExercise[] | null | undefined): Co
   );
 }
 
-/** The recap's line under the workout's name: "Mon, Nov 16 · 1h 12m · 14 sets". */
-export function recapMeta(
-  s: Pick<WorkoutShareStats, "completed_at" | "duration_min" | "working_sets">,
-): string {
+/**
+ * The recap's line under the workout's name: "2h 13m · 10 sets". The day is the post's own line (its author line
+ * says "Nov 16"), so it isn't said twice.
+ */
+export function recapMeta(s: Pick<WorkoutShareStats, "duration_min" | "working_sets">): string {
   const parts = [
-    recapDay(s.completed_at),
     formatWorkoutDuration(s.duration_min),
     s.working_sets > 0 ? `${s.working_sets} ${s.working_sets === 1 ? "set" : "sets"}` : null,
   ];
   return parts.filter(Boolean).join(" · ");
+}
+
+/**
+ * A best set split for the slide's type: the load as the big number and the reps after it, smaller ("455 lb" ·
+ * "× 1"); a set with no load is one piece ("12 reps", "1:15").
+ */
+export function splitBestSet(text: string): { big: string; small: string | null } {
+  const m = /^(.*\S)\s(×\s?\d+)$/.exec(text.trim());
+  if (!m || /^\d+ reps?$/.test(text.trim())) return { big: text.trim(), small: null };
+  return { big: m[1], small: m[2] };
 }
 
 /** At most this many lifts on the recap: it's a glance, every set is one tap away. */
