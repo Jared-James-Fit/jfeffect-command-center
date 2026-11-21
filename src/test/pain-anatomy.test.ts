@@ -360,4 +360,16 @@ describe("the review keeps what's being typed", () => {
     expect(map).toMatch(/onEscapeKeyDown/);
     expect(map).toMatch(/onPointerDownOutside/);
   });
+  it("holds the scroll lock itself, so its details, list and tray scroll over the review sheet", () => {
+    // Radix puts RemoveScroll on the overlay: with none, the review sheet's lock
+    // cancelled every touchmove on the map (Nov 21 2026: the details wouldn't scroll)
+    const map = readFileSync("src/components/pain/pain-map.tsx", "utf8");
+    expect(map).toContain("<DialogPrimitive.Overlay");
+    // the details sheet is the height the map frames around, so no label sits under it
+    expect(map).toContain("height: `${DETAILS_SHARE * 100}%`");
+    expect(map.match(/size\.h \* DETAILS_SHARE/g)?.length).toBe(2);
+    expect(map).not.toMatch(/size\.h \* 0\.\d+/);
+    // a swipe up or down that starts on the 0–10 row scrolls the sheet
+    expect(map).toContain("touch-pan-y grid-cols-11");
+  });
 });

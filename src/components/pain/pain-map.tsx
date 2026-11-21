@@ -68,6 +68,13 @@ export function partForPlace(view: AtlasView, site: string | null | undefined, r
   return best;
 }
 
+/**
+ * How much of the stage a spot's details take: the sheet is always this tall
+ * (it never grows as sections appear) and the map frames the spot and lays out
+ * its labels in the rest above it, so no label sits under the sheet.
+ */
+const DETAILS_SHARE = 0.64;
+
 const chip = (on: boolean) =>
   cn(
     "inline-flex min-h-10 items-center justify-center rounded-full border px-3.5 text-[14px] font-medium transition-colors active:scale-[0.97]",
@@ -78,8 +85,10 @@ const chip = (on: boolean) =>
 
 function ScoreScale({ value, onPick, label }: { value: number | null; onPick: (n: number) => void; label: string }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const dragging = useRef(false);
-  // a finger can slide along the scale: the number under it is picked as it moves
+  // a finger can slide sideways along the scale: the number under it is picked as it moves;
+  // up or down is the sheet's scroll (touch-pan-y), so a swipe that starts here never picks
+  const drag = useRef<{ x: number; y: number; sliding: boolean } | null>(null);
+  const slid = useRef(false);
   const at = (clientX: number) => {
     const el = ref.current;
     if (!el) return null;
@@ -97,16 +106,25 @@ function ScoreScale({ value, onPick, label }: { value: number | null; onPick: (n
         ref={ref}
         role="radiogroup"
         aria-label={label}
-        className="grid touch-none grid-cols-11 gap-1 select-none"
+        className="grid touch-pan-y grid-cols-11 gap-1 select-none"
         data-no-sheet-drag
         onPointerDown={(e) => {
-          dragging.current = true;
-          (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+          drag.current = { x: e.clientX, y: e.clientY, sliding: false };
+          slid.current = false;
+        }}
+        onPointerMove={(e) => {
+          const d = drag.current;
+          if (!d) return;
+          if (!d.sliding) {
+            const dx = e.clientX - d.x;
+            if (Math.abs(dx) < 6 || Math.abs(dx) < Math.abs(e.clientY - d.y)) return;
+            d.sliding = true;
+            slid.current = true;
+          }
           set(at(e.clientX));
         }}
-        onPointerMove={(e) => dragging.current && set(at(e.clientX))}
-        onPointerUp={() => (dragging.current = false)}
-        onPointerCancel={() => (dragging.current = false)}
+        onPointerUp={() => (drag.current = null)}
+        onPointerCancel={() => (drag.current = null)}
         data-pain-score
       >
         {Array.from({ length: 11 }, (_, n) => {
@@ -119,7 +137,14 @@ function ScoreScale({ value, onPick, label }: { value: number | null; onPick: (n
               role="radio"
               aria-checked={on}
               aria-label={`${n} out of 10${scoreWord(n) ? `, ${scoreWord(n)}` : ""}`}
-              onClick={() => set(n)}
+              onClick={() => {
+                // the click a slide ends on is the slide's, not a tap on where it started
+                if (slid.current) {
+                  slid.current = false;
+                  return;
+                }
+                set(n);
+              }}
               onKeyDown={(e) => {
                 if (e.key === "ArrowRight") set(Math.min(10, (value ?? -1) + 1));
                 if (e.key === "ArrowLeft") set(Math.max(0, (value ?? 1) - 1));
@@ -184,8 +209,8 @@ function PlaceDetails({
   return (
     <div
       ref={setPanel}
-      className="absolute inset-x-0 bottom-0 z-30 flex max-h-[72%] flex-col rounded-t-3xl border-t border-white/10 bg-background shadow-[0_-12px_40px_rgba(0,0,0,0.6)]"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      className="absolute inset-x-0 bottom-0 z-30 flex flex-col rounded-t-3xl border-t border-white/10 bg-background shadow-[0_-12px_40px_rgba(0,0,0,0.6)]"
+      style={{ height: `${DETAILS_SHARE * 100}%`, paddingBottom: "env(safe-area-inset-bottom)" }}
       data-pain-details
       role="dialog"
       aria-label={`${name}: details`}
@@ -528,7 +553,7 @@ export function PainMap({
 
   const view = atlasView(viewKey, facing);
   const fit = useMemo(() => fitView(size), [size]);
-  const sheetH = active ? Math.round(size.h * 0.62) : 0;
+  const sheetH = active ? Math.round(size.h * DETAILS_SHARE) : 0;
   const vis = useMemo(() => ({ top: 0, bottom: sheetH }), [sheetH]);
   const detail = xf.s >= DETAIL_SCALE;
 
@@ -632,7 +657,7 @@ export function PainMap({
     feedback("tap");
     setActive(res.uid);
     if (part) {
-      const nextVis = { top: 0, bottom: Math.round(size.h * 0.62) };
+      const nextVis = { top: 0, bottom: Math.round(size.h * DETAILS_SHARE) };
       go(centerOn(part.center, latest.current.xf.s < DETAIL_SCALE ? { ...latest.current.xf, s: Math.max(DETAIL_SCALE, latest.current.xf.s) } : latest.current.xf, size, fit, nextVis));
     }
   };
@@ -815,6 +840,10 @@ export function PainMap({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())}>
       <DialogPrimitive.Portal>
+        {/* Radix puts the scroll lock on the overlay. Without one the review sheet
+            underneath stays the active lock and cancels every swipe on the map
+            (the details, the list and the tray couldn't scroll). */}
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[90] bg-[#0b0b0d]" />
         <DialogPrimitive.Content
           className="dark fixed inset-0 z-[90] flex flex-col bg-[#0b0b0d] text-foreground outline-none"
           style={{ paddingTop: "env(safe-area-inset-top)" }}
