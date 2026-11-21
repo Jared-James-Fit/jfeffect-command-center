@@ -115,6 +115,14 @@ const NOTE: Record<QualityNote, { title: string; tip: string }> = {
     title: "Very short clip",
     tip: "Film the whole set, from the unrack to the rack.",
   },
+  plate_edge_faint: {
+    title: "The plate's edge was hard to see",
+    tip: "A dark plate against a dark rack or wall: its size, the ruler for every speed, is less certain, so speeds are estimates. Something lighter behind the plate, or more light, fixes it.",
+  },
+  tracking_gaps: {
+    title: "The plate was lost for a moment",
+    tip: "Those frames are left out, never guessed. Fix tracking puts the marker back on the plate there.",
+  },
   implausible_scale: {
     title: "Couldn't trust the plate's size",
     tip: "The numbers it gave were impossible for a barbell, so no speeds are shown. If the biggest plate is smaller than 450 mm, set its size.",
@@ -131,7 +139,9 @@ export function shownNotes(a: LiftAnalysis): QualityNote[] {
     "implausible_scale",
     "not_calibrated",
     "camera_moved",
+    "tracking_gaps",
     "plate_hidden",
+    "plate_edge_faint",
     "camera_tilted",
     "camera_turned",
     "plate_small",
