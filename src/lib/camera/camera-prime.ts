@@ -40,10 +40,22 @@ const release = (p: Promise<MediaStream>) => p.then((s) => s.getTracks().forEach
 
 let primed: { key: string; promise: Promise<MediaStream>; timer: ReturnType<typeof setTimeout> } | null = null;
 
-/** Call inside the tap that opens the film camera. Does nothing where a page can't use the camera. */
-export function primeCamera(): void {
+/**
+ * The Crew studio's first request (share-studio.tsx asks for exactly this
+ * first), so the tap that opens it can ask the same (`primeCamera`).
+ */
+export function studioCameraAsk(facing: "environment" | "user"): MediaTrackConstraints {
+  return { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } };
+}
+
+/**
+ * Call inside the tap that opens a camera: the film camera's first ask, or
+ * `ask` for another camera (the Crew studio's, `studioCameraAsk`). Does
+ * nothing where a page can't use the camera.
+ */
+export function primeCamera(ask?: MediaTrackConstraints): void {
   if (primed || typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return;
-  const first = firstCameraAsk();
+  const first = ask ? { ask } : firstCameraAsk();
   if (!first) return;
   let promise: Promise<MediaStream>;
   try {

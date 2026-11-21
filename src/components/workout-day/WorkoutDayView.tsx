@@ -7747,6 +7747,17 @@ function SetRow({
             loadType,
             durationSec: showTimer ? durationSec ?? null : null,
           })}
+          // what the camera shows while they set up: the weight in the box, else the one a
+          // tap on the set's number logs (Suggested / the coach's plan), with its reps and effort
+          aim={setVideoLabel({
+            load: bw ? (load ? Number(load) : 0) : load ? Number(load) : quickWeight && quickLoad != null ? quickLoad : null,
+            unit,
+            reps: reps ? Number(reps) : null,
+            rpe: !showRir && effortSelectValue ? Number(effortSelectValue) : null,
+            rir: showRir && effortSelectValue ? Number(effortSelectValue) : null,
+            loadType,
+            durationSec: showTimer ? durationSec ?? null : null,
+          })}
         /> : <div aria-hidden />
       )}
     </div>
