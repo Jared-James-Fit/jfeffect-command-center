@@ -15,9 +15,9 @@ export function WeekStrip({
   selected,
   onSelect,
   count,
-  dotClass = "bg-violet-400",
+  dotClass = "bg-foreground",
   extraCount,
-  extraDotClass = "bg-sky-400",
+  extraDotClass = "bg-muted-foreground/45",
   workoutMark,
 }: {
   today: string;

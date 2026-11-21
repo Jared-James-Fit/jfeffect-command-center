@@ -456,7 +456,7 @@ export function SessionActionsSheet({
               <Badge variant="outline" className={statusTone(session.status)}>{sessionStatusLabel(session.status)}</Badge>
               {usesCredit && <Badge variant="outline" className={creditChipClasses(credit.state)}>{credit.label}</Badge>}
               {session.google_event_id && (
-                <Badge variant="outline" className="border-sky-500/30 bg-sky-500/10 text-sky-300">In Google</Badge>
+                <Badge variant="outline" className="border-border bg-muted text-muted-foreground">In Google</Badge>
               )}
             </div>
             <SheetTitle className="text-left">

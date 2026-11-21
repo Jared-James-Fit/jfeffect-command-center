@@ -11,6 +11,9 @@ import {
   Users,
 } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ProgramStartOptions } from "@/components/program-import/program-start-options";
+import { OpenImports } from "@/components/program-import/open-imports";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -68,6 +71,7 @@ export function ProgramsHub({ initialTab }: { initialTab?: ProgramsTab }) {
   // a link to a tab (or Back to one) moves the page there
   useEffect(() => setTabState(wanted), [wanted]);
   const shown: ProgramsTab = tabs.includes(tab) ? tab : "mine";
+  const [startOpen, setStartOpen] = useState(false);
   const setTab = (t: ProgramsTab) => {
     setTabState(t);
     navigate({ to: "/portal/programs", search: { tab: t }, replace: true } as any);
@@ -81,11 +85,9 @@ export function ProgramsHub({ initialTab }: { initialTab?: ProgramsTab }) {
         title="Programs"
         backTo="/portal/workouts"
         actions={
-          <Button asChild size="sm" variant="secondary">
-            <Link to="/portal/programs/new">
-              <Plus className="mr-1 h-4 w-4" aria-hidden />
-              New program
-            </Link>
+          <Button size="sm" variant="secondary" onClick={() => setStartOpen(true)} data-new-program>
+            <Plus className="mr-1 h-4 w-4" aria-hidden />
+            New program
           </Button>
         }
       />
@@ -137,6 +139,21 @@ export function ProgramsHub({ initialTab }: { initialTab?: ProgramsTab }) {
           <CrewPrograms />
         )}
       </div>
+      <Sheet open={startOpen} onOpenChange={setStartOpen}>
+        <SheetContent side="bottom" swipeToClose className="rounded-t-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <SheetHeader className="mb-3 text-left">
+            <SheetTitle>New program</SheetTitle>
+            <SheetDescription>Every way ends in a program you can edit and track.</SheetDescription>
+          </SheetHeader>
+          <ProgramStartOptions
+            ways={isSelfServe ? ["follow", "build", "import"] : ["build", "import"]}
+            onFollow={() => {
+              setStartOpen(false);
+              setTab("jf");
+            }}
+          />
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -187,6 +204,9 @@ function MyPrograms({
       {!hasRunning && paused && (
         <PausedProgramCard entry={paused} chooseAnother={false} />
       )}
+
+      {/* a program being imported, or read and waiting to be checked */}
+      <OpenImports />
 
       {own.isError && (
         <Empty
@@ -344,26 +364,16 @@ function FindPrograms({
         </div>
       )}
       {hasRunning && <SectionTitle icon={Search}>Find another program</SectionTitle>}
+      <ProgramStartOptions
+        ways={isSelfServe ? ["follow", "build", "import"] : ["build", "import"]}
+        onFollow={() => onTab("jf")}
+      />
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        {isSelfServe && (
-          <FindRow
-            icon={BookOpen}
-            title="JF Effect plans"
-            sub="Written by our coaches. Pick one and start today."
-            onClick={() => onTab("jf")}
-          />
-        )}
         <FindRow
           icon={Users}
           title="Programs from the crew"
           sub="Save a copy of one someone shared and make it yours."
           onClick={() => onTab("crew")}
-        />
-        <FindRow
-          icon={Hammer}
-          title="Build your own"
-          sub="Blocks, weeks and days from the exercise library. 12 weeks to start."
-          to="/portal/programs/new"
         />
       </div>
     </section>
