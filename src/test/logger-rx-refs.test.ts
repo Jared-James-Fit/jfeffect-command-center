@@ -51,9 +51,11 @@ describe("the card's top: name, role, the prescription, then Last / Suggested", 
     expect(html).toContain('data-testid="load-suggestion-info"');
     expect(html).toMatch(/data-testid="load-target">250[\s\u00a0]lb<\/span>/);
     expect(html).not.toContain("load-pick");
-    // a range fills its middle: no row of weights to choose from
+    // a range logs its middle in one tap: no row of weights to choose from
     const ranged = render({ onApply: async () => 1, picks: { low: 240, high: 260, loads: [240, 250, 260] } });
     expect(ranged).toContain("240–260 lb");
+    expect(ranged).toContain("Log your open sets at 250 lb");
+    expect(ranged).toContain("Tap to log your sets at 250 lb");
     expect(ranged).not.toContain("load-pick");
     // nothing to fill (read-only, every set logged): the whole half opens the explanation
     const readOnly = render({});
