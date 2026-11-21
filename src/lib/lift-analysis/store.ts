@@ -4,7 +4,7 @@
  * without asking the server again and again. In memory only.
  */
 import { useSyncExternalStore } from "react";
-import type { RunProgress } from "@/lib/lift-analysis/run";
+import type { RunProgress } from "@/lib/lift-analysis/progress";
 
 type Running = RunProgress & { setVideoId: string; startedAt: number };
 

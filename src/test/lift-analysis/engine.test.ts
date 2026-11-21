@@ -269,7 +269,9 @@ describe("lift analysis engine (synthetic clips with a known answer)", () => {
           staticPlates: [],
         }),
       );
-      const a = checkReps(clip, res);
+      // a 34 px plate: its edge is a few pixels, so its margins run up to ±8 % and accuracy is held to 6 %
+      // (the truth still has to sit inside the margin the engine states)
+      const a = checkReps(clip, res, { maxErr: 0.06 });
       expect(a.calibration.relErr).toBeGreaterThan(0.012);
     },
   );

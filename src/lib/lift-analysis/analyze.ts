@@ -9,8 +9,10 @@ import {
   DEFAULT_PLATE,
   type Calibration,
   type PlateSize,
+  type RimSizeInput,
   type View,
 } from "@/lib/lift-analysis/calibrate";
+import { lostStretches, type TrackKey } from "@/lib/lift-analysis/keyed";
 import { madSigma, median } from "@/lib/lift-analysis/image";
 import {
   analyzeReps,
@@ -27,7 +29,7 @@ import {
 import type { TrackPoint } from "@/lib/lift-analysis/track";
 import { velocityVerdict, type VelocityVerdict } from "@/lib/lift-analysis/verdict";
 
-export const ENGINE_VERSION = "bar-path/2";
+export const ENGINE_VERSION = "bar-path/3";
 
 export type SetMetrics = {
   reps: number;
@@ -56,7 +58,11 @@ export type QualityNote =
   | "plate_hidden"
   | "no_reps"
   | "short_track"
-  | "implausible_scale";
+  | "implausible_scale"
+  /** The plate's outer edge barely showed (black plate on a black background): the scale is less certain. */
+  | "plate_edge_faint"
+  /** The plate was lost for a stretch inside the set (shown for the athlete to fix). */
+  | "tracking_gaps";
 
 export type LiftAnalysis = {
   engine: string;
@@ -87,6 +93,18 @@ export type LiftAnalysis = {
   velocity: VelocityVerdict;
   /** The smoothed path for drawing: times, x / y as shares of the frame (0…1), velocity (m/s, or null), tracked flags. */
   series: { t: number[]; x: number[]; y: number[]; v: (number | null)[]; ok: number[] };
+  /**
+   * What the read was followed from, so it can be read again (a correction
+   * added) without asking again: the keys (frames where the plate's centre
+   * and edge were known, analysed px), and the stretches inside the set
+   * where the plate wasn't followed. Older reads have none.
+   */
+  track?: {
+    keys: TrackKey[];
+    lost: { start: number; end: number }[];
+    /** Frames where following forward and backward disagreed (left out, never guessed). */
+    conflicts: number;
+  };
 };
 
 export type AnalyzeOptions = {
@@ -97,6 +115,10 @@ export type AnalyzeOptions = {
   dirHint?: "lower_first" | "lift_first";
   /** Per-frame camera shift (px), when it was measured. */
   shake?: number[];
+  /** The plate's size from its outer edge in still frames (rim-outer.ts), when measured. */
+  size?: RimSizeInput | null;
+  keys?: TrackKey[];
+  conflicts?: number;
 };
 
 const round = (v: number, d: number) => {
@@ -126,6 +148,8 @@ function tierOfShare(share: number, measured: number, estimate: number): Tier | 
  * is dropped rather than shown.
  */
 export const MAX_REP_ROM_MM = 1100;
+/** The least position noise a margin assumes (px): a small plate's sub-pixel jitter. */
+export const MARGIN_FLOOR_PX = 0.13;
 export const MAX_PEAK_M_S = 3.5;
 
 export function analyzeTrack(points: TrackPoint[], opts: AnalyzeOptions): LiftAnalysis {
@@ -146,7 +170,7 @@ function readTrack(
   plate: PlateSize & { confirmed?: boolean },
   allowScale: boolean,
 ) {
-  const cal0 = calibrate(points, plate);
+  const cal0 = calibrate(points, plate, opts.size);
   const cal: Calibration = allowScale ? cal0 : { ...cal0, ok: false };
   const times = points.map((p) => p.t);
   const fps = frameRate(times);
@@ -155,8 +179,18 @@ function readTrack(
   // vertical up, in mm when calibrated
   const sy = cal.ok ? cal.mmPerPxY : 1;
   const sxs = cal.ok ? cal.mmPerPxX : 1;
-  const Y = points.map((p) => -p.y * sy);
-  const X = points.map((p) => p.x * sxs);
+  // a tilted phone: the plate (and the bar's travel with it) bigger at one end of the rep. Heights are
+  // remapped so one scale fits all of them: y' = y0 + (b/k)·ln(1 + k(y − y0)/b), the integral of b / b(y)
+  const grad = cal.ok && opts.size?.grad ? opts.size.grad : null;
+  const level = (y: number) => {
+    if (!grad || !(cal.b > 0)) return y;
+    const u = 1 + (grad.k * (y - grad.y0)) / cal.b;
+    return u > 0.2 ? grad.y0 + (cal.b / grad.k) * Math.log(u) : y;
+  };
+  const across = (y: number) =>
+    grad && cal.b > 0 ? cal.b / Math.max(0.2 * cal.b, cal.b + grad.k * (y - grad.y0)) : 1;
+  const Y = points.map((p) => -level(p.y) * sy);
+  const X = points.map((p) => p.x * sxs * across(p.y));
   const w = points.map((p) => (p.found ? Math.max(0.2, p.conf) : 0));
   const h = bandwidthFor(fps);
   const s = loess(times, Y, w, h);
@@ -169,14 +203,18 @@ function readTrack(
   // the raw position noise, from what the smoothing took off (its own dof corrected)
   const res: number[] = [];
   for (let i = 0; i < points.length; i++) if (found[i] && s.ok[i]) res.push(Y[i] - s.y[i]);
-  const sigmaRaw = Math.max(madSigma(res) * 1.25, cal.ok ? 0.3 : 0.05);
-  const minRom = cal.ok ? 60 : 6 * sigmaRaw;
+  const sigmaMove = Math.max(madSigma(res) * 1.25, cal.ok ? 0.3 : 0.05);
+  // the margins: never better than an eighth of a pixel. Following a plate's picture jitters by about
+  // that much frame to frame however smooth the path looks, and on a small plate that's millimetres
+  const sigmaRaw = Math.max(sigmaMove, cal.ok ? MARGIN_FLOOR_PX * sy : MARGIN_FLOOR_PX);
+  const minRom = cal.ok ? 60 : 6 * sigmaMove;
   const reps = analyzeReps({
     raw: { t: times, y: Y, found },
     s,
     sb,
     sx: sxSm,
     sigma: sigmaRaw,
+    sigmaMove,
     fps,
     scale: {
       ok: cal.ok,
@@ -205,6 +243,7 @@ function finish(
   const notes = new Set<QualityNote>();
   if (implausible) notes.add("implausible_scale");
   if (!cal.ok) notes.add("not_calibrated");
+  if (cal.ok && cal.faint) notes.add("plate_edge_faint");
   if (cal.ok && !plate.confirmed) notes.add("plate_size_assumed");
   if (fps < 50) notes.add("low_fps");
   if (cal.ok && cal.view === "turned" && cal.ratio < 0.96) notes.add("camera_turned");
@@ -320,6 +359,15 @@ function finish(
 
   const tracked = points.length ? found.filter(Boolean).length / points.length : 0;
   if (points.length < 20) notes.add("short_track");
+  // the stretches inside the set (first rep's start to last rep's end) where the plate wasn't followed
+  const setFrom = reps.length
+    ? Math.min(...reps.map((r) => r.ecc?.start ?? r.con.start))
+    : times[0];
+  const setTo = reps.length
+    ? Math.max(...reps.map((r) => Math.max(r.con.end, r.ecc?.end ?? 0)))
+    : times[times.length - 1];
+  const lost = lostStretches(points, setFrom, setTo, Math.max(3, Math.round(fps * 0.1)));
+  if (lost.length) notes.add("tracking_gaps");
   const startT = reps.length
     ? Math.max(times[0], (reps[0].ecc?.start ?? reps[0].con.start) - 0.5)
     : times[0];
@@ -378,6 +426,22 @@ function finish(
     },
     quality: { tracked: round(tracked, 3), notes: [...notes] },
     series,
+    ...(opts.keys
+      ? {
+          track: {
+            keys: opts.keys.map((k) => ({
+              ...k,
+              t: round(k.t, 4),
+              x: round(k.x, 2),
+              y: round(k.y, 2),
+              a: round(k.a, 2),
+              b: round(k.b, 2),
+            })),
+            lost: lost.map((l) => ({ start: round(l.start, 3), end: round(l.end, 3) })),
+            conflicts: opts.conflicts ?? 0,
+          },
+        }
+      : {}),
   };
   return { ...out, velocity: velocityVerdict(out as LiftAnalysis) };
 }

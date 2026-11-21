@@ -5,7 +5,9 @@ import { runEngine } from "../../src/lib/lift-analysis/engine";
 const [file, lift, tx, ty, tt] = process.argv.slice(2);
 const dirHint = lift === "deadlift" ? "lift_first" : "lower_first";
 const d = decode(file);
-const seed = tx ? { kind: "tap" as const, x: Number(tx), y: Number(ty), t: Number(tt) } : undefined;
+const seed = tx
+  ? { kind: "tap" as const, x: Number(tx), y: Number(ty), t: Number(tt) }
+  : { kind: "proposal" as const };
 const r = runEngine(d.frames, { dirHint, seed });
 if (!r.ok) {
   console.log(JSON.stringify({ ok: false, why: r.why }));
