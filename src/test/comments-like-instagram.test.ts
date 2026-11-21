@@ -25,7 +25,9 @@ describe("comments read like Instagram's and TikTok's (Nov 14 2026)", () => {
   it("the sheet is titled Comments with ✕, and the caption is its first line, written like a comment", () => {
     const sheet = read("src/components/community/post-sheet.tsx");
     expect(sheet).toContain('<Dialog.Title className="mt-2.5 text-center text-[16px] font-semibold leading-6">Comments</Dialog.Title>');
-    expect(sheet).toContain('aria-label="Close comments"');
+    expect(sheet).toContain('aria-label={workout ? "Close" : "Close comments"}');
+    // a workout post's sheet (Nov 21 2026): Workout | Comments as two tabs in the title's place
+    expect(sheet).toContain('<Dialog.Title className="sr-only">Workout and comments</Dialog.Title>');
     expect(sheet).toContain("data-post-sheet-caption");
     // no words: only who liked it (Nov 19 2026), and with no likes either, nothing
     expect(sheet).toContain("if (!auto && !caption) {\n    if (!likes) return null;");
