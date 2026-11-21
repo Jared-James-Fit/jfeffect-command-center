@@ -21,7 +21,7 @@ import { feedback } from "@/lib/feedback";
 import { noAutofill } from "@/lib/no-autofill";
 import { AnatomyFigure, placeKey } from "@/components/pain/anatomy-figure";
 import { atlasView, hasDeep, partAt, regionBox, type AtlasPart, type AtlasView, type SideFacing, type ViewKey } from "@/lib/pain/anatomy/atlas";
-import { DETAIL_SCALE, IDENTITY, centerOn, clampXf, fitView, frameBox, layoutCallouts, toDrawing, toScreen, zoomAt, type Size, type Xf } from "@/lib/pain/anatomy/stage";
+import { DETAIL_SCALE, IDENTITY, LABEL_TYPE, centerOn, clampXf, fitView, frameBox, labelHeight, layoutCallouts, toDrawing, toScreen, wrapLines, zoomAt, type Size, type Xf } from "@/lib/pain/anatomy/stage";
 import { PAIN_REGIONS, areaLabel, regionOf, type PainSide } from "@/lib/pain/regions";
 import { PAIN_SITES, searchSites, siteAnatomy, siteLabel, siteOf } from "@/lib/pain/sites";
 import { CHANGES, FEELS, FEEL_CHOICES, FEEL_SIGNS, IMPACTS, NOTE_MAX, TIMINGS, placeLabel, scoreWord, type Feel, type Timing } from "@/lib/pain/report";
@@ -29,6 +29,8 @@ import { followUpFor, shortDay, type PainEntry } from "@/lib/pain/history";
 import { addPick, answerFollowUp, pickScore, recentSites, scorePatch, unrated, updatePick, type PainPick } from "@/lib/pain/picks";
 import { CLIENT_SAFETY_NOTICE, needsSafetyNotice, URGENT_SIGNS } from "@/lib/pain/safety";
 import { useSwipeDownToClose } from "@/hooks/use-swipe-down-to-close";
+import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
+import { revealDelta } from "@/lib/equipment/setup-draft";
 
 export type PainMapContext = {
   today: string;
@@ -172,22 +174,43 @@ function ScoreScale({ value, onPick, label }: { value: number | null; onPick: (n
 
 // ── one place's details ─────────────────────────────────────────────────
 
+type ViewportBox = { top: number; height: number; keyboard: boolean } | null;
+
 function PlaceDetails({
   pick,
   ctx,
+  vv,
   onChange,
   onRemove,
   onDone,
 }: {
   pick: PainPick;
   ctx: PainMapContext | null;
+  /** The visible part of the screen (useVisualViewportBox): with the keyboard up the details are pinned to it. */
+  vv: ViewportBox;
   onChange: (patch: Partial<PainPick>) => void;
   onRemove: () => void;
   onDone: () => void;
 }) {
   const [panel, setPanel] = useState<HTMLDivElement | null>(null);
-  // one swipe down puts the details away (the place stays picked)
-  useSwipeDownToClose(panel, true, onDone);
+  const kb = !!vv?.keyboard;
+  // one swipe down puts the details away (the place stays picked); never while typing,
+  // when a pull down takes the keyboard down instead (iOS's own sheets)
+  useSwipeDownToClose(panel, !kb, onDone);
+  const scroller = useRef<HTMLDivElement | null>(null);
+  const reveal = useCallback((el: Element | null) => {
+    const sc = scroller.current;
+    if (!sc || !el || !sc.contains(el)) return;
+    const r = el.getBoundingClientRect();
+    const b = sc.getBoundingClientRect();
+    const d = revealDelta({ top: r.top, bottom: r.bottom, viewTop: b.top, viewBottom: b.bottom });
+    if (d) sc.scrollTop += d;
+  }, []);
+  // the box being typed in stays in view as the keyboard comes up and the sheet resizes
+  useEffect(() => {
+    if (kb) reveal(document.activeElement);
+  }, [kb, vv?.height, vv?.top, reveal]);
+  const pull = useRef<number | null>(null);
   const name = placeLabel(pick);
   const anat = siteAnatomy(pick.site);
   const region = regionOf(pick.region);
@@ -209,8 +232,29 @@ function PlaceDetails({
   return (
     <div
       ref={setPanel}
-      className="absolute inset-x-0 bottom-0 z-30 flex flex-col rounded-t-3xl border-t border-white/10 bg-background shadow-[0_-12px_40px_rgba(0,0,0,0.6)]"
-      style={{ height: `${DETAILS_SHARE * 100}%`, paddingBottom: "env(safe-area-inset-bottom)" }}
+      className={cn(
+        "inset-x-0 z-30 flex flex-col rounded-t-3xl border-t border-white/10 bg-background shadow-[0_-12px_40px_rgba(0,0,0,0.6)]",
+        // typing: the details are the visible part of the screen, pinned to it (top and
+        // height from the visual viewport, never the keyboard's height added to the
+        // bottom: iOS also slides the page, and the two together jump a sheet past it)
+        kb ? "fixed" : "absolute bottom-0",
+      )}
+      style={
+        kb && vv
+          ? { top: vv.top + 8, height: vv.height - 8 }
+          : { height: `${DETAILS_SHARE * 100}%`, paddingBottom: "env(safe-area-inset-bottom)" }
+      }
+      onTouchStart={(e) => {
+        pull.current = kb && (scroller.current?.scrollTop ?? 0) <= 0 && e.touches.length === 1 ? e.touches[0].clientY : null;
+      }}
+      onTouchMove={(e) => {
+        if (pull.current == null) return;
+        if (e.touches[0].clientY - pull.current > 36) {
+          pull.current = null;
+          (document.activeElement as HTMLElement | null)?.blur?.();
+        }
+      }}
+      data-pain-keyboard={kb ? "up" : undefined}
       data-pain-details
       role="dialog"
       aria-label={`${name}: details`}
@@ -231,7 +275,16 @@ function PlaceDetails({
           <Trash2 className="h-[18px] w-[18px]" />
         </button>
       </div>
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 pb-4 pt-1">
+      <div
+        ref={scroller}
+        className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 pb-4 pt-1"
+        onFocus={(e) => {
+          const t = e.target as Element;
+          if (!t.matches?.("input, textarea")) return;
+          // after the keyboard has come up and the sheet has been pinned above it
+          for (const ms of [0, 160, 380]) window.setTimeout(() => reveal(t), ms);
+        }}
+      >
         <div className="space-y-2">
           {label("How bad is it?")}
           <ScoreScale value={score} onPick={(n) => onChange(scorePatch(n))} label={`${name}: how bad, 0 to 10`} />
@@ -389,7 +442,7 @@ function PlaceDetails({
           </div>
         )}
       </div>
-      <div className="shrink-0 border-t border-white/10 px-5 pb-3 pt-3">
+      <div className={cn("shrink-0 border-t border-white/10 px-5 pt-3", kb ? "pb-2" : "pb-3")}>
         <button
           type="button"
           onClick={onDone}
@@ -507,10 +560,23 @@ type Gesture = {
   mid0: { x: number; y: number };
 };
 
-const LABEL_H = 40;
 const labelWidth = (w: number) => Math.min(148, Math.round(w * 0.36));
 /** What framing keeps clear on each side for the labels (they may overlap the drawing's edge a little). */
 const labelRoom = (w: number) => Math.round(labelWidth(w) * 0.72);
+/** Inside a label: its side padding (px-2.5) and border, and a hair of slack for the font's rounding. */
+const LABEL_INSET = 2 * 10 + 2 + 2;
+
+/** Text widths for sizing labels to their names, on one shared canvas. */
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+function textMeasure(font: string): (s: string) => number {
+  if (measureCtx === undefined) measureCtx = typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
+  const ctx = measureCtx;
+  if (!ctx) return (t) => t.length * (parseFloat(font.split(" ")[1]) || 13) * 0.58;
+  return (t) => {
+    ctx.font = font;
+    return ctx.measureText(t).width;
+  };
+}
 
 export function PainMap({
   open,
@@ -575,18 +641,31 @@ export function PainMap({
     return () => ro.disconnect();
   }, [stageEl]);
 
-  // iOS Safari's own page pinch would fight ours
+  // A pinch anywhere on the map is the map's (the stage zooms the body), never the
+  // page's: iOS would zoom the whole app under the dialog. Two fingers on the
+  // header, the details or the list do nothing.
+  const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null);
   useEffect(() => {
-    const el = stageEl;
+    const el = contentEl;
     if (!el) return;
     const stop = (e: Event) => e.preventDefault();
+    const twoFingers = (e: TouchEvent) => {
+      if (e.touches.length > 1 && e.cancelable) e.preventDefault();
+    };
     el.addEventListener("gesturestart", stop);
     el.addEventListener("gesturechange", stop);
+    el.addEventListener("touchmove", twoFingers, { passive: false });
     return () => {
       el.removeEventListener("gesturestart", stop);
       el.removeEventListener("gesturechange", stop);
+      el.removeEventListener("touchmove", twoFingers);
     };
-  }, [stageEl]);
+  }, [contentEl]);
+
+  // the keyboard: the dialog is the visible part of the screen while it's up
+  const vv = useVisualViewportBox(open);
+  const kb = !!vv?.keyboard;
+  const fontFamily = useRef<string | null>(null);
 
   const go = useCallback((next: Xf, anim = true) => {
     setAnimate(anim);
@@ -778,20 +857,31 @@ export function PainMap({
     anchors.sort((a, b) => a.rank - b.rank);
     const keep = anchors.slice(0, 8);
     const labelW = labelWidth(size.w);
-    const placed = layoutCallouts(
-      keep.map((a) => ({ id: a.id, x: a.sx, y: a.sy })),
-      { w: size.w, h: visibleH },
-      { labelW, labelH: LABEL_H, gap: 6, top: 52, bottom: 52 },
-    );
-    const byId = new Map(keep.map((a) => [a.id, a]));
     // both sides of one structure in view: each label says which
     const count = new Map<string, number>();
-    for (const c of placed) count.set(byId.get(c.id)!.site!, (count.get(byId.get(c.id)!.site!) ?? 0) + 1);
-    return placed.map((c) => {
-      const part = byId.get(c.id)!;
-      return { ...c, part, w: labelW, sideTag: (count.get(part.site!) ?? 0) > 1 ? part.side : null };
+    for (const a of keep) count.set(a.site!, (count.get(a.site!) ?? 0) + 1);
+    // each label as tall as its name needs: a long name wraps, never cut off with "…"
+    fontFamily.current ??= stage.current ? getComputedStyle(stage.current).fontFamily : "system-ui, sans-serif";
+    const nameW = textMeasure(`600 13px ${fontFamily.current}`);
+    const tagW = textMeasure(`700 11px ${fontFamily.current}`);
+    const sized = keep.map((a) => {
+      const s = siteOf(a.site);
+      const sideTag = (count.get(a.site!) ?? 0) > 1 ? a.side : null;
+      const lines = wrapLines(s?.label ?? "", labelW - LABEL_INSET, nameW, sideTag ? tagW(sideTag) + 4 : 0);
+      return { a, sideTag, ...labelHeight(lines, !!s?.anat) };
     });
-  }, [detail, gesturing, mode, layer, size, sheetH, fit, xf, focus]);
+    const placed = layoutCallouts(
+      sized.map(({ a, h }) => ({ id: a.id, x: a.sx, y: a.sy, h })),
+      { w: size.w, h: visibleH },
+      // the "pick the whole area" pill only shows with no details open
+      { labelW, labelH: LABEL_TYPE.minH, gap: 6, top: 52, bottom: focus && !active ? 52 : 12 },
+    );
+    const byId = new Map(sized.map((x) => [x.a.id, x]));
+    return placed.map((c) => {
+      const x = byId.get(c.id)!;
+      return { ...c, part: x.a, w: labelW, sideTag: x.sideTag, lines: x.lines, anat: x.anat };
+    });
+  }, [detail, gesturing, mode, layer, size, sheetH, fit, xf, focus, active]);
 
   const activePick = active ? picks.find((p) => p.uid === active) ?? null : null;
   const focusLabel = focus ? areaLabel(focus.region, focus.side) : null;
@@ -845,8 +935,11 @@ export function PainMap({
             (the details, the list and the tray couldn't scroll). */}
         <DialogPrimitive.Overlay className="fixed inset-0 z-[90] bg-[#0b0b0d]" />
         <DialogPrimitive.Content
-          className="dark fixed inset-0 z-[90] flex flex-col bg-[#0b0b0d] text-foreground outline-none"
-          style={{ paddingTop: "env(safe-area-inset-top)" }}
+          ref={setContentEl}
+          className="dark fixed inset-x-0 z-[90] flex flex-col bg-[#0b0b0d] text-foreground outline-none"
+          // typing in the list's search: the dialog ends at the keyboard, so the whole list scrolls into view
+          style={kb && vv ? { top: vv.top, height: vv.height, paddingTop: "env(safe-area-inset-top)" } : { top: 0, bottom: 0, paddingTop: "env(safe-area-inset-top)" }}
+          data-pain-keyboard={kb ? "up" : undefined}
           onEscapeKeyDown={(e) => {
             e.preventDefault();
             back();
@@ -966,7 +1059,7 @@ export function PainMap({
                     <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
                       {callouts.map((c) => {
                         const x1 = c.side === "l" ? c.x + c.w : c.x;
-                        const y1 = c.y + LABEL_H / 2;
+                        const y1 = c.y + c.h / 2;
                         return (
                           <g key={c.id}>
                             <line x1={x1} y1={y1} x2={c.ax} y2={c.ay} stroke="rgba(255,255,255,0.55)" strokeWidth={1} />
@@ -988,16 +1081,16 @@ export function PainMap({
                             "absolute flex flex-col justify-center rounded-lg border px-2.5 text-left leading-tight shadow-[0_4px_14px_rgba(0,0,0,0.45)] backdrop-blur-[2px] transition-colors",
                             on ? "border-primary bg-primary/90 text-white" : "border-white/20 bg-black/70 text-white active:bg-white/20",
                           )}
-                          style={{ left: c.x, top: c.y, width: c.w, height: LABEL_H }}
+                          style={{ left: c.x, top: c.y, width: c.w, height: c.h }}
                           aria-label={`${siteLabel(c.part.site!, c.part.side)}${s?.anat ? `, ${s.anat}` : ""}`}
                           aria-pressed={on}
                           data-pain-label={c.part.site!}
                         >
-                          <span className="flex min-w-0 items-baseline gap-1">
-                            {c.sideTag && <span className={cn("shrink-0 text-[11px] font-bold", on ? "text-white/85" : "text-white/60")}>{c.sideTag}</span>}
-                            <span className="truncate text-[13px] font-semibold">{s?.label}</span>
+                          <span className={cn("block break-words text-[13px] font-semibold leading-[15px]", c.lines >= 3 ? "line-clamp-3" : c.lines === 2 ? "line-clamp-2" : "truncate")}>
+                            {c.sideTag && <span className={cn("mr-1 text-[11px] font-bold", on ? "text-white/85" : "text-white/60")}>{c.sideTag}</span>}
+                            {s?.label}
                           </span>
-                          {s?.anat && <span className={cn("truncate text-[11px]", on ? "text-white/85" : "text-white/60")}>{s.anat}</span>}
+                          {c.anat && s?.anat && <span className={cn("block truncate text-[11px] leading-[13px]", on ? "text-white/85" : "text-white/60")}>{s.anat}</span>}
                         </button>
                       );
                     })}
@@ -1055,6 +1148,7 @@ export function PainMap({
                 key={activePick.uid}
                 pick={activePick}
                 ctx={ctx}
+                vv={vv}
                 onChange={(patch) => onChange(updatePick(latest.current.picks, activePick.uid, patch))}
                 onRemove={() => remove(activePick.uid)}
                 onDone={() => setActive(null)}
@@ -1063,7 +1157,7 @@ export function PainMap({
           </div>
 
           {/* what's picked, and the way back */}
-          {!activePick && (
+          {!activePick && !kb && (
             <div className="shrink-0 border-t border-white/10 bg-[#0b0b0d] px-4 pt-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
               {picks.length > 0 && (
                 <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-0.5" data-pain-tray>
