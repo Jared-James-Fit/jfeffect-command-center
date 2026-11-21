@@ -1,5 +1,5 @@
-import { forwardRef, useLayoutEffect, useRef } from "react";
-import { Archive, ChevronLeft, Trophy } from "lucide-react";
+import { forwardRef, useLayoutEffect, useRef, useState } from "react";
+import { Archive, ChevronDown, ChevronLeft, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,7 +15,6 @@ import { useHoldToPause } from "@/components/community/clip-gestures";
 import { CLIP_HOLD_EVENT } from "@/components/community/inline-video";
 import {
   REACTION,
-  SCOPE_WORD,
   exerciseBestLines,
   isTrainingNow,
   lockInTimeLabel,
@@ -32,7 +31,8 @@ import { PostViewsRow, useViewOnOpen } from "@/components/community/post-views";
 import { PostScoreRow } from "@/components/community/post-score";
 import { PostExtras } from "@/components/community/post-attach";
 import { useMarkHintSeen, usePostDetail, usePostMediaUrls, useReact } from "@/lib/community.queries";
-import { summaryStats } from "@/lib/workout-recap";
+import { RECAP_MAX_LIFTS, recapExercises, recapKeyLifts, recapMoreLabel, recapPr, summaryStats } from "@/lib/workout-recap";
+import { WorkoutSetList } from "@/components/community/workout-details";
 import { WeightOther } from "@/components/dual-weight";
 import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 
@@ -228,6 +228,7 @@ function Detail({
           ref={workoutRef}
           post={post}
           unit={unit}
+          expanded={at === "workout"}
           // a workout with no picture: its summary is what two taps ❤️
           heroTap={post.media_type ? undefined : onHeroTap}
           burst={post.media_type ? null : <ReactionBurst n={burst.n} x={burst.x} y={burst.y} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />}
@@ -260,23 +261,32 @@ function Detail({
 /**
  * The workout on its page, read top to bottom: what it was (its name, where it
  * sits in the program, which workout of the month), its numbers in one quiet
- * row, then every exercise with its best set. Plain type in the app's text
- * face, sentence case, numbers in tabular figures at text size: the display
- * face is the feed card's, never a summary someone reads.
+ * row, then its key lifts with their best sets (the same as the feed's recap,
+ * at most four) and "All 9 exercises" that opens every set right there
+ * (WorkoutSetList, the post's sheet's Workout tab), so the reactions and
+ * comments under it are never a long scroll away. Opened for the workout
+ * (`expanded`), every set shows at once. Plain type in the app's text face,
+ * sentence case, numbers in tabular figures at text size.
  */
 const WorkoutSummary = forwardRef<
   HTMLElement,
   {
     post: NonNullable<ReturnType<typeof usePostDetail>["data"]>;
     unit: "kg" | "lb";
+    expanded?: boolean;
     heroTap?: (e: React.MouseEvent) => void;
     burst: React.ReactNode;
   }
->(function WorkoutSummary({ post, unit, heroTap, burst }, ref) {
+>(function WorkoutSummary({ post, unit, expanded = false, heroTap, burst }, ref) {
   const s = post.stats!;
   const meta = [workoutSubtitle(s), monthWorkoutLine(s)].filter(Boolean).join(" · ");
-  // Time · Working sets · Volume (both units) · PRs, the same numbers as the feed's recap
+  // Time · Working sets · Volume (both units) · PRs
   const stats = summaryStats(s, unit);
+  const exercises = recapExercises(post.exercises);
+  const lifts = recapKeyLifts(exercises, s);
+  const [open, setOpen] = useState(expanded);
+  // nothing more to open (every lift on screen, no sets to show): the list as it is
+  const all = open || (lifts.length >= exercises.length && exercises.every((e) => !e.set_list?.length));
   return (
     <section ref={ref} className="pt-5" data-workout-section>
       <div className={cn("relative px-4", heroTap && "select-none [-webkit-touch-callout:none]")} onClick={heroTap} data-workout-head>
@@ -304,42 +314,47 @@ const WorkoutSummary = forwardRef<
         {burst}
       </div>
 
-      {post.exercises.length > 0 && (
-        <div className="px-4 pt-6" data-workout-exercises>
-          <div className="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
-            <h3 className="text-[15px] font-semibold">
-              Exercises <span className="font-normal text-muted-foreground">{post.exercises.length}</span>
-            </h3>
-            <span className="text-[12px] text-muted-foreground">Best set</span>
-          </div>
-          <ul className="divide-y divide-border/60">
-            {post.exercises.map((e, i) => {
-              const best = exerciseBestLines(e, unit);
-              return (
-                <li key={`${e.name}-${i}`} className="flex items-start gap-3 py-3" data-workout-exercise>
-                  <div className="min-w-0 flex-1">
-                    <div className="break-words text-[15px] font-medium leading-snug">{e.name}</div>
-                    {/* its record after the sets, wrapping whole under them on a small phone (the trophy marks it, no separator left dangling) */}
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 text-[13px] leading-snug text-muted-foreground">
-                      <span>
-                        {e.sets} working {e.sets === 1 ? "set" : "sets"}
-                      </span>
-                      {e.pr && (
-                        <span className="inline-flex items-center gap-1 font-medium text-warning" data-exercise-pr>
-                          <Trophy className="h-3.5 w-3.5" aria-hidden />
-                          {SCOPE_WORD[e.pr]}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <div className="whitespace-nowrap text-[15px] font-semibold leading-snug tabular-nums">{best.main}</div>
-                    {best.other && <div className="mt-0.5 whitespace-nowrap text-[12px] leading-snug tabular-nums text-muted-foreground">{best.other}</div>}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+      {exercises.length > 0 && (
+        <div className="px-4 pt-5" data-workout-exercises>
+          {all ? (
+            <WorkoutSetList exercises={exercises} stats={s} unit={unit} totals={false} className="border-t border-border/60" />
+          ) : (
+            <>
+              <ul className="divide-y divide-border/60 border-t border-border/60">
+                {lifts.map(({ exercise: e, index }) => {
+                  const best = exerciseBestLines(e, unit);
+                  const pr = recapPr(e, s);
+                  return (
+                    <li key={`${e.name}-${index}`} className="flex items-center gap-3 py-3" data-workout-exercise>
+                      <div className="min-w-0 flex-1">
+                        <div className="break-words text-[15px] font-medium leading-snug">{e.name}</div>
+                        {pr && (
+                          <div className={cn("mt-0.5 inline-flex items-center gap-1 text-[13px] leading-snug", pr.loud ? "font-medium text-warning" : "text-muted-foreground")} data-exercise-pr={pr.loud ? "headline" : "quiet"}>
+                            {pr.loud && <Trophy className="h-3.5 w-3.5" aria-hidden />}
+                            {pr.label}
+                          </div>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="whitespace-nowrap text-[15px] font-semibold leading-snug tabular-nums">{best.main}</div>
+                        {best.other && <div className="mt-0.5 whitespace-nowrap text-[12px] leading-snug tabular-nums text-muted-foreground">{best.other}</div>}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="flex h-11 w-full items-center justify-between gap-2 border-t border-border/60 text-[14px] font-medium text-muted-foreground transition-colors active:text-foreground"
+                aria-expanded={false}
+                data-workout-every-set
+              >
+                {recapMoreLabel(exercises.length, Math.min(RECAP_MAX_LIFTS, lifts.length))}
+                <ChevronDown className="h-4 w-4 shrink-0" aria-hidden />
+              </button>
+            </>
+          )}
         </div>
       )}
     </section>

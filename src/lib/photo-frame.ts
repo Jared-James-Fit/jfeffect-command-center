@@ -151,6 +151,17 @@ export const PHOTO_FILL_MAX_TRIM = 0.12;
 export const PHOTO_ZOOM_MAX_TRIM = 0.1;
 
 /**
+ * A clip the same, a little further (Nov 21 2026): a phone's 3:4 set video
+ * (an older iPhone recording, a clip filmed in the picker) sat as a narrow box
+ * with black down both sides whenever the post's words took a line or two, so
+ * it's zoomed to the room's width giving up at most this share of its height,
+ * half off the top and half off the bottom (a lift is filmed with the lifter in
+ * the middle, the floor and head room at the edges). Never stretched, never cut
+ * at the sides; a clip framed in the studio keeps its frame.
+ */
+export const CLIP_ZOOM_MAX_TRIM = 0.15;
+
+/**
  * The photo's box inside that room (FitBox's container units: the room has
  * `container-type: size`): CSS width / height / left / top. `aspect` is the
  * photo's own (w / h); `focusY` (0 top, 1 bottom) says which part of a

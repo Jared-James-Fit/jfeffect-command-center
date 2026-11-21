@@ -90,15 +90,15 @@ describe("a film post's set is said in its words, the slide on screen's", () => 
     expect(card).toContain(
       "{slide.caption && !shrunk && !page && <SlideCaption caption={slide.caption} withDots={withDots} />}",
     );
-    // the order in the words (Nov 17 2026): who, their own words, then the workout's context (the set on screen,
-    // then the workout chip that holds its PRs and opens it)
+    // the order in the words (Nov 17 2026): who, their own words, then the workout's context (the set on screen)
     const words = card.slice(card.indexOf("data-page-words-body>"), card.indexOf("data-page-meta"));
     const at = (m: string) => words.indexOf(m);
     expect(at("<AuthorLine")).toBeGreaterThan(0);
     expect(at("<PageCaption")).toBeGreaterThan(at("<AuthorLine"));
     expect(at("data-page-workout-context")).toBeGreaterThan(at("<PageCaption"));
     expect(at("data-page-set")).toBeGreaterThan(at("data-page-workout-context"));
-    expect(at("data-page-workout\n")).toBeGreaterThan(at("data-page-set"));
+    // no workout chip after it any more (Nov 21 2026): the recap is the post's last swipe
+    expect(words).not.toContain("data-page-workout\n");
     // their words at 15px, the workout's context a step smaller
     expect(read("src/components/community/page-caption.tsx")).toContain('"relative block w-full text-left text-[15px] leading-[1.4]"');
     expect(card).toContain('<div className="line-clamp-2 break-words text-[14px] font-medium">{slideSet.title}</div>');
