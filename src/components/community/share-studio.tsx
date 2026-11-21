@@ -25,6 +25,7 @@ import { reportCameraTrouble } from "@/lib/camera-report";
 import { LookCarousel, lookItems, type LookItem } from "@/components/community/look-carousel";
 import { canRecordClips, useClipRecorder } from "@/components/community/clip-recorder";
 import { readFilmSettings } from "@/lib/camera/film-settings";
+import { studioCameraAsk, takePrimedCamera } from "@/lib/camera/camera-prime";
 import { createCommunityPost, useHintsSeen, useMarkHintSeen } from "@/lib/community.queries";
 import { useAuth } from "@/lib/auth";
 import {
@@ -555,14 +556,19 @@ export function ShareStudio({
     // The full-quality ask first; a camera that can't do it gets simpler ones
     // (a refusal is final: asking again only repeats it).
     const asks: MediaStreamConstraints[] = [
-      { video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } }, audio: false },
+      { video: studioCameraAsk(facing), audio: false },
       { video: { facingMode: facing }, audio: false },
       { video: true, audio: false },
     ];
     const openCamera = async (): Promise<MediaStream> => {
       let last: unknown = null;
-      for (const ask of asks) {
+      // The tap that opened the studio may have asked already (camera-prime.ts): on an iPhone only a
+      // request from a tap reuses an "Allow" once the camera's been off a minute, so that answer is taken.
+      const primed = takePrimedCamera(studioCameraAsk(facing));
+      if (primed && "released" in primed) await primed.released;
+      for (const [i, ask] of asks.entries()) {
         try {
+          if (i === 0 && primed && "stream" in primed) return await primed.stream;
           return await navigator.mediaDevices.getUserMedia(ask);
         } catch (e) {
           last = e;

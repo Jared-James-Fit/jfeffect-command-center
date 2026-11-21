@@ -18,6 +18,7 @@ import { CameraChip } from "@/components/community/camera-overlays";
 import { postedToast, useWorkoutStudio } from "@/components/community/use-workout-studio";
 
 import { NoteEditor, ShareComposer, ShareStudio, StudioShell, preloadStudio, usePreloadStudio } from "@/components/community/studio-chunks";
+import { primeCamera, studioCameraAsk } from "@/lib/camera/camera-prime";
 
 type Mode = "post" | "meal" | "lockin" | "workout";
 /** A plain post (any photo or video, no workout on it): one per person at a time while it's being made. */
@@ -128,6 +129,8 @@ export function ShareWorkoutButton({
 
   const begin = () => {
     if (previewOnly) return void toast.message(PREVIEW_ONLY_MESSAGE);
+    // the studio's camera asked for in this tap, so a camera already allowed opens without asking again
+    primeCamera(studioCameraAsk("environment"));
     preloadStudio();
     setMode(null);
     setKind(story ? "story" : "post");

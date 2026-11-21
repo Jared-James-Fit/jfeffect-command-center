@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PRIME_TTL_MS, firstCameraAsk, primeCamera, primedCameraForTests, takePrimedCamera } from "@/lib/camera/camera-prime";
+import { PRIME_TTL_MS, firstCameraAsk, primeCamera, primedCameraForTests, studioCameraAsk, takePrimedCamera } from "@/lib/camera/camera-prime";
 
 const read = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
 const g = globalThis as any;
@@ -68,5 +68,18 @@ describe("the camera asked for inside the tap that opens it", () => {
     expect(read("src/components/camera/use-film-camera.tsx")).toMatch(/if \(!canFilmInApp\(\)\) return false;\n[^\n]*\n\s*primeCamera\(\);/);
     const cam = read("src/components/camera/film-camera.tsx");
     expect(cam).toContain("const primed = first ? takePrimedCamera(ask) : null;");
+  });
+
+  it("the Crew camera too (Nov 21 2026): its + tap asks the studio's own first ask, and the studio takes it", async () => {
+    primeCamera(studioCameraAsk("environment"));
+    expect(getUserMedia.mock.calls[0][0]).toEqual({ video: studioCameraAsk("environment"), audio: false });
+    const taken = takePrimedCamera(studioCameraAsk("environment"));
+    expect(taken && "stream" in taken).toBe(true);
+    await (taken as { stream: Promise<MediaStream> }).stream;
+    expect(read("src/components/community/share-workout-picker.tsx")).toContain('primeCamera(studioCameraAsk("environment"));');
+    const studio = read("src/components/community/share-studio.tsx");
+    expect(studio).toContain("{ video: studioCameraAsk(facing), audio: false },");
+    expect(studio).toContain("const primed = takePrimedCamera(studioCameraAsk(facing));");
+    expect(studio).toContain('if (i === 0 && primed && "stream" in primed) return await primed.stream;');
   });
 });
