@@ -271,6 +271,10 @@ export function deckProblems(deck: PostDeck, ctx: DeckContext): string[] {
   const ask = lowerHas(caption, GENERIC_ASK);
   if (ask.length) out.push(`the caption asks for engagement ("${ask[0]}"): end on something worth answering or nothing`);
   if (/#\w/.test(caption)) out.push("no hashtags");
+  // the shape it reads in on a phone: a few short paragraphs, never a poem of one-line sentences
+  const paras = caption.split(/\n[ \t]*\n/).map((p) => p.trim()).filter(Boolean);
+  if (paras.length > 4) out.push(`the caption is ${paras.length} paragraphs: two or three short ones read better`);
+  else if (paras.length === 4 && paras.every((p) => !/[.!?…]\S*\s+\S/.test(p))) out.push("the caption is one sentence a line all the way down: join the ones that belong together");
 
   // voice: his, not a writer's or a motivation page's
   const all = `${deckText(deck)}\n${caption}`;

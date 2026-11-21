@@ -18,6 +18,7 @@
  * `post-decks-tick` hook (woken by the database when there's work, and by
  * pg_cron).
  */
+import { shapeCaption } from "@/lib/caption-shape";
 import { callModelNow } from "@/lib/ai/model-client.server";
 import { readRouteOverride } from "@/lib/ai/route-call.server";
 import { resolveRoute } from "@/lib/ai/routing";
@@ -66,9 +67,13 @@ LIMITS (words): kicker ${L.kicker.words}; cover title ${L.coverTitle.words}, sub
 THE CAPTION
 - Jared talking about it, under the post, in his voice. Whoever reads it has just seen the slides, so it never repeats them: no sentence from a slide, not the hook again, not a summary of the slides.
 - Give what the slides don't, one angle, picked for this post (vary it post to post): the mistake he sees lifters make with this, who should ignore it, when it matters and when it doesn't, how it plays out in a meet prep or a cut, or exactly what he'd change in this week's training.
-- Open with the thought itself, the way he'd start typing: never a preamble ("I care about this because", "this matters because", "here's why", "let me", "quick one"), and never the way a recent caption opened (they're listed).
-- 2 to 5 short sentences, ${L.caption.min} to ${Math.min(L.caption.max, 550)} characters.
-- Never ask for engagement ("what's yours?", "thoughts?", "let me know", "drop a…", "save this", "tag a friend", "who else"). End on the useful thought. A specific question is fine only when a real answer would teach the crew something.
+- One idea, said once. Cut anything that explains what a lifter already knows, any sentence that only restates the one before, and any warm-up line. Shorter is usually better.
+- Open with the thought itself, the way he'd start typing: never a preamble ("I care about this because", "this matters because", "here's why", "let me", "quick one"), and never the way a recent caption opened (they're listed). The opening line stands on its own: a claim, a pattern he sees, a blunt line he'd actually say, short enough that the two lines the feed shows before "more" make someone want the rest.
+- Written for a phone: short paragraphs of one to three sentences with a blank line between them ("\n\n" in the JSON), the opening line its own paragraph more often than not. Vary the shape post to post: one tight paragraph, two or three short ones, a longer thought then a one-line landing. Never a wall of four or five sentences, never one sentence per line all the way down.
+- 2 to 6 short sentences, ${L.caption.min} to ${Math.min(L.caption.max, 550)} characters.
+- A strong opinion is good when the source backs it: say it plainly and own it ("I'd", "my take"). Pick a side when the source does; don't hedge every line.
+- Never ask for engagement ("what's yours?", "thoughts?", "let me know", "drop a…", "save this", "tag a friend", "who else"). End on the useful thought. Now and then (not every post) a specific question is fine when a real answer would teach the crew something ("Where does your bench slow down, off the chest or at lockout?").
+- No bold, no lists, no emoji runs: it's a caption, not a slide.
 
 ACCURACY (never bend this)
 - Every fact, number, study, name and quote comes from the source. Never add one, never change one (don't round differently, don't turn "a 2018 review" into "studies show", don't name a study's authors: say its year and what it was).
@@ -104,7 +109,7 @@ Score each from 1 to 5 and be hard to please (4 means you'd publish it as is):
 - value: a lifter learns something they can use or think differently about, and every slide earns its swipe (no filler slide)
 - accuracy: every fact, number, name and study matches the source, nothing is added, research isn't overstated, the advice is something a good coach would defend (any invented or bent fact is a 1)
 - voice: sounds like a confident coach who competes, not a textbook, a copywriter, a motivation page or AI
-- caption: adds something the slides don't (his take, when it applies, who it doesn't) and doesn't repeat them or beg for engagement
+- caption: adds something the slides don't (his take, when it applies, who it doesn't), one idea, sounds like him talking, reads easily on a phone (an opening line that earns the "more", short paragraphs, nothing said twice, no filler), and doesn't repeat the slides or beg for engagement
 - flow: the slides build in order, each one idea, a phone-sized amount of words, and the takeaway lands somewhere the cover didn't
 
 Then "verdict": "publish" only if every score is 4 or 5 and accuracy is 5, else "revise", with "notes": the specific fixes (quote the words to change, say what to change them to or what to cut). Never ask for a fact the source doesn't have. Anything you suggest stays inside the slides' limits (in words): cover ${L.coverTitle.words}, kicker ${L.kicker.words}, point title ${L.pointTitle.words} and body ${L.pointBody.words}, stat label ${L.statLabel.words} and note ${L.statNote.words}, compare side ${L.compareText.words}, list items ${L.listItem.words}, takeaway ${L.takeawayTitle.words} and its line ${L.takeawayBody.words}; no dashes.
@@ -256,7 +261,8 @@ export function tidyText(t: string): string {
 
 function tidyDeck(deck: PostDeck): PostDeck {
   const walk = (v: unknown): unknown => (typeof v === "string" ? tidyText(v) : Array.isArray(v) ? v.map(walk) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)])) : v);
-  return { ...deck, slides: walk(deck.slides) as PostDeck["slides"], caption: tidyText(deck.caption) };
+  // a caption handed back as one block gets the shape a phone reads (shapeCaption: the opener alone, never a word changed)
+  return { ...deck, slides: walk(deck.slides) as PostDeck["slides"], caption: shapeCaption(tidyText(deck.caption)) };
 }
 
 export type DeckAttempt = { deck: PostDeck | null; problems: string[]; editor: EditorRead | null; model: string | null };

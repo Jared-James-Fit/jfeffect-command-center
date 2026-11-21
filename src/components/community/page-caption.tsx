@@ -2,18 +2,20 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { MentionText } from "@/components/community/mentions";
 import { withHandles, type CommunityMention } from "@/lib/community";
-import { cutPreview, flatCaption, previewLine, wordStops } from "@/lib/caption-preview";
+import { choosePreviewStop, cutPreview, previewLine, previewText } from "@/lib/caption-preview";
 
 /** Lines a caption shows on a feed screen before "… more" (Reels'). */
 export const PAGE_CAPTION_LINES = 2;
 
 /**
- * A post's words on its own screen of the Crew feed, Reels' way: two lines,
- * cut at the last word that fits with "… more" after it, line breaks read as
- * spaces. The whole thing is one tap that opens the post's sheet (the full
- * caption with the comments under it), so a name in it is never its own link
- * here; the sheet has those. Measured at the real width, so it's right on
- * every phone.
+ * A post's words on its own screen of the Crew feed, Reels' way: two lines
+ * and "… more". It reads the way it was written (Nov 21 2026): each paragraph
+ * starts its own line (never run together into one block), and it stops
+ * where a thought does: the opener whole when it fits, else a sentence, else
+ * the last word that fits (choosePreviewStop). The whole thing is one tap
+ * that opens the post's sheet (the full caption with the comments under it),
+ * so a name in it is never its own link here; the sheet has those. Measured
+ * at the real width, so it's right on every phone.
  */
 export function PageCaption({ text: typed, mentions: typedMentions, onOpen, className }: {
   text: string;
@@ -22,7 +24,7 @@ export function PageCaption({ text: typed, mentions: typedMentions, onOpen, clas
   onOpen: () => void;
   className?: string;
 }) {
-  const { text, mentions } = useMemo(() => withHandles(flatCaption(typed), typedMentions), [typed, typedMentions]);
+  const { text, mentions } = useMemo(() => withHandles(previewText(typed), typedMentions), [typed, typedMentions]);
   const box = useRef<HTMLButtonElement | null>(null);
   const probe = useRef<HTMLSpanElement | null>(null);
   const [width, setWidth] = useState(0);
@@ -48,19 +50,8 @@ export function PageCaption({ text: typed, mentions: typedMentions, onOpen, clas
       return Math.round(p.scrollHeight / lh);
     };
     if (lines(text) <= PAGE_CAPTION_LINES) return setCut(null);
-    // the most words that fit, "… more" included
-    const stops = wordStops(text);
-    let lo = 0;
-    let hi = stops.length - 1;
-    let best = -1;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (lines(previewLine(text, stops[mid])) <= PAGE_CAPTION_LINES) {
-        best = stops[mid];
-        lo = mid + 1;
-      } else hi = mid - 1;
-    }
-    setCut(best);
+    // the most that fits, "… more" included, stopping where a thought does
+    setCut(choosePreviewStop(text, (stop) => lines(previewLine(text, stop)) <= PAGE_CAPTION_LINES));
   }, [text, width]);
 
   const preview = cut !== null && cut > 0 ? cutPreview(text, cut) : null;
@@ -76,7 +67,7 @@ export function PageCaption({ text: typed, mentions: typedMentions, onOpen, clas
       aria-label="Open the caption and comments"
       data-page-caption
     >
-      <span className={cn("block", cut === -1 && "line-clamp-2")}>
+      <span className={cn("block whitespace-pre-line break-words", cut === -1 && "line-clamp-2")}>
         <MentionText text={preview ? preview.shown : text} mentions={mentions} />
         {preview && (
           <>
@@ -88,7 +79,7 @@ export function PageCaption({ text: typed, mentions: typedMentions, onOpen, clas
       <span
         ref={probe}
         aria-hidden
-        className="pointer-events-none invisible absolute inset-x-0 top-0 -z-10 block text-[15px] leading-[1.4]"
+        className="pointer-events-none invisible absolute inset-x-0 top-0 -z-10 block whitespace-pre-line break-words text-[15px] leading-[1.4]"
       />
     </button>
   );

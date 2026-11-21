@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { MentionText } from "@/components/community/mentions";
+import { CaptionText } from "@/components/community/caption-text";
 import { captionBreaks, withHandles, type CommunityAuthor, type CommunityMention } from "@/lib/community";
 import { cutPreview, previewLine } from "@/lib/caption-preview";
 
@@ -109,21 +110,27 @@ export function NoteCaption({
   const preview = cut !== null && cut > 0 ? cutPreview(text, cut) : null;
   const shown = preview ? preview.shown : text;
 
+  const leadNode = lead ? <span className="font-bold">{lead} </span> : null;
+  const tail =
+    cut !== null && cut > 0 ? (
+      <>
+        <span className="text-muted-foreground">{preview?.gap}… </span>
+        {more}
+      </>
+    ) : null;
+
   return (
     <div ref={box} className="relative">
-      <p
-        className={cn("whitespace-pre-line text-[15px] leading-[1.45]", cut === -1 && "line-clamp-[9]")}
-        style={cut === -1 ? { WebkitLineClamp: limits.cut } : undefined}
-      >
-        {lead && <span className="font-bold">{lead} </span>}
-        <MentionText text={shown} mentions={mentions} onOpen={onOpenPerson} />
-        {cut !== null && cut > 0 && (
-          <>
-            <span className="text-muted-foreground">{preview?.gap}… </span>
-            {more}
-          </>
-        )}
-      </p>
+      {cut === -1 ? (
+        // no clean place to stop: as many lines as the limit, then "more" under them
+        <p className="whitespace-pre-line text-[15px] leading-[1.45] line-clamp-[9]" style={{ WebkitLineClamp: limits.cut }}>
+          {leadNode}
+          <MentionText text={shown} mentions={mentions} onOpen={onOpenPerson} />
+        </p>
+      ) : (
+        // whole, or up to a clean stop: its paragraphs as written (CaptionText), "… more" at the end of the last
+        <CaptionText text={shown} mentions={mentions} onOpenPerson={onOpenPerson} lead={leadNode} trail={tail} className="text-[15px] leading-[1.5]" />
+      )}
       {cut === -1 && <div className="text-[15px] leading-[1.45]">{more}</div>}
       {clamp && (
         <p
