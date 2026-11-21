@@ -22,20 +22,15 @@ describe("The workout in Crew: the post's last swipe, never a page it sends you 
     expect(card).not.toContain('closest?.("[data-workout-open]")');
     // the card's row and the recap's button take their own tap straight away (the post waits out a double tap)
     expect(card).toContain("e.stopPropagation();\n          onRecap();");
-    expect(card).toContain("const toRecap = () => (recapCtl.current ? recapCtl.current.toEnd() : onOpen(post));");
+    expect(card).toContain("const toRecap = () => (recapCtl.current ? recapCtl.current.toEnd() : openSets());");
   });
 
-  it("a picture or film post's workout is one small chip under the set, its PRs first, sliding to the recap (Nov 17 2026, Nov 20 2026)", () => {
-    expect(card).toContain("after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']\"\n                    data-page-workout");
-    expect(card).toContain('className="relative inline-flex h-7 max-w-full items-center gap-1.5 rounded-md bg-secondary/70 pl-2 pr-1.5 text-[12px] leading-none text-foreground');
-    expect(card).toContain('aria-label={`Workout recap: ${workoutHeadline(s)}${prLabel ? `, ${prLabel}` : ""}`}');
-    expect(card).toContain("onClick={toRecap}");
-    expect(card).toContain("data-page-prs");
-    // gone while the recap itself is on screen
-    expect(card).toContain("{visual && s && !onRecap && (");
-    // the workout's name lives in the chip; no separate name line, no "View workout" pill
+  it("a picture or film post's words say the set on screen and nothing more: the workout chip is gone (Nov 21 2026)", () => {
+    // the counter ("4/7") and the swipe are the way to the recap; the chip repeated them and cost the clip a line
+    expect(card).not.toContain("data-page-prs");
+    expect(card).not.toContain("onClick={toRecap}");
     expect(card).not.toContain("data-page-workout-name");
-    expect(card).not.toContain("View workout\n                  <ChevronRight");
+    expect(card).toContain("{slideSet && (");
   });
 
   it("the card's numbers show whole: their own widths, a step smaller on a narrow card, a line of their own before anything's cut", () => {
@@ -45,7 +40,7 @@ describe("The workout in Crew: the post's last swipe, never a page it sends you 
     expect(card).toContain('big ? "text-[54px] @max-[16rem]:text-[44px]" : "text-[42px]"');
   });
 
-  it("the workout page reads as a summary: plain type, one quiet row of numbers, the exercises with their best set (Nov 17 2026)", () => {
+  it("the workout page reads as a summary: plain type, one quiet row of numbers, the key lifts with their best set, every set a tap away in place (Nov 17 2026, Nov 21 2026)", () => {
     const detail = read("src/components/community/post-detail.tsx");
     // no condensed display face, no tile grid, no caps labels anywhere on the page
     expect(detail).not.toContain("font-display");
@@ -64,8 +59,13 @@ describe("The workout in Crew: the post's last swipe, never a page it sends you 
     expect(detail).toContain("data-exercise-pr");
     // a workout with no picture: its summary is what two taps ❤️
     expect(detail).toContain("heroTap={post.media_type ? undefined : onHeroTap}");
-    // the exercises, the reactions and the comments are still all there
-    expect(detail).toContain("post.exercises.map((e, i) =>");
+    // the key lifts (the feed recap's), then every set opening right there, so the comments under it stay close
+    expect(detail).toContain("const lifts = recapKeyLifts(exercises, s);");
+    expect(detail).toContain("<WorkoutSetList exercises={exercises} stats={s} unit={unit} totals={false}");
+    expect(detail).toContain("data-workout-every-set");
+    // opened for the workout, every set shows at once
+    expect(detail).toContain('expanded={at === "workout"}');
+    // the reactions and the comments are still all there
     expect(detail).toContain("<CommentThread post={post} viewerIsStaff={viewerIsStaff} inline onOpenAuthor={onOpenAuthor} />");
   });
 

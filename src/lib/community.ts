@@ -119,6 +119,23 @@ export type CommunityExercise = {
   max_reps: number | null;
   max_seconds: number | null;
   pr: RecordScope | null;
+  /**
+   * Its working sets in the order they were done (community_workout_exercises,
+   * Nov 21 2026): the weight as typed and its unit (`v`, `u`), the kg mirror,
+   * reps, RPE, a timed set's seconds and how the load counts (`lt`). A post
+   * that hides its weights has no `v` / `kg`. Missing on an older read.
+   */
+  set_list?: WorkoutSetEntry[] | null;
+};
+
+export type WorkoutSetEntry = {
+  v?: number | null;
+  u?: WeightUnit | null;
+  kg?: number | null;
+  reps?: number | null;
+  rpe?: number | null;
+  secs?: number | null;
+  lt?: "external" | "bodyweight" | "assisted" | string | null;
 };
 
 export type CommunityAuthor = {

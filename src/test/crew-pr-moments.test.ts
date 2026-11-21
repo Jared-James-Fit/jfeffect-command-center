@@ -120,10 +120,13 @@ describe("where it's used", () => {
     // never shouted in capitals any more
     expect(recap).not.toContain("NEW ALL-TIME PR!");
   });
-  it("the feed's workout chip is amber with the trophy only for the headline PR", () => {
-    const card = read("src/components/community/post-card.tsx");
-    expect(card).toContain("const prLoud = !!lift?.pr;");
-    expect(card).toContain('data-page-prs={prLoud ? "headline" : "quiet"}');
+  it("the recap and the sheet give the trophy only to the headline PR; any other record is said quietly (Nov 21 2026)", () => {
+    // the feed's workout chip is gone: the recap (the post's last swipe) is where a workout's PRs show
+    expect(read("src/components/community/post-card.tsx")).not.toContain("data-page-prs");
+    const lib = read("src/lib/workout-recap.ts");
+    expect(lib).toContain("return { label: SCOPE_WORD[e.pr], loud: !!head && same(e.name, head.exercise_name) };");
+    expect(read("src/components/community/workout-recap.tsx")).toContain('data-recap-pr={pr.loud ? "headline" : "quiet"}');
+    expect(read("src/components/community/workout-details.tsx")).toContain('data-detail-pr={pr.loud ? "headline" : "quiet"}');
   });
   it("the share cards, the quick story's PR look and the grid / Home cards all read featuredLift / isPrMoment", () => {
     expect(read("src/lib/community.ts")).toContain("isPr: isPrMoment(s),");
