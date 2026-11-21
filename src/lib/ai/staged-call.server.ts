@@ -16,7 +16,7 @@
  * Server only.
  */
 import type { Route } from "./routing";
-import type { Effort, ModelUsage } from "./model-client.server";
+import type { Effort, ModelFile, ModelUsage } from "./model-client.server";
 
 /** The model hasn't answered yet: save, hand the request back, and poll again on the next one. */
 export class WaitingForModel extends Error {
@@ -61,6 +61,8 @@ export async function stagedCall(opts: {
     effort: Effort;
     maxOutputTokens?: number;
     temperature?: number;
+    /** Files the model reads (OpenAI direct only); built only when a call is about to be submitted. */
+    files?: ModelFile[] | (() => Promise<ModelFile[]>);
   };
   /** Saves `state` (after every change). */
   save: () => Promise<void>;
@@ -124,7 +126,8 @@ export async function stagedCall(opts: {
     const t0 = Date.now();
     try {
       if (parseModelRef(model).via === "openai") {
-        const { id } = await submitBackground(model, req);
+        const files = typeof req.files === "function" ? await req.files() : req.files;
+        const { id } = await submitBackground(model, { ...req, files });
         state.pending[key] = { id, model, at: t0, failed: tried };
         await save();
         const st = await pollFor(id);
@@ -133,7 +136,8 @@ export async function stagedCall(opts: {
           return done(st.reply.text, model, st.reply.usage, Date.now() - t0);
         throw new Error(st.error);
       }
-      const r = await callModel(model, { ...req, timeoutMs: opts.syncTimeoutMs });
+      const files = typeof req.files === "function" ? await req.files() : req.files;
+      const r = await callModel(model, { ...req, files, timeoutMs: opts.syncTimeoutMs });
       return done(r.text, model, r.usage, r.ms);
     } catch (e: any) {
       if (e instanceof WaitingForModel) throw e;

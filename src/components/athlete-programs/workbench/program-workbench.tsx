@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -59,7 +59,9 @@ import {
   type PlanExercise,
   type Scope,
   type WeekRef,
+  type ProgramPlan,
 } from "@/lib/program-plan";
+import { resolveName } from "@/lib/program-import/review";
 import { ExercisePickerSheet } from "../exercise-picker-sheet";
 import type { ProgramEditor } from "../use-program-editor";
 import { CellsProvider, KeyboardBar, type ActiveCell } from "./cells";
@@ -83,7 +85,18 @@ import {
   ProgressionSheet,
 } from "./sheets";
 
-type Picker = null | { mode: "add" } | { mode: "swap"; exKey: string };
+type Picker = null | { mode: "add" } | { mode: "swap"; exKey: string } | { mode: "resolve"; name: string };
+
+/** What a review panel above the day can do (an imported program's checks). */
+export type WorkbenchReviewApi = {
+  plan: ProgramPlan;
+  /** Shows that week and day, and the exercise when one is named. */
+  goTo: (at: { b: number; w: number; d: number; e?: number }) => void;
+  /** Opens the library picker for a name the file used; the pick becomes it everywhere. */
+  resolve: (sourceName: string) => void;
+  /** An edit, one Undo step. */
+  edit: (fn: (plan: ProgramPlan) => ProgramPlan) => void;
+};
 
 /**
  * The program builder (Nov 19 2026): one screen for phones and computers.
@@ -95,7 +108,14 @@ type Picker = null | { mode: "add" } | { mode: "swap"; exKey: string };
  * is a tap away. Undo / Redo for everything, the draft kept on the phone, and
  * nothing goes to the server until Save.
  */
-export function ProgramWorkbench({ editor }: { editor: ProgramEditor }) {
+export function ProgramWorkbench({
+  editor,
+  review,
+}: {
+  editor: ProgramEditor;
+  /** A panel above the day (an import's review), given ways to move around and fix things. */
+  review?: (api: WorkbenchReviewApi) => ReactNode;
+}) {
   const navigate = useNavigate();
   const desktop = !useIsMobileNow();
   const { d, edit } = editor;
@@ -161,6 +181,21 @@ export function ProgramWorkbench({ editor }: { editor: ProgramEditor }) {
   const goCursor = (c: Cursor) => {
     setCursor(c);
     if (c.b !== cur.b) setScope(defaultScope(plan, c.b));
+  };
+
+  // a flag's place: the week and day on screen, then the exercise scrolled to and lit for a moment
+  const goTo = (at: { b: number; w: number; d: number; e?: number }) => {
+    goCursor({ b: at.b, w: at.w, d: at.d });
+    if (at.e == null) return;
+    const key = plan.blocks[at.b]?.weeks[at.w]?.days[at.d]?.exercises[at.e]?.key;
+    if (!key) return;
+    setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(`[data-pb-row="${CSS.escape(key)}"]`);
+      if (!el) return;
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      el.setAttribute("data-pb-flash", "");
+      setTimeout(() => el.removeAttribute("data-pb-flash"), 1600);
+    }, 60);
   };
 
   const onSave = async () => {
@@ -354,6 +389,17 @@ export function ProgramWorkbench({ editor }: { editor: ProgramEditor }) {
         {/* the fixed header's room on a phone */}
         {!desktop && <div aria-hidden style={{ height: "calc(var(--app-chrome-top) + var(--app-safe-top) + 6.6rem)" }} />}
 
+        {review && (
+          <div className={cn(desktop ? "pt-4" : "px-3 pt-2")} data-workbench-review>
+            {review({
+              plan,
+              goTo,
+              resolve: (name) => setPicker({ mode: "resolve", name }),
+              edit: (fn) => edit(fn),
+            })}
+          </div>
+        )}
+
         {/* The day */}
         <section className={cn(desktop ? "pt-4" : "px-3 pt-2")} aria-label={day ? day.title : "Day"}>
           {day && day.exercises.length > 0 ? (
@@ -368,7 +414,9 @@ export function ProgramWorkbench({ editor }: { editor: ProgramEditor }) {
                     desktop={desktop}
                     changed={changedFromLastWeek(plan, cur, day.key, e.key) as Set<string>}
                     onPatch={(p) => patchEx(e.key, p)}
-                    onOpen={() => setExSheet(e.key)}
+                    onOpen={() =>
+                      e.exercise_id ? setExSheet(e.key) : setPicker({ mode: "resolve", name: e.source_name ?? e.name ?? "" })
+                    }
                   />
                 ))}
               </div>
@@ -418,12 +466,29 @@ export function ProgramWorkbench({ editor }: { editor: ProgramEditor }) {
       <ExercisePickerSheet
         open={!!picker}
         onOpenChange={(o) => !o && setPicker(null)}
-        mode={picker?.mode === "swap" ? "single" : "multi"}
+        mode={picker?.mode === "swap" || picker?.mode === "resolve" ? "single" : "multi"}
         room={day ? MAX_EXERCISES - day.exercises.length : 0}
-        title={picker?.mode === "swap" ? "Swap exercise" : `Add to ${day?.title || "this day"}`}
-        description={picker?.mode === "swap" ? `Keeps the sets, reps and load, in ${scopeText}` : `Into ${scopeText}`}
+        initialSearch={picker?.mode === "resolve" ? picker.name : undefined}
+        title={
+          picker?.mode === "resolve"
+            ? `Pick the exercise for "${picker.name}"`
+            : picker?.mode === "swap"
+              ? "Swap exercise"
+              : `Add to ${day?.title || "this day"}`
+        }
+        description={
+          picker?.mode === "resolve"
+            ? "Every place your program uses it becomes this exercise. Sets, reps and loads stay."
+            : picker?.mode === "swap"
+              ? `Keeps the sets, reps and load, in ${scopeText}`
+              : `Into ${scopeText}`
+        }
         onPick={(picked) => {
-          if (picker?.mode === "swap" && day && picked[0]) {
+          if (picker?.mode === "resolve" && picked[0]) {
+            const name = picker.name;
+            edit((x) => resolveName(x, name, picked[0]));
+            undoable(`"${name}" is now ${picked[0].name} everywhere`);
+          } else if (picker?.mode === "swap" && day && picked[0]) {
             const exKey = picker.exKey;
             edit((x) => swapExercise(x, targets, day.key, exKey, picked[0]));
             undoable(`Swapped in ${picked[0].name} (${scopeText})`);

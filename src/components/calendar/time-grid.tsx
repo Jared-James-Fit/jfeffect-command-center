@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Plus } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 import type { KindFamily } from "@/lib/calendar-sources";
+import { FAMILY_BLOCK, statusMark, statusWord } from "@/lib/calendar-palette";
 import {
   DAY_MINUTES,
   MIN_BLOCK_MIN,
@@ -51,13 +52,8 @@ export type TimeGridEntry<T> = {
 /** Room left above the hour the grid opens on, for that hour's label. */
 const LABEL_ROOM_PX = 8;
 
-/** A block per colour family: a tint, a solid edge, the theme's own text (readable light and dark). */
-const BLOCK: Record<KindFamily, string> = {
-  people: "border-violet-500 bg-violet-500/15 hover:bg-violet-500/25",
-  coach: "border-amber-500 bg-amber-500/15 hover:bg-amber-500/25",
-  training: "border-foreground/50 bg-foreground/[0.07] hover:bg-foreground/[0.12]",
-  google: "border-muted-foreground/40 bg-muted hover:bg-muted/70",
-};
+/** A block per family: the theme's ink, never a brand colour (calendar-palette.ts). */
+const BLOCK: Record<KindFamily, string> = FAMILY_BLOCK;
 
 const STRUCK = new Set(["Cancelled", "Missed", "Rescheduled"]);
 
@@ -383,13 +379,16 @@ function Block<T>({
   const left = (col / cols) * 100;
   const width = (span / cols) * 100;
   const struck = STRUCK.has(item.status ?? "");
+  // done says so with a check, never with colour alone
+  const done = statusMark(item.status) === "done";
+  const tick = done ? <Check className="mr-0.5 inline h-[1em] w-[1em] -translate-y-px stroke-[3]" aria-hidden /> : null;
   const sameHalf = (startMin < 720) === (endMin < 720 || endMin === DAY_MINUTES);
   const range = `${minuteClock(startMin, !sameHalf)}–${minuteClock(endMin)}`;
   const start = minuteClock(startMin);
   // Lines that fit: the padding is 4px; a line is 12.5px (card, 10px type) / 15px (page, 12px type).
   const fit = Math.max(1, Math.floor((height - 4) / (compact ? 12.5 : 15)));
   const short = item.short ?? item.title;
-  const status = item.status === "Missed" ? "No-show" : item.status === "Cancelled" ? "Cancelled" : null;
+  const status = struck || done ? statusWord(item.status) : null;
   const words = [item.title, range, item.detail, status].filter(Boolean);
   const strike = struck && "line-through";
   return (
@@ -415,15 +414,15 @@ function Block<T>({
     >
       {/* A phone's week column: the first name, small. */}
       <span className="block @[4.5rem]:hidden">
-        <Lines n={fit} className={cn("text-[9px] font-semibold tracking-tight", strike)}>{item.tiny ?? short}</Lines>
+        <Lines n={fit} className={cn("text-[9px] font-semibold tracking-tight", strike)}>{tick}{item.tiny ?? short}</Lines>
       </span>
       {/* A narrow column: the first name and when it starts. */}
       <span className="hidden @[4.5rem]:block @[6.5rem]:hidden">
         {fit === 1 ? (
-          <Lines n={1} className={cn("font-semibold", strike)}>{short}</Lines>
+          <Lines n={1} className={cn("font-semibold", strike)}>{tick}{short}</Lines>
         ) : (
           <>
-            <Lines n={fit - 1} className={cn("font-semibold", strike)}>{short}</Lines>
+            <Lines n={fit - 1} className={cn("font-semibold", strike)}>{tick}{short}</Lines>
             <span className="block truncate tabular-nums text-foreground/70">{start}</span>
           </>
         )}
@@ -432,12 +431,13 @@ function Block<T>({
       <span className="hidden @[6.5rem]:block">
         {fit === 1 ? (
           <span className={cn("block truncate", strike)}>
+            {tick}
             <span className="font-semibold">{item.title}</span>
             <span className="font-normal text-foreground/70">, {start}</span>
           </span>
         ) : (
           <>
-            <span className={cn("block truncate font-semibold", strike)}>{item.title}</span>
+            <span className={cn("block truncate font-semibold", strike)}>{tick}{item.title}</span>
             <span className="block truncate tabular-nums text-foreground/70">{range}</span>
             {fit >= 3 && (item.detail || status) && (
               <span className="block truncate text-foreground/60">{[status, item.detail].filter(Boolean).join(" · ")}</span>

@@ -95,15 +95,17 @@ export function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
 }
 
-export type Anchor = { id: string; x: number; y: number };
-export type Callout = { id: string; side: "l" | "r"; x: number; y: number; ax: number; ay: number };
+/** A structure to label; `h` is its label's height when the labels differ (else `labelH`). */
+export type Anchor = { id: string; x: number; y: number; h?: number };
+export type Callout = { id: string; side: "l" | "r"; x: number; y: number; h: number; ax: number; ay: number };
 
 /**
  * Labels for the structures in view, Netter's way: two columns at the stage's
  * edges, each label at its structure's height where it can be, pushed apart
  * so none overlap, with a leader line to the structure. A structure goes to
  * the nearer edge; a full column overflows to the other; what still doesn't
- * fit is left out (it's still tappable, and in the list).
+ * fit is left out (it's still tappable, and in the list). Labels can differ in
+ * height (a long name wraps instead of being cut off).
  */
 export function layoutCallouts(
   anchors: Anchor[],
@@ -114,15 +116,19 @@ export function layoutCallouts(
   const margin = opts.margin ?? 8;
   const top = (opts.top ?? 0) + 4;
   const bottom = size.h - (opts.bottom ?? 0) - 4;
-  const slots = Math.max(0, Math.floor((bottom - top + gap) / (opts.labelH + gap)));
+  const room = bottom - top;
+  const hOf = (a: Anchor) => a.h ?? opts.labelH;
+  // the height a column of labels takes, stacked with gaps
+  const need = (col: Anchor[]) => col.reduce((sum, a) => sum + hOf(a), 0) + Math.max(0, col.length - 1) * gap;
   const sorted = [...anchors].sort((a, b) => a.y - b.y);
   const left: Anchor[] = [];
   const right: Anchor[] = [];
   for (const a of sorted) (a.x < size.w / 2 ? left : right).push(a);
   // a full column hands its extra to the other (the ones nearest the middle move)
   const balance = (from: Anchor[], to: Anchor[]) => {
-    while (from.length > slots && to.length < slots) {
+    while (from.length && need(from) > room) {
       const i = from.reduce((best, a, j) => (Math.abs(a.x - size.w / 2) < Math.abs(from[best].x - size.w / 2) ? j : best), 0);
+      if (need([...to, from[i]]) > room) break;
       to.push(...from.splice(i, 1));
       to.sort((a, b) => a.y - b.y);
     }
@@ -130,16 +136,67 @@ export function layoutCallouts(
   balance(left, right);
   balance(right, left);
   const place = (col: Anchor[], side: "l" | "r"): Callout[] => {
-    const list = col.slice(0, slots);
-    const ys = list.map((a) => clamp(a.y - opts.labelH / 2, top, bottom - opts.labelH));
+    // top down, as many as the column holds
+    const list: Anchor[] = [];
+    for (const a of col) {
+      if (need([...list, a]) > room) break;
+      list.push(a);
+    }
+    const hs = list.map(hOf);
+    const ys = list.map((a, i) => clamp(a.y - hs[i] / 2, top, bottom - hs[i]));
     // push down to clear the one above, then up from the bottom to fit
-    for (let i = 1; i < ys.length; i++) ys[i] = Math.max(ys[i], ys[i - 1] + opts.labelH + gap);
-    if (ys.length && ys[ys.length - 1] > bottom - opts.labelH) {
-      ys[ys.length - 1] = bottom - opts.labelH;
-      for (let i = ys.length - 2; i >= 0; i--) ys[i] = Math.min(ys[i], ys[i + 1] - opts.labelH - gap);
+    for (let i = 1; i < ys.length; i++) ys[i] = Math.max(ys[i], ys[i - 1] + hs[i - 1] + gap);
+    const last = ys.length - 1;
+    if (last >= 0 && ys[last] > bottom - hs[last]) {
+      ys[last] = bottom - hs[last];
+      for (let i = last - 1; i >= 0; i--) ys[i] = Math.min(ys[i], ys[i + 1] - hs[i] - gap);
     }
     const x = side === "l" ? margin : size.w - margin - opts.labelW;
-    return list.map((a, i) => ({ id: a.id, side, x, y: ys[i], ax: a.x, ay: a.y }));
+    return list.map((a, i) => ({ id: a.id, side, x, y: ys[i], h: hs[i], ax: a.x, ay: a.y }));
   };
   return [...place(left, "l"), ...place(right, "r")];
+}
+
+/** How a label is sized: its name wraps to up to `maxLines`, never cut mid-word unless a word alone is too wide. */
+export const LABEL_TYPE = { padY: 5, nameLine: 15, anatLine: 13, minH: 40, maxLines: 3 } as const;
+
+/**
+ * The lines a label's name takes at `width` (greedy word wrap, like the
+ * browser's), measured with `measure` (a canvas in the app, a stub in tests).
+ * `lead` is the width of anything before the name on its first line (the
+ * "L" / "R" tag).
+ */
+export function wrapLines(text: string, width: number, measure: (s: string) => number, lead = 0): number {
+  const space = measure(" ");
+  let lines = 1;
+  let used = 0;
+  let room = width - lead;
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    let w = measure(word);
+    const add = used ? space + w : w;
+    if (used + add <= room) {
+      used += add;
+      continue;
+    }
+    if (used) {
+      lines += 1;
+      room = width;
+    }
+    // a word wider than a whole line breaks inside itself (overflow-wrap)
+    while (w > room) {
+      lines += 1;
+      w -= room;
+      room = width;
+    }
+    used = w;
+  }
+  return lines;
+}
+
+/** A label's height: its name's lines, the anatomical name under it unless the name already takes every line. */
+export function labelHeight(nameLines: number, hasAnat: boolean): { h: number; lines: number; anat: boolean } {
+  const lines = Math.max(1, Math.min(LABEL_TYPE.maxLines, nameLines));
+  const anat = hasAnat && lines < LABEL_TYPE.maxLines;
+  const h = Math.max(LABEL_TYPE.minH, LABEL_TYPE.padY * 2 + lines * LABEL_TYPE.nameLine + (anat ? LABEL_TYPE.anatLine : 0));
+  return { h, lines, anat };
 }

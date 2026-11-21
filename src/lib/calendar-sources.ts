@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { FAMILY_CHIP } from "./calendar-palette";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { clientWorkoutsQuery, primaryWorkouts } from "@/lib/client-workouts-query";
@@ -70,12 +71,14 @@ export function placeLabel(location: string | null | undefined): string | null {
 }
 
 /**
- * Four colour families, everywhere a calendar item shows (client and coach):
- *   training (workouts, cardio)            cyan
- *   with a person (sessions, appointments) violet
- *   from the coach (events, key dates, check-ins, membership) amber
- *   Google (their own calendar)            slate, quiet
- * Red stays for "today" and the selected day; green for done.
+ * Four families, everywhere a calendar item shows (client and coach), drawn in
+ * black, white and grey from calendar-palette.ts (Nov 21 2026):
+ *   with a person (sessions, appointments) the theme's ink, strongest
+ *   training (workouts, cardio)            the same ink, lighter
+ *   from the coach (events, key dates, check-ins, membership) an outline
+ *   Google (their own calendar)            muted grey
+ * Red is never a calendar colour; status says itself with a check or a line
+ * through it (statusMark), never with colour alone.
  */
 export type KindFamily = "training" | "people" | "coach" | "google";
 export const KIND_FAMILY: Record<CalendarKind, KindFamily> = {
@@ -89,12 +92,7 @@ export const KIND_FAMILY: Record<CalendarKind, KindFamily> = {
   membership_event: "coach",
   google_event: "google",
 };
-const FAMILY_STYLE: Record<KindFamily, { chip: string; dot: string }> = {
-  training: { chip: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30", dot: "bg-cyan-400" },
-  people: { chip: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30", dot: "bg-violet-400" },
-  coach: { chip: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30", dot: "bg-amber-400" },
-  google: { chip: "bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/25", dot: "bg-slate-400" },
-};
+const FAMILY_STYLE = FAMILY_CHIP;
 const KIND_LABEL: Record<CalendarKind, string> = {
   event: "Event",
   important_date: "Key Date",

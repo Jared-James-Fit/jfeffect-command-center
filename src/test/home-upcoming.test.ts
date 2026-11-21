@@ -127,7 +127,8 @@ describe("Home schedule card: today in full, then what's coming", () => {
     const agenda = readFileSync("src/components/schedule/agenda.tsx", "utf8");
     expect(agenda).toContain('isToday ? "bg-foreground text-background"');
     expect(agenda).not.toContain('isToday ? "bg-primary text-primary-foreground"');
-    expect(agenda).toContain('training: "bg-foreground/60"');
+    // the rows' hairlines come from the one calendar palette, every family neutral (calendar-neutral.test.ts)
+    expect(agenda).toContain('import { FAMILY_ACCENT as PALETTE_ACCENT } from "@/lib/calendar-palette";');
     expect(agenda).not.toContain("bg-cyan-500");
     expect(agenda).not.toMatch(/AGENDA_ACTION = "[^"]*text-primary/);
     // Now is neutral too

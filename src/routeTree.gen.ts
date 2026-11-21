@@ -238,6 +238,7 @@ import { Route as AuthenticatedPortalPlansPlanIdRouteImport } from './routes/_au
 import { Route as AuthenticatedPortalProgramsIndexRouteImport } from './routes/_authenticated/portal/programs.index'
 import { Route as AuthenticatedPortalProgramsProgramIdRouteImport } from './routes/_authenticated/portal/programs.$programId'
 import { Route as AuthenticatedPortalProgramsHistoryRouteImport } from './routes/_authenticated/portal/programs.history'
+import { Route as AuthenticatedPortalProgramsImportRouteImport } from './routes/_authenticated/portal/programs.import'
 import { Route as AuthenticatedPortalProgramsNewRouteImport } from './routes/_authenticated/portal/programs.new'
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
 import { Route as AuthenticatedPortalRecipesIndexRouteImport } from './routes/_authenticated/portal/recipes.index'
@@ -276,6 +277,7 @@ import { Route as ApiPublicHooksPostDecksTickRouteImport } from './routes/api/pu
 import { Route as ApiPublicHooksPostPicturesTickRouteImport } from './routes/api/public/hooks/post-pictures-tick'
 import { Route as ApiPublicHooksProgramAiTickRouteImport } from './routes/api/public/hooks/program-ai-tick'
 import { Route as ApiPublicHooksProgramGapsTickRouteImport } from './routes/api/public/hooks/program-gaps-tick'
+import { Route as ApiPublicHooksProgramImportsTickRouteImport } from './routes/api/public/hooks/program-imports-tick'
 import { Route as ApiPublicHooksProgramIntelTickRouteImport } from './routes/api/public/hooks/program-intel-tick'
 import { Route as ApiPublicHooksProgressArchiveTickRouteImport } from './routes/api/public/hooks/progress-archive-tick'
 import { Route as ApiPublicHooksScheduleSyncRouteImport } from './routes/api/public/hooks/schedule-sync'
@@ -1617,6 +1619,12 @@ const AuthenticatedPortalProgramsHistoryRoute =
     path: '/programs/history',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedPortalProgramsImportRoute =
+  AuthenticatedPortalProgramsImportRouteImport.update({
+    id: '/programs/import',
+    path: '/programs/import',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
 const AuthenticatedPortalProgramsNewRoute =
   AuthenticatedPortalProgramsNewRouteImport.update({
     id: '/programs/new',
@@ -1841,6 +1849,12 @@ const ApiPublicHooksProgramGapsTickRoute =
   ApiPublicHooksProgramGapsTickRouteImport.update({
     id: '/api/public/hooks/program-gaps-tick',
     path: '/api/public/hooks/program-gaps-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicHooksProgramImportsTickRoute =
+  ApiPublicHooksProgramImportsTickRouteImport.update({
+    id: '/api/public/hooks/program-imports-tick',
+    path: '/api/public/hooks/program-imports-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicHooksProgramIntelTickRoute =
@@ -2254,6 +2268,7 @@ export interface FileRoutesByFullPath {
   '/portal/plans/$planId': typeof AuthenticatedPortalPlansPlanIdRoute
   '/portal/programs/$programId': typeof AuthenticatedPortalProgramsProgramIdRoute
   '/portal/programs/history': typeof AuthenticatedPortalProgramsHistoryRoute
+  '/portal/programs/import': typeof AuthenticatedPortalProgramsImportRoute
   '/portal/programs/new': typeof AuthenticatedPortalProgramsNewRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
@@ -2289,6 +2304,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
   '/api/public/hooks/program-gaps-tick': typeof ApiPublicHooksProgramGapsTickRoute
+  '/api/public/hooks/program-imports-tick': typeof ApiPublicHooksProgramImportsTickRoute
   '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/schedule-sync': typeof ApiPublicHooksScheduleSyncRoute
@@ -2551,6 +2567,7 @@ export interface FileRoutesByTo {
   '/portal/plans/$planId': typeof AuthenticatedPortalPlansPlanIdRoute
   '/portal/programs/$programId': typeof AuthenticatedPortalProgramsProgramIdRoute
   '/portal/programs/history': typeof AuthenticatedPortalProgramsHistoryRoute
+  '/portal/programs/import': typeof AuthenticatedPortalProgramsImportRoute
   '/portal/programs/new': typeof AuthenticatedPortalProgramsNewRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
@@ -2586,6 +2603,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
   '/api/public/hooks/program-gaps-tick': typeof ApiPublicHooksProgramGapsTickRoute
+  '/api/public/hooks/program-imports-tick': typeof ApiPublicHooksProgramImportsTickRoute
   '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/schedule-sync': typeof ApiPublicHooksScheduleSyncRoute
@@ -2854,6 +2872,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/plans/$planId': typeof AuthenticatedPortalPlansPlanIdRoute
   '/_authenticated/portal/programs/$programId': typeof AuthenticatedPortalProgramsProgramIdRoute
   '/_authenticated/portal/programs/history': typeof AuthenticatedPortalProgramsHistoryRoute
+  '/_authenticated/portal/programs/import': typeof AuthenticatedPortalProgramsImportRoute
   '/_authenticated/portal/programs/new': typeof AuthenticatedPortalProgramsNewRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/_authenticated/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
@@ -2889,6 +2908,7 @@ export interface FileRoutesById {
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
   '/api/public/hooks/program-gaps-tick': typeof ApiPublicHooksProgramGapsTickRoute
+  '/api/public/hooks/program-imports-tick': typeof ApiPublicHooksProgramImportsTickRoute
   '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/schedule-sync': typeof ApiPublicHooksScheduleSyncRoute
@@ -3157,6 +3177,7 @@ export interface FileRouteTypes {
     | '/portal/plans/$planId'
     | '/portal/programs/$programId'
     | '/portal/programs/history'
+    | '/portal/programs/import'
     | '/portal/programs/new'
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
@@ -3192,6 +3213,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
     | '/api/public/hooks/program-gaps-tick'
+    | '/api/public/hooks/program-imports-tick'
     | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/schedule-sync'
@@ -3454,6 +3476,7 @@ export interface FileRouteTypes {
     | '/portal/plans/$planId'
     | '/portal/programs/$programId'
     | '/portal/programs/history'
+    | '/portal/programs/import'
     | '/portal/programs/new'
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
@@ -3489,6 +3512,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
     | '/api/public/hooks/program-gaps-tick'
+    | '/api/public/hooks/program-imports-tick'
     | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/schedule-sync'
@@ -3756,6 +3780,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/plans/$planId'
     | '/_authenticated/portal/programs/$programId'
     | '/_authenticated/portal/programs/history'
+    | '/_authenticated/portal/programs/import'
     | '/_authenticated/portal/programs/new'
     | '/_authenticated/portal/purchases/$id'
     | '/_authenticated/portal/recipes/$recipeId'
@@ -3791,6 +3816,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/program-ai-tick'
     | '/api/public/hooks/program-gaps-tick'
+    | '/api/public/hooks/program-imports-tick'
     | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/schedule-sync'
@@ -3924,6 +3950,7 @@ export interface RootRouteChildren {
   ApiPublicHooksPostPicturesTickRoute: typeof ApiPublicHooksPostPicturesTickRoute
   ApiPublicHooksProgramAiTickRoute: typeof ApiPublicHooksProgramAiTickRoute
   ApiPublicHooksProgramGapsTickRoute: typeof ApiPublicHooksProgramGapsTickRoute
+  ApiPublicHooksProgramImportsTickRoute: typeof ApiPublicHooksProgramImportsTickRoute
   ApiPublicHooksProgramIntelTickRoute: typeof ApiPublicHooksProgramIntelTickRoute
   ApiPublicHooksProgressArchiveTickRoute: typeof ApiPublicHooksProgressArchiveTickRoute
   ApiPublicHooksScheduleSyncRoute: typeof ApiPublicHooksScheduleSyncRoute
@@ -5551,6 +5578,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalProgramsHistoryRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/portal/programs/import': {
+      id: '/_authenticated/portal/programs/import'
+      path: '/programs/import'
+      fullPath: '/portal/programs/import'
+      preLoaderRoute: typeof AuthenticatedPortalProgramsImportRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
     '/_authenticated/portal/programs/new': {
       id: '/_authenticated/portal/programs/new'
       path: '/programs/new'
@@ -5815,6 +5849,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/program-gaps-tick'
       fullPath: '/api/public/hooks/program-gaps-tick'
       preLoaderRoute: typeof ApiPublicHooksProgramGapsTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/program-imports-tick': {
+      id: '/api/public/hooks/program-imports-tick'
+      path: '/api/public/hooks/program-imports-tick'
+      fullPath: '/api/public/hooks/program-imports-tick'
+      preLoaderRoute: typeof ApiPublicHooksProgramImportsTickRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/program-intel-tick': {
@@ -6583,6 +6624,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalPlansPlanIdRoute: typeof AuthenticatedPortalPlansPlanIdRoute
   AuthenticatedPortalProgramsProgramIdRoute: typeof AuthenticatedPortalProgramsProgramIdRoute
   AuthenticatedPortalProgramsHistoryRoute: typeof AuthenticatedPortalProgramsHistoryRoute
+  AuthenticatedPortalProgramsImportRoute: typeof AuthenticatedPortalProgramsImportRoute
   AuthenticatedPortalProgramsNewRoute: typeof AuthenticatedPortalProgramsNewRoute
   AuthenticatedPortalRecipesRecipeIdRoute: typeof AuthenticatedPortalRecipesRecipeIdRoute
   AuthenticatedPortalResourcesSlugRoute: typeof AuthenticatedPortalResourcesSlugRoute
@@ -6636,6 +6678,8 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
       AuthenticatedPortalProgramsProgramIdRoute,
     AuthenticatedPortalProgramsHistoryRoute:
       AuthenticatedPortalProgramsHistoryRoute,
+    AuthenticatedPortalProgramsImportRoute:
+      AuthenticatedPortalProgramsImportRoute,
     AuthenticatedPortalProgramsNewRoute: AuthenticatedPortalProgramsNewRoute,
     AuthenticatedPortalRecipesRecipeIdRoute:
       AuthenticatedPortalRecipesRecipeIdRoute,
@@ -6785,6 +6829,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksPostPicturesTickRoute: ApiPublicHooksPostPicturesTickRoute,
   ApiPublicHooksProgramAiTickRoute: ApiPublicHooksProgramAiTickRoute,
   ApiPublicHooksProgramGapsTickRoute: ApiPublicHooksProgramGapsTickRoute,
+  ApiPublicHooksProgramImportsTickRoute: ApiPublicHooksProgramImportsTickRoute,
   ApiPublicHooksProgramIntelTickRoute: ApiPublicHooksProgramIntelTickRoute,
   ApiPublicHooksProgressArchiveTickRoute:
     ApiPublicHooksProgressArchiveTickRoute,

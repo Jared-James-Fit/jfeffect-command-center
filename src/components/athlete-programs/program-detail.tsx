@@ -52,6 +52,8 @@ import {
 } from "@/lib/athlete-programs";
 import { PlanView } from "./plan-view";
 import { prescription } from "@/lib/athlete-program-draft";
+import { useImportedFrom } from "@/lib/program-import/queries";
+import { IMPORTED_SHARE_WARNING } from "@/lib/program-import/rights";
 
 /** One program: what's in it, who made it, and what you can do with it. */
 export function ProgramDetailPage({
@@ -149,8 +151,15 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
     }
   };
 
-  const onShare = async (shared: boolean) => {
+  // an imported program: sharing it asks first whether they may (buying one rarely includes it)
+  const imported = useImportedFrom(p.is_mine ? p.id : null);
+  const [shareAsk, setShareAsk] = useState(false);
+  const onShare = async (shared: boolean, confirmed = false) => {
     if (preview) return;
+    if (shared && imported.data && !confirmed) {
+      setShareAsk(true);
+      return;
+    }
     try {
       await share.mutateAsync({ id: p.id, shared });
       toast.success(shared ? "Shared with the crew" : "Only you can see it now");
@@ -364,7 +373,7 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
               <Switch
                 checked={p.visibility === "community" && !p.hidden}
                 disabled={share.isPending || preview || p.hidden}
-                onCheckedChange={onShare}
+                onCheckedChange={(v) => void onShare(v)}
                 aria-label="Share with the crew"
               />
             </label>
@@ -423,6 +432,25 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
         onOpenChange={setStarting}
         startWith={startWith}
       />
+      <AlertDialog open={shareAsk} onOpenChange={setShareAsk}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Share an imported program?</AlertDialogTitle>
+            <AlertDialogDescription>{IMPORTED_SHARE_WARNING}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it private</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShareAsk(false);
+                void onShare(true, true);
+              }}
+            >
+              I may share it
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={deleting} onOpenChange={setDeleting}>
         <AlertDialogContent>
           <AlertDialogHeader>

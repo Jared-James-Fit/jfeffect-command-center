@@ -15,7 +15,7 @@
  */
 import type { Effort } from "./model-client.server";
 
-export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write";
+export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write" | "program_import";
 export type Route = {
   /** Tried in order. */
   models: string[];
@@ -106,6 +106,15 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
    * across look-ups (cleo-model.server.ts). Effort from the Nov 18 live benchmark (cleo-bench hook).
    */
   assistant: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "low", strongOnly: false },
+  /**
+   * Reading a program someone already has (a PDF, photos, a layout the parser can't read on its
+   * own) into the app's structure (program-import, Nov 21 2026): copying, never deciding, and
+   * checked by code against the file before the person reviews it (groundingFlags). Accuracy
+   * over speed, in the background: GPT-5.5 reads PDFs and page photos directly, Astra backs it up;
+   * never GPT-5 mini, which drops rows on a long program. A member's or client's own AI use,
+   * metered with AI credits (program_import).
+   */
+  program_import: { models: ["openai:gpt-5.5", "openai:gpt-6-astra"], effort: "medium", maxOutputTokens: 100_000, strongOnly: false },
 };
 
 /**

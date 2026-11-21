@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Loader2, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ export function ExercisePickerSheet({
   title,
   description,
   onPick,
+  initialSearch,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -43,8 +44,13 @@ export function ExercisePickerSheet({
   title: string;
   description: string;
   onPick: (picked: ExerciseLite[]) => void;
+  /** Opens already searching for this (an imported program's own name for the exercise). */
+  initialSearch?: string;
 }) {
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch ?? "");
+  useEffect(() => {
+    if (open && initialSearch) setSearch(initialSearch);
+  }, [open, initialSearch]);
   const [group, setGroup] = useState<string | null>(null);
   const [picked, setPicked] = useState<ExerciseLite[]>([]);
   const { data: library = [], isLoading, isError, refetch } = useExerciseLibraryLite(open);

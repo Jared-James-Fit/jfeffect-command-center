@@ -4459,12 +4459,13 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
   );
   // The weight an open set logs at with one tap on its number while its box is
   // empty: the one the strip shows (the coach's planned weight, else Suggested
-  // while it's on), never put in the box itself. A range is picked by feel, so
-  // it never logs on a tap: they type the weight they chose.
+  // while it's on), never put in the box itself. A range logs at its middle,
+  // the engine's own estimate (hint.target); a weight picked by feel inside it
+  // is typed in set 1, which fills the sets below the same way.
   const quickLoadFromStrip: number | null =
     readonly || hideWeight || rowLoadType !== "external" ? null
     : plannedView ? (plannedView.load != null && plannedView.value ? plannedView.load : null)
-    : showSuggestionCard && canSuggest && loadHint && loadModel && loadModel.status !== "calibrating" && !loadPicks ? loadHint.target
+    : showSuggestionCard && canSuggest && loadHint && loadModel && loadModel.status !== "calibrating" ? loadHint.target
     : null;
   // The warm-up today's number is read from (the heaviest; ties by rating, then reps: finalWarmupRow).
   const heaviestWarmupId = useMemo(() => finalWarmupRow(warmupSets)?.id ?? null, [warmupSets]);
@@ -4573,7 +4574,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
   // Put one weight into every open set as a draft (never a confirmed set);
   // each set keeps its own reps / RPE.
   // Each set row's own handle: the strip's chip logs through the exact path a
-  // tap on a set's number takes (and a range opens the set's weight box).
+  // tap on a set's number takes.
   const setRowHandlesRef = useRef(new Map<number, SetRowHandle>());
   const registerSetRow = useCallback((i: number, h: SetRowHandle | null) => {
     if (h) setRowHandlesRef.current.set(i, h);
@@ -4582,8 +4583,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
   /**
    * The chip (Suggested, or the coach's planned weight): logs the first open
    * set at it and the untouched sets below with it, like a tap on that set's
-   * number. A range is picked by feel: it opens that set's weight box instead
-   * (called inside the tap, so the keyboard comes up).
+   * number. A range logs at its middle (the chip is handed hint.target), and
+   * the toast says the weight with Undo.
    */
   const logOpenSetsAt = async (load: number): Promise<number> => {
     let first: number | null = null;
@@ -4593,7 +4594,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
     }
     const h = first != null ? setRowHandlesRef.current.get(first) : null;
     if (!h) return 0;
-    if (loadPicks) { h.editWeight(); return 0; }
     return h.logAt(load);
   };
   // "Apply to remaining" — runs from a completed SetRow, pushes Draft values
@@ -6159,8 +6159,8 @@ function NoteHistoryItem({ note, canEdit, editing, onEdit, onSave }: {
 /** How long a weight typed in the other unit waits for the card's KG / LB switch to render. */
 const UNIT_PICK_WAIT_MS = 5000;
 
-/** The card's way into one set row: the chip logs through the set's own number, a range opens its weight box. */
-type SetRowHandle = { logAt: (load: number) => Promise<number>; editWeight: () => void };
+/** The card's way into one set row: the chip logs through the set's own number. */
+type SetRowHandle = { logAt: (load: number) => Promise<number> };
 
 function SetRow({
   rowId, workoutId, startsWorkout = true, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
@@ -7264,15 +7264,13 @@ function SetRow({
       setStatusSaving(false);
     }
   };
-  // The card's chip logs through this set's own number (its handle), and a
-  // range opens this set's weight box from the chip's tap.
+  // The card's chip logs through this set's own number (its handle).
   const saveStatusRef = useRef(saveCompletionStatus);
   saveStatusRef.current = saveCompletionStatus;
   useEffect(() => {
     if (!registerHandle || readonly) return;
     registerHandle(setIndex, {
       logAt: (w: number) => saveStatusRef.current({ weight: fmtLoad(w) }),
-      editWeight: () => weightEditRef.current?.(),
     });
     return () => registerHandle(setIndex, null);
   }, [registerHandle, setIndex, readonly]);
