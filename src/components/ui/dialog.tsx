@@ -4,7 +4,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { ChevronLeft } from "lucide-react";
 
-import { focusOverlayOnOpen } from "@/lib/overlay-focus";
+import { focusOverlayOnOpen, keepOpenForToasts } from "@/lib/overlay-focus";
 import { cn } from "@/lib/utils";
 
 const Dialog = DialogPrimitive.Root;
@@ -40,7 +40,7 @@ type DialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(({ className, children, showBackButton = true, onOpenAutoFocus, overlayStyle, ...props }, ref) => (
+>(({ className, children, showBackButton = true, onOpenAutoFocus, overlayStyle, onPointerDownOutside, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay style={overlayStyle} />
     <DialogPrimitive.Content
@@ -50,6 +50,7 @@ const DialogContent = React.forwardRef<
         className,
       )}
       onOpenAutoFocus={(e) => focusOverlayOnOpen(e, onOpenAutoFocus)}
+      onPointerDownOutside={(e) => keepOpenForToasts(e, onPointerDownOutside)}
       {...props}
     >
       {children}

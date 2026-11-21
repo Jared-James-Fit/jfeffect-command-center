@@ -8,9 +8,9 @@
  * static safety notice, never coaching advice. Everything else reaches them
  * only through a message the coach writes or approves.
  */
-import type { PainEntry } from "@/lib/pain/history";
-import type { Feel, Severity, Trigger } from "@/lib/pain/report";
-import { areaLabel, type PainSide } from "@/lib/pain/regions";
+import { severeAtRest, type PainEntry } from "@/lib/pain/history";
+import { placeLabel, type Feel, type Severity, type Timing, type Trigger } from "@/lib/pain/report";
+import type { PainSide } from "@/lib/pain/regions";
 
 /** Get help now: the athlete's notice and the coach's sheet say the same. */
 export const URGENT_SIGNS = [
@@ -21,11 +21,17 @@ export const URGENT_SIGNS = [
   "severe pain after a fall or a hard hit",
 ] as const;
 
-export type SafetyPick = { region: string; side: PainSide | null; severity: Severity | null; feel?: Feel[]; trigger?: Trigger | null };
+export type SafetyPick = { region: string; side: PainSide | null; severity: Severity | null; score?: number | null; feel?: Feel[]; trigger?: Trigger | null; timing?: Timing[] };
 
 /** The review shows the notice when any place calls for it. */
 export function needsSafetyNotice(picks: SafetyPick[]): boolean {
-  return picks.some((p) => p.severity === "severe" || (p.feel ?? []).some((f) => f === "numb" || f === "pop" || f === "swollen") || (p.region === "chest" && (p.trigger === "daily" || p.trigger === "unsure")));
+  return picks.some(
+    (p) =>
+      p.severity === "severe" ||
+      (typeof p.score === "number" && p.score >= 7) ||
+      (p.feel ?? []).some((f) => f === "numb" || f === "pop" || f === "swollen") ||
+      (p.region === "chest" && (p.trigger === "daily" || p.trigger === "unsure" || ((p.timing ?? []).includes("rest") && !(p.timing ?? []).some((t) => t === "during" || t === "after")))),
+  );
 }
 
 /** What the athlete reads in the review (static, the same for everyone). */
@@ -48,7 +54,7 @@ export function redFlags(entries: PainEntry[]): RedFlag[] {
     const id = `${e.region}:${key}`;
     if (seen.has(id)) return;
     seen.add(id);
-    out.push({ key, area: areaLabel(e.region, e.side), date: e.date, text, urgent });
+    out.push({ key, area: placeLabel(e), date: e.date, text, urgent });
   };
   for (const e of [...entries].sort((a, b) => b.at.localeCompare(a.at))) {
     if (e.feel.includes("numb")) {
@@ -62,6 +68,8 @@ export function redFlags(entries: PainEntry[]): RedFlag[] {
       add(e, "pop", "A pop with swelling, severe pain or a stopped session: get it assessed before loading it again.");
     else if (e.feel.includes("swollen") && e.severity === "severe")
       add(e, "swollen", "Severe and swollen: get it assessed before loading it again.");
+    if (severeAtRest(e))
+      add(e, "rest", "Severe pain at rest, not only when training: get it assessed rather than training around it.");
     if (e.region === "chest" && (e.trigger === "daily" || e.trigger === "unsure") && (e.severity === "moderate" || e.severity === "severe"))
       add(e, "chest", "Chest pain that isn't clearly from a lift: ask about shortness of breath, arm or jaw pain, and send them for medical help if there's any doubt.", true);
   }

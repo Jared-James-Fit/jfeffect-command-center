@@ -31,6 +31,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Loader2, Plus } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { submitOrEditReview, type WorkoutCompletionCtx } from "@/lib/workout-completion.functions";
 import { FilmAudienceChoice } from "@/components/workout/shared/workout-film";
 import { PhoneCopyReminder } from "@/components/workout-day/set-video-phone-copy";
@@ -50,7 +58,8 @@ import type { SleepBucket } from "@/lib/analytics/recovery-score";
 import { HapticTap } from "@/components/haptic-tap";
 import { PainReporter, type PainContext } from "@/components/pain/pain-reporter";
 import { getPainReportContextFn } from "@/lib/pain/pain.functions";
-import { picksFromEntries, picksFromLegacy, picksToReports, type PainPick } from "@/lib/pain/picks";
+import { picksFromEntries, picksFromLegacy, picksToReports, unrated, type PainPick } from "@/lib/pain/picks";
+import { forgetPainDraft, keepPainDraft, painDraftKey, readPainDraft } from "@/lib/pain/pain-draft";
 import { legacyColumns } from "@/lib/pain/report";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -186,6 +195,7 @@ export function WorkoutReviewEditor({
     painTouched.current = true;
     setPainPicksState(next);
   };
+  const [askDiscard, setAskDiscard] = useState(false);
   const [note, setNote] = useState<string>(initial?.clientNote ?? "");
   const [noteOpen, setNoteOpen] = useState<boolean>(!!(initial?.clientNote ?? "").trim());
 
@@ -220,6 +230,40 @@ export function WorkoutReviewEditor({
     if (saved.length) setPainPicksState(saved);
   }, [open, painCtx?.feedbackId, painCtx?.entries]);
 
+  // a pain report an interruption cut short (the app closed, a reload) comes back on a new review
+  const draftKey = ctx.kind === "client" ? painDraftKey(ctx.dayId, (ctx as any)?.scheduledWorkoutId ?? null, actAsClientId ?? null) : null;
+  useEffect(() => {
+    if (!open || !draftKey || initial?.submittedAt || savingRef.current) return;
+    const kept = readPainDraft(draftKey);
+    if (!kept || painTouched.current || !kept.picks.length) return;
+    setPain(true);
+    setPainPicksState(kept.picks);
+    painTouched.current = true;
+    toast("Your pain report from before is back.");
+  }, [open, draftKey, initial?.submittedAt]);
+  useEffect(() => {
+    if (!open || !draftKey || initial?.submittedAt || savingRef.current || !painTouched.current) return;
+    if (pain && painPicks.length) keepPainDraft(draftKey, painPicks);
+    else forgetPainDraft(draftKey);
+  }, [open, draftKey, pain, painPicks, initial?.submittedAt]);
+
+  // anything answered that isn't saved yet: closing asks first
+  const dirty =
+    effort !== initialEffort(initial) ||
+    sleepBucket !== (initial?.sleepBucket ?? null) ||
+    recoveryToday !== (initial?.recoveryToday ?? null) ||
+    pain !== (initial?.submittedAt ? !!initial.pain : null) ||
+    painTouched.current ||
+    note.trim() !== (initial?.clientNote ?? "").trim();
+  const requestClose = () => {
+    if (savingRef.current || mutation.isPending) return;
+    if (dirty) {
+      setAskDiscard(true);
+      return;
+    }
+    onOpenChange(false);
+  };
+
   const painReports = picksToReports(painPicks);
   const storedArea = legacyColumns(painReports).painArea ?? (painPicks.length ? "…" : null);
   const cta = checkoutCta({
@@ -229,7 +273,7 @@ export function WorkoutReviewEditor({
     painArea: painPicks.length ? storedArea : null,
     sleepBucket,
     recoveryToday,
-    painUnrated: painPicks.some((p) => !p.severity),
+    painUnrated: painPicks.some((p) => unrated(p)),
     painUnnamed: painPicks.some((p) => p.region === "other" && !p.note?.trim()),
   });
 
@@ -273,6 +317,7 @@ export function WorkoutReviewEditor({
       return { res, overallRating, wasEdit };
     },
     onSuccess: async ({ res, overallRating, wasEdit }: any) => {
+      if (draftKey) forgetPainDraft(draftKey);
       // Some flows use the review itself as the final completion action.
       // Wait for that parent finalization before showing "Workout complete"
       // or closing the sheet, so the UI never claims success early.
@@ -311,7 +356,7 @@ export function WorkoutReviewEditor({
   });
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={(o) => (o ? onOpenChange(true) : requestClose())}>
       <SheetContent
         side="bottom"
         hideCloseButton
@@ -473,7 +518,7 @@ export function WorkoutReviewEditor({
           className="flex-row gap-2 border-t bg-background/95 px-5 py-3 backdrop-blur sm:flex-row"
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
         >
-          <Button variant="ghost" className="flex-1" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
+          <Button variant="ghost" className="flex-1" onClick={requestClose} disabled={mutation.isPending}>
             Close
           </Button>
           <Button type="button" className="relative flex-1" onClick={() => mutation.mutate()} disabled={!cta.enabled || mutation.isPending}>
@@ -483,6 +528,44 @@ export function WorkoutReviewEditor({
             {cta.enabled && !mutation.isPending && <HapticTap />}
           </Button>
         </SheetFooter>
+        <AlertDialog open={askDiscard} onOpenChange={setAskDiscard}>
+          <AlertDialogContent className="z-[100] w-[calc(100%-2rem)] rounded-2xl" overlayClassName="z-[95]" data-review-discard>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Leave without saving?</AlertDialogTitle>
+              <AlertDialogDescription>Your answers{pain && painPicks.length ? " and where it hurts" : ""} aren't saved yet.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+              <Button
+                type="button"
+                className="w-full"
+                disabled={!cta.enabled || mutation.isPending}
+                onClick={() => {
+                  setAskDiscard(false);
+                  mutation.mutate();
+                }}
+                data-review-discard-save
+              >
+                {cta.enabled ? "Save it" : cta.label}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full text-destructive"
+                onClick={() => {
+                  setAskDiscard(false);
+                  if (draftKey) forgetPainDraft(draftKey);
+                  onOpenChange(false);
+                }}
+                data-review-discard-confirm
+              >
+                Discard
+              </Button>
+              <Button type="button" variant="ghost" className="w-full" onClick={() => setAskDiscard(false)} data-review-discard-keep>
+                Keep editing
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
     </Sheet>
   );

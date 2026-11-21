@@ -11,7 +11,8 @@ import { OpenWorkout } from "@/components/messages/open-client-workout";
 import { EditedToggle, NoteVersions } from "@/components/workout/shared/note-edit-history";
 import type { NoteDates } from "@/lib/exercise-note-versions";
 import { PainReviewSheet } from "@/components/pain/pain-review-sheet";
-import { FEELS, reportLine, type Severity } from "@/lib/pain/report";
+import { FEELS, TIMINGS, reportLine, type Severity } from "@/lib/pain/report";
+import { siteAnatomy } from "@/lib/pain/sites";
 
 const sb = supabase as any;
 
@@ -75,7 +76,8 @@ export function WorkoutNoteCard({ att, messageId, role, clientId, version }: {
       }
       const [{ data }, { data: reports }] = await Promise.all([
         sb.from("pl_workout_feedback").select("client_note, pain, pain_area, pain_level, review_edit_count, coach_message_id").eq("id", sourceId).maybeSingle(),
-        sb.from("pain_reports").select("region, side, severity, exercise_name, feel, impact, same_issue, change, note").eq("feedback_id", sourceId).order("created_at"),
+        // every column (the spot, 0–10 and when it hurts came later; "*" reads them once they're there)
+        sb.from("pain_reports").select("*").eq("feedback_id", sourceId).order("created_at"),
       ]);
       if (!data) return null;
       return {
@@ -176,13 +178,20 @@ export function WorkoutNoteCard({ att, messageId, role, clientId, version }: {
 
 function placeOf(r: any): Place {
   const feel = ((r.feel ?? []) as string[]).map((f) => FEELS.find((x) => x.v === f)?.label.toLowerCase() ?? f);
+  const when = ((r.timing ?? []) as string[]).map((t) => TIMINGS.find((x) => x.v === t)?.label.toLowerCase() ?? t);
+  const anat = siteAnatomy(r.site);
   const extra = [
+    anat,
     r.same_issue && r.change ? `${r.change} than last time` : r.same_issue === false ? "new" : null,
     feel.length ? feel.join(", ") : null,
+    when.length ? when.join(", ") : null,
     r.impact === "stopped" ? "had to stop" : r.impact === "modified" ? "changed the session" : null,
     r.region !== "other" && r.note ? `“${r.note}”` : null,
   ].filter(Boolean).join(" · ");
-  return { line: reportLine({ region: r.region, side: r.side ?? null, severity: (r.severity as Severity) ?? null, exerciseName: r.exercise_name, note: r.note }), extra: extra || null };
+  return {
+    line: reportLine({ region: r.region, side: r.side ?? null, site: r.site ?? null, severity: (r.severity as Severity) ?? null, score: r.score ?? null, exerciseName: r.exercise_name, note: r.note }),
+    extra: extra || null,
+  };
 }
 
 function safeDate(s: string): Date | null {

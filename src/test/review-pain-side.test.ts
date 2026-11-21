@@ -79,10 +79,10 @@ describe("where it hurts in the review", () => {
     expect(ed).toContain("painReports: pain ? painReports : [],");
     expect(ed).toContain("painArea: pain ? painCols.painArea : null,");
     // a place with no "how bad" holds the button
-    expect(ed).toContain("painUnrated: painPicks.some((p) => !p.severity)");
+    expect(ed).toContain("painUnrated: painPicks.some((p) => unrated(p)),");
     expect(ed).toContain('painUnnamed: painPicks.some((p) => p.region === "other" && !p.note?.trim())');
     const rep = readFileSync("src/components/pain/pain-reporter.tsx", "utf8");
-    expect(rep).toContain("<BodyMap");
-    expect(rep).toContain("<PlaceList");
+    expect(rep).toContain("<PainMap");
+    expect(rep).toContain("data-pain-place");
   });
 });
