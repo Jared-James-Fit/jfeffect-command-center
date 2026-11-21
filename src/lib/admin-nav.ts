@@ -36,16 +36,16 @@ export const clientNav: NavItem[] = [
   { to: "/portal/account", label: "Account Settings", icon: Settings, keywords: ["account","settings","agreement","coaching agreement","contract","signed","password","units","notifications","privacy"] },
 ];
 
-// Mobile bottom-tab nav for the client portal: five equal tabs (TikTok's /
-// Instagram's), Crew in the middle with a count when there are new posts
-// (Rankings is the trophy bubble at the start of Crew's stories). "More" opens
-// from the top bar instead (AppShell `moreInHeader`). Messages sits right after
-// Crew (the coach is one thumb-reach away) and Nutrition takes the far right.
+// Mobile bottom-tab nav for the client portal: five equal tabs (Instagram's /
+// TikTok's), Crew first, far left, where the app opens (launch-home.ts), with a
+// count when there are new posts; then Home, Workouts, Messages (the coach a
+// thumb away) and Nutrition on the far right. "More" opens from the top bar
+// (AppShell `moreInHeader`).
 export const clientBottomNav: NavItem[] = [
+  { to: "/portal/community", label: "Crew", icon: UsersRound },
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   // Programs and a plan's page are part of Workouts: the tab stays lit there
   { to: "/portal/workouts", label: "Workouts", icon: Activity, activeOn: WORKOUTS_AREA },
-  { to: "/portal/community", label: "Crew", icon: UsersRound },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
 ];
@@ -70,11 +70,11 @@ export const selfServeNav: NavItem[] = [
   { to: "/portal/account", label: "Account Settings", icon: Settings },
 ];
 
-// Members' bottom tabs: Crew in the middle; Support takes Messages' place.
+// Members' bottom tabs: the clients' order, Support in Messages' place.
 export const selfServeBottomNav: NavItem[] = [
+  { to: "/portal/community", label: "Crew", icon: UsersRound },
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/workouts", label: "Workouts", icon: Activity, activeOn: WORKOUTS_AREA },
-  { to: "/portal/community", label: "Crew", icon: UsersRound },
-  { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   { to: "/portal/support", label: "Support", icon: HelpCircle },
+  { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
 ];

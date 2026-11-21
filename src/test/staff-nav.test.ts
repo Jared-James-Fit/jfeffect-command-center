@@ -5,9 +5,9 @@ import { STAFF_BAR, buildInternalNav, buildInternalNavCollapsed } from "@/lib/in
 const read = (p: string) => readFileSync(p, "utf8");
 
 describe("one staff app, laid out like the client app", () => {
-  it("every staff phone bar is Dashboard, Clients, Crew (centre), Messages, Tasks: plain tabs", () => {
-    expect(STAFF_BAR.map((i) => i.label)).toEqual(["Dashboard", "Clients", "Crew", "Messages", "Tasks"]);
-    expect(STAFF_BAR.map((i) => i.to)).toEqual(["/admin", "/admin/clients", "/admin/community", "/admin/messages", "/admin/tasks"]);
+  it("every staff phone bar is Crew (far left), Dashboard, Clients, Messages, Tasks: plain tabs", () => {
+    expect(STAFF_BAR.map((i) => i.label)).toEqual(["Crew", "Dashboard", "Clients", "Messages", "Tasks"]);
+    expect(STAFF_BAR.map((i) => i.to)).toEqual(["/admin/community", "/admin", "/admin/clients", "/admin/messages", "/admin/tasks"]);
     expect(STAFF_BAR.every((i) => !i.children && !!i.icon)).toBe(true);
   });
 
@@ -31,7 +31,7 @@ describe("one staff app, laid out like the client app", () => {
   });
 
   it("bars saved before the reset start fresh", () => {
-    expect(read("src/lib/floating-bar.ts")).toContain('const KEY = "jf-floating-bar-v4";');
+    expect(read("src/lib/floating-bar.ts")).toContain('const KEY = "jf-floating-bar-v5";');
   });
 });
 

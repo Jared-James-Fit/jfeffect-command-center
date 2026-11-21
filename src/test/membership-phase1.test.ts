@@ -32,11 +32,11 @@ describe("one athlete record, the service tier decides the coach's layer", () =>
     expect(isLapsedMemberPath("/portal/workouts")).toBe(false);
   });
 
-  it("members get the same app with Crew in the middle, Support instead of Messages", () => {
+  it("members get the same app with Crew first, Support in Messages' place", () => {
     const paths = selfServeNav.map((i) => i.to);
     expect(paths).toEqual(expect.arrayContaining(["/portal", "/portal/workouts", "/portal/programs", "/portal/community", "/portal/support", "/portal/membership", "/portal/nutrition-targets"]));
     expect(paths.some((p) => isCoachingOnlyPath(p))).toBe(false);
-    expect(selfServeBottomNav.map((i) => i.to)).toEqual(["/portal", "/portal/workouts", "/portal/community", "/portal/nutrition-targets", "/portal/support"]);
+    expect(selfServeBottomNav.map((i) => i.to)).toEqual(["/portal/community", "/portal", "/portal/workouts", "/portal/support", "/portal/nutrition-targets"]);
   });
 });
 
