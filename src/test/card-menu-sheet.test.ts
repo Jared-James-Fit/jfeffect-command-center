@@ -18,8 +18,8 @@ describe("the exercise card's ⋯ is a bottom sheet on a phone", () => {
 
   it("the items are written once and work in either; Undo / Redo keep the sheet open", () => {
     expect(menu).toContain("if (!keepOpen) mode.close();");
-    expect(wdv).toContain('import { CardMenuItem, CardMenuSeparator } from "@/components/workout-day/card-menu";');
-    const items = wdv.slice(wdv.indexOf("moreMenu={("), wdv.indexOf("rest={(exerciseId || name)"));
+    expect(wdv).toContain('import { CardMenu, CardMenuItem, CardMenuSeparator } from "@/components/workout-day/card-menu";');
+    const items = wdv.slice(wdv.indexOf("  const cardMenu = ("), wdv.indexOf("  const quickActions = ("));
     expect(items).not.toContain("DropdownMenuContent");
     expect(items).not.toContain("<DropdownMenuItem");
     expect(items).toContain('data-testid="card-undo"');

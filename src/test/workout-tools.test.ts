@@ -8,7 +8,7 @@ import { estimateOneRepMax } from "@/lib/final-warmup";
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 const { E1rmTool, CalculatorTool } = await import("@/components/workout-tools/lifting-math");
 const { ToolsPicker, TOOLS, toolStatus, WorkoutToolsProvider, useWorkoutToolsActions } = await import("@/components/workout-tools/workout-tools");
-const { ExerciseActionRow } = await import("@/components/workout-day/exercise-action-row");
+const { ExerciseQuickActions } = await import("@/components/workout-day/exercise-action-row");
 const { emptyStopwatch, emptyTimer } = await import("@/lib/workout-tools/timing");
 
 const run = (...keys: (string | CalcKey)[]) =>
@@ -93,8 +93,8 @@ describe("Workout Tools: one sheet for the whole workout, plain labels", () => {
     expect(html).not.toContain("<input");
   });
   it("every tool is one tap from any card's ⋯ menu, in the card's unit (nothing on the card itself)", () => {
-    const row = renderToStaticMarkup(createElement(ExerciseActionRow, {
-      name: "Squat", howTo: null, hasNote: false, onOpenNote() {}, moreMenu: null, rest: null,
+    const row = renderToStaticMarkup(createElement(ExerciseQuickActions, {
+      name: "Squat", howTo: null, hasNote: false, onOpenNote() {},
     }));
     expect(row).not.toContain('aria-label="Calculator"');
     const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");

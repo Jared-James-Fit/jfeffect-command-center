@@ -3,7 +3,7 @@
  * Stopwatch / Timer).
  *
  * Completely independent of the prescribed Rest timer
- * (`RestTimerButton` / `ActiveRestTimerProvider`) — no shared storage keys,
+ * (`RestLine` / rest-timer-store.ts) — no shared storage keys,
  * no shared state, and nothing here feeds analytics, logging or completion.
  *
  * All timing derives from absolute epoch-ms so backgrounding the app never

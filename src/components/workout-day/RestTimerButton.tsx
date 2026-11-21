@@ -1,54 +1,53 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Pause, Play, RotateCcw, Timer, X } from "lucide-react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { Check, Pause, Play, RotateCcw, Timer, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
+  REST_STEP_SECONDS,
+  adjustRestTimer,
+  claimRestDoneCue,
   clearRestTimer,
   formatAgo,
   formatClock,
   pauseRestTimer,
+  readRestAutoStart,
   readRestTimer,
   restFinished,
   restRemainingMs,
   resumeRestTimer,
+  setRestAutoStart,
   startRestTimer,
+  subscribeRestAutoStart,
   subscribeRestTimer,
   type RestTimerState,
 } from "@/lib/rest-timer-store";
 import { feedback } from "@/lib/feedback";
 
 /**
- * Compact rest-timer chip.
+ * The card's rest, one line right above its set table (Nov 21 2026).
  *
- * Timestamp-based: the countdown is derived from an absolute `endsAt` stored
- * per workout scope, so leaving the app, locking the phone, or reloading the
- * page all resolve to the correct remaining time on return (or a clear
- * "Rest done" state if it elapsed while away). The interval below only
- * repaints; it never owns the countdown value.
+ * Timestamp-based: the countdown is an absolute `endsAt` kept per workout
+ * (rest-timer-store.ts), so leaving the app, locking the phone, switching
+ * exercises or reloading all come back to the right time, or "Rest done" with
+ * how long ago. The ticker below only repaints.
  *
- * One timer runs per `scopeKey` (the workout day): starting a rest on another
- * exercise replaces the previous one, and other cards fall back to their
- * idle label.
+ * One rest runs per workout. It starts by itself when a working set is logged
+ * (unless turned off in a card's ⋯) or with a tap on "Rest 3 min", and it's
+ * shown on the card it started on and, once that exercise is done, on the next
+ * one with sets to log too (restHosts): wherever the next set is.
  */
-type RestTimerProps = {
-  seconds: number | null;
-  /** True when the rest comes from the category default, not the program. */
-  auto?: boolean;
-  className?: string;
-  /** Fired when the rest countdown begins — used to auto-start the workout session clock. */
-  onStart?: () => void;
-  /** Per-workout/day key — keeps timer state isolated per workout and client. */
-  scopeKey: string;
-  /** Per-exercise-row key — identifies which card owns the active timer. */
-  timerId: string;
-};
 
-/** One card's rest timer: the store's state for this workout, the repaint while it runs, the buzz / chime at the end. */
-function useRestTimer({ seconds, onStart, scopeKey, timerId }: RestTimerProps) {
+/** "Rest 5 min", "Rest 2:30", "Rest 45 s": the prescribed rest in words, before it starts. */
+export function restWords(seconds: number | null | undefined): string | null {
+  if (!seconds || seconds <= 0) return null;
+  const s = Math.round(seconds);
+  if (s < 60) return `Rest ${s} s`;
+  if (s % 60 === 0) return `Rest ${s / 60} min`;
+  return `Rest ${formatClock(s)}`;
+}
+
+/** The workout's rest as it is now (null when none), kept in step with every card and tab. */
+export function useRestState(scopeKey: string): RestTimerState | null {
   const [state, setState] = useState<RestTimerState | null>(null);
-  const [, forceTick] = useState(0);
-  const vibratedRef = useRef<number | null>(null);
-
-  // Hydrate + subscribe. Recompute on every return path.
   useEffect(() => {
     const read = () => setState(readRestTimer(scopeKey));
     read();
@@ -67,174 +66,153 @@ function useRestTimer({ seconds, onStart, scopeKey, timerId }: RestTimerProps) {
       window.removeEventListener("storage", onStorage);
     };
   }, [scopeKey]);
+  return state;
+}
 
-  // Repaint ticker — only while this card owns a live timer.
-  const mine = state && state.timerId === timerId ? state : null;
-  const active = !!mine && (mine.pausedRemainingMs != null || !restFinished(mine));
+/** Whether a rest starts by itself when a set is logged (this phone; on by default). */
+export function useRestAutoStart(): [boolean, (on: boolean) => void] {
+  const on = useSyncExternalStore(subscribeRestAutoStart, readRestAutoStart, () => true);
+  return [on, setRestAutoStart];
+}
+
+// The running line fits a 320pt phone: the clock, +15 and stop always; −15
+// from a 272px row, start-again from 320px, the word "Rest" from 384px
+// (a row is the card's width, the How To and Note icons included).
+const ICON = "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground active:scale-95 [&_svg]:size-[18px]";
+
+export function RestLine({ seconds, auto = false, scopeKey, timerId, shows, idle = true, onStart, className, children }: {
+  /** The prescribed rest (the program's, else the usual one for this kind of exercise). */
+  seconds: number | null;
+  /** True when the rest is the usual one for this kind of exercise, not the program's. */
+  auto?: boolean;
+  /** The workout: one rest runs per workout. */
+  scopeKey: string;
+  /** This card's row. */
+  timerId: string;
+  /** Whether this card shows a rest that started on `ownerId` (its own always). */
+  shows?: (ownerId: string) => boolean;
+  /** Offer "Rest 3 min" while nothing runs (off once the card's sets are all in, or read-only). */
+  idle?: boolean;
+  /** A tap that starts the rest (the workout's clock starts with it). */
+  onStart?: () => void;
+  className?: string;
+  /** The card's quiet icons on the right (How To, Note). */
+  children?: React.ReactNode;
+}) {
+  const state = useRestState(scopeKey);
+  const mine = state && (state.timerId === timerId || shows?.(state.timerId)) ? state : null;
+  const [, tick] = useState(0);
+  const live = !!mine && mine.pausedRemainingMs == null && !restFinished(mine);
   useEffect(() => {
-    if (!active) return;
-    const id = window.setInterval(() => forceTick((n) => n + 1), 500);
+    if (!live) return;
+    const id = window.setInterval(() => tick((n) => n + 1), 500);
     return () => window.clearInterval(id);
-  }, [active]);
+  }, [live]);
+  // once a minute after it's done, so "2:10 ago" moves on
+  const done = !!mine && restFinished(mine);
+  useEffect(() => {
+    if (!done) return;
+    const id = window.setInterval(() => tick((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [done]);
 
-  // Haptic cue on completion (once per timer instance).
+  // The end of the rest: the timer's buzz and two gentle chimes, once per rest
+  // however many cards show it, and only when it ended while we're looking.
   useEffect(() => {
     if (!mine || !restFinished(mine)) return;
-    if (vibratedRef.current === mine.startedAt) return;
-    vibratedRef.current = mine.startedAt;
-    // Only buzz if the finish just happened while we're looking at it.
     if (Date.now() - mine.endsAt > 3000) return;
-    // rest is over: the timer's long buzz and two gentle chimes (an iPhone's web view can't
-    // buzz from a timer, so there the chimes say it)
-    feedback("timer");
-  }, [mine, mine && restRemainingMs(mine)]);
+    if (claimRestDoneCue(scopeKey, mine)) feedback("timer");
+  }, [mine, done, scopeKey]);
 
-  const disabled = !seconds || seconds <= 0;
-  const start = () => {
-    if (disabled) return;
-    onStart?.();
-    setState(startRestTimer(scopeKey, timerId, seconds as number));
-  };
-  return { mine, disabled, start, setState };
-}
-
-/** "Rest 5 min", "Rest 2:30", "Rest 45 s": the prescribed rest in words, the card's action row. */
-export function restWords(seconds: number | null | undefined): string | null {
-  if (!seconds || seconds <= 0) return null;
-  const s = Math.round(seconds);
-  if (s < 60) return `Rest ${s} s`;
-  if (s % 60 === 0) return `Rest ${s / 60} min`;
-  return `Rest ${formatClock(s)}`;
-}
-
-/**
- * The rest timer laid out across the card's action row: `label` on the left
- * ("Rest 5 min", or the countdown with pause / restart / stop while it runs)
- * and `button` among the row's icons (the timer: start it, or start it again).
- * One state for both, so the chime plays once.
- */
-export function RestTimer(props: RestTimerProps & { children: (parts: { label: ReactNode; button: ReactNode }) => ReactNode }) {
-  const { seconds, auto = false, scopeKey, children } = props;
-  const { mine, disabled, start, setState } = useRestTimer(props);
   const words = restWords(seconds);
-  const clock = seconds && seconds > 0 ? formatClock(seconds) : null;
-  const label = mine
-    ? <RunningRest mine={mine} scopeKey={scopeKey} start={start} setState={setState} />
-    : words
-      ? <span className="truncate text-[15px] text-muted-foreground" title={auto ? "The usual rest for this kind of exercise" : undefined} data-rest-words>{words}</span>
-      : null;
-  const button = disabled ? null : (
-    <button
-      type="button"
-      onClick={start}
-      aria-label={mine ? "Restart rest timer" : `Start ${clock} ${auto ? "auto " : ""}rest timer`}
-      title={mine ? "Start the rest again" : "Start your rest"}
-      data-rest-start
-      className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground active:scale-95 [&_svg]:size-[22px]"
-    >
-      <Timer />
-      {mine && <span aria-hidden className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-foreground ring-2 ring-card" />}
-    </button>
-  );
-  return <>{children({ label, button })}</>;
-}
+  const start = () => {
+    if (!seconds || seconds <= 0) return;
+    onStart?.();
+    startRestTimer(scopeKey, timerId, seconds);
+  };
 
-/**
- * The rest timer as one chip ("▶ 2:00", then the countdown), for anywhere
- * that has no action row of its own.
- */
-export function RestTimerButton(props: RestTimerProps) {
-  const { seconds, auto = false, className, scopeKey } = props;
-  const { mine, disabled, start, setState } = useRestTimer(props);
-  // Compact by default ("▶ 2:00"); the "Rest" / "Auto rest" label only
-  // appears when the surrounding @container (the card's action row) has room.
-  const clock = seconds && seconds > 0 ? formatClock(seconds) : null;
-  if (!mine) {
-    return (
+  let left: React.ReactNode = null;
+  let stateName: "idle" | "running" | "paused" | "done" | "off" = "off";
+  if (mine) {
+    const paused = mine.pausedRemainingMs != null;
+    const left_ms = restRemainingMs(mine);
+    stateName = done ? "done" : paused ? "paused" : "running";
+    if (done) {
+      const ago = Date.now() - mine.endsAt;
+      left = (
+        <div className="flex min-w-0 items-center gap-1" role="status" aria-live="polite">
+          <span className="inline-flex shrink-0 items-center gap-1.5 pl-1 text-[15px] font-semibold text-success">
+            <Check className="h-4 w-4 shrink-0" aria-hidden />
+            Rest done
+          </span>
+          {ago > 5000 && <span className="min-w-0 truncate text-[13px] tabular-nums text-muted-foreground" data-rest-ago>· {formatAgo(ago)}</span>}
+          <button type="button" className={ICON} onClick={() => startRestTimer(scopeKey, mine.timerId, mine.durationSeconds)} aria-label="Start the rest again" data-rest-restart>
+            <RotateCcw />
+          </button>
+          <button type="button" className={ICON} onClick={() => clearRestTimer(scopeKey)} aria-label="Dismiss rest" data-rest-stop>
+            <X />
+          </button>
+        </div>
+      );
+    } else {
+      const total = Math.max(1, mine.durationSeconds * 1000);
+      const share = Math.min(1, Math.max(0, 1 - left_ms / total));
+      left = (
+        <div className="flex min-w-0 items-center" role="group" aria-label="Rest timer">
+          <button
+            type="button"
+            onClick={() => (paused ? resumeRestTimer(scopeKey) : pauseRestTimer(scopeKey))}
+            aria-label={paused ? `Resume rest, ${formatClock(left_ms / 1000)} left` : `Pause rest, ${formatClock(left_ms / 1000)} left`}
+            className="relative -ml-1 inline-flex h-10 shrink-0 items-center gap-1.5 overflow-hidden rounded-full pl-2 pr-3 text-foreground transition hover:bg-muted active:scale-[0.98]"
+            data-rest-toggle
+          >
+            {paused ? <Play className="h-4 w-4 fill-current" aria-hidden /> : <Pause className="h-4 w-4 fill-current" aria-hidden />}
+            <span className="hidden text-[15px] text-muted-foreground @[24rem]:inline">Rest</span>
+            <span className={cn("text-[17px] font-semibold tabular-nums", paused && "text-muted-foreground")} data-rest-clock>
+              {formatClock(left_ms / 1000)}
+            </span>
+            {paused && <span className="hidden text-[13px] text-muted-foreground @[27rem]:inline">Paused</span>}
+            {/* how much of it has gone by: one hairline under the clock */}
+            <span aria-hidden className="absolute inset-x-3 bottom-1 h-0.5 overflow-hidden rounded-full bg-muted">
+              <span className="block h-full rounded-full bg-foreground/40" style={{ width: `${share * 100}%` }} />
+            </span>
+          </button>
+          <button type="button" className={cn(ICON, "hidden w-11 text-[13px] font-semibold tabular-nums @[17rem]:inline-flex")} onClick={() => adjustRestTimer(scopeKey, -REST_STEP_SECONDS)} aria-label={`${REST_STEP_SECONDS} seconds less rest`} data-rest-less>
+            −{REST_STEP_SECONDS}
+          </button>
+          <button type="button" className={cn(ICON, "w-11 text-[13px] font-semibold tabular-nums")} onClick={() => adjustRestTimer(scopeKey, REST_STEP_SECONDS)} aria-label={`${REST_STEP_SECONDS} seconds more rest`} data-rest-more>
+            +{REST_STEP_SECONDS}
+          </button>
+          <button type="button" className={cn(ICON, "hidden @[20rem]:inline-flex")} onClick={() => startRestTimer(scopeKey, mine.timerId, mine.durationSeconds)} aria-label="Start the rest again" data-rest-restart>
+            <RotateCcw />
+          </button>
+          <button type="button" className={ICON} onClick={() => clearRestTimer(scopeKey)} aria-label="Stop rest" data-rest-stop>
+            <X />
+          </button>
+        </div>
+      );
+    }
+  } else if (idle && words) {
+    stateName = "idle";
+    left = (
       <button
         type="button"
         onClick={start}
-        disabled={disabled}
-        title={clock ? `${auto ? "Auto rest" : "Rest"} ${clock} — tap to start` : "No rest set"}
-        aria-label={clock ? `Start ${clock} ${auto ? "auto " : ""}rest timer` : "Rest timer unavailable"}
-        className={cn(
-          "inline-flex h-10 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-full border border-border bg-background pl-1.5 pr-3 text-xs font-semibold tabular-nums text-foreground transition hover:bg-muted active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100 @max-[17rem]:h-9 @max-[17rem]:pl-2 @max-[17rem]:pr-2.5",
-          className,
-        )}
+        className="-ml-1 inline-flex h-10 min-w-0 items-center gap-1.5 rounded-full pl-1.5 pr-3 text-[15px] text-muted-foreground transition hover:bg-muted hover:text-foreground active:scale-[0.98]"
+        aria-label={`Start ${formatClock(seconds as number)} rest`}
+        title={auto ? "The usual rest for this kind of exercise. Tap to start it." : "Tap to start your rest"}
+        data-rest-start
       >
-        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-foreground @max-[17rem]:h-auto @max-[17rem]:w-auto @max-[17rem]:bg-transparent">
-          <Play className="h-3 w-3 fill-current" />
-        </span>
-        <span className="hidden text-[11px] font-semibold text-muted-foreground @[26rem]:inline">{auto ? "Auto rest" : "Rest"}</span>
-        <span>{clock ?? "Rest"}</span>
+        <Timer className="h-[18px] w-[18px] shrink-0" aria-hidden />
+        <span className="truncate" data-rest-words>{words}</span>
       </button>
     );
   }
 
-  return <RunningRest mine={mine} scopeKey={scopeKey} start={start} setState={setState} className={className} />;
-}
-
-/** The countdown while it runs: pause / resume, the time, restart, stop; "Rest done" once it's over. */
-function RunningRest({ mine, scopeKey, start, setState, className }: {
-  mine: RestTimerState;
-  scopeKey: string;
-  start: () => void;
-  setState: (s: RestTimerState | null) => void;
-  className?: string;
-}) {
-  const paused = mine.pausedRemainingMs != null;
-  const finished = restFinished(mine);
-  const display = finished ? "Rest done" : formatClock(restRemainingMs(mine) / 1000);
-
   return (
-    <div
-      className={cn(
-        "inline-flex h-10 shrink-0 items-center gap-0 whitespace-nowrap rounded-full border px-1 ring-2 @max-[17rem]:h-9",
-        finished
-          ? "border-emerald-500/50 bg-emerald-500/10 ring-emerald-500/10"
-          : "border-border bg-secondary ring-transparent",
-        className,
-      )}
-      role="group"
-      aria-live="polite"
-      aria-label={finished ? "Rest complete" : `Rest timer ${display} remaining`}
-    >
-      {!finished && (
-        <button
-          type="button"
-          onClick={() => setState(paused ? resumeRestTimer(scopeKey) : pauseRestTimer(scopeKey))}
-          aria-label={paused ? "Resume rest timer" : "Pause rest timer"}
-          className="inline-flex h-7 w-6 shrink-0 items-center justify-center rounded-full text-foreground transition hover:bg-foreground/10 active:scale-95"
-        >
-          {paused ? <Play className="h-3.5 w-3.5 fill-current" /> : <Pause className="h-3.5 w-3.5 fill-current" />}
-        </button>
-      )}
-      <div className="px-0.5 text-sm font-bold tabular-nums text-foreground">
-        {!finished && <span className="mr-1 hidden text-[10px] font-semibold uppercase tracking-wide text-muted-foreground @[27rem]:inline">Resting</span>}
-        {display}
-        {paused && <span className="ml-1 hidden text-[10px] font-medium text-muted-foreground @[26rem]:inline">Paused</span>}
-        {finished && Date.now() - mine.endsAt > 5000 && (
-          <span className="ml-1 hidden text-[10px] font-medium text-muted-foreground @[27rem]:inline">
-            {formatAgo(Date.now() - mine.endsAt)}
-          </span>
-        )}
-      </div>
-      <button
-        type="button"
-        onClick={start}
-        aria-label="Restart rest timer"
-        className="hidden h-7 w-7 shrink-0 @[24rem]:inline-flex items-center justify-center rounded-full text-muted-foreground transition hover:bg-foreground/10 hover:text-foreground active:scale-95"
-      >
-        <RotateCcw className="h-3 w-3" />
-      </button>
-      <button
-        type="button"
-        onClick={() => { clearRestTimer(scopeKey); setState(null); }}
-        aria-label={finished ? "Dismiss rest timer" : "Stop rest timer"}
-        className="inline-flex h-7 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-foreground/10 hover:text-foreground active:scale-95"
-      >
-        <X className="h-3 w-3" />
-      </button>
+    <div className={cn("@container mt-2 flex min-h-10 min-w-0 items-center gap-0.5", className)} data-rest-line={stateName} data-testid="exercise-action-row">
+      <div className="flex min-w-0 flex-1 items-center">{left}</div>
+      {children}
     </div>
   );
 }

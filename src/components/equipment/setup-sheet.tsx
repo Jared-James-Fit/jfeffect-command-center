@@ -1040,17 +1040,32 @@ function EquipmentPicker({
 
 /** The card's one quiet line when a setup is saved: tap it for the sheet. */
 export function SetupLine({ text, onOpen, retired = false }: { text: string; onOpen: () => void; retired?: boolean }) {
+  // The setup right under the name and role: the equipment, then its first
+  // settings ("Rogue rack · J-hooks 9 · Safeties 4"), whole on up to two lines,
+  // never cut mid-word. Empty: "Add your setup", only where a setup matters.
+  const empty = !text;
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="-ml-1 mt-1 inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-md px-1 text-left text-[13px] leading-snug text-muted-foreground active:bg-muted"
-      aria-label={`Setup: ${text}. Open setup`}
-      data-setup-line
+      className={cn(
+        "-ml-1 mt-0.5 inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-md px-1 text-left text-[14px] leading-snug active:bg-muted",
+        empty ? "text-muted-foreground" : "text-foreground/80",
+      )}
+      aria-label={empty ? "Add your setup for this exercise" : `Setup: ${text}. Open setup`}
+      data-setup-line={empty ? "empty" : "saved"}
     >
-      <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" aria-hidden />
-      <span className="min-w-0 truncate">{text}</span>
-      {retired && <span className="shrink-0 text-[11px]">· retired</span>}
+      <SlidersHorizontal className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      {/* the parts never break mid-phrase: "Back pad 3" stays together */}
+      <span className="min-w-0 line-clamp-2">
+        {empty ? "Add your setup" : text.split(" · ").map((part, i) => (
+          <span key={i}>
+            {i > 0 && " · "}
+            <span className="whitespace-nowrap">{part}</span>
+          </span>
+        ))}
+      </span>
+      {retired && <span className="shrink-0 text-[12px] text-muted-foreground">· retired</span>}
     </button>
   );
 }

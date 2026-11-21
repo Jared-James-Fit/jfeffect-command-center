@@ -84,6 +84,7 @@ export function TypedValueInput({
           <input
             ref={inputRef}
             autoFocus
+            data-set-box
             type="text"
             inputMode={kind === "reps" ? "numeric" : "decimal"}
             enterKeyHint="done"
@@ -112,6 +113,7 @@ export function TypedValueInput({
           disabled={disabled}
           onClick={start}
           aria-label={ariaLabel}
+          data-set-box
           className={cn(
             "flex w-full items-center justify-center whitespace-nowrap rounded-md border px-2 text-sm font-medium tabular-nums transition-colors",
             cellHeight,

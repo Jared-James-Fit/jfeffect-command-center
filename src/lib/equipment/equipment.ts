@@ -136,10 +136,22 @@ export function suggestKind(ex: { name?: string | null; equipment?: string | nul
   if (/machine|leg press|hack squat|leg extension|leg curl|pec deck|hammer strength|iso[- ]?lateral|belt squat|chest press|seated row machine|abductor|adductor/.test(name) || /\bmachine\b/.test(eq)) return "machine";
   const barbell = /barbell/.test(eq) || /\bbarbell\b|competition|comp\b|\bsquat\b|bench press|overhead press|ohp\b|pin press|rack pull/.test(name);
   // a barbell squat, bench or press comes out of a rack (a bench press's uprights included)
-  if (barbell && /squat|bench|press|good morning|rack|pin|lunge|split squat/.test(name) && !/dumbbell|\bdb\b/.test(name)) return "rack";
+  // (never one done with dumbbells or a kettlebell, whatever its name: a Bulgarian split squat with dumbbells needs no rack)
+  const freeWeights = /dumbbell|\bdb\b|kettlebell|\bkb\b/.test(name) || /dumbbell|kettlebell/.test(eq);
+  if (barbell && /squat|bench|press|good morning|rack|pin|lunge|split squat/.test(name) && !freeWeights) return "rack";
   if (/\brack\b/.test(eq)) return "rack";
   if (/incline|decline|bench|seated|preacher/.test(name) || /\bbench\b/.test(eq)) return "bench";
   return null;
+}
+
+/**
+ * Where an empty card offers "Add your setup": equipment whose settings change
+ * the lift (J-hooks and safeties, a seat, a pulley). Never a bench, dumbbells
+ * or a bodyweight move, so a day's accessories don't each ask.
+ */
+export function offersSetup(ex: { name?: string | null; equipment?: string | null } | null | undefined): boolean {
+  const kind = suggestKind(ex);
+  return kind === "rack" || kind === "smith" || kind === "machine" || kind === "cable";
 }
 
 const time = (iso: string | null | undefined): number => {

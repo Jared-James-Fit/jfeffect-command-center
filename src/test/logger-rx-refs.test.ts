@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 const { LoadSuggestionCard, LoadSuggestionsDone, LoadSuggestionsDoneNote, REF_BAR, REF_CELL } = await import("@/components/workout-day/load-suggestion-card");
-const { ExerciseActionRow } = await import("@/components/workout-day/exercise-action-row");
+const { ExerciseQuickActions } = await import("@/components/workout-day/exercise-action-row");
 const { restWords } = await import("@/components/workout-day/RestTimerButton");
 
 const hint = { low: 240, high: 260, target: 250, unit: "lb" as const };
@@ -94,7 +94,7 @@ describe("the card's top: name, role, the prescription, then Last / Suggested", 
   });
 });
 
-describe("the action row: Rest on the left, quiet icons on the right", () => {
+describe("the rest line over the sets: Rest on the left, How To · Note on the right", () => {
   it("rest in words", () => {
     expect(restWords(180)).toBe("Rest 3 min");
     expect(restWords(150)).toBe("Rest 2:30");
@@ -103,16 +103,17 @@ describe("the action row: Rest on the left, quiet icons on the right", () => {
     expect(restWords(null)).toBeNull();
   });
 
-  it("How To · Note · rest timer · More, borderless, after a hairline", () => {
-    const html = renderToStaticMarkup(createElement(ExerciseActionRow, {
-      name: "Squat", howTo: null, hasNote: true, onOpenNote() {}, moreMenu: null, rest: null, restLabel: "Rest 3 min",
+  it("How To · Note as quiet icons, the ⋯ up beside the name", () => {
+    const html = renderToStaticMarkup(createElement(ExerciseQuickActions, {
+      name: "Squat", howTo: null, hasNote: true, onOpenNote() {},
     }));
-    expect(html).toContain("border-t");
-    expect(html).toContain("Rest 3 min");
+    expect(html).toContain('aria-label="Notes for Squat"');
     expect(html).not.toContain("border border-border bg-card");
     expect(html).not.toContain("bg-primary");
-    expect(wdv).toContain("restLabel={(exerciseId || name) ? restParts.label : null}");
+    expect(html).not.toContain("More options");
+    expect(wdv).toContain("{quickActions}\n      </RestLine>");
     expect(wdv).toContain("iconOnly");
+    expect(wdv).toContain("{cardMenu}\n          </CardMenu>");
   });
 
   it("the running countdown is neutral: red stays the screen's one main action", () => {

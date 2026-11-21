@@ -368,6 +368,7 @@ export function WeightValueInput({
             <input
               ref={inputRef}
               autoFocus
+              data-set-box
               inputMode="decimal"
               type="text"
               enterKeyHint="done"
@@ -396,6 +397,7 @@ export function WeightValueInput({
             type="button"
             disabled={disabled}
             aria-label={ghost != null ? `${ariaLabel}, suggested ${ghost} ${unit}` : ariaLabel}
+            data-set-box
             onClick={() => startEditing()}
             className={cn(
               "flex w-full items-center justify-center whitespace-nowrap rounded-md border text-sm font-medium transition-colors",

@@ -22,7 +22,7 @@ import { ACTIVE_WORKOUT_DAY_KEY, WORKOUT_SESSION_PREFIX } from "@/lib/workout-re
  * refreshes, backgrounding and navigation. A JS interval only drives repaints.
  *
  * This is the total workout-session clock. Rest timers are a separate,
- * untouched mechanism (RestTimerButton / DurationTimerInCard).
+ * untouched mechanism (RestLine / DurationTimerInCard).
  */
 
 const SESSION_PREFIX = WORKOUT_SESSION_PREFIX;

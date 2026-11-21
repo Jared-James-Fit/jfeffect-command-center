@@ -276,8 +276,8 @@ describe("PRs and progress say which machine", () => {
 describe("the card stays quiet", () => {
   const card = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
   const sheet = readFileSync("src/components/equipment/setup-sheet.tsx", "utf8");
-  it("the setup line shows only when something's saved, and the ⋯ menu is the way in otherwise", () => {
-    expect(card).toMatch(/\{cardSetup\?\.summary && \(\s*<SetupLine/);
+  it("the setup line shows what's saved; empty, only on a rack, machine or cable lift before its first set (Nov 21 2026), else the ⋯ is the way in", () => {
+    expect(card).toContain('{cardSetup && (cardSetup.summary || (cardSetup.mode === "live" && completedSetCount === 0 && offersSetup(');
     expect(card).toContain('data-testid="card-setup"');
   });
   it("the setup sheet is a grip sheet that swipes down and stays above the keyboard", () => {
