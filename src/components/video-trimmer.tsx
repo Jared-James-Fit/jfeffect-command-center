@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { VIDEO_LIMITS, formatClock, videoLimit } from "@/lib/video-edit/limits";
 import { defaultTrim, maxSelectable, type VideoTrim } from "@/lib/video-edit/plan";
 import type { TrimFn, TrimRequest } from "@/lib/video-edit/pick";
+import { liftNotFound, liftNoteFor } from "@/lib/video-edit/lift-note";
 import { createThumbnailer, type Thumbnailer } from "@/lib/video-edit/thumbs";
 import {
   centerSelectionOn, clampView, edgePan, needsOverview, normalizeSelection, setEnd, setStart, shiftSelection, tileGrid, timeToX, viewAround, viewSpan, xToTime,
@@ -154,6 +155,7 @@ export function VideoTrimmer({ req, onDone }: { req: TrimRequest; onDone: (v: Vi
   // a handle moved by hand before it was found: it's offered, never moved to
   const touched = useRef(false);
   const [lift, setLift] = useState<VideoTrim | "finding" | "none" | null>(req.suggest ? "finding" : null);
+  const [liftMissed, setLiftMissed] = useState(false);
   const glide = useRef(0);
   const moveTo = useCallback(
     (to: VideoTrim) => {
@@ -196,7 +198,11 @@ export function VideoTrimmer({ req, onDone }: { req: TrimRequest; onDone: (v: Vi
     void find().then(
       (found) => {
         if (!alive) return;
-        if (!found) return setLift("none");
+        if (!found) {
+          // it looked and couldn't pick the lift out: said, so a missing suggestion never reads as broken
+          setLiftMissed(liftNotFound(liftNoteFor(req.file)));
+          return setLift("none");
+        }
         const n = normalizeSelection(found, maxLen, duration);
         setLift(n);
         if (auto && !touched.current) moveTo(n);
@@ -458,9 +464,11 @@ export function VideoTrimmer({ req, onDone }: { req: TrimRequest; onDone: (v: Vi
     ? `This phone can't shrink video, so up to ${formatClock(maxLen)} of this one can go.`
     : onLift
       ? "Cut to the lift, from stepping up to the bar to racking it. Drag the ends to change it."
-      : fits
-        ? "Drag the ends to pick the part you want."
-        : `${VIDEO_LIMITS[context].label} can be up to ${formatClock(limit)}. Drag the ends to pick the part you want.`;
+      : liftMissed && fits
+        ? "Couldn't pick out the lift in this one. Drag the ends to trim it yourself."
+        : fits
+          ? "Drag the ends to pick the part you want."
+          : `${VIDEO_LIMITS[context].label} can be up to ${formatClock(limit)}. Drag the ends to pick the part you want.`;
   const snapNote = snapStart ? " This phone can only cut this clip at certain frames, so the start may move back a moment." : "";
 
   return (

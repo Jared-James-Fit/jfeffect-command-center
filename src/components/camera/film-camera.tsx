@@ -27,6 +27,7 @@ import {
   recordClock,
   recordLimitSeconds,
   recorderBitrate,
+  recorderKeyframes,
   recorderTypes,
   saveFilmAsk,
   saveFilmSettings,
@@ -398,7 +399,7 @@ export function FilmCamera({
     const mixed = new MediaStream([...stream.getVideoTracks(), ...(mic?.getAudioTracks() ?? [])]);
     let recorder: MediaRecorder;
     try {
-      recorder = new MediaRecorder(mixed, { ...(type ? { mimeType: type } : {}), videoBitsPerSecond: rate, audioBitsPerSecond: 128_000 });
+      recorder = new MediaRecorder(mixed, { ...(type ? { mimeType: type } : {}), videoBitsPerSecond: rate, audioBitsPerSecond: 128_000, ...recorderKeyframes() });
     } catch {
       try {
         recorder = new MediaRecorder(mixed, type ? { mimeType: type } : undefined);
