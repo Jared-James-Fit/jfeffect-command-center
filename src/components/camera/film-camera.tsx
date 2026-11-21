@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import { ChevronDown, Grid3x3, Images, MicOff, RefreshCcw, X, Zap, ZapOff } from "lucide-react";
+import { ChevronDown, Grid3x3, Images, RefreshCcw, X, Zap, ZapOff } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { baseMediaType } from "@/lib/community";
-import { micRefused, noteClipMic, openVideoMic } from "@/lib/video-mic";
-import { FilmSoundToggle, sayFilmSound } from "@/components/camera/film-sound-toggle";
+import { askForMicAgain, micRefused, noteClipMic, openVideoMic } from "@/lib/video-mic";
 import { holdCameraOpen } from "@/lib/camera/camera-presence";
 import { phoneUpright, takePrimedCamera } from "@/lib/camera/camera-prime";
 import {
@@ -31,7 +30,6 @@ import {
   recorderTypes,
   saveFilmAsk,
   saveFilmSettings,
-  takeFilmSoundHint,
   type AskShape,
   type CameraCaps,
   type FilmFps,
@@ -77,10 +75,10 @@ type Rec = { recorder: MediaRecorder; mic: MediaStream | null; restore: (() => v
  * picture edge to edge, 9:16 upright, the controls over it; the page and the
  * status bar black behind it, camera-presence.ts): films at the quality picked (1080p by default, 4K or 60 fps where the phone
  * can), with its lenses (0.5 · 1× · Tele), pinch to zoom, the light, the front
- * camera, a grid and music or sound, all remembered on the phone
- * (film-settings.ts). Music (the default on a phone) films without the mic, so
- * the music in their earbuds keeps playing; the mic button up top records
- * sound instead, which pauses it (FilmSoundToggle). One tap starts, one stops: a propped phone films the
+ * camera, a grid and sound on or off, all remembered on the phone
+ * (film-settings.ts). A phone films without the mic unless sound is switched
+ * on in the settings, so the music in their earbuds keeps playing
+ * (`defaultFilmSound`). One tap starts, one stops: a propped phone films the
  * whole set. The clip goes to `onClip` as a file, exactly as if it had been
  * picked, so the trimmer and the lift finder take it from there. Library
  * opens the phone's own picker instead (from the tap, as iOS requires).
@@ -114,8 +112,6 @@ export function FilmCamera({
   const [panel, setPanel] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [micBlocked, setMicBlocked] = useState(() => micRefused());
-  /** Whether the clip being filmed has sound (the recording pill says when it doesn't). */
-  const [recordingSound, setRecordingSound] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -133,11 +129,6 @@ export function FilmCamera({
 
   // While it's up: the phone may turn to film sideways, and nothing else on the page takes the keys.
   useEffect(() => holdCameraOpen(), []);
-
-  // The first time it films without sound by default, it says so (once per phone).
-  useEffect(() => {
-    if (!settingsRef.current.sound && takeFilmSoundHint()) sayFilmSound(false);
-  }, []);
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -390,9 +381,8 @@ export function FilmCamera({
         setMicBlocked(micRefused());
         toast.message("Filming without sound", {
           description: micRefused()
-            ? "The microphone isn't allowed. Tap the mic up top to ask again."
+            ? "The microphone isn't allowed. Ask again from the camera's settings."
             : "The microphone isn't available to JF Effect.",
-          id: "film-sound",
         });
       }
     }
@@ -445,7 +435,6 @@ export function FilmCamera({
       return;
     }
     recRef.current = entry;
-    setRecordingSound(!!mic);
     setRecordingAt(t0);
     limitTimer.current = setTimeout(() => stopRecording(true), limitSeconds * 1000);
     // the screen stays on while it films (an auto-lock would end the recording)
@@ -575,7 +564,7 @@ export function FilmCamera({
 
       {/* top: close, what it's filming at (the clock while recording), the light and settings */}
       <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/55 to-transparent px-3 pb-6 pt-[max(calc(env(safe-area-inset-top)_+_var(--ios-edge-room,0px)),12px)]" data-film-top>
-        <div className="grid h-11 grid-cols-[1fr_auto_1fr] items-center gap-2">
+        <div className="flex h-11 items-center justify-between gap-2">
           {recording ? (
             <span className="w-10" />
           ) : (
@@ -588,7 +577,6 @@ export function FilmCamera({
               <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" aria-hidden />
               {recordClock(elapsed)}
               {remaining < 30_000 && <span className="text-white/70">· {recordClock(remaining)} left</span>}
-              {!recordingSound && <MicOff className="h-3.5 w-3.5 text-white/70" aria-label="No sound: your music keeps playing" data-film-no-sound />}
             </span>
           ) : (
             <button
@@ -603,17 +591,7 @@ export function FilmCamera({
               <ChevronDown className={cn("ml-1 h-3.5 w-3.5 transition-transform", panel && "rotate-180")} aria-hidden />
             </button>
           )}
-          <div className="flex items-center justify-end gap-2">
-            {!recording && (
-              <FilmSoundToggle
-                // a mic refused this visit films without sound, so it reads as music until it's allowed
-                sound={settings.sound && !micBlocked}
-                onChange={(on) => {
-                  if (on) setMicBlocked(false);
-                  update({ sound: on });
-                }}
-              />
-            )}
+          <div className="flex w-10 items-center justify-end">
             {caps?.torch && (
               <button type="button" onClick={() => void toggleTorch()} aria-label={torch ? "Light off" : "Light on"} aria-pressed={torch} className={cn("grid h-10 w-10 place-items-center rounded-full active:scale-95", torch ? "bg-white text-black" : "bg-black/40")} data-film-torch>
                 {torch ? <Zap className="h-5 w-5" /> : <ZapOff className="h-5 w-5" />}
@@ -655,6 +633,31 @@ export function FilmCamera({
                 : "1080p is sharp for your coach and the Crew."}
           </p>
           <label className="mt-4 flex items-center justify-between gap-3 text-sm font-medium">
+            <span>
+              Record sound
+              <span className="block text-[12px] font-normal text-white/60">Pauses your music while you film.</span>
+            </span>
+            <Switch checked={settings.sound} onCheckedChange={(v) => update({ sound: v })} aria-label="Record sound" />
+          </label>
+          {settings.sound && micBlocked && (
+            <div className="mt-2 flex items-center justify-between gap-3 text-[12px] leading-snug text-white/70" data-mic-refused>
+              <span>The microphone isn't allowed, so clips film without sound.</span>
+              <button
+                type="button"
+                // asked inside this tap and let go at once: the next recording uses the answer
+                onClick={() =>
+                  void askForMicAgain().then((ok) => {
+                    setMicBlocked(!ok && micRefused());
+                    if (!ok) toast.message("Still not allowed", { description: "Allow the microphone for JF Effect in your phone's settings to film with sound." });
+                  })
+                }
+                className="h-9 shrink-0 rounded-full bg-white/15 px-3 text-[13px] font-semibold text-white active:scale-[0.97]"
+              >
+                Ask again
+              </button>
+            </div>
+          )}
+          <label className="mt-3 flex items-center justify-between gap-3 text-sm font-medium">
             <span className="inline-flex items-center gap-2">
               <Grid3x3 className="h-4 w-4" aria-hidden /> Grid
             </span>

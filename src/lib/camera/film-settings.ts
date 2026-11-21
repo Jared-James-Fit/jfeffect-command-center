@@ -123,11 +123,6 @@ export function saveFilmSettings(s: FilmSettings, storage: Pick<Storage, "setIte
   }
 }
 
-/** Sound on or off for every in-app camera (the set camera and the Crew studio share it). */
-export function saveFilmSound(sound: boolean, storage: (Pick<Storage, "getItem"> & Pick<Storage, "setItem">) | null = safeStorage()): void {
-  saveFilmSettings({ ...readFilmSettings(storage), sound }, storage);
-}
-
 function safeStorage(): Storage | null {
   try {
     return typeof localStorage === "undefined" ? null : localStorage;
@@ -343,18 +338,4 @@ export function recordClock(ms: number): string {
 /** The file a recording becomes (named so it counts as filmed here: offered to Photos, looksFilmedInApp). */
 export function filmFileName(mime: string, now = Date.now()): string {
   return `jf-film-${now}.${/mp4/i.test(mime) ? "mp4" : "webm"}`;
-}
-
-/** Seen once per phone: the first time the camera films without sound by default, it says why. */
-export const FILM_SOUND_HINT_KEY = "jf-film-sound-hint-v1";
-
-/** True the first time (and marks it seen); false after, or where nothing can be remembered. */
-export function takeFilmSoundHint(storage: (Pick<Storage, "getItem"> & Pick<Storage, "setItem">) | null = safeStorage()): boolean {
-  try {
-    if (!storage || storage.getItem(FILM_SOUND_HINT_KEY)) return false;
-    storage.setItem(FILM_SOUND_HINT_KEY, "1");
-    return true;
-  } catch {
-    return false;
-  }
 }

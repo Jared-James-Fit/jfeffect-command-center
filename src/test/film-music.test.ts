@@ -6,8 +6,6 @@ import {
   defaultFilmSound,
   readFilmSettings,
   saveFilmSettings,
-  saveFilmSound,
-  takeFilmSoundHint,
 } from "@/lib/camera/film-settings";
 import { installMediaPlaybackSession } from "@/lib/audio-session";
 
@@ -46,39 +44,25 @@ describe("filming keeps the music in their earbuds playing (Nov 21 2026)", () =>
     saveFilmSettings({ ...DEFAULT_FILM_SETTINGS, quality: "720p", sound: true }, m);
     expect(JSON.parse(m.store.get(FILM_SETTINGS_KEY)!)).toMatchObject({ audio: "sound", sound: true, quality: "720p" });
     expect(readFilmSettings(m, true).sound).toBe(true);
-    saveFilmSound(false, m);
+    saveFilmSettings({ ...readFilmSettings(m, true), sound: false }, m);
     expect(JSON.parse(m.store.get(FILM_SETTINGS_KEY)!)).toMatchObject({ audio: "music", sound: false, quality: "720p" });
     expect(readFilmSettings(m, false)).toMatchObject({ sound: false, quality: "720p" });
   });
-
-  it("the first time it films without sound it says so, once per phone", () => {
-    const m = memory();
-    expect(takeFilmSoundHint(m)).toBe(true);
-    expect(takeFilmSoundHint(m)).toBe(false);
-    expect(takeFilmSoundHint(null)).toBe(false);
-  });
 });
 
-describe("the cameras", () => {
+describe("the cameras keep the music playing by themselves", () => {
   const cam = read("src/components/camera/film-camera.tsx");
-  const toggle = read("src/components/camera/film-sound-toggle.tsx");
   const studio = read("src/components/community/share-studio.tsx");
   const recorder = read("src/components/community/clip-recorder.ts");
 
-  it("music or sound is one tap on the camera itself, not a switch in its settings", () => {
-    expect(cam).toContain("<FilmSoundToggle");
-    expect(cam).not.toContain("Record sound");
-    expect(cam).toContain("if (!settingsRef.current.sound && takeFilmSoundHint()) sayFilmSound(false);");
-    // the clip being filmed says when there's no sound
-    expect(cam).toContain("data-film-no-sound");
-    expect(toggle).toContain('data-film-sound={sound ? "sound" : "music"}');
-    expect(toggle).toContain('"Your music keeps playing"');
+  it("nothing to tap: the mic opens only when sound is switched on in the camera's settings", () => {
+    expect(cam).toContain("if (settingsRef.current.sound && !micRefused()) {");
+    expect(cam).toContain("Pauses your music while you film.");
+    expect(cam).not.toContain("FilmSoundToggle");
   });
 
-  it("the Crew studio's held clips follow the same choice, read when the clip starts", () => {
-    expect(studio).toContain("withSound: () => filmSoundRef.current,");
-    expect(studio).toContain("saveFilmSound(on);");
-    expect(studio).toContain("<FilmSoundToggle");
+  it("the Crew studio's held clips follow the same setting, read when the clip starts", () => {
+    expect(studio).toContain("withSound: () => readFilmSettings().sound,");
     expect(recorder).toContain("if (withSoundRef.current() && !micRefused()) {");
   });
 });
