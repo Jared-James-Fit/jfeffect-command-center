@@ -669,7 +669,7 @@ function CommentRow({
       data-comment-id={c.id}
       aria-label={`${c.author.name}: ${c.body || mediaWord(c)}. Hold for options.`}
       className={cn(
-        "group -mx-2 flex select-none items-start gap-3 rounded-xl px-2 py-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+        "group -mx-2 flex select-none items-start gap-3 rounded-xl px-2 py-3 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
         hold.pressing && "bg-muted",
         c.pending && "opacity-60",
         c.hidden && "opacity-60",
@@ -703,7 +703,7 @@ function CommentRow({
           </span>
         </div>
         {(c.body || c.reply_to) && (
-          <p className="mt-0.5 whitespace-pre-line break-words text-[14px] leading-[1.4]">
+          <p className="mt-0.5 whitespace-pre-line break-words text-[14px] leading-[1.45]" data-comment-body>
             {c.reply_to && <span className="font-semibold">@{c.reply_to} </span>}
             {c.body}
           </p>

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
-import { MentionText } from "@/components/community/mentions";
 import { CommentThread } from "@/components/community/comments-sheet";
 import { AutoPostCaption, CoachBadge } from "@/components/community/post-card";
 import { LikedBy, ReactorsSheet } from "@/components/community/reactors-sheet";
@@ -10,8 +9,9 @@ import { UserAvatar } from "@/components/user-avatar";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { isAutoPost, postTimeLabel, reactionTotal, withHandles, type CommunityAuthor, type CommunityPost } from "@/lib/community";
 import { cn } from "@/lib/utils";
-import { useSwipeDownToClose } from "@/hooks/use-swipe-down-to-close";
-import { POST_SHEET_HEIGHT } from "@/lib/post-sheet";
+import { SHEET_SETTLE, useSwipeDownToClose } from "@/hooks/use-swipe-down-to-close";
+import { POST_SHEET_FULL_HEIGHT, POST_SHEET_HEIGHT } from "@/lib/post-sheet";
+import { CaptionText } from "@/components/community/caption-text";
 
 /** Where the sheet opens: the caption at the top ("… more"), scrolled to the comments (💬), or a workout's every set (its recap). */
 export type PostSheetAt = "caption" | "comments" | "workout";
@@ -64,10 +64,26 @@ export function PostSheet({ post, at, viewerIsStaff, onClose, onOpenAuthor, unit
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const closeNow = useCallback(() => closeRef.current(), []);
-  // one swipe down closes it (the grip, the caption, or the comments once they're at the top; never the comment box)
-  useSwipeDownToClose(node, open, closeNow);
   // typing: the sheet fills what's on screen above the keyboard
   const vv = useVisualViewportBox(open);
+  // half the screen to start; a drag up (or a tap on the grip) opens it to nearly all of it, for a long caption or thread
+  const [full, setFull] = useState(false);
+  useEffect(() => {
+    if (open) setFull(false);
+  }, [open, post?.id]);
+  // one swipe down closes it (the grip, the caption, or the comments once they're at the top; never the comment box),
+  // and a swipe up from half opens it up
+  useSwipeDownToClose(node, open, closeNow, {
+    full,
+    enabled: !vv?.keyboard,
+    halfCss: POST_SHEET_HEIGHT,
+    fullCss: POST_SHEET_FULL_HEIGHT,
+    onChange: setFull,
+  });
+  const toggleFull = () => {
+    if (content.current) content.current.style.transition = SHEET_SETTLE;
+    setFull((f) => !f);
+  };
   const item = post ? { post, at } : shown;
   const workout = !!item && sheetHasWorkout(item.post);
   // which tab is up: where it was opened, then wherever they tap
@@ -95,12 +111,25 @@ export function PostSheet({ post, at, viewerIsStaff, onClose, onOpenAuthor, unit
             content.current?.focus({ preventScroll: true });
           }}
           className="phone-column fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden rounded-t-[24px] bg-card shadow-[0_-10px_30px_rgb(0_0_0/0.28)] outline-none data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom data-[state=closed]:duration-200 data-[state=open]:duration-300 sm:mx-auto sm:max-w-[520px]"
-          style={vv?.keyboard ? { top: vv.top + 8, height: vv.height - 8, bottom: "auto" } : { height: POST_SHEET_HEIGHT }}
+          style={vv?.keyboard ? { top: vv.top + 8, height: vv.height - 8, bottom: "auto" } : { height: full ? POST_SHEET_FULL_HEIGHT : POST_SHEET_HEIGHT }}
           data-post-sheet={workout ? tab : (item?.at ?? "caption")}
+          data-sheet-full={full ? "" : undefined}
         >
           {/* the grip and the title: drag them (or the words under them) down to close */}
           <div className="relative shrink-0 cursor-grab pb-2 pt-2" data-sheet-handle>
-            <span aria-hidden className="mx-auto block h-1 w-10 rounded-full bg-muted-foreground/35" />
+            {/* the grip: drag it up for more room, down to close; a tap opens it up or back to half */}
+            <button
+              type="button"
+              onClick={toggleFull}
+              disabled={!!vv?.keyboard}
+              className="absolute inset-x-0 top-0 mx-auto h-5 w-24 rounded-full"
+              aria-label={full ? "Show less" : "Show more"}
+              aria-expanded={full}
+              data-sheet-grip
+            >
+              <span aria-hidden className="mx-auto mt-2 block h-1 w-10 rounded-full bg-muted-foreground/35" />
+            </button>
+            <span aria-hidden className="block h-1" />
             {workout ? (
               <>
                 <Dialog.Title className="sr-only">Workout and comments</Dialog.Title>
@@ -173,10 +202,13 @@ export function PostSheet({ post, at, viewerIsStaff, onClose, onOpenAuthor, unit
 }
 
 /**
- * The post's own words as the first line of the comments, the way Instagram
- * lists a caption: the photo, the name and when, then the words, then
- * "Liked by …" (a tap: the Likes), a hairline under them. A post with no
- * words shows only who liked it, and with no likes either, nothing (the
+ * The post's own words at the top of the sheet, apart from the comments
+ * under it (Nov 21 2026): the author's row (photo, name, when), then the
+ * caption full width in the post font with its paragraphs as written
+ * (CaptionText), then "Liked by …" (a tap: the Likes), and a hairline before
+ * the first comment. Comments sit indented beside their photos in a smaller
+ * size, so the post and the replies to it never read as one list. A post with
+ * no words shows only who liked it, and with no likes either, nothing (the
  * comments start the sheet).
  */
 function PostSheetCaption({ post, onOpenAuthor, onOpenLikes }: { post: CommunityPost; onOpenAuthor?: (a: CommunityAuthor) => void; onOpenLikes: () => void }) {
@@ -194,44 +226,44 @@ function PostSheetCaption({ post, onOpenAuthor, onOpenLikes }: { post: Community
   const open = onOpenAuthor ? () => onOpenAuthor(post.author) : undefined;
   const collabs = post.collaborators ?? [];
   const also = collabs.length === 1 ? ` and ${collabs[0].name}` : collabs.length > 1 ? ` and ${collabs.length} others` : "";
+  const avatar = <UserAvatar src={post.author.avatar_url} name={post.author.name} size={32} expandable={false} />;
   return (
-    <div className="-mx-4 mb-1 flex items-start gap-3 border-b border-border/60 px-4 pb-3.5 pt-1" data-post-sheet-caption>
-      {open ? (
-        <button type="button" onClick={open} className="shrink-0 rounded-full active:scale-95" aria-label={`Open ${post.author.name}'s profile`}>
-          <UserAvatar src={post.author.avatar_url} name={post.author.name} size={36} expandable={false} />
-        </button>
-      ) : (
-        <UserAvatar src={post.author.avatar_url} name={post.author.name} size={36} expandable={false} />
-      )}
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-1.5 text-[13px] leading-5">
-          {open ? (
-            <button type="button" onClick={open} className="min-w-0 truncate text-left font-semibold active:opacity-70">
-              {post.author.name}
-              {also}
-            </button>
-          ) : (
-            <span className="min-w-0 truncate font-semibold">
-              {post.author.name}
-              {also}
-            </span>
-          )}
-          {post.author.is_coach && <CoachBadge className="h-3.5 w-3.5" />}
-          <span className="shrink-0 text-[12px] text-muted-foreground">{postTimeLabel(post.created_at)}</span>
-        </div>
-        {auto ? (
-          // an automated post's words with what rides under them (the Recap's "work on this week", a poll)
-          <AutoPostCaption post={post} clamp={false} named={false} onOpenPerson={onOpenAuthor} className="px-0 pt-0.5" />
+    <div className="-mx-4 mb-2 border-b border-border/60 px-4 pb-4 pt-1" data-post-sheet-caption>
+      <div className="flex min-w-0 items-center gap-2.5">
+        {open ? (
+          <button type="button" onClick={open} className="shrink-0 rounded-full active:scale-95" aria-label={`Open ${post.author.name}'s profile`}>
+            {avatar}
+          </button>
         ) : (
-          caption && (
-            <p className="mt-0.5 whitespace-pre-line break-words text-[15px] leading-[1.45]">
-              <MentionText text={caption.text} mentions={caption.mentions} onOpen={onOpenAuthor} />
-            </p>
-          )
+          avatar
         )}
-        {likes && <LikedBy post={post} onOpen={onOpenLikes} className="-ml-1.5 mt-1.5" />}
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-1.5 text-[14px] leading-5">
+            {open ? (
+              <button type="button" onClick={open} className="min-w-0 truncate text-left font-semibold active:opacity-70">
+                {post.author.name}
+                {also}
+              </button>
+            ) : (
+              <span className="min-w-0 truncate font-semibold">
+                {post.author.name}
+                {also}
+              </span>
+            )}
+            {post.author.is_coach && <CoachBadge className="h-3.5 w-3.5" />}
+          </div>
+          <div className="text-[12px] leading-4 text-muted-foreground">{postTimeLabel(post.created_at)}</div>
+        </div>
       </div>
+      {auto ? (
+        // an automated post's words with what rides under them (the Recap's "work on this week", a poll)
+        <AutoPostCaption post={post} clamp={false} named={false} onOpenPerson={onOpenAuthor} className="px-0 pt-2.5" />
+      ) : (
+        caption && (
+          <CaptionText text={caption.text} mentions={caption.mentions} onOpenPerson={onOpenAuthor} className="mt-2.5 text-[15px] leading-[1.5]" />
+        )
+      )}
+      {likes && <LikedBy post={post} onOpen={onOpenLikes} className="-ml-1.5 mt-2.5" />}
     </div>
   );
 }
-

@@ -4,11 +4,11 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { CaptionText } from "@/components/community/caption-text";
 import { AuthorLine, AutoPostCaption, AutoPostHero, LockInHero, NoteBody, NoteExtras, PostMedia, ReactionBar, TrainingNowPill, audienceNote, isPhotoPost } from "@/components/community/post-card";
 import { isAutoPost } from "@/lib/community";
 import { InlineFollow } from "@/components/community/follow-button";
 import { CommentThread } from "@/components/community/comments-sheet";
-import { MentionText } from "@/components/community/mentions";
 import { PostActions } from "@/components/community/post-actions";
 import { ReactionBurst, useBurst, useDoubleTap } from "@/components/community/reaction-button";
 import { useHoldToPause } from "@/components/community/clip-gestures";
@@ -217,9 +217,13 @@ function Detail({
       )}
 
       {post.caption && (post.kind !== "note" || photo) && (
-        <p className="whitespace-pre-line px-4 pt-3 text-[15px] leading-snug">
-          <span className="font-bold">{post.author.name}</span> <MentionText text={post.caption} mentions={post.mentions} onOpen={onOpenAuthor} />
-        </p>
+        <CaptionText
+          text={post.caption}
+          mentions={post.mentions}
+          onOpenPerson={onOpenAuthor}
+          lead={<span className="font-bold">{post.author.name} </span>}
+          className="px-4 pt-3 text-[15px] leading-[1.5]"
+        />
       )}
       {(post.kind !== "note" || photo) && <PostExtras post={post} className="px-4 pt-3" />}
 

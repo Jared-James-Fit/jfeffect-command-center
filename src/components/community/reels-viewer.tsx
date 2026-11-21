@@ -1,3 +1,4 @@
+import { previewText } from "@/lib/caption-preview";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, Heart, MessageCircle, Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
@@ -538,7 +539,8 @@ function ReelPage({
             )}
             data-reel-caption
           >
-            {caption}
+            {/* folded: each paragraph on its own line, no empty line spent between them */}
+            {expanded ? caption : previewText(caption)}
           </button>
         )}
       </div>
