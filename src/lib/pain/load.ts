@@ -19,7 +19,7 @@ import type { GivenSuggestion } from "@/lib/pain/recovery";
 
 const REPORT_COLS_BASE =
   "id, client_id, feedback_id, checkin_id, day_id, reported_on, reported_at, source, region, side, severity, trigger, exercise_name, feel, impact, same_issue, change, continues_id, note";
-/** With the spot, 0–10 and when it hurts (20270430090000_pain_sites.sql); the base set while that isn't in yet. */
+/** With the spot, 0–10 and when it hurts (20270430091000_pain_sites.sql); the base set while that isn't in yet. */
 const REPORT_COLS = `${REPORT_COLS_BASE}, site, score, timing`;
 
 /** Did the read fail only because a newer column isn't in this database yet? */
