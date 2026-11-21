@@ -76,7 +76,9 @@ type Rec = { recorder: MediaRecorder; mic: MediaStream | null; restore: (() => v
  * status bar black behind it, camera-presence.ts): films at the quality picked (1080p by default, 4K or 60 fps where the phone
  * can), with its lenses (0.5 · 1× · Tele), pinch to zoom, the light, the front
  * camera, a grid and sound on or off, all remembered on the phone
- * (film-settings.ts). One tap starts, one stops: a propped phone films the
+ * (film-settings.ts). A phone films without the mic unless sound is switched
+ * on in the settings, so the music in their earbuds keeps playing
+ * (`defaultFilmSound`). One tap starts, one stops: a propped phone films the
  * whole set. The clip goes to `onClip` as a file, exactly as if it had been
  * picked, so the trimmer and the lift finder take it from there. Library
  * opens the phone's own picker instead (from the tap, as iOS requires).
@@ -87,6 +89,7 @@ export function FilmCamera({
   onLibrary,
   maxSeconds,
   title,
+  detail,
 }: {
   onClose: () => void;
   onClip: (file: File) => void;
@@ -96,6 +99,8 @@ export function FilmCamera({
   maxSeconds: number;
   /** What's being filmed ("Competition Squat · Top set"). */
   title?: string;
+  /** The set to lift, "140 kg × 3 @ RPE 7": big enough to read from the bench, and kept on screen while it films. */
+  detail?: string;
 }) {
   const [settings, setSettings] = useState<FilmSettings>(() => readFilmSettings());
   const [lensId, setLensId] = useState<string | null>(null);
@@ -362,7 +367,7 @@ export function FilmCamera({
     const fps = s.frameRate ?? dims.fps;
     const rate = recorderBitrate(w, h, fps);
     const type = pickType(recorderTypes(w, h, fps), (x) => !!MediaRecorder.isTypeSupported?.(x));
-    // the mic only now, and only when sound is on: asking for it stops the music on a phone
+    // the mic only now, and only when sound is on: opening it pauses the music in their earbuds
     let mic: MediaStream | null = null;
     let restore: (() => void) | null = null;
     let micNote = "off";
@@ -598,6 +603,14 @@ export function FilmCamera({
           </div>
         </div>
         {title && !recording && <p className="mt-1 truncate text-center text-[13px] font-medium text-white/80">{title}</p>}
+        {detail && (
+          <p
+            className="mt-1 truncate text-center text-[20px] font-semibold tabular-nums text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]"
+            data-film-detail
+          >
+            {detail}
+          </p>
+        )}
       </div>
 
       {/* settings: what to film at, all remembered on this phone */}
@@ -633,7 +646,7 @@ export function FilmCamera({
           <label className="mt-4 flex items-center justify-between gap-3 text-sm font-medium">
             <span>
               Record sound
-              <span className="block text-[12px] font-normal text-white/60">Off keeps your music playing.</span>
+              <span className="block text-[12px] font-normal text-white/60">Pauses your music while you film.</span>
             </span>
             <Switch checked={settings.sound} onCheckedChange={(v) => update({ sound: v })} aria-label="Record sound" />
           </label>

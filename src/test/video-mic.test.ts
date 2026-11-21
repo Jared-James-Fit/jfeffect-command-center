@@ -185,7 +185,7 @@ describe("asked inside the tap, once", () => {
     expect(cam).toContain("if (settingsRef.current.sound && !micRefused()) {");
     expect(cam).toContain("askForMicAgain()");
     expect(cam).toContain("data-mic-refused");
-    expect(read("src/components/community/clip-recorder.ts")).toContain("if (!micRefused()) {");
+    expect(read("src/components/community/clip-recorder.ts")).toContain("if (withSoundRef.current() && !micRefused()) {");
   });
 });
 

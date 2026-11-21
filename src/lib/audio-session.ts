@@ -10,6 +10,8 @@
  * No-ops where the API doesn't exist (everything except recent WebKit).
  */
 
+import { clipIsSilent } from "@/lib/video-silent";
+
 export type AudioSessionType = "auto" | "playback" | "transient" | "transient-solo" | "ambient" | "play-and-record";
 
 function session(): { type: AudioSessionType } | null {
@@ -136,7 +138,11 @@ let mediaWatchInstalled = false;
  * Native <video>/<audio> anywhere in the app: hold "playback" while one is
  * playing with sound (muted clips don't count; unmuting does). A clip marked
  * `data-ambient-audio` (a feed clip playing by itself) never holds it: it
- * stays on the page's "ambient", following the silent switch.
+ * stays on the page's "ambient", following the silent switch. Nor does a clip
+ * with no sound track (a set filmed with Music on, `clipIsSilent`): there's
+ * nothing to hear, and "playback" can't mix, so watching it back would pause
+ * the music in their earbuds for nothing. Whether it has one is known once its
+ * header is read, so a play that comes first waits for that.
  */
 export function installMediaPlaybackSession(doc: Document | undefined = typeof document === "undefined" ? undefined : document) {
   if (mediaWatchInstalled || !doc) return;
@@ -147,6 +153,12 @@ export function installMediaPlaybackSession(doc: Document | undefined = typeof d
     const el = e.target as HTMLMediaElement | null;
     if (!el || typeof (el as any).paused !== "boolean" || held.has(el) || !audible(el)) return;
     if (el.hasAttribute?.("data-ambient-audio")) return;
+    if (el.readyState === 0) {
+      // nothing can be heard before the header's in, and then it says whether there's sound
+      el.addEventListener("loadedmetadata", () => start({ target: el } as unknown as Event), { once: true });
+      return;
+    }
+    if (clipIsSilent(el) === true) return;
     held.add(el);
     const release = holdPlaybackSession();
     // On the element itself: a player removed mid-play still fires its pause
