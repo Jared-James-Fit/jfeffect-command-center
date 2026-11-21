@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { baseMediaType } from "@/lib/community";
 import { RECORD_MAX_SECONDS } from "@/lib/video-edit/limits";
 import { micRefused, openVideoMic } from "@/lib/video-mic";
-import { pickType, recorderBitrate, recorderTypes } from "@/lib/camera/film-settings";
+import { pickType, recorderBitrate, recorderKeyframes, recorderTypes } from "@/lib/camera/film-settings";
 
 /** The longest clip the camera records (a story's length; longer clips come from the library and get trimmed). */
 export const MAX_RECORD_MS = RECORD_MAX_SECONDS * 1000;
@@ -115,7 +115,7 @@ export function useClipRecorder({ getStream, onClip }: { getStream: () => MediaS
     const mixed = new MediaStream([...stream.getVideoTracks(), ...(audio?.getAudioTracks() ?? [])]);
     let recorder: MediaRecorder;
     try {
-      recorder = new MediaRecorder(mixed, { mimeType: type, videoBitsPerSecond: recorderBitrate(w, h, fps), audioBitsPerSecond: 128_000 });
+      recorder = new MediaRecorder(mixed, { mimeType: type, videoBitsPerSecond: recorderBitrate(w, h, fps), audioBitsPerSecond: 128_000, ...recorderKeyframes() });
     } catch {
       try {
         recorder = new MediaRecorder(mixed);

@@ -192,6 +192,17 @@ export function recorderBitrate(width: number, height: number, fps: number): num
   return Math.round(Math.min(40_000_000, Math.max(4_000_000, px * rate * bpp)));
 }
 
+/**
+ * A keyframe a second, like a phone's own camera, where the browser's
+ * recorder takes the setting (Chrome does; one that doesn't ignores it and
+ * keeps its own, every few seconds): a clip can then be read a frame a second
+ * without decoding all of it (the lift finder), and cut at any second.
+ */
+export const RECORDER_KEYFRAME_MS = 1000;
+export function recorderKeyframes(): MediaRecorderOptions {
+  return { videoKeyFrameIntervalDuration: RECORDER_KEYFRAME_MS } as MediaRecorderOptions;
+}
+
 /** The longest this recording can run: the place's limit, or what fits in memory at this bitrate. */
 export function recordLimitSeconds(bitrate: number, placeMaxSeconds: number, memoryBytes = RECORD_MEMORY_BYTES): number {
   const fit = Math.floor((memoryBytes * 8) / Math.max(1, bitrate + 128_000));

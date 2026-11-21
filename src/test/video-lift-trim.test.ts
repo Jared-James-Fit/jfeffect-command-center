@@ -1,47 +1,128 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { LIFT_BUDGET_MS, liftSampleTimes } from "@/lib/video-edit/lift";
+import { LIFT_BUDGET_MS, liftSamplePlan, liftSampleTimes } from "@/lib/video-edit/lift";
+import { liftNotFound, liftNoteFor, liftTransferNote, noteLift } from "@/lib/video-edit/lift-note";
+import { RECORDER_KEYFRAME_MS, recorderKeyframes } from "@/lib/camera/film-settings";
 import { fixedTrim, type TrimRequest } from "@/lib/video-edit/pick";
 import { videoLimit } from "@/lib/video-edit/limits";
 
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
 describe("the lift finder reads few, tiny frames", () => {
-  it("reads a phone's keyframes (about one a second) as they are", () => {
+  it("reads a phone's keyframes (about one a second) as they are, with nothing to fill in", () => {
     const keys = Array.from({ length: 31 }, (_, i) => i);
+    const plan = liftSamplePlan(keys, 31);
+    expect(plan.mode).toBe("keys");
+    expect(plan.first).toEqual(keys);
+    expect(plan.fill).toEqual([]);
+    expect(plan.keyGap).toBe(1);
     expect(liftSampleTimes(keys, 31)).toEqual(keys);
   });
 
-  it("thins keyframes that come every few frames, never closer than ~half a second", () => {
+  it("thins keyframes that come every few frames to about one a second", () => {
     const keys = Array.from({ length: 300 }, (_, i) => i / 10);
-    const t = liftSampleTimes(keys, 30);
-    expect(t.length).toBeLessThanOrEqual(70);
-    for (let i = 1; i < t.length; i++) expect(t[i] - t[i - 1]).toBeGreaterThanOrEqual(0.44);
+    const t = liftSamplePlan(keys, 30).first;
+    expect(t.length).toBeLessThanOrEqual(40);
+    for (let i = 1; i < t.length; i++) expect(t[i] - t[i - 1]).toBeGreaterThanOrEqual(0.79);
   });
 
-  it("reads a grid instead when keyframes are far apart, on a short clip only", () => {
-    const sparse = [0, 10, 20];
-    const t = liftSampleTimes(sparse, 30);
-    expect(t.length).toBeGreaterThan(30);
-    expect(t[1] - t[0]).toBeCloseTo(0.7, 5);
-    // a long clip with sparse keyframes would mean decoding straight through it: no suggestion
-    expect(liftSampleTimes([0, 30, 60, 90], 600)).toEqual([]);
+  it("keyframes every two seconds (a clip filmed in the app): the keyframes first, then a frame between each pair", () => {
+    const keys = Array.from({ length: 18 }, (_, i) => i * 2);
+    const plan = liftSamplePlan(keys, 35.4);
+    expect(plan.mode).toBe("keys+fill");
+    expect(plan.first).toEqual(keys);
+    // one in the middle of each gap (the last 1.4 s after the final keyframe needs none)
+    expect(plan.fill.slice(0, 3)).toEqual([1, 3, 5]);
+    expect(plan.fill.length).toBe(17);
+    // together: never further apart than FILL_OVER, never closer than lift-window reads
+    const all = [...plan.first, ...plan.fill].sort((a, b) => a - b);
+    for (let i = 1; i < all.length; i++) {
+      expect(all[i] - all[i - 1]).toBeLessThanOrEqual(1.6);
+      expect(all[i] - all[i - 1]).toBeGreaterThanOrEqual(0.7);
+    }
+  });
+
+  it("keyframes three and a bit seconds apart get two frames in each gap", () => {
+    const keys = [0, 3.3, 6.6, 9.9, 13.2, 16.5];
+    const plan = liftSamplePlan(keys, 19);
+    expect(plan.mode).toBe("keys+fill");
+    expect(plan.fill.slice(0, 2)).toEqual([1.1, 2.2]);
+  });
+
+  it("hardly any keyframes: a frame a second straight through, on a clip short enough to decode", () => {
+    const plan = liftSamplePlan([0, 10, 20], 30);
+    expect(plan.mode).toBe("grid");
+    expect(plan.first.length).toBe(30);
+    expect(plan.first[1] - plan.first[0]).toBe(1);
+    // keyframes that stop well before the end don't cover the clip either
+    expect(liftSamplePlan([0, 1, 2, 3], 40).mode).toBe("grid");
+    // a long clip with sparse keyframes would mean decoding straight through all of it: no suggestion
+    expect(liftSamplePlan([0, 30, 60, 90], 600)).toMatchObject({ mode: "none", first: [], fill: [] });
   });
 
   it("never reads more than 240 frames, however long the clip", () => {
     const keys = Array.from({ length: 1200 }, (_, i) => i);
-    expect(liftSampleTimes(keys, 1200).length).toBeLessThanOrEqual(240);
+    const plan = liftSamplePlan(keys, 1200);
+    expect(plan.first.length + plan.fill.length).toBeLessThanOrEqual(240);
+    const sparse = Array.from({ length: 400 }, (_, i) => i * 3);
+    const p2 = liftSamplePlan(sparse, 1200);
+    expect(p2.first.length + p2.fill.length).toBeLessThanOrEqual(240);
   });
 
   it("ignores times outside the clip", () => {
     expect(liftSampleTimes([-1, 0, 1, 2, 3, 4, 99], 5)).toEqual([0, 1, 2, 3, 4]);
   });
 
-  it("gives up in a few seconds; nothing ever waits on it", () => {
-    expect(LIFT_BUDGET_MS).toBeLessThanOrEqual(8000);
+  it("is held to a budget, uses what a cut-short fill-in read, and nothing ever waits on it", () => {
+    expect(LIFT_BUDGET_MS).toBeLessThanOrEqual(15000);
     const lift = read("lib/video-edit/lift.ts");
     expect(lift).toContain("const SIDE = 64;");
     expect(lift).toContain('fit: "fill"');
+    // out of time in the first pass: no suggestion, and it says so; in the fill-in: what's read is read
+    expect(lift).toContain('if (!(await readAt(plan.first))) return done(stopped() ? "stopped" : "slow");');
+    expect(lift).toMatch(/if \(plan\.fill\.length\) \{\s*filled = await readAt\(plan\.fill\);/);
+    expect(lift).toContain('return done(!filled && res.why === "sparse" ? "slow" : res.why, res.window);');
+    // never throws: anything that goes wrong is a reason, kept with the file
+    expect(lift).toContain('return done("error");');
+    expect(lift).toContain("noteLift(file, note);");
+  });
+});
+
+describe("what the finder did is kept with the clip", () => {
+  const file = new File([new Uint8Array(4)], "jf-film-1.mp4");
+
+  it("the trimmer says so when it looked and couldn't pick the lift out, never when there's just nothing to cut", () => {
+    expect(liftNotFound(null)).toBe(false);
+    noteLift(file, { ms: 900, n: 30, mode: "keys", key_s: 1, why: "nothing-to-cut", win: null });
+    expect(liftNotFound(liftNoteFor(file))).toBe(false);
+    noteLift(file, { ms: 900, n: 30, mode: "keys", key_s: 1, why: "handheld", win: null });
+    expect(liftNotFound(liftNoteFor(file))).toBe(true);
+    noteLift(file, { ms: 12004, n: 20, mode: "grid", key_s: null, why: "slow", win: null });
+    expect(liftNotFound(liftNoteFor(file))).toBe(true);
+    const trimmer = read("components/video-trimmer.tsx");
+    expect(trimmer).toContain("setLiftMissed(liftNotFound(liftNoteFor(req.file)));");
+    expect(trimmer).toContain("Couldn't pick out the lift in this one. Drag the ends to trim it yourself.");
+  });
+
+  it("a set video's upload carries one line of it: how the clip was read, how long, what was suggested and whether that's what went", () => {
+    noteLift(file, { ms: 12004, n: 20, mode: "grid", key_s: null, why: "slow", win: null });
+    expect(liftTransferNote(file, null, 35)).toBe("slow grid key- n20 12004ms");
+    noteLift(file, { ms: 3140, n: 52, mode: "keys+fill", key_s: 2, why: "found", win: [3.1, 14.2] });
+    expect(liftTransferNote(file, { start: 3.1, end: 14.2 }, 35)).toBe("found keys+fill key2 n52 3140ms 3.1-14.2 kept");
+    expect(liftTransferNote(file, { start: 18, end: 35 }, 35)).toBe("found keys+fill key2 n52 3140ms 3.1-14.2 changed");
+    expect(liftTransferNote(file, null, 35)).toContain("changed");
+    expect(liftTransferNote(new File([], "other.mov"), null, 35)).toBeNull();
+    const up = read("lib/set-videos/uploader.ts");
+    expect(up).toContain("lift: liftTransferNote(picked.file, picked.trim, picked.info.duration),");
+    // the note itself never loads the video engine
+    expect(read("lib/video-edit/lift-note.ts")).not.toMatch(/mediabunny|video-edit\/probe/);
+  });
+
+  it("the in-app cameras ask for a keyframe a second, so their clips read without decoding every frame", () => {
+    expect(RECORDER_KEYFRAME_MS).toBe(1000);
+    expect(recorderKeyframes()).toEqual({ videoKeyFrameIntervalDuration: 1000 });
+    expect(read("components/camera/film-camera.tsx")).toContain("audioBitsPerSecond: 128_000, ...recorderKeyframes() });");
+    expect(read("components/community/clip-recorder.ts")).toContain("audioBitsPerSecond: 128_000, ...recorderKeyframes() });");
   });
 });
 

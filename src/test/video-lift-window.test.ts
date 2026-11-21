@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LIFT_PAD_AFTER, LIFT_PAD_BEFORE, classifyMoments, liftWindow, liftZone, motionMasks, type LiftFrame } from "@/lib/video-edit/lift-window";
+import { LIFT_PAD_AFTER, LIFT_PAD_BEFORE, classifyMoments, findWalks, liftSpot, liftWindow, motionMasks, readLift, type LiftFrame } from "@/lib/video-edit/lift-window";
 
 // a phone's portrait picture, tiny: 36 × 64
 const W = 36;
@@ -62,9 +62,9 @@ describe("finding the lift in a filmed set", () => {
     const { frames, duration } = setClip();
     const win = liftWindow(frames, W, H, duration);
     expect(win).not.toBeNull();
-    // starts as they reach the bar (a moment before), never in the middle of the walk away from the lens
+    // starts at the bar, a few seconds before the first rep at most (a long wait there isn't kept), never in the walk away from the lens
     expect(win!.start).toBeGreaterThanOrEqual(1.5);
-    expect(win!.start).toBeLessThanOrEqual(3);
+    expect(win!.start).toBeLessThanOrEqual(4.5);
     // every rep is in
     expect(win!.start).toBeLessThan(8);
     expect(win!.end).toBeGreaterThan(24);
@@ -72,18 +72,23 @@ describe("finding the lift in a filmed set", () => {
     expect(win!.end).toBeLessThanOrEqual(28.5);
   });
 
-  it("knows the bar's spot from where the movement keeps coming back to (each moment counts once, so a walk past the lens can't outweigh the reps)", () => {
+  it("knows the lifter's spot from where the movement keeps coming back to, and reads the walks from the picture itself", () => {
     const { frames } = setClip();
-    const zone = liftZone(motionMasks(frames), W, H)!;
-    expect(zone.x0).toBeGreaterThanOrEqual(10);
-    expect(zone.x1).toBeLessThanOrEqual(26);
-    expect(zone.y0).toBeGreaterThanOrEqual(22);
-    expect(zone.y1).toBeLessThanOrEqual(52);
-    const kinds = classifyMoments(motionMasks(frames), W, H, zone).map((m) => m.kind);
-    // the walk away is off the bar, the reps are the lift, picking the phone up is the phone
-    expect(kinds[0]).toBe("off");
+    const masks = motionMasks(frames);
+    const walks = findWalks(frames, masks);
+    expect(walks).not.toBeNull();
+    expect(walks).not.toBe("handheld");
+    const spot = liftSpot(masks, W, H, walks as Exclude<typeof walks, "handheld">)!;
+    expect(spot.zone.x0).toBeGreaterThanOrEqual(10);
+    expect(spot.zone.x1).toBeLessThanOrEqual(26);
+    expect(spot.zone.y0).toBeGreaterThanOrEqual(22);
+    expect(spot.zone.y1).toBeLessThanOrEqual(52);
+    const kinds = classifyMoments(masks, W, H, spot).map((m) => m.kind);
+    // the walk away is off the bar, the reps are the lift, the walk back and picking the phone up are never the lift
+    expect(kinds[0]).not.toBe("lift");
     expect(kinds.slice(9, 20).every((k) => k === "lift")).toBe(true);
-    expect(kinds[kinds.length - 1]).toBe("phone");
+    expect(kinds[kinds.length - 1]).not.toBe("lift");
+    expect(kinds[kinds.length - 2]).not.toBe("lift");
   });
 
   it("pads a moment either side so the unrack and the rack are never cut", () => {
@@ -108,16 +113,20 @@ describe("finding the lift in a filmed set", () => {
     const f: LiftFrame[] = [];
     for (let t = 0; t <= 20; t++) f.push(frame(t, atBar(t % 2 === 1)));
     expect(liftWindow(f, W, H, 20.5)).toBeNull();
+    expect(readLift(f, W, H, 20.5).why).toBe("nothing-to-cut");
   });
 
-  it("says nothing for a handheld clip (the whole picture moves every second) or a clip with nothing going on", () => {
+  it("says nothing, and why, for a handheld clip (the whole picture moves every second) or a clip with nothing going on", () => {
     const shaky: LiftFrame[] = [];
     for (let t = 0; t <= 20; t++) shaky.push(frame(t, atBar(t % 2 === 1), { shift: (t * 5) % 11 }));
     expect(liftWindow(shaky, W, H, 20.5)).toBeNull();
+    expect(readLift(shaky, W, H, 20.5).why).toBe("handheld");
     const empty: LiftFrame[] = [];
     for (let t = 0; t <= 20; t++) empty.push(frame(t, null));
     expect(liftWindow(empty, W, H, 20.5)).toBeNull();
+    expect(readLift(empty, W, H, 20.5).why).toBe("no-movement");
     expect(liftWindow([], W, H, 10)).toBeNull();
+    expect(readLift([], W, H, 10).why).toBe("few-frames");
   });
 
   it("the phone re-exposing (the whole picture a bit brighter) is not movement", () => {
