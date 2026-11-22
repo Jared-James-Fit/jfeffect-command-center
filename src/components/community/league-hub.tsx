@@ -11,6 +11,8 @@ import { LeagueRecapButton } from "@/components/portal/league-recap";
 import { inRecapWindow } from "@/lib/league-recap";
 import { RankingsSpotlight } from "@/components/community/rankings-spotlight";
 import type { SpotlightSlide, StrengthView } from "@/lib/rankings-spotlight";
+import { feedback } from "@/lib/feedback";
+import { RankingsMusicButton, useRankingsMusic } from "@/components/community/rankings-music";
 
 export type RankingsBoard = "monthly" | "strength";
 
@@ -71,8 +73,12 @@ export function RankingsHub() {
   const tabsRef = useRef<HTMLDivElement | null>(null);
   // which way the new board slides in (from a swipe or a tab tap)
   const [enterFrom, setEnterFrom] = useState<"left" | "right" | null>(null);
+  // each board's theme (off until they turn it on, on this phone), following the board
+  const music = useRankingsMusic(board === "strength" ? "hall" : "league");
   const setBoard = (next: RankingsBoard) => {
     if (next === board) return;
+    // the board slides in with a soft swish
+    feedback("board");
     setEnterFrom(next === "strength" ? "right" : "left");
     setBoardState(next);
     // a tab or a swipe opens a board as usual (not on whatever a podium tap asked for)
@@ -114,8 +120,9 @@ export function RankingsHub() {
 
   return (
     <div data-league-hub className="space-y-3">
-      {/* which board: the first thing on the page, so the two never blur together */}
-      <div ref={tabsRef} className="grid scroll-mt-[calc(var(--app-safe-top)+3.75rem)] grid-cols-2 rounded-full bg-muted/60 p-1 text-[14px] font-semibold" role="tablist" aria-label="Leaderboard">
+      {/* which board: the first thing on the page, so the two never blur together; its theme music beside it */}
+      <div ref={tabsRef} className="flex scroll-mt-[calc(var(--app-safe-top)+3.75rem)] items-center gap-2">
+      <div className="grid min-w-0 flex-1 grid-cols-2 rounded-full bg-muted/60 p-1 text-[14px] font-semibold" role="tablist" aria-label="Leaderboard">
         {BOARD_TABS.map(([k, label]) => (
           <button
             key={k}
@@ -129,6 +136,8 @@ export function RankingsHub() {
             {label}
           </button>
         ))}
+      </div>
+      <RankingsMusicButton theme={board === "strength" ? "hall" : "league"} on={music.on} playing={music.playing} onToggle={music.toggle} />
       </div>
       {/* last month's recap: up here in recap week (news); the rest of the month it's a row under the Monthly board */}
       {inRecapWindow() && !spectator && <LeagueRecapButton />}

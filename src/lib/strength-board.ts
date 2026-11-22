@@ -42,6 +42,14 @@ export type StrengthRow = {
   is_alumni: boolean;
   /** Where this number was made. */
   source: "training" | "meet";
+  /**
+   * A total's squat, bench and deadlift (20270503090000_hall_of_strength_total_split.sql):
+   * a training total's three best lifts with their reps, a meet total's lifts
+   * from that day (singles). Null on single-lift rows, and from an older board.
+   */
+  parts?: TotalParts | null;
+  /** A meet total's official GL points (the meet record's), on either board. */
+  gl_points?: number | null;
   // Meet rows only.
   meet?: {
     name: string;
@@ -53,6 +61,23 @@ export type StrengthRow = {
     first_meet: string | null;
   };
 };
+
+/** What a total is made of: each lift's kg and the reps it was done for (1 = a single). */
+export type TotalParts = {
+  squat: number;
+  bench: number;
+  deadlift: number;
+  reps: { squat: number; bench: number; deadlift: number };
+};
+
+/** The total's parts from a board row, or null when the board didn't send them. */
+export function partsOf(r: any): TotalParts | null {
+  if (r?.lift !== "total") return null;
+  const s = num(r.squat_kg), b = num(r.bench_kg), d = num(r.deadlift_kg);
+  if (!s || !b || !d || s <= 0 || b <= 0 || d <= 0) return null;
+  const reps = (v: unknown) => { const n = num(v); return n && n > 1 ? Math.round(n) : 1; };
+  return { squat: s, bench: b, deadlift: d, reps: { squat: reps(r.squat_reps), bench: reps(r.bench_reps), deadlift: reps(r.deadlift_reps) } };
+}
 
 export const BOARD_LIFTS: { key: BoardLift; label: string }[] = [
   { key: "total", label: "Total" },
@@ -98,6 +123,8 @@ export function normalizeRow(r: any): StrengthRow {
     all_count: num(r.all_count),
     is_alumni: !!r.is_alumni,
     source: r.source === "meet" ? "meet" : "training",
+    parts: partsOf(r),
+    gl_points: num(r.gl_points),
   };
 }
 
