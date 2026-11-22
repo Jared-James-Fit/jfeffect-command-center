@@ -202,10 +202,10 @@ describe("the screens", () => {
     expect(ws).toContain('title={intel?.firstProgram ? "First program" : "Next program"}');
   });
 
-  it("a client with no program gets 'Write it with AI' on the Training tab, and the Intelligence button says first program", () => {
+  it("a client with no program gets 'Generate a program' on the Training tab, and the Intelligence button says first program", () => {
     const tab = readFileSync("src/components/clients/client-training-tab.tsx", "utf8");
     expect(tab).toContain('data-testid="training-write-with-ai"');
-    expect(tab).toContain('title="Write it with AI"');
+    expect(tab).toContain('title="Generate a program"');
     expect(readFileSync("src/components/program-intel/ProgramIntelligencePage.tsx", "utf8")).toContain('c.loggedSets === 0 ? "Generate first program" : "Generate next program"');
     expect(readFileSync("src/components/program-intel/generator/overview.tsx", "utf8")).toContain("Starting from their setup");
   });

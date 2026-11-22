@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { CalendarRange, AlertTriangle, Lock, Loader2, RefreshCcw, Sparkles, Trash2, Eye } from "lucide-react";
+import { CalendarRange, AlertTriangle, Lock, Loader2, RefreshCcw, Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import {
@@ -161,7 +161,7 @@ export function AutoSchedulePanel({ blockId, bare }: { blockId: string; bare?: b
 
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={openPreview} disabled={busy}>
-          {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Sparkles className="mr-1 h-3 w-3" />}
+          {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <CalendarRange className="mr-1 h-3 w-3" />}
           Build schedule from availability
         </Button>
         <Button size="sm" variant="outline" onClick={() => setClearOpen(true)} disabled={busy}>

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, ChevronDown, FileText, Info, Loader2, Sparkles } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, FileText, Info, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -217,13 +217,13 @@ function Failed({ row }: { row: ImportRow }) {
         <AlertTriangle className="mx-auto h-7 w-7 text-warning" aria-hidden />
         <div className="mt-3 text-[17px] font-semibold">This program couldn't be read</div>
         <p className="mx-auto mt-1 max-w-sm text-[15px] leading-relaxed text-muted-foreground">
-          {row.error ?? "Something went wrong reading it."} Your AI credits were given back.
+          {row.error ?? "Something went wrong reading it."} Your credits were given back.
         </p>
         <div className="mx-auto mt-6 flex max-w-xs flex-col gap-2">
           {canRetry && (
             <Button onClick={again} disabled={busy}>
               {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Try again ({COST} AI credits)
+              Try again ({COST} credits)
             </Button>
           )}
           <Button variant="outline" onClick={() => navigate({ to: "/portal/programs/import", search: { paste: 1 } })}>
@@ -256,7 +256,7 @@ function DiscardDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>{running ? "Cancel this import?" : "Discard this import?"}</AlertDialogTitle>
           <AlertDialogDescription>
-            Its file is deleted now and nothing is saved.{running ? " Any AI credits it took are given back." : ""}
+            Its file is deleted now and nothing is saved.{running ? " Any credits it took are given back." : ""}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -321,14 +321,14 @@ function NothingFound({ row }: { row: ImportRow }) {
         <div className="text-[17px] font-semibold">No exercises were found in it</div>
         <p className="mx-auto mt-1 max-w-sm text-[15px] leading-relaxed text-muted-foreground">
           {row.method === "parsed"
-            ? `It isn't laid out in a way that could be read instantly. Have AI read it (${COST} credits), or paste it with one exercise per line.`
+            ? `It isn't laid out in a way that could be read instantly. Do a full read (${COST} credits), or paste it with one exercise per line.`
             : "Check that the file has the program's exercises in it, or paste the program as text."}
         </p>
         <div className="mx-auto mt-6 flex max-w-xs flex-col gap-2">
           {row.method === "parsed" && (
             <Button onClick={reread.run} disabled={reread.busy}>
-              {reread.busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-              Read it with AI
+              {reread.busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Do a full read
             </Button>
           )}
           <Button variant="outline" onClick={() => navigate({ to: "/portal/programs/import", search: { paste: 1 } })}>
@@ -470,7 +470,7 @@ function ReviewPanel({ api, row, draft }: { api: WorkbenchReviewApi; row: Import
           <span className="block text-[16px] font-semibold">Check your import</span>
           <span className="block text-[13px] leading-snug text-muted-foreground" data-import-summary>
             {[
-              row.method === "ai" ? "Read with AI" : "Read instantly",
+              row.method === "ai" ? "Full read" : "Read instantly",
               `${weeks} ${weeks === 1 ? "week" : "weeks"}`,
               `${days} ${days === 1 ? "day" : "days"} a week`,
               `${exercises} exercises`,
@@ -558,8 +558,8 @@ function ReviewPanel({ api, row, draft }: { api: WorkbenchReviewApi; row: Import
             </button>
             {row.method === "parsed" && (
               <button type="button" onClick={reread.run} disabled={reread.busy} className="inline-flex items-center gap-1.5 font-medium" data-import-reread>
-                {reread.busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" aria-hidden />}
-                Doesn't look right? Read it with AI ({COST} credits)
+                {reread.busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                Doesn't look right? Do a full read ({COST} credits)
               </button>
             )}
             <button type="button" onClick={() => setConfirm(true)} className="font-medium text-muted-foreground" data-import-discard>

@@ -329,7 +329,7 @@ function Recommendation({ clientId, view, onCardio }: { clientId: string; view: 
           onNutrition={(instruction) => {
             prefillPlanAiChange(clientId, instruction);
             decideM.mutate({ decision: "approved", handedOff: "change_with_ai", instruction });
-            toast.success("It's in Change it with AI on the current plan: send it, check the change, then update their plan.");
+            toast.success("It's in Adjust plan on the current plan: send it, check the change, then update their plan.");
           }}
           onCardio={(plan) => cardioM.mutate(plan)}
           onEditCardio={(plan) => onCardio(plan, reviewId)}
@@ -377,7 +377,7 @@ function ActionView({
         <div className="font-medium">Nutrition</div>
         <p>{act.instruction}</p>
         <Button variant="outline" className="h-10" disabled={disabled || !hasPlan} onClick={() => onNutrition(act.instruction)}>
-          {hasPlan ? "Write it with Change it with AI" : "No current plan to change"}
+          {hasPlan ? "Write it in Adjust plan" : "No current plan to change"}
         </Button>
       </div>
     );
@@ -606,7 +606,7 @@ function HistorySection({ view }: { view: WeightManagementView }) {
 function appliedWords(applied: unknown): string {
   if (!Array.isArray(applied) || !applied.length) return "";
   const kinds = new Set(applied.map((x: any) => x?.kind));
-  const parts = [kinds.has("nutrition") ? "nutrition sent to Change it with AI" : null, kinds.has("cardio") ? "cardio changed" : null, kinds.has("water") ? "water changed" : null].filter(Boolean);
+  const parts = [kinds.has("nutrition") ? "nutrition sent to Adjust plan" : null, kinds.has("cardio") ? "cardio changed" : null, kinds.has("water") ? "water changed" : null].filter(Boolean);
   return parts.length ? ` · ${parts.join(", ")}` : "";
 }
 

@@ -39,7 +39,7 @@ async function askModel(admin: Db, system: string, prompt: string, timeoutMs: nu
       const r = await callModel(model, { system, prompt, effort: route.effort, maxOutputTokens: route.maxOutputTokens, timeoutMs, temperature: 0.3 });
       return { text: r.text, model };
     } catch (e: any) {
-      if (e instanceof ModelHttpError && e.status === 402) throw new Error("AI credits are used up.");
+      if (e instanceof ModelHttpError && e.status === 402) throw new Error("The writing service is out of credits. Ask an admin to top it up.");
       errors.push(`${model}: ${String(e?.message ?? e).slice(0, 120)}`);
     }
   }
@@ -54,7 +54,7 @@ async function askJson<T>(admin: Db, system: string, prompt: string, schema: any
   const second = await askModel(admin, system, `${prompt}\n\nYour previous reply could not be used (${p1.error}). Reply again with ONE valid JSON object in exactly the required shape, nothing else.`, timeoutMs);
   const p2 = parseJsonReply<T>(second.text, schema);
   if (p2.ok) return { value: p2.value, model: second.model };
-  throw new Error(`The AI reply wasn't in the required shape: ${p2.error}`);
+  throw new Error(`The reply wasn't in the required shape: ${p2.error}`);
 }
 
 async function claimJob(admin: Db, jobId: string | null): Promise<any | null> {

@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { format, parseISO } from "date-fns";
-import { AlertCircle, Calendar, Check, Loader2, Sparkles } from "lucide-react";
+import { AlertCircle, Calendar, CalendarCheck, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -435,7 +435,7 @@ function DaysNote({
   if (fit && fit.added.length) {
     return (
       <p className={cn(base, "text-muted-foreground")}>
-        <Sparkles className="mt-px h-3.5 w-3.5 shrink-0" />
+        <CalendarCheck className="mt-px h-3.5 w-3.5 shrink-0" />
         <span>
           You train {mine.length} day{mine.length === 1 ? "" : "s"} a week{mine.length ? "" : " so far"}, so we
           {mine.length ? " added " : " picked "}
@@ -448,7 +448,7 @@ function DaysNote({
   if (fit && fit.dropped.length) {
     return (
       <p className={cn(base, "text-muted-foreground")}>
-        <Sparkles className="mt-px h-3.5 w-3.5 shrink-0" />
+        <CalendarCheck className="mt-px h-3.5 w-3.5 shrink-0" />
         <span>
           We kept <strong className="text-foreground">{listDays(fit.days)}</strong> from your days. Tap any day to change it.
           Your training schedule updates to match.

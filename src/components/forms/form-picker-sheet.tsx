@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Bell, Check, Copy, Eye, Loader2, MoreHorizontal, Plus, Search, Send, Sparkles, Star } from "lucide-react";
+import { Bell, Check, Copy, Eye, Loader2, MoreHorizontal, Plus, Search, Send, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -211,7 +211,6 @@ export function FormPickerSheet({
                     )}
                   >
                     {t.key === "favorites" && <Star className="mr-1 inline h-3.5 w-3.5 -translate-y-px" />}
-                    {t.key === "suggested" && <Sparkles className="mr-1 inline h-3.5 w-3.5 -translate-y-px" />}
                     {t.label}
                   </button>
                 ))}

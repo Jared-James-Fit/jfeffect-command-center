@@ -198,13 +198,13 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
   nutrition_submitted: {
     to: "staff", category: "check_ins",
     title: (n) => `Nutrition update from ${n}`,
-    body: () => "Their answers are in. The AI targets and meal plan are on the way.",
+    body: () => "Their answers are in. Their targets and meal plan are being written.",
     url: (id) => `/admin/clients/${id}?tab=nutrition`, rateMinutes: 10,
   },
   nutrition_plan_ready: {
     to: "staff", category: "check_ins",
     title: (n) => `Nutrition plan ready: ${n}`,
-    body: () => "AI targets and meal plan are ready to review and apply.",
+    body: () => "Their targets and meal plan are ready to review and apply.",
     url: (id) => `/admin/clients/${id}?tab=nutrition`, rateMinutes: 60,
   },
   lift_video_uploaded: {

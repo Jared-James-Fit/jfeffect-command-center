@@ -163,7 +163,7 @@ async function askChecked<T>(admin: Db, job: any, result: any, task: AiTask, key
   if (p1.ok && !issues1.length) return { value: p1.value, model: first.model, issues: [] };
   const second = await ask(admin, job, result, task, `${key} (retry)`, system, `${prompt}\n\nYour previous reply couldn't be used:\n${issues1.map((i) => `- ${i}`).join("\n")}\nReply again with ONE valid JSON object in exactly the required shape that fixes these, nothing else.`);
   const p2 = parseJsonReply<T>(second.text, schema);
-  if (!p2.ok) throw new Error(`The AI reply wasn't in the required shape: ${p2.error}`);
+  if (!p2.ok) throw new Error(`The reply wasn't in the required shape: ${p2.error}`);
   return { value: p2.value, model: second.model, issues: check(p2.value) };
 }
 

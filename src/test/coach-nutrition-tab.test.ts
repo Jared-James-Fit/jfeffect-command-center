@@ -37,7 +37,7 @@ describe("the coach's Nutrition tab reads as one calm screen", () => {
     // the rest lives in sections that open in place, and the copy tools in one list
     for (const s of [
       'title="Change something"',
-      'title="AI targets"',
+      'title="Draft targets"',
       'title="Meal plan"',
       'title="Client answers"',
       'title="Regenerate"',

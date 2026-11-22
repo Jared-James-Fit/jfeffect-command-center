@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CardHeader, MoreButton, StatusChip } from "@/components/nutrition/nutrition-ui";
 import { cn } from "@/lib/utils";
-import { Heart, Plus, Pencil, Trash2, Copy, LayoutList, Sparkles, AlertTriangle } from "lucide-react";
+import { Heart, Plus, Pencil, Trash2, Copy, LayoutList, ListChecks, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { CardioTargetDialog } from "./cardio-target-dialog";
 import { CardioProgramBuilderDialog } from "./cardio-program-builder-dialog";
@@ -124,7 +124,7 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-60">
               <DropdownMenuItem onClick={() => setDefaultsOpen(true)}>
-                <Sparkles className="mr-2 h-4 w-4" /> The default plan for their days
+                <ListChecks className="mr-2 h-4 w-4" /> The default plan for their days
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => add("Training Day")}>Training day</DropdownMenuItem>
@@ -160,7 +160,7 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">No cardio yet. The default plan sets a session for each kind of day in one tap.</p>
           <Button variant="outline" className="h-10 w-full gap-2 sm:w-auto" onClick={() => setDefaultsOpen(true)}>
-            <Sparkles className="h-4 w-4" /> Add the default plan
+            <ListChecks className="h-4 w-4" /> Add the default plan
           </Button>
         </div>
       ) : (

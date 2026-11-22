@@ -99,7 +99,7 @@ describe("the coach's weight management card", () => {
     expect(a.recommendation.material).toBe(true);
     const html = render({ assessment: a });
     expect(html).toContain('data-weight-action="nutrition"');
-    expect(html).toContain("Write it with Change it with AI");
+    expect(html).toContain("Write it in Adjust plan");
     expect(html).toContain("Dismiss");
   });
 });

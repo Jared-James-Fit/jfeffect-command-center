@@ -82,7 +82,7 @@ export function FoodNotesCard({ clientId, className }: { clientId: string; class
       setDraft("");
       setComposing(false);
       void refreshFood();
-      toast.success("Saved. The AI follows it on their next plan.");
+      toast.success("Saved. Their next plan follows it.");
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't save the note");
     } finally {
@@ -123,7 +123,7 @@ export function FoodNotesCard({ clientId, className }: { clientId: string; class
       return;
     }
     await refreshFood();
-    if (on) toast(`${f.label}: no longer applies. The AI stops planning around it.`, { action: { label: "Undo", onClick: () => void setDismissed(f, false) } });
+    if (on) toast(`${f.label}: no longer applies. Their plans stop working around it.`, { action: { label: "Undo", onClick: () => void setDismissed(f, false) } });
     else toast.success(`${f.label} is back on file`);
   };
 
@@ -268,7 +268,7 @@ export function FoodNotesCard({ clientId, className }: { clientId: string; class
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
             <h4 className="text-[15px] font-semibold">Your notes</h4>
-            <p className="text-[13px] text-muted-foreground">Only you and your team see these. The AI follows them.</p>
+            <p className="text-[13px] text-muted-foreground">Only you and your team see these. Their plans follow them.</p>
           </div>
           {!composing && (
             <Button variant="outline" size="sm" className="h-10 shrink-0 gap-1" onClick={() => setComposing(true)}>

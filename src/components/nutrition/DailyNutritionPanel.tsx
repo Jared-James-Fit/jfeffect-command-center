@@ -51,7 +51,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Check, ChevronLeft, ChevronRight, Loader2, Minus, Pill, Plus, Sparkles, Trash2, Utensils } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Loader2, Minus, Pill, Plus, Trash2, Utensils } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AiCreditsChip, AiCreditsSheet, AI_CREDITS_KEY, useAiCredits, useSetCreditState } from "@/components/ai-credits/ai-credits";
 import { canAfford } from "@/lib/ai-credits/packs";
@@ -578,7 +578,7 @@ function LogFoodSheet({
       });
     },
     onError: (e: any) => {
-      toast.error(e?.message ?? "The AI couldn't estimate that. No credit was used.");
+      toast.error(e?.message ?? "Couldn't estimate that. No credit was used.");
       void qc.invalidateQueries({ queryKey: [AI_CREDITS_KEY] });
     },
   });
@@ -753,7 +753,7 @@ function LogFoodSheet({
             </div>
             {!aiResult && (
               <Button onClick={estimate} disabled={parseM.isPending || aiText.trim().length < 2} className="h-11 w-full">
-                {parseM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {parseM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {parseM.isPending ? "Estimating…" : "Estimate the macros"}
               </Button>
             )}

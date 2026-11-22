@@ -148,10 +148,10 @@ export function readEditedPlan(
 ): EditedPlan {
   const before = planDays(plan);
   const parsed = parseMealPlan(mealPlanText);
-  if (!parsed.length) throw new Error("The AI's answer didn't come back as a meal plan");
+  if (!parsed.length) throw new Error("The answer didn't come back as a meal plan");
   if (parsed.length !== before.length)
     throw new Error(
-      `The AI's answer has ${parsed.length} ${parsed.length === 1 ? "day" : "days"} where the plan has ${before.length}. Try wording the change differently`,
+      `The answer has ${parsed.length} ${parsed.length === 1 ? "day" : "days"} where the plan has ${before.length}. Try wording the change differently`,
     );
   const targets = targetsText ? parseAiTargets(targetsText) : [];
   const days = before.map((d, i) => {

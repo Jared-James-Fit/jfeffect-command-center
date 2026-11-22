@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { AlertTriangle, Check, ChevronDown, Copy, Loader2, PencilLine, RefreshCw, Send, Sparkles, Undo2, Wand2 } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ClipboardList, Copy, Loader2, PencilLine, RefreshCw, Send, Undo2 } from "lucide-react";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { invalidateGroceryList } from "@/lib/grocery-query-keys";
 import { clientPlansQuery, publishAiPlan } from "@/lib/nutrition-targets/plan-publish";
@@ -270,7 +270,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
     const foods = days
       .flatMap((d) => mealsOffTheirFoods(d.notes).map((c) => `${d.day_label}, ${mealFoodShort(c)}`))
       .slice(0, 3);
-    return [...allergy, ...meals, ...foods, ...out, ...(flags ? [`AI: ${flags}`] : [])];
+    return [...allergy, ...meals, ...foods, ...out, ...(flags ? [`Flagged: ${flags}`] : [])];
   }, [plan?.targets_text, latest?.answers, data?.client?.sex, allergyHits, onFile, prefill]);
 
   /** Everything for this plan as one block (to paste into a doc, a chat or another AI). */
@@ -281,8 +281,8 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       previousPlanText(plan?.previous_plan),
       data?.programText ? `TRAINING PROGRAM\n${data.programText}` : "",
       data?.cardioText ?? "",
-      plan?.targets_text ? `AI TARGETS\n${plan.targets_text}` : "",
-      plan?.meal_plan_text ? `AI MEAL PLAN\n${plan.meal_plan_text}` : "",
+      plan?.targets_text ? `DRAFT TARGETS\n${plan.targets_text}` : "",
+      plan?.meal_plan_text ? `DRAFT MEAL PLAN\n${plan.meal_plan_text}` : "",
     ].filter(Boolean).join("\n\n------------------------\n\n");
   };
 
@@ -317,9 +317,9 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
           workoutMeals: regenWorkoutMeals ?? plan?.workout_meals ?? null,
         },
       });
-      if (res.status === "error") toast.error("AI couldn't finish — try again");
+      if (res.status === "error") toast.error("Couldn't finish the plan. Try again");
     } catch (e: any) {
-      toast.error(e?.message ?? "Couldn't run the AI");
+      toast.error(e?.message ?? "Couldn't write the plan");
     } finally {
       setRegenerating(false);
       qc.invalidateQueries({ queryKey: key });
@@ -460,7 +460,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
   return (
     <Card className="space-y-4 border-border bg-card p-4 md:col-span-3 md:p-6" data-nutrition-update>
       <CardHeader
-        icon={Sparkles}
+        icon={ClipboardList}
         title="Nutrition update"
         chip={status ? <StatusChip tone={status.tone}>{status.label}</StatusChip> : null}
         actions={
@@ -490,7 +490,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       ) : !latest && !data?.requestedAt ? (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Send {firstName} the Nutrition Update form. The AI writes their targets and meal plan from the answers, ready for you to check. It also goes out by itself in the last week of each plan.
+            Send {firstName} the Nutrition Update form. Their targets and meal plan are written from the answers, ready for you to check. It also goes out by itself in the last week of each plan.
           </p>
           <Button variant={currentPlan ? "outline" : "default"} className="w-full gap-2 sm:w-auto" onClick={() => setSendOpen(true)}>
             <Send className="h-4 w-4" /> Send request
@@ -498,10 +498,10 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
         </div>
       ) : !latest ? (
         <p className="text-sm text-muted-foreground">
-          Sent {shortDate(data?.requestedAt)}. When {firstName} fills it in, the AI writes the plan here.
+          Sent {shortDate(data?.requestedAt)}. When {firstName} fills it in, the plan is written here.
         </p>
       ) : !submitted ? (
-        <p className="text-sm text-muted-foreground">{firstName} has started the form. The AI writes the plan when they send it.</p>
+        <p className="text-sm text-muted-foreground">{firstName} has started the form. The plan is written when they send it.</p>
       ) : writing ? (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> Writing the targets and meal plan. A minute or two; you can leave this page.
@@ -509,7 +509,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       ) : plan?.status === "error" ? (
         <div className="space-y-3">
           <p className="text-sm">
-            The AI couldn't finish: <span className="text-muted-foreground">{plan.error ?? "unknown error"}</span>
+            The plan couldn't finish: <span className="text-muted-foreground">{plan.error ?? "unknown error"}</span>
           </p>
           <Button variant="outline" className="w-full gap-2 sm:w-auto" onClick={regenerate} disabled={regenerating}>
             <RefreshCw className={cn("h-4 w-4", regenerating && "animate-spin")} /> Try again
@@ -620,7 +620,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
                     <p className="text-[13px] text-muted-foreground">Only what you ask changes; the portions rebalance to the targets.</p>
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <Button variant="outline" className="h-10 gap-1.5" onClick={() => sendChange()} disabled={changing || change.trim().length < 3}>
-                        {changing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Make the change
+                        {changing ? <Loader2 className="h-4 w-4 animate-spin" /> : <PencilLine className="h-4 w-4" />} Make the change
                       </Button>
                       <Button
                         variant="ghost"
@@ -671,8 +671,8 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
             </Section>
           )}
           {reviewOpen && plan?.targets_text && (
-            <Section value="targets" title="AI targets">
-              <TextBlock title="AI targets" text={plan.targets_text} />
+            <Section value="targets" title="Draft targets">
+              <TextBlock title="Draft targets" text={plan.targets_text} />
             </Section>
           )}
           {reviewOpen && plan?.meal_plan_text && (
@@ -743,12 +743,12 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
         onOpenChange={setCopyOpen}
         items={[
           { group: "Prompts to run it yourself", label: "Targets, steps and cardio prompt", hint: "with every answer and the context", disabled: !submitted, run: () => latest && copyPrompt({ kind: "targets", client: data?.client ?? data?.clientName ?? "Client", qas: latest.answers, phase: plan?.phase ?? null, previous: previousPlanText(plan?.previous_plan), program: data?.programText ?? null, cardio: data?.cardioText ?? null, foodNotes: data?.foodNotes ?? null }, "Targets prompt") },
-          { group: "Prompts to run it yourself", label: "Meal plan prompt", hint: "with the AI targets", disabled: !plan?.targets_text || !latest, run: () => plan?.targets_text && latest && copyPrompt({ kind: "meals", qas: latest.answers, targetsText: plan.targets_text, phase: plan.phase, workoutMeals: regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null, history: data?.trainingPattern ?? null, currentMeals: previousMealsText(plan.previous_plan), foodNotes: data?.foodNotes ?? null, restrictions: data?.foodRestrictions ?? null }, "Meal plan prompt") },
+          { group: "Prompts to run it yourself", label: "Meal plan prompt", hint: "with the draft targets", disabled: !plan?.targets_text || !latest, run: () => plan?.targets_text && latest && copyPrompt({ kind: "meals", qas: latest.answers, targetsText: plan.targets_text, phase: plan.phase, workoutMeals: regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null, history: data?.trainingPattern ?? null, currentMeals: previousMealsText(plan.previous_plan), foodNotes: data?.foodNotes ?? null, restrictions: data?.foodRestrictions ?? null }, "Meal plan prompt") },
           { group: "Prompts to run it yourself", label: "Blank targets formula", run: () => copyPrompt({ kind: "blank_targets" }, "Targets formula") },
           { group: "Prompts to run it yourself", label: "Blank meal plan formula", run: () => copyPrompt({ kind: "blank_meals" }, "Meal plan formula") },
           { group: "Text", label: "Client answers", disabled: !submitted, run: () => latest && copyText(nutritionSubmissionSummary({ client: data?.client ?? data?.clientName ?? "Client", qas: latest.answers, phase: plan?.phase ?? data?.requestedPhase ?? null, submittedAt: latest.submitted_at }), "Client answers") },
-          { group: "Text", label: "AI targets, steps and cardio", disabled: !plan?.targets_text, run: () => plan?.targets_text && copyText(plan.targets_text, "AI targets") },
-          { group: "Text", label: "AI meal plan", disabled: !plan?.meal_plan_text, run: () => plan?.meal_plan_text && copyText(plan.meal_plan_text, "AI meal plan") },
+          { group: "Text", label: "Draft targets, steps and cardio", disabled: !plan?.targets_text, run: () => plan?.targets_text && copyText(plan.targets_text, "Draft targets") },
+          { group: "Text", label: "Draft meal plan", disabled: !plan?.meal_plan_text, run: () => plan?.meal_plan_text && copyText(plan.meal_plan_text, "Draft meal plan") },
           { group: "Text", label: "Last plan and how it went", disabled: !plan?.previous_plan, run: () => copyText(previousPlanText(plan?.previous_plan), "Last plan + results") },
           { group: "Text", label: "Last plan's meals", disabled: !plan?.previous_plan, run: () => copyText(previousMealsText(plan?.previous_plan), "Last plan's meals") },
           { group: "Text", label: "Current cardio", disabled: !data?.cardioText, run: () => data?.cardioText && copyText(data.cardioText, "Current cardio") },
@@ -762,7 +762,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
           <DialogHeader>
             <DialogTitle>Send the Nutrition Update</DialogTitle>
             <DialogDescription>
-              It lands in {firstName}'s messages as a form. When they send it, the AI writes their targets and meal plan here. It also goes out by itself in the last week of each plan.
+              It lands in {firstName}'s messages as a form. When they send it, their targets and meal plan are written here. It also goes out by itself in the last week of each plan.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
@@ -815,7 +815,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Update {firstName}'s plan?</DialogTitle>
-            <DialogDescription>The AI plan goes live as it is. Use Review & edit first to change anything.</DialogDescription>
+            <DialogDescription>The plan goes live as it is. Use Review & edit first to change anything.</DialogDescription>
           </DialogHeader>
           <DayRows rows={preview.map((r) => ({ label: r.label, kcal: r.kcal, protein: r.p, carbs: r.c, fat: r.f }))} />
           <ul className="space-y-1.5 text-sm text-muted-foreground">

@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Copy, ClipboardPaste, Check, Wand2 } from "lucide-react";
+import { Copy, ClipboardPaste, Check } from "lucide-react";
 import { toast } from "sonner";
 import { phaseFromPlanText } from "@/lib/nutrition-cardio";
 import type { ClientBasics, QA, WorkoutMealsMode } from "@/lib/nutrition-request";
@@ -237,7 +237,7 @@ export function MealPlanBulkPaste({ onApply, clientId, phase: coachPhase }: Prop
           : !answered
             ? `No Nutrition Update from ${name ?? "this client"} yet, so the prompt's client details are blank to fill in.`
             : targets
-              ? `Filled in from ${name ? `${name}'s` : "their"} Nutrition Update (${shortDate(answered.submitted_at)}) and the AI targets.`
+              ? `Filled in from ${name ? `${name}'s` : "their"} Nutrition Update (${shortDate(answered.submitted_at)}) and the draft targets.`
               : `Filled in from ${name ? `${name}'s` : "their"} Nutrition Update (${shortDate(answered.submitted_at)}). Add your calorie and macro targets where it says (fill in).`,
     };
   }, [reqQ.data, reqQ.isLoading, clientId, coachPhase]);
@@ -333,7 +333,7 @@ export function MealPlanBulkPaste({ onApply, clientId, phase: coachPhase }: Prop
       )}
 
       <Button type="button" variant="outline" className="h-11 w-full gap-1.5" onClick={apply} disabled={!text.trim()}>
-        <Wand2 className="h-4 w-4" />
+        <ClipboardPaste className="h-4 w-4" />
         {preview.length ? `Use these ${preview.length} day${preview.length > 1 ? "s" : ""}` : "Fill the days from it"}
       </Button>
     </div>

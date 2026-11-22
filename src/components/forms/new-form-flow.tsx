@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { FileEdit, Loader2, Sparkles, Copy } from "lucide-react";
+import { FileEdit, Loader2, PenLine, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -76,7 +76,7 @@ export function NewFormFlow({ open, onClose, onCreated }: { open: boolean; onClo
         <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Start from">
           {([
             ["blank", "Blank", FileEdit],
-            ["ai", "Draft with AI", Sparkles],
+            ["ai", "Draft from a description", PenLine],
             ["template", "From a form", Copy],
           ] as const).map(([k, label, Icon]) => (
             <button

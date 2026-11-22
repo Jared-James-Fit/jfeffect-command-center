@@ -53,7 +53,7 @@ async function packPriceId(pack: CreditPack): Promise<string> {
       lookup_key: key,
       transfer_lookup_key: true,
       product_data: {
-        name: `JF Effect AI credits · ${pack.credits.toLocaleString("en-CA")}`,
+        name: `JF Effect credits · ${pack.credits.toLocaleString("en-CA")}`,
         metadata: { kind: AI_CREDITS_KIND, credits: pack.credits },
       },
       metadata: { kind: AI_CREDITS_KIND, pack: pack.key, credits: pack.credits },
@@ -101,7 +101,7 @@ export async function createCreditsCheckout(opts: {
     metadata: meta,
     payment_intent_data: {
       metadata: meta,
-      description: `JF Effect AI credits · ${pack.credits.toLocaleString("en-CA")}`,
+      description: `JF Effect credits · ${pack.credits.toLocaleString("en-CA")}`,
     },
     "custom_text[submit][message]":
       "Credits are added to your JF Effect account right away and never expire.",
@@ -190,7 +190,7 @@ export async function confirmCreditsSession(
 ): Promise<RecordedCredits> {
   const session = await stripeFetch(`/checkout/sessions/${encodeURIComponent(sessionId)}`);
   const r = await recordCreditsFromSession(session, { expectUser: userId });
-  if (!r) throw new Error("That checkout wasn't for AI credits.");
+  if (!r) throw new Error("That checkout wasn't for credits.");
   return r;
 }
 

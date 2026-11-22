@@ -200,7 +200,7 @@ export async function runQueuedImport(sb: Db, id: string | null): Promise<{ stat
         .eq("status", "reading");
       return { status: "waiting", id: row.id };
     }
-    if (e instanceof UnreadableAnswer) return fail("The AI's answer couldn't be read. Try again, or paste the program as text.");
+    if (e instanceof UnreadableAnswer) return fail("Something went wrong with the full read. Try again, or paste the program as text.");
     if (e instanceof ModelsExhausted) {
       console.error("[program-import] no model answered", { id: row.id, tried: e.tried, errors: e.errors });
       return fail(`The program couldn't be read right now. Try again in a few minutes.${e.noOpenAiCredits ? OPENAI_CREDITS_HINT : ""}`);

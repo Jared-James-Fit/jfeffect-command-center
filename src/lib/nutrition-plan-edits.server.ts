@@ -93,7 +93,7 @@ export async function queuePlanEdit(
     .eq("target_id", input.targetId)
     .or(`status.eq.pending,and(status.eq.generating,updated_at.gt."${stale}")`)
     .limit(1);
-  if (busy?.length) throw new Error("The AI is already writing a change to this plan");
+  if (busy?.length) throw new Error("A change to this plan is already being written");
   await sb
     .from("nutrition_plan_edits")
     .update({ status: "discarded", updated_at: new Date().toISOString() })
@@ -112,7 +112,7 @@ export async function queuePlanEdit(
     })
     .select("id")
     .single();
-  if (error || !data) throw new Error(error?.message ?? "Couldn't ask the AI");
+  if (error || !data) throw new Error(error?.message ?? "Couldn't send that change");
   return { id: data.id };
 }
 
@@ -180,7 +180,7 @@ export async function runPlanEdit(sb: any, editId: string) {
     const answered = cleanAiText(m.text);
     if (!revisionLooksRight("meals", row.before_meal_plan_text, answered))
       throw new Error(
-        "The AI's answer didn't come back as a meal plan. Try wording the change differently",
+        "The answer didn't come back as a meal plan. Try wording the change differently",
       );
     // the coach's words win, but a specialty food the AI brought in on its own goes back once;
     // and every Daily Total is what its meals add up to (the review reads the meals, plan-coverage.ts)
@@ -205,7 +205,7 @@ export async function runPlanEdit(sb: any, editId: string) {
     const got = parseMealPlan(mealPlanText).length;
     if (want !== got)
       throw new Error(
-        `The AI's answer has ${got} ${got === 1 ? "day" : "days"} where the plan has ${want}. Try wording the change differently`,
+        `The answer has ${got} ${got === 1 ? "day" : "days"} where the plan has ${want}. Try wording the change differently`,
       );
     const now = new Date().toISOString();
     await sb

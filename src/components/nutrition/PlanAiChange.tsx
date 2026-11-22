@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertTriangle, Loader2, Sparkles, Undo2 } from "lucide-react";
+import { AlertTriangle, Loader2, SlidersHorizontal, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -146,7 +146,7 @@ export function PlanAiChange({
       setText("");
       qc.invalidateQueries({ queryKey: key });
     },
-    onError: (e: any) => toast.error(e?.message ?? "Couldn't ask the AI"),
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't send that change"),
   });
   const undoM = useMutation({
     mutationFn: (editId: string) => undo({ data: { editId } }),
@@ -235,8 +235,8 @@ export function PlanAiChange({
   return (
     <div ref={boxRef} className="space-y-3 rounded-xl border border-border p-3" data-plan-ai-change>
       <div className="flex items-center gap-2">
-        <Sparkles className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="text-[15px] font-medium">Change it with AI</span>
+        <SlidersHorizontal className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="text-[15px] font-medium">Adjust plan</span>
       </div>
 
       {working && edit ? (
@@ -262,13 +262,13 @@ export function PlanAiChange({
             <p className="text-[13px] text-destructive">{review.error}</p>
           ) : review.nothing ? (
             <p className="text-[13px] text-muted-foreground">
-              The AI didn't change anything. Try saying it a different way.
+              Nothing changed. Try saying it a different way.
             </p>
           ) : (
             <>
               {review.stale && (
                 <p className="text-[13px] text-warning">
-                  The plan changed since you asked. Ask again so the AI works from the plan as it is
+                  The plan changed since you asked. Ask again so the change works from the plan as it is
                   now.
                 </p>
               )}
@@ -332,7 +332,7 @@ export function PlanAiChange({
           {edit?.status === "error" && (
             <div className="space-y-2 rounded-lg border border-destructive/40 px-3 py-2">
               <p className="text-[13px] text-destructive">
-                {edit.error ?? "The AI couldn't write that change."}
+                {edit.error ?? "Couldn't write that change."}
               </p>
               <div className="flex gap-2">
                 <Button
@@ -359,7 +359,7 @@ export function PlanAiChange({
             value={text}
             maxLength={REVISE_MAX_CHARS}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Tell the AI what to change, e.g. salmon instead of chicken on rest days"
+            placeholder="Say what to change, e.g. salmon instead of chicken on rest days"
             className="text-base sm:text-sm"
           />
           {!text.trim() && (
@@ -385,9 +385,7 @@ export function PlanAiChange({
             >
               {askM.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              ) : (
-                <Sparkles className="h-4 w-4" aria-hidden />
-              )}
+              ) : null}
               Write the change
             </Button>
             <span className="text-[13px] text-muted-foreground">
@@ -396,7 +394,7 @@ export function PlanAiChange({
           </div>
           {canUndo && edit && (
             <p className="flex flex-wrap items-center gap-x-2 text-[13px] text-muted-foreground">
-              <span className="min-w-0">Last AI change: “{edit.instructions}”</span>
+              <span className="min-w-0">Last change: “{edit.instructions}”</span>
               <button
                 type="button"
                 className="inline-flex min-h-9 items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline"

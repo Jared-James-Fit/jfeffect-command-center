@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   AlertTriangle, BarChart3, BookOpen, CalendarClock, Check, ChevronDown, ChevronRight, Clock, Eye, ImageIcon, Library, PenLine, Plus,
-  Play, RefreshCw, Send, Shuffle, SkipForward, Sparkles, Sticker, Undo2, X,
+  Palette, Play, RefreshCw, Send, Shuffle, SkipForward, Sticker, Undo2, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -592,7 +592,7 @@ export function LessonSheet({ row, data, onClose, onPlay }: { row: LessonPlanRow
                 {row.status !== "skipped" && <Tool icon={SkipForward} label="Skip" onClick={() => run({ kind: "skip", id: row.id }, "Skipped. It stays in the library for later.", onClose)} />}
                 {it && row.status !== "skipped" && <Tool icon={Send} label="Post now" onClick={() => setConfirmNow(true)} />}
                 {it && row.status !== "skipped" && art.enabled && canHaveArt(it) && (
-                  <Tool icon={Sparkles} label={art.busy ? "Drawing…" : cover ? "New illustration" : "Illustration"} onClick={() => !art.busy && art.make()} />
+                  <Tool icon={Palette} label={art.busy ? "Drawing…" : cover ? "New illustration" : "Illustration"} onClick={() => !art.busy && art.make()} />
                 )}
               </div>
               {row.edited && it && (

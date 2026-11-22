@@ -181,7 +181,7 @@ async function staffDigest(db: any, uid: string, role: string, today: string) {
   const nPlans = new Set(((plans ?? []) as any[]).map((r) => r.client_id)).size;
   const body = digestBody([
     nDue > 0 && `${plural(nDue, "nutrition update")} due`,
-    nPlans > 0 && `${plural(nPlans, "AI plan")} to apply`,
+    nPlans > 0 && `${plural(nPlans, "nutrition plan")} to apply`,
     (videos ?? 0) > 0 && `${plural(videos ?? 0, "lift video")} to review`,
   ]);
   if (!body) return null;

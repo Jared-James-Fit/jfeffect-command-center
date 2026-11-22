@@ -7,6 +7,7 @@ import { FINANCE_BAR, STAFF_BAR, buildFinanceNav, buildInternalNav, buildInterna
 import { AdminTopBar } from "@/components/admin-top-bar";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { SummerAssistant } from "@/components/summer/summer-assistant";
+import { useCleoAccess } from "@/hooks/use-cleo-access";
 import { ReturnToDashboardPill } from "@/components/return-to-dashboard";
 import { useIsBusinessOwner, withoutOwnerOnly } from "@/lib/business-owner";
 import { useBarLayout, resolveLayout, withBarActionItems, mergeNavSources } from "@/lib/floating-bar";
@@ -27,6 +28,8 @@ export const Route = createFileRoute("/_authenticated/admin")({
 
 function AdminLayout() {
   const { role, viewOnly, preview, loading } = useAuth();
+  // Cleo is the admin's, and the finance login's or coaches' only while switched on (Settings → AI & Cleo).
+  const cleoOn = useCleoAccess();
   const navigate = useNavigate();
   useEffect(() => {
     if (loading || !role) return;
@@ -91,7 +94,7 @@ function AdminLayout() {
       <Outlet />
       {!viewOnly && <TaskPopupGate />}
       <ReturnToDashboardPill />
-      {role === "admin" && <SummerAssistant />}
+      {cleoOn && <SummerAssistant />}
     </AppShell>
   );
 }

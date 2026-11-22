@@ -36,6 +36,7 @@ import {
   type DailyTheme,
 } from "@/lib/daily-visuals";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 
 const db = supabase as any;
 
@@ -234,6 +235,8 @@ export function useInsightsOverview(enabled = true) {
 
 export function DailyPicturesCard() {
   const qc = useQueryClient();
+  // Which AI service makes them (and its keys) is infrastructure: the admin's, never a coach's.
+  const isAdmin = useAuth().accountRole === "admin";
   const { data, isLoading, isError } = useInsightsOverview();
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -342,7 +345,9 @@ export function DailyPicturesCard() {
           <div>
             <div className="font-semibold">New ones can't be made yet</div>
             <div className="text-muted-foreground">
-              {maker.blocked} Add an OpenAI key (OPENAI_API_KEY) in Lovable → Cloud → Secrets, or allow Lovable AI below. Nothing already made is touched.
+              {isAdmin
+                ? `${maker.blocked} Add an OpenAI key (OPENAI_API_KEY) in Lovable → Cloud → Secrets, or allow Lovable AI below. Nothing already made is touched.`
+                : "An admin needs to finish setting this up. Nothing already made is touched."}
             </div>
           </div>
         </div>
@@ -373,13 +378,13 @@ export function DailyPicturesCard() {
         </div>
       )}
 
-      <label className="flex min-h-[48px] items-center gap-3 border-t border-border px-4 py-2 text-[13px]">
+      {isAdmin && <label className="flex min-h-[48px] items-center gap-3 border-t border-border px-4 py-2 text-[13px]">
         <div className="min-w-0 flex-1">
           <div className="font-medium">Use Lovable AI</div>
           <div className="text-[12px] text-muted-foreground">Off: made on OpenAI only, never your Lovable balance.</div>
         </div>
         <Switch checked={data.lovable} disabled={setLovable.isPending} onCheckedChange={(v) => setLovable.mutate(v)} aria-label="Use Lovable AI for Athlete Insights" />
-      </label>
+      </label>}
 
       <DaySheet d={open} today={data.today} off={off} onClose={() => setOpenId(null)} />
     </div>

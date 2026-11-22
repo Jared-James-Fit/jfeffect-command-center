@@ -24,7 +24,7 @@
 import {
   LayoutDashboard, Users, ClipboardList, Activity, ClipboardCheck,
   Dumbbell, Heart, Flame, ChefHat, BookOpen, FileEdit, HelpCircle,
-  MessageCircle, Megaphone, LayoutGrid, Phone, Sparkles, MessagesSquare,
+  MessageCircle, Megaphone, LayoutGrid, Phone, LayoutTemplate, MessageSquareQuote, Music, MessagesSquare,
   UserCheck, CreditCard, Ticket, Calendar,
   Layers, Briefcase, Archive, UserPlus, UserCog, Settings, AlertCircle,
   FileSignature, ShoppingBag, Tags, Library, KeyRound, BarChart3, RefreshCw,
@@ -230,7 +230,7 @@ const REGISTRY: Entry[] = [
   // Pages that only say "coming soon" (Content Ideas, Testimonials, Challenges,
   // Welcome Messages, Promo Tools) are in no menu or search: a dead end isn't
   // worth finding. Their addresses still open.
-  { to: "/admin/membership/sales-page", label: "Sales Page", icon: Sparkles, group: "Membership",
+  { to: "/admin/membership/sales-page", label: "Sales Page", icon: LayoutTemplate, group: "Membership",
     visibleTo: ["admin"], section: "Sales", keywords: ["sales page", "join page", "landing"] },
   { to: "/admin/membership/signup-link", label: "Signup Link", icon: LinkIcon, group: "Membership", searchOnly: true,
     visibleTo: ["admin"], section: "Sales" },
@@ -272,7 +272,7 @@ const REGISTRY: Entry[] = [
   { to: "/admin/settings", label: "Workspace", icon: Settings, group: "Settings",
     visibleTo: ["admin", "coach", "assistant_coach", "sales", "support", "operations", "staff"],
     keywords: ["app settings", "email sender", "drive", "archive", "signnow"] },
-  { to: "/admin/voice", label: "My Voice", icon: Sparkles, group: "Settings",
+  { to: "/admin/voice", label: "My Voice", icon: MessageSquareQuote, group: "Settings",
     visibleTo: ["admin", "coach"] },
   { to: "/admin/automations", label: "Automations", icon: RefreshCw, group: "Settings",
     visibleTo: ["admin", "coach"] },
@@ -286,7 +286,7 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin"], section: "Messaging" },
   { to: "/admin/chat-gifs", label: "Chat Media", icon: ImageIcon, group: "Settings",
     visibleTo: ["admin"], section: "Messaging", keywords: ["gif", "gifs", "chat gif library"] },
-  { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Sparkles, group: "Settings", searchOnly: true,
+  { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Music, group: "Settings", searchOnly: true,
     visibleTo: ["admin"], keywords: ["sounds", "chat media"] },
   { to: "/admin/call-access", label: "Call Access", icon: Phone, group: "Settings",
     visibleTo: ["admin"], section: "Messaging", keywords: ["add-ons", "calls"] },
@@ -302,8 +302,8 @@ const REGISTRY: Entry[] = [
   // still found by More's search and the ⌘K palette.
   { to: "/admin/onboarding", label: "Onboarding", icon: ClipboardCheck, group: "Settings", searchOnly: true,
     visibleTo: ["admin"], section: "Advanced" },
-  { to: "/admin/settings/ai", label: "AI Credits & Models", icon: ShieldCheck, group: "Settings", searchOnly: true,
-    visibleTo: ["admin"], section: "Advanced", keywords: ["ai", "credits", "ai credits", "usage limits", "credit packs", "models", "gpt", "claude", "gemini", "program generator", "generation cost", "errors"] },
+  { to: "/admin/settings/ai", label: "AI & Cleo", icon: ShieldCheck, group: "Settings", searchOnly: true,
+    visibleTo: ["admin"], section: "Advanced", keywords: ["ai", "cleo", "assistant", "who has cleo", "cleo access", "credits", "ai credits", "usage limits", "credit packs", "models", "gpt", "claude", "gemini", "program generator", "generation cost", "errors"] },
   { to: "/admin/feature-flags", label: "Feature Flags", icon: ShieldCheck, group: "Settings", searchOnly: true,
     visibleTo: ["admin"], section: "Advanced" },
   { to: "/admin/archives", label: "Archive Manager", icon: Archive, group: "Settings", searchOnly: true,

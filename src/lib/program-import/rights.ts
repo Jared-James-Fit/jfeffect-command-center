@@ -18,7 +18,7 @@ export const IMPORT_RIGHTS_EXPLAINER =
 export const IMPORT_FILE_DAYS = 7;
 export const IMPORT_ROW_DAYS = 30;
 
-export const IMPORT_PRIVACY_TEXT = `Your file is only used to build this program. It's deleted from our servers when you save or discard the import, and within ${IMPORT_FILE_DAYS} days either way. What was read from it is kept ${IMPORT_ROW_DAYS} days so you can come back to it. If it needs AI to read it, it's sent to our AI provider, OpenAI, to be read and isn't used to train their models.`;
+export const IMPORT_PRIVACY_TEXT = `Your file is only used to build this program. It's deleted from our servers when you save or discard the import, and within ${IMPORT_FILE_DAYS} days either way. What was read from it is kept ${IMPORT_ROW_DAYS} days so you can come back to it. If it needs a full read, it's sent to our AI provider, OpenAI, to be read and isn't used to train their models.`;
 
 /** The reminder before sharing a program that was imported. */
 export const IMPORTED_SHARE_WARNING =

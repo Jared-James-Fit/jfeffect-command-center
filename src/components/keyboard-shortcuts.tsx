@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Keyboard } from "lucide-react";
+import { useCleoAccess } from "@/hooks/use-cleo-access";
 import {
   Dialog,
   DialogContent,
@@ -18,13 +19,16 @@ import {
 type Shortcut = { keys: string[]; label: string };
 type Group = { heading: string; items: Shortcut[] };
 
+/** Listed only for someone who has Cleo. */
+const CLEO_SHORTCUT = "Open / close Cleo";
+
 const SHORTCUT_GROUPS: Group[] = [
   {
     heading: "Global",
     items: [
       { keys: ["?"], label: "Show keyboard shortcuts" },
       { keys: ["⌘", "K"], label: "Open command palette / quick search" },
-      { keys: ["⌘", "⇧", "S"], label: "Open / close Cleo" },
+      { keys: ["⌘", "⇧", "S"], label: CLEO_SHORTCUT },
       { keys: ["⌘", "B"], label: "Toggle sidebar" },
       { keys: ["⌘", "⇧", "M"], label: "Toggle client preview (POV)" },
       { keys: ["⌘", "⇧", "E"], label: "Open / close all sidebar sections" },
@@ -58,6 +62,10 @@ function Kbd({ children }: { children: React.ReactNode }) {
 
 export function KeyboardShortcutsButton() {
   const [open, setOpen] = useState(false);
+  const cleo = useCleoAccess();
+  const groups = cleo
+    ? SHORTCUT_GROUPS
+    : SHORTCUT_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => i.label !== CLEO_SHORTCUT) }));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -111,7 +119,7 @@ export function KeyboardShortcutsButton() {
         </DialogHeader>
 
         <div className="mt-2 space-y-5">
-          {SHORTCUT_GROUPS.map((group) => (
+          {groups.map((group) => (
             <div key={group.heading}>
               <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {group.heading}

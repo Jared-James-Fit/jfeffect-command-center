@@ -61,7 +61,7 @@ export function HealthCard({ clientId, className, bare }: { clientId: string; cl
       .eq("id", e.item.id);
     if (error) return void toast.error(error.message ?? "Couldn't update it");
     refresh();
-    if (on) toast(`${e.label}: resolved. The AI stops planning around it.`, { action: { label: "Undo", onClick: () => void setResolved(e, false) } });
+    if (on) toast(`${e.label}: resolved. Their plans stop working around it.`, { action: { label: "Undo", onClick: () => void setResolved(e, false) } });
   };
 
   const setDismissed = async (e: HealthEntry, on: boolean) => {

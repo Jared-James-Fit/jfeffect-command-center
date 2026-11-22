@@ -15,7 +15,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { AlertTriangle, Check, Loader2, MessageCircle, RotateCcw, Sparkles, X } from "lucide-react";
+import { AlertTriangle, Check, Loader2, MessageCircle, PenLine, RotateCcw, X } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -265,7 +265,7 @@ export function PainReviewSheet({ clientId, onClose, inChat = false }: { clientI
                 </>
               ) : (
                 <Button type="button" variant="outline" className="w-full" onClick={() => write.mutate()} disabled={write.isPending} data-pain-draft-button>
-                  {write.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4" />}
+                  {write.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <PenLine className="mr-1.5 h-4 w-4" />}
                   {write.isPending ? "Writing it in your voice…" : "Draft a reply"}
                 </Button>
               )}

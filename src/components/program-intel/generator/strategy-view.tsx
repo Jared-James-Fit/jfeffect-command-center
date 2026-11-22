@@ -6,7 +6,7 @@
  * drops each decision and edits the wording, then approves it to build.
  */
 import { useMemo, useState } from "react";
-import { Check, Loader2, RotateCcw, Trash2, Wand2, X } from "lucide-react";
+import { Check, FilePlus2, Loader2, RotateCcw, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -178,7 +178,7 @@ export function StrategyReview({
       )}
       <div className="flex flex-col gap-1.5 border-t border-border/60 pt-3">
         <Button className="h-11" disabled={busy || kept === 0} onClick={() => onApprove(edited)} data-testid="gen-approve-strategy">
-          {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />} Approve and build the program
+          {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus2 className="mr-2 h-4 w-4" />} Approve and build the program
         </Button>
         <div className="flex gap-1.5">
           <Button variant="outline" className="h-10 flex-1" disabled={busy} onClick={onRegenerate}><RotateCcw className="mr-1.5 h-4 w-4" /> New strategy</Button>
