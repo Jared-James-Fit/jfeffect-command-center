@@ -247,13 +247,16 @@ export function buildRoadmap(x: RoadmapInput): { fresh: RoadmapPlan; read: Roadm
 
 /** The next checkpoint or block start, whichever comes first. */
 export function milestoneAfter(plan: RoadmapPlan, today: string): RoadmapRead["nextMilestone"] {
-  const cands: Array<{ date: string; label: string; kg: number | null }> = [];
+  type M = NonNullable<RoadmapRead["nextMilestone"]>;
+  const cands: M[] = [];
   for (const b of plan.blocks) {
-    if (b.start > today) cands.push({ date: b.start, label: `${b.title} starts`, kg: b.weight?.startKg ?? null });
-    for (const c of b.checkpoints) if (c.date > today) cands.push({ date: c.date, label: c.label === "Block end" ? `${b.title}: target` : `${b.title}: ${c.label.toLowerCase()} checkpoint`, kg: c.kg });
+    if (b.start > today) cands.push({ date: b.start, label: b.title, kg: b.weight?.startKg ?? null, kind: "block" });
+    for (const c of b.checkpoints) if (c.date > today) cands.push({ date: c.date, label: b.title, kg: c.kg, kind: "checkpoint" });
   }
-  if (plan.goal?.date && plan.goal.date > today) cands.push({ date: plan.goal.date, label: plan.goal.eventName ?? plan.goal.label, kg: plan.goal.kg });
-  cands.sort((p, q) => p.date.localeCompare(q.date));
+  if (plan.goal?.date && plan.goal.date > today) cands.push({ date: plan.goal.date, label: plan.goal.eventName ?? plan.goal.label, kg: plan.goal.kg, kind: "goal" });
+  // a block starting or the goal wins over a routine checkpoint on the same day
+  const rank = { goal: 0, block: 1, checkpoint: 2 } as const;
+  cands.sort((p, q) => p.date.localeCompare(q.date) || rank[p.kind] - rank[q.kind]);
   return cands[0] ?? null;
 }
 

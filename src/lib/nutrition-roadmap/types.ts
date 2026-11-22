@@ -255,5 +255,5 @@ export type RoadmapRead = {
   decision: Decision;
   checkin: CheckinSchedule;
   currentBlock: Block | null;
-  nextMilestone: { date: string; label: string; kg: number | null } | null;
+  nextMilestone: { date: string; label: string; kg: number | null; kind: "block" | "checkpoint" | "goal" } | null;
 };

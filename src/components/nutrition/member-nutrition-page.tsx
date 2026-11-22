@@ -7,6 +7,10 @@ import { NutritionDashboard, type NutritionTargets } from "@/components/nutritio
 import { getActiveMemberTargets } from "@/lib/nutrition-targets/member-targets.functions";
 import { MemberMealPlanPanel } from "@/components/nutrition/MemberMealPlanPanel";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
+import { Suspense } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
+
+const NutritionRoadmapCard = lazyWithRetry(() => import("@/components/nutrition-roadmap/roadmap-athlete").then((m) => ({ default: m.NutritionRoadmapCard })));
 
 /**
  * Nutrition for a JF member (self-serve): suggested targets they calculate
@@ -63,6 +67,12 @@ export function MemberNutritionPage() {
   return (
     <div className="mx-auto w-full max-w-5xl pb-safe-bottom">
       <PageHeader title="Nutrition" />
+      {/* the roadmap: the goal, the block they're in, the next check-in (or "Set a goal") */}
+      <SectionErrorBoundary label="Nutrition roadmap" className="mx-4 mt-4 md:mx-6">
+        <Suspense fallback={null}>
+          <NutritionRoadmapCard className="mx-4 mt-4 md:mx-6" />
+        </Suspense>
+      </SectionErrorBoundary>
       <SectionErrorBoundary label="Meal plan">
         <MemberMealPlanPanel />
       </SectionErrorBoundary>

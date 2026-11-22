@@ -940,6 +940,15 @@ export const analyzeMessengerCheckin = createServerFn({ method: "POST" })
       const { assessmentText } = await import("@/lib/weight-management/assessment");
       const loaded = await recordCheckinReview(sb, row.client_id, row.id);
       if (loaded) weightText = assessmentText(loaded.assessment);
+      // the nutrition roadmap reads the new check-in too (a reforecast or adjustment for the coach to approve)
+      try {
+        const { evaluateRoadmap } = await import("@/lib/nutrition-roadmap/evaluate.server");
+        const { roadmapText } = await import("@/lib/nutrition-roadmap/text");
+        const e = await evaluateRoadmap(sb, row.client_id, { trigger: "checkin" });
+        if (e.loaded.active) weightText = [weightText, roadmapText(e.read, { approved: true })].filter(Boolean).join("\n\n");
+      } catch (err: any) {
+        console.error("[checkin] nutrition roadmap unavailable", err?.message);
+      }
     }
     // Pain over time (src/lib/pain/): what they reported after workouts and in
     // check-ins, what's changing and what lines up with it, with the recovery

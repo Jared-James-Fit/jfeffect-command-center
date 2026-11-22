@@ -26,6 +26,7 @@ export type AppEvent =
   | "program_gaps_due"
   | "health_updated"
   | "weight_review_ready"
+  | "roadmap_review_ready"
   | "support_message"
   | "account_deactivated"
   | "account_deactivation_scheduled"
@@ -42,7 +43,9 @@ export type AppEvent =
   | "community_coach_recognition"
   | "session_request_answered"
   | "session_booked"
-  | "support_reply";
+  | "support_reply"
+  | "roadmap_checkin_due"
+  | "roadmap_update_ready";
 
 type EventSpec = {
   to: "staff" | "client";
@@ -178,6 +181,14 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     body: () => "Their check-in is in and there's a recommendation waiting for your OK. Tap to review it.",
     url: (id) => `/admin/clients/${id}?tab=nutrition#weight`, rateMinutes: 12 * 60,
   },
+  // A nutrition roadmap wants the coach: a reforecast or adjustment to approve, or a real
+  // risk (nutrition-roadmap/evaluate.server.ts: at most every 3 days, never a first draft).
+  roadmap_review_ready: {
+    to: "staff", category: "check_ins",
+    title: (n) => `${n}'s nutrition roadmap needs a look`,
+    body: () => "There's a change to approve or something worth checking. Tap to review it.",
+    url: (id) => `/admin/clients/${id}?tab=nutrition#roadmap`, rateMinutes: 3 * 24 * 60,
+  },
   health_updated: {
     to: "staff", category: "check_ins",
     title: (n) => `${n} updated their health info`,
@@ -243,6 +254,20 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     title: () => "Lift feedback",
     body: (coach) => `${coach} reviewed your lift. Tap to watch.`,
     url: () => "/portal/lift-videos", rateMinutes: 60,
+  },
+  // A self-coached athlete's roadmap check-in is due (one push, then the card on Nutrition).
+  roadmap_checkin_due: {
+    to: "client", category: "check_ins",
+    title: () => "Nutrition check-in",
+    body: () => "A quick one, under a minute. Tap to do it.",
+    url: () => "/portal/nutrition-targets#roadmap", rateMinutes: 2 * 24 * 60,
+  },
+  // A self-coached athlete's roadmap has an update for them to accept or decline.
+  roadmap_update_ready: {
+    to: "client", category: "check_ins",
+    title: () => "Your nutrition roadmap",
+    body: () => "There's an update for you to look at. Tap to see it.",
+    url: () => "/portal/nutrition-targets#roadmap", rateMinutes: 24 * 60,
   },
   nutrition_targets_updated: {
     to: "client", category: "check_ins",

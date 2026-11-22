@@ -56,10 +56,10 @@ export async function loadNutritionSide(sb: any, clientId: string, due: string, 
 }
 
 export async function loadPlanInput(sb: any, clientId: string, due: string, foldedAt: string | null = null): Promise<PlanInput | null> {
-  const { data: c } = await sb.from("clients").select("id, user_id, bodyweight_goal_type, bodyweight_goal_date").eq("id", clientId).maybeSingle();
+  const { data: c } = await sb.from("clients").select("id, user_id, sex, bodyweight_goal_type, bodyweight_goal_date").eq("id", clientId).maybeSingle();
   if (!c) return null;
   const uid: string | null = c.user_id ?? null;
-  const [bw, preps, photos, tape, schedules, nutrition, plans] = await Promise.all([
+  const [bw, preps, photos, tape, schedules, nutrition, plans, roadmap] = await Promise.all([
     uid ? safe<any[]>(() => sb.from("progress_bodyweight").select("logged_date").eq("user_id", uid).lte("logged_date", due).order("logged_date", { ascending: false }).limit(14), []) : Promise.resolve([]),
     safe<any[]>(() => sb.from("pl_preps").select("event_name, title, event_date, weight_class, archived, status").eq("client_id", clientId).gte("event_date", due).order("event_date").limit(3), []),
     uid ? safe<any[]>(() => sb.from("progress_submissions").select("submission_date").eq("user_id", uid).eq("submission_type", "photo").order("submission_date", { ascending: false }).limit(1), []) : Promise.resolve([]),
@@ -67,6 +67,8 @@ export async function loadPlanInput(sb: any, clientId: string, due: string, fold
     uid ? safe<any[]>(() => sb.from("progress_check_in_schedules").select("kind, enabled, frequency, custom_days").eq("user_id", uid), []) : Promise.resolve([]),
     loadNutritionSide(sb, clientId, due, foldedAt),
     safe<any[]>(() => sb.from("nutrition_targets").select("phase, status, start_date").eq("client_id", clientId).neq("status", "Archived").order("start_date", { ascending: false }).limit(1), []),
+    // the roadmap's follow-ups, only once the coach approved a roadmap
+    safe<any>(() => sb.from("nutrition_roadmaps").select("asks, next_checkin_reason, active_revision_id").eq("client_id", clientId).maybeSingle(), null),
   ]);
   const meet = preps.find((p) => !p.archived && !/cancel/i.test(String(p.status ?? ""))) ?? null;
   return {
@@ -82,6 +84,7 @@ export async function loadPlanInput(sb: any, clientId: string, due: string, fold
     lastMeasurements: tape[0]?.measured_date ? String(tape[0].measured_date).slice(0, 10) : null,
     schedules: schedules.map((s) => ({ kind: s.kind, enabled: !!s.enabled, frequency: s.frequency, customDays: s.custom_days ?? null })) as ProgressSchedule[],
     nutritionPendingSince: nutrition.nutritionPendingSince,
+    roadmap: roadmap?.active_revision_id && Array.isArray(roadmap.asks) && roadmap.asks.length ? { asks: roadmap.asks.map(String), reason: roadmap.next_checkin_reason ?? null, sex: /^f/i.test(String(c.sex ?? "")) ? "F" : /^m/i.test(String(c.sex ?? "")) ? "M" : null } : null,
   };
 }
 

@@ -323,6 +323,7 @@ describe("7. progressing exactly to plan: nothing changes", () => {
     expect(r.read.decision.action).toBe("hold");
     expect(r.read.decision.kcalChange).toBeNull();
     expect(r.read.decision.headline).toMatch(/No changes needed/);
+    expect(r.read.progress.detail).not.toMatch(/No changes needed/);
     expect(r.read.checkin.cadenceDays).toBe(14);
   });
   it("a fresh plan from today isn't a meaningful change", () => {
@@ -481,5 +482,25 @@ describe("the check-in form and the text for the AI", () => {
     expect(text).toMatch(/NUTRITION ROADMAP \(approved/);
     expect(text).toMatch(/Current block:/);
     expect(text).toMatch(/never plans dehydration/);
+  });
+});
+
+describe("the words around the numbers", () => {
+  it("a model's two lines are thrown away when they add a number or something the app never plans", async () => {
+    const { readExplanation, numbersIn } = await import("@/lib/nutrition-roadmap/explain.server");
+    const facts = "Current block: Controlled fat loss. The block calls for: 2300 kcal · 145 g protein. Target 65.7 kg by Feb 14.";
+    expect(numbersIn("2,300 kcal and 65.7 kg")).toEqual(["2300", "65.7"]);
+    expect(readExplanation('{"summary":"You are cutting toward 65.7 kg at 2300 kcal a day.","focus":"Hit 145 g protein every day."}', facts)).not.toBeNull();
+    expect(readExplanation('{"summary":"You are cutting toward 64 kg.","focus":"Hit protein."}', facts)).toBeNull();
+    expect(readExplanation('{"summary":"Cut water the day before.","focus":"Use the sauna on meet week."}', facts)).toBeNull();
+    expect(readExplanation("not json", facts)).toBeNull();
+    expect(readExplanation('{"summary":"Great work!","focus":"Keep going."}', facts)).toBeNull();
+  });
+  it("an athlete reads their roadmap addressed to them", async () => {
+    const { toYou } = await import("@/lib/nutrition-roadmap/view");
+    expect(toYou("Their current trajectory projects 70 kg. Reaching it needs a faster loss than their recent progress supports, without eating under their resting energy.")).toBe(
+      "Your current trajectory projects 70 kg. Reaching it needs a faster loss than your recent progress supports, without eating under your resting energy.",
+    );
+    expect(toYou("the lowest this plan goes for them")).toBe("the lowest this plan goes for you");
   });
 });

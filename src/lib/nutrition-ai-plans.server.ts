@@ -827,9 +827,17 @@ export async function loadNutritionAthlete(sb: any, clientId: string): Promise<{
  */
 export async function loadWeightText(sb: any, clientId: string): Promise<string | null> {
   const read = (async () => {
-    const [{ loadWeightManagement }, { assessmentText }] = await Promise.all([import("@/lib/weight-management/load.server"), import("@/lib/weight-management/assessment")]);
-    const loaded = await loadWeightManagement(sb, clientId);
-    return assessmentText(loaded.assessment);
+    const [{ loadRoadmap }, { assessmentText }, { buildRoadmap }, { roadmapText }] = await Promise.all([
+      import("@/lib/nutrition-roadmap/load.server"),
+      import("@/lib/weight-management/assessment"),
+      import("@/lib/nutrition-roadmap/build"),
+      import("@/lib/nutrition-roadmap/text"),
+    ]);
+    const loaded = await loadRoadmap(sb, clientId);
+    const parts = [assessmentText(loaded.wm.assessment)];
+    // the roadmap the coach approved: the plan follows its current block
+    if (loaded.active) parts.push(roadmapText(buildRoadmap(loaded.ctx).read, { approved: true }));
+    return parts.join("\n\n");
   })();
   const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 20_000));
   return Promise.race([read, timeout]).catch(() => null);

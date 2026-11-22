@@ -104,7 +104,7 @@ export function readProgress(x: ProgressInput): Progress {
     );
   }
   if (!off) {
-    return make("on_track", "On track", `${deviation === 0 ? "Right on" : `${W(deviation)} ${(deviation > 0) === (toward < 0) ? "behind" : "ahead of"}`} the planned path, inside its normal range. No changes needed.${fluct}`);
+    return make("on_track", "On track", `${deviation === 0 ? "Right on" : `${W(deviation)} ${(deviation > 0) === (toward < 0) ? "behind" : "ahead of"}`} the planned path, inside its normal range.${fluct}`);
   }
   if (ahead) {
     const fast = trendRate != null && Math.abs(trendRate) > Math.abs(block.rate.kgPerWeek) * 1.5;

@@ -31,7 +31,7 @@ const daysBetween = (a: string, b: string) => dayNum(b) - dayNum(a);
 
 export const PLAN_VERSION = 1;
 /** Weekly check-in extras, in the order they're asked. */
-export type CheckinExtra = "bodyweight" | "weight_making" | "photos" | "measurements" | "nutrition_update";
+export type CheckinExtra = "bodyweight" | "weight_making" | "photos" | "measurements" | "nutrition_update" | "roadmap";
 
 export type ScheduleFrequency = "weekly" | "biweekly" | "monthly" | "per_block" | "custom" | "none";
 export type ProgressSchedule = { kind: "photos" | "measurements" | "videos" | "bodyweight"; enabled: boolean; frequency: ScheduleFrequency; customDays: number | null };
@@ -83,6 +83,8 @@ export type PlanInput = {
   schedules: ProgressSchedule[];
   /** A Nutrition Update request sent and not answered yet (its date). */
   nutritionPendingSince: string | null;
+  /** What the nutrition roadmap needs told apart this week (nutrition-roadmap/checkins.ts), and why. */
+  roadmap?: { asks: string[]; reason: string | null; sex?: "M" | "F" | null } | null;
 };
 
 export type PlanExtra = {
@@ -95,6 +97,9 @@ export type PlanExtra = {
   options?: { goal: string[]; freeMeal: string[] } | null;
   /** nutrition_update: the free meal was never answered, so it's asked. */
   askFreeMeal?: boolean;
+  /** roadmap: the follow-ups the nutrition roadmap asked for (tracking, barriers, confounders, cycle, training). */
+  asks?: string[];
+  sex?: "M" | "F" | null;
 };
 
 export type CheckinPlan = {
@@ -181,6 +186,9 @@ export function planCheckin(x: PlanInput): CheckinPlan {
       ...(inline && x.nutritionAskFreeMeal ? { askFreeMeal: true } : {}),
     });
   }
+  // the nutrition roadmap's follow-ups: only what it needs told apart, never a second form
+  const asks = (x.roadmap?.asks ?? []).filter((a) => ["tracking", "barriers", "confounders", "cycle", "training"].includes(a));
+  if (asks.length) extras.push({ key: "roadmap", reason: x.roadmap?.reason ? `Nutrition roadmap: ${x.roadmap.reason}` : "Nutrition roadmap follow-ups", asks, sex: x.roadmap?.sex ?? null });
   return { version: PLAN_VERSION, extras, skipped };
 }
 

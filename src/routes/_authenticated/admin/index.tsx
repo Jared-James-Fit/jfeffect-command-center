@@ -26,6 +26,7 @@ import { NewLeadsCard } from "@/components/leads/new-leads-card";
 import { NewApplicationsCard } from "@/components/applications/member-applications-entry";
 import { MeetReadinessCard } from "@/components/forms/meet-readiness-card";
 import { PainWatchCard } from "@/components/pain/pain-watch-card";
+import { RoadmapBoardCard } from "@/components/nutrition-roadmap/roadmap-board-card";
 import { CheckinsToReviewCard, useReviewQueue } from "@/components/forms/checkins-to-review-card";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
@@ -272,6 +273,11 @@ function AdminDashboard() {
         {/* ---------------- PAIN: clients whose pain wants a look (persistent, worse, severe, limiting; hidden when none) ---------------- */}
         <SectionErrorBoundary label="Pain to look at">
           <PainWatchCard />
+        </SectionErrorBoundary>
+
+        {/* ---------------- NUTRITION ROADMAPS: who needs a look, who's on schedule (hidden when none) ---------------- */}
+        <SectionErrorBoundary label="Nutrition roadmaps">
+          <RoadmapBoardCard />
         </SectionErrorBoundary>
 
         {/* ---------------- LEADS: new applications waiting on a text (admin; hidden when none) ---------------- */}
