@@ -31,6 +31,13 @@ const known = new Set<HTMLVideoElement>();
 const unlocked = new WeakSet<HTMLVideoElement>();
 /** Feed clips playing muted only because the phone held their sound back. */
 const blocked = new Set<HTMLVideoElement>();
+/**
+ * Feed clips that should be playing but the phone wouldn't start at all, even
+ * muted, without a tap (an iPhone in Low Power Mode refuses every video that
+ * starts by itself). They show a play button, and the next tap anywhere starts
+ * them inside that tap (`unlockVideoSound`).
+ */
+const refused = new Set<HTMLVideoElement>();
 let reels: HTMLVideoElement[] | null = null;
 let feed: HTMLVideoElement[] | null = null;
 const feedFree: HTMLVideoElement[] = [];
@@ -81,6 +88,7 @@ export function acquireFeedVideo(): HTMLVideoElement {
 export function releaseFeedVideo(v: HTMLVideoElement) {
   v.pause();
   blocked.delete(v);
+  refused.delete(v);
   v.removeAttribute("src");
   v.removeAttribute("data-ambient-audio");
   try {
@@ -95,6 +103,68 @@ export function releaseFeedVideo(v: HTMLVideoElement) {
 }
 
 export const SOUND_BLOCKED_EVENT = "jf-sound-blocked";
+/** Dispatched on a feed clip when the phone refuses (or then allows) it to start by itself. */
+export const PLAY_REFUSED_EVENT = "jf-play-refused";
+
+/** True while this clip should be playing but the phone wants a tap before it starts (Low Power Mode). */
+export function playRefused(v: HTMLVideoElement | null): boolean {
+  return !!v && refused.has(v);
+}
+
+function setRefused(v: HTMLVideoElement, on: boolean) {
+  if (on === refused.has(v)) return;
+  if (on) refused.add(v);
+  else refused.delete(v);
+  v.dispatchEvent(new Event(PLAY_REFUSED_EVENT));
+}
+
+/** The caller stops wanting it to play (off screen, held, scrubbed): paused, and no tap will start it or give it sound. */
+export function pauseFeedVideo(v: HTMLVideoElement) {
+  v.pause();
+  setRefused(v, false);
+  // nor gets its sound from one (a tap gives sound only to a clip that's playing)
+  setBlocked(v, false);
+}
+
+/** When a tap last started a clip the phone had refused: that tap is for starting it, nothing else. */
+let startedAt = 0;
+/** True for the tap that just started a clip the phone wouldn't start by itself (its click comes right after). */
+export function justStartedPlay(now = Date.now()): boolean {
+  return now - startedAt < 600;
+}
+
+/**
+ * Inside a tap: start a clip the phone refused, with its sound when the feed's
+ * speaker is on (a tap allows both). A swipe the phone doesn't count leaves it
+ * refused, waiting for a real tap.
+ */
+export function startRefused(v: HTMLVideoElement, swipe = false) {
+  const withSound = soundWanted();
+  v.muted = !withSound;
+  if (!swipe) startedAt = Date.now();
+  const p = v.play() as Promise<void> | undefined;
+  p?.then?.(
+    () => {
+      setRefused(v, false);
+      if (!v.muted) {
+        unlocked.add(v);
+        setBlocked(v, false);
+      }
+    },
+    (e: unknown) => {
+      if (!isNotAllowed(e) || v.muted) return;
+      // sound held back but the picture allowed: play it muted, "Tap for sound"
+      v.muted = true;
+      void (v.play() as Promise<void> | undefined)?.then?.(
+        () => {
+          setRefused(v, false);
+          setBlocked(v, true);
+        },
+        () => undefined,
+      );
+    },
+  );
+}
 
 /** True while this clip plays muted because the phone wanted a tap before its sound. */
 export function soundBlocked(v: HTMLVideoElement | null): boolean {
@@ -123,16 +193,24 @@ export function playFeedVideo(v: HTMLVideoElement, sound: boolean) {
   const p = v.play() as Promise<void> | undefined;
   p?.then?.(
     () => {
+      setRefused(v, false);
       if (!v.muted) {
         unlocked.add(v);
         setBlocked(v, false);
       }
     },
     (e: unknown) => {
-      if (v.muted || !isNotAllowed(e)) return;
+      if (!isNotAllowed(e)) return;
+      // refused even muted: the phone starts nothing by itself (Low Power Mode) until a tap
+      if (v.muted) return setRefused(v, true);
       v.muted = true;
       setBlocked(v, true);
-      void (v.play() as Promise<void> | undefined)?.catch?.(() => undefined);
+      void (v.play() as Promise<void> | undefined)?.then?.(
+        () => setRefused(v, false),
+        (e2: unknown) => {
+          if (isNotAllowed(e2)) setRefused(v, true);
+        },
+      );
     },
   );
 }
@@ -190,15 +268,21 @@ export function setSoundWanted(fn: () => boolean) {
 export function unlockVideoSound(skip?: Element | null, swipe = false) {
   if (typeof document === "undefined") return;
   ensure();
-  const refused = () => {
+  const swipeRefused = () => {
     if (swipe) swipeUnlocks = false;
   };
   for (const v of known) {
+    // wanted but refused even muted (Low Power Mode): this tap starts it (its own play button decides for itself)
+    if (refused.has(v)) {
+      if (skip && skip.contains(v)) continue;
+      startRefused(v, swipe);
+      continue;
+    }
     if (blocked.has(v)) {
       if (skip && skip.contains(v)) continue;
       if (soundWanted()) {
         if (!swipe) soundGivenAt = Date.now();
-        unmuteBlocked(v, refused);
+        unmuteBlocked(v, swipeRefused);
       }
       continue;
     }
@@ -215,7 +299,7 @@ export function unlockVideoSound(skip?: Element | null, swipe = false) {
         },
         (e: unknown) => {
           if (!isNotAllowed(e)) unlocked.add(v);
-          else refused();
+          else swipeRefused();
         },
       );
     } catch {
@@ -233,7 +317,8 @@ function installUnlock() {
   const onTap = (e: Event) => {
     const t = e.target as Element | null;
     unlockVideoSound(
-      t?.closest?.("[data-inline-video]") && t?.closest?.("[data-video-sound]")
+      t?.closest?.("[data-inline-video]") &&
+        (t?.closest?.("[data-video-sound]") || t?.closest?.("[data-video-refused]"))
         ? t.closest("[data-inline-video]")
         : null,
     );
@@ -273,6 +358,8 @@ export function resetVideoPool() {
   }
   known.clear();
   blocked.clear();
+  refused.clear();
+  startedAt = 0;
   feedFree.length = 0;
   soundGivenAt = 0;
   swipeUnlocks = null;

@@ -1,6 +1,6 @@
 import { previewText } from "@/lib/caption-preview";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, Heart, MessageCircle, Volume2, VolumeX } from "lucide-react";
+import { ChevronLeft, Heart, MessageCircle, Play, Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { ActivitySpinner } from "@/components/activity-spinner";
@@ -254,6 +254,8 @@ function ReelPage({
   const [scrubShown, setScrubShown] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [failed, setFailed] = useState(false);
+  // the phone won't start it by itself, even muted (Low Power Mode): a play button until a tap
+  const [needsTap, setNeedsTap] = useState(false);
   // held down (Reels'): paused until the finger lets go
   const [paused, setPaused] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -288,6 +290,7 @@ function ReelPage({
           setPlaying(true);
           setShown(true);
           setWaiting(false);
+          setNeedsTap(false);
         },
       ],
       ["pause", () => setPlaying(false)],
@@ -323,6 +326,7 @@ function ReelPage({
   useEffect(() => {
     if (active) return;
     setPaused(false);
+    setNeedsTap(false);
     setExpanded(false);
     const v = vid.current;
     if (v && v.currentTime > 0) v.currentTime = 0;
@@ -338,13 +342,19 @@ function ReelPage({
   const playNow = useCallback((v: HTMLVideoElement) => {
     v.muted = !soundNow.current;
     const p = v.play() as Promise<void> | undefined;
-    p?.catch?.(() => {
-      // sound without a tap first: the phone said no, so it plays muted (the speaker turns it on)
-      if (!v.muted) {
-        setSoundRef.current(false);
-        v.muted = true;
-        void (v.play() as Promise<void> | undefined)?.catch?.(() => undefined);
+    p?.catch?.((e: unknown) => {
+      const notAllowed = (e as { name?: string } | null)?.name === "NotAllowedError";
+      // refused even muted: the phone starts nothing by itself (Low Power Mode) until a tap
+      if (v.muted) {
+        if (notAllowed) setNeedsTap(true);
+        return;
       }
+      // sound without a tap first: the phone said no, so it plays muted (the speaker turns it on)
+      setSoundRef.current(false);
+      v.muted = true;
+      void (v.play() as Promise<void> | undefined)?.catch?.((e2: unknown) => {
+        if ((e2 as { name?: string } | null)?.name === "NotAllowedError") setNeedsTap(true);
+      });
     });
   }, []);
   useEffect(() => {
@@ -492,7 +502,24 @@ function ReelPage({
       )}
       <ReactionBurst n={burst.n} x={burst.x} y={burst.y} emoji={REACTION.emoji} />
       {soundFlash}
-      {active && slow && !failed && (
+      {active && needsTap && !failed && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            const v = vid.current;
+            if (v) playNow(v);
+          }}
+          className="absolute inset-0 z-[2] grid place-items-center"
+          aria-label="Play video"
+          data-video-refused
+        >
+          <span className="grid h-16 w-16 place-items-center rounded-full bg-black/55 text-white backdrop-blur">
+            <Play className="ml-1 h-7 w-7 fill-current" />
+          </span>
+        </button>
+      )}
+      {active && slow && !failed && !needsTap && (
         <div
           className="pointer-events-none absolute inset-0 grid place-items-center"
           role="status"

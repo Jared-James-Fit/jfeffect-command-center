@@ -3,7 +3,7 @@ import { LiveDot } from "@/components/live-indicator";
 import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, ChevronsLeft, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
 import { CLIP_HOLD_EVENT, InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
 import { CLIP_SCRUB_EVENT, inClipScrubBand } from "@/lib/video-scrub";
-import { justGaveSound } from "@/lib/video-pool";
+import { justGaveSound, justStartedPlay } from "@/lib/video-pool";
 import { UserAvatar } from "@/components/user-avatar";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { cn } from "@/lib/utils";
@@ -668,6 +668,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     // a clip: full screen (or sound on / off), once it's clear this wasn't the first of two taps
     const clip = (e.target as Element | null)?.closest?.("[data-inline-video]");
     if (!clip) return;
+    // the tap that started a clip the phone wouldn't start by itself (Low Power Mode) is for starting it
+    if (justStartedPlay()) return;
     const path = clip.getAttribute("data-slide-path");
     // the tap that gave a clip the phone held quiet its sound is for the sound: it doesn't mute it again
     // (opening the full-screen clips still goes ahead: they play with sound too)
