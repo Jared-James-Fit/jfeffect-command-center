@@ -30,6 +30,7 @@ const VERDICT_WORD: Record<Feasibility["verdict"], { label: string; tone: "done"
   no_deadline: { label: "No deadline", tone: "neutral" },
   reached: { label: "Reached", tone: "done" },
   no_goal: { label: "No target yet", tone: "neutral" },
+  needs_weigh_ins: { label: "Needs weigh-ins", tone: "attention" },
 };
 
 export function VerdictChip({ verdict }: { verdict: Feasibility["verdict"] }) {

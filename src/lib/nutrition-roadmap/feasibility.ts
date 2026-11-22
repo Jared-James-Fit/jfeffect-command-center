@@ -72,6 +72,25 @@ const pctOf = (kg: number, of: number) => round((kg / of) * 100, 2);
 export type FeasibilityPlan = Feasibility & { plannedKgPerWeek: number; maxKgPerWeek: number; makeBy: string | null };
 
 export function assessFeasibility(x: FeasibilityInput): FeasibilityPlan {
+  const f = judge(x);
+  // a weigh-in from weeks ago says nothing about today: the plan is drawn from it, but nothing is judged on it
+  const last = x.trajectory.latest;
+  if (!x.trajectory.stale || !last || !x.goal || x.goal.kg == null || f.verdict === "no_goal" || f.verdict === "unsafe") return f;
+  const weeksOut = x.goal.date ? daysBetween(x.today, x.goal.date) / 7 : null;
+  const headline =
+    weeksOut != null && weeksOut <= 4 && x.goal.eventName
+      ? `${x.goal.eventName} in ${Math.max(0, Math.round(weeksOut))} ${Math.round(weeksOut) === 1 ? "week" : "weeks"}: no weigh-ins since ${fmtDay(last.date, x.today)}`
+      : `No weigh-ins since ${fmtDay(last.date, x.today)}: the plan can't be judged until there are new ones`;
+  return {
+    ...f,
+    verdict: "needs_weigh_ins",
+    headline,
+    confidence: "low",
+    reasons: [`The last weigh-in was ${fmtWeight(last.kg, x.unit)} on ${fmtDay(last.date, x.today)}. The roadmap is drawn from it until a week of morning weigh-ins says where they are now.`, ...f.reasons],
+  };
+}
+
+function judge(x: FeasibilityInput): FeasibilityPlan {
   const g = x.goal;
   const u = x.unit;
   const cur = x.currentKg;
@@ -215,6 +234,7 @@ export function assessFeasibility(x: FeasibilityInput): FeasibilityPlan {
     no_deadline: "",
     reached: "",
     no_goal: "",
+    needs_weigh_ins: "",
   };
 
   return {
