@@ -135,6 +135,8 @@ const CARD_W = 1080;
 const CARD_H = 1920;
 const LIVE_SCALE = 0.72;
 const FRAME_MS = 33;
+/** A finger resting this long on the picture being edited is a peek under the filter row. */
+const PEEK_MS = 180;
 const AUDIENCE: { key: CommunityVisibility; label: string; icon: typeof Users }[] = [
   { key: "community", label: "JF crew", icon: Users },
   { key: "close_friends", label: "Close friends", icon: Star },
@@ -690,6 +692,20 @@ export function ShareStudio({
 
   /* ---- the card ----------------------------------------------------- */
   const showCard = !!card && !cardFailed && !adding;
+  // Editing a picture: the camera's own row of filters over its foot (chips, the ring, the name), so a
+  // photo you took or picked is changed exactly the way the camera picks one. A story's photo walks the
+  // whole row; otherwise a card's looks. Never on a clip, a reply's or a shared post's backdrop.
+  const editRing: { looks: LookItem[]; look: string | null; onLook: (k: string) => void; groups?: LookGroup[] } | null =
+    phase !== "edit" || reply || share || adding || selItem
+      ? null
+      : story && !!shot && filters && filters.length > 1 && onFilter
+        ? { looks: filters, look: filter ?? null, onLook: onFilter, groups: filterGroups }
+        : card && !cardFailed && card.looks.length > 1
+          ? { looks: lookItems(card.looks)!, look: card.look, onLook: (k) => card.onLook(k as ShareTemplate) }
+          : null;
+  // it steps aside while a finger rests on the picture (a peek at what's under it), frames it, or drags a sticker to the bin
+  const [peek, setPeek] = useState(false);
+  const [stickerDrag, setStickerDrag] = useState(false);
   const frozenLockedIn = (d: CameraCard["data"]) =>
     d.lockedIn?.live ? { time: timeLabel(shot?.at ?? new Date()), live: !!shot?.live } : d.lockedIn;
 
@@ -769,7 +785,8 @@ export function ShareStudio({
       onFilter(next.key);
       if (phase === "edit") {
         feedback("detent");
-        setLookFlash(next.label);
+        // the ring under it says which (and glides there)
+        if (!editRing) setLookFlash(next.label);
       }
       return;
     }
@@ -777,8 +794,8 @@ export function ShareStudio({
     const i = Math.max(0, card.looks.indexOf(card.look));
     const next = card.looks[(i + dir + card.looks.length) % card.looks.length];
     card.onLook(next);
-    // shooting, the looks' row shows it; editing, a quick name on the card
-    if (phase === "edit") setLookFlash(TEMPLATE_LABEL[next]);
+    // shooting, the looks' row shows it; editing, the ring does too (else a quick name on the card)
+    if (phase === "edit" && !editRing) setLookFlash(TEMPLATE_LABEL[next]);
   };
   useEffect(() => {
     if (!lookFlash) return;
@@ -982,6 +999,25 @@ export function ShareStudio({
   const onDown = (e: React.PointerEvent) => {
     if ((e.target as Element).closest("button, input, textarea")) return void (swipe.current = null);
     swipe.current = { x: e.clientX, y: e.clientY };
+    if (editRing) startPeek(e.clientX, e.clientY);
+  };
+  /** A finger held still on the picture hides the ring until it lifts (a swipe keeps it: the ring follows the swipe). */
+  const startPeek = (x: number, y: number) => {
+    const t = setTimeout(() => setPeek(true), PEEK_MS);
+    const move = (ev: PointerEvent) => {
+      if (Math.hypot(ev.clientX - x, ev.clientY - y) > 10) clearTimeout(t);
+    };
+    const end = () => {
+      clearTimeout(t);
+      setPeek(false);
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", end, true);
+      window.removeEventListener("pointercancel", end, true);
+    };
+    // on the window, in capture: a sticker or the framer keeping the finger never strands it hidden
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", end, true);
+    window.addEventListener("pointercancel", end, true);
   };
   const onUp = (e: React.PointerEvent) => {
     const st = swipe.current;
@@ -1230,377 +1266,395 @@ export function ShareStudio({
         >
           <div
             // the shot settles into the editor (opening and retaking snap straight to full screen)
-            className={cn("relative shrink-0 touch-pan-y select-none overflow-hidden rounded-[22px] bg-zinc-900", phase === "edit" && "transition-[width,height] duration-300 ease-out")}
+            className={cn("relative shrink-0", phase === "edit" && "transition-[width,height] duration-300 ease-out")}
             style={{ width: box.w, height: box.h }}
-            onPointerDown={onDown}
-            onPointerUp={onUp}
-            onPointerCancel={() => (swipe.current = null)}
+            data-studio-frame
           >
-            {phase === "shoot" && (
-              <video
-                ref={setVideo}
-                playsInline
-                muted
-                autoPlay
-                // a post's card sits in the middle 4:5: the camera shows (dimmed) around it
-                className={cn("absolute inset-0 h-full w-full object-cover", status === "live" && (!showCard || !story) ? "opacity-100" : "opacity-0", facing === "user" && "-scale-x-100")}
-              />
-            )}
-            {/* a post on the camera: what's outside the post's 4:5 is dimmed (Instagram's post camera) */}
-            {phase === "shoot" && !story && status === "live" && !adding && band.y > 1 && (
-              <>
-                <div className="pointer-events-none absolute inset-x-0 top-0 bg-black/60" style={{ height: band.y }} aria-hidden data-post-band="top" />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/60" style={{ height: Math.max(0, box.h - band.y - band.h) }} aria-hidden data-post-band="bottom" />
-              </>
-            )}
-            {/* a story's clip: the whole picture, as the story viewer shows it (a lift is never cropped off) */}
-            {story && clip0?.video ? (
-              <TrimmedVideo key={clip0.video} src={clip0.video} trim={clip0.trim} poster={clip0.preview ?? undefined} sound={hear && !clip0.muted} className="absolute inset-0 h-full w-full bg-black object-contain" data-studio-clip />
-            ) : (
-              !story && !selItem && clip0?.preview && <img src={clip0.preview} alt="" className="absolute inset-0 h-full w-full object-cover" />
-            )}
-            {showCard && (
-              <canvas
-                ref={setCardEl}
-                className={cn("pointer-events-none absolute", selItem && "invisible")}
-                style={phase === "shoot" ? { left: band.x, top: band.y, width: band.w, height: band.h } : { inset: 0, width: "100%", height: "100%" }}
-                aria-label={card ? `${TEMPLATE_LABEL[card.look]} look` : undefined}
-              />
-            )}
-            {/* the photo, framed: drag and pinch (a card on it: two fingers, one swipes the looks). Over the card, so its grid shows; the card paints the photo itself */}
-            {phase === "edit" && shot && shotSize && !selItem && (
-              <PhotoFramer
-                src={shotUrl}
-                size={shotSize}
-                frame={box}
-                framing={framing}
-                onFraming={setFraming}
-                oneFinger={!showCard && !storySwipe}
-                showImage={!showCard}
-                gridPreview={!story}
-                flash={shapeFlash}
-                onActive={setFramingLive}
-                onClaim={() => (swipe.current = null)}
-              />
-            )}
-            {/* a photo or clip from the strip, in the post's shape: drag to place it, pinch to size it (a clip plays, muted, just the part that goes) */}
-            {selItem && (
-              <PhotoFramer
-                key={selItem.id}
-                src={selItem.kind === "image" ? selItem.preview : null}
-                video={selItem.kind === "video" && selItem.video ? { src: selItem.video, trim: selItem.trim, poster: selItem.preview ?? undefined, sound: hear && !selItem.muted } : null}
-                size={{ w: selItem.w ?? 4, h: selItem.h ?? 5 }}
-                frame={box}
-                framing={selItem.framing ?? CENTRED}
-                onFraming={(f) => tray.setFraming(selItem.id, f)}
-                oneFinger
-                gridPreview
-                flash={shapeFlash}
-                onClaim={() => (swipe.current = null)}
-              />
-            )}
-            {/* bottom left: the post's shape (9:16 / 4:5 / 1:1 / 16:9, Instagram's corner button: every slide takes it) and a clip's cover */}
-            {(shapeable || coverClip) && (
-              <div className="absolute bottom-2.5 left-2.5 z-[5] flex gap-2">
-                {shapeable && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      aspectPicked.current = true;
-                      setAspect(nextAspect(aspect));
-                      setShapeFlash((n) => n + 1);
-                    }}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
-                    aria-label={`Shape ${POST_ASPECT_LABEL[aspect]}. Tap for ${POST_ASPECT_LABEL[nextAspect(aspect)]}`}
-                    data-frame-shape={aspect}
-                  >
-                    {aspect === "full" ? (
-                      <Smartphone className="h-4 w-4" />
-                    ) : aspect === "portrait" ? (
-                      <RectangleVertical className="h-4 w-4" />
-                    ) : aspect === "square" ? (
-                      <Square className="h-4 w-4" />
-                    ) : (
-                      <RectangleHorizontal className="h-4 w-4" />
-                    )}
-                    {POST_ASPECT_LABEL[aspect]}
-                  </button>
-                )}
-                {/* a clip on a post: its cover (what shows before it plays, and on your profile grid) */}
-                {coverClip && (
-                  <button
-                    type="button"
-                    onClick={() => setCoverFor(coverClip.id)}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
-                    data-edit-cover
-                  >
-                    <Film className="h-4 w-4" /> Cover
-                  </button>
-                )}
-              </div>
-            )}
-            {/* a clip in a post: the lift, found on the phone, one tap away (and the whole clip one tap back) */}
-            {coverClip?.lift && !coverClip.existing && !(liftOn && coverClip.liftBefore === undefined) && (
-              <div className="absolute inset-x-0 top-2.5 z-[5] flex justify-center px-14" data-studio-lift={liftOn ? "on" : "off"}>
-                {liftOn ? (
-                  <span className="jf-arrive inline-flex h-9 items-center gap-1 rounded-full bg-black/55 pl-3 pr-1 text-[12px] font-bold text-white backdrop-blur">
-                    <Scissors className="h-4 w-4" />
-                    <span className="ml-0.5">Trimmed to the lift</span>
-                    <button type="button" onClick={() => tray.undoLift(coverClip.id)} className="ml-1 h-7 rounded-full bg-white/20 px-2.5 text-[12px] font-bold active:scale-95" data-studio-whole>
-                      Whole clip
-                    </button>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => tray.trimToLift(coverClip.id)}
-                    className="jf-arrive inline-flex h-9 items-center gap-1.5 rounded-full bg-white px-3.5 text-[12px] font-bold text-black active:scale-95"
-                    data-studio-trim-lift
-                  >
-                    <Scissors className="h-4 w-4" /> Trim to the lift · {formatClock(coverClip.lift.end - coverClip.lift.start)}
-                  </button>
-                )}
-              </div>
-            )}
-            {/* a clip: its sound on or off (one tap, said in the middle), and one tap to change which part goes */}
-            {trimClip && (
-              <div className="absolute bottom-2.5 right-2.5 z-[5] flex gap-2">
-                {trimClip.audio && !trimClip.existing && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      const on = !!trimClip.muted;
-                      tray.setSound(trimClip.id, on);
-                      setHear(on);
-                      flashSound(on);
-                      // inside the tap, so the phone lets the stage play it with its sound
-                      const v = (e.currentTarget.closest('[role="dialog"]') ?? document).querySelector<HTMLVideoElement>("video[data-framed-clip], video[data-studio-clip]");
-                      if (v) {
-                        v.muted = !on;
-                        if (on)
-                          void v.play().catch(() => {
-                            v.muted = true;
-                          });
-                      }
-                    }}
-                    className="grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur active:scale-95"
-                    aria-label={trimClip.muted ? "No sound. Tap to post it with sound" : "Sound on. Tap to post it with no sound"}
-                    aria-pressed={!trimClip.muted}
-                    data-studio-sound={trimClip.muted ? "off" : "on"}
-                  >
-                    {trimClip.muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => void tray.edit(trimClip.id)}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
-                  data-studio-trim
-                >
-                  <Scissors className="h-4 w-4" /> Trim{trimClip.seconds != null ? ` · ${formatClock(trimClip.seconds)}` : ""}
-                </button>
-              </div>
-            )}
-            {soundFlash}
-
-            {phase === "shoot" && status === "fallback" && (
-              <div className={cn("absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center", showCard && "bg-black/55 backdrop-blur-[2px]")} data-camera-fallback={oldApp ? "old-app" : camWhy ?? "other"}>
-                {oldApp ? (
-                  // the phone's camera would close this version of the app: update first, or pick a photo
-                  <>
-                    <div className="grid h-20 w-20 place-items-center rounded-full bg-white/10">
-                      <Camera className="h-9 w-9" />
-                    </div>
-                    <div className="text-[17px] font-bold">Update JF Effect to use the camera</div>
-                    <p className="max-w-[270px] text-[13px] text-white/75">This version of the app can't open the camera. Get the latest one in TestFlight and it opens right here.</p>
-                    <button type="button" onClick={openTestFlight} className="h-11 rounded-full bg-white px-6 text-[15px] font-bold text-black active:scale-95">
-                      Update in TestFlight
-                    </button>
-                    <button type="button" disabled={!canShoot} onClick={() => libRef.current?.click()} className="text-[14px] font-bold text-white/80 underline-offset-4 active:underline disabled:opacity-40">
-                      Choose a photo instead
-                    </button>
-                  </>
-                ) : camWhy === "denied" && isNative() ? (
-                  // switched off for the app: one tap to its Settings page (Android: back here, it retries by itself)
-                  <>
-                    <div className="grid h-20 w-20 place-items-center rounded-full bg-white/10">
-                      <Camera className="h-9 w-9" />
-                    </div>
-                    <div className="text-[17px] font-bold">Camera is off for JF Effect</div>
-                    <p className="max-w-[270px] text-[13px] text-white/75">
-                      {/* iOS restarts an app when its camera permission changes, so it's "open it again", not "come back" */}
-                      {getPlatform() === "ios" ? "Turn on Camera, then open Post again. From then on it opens right here." : "Allow the camera for JF Effect in your phone's settings and come back. It opens right here."}
-                    </p>
-                    {getPlatform() === "ios" && (
-                      <button type="button" onClick={openAppSettings} className="h-11 rounded-full bg-white px-6 text-[15px] font-bold text-black active:scale-95" data-camera-settings>
-                        Turn on camera
-                      </button>
-                    )}
-                    <button type="button" disabled={!canShoot} onClick={() => capRef.current?.click()} className="text-[14px] font-bold text-white/80 underline-offset-4 active:underline disabled:opacity-40">
-                      Use the phone's camera instead
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button type="button" disabled={!canShoot} onClick={() => capRef.current?.click()} className="grid h-24 w-24 place-items-center rounded-full bg-white text-black shadow-xl active:scale-95 disabled:opacity-40" aria-label="Open the camera">
-                      <Camera className="h-10 w-10" />
-                    </button>
-                    <div className="text-[15px] font-bold">Take a photo</div>
-                    <p className="max-w-[260px] text-[12px] text-white/70">The live camera didn't start here, so this opens your phone's camera.</p>
-                  </>
-                )}
-              </div>
-            )}
-
-            {phase === "edit" && (
-              <StickerLayer
-                items={items}
-                setItems={setItems}
-                width={box.w}
-                height={box.h}
-                context={stickerContext}
-                request={request}
-                // a story (on a picture) can carry one Questions, Poll or Slider; picking another replaces it
-                interactive={story && shot ? { onPick: (type) => setLiveForm(live?.type === type ? live : blankSticker(type)) } : undefined}
-              />
-            )}
-            {phase === "edit" && story && live && (
-              <LiveStickerSpot
-                sticker={live}
-                height={box.h}
-                onMove={(y) => {
-                  setLive((cur) => (cur ? { ...cur, y } : cur));
-                  setPosted(false);
-                }}
-                onEdit={() => setLiveForm(live)}
-              />
-            )}
-
-            {count != null && (
-              <div className="pointer-events-none absolute inset-0 grid place-items-center">
-                <span key={count} className="font-display animate-in zoom-in-50 fade-in text-[140px] leading-none text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.5)]">{count}</span>
-              </div>
-            )}
-            {flash && <div className="pointer-events-none absolute inset-0 bg-white/80" />}
-            {/* a card on a photo: one finger swipes the looks, so moving the photo is two fingers (said once per shot) */}
-            {pinchHint && (
-              <div className="pointer-events-none absolute inset-x-0 top-16 flex justify-center" data-pinch-hint>
-                <span className="animate-in fade-in rounded-full bg-black/55 px-3 py-1 text-[12px] font-bold backdrop-blur">Two fingers to move or zoom the photo</span>
-              </div>
-            )}
-            {lookFlash && (
-              <div className="pointer-events-none absolute inset-0 grid place-items-center">
-                <span key={lookFlash} className="font-display animate-in fade-in zoom-in-95 rounded-2xl bg-black/35 px-5 py-2 text-[34px] uppercase leading-none backdrop-blur-sm">{lookFlash}</span>
-              </div>
-            )}
-            {phase === "edit" && card && card.looks.length > 1 && (
-              <div className="pointer-events-none absolute inset-x-0 bottom-2.5 flex justify-center gap-1.5" aria-hidden>
-                {card.looks.map((t) => (
-                  <span key={t} className={cn("h-1.5 rounded-full transition-all", t === card.look ? "w-5 bg-white" : "w-1.5 bg-white/45")} />
-                ))}
-              </div>
-            )}
-
-            {/* Top bar, on the card */}
-            <div className="absolute inset-x-0 top-0 flex items-center gap-2 p-2.5">
-              {phase === "shoot" ? (
+            <div
+              className="absolute inset-0 touch-pan-y select-none overflow-hidden rounded-[22px] bg-zinc-900"
+              onPointerDown={onDown}
+              onPointerUp={onUp}
+              onPointerCancel={() => (swipe.current = null)}
+            >
+              {phase === "shoot" && (
+                <video
+                  ref={setVideo}
+                  playsInline
+                  muted
+                  autoPlay
+                  // a post's card sits in the middle 4:5: the camera shows (dimmed) around it
+                  className={cn("absolute inset-0 h-full w-full object-cover", status === "live" && (!showCard || !story) ? "opacity-100" : "opacity-0", facing === "user" && "-scale-x-100")}
+                />
+              )}
+              {/* a post on the camera: what's outside the post's 4:5 is dimmed (Instagram's post camera) */}
+              {phase === "shoot" && !story && status === "live" && !adding && band.y > 1 && (
                 <>
-                  {adding ? (
-                    <button type="button" onClick={backToPost} className={pill} aria-label="Back to your post">
-                      <ChevronLeft className="h-6 w-6" />
-                    </button>
-                  ) : (
-                    <button type="button" onClick={onClose} className={pill} aria-label="Close">
-                      <X className="h-6 w-6" />
-                    </button>
-                  )}
-                  {status === "live" && (
+                  <div className="pointer-events-none absolute inset-x-0 top-0 bg-black/60" style={{ height: band.y }} aria-hidden data-post-band="top" />
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/60" style={{ height: Math.max(0, box.h - band.y - band.h) }} aria-hidden data-post-band="bottom" />
+                </>
+              )}
+              {/* a story's clip: the whole picture, as the story viewer shows it (a lift is never cropped off) */}
+              {story && clip0?.video ? (
+                <TrimmedVideo key={clip0.video} src={clip0.video} trim={clip0.trim} poster={clip0.preview ?? undefined} sound={hear && !clip0.muted} className="absolute inset-0 h-full w-full bg-black object-contain" data-studio-clip />
+              ) : (
+                !story && !selItem && clip0?.preview && <img src={clip0.preview} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              )}
+              {showCard && (
+                <canvas
+                  ref={setCardEl}
+                  className={cn("pointer-events-none absolute", selItem && "invisible")}
+                  style={phase === "shoot" ? { left: band.x, top: band.y, width: band.w, height: band.h } : { inset: 0, width: "100%", height: "100%" }}
+                  aria-label={card ? `${TEMPLATE_LABEL[card.look]} look` : undefined}
+                />
+              )}
+              {/* the photo, framed: drag and pinch (a card on it: two fingers, one swipes the looks). Over the card, so its grid shows; the card paints the photo itself */}
+              {phase === "edit" && shot && shotSize && !selItem && (
+                <PhotoFramer
+                  src={shotUrl}
+                  size={shotSize}
+                  frame={box}
+                  framing={framing}
+                  onFraming={setFraming}
+                  oneFinger={!showCard && !storySwipe}
+                  showImage={!showCard}
+                  gridPreview={!story}
+                  flash={shapeFlash}
+                  onActive={setFramingLive}
+                  onClaim={() => (swipe.current = null)}
+                />
+              )}
+              {/* a photo or clip from the strip, in the post's shape: drag to place it, pinch to size it (a clip plays, muted, just the part that goes) */}
+              {selItem && (
+                <PhotoFramer
+                  key={selItem.id}
+                  src={selItem.kind === "image" ? selItem.preview : null}
+                  video={selItem.kind === "video" && selItem.video ? { src: selItem.video, trim: selItem.trim, poster: selItem.preview ?? undefined, sound: hear && !selItem.muted } : null}
+                  size={{ w: selItem.w ?? 4, h: selItem.h ?? 5 }}
+                  frame={box}
+                  framing={selItem.framing ?? CENTRED}
+                  onFraming={(f) => tray.setFraming(selItem.id, f)}
+                  oneFinger
+                  gridPreview
+                  flash={shapeFlash}
+                  onClaim={() => (swipe.current = null)}
+                />
+              )}
+              {/* bottom left: the post's shape (9:16 / 4:5 / 1:1 / 16:9, Instagram's corner button: every slide takes it) and a clip's cover */}
+              {(shapeable || coverClip) && (
+                <div className="absolute bottom-2.5 left-2.5 z-[5] flex gap-2">
+                  {shapeable && (
                     <button
                       type="button"
-                      onClick={() => setTimer((t) => (t === 0 ? 3 : t === 3 ? 10 : 0))}
-                      className={cn("inline-flex h-11 items-center gap-1 rounded-full px-3 text-[13px] font-bold backdrop-blur active:scale-95", timer ? "bg-white text-black" : "bg-black/40")}
-                      aria-label={timer ? `Self-timer ${timer} seconds` : "Self-timer off"}
+                      onClick={() => {
+                        aspectPicked.current = true;
+                        setAspect(nextAspect(aspect));
+                        setShapeFlash((n) => n + 1);
+                      }}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
+                      aria-label={`Shape ${POST_ASPECT_LABEL[aspect]}. Tap for ${POST_ASPECT_LABEL[nextAspect(aspect)]}`}
+                      data-frame-shape={aspect}
                     >
-                      <Timer className="h-5 w-5" />
-                      {timer ? `${timer}s` : null}
+                      {aspect === "full" ? (
+                        <Smartphone className="h-4 w-4" />
+                      ) : aspect === "portrait" ? (
+                        <RectangleVertical className="h-4 w-4" />
+                      ) : aspect === "square" ? (
+                        <Square className="h-4 w-4" />
+                      ) : (
+                        <RectangleHorizontal className="h-4 w-4" />
+                      )}
+                      {POST_ASPECT_LABEL[aspect]}
                     </button>
                   )}
-                  <div className="ml-auto flex items-center gap-2">
-                    {canShoot && !adding && (card && allowNoPhoto ? (
-                      <button type="button" onClick={skipPhoto} className="h-10 rounded-full bg-black/40 px-4 text-[13px] font-bold backdrop-blur active:scale-95">
-                        No photo
+                  {/* a clip on a post: its cover (what shows before it plays, and on your profile grid) */}
+                  {coverClip && (
+                    <button
+                      type="button"
+                      onClick={() => setCoverFor(coverClip.id)}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
+                      data-edit-cover
+                    >
+                      <Film className="h-4 w-4" /> Cover
+                    </button>
+                  )}
+                </div>
+              )}
+              {/* a clip in a post: the lift, found on the phone, one tap away (and the whole clip one tap back) */}
+              {coverClip?.lift && !coverClip.existing && !(liftOn && coverClip.liftBefore === undefined) && (
+                <div className="absolute inset-x-0 top-2.5 z-[5] flex justify-center px-14" data-studio-lift={liftOn ? "on" : "off"}>
+                  {liftOn ? (
+                    <span className="jf-arrive inline-flex h-9 items-center gap-1 rounded-full bg-black/55 pl-3 pr-1 text-[12px] font-bold text-white backdrop-blur">
+                      <Scissors className="h-4 w-4" />
+                      <span className="ml-0.5">Trimmed to the lift</span>
+                      <button type="button" onClick={() => tray.undoLift(coverClip.id)} className="ml-1 h-7 rounded-full bg-white/20 px-2.5 text-[12px] font-bold active:scale-95" data-studio-whole>
+                        Whole clip
                       </button>
-                    ) : onWrite && !story ? (
-                      <button type="button" onClick={onWrite} className="inline-flex h-10 items-center gap-1.5 rounded-full bg-black/40 px-4 text-[13px] font-bold backdrop-blur active:scale-95">
-                        <PenLine className="h-4 w-4" /> Write
-                      </button>
-                    ) : null)}
-                    {/* up here (Snapchat / TikTok's spot) so every mode fits along the bottom; double-tap the camera flips too */}
-                    {status === "live" && (
-                      <button type="button" onClick={flip} className={pill} aria-label="Flip camera">
-                        <RefreshCcw className="h-5 w-5" />
-                      </button>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <>
-                  {reply || share ? (
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => tray.trimToLift(coverClip.id)}
+                      className="jf-arrive inline-flex h-9 items-center gap-1.5 rounded-full bg-white px-3.5 text-[12px] font-bold text-black active:scale-95"
+                      data-studio-trim-lift
+                    >
+                      <Scissors className="h-4 w-4" /> Trim to the lift · {formatClock(coverClip.lift.end - coverClip.lift.start)}
+                    </button>
+                  )}
+                </div>
+              )}
+              {/* a clip: its sound on or off (one tap, said in the middle), and one tap to change which part goes */}
+              {trimClip && (
+                <div className="absolute bottom-2.5 right-2.5 z-[5] flex gap-2">
+                  {trimClip.audio && !trimClip.existing && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        const on = !!trimClip.muted;
+                        tray.setSound(trimClip.id, on);
+                        setHear(on);
+                        flashSound(on);
+                        // inside the tap, so the phone lets the stage play it with its sound
+                        const v = (e.currentTarget.closest('[role="dialog"]') ?? document).querySelector<HTMLVideoElement>("video[data-framed-clip], video[data-studio-clip]");
+                        if (v) {
+                          v.muted = !on;
+                          if (on)
+                            void v.play().catch(() => {
+                              v.muted = true;
+                            });
+                        }
+                      }}
+                      className="grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur active:scale-95"
+                      aria-label={trimClip.muted ? "No sound. Tap to post it with sound" : "Sound on. Tap to post it with no sound"}
+                      aria-pressed={!trimClip.muted}
+                      data-studio-sound={trimClip.muted ? "off" : "on"}
+                    >
+                      {trimClip.muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void tray.edit(trimClip.id)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
+                    data-studio-trim
+                  >
+                    <Scissors className="h-4 w-4" /> Trim{trimClip.seconds != null ? ` · ${formatClock(trimClip.seconds)}` : ""}
+                  </button>
+                </div>
+              )}
+              {soundFlash}
+
+              {phase === "shoot" && status === "fallback" && (
+                <div className={cn("absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center", showCard && "bg-black/55 backdrop-blur-[2px]")} data-camera-fallback={oldApp ? "old-app" : camWhy ?? "other"}>
+                  {oldApp ? (
+                    // the phone's camera would close this version of the app: update first, or pick a photo
                     <>
+                      <div className="grid h-20 w-20 place-items-center rounded-full bg-white/10">
+                        <Camera className="h-9 w-9" />
+                      </div>
+                      <div className="text-[17px] font-bold">Update JF Effect to use the camera</div>
+                      <p className="max-w-[270px] text-[13px] text-white/75">This version of the app can't open the camera. Get the latest one in TestFlight and it opens right here.</p>
+                      <button type="button" onClick={openTestFlight} className="h-11 rounded-full bg-white px-6 text-[15px] font-bold text-black active:scale-95">
+                        Update in TestFlight
+                      </button>
+                      <button type="button" disabled={!canShoot} onClick={() => libRef.current?.click()} className="text-[14px] font-bold text-white/80 underline-offset-4 active:underline disabled:opacity-40">
+                        Choose a photo instead
+                      </button>
+                    </>
+                  ) : camWhy === "denied" && isNative() ? (
+                    // switched off for the app: one tap to its Settings page (Android: back here, it retries by itself)
+                    <>
+                      <div className="grid h-20 w-20 place-items-center rounded-full bg-white/10">
+                        <Camera className="h-9 w-9" />
+                      </div>
+                      <div className="text-[17px] font-bold">Camera is off for JF Effect</div>
+                      <p className="max-w-[270px] text-[13px] text-white/75">
+                        {/* iOS restarts an app when its camera permission changes, so it's "open it again", not "come back" */}
+                        {getPlatform() === "ios" ? "Turn on Camera, then open Post again. From then on it opens right here." : "Allow the camera for JF Effect in your phone's settings and come back. It opens right here."}
+                      </p>
+                      {getPlatform() === "ios" && (
+                        <button type="button" onClick={openAppSettings} className="h-11 rounded-full bg-white px-6 text-[15px] font-bold text-black active:scale-95" data-camera-settings>
+                          Turn on camera
+                        </button>
+                      )}
+                      <button type="button" disabled={!canShoot} onClick={() => capRef.current?.click()} className="text-[14px] font-bold text-white/80 underline-offset-4 active:underline disabled:opacity-40">
+                        Use the phone's camera instead
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" disabled={!canShoot} onClick={() => capRef.current?.click()} className="grid h-24 w-24 place-items-center rounded-full bg-white text-black shadow-xl active:scale-95 disabled:opacity-40" aria-label="Open the camera">
+                        <Camera className="h-10 w-10" />
+                      </button>
+                      <div className="text-[15px] font-bold">Take a photo</div>
+                      <p className="max-w-[260px] text-[12px] text-white/70">The live camera didn't start here, so this opens your phone's camera.</p>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {phase === "edit" && (
+                <StickerLayer
+                  items={items}
+                  setItems={setItems}
+                  width={box.w}
+                  height={box.h}
+                  context={stickerContext}
+                  request={request}
+                  // a story (on a picture) can carry one Questions, Poll or Slider; picking another replaces it
+                  interactive={story && shot ? { onPick: (type) => setLiveForm(live?.type === type ? live : blankSticker(type)) } : undefined}
+                  onDragging={setStickerDrag}
+                />
+              )}
+              {phase === "edit" && story && live && (
+                <LiveStickerSpot
+                  sticker={live}
+                  height={box.h}
+                  onMove={(y) => {
+                    setLive((cur) => (cur ? { ...cur, y } : cur));
+                    setPosted(false);
+                  }}
+                  onEdit={() => setLiveForm(live)}
+                />
+              )}
+
+              {count != null && (
+                <div className="pointer-events-none absolute inset-0 grid place-items-center">
+                  <span key={count} className="font-display animate-in zoom-in-50 fade-in text-[140px] leading-none text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.5)]">{count}</span>
+                </div>
+              )}
+              {flash && <div className="pointer-events-none absolute inset-0 bg-white/80" />}
+              {/* a card on a photo: one finger swipes the looks, so moving the photo is two fingers (said once per shot) */}
+              {pinchHint && (
+                <div className="pointer-events-none absolute inset-x-0 top-16 flex justify-center" data-pinch-hint>
+                  <span className="animate-in fade-in rounded-full bg-black/55 px-3 py-1 text-[12px] font-bold backdrop-blur">Two fingers to move or zoom the photo</span>
+                </div>
+              )}
+              {lookFlash && (
+                <div className="pointer-events-none absolute inset-0 grid place-items-center">
+                  <span key={lookFlash} className="font-display animate-in fade-in zoom-in-95 rounded-2xl bg-black/35 px-5 py-2 text-[34px] uppercase leading-none backdrop-blur-sm">{lookFlash}</span>
+                </div>
+              )}
+              {phase === "edit" && !editRing && card && card.looks.length > 1 && (
+                <div className="pointer-events-none absolute inset-x-0 bottom-2.5 flex justify-center gap-1.5" aria-hidden>
+                  {card.looks.map((t) => (
+                    <span key={t} className={cn("h-1.5 rounded-full transition-all", t === card.look ? "w-5 bg-white" : "w-1.5 bg-white/45")} />
+                  ))}
+                </div>
+              )}
+
+              {/* Top bar, on the card */}
+              <div className="absolute inset-x-0 top-0 flex items-center gap-2 p-2.5">
+                {phase === "shoot" ? (
+                  <>
+                    {adding ? (
+                      <button type="button" onClick={backToPost} className={pill} aria-label="Back to your post">
+                        <ChevronLeft className="h-6 w-6" />
+                      </button>
+                    ) : (
                       <button type="button" onClick={onClose} className={pill} aria-label="Close">
                         <X className="h-6 w-6" />
                       </button>
-                      {/* the backdrop's colour, Instagram's colour wheel */}
+                    )}
+                    {status === "live" && (
                       <button
                         type="button"
-                        onClick={() => {
-                          const next = backdrop + 1;
-                          setBackdrop(next);
-                          dropShot(shotRef.current);
-                          setShot({ src: paintReplyBackdrop(next), file: null, live: false, at: new Date() });
-                          setPosted(false);
-                        }}
-                        className={pill}
-                        aria-label="Change the background colour"
-                        data-reply-backdrop
+                        onClick={() => setTimer((t) => (t === 0 ? 3 : t === 3 ? 10 : 0))}
+                        className={cn("inline-flex h-11 items-center gap-1 rounded-full px-3 text-[13px] font-bold backdrop-blur active:scale-95", timer ? "bg-white text-black" : "bg-black/40")}
+                        aria-label={timer ? `Self-timer ${timer} seconds` : "Self-timer off"}
                       >
-                        <span className="h-6 w-6 rounded-full border-2 border-white bg-[conic-gradient(#ef3340,#f97316,#facc15,#22c55e,#2563eb,#a855f7,#ef3340)]" />
+                        <Timer className="h-5 w-5" />
+                        {timer ? `${timer}s` : null}
                       </button>
-                    </>
-                  ) : (
-                    <button type="button" onClick={retake} className={pill} aria-label={shot ? "Retake" : "Back to the camera"}>
-                      <ChevronLeft className="h-6 w-6" />
-                    </button>
-                  )}
-                  {/* text and stickers go on a card or a photo (never on a clip) */}
-                  {(card || shot) && (
-                    <>
-                      <button type="button" onClick={() => setRequest({ kind: "text", n: Date.now() })} className={cn(pill, "ml-auto")} aria-label="Add text">
-                        <Type className="h-5 w-5" />
-                      </button>
-                      <button type="button" onClick={() => setRequest({ kind: "stickers", n: Date.now() })} className={pill} aria-label="Add a sticker">
-                        <Smile className="h-5 w-5" />
-                      </button>
-                    </>
-                  )}
-                  {/* a story tags people (a photo gets their @ sticker; a clip just carries the tag) */}
-                  {story && tagPeople && (card || shot || !!clip0) && (
-                    <button
-                      type="button"
-                      onClick={() => setTagging(true)}
-                      className={cn(pill, "relative", !(card || shot) && "ml-auto")}
-                      aria-label={tags.length ? `Tagged ${tags.length}. Tap to change` : "Tag people"}
-                      data-story-tag
-                    >
-                      <AtSign className="h-5 w-5" />
-                      {tags.length > 0 && (
-                        <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[11px] font-bold text-black animate-in zoom-in-50">{tags.length}</span>
+                    )}
+                    <div className="ml-auto flex items-center gap-2">
+                      {canShoot && !adding && (card && allowNoPhoto ? (
+                        <button type="button" onClick={skipPhoto} className="h-10 rounded-full bg-black/40 px-4 text-[13px] font-bold backdrop-blur active:scale-95">
+                          No photo
+                        </button>
+                      ) : onWrite && !story ? (
+                        <button type="button" onClick={onWrite} className="inline-flex h-10 items-center gap-1.5 rounded-full bg-black/40 px-4 text-[13px] font-bold backdrop-blur active:scale-95">
+                          <PenLine className="h-4 w-4" /> Write
+                        </button>
+                      ) : null)}
+                      {/* up here (Snapchat / TikTok's spot) so every mode fits along the bottom; double-tap the camera flips too */}
+                      {status === "live" && (
+                        <button type="button" onClick={flip} className={pill} aria-label="Flip camera">
+                          <RefreshCcw className="h-5 w-5" />
+                        </button>
                       )}
-                    </button>
-                  )}
-                </>
-              )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {reply || share ? (
+                      <>
+                        <button type="button" onClick={onClose} className={pill} aria-label="Close">
+                          <X className="h-6 w-6" />
+                        </button>
+                        {/* the backdrop's colour, Instagram's colour wheel */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = backdrop + 1;
+                            setBackdrop(next);
+                            dropShot(shotRef.current);
+                            setShot({ src: paintReplyBackdrop(next), file: null, live: false, at: new Date() });
+                            setPosted(false);
+                          }}
+                          className={pill}
+                          aria-label="Change the background colour"
+                          data-reply-backdrop
+                        >
+                          <span className="h-6 w-6 rounded-full border-2 border-white bg-[conic-gradient(#ef3340,#f97316,#facc15,#22c55e,#2563eb,#a855f7,#ef3340)]" />
+                        </button>
+                      </>
+                    ) : (
+                      <button type="button" onClick={retake} className={pill} aria-label={shot ? "Retake" : "Back to the camera"}>
+                        <ChevronLeft className="h-6 w-6" />
+                      </button>
+                    )}
+                    {/* text and stickers go on a card or a photo (never on a clip) */}
+                    {(card || shot) && (
+                      <>
+                        <button type="button" onClick={() => setRequest({ kind: "text", n: Date.now() })} className={cn(pill, "ml-auto")} aria-label="Add text">
+                          <Type className="h-5 w-5" />
+                        </button>
+                        <button type="button" onClick={() => setRequest({ kind: "stickers", n: Date.now() })} className={pill} aria-label="Add a sticker">
+                          <Smile className="h-5 w-5" />
+                        </button>
+                      </>
+                    )}
+                    {/* a story tags people (a photo gets their @ sticker; a clip just carries the tag) */}
+                    {story && tagPeople && (card || shot || !!clip0) && (
+                      <button
+                        type="button"
+                        onClick={() => setTagging(true)}
+                        className={cn(pill, "relative", !(card || shot) && "ml-auto")}
+                        aria-label={tags.length ? `Tagged ${tags.length}. Tap to change` : "Tag people"}
+                        data-story-tag
+                      >
+                        <AtSign className="h-5 w-5" />
+                        {tags.length > 0 && (
+                          <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[11px] font-bold text-black animate-in zoom-in-50">{tags.length}</span>
+                        )}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
+            {/* editing: the camera's filter row over the picture's foot (the ring shows what's on; swipe or tap a circle) */}
+            {editRing && (
+              <div
+                className={cn(
+                  "absolute inset-x-0 bottom-0 z-[6] pb-2 transition-opacity duration-200",
+                  peek || framingLive || stickerDrag ? "pointer-events-none opacity-0" : "animate-in fade-in-0 slide-in-from-bottom-2 opacity-100",
+                )}
+                data-edit-filters
+              >
+                <LookCarousel looks={editRing.looks} groups={editRing.groups} look={editRing.look} onLook={editRing.onLook} />
+              </div>
+            )}
           </div>
         </div>
 

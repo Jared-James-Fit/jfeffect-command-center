@@ -817,6 +817,7 @@ export function StickerLayer({
   context,
   request,
   interactive,
+  onDragging,
 }: {
   items: StickerItem[];
   setItems: React.Dispatch<React.SetStateAction<StickerItem[]>>;
@@ -827,6 +828,8 @@ export function StickerLayer({
   request: StickerRequest;
   /** A story: Instagram's Questions, Poll and Slider lead the tray (they go on live, not drawn in). */
   interactive?: { onPick: (type: StickerType) => void };
+  /** A sticker is being dragged (the bin's up at the bottom): anything sitting there steps aside. */
+  onDragging?: (on: boolean) => void;
 }) {
   const [tray, setTray] = useState(false);
   const [editing, setEditing] = useState<TextDraft | null>(null);
@@ -836,6 +839,11 @@ export function StickerLayer({
   const root = useRef<HTMLDivElement | null>(null);
   const nextId = useRef(1);
   const stickers = useMemo(() => stickerDefs(context), [context]);
+  const draggingRef = useRef(onDragging);
+  draggingRef.current = onDragging;
+  useEffect(() => {
+    draggingRef.current?.(dragging != null);
+  }, [dragging]);
 
   useEffect(() => {
     void loadImage("/logo.png").then(setLogo);

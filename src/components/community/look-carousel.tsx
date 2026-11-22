@@ -52,6 +52,10 @@ const STEP = ITEM + GAP;
  * one snapping into the ring and showing on the camera as it lands; tap a
  * circle to bring it in; tap the middle one (the shutter) to take the photo.
  * One (or none): just the shutter.
+ *
+ * Without `onShoot` it's the same row for a photo already taken or picked
+ * (the story editor, the New post screen): the ring only shows which filter
+ * is on, so picking one reads exactly like the camera.
  */
 export function LookCarousel({
   looks,
@@ -68,7 +72,8 @@ export function LookCarousel({
   /** The key of the one in the ring. */
   look: string | null;
   onLook: (key: string) => void;
-  onShoot: () => void;
+  /** The ring is the shutter. Left out: a picker (the photo's already there), the ring just shows what's on. */
+  onShoot?: () => void;
   disabled?: boolean;
   /** the self-timer is counting down: the shutter is a stop button */
   counting?: boolean;
@@ -80,7 +85,7 @@ export function LookCarousel({
   groups?: LookGroup[];
 }) {
   const many = !!looks && looks.length > 1 && !!look && looks.some((l) => l.key === look);
-  if (!many) return <Shutter onShoot={onShoot} disabled={disabled} counting={counting} hold={hold} />;
+  if (!many) return onShoot ? <Shutter onShoot={onShoot} disabled={disabled} counting={counting} hold={hold} /> : null;
   // a new set of filters starts a fresh row, on the one you're on
   return <Glide key={looks!.map((l) => l.key).join("|")} looks={looks!} look={look!} onLook={onLook} onShoot={onShoot} disabled={disabled} counting={counting} showName={showName} hold={hold} groups={groups} />;
 }
@@ -191,7 +196,7 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
   looks: LookItem[];
   look: string;
   onLook: (key: string) => void;
-  onShoot: () => void;
+  onShoot?: () => void;
   disabled: boolean;
   counting: boolean;
   showName: boolean;
@@ -201,7 +206,9 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
   const row = useRef<HTMLDivElement | null>(null);
   const items = useRef<(HTMLButtonElement | null)[]>([]);
   const at = Math.max(0, looks.findIndex((l) => l.key === look));
-  const h = useHold(hold, disabled || counting);
+  // a picker (no shutter): the ring shows what's on, the circle in it isn't a button to take a photo
+  const pick = !onShoot;
+  const h = useHold(pick ? undefined : hold, disabled || counting);
   const filming = h.filming;
   // the look in the ring as the row moves (ahead of React)
   const shown = useRef(at);
@@ -277,7 +284,7 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
   const chips = (groups ?? []).filter((g) => looks.some((l) => l.group === g.key));
   const onGroup = looks[at]?.group ?? null;
   return (
-    <div className="relative" data-look-carousel>
+    <div className="relative" data-look-carousel={pick ? "pick" : "shoot"}>
       {chips.length > 1 && !filming && <GroupChips chips={chips} on={onGroup} onPick={(k) => bring(Math.max(0, looks.findIndex((l) => l.group === k)))} />}
       {/* what the ring holds, above it (the clip's time while filming) */}
       <div className={cn("pointer-events-none mb-1.5 flex justify-center", !showName && !filming && "sr-only")}>
@@ -319,25 +326,26 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
                 type="button"
                 role="option"
                 aria-selected={on}
-                aria-label={on ? (filming ? "Stop filming" : counting ? "Cancel timer" : `Take photo, ${l.label}${hold ? ", or hold to film" : ""}`) : l.label}
-                disabled={(on && disabled) || (!on && filming)}
-                {...(on ? h.handlers : {})}
+                aria-label={pick ? l.label : on ? (filming ? "Stop filming" : counting ? "Cancel timer" : `Take photo, ${l.label}${hold ? ", or hold to film" : ""}`) : l.label}
+                disabled={!pick && ((on && disabled) || (!on && filming))}
+                {...(on && !pick ? h.handlers : {})}
                 onContextMenu={(e) => e.preventDefault()}
                 onClick={() => {
                   if (!on) return bring(i);
+                  if (pick) return;
                   // a hold on the ring was a clip, not a photo
                   if (h.consume()) return;
-                  onShoot();
+                  onShoot?.();
                 }}
                 className={cn(
                   "grid shrink-0 snap-center snap-always place-items-center rounded-full transition-colors duration-150 will-change-transform [-webkit-touch-callout:none] disabled:opacity-40",
                   on ? (filming ? "text-white" : "bg-white text-black") : "bg-white/20 text-white backdrop-blur-md",
-                  on && "touch-none select-none",
+                  on && !pick && "touch-none select-none",
                 )}
                 style={{ width: ITEM, height: ITEM, ...(on && filming ? filmRing(hold!.progress!) : {}) }}
                 data-look={l.look}
                 data-look-key={l.key}
-                data-shutter={on ? "" : undefined}
+                data-shutter={on && !pick ? "" : undefined}
                 data-filming={on && filming ? "" : undefined}
               >
                 {on && filming ? (
@@ -347,8 +355,8 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
                 ) : on && counting ? (
                   <span className="block h-6 w-6 rounded-md bg-red-500" />
                 ) : on && l.look === "plain" && !l.emoji ? (
-                  // no filter in the ring: just the shutter, like Instagram's
-                  <span className="sr-only">{l.label}</span>
+                  // no filter in the ring: just the shutter, like Instagram's (a picker: an empty circle, "none")
+                  pick ? <span className="h-6 w-6 rounded-full border-2 border-current" aria-hidden /> : <span className="sr-only">{l.label}</span>
                 ) : l.emoji ? (
                   <span className="text-[26px] leading-none" aria-hidden>
                     {l.emoji}
