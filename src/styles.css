@@ -648,6 +648,20 @@ html, body { @variant max-md { overflow-x: hidden; } }
   to { opacity: 1; }
 }
 .jf-arrive { animation: jf-arrive 240ms ease-out both; }
+/* Crew's camera (share-studio.tsx): it sits left of the feed, Instagram's way, so the + pushes the feed off to
+   the right and the camera comes in under it, a third slower, clipped at the feed's edge (swipe-to-create.ts
+   cameraUnderFeed); closing runs it backwards; switched to from the New post screen, it fades in place */
+@keyframes jf-camera-in {
+  from { transform: translate3d(-30%, 0, 0); clip-path: inset(0 70% 0 0); }
+  to { transform: none; clip-path: inset(0 0 0 0); }
+}
+@keyframes jf-create-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-share-studio] { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+}
 /* "Swipe for workout" (a workout post's recap tip): the chevrons lean the way to swipe, twice, then rest.
    Only the little icon moves, never the post's screen (a moving screen is a layer an iPhone paints in strips). */
 @keyframes jf-recap-nudge {
@@ -1727,8 +1741,14 @@ html[data-holding] *:not(input):not(textarea):not([contenteditable="true"]) {
   50% { transform: scaleY(1); }
 }
 
+/* The builder: a copy or a new set group, lit for a moment where it landed (program-workbench flash). */
+[data-pb-unit][data-pb-flash="new"] {
+  background-color: color-mix(in oklch, var(--foreground) 7%, transparent);
+  border-radius: 0.75rem;
+  transition: background-color 0.5s ease;
+}
 /* The builder: an exercise a review flag pointed at, lit for a moment (program-workbench goTo). */
-[data-pb-row][data-pb-flash] {
+[data-pb-row][data-pb-flash]:not([data-pb-flash="new"]) {
   background-color: color-mix(in oklch, var(--warning) 16%, transparent);
   border-radius: 0.75rem;
   transition: background-color 0.4s ease;

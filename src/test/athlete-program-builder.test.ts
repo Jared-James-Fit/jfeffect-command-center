@@ -156,10 +156,23 @@ describe("program builder: one screen for phones and computers", () => {
     expect(cells).toContain("style={{ top: box.top + box.height - 52 }}");
   });
 
-  it("says which weeks an edit reaches, in words and on the week tabs", () => {
-    expect(rows).toContain('<span className="shrink-0">Edits apply to</span>');
+  it("says which weeks an edit reaches, in the header above the exercises and on the week tabs", () => {
+    // the scope sits in the header, in view while typing (the week bar steps aside for the keyboard)
+    expect(bench).toContain("<ScopeBar plan={plan} cursor={cur} scope={scope} onScope={setScope} />");
+    expect(rows).toContain('aria-label="Which weeks your changes reach"');
     expect(rows).toContain("data-week-reached={reached ? \"\" : undefined}");
     expect(bench).toContain("const targets = useMemo(() => scopeWeeks(plan, cur, scope)");
+    // a week with its own numbers keeps them, said once the edit is done
+    expect(bench).toContain("inStepWeeks(plan, cur, targets, day.key, exKey, fields)");
+    expect(bench).toContain('label: "Change them too"');
+  });
+
+  it("exercises are dragged by a handle (press and hold on a phone), never Move up / Move down", () => {
+    expect(bench).toContain("useSensor(TouchSensor, { activationConstraint: { delay: 160, tolerance: 8 } })");
+    expect(bench).toContain("useSensor(MouseSensor, { activationConstraint: { distance: 4 } })");
+    expect(bench).toContain("edit((x) => reorderExercise(x, targets, cur, day.key, first.key, to));");
+    expect(rows).toContain("ref={setActivatorNodeRef}");
+    expect(read("src/components/athlete-programs/workbench/sheets.tsx")).not.toContain('title="Move up"');
   });
 
   it("numbers are typed straight in; Enter moves down a column like a spreadsheet", () => {

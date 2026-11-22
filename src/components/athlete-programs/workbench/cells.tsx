@@ -36,6 +36,8 @@ export type ActiveCell = {
 type CellsCtx = {
   active: ActiveCell | null;
   setActive: (a: ActiveCell | null) => void;
+  /** A cell stopped being typed in: the builder says what its edit left alone (weeks with their own numbers). */
+  endSession?: (session: string) => void;
   /** The weight unit a new load starts in (the last one used). */
   unit: "lb" | "kg";
   setUnit: (u: "lb" | "kg") => void;
@@ -64,14 +66,18 @@ export function Cell({
 }: {
   e: PlanExercise;
   field: CellField;
-  onPatch: (p: Partial<PlanExercise>) => void;
+  /** `session` is the same for every change made while the cell is being typed in (one focus). */
+  onPatch: (p: Partial<PlanExercise>, session?: string) => void;
   changed?: boolean;
   className?: string;
   /** a label inside the box when it's empty (phones show no column headers) */
   label?: boolean;
 }) {
-  const { active, setActive, unit, setUnit } = useCells();
+  const { active, setActive, unit, setUnit, endSession } = useCells();
   const [draft, setDraft] = useState<string | null>(null);
+  // one typing session per focus: an edit across weeks is worked out once, when it starts
+  const focusSeq = useRef(0);
+  const session = () => `${e.key}:${field}:${focusSeq.current}`;
   const [mode, setModeState] = useState<LoadMode>(() => loadModeOf(e, unit));
   const ref = useRef<HTMLInputElement>(null);
   const shown = cellText(e, field);
@@ -85,7 +91,7 @@ export function Cell({
   const type = (text: string) => {
     setDraft(text);
     const p = cellPatch(latest.current.e, field, text, latest.current.mode);
-    if (p) onPatch(p);
+    if (p) onPatch(p, session());
   };
   const setMode = (m: LoadMode) => {
     setModeState(m);
@@ -94,27 +100,31 @@ export function Cell({
     const text = draft ?? cellText(latest.current.e, "load").value;
     if (text) {
       const p = cellPatch(latest.current.e, "load", text, m);
-      if (p) onPatch(p);
+      if (p) onPatch(p, session());
     }
   };
 
   useEffect(() => {
     if (!focused) return;
-    setActive({ exKey: e.key, field, exercise: e, type, patch: onPatch, mode, setMode });
+    setActive({ exKey: e.key, field, exercise: e, type, patch: (p) => onPatch(p, session()), mode, setMode });
     // keep the bar pointing at this cell's latest state
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focused, e, mode]);
 
   const invalid = cellInvalid(e, field);
+  // an empty cell reads as one: an outline to fill, never a well that looks filled
+  const empty = !value && !focused;
   return (
     <label
       className={cn(
-        "relative flex h-10 min-w-0 items-center justify-center rounded-lg bg-muted/60 px-1 transition-colors",
-        "focus-within:bg-background focus-within:ring-2 focus-within:ring-foreground/70",
+        "relative flex h-11 min-w-0 items-center justify-center rounded-lg px-1 transition-colors",
+        empty ? "border border-dashed border-muted-foreground/35 bg-transparent" : "bg-muted/70",
+        "focus-within:border-transparent focus-within:bg-background focus-within:ring-2 focus-within:ring-foreground/70",
         invalid && "ring-1 ring-destructive/70",
         className,
       )}
       data-pb-cell-box={field}
+      data-pb-empty={empty ? "" : undefined}
     >
       <input
         ref={ref}
@@ -128,14 +138,16 @@ export function Cell({
         placeholder={label ? CELL_LABEL[field] : "—"}
         data-pb-cell={field}
         onFocus={(ev) => {
+          focusSeq.current += 1;
           setDraft(null);
           setModeState(loadModeOf(e, unit));
-          setActive({ exKey: e.key, field, exercise: e, type, patch: onPatch, mode: loadModeOf(e, unit), setMode });
+          setActive({ exKey: e.key, field, exercise: e, type, patch: (p) => onPatch(p, session()), mode: loadModeOf(e, unit), setMode });
           ev.currentTarget.select();
         }}
         onBlur={() => {
           setDraft(null);
           setActive(null);
+          endSession?.(session());
         }}
         onChange={(ev) => type(ev.target.value)}
         onKeyDown={(ev) => {
@@ -145,11 +157,11 @@ export function Cell({
           }
         }}
         className={cn(
-          "w-full min-w-0 bg-transparent text-center text-[15px] font-medium tabular-nums outline-none placeholder:text-[12px] placeholder:font-normal placeholder:text-muted-foreground/70",
+          "w-full min-w-0 bg-transparent text-center text-[16px] font-semibold tabular-nums outline-none placeholder:text-[12px] placeholder:font-medium placeholder:text-muted-foreground/80",
         )}
       />
       {shown.unit && value && (
-        <span className="pointer-events-none -ml-0.5 shrink-0 pr-0.5 text-[10px] font-medium text-muted-foreground">
+        <span className="pointer-events-none -ml-0.5 shrink-0 pr-0.5 text-[11px] font-medium text-muted-foreground">
           {shown.unit}
         </span>
       )}
@@ -232,6 +244,14 @@ export function KeyboardBar() {
     chips = (["lb", "kg", "pct_1rm", "pct_top"] as LoadMode[]).map((m) =>
       chip(LOAD_MODE_LABEL[m], active.mode === m, () => active.setMode(m), m),
     );
+    // a % of the top set the way coaches say it: 10% under it is 90%
+    if (active.mode === "pct_top") {
+      chips.push(<span key="sep2" aria-hidden className="mx-0.5 h-5 w-px shrink-0 bg-border" />);
+      for (const off of [5, 10, 15, 20]) {
+        const v = String(100 - off);
+        chips.push(chip(`−${off}%`, value === v, () => active.type(v), `off${off}`));
+      }
+    }
     if (value) chips.push(chip("Clear", false, () => active.type(""), "clear"));
   }
   if (active.field === "rest") {
