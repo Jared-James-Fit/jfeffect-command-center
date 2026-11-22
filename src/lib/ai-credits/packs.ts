@@ -23,22 +23,33 @@
  * biggest is well under what AI food logging apps charge a month.
  */
 
-export type AiFeature = "meal_estimate" | "program_import";
+export type AiFeature = "meal_estimate" | "program_import" | "nutrition_import" | "nutrition_create";
 
 /**
  * Credits per use. Must match `public.ai_credit_cost`. A program import read by AI (a PDF,
  * photos, a layout the parser can't read) is 10: GPT-5.5 over a whole multi-week program is
  * roughly 20k tokens in and up to 30k out, about US$0.25-0.35, and it's given back if the
  * read fails. A file the parser reads on its own costs nothing.
+ *
+ * Meal plans (Nov 22 2026, nutrition-import): a meal plan read from a PDF, photos or a layout the
+ * app's own reader can't take (`nutrition_import`) is 5: a plan is a few pages, roughly 5-10k
+ * tokens in (photos included) and up to ~10k out with its reasoning on GPT-5.5, about
+ * US$0.08-0.12. A Cleo draft (`nutrition_create`) is 10: the meal-plan rules (~5k tokens) and the
+ * member's answers in, a whole plan out, and one fix round when a check fails, so up to ~US$0.20.
+ * Both are given back when the read or the draft fails; a plan the app reads itself costs nothing.
  */
 export const FEATURE_COSTS: Record<AiFeature, number> = {
   meal_estimate: 1,
   program_import: 10,
+  nutrition_import: 5,
+  nutrition_create: 10,
 };
 
 export const FEATURE_LABEL: Record<AiFeature, { one: string; many: string }> = {
   meal_estimate: { one: "meal estimate", many: "meal estimates" },
   program_import: { one: "program import", many: "program imports" },
+  nutrition_import: { one: "meal plan import", many: "meal plan imports" },
+  nutrition_create: { one: "meal plan draft", many: "meal plan drafts" },
 };
 
 export type CreditPack = {

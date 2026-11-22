@@ -12,6 +12,7 @@ import { accountReview, lifecycleNote, type AccountReview, type LifecycleKind, t
 import { buildClientPayments, type ScheduleSale } from "@/lib/payment-schedule";
 import { formatMoney } from "@/lib/payment-display";
 import { readClientBilling } from "@/lib/my-billing.functions";
+import { staffCanReachClient } from "@/lib/staff-client-access.server";
 
 type Db = SupabaseClient<any, any, any>;
 
@@ -60,11 +61,15 @@ async function isStaffLogin(admin: Db, userId: string): Promise<boolean> {
 /**
  * Whose account, and may this login act on it: the person themselves (never a
  * team login), an admin, or the client's own coach. Everything else is refused.
+ * A coach counts only through their own login (`userDb`, staffCanReachClient:
+ * the coach role and the client readable under RLS, i.e. coached_client_ids()),
+ * so a suspended or archived coach's old coach record reaches nobody.
  */
 export async function resolveLifecycle(
   admin: Db,
   userId: string,
   clientId: string | undefined,
+  userDb: Db,
 ): Promise<{ client: LifecycleClient; actor: LifecycleActor }> {
   let client: LifecycleClient | null = null;
   if (clientId) {
@@ -90,7 +95,12 @@ export async function resolveLifecycle(
     return { client, actor: { who: "self", role: "self", userId, name } };
   }
   if (isAdmin) return { client, actor: { who: "staff", role: "admin", userId, name } };
-  if (coach && client.assigned_coach_id && (coach as any).id === client.assigned_coach_id) {
+  if (
+    coach &&
+    client.assigned_coach_id &&
+    (coach as any).id === client.assigned_coach_id &&
+    (await staffCanReachClient(userDb, userId, client.id))
+  ) {
     return { client, actor: { who: "staff", role: "coach", userId, name } };
   }
   throw new Error("You can't change this account.");
@@ -258,7 +268,7 @@ export async function tellCoach(
  */
 export async function staffDeletion(userDb: Db, admin: Db, userId: string, clientId: string | null) {
   if (!clientId) return { after: async (_res: any) => {} };
-  const { client, actor } = await resolveLifecycle(admin, userId, clientId);
+  const { client, actor } = await resolveLifecycle(admin, userId, clientId, userDb);
   const { review } = await reviewFor(userDb, admin, client, "delete", "staff");
   await stopSubscriptions(admin, client.id, userId, actor.role, review.stop, "account_deleted");
   return {

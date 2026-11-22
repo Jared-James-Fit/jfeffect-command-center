@@ -83,7 +83,8 @@ export const getCoachVoiceFn = createServerFn({ method: "POST" })
     const sb = await adminClient();
     const [{ data: row }, { data: clients }] = await Promise.all([
       sb.from("coach_voice").select("profile, updated_at").eq("id", true).maybeSingle(),
-      sb
+      // The client list through the caller's own login: a coach sees their own clients, the admin everyone.
+      (context.supabase as any)
         .from("clients")
         .select("id, full_name, sex, voice_nickname, voice_edgy_ok")
         .eq("archived", false)
@@ -126,6 +127,8 @@ export const saveClientVoiceFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    const { staffCanReachClient } = await import("@/lib/staff-client-access.server");
+    if (!(await staffCanReachClient(context.supabase, context.userId, data.clientId))) throw new Error("Client not found.");
     const sb = await adminClient();
     const patch: Record<string, unknown> = {};
     if (data.sex !== undefined) patch.sex = data.sex;
@@ -159,6 +162,10 @@ export const tryCoachVoiceFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    if (data.clientId) {
+      const { staffCanReachClient } = await import("@/lib/staff-client-access.server");
+      if (!(await staffCanReachClient(context.supabase, context.userId, data.clientId))) throw new Error("Client not found.");
+    }
     const sb = await adminClient();
     const profile = normalizeVoiceProfile(data.profile);
     const audience = await loadVoiceAudience(sb, data.clientId ?? null);

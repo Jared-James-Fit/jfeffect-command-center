@@ -73,7 +73,7 @@ export const getAccountReview = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { resolveLifecycle, reviewFor, firstNameOf } = await import("@/lib/lifecycle.server");
-    const { client, actor } = await resolveLifecycle(supabaseAdmin as any, userId, data.clientId);
+    const { client, actor } = await resolveLifecycle(supabaseAdmin as any, userId, data.clientId, supabase);
     if (data.kind === "delete" && actor.who === "staff" && actor.role !== "admin") {
       throw new Error("Only an admin can delete an account.");
     }
@@ -119,7 +119,7 @@ export const deactivateAccount = createServerFn({ method: "POST" })
     const admin = supabaseAdmin as any;
     const { resolveLifecycle, reviewFor, stopSubscriptions, tellCoach } = await import("@/lib/lifecycle.server");
     const { effectiveInstant } = await import("@/lib/account-review");
-    const { client, actor } = await resolveLifecycle(admin, userId, data.clientId);
+    const { client, actor } = await resolveLifecycle(admin, userId, data.clientId, supabase);
     if (client.status === "Deleted" || (await deletionOf(admin, client.id))) {
       throw new Error("This account is in Recently deleted.");
     }
@@ -174,7 +174,7 @@ export const reactivateAccount = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = supabaseAdmin as any;
     const { resolveLifecycle, reviewFor, tellCoach } = await import("@/lib/lifecycle.server");
-    const { client, actor } = await resolveLifecycle(admin, userId, data.clientId);
+    const { client, actor } = await resolveLifecycle(admin, userId, data.clientId, supabase);
     if (client.status === "Deleted") throw new Error("This account is in Recently deleted.");
     // A coach's deactivation is theirs to undo; the person can take back their own.
     if (actor.who === "self" && client.status === "Deactivated" && client.deactivation_source !== "self") {
@@ -210,7 +210,7 @@ export const requestAccountDeletion = createServerFn({ method: "POST" })
     let client: any = null;
     let actor: any = null;
     try {
-      ({ client, actor } = await resolveLifecycle(admin, userId, undefined));
+      ({ client, actor } = await resolveLifecycle(admin, userId, undefined, supabase));
     } catch (e: any) {
       // A login with no client record can still delete itself (account_delete_request handles the rest).
       if (!/not found/i.test(String(e?.message))) throw e;
@@ -248,7 +248,7 @@ export const withdrawAccountDeletion = createServerFn({ method: "POST" })
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const { resolveLifecycle, tellCoach } = await import("@/lib/lifecycle.server");
-      const { client, actor } = await resolveLifecycle(supabaseAdmin as any, userId, undefined);
+      const { client, actor } = await resolveLifecycle(supabaseAdmin as any, userId, undefined, supabase);
       await tellCoach(supabaseAdmin as any, { client, actor, event: "deletion_withdrawn", review: null, sourceId: `undel:${client.id}:${Date.now()}` });
     } catch {
       // the restore stands; the note is best effort

@@ -80,7 +80,14 @@ export function useMyStudioPlan() {
   });
 }
 
-export function MemberPlanStudio({ seed }: { seed?: { days: StudioPlanDay[]; phase?: string | null; weighing?: string | null } | null }) {
+export function MemberPlanStudio({
+  seed,
+  onSaved,
+}: {
+  seed?: { days: StudioPlanDay[]; phase?: string | null; weighing?: string | null } | null;
+  /** After the plan is saved (an import files its original in their documents); never blocks the save. */
+  onSaved?: (planId: string) => void | Promise<void>;
+}) {
   const planQ = useMyStudioPlan();
   const targetsFn = useServerFn(getActiveMemberTargets);
   const targetsQ = useQuery({ queryKey: ["m-nutrition-targets-studio"], queryFn: () => targetsFn({}), retry: false });
@@ -123,7 +130,8 @@ export function MemberPlanStudio({ seed }: { seed?: { days: StudioPlanDay[]; pha
     if (!info.selfServe) return toast.error("Your coach writes your plan.");
     setSaving(true);
     try {
-      const existing = info.plan && !info.plan.assigned_coach_id ? info.plan : null;
+      // an import or a Cleo draft is a new plan: the one before is archived with its dates, never overwritten
+      const existing = !seed?.days?.length && info.plan && !info.plan.assigned_coach_id ? info.plan : null;
       const payload = { client_id: info.clientId, phase, goal: PHASE_GOAL[phase] ?? null, start_date: existing?.start_date ?? today(), status: "Active", visible_to_client: true, last_updated_at: new Date().toISOString(), food_weighing_rules: seed?.weighing ?? existing?.food_weighing_rules ?? null };
       let id = existing?.id as string | undefined;
       if (id) {
@@ -143,6 +151,7 @@ export function MemberPlanStudio({ seed }: { seed?: { days: StudioPlanDay[]; pha
       setDirty(false);
       for (const k of [["nutrition-studio-plan"], ["m-coach-meal-plan"], ["grocery-list"], ["nutrition-dashboard"]]) qc.invalidateQueries({ queryKey: k });
       toast.success("Plan saved");
+      if (onSaved) await Promise.resolve(onSaved(id!)).catch(() => undefined);
       navigate({ to: "/portal/nutrition-targets" });
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't save the plan");
@@ -301,8 +310,8 @@ export function MemberPlanStudio({ seed }: { seed?: { days: StudioPlanDay[]; pha
   );
 }
 
-/** Import a plan and Create with Cleo show once their flows ship (studio-start.tsx); until then, Build it yourself. */
-export const STUDIO_DRAFTS_READY = false;
+/** Import a plan and Create with Cleo (studio-start.tsx) are offered beside Build it yourself. */
+export const STUDIO_DRAFTS_READY = true;
 
 /** The three ways in, on a member's Nutrition page when they have no plan of their own. */
 export function StudioStartOptions() {

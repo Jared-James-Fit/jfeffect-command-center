@@ -57,6 +57,31 @@ async function resolveActorAccess(
   throw new Error("You don't have permission to change this schedule.");
 }
 
+/** Of these workouts, the ones in this client's own program (read as the server). */
+async function daysOfClient(admin: any, dayIds: string[], clientId: string): Promise<Set<string>> {
+  // 150 ids a request: one long URL of ids is refused by the API.
+  const byIds = async (table: string, cols: string, ids: string[], extra?: (q: any) => any) => {
+    const out: any[] = [];
+    for (let i = 0; i < ids.length; i += 150) {
+      let q = admin.from(table).select(cols).in("id", ids.slice(i, i + 150));
+      if (extra) q = extra(q);
+      const { data, error } = await q;
+      if (error) throw new Error(error.message);
+      out.push(...(data ?? []));
+    }
+    return out;
+  };
+  const ids = [...new Set(dayIds.filter(Boolean))];
+  const days = ids.length ? await byIds("pl_days", "id, week_id", ids) : [];
+  const weekIds = [...new Set(days.map((d) => d.week_id).filter(Boolean))] as string[];
+  const weeks = weekIds.length ? await byIds("pl_weeks", "id, block_id", weekIds) : [];
+  const blockIds = [...new Set(weeks.map((w) => w.block_id).filter(Boolean))] as string[];
+  const blocks = blockIds.length ? await byIds("pl_blocks", "id", blockIds, (q) => q.eq("client_id", clientId)) : [];
+  const ownBlocks = new Set(blocks.map((b) => b.id));
+  const ownWeeks = new Set(weeks.filter((w) => ownBlocks.has(w.block_id)).map((w) => w.id));
+  return new Set(days.filter((d) => ownWeeks.has(d.week_id)).map((d) => d.id as string));
+}
+
 /** Loads the day + its block/week metadata + the client's completion row. */
 async function loadDayContext(supabase: any, dayId: string) {
   const { data: day, error } = await supabase
@@ -317,12 +342,18 @@ export const undoScheduleChange = createServerFn({ method: "POST" })
 
     // All rows in a batch share a client_id; authorize once.
     const clientId = rows[0].client_id as string;
+    if (rows.some((r) => r.client_id !== clientId)) throw new Error("That change is no longer available to undo.");
     const { role } = await resolveActorAccess({ supabase, userId }, clientId);
 
     const newBatchId = crypto.randomUUID();
     let undone = 0;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Audit rows can be written by the caller (RLS only checks the client), so
+    // a row's day is put back only when it's in this client's own program:
+    // never a day of someone else's, whatever the row says.
+    const own = await daysOfClient(supabaseAdmin, rows.map((r) => r.day_id as string), clientId);
     for (const r of rows) {
+      if (!own.has(r.day_id)) continue;
       const { error: uerr } = await supabaseAdmin
         .from("pl_days")
         .update({
