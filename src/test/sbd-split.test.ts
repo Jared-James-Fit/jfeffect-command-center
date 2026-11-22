@@ -137,19 +137,21 @@ describe("SBD split", () => {
 });
 
 describe("SBD card wiring", () => {
-  const card = readFileSync("src/components/analytics/sbd-split-card.tsx", "utf8");
+  const lib = readFileSync("src/lib/analytics/competition-strength.ts", "utf8");
   const dash = readFileSync("src/components/analytics/client-analytics-dashboard.tsx", "utf8");
 
-  it("reads comp lifts through the shared load normalizer and outlier guard", () => {
-    expect(card).toContain("resultLoadLb(r)");
-    expect(card).toContain("neutralizeObviousLoadOutliers(rows)");
-    expect(card).toContain('.eq("is_competition_lift", true)');
+  it("reads comp lifts (never variations) through the shared loads and outlier guard", () => {
+    // getClientResults' load is resultLoadLb's; the guard runs before any estimate
+    expect(dash).toContain("strengthPoints(allResults as any[])");
+    expect(lib).toContain("neutralizeObviousLoadOutliers(");
+    expect(lib).toContain('if (!r || r.is_competition_lift !== true) return null;');
   });
 
-  it("sits right after the summary, ahead of lift progress", () => {
-    expect(card).toContain('<section aria-label="SBD Total">');
-    const sbd = dash.indexOf("<SbdSplitCard");
+  it("Where you stand (meet, current estimate, training max kept apart) sits after the summary, ahead of lift progress", () => {
+    const sbd = dash.indexOf("<TotalStandingCard");
     expect(sbd).toBeGreaterThan(dash.indexOf('aria-label="Summary"'));
     expect(sbd).toBeLessThan(dash.indexOf('aria-label="Lift Progress"'));
+    // the old card mixed an August e1RM, a coach max and today into one "estimated total"
+    expect(dash).not.toContain("<SbdSplitCard");
   });
 });

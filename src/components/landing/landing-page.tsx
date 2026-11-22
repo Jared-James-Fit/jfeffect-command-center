@@ -1,9 +1,11 @@
 /**
  * jfeffect.com's front door (signed-out visitors on "/"). JF Effect is a
  * coaching brand with its own app: the app is free to use (by application, no
- * card) and 1:1 online coaching with Jared is a paid service (by application,
- * priced on a call). The page sells the free app first and coaching as its own
- * premium offer, never as a row in a price table.
+ * card) and 1:1 online coaching with Jared is a paid service (by application).
+ * The page sells the free app first and coaching as its own premium offer,
+ * with its packages and prices read from coaching_packages (the one source of
+ * truth: the admin's Coaching packages edits them, CoachingPackagesGrid draws
+ * them), never typed here.
  *
  * Order: who built it and both ways in; why listen; the app on its real
  * screens; your own program (built in the app or uploaded); online coaching (what Jared does for you, shown in the chat where
@@ -18,8 +20,8 @@
  * Coaching page. App screens are a made-up athlete, never a client
  * (scripts/coaching-screenshots).
  */
-import { useEffect } from "react";
-import { Link } from "@tanstack/react-router";
+import { Suspense, useEffect, type ReactNode } from "react";
+import { Await, Link } from "@tanstack/react-router";
 import { Apple, Dumbbell, Gauge, Quote, Users } from "lucide-react";
 import { SalesPageShell } from "@/components/sales/sales-page-shell";
 import { PhoneShot } from "@/components/sales/coaching-hero";
@@ -38,6 +40,8 @@ import { COACH_NAME } from "@/lib/social-links";
 import { trackJoin } from "@/lib/join-funnel";
 import { currentLaunchMode } from "@/lib/landing-launch";
 import { HOME_CTA_ZONES } from "@/lib/public-nav";
+import { CoachingPackagesGrid } from "@/components/sales/coaching-packages";
+import { costAnswer, listedPackages, paidPackages, type PublicPackage } from "@/lib/coaching-packages/packages";
 import { cn } from "@/lib/utils";
 import jaredAsset from "@/assets/athletes/jared-napf-2026.jpg.asset.json";
 import shotLog from "@/assets/landing/app-log.webp";
@@ -140,6 +144,9 @@ const COACHING: Array<{ title: string; body: string }> = [
   },
 ];
 
+/** Its answer comes from the packages on the site (costAnswer), these words only while they load. */
+const COST_QUESTION = "What does coaching cost?";
+
 const FAQ: Array<{ q: string; a: string }> = [
   {
     q: "What's free?",
@@ -159,7 +166,7 @@ const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: "What does coaching cost?",
-    a: "It depends on what you need. Apply, and we'll go over the options and the price on a short call before you commit to anything.",
+    a: "Applying is free. We talk on a short call before you commit to anything.",
   },
   {
     q: "I'm new to lifting. Is this for me?",
@@ -194,7 +201,20 @@ function SecondaryCta({
   );
 }
 
-export function LandingPage() {
+/** The packages, whether they came with the page or are still on their way (they never hold the page up). */
+type PackagesIn = Promise<PublicPackage[]> | readonly PublicPackage[] | undefined;
+
+function WithPackages({ packages, fallback = null, children }: { packages: PackagesIn; fallback?: ReactNode; children: (list: readonly PublicPackage[]) => ReactNode }) {
+  if (!packages) return <>{fallback}</>;
+  if (Array.isArray(packages)) return <>{children(packages as readonly PublicPackage[])}</>;
+  return (
+    <Suspense fallback={fallback}>
+      <Await promise={packages as Promise<PublicPackage[]>}>{(list) => <>{children(list)}</>}</Await>
+    </Suspense>
+  );
+}
+
+export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
   useEffect(() => {
     // a signed-in launch renders this hidden for a moment: only real visitors count
     if (currentLaunchMode() === "landing") trackJoin("landing_view");
@@ -380,8 +400,8 @@ export function LandingPage() {
                     </Link>
                   </div>
                   <p className="mt-4 text-[13px] leading-relaxed text-background/60">
-                    It's by application. We'll go over price on a quick call before you commit to
-                    anything. I keep my client list small so every check-in gets my full attention.
+                    It's by application, and applying doesn't commit you to anything. I keep my
+                    client list small so every check-in gets my full attention.
                   </p>
                 </div>
 
@@ -399,6 +419,23 @@ export function LandingPage() {
             </div>
           </section>
         </Reveal>
+
+        <WithPackages packages={packages}>
+          {(list) =>
+            paidPackages(listedPackages(list)).length ? (
+              <Reveal>
+                <Block id="pricing" className="!pt-0">
+                  <Heading
+                    eyebrow="Coaching packages"
+                    title="What coaching costs."
+                    sub="In Canadian dollars, plus applicable tax. Applying is free and doesn't commit you to anything."
+                  />
+                  <CoachingPackagesGrid packages={list} from="home" />
+                </Block>
+              </Reveal>
+            ) : null
+          }
+        </WithPackages>
 
         <Reveal>
           <Block className="!pt-0">
@@ -465,7 +502,13 @@ export function LandingPage() {
                     {it.q}
                   </AccordionTrigger>
                   <AccordionContent className="text-[15px] leading-relaxed text-muted-foreground">
-                    {it.a}
+                    {it.q === COST_QUESTION ? (
+                      <WithPackages packages={packages} fallback={it.a}>
+                        {(list) => costAnswer(list) ?? it.a}
+                      </WithPackages>
+                    ) : (
+                      it.a
+                    )}
                   </AccordionContent>
                 </AccordionItem>
               ))}

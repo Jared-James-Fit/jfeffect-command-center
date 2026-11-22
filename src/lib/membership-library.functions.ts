@@ -486,6 +486,11 @@ export const listSavedPlans = createServerFn({ method: "GET" })
 
 /* ---------- PDF download ---------- */
 
+/**
+ * A member downloaded a plan's PDF: checks they may, then records it. The PDF
+ * itself is made on the phone from the plan already on their screen
+ * (library-plan-pdf.ts), the same Program PDF every training program uses.
+ */
 export const downloadLibraryPdf = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => z.object({ planId: z.string().uuid() }).parse(i))
@@ -494,13 +499,8 @@ export const downloadLibraryPdf = createServerFn({ method: "POST" })
     await assertMemberCanReadProtected(supabase, userId);
     const { member, plan } = await memberAccessGate(supabase, userId, data.planId);
     if (!plan.allow_pdf_download) throw new Error("PDF download is not enabled for this program");
-    const { generateLibraryPdf } = await import("./membership-library-pdf.server");
-    const bytes = await generateLibraryPdf(plan);
     await supabase.from("member_plan_events").insert({
       plan_id: plan.id, member_id: member.id, event_type: "pdf_download",
     });
-    return {
-      filename: `${(plan.public_title || plan.name).replace(/[^a-z0-9-_ ]/gi,"").slice(0,80)}.pdf`,
-      base64: Buffer.from(bytes).toString("base64"),
-    };
+    return { ok: true as const };
   });

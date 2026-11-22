@@ -12,7 +12,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, RefreshCw, Route, Settings2 } from "lucide-react";
+import { Download, Loader2, RefreshCw, Route, Settings2 } from "lucide-react";
+import { makeAndDeliverPdf } from "@/lib/pdf/deliver";
 import { Accordion } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -92,9 +93,23 @@ export function RoadmapCoachCard({ clientId, className }: { clientId: string; cl
     }, "refresh");
 
   const actions = (
-    <Button variant="ghost" size="sm" className="h-10" onClick={() => void refreshNow()} disabled={!!busy} aria-label="Read the roadmap again now">
-      {busy === "refresh" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-    </Button>
+    <div className="flex items-center">
+      {v?.read && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-10"
+          aria-label="Download the roadmap as a PDF"
+          data-roadmap-pdf
+          onClick={() => void makeAndDeliverPdf("Nutrition roadmap", async () => (await import("@/lib/nutrition-roadmap/roadmap-pdf")).roadmapPdfFile(v, "coach"))}
+        >
+          <Download className="h-4 w-4" />
+        </Button>
+      )}
+      <Button variant="ghost" size="sm" className="h-10" onClick={() => void refreshNow()} disabled={!!busy} aria-label="Read the roadmap again now">
+        {busy === "refresh" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+      </Button>
+    </div>
   );
 
   if (v.state === "no_goal" || !v.read) {

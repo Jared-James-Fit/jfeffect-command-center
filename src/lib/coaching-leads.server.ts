@@ -20,7 +20,7 @@ import {
 } from "@/lib/coaching-leads";
 
 export const LEAD_APP_COLUMNS =
-  "id, created_at, full_name, first_name, email, phone, instagram, main_goal, target_outcome, timeline, lead_score, lead_temperature, qualification_label, recommended_offer, status, call_status, follow_up_at, client_id, is_test, source_label, booking_link_slug";
+  "id, created_at, full_name, first_name, email, phone, instagram, main_goal, target_outcome, timeline, lead_score, lead_temperature, qualification_label, recommended_offer, status, call_status, follow_up_at, client_id, is_test, source_label, booking_link_slug, coaching_interest, package_slug";
 
 /** The discovery-call link, only while that booking type is live online. */
 export async function leadBookingUrl(sb: any, slug: string | null | undefined): Promise<string | null> {

@@ -258,7 +258,7 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setArchiveOpen(true)}><Archive className="mr-2 h-4 w-4" /> Workout archive</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setReportOpen(true)}>
-                <Download className="mr-2 h-4 w-4" /> Download training report
+                <Download className="mr-2 h-4 w-4" /> Training PDF
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>

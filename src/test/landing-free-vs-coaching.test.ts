@@ -58,7 +58,7 @@ describe("the landing page sells the free app first and online coaching as its o
     expect(visible).toContain("data-landing-coaching");
   });
 
-  it("says what the coach does, and that it's paid, without a price list", () => {
+  it("says what the coach does, and its price comes from the published packages (Nov 22 2026)", () => {
     const titles = LANDING_COPY.COACHING.map((c) => c.title);
     expect(titles).toEqual([
       "Your program",
@@ -68,7 +68,10 @@ describe("the landing page sells the free app first and online coaching as its o
       "Meet prep",
     ]);
     expect(visible).toContain("I'll run your training.");
-    expect(visible).toContain("We'll go over price on a quick call before you commit");
+    // the price is the coaching packages' (coaching_packages, edited in Sales → Coaching packages), never typed here
+    expect(visible).toContain("applying doesn't commit you to anything");
+    expect(visible).toContain('<CoachingPackagesGrid packages={list} from="home" />');
+    expect(visible).not.toMatch(/\$1[0-9]{2}\b/);
     // replies are what the app's own coach chat promises, never "unlimited"
     expect(LANDING_COPY.COACHING.map((c) => c.body).join(" ")).toContain(
       "I usually reply within a day.",

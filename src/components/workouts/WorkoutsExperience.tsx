@@ -12,7 +12,7 @@ import {
 import {
   Calendar as CalendarIcon, CalendarCheck, ChevronLeft, ChevronRight, ClipboardList, Clock,
   History, Loader2, Move, MoreVertical, Play, Pencil, Activity, Download,
-  RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot, Check, Archive,
+  RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot, Check, Archive, BarChart3,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -205,10 +205,10 @@ export function WorkoutsExperience({
   // Which program the roadmap shows; null = the current one. Viewing another
   // program is read-only and never touches the schedule.
   const [roadmapProgramId, setRoadmapProgramId] = useState<string | null>(null);
-  const roadmap = useProgramRoadmap(clientId, visibleBlocks, {
-    programId: roadmapProgramId,
-    ownerName: (client as any)?.full_name ?? (client as any)?.first_name ?? null,
-  });
+  const ownerName = (client as any)?.full_name ?? (client as any)?.first_name ?? null;
+  // The card always shows today's program; another one is only ever looked at in the plan sheet.
+  const roadmap = useProgramRoadmap(clientId, visibleBlocks, { programId: null, ownerName });
+  const browseRoadmap = useProgramRoadmap(clientId, visibleBlocks, { programId: roadmapProgramId, ownerName });
   // A JF member's own program (a plan they started, or one they built) is
   // theirs to manage: Manage beside the program's name opens Edit / Training
   // days / Switch / End. A coach's program never offers it.
@@ -321,6 +321,18 @@ export function WorkoutsExperience({
                 control, not the first thing on the page (the calendar and
                 today's workout are). */}
             {mode === "self" && !noProgram && <ScheduleViewSwitch view={view} onChange={setView} compact />}
+            {/* Training analytics, one tap from the top of Workouts (also the progress card's first row). */}
+            {mode === "self" && !noProgram && (
+              <Link
+                to="/portal/workouts/analytics"
+                aria-label="Training analytics"
+                title="Training analytics"
+                className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg text-foreground transition hover:bg-muted active:scale-[0.96] min-[370px]:inline-flex"
+                data-header-analytics
+              >
+                <BarChart3 className="h-5 w-5" aria-hidden />
+              </Link>
+            )}
             {/* A bottom sheet on a phone (within a thumb's reach), a dropdown elsewhere. */}
             <CardMenu
               name="Workouts"
@@ -377,7 +389,7 @@ export function WorkoutsExperience({
               <CardMenuSeparator />
               <CardMenuItem onSelect={() => setReportOpen(true)}>
                 <Download className="mr-2 h-4 w-4" />
-                Training report (PDF)
+                Training PDF
               </CardMenuItem>
             </CardMenu>
           </div>
@@ -487,6 +499,7 @@ export function WorkoutsExperience({
           <div className={arrived}>
           <ProgramRoadmapCard
             roadmap={roadmap}
+            browseRoadmap={roadmapProgramId ? browseRoadmap : null}
             selectedBlockId={view === "block" ? blockViewId ?? roadmap?.currentBlockId ?? null : null}
             onSelectBlock={(id) => {
               setBlockViewId(id);
@@ -506,13 +519,15 @@ export function WorkoutsExperience({
             (the day's cardio is the day's, up with the workout). */}
         {mode === "self" && !noProgram && (
           <Card className="divide-y divide-border overflow-hidden p-0 empty:hidden" data-workouts-progress>
+            {/* The way into analytics first, then readiness (a status, not a score), then the trend. */}
+            <DeferredAnalytics clientId={clientId} part="entry" />
             <RecoveryPreviewCard
               clientId={clientId}
               analyticsTo={"/portal/workouts/analytics"}
               hideWhenEmpty
               bare
             />
-            <DeferredAnalytics clientId={clientId} />
+            <DeferredAnalytics clientId={clientId} part="trend" />
           </Card>
         )}
         {footer}
@@ -557,14 +572,14 @@ export function WorkoutsExperience({
 /* recharts bundle + data query never block the initial workouts paint.   */
 /* ---------------------------------------------------------------------- */
 
-function DeferredAnalytics({ clientId }: { clientId: string }) {
-  // Render the analytics card immediately alongside the rest of the page so
+function DeferredAnalytics({ clientId, part }: { clientId: string; part: "entry" | "trend" }) {
+  // Render the analytics rows immediately alongside the rest of the page so
   // sections appear together instead of popping in one-by-one on scroll.
   return (
-    // no reserved height: the card isn't there at all until there's a workout to count
+    // no reserved height: the rows aren't there at all until there's a workout to count
     // (empty:hidden, so an empty wrapper takes no gap in the column either)
     <Suspense fallback={null}>
-      <TrainingAnalyticsPreviewCard clientId={clientId} hideWhenEmpty bare />
+      <TrainingAnalyticsPreviewCard clientId={clientId} hideWhenEmpty bare part={part} />
     </Suspense>
   );
 }
@@ -746,7 +761,7 @@ function ScheduleViewSwitch({
           className={cn(
             "font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             // a 320pt phone keeps "Workouts" whole beside it
-            compact ? "h-9 rounded-md px-2.5 text-[13px] max-[359px]:px-1.5 max-[359px]:text-[12px]" : "h-9 rounded-lg text-sm",
+            compact ? "h-9 rounded-md px-2.5 text-[13px] max-[399px]:px-2 max-[359px]:px-1.5 max-[359px]:text-[12px]" : "h-9 rounded-lg text-sm",
             view === v ? "bg-background text-foreground shadow-sm dark:bg-[oklch(0.34_0.008_280)]" : "text-muted-foreground hover:text-foreground",
           )}
         >

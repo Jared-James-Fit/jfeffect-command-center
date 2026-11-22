@@ -12,41 +12,38 @@ describe("Workouts page: program roadmap under the calendar", () => {
     // the day's cardio is the day's (useDayCardio in SelectedDayList), never a section at the bottom
     expect(src).not.toContain("<ClientCardioSection");
   });
-  it("is compact by default with an expandable roadmap; one bar, no week pills on top of it", () => {
+  it("shows its phases at a glance and every week one tap away; one bar, no week pills, no fold", () => {
     const card = readFileSync("src/components/workouts/program-roadmap.tsx", "utf8");
-    // the roadmap folds under one row; a block opens Block View from inside it
+    // every block on the card (done, now with this week, next), never behind a "Plan details" fold
+    expect(card).toContain("data-roadmap-timeline");
+    expect(card).not.toContain("<span>Plan details</span>");
+    // the whole plan (every week and what it's for) opens in one sheet from "Full plan" or a block
     expect(card).toContain("data-roadmap-toggle");
-    // what this week is for (the coach's or Cleo's paragraph) folds under Plan details with the roadmap;
-    // the card itself says the block and the week's focus in a few words
-    expect(card).toContain("<span>Plan details</span>");
-    expect(card).toContain("data-roadmap-week-detail");
-    expect(card).toContain('This week: <span className="text-foreground/80">{thisWeek.label}</span>');
-    expect(card).toContain("Open workouts in Block View");
+    expect(card).toContain("<span>Full plan</span>");
+    expect(card).toContain("function ProgramPlanSheet(");
+    expect(card).toContain("See its workouts");
     expect(card).toContain("<ProgramBar blocks={blocks} />");
     expect(card).not.toContain("WeekPills");
   });
-  it("is the one place that says the block and week, in neutral ink (no red or green bar)", () => {
+  it("is the one place that says the block and week, in neutral ink (no red bar)", () => {
     const card = readFileSync("src/components/workouts/program-roadmap.tsx", "utf8");
-    expect(card).toContain("? blockTitle(current)");
-    expect(card).toContain("`Block ${currentIdx + 1} of ${blocks.length}`");
+    expect(card).toContain("{blockTitle(b)}");
     expect(card).toContain('<div className="h-full rounded-full bg-foreground" style={{ width: `${pct}%` }} />');
     expect(card).not.toMatch(/bg-primary|text-primary/);
     // the program's own week is the one week number, on the line under its name
     expect(card).toContain("const progress = roadmapProgressParts(roadmap, todayLocalISO());");
     expect(card).not.toContain("programWeekText");
+    // a week's label never repeats its number ("Week 1 · Week 1 · Calibration")
+    expect(card).toContain("weekParts(thisWeek)");
   });
-  it("reads in one pass: the program's name, the week, one bar, then this block and this week", () => {
+  it("reads in one pass: the program's name, the week, one bar, then the phases", () => {
     const card = readFileSync("src/components/workouts/program-roadmap.tsx", "utf8");
-    // no box inside the card, no repeated counts under the bar, no "Block 1 — …" under the block's own name
     expect(card).not.toContain("rounded-xl border border-primary/30 bg-primary/5");
     expect(card).not.toContain("% through");
     expect(card).toContain("blockNameParts(b.name)");
-    // the program picker is the name itself; Active only says something when you're looking at another one
-    expect(card).toContain('aria-label="Choose a program"');
-    expect(card).not.toContain("programs.length} programs");
-    expect(card).toContain('text-[14px] leading-relaxed');
-    // the program's name is the heading (short: no level and days after it)
-    expect(card).toContain("const name = programHeading(roadmap.program, !browsing);");
+    // other programs are looked at in the plan sheet; the card is always today's program
+    expect(card).toContain('<ProgramList programs={roadmap.programs}');
+    expect(card).toContain("const name = programHeading(roadmap.program, true);");
     expect(card).toContain("data-program-name");
     expect(card).toContain("data-program-progress");
   });

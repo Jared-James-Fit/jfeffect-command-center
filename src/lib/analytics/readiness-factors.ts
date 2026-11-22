@@ -668,7 +668,8 @@ export function pickRecommendation(
   if (!f.sleep.isMissing && f.sleep.score < 60) return "Sleep was short. Reduce optional volume, keep top sets at the prescribed RPE, and skip AMRAP finishers.";
   if (!f.load.isMissing && f.load.score < 60) return "Training load has spiked. Complete prescribed work and skip unnecessary back-off sets.";
   if (!f.recovery.isMissing && f.recovery.score < 60) return "You're feeling under-recovered. Warm up thoroughly and let the first working set dictate the day.";
-  if (!limiter) return "Everything is in a great window. Train as planned and push your top sets if warm-ups feel sharp.";
+  // A good read never means "go heavier": the program already set today's work.
+  if (!limiter) return "Nothing stands out in what you logged. Train as planned.";
   return "Train as planned. Stay within today's prescribed RPE and avoid adding unnecessary volume.";
 }
 

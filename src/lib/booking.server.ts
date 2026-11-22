@@ -584,6 +584,9 @@ export async function createOnlineBooking(
   if (!audienceAllows(type, trustedClient ? { serviceTier: trustedClient.service_tier } : null)) {
     throw new BookingError("invalid", "This booking is for JF Effect coaching clients. Sign in with your client account to book it.");
   }
+  // A package's included call (Coaching Plus): only a client on it, only with a call left in
+  // that billing period. The pt_sessions guard checks it again under a lock.
+  const included = await includedCallCheck(admin, type, trustedClient, when, tz);
 
   if (!trustedClient) {
     // A shared link can't be used to fill the calendar.
@@ -651,6 +654,17 @@ export async function createOnlineBooking(
       .eq("id", claimId);
   }
 
+  // What they want to cover, kept where the coach's call prep reads it (and they can change it).
+  if (included && trustedClient && result.kind === "session" && booker.notes?.trim()) {
+    await admin
+      .from("coaching_call_topics")
+      .upsert({ pt_session_id: result.id, client_id: trustedClient.id, topics: booker.notes.trim().slice(0, 1500) })
+      .then(
+        () => {},
+        () => {},
+      );
+  }
+
   // A call a client booked, or anything booked from the coach's personal link (a text or an
   // email reaches no chat), shows in their coach chat, unless the coach's invite card already does.
   const inChat =
@@ -674,6 +688,70 @@ export async function createOnlineBooking(
     eventKey: `booking:${result.id}`,
   });
   return result;
+}
+
+/** Is this booking type a package's included call? (coaching_packages.call_booking_card_id) */
+export async function isIncludedCallType(admin: Admin, typeId: string): Promise<boolean> {
+  const { data } = await admin
+    .from("coaching_packages" as any)
+    .select("id")
+    .eq("call_booking_card_id", typeId)
+    .limit(1);
+  return ((data ?? []) as any[]).length > 0;
+}
+
+/** The booking types a client's package gives them calls on (empty for everyone else). */
+export async function includedCallTypesFor(admin: Admin, clientId: string): Promise<Set<string>> {
+  const { data } = await admin
+    .from("coaching_package_enrollments" as any)
+    .select("included_calls, coaching_packages!inner(included_calls, call_booking_card_id)")
+    .eq("client_id", clientId)
+    .eq("status", "active");
+  const out = new Set<string>();
+  for (const e of (data ?? []) as any[]) {
+    const p = e.coaching_packages;
+    const calls = e.included_calls ?? p?.included_calls ?? 0;
+    if (p?.call_booking_card_id && calls > 0) out.add(p.call_booking_card_id);
+  }
+  return out;
+}
+
+/**
+ * Before booking an included call: they're on the package and have a call
+ * left in the billing period it falls in. True when it is one (false for any
+ * other type). Throws the reason in words.
+ */
+async function includedCallCheck(
+  admin: Admin,
+  type: BookingType,
+  client: BookingClient | null,
+  when: Date,
+  tz: string,
+): Promise<boolean> {
+  if (!(await isIncludedCallType(admin, type.id))) return false;
+  if (!client) {
+    throw new BookingError("invalid", "This call is included with coaching. Sign in with your client account to book it.");
+  }
+  const { data: u, error } = await admin.rpc("coaching_call_usage" as any, {
+    _client: client.id,
+    _card: type.id,
+    _on: localDateISO(when, tz),
+  });
+  if (error) throw new Error(error.message);
+  if (!u) {
+    throw new BookingError("invalid", "This call is included with a coaching package you're not on. Ask your coach about adding it.");
+  }
+  const usage = u as any;
+  if (Number(usage.left) <= 0) {
+    const end = new Date(`${String(usage.period_end)}T12:00:00Z`);
+    end.setUTCDate(end.getUTCDate() - 1);
+    const until = end.toLocaleDateString("en-CA", { month: "short", day: "numeric", timeZone: "UTC" });
+    throw new BookingError(
+      "too_many",
+      `You've booked all ${usage.included} of your included calls for this billing period (it ends ${until}). Pick a day after that.`,
+    );
+  }
+  return true;
 }
 
 async function bookSession(

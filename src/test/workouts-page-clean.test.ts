@@ -8,7 +8,7 @@ describe("Workouts page: one card per section, nothing said twice", () => {
   const readiness = read("src/components/analytics/recovery-preview-card.tsx");
   const month = read("src/components/training-analytics-preview-card.tsx");
 
-  it("readiness is one compact row that opens the whole picture: score, today's call, limiter, six factor bars", () => {
+  it("readiness is one compact row that opens the whole picture: a status, today's call, what to watch, what it read", () => {
     // In the page: one row (the score, the call's first line + limiter, a chevron)…
     expect(readiness).toContain('data-testid="readiness-row"');
     expect(readiness).toContain('onClick={() => setView("overview")}');
@@ -16,7 +16,10 @@ describe("Workouts page: one card per section, nothing said twice", () => {
     expect(readiness).toContain('<SheetContent side="bottom"');
     expect(readiness).toContain('data-testid="readiness-call"');
     expect(readiness).toContain("<FactorBar key={k}");
-    expect(readiness).toContain("Limiter: {bd.limiter.label}");
+    expect(readiness).toContain("Watch: {bd.limiter.label}");
+    // a status, never a precise score: it's an estimate from a check-out
+    expect(readiness).toContain("data-readiness-status");
+    expect(readiness).toContain("It's a guide, not a measurement");
     expect(readiness).toContain("<FactorSheet factor={activeFactor} />");
     // Back from a factor steps out to the whole picture, not off the sheet.
     expect(readiness).toContain('setView((v) => (v && v !== "overview" ? "overview" : null))');
@@ -28,18 +31,16 @@ describe("Workouts page: one card per section, nothing said twice", () => {
     }
   });
 
-  it("the month is one line (nothing at zero); weight lifted and the athlete rows fold under More", () => {
+  it("the month is one line (nothing at zero) on the row named Training analytics; nothing folds", () => {
     expect(month).toContain("data-month-line");
     expect(month).toContain("...(h.prLifts > 0 ?");
     expect(month).toContain("...(h.streakWeeks > 0 ?");
     expect(month).not.toContain("<Tile ");
     // neutral bars: colour on Workouts only ever means something
     expect(month).not.toContain("var(--chart-4)");
-    // the analytics page reads by block, so the month's own numbers stay one tap away here
-    expect(month).toContain("<CollapsibleContent");
-    expect(month).toContain('data-testid="month-weight-line"');
-    expect(month).toContain('label="Strongest lift"');
-    expect(month).toContain('label="Most trained this week"');
+    // one tap to the analytics page, which has everything the old "More" fold held
+    expect(month).not.toContain("<CollapsibleContent");
+    expect(month).toContain(">Training analytics</span>");
     expect(month).toContain('to="/portal/workouts/analytics"');
     for (const gone of ["weightComparison", "school bus", "backdrop-blur", "Athlete corner"]) {
       expect(month, gone).not.toContain(gone);

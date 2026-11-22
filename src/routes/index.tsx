@@ -10,6 +10,7 @@ import { hasPersistedAuthSession } from "@/lib/session-hint";
 import { shareMeta } from "@/lib/share-meta";
 import { LandingPage } from "@/components/landing/landing-page";
 import { currentLaunchMode, installedApp } from "@/lib/landing-launch";
+import { getPublicPackages } from "@/lib/coaching-packages/packages.functions";
 
 const DESCRIPTION =
   "The training app built by Team Canada powerlifter Jared McIntyre: his programs, a log that keeps every set and PR, nutrition and a crew to train with, free to use. 1:1 online coaching with Jared is a paid service, by application.";
@@ -24,6 +25,10 @@ export const Route = createFileRoute("/")({
       throw redirect({ to: "/auth", replace: true });
     }
   },
+  // The coaching packages, never awaited: the launch splash and the page don't wait on them
+  // (they stream in under the coaching section, and the section is simply left out if they fail).
+  loader: () => ({ packages: getPublicPackages() }),
+  staleTime: 5 * 60_000,
   head: () => ({
     meta: [
       { title: "JF Effect | Free Training App + Online Coaching with Jared McIntyre" },
@@ -41,6 +46,7 @@ export const Route = createFileRoute("/")({
  * before the first paint, so this only starts the launch for the app.
  */
 function IndexPage() {
+  const { packages } = Route.useLoaderData();
   const [mode, setMode] = useState<"unknown" | "app" | "landing">("unknown");
   useEffect(() => {
     const m = currentLaunchMode();
@@ -53,7 +59,7 @@ function IndexPage() {
     <>
       {mode !== "app" && (
         <div data-landing>
-          <LandingPage />
+          <LandingPage packages={packages} />
         </div>
       )}
       <div data-launch-splash>{mode === "app" ? <IndexRedirect /> : <DashboardSplash />}</div>

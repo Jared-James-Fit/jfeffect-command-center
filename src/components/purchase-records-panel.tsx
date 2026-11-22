@@ -10,67 +10,16 @@ import { updatePurchaseTermDates } from "@/lib/purchase-term-dates.functions";
 import { toast } from "sonner";
 import { DateField } from "@/components/ui/date-field";
 import { format, parseISO } from "date-fns";
-import { billingDay } from "@/lib/date-range";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+/** The sale's record as a PDF (purchase-pdf.ts), handed to the share sheet or downloaded. */
 export async function downloadPurchasePdf(r: any, clientName?: string | null) {
   try {
-    const { jsPDF } = await import("jspdf");
-    const doc = new jsPDF();
-    const pageW = doc.internal.pageSize.getWidth();
-    let y = 20;
-    doc.setFontSize(18); doc.setFont("helvetica", "bold");
-    doc.text("JF Effect — Purchase Record", pageW / 2, y, { align: "center" });
-    y += 10;
-    doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.setTextColor(100);
-    doc.text(`Generated ${new Date().toLocaleDateString("en-CA")}`, pageW / 2, y, { align: "center" });
-    y += 12;
-    doc.setDrawColor(220); doc.line(14, y, pageW - 14, y); y += 8;
-    doc.setTextColor(0);
-    const rows: [string, string][] = [
-      ["Client", clientName ?? "—"],
-      ["Product", `${r.offer_name ?? "—"} v${r.offer_version ?? "1"}`],
-      ["Product type", r.offer_type ?? "—"],
-      ["Purchase date", r.purchased_at ? new Date(r.purchased_at).toLocaleDateString("en-CA") : "—"],
-      ["Payment status", r.payment_status ?? "—"],
-      ["Amount", `${r.currency ?? "CAD"} ${Number(r.full_payable_amount ?? 0).toLocaleString()}`],
-      ["", ""],
-      ["Service start date", billingDay(r.term_start_date, { year: "always" }) ?? "Not set"],
-      ["Service end date", billingDay(r.term_end_date, { year: "always" }) ?? "Not set"],
-      ["Term", r.term_duration_text ?? (r.term_length_snapshot ? `${r.term_length_snapshot} ${r.term_unit_snapshot ?? ""}` : "—")],
-      ["", ""],
-      ["Service status", r.service_status ?? "—"],
-    ];
-    for (const [label, value] of rows) {
-      if (!label && !value) { y += 4; continue; }
-      doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text(label, 14, y);
-      doc.setFont("helvetica", "normal"); doc.text(value, 80, y); y += 7;
-    }
-    const history = r.term_date_history ?? [];
-    if (history.length > 0) {
-      y += 4; doc.setDrawColor(220); doc.line(14, y, pageW - 14, y); y += 8;
-      doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("Date Change History", 14, y); y += 7;
-      for (const h of history.slice(-10)) {
-        doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-        const line = `${h.changed_at ? new Date(h.changed_at).toLocaleDateString("en-CA") : "?"} — Start: ${h.start_date ?? "—"} → End: ${h.end_date ?? "—"}${h.reason ? ` (${h.reason})` : ""}`;
-        doc.text(line, 14, y); y += 6;
-      }
-    }
-    if (r.admin_notes) {
-      y += 4; doc.setDrawColor(220); doc.line(14, y, pageW - 14, y); y += 8;
-      doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("Admin Notes", 14, y); y += 7;
-      doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-      const lines = doc.splitTextToSize(r.admin_notes, pageW - 28);
-      doc.text(lines, 14, y);
-    }
-    doc.setTextColor(150); doc.setFontSize(8);
-    doc.text("JF Effect · jfeffect.com", pageW / 2, doc.internal.pageSize.getHeight() - 10, { align: "center" });
-    const filename = `purchase-${r.offer_name?.replace(/[^a-z0-9]/gi, "-").toLowerCase() ?? "record"}-${r.id.slice(0, 8)}.pdf`;
-    doc.save(filename);
-    toast.success("PDF downloaded");
+    const { deliverPurchasePdf } = await import("@/lib/purchase-pdf");
+    await deliverPurchasePdf(r, clientName);
   } catch (e: any) {
-    toast.error("Could not generate PDF: " + (e?.message ?? "Unknown error"));
+    toast.error("Could not make the PDF: " + (e?.message ?? "Unknown error"));
   }
 }
 

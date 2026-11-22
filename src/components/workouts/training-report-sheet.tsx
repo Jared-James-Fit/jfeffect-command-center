@@ -1,5 +1,6 @@
 /**
- * Download training report: pick the blocks (or all of them), get one PDF.
+ * Training PDF: the program (what to do) or the training report (what was
+ * done against what was prescribed), for the blocks picked.
  *
  * The coach's ⋯ on a client (Clients list, the client's Training tab) and the
  * athlete's own Workouts ⋯ open the same sheet. Everything the report needs
@@ -21,16 +22,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { todayLocalISO } from "@/lib/today";
 import { saveFiles } from "@/lib/file-share";
 import { reloadForUpdate } from "@/lib/lazy-chunk";
+import { loadPdfLogo } from "@/lib/pdf/deliver";
 import {
   blockRangeLabel,
   buildTrainingReport,
   defaultReportSelection,
   loadTrainingReportSource,
   reportBlockOptions,
-  trainingReportFileName,
   trainingReportSourceKey,
   type ReportAudience,
   type ReportBlockOption,
+  type TrainingPdfMode,
 } from "@/lib/workouts/training-report-data";
 
 type PdfModule = typeof import("@/lib/workouts/workout-pdf");
@@ -62,9 +64,9 @@ export function TrainingReportSheet({
         data-training-report-sheet
       >
         <SheetHeader className="min-h-0 space-y-1 px-5 pb-3 pt-5 pl-5">
-          <SheetTitle>Training report</SheetTitle>
+          <SheetTitle>Training PDF</SheetTitle>
           <SheetDescription>
-            {audience === "coach" && clientName ? `${clientName} · pick` : "Pick"} the blocks to include, or all of them.
+            {audience === "coach" && clientName ? `${clientName} · ` : ""}The program to follow, or a report of what was done.
           </SheetDescription>
         </SheetHeader>
         {open && clientId && (
@@ -105,22 +107,35 @@ function ReportPicker({
     return () => { live = false; };
   }, []);
 
-  const options = useMemo(() => (source.data ? reportBlockOptions(source.data, today) : []), [source.data, today]);
+  const [mode, setMode] = useState<TrainingPdfMode>("program");
+  const [logo, setLogo] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    void loadPdfLogo().then((l) => live && setLogo(l));
+    return () => { live = false; };
+  }, []);
+  const options = useMemo(() => (source.data ? reportBlockOptions(source.data, today, { mode, audience }) : []), [source.data, today, mode, audience]);
   const [picked, setPicked] = useState<Set<string> | null>(null);
   useEffect(() => {
-    if (source.data && picked === null) setPicked(new Set(defaultReportSelection(options)));
-  }, [source.data, options, picked]);
+    if (source.data && picked === null) setPicked(new Set(defaultReportSelection(options, mode)));
+  }, [source.data, options, picked, mode]);
+  const switchMode = (m: TrainingPdfMode) => {
+    if (m === mode) return;
+    setMode(m);
+    setPicked(null);
+  };
   const selected = useMemo(() => options.filter((o) => picked?.has(o.id)), [options, picked]);
 
   // The file for exactly what's ticked, made ahead so the tap only hands it over.
-  const selectionKey = `${source.dataUpdatedAt}:${selected.map((o) => o.id).join(",")}`;
+  const selectionKey = `${mode}:${source.dataUpdatedAt}:${logo ? 1 : 0}:${selected.map((o) => o.id).join(",")}`;
   const prepared = useRef<{ key: string; file: File } | null>(null);
   const makeFile = (): File | null => {
     if (!pdf || !source.data || !selected.length) return null;
     if (prepared.current?.key === selectionKey) return prepared.current.file;
-    const data = buildTrainingReport(source.data, selected.map((o) => o.id), { clientName, audience });
+    const data = buildTrainingReport(source.data, selected.map((o) => o.id), { clientName, audience, mode, today });
     const names = data.blocks.map((b) => b.block_name ?? "");
-    const file = pdf.trainingReportPdfFile(data, trainingReportFileName(clientName, names));
+    const name = pdf.trainingPdfFileName(mode, clientName, names);
+    const file = mode === "program" ? pdf.programPdfFile(data, name, logo) : pdf.trainingReportPdfFile(data, name, logo);
     prepared.current = { key: selectionKey, file };
     return file;
   };
@@ -162,7 +177,8 @@ function ReportPicker({
       toast.error("Couldn't save the PDF.");
       return;
     }
-    toast.success(outcome === "shared" ? "Training report ready" : "Training report downloaded");
+    const what = mode === "program" ? "Training program" : "Training report";
+    toast.success(outcome === "shared" ? `${what} ready` : `${what} downloaded`);
     onDone();
   };
 
@@ -175,6 +191,35 @@ function ReportPicker({
       else next.add(id);
       return next;
     });
+
+  const modeSwitch = (
+    <div className="px-5 pb-3" role="radiogroup" aria-label="What the PDF is">
+      <div className="grid grid-cols-2 gap-1 rounded-xl border border-border p-1">
+        {(
+          [
+            ["program", "Program", "Every workout to follow"],
+            ["report", "Report", "What was done vs planned"],
+          ] as const
+        ).map(([m, label, hint]) => (
+          <button
+            key={m}
+            type="button"
+            role="radio"
+            aria-checked={mode === m}
+            onClick={() => switchMode(m)}
+            data-training-pdf-mode={m}
+            className={cn(
+              "min-h-12 rounded-lg px-3 py-1.5 text-left transition",
+              mode === m ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <span className="block text-[14px] font-semibold">{label}</span>
+            <span className="block text-[11px] leading-tight text-muted-foreground">{hint}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   const workouts = selected.reduce((n, o) => n + o.workouts, 0);
   const done = selected.reduce((n, o) => n + o.done, 0);
@@ -207,8 +252,8 @@ function ReportPicker({
             checked={!!picked?.has(o.id)}
             onToggle={() => toggle(o.id)}
             title={o.name}
-            meta={optionMeta(o, today)}
-            tag={o.current ? "Now" : o.archived ? "Archived" : o.upcoming ? "Not started" : null}
+            meta={optionMeta(o, today, mode)}
+            tag={o.hidden ? "Hidden" : o.current ? "Now" : o.archived ? "Archived" : o.upcoming ? "Not started" : o.ended ? "Finished" : null}
           />
         ))}
       </div>
@@ -220,15 +265,16 @@ function ReportPicker({
     ? "Pick a block"
     : again
       ? "Tap to save the PDF"
-      : `Download PDF${selected.length > 1 ? ` · ${selected.length} blocks` : ""}`;
+      : `Download ${mode === "program" ? "program" : "report"}${selected.length > 1 ? ` · ${selected.length} blocks` : ""}`;
 
   return (
     <>
+      {modeSwitch}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{body}</div>
       <div className="border-t border-border px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3">
         {source.data && selected.length > 0 && (
           <p className="mb-2 text-center text-xs text-muted-foreground" data-report-summary>
-            {done} of {workouts} workout{workouts === 1 ? "" : "s"} done
+            {mode === "program" ? `${workouts} workout${workouts === 1 ? "" : "s"}` : `${done} of ${workouts} workout${workouts === 1 ? "" : "s"} done`}
             {missing.length ? ` · ${missing.join(", ")} couldn't be read` : ""}
           </p>
         )}
@@ -251,9 +297,9 @@ function ReportPicker({
   );
 }
 
-function optionMeta(o: ReportBlockOption, today: string): string {
+function optionMeta(o: ReportBlockOption, today: string, mode: TrainingPdfMode): string {
   const range = blockRangeLabel(o.start_date, o.end_date, today);
-  const count = o.upcoming ? `${o.workouts} workout${o.workouts === 1 ? "" : "s"}` : `${o.done} of ${o.workouts} done`;
+  const count = o.upcoming || mode === "program" ? `${o.workouts} workout${o.workouts === 1 ? "" : "s"}` : `${o.done} of ${o.workouts} done`;
   return [range, count].filter(Boolean).join(" · ");
 }
 

@@ -37,13 +37,15 @@ describe("one analytics experience for the coach and the athlete", () => {
     expect(dash).toContain("<TrainingLoadSection");
     // the old, every-set muscle chart is gone
     expect(dash).not.toContain("weeklyMuscleVolume");
-    // squat · bench · deadlift sections only for someone who trains them (or the coach)
+    // squat · bench · deadlift sections only for someone who trains them; the
+    // programming detail (roles, weekly session grid) only for the coach
     expect(dash).toContain("{hasPowerlifting && (");
-    expect(dash).toContain("{(hasPowerlifting || coach) && (");
+    expect(dash).toContain("{coach && (\n            <SectionErrorBoundary label=\"Powerlifting exposure\">");
   });
 
   it("the Working sets tile says what it counts (it used to claim warm-ups and drop bodyweight sets)", () => {
-    expect(dash).toContain('label="Working sets"');
+    // a week's average, or this week so far: never this week divided by weeks still ahead
+    expect(dash).toContain('label={trainingLoad.load.perWeekBasis.partial ? "Sets this week" : "Sets a week"}');
     expect(dash).not.toContain('label="Sets in range"');
   });
 

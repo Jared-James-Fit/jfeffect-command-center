@@ -126,7 +126,7 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
       else if (kind === "csv") download(exportFileName(x.rep, "csv", privacySafe), reportToCsv(x.rep), "text/csv;charset=utf-8");
       else {
         const { downloadIntelPdf } = await import("@/lib/program-intel/pdf");
-        downloadIntelPdf(x.rep, x.rec, x.meta);
+        await downloadIntelPdf(x.rep, x.rec, x.meta);
       }
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't make the file");

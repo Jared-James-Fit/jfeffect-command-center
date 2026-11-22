@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Archive, Check, ChevronDown, ChevronRight, Eye, Flag, Pencil, Settings2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { parseLocalDate, todayLocalISO } from "@/lib/today";
@@ -118,8 +119,21 @@ function weekLine(week: RoadmapWeekView | null, block: RoadmapBlockView | null):
   return week?.focus ?? block?.purpose ?? null;
 }
 
+/**
+ * A week's own words without a "Week 2 ·" the label already carries:
+ * "Week 2 · Base volume" → { number: 2, name: "Base volume" }. The roadmap
+ * used to print "Week 1 · Week 1 · Calibration".
+ */
+export function weekParts(w: Pick<RoadmapWeekView, "index" | "label">): { number: number; name: string | null } {
+  const label = (w.label ?? "").trim();
+  const m = label.match(/^week\s*(\d+)\s*(?:[·:|\-–—]\s*)?(.*)$/i);
+  if (m) return { number: Number(m[1]), name: m[2].trim() || null };
+  return { number: w.index, name: label || null };
+}
+
 export function ProgramRoadmapCard({
   roadmap,
+  browseRoadmap,
   selectedBlockId,
   onSelectBlock,
   coach = false,
@@ -127,12 +141,15 @@ export function ProgramRoadmapCard({
   onManage,
   nextProgramTo,
 }: {
+  /** Today's program: what the card always shows. */
   roadmap: ProgramRoadmap | null;
+  /** The program picked inside the plan sheet (another program, read-only); null = today's. */
+  browseRoadmap?: ProgramRoadmap | null;
   /** The athlete's own program (one they started or built): Manage sits beside its name. */
   onManage?: () => void;
   /** A finished program of their own: its last row is the way to the next one. */
   nextProgramTo?: string;
-  /** Look at another program (read-only: nothing about the schedule changes). null = back to the current one. */
+  /** Look at another program in the plan sheet (read-only). null = back to the current one. */
   onSelectProgram?: (programId: string | null) => void;
   selectedBlockId?: string | null;
   /** Opens a block in Block View. */
@@ -140,45 +157,26 @@ export function ProgramRoadmapCard({
   /** Coach viewing an athlete: shows where to edit the words. */
   coach?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [openBlock, setOpenBlock] = useState<string | null>(null);
-  const [picking, setPicking] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [focusBlock, setFocusBlock] = useState<string | null>(null);
   if (!roadmap || !roadmap.blocks.length) return null;
   const { blocks } = roadmap;
-  // Another program than today's: a read-only look back (or ahead).
-  const browsing = roadmap.program.id !== roadmap.defaultProgramId;
-  const canPick = roadmap.programs.length > 1 && !!onSelectProgram;
-  // A finished program has no "this week" part, so its roadmap is the content.
-  const showAll = expanded || roadmap.program.status === "completed";
   const current = blocks.find((b) => b.id === roadmap.currentBlockId) ?? null;
-  const currentIdx = current ? blocks.indexOf(current) : -1;
   const thisWeek = current?.weeks.find((w) => w.status === "current") ?? null;
   const allDone = blocks.every((b) => b.status === "completed");
   const multi = blocks.length > 1;
-
-  // The program is the heading (Manage beside it), its one progress line and
-  // bar under it; then this block by its own name and this week's focus. One
-  // week number on the card: the program's.
-  const name = programHeading(roadmap.program, !browsing);
+  const name = programHeading(roadmap.program, true);
   const progress = roadmapProgressParts(roadmap, todayLocalISO());
-  const blockLine = current && !allDone && multi ? blockTitle(current) : null;
-  const blockWhere = current && !allDone && multi
-    ? [
-        `Block ${currentIdx + 1} of ${blocks.length}`,
-        current.status === "upcoming" ? `starts ${fmt(current.start) ?? "soon"}` : null,
-      ].filter(Boolean).join(" · ")
-    : null;
-  const line = !allDone ? weekLine(thisWeek, current) : null;
-  const pick = (id: string) => {
-    setPicking(false);
-    setExpanded(false);
-    setOpenBlock(null);
-    onSelectProgram?.(id === roadmap.defaultProgramId ? null : id);
+  const wk = thisWeek ? weekParts(thisWeek) : null;
+  const focus = !allDone ? weekLine(thisWeek, current) : null;
+  const open = (blockId: string | null) => {
+    setFocusBlock(blockId);
+    setSheetOpen(true);
   };
 
   return (
     <Card className="overflow-hidden p-0" aria-label="Your training program">
-      <div className="px-4 pb-4 pt-3.5">
+      <div className="px-4 pb-3 pt-3.5">
         <ActiveProgramHeader
           name={name}
           line={
@@ -192,79 +190,71 @@ export function ProgramRoadmapCard({
             )
           }
           blocks={blocks}
-          badge={browsing && roadmap.program.status !== "active" ? (roadmap.program.status === "completed" ? "Past" : "Upcoming") : null}
-          picker={canPick ? { open: picking, onToggle: () => setPicking((v) => !v) } : undefined}
-          onManage={!browsing && !(allDone && nextProgramTo) ? onManage : undefined}
+          onManage={!(allDone && nextProgramTo) ? onManage : undefined}
         />
 
-        {/* Where you are, at a glance: this block and this week's focus in a few words.
-            What the week is for and the whole roadmap are one tap down, under Plan details. */}
-        {(blockLine || thisWeek?.label) && !allDone && (
-          <div className="mt-3.5" data-roadmap-now>
-            {blockLine && (
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="min-w-0 truncate text-[15px] font-semibold leading-snug">{blockLine}</span>
-                {blockWhere && <span className="shrink-0 text-[12px] text-muted-foreground tabular-nums" data-roadmap-position>{blockWhere}</span>}
-              </div>
-            )}
-            {thisWeek?.label && (
-              <p className={cn("truncate text-[13px] text-muted-foreground", blockLine && "mt-0.5")} data-roadmap-week>
-                This week: <span className="text-foreground/80">{thisWeek.label}</span>
-              </p>
-            )}
+        {/* This week, in the coach's (or Cleo's) words: what today's training is for. */}
+        {!allDone && (wk || focus) && !multi && (
+          <div className="mt-3" data-roadmap-now>
+            <p className="text-[14px] font-medium text-foreground" data-roadmap-week>
+              This week{wk?.name ? ` · ${wk.name}` : ""}
+            </p>
+            {focus && <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-muted-foreground">{focus}</p>}
           </div>
         )}
       </div>
 
-      {picking && canPick && (
-        <ProgramList programs={roadmap.programs} selectedId={roadmap.program.id} defaultId={roadmap.defaultProgramId} onSelect={pick} />
-      )}
-
-      {/* Roadmap: every block in order, a tap away. Always open for a finished program. */}
-      {roadmap.program.status !== "completed" && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          aria-expanded={showAll}
-          className="flex min-h-11 w-full items-center justify-between gap-2 border-t border-border/60 px-4 py-3 text-[13px] font-semibold transition hover:bg-secondary/40"
-          data-roadmap-toggle
-        >
-          <span>Plan details</span>
-          <span className="inline-flex items-center gap-1 font-medium text-muted-foreground tabular-nums">
-            {multi ? `${blocks.length} blocks` : weeksLabel(blocks[0].weekCount)}
-            <ChevronDown className={cn("h-4 w-4 transition-transform", showAll && "rotate-180")} />
-          </span>
-        </button>
-      )}
-      {showAll && line && (
-        // what this week is for, in the coach's (or Cleo's) words
-        <div className="px-4 pb-3" data-roadmap-week-detail>
-          <div className="text-[12px] font-medium text-muted-foreground">This week</div>
-          <p className="mt-0.5 text-[14px] leading-relaxed text-foreground/80">
-            {thisWeek?.label && <span className="font-medium text-foreground">{thisWeek.label}. </span>}
-            {line}
-          </p>
-        </div>
-      )}
-      {showAll && (
-        <ol className={cn("space-y-0 px-4 pb-3", line && "border-t border-border/60 pt-3")} aria-label="Blocks in this program">
-          {blocks.map((b, i) => (
-            <RoadmapStep
-              key={b.id}
-              block={b}
-              number={i + 1}
-              last={i === blocks.length - 1}
-              open={openBlock === b.id || (blocks.length === 1 && openBlock === null)}
-              selected={b.id === selectedBlockId}
-              onToggle={() => setOpenBlock((id) => (id === b.id ? "" : b.id))}
-              onOpenBlockView={onSelectBlock ? () => onSelectBlock(b.id) : undefined}
-            />
-          ))}
+      {/* The phases, always in view: done, now (with this week), what's next. A tap opens the full plan there. */}
+      {multi && (
+        <ol className="border-t border-border/60 px-2 py-1" aria-label="Blocks in this program" data-roadmap-timeline>
+          {blocks.map((b, i) => {
+            const isNow = b.id === current?.id && !allDone;
+            return (
+              <li key={b.id}>
+                <button
+                  type="button"
+                  onClick={() => open(b.id)}
+                  className={cn("flex w-full items-start gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-secondary/40 active:bg-secondary/60", isNow && "py-2.5")}
+                  data-roadmap-block={b.status}
+                >
+                  <span
+                    className={cn(
+                      "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-semibold tabular-nums",
+                      b.status === "completed" && "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+                      b.status === "current" && "bg-foreground text-background",
+                      b.status === "upcoming" && "border border-border text-muted-foreground",
+                    )}
+                    aria-hidden
+                  >
+                    {b.status === "completed" ? <Check className="h-3 w-3" /> : i + 1}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className={cn("truncate text-[14px]", isNow ? "font-semibold text-foreground" : b.status === "completed" ? "text-muted-foreground" : "text-foreground/85")}>
+                        {blockTitle(b)}
+                      </span>
+                      <span className="shrink-0 text-[12px] tabular-nums text-muted-foreground">
+                        {isNow ? "Now" : b.status === "completed" ? "Done" : fmt(b.start) ?? weeksLabel(b.weekCount)}
+                      </span>
+                    </span>
+                    {isNow && (wk || focus) && (
+                      <span className="mt-1 block" data-roadmap-now>
+                        <span className="block text-[13px] font-medium text-foreground/90" data-roadmap-week>
+                          This week{wk?.name ? ` · ${wk.name}` : wk ? ` · week ${wk.number}` : ""}
+                        </span>
+                        {focus && <span className="mt-0.5 line-clamp-2 block text-[13px] leading-snug text-muted-foreground">{focus}</span>}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ol>
       )}
 
       {/* A finished program of their own: the way to the next one. */}
-      {!browsing && nextProgramTo && allDone && (
+      {nextProgramTo && allDone ? (
         <Link
           to={nextProgramTo as any}
           className="flex min-h-12 w-full items-center justify-between gap-2 border-t border-border/60 px-4 py-3 text-[14px] font-semibold transition hover:bg-secondary/40"
@@ -273,37 +263,174 @@ export function ProgramRoadmapCard({
           <span>Choose your next program</span>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
         </Link>
+      ) : (
+        <button
+          type="button"
+          onClick={() => open(current?.id ?? null)}
+          className="flex min-h-11 w-full items-center justify-between gap-2 border-t border-border/60 px-4 py-2.5 text-[13px] font-medium transition hover:bg-secondary/40"
+          data-roadmap-toggle
+        >
+          <span>Full plan</span>
+          <span className="inline-flex items-center gap-1 text-muted-foreground tabular-nums">
+            {weeksLabel(roadmap.totalWeeks || blocks.reduce((a, b) => a + b.weekCount, 0))}
+            <ChevronRight className="h-4 w-4" />
+          </span>
+        </button>
       )}
 
-      {browsing && onSelectProgram && (
-        <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2 text-[11px] text-muted-foreground">
-          <span className="inline-flex items-center gap-1">
-            <Eye className="h-3 w-3" /> Viewing only. Your current program and schedule are unchanged.
-          </span>
-          <button type="button" onClick={() => pick(roadmap.defaultProgramId)} className="shrink-0 font-semibold text-foreground">
-            Back to current
-          </button>
-        </div>
-      )}
+      <ProgramPlanSheet
+        open={sheetOpen}
+        onOpenChange={(o) => {
+          setSheetOpen(o);
+          if (!o) onSelectProgram?.(null);
+        }}
+        roadmap={browseRoadmap ?? roadmap}
+        currentProgramId={roadmap.defaultProgramId}
+        focusBlockId={focusBlock}
+        selectedBlockId={selectedBlockId ?? null}
+        onSelectProgram={onSelectProgram}
+        onOpenBlockView={
+          onSelectBlock
+            ? (id) => {
+                setSheetOpen(false);
+                onSelectProgram?.(null);
+                onSelectBlock(id);
+              }
+            : undefined
+        }
+        coach={coach}
+      />
+    </Card>
+  );
+}
 
-      {coach && (
-        <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2 text-[11px] text-muted-foreground">
-          <span className="inline-flex min-w-0 items-center gap-1">
-            <span className="truncate">Notes are written from the program. Your words always win.</span>
-          </span>
-          {(selectedBlockId ?? current?.id) && (
-            <Link
-              to="/admin/blocks/$blockId"
-              params={{ blockId: (selectedBlockId ?? current?.id) as string }}
-              hash="roadmap"
-              className="inline-flex shrink-0 items-center gap-1 font-semibold text-foreground hover:underline"
-            >
-              <Pencil className="h-3 w-3" /> Edit
-            </Link>
+/**
+ * The whole plan in one place: every block with every week and what it's
+ * for, all in view (no folds), and other programs to look back at. Opening
+ * one never changes the schedule.
+ */
+function ProgramPlanSheet({
+  open,
+  onOpenChange,
+  roadmap,
+  currentProgramId,
+  focusBlockId,
+  selectedBlockId,
+  onSelectProgram,
+  onOpenBlockView,
+  coach,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  roadmap: ProgramRoadmap;
+  currentProgramId: string;
+  focusBlockId: string | null;
+  selectedBlockId: string | null;
+  onSelectProgram?: (id: string | null) => void;
+  onOpenBlockView?: (blockId: string) => void;
+  coach: boolean;
+}) {
+  const browsing = roadmap.program.id !== currentProgramId;
+  const name = programHeading(roadmap.program, !browsing);
+  const progress = roadmapProgressParts(roadmap, todayLocalISO());
+  const editBlock = selectedBlockId ?? roadmap.currentBlockId ?? roadmap.blocks[0]?.id ?? null;
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="bottom"
+        swipeToClose
+        className="max-h-[90dvh] overflow-y-auto rounded-t-2xl p-0"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          if (!focusBlockId) return;
+          window.setTimeout(() => {
+            document.querySelector(`[data-plan-block="${focusBlockId}"]`)?.scrollIntoView({ block: "start" });
+          }, 60);
+        }}
+      >
+        <div className="mx-auto max-w-lg px-4 pb-8 pt-3">
+          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/30" aria-hidden />
+          <SheetHeader className="text-left">
+            <SheetTitle className="text-lg leading-snug">{name}</SheetTitle>
+            <SheetDescription className="text-[13px]">
+              {[
+                weeksLabel(roadmap.totalWeeks),
+                rangeLabel(roadmap.start, roadmap.end) || null,
+                !browsing ? progress.where : null,
+                roadmap.meet ? `Meet ${fmt(roadmap.meet.date, "MMM d")}` : null,
+              ].filter(Boolean).join(" · ")}
+            </SheetDescription>
+          </SheetHeader>
+          {browsing && (
+            <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-secondary/60 px-3 py-2 text-[12px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1"><Eye className="h-3.5 w-3.5" /> Viewing only. Your schedule is unchanged.</span>
+              <button type="button" onClick={() => onSelectProgram?.(null)} className="shrink-0 font-semibold text-foreground">Current</button>
+            </div>
+          )}
+
+          <ol className="mt-4 space-y-5" aria-label="Blocks">
+            {roadmap.blocks.map((b, i) => (
+              <li key={b.id} data-plan-block={b.id} className="scroll-mt-4">
+                <div className="flex items-baseline justify-between gap-2">
+                  <h3 className="min-w-0 text-[15px] font-semibold">
+                    <span className="mr-1.5 text-muted-foreground tabular-nums">{i + 1}</span>
+                    {blockTitle(b)}
+                    {b.status === "current" && <span className="ml-2 rounded bg-secondary px-1.5 align-middle text-[11px] font-medium">Now</span>}
+                  </h3>
+                  <span className="shrink-0 text-[12px] tabular-nums text-muted-foreground">{rangeLabel(b.start, b.end)}</span>
+                </div>
+                {b.purpose && <p className="mt-1 text-[13px] leading-snug text-foreground/80">{b.purpose}</p>}
+                {b.weeks.length > 0 && (
+                  <ul className="mt-2 divide-y divide-border/50 rounded-xl border border-border/60">
+                    {b.weeks.map((w) => {
+                      const p = weekParts(w);
+                      return (
+                        <li key={w.id} className={cn("px-3 py-2", w.status === "current" && "bg-secondary/50")}>
+                          <div className="flex items-center justify-between gap-2 text-[13px]">
+                            <span className="min-w-0 truncate font-medium">
+                              Week {p.number}{p.name ? ` · ${p.name}` : ""}
+                            </span>
+                            <span className="shrink-0 text-[12px] tabular-nums text-muted-foreground">
+                              {w.status === "completed" ? "Done" : w.status === "current" ? "This week" : fmt(w.start) ?? ""}
+                            </span>
+                          </div>
+                          {w.focus && <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">{w.focus}</p>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                {onOpenBlockView && !browsing && (
+                  <button type="button" onClick={() => onOpenBlockView(b.id)} className="mt-1 inline-flex min-h-10 items-center gap-0.5 text-[13px] font-medium text-foreground">
+                    See its workouts <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ol>
+
+          {roadmap.programs.length > 1 && onSelectProgram && (
+            <div className="mt-6">
+              <div className="mb-1 text-[13px] font-medium text-muted-foreground">Your programs</div>
+              <ProgramList programs={roadmap.programs} selectedId={roadmap.program.id} defaultId={currentProgramId} onSelect={(id) => onSelectProgram(id === currentProgramId ? null : id)} />
+            </div>
+          )}
+
+          {coach && (
+            <div className="mt-5 flex items-center justify-between gap-2 border-t border-border/60 pt-3 text-[12px] text-muted-foreground">
+              <span className="inline-flex min-w-0 items-center gap-1">
+                <span className="truncate">Notes are written from the program. Your words always win.</span>
+              </span>
+              {editBlock && (
+                <Link to="/admin/blocks/$blockId" params={{ blockId: editBlock }} hash="roadmap" className="inline-flex shrink-0 items-center gap-1 font-semibold text-foreground hover:underline">
+                  <Pencil className="h-3 w-3" /> Edit
+                </Link>
+              )}
+            </div>
           )}
         </div>
-      )}
-    </Card>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -427,89 +554,6 @@ function ProgramBar({ blocks }: { blocks: RoadmapBlockView[] }) {
   );
 }
 
-function RoadmapStep({
-  block, number, last, open, selected, onToggle, onOpenBlockView,
-}: {
-  block: RoadmapBlockView;
-  number: number;
-  last: boolean;
-  open: boolean;
-  selected: boolean;
-  onToggle: () => void;
-  onOpenBlockView?: () => void;
-}) {
-  const range = rangeLabel(block.start, block.end);
-  return (
-    <li className="relative flex gap-3">
-      {/* Rail */}
-      <div className="flex flex-col items-center pt-3">
-        <span
-          className={cn(
-            "grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold tabular-nums",
-            block.status === "completed" && "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-            block.status === "current" && "bg-foreground text-background",
-            block.status === "upcoming" && "border border-border text-muted-foreground",
-          )}
-        >
-          {block.status === "completed" ? <Check className="h-3.5 w-3.5" /> : number}
-        </span>
-        {!last && <span className="mt-1 w-px flex-1 bg-border" />}
-      </div>
-
-      <div className={cn("min-w-0 flex-1 pb-2 pt-2", !last && "border-b border-border/40")}>
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={open}
-          className={cn("flex w-full items-start gap-2 rounded-lg px-1.5 py-1 text-left transition hover:bg-secondary/40", selected && "bg-secondary/60")}
-        >
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <span className={cn("truncate text-sm font-semibold", block.status === "upcoming" && "text-foreground/80")}>{blockTitle(block)}</span>
-              {block.status === "current" && (
-                <span className="shrink-0 rounded bg-secondary px-1.5 text-[11px] font-medium leading-5 text-foreground">Now</span>
-              )}
-            </div>
-            <div className="truncate text-[12px] text-muted-foreground tabular-nums">
-              {weeksLabel(block.weekCount)}{range ? ` · ${range}` : ""}
-            </div>
-            {block.purpose && !open && <p className="mt-0.5 line-clamp-1 text-[12px] text-foreground/70">{block.purpose}</p>}
-          </div>
-          <ChevronDown className={cn("mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
-        </button>
-
-        {open && (
-          <div className="space-y-2 px-1.5 pb-1 pt-1">
-            {block.purpose && <p className="text-[12px] leading-snug text-foreground/80">{block.purpose}</p>}
-            {block.weeks.length > 0 && (
-              <ul className="space-y-1">
-                {block.weeks.map((w) => (
-                  <li key={w.id} className={cn("rounded-lg px-2 py-1.5", w.status === "current" ? "bg-secondary" : "bg-secondary/30")}>
-                    <div className="flex items-center justify-between gap-2 text-[12px]">
-                      <span className="font-semibold">
-                        Week {w.index}{w.label ? ` · ${w.label}` : ""}
-                      </span>
-                      <span className="shrink-0 text-muted-foreground tabular-nums">
-                        {w.status === "completed" ? "Done" : w.status === "current" ? "This week" : fmt(w.start) ?? ""}
-                      </span>
-                    </div>
-                    {w.focus && <p className="mt-0.5 text-[12px] leading-snug text-foreground/75">{w.focus}</p>}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {onOpenBlockView && (
-              <button type="button" onClick={onOpenBlockView} className="inline-flex min-h-10 items-center gap-0.5 text-[12px] font-semibold text-foreground">
-                Open workouts in Block View <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    </li>
-  );
-}
-
 export function programName(p: ProgramSummary): string {
   return p.title ?? (p.start ? `Program from ${fmt(p.start, "MMM yyyy")}` : "Program");
 }
@@ -524,7 +568,7 @@ function ProgramList({
   onSelect: (id: string) => void;
 }) {
   return (
-    <ul className="space-y-0.5 border-t border-border/60 px-2 py-2" role="listbox" aria-label="Programs">
+    <ul className="space-y-0.5" role="listbox" aria-label="Programs">
       {programs.map((p) => {
         const isSel = p.id === selectedId;
         return (

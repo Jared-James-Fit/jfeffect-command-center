@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Bookmark, BookmarkCheck, CalendarCheck, Download, Lock, Play } from "lucide-react";
 import { recordPreviewEvent, downloadLibraryPdf } from "@/lib/membership-library.functions";
+import { makeAndDeliverPdf } from "@/lib/pdf/deliver";
 import { getMyStartedPlan } from "@/lib/member-plan-start.functions";
 import { getCurrentMember } from "@/lib/members.functions";
 import { supabase } from "@/integrations/supabase/client";
@@ -114,15 +115,10 @@ function PlanDetail() {
     );
   };
 
-  const handleDownload = async () => {
-    try {
-      const { filename, base64 } = await downloadFn({ data: { planId } });
-      const blob = new Blob([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = filename; a.click();
-      URL.revokeObjectURL(url);
-    } catch (e: any) { toast.error(e?.message ?? "Download unavailable"); }
+  // made on the phone from the plan on screen and handed to the share sheet; the server only records it
+  const handleDownload = () => {
+    void downloadFn({ data: { planId } }).catch(() => {});
+    void makeAndDeliverPdf("Program", async () => (await import("@/lib/library-plan-pdf")).libraryPlanPdfFile(plan));
   };
 
   // extra sessions (a recovery day, easy runs) go on free days; they never need a training day

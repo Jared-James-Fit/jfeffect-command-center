@@ -316,7 +316,7 @@ export function LiftProgressCard({
                 className={cn(
                   "h-9 shrink-0 rounded-full border px-3 text-xs font-bold transition-colors",
                   name === activeEx
-                    ? "border-primary bg-primary text-primary-foreground"
+                    ? "border-foreground bg-foreground text-background"
                     : "border-border bg-background text-foreground hover:bg-secondary",
                 )}
               >
@@ -553,7 +553,7 @@ export function LiftProgressCard({
 
           {maxes.length > 0 && (
             <div>
-              <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              <div className="mb-1.5 text-[12px] font-medium text-muted-foreground">
                 Rep maxes · heaviest lifted
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -604,7 +604,7 @@ export function LiftProgressCard({
 
           {!single && (
           <div>
-            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <div className="mb-1.5 text-[12px] font-medium text-muted-foreground">
               Sessions
             </div>
             <ul className="space-y-1.5" data-testid="lift-session-log">
@@ -619,7 +619,7 @@ export function LiftProgressCard({
                     key={s.key}
                     className={cn(
                       "overflow-hidden rounded-xl border bg-background",
-                      isSel ? "border-primary/50" : "border-border",
+                      isSel ? "border-foreground/50" : "border-border",
                     )}
                   >
                     <button
@@ -660,7 +660,7 @@ export function LiftProgressCard({
                                 ? "text-muted-foreground"
                                 : delta > 0
                                   ? "text-emerald-500"
-                                  : "text-rose-500",
+                                  : "text-foreground",
                             )}
                           >
                             {delta == null || Math.abs(delta) < 0.05
@@ -716,7 +716,7 @@ export function LiftProgressCard({
               <button
                 type="button"
                 onClick={() => setShowAllSessions((v) => !v)}
-                className="mt-1.5 h-10 w-full rounded-lg text-xs font-bold text-primary hover:bg-secondary"
+                className="mt-1.5 h-10 w-full rounded-lg text-xs font-semibold text-foreground hover:bg-secondary"
               >
                 {showAllSessions ? "Show fewer" : `Show all ${sessions.length} sessions`}
               </button>
@@ -792,7 +792,7 @@ function SessionReadout({
       data-testid="lift-readout"
     >
       <div className="flex items-center justify-between gap-2">
-        <div className="truncate text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+        <div className="truncate text-[12px] font-medium text-muted-foreground">
           {format(parseISO(session.key), "EEE · MMM d, yyyy")}
           {isLatest && " · Latest"}
         </div>
@@ -800,7 +800,7 @@ function SessionReadout({
           <button
             type="button"
             onClick={onDetails}
-            className="-my-1 inline-flex h-8 shrink-0 items-center gap-0.5 rounded-lg px-2 text-xs font-bold text-primary hover:bg-secondary"
+            className="-my-1 inline-flex h-8 shrink-0 items-center gap-0.5 rounded-lg px-2 text-xs font-semibold text-foreground hover:bg-secondary"
           >
             Details <ChevronRight className="h-3.5 w-3.5" />
           </button>
@@ -813,7 +813,7 @@ function SessionReadout({
           <span
             className={cn(
               "text-xs font-bold tabular-nums",
-              good == null ? "text-muted-foreground" : good ? "text-emerald-500" : "text-rose-500",
+              good == null ? "text-muted-foreground" : good ? "text-emerald-600 dark:text-emerald-400" : "text-foreground",
             )}
           >
             {delta! > 0 ? "▲" : "▼"}{" "}
@@ -822,7 +822,7 @@ function SessionReadout({
         )}
         {isPr && metric === "est" && (
           <span
-            className="rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+            className="rounded-full px-1.5 py-0.5 text-[11px] font-semibold"
             style={{
               background: `color-mix(in oklab, ${ANALYTICS_COLORS.green} 18%, transparent)`,
               color: ANALYTICS_COLORS.green,
@@ -852,14 +852,14 @@ function Tile({
 }) {
   return (
     <div className="min-w-0 rounded-xl border border-border bg-background px-3 py-2.5">
-      <div className="truncate text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+      <div className="truncate text-[12px] font-medium text-muted-foreground">
         {label}
       </div>
       <div
         className={cn(
           "mt-0.5 truncate text-lg font-bold tabular-nums",
           tone === "up" && "text-emerald-500",
-          tone === "down" && "text-rose-500",
+          tone === "down" && "text-foreground",
         )}
       >
         {value}
@@ -985,7 +985,7 @@ function useVelocityInsight(
     <div className="rounded-xl border border-border bg-muted/20 p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          <div className="text-[12px] font-medium text-muted-foreground">
             Velocity readiness
           </div>
           <div className="mt-1 text-sm font-bold text-foreground">
@@ -1007,7 +1007,7 @@ function useVelocityInsight(
         </div>
         {insight.predicted1rm != null && (
           <div className="shrink-0 text-right">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            <div className="text-[12px] font-medium text-muted-foreground">
               Velocity 1RM estimate
             </div>
             <div className="text-lg font-bold text-foreground">
