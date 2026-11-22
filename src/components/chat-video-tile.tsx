@@ -1,3 +1,4 @@
+import type * as React from "react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Loader2, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -43,7 +44,7 @@ function useNearViewport(ref: React.RefObject<Element | null>, enabled: boolean)
  * plays a local copy instantly, like iMessage. Bigger ones stream.
  */
 export function ChatVideoTile({
-  src, poster, expectPoster, width, height, duration: knownDuration, cacheKey, path, size, name, className,
+  src, poster, expectPoster, width, height, duration: knownDuration, cacheKey, path, size, name, className, overlay,
 }: {
   /** Signed URL of the video; may still be loading. */
   src?: string;
@@ -62,6 +63,8 @@ export function ChatVideoTile({
   size?: number;
   name?: string | null;
   className?: string;
+  /** Drawn over the still (a lift video's bar path), under the play button. */
+  overlay?: React.ReactNode;
 }) {
   const viewer = useMediaViewer();
   const ref = useRef<HTMLButtonElement>(null);
@@ -148,6 +151,7 @@ export function ChatVideoTile({
         />
       ) : null}
       {!ready && <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-muted to-secondary/50" aria-hidden="true" />}
+      {ready && overlay}
       <span className="absolute inset-0 grid place-items-center">
         <span className="grid h-12 w-12 place-items-center rounded-full bg-black/55 text-white ring-1 ring-white/30 backdrop-blur-sm">
           {playable ? <Play className="h-5 w-5 translate-x-[1px] fill-current" /> : <Loader2 className="h-5 w-5 animate-spin" />}

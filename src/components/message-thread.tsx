@@ -83,6 +83,14 @@ import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resum
 import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
 import { ChatVideoTile } from "@/components/chat-video-tile";
 import { LiftAnalysisEntry } from "@/components/lift-analysis/lift-analysis-entry";
+import { BarPathOverlay } from "@/components/lift-analysis/bar-path-overlay";
+import {
+  ChatLiftOffer,
+  ChatLiftOnSet,
+  ChatLiftPlace,
+  type ChatSetVideo,
+} from "@/components/lift-analysis/chat-lift-line";
+import { isRead, useSetVideoAnalyses } from "@/lib/lift-analysis/queries";
 import { ReplyThumb } from "@/components/messages/reply-thumb";
 import { COMPOSER_INSERT_EVENT, takeQueuedComposerInsert, type ComposerInsertDetail } from "@/lib/composer-insert";
 import {
@@ -172,10 +180,27 @@ function ImageAttachment({ att, messageId }: { att: MessageAttachment; messageId
   return <ChatImageAttachment att={att} messageId={messageId} initialSignedUrl={signed} deferSign={!signed && pending} />;
 }
 
-function VideoAttachment({ att, mine }: { att: MessageAttachment; mine?: boolean }) {
+function VideoAttachment({
+  att,
+  mine,
+  message,
+  role,
+  clientId,
+}: {
+  att: MessageAttachment;
+  mine?: boolean;
+  message?: Message;
+  role?: SenderRole;
+  clientId?: string;
+}) {
   const signed = useSignedUrlFor(att.storage_path);
   const poster = useSignedUrlFor(att.thumbnail_storage_path);
   const src = att.storage_path ? signed : att.url;
+  const sv = (att.set_video ?? null) as ChatSetVideo | null;
+  // a read lift video: its bar path drawn on the still, nothing else
+  const { data: reads } = useSetVideoAnalyses(sv?.id ? [sv.id] : []);
+  const stored = sv?.id ? reads?.[sv.id] : null;
+  const read = isRead(stored) ? stored : null;
   const tile = (
     <ChatVideoTile
       src={src}
@@ -188,23 +213,49 @@ function VideoAttachment({ att, mine }: { att: MessageAttachment; mine?: boolean
       path={att.storage_path}
       size={att.size}
       name={att.name}
+      overlay={read ? <BarPathOverlay analysis={read.result} /> : undefined}
     />
   );
   // One tap plays it full screen. The tile shows (and reserves room for) the poster
   // immediately, even while the video's own link is still being signed.
-  // A set video: its bar path & speed one line under it.
-  if (!att.set_video?.id) return tile;
+  // A client's video that isn't read yet (a lift sent in chat): read it, quietly.
+  if (!sv?.id) {
+    const fromClient = message?.sender_role === "client" && !message.deleted_at;
+    if (!fromClient || !att.storage_path || !clientId || !message || message.id.startsWith("optimistic-"))
+      return tile;
+    return (
+      <div className="space-y-1">
+        {tile}
+        <ChatLiftOffer
+          message={message}
+          storagePath={att.storage_path}
+          clientId={clientId}
+          staff={role === "admin"}
+          className={mine ? "text-current hover:text-current" : undefined}
+        />
+      </div>
+    );
+  }
+  // A set video (or a lift sent in chat): its bar path & speed one line under it.
+  const chat = sv.origin === "chat";
   return (
     <div className="space-y-1">
       {tile}
       <LiftAnalysisEntry
-        setVideoId={att.set_video.id}
+        setVideoId={sv.id}
         src={src}
         poster={poster}
-        exerciseName={att.set_video.exercise ?? "Set video"}
-        setLabel={att.set_video.label}
+        exerciseName={sv.exercise ?? (chat ? "Barbell lift" : "Set video")}
+        setLabel={(att.set_video as { label?: string } | undefined)?.label}
         className={mine ? "text-current hover:text-current" : undefined}
       />
+      {chat && message && att.storage_path && clientId && (
+        sv.linked ? (
+          <ChatLiftOnSet sv={sv} message={message} storagePath={att.storage_path} clientId={clientId} />
+        ) : (
+          <ChatLiftPlace sv={sv} message={message} storagePath={att.storage_path} clientId={clientId} />
+        )
+      )}
     </div>
   );
 }
@@ -586,7 +637,8 @@ function AttachmentView({
     );
   }
   if (att.type === "image") return <ImageAttachment att={att} messageId={message?.id} />;
-  if (att.type === "video") return <VideoAttachment att={att} mine={mine} />;
+  if (att.type === "video")
+    return <VideoAttachment att={att} mine={mine} message={message} role={role} clientId={clientId} />;
   if (att.type === "audio") return <AudioAttachment att={att} mine={mine} message={message} />;
   if (att.type === "pdf" || att.type === "file") return <FileAttachment att={att} mine={mine} />;
   return <LinkAttachment att={att} mine={mine} />;
@@ -2110,6 +2162,29 @@ export function MessageThread({
         return [...withoutTemp, sent];
       });
       releaseDrafts();
+      // a client's video to their coach: read as a lift in the background (the file itself when it
+      // went as it was, else its link), never holding up the chat
+      if (role === "client") {
+        uploaded.forEach((a, i) => {
+          if (a.type !== "video" || !a.storage_path) return;
+          const d = drafts[i];
+          const same = d && a.size != null && d.file.size === a.size;
+          void import("@/lib/lift-analysis/chat-lift-run")
+            .then((m) =>
+              m.queueChatLift({
+                messageId: sent.id,
+                storagePath: a.storage_path!,
+                clientId,
+                caption: text,
+                sentAt: sent.created_at ?? new Date().toISOString(),
+                source: same ? d.file : undefined,
+                by: "athlete",
+              }),
+            )
+            .then(() => qc.invalidateQueries({ queryKey: ["messages", clientId] }))
+            .catch(() => {});
+        });
+      }
       return sent;
     } catch (e: any) {
       patchInbox((prev) => resolveOptimistic(prev, tempId, null));

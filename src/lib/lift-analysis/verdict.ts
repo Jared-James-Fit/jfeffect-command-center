@@ -44,10 +44,19 @@ export type VelocityVerdict = {
 export const ACCEPT_RULES = {
   /** The scale's own 1-σ uncertainty (plate size, edge, view). */
   maxScaleRel: 0.03,
-  /** Of each concentric, at least this share of frames had the plate. */
+  /** Of each concentric, the share of frames that had the plate (below it a rep that isn't measured reads as hidden). */
   minRepCoverage: 0.9,
-  /** The plate at least this round (vertical ÷ horizontal or the reverse): within ~25° of side-on. */
+  /**
+   * The plate at least this round. Tilted (the phone pitched up or down) moves
+   * the bar toward and away from the lens as it rises, which the scale can't
+   * follow: within ~25° of level. Turned (the phone round to the side, how
+   * nearly everyone films) leaves the plate's tall axis its true 450 mm and the
+   * bar's rise square to the lens, so the vertical speed is read as well as
+   * side-on: anything to ~40° (cos 40° ≈ 0.77). The sideways path is scaled by
+   * the plate's narrow axis and marked an estimate past 0.96.
+   */
   minViewRatio: 0.9,
+  minTurnedRatio: 0.77,
   minFps: 24,
   /**
    * Every rep's range within this share of the set's median: a rep read far
@@ -57,12 +66,16 @@ export const ACCEPT_RULES = {
    */
   romSpread: 0.3,
   /**
-   * The plate followed in at least this share of the clip: a rep done while
-   * it was lost is a rep never counted, and an average without it would be
-   * called the set's (a real clip read in the browser once found 3 of 5 reps
-   * with the plate followed in 68 % of frames).
+   * The plate followed in at least this share of the clip, and never lost
+   * inside the set for longer than a rep takes (maxLostInsideS): a rep done
+   * while it was lost is a rep never counted, and an average without it would
+   * be called the set's (a real clip read in the browser once found 3 of 5
+   * reps with the plate followed in 68 % of frames). Before the set and after
+   * it (the walk-out, racking it) a lost plate hides no rep; the server also
+   * logs a speed only when the reps it found are the reps the athlete logged.
    */
-  minTracked: 0.85,
+  minTracked: 0.75,
+  maxLostInsideS: 1.0,
 } as const;
 
 export function velocityVerdict(a: LiftAnalysis): VelocityVerdict {
@@ -77,13 +90,23 @@ export function velocityVerdict(a: LiftAnalysis): VelocityVerdict {
   if (!reps.length) reasons.add("no_reps");
   if (a.fps < ACCEPT_RULES.minFps) reasons.add("low_fps");
   if (a.quality.notes.includes("camera_moved")) reasons.add("camera_moved");
-  if (!(a.quality.tracked >= ACCEPT_RULES.minTracked)) reasons.add("plate_lost");
-  if (Number.isFinite(a.plate.ratio) && a.plate.ratio < ACCEPT_RULES.minViewRatio)
-    reasons.add("camera_angle");
+  const lostInside = (a.track?.lost ?? []).some(
+    (l) => l.end - l.start > ACCEPT_RULES.maxLostInsideS,
+  );
+  if (!(a.quality.tracked >= ACCEPT_RULES.minTracked) || lostInside) reasons.add("plate_lost");
+  const minRatio =
+    a.plate.view === "turned" ? ACCEPT_RULES.minTurnedRatio : ACCEPT_RULES.minViewRatio;
+  if (Number.isFinite(a.plate.ratio) && a.plate.ratio < minRatio) reasons.add("camera_angle");
   for (const r of reps) {
     if (!r.complete) reasons.add("rep_incomplete");
-    if (r.mcv.tier !== "measured") reasons.add("rep_not_measured");
-    if (r.coverage < ACCEPT_RULES.minRepCoverage) reasons.add("plate_hidden");
+    // a rep's mean needs both its ends and the bar seen rising across any hidden moment
+    // (kinematics.ts): when it's measured, a short hidden stretch inside it doesn't matter
+    if (r.mcv.tier !== "measured")
+      reasons.add(
+        r.mcv.why === "plate_hidden" || r.coverage < ACCEPT_RULES.minRepCoverage
+          ? "plate_hidden"
+          : "rep_not_measured",
+      );
   }
   const roms = reps.map((r) => r.top - r.bottom).filter((v) => Number.isFinite(v) && v > 0);
   if (roms.length >= 2) {
@@ -177,7 +200,7 @@ const REASON_TEXT: Record<VelocityReason, string> = {
   rep_not_measured: "a rep's speed was only an estimate",
   plate_hidden: "the plate was hidden during a rep",
   camera_moved: "the camera moved",
-  camera_angle: "the camera wasn't side-on",
+  camera_angle: "the camera was too far round from side-on",
   low_fps: "the frame rate was too low",
   rom_inconsistent: "one rep's range didn't match the others",
   plate_lost: "the plate was lost for part of the set",

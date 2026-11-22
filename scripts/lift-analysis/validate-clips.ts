@@ -39,6 +39,7 @@ async function main() {
       SCENARIOS.map((s) => ({
         name: s.name,
         dir: dirOf(s.lift),
+        lift: s.lift === "sumo" ? "deadlift" : s.lift,
         plateMm: s.plateMm ?? 450,
         width: s.w ?? 720,
       })),
@@ -59,6 +60,7 @@ async function main() {
     let res = engine.runEngine(d.frames, {
       seed: { kind: mode === "confirm" ? "proposal" : "auto" },
       dirHint: dirOf(sc.lift),
+      lift: sc.lift === "sumo" ? "deadlift" : sc.lift,
       plate,
     });
     let tapped = false;

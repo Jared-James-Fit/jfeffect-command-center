@@ -16,7 +16,23 @@ export type MessageAttachment = {
   /** Videos: how the upload went on the sender's phone (compressed or not, why, timings). */
   transfer?: Record<string, string | number | null>;
   /** Videos: the logged set this clip is of (pl_set_videos, set_video_attach). */
-  set_video?: { id: string; exercise?: string; set?: number; label?: string; workout?: string; day_id?: string; row_id?: string };
+  set_video?: {
+    id: string;
+    exercise?: string;
+    set?: number;
+    set_name?: string;
+    label?: string;
+    workout?: string;
+    day_id?: string;
+    row_id?: string;
+    /** "chat": a video the athlete sent in the chat, read as a lift (its message keeps their words). */
+    origin?: "set" | "chat";
+    /** A chat lift: on a set yet, and how it got there. */
+    linked?: boolean;
+    how?: "auto" | "athlete" | "coach";
+    /** A chat lift not on a set: the set it's probably from, for one tap. */
+    suggest?: { row_id: string; set: number; exercise?: string; set_name?: string } | null;
+  };
   width?: number;
   height?: number;
   peaks?: number[];

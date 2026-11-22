@@ -25,6 +25,14 @@ export type Metric = { v: number | null; u: number | null; tier: Tier; why?: str
 
 export const NONE = (why: string): Metric => ({ v: null, u: null, tier: "unavailable", why });
 
+/**
+ * A rep's mean velocity stays a measurement with the plate hidden for up to
+ * this long inside the press (s), both ends seen and at least this share of
+ * its frames followed.
+ */
+export const MCV_MAX_HIDDEN_S = 0.6;
+export const MCV_MIN_COVERAGE = 0.6;
+
 /** Velocity threshold for "moving" (mm/s). */
 export const MOVE_MM_S = 30;
 /** 95 % margins up to this share of the value are "measured"; up to ESTIMATE_MAX "estimated". */
@@ -683,6 +691,18 @@ export function analyzeReps(input: RepInput): RepMetrics[] {
     const coverage = total ? seen / total : 0;
     const gapS = longestGap * dt;
     const trackedOk = coverage >= 0.75 && gapS <= 0.15;
+    // the bar rose across every stretch where the plate was hidden (the heights either side of
+    // each gap, as seen): a hidden reversal would make the rep two pushes, not one
+    let risesAcrossGaps = true;
+    if (input.raw) {
+      let lastSeen = -1;
+      for (let i = ph.iStart; i <= ph.iEnd; i++) {
+        if (!found[i]) continue;
+        if (lastSeen >= 0 && i - lastSeen > 1 && !(input.raw.y[i] > input.raw.y[lastSeen]))
+          risesAcrossGaps = false;
+        lastSeen = i;
+      }
+    }
     // where the rep starts and stops has to be seen: a plate lost around either end means the
     // time or the height is a guess, and a mean velocity from a guessed end is no number at all
     const endSeen = (time: number) => {
@@ -710,12 +730,18 @@ export function analyzeReps(input: RepInput): RepMetrics[] {
     const notTracked = !trackedOk ? "plate_hidden" : undefined;
     // the plate hidden for long enough inside the rise: its peak and sticking point weren't seen
     const blind = gapS > 0.15;
+    // A rep's mean concentric velocity is its rise over its time: both ends seen, it doesn't need
+    // the frames in between. A short hidden stretch inside the press (a hand, a spotter, the
+    // upright) costs the peak and the sticking point, never the mean, as long as the bar was
+    // seen rising across it and most of the rep was seen.
+    const meanFromEnds =
+      endsSeen && coverage >= MCV_MIN_COVERAGE && gapS <= MCV_MAX_HIDDEN_S && risesAcrossGaps;
     const mcv: Metric =
       units !== "mm"
         ? NONE("not_calibrated")
         : !endsSeen
           ? NONE("plate_hidden")
-          : notTracked
+          : notTracked && !meanFromEnds
             ? {
                 ...metric(mcvV, relMcv, { forceEstimate: notTracked }),
                 tier: "estimated",
@@ -890,7 +916,9 @@ export function analyzeReps(input: RepInput): RepMetrics[] {
     }
     out.push({
       n: out.length + 1,
-      complete: top >= topRef - Math.max(0.15 * romRef, units === "mm" ? 40 : 0),
+      // reached the top: the highest the bar got on this rise, against the set's own tops (the
+      // concentric's timed end can stop short of it on a slow lockout, and that's still a rep)
+      complete: s.y[l.to] >= topRef - Math.max(0.15 * romRef, units === "mm" ? 40 : 0),
       dir,
       con: { start: ph.start, end: ph.end },
       ecc,

@@ -97,6 +97,8 @@ export async function buildWorkoutFilm(
       .eq("client_id", comp.client_id)
       .eq("day_id", comp.day_id)
       .eq("uploaded_by", userId)
+      // a video sent in the coach chat went to the coach, never the crew
+      .eq("origin", "set")
       .is("deleted_at", null);
     const all = ((vids ?? []) as any[]).filter((v) => v.result_id && v.storage_path);
     if (!all.length) return { status: "no_clips", clips: 0, skipped: 0 };

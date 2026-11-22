@@ -31,6 +31,7 @@ import { looksFilmedInApp } from "@/lib/set-videos/phone-copy";
 import { SET_RECORD_MAX_SECONDS, canFilmInApp } from "@/lib/camera/film-settings";
 import { primeCamera } from "@/lib/camera/camera-prime";
 import { setTitle, setWord } from "@/lib/set-videos/label";
+import { analysableExercise } from "@/lib/lift-analysis/exercise";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -57,6 +58,8 @@ export type SetVideo = {
   set_index: number;
   exercise_name: string | null;
   label: string;
+  /** "chat": a video the athlete sent in the coach chat, read as a lift (never in the film). */
+  origin?: "set" | "chat";
   storage_path: string;
   thumbnail_path: string | null;
   duration_s: number | null;
@@ -161,10 +164,12 @@ export function useSetVideosForDay(dayId: string, enabled: boolean) {
       const { data, error } = await (supabase as any)
         .from("pl_set_videos")
         .select(
-          "id, row_id, result_id, warmup_id, set_index, exercise_name, label, storage_path, thumbnail_path, duration_s, width, height, size_bytes, message_id, uploaded_by, created_at, feed_path, feed_width, feed_height, feed_duration_s, feed_size_bytes",
+          "id, row_id, result_id, warmup_id, set_index, exercise_name, label, origin, storage_path, thumbnail_path, duration_s, width, height, size_bytes, message_id, uploaded_by, created_at, feed_path, feed_width, feed_height, feed_duration_s, feed_size_bytes",
         )
         .eq("day_id", dayId)
         .is("deleted_at", null)
+        // a video sent in the coach chat shows on its set once it's on one
+        .not("set_index", "is", null)
         .order("created_at", { ascending: true });
       if (error) throw error;
       return (data ?? []) as SetVideo[];
@@ -581,6 +586,12 @@ export function SetVideoCell(props: SetVideoCellProps) {
         <FilmCam
           title={`${props.exerciseName} · ${setTitle(setIndex)}`}
           detail={props.aim ?? props.label}
+          // a barbell lift is read for bar speed: one line on how to stand the phone, before it films
+          tip={
+            analysableExercise(props.exerciseName)
+              ? "For bar speed: phone propped at the end of the bar, the whole plate in view"
+              : undefined
+          }
           maxSeconds={SET_RECORD_MAX_SECONDS}
           onClose={() => setCameraOpen(false)}
           onLibrary={() => {
