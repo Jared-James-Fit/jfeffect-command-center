@@ -99,6 +99,8 @@ export function CleoActionCard({
 
   const open = action.status === "proposed";
   const asking = open && action.route === "ask_owner";
+  // An older card for something this person's role can't do (money for a coach): nothing to confirm.
+  const blocked = open && action.route === "not_allowed";
   return (
     <div className="w-full rounded-2xl border bg-card p-3 text-left shadow-sm">
       <div className="mb-1 flex items-center justify-between gap-2">
@@ -136,7 +138,12 @@ export function CleoActionCard({
       {action.status === "failed" && action.error && <p className="mt-1.5 text-xs text-destructive">{action.error}</p>}
       {asking && (
         <p className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
-          <ShieldQuestion className="h-3.5 w-3.5" /> Not in your role, so {ownerName} has to approve it.
+          <ShieldQuestion className="h-3.5 w-3.5" /> {ownerName} has to approve it. Once they do, it's done as you.
+        </p>
+      )}
+      {blocked && (
+        <p className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
+          <ShieldQuestion className="h-3.5 w-3.5" /> This isn't something your role does, so it can't run.
         </p>
       )}
       {mode === "mine" && action.status === "awaiting_approval" && (
@@ -155,7 +162,7 @@ export function CleoActionCard({
             </>
           ) : (
             <>
-              {open && (
+              {open && !blocked && (
                 <Button size="sm" className="h-8" disabled={!!busy} onClick={() => void act("confirm")}>
                   {busy === "confirm" ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : asking ? <ShieldQuestion className="mr-1 h-3.5 w-3.5" /> : <Check className="mr-1 h-3.5 w-3.5" />}
                   {asking ? `Ask ${ownerName}` : "Confirm"}

@@ -3,14 +3,18 @@
  * shared by the server (cleo-actions.server.ts) and the chat UI.
  *
  * Cleo never acts alone: Cleo proposes, the person taps Confirm, and it runs
- * with their own session. When it's outside their role it becomes a request
- * the business owner approves (see 20261101090000_cleo_actions.sql).
+ * with their own session. A coach's card for their own client becomes a
+ * request the business owner approves; approving only authorizes it, and it
+ * then runs as the coach (CLEO_ACTION_RULES, 20270507093000). Anything a
+ * person's role could never do (money for a coach, anything for a role with no
+ * coaching) is never offered to them at all.
  */
 import { z } from "zod";
 import type { Permission } from "@/lib/permissions";
 import { WEEKDAYS, rxSchema } from "@/lib/cleo-program";
 
-export type ActionPermission = Permission | "admin";
+/** Stored on a card (cleo_actions.permission); older cards say "admin" or a role permission. */
+export type ActionPermission = ActionNeed | Permission | "admin";
 
 /** Same list as createAppointment's (appointments.functions.ts). */
 export const CLEO_APPOINTMENT_TYPES = [
@@ -197,28 +201,105 @@ export const CLEO_ACTION_INFO: Record<CleoActionKind, { title: string; tool: str
   set_nutrition_targets: { title: "Update nutrition", tool: "Set a client's nutrition targets: calories and macros for each day type, plus phase and notes. Replaces their current day list (or creates their first targets)." },
 };
 
-/** What doing it takes. Admins can do all of these; the finance login holds some role permissions. */
-export function actionPermission(kind: CleoActionKind, params: any): ActionPermission {
-  switch (kind) {
-    case "create_task":
-    case "complete_task":
-      return "tasks.manage";
-    case "send_payment_link":
-      return "payments.request";
-    case "record_payment":
-      // payments.record covers money that came in; a refund, cancellation or comp is the owner's call.
-      return "payments.record";
-    default:
-      return "admin";
+/**
+ * What a card needs from the person who asks for it. Never from whoever
+ * approves it: the owner's OK only authorizes a request; it never lends the
+ * owner's identity or rights to it (20270507093000_cleo_actions_run_as_requester.sql).
+ *
+ * - "tasks": the team task board (the admin, an active coach, a role with tasks.manage).
+ * - "client": coaching work on one client: the admin, or that client's own coach.
+ * - "payments.record" / "payments.request": money. The admin, or a role holding the
+ *   permission (the finance login). Never a coach, with or without approval.
+ * - "owner": the admin only, run as themselves.
+ */
+export type ActionNeed = "tasks" | "client" | "payments.record" | "payments.request" | "owner";
+
+export type ActionRule = {
+  need: ActionNeed;
+  /**
+   * A coach's card for their own client can be approved by the owner and then
+   * runs as the coach: written with the service role after the coach's role and
+   * the client's assignment are checked again, every row naming the coach.
+   * False when running it goes through the app's request-bound server
+   * functions, which would act as whoever tapped Approve: those stay the
+   * owner's to do himself.
+   */
+  approvable: boolean;
+};
+
+export const CLEO_ACTION_RULES: Record<CleoActionKind, ActionRule> = {
+  create_task: { need: "tasks", approvable: false },
+  complete_task: { need: "tasks", approvable: false },
+  send_message: { need: "client", approvable: true },
+  schedule_message: { need: "client", approvable: true },
+  add_client_note: { need: "client", approvable: true },
+  mark_check_ins_reviewed: { need: "client", approvable: true },
+  build_program: { need: "client", approvable: true },
+  edit_program_day: { need: "client", approvable: true },
+  publish_program: { need: "client", approvable: true },
+  correct_logged_exercise: { need: "client", approvable: true },
+  set_nutrition_targets: { need: "client", approvable: true },
+  // These run through server functions bound to the tapper's request (templates,
+  // the calendar's scheduled instances, appointments with Google): the owner's.
+  assign_program_template: { need: "owner", approvable: false },
+  add_workout: { need: "owner", approvable: false },
+  remove_workout: { need: "owner", approvable: false },
+  move_workout: { need: "owner", approvable: false },
+  book_appointment: { need: "owner", approvable: false },
+  restore_program_version: { need: "owner", approvable: false },
+  // payments.record covers money that came in; a refund, cancellation or comp is the owner's call.
+  record_payment: { need: "payments.record", approvable: false },
+  send_payment_link: { need: "payments.request", approvable: false },
+};
+
+/** What doing it takes (stored on the card as `permission`; the server always re-reads the rule by kind). */
+export function actionPermission(kind: CleoActionKind, _params?: unknown): ActionPermission {
+  return CLEO_ACTION_RULES[kind].need;
+}
+
+/**
+ * Who's asking. `permissions` are the role permissions of the person's roles
+ * other than coach: a coach role never carries money through Cleo.
+ */
+export type Caller = { isAdmin: boolean; isCoach?: boolean; permissions: readonly string[] };
+
+/** "run": they do it themselves now. "ask_owner": the owner approves, then it runs as them. "not_allowed": never theirs. */
+export type ActionRoute = "run" | "ask_owner" | "not_allowed";
+
+export function routeFor(kind: CleoActionKind, caller: Caller): ActionRoute {
+  if (caller.isAdmin) return "run";
+  const rule = CLEO_ACTION_RULES[kind];
+  switch (rule.need) {
+    case "tasks":
+      return caller.isCoach || caller.permissions.includes("tasks.manage") ? "run" : "not_allowed";
+    case "payments.record":
+    case "payments.request":
+      return caller.permissions.includes(rule.need) ? "run" : "not_allowed";
+    case "client":
+      return caller.isCoach && rule.approvable ? "ask_owner" : "not_allowed";
+    case "owner":
+      return "not_allowed";
   }
 }
 
-export type Caller = { isAdmin: boolean; permissions: readonly string[] };
+/** The kinds Cleo offers this person at all. */
+export function availableKinds(caller: Caller): CleoActionKind[] {
+  return CLEO_ACTION_KINDS.filter((k) => routeFor(k, caller) !== "not_allowed");
+}
 
-/** "run": they can do it themselves. "ask_owner": it needs the business owner's OK. */
-export function routeFor(permission: ActionPermission, caller: Caller): "run" | "ask_owner" {
-  if (caller.isAdmin) return "run";
-  return permission !== "admin" && caller.permissions.includes(permission) ? "run" : "ask_owner";
+/** Why a card isn't theirs, in words Cleo can pass on. */
+export function notAllowedReason(kind: CleoActionKind, ownerName: string): string {
+  switch (CLEO_ACTION_RULES[kind].need) {
+    case "payments.record":
+    case "payments.request":
+      return `Payments are ${ownerName}'s and the finance login's, never a coach's.`;
+    case "tasks":
+      return "Your role doesn't work the team task board.";
+    case "client":
+      return "That's coaching work on a client, which only the admin or that client's own coach does.";
+    case "owner":
+      return `Only ${ownerName} can do this one. Do it in the app, or ask ${ownerName}.`;
+  }
 }
 
 export type CleoActionStatus = "proposed" | "cancelled" | "awaiting_approval" | "declined" | "running" | "done" | "failed";
@@ -232,7 +313,7 @@ export type CleoActionView = {
   summary: string;
   status: CleoActionStatus;
   /** For a proposal: what Confirm does for this person. */
-  route: "run" | "ask_owner";
+  route: ActionRoute;
   result: string | null;
   error: string | null;
   requestedBy: string;
