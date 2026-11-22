@@ -19,7 +19,14 @@ import type { ShownKey } from "@/lib/lift-analysis/run";
 
 export type RereadPlan =
   | { mode: "auto"; was: "needs_tap" | "done" }
-  | { mode: "keys"; was: "done"; keys: ShownKey[]; plateMm: number | null };
+  | {
+      mode: "keys";
+      was: "done";
+      keys: ShownKey[];
+      plateMm: number | null;
+      /** Rises the athlete said aren't reps: still left out. */
+      exclude?: number[];
+    };
 
 type Row = {
   status?: string | null;
@@ -36,6 +43,7 @@ type OldRead = {
   frame?: { w: number; h: number };
   plate?: { t?: number; x?: number; y?: number; r?: number; mm?: number; confirmed?: boolean };
   track?: { keys?: { t: number; x: number; y: number; a: number; b: number; source?: string }[] };
+  exclude?: number[];
 };
 
 /** The engine a stored row was read with (the column, else the read's own field). */
@@ -62,6 +70,7 @@ export function rereadPlan(row: Row | null | undefined, engine: string): RereadP
         was: "done",
         keys,
         plateMm: r.plate?.confirmed && r.plate.mm ? r.plate.mm : null,
+        ...(r.exclude?.length ? { exclude: r.exclude } : {}),
       };
   }
   return { mode: "auto", was: "done" };

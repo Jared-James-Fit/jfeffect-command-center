@@ -204,13 +204,62 @@ export function keyFromMarker(
   source: KeySource,
 ): { key: TrackKey; snapped: boolean; rim: OuterRim | null } {
   const r0 = Math.sqrt(m.a * m.b);
+  // sizes compared by the longer axis: the ring is a circle, the plate off side-on an ellipse that
+  // keeps its full size one way (a turned plate is as tall as the ring and narrower)
+  const major = (a: number, b: number) => Math.max(a, b);
+  const m0 = major(m.a, m.b);
   const rim = outerRim(f, m.x, m.y, r0, { lo: 0.78, hi: 1.25 });
   const snapped =
     !!rim &&
     rim.share >= 0.35 &&
     Math.hypot(rim.x - m.x, rim.y - m.y) <= 0.25 * r0 &&
-    Math.abs(rim.r / r0 - 1) <= 0.12;
-  return { key: keyOf(f.t, snapped ? rim! : m, source), snapped, rim: snapped ? rim : null };
+    (Math.abs(rim.r / r0 - 1) <= 0.12 || Math.abs(major(rim.a, rim.b) / m0 - 1) <= 0.12);
+  if (snapped) return { key: keyOf(f.t, rim!, source), snapped, rim };
+  // no outer edge to snap to: still learn the plate's shape at the ring (its rim as an ellipse), so
+  // the tracker expects the plate it sees, not the ring's circle
+  const shape = shapeAtMarker(f, m);
+  return { key: keyOf(f.t, shape ?? m, source), snapped: false, rim: null };
+}
+
+/**
+ * The plate's rim at the athlete's ring, fitted as an ellipse: its centre
+ * within a quarter of the ring and its longer axis within 15 % of the
+ * ring's. Null when too little of it shows to say (the ring is kept as it is).
+ */
+export function shapeAtMarker(
+  f: Frame,
+  m: { x: number; y: number; a: number; b: number },
+): { x: number; y: number; a: number; b: number } | null {
+  const r0 = Math.sqrt(m.a * m.b);
+  const m0 = Math.max(m.a, m.b);
+  const pad = Math.ceil(m0 * 1.6) + 3;
+  const g = gradients(f, m.x - pad, m.y - pad, m.x + pad, m.y + pad);
+  let best: ReturnType<typeof fitRim> = null;
+  // the ring as placed, and narrower one way or the other (a turned or a tilted plate)
+  for (const [ka, kb] of [
+    [1, 1],
+    [0.8, 1],
+    [0.6, 1],
+    [0.45, 1],
+    [1, 0.8],
+    [1, 0.6],
+  ]) {
+    const fit = fitRim(
+      g,
+      { x: m.x, y: m.y, r: Math.sqrt(m.a * ka * m.b * kb) },
+      { rTol: 0.35, ellipse: true, axes: { a: m.a * ka, b: m.b * kb }, edgeMin: 12 },
+    );
+    if (
+      !fit ||
+      fit.rms > 1.5 ||
+      fit.coverage < 0.45 ||
+      Math.hypot(fit.x - m.x, fit.y - m.y) > 0.25 * r0 ||
+      Math.abs(Math.max(fit.a, fit.b) / m0 - 1) > 0.15
+    )
+      continue;
+    if (!best || fit.coverage > best.coverage) best = fit;
+  }
+  return best ? { x: best.x, y: best.y, a: best.a, b: best.b } : null;
 }
 
 /**

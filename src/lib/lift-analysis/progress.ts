@@ -2,10 +2,10 @@
  * How far a read has got (pure, tiny): shared by the line under a clip and
  * the full view without pulling the tracking engine into either's bundle.
  */
-export type RunStage = "opening" | "finding" | "tracking" | "measuring" | "reading";
+export type RunStage = "opening" | "finding" | "tracking" | "recovering" | "measuring" | "reading";
 export type RunProgress = { stage: RunStage; progress: number };
 
-const STAGES: RunStage[] = ["opening", "finding", "tracking", "measuring", "reading"];
+const STAGES: RunStage[] = ["opening", "finding", "tracking", "recovering", "measuring", "reading"];
 /**
  * Each stage's share of the whole run, from the time each took on the 27
  * validation clips in a browser (Nov 22 2026: finding ~2.8 s, tracking ~7 s,
@@ -15,7 +15,9 @@ const STAGES: RunStage[] = ["opening", "finding", "tracking", "measuring", "read
 const WEIGHTS: Record<RunStage, number> = {
   opening: 0.02,
   finding: 0.22,
-  tracking: 0.62,
+  tracking: 0.6,
+  // only lost stretches are read again: nothing at all on a clip followed throughout
+  recovering: 0.02,
   measuring: 0.12,
   reading: 0.02,
 };

@@ -68,6 +68,7 @@ const WHY: Record<string, string> = {
   one_rep: "Needs at least two reps.",
   no_reps: "No reps found.",
   not_measurable: "Couldn't be read from this footage.",
+  partial_set: "Not every rep's speed was read, so the fastest or the last could be missing.",
 };
 
 export function whyWords(why: string | undefined): string {
@@ -123,6 +124,14 @@ const NOTE: Record<QualityNote, { title: string; tip: string }> = {
     title: "The plate was lost for a moment",
     tip: "Those frames are left out, never guessed. Fix tracking puts the marker back on the plate there.",
   },
+  after_set: {
+    title: "Movement after the set wasn't counted",
+    tip: "The bar went part way up at the end and was never seen coming back down (moving the bar, or the clip ending). It isn't a rep.",
+  },
+  reps_edited: {
+    title: "Reps edited",
+    tip: "A rise you said isn't a rep is left out of the reps and the set's numbers.",
+  },
   implausible_scale: {
     title: "Couldn't trust the plate's size",
     tip: "The numbers it gave were impossible for a barbell, so no speeds are shown. If the biggest plate is smaller than 450 mm, set its size.",
@@ -148,6 +157,8 @@ export function shownNotes(a: LiftAnalysis): QualityNote[] {
     "low_fps",
     "no_reps",
     "short_track",
+    "after_set",
+    "reps_edited",
   ];
   return order.filter((n) => a.quality.notes.includes(n));
 }

@@ -35,6 +35,10 @@ export const STRONG = 0.6;
 export const ACCEPT = 0.4;
 export const SURE = 0.75;
 export const REACQUIRE = 0.5;
+/** A match of the plate's own picture this strong, where its own motion put it, isn't overruled by the backbone. */
+export const SELF_SURE = 0.88;
+/** The backbone is searched too only after the plate has been gone this long (s). */
+export const BACKBONE_AFTER_S = 1;
 
 export type FollowSeed = {
   /** The frame the template is cut from, and the plate in it. */
@@ -125,8 +129,13 @@ export type FollowOptions = {
 
 /** The plate's rim must measure within this share of its known size to take it back after a loss. */
 export const RESIZE_TOLERANCE = 0.12;
-/** The fastest a loaded bar moves: up or down (a light speed pull or a fast eccentric) and sideways (a walk-out, a re-rack). */
-export const MAX_BAR_SPEED_MM_S = { y: 2800, x: 1600 };
+/**
+ * The fastest a loaded bar moves: up or down (a light speed pull or a fast
+ * eccentric) and sideways (a walk-out or a re-rack is ~0.3–0.5 m/s; 1.1 leaves
+ * room, and keeps a lost plate from being taken back on a look-alike a
+ * metre across the frame).
+ */
+export const MAX_BAR_SPEED_MM_S = { y: 2800, x: 1100 };
 
 export class PlateFollower {
   private readonly ref: Template;
@@ -218,10 +227,8 @@ export class PlateFollower {
     const bb = this.backbone ? trackAt(this.backbone, f.t) : null;
     // where to look: where the plate was, carried on at the speed it was going; the window is
     // what physics allows (a bar's acceleration stays under ~3 g: R px is 225 mm, so 30 m/s² is ~133 R/s²)
-    let px: number;
-    let py: number;
-    let s: number;
     const tracking = good.length > 0 && this.lostRun === 0;
+    const regions: { x: number; y: number; s: number; own: boolean }[] = [];
     if (good.length) {
       const p = good[0];
       let vx = 0;
@@ -235,24 +242,64 @@ export class PlateFollower {
       // strict: after a gap the bar's last speed is carried on only briefly (it slows to a stop at
       // lockout or in the hooks; carried on for half a second it was looked for far past where it was)
       const carry = this.opts.strict ? Math.min(dt, 0.12) : dt;
-      px = p.x + vx * carry;
-      py = p.y + vy * carry;
-      s = Math.max(4, 0.2 * R) + 0.3 * Math.hypot(vx, vy) * dt + 0.5 * 133 * R * dt * dt;
-      if (bb && Math.hypot(px - bb.x, py - bb.y) > bb.slack + s) {
-        // the plate can't be there: the backbone wins
-        px = bb.x;
-        py = bb.y;
-        s = Math.max(s, Math.min(bb.slack, 3 * R));
-      }
+      const s = Math.max(4, 0.2 * R) + 0.3 * Math.hypot(vx, vy) * dt + 0.5 * 133 * R * dt * dt;
+      regions.push({ x: p.x + vx * carry, y: p.y + vy * carry, s: Math.min(s, 3 * R), own: true });
+      // the backbone (the finder's four-a-second circles) is looked at as well, never instead, and
+      // only once the plate has been gone a while (it moved further than its own window reaches,
+      // a walk-out, a re-rack). Linked from round shapes four times a second, it can follow another
+      // round thing for a stretch (the far plate, a plate on the tree): taking it over the plate's
+      // own path lost a plate in plain view for seconds on end, and searching it as an equal took
+      // the identical plate next to it
+      const own = regions[0];
+      const goneFor = Math.max(0, f.t - p.t);
+      if (
+        bb &&
+        goneFor > BACKBONE_AFTER_S &&
+        Math.hypot(own.x - bb.x, own.y - bb.y) > bb.slack + own.s
+      )
+        regions.push({
+          x: bb.x,
+          y: bb.y,
+          s: Math.min(Math.max(own.s, bb.slack), 3 * R),
+          own: false,
+        });
     } else if (bb) {
-      px = bb.x;
-      py = bb.y;
-      s = Math.max(0.5 * R, bb.slack);
+      regions.push({
+        x: bb.x,
+        y: bb.y,
+        s: Math.min(Math.max(0.5 * R, bb.slack), 3 * R),
+        own: false,
+      });
     } else {
       return this.record(f, null, -2, null);
     }
-    s = Math.min(s, 3 * R);
-    // half-size search over the window, then full size around the best
+    // each region: its best match and whether it's the plate
+    let pick: { fine: { x: number; y: number; score: number }; rim: RimAt | null } | null = null;
+    let bestScore = -3;
+    for (const reg of regions) {
+      const fine = this.bestMatch(f, reg.x, reg.y, reg.s);
+      bestScore = Math.max(bestScore, fine.score);
+      const rim = this.rimAt(f, fine.x, fine.y);
+      if (!this.accepts(fine, rim, bb, good[0] ?? null, f.t, tracking, reg.own)) continue;
+      // found where only the backbone pointed: the plate's own picture and its rim at its size, both sure
+      if (
+        !reg.own &&
+        good.length &&
+        !(fine.score >= SURE && !!rim && this.sizedRim(rim) && rim.coverage >= 0.4)
+      )
+        continue;
+      // the plate's own path wins a near tie with the backbone's
+      if (!pick || fine.score > pick.fine.score + (reg.own ? -0.05 : 0.05)) pick = { fine, rim };
+    }
+    if (!pick) {
+      const fine = { x: regions[0].x, y: regions[0].y, score: bestScore };
+      return this.record(f, null, fine.score, null);
+    }
+    return this.record(f, pick.fine, pick.fine.score, pick.rim);
+  }
+
+  /** The best match of the plate's pictures in a window: half size over it, then full size around the best. */
+  private bestMatch(f: Frame, px: number, py: number, s: number) {
     const small = halfSize(f);
     const cx = (px - 0.5) / 2;
     const cy = (py - 0.5) / 2;
@@ -272,13 +319,32 @@ export class PlateFollower {
       const fm = search(f, tf, m.x * 2 + 0.5, m.y * 2 + 0.5, 2);
       if (fm.score > fine.score + 0.02) fine = fm;
     }
-    // a strong match counts; a weaker one only when the plate's rim is really there, at its size
-    const rim = this.rimAt(f, fine.x, fine.y);
+    return fine;
+  }
+
+  /**
+   * Whether a match is the plate. A strong match counts; a weaker one only
+   * with the plate's rim there at its size (or the backbone's sighting right
+   * there). Never further than the bar could have moved since it was last
+   * seen, never on a plate that sat still the whole clip. The backbone vetoes
+   * a match that's far from it only when the match isn't sure on its own (the
+   * plate's own picture, its rim at its own size): it's the weaker evidence.
+   */
+  private accepts(
+    fine: { x: number; y: number; score: number },
+    rim: RimAt | null,
+    bb: { x: number; y: number; slack: number } | null,
+    g0: FollowPoint | null,
+    t: number,
+    tracking: boolean,
+    own: boolean,
+  ): boolean {
+    const R = this.r;
     // the plate's own track saw it right here just now: a second, independent sighting
     const bbClose =
       !!bb && bb.slack <= 1.2 * R && Math.hypot(fine.x - bb.x, fine.y - bb.y) <= 0.5 * R;
     // strict: the rim there at the plate's own size (a far plate or a head is a different size)
-    const sized = !!rim && Math.abs(rim.r / R - 1) <= RESIZE_TOLERANCE;
+    const sized = this.sizedRim(rim);
     let ok: boolean;
     if (this.opts.strict) {
       ok = tracking
@@ -287,9 +353,8 @@ export class PlateFollower {
         : fine.score >= REACQUIRE &&
           ((sized && rim!.coverage >= 0.4) || (bbClose && fine.score >= SURE));
       // never further from where it was last seen than the bar could have moved since
-      if (ok && good.length) {
-        const g0 = good[0];
-        const dt = Math.max(0, f.t - g0.t);
+      if (ok && g0) {
+        const dt = Math.max(0, t - g0.t);
         const mm = this.opts.mmPerPx ?? 225 / R;
         const reachX = (MAX_BAR_SPEED_MM_S.x / mm) * dt + 0.25 * R;
         const reachY = (MAX_BAR_SPEED_MM_S.y / mm) * dt + 0.25 * R;
@@ -302,10 +367,40 @@ export class PlateFollower {
         : fine.score >= SURE ||
           (fine.score >= REACQUIRE && ((!!rim && rim.coverage >= 0.4) || bbClose));
     }
-    if (ok && bb && Math.hypot(fine.x - bb.x, fine.y - bb.y) > bb.slack + 0.6 * R) ok = false;
+    // sure of itself: the plate's own picture matched strongly where its own motion put it, its rim
+    // at its size (or, while following, a near-perfect match)
+    const selfSure =
+      own &&
+      (fine.score >= SELF_SURE || (fine.score >= SURE && sized && !!rim && rim.coverage >= 0.4));
+    // the backbone only ever vetoes taking a plate back after a loss (where a look-alike could be
+    // taken): while the plate is followed frame to frame its own picture, where its own motion put
+    // it, is the stronger evidence, and a backbone gone to another round thing dropped it
+    if (
+      ok &&
+      bb &&
+      !tracking &&
+      !selfSure &&
+      Math.hypot(fine.x - bb.x, fine.y - bb.y) > bb.slack + 0.6 * R
+    )
+      ok = false;
     // an identical plate that sat still the whole clip (the tree next to the rack) is never the bar's
     if (ok && this.decoys.some((d) => Math.hypot(fine.x - d.x, fine.y - d.y) < 0.5 * R)) ok = false;
-    return this.record(f, ok ? fine : null, fine.score, rim);
+    return ok;
+  }
+
+  /**
+   * The rim there is the plate's own size. Judged by the longer axis: a
+   * plate seen off side-on (turned or tilted) narrows one way and keeps its
+   * full size the other, so the longer axis is its size whatever the angle,
+   * where the mean of the two shrank a plate turned 38° by 11 % and a sure
+   * match of it was refused.
+   */
+  private sizedRim(rim: RimAt | null): boolean {
+    if (!rim) return false;
+    const major = (a: number, b: number, r: number) =>
+      Number.isFinite(a) && Number.isFinite(b) ? Math.max(a, b) : r;
+    const want = major(this.ab.a, this.ab.b, this.r);
+    return Math.abs(major(rim.a, rim.b, rim.r) / want - 1) <= RESIZE_TOLERANCE;
   }
 
   /** The rim around a centre: the plate's measured size there, and how much of it shows (null: no rim of its size). */

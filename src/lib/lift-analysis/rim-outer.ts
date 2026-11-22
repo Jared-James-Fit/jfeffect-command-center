@@ -729,6 +729,34 @@ function solve4(M: number[][], v: number[]): number[] | null {
  * blur), more when it barely shows (low contrast or under half the way
  * round), and the frames' spread counts too.
  */
+/** A rim measured in a still frame counts when it's within this share of the plate's size. */
+export const RIM_SIZE_TOL = 0.12;
+
+/**
+ * The still frames' rims that are the plate (pure): those within
+ * RIM_SIZE_TOL of the size the track was followed at, unless the frames
+ * themselves agree on another size, well apart from it. The size the track
+ * started from can be wrong: on a phone turned well round, the plate's face
+ * and the edge of the stack behind it make one rounder, bigger outline, and a
+ * ring fitted to that outline (Nov 22 2026: 8 % too big) measured only rims
+ * of its own wrong size, so every speed came out that much too slow. The
+ * plate's own rim, measured at full resolution in most of the frames and in
+ * close agreement, outvotes it; when they don't agree, nothing changes. Only
+ * ever smaller than the ring: an outline bigger than it is never the plate
+ * (with no plate in view the lifter's own outline would win).
+ */
+export function plateSizedRims<T extends { r: number; share: number }>(rims: T[], R: number): T[] {
+  const near = rims.filter((r) => Math.abs(r.r / R - 1) <= RIM_SIZE_TOL);
+  const clear = rims.filter((r) => r.share >= 0.6);
+  if (clear.length < 3) return near;
+  const m = median(clear.map((r) => r.r));
+  const agree = clear.filter((r) => Math.abs(r.r / m - 1) <= 0.04);
+  // only ever smaller: a ring that took in more than the plate (the stack's edge). A rim bigger than
+  // the ring is something round behind it (the lifter), never the plate's own edge
+  if (m >= R * (1 - RIM_SIZE_TOL) || agree.length < Math.max(3, 0.7 * clear.length)) return near;
+  return rims.filter((r) => Math.abs(r.r / m - 1) <= RIM_SIZE_TOL);
+}
+
 export function rimSize(
   rims: {
     a: number;

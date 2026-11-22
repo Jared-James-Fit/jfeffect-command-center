@@ -77,6 +77,7 @@ const LAYER_WORDS: { key: keyof Layers; label: string; needsAngles?: boolean }[]
   { key: "angles", label: "Joint angles", needsAngles: true },
   { key: "segments", label: "Torso & shin", needsAngles: true },
   { key: "vertical", label: "Vertical line" },
+  { key: "horizontal", label: "Horizontal line" },
   { key: "paths", label: "Hip & knee paths" },
 ];
 
