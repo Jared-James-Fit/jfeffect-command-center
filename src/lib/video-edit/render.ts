@@ -30,6 +30,11 @@ export type RenderOptions = {
   /** The published limits, re-checked on the result. */
   limitSeconds: number;
   maxBytes: number;
+  /**
+   * A filter baked into every frame of a re-encode (the studio's preview ran
+   * the same program). Its output size is the plan's.
+   */
+  grade?: import("@/lib/media-grade").CompiledGrade | null;
 };
 
 export class VideoRenderError extends Error {
@@ -80,6 +85,43 @@ function whenVisible(signal?: AbortSignal): Promise<void> {
 
 type Job = { mode: "copy" | "transcode"; plan: Extract<VideoPlan, { mode: "copy" | "transcode" }> };
 
+/**
+ * Every frame of a re-encode through the filter: drawn upright at the output
+ * size (rotation applied), graded on the GPU (else the pixel loop) and handed
+ * back as a canvas, so the encoder only ever sees the graded picture.
+ */
+function gradeProcess(grade: import("@/lib/media-grade").CompiledGrade, w0: number, h0: number, portrait: boolean) {
+  // the plan's width / height are its long and short edges in the picture's own orientation
+  const long = Math.max(w0, h0);
+  const short = Math.min(w0, h0);
+  const W = (portrait ? short : long) & ~1;
+  const H = (portrait ? long : short) & ~1;
+  let flat: OffscreenCanvas | HTMLCanvasElement | null = null;
+  let gl: import("@/lib/media-grade-gl").GradeGL | null | undefined;
+  let mod: typeof import("@/lib/media-grade-gl") | null = null;
+  let pixels: typeof import("@/lib/media-grade").gradePixels | null = null;
+  return {
+    processedWidth: W,
+    processedHeight: H,
+    process: async (sample: import("mediabunny").VideoSample) => {
+      if (!mod) {
+        mod = await import("@/lib/media-grade-gl");
+        pixels = (await import("@/lib/media-grade")).gradePixels;
+      }
+      if (!flat) flat = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(W, H) : Object.assign(document.createElement("canvas"), { width: W, height: H });
+      const ctx = flat.getContext("2d") as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+      if (!ctx) return sample;
+      sample.drawWithFit(ctx, { fit: "fill" });
+      if (gl === undefined) gl = mod.GradeGL.create();
+      if (gl && gl.draw(flat as unknown as HTMLCanvasElement, W, H, grade)) return gl.canvas as CanvasImageSource;
+      const img = ctx.getImageData(0, 0, W, H);
+      pixels!(img.data, W, H, grade);
+      ctx.putImageData(img, 0, 0);
+      return flat as CanvasImageSource;
+    },
+  };
+}
+
 async function runConversion(
   file: File,
   info: SourceInfo,
@@ -123,7 +165,13 @@ async function runConversion(
         output,
         trim: { start: t.start, end: t.end },
         video: {
-          ...(scaled ? (portrait ? { height: t.height } : { width: t.width }) : {}),
+          ...(opts.grade && !opts.grade.identity
+            ? gradeProcess(opts.grade, scaled ? t.width : info.width, scaled ? t.height : info.height, portrait)
+            : scaled
+              ? portrait
+                ? { height: t.height }
+                : { width: t.width }
+              : {}),
           ...(t.frameRate ? { frameRate: t.frameRate } : {}),
           codec: outputCodec(),
           quality: new mb.Quality({ bitrate: t.videoBitrate }),
