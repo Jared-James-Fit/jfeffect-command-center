@@ -16,7 +16,7 @@ const EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
 /**
  * What you're making, Instagram's way (Nov 22 2026): POST · STORY along the
  * bottom. `row` (the camera): the one you're on sits centred under the
- * shutter, white, with a dot under it, and the row slides to the next one;
+ * shutter in bold white, the rest grey, and the row slides to the next one;
  * `pill` (the New post screen): a floating pill whose highlight slides. Tap a
  * mode, or swipe the selector itself either way; it follows the finger.
  * `enterFrom`: the mode the last screen was on, so it opens there and slides to
@@ -218,15 +218,13 @@ export function ModeSelector({
             aria-selected={still ? undefined : m.key === value}
             tabIndex={still ? -1 : undefined}
             onClick={() => onClick(m.key)}
-            className={cn("h-10 shrink-0 px-3.5 transition-colors duration-200", label, m.key === shown ? "text-white" : "text-white/50 active:text-white/80")}
+            className={cn("h-10 shrink-0 px-3.5 transition-colors duration-200", label, m.key === shown ? "text-white" : "text-white/55 active:text-white/80")}
             data-mode={m.key}
           >
             {m.label}
           </button>
         ))}
       </div>
-      {/* the one you're on is always the one over the dot (centred under the shutter) */}
-      <span className="pointer-events-none absolute bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-white" aria-hidden />
     </div>
   );
 }

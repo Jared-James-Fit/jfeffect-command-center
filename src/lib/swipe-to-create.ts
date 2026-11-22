@@ -1,8 +1,10 @@
 /**
  * Swipe to create (Nov 22 2026): on Crew's feed, the camera sits to the left
- * (where Crew's + is), Instagram's way, so a finger moving right pulls it in
- * over the feed and lets go of it the same way. Pure and tested: the hook in
- * swipe-to-create.tsx only reads the finger and paints.
+ * (where Crew's + is), Instagram's way: a finger moving right pushes the feed
+ * (its bars too) off to the right, its leading edge rounded, and the camera is
+ * there underneath, moving slower than the feed (`CAMERA_PARALLAX`) and dimmed
+ * until it's in. Closing the camera runs it backwards. Pure and tested: the
+ * hook in swipe-to-create.tsx only reads the finger and paints.
  *
  * Why right and not left: most posts with a workout are carousels whose last
  * swipe left is the recap, so a leftward gesture would fight the feed's most
@@ -21,8 +23,28 @@ export const CREATE_FLICK_SPEED = 0.45;
 export const CREATE_FLICK_MIN_PX = 40;
 /** In Safari (not the home-screen app) a swipe from this close to the left edge is the browser's Back. */
 export const SAFARI_EDGE_PX = 22;
-/** How dark the feed gets under the camera as it comes in (at the camera fully in). */
-export const FEED_DIM = 0.6;
+/** How much slower than the feed the camera underneath moves (Instagram's: about a third). */
+export const CAMERA_PARALLAX = 0.3;
+/** How dark the camera is while the feed still mostly covers it (fading to none as it comes in). */
+export const CAMERA_DIM = 0.5;
+/** The feed's leading edge, rounded like a card being pushed aside. */
+export const FEED_EDGE_RADIUS = 36;
+/** The camera opening from + and closing from its X tell the feed to move with it (the same push, without a finger). */
+export const CAMERA_ENTER_EVENT = "jf:crew-camera-enter";
+export const CAMERA_LEAVE_EVENT = "jf:crew-camera-leave";
+
+/**
+ * Where the camera is drawn at progress p (0 = all feed, 1 = all camera), with
+ * the feed's leading edge at p × the screen's width: shifted left by a third
+ * of what's still to come and clipped so its right edge is always the feed's
+ * edge. On screen the camera shows [0, pW]; in its own box that's
+ * [0.3W(1−p), pW + 0.3W(1−p)], so its clip from the right is 0.7W(1−p).
+ * Both are linear in (1 − p), so one CSS easing on both keeps the edges together.
+ */
+export function cameraUnderFeed(p: number): { shiftPct: number; clipRightPct: number; dim: number } {
+  const q = 1 - Math.max(0, Math.min(1, p));
+  return { shiftPct: -CAMERA_PARALLAX * 100 * q, clipRightPct: (1 - CAMERA_PARALLAX) * 100 * q, dim: CAMERA_DIM * q };
+}
 
 export type CreateIntent = "wait" | "mine" | "theirs";
 
