@@ -259,14 +259,14 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
   roadmap_checkin_due: {
     to: "client", category: "check_ins",
     title: () => "Nutrition check-in",
-    body: () => "A quick one, under a minute. Tap to do it.",
+    body: (from) => `${from}: a quick nutrition check-in, under a minute. Tap to do it.`,
     url: () => "/portal/nutrition-targets#roadmap", rateMinutes: 2 * 24 * 60,
   },
   // A self-coached athlete's roadmap has an update for them to accept or decline.
   roadmap_update_ready: {
     to: "client", category: "check_ins",
     title: () => "Your nutrition roadmap",
-    body: () => "There's an update for you to look at. Tap to see it.",
+    body: (from) => `${from}: there's an update to your roadmap for you to look at. Tap to see it.`,
     url: () => "/portal/nutrition-targets#roadmap", rateMinutes: 24 * 60,
   },
   nutrition_targets_updated: {
@@ -312,11 +312,13 @@ async function coachNameForClient(admin: SupabaseClient, clientId: string, actor
     const n = (coach as any)?.full_name || (prof as any)?.full_name;
     if (n) return coachLabel(n);
   }
-  const { data: c } = await admin.from("clients").select("assigned_coach_id").eq("id", clientId).maybeSingle();
+  const { data: c } = await admin.from("clients").select("assigned_coach_id, service_tier").eq("id", clientId).maybeSingle();
   if ((c as any)?.assigned_coach_id) {
     const { data: coach } = await admin.from("coaches").select("full_name").eq("id", (c as any).assigned_coach_id).maybeSingle();
     if ((coach as any)?.full_name) return coachLabel((coach as any).full_name);
   }
+  // a self-coached member has no coach: the app speaks for itself
+  if ((c as any)?.service_tier === "self_serve") return "JF Effect";
   return "Your coach";
 }
 
