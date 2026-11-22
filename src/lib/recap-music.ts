@@ -9,6 +9,8 @@
  * player any time and call `start()` again from a tap if it was blocked.
  */
 
+import { holdBackgroundMusic } from "@/lib/music-hold";
+
 const BPM = 78;
 const BEAT = 60 / BPM;
 const BAR = BEAT * 4;
@@ -58,6 +60,7 @@ export function createRecapMusic(volume = 0.32): RecapMusic | null {
   let ducked = false;
   let stopped = false;
   let crackle: AudioBufferSourceNode | null = null;
+  let releaseHold: (() => void) | null = null;
 
   const target = () => (muted ? 0 : ducked ? volume * 0.45 : volume);
 
@@ -307,6 +310,8 @@ export function createRecapMusic(volume = 0.32): RecapMusic | null {
         if (ctx!.state !== "running") await ctx!.resume();
         if (ctx!.state !== "running") return false;
         if (timer == null) {
+          // the Rankings theme steps aside while the recap plays its own
+          releaseHold ??= holdBackgroundMusic();
           nextBar = ctx!.currentTime + 0.1;
           pump();
           timer = window.setInterval(pump, 250);
@@ -325,6 +330,8 @@ export function createRecapMusic(volume = 0.32): RecapMusic | null {
     duck(on) { ducked = on; ramp(target(), 0.5); },
     stop() {
       stopped = true;
+      releaseHold?.();
+      releaseHold = null;
       if (timer != null) window.clearInterval(timer);
       timer = null;
       const c = ctx;
