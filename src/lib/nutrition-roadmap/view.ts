@@ -73,6 +73,17 @@ export type BoardRow = {
   waiting: "first" | "change" | null;
 };
 
+/**
+ * What an athlete may see of their own revisions, the same rule as the "Athletes read own nutrition
+ * roadmap revisions" policy: their own decisions, and their coach's only once in effect (active, or
+ * superseded after being approved: `decided_at` is stamped on activation). A draft the coach never
+ * approved stays the coach's, even once a newer draft replaces it. A coach in View as client reads
+ * with his own login, so the client view applies this in code too.
+ */
+export function athleteSees(r: { decider: string; status: string; decided_at: string | null }): boolean {
+  return r.decider === "athlete" || r.status === "active" || (r.status === "superseded" && !!r.decided_at);
+}
+
 export const STATUS_TONE: Record<ProgressStatus, "done" | "attention" | "error" | "neutral"> = {
   on_track: "done",
   ahead: "done",

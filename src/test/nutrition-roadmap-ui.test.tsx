@@ -202,6 +202,21 @@ describe("wiring", () => {
     const sql = read("supabase/migrations/20270501090000_nutrition_roadmaps.sql");
     expect(sql).toContain("nutrition-roadmap-tick");
     expect(sql).toContain("Athletes read own nutrition roadmap revisions");
-    expect(sql).toMatch(/decider = 'athlete' OR status IN \('active', 'superseded'\)/);
+    // a coach's draft stays private even once a newer draft supersedes it (only approved ones were in effect)
+    const tighter = read("supabase/migrations/20270502090000_roadmap_drafts_stay_private.sql");
+    expect(tighter).toContain("Athletes read own nutrition roadmap revisions");
+    expect(tighter).toMatch(/decider = 'athlete' OR status = 'active' OR \(status = 'superseded' AND decided_at IS NOT NULL\)/);
+    // the roadmap row is the coach's working state: a coached athlete reads none of it directly
+    expect(tighter).toMatch(/"Athletes read own nutrition roadmap" ON public\.nutrition_roadmaps[\s\S]*c\.service_tier = 'self_serve'/);
+    expect(read("src/lib/nutrition-roadmap/roadmap.functions.ts")).not.toMatch(/context\.supabase as any\)\.from\("nutrition_roadmaps"\)/);
+  });
+  it("the client view's history follows the same rule in code, for a coach previewing as the client", async () => {
+    const { athleteSees } = await import("@/lib/nutrition-roadmap/view");
+    expect(athleteSees({ decider: "coach", status: "superseded", decided_at: null })).toBe(false);
+    expect(athleteSees({ decider: "coach", status: "proposed", decided_at: null })).toBe(false);
+    expect(athleteSees({ decider: "coach", status: "rejected", decided_at: "2026-11-22T00:00:00Z" })).toBe(false);
+    expect(athleteSees({ decider: "coach", status: "superseded", decided_at: "2026-11-22T00:00:00Z" })).toBe(true);
+    expect(athleteSees({ decider: "coach", status: "active", decided_at: "2026-11-22T00:00:00Z" })).toBe(true);
+    expect(athleteSees({ decider: "athlete", status: "proposed", decided_at: null })).toBe(true);
   });
 });
