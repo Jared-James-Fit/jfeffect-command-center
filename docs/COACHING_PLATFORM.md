@@ -49,7 +49,7 @@ All tested; none changes what a client or member sees.
 6. **Cleo shared its table list across people.** The data catalog was cached
    module-wide, so after an admin's lookup a coach got the list too. It's now
    kept per login.
-7. **Organizations foundation** (`20270506090000_organizations_foundation.sql`):
+7. **Organizations foundation** (`20270507090000_organizations_foundation.sql`):
    `organizations` (JF Effect seeded), `organization_members` (kept in step
    with staff roles and the business owner by triggers, never typed twice),
    `organization_audit_log` (append-only, database-written: who joined, lost

@@ -1,7 +1,7 @@
 # Organizations and team access — database tests
 
-Plain Postgres (16+) tests for `20270506090000_organizations_foundation.sql`
-and `20270506091000_team_access_hardening.sql`: JF Effect's organization and
+Plain Postgres (16+) tests for `20270507090000_organizations_foundation.sql`
+and `20270507091000_team_access_hardening.sql`: JF Effect's organization and
 its members read from staff roles (the owner, coaches, the finance login;
 never a JF member), the backfills (a coach already suspended loses the role),
 a coach's role following their record (suspend, restore, archive), client
@@ -14,8 +14,8 @@ server.
 ```sh
 createdb org_test
 psql -d org_test -f supabase/tests/organizations/schema.sql
-psql -d org_test -v ON_ERROR_STOP=1 -f supabase/migrations/20270506090000_organizations_foundation.sql
-psql -d org_test -v ON_ERROR_STOP=1 -f supabase/migrations/20270506091000_team_access_hardening.sql
+psql -d org_test -v ON_ERROR_STOP=1 -f supabase/migrations/20270507090000_organizations_foundation.sql
+psql -d org_test -v ON_ERROR_STOP=1 -f supabase/migrations/20270507091000_team_access_hardening.sql
 psql -d org_test -f supabase/tests/organizations/scenario.sql
 ```
 

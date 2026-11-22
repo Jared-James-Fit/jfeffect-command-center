@@ -1,6 +1,6 @@
 -- Minimal stand-ins for the tables and helpers that
--- 20270506090000_organizations_foundation.sql and
--- 20270506091000_team_access_hardening.sql use, plus the team as it stands
+-- 20270507090000_organizations_foundation.sql and
+-- 20270507091000_team_access_hardening.sql use, plus the team as it stands
 -- before they run (so their backfills have something real to act on).
 \set ON_ERROR_STOP 1
 

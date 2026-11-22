@@ -13,6 +13,10 @@
 --    purchase, and auto_calculate_purchase_term_dates had no check at all
 --    (any signed-in account, free members included, could set dates on an
 --    undated purchase and read back the whole purchase row).
+--    Production note (Nov 22 2026): 20260624000003_purchase_term_date_tracking
+--    was never applied to production, so neither function exists there and
+--    section 2 was not applied; wherever 20260624000003 is applied, this
+--    section has to follow it.
 
 SET lock_timeout = '5s';
 
