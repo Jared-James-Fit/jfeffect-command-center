@@ -9,9 +9,11 @@
  * it's removed, and at the end of the workout (set-video-phone-copy.tsx).
  *
  * This is what it remembers, per login: the clip itself while the app stays
- * open, and a small record on the phone (localStorage) so a reload still
- * knows which clips were filmed here and not saved (those come back down from
- * storage to save). Light on purpose: no video code, read by the set rows.
+ * open (the part that was sent, cut from the recording without re-encoding,
+ * never the whole recording: holdFilmedFile), and a small record on the phone
+ * (localStorage) so a reload still knows which clips were filmed here and not
+ * saved (those come back down from storage to save, trimmed as sent). Light
+ * on purpose: no video code, read by the set rows.
  *
  * Nov 12 2026: Fionna filmed her hip thrust set in the app, then removed it
  * from the set thinking it was on her phone. It wasn't.
@@ -104,6 +106,19 @@ export function noteFilmed(userId: string, entry: { jobId: string; dayId: string
   list.push({ jobId: entry.jobId, setVideoId: null, dayId: entry.dayId, at: now });
   write(userId, list);
   emit();
+}
+
+/**
+ * The copy for the phone, once it's made: the trimmed part, as filmed
+ * (uploader.ts phoneCopyFor), never the whole recording. Only for a clip
+ * still waiting to be saved.
+ */
+export function holdFilmedFile(userId: string, jobId: string, file: File): boolean {
+  if (!userId || !jobId || !file) return false;
+  if (!read(userId).some((e) => e.jobId === jobId)) return false;
+  files.set(jobId, file);
+  emit();
+  return true;
 }
 
 /** Its upload landed: the set video it became (so a reload can fetch it from storage). */

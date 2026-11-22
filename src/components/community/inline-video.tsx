@@ -8,6 +8,8 @@ import { preferAmbientAudio } from "@/lib/audio-session";
 import { SOUND_BLOCKED_EVENT, acquireFeedVideo, playFeedVideo, releaseFeedVideo, setSoundWanted, soundBlocked, unmuteBlocked } from "@/lib/video-pool";
 import { clipIsSilent, type SilentProbe } from "@/lib/video-silent";
 import { VideoScrubber } from "@/components/community/video-scrubber";
+import { ActivitySpinner } from "@/components/activity-spinner";
+import { keepPlaying } from "@/lib/video-keep-playing";
 
 /*
  * Sound in the feed: clips play with their sound by default. One speaker for
@@ -135,6 +137,7 @@ export function InlineVideo({
   frame = null,
   media = null,
   focusY = 0.5,
+  warm,
 }: {
   path: string;
   poster: string | null;
@@ -150,6 +153,13 @@ export function InlineVideo({
   media?: number | null;
   /** Which part of a clip zoomed to the room's width stays (0 its top, 1 its bottom): its focus, else the middle. */
   focusY?: number;
+  /**
+   * The slide next to the one showing in a carousel: while its post is on
+   * screen it keeps (or borrows) its element, so a swipe to it plays at once
+   * ("next" also loads ahead) and a swipe back carries on where it was,
+   * instead of starting cold on its poster every time.
+   */
+  warm?: "next" | "prev";
   /**
    * Where its speaker sits: "top" on a post's own screen in the feed (its words
    * and buttons are at the bottom); "corner" in the small card above a post's
@@ -170,6 +180,10 @@ export function InlineVideo({
   // a finger on its bar (VideoScrubber): it holds still until it lets go, then plays on if it was playing
   const [scrubbing, setScrubbing] = useState(false);
   const [failed, setFailed] = useState(false);
+  // waiting on data for a moment: a quiet spinner (never a frame that just sits there)
+  const [buffering, setBuffering] = useState(false);
+  // a carousel neighbour's post is on screen (at least half of it)
+  const [postUp, setPostUp] = useState(false);
   const [tapped, setTapped] = useState(false);
   const [blocked, setBlocked] = useState(false);
   // no sound track (posted with no sound): no speaker, no "Tap for sound"
@@ -181,8 +195,10 @@ export function InlineVideo({
   const mode = useFeedSoundMode();
   const sound = mode !== "off";
   const held = useFeedHeld();
-  // a carousel's next clip gets its link too, so a swipe to it starts at once
-  const { data: url } = useFullMediaUrl(path, near);
+  // a carousel's neighbours (while their post is on screen) hold an element and their link too
+  const warmNow = !!warm && postUp;
+  const holding = inRange || warmNow;
+  const { data: url } = useFullMediaUrl(path, near || warmNow);
 
   useEffect(() => {
     const box = wrap.current;
@@ -213,10 +229,23 @@ export function InlineVideo({
     };
   }, []);
 
+  // a slide off to the side is clipped by its carousel, so its own box never reads as near:
+  // a neighbour asks whether the carousel (its post) is on screen instead
+  useEffect(() => {
+    const track = warm ? (wrap.current?.closest("[data-carousel]") as HTMLElement | null) : null;
+    if (!track || typeof IntersectionObserver === "undefined") {
+      setPostUp(false);
+      return;
+    }
+    const io = new IntersectionObserver(([e]) => setPostUp(!!e && e.intersectionRatio >= 0.5), { threshold: [0, 0.5, 1] });
+    io.observe(track);
+    return () => io.disconnect();
+  }, [warm]);
+
   // borrow an element while it's near, give it back when it isn't
   useLayoutEffect(() => {
     const h = host.current;
-    if (!inRange || !url || !h) return;
+    if (!holding || !url || !h) return;
     const v = acquireFeedVideo();
     v.className = "absolute inset-0 h-full w-full";
     v.muted = true;
@@ -238,7 +267,6 @@ export function InlineVideo({
       ["pause", () => setPlaying(false)],
       // scrubbed while paused: the frame it's on is what shows (once there is one to show)
       ["seeked", () => v.readyState >= 2 && setShown(true)],
-      ["error", () => setFailed(true)],
       [SOUND_BLOCKED_EVENT, () => setBlocked(soundBlocked(v))],
       ["loadedmetadata", readSound],
       ["timeupdate", readSound],
@@ -253,8 +281,9 @@ export function InlineVideo({
       setShown(false);
       setBlocked(false);
       setSilent(false);
+      setBuffering(false);
     };
-  }, [inRange, url]);
+  }, [holding, url]);
 
   // its frame: whole (contain) or filled (cover, at its focus); framed in the studio, its own box is the whole clip
   const framed = !!frame;
@@ -264,10 +293,11 @@ export function InlineVideo({
     el.style.objectPosition = position && fit === "cover" && !framed ? position : "";
   }, [el, fit, position, framed]);
 
-  // within a screen of being seen (and the slide that's showing): load it all, so it plays at once
+  // within a screen of being seen (and the slide that's showing, or the one a swipe brings next): load it all,
+  // so it plays at once
   useEffect(() => {
-    if (el) el.preload = soon && active && (auto || tapped) ? "auto" : "metadata";
-  }, [el, soon, active, auto, tapped]);
+    if (el) el.preload = ((soon && active) || (warmNow && warm === "next")) && (auto || tapped) ? "auto" : "metadata";
+  }, [el, soon, active, auto, tapped, warmNow, warm]);
 
   // playing by itself with sound: the page's "ambient" (silent switch, over their music);
   // turned on with the speaker: like any video (through the switch)
@@ -292,6 +322,21 @@ export function InlineVideo({
   const shouldPlay = active && visible && !held && !holdPaused && !scrubbing && !!el && (auto || tapped) && !failed;
   const playingWanted = useRef(shouldPlay);
   playingWanted.current = shouldPlay;
+  const soundRef = useRef(sound);
+  soundRef.current = sound;
+
+  // stopped by the phone (the app away and back, a call, an audio change), stuck loading, or a dropped
+  // connection: played again where it was, never left frozen on a frame (video-keep-playing.ts)
+  useEffect(() => {
+    if (!el) return;
+    return keepPlaying(el, {
+      wanted: () => playingWanted.current,
+      // with its sound when it had it: a phone that holds it back plays it muted with "Tap for sound" (playFeedVideo)
+      resume: () => playFeedVideo(el, soundRef.current),
+      onWaiting: setBuffering,
+      onFailed: () => setFailed(true),
+    });
+  }, [el]);
   useEffect(() => {
     if (!el) return;
     if (!shouldPlay) {
@@ -379,6 +424,12 @@ export function InlineVideo({
             />
           )}
         </>
+      )}
+      {/* loading: a quiet spinner in the middle, so a clip waiting on the network never reads as frozen */}
+      {buffering && shouldPlay && (
+        <div className="pointer-events-none absolute inset-0 z-[1] grid place-items-center" style={between ? BETWEEN_BARS : undefined} data-video-buffering>
+          <ActivitySpinner size={28} className="text-white/85 drop-shadow" />
+        </div>
       )}
       {/* its progress bar along the bottom (on a post's screen, right above the tab bar): a finger scrubs it */}
       <VideoScrubber video={el} onHold={setScrubbing} enabled={active} disabled={failed} />

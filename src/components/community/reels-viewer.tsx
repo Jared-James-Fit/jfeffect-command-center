@@ -27,6 +27,7 @@ import {
   type ReelItem,
 } from "@/lib/reels";
 import { reelVideo } from "@/lib/video-pool";
+import { keepPlaying } from "@/lib/video-keep-playing";
 import { clipFrame } from "@/lib/photo-frame";
 import { ClipFrameBox } from "@/components/community/clip-frame-box";
 import { cn } from "@/lib/utils";
@@ -293,7 +294,6 @@ function ReelPage({
       ["seeked", () => v.readyState >= 2 && setShown(true)],
       ["waiting", () => setWaiting(true)],
       ["canplay", () => setWaiting(false)],
-      ["error", () => setFailed(true)],
     ];
     handlers.forEach(([k, f]) => v.addEventListener(k, f));
     return () => {
@@ -329,6 +329,24 @@ function ReelPage({
   }, [active]);
 
   const shouldPlay = active && !!attached && !!url && !paused && !scrubbing && !failed;
+  const wanted = useRef(shouldPlay);
+  wanted.current = shouldPlay;
+  const soundNow = useRef(sound);
+  soundNow.current = sound;
+  const setSoundRef = useRef(setSound);
+  setSoundRef.current = setSound;
+  const playNow = useCallback((v: HTMLVideoElement) => {
+    v.muted = !soundNow.current;
+    const p = v.play() as Promise<void> | undefined;
+    p?.catch?.(() => {
+      // sound without a tap first: the phone said no, so it plays muted (the speaker turns it on)
+      if (!v.muted) {
+        setSoundRef.current(false);
+        v.muted = true;
+        void (v.play() as Promise<void> | undefined)?.catch?.(() => undefined);
+      }
+    });
+  }, []);
   useEffect(() => {
     const v = vid.current;
     if (!v) return;
@@ -336,18 +354,21 @@ function ReelPage({
       v.pause();
       return;
     }
-    v.muted = !sound;
-    const p = v.play() as Promise<void> | undefined;
-    p?.catch?.(() => {
-      // sound without a tap first: the phone said no, so it plays muted (the speaker turns it on)
-      if (!v.muted) {
-        setSound(false);
-        v.muted = true;
-        void (v.play() as Promise<void> | undefined)?.catch?.(() => undefined);
-      }
-    });
+    playNow(v);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shouldPlay, url, attached]);
+
+  // stopped by the phone (away and back, a call, an audio change), stuck loading or a dropped connection:
+  // played again where it was, never left frozen (video-keep-playing.ts)
+  useEffect(() => {
+    const v = attached;
+    if (!v) return;
+    return keepPlaying(v, {
+      wanted: () => wanted.current,
+      resume: () => playNow(v),
+      onFailed: () => setFailed(true),
+    });
+  }, [attached, playNow]);
 
   useEffect(() => {
     if (vid.current) vid.current.muted = !sound;

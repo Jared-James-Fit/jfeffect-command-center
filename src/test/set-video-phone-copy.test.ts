@@ -105,9 +105,10 @@ describe("where it's offered", () => {
     expect(cell).toContain("const filmedHere = looksFilmedInApp(f);");
     expect(cell).toContain("filmedHere={picked.filmedHere}");
     expect(flow).toContain("if (!res.ok || !res.id || !filmedHere || !isTouchDevice()) return;");
-    expect(flow).toContain("noteFilmed(start.userId, { jobId: res.id, dayId: start.dayId, file });");
-    expect(flow).toContain("offerPhoneCopy(start.userId, res.id, file);");
-    // the share sheet opens from the toast's own button, with the clip as filmed
+    expect(flow).toContain("noteFilmed(start.userId, { jobId, dayId: start.dayId });");
+    // offered once its copy for Photos is cut: the trimmed part as filmed, never the whole recording
+    expect(flow).toContain("if (copy && holdFilmedFile(start.userId, jobId, copy)) offerPhoneCopy(start.userId, jobId, copy);");
+    // the share sheet opens from the toast's own button, with that copy
     expect(ui).toContain('label: "Save",');
     expect(ui).toContain("void saveFiles([file]).then((o) => {");
   });

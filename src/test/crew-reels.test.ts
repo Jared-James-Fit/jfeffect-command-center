@@ -180,9 +180,9 @@ describe("the feed loads ahead of the scroll", () => {
     expect(inline).toContain('{ rootMargin: "200% 0px" }');
     expect(inline).toContain('{ rootMargin: "100% 0px" }');
     expect(inline).toContain(
-      'if (el) el.preload = soon && active && (auto || tapped) ? "auto" : "metadata";',
+      'if (el) el.preload = ((soon && active) || (warmNow && warm === "next")) && (auto || tapped) ? "auto" : "metadata";',
     );
-    expect(inline).toContain("useFullMediaUrl(path, near);");
+    expect(inline).toContain("useFullMediaUrl(path, near || warmNow);");
     expect(read("src/components/community/post-art.tsx")).toContain('{ rootMargin: "300%" },');
     const card = read("src/components/community/post-card.tsx");
     const fade = card.slice(
