@@ -16,7 +16,6 @@
  * moment the phone allows it. The installed app (Capacitor) never asks, so
  * there clips have sound from the first one.
  */
-import { noteAutoplayRefused } from "@/lib/autoplay-notice";
 import { REEL_SLOTS } from "@/lib/reels";
 
 /**
@@ -90,6 +89,7 @@ export function releaseFeedVideo(v: HTMLVideoElement) {
   v.pause();
   blocked.delete(v);
   refused.delete(v);
+  refusedClocks.delete(v);
   v.removeAttribute("src");
   v.removeAttribute("data-ambient-audio");
   try {
@@ -117,8 +117,17 @@ function setRefused(v: HTMLVideoElement, on: boolean) {
   if (on) refused.add(v);
   else refused.delete(v);
   v.dispatchEvent(new Event(PLAY_REFUSED_EVENT));
-  // the first time, say why (Low Power Mode), once
-  if (on) noteAutoplayRefused();
+}
+
+/**
+ * Where a refused clip really is while it plays decoded (decoded-clip.ts: the
+ * clip drawn from its own frames, since the element can't start): the tap that
+ * starts the element starts it there, never back at its first frame.
+ */
+const refusedClocks = new WeakMap<HTMLVideoElement, () => number | null>();
+export function setRefusedClock(v: HTMLVideoElement, clock: (() => number | null) | null) {
+  if (clock) refusedClocks.set(v, clock);
+  else refusedClocks.delete(v);
 }
 
 /** The caller stops wanting it to play (off screen, held, scrubbed): paused, and no tap will start it or give it sound. */
@@ -144,6 +153,14 @@ export function justStartedPlay(now = Date.now()): boolean {
 export function startRefused(v: HTMLVideoElement, swipe = false) {
   const withSound = soundWanted();
   v.muted = !withSound;
+  const at = refusedClocks.get(v)?.();
+  if (at != null && Number.isFinite(at) && Math.abs(v.currentTime - at) > 0.05) {
+    try {
+      v.currentTime = at;
+    } catch {
+      /* not seekable yet: from the start */
+    }
+  }
   if (!swipe) startedAt = Date.now();
   const p = v.play() as Promise<void> | undefined;
   p?.then?.(

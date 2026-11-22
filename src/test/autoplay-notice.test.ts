@@ -111,12 +111,15 @@ describe("noteAutoplayRefused shows one toast, then holds", () => {
 });
 
 describe("every place a clip can be refused says so", () => {
-  it("the feed's pool, the full-screen clips and stories", () => {
-    expect(read("src/lib/video-pool.ts")).toContain("if (on) noteAutoplayRefused();");
+  it("only where a clip can't play decoded either: the feed, the full-screen clips and stories", () => {
+    // the pool never says it: a refused clip plays decoded first (decoded-clip.ts)
+    expect(read("src/lib/video-pool.ts")).not.toContain("noteAutoplayRefused");
+    const inline = read("src/components/community/inline-video.tsx");
+    expect(inline).toContain("onFail: () => {\n        window.clearTimeout(slow);\n        setDecodeFailed(true);\n        // only now does the phone's setting keep a clip still: say why, once\n        noteAutoplayRefused();");
     const reels = read("src/components/community/reels-viewer.tsx");
     expect(reels.match(/noteAutoplayRefused\(\);/g)?.length).toBe(2);
-    expect(read("src/components/community/crew-stories.tsx")).toContain(
-      'if ((e as { name?: string } | null)?.name === "NotAllowedError") noteAutoplayRefused();',
-    );
+    const stories = read("src/components/community/crew-stories.tsx");
+    expect(stories).toContain('if ((e as { name?: string } | null)?.name === "NotAllowedError") setLowPower(true);');
+    expect(stories).toContain("onFail: () => {\n        noteAutoplayRefused();\n        failRef.current();");
   });
 });

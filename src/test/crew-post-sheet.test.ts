@@ -120,7 +120,7 @@ describe("the post's sheet: the whole caption, then the comments, one swipe to c
     expect(card).toContain('controls={shrunk ? "corner" : page ? "top" : "bottom"}');
     expect(card).toContain("{slide.caption && !shrunk && !page && <SlideCaption");
     const video = read("src/components/community/inline-video.tsx");
-    expect(video).toContain('const askTap = sound && blocked && !silent && !refused && controls !== "corner";');
+    expect(video).toContain('const askTap = sound && !silent && controls !== "corner" && (refused ? decodedNow : blocked);');
   });
 
   it("the paged feed opens it from … more and 💬; the coach's card feed keeps its comments sheet", () => {
