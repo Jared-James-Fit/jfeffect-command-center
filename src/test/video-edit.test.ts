@@ -221,7 +221,7 @@ describe("every place a video can be picked uses the trimmer and the pipeline", 
     expect(read("src/components/community/comments-sheet.tsx")).toContain('pickMedia(file, { context: "comment", trim: trimmer.request })');
     expect(read("src/components/community/edit-post-sheet.tsx")).toContain('videoContext: post?.completion_id ? "workout" : "post"');
     const tray = read("src/components/community/slide-tray.tsx");
-    expect(tray).toContain("const next = await retrimPicked(old, to ? fixedTrim(to) : trimmer.request, videoContext);");
+    expect(tray).toContain("const cut = await retrimPicked(old, to ? fixedTrim(to) : trimmer.request, videoContext);");
     expect(tray).toContain("job.ctl?.abort();");
   });
 

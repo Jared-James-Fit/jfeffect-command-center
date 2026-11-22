@@ -4,7 +4,11 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { MAX_SLIDES, fitSlides, slideThumbPath, type PostSlide } from "@/lib/community";
-import { COMMUNITY_BUCKET, pickMedia, pickedSeconds, releasePicked, removeCommunityFiles, retrimPicked, uploadPicked, withSound, type PickedMedia } from "@/lib/community-media";
+import { COMMUNITY_BUCKET, pickMedia, pickedSeconds, releasePicked, removeCommunityFiles, retrimPicked, uploadPicked, withGrade, withSound, type PickedMedia } from "@/lib/community-media";
+import { compiledFor, type CompiledGrade, type MediaGrade } from "@/lib/media-grade";
+
+/** A clip's filter settles this long before its upload restarts with it. */
+export const GRADE_SETTLE_MS = 1200;
 import { useSlideThumbUrls } from "@/lib/community.queries";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 import { CENTRED, clampFraming, frameFocus, type Framing } from "@/lib/photo-frame";
@@ -49,6 +53,12 @@ export type TrayItem = {
   audio?: boolean;
   /** A clip posted with no sound. */
   muted?: boolean;
+  /** A story's clip shown whole over a blur of itself (storyStartsWhole); unset: decided from its shape. */
+  whole?: boolean;
+  /** A filter can go on it (a photo always; a clip only where this phone can re-encode it). */
+  canGrade?: boolean;
+  /** Its filter (media-grade.ts): a photo's baked in when it's posted, a clip's re-encoded into it. Null / unset: as shot. */
+  grade?: MediaGrade | null;
 };
 
 /** A thumbnail's width at a shape: 720 px on its long side, like the ones picked photos get. */
@@ -72,8 +82,8 @@ const jpeg = (c: HTMLCanvasElement, name: string) =>
   new Promise<File | null>((resolve) => c.toBlob((b) => resolve(b ? new File([b], name, { type: "image/jpeg" }) : null), "image/jpeg", 0.88));
 
 /** A framed copy as a JPEG file (the canvas is released either way). */
-async function framedFile(src: Drawable, framing: Framing, aspect: number, width: number, name: string): Promise<File | null> {
-  const c = framedCanvas(src, framing, aspect, width);
+async function framedFile(src: Drawable, framing: Framing, aspect: number, width: number, name: string, grade?: CompiledGrade | null): Promise<File | null> {
+  const c = framedCanvas(src, framing, aspect, width, grade);
   try {
     return await jpeg(c, name);
   } finally {
@@ -82,8 +92,8 @@ async function framedFile(src: Drawable, framing: Framing, aspect: number, width
 }
 
 /** A framed photo and its thumbnail: the big one cut once from the original, the small one drawn from it (one big canvas at a time). */
-async function framedPhoto(src: Drawable, framing: Framing, aspect: number): Promise<{ main: File | null; thumb: File | null }> {
-  const big = framedCanvas(src, framing, aspect, 1080);
+async function framedPhoto(src: Drawable, framing: Framing, aspect: number, grade?: CompiledGrade | null): Promise<{ main: File | null; thumb: File | null }> {
+  const big = framedCanvas(src, framing, aspect, 1080, grade);
   try {
     const main = await jpeg(big, "photo.jpg");
     const small = framedCanvas(big, { z: 1, cx: 0.5, cy: 0.5 }, aspect, thumbWidth(aspect));
@@ -256,7 +266,10 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
       const job = jobs.current.get(id);
       const old = job?.picked;
       if (!job || !old?.video || removed.current.has(id)) return;
-      const next = await retrimPicked(old, to ? fixedTrim(to) : trimmer.request, videoContext);
+      const cut = await retrimPicked(old, to ? fixedTrim(to) : trimmer.request, videoContext);
+      // a new cut keeps its sound choice and its filter
+      const keep = cut?.video ? { ...cut, video: { ...cut.video, muted: old.video.muted, grade: old.video.grade ?? null } } : cut;
+      const next = keep;
       if (!next || removed.current.has(id)) {
         if (next) releasePicked(next);
         return;
@@ -306,6 +319,50 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
     },
     [patch, pump],
   );
+
+  /**
+   * A slide's filter. A photo's is only a field (baked in when it's posted,
+   * `finish`); a clip's shows at once on screen (the preview grades the video
+   * as it plays) and its upload restarts with the filter in it once the
+   * choice has settled (`GRADE_SETTLE_MS`), so dragging a slider never
+   * re-encodes on every move.
+   */
+  const gradeTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const setGrade = useCallback(
+    (id: string, grade: MediaGrade | null) => {
+      const it = itemsRef.current.find((x) => x.id === id);
+      if (!it || it.existing) return;
+      patch(id, { grade });
+      if (it.kind !== "video") return;
+      const old = gradeTimers.current.get(id);
+      if (old) clearTimeout(old);
+      gradeTimers.current.set(
+        id,
+        setTimeout(() => {
+          gradeTimers.current.delete(id);
+          const job = jobs.current.get(id);
+          const was = job?.picked;
+          const now = itemsRef.current.find((x) => x.id === id);
+          const next = was && now ? withGrade(was, compiledFor(now.grade ?? null)) : null;
+          if (!job || !next || removed.current.has(id)) return;
+          job.ctl?.abort();
+          if (now?.slide && !now.existing) void removeCommunityFiles([now.slide.path, now.slide.thumb]);
+          const waiting = job.resolve;
+          queue.current = queue.current.filter((q) => q !== id);
+          const fresh = defer(id, next);
+          void fresh.promise.then(waiting);
+          patch(id, { slide: null, status: "preparing", progress: 0 });
+          queue.current.push(id);
+          pump();
+        }, GRADE_SETTLE_MS),
+      );
+    },
+    [patch, pump],
+  );
+  useEffect(() => {
+    const timers = gradeTimers.current;
+    return () => timers.forEach((t) => clearTimeout(t));
+  }, []);
 
   /** One tap: just the lift goes (its upload restarts with it); Whole clip puts back what went before. */
   const trimToLift = useCallback(
@@ -376,6 +433,8 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
   );
   /** How a slide sits in the post's frame (drag / pinch in the studio). */
   const setFraming = useCallback((id: string, framing: Framing | null) => patch(id, { framing }), [patch]);
+  /** A story's clip: whole over a blur of itself, or filling the story. */
+  const setWhole = useCallback((id: string, whole: boolean) => patch(id, { whole }), [patch]);
 
   /**
    * What's posted is what the studio's frame showed (Instagram's): a new photo
@@ -404,9 +463,10 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
           if (!shape || !box || !src) return slide;
           const size = drawableSize(src);
           const f = clampFraming(it.framing ?? CENTRED, size, box);
-          // already the post's shape and untouched: as it was uploaded
-          if (Math.abs(size.w / size.h - shape) < 0.01 && f.z <= 1.001) return slide;
-          const { main, thumb: small } = await framedPhoto(src, f, shape);
+          const grade = compiledFor(it.grade);
+          // already the post's shape and untouched (no filter): as it was uploaded
+          if (!grade && Math.abs(size.w / size.h - shape) < 0.01 && f.z <= 1.001) return slide;
+          const { main, thumb: small } = await framedPhoto(src, f, shape, grade);
           if (!main) return slide;
           const [path, thumb] = await Promise.all([up(main), small ? up(small).catch(() => null) : Promise.resolve(null)]);
           void removeCommunityFiles([slide.path, slide.thumb]);
@@ -416,16 +476,19 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
         const own = it.cover ? await blobImage(it.cover) : null;
         const src: Drawable | null = own?.img ?? picked?.drawable ?? null;
         try {
+          const grade = compiledFor(it.grade);
           if (!shape || !box) {
             if (!it.cover) return slide;
-            const thumb = await up(new File([it.cover], "cover.jpg", { type: "image/jpeg" }));
+            // a story's clip: its picked cover, with the clip's filter on it
+            const coverFile = grade && own ? await framedFile(own.img, CENTRED, own.img.naturalWidth / Math.max(1, own.img.naturalHeight), own.img.naturalWidth, "cover.jpg", grade) : null;
+            const thumb = await up(coverFile ?? new File([it.cover], "cover.jpg", { type: "image/jpeg" }));
             if (slide.thumb) void removeCommunityFiles([slide.thumb]);
             return done({ ...slide, thumb });
           }
           const size = it.w && it.h ? { w: it.w, h: it.h } : src ? drawableSize(src) : { w: shape, h: 1 };
           const f = clampFraming(it.framing ?? CENTRED, size, box);
           const focus = frameFocus(f, shape);
-          const poster = src ? await framedFile(src, f, shape, thumbWidth(shape), "poster.jpg") : null;
+          const poster = src ? await framedFile(src, f, shape, thumbWidth(shape), "poster.jpg", grade) : null;
           const thumb = poster ? await up(poster).catch(() => null) : null;
           if (thumb && slide.thumb) void removeCommunityFiles([slide.thumb]);
           return done({ ...slide, thumb: thumb ?? slide.thumb, focus });
@@ -528,7 +591,7 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
   const drawable = useCallback((id: string): Drawable | null => jobs.current.get(id)?.picked?.drawable ?? null, []);
 
   const uploading = items.filter((it) => it.status === "preparing" || it.status === "uploading").length;
-  return { items, add, remove, retry, edit, trimToLift, undoLift, setSound, ready, commit, discard, setCover, setFraming, move, drawable, uploading, total: coverCount + items.length, full: coverCount + items.length >= MAX_SLIDES, trimmer: trimmer.element };
+  return { items, add, remove, retry, edit, trimToLift, undoLift, setSound, setGrade, ready, commit, discard, setCover, setFraming, setWhole, move, drawable, uploading, total: coverCount + items.length, full: coverCount + items.length >= MAX_SLIDES, trimmer: trimmer.element };
 }
 
 /** What the strip shows for a picked photo or clip. */
@@ -542,6 +605,8 @@ function itemFields(m: PickedMedia): Partial<TrayItem> {
     seconds: pickedSeconds(m),
     audio: m.video ? m.video.info.hasAudio : undefined,
     muted: !!m.video?.muted,
+    // a clip's filter needs a re-encode: a phone that can't encode is never offered one
+    canGrade: m.kind === "image" || !!m.video?.canEncode,
   };
 }
 

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Camera, Check, ChevronRight, Loader2, PenSquare } from "lucide-react";
+import { Camera, Check, ChevronRight, Loader2, PenSquare, Share } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,6 +8,9 @@ import { isCrewAudience, postPointsHint } from "@/lib/community";
 import { invalidateCommunity, saveCommunityPost, useCommunityActivity, useDeletePost, useMyPostForCompletion, usePostPointsStatus } from "@/lib/community.queries";
 import { storyLookLabel } from "@/lib/quick-story";
 import { QuickStorySheet, QuickStoryThumb, useQuickStory } from "@/components/community/quick-story";
+import { ShareOutSheet } from "@/components/community/share-out-sheet";
+import { promoLine, shareFileName, workoutShareCaption } from "@/lib/share-out";
+import { canvasToBlob, ensureDisplayFont } from "@/lib/workout-share-card";
 
 /**
  * The recap's footer for a finished client workout: where the workout is now
@@ -55,6 +58,8 @@ export function RecapPostFooter({
   const canPost = activity?.enabled !== false;
   const story = useQuickStory({ completionId, workoutTitle, athleteName, unit, enabled: canPost });
   const [editing, setEditing] = useState(false);
+  // Share outside the app: Instagram, TikTok, the phone's share sheet, Save, Copy caption
+  const [sharingOut, setSharingOut] = useState(false);
   // the story shared from here (Undo takes it back)
   const [storyId, setStoryId] = useState<string | null>(null);
   const [undoing, setUndoing] = useState(false);
@@ -202,6 +207,34 @@ export function RecapPostFooter({
           Done
         </Button>
       </div>
+
+      {story.ready && story.data && (
+        <Button type="button" variant="ghost" className="mt-1 h-10 w-full gap-1.5 rounded-lg text-[13px] font-semibold text-muted-foreground" onClick={() => setSharingOut(true)} data-recap-share-out>
+          <Share className="h-4 w-4" />
+          Share to Instagram, TikTok and more
+        </Button>
+      )}
+      {story.data && (
+        <ShareOutSheet
+          open={sharingOut}
+          onOpenChange={setSharingOut}
+          look={story.look}
+          caption={workoutShareCaption({ workoutTitle: story.data.workoutTitle, lift: story.data.lift, isPr: story.data.isPr }, { promo: false })}
+          promoLine={promoLine({ isPr: story.data.isPr, lift: story.data.lift })}
+          make={async (format) => {
+            await ensureDisplayFont();
+            const c = document.createElement("canvas");
+            try {
+              if (!story.paint(c, { scale: 1, format })) return null;
+              const b = await canvasToBlob(c, "image/jpeg", 0.92);
+              return b ? new File([b], shareFileName(format, story.look), { type: "image/jpeg" }) : null;
+            } finally {
+              c.width = 0;
+              c.height = 0;
+            }
+          }}
+        />
+      )}
 
       <QuickStorySheet
         open={editing}

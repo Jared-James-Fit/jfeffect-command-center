@@ -107,6 +107,36 @@ export const FEED_VIDEO_MAX_HEIGHT = "calc(100svh - 15rem)";
 export const SCREEN_FILL_MAX_TRIM = 0.25;
 
 /**
+ * A story is always its whole 9:16 canvas (Nov 22 2026): a photo or clip that
+ * fills it by trimming at most `SCREEN_FILL_MAX_TRIM` starts filling it (drag
+ * and pinch to frame it); anything wider or taller starts whole, centred over
+ * a soft, dimmed blur of itself that fills the rest (`wholeStoryCanvas`), never
+ * black bars and never stretched. Fill / Fit switches between the two, and the
+ * choice holds through every filter and look.
+ */
+export function storyStartsWhole(size: Size): boolean {
+  if (!size.w || !size.h) return false;
+  const r = size.w / size.h;
+  const trim = r > STORY_ASPECT ? 1 - STORY_ASPECT / r : 1 - r / STORY_ASPECT;
+  return trim > SCREEN_FILL_MAX_TRIM;
+}
+
+/** Fill and Fit look different enough to offer the switch (a phone's own 9:16 shot doesn't need it). */
+export function storyCanFit(size: Size): boolean {
+  if (!size.w || !size.h) return false;
+  const r = size.w / size.h;
+  return Math.abs(r - STORY_ASPECT) / STORY_ASPECT > 0.03;
+}
+
+/** Where a picture shown whole sits in a box (px): contained and centred. */
+export function wholeRect(size: Size, box: Size): { x: number; y: number; w: number; h: number } {
+  const s = Math.min(box.w / (size.w || 1), box.h / (size.h || 1));
+  const w = size.w * s;
+  const h = size.h * s;
+  return { x: (box.w - w) / 2, y: (box.h - h) / 2, w, h };
+}
+
+/**
  * How one slide sits on a post's screen (`screenRatio` = the screen's width /
  * height): "cover" fills it (a clip within SCREEN_FILL_MAX_TRIM of the
  * screen's shape: a 9:16 clip loses ~18% of its sides on a 390×844 screen,
