@@ -186,7 +186,8 @@ describe("the bar on every Crew clip, and nothing it does reaches the post", () 
   const reels = read("src/components/community/reels-viewer.tsx");
 
   it("is the feed's own clip element (the pool's), on the feed's clips and the full-screen ones, never a second player", () => {
-    expect(inline).toContain("<VideoScrubber video={el} onHold={setScrubbing} enabled={active} disabled={failed} />");
+    // (hidden while it plays decoded in Low Power Mode: the element's time isn't where the picture is)
+    expect(inline).toContain("<VideoScrubber video={el} onHold={setScrubbing} enabled={active} disabled={failed || decodedNow} />");
     expect(reels).toContain("video={attached}");
     expect(reels).not.toContain("bar.current");
     expect(bar).not.toContain("document.createElement");

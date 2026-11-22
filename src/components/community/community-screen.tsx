@@ -137,6 +137,9 @@ export function CommunityScreen({
   const qc = useQueryClient();
   // viewing as a client: the client's screen, without the coach's extras (remove anyone's post, …)
   const viewerIsStaff = (role === "admin" || role === "coach") && !previewOnly;
+  // "Your story" leads the story row for anyone who can post to the crew, the coach on his own Crew page too:
+  // without it his row was there only on a day someone else had a story up, and gone the rest (Nov 22 2026)
+  const canStory = canShare || !!coach;
   // leaving Crew ends the visit on whatever post is on screen (an exit); a layout
   // cleanup, so it runs before the cards' own cleanups take them off screen
   useLayoutEffect(() => () => attentionExit(), []);
@@ -785,8 +788,8 @@ export function CommunityScreen({
               onOpenPost={(id) => setDetailId(id)}
               onOpenPerson={openAuthor}
               onJumpTo={setJumpTo}
-              addStory={canShare ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} story /> : undefined}
-              addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} story /> : null}
+              addStory={canStory ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} story /> : undefined}
+              addYours={canStory ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} story /> : null}
               rankings={rankings}
             />
           }
@@ -872,8 +875,8 @@ export function CommunityScreen({
             onOpenPost={(id) => setDetailId(id)}
             onOpenPerson={openAuthor}
             onJumpTo={setJumpTo}
-            addStory={canShare ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} story /> : undefined}
-            addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} story /> : null}
+            addStory={canStory ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} story /> : undefined}
+            addYours={canStory ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} story /> : null}
             rankings={rankings}
           />
           {/* Crew / Following are the tabs at the top (TikTok's): no second row of chips here */}

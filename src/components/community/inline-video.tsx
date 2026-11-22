@@ -13,6 +13,7 @@ import {
   playFeedVideo,
   playRefused,
   releaseFeedVideo,
+  setRefusedClock,
   setSoundWanted,
   soundBlocked,
   startRefused,
@@ -22,6 +23,11 @@ import { clipIsSilent, type SilentProbe } from "@/lib/video-silent";
 import { VideoScrubber } from "@/components/community/video-scrubber";
 import { ActivitySpinner } from "@/components/activity-spinner";
 import { keepPlaying } from "@/lib/video-keep-playing";
+import { startDecodedClip, type DecodedClip } from "@/lib/decoded-clip";
+import { noteAutoplayRefused } from "@/lib/autoplay-notice";
+
+/** Decoding hasn't shown a frame this long: the play button shows meanwhile (it goes once a frame is up). */
+export const DECODED_SLOW_MS = 2500;
 
 /*
  * Sound in the feed: clips play with their sound by default. One speaker for
@@ -198,8 +204,18 @@ export function InlineVideo({
   const [postUp, setPostUp] = useState(false);
   const [tapped, setTapped] = useState(false);
   const [blocked, setBlocked] = useState(false);
-  // the phone won't start it by itself, even muted (Low Power Mode): a play button, and the next tap starts it
+  // the phone won't start it by itself, even muted (Low Power Mode): it plays from its own decoded frames on a
+  // canvas in the element's place, muted (decoded-clip.ts), and the next tap hands it to the element with its sound;
+  // only where that can't run, a play button
   const [refused, setRefused] = useState(false);
+  const [lowPower, setLowPower] = useState(false);
+  const [decodedOn, setDecodedOn] = useState(false);
+  const [decodeFailed, setDecodeFailed] = useState(false);
+  const [decodeSlow, setDecodeSlow] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const clipRef = useRef<DecodedClip | null>(null);
+  // where the decoded clip is (a hold, a swipe away and back, the tap that hands it to the element carry on from here)
+  const decodedAt = useRef(0);
   // no sound track (posted with no sound): no speaker, no "Tap for sound"
   const [silent, setSilent] = useState(false);
   // a finger held on it (on a post's own screen): paused until it lets go
@@ -276,8 +292,12 @@ export function InlineVideo({
         () => {
           setPlaying(true);
           setShown(true);
+          // a tap started the element: it takes over from the decoded copy
+          setLowPower(false);
         },
       ],
+      // started from a tap: the decoded copy holds its frame until the element's first one is up
+      ["play", () => clipRef.current?.stop()],
       ["pause", () => setPlaying(false)],
       // scrubbed while paused: the frame it's on is what shows (once there is one to show)
       ["seeked", () => v.readyState >= 2 && setShown(true)],
@@ -296,6 +316,8 @@ export function InlineVideo({
       setShown(false);
       setBlocked(false);
       setRefused(false);
+      setLowPower(false);
+      setDecodeFailed(false);
       setSilent(false);
       setBuffering(false);
     };
@@ -379,16 +401,86 @@ export function InlineVideo({
     return () => window.clearTimeout(t);
   }, [el, sound, mode]);
 
-  const soundOn = sound && !blocked;
+  // refused by the phone (Low Power Mode): from now until a tap starts the element, it plays decoded
+  useEffect(() => {
+    if (refused) setLowPower(true);
+  }, [refused]);
+  // the canvas in the element's place: the element's own box and fit, so it shows exactly what the element would
+  useEffect(() => {
+    const h = host.current;
+    if (!lowPower || !el || !h || decodeFailed) return;
+    const c = document.createElement("canvas");
+    c.className = el.className;
+    c.style.objectFit = el.style.objectFit;
+    c.style.objectPosition = el.style.objectPosition;
+    c.style.pointerEvents = "none";
+    c.setAttribute("data-decoded-clip", "");
+    h.appendChild(c);
+    canvasRef.current = c;
+    setRefusedClock(el, () => clipRef.current?.time() ?? decodedAt.current);
+    return () => {
+      clipRef.current?.stop();
+      clipRef.current = null;
+      setRefusedClock(el, null);
+      c.remove();
+      canvasRef.current = null;
+      setDecodedOn(false);
+      setDecodeSlow(false);
+    };
+  }, [lowPower, el, decodeFailed]);
+  useEffect(() => {
+    const c = canvasRef.current;
+    if (!c || !el) return;
+    c.style.objectFit = el.style.objectFit;
+    c.style.objectPosition = el.style.objectPosition;
+  }, [el, fit, position, framed, lowPower]);
+  // it moves whenever the element would be playing (on screen, not held or scrubbed), muted
+  useEffect(() => {
+    const c = canvasRef.current;
+    if (!lowPower || !shouldPlay || !url || !c || decodeFailed) return;
+    const slow = window.setTimeout(() => setDecodeSlow(true), DECODED_SLOW_MS);
+    const clip = startDecodedClip({
+      url,
+      canvas: c,
+      from: decodedAt.current,
+      loop: true,
+      onFirstFrame: () => {
+        window.clearTimeout(slow);
+        setDecodeSlow(false);
+        setDecodedOn(true);
+        setShown(true);
+      },
+      onTime: (t) => {
+        decodedAt.current = t;
+      },
+      onFail: () => {
+        window.clearTimeout(slow);
+        setDecodeFailed(true);
+        // only now does the phone's setting keep a clip still: say why, once
+        noteAutoplayRefused();
+      },
+    });
+    clipRef.current = clip;
+    return () => {
+      window.clearTimeout(slow);
+      clip.stop();
+      decodedAt.current = clip.time();
+      if (clipRef.current === clip) clipRef.current = null;
+    };
+  }, [lowPower, shouldPlay, url, decodeFailed]);
+  // playing decoded right now (muted: its sound comes with the tap that hands it to the element)
+  const decodedNow = lowPower && decodedOn && !decodeFailed;
+
+  const soundOn = sound && !blocked && !decodedNow;
   // the phone is holding its sound back until a tap: say so, plainly (TikTok's "Tap for sound")
-  const askTap = sound && blocked && !silent && !refused && controls !== "corner";
+  const askTap = sound && !silent && controls !== "corner" && (refused ? decodedNow : blocked);
   // on a post's screen (controls up top), shown whole: between the bars
   const between = controls === "top" && fit === "contain";
   // shown whole there, a clip a little taller than the room fills its width instead of leaving black down both sides
   // (photoZoomBox at CLIP_ZOOM_MAX_TRIM, the photo's rule): the element and its poster sit in a box at its own shape
   const zoom = between && !frame ? photoZoomBox(media, focusY, CLIP_ZOOM_MAX_TRIM) : null;
   return (
-    <div ref={wrap} className="absolute inset-0 bg-black" data-inline-video={playing ? "playing" : "poster"} data-slide-path={path} data-fit={fit} data-silent={silent ? "" : undefined}>
+    <div ref={wrap} className="absolute inset-0 bg-black" data-inline-video={playing ? "playing" : decodedNow ? "decoded" : "poster"} data-slide-path={path} data-fit={fit} data-silent={silent ? "" : undefined}>
       {frame ? (
         // framed in the studio: just that part, as its frame (its poster is that frame too)
         <ClipFrameBox
@@ -449,7 +541,7 @@ export function InlineVideo({
         </div>
       )}
       {/* its progress bar along the bottom (on a post's screen, right above the tab bar): a finger scrubs it */}
-      <VideoScrubber video={el} onHold={setScrubbing} enabled={active} disabled={failed} />
+      <VideoScrubber video={el} onHold={setScrubbing} enabled={active} disabled={failed || decodedNow} />
       {!auto && !tapped && (
         <button
           type="button"
@@ -465,9 +557,9 @@ export function InlineVideo({
           </span>
         </button>
       )}
-      {/* the phone wouldn't start it by itself (Low Power Mode): say so with a play button, never a frame that just sits
-          there; any tap starts it (video-pool.ts), this one too */}
-      {refused && shouldPlay && (
+      {/* the phone wouldn't start it by itself (Low Power Mode) and it can't play decoded here (or hasn't shown a frame
+          yet): a play button, never a frame that just sits there; any tap starts it (video-pool.ts), this one too */}
+      {refused && shouldPlay && (decodeFailed || (decodeSlow && !decodedNow)) && (
         <button
           type="button"
           onClick={(e) => {
@@ -490,6 +582,8 @@ export function InlineVideo({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
+            // playing decoded: this tap starts the element where it is, with its sound
+            if (el && playRefused(el)) return startRefused(el);
             // turning it on: inside the tap (so the phone allows it), and through the
             // silent switch from now on (the attribute goes before the sound starts,
             // so the page's media watcher sees a clip someone asked to hear)

@@ -24,6 +24,7 @@ import { videoLimit } from "@/lib/video-edit/limits";
 import { feedback } from "@/lib/feedback";
 import { MentionText } from "@/components/community/mentions";
 import { noteAutoplayRefused } from "@/lib/autoplay-notice";
+import { startDecodedClip, type DecodedClip } from "@/lib/decoded-clip";
 
 /** How long one moment shows before the next. */
 const FRAME_MS = 5000;
@@ -715,6 +716,11 @@ function StoryClip({ path, poster, paused, onProgress, onEnd, onFail }: { path: 
   const vid = useRef<HTMLVideoElement | null>(null);
   const [muted, setMuted] = useState(storySoundBlocked);
   const [started, setStarted] = useState(false);
+  // refused even muted (Low Power Mode): played from its own decoded frames on a canvas, muted (decoded-clip.ts)
+  const [lowPower, setLowPower] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const clipRef = useRef<DecodedClip | null>(null);
+  const decodedAt = useRef(0);
   const failRef = useRef(onFail);
   failRef.current = onFail;
   const progressRef = useRef(onProgress);
@@ -735,10 +741,10 @@ function StoryClip({ path, poster, paused, onProgress, onEnd, onFail }: { path: 
       v.pause();
       return;
     }
-    // refused even muted (Low Power Mode): the story clock takes over, and the first time the app says why
+    // refused even muted (Low Power Mode): it plays decoded instead (below); anything else hands back to the clock
     const refusedMuted = (e: unknown) => {
-      if ((e as { name?: string } | null)?.name === "NotAllowedError") noteAutoplayRefused();
-      failRef.current();
+      if ((e as { name?: string } | null)?.name === "NotAllowedError") setLowPower(true);
+      else failRef.current();
     };
     v.play().catch((e: unknown) => {
       if (!v.muted) {
@@ -753,8 +759,36 @@ function StoryClip({ path, poster, paused, onProgress, onEnd, onFail }: { path: 
   // a smooth bar from the clip's own clock; a story shows a clip's first minute (a longer post's clip moves on there)
   const endRef = useRef(onEnd);
   endRef.current = onEnd;
+  // decoded: its frames run the bar, held pauses it, its end (or its first minute) moves the story on; where it can't
+  // run, the story clock takes over on its poster and the first time the app says why
   useEffect(() => {
-    if (!started || paused) return;
+    const c = canvasRef.current;
+    if (!lowPower || !url || paused || !c) return;
+    const clip = startDecodedClip({
+      url,
+      canvas: c,
+      from: decodedAt.current,
+      until: STORY_CLIP_MAX_SECONDS,
+      onFirstFrame: () => setStarted(true),
+      onTime: (t, length) => {
+        decodedAt.current = t;
+        if (length > 0) progressRef.current(Math.min(1, t / length));
+      },
+      onEnd: () => endRef.current(),
+      onFail: () => {
+        noteAutoplayRefused();
+        failRef.current();
+      },
+    });
+    clipRef.current = clip;
+    return () => {
+      clip.stop();
+      decodedAt.current = clip.time();
+      if (clipRef.current === clip) clipRef.current = null;
+    };
+  }, [lowPower, url, paused]);
+  useEffect(() => {
+    if (!started || paused || lowPower) return;
     let raf = 0;
     let ended = false;
     const tick = () => {
@@ -773,7 +807,7 @@ function StoryClip({ path, poster, paused, onProgress, onEnd, onFail }: { path: 
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [started, paused]);
+  }, [started, paused, lowPower]);
 
   const attach = useCallback((v: HTMLVideoElement | null) => {
     vid.current = v;
@@ -793,13 +827,14 @@ function StoryClip({ path, poster, paused, onProgress, onEnd, onFail }: { path: 
           src={url}
           playsInline
           preload="auto"
-          className={cn("max-h-full w-full object-contain", !started && "opacity-0")}
+          className={cn("max-h-full w-full object-contain", (!started || lowPower) && "opacity-0", lowPower && "absolute")}
           onPlaying={() => setStarted(true)}
           onEnded={() => onEnd()}
           onError={() => failRef.current()}
         />
       )}
-      {muted && started && (
+      {lowPower && <canvas ref={canvasRef} className={cn("max-h-full w-full object-contain", !started && "opacity-0")} data-decoded-clip />}
+      {(muted || lowPower) && started && (
         <button
           type="button"
           onClick={() => {
@@ -807,12 +842,27 @@ function StoryClip({ path, poster, paused, onProgress, onEnd, onFail }: { path: 
             storySoundBlocked = false;
             setMuted(false);
             if (v) {
+              // playing decoded: this tap starts the clip itself where the decoded one is, with its sound;
+              // should the phone still say no, it carries on decoded, muted
+              if (lowPower) {
+                try {
+                  v.currentTime = clipRef.current?.time() ?? decodedAt.current;
+                } catch {
+                  /* not seekable yet */
+                }
+              }
               v.muted = false;
               v.removeAttribute("muted");
-              void v.play().catch(() => {});
+              void v.play().then(
+                () => setLowPower(false),
+                () => {
+                  if (lowPower) setMuted(true);
+                },
+              );
             }
           }}
-          className="absolute bottom-24 left-1/2 inline-flex h-9 -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3.5 text-[13px] font-bold text-white backdrop-blur active:scale-95"
+          // above the reply bar's shade (z-30), which otherwise took the tap
+          className="absolute bottom-24 left-1/2 z-40 inline-flex h-9 -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3.5 text-[13px] font-bold text-white backdrop-blur active:scale-95"
           data-story-sound
         >
           <VolumeX className="h-4 w-4" /> Tap for sound
