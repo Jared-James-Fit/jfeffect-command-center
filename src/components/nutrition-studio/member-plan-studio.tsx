@@ -130,7 +130,8 @@ export function MemberPlanStudio({
     if (!info.selfServe) return toast.error("Your coach writes your plan.");
     setSaving(true);
     try {
-      const existing = info.plan && !info.plan.assigned_coach_id ? info.plan : null;
+      // an import or a Cleo draft is a new plan: the one before is archived with its dates, never overwritten
+      const existing = !seed?.days?.length && info.plan && !info.plan.assigned_coach_id ? info.plan : null;
       const payload = { client_id: info.clientId, phase, goal: PHASE_GOAL[phase] ?? null, start_date: existing?.start_date ?? today(), status: "Active", visible_to_client: true, last_updated_at: new Date().toISOString(), food_weighing_rules: seed?.weighing ?? existing?.food_weighing_rules ?? null };
       let id = existing?.id as string | undefined;
       if (id) {
@@ -309,8 +310,8 @@ export function MemberPlanStudio({
   );
 }
 
-/** Import a plan and Create with Cleo show once their flows ship (studio-start.tsx); until then, Build it yourself. */
-export const STUDIO_DRAFTS_READY = false;
+/** Import a plan and Create with Cleo (studio-start.tsx) are offered beside Build it yourself. */
+export const STUDIO_DRAFTS_READY = true;
 
 /** The three ways in, on a member's Nutrition page when they have no plan of their own. */
 export function StudioStartOptions() {

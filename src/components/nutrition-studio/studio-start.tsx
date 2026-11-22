@@ -384,7 +384,7 @@ function Ready({
             ) : row.method === "parsed" ? (
               <p className="text-[14px] text-muted-foreground">Read straight from your plan, nothing changed.</p>
             ) : null}
-            {hasOwnPlan && <p className="text-[14px] text-muted-foreground">Saving it replaces the days of the meal plan you have now.</p>}
+            {hasOwnPlan && <p className="text-[14px] text-muted-foreground">Saving it starts a new plan. The one you have now is archived, never deleted.</p>}
           </>
         }
         actions={
