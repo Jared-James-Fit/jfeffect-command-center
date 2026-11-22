@@ -6,13 +6,18 @@ export type RunStage = "opening" | "finding" | "tracking" | "measuring" | "readi
 export type RunProgress = { stage: RunStage; progress: number };
 
 const STAGES: RunStage[] = ["opening", "finding", "tracking", "measuring", "reading"];
-/** Each stage's share of the whole run: following the bar through every frame is most of it. */
+/**
+ * Each stage's share of the whole run, from the time each took on the 27
+ * validation clips in a browser (Nov 22 2026: finding ~2.8 s, tracking ~7 s,
+ * measuring ~1.5 s of ~11 s); within a stage the progress is measured (frames
+ * decoded, seconds of the clip followed, plate frames measured), never a timer.
+ */
 const WEIGHTS: Record<RunStage, number> = {
-  opening: 0.04,
-  finding: 0.14,
-  tracking: 0.7,
-  measuring: 0.08,
-  reading: 0.04,
+  opening: 0.02,
+  finding: 0.22,
+  tracking: 0.62,
+  measuring: 0.12,
+  reading: 0.02,
 };
 
 /** How far through the whole run a stage's progress is (0…1, for one bar). */
