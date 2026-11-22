@@ -74,7 +74,7 @@ function ClientMessages() {
     queryFn: async () => {
       const { data } = await supabase
         .from("coaches")
-        .select("id, full_name, phone, profile_picture_url")
+        .select("id, user_id, full_name, phone, profile_picture_url")
         .eq("id", client!.assigned_coach_id!)
         .maybeSingle();
       return data;
@@ -142,6 +142,7 @@ function ClientMessages() {
     id: "coach",
     name: coachName,
     avatarUrl: coach?.profile_picture_url ?? null,
+    storyUserId: coach?.user_id ?? null,
     live: coachLive,
     preview: coachPreview,
     at: coachLast?.created_at ?? null,
@@ -169,7 +170,6 @@ function ClientMessages() {
             src={coach?.profile_picture_url ?? null}
             name={coachName}
             size={40}
-            ring
           />
         </LiveAvatar>
         <div className="min-w-0 flex-1">

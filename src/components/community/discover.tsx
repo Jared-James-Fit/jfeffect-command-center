@@ -3,6 +3,7 @@ import { ChevronLeft, Lock, Search, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
+import { StoryAvatar } from "@/components/community/story-ring";
 import { CoachBadge } from "@/components/community/post-card";
 import { FollowButton } from "@/components/community/follow-button";
 import { CrewList } from "@/components/community/crew-list";
@@ -238,8 +239,9 @@ export function PersonRow({ p, sub, faces, onOpen, onHide }: { p: DiscoverPerson
   const line = [sub, p.username ? `@${p.username}` : null].filter(Boolean).join(" · ");
   return (
     <div data-person-row className="flex w-full items-center gap-2 pr-2.5">
-      <button type="button" onClick={() => onOpen(p)} className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-3.5 text-left active:bg-muted">
-        <UserAvatar src={p.avatar_url} name={p.name} size={44} expandable={false} />
+      {/* the photo plays their story when they have one up, else it opens their profile like the rest of the row */}
+      <StoryAvatar userId={p.user_id} src={p.avatar_url} name={p.name} size={44} onPress={() => onOpen(p)} pressLabel={`${p.name}'s profile`} className="ml-3.5" />
+      <button type="button" onClick={() => onOpen(p)} className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-1 text-left active:bg-muted">
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-1">
             <span className="truncate text-[15px] font-bold">{p.name}</span>

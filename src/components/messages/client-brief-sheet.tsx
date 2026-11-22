@@ -88,7 +88,7 @@ export function ClientBriefSheet({
       >
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted" aria-hidden />
         <div className="flex items-center gap-3 border-b border-border px-4 pb-3 pt-3">
-          <UserAvatar src={client.profile_picture_url ?? null} name={client.full_name ?? "Client"} size={44} ring expandable={false} />
+          <UserAvatar src={client.profile_picture_url ?? null} name={client.full_name ?? "Client"} size={44} expandable={false} />
           <div className="min-w-0 flex-1">
             <SheetTitle className="truncate text-base font-bold tracking-tight">{client.full_name}</SheetTitle>
             <SheetDescription className="truncate text-xs text-muted-foreground">

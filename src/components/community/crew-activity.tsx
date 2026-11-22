@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Dumbbell, Heart, Lock, Play, Search, Trophy } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
+import { StoryAvatar } from "@/components/community/story-ring";
 import { FollowButton, FollowRequestActions } from "@/components/community/follow-button";
 import { SuggestedAthletes } from "@/components/community/suggested-athletes";
 import { cn } from "@/lib/utils";
@@ -126,21 +127,27 @@ function ActivityRow({ it, isNew, thumb, onOpenPost, onOpenPerson }: {
   };
   return (
     <li className={cn("-mx-3 flex items-center gap-3 px-3 py-2", isNew && "bg-primary/[0.06]")} data-activity-row={it.kind}>
-      <button type="button" onClick={() => first && onOpenPerson(first)} className="relative h-11 w-11 shrink-0 active:opacity-80" aria-label={first ? `${first.name}'s profile` : undefined}>
-        {actors.length > 1 ? (
-          // two people: Instagram's stacked pair
-          <>
-            <span className="absolute left-0 top-0">
-              <UserAvatar src={actors[1].avatar_url} name={actors[1].name} size={32} expandable={false} />
-            </span>
-            <span className="absolute bottom-0 right-0 rounded-full ring-2 ring-background">
-              <UserAvatar src={actors[0].avatar_url} name={actors[0].name} size={32} expandable={false} />
-            </span>
-          </>
-        ) : (
-          <UserAvatar src={first?.avatar_url ?? null} name={first?.name ?? "Someone"} size={44} expandable={false} />
-        )}
-      </button>
+      {actors.length > 1 ? (
+        // two people: Instagram's stacked pair (no rings on a pair; their names open them)
+        <button type="button" onClick={() => first && onOpenPerson(first)} className="relative h-11 w-11 shrink-0 active:opacity-80" aria-label={first ? `${first.name}'s profile` : undefined}>
+          <span className="absolute left-0 top-0">
+            <UserAvatar src={actors[1].avatar_url} name={actors[1].name} size={32} expandable={false} />
+          </span>
+          <span className="absolute bottom-0 right-0 rounded-full ring-2 ring-background">
+            <UserAvatar src={actors[0].avatar_url} name={actors[0].name} size={32} expandable={false} />
+          </span>
+        </button>
+      ) : (
+        // one person: their story ring when they have one up (a tap plays it), else their profile
+        <StoryAvatar
+          userId={first?.user_id}
+          src={first?.avatar_url ?? null}
+          name={first?.name ?? "Someone"}
+          size={44}
+          onPress={first ? () => onOpenPerson(first) : undefined}
+          pressLabel={first ? `${first.name}'s profile` : undefined}
+        />
+      )}
       <button type="button" onClick={open} className="min-w-0 flex-1 text-left text-[14px] leading-snug active:opacity-70">
         <span className="line-clamp-3 break-words">
           {line.names.map((n, i) => (

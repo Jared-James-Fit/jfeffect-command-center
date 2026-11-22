@@ -58,6 +58,8 @@ export type PinnedChat = {
   id: string;
   name: string;
   avatarUrl: string | null;
+  /** Their login, so the row's photo carries their story ring (and plays it). */
+  storyUserId?: string | null;
   live?: boolean;
   /** The list row's second line. */
   preview: string;
@@ -436,7 +438,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
   const coachTarget: ChatMenuTarget | null = pinned ? {
     key: pinned.id,
     title: pinned.name,
-    avatar: <UserAvatar src={pinned.avatarUrl} name={pinned.name} size={44} ring expandable={false} />,
+    avatar: <UserAvatar src={pinned.avatarUrl} name={pinned.name} size={44} expandable={false} />,
     preview: pinned.preview,
     fixed: true,
     pinned: true,
@@ -566,9 +568,11 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
       at={pinned.at}
       avatar={
         <LiveAvatar live={pinned.live} size={CHAT_ROW_AVATAR}>
-          <UserAvatar src={pinned.avatarUrl} name={pinned.name} size={CHAT_ROW_AVATAR} ring expandable={false} />
+          <UserAvatar src={pinned.avatarUrl} name={pinned.name} size={CHAT_ROW_AVATAR} expandable={false} />
         </LiveAvatar>
       }
+      storyUserId={pinned.storyUserId}
+      storyName={pinned.name}
       name={pinned.name}
       preview={pinned.preview}
     />
@@ -723,7 +727,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
               {pinned && (
                 <PinTile
                   name={pinned.name}
-                  avatar={<UserAvatar src={pinned.avatarUrl} name={pinned.name} size={60} ring expandable={false} />}
+                  avatar={<UserAvatar src={pinned.avatarUrl} name={pinned.name} size={60} expandable={false} />}
                   unread={!!pinned.unread}
                   preview={pinned.unreadPreview}
                   alone={pinnedRows.length === 0}

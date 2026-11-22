@@ -2,6 +2,7 @@ import { useSyncExternalStore, type KeyboardEvent, type PointerEvent, type React
 import { BellOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { activityAge } from "@/lib/crew-activity";
+import { StoryRing, useStoryRing } from "@/components/community/story-ring";
 
 /**
  * Instagram's DM list, everywhere a list of chats shows (the coach inbox, the
@@ -61,6 +62,8 @@ export function ChatListRow({
   onClick,
   onPointerDown,
   className,
+  storyUserId,
+  storyName,
   ...data
 }: {
   /** The face, sized CHAT_ROW_AVATAR. */
@@ -92,13 +95,42 @@ export function ChatListRow({
   onClick?: () => void;
   onPointerDown?: (e: PointerEvent<HTMLElement>) => void;
   className?: string;
+  /**
+   * The person this chat is with: their story ring on the face while they
+   * have a story up, and a tap on the face plays it (Instagram's DM list);
+   * the rest of the row still opens the chat. No story: the face as it is.
+   */
+  storyUserId?: string | null;
+  storyName?: string;
   [data: `data-${string}`]: string | boolean | undefined;
 }) {
   useMinute(); // re-render as the minute turns
+  const story = useStoryRing(storyUserId);
+  const storied = story.state !== "none";
+  const face = storied ? (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!story.open()) onClick?.();
+      }}
+      className="shrink-0 rounded-full active:scale-95"
+      aria-label={`Watch ${storyName ?? "their"}${storyName ? "'s" : ""} story${story.state === "seen" ? "" : ", new"}`}
+      data-story-avatar={story.state}
+    >
+      <StoryRing state={story.state} size={CHAT_ROW_AVATAR}>
+        {avatar}
+      </StoryRing>
+    </button>
+  ) : (
+    avatar
+  );
+  // a face that plays a story is a button of its own, so the row can't be one
+  const tag = storied ? "div" : as;
   const age = chatAge(at);
   const classes = cn(
     "flex min-h-[72px] w-full items-center gap-3 px-4 py-2 text-left transition hover:bg-secondary/40",
-    as === "div" && "cursor-pointer",
+    tag === "div" && "cursor-pointer",
     selected && "bg-secondary/60",
     dim && "opacity-60",
     className,
@@ -106,7 +138,7 @@ export function ChatListRow({
   const body = (
     <>
       {leading}
-      {avatar}
+      {face}
       <span className="block min-w-0 flex-1">
         <span
           data-chat-name
@@ -143,7 +175,7 @@ export function ChatListRow({
       )}
     </>
   );
-  if (as === "div") {
+  if (tag === "div") {
     return (
       <div
         role="button"

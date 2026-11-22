@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, Bookmark, Camera, Dumbbell, Grid3x3, Lock, MapPin, MoreHorizontal, Repeat2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,9 @@ import { GridSkeleton, PostGrid } from "@/components/community/post-grid";
 import { RepostsGrid, SavedView } from "@/components/community/saved-view";
 import { isWorkoutCard, trainingSinceLabel, type CommunityAuthor, type CommunityPost } from "@/lib/community";
 import { useCommunityFeed, useCommunityProfile, useMyArchived, usePostMediaUrls, useSetCommunityAvatar } from "@/lib/community.queries";
+import { StoryAvatar, StoryHostContext, useStoryRing } from "@/components/community/story-ring";
+import { storyGroupFor, storyRings } from "@/lib/story-ring";
+import { useSeenStories } from "@/lib/story-seen";
 
 /**
  * A person's corner of the community: photo, name, a short bio, follower /
@@ -38,6 +41,27 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
   // (a story someone posted lives in the story rail only, never on the grid: Instagram's way)
   // a profile is what they posted: never a story or a workout's bare card (isWorkoutCard)
   const shown = useMemo(() => (blocked ? [] : (feed.data?.pages.flatMap((p) => p.posts) ?? []).filter((p) => !p.story && !isWorkoutCard(p))), [feed.data, blocked]);
+  // Their story ring: the Crew's read of who has a story up, else their own posts' (a story the Crew
+  // hasn't loaded yet still rings here). No story, no ring: a plain photo.
+  const host = useContext(StoryHostContext);
+  const hostStory = useStoryRing(profile?.author.user_id);
+  const seenStories = useSeenStories();
+  const theirPosts = useMemo(() => (blocked ? [] : feed.data?.pages.flatMap((p) => p.posts) ?? []), [feed.data, blocked]);
+  const ownRead = useMemo(
+    () => (profile ? storyRings(theirPosts, { seen: seenStories }).get(profile.author.user_id) ?? "none" : "none"),
+    [theirPosts, seenStories, profile],
+  );
+  const story = hostStory.state !== "none"
+    ? hostStory
+    : {
+        state: host?.play ? ownRead : ("none" as const),
+        open: () => {
+          const g = profile ? storyGroupFor(theirPosts, profile.author.user_id) : null;
+          if (!g || !host?.play) return false;
+          host.play(g, theirPosts);
+          return true;
+        },
+      };
   // Posts | Reposts | Saved | Archived (Instagram's tabs; only you see Saved and Archived)
   const [tab, setTab] = useState<ProfileTab>("posts");
   const showArchived = tab === "archived";
@@ -86,11 +110,15 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
   return (
     <div>
       <div className="flex items-center gap-4">
-        {/* The photo: a tap opens it big (photo-viewer.tsx); your own changes from the camera badge, or a tap on the circle while there's none. Community-only, never your account photo. */}
+        {/* The photo: no ring unless there's a story up (then a tap plays it: the brand ring while there's
+            something you haven't watched, grey once you have); with no story a tap opens the photo big
+            (photo-viewer.tsx). Your own changes from the camera badge, or a tap on the circle while there's
+            none. Community-only, never your account photo. The room around it is kept whatever the ring
+            says, so nothing moves when a story goes up or runs out. */}
         <div className="flex shrink-0 flex-col items-center gap-1">
-          <div className="relative rounded-full bg-[linear-gradient(135deg,#ffb054,#ef3340)] p-[3px]">
-            <span className={cn("block rounded-full bg-background p-[2px]", setAvatar.isPending && "animate-pulse")}>
-              {profile.is_me && !profile.author.avatar_url ? (
+          <div className="relative p-1.5" data-profile-photo>
+            <span className={cn("block rounded-full", setAvatar.isPending && "animate-pulse")}>
+              {story.state === "none" && profile.is_me && !profile.author.avatar_url ? (
                 <button
                   type="button"
                   disabled={setAvatar.isPending}
@@ -101,7 +129,7 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
                   <UserAvatar src={null} name={profile.author.name} size={78} expandable={false} />
                 </button>
               ) : (
-                <UserAvatar src={profile.author.avatar_url} name={profile.author.name} size={78} />
+                <StoryAvatar userId={profile.author.user_id} src={profile.author.avatar_url} name={profile.author.name} size={78} expandable story={story} />
               )}
             </span>
             {profile.is_me && (
@@ -111,7 +139,7 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
                 onClick={() => photoRef.current?.click()}
                 data-profile-photo-change
                 aria-label={profile.author.avatar_url ? "Change your community photo" : "Add a community photo"}
-                className="absolute -bottom-0.5 -right-0.5 grid h-7 w-7 place-items-center rounded-full border-2 border-background bg-foreground text-background after:absolute after:-inset-2 after:content-[''] active:scale-95"
+                className="absolute bottom-0.5 right-0.5 grid h-7 w-7 place-items-center rounded-full border-2 border-background bg-foreground text-background after:absolute after:-inset-2 after:content-[''] active:scale-95"
               >
                 <Camera className="h-3.5 w-3.5" />
               </button>

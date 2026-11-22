@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Search, Star, X } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { UserAvatar } from "@/components/user-avatar";
+import { StoryAvatar } from "@/components/community/story-ring";
 import { cn } from "@/lib/utils";
 import { feedback } from "@/lib/feedback";
 import { HapticTap } from "@/components/haptic-tap";
@@ -217,8 +218,9 @@ const SHEET = "max-h-[80dvh] gap-0 overflow-y-auto rounded-t-[24px] p-0 pb-safe-
 function PersonRow({ a, onOpen, followsYou = true, children }: { a: CommunityAuthor; onOpen?: () => void; followsYou?: boolean; children?: React.ReactNode }) {
   return (
     <li className="flex items-center gap-3 px-5 py-2.5">
+      {/* the photo plays their story when they have one up, else it opens their profile like the name */}
+      <StoryAvatar userId={a.user_id} src={a.avatar_url} name={a.name} size={40} onPress={onOpen} pressLabel={`${a.name}'s profile`} />
       <button type="button" onClick={onOpen} disabled={!onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left active:opacity-70 disabled:active:opacity-100">
-        <UserAvatar src={a.avatar_url} name={a.name} size={40} expandable={false} />
         <span className="min-w-0 truncate text-[14px] font-bold">{a.name}</span>
         {followsYou && <FollowsYouTag userId={a.user_id} />}
       </button>

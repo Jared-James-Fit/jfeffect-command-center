@@ -139,7 +139,7 @@ function CoachDetailPage() {
         breadcrumbs={[{ label: "Coaches", to: "/admin/coaches" }, { label: coach.full_name }]}
         title={
           <span className="flex items-center gap-3">
-            <UserAvatar src={coach.profile_picture_url} name={coach.full_name} size={44} ring />
+            <UserAvatar src={coach.profile_picture_url} name={coach.full_name} size={44} />
             <span>{coach.full_name}</span>
           </span>
         }
@@ -152,7 +152,7 @@ function CoachDetailPage() {
         <Card className="p-5">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile</h3>
           <div className="mt-3 flex items-center gap-3">
-            <UserAvatar src={coach.profile_picture_url} name={coach.full_name} size={56} ring />
+            <UserAvatar src={coach.profile_picture_url} name={coach.full_name} size={56} />
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => setEditingPic((v) => !v)}>
                 <Camera className="mr-1.5 h-3 w-3" />

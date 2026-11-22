@@ -163,13 +163,15 @@ describe("one photo viewer, everywhere", () => {
 
   it("profile headers: a tap views the photo, editing has its own button", () => {
     const pv = read("src/components/community/profile-view.tsx");
-    expect(pv).toContain('<UserAvatar src={profile.author.avatar_url} name={profile.author.name} size={78} />');
+    // with no story up a tap opens the photo big; with one, it plays the story (story-ring.tsx)
+    expect(pv).toContain("<StoryAvatar userId={profile.author.user_id} src={profile.author.avatar_url} name={profile.author.name} size={78} expandable story={story} />");
     expect(pv).toContain("data-profile-photo-change");
     const acct = read("src/routes/_authenticated/portal/account.tsx");
     expect(acct).toContain("<UserAvatar src={form.profile_picture_url} name={displayName} size={56} />");
     expect(acct).toContain("data-account-photo-change");
     // the client's chat header: their coach's photo opens big
     const msgs = read("src/routes/_authenticated/portal/messages.tsx");
-    expect(msgs).toMatch(/src=\{coach\?\.profile_picture_url \?\? null\}\s*name=\{coachName\}\s*size=\{40\}\s*ring\s*\/>/);
+    // (no decorative ring: a ring around a photo only ever means a story)
+    expect(msgs).toMatch(/src=\{coach\?\.profile_picture_url \?\? null\}\s*name=\{coachName\}\s*size=\{40\}\s*\/>/);
   });
 });

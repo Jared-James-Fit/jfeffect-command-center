@@ -3,9 +3,9 @@ import { cn } from "@/lib/utils";
 
 /**
  * One live look for the whole app (chat presence, the Live boards, training
- * now): a breathing dot with two soft waves, a ring of light turning around a
- * live avatar with a LIVE tag, and the red Live pills glowing. Animations live
- * in styles.css ("Live indicators") and stop with reduced motion.
+ * now): a breathing dot with two soft waves, a still dot on a live avatar's
+ * corner, and the red Live pills glowing. Animations live in styles.css
+ * ("Live indicators") and stop with reduced motion.
  */
 
 const TONE = {
@@ -48,47 +48,43 @@ export function LiveMark({ children = "Live", className, size = 8 }: { children?
 }
 
 /**
- * An avatar that's live right now: a ring of light turning around it, a soft
- * glow, and a LIVE tag along the bottom. Not live: the avatar as it is.
+ * An avatar that's live right now (in the chat now, training now): a still
+ * dot on the photo's corner, Instagram's "Active now", green or the Crew's
+ * training red. Never a ring: a ring around a photo means a story (story-ring.tsx),
+ * and a spinning coloured ring read as one. Not live: the avatar as it is.
+ * `tag` is kept for older call sites; the dot says it.
  */
 export function LiveAvatar({
   live,
   children,
   size,
-  tag = true,
   tone = "green",
   className,
 }: {
   live: boolean | undefined;
   children: ReactNode;
-  /** the avatar's size in px (the ring sits just outside it) */
+  /** the avatar's size in px (the dot sits on its corner) */
   size: number;
-  /** the LIVE tag (off for very small avatars) */
+  /** (no longer drawn: the dot is the whole mark) */
   tag?: boolean;
   /** green: in the chat now; red: training now (Crew) */
   tone?: "green" | "red";
   className?: string;
 }) {
   if (!live) return <span className={cn("relative inline-flex shrink-0", className)}>{children}</span>;
-  const pad = size >= 56 ? 4 : 3;
+  const dot = Math.round(Math.min(16, Math.max(9, size * 0.24)));
+  // on the circle's edge at the bottom right (45°), whatever the size
+  const inset = Math.round(size * 0.146 - dot / 2);
   return (
     <span className={cn("relative inline-flex shrink-0", className)} style={{ width: size, height: size }} data-live>
-      <span aria-hidden className={cn("jf-live-halo pointer-events-none absolute rounded-full", tone === "red" && "jf-live-halo-red")} style={{ inset: -pad }} />
-      <span aria-hidden className={cn("jf-live-ring pointer-events-none absolute rounded-full", tone === "red" && "jf-live-ring-red")} style={{ inset: -pad }} />
       {children}
-      {tag && (
-        <span
-          aria-label="Live"
-          className={cn(
-            "jf-live-pill absolute left-1/2 -translate-x-1/2 rounded-[5px] font-bold uppercase leading-none tracking-wide text-white ring-2 ring-background",
-            tone === "red" ? "bg-red-500" : "bg-emerald-500",
-            size >= 56 ? "-bottom-1.5 px-1.5 py-[3px] text-[9px]" : "-bottom-1 px-1 py-[2px] text-[8px]",
-          )}
-          style={{ ["--jf-live-glow" as string]: tone === "red" ? "#ef4444" : "#10b981" }}
-        >
-          Live
-        </span>
-      )}
+      <span
+        role="img"
+        aria-label={tone === "red" ? "Training now" : "Active now"}
+        className={cn("pointer-events-none absolute rounded-full ring-2 ring-background", tone === "red" ? "bg-red-500" : "bg-emerald-500")}
+        style={{ width: dot, height: dot, right: inset, bottom: inset }}
+        data-live-dot
+      />
     </span>
   );
 }

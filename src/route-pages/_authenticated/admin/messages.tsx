@@ -1116,7 +1116,7 @@ export function MessagesInbox({
                   onClick={(e) => { e.stopPropagation(); setBriefFor(client.id); }}
                   className="relative flex shrink-0 rounded-full transition active:scale-95"
                 >
-                  {/* the same live look as the client's inbox: the turning ring and LIVE tag */}
+                  {/* the same live look as the client's inbox: a dot on the photo */}
                   <LiveAvatar
                     live={isClientActive((client as any).last_active_at) || (client.id === selectedId && selectedClientLive)}
                     size={CHAT_ROW_AVATAR}
@@ -1125,7 +1125,6 @@ export function MessagesInbox({
                       src={client.profile_picture_url}
                       name={client.full_name}
                       size={CHAT_ROW_AVATAR}
-                      ring
                       expandable={false}
                     />
                   </LiveAvatar>
@@ -1223,7 +1222,6 @@ export function MessagesInbox({
                     src={selected.profile_picture_url}
                     name={selected.full_name}
                     size={40}
-                    ring
                   />
                 </LiveAvatar>
               </ClientNameLink>

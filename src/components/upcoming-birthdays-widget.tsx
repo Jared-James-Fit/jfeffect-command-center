@@ -289,7 +289,6 @@ export function UpcomingBirthdaysWidget({ windowDays = UPCOMING_DAYS_DEFAULT, hi
                       src={r.profile_picture_url}
                       name={name}
                       size={44}
-                      ring
                       expandable={false}
                     />
                     <div className="min-w-0">
