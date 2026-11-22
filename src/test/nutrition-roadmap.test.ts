@@ -569,4 +569,17 @@ describe("live data, Nov 22 2026: the first run on every coaching client", () =>
     expect(r.fresh.blocks.map((b) => b.kind)).toEqual(["performance", "taper", "post_comp", "transition"]);
     expect(r.fresh.blocks[0].start).toBe(TODAY);
   });
+
+  // Alyssa: a 76 kg class (her competition profile) on Dec 5, last weigh-in 74.2 kg on Sep 27
+  it("a stale weigh-in under the class is never 'reached': it needs weigh-ins, and says the meet is close", () => {
+    const meetDate = addDays(TODAY, 13);
+    const inp = athlete({ sex: "F", heightCm: 165, weighIns: series(10, 74.2, 0, 0.2, addDays(TODAY, -56)), powerlifter: true, meet: { name: "Total Fortification", date: meetDate, weightClass: "76", federation: null, sport: "powerlifting" } });
+    const r = roadmap(inp);
+    expect(r.fresh.goal?.kind).toBe("weight_class");
+    expect(r.fresh.feasibility.verdict).toBe("needs_weigh_ins");
+    expect(r.fresh.feasibility.headline).toMatch(/^Total Fortification in 2 weeks: no weigh-ins since/);
+    expect(r.read.decision.kcalChange).toBeNull();
+    expect(r.fresh.blocks.map((b) => b.kind).slice(-3)).toEqual(["taper", "post_comp", "transition"]);
+  });
 });
+

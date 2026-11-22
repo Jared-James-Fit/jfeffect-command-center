@@ -106,7 +106,8 @@ export type Block = {
   why: string;
 };
 
-export type FeasibilityVerdict = "realistic" | "aggressive" | "unlikely" | "unsafe" | "no_deadline" | "reached" | "no_goal";
+/** needs_weigh_ins: the last weigh-in is stale (10+ days), so nothing is judged, never "reached". */
+export type FeasibilityVerdict = "realistic" | "aggressive" | "unlikely" | "unsafe" | "no_deadline" | "reached" | "no_goal" | "needs_weigh_ins";
 
 export type Alternative = {
   kind: "extend" | "revise_target" | "weight_class" | "performance" | "slower";
