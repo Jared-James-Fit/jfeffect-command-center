@@ -4,7 +4,7 @@ import {
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import {
-  Plus, Camera, Image as ImageIcon, FileText, Sparkles,
+  Plus, Camera, Image as ImageIcon, FileText,
   ClipboardList, FileSignature, UtensilsCrossed, Video, CalendarPlus, ListChecks,
 } from "lucide-react";
 import { ScheduleSheet } from "@/components/messages/booking-invite";
@@ -124,7 +124,7 @@ export function ComposerPlusMenu({
       key: "gif",
       section: "attach",
       label: "GIFs & Sounds",
-      icon: <Sparkles className="h-6 w-6" />,
+      icon: <span className="rounded-[5px] border-2 border-current px-[3px] text-[11px] font-bold leading-[16px] tracking-tight" aria-hidden>GIF</span>,
       onClick: () => { setOpen(false); setGifOpen(true); },
       hidden: !canSendGifs,
       tone: "accent",

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Sparkles, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { HeartPulse, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { format } from "date-fns";
 import { recoveryTrendLabel, fetchRecoveryScoreSeries } from "@/lib/analytics/recovery-score";
 import { InfoTip } from "@/components/analytics/info-tip";
@@ -53,7 +53,7 @@ export function RecoverySummaryCard({ clientId, rangeStart, rangeEnd, rangeLabel
       <section aria-label="Recovery">
         <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:justify-between">
           <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-semibold text-foreground">
-            <Sparkles className="h-5 w-5 shrink-0 text-primary" />
+            <HeartPulse className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
             <span className="truncate">Recovery</span>
             <InfoTip label="About recovery score" title="Recovery" align="start">
               Average recovery score (20–100) from workout reviews completed in
@@ -84,7 +84,7 @@ export function RecoverySummaryCard({ clientId, rangeStart, rangeEnd, rangeLabel
     <section aria-label="Recovery">
       <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:justify-between">
         <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-semibold text-foreground">
-          <Sparkles className="h-5 w-5 shrink-0 text-primary" />
+          <HeartPulse className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
           <span className="truncate">Recovery</span>
             <InfoTip label="About recovery score" title="Recovery" align="start">
               Average recovery score (20–100) from workout reviews completed in

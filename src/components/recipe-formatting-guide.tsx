@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Copy, Save, Loader2, Sparkles } from "lucide-react";
+import { ClipboardCopy, Copy, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { DEFAULT_RECIPE_PROMPT } from "@/lib/recipe-format";
 import { getFormatPrompt, saveFormatPrompt } from "@/lib/recipes";
@@ -50,7 +50,7 @@ export function RecipeFormattingGuide() {
         <CollapsibleTrigger asChild>
           <button className="flex w-full items-center justify-between gap-3 text-left">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
+              <ClipboardCopy className="h-4 w-4 text-muted-foreground" />
               <div>
                 <div className="text-sm font-bold">Recipe Formatting Guide</div>
                 <div className="text-xs text-muted-foreground">

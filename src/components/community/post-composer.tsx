@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   AtSign, BarChart3, Camera, Check, ChevronLeft, ChevronRight, Dumbbell, Film, Images, Loader2, Lock, Maximize2, PenLine, Play,
-  Scissors, Smile, Sparkles, Star, Type, UserRound, Users, Volume2, VolumeX, X,
+  Blend, Scissors, Smile, Star, Type, UserRound, Users, Volume2, VolumeX, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -1087,7 +1087,7 @@ function EditStep({
       </div>
       <div className="shrink-0 px-3 pt-2" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}>
         <div className="flex justify-around pb-3">
-          {onCoverSlide && filters.items.length > 1 && <Tool icon={<Sparkles className="h-5 w-5" />} label="Filter" on={tool === "filters"} onClick={() => setTool(tool === "filters" ? null : "filters")} />}
+          {onCoverSlide && filters.items.length > 1 && <Tool icon={<Blend className="h-5 w-5" />} label="Filter" on={tool === "filters"} onClick={() => setTool(tool === "filters" ? null : "filters")} />}
           {onCoverSlide && <Tool icon={<Type className="h-5 w-5" />} label="Text" onClick={() => setRequest({ kind: "text", n: Date.now() })} />}
           {onCoverSlide && <Tool icon={<Smile className="h-5 w-5" />} label="Stickers" onClick={() => setRequest({ kind: "stickers", n: Date.now() })} />}
           <Tool icon={<AtSign className="h-5 w-5" />} label={tags ? `Tagged ${tags}` : "Tag"} on={tags > 0} onClick={onTag} />

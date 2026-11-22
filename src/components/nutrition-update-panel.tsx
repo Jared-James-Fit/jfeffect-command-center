@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Clock, AlertTriangle, CheckCircle2, Inbox, Sparkles, Upload, X } from "lucide-react";
+import { Clock, AlertTriangle, CheckCircle2, Inbox, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { getMyNutritionStatusFn, submitNutritionUpdateFn } from "@/lib/nutrition-updates.functions";
 import { listFormsForClient, pickNutritionUpdateForm } from "@/lib/native-forms";
@@ -90,7 +90,7 @@ export function NutritionUpdatePanel() {
     overdue: { icon: AlertTriangle, label: "Overdue", tone: "border-red-500/50 bg-red-500/10 text-red-300", sub: "Please submit your update." },
     submitted: { icon: Inbox, label: "Submitted — waiting for coach", tone: "border-blue-500/40 bg-blue-500/10 text-blue-300", sub: "Your coach will review and reply." },
     under_review: { icon: Inbox, label: "Under review", tone: "border-blue-500/40 bg-blue-500/10 text-blue-300", sub: "Coach is working on it." },
-    published: { icon: Sparkles, label: "Updated — review your new plan", tone: "border-violet-500/40 bg-violet-500/10 text-violet-300", sub: "Your targets were just updated." },
+    published: { icon: CheckCircle2, label: "Updated — review your new plan", tone: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300", sub: "Your targets were just updated." },
     paused: { icon: Clock, label: "Tracking paused", tone: "border-zinc-500/30 bg-zinc-500/10 text-zinc-300", sub: "" },
     not_needed: { icon: CheckCircle2, label: "Not needed right now", tone: "border-zinc-500/30 bg-zinc-500/10 text-zinc-300", sub: "" },
   };
@@ -176,7 +176,7 @@ export function NutritionUpdatePanel() {
           </Button>
         )}
         {ts === "published" && lastPub?.coach_note ? (
-          <div className="mt-3 rounded border border-violet-500/30 bg-violet-500/5 p-3 text-sm">
+          <div className="mt-3 rounded border border-border bg-muted/40 p-3 text-sm">
             <div className="text-[10px] uppercase opacity-70 mb-1">Coach note</div>
             <p className="whitespace-pre-wrap">{lastPub.coach_note}</p>
           </div>

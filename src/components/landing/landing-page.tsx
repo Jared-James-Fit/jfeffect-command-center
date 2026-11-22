@@ -102,7 +102,7 @@ const OWN: Array<{ title: string; body: string; note: string; src: string; alt: 
   {
     title: "Upload one you already have",
     body: "A spreadsheet, a Word doc, a PDF or photos of it. It comes in with its weeks, days and numbers, matched to the exercise library, and you check every line before it's saved.",
-    note: "Most files are read in seconds. PDFs and photos are read with AI. What you upload stays private to you.",
+    note: "Most files come in within seconds. PDFs and photos take a little longer. What you upload stays private to you.",
     src: shotImport,
     alt: "An imported program being checked: read from a spreadsheet, 8 weeks, 4 days a week, one exercise left to pick from the library",
   },
@@ -147,7 +147,7 @@ const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: "Can I bring a program I already follow?",
-    a: "Yes. Upload the spreadsheet, Word doc, PDF or photos, or paste it in. You check it before it's saved and it stays private to you. Reading a PDF or photos uses some of your free monthly AI credits. Only upload programs you wrote or have permission to use.",
+    a: "Yes. Upload the spreadsheet, Word doc, PDF or photos, or paste it in. You check it before it's saved and it stays private to you. Reading a PDF or photos uses some of your free monthly credits. Only upload programs you wrote or have permission to use.",
   },
   {
     q: "Why do I have to apply for a free app?",

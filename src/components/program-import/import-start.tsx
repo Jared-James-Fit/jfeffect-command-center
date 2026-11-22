@@ -372,8 +372,8 @@ export function ImportStart({ startWithPaste = false }: { startWithPaste?: boole
       <div className="mt-4 flex items-start justify-between gap-3">
         <p className="text-[13px] leading-relaxed text-muted-foreground" data-import-cost>
           {usesAi
-            ? `PDFs and photos are read with AI: ${COST} AI credits, given back if it can't be read.`
-            : `Most programs are read in a second, free. If yours needs AI to read all of it, that's ${COST} AI credits, given back if it can't be read.`}
+            ? `Reading a PDF or photos takes ${COST} credits, given back if it can't be read.`
+            : `Most programs are read in a second, free. If yours needs a full read, that's ${COST} credits, given back if it can't be read.`}
         </p>
         <AiCreditsChip state={credits.data} onClick={() => setCreditsOpen(true)} className="shrink-0" />
       </div>
@@ -418,14 +418,14 @@ export function ImportStart({ startWithPaste = false }: { startWithPaste?: boole
 
       {outOfCredits && (
         <div className="mt-4 rounded-2xl border border-border p-4" role="alert" data-import-out-of-credits>
-          <p className="text-[15px] font-semibold">Not enough AI credits this month</p>
+          <p className="text-[15px] font-semibold">Not enough credits this month</p>
           <p className="mt-1 text-[14px] leading-relaxed text-muted-foreground">
-            {`Reading it with AI takes ${COST} credits. `}
+            {`A full read takes ${COST} credits. `}
             {outOfCredits.partial
-              ? "Part of your program could be read without AI. Review what was read and fill in the rest yourself, or get more credits to have all of it read."
+              ? "Part of your program could be read for free. Review what was read and fill in the rest yourself, or get more credits to have all of it read."
               : picked?.mode === "upload"
-                ? "PDFs and photos need AI to read. Get more credits, or copy the program's text and paste it in instead."
-                : "Your program needs AI to read it. Get more credits, or tidy it into one exercise per line and try again."}
+                ? "PDFs and photos need a full read. Get more credits, or copy the program's text and paste it in instead."
+                : "Your program needs a full read. Get more credits, or tidy it into one exercise per line and try again."}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {outOfCredits.partial && (
@@ -434,7 +434,7 @@ export function ImportStart({ startWithPaste = false }: { startWithPaste?: boole
               </Button>
             )}
             <Button variant="outline" onClick={() => setCreditsOpen(true)}>
-              Get AI credits
+              Get credits
             </Button>
           </div>
         </div>

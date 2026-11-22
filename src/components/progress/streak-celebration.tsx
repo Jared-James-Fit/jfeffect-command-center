@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Flame, Trophy, Sparkles } from "lucide-react";
+import { Flame, Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type Props = { userId: string };
@@ -109,7 +109,7 @@ export function StreakCelebration({ userId }: Props) {
       </div>
       {streak >= 4 && (
         <Badge variant="secondary" className="ml-auto gap-1">
-          <Sparkles className="h-3 w-3" /> On fire
+          <Flame className="h-3 w-3" /> On fire
         </Badge>
       )}
     </Card>

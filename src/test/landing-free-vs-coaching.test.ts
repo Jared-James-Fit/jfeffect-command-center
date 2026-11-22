@@ -87,8 +87,9 @@ describe("the landing page sells the free app first and online coaching as its o
     expect(LANDING_COPY.HERO.body).toContain("Follow my programs, build your own, or upload a plan you already have.");
     expect(LANDING_COPY.OWN.map((o) => o.title)).toEqual(["Build your own", "Upload one you already have"]);
     expect(visible).toContain("data-landing-own");
-    // uploads say they're private and that PDFs and photos are read with AI
-    expect(LANDING_COPY.OWN[1].note).toMatch(/PDFs and photos are read with AI/);
+    // uploads say they're private and that PDFs and photos take a little longer (never "read with AI": Nov 22 2026)
+    expect(LANDING_COPY.OWN[1].note).toMatch(/PDFs and photos take a little longer/);
+    expect(LANDING_COPY.OWN[1].note).not.toMatch(/\bAI\b/);
     expect(LANDING_COPY.OWN[1].note).toMatch(/private to you/);
     // bar speed for everyone is typed from a tracker; read from video only in coaching
     expect(LANDING_COPY.FREE.map((f) => f.text)).toContain("Bar speed on any set, if you train with a velocity tracker");

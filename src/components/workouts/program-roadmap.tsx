@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Archive, Check, ChevronDown, ChevronRight, Eye, Flag, Pencil, Settings2, Sparkles } from "lucide-react";
+import { Archive, Check, ChevronDown, ChevronRight, Eye, Flag, Pencil, Settings2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -289,7 +289,7 @@ export function ProgramRoadmapCard({
       {coach && (
         <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2 text-[11px] text-muted-foreground">
           <span className="inline-flex min-w-0 items-center gap-1">
-            <Sparkles className="h-3 w-3 shrink-0" /> <span className="truncate">Notes are written by Cleo from the program. Yours always win.</span>
+            <span className="truncate">Notes are written from the program. Your words always win.</span>
           </span>
           {(selectedBlockId ?? current?.id) && (
             <Link

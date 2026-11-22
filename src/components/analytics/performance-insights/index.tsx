@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, Sparkles } from "lucide-react";
+import { ChevronDown, LineChart } from "lucide-react";
 import {
   detectFocus,
   generateInsights,
@@ -206,7 +206,7 @@ export function PerformanceInsights({
 
   return (
     <div className="space-y-3">
-      <Card className="overflow-hidden rounded-3xl border-border/70 bg-gradient-to-br from-primary/10 via-transparent to-transparent">
+      <Card className="overflow-hidden rounded-3xl border-border/70">
         <div className="flex items-center gap-2 p-4">
           <button
             type="button"
@@ -214,8 +214,8 @@ export function PerformanceInsights({
             className="flex min-w-0 flex-1 items-center gap-3 text-left"
             aria-expanded={expanded}
           >
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary">
-              <Sparkles className="h-5 w-5" />
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-muted text-muted-foreground">
+              <LineChart className="h-5 w-5" aria-hidden />
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-sm font-bold">Performance Insights</div>
@@ -231,7 +231,7 @@ export function PerformanceInsights({
             What it means: your logged sets analysed per muscle group —
             weekly/monthly sets, tonnage, trends, and competition-lift
             summaries for the selected time window.
-            How to use it: pick a window, scan the smart insights, and tap
+            How to use it: pick a window, scan the insights, and tap
             share on any card to send a summary.
             Watch out: exercises without a muscle group tag are skipped, and
             insights based on fewer than ~20 sets are a first snapshot, not a
@@ -280,7 +280,7 @@ export function PerformanceInsights({
 
               {insights.length > 0 && (
                 <section className="space-y-2">
-                  <SectionHeader label="Smart insights" />
+                  <SectionHeader label="Insights" />
                   <SmartInsights insights={insights} onShare={openShareForInsight} />
                 </section>
               )}

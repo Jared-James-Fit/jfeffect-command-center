@@ -68,7 +68,7 @@ export async function withAiCredits<T>(
     _feature: feature,
     _ref: ref ?? null,
   });
-  if (error) throw new Error(`Couldn't check your AI credits: ${error.message}`);
+  if (error) throw new Error(`Couldn't check your credits: ${error.message}`);
   if (!data?.ok)
     return { ok: false, reason: "out_of_credits", credits: data?.state as CreditState };
   const useId = String(data.use_id);

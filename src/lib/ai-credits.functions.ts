@@ -55,7 +55,7 @@ export const startAiCreditsCheckout = createServerFn({ method: "POST" })
     const { userId, claims } = context as any;
     const { creditStateFor } = await import("@/lib/ai-credits/meter.server");
     const state = await creditStateFor(userId);
-    if (state?.unlimited) throw new Error("Staff accounts have unlimited AI credits.");
+    if (state?.unlimited) throw new Error("Staff accounts have unlimited credits.");
     const { createCreditsCheckout } = await import("@/lib/ai-credits/stripe.server");
     return createCreditsCheckout({
       userId,

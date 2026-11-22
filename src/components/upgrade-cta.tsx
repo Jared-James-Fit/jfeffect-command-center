@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Lock, Sparkles } from "lucide-react";
+import { Lock } from "lucide-react";
 import { isNative } from "@/platform";
 
 type Props = {
@@ -36,7 +36,7 @@ export function UpgradeCTA({
   return (
     <Card className="p-6">
       <div className="flex items-start gap-3">
-        <Sparkles className="h-5 w-5 text-amber-500" />
+        <Lock className="h-5 w-5 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <div className="text-lg font-bold">{title}</div>
           <div className="mt-1 text-sm text-muted-foreground">{subtitle}</div>

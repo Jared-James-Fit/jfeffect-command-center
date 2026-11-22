@@ -47,13 +47,15 @@ describe("AI credits on screen", () => {
     expect(html).toContain('data-ai-credits-left="true">18</span>');
     expect(html).toContain("18 of 30 free this month");
     expect(html).toContain(
-      "Free credits reset Dec 1. Bought credits never expire. 1 credit = 1 AI food log.",
+      "Free credits reset Dec 1. Bought credits never expire. Describing a meal to log it takes 1 credit. Reading a PDF or photos of a program takes 10 credits, given back if it can&#x27;t be read.",
     );
+    // the person reads "Credits", never "AI" (Nov 22 2026)
+    expect(html).not.toMatch(/\bAI\b/);
     expect(html).toContain('data-ai-credits-pack="p300"');
     expect(html).toContain("$6.99");
     expect(html).toContain(" + tax");
     expect(html).toContain("Most popular");
-    expect(html).toContain("This month: 12 AI food logs");
+    expect(html).toContain("This month: 12 meal estimates");
     // the packs are choices, never the brand red
     expect(html).not.toContain("bg-primary");
   });
@@ -61,7 +63,7 @@ describe("AI credits on screen", () => {
   it("says they're out and when the free ones come back", () => {
     platform.native = false;
     const html = panel({ state: detail({ used: 30, allowance_left: 0, left: 0 }), out: true });
-    expect(html).toContain("You&#x27;ve used this month&#x27;s AI credits");
+    expect(html).toContain("You&#x27;ve used this month&#x27;s credits");
     expect(html).toContain("Get more below, or your free credits come back Dec 1.");
   });
 
@@ -82,7 +84,7 @@ describe("AI credits on screen", () => {
       allowance_left: null,
       left: null,
     });
-    expect(panel({ state: s })).toContain("Staff accounts have unlimited AI credits.");
+    expect(panel({ state: s })).toContain("Staff accounts have unlimited credits.");
     expect(
       renderToStaticMarkup(createElement(AiCreditsChip, { state: s, onClick: () => {} })),
     ).toBe("");

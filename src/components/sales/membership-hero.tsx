@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import {
   Smartphone, TrendingUp, Dumbbell, Apple, BookOpen,
-  ListChecks, LineChart, Sparkles, ChevronDown, User, Users,
+  ListChecks, LineChart, LayoutGrid, ChevronDown, User, Users,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -57,7 +57,7 @@ export function MembershipHero({
                 body: "Log every set, watch your PRs climb, and see whether what you're doing is working.",
               },
               {
-                Icon: Sparkles,
+                Icon: LayoutGrid,
                 title: "Everything in One Place",
                 body: "Demos, recipes, nutrition and education, so the plan sticks.",
               },
