@@ -1,4 +1,4 @@
--- Minimal stand-ins for what 20270508090000_coach_platform_early_access.sql
+-- Minimal stand-ins for what 20270509090000_coach_platform_early_access.sql
 -- uses: auth.uid(), the roles, has_role and app_settings.
 \set ON_ERROR_STOP 1
 

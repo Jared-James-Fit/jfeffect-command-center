@@ -300,6 +300,9 @@ export type WeekLoad = {
   sessions: number;
   /** null when nothing was written for that week (no plan on file) */
   prescribed: number | null;
+  /** workouts written for days of the week that have passed, and how many of them have a logged set (null with no plan) */
+  plannedSessions: number | null;
+  plannedSessionsDone: number | null;
   completedOfPrescribed: number | null;
   missed: number | null;
   extra: number | null;
@@ -484,6 +487,8 @@ export function buildTrainingLoad(input: {
     for (let n = dayNum(active[0]); n < dayNum(active[active.length - 1]); n += 7) weekKeys.add(dayStr(n));
   }
   const keys = [...weekKeys].sort();
+  // a written workout counts as done when any set on it was logged, whatever week it was logged in
+  const trainedAnywhere = new Set(sets.map((x) => x.dayId).filter(Boolean) as string[]);
   const doneByRow = new Map<string, number>();
   for (const s of sets) if (s.rowId) doneByRow.set(s.rowId, (doneByRow.get(s.rowId) ?? 0) + 1);
 
@@ -535,6 +540,9 @@ export function buildTrainingLoad(input: {
       }
     }
     const phase = wp.find((p) => p.weekPhase)?.weekPhase ?? null;
+    // workouts written for days that have passed (a day still ahead is never missed)
+    const pastDays = new Set(wp.filter((p) => p.day! < today).map((p) => p.dayId));
+    const trainedHere = new Set(ws.map((x) => x.dayId).filter(Boolean) as string[]);
     return {
       key,
       label: weekLabel(key),
@@ -548,6 +556,8 @@ export function buildTrainingLoad(input: {
       tonnageKg: Math.round(tonnage),
       sessions: days.size,
       prescribed,
+      plannedSessions: wp.length ? pastDays.size : null,
+      plannedSessionsDone: wp.length ? [...pastDays].filter((d) => trainedHere.has(d) || trainedAnywhere.has(d)).length : null,
       completedOfPrescribed: completed,
       missed,
       extra,

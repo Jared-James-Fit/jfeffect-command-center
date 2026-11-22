@@ -151,7 +151,9 @@ export const notifyAppEventFn = createServerFn({ method: "POST" })
         break;
       }
       case "nutrition_targets_updated": {
-        if (!(await isStaff())) return { skipped: true };
+        // Staff, and a client they can reach (the admin, or the client's own coach): it posts in their chat as the caller.
+        const { staffCanReachClient } = await import("@/lib/staff-client-access.server");
+        if (!(await staffCanReachClient(supabase, userId, data.id))) return { skipped: true };
         clientId = data.id;
         // The update lands in their chat as a message with the plan's card (once per plan version).
         const { postPlanMessage } = await import("@/lib/nutrition-targets/plan-message.server");

@@ -71,7 +71,7 @@ export async function hasBusinessRecords(admin: Admin, clientId: string | null):
 }
 
 /** The person's own files: photo, progress photos and videos, lift videos, Crew media, plan PDFs. Chat attachments and signed agreements stay. */
-const PERSONAL_BUCKETS = ["avatars", "progress-media", "lift-videos", "community-media", "nutrition-plans", "nutrition-submissions", "form-uploads"];
+const PERSONAL_BUCKETS = ["avatars", "progress-media", "lift-videos", "community-media", "nutrition-plans", "nutrition-submissions", "form-uploads", "documents"];
 
 async function removeFolder(admin: Admin, bucket: string, folder: string): Promise<number> {
   let removed = 0;
@@ -124,6 +124,14 @@ export async function purgeAccount(admin: Admin, row: DueRow): Promise<PurgeOutc
     }
   }
   let files = 0;
+  // their documents (filed by them or for them, a coach's for them too): files, then rows;
+  // their own folder is also cleared below as a fallback
+  try {
+    const { purgeDocumentsForAccount } = await import("@/lib/documents/documents.server");
+    files += (await purgeDocumentsForAccount(admin, { userId: row.user_id, clientId: row.client_id })).files;
+  } catch {
+    /* the rows go with the client record and the login */
+  }
   for (const id of [row.user_id, row.client_id].filter(Boolean) as string[]) {
     for (const b of PERSONAL_BUCKETS) files += await removeFolder(admin, b, id);
   }

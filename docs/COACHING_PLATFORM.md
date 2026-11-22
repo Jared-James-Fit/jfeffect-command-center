@@ -20,7 +20,7 @@ standing between today and independent coaches.
 | Stripe | One account. Hand-written `fetch` helper (`stripe.server.ts`), 7 files bypass it, no API version pinned, one webhook, no Connect anywhere. | Connect needs one account context threaded through ~20 modules, a separate webhook, per-account customers, and the books filtered to the owner's account. |
 | Nutrition | Meals are free text in `nutrition_target_days.notes` in one paste format, read by parsers (`parseMealPlan`, `structureMealPlanDay`, `splitFoodLine`). No food database. Members have targets only (`member_nutrition_targets`); a meal plan is coach-written and read-only to the client. | A structured builder must keep writing the same records, or every reader (meal cards, food log, PDF, grocery list, roadmap) breaks. |
 | Importer | Workout importer is complete (PDF/XLSX/CSV/DOCX/text/photos, rights tick, background AI on the OpenAI key, review in the builder, files deleted in 7 days). | Its extraction, queue, rights and credits are reusable for nutrition; the parse and review are workout-specific. |
-| Cleo | Reads through the caller's own login (RLS). Access is `cleo_allowed()`. Every coach action card runs as the owner after the owner approves. Prompt names one business, time zone and owner. | Per-org Cleo needs org-scoped data, per-kind permissions that run as the coach, approval by that org's owner, per-org documents, voice and metering. |
+| Cleo | Reads through the caller's own login (RLS). Access is `cleo_allowed()`. A coach's action card runs as the coach after the owner approves (approval only authorizes; 20270507093000), money and the owner's own kinds are never a coach's. Prompt names one business, time zone and owner. | Per-org Cleo needs org-scoped data, per-kind permissions that run as the coach, approval by that org's owner, per-org documents, voice and metering. |
 | Legal | Versioned documents with drafts, publish confirmation, immutable published text, acceptance evidence stamped by the database. | Sign-up was passive (fixed, below). No data export or access request, no copyright process, `marketing_email` consent isn't read by senders, renewed-consent fields are stored but unused. |
 
 ## 2. Fixed now (Phase 1)
@@ -249,17 +249,30 @@ Full matrix as member, client, JF coach, independent coach, finance, owner;
 denied access, imports, exports, failed payments, client moves; production
 migrations applied with their rollbacks ready.
 
-## 5. Decisions only Jared can make
+## 5. Business decisions (made Nov 22 2026)
 
-1. **Is there demand?** Independent coaches mean support, disputes, privacy
-   obligations as a service provider, and Stripe Connect liability for a
-   business with ~16 coaching clients today. Worth confirming coaches who'd
-   pay before Phase 3, which is the largest and riskiest phase.
-2. **Price for independent coaches** (subscription to JF Effect, a disclosed
-   platform fee, or both).
-3. **Charge model** for JF Effect team coaches: central (JF Effect collects)
-   or their own connected account, per coach agreement.
-4. **Do independent coaches' clients join Crew?** Crew is one community
-   today; mixing businesses there is a product and moderation choice.
-5. **Counsel.** The legal drafts need a Canadian lawyer before any of the
-   coach features turn on.
+| Question | Decision | What it means for the build |
+| --- | --- | --- |
+| Independent coach price | Founding price CAD $79/month, subject to market validation with a small founding-coach pilot | A subscription product on JF Effect's own Stripe account (the coach pays JF Effect); no code until the pilot is confirmed |
+| Platform transaction fee | 0% to start, processor charges aside | Connect direct charges with no `application_fee_amount`; the fee stays a configurable, disclosed setting that defaults to 0 |
+| JF Effect team coaches' clients | Billed centrally by JF Effect by default | Team coaches work inside JF Effect's organization; sales stay on the owner's Stripe account and in the owner's books |
+| Team coach pay | A separate, authorized agreement and workflow | Not paid out through client checkouts; a coach's pay is its own record, never derived from a client's payment by code |
+| Independent coaches' billing | Their own business, through Stripe Connect, once validated | Standard connected accounts, the coach as merchant of record (Phase 5, `docs/STRIPE_CONNECT_DECISION.md`) |
+| Independent coaches' clients and Crew | Their coaching portal, not automatically in Crew | Crew membership is JF Effect's; an independent organization's clients get the portal only unless both sides opt in later |
+| External coaches | Off by default until security, legal and payment requirements are met | No sign-up path; organizations of kind `independent` can't be created (no function or policy writes one) |
+
+Still open: counsel's review of the drafts in `docs/legal/` before any coach
+feature turns on, and the founding-coach pilot's results.
+
+## 6. Where Phase 2 and 3 stand
+
+- Phase 2 (Nutrition Studio): the meal builder (coaches and members), food
+  search, custom foods, saved meals, swaps, a member's own plan, the food log
+  reading it and the grocery list are built (`src/lib/nutrition-studio/`,
+  `20270508090000_nutrition_studio.sql`). Import and Create with Cleo are
+  being built on the same engine.
+- Phase 3 foundations: coach access follows the coach record (live), the
+  access record (live). Fixing the three risks the audit named (finance
+  permissions without client scope, coach actions on any client through the
+  service role, Cleo actions running as the owner) is the next step and
+  is held to direct-API tests, not only screens.

@@ -2,7 +2,7 @@
  * JF Effect for coaches, early access: the application's questions, answers
  * and rules, shared by the page and the server (pure, tested in
  * coach-platform-apply.test.ts; the CHECKs in
- * 20270508090000_coach_platform_early_access.sql hold the same values).
+ * 20270509090000_coach_platform_early_access.sql hold the same values).
  *
  * This is a waitlist, said plainly everywhere it shows: independent coach
  * workspaces aren't open (organization isolation, seat billing and the coach

@@ -12,7 +12,9 @@
  *    their block / request / preference tables are hidden, and the group chat
  *    tables are only read for coach-run groups (`MEMBER_CHAT_SCOPED`);
  *  - the books for anyone but the owner and the finance login (Cleo's
- *    "PRIVATE" rule): the ledgers and books tables are hidden from them.
+ *    "PRIVATE" rule): the ledgers and books tables are hidden from them;
+ *  - clients' money (sales, payments, credits) for anyone without it (a
+ *    coach): `CLEO_MONEY_TABLES`.
  */
 
 export type CatalogTable = {
@@ -57,6 +59,24 @@ export const CLEO_BOOKS_TABLES = new Set([
   "member_payment_ledger",
 ]);
 
+/**
+ * Clients' money (sales, payments, links, auto-pay, session credits, prices and
+ * codes): the admin's and the finance login's, never a coach's. A coach's Cleo
+ * doesn't list or read these even where their app shows a client's sale.
+ */
+export const CLEO_MONEY_TABLES = new Set([
+  "purchase_records",
+  "payment_share_links",
+  "auto_pay_changes",
+  "session_ledger_events",
+  "coaching_package_enrollments",
+  "discount_codes",
+  "coaching_products",
+  "offers",
+  "deposit_accounts",
+  "ai_credit_purchases",
+]);
+
 /** Group chat tables, read only for coach-run groups (never members' own 1:1s and crews): table → its group id column. */
 export const MEMBER_CHAT_SCOPED: Record<string, string> = { chat_groups: "id", chat_group_members: "group_id", group_messages: "group_id" };
 
@@ -76,10 +96,14 @@ export function shortType(t: string): string {
     .replace(/\(\d+(,\d+)?\)/, "");
 }
 
-/** The tables this person's Cleo may see, without credential columns. */
-export function visibleCatalog(raw: CatalogTable[], opts: { books: boolean }): CatalogTable[] {
+/**
+ * The tables this person's Cleo may see, without credential columns. `money`
+ * (clients' sales and payments): off for a coach, whose Cleo passes `money: false`.
+ */
+export function visibleCatalog(raw: CatalogTable[], opts: { books: boolean; money?: boolean }): CatalogTable[] {
+  const money = opts.money ?? true;
   return (raw ?? [])
-    .filter((t) => t?.t && !CLEO_HIDDEN_TABLES.has(t.t) && (opts.books || !CLEO_BOOKS_TABLES.has(t.t)))
+    .filter((t) => t?.t && !CLEO_HIDDEN_TABLES.has(t.t) && (opts.books || !CLEO_BOOKS_TABLES.has(t.t)) && (money || !CLEO_MONEY_TABLES.has(t.t)))
     .map((t) => ({ ...t, c: (t.c ?? []).filter(([name]) => !isCredentialColumn(name)) }))
     .filter((t) => t.c.length > 0);
 }

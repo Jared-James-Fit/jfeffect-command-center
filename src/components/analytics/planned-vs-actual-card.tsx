@@ -71,7 +71,7 @@ export function PlannedVsActualCard({
         className="overflow-hidden p-4"
       >
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
           </div>
           <div className="min-w-0 flex-1">
@@ -94,8 +94,8 @@ export function PlannedVsActualCard({
     return (
       <Card role="alert" className="p-4">
         <div className="flex items-center gap-2 text-sm font-semibold">
-          <Target className="h-4 w-4 text-primary" />
-          Planned vs Actual
+          <Target className="h-4 w-4 text-muted-foreground" />
+          Recent workouts
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
           Unable to load this comparison right now
@@ -116,8 +116,8 @@ export function PlannedVsActualCard({
     return (
       <Card className="p-4">
         <div className="flex items-center gap-2 text-sm font-semibold">
-          <Target className="h-4 w-4 text-primary" />
-          Planned vs Actual
+          <Target className="h-4 w-4 text-muted-foreground" />
+          Recent workouts
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
           Not enough data — complete a programmed workout to see how your sets and reps stack up.
@@ -128,29 +128,7 @@ export function PlannedVsActualCard({
 
   return (
     <Card className="overflow-hidden">
-      <div className="border-b border-border p-4">
-        <div className="flex items-center gap-2">
-          <Target className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-semibold">Planned vs Actual</h3>
-          <InfoTip label="About planned vs actual" title="Planned vs Actual" align="start">
-            Compares what was programmed against what was actually logged for
-            recent completed workouts. Sets % = completed sets ÷ planned sets.
-            Reps on target = how closely logged reps matched the plan. A 0%
-            sets row means the workout was marked complete but no sets were
-            logged for it.
-          </InfoTip>
-          {isFetching && (
-            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Updating
-            </span>
-          )}
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          How closely your last {days.length} workout{days.length === 1 ? "" : "s"} matched
-          the prescription — sets completed and reps on target.
-        </p>
-      </div>
+      {/* the section heading above names it; the rows are the content */}
       <ul className="divide-y divide-border">
         {days.map((d) => {
           const open = expandedDay === d.dayId;

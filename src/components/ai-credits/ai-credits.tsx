@@ -124,6 +124,8 @@ export function AiCreditsChip({
 export function coverLine(feature?: AiFeature): string {
   const meal = `Describing a meal to log it takes ${FEATURE_COSTS.meal_estimate} credit.`;
   const program = `Reading a PDF or photos of a program takes ${FEATURE_COSTS.program_import} credits, given back if it can't be read.`;
+  const mealPlan = `Reading a meal plan from a PDF or photos takes ${FEATURE_COSTS.nutrition_import}, and a meal plan draft from Cleo ${FEATURE_COSTS.nutrition_create}, given back if it doesn't work out.`;
+  if (feature === "nutrition_import" || feature === "nutrition_create") return `${mealPlan} ${meal}`;
   return feature === "program_import" ? `${program} ${meal}` : `${meal} ${program}`;
 }
 

@@ -7,7 +7,8 @@
  *
  * Safety rules:
  *  - Entries are NEVER deleted, only status-updated.
- *  - Only admin/coach can write; members can only read their own.
+ *  - Only the admin writes (money is never a coach's: a coach reads their own
+ *    members' ledger through RLS); members can only read their own.
  *  - Granting access via manual payment calls adminGrantTemporaryAccess.
  */
 
@@ -28,6 +29,13 @@ async function assertAdminOrCoach(context: any) {
     throw new Error("Unauthorized: admin or coach role required.");
   }
   return profile;
+}
+
+/** Recording money or granting access is the admin's, never a coach's. */
+async function assertAdmin(context: any) {
+  const { supabase, userId } = context;
+  const { data } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
+  if (data !== true) throw new Error("Unauthorized: only an admin records membership payments.");
 }
 
 /* ─────────────────────────────────────────────────────── list ledger ── */
@@ -66,7 +74,7 @@ export const recordManualPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => RecordManualPaymentInput.parse(d))
   .handler(async ({ data, context }) => {
-    await assertAdminOrCoach(context);
+    await assertAdmin(context);
     const { userId } = context as any;
     const supabaseAdmin = (await import("@/integrations/supabase/client.server")).supabaseAdmin as any;
 
@@ -119,7 +127,7 @@ export const addLedgerNote = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => AddLedgerNoteInput.parse(d))
   .handler(async ({ data, context }) => {
-    await assertAdminOrCoach(context);
+    await assertAdmin(context);
     const supabaseAdmin = (await import("@/integrations/supabase/client.server")).supabaseAdmin as any;
     const { error } = await supabaseAdmin
       .from("member_payment_ledger")

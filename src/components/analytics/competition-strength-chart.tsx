@@ -14,18 +14,27 @@ import {
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { fmtNum } from "@/lib/analytics-format";
-import { trendWords } from "@/lib/analytics/strength-read";
+import { InfoTip } from "@/components/analytics/info-tip";
 import {
-  bucketPoints,
   COMP_LIFTS,
   COMP_LIFT_LABEL,
   grainFor,
-  liftTrends,
   relativeToBodyweight,
   type CompLift,
   type MeetResult,
   type StrengthPoint,
 } from "@/lib/analytics/competition-strength";
+import {
+  changeWords,
+  liftSeries,
+  liftSummary,
+  niceDomain,
+  normalizedSeries,
+  strengthMinSpan,
+  testedNotMeet,
+  timeTicks,
+  type MaxOnFile,
+} from "@/lib/analytics/analytics-areas";
 import { parseLocalDate } from "@/lib/today";
 
 /** The validated split palette (styles.css --split-*): the Hall of Strength's colours for the three lifts. */
@@ -37,22 +46,28 @@ export const LIFT_SERIES: Record<CompLift, string> = {
 
 const DAY = 86_400_000;
 const WIDEN_DAYS = 84;
+const toDay = (d: Date) => format(d, "yyyy-MM-dd");
 const dayMs = (d: string) => (parseLocalDate(d) ?? new Date(d)).getTime();
+const fmtDay = (d: string) => {
+  const x = parseLocalDate(d);
+  return x ? format(x, x.getFullYear() === new Date().getFullYear() ? "MMM d" : "MMM d, yyyy") : d;
+};
 
-type Row = { t: number; day: string } & Partial<Record<CompLift, number>> & {
-    sets?: Partial<Record<CompLift, StrengthPoint["set"]>>;
-  };
+type View = CompLift | "compare";
 
 /**
- * Competition lifts over time: each lift's estimated max from its hard sets
- * (RPE 7+, ≤10 reps), meet results as separate marks (what was lifted, never
- * mixed into the line), block starts as quiet lines. One axis: estimated max,
- * or × bodyweight when switched. A lift toggle shows one alone (its scale).
+ * The competition lifts over time, one lift at a time (each on its own
+ * scale), or the three as % change from a stated day (Compare). Estimated
+ * max from hard sets is the line; what was lifted at a meet and a tested max
+ * are their own marks, never joined to it; a training max never appears here
+ * (it's a programming number, in the table under the chart). A line breaks
+ * where the gap is too long to be one trend. Tap a point for the set behind it.
  */
 export function CompetitionStrengthChart({
   points,
   lightSessions,
   meets,
+  maxes = [],
   blocks,
   start,
   end,
@@ -60,13 +75,14 @@ export function CompetitionStrengthChart({
   conv,
   weighIns,
   onWiden,
-  compact = false,
 }: {
   /** every comparable point on file (the chart cuts to the period) */
   points: StrengthPoint[];
   /** sessions in the period with only light or unrated sets (counted, not plotted) */
   lightSessions: number;
   meets: MeetResult[];
+  /** maxes on file: tested ones are marked on the chart */
+  maxes?: MaxOnFile[];
   blocks?: Array<{ id: string; name: string | null; start_date: string | null }>;
   start: Date;
   end: Date;
@@ -76,164 +92,289 @@ export function CompetitionStrengthChart({
   weighIns?: Array<{ day: string; lb: number }>;
   /** too little in this period: offer a longer one */
   onWiden?: () => void;
-  compact?: boolean;
 }) {
-  const [only, setOnly] = useState<CompLift | "all">("all");
+  const everTrained = COMP_LIFTS.filter(
+    (l) => points.some((p) => p.lift === l) || meets.length > 0,
+  );
+  const startDay = toDay(start);
+  const endDay = toDay(end);
+  // the lift with the most hard sessions in the period leads (else the most ever)
+  const defaultLift = useMemo<CompLift>(() => {
+    const count = (l: CompLift, from: string) =>
+      points.filter((p) => p.lift === l && p.day >= from && p.day <= endDay).length;
+    const inP = [...COMP_LIFTS].sort((a, b) => count(b, startDay) - count(a, startDay));
+    if (count(inP[0], startDay) > 0) return inP[0];
+    return [...COMP_LIFTS].sort((a, b) => count(b, "0000") - count(a, "0000"))[0];
+  }, [points, startDay, endDay]);
+  const [picked, setPicked] = useState<View | null>(null);
+  const view: View = picked ?? defaultLift;
   const [relative, setRelative] = useState(false);
-  const periodStart = start.getTime();
-  const eMs = end.getTime() + DAY - 1;
-  // A short period with under two heavy sessions (a block's first week) reads
-  // the 12 weeks up to it instead of an empty chart, and says so.
-  const pointsIn = (from: number) =>
-    points.filter((p) => {
-      const t = dayMs(p.day);
-      return t >= from && t <= eMs;
-    });
-  const shortAndEmpty = (eMs - periodStart) / DAY < WIDEN_DAYS && pointsIn(periodStart).length < 2;
-  const widened = shortAndEmpty && pointsIn(eMs - WIDEN_DAYS * DAY).length >= 2;
-  const sMs = widened ? Math.min(periodStart, eMs - WIDEN_DAYS * DAY) : periodStart;
-  const spanDays = Math.round((eMs - sMs) / DAY);
-  const grain = grainFor(spanDays);
 
-  const inPeriod = useMemo(
-    () =>
-      points.filter((p) => {
-        const t = dayMs(p.day);
-        return t >= sMs && t <= eMs;
-      }),
-    [points, sMs, eMs],
-  );
-  const trends = useMemo(() => liftTrends(inPeriod), [inPeriod]);
-  const hasBw = (weighIns?.length ?? 0) >= 3;
-  const rel = relative && hasBw;
-  const meetsIn = meets.filter((m) => {
-    const t = dayMs(m.date);
-    return t >= sMs && t <= eMs;
-  });
-  const present = COMP_LIFTS.filter(
-    (l) => inPeriod.some((p) => p.lift === l) || meetsIn.length > 0,
-  );
-  const shown = only === "all" ? present : present.filter((l) => l === only);
-
-  const rows: Row[] = useMemo(() => {
-    const bucketed = bucketPoints(inPeriod, grain);
-    const byDay = new Map<string, Row>();
-    const add = (lift: CompLift, day: string, value: number, set: StrengthPoint["set"]) => {
-      const r = byDay.get(day) ?? { t: dayMs(day), day, sets: {} };
-      r[lift] = value;
-      r.sets![lift] = set;
-      byDay.set(day, r);
-    };
-    if (rel && weighIns) {
-      for (const lift of COMP_LIFTS) {
-        const lp = bucketed.filter((p) => p.lift === lift).map((p) => ({ ...p, value: p.e1rm }));
-        for (const p of relativeToBodyweight(lp, weighIns)) add(lift, p.day, p.value, p.set);
-      }
-    } else {
-      for (const p of bucketed) add(p.lift, p.day, Math.round(conv(p.e1rm) * 10) / 10, p.set);
-    }
-    return [...byDay.values()].sort((a, b) => a.t - b.t);
-  }, [inPeriod, grain, rel, weighIns, conv]);
-
-  const meetMarks = useMemo(() => {
-    const out: Array<{ t: number; lift: CompLift; value: number; meet: MeetResult }> = [];
-    for (const m of meets) {
-      const t = dayMs(m.date);
-      if (t < sMs || t > eMs) continue;
-      for (const lift of COMP_LIFTS) {
-        const v = rel
-          ? m.bodyweightLb
-            ? m.lifts[lift] / m.bodyweightLb
-            : null
-          : conv(m.lifts[lift]);
-        if (v != null) out.push({ t, lift, value: Math.round(v * 100) / 100, meet: m });
-      }
-    }
-    return out;
-  }, [meets, sMs, eMs, rel, conv]);
-
-  // Block starts only while they're few enough to read (a year of blocks is a fence).
-  const allLines = (blocks ?? [])
-    .map((b) => ({ id: b.id, name: b.name, t: b.start_date ? dayMs(b.start_date) : NaN }))
-    .filter((b) => Number.isFinite(b.t) && b.t > sMs && b.t <= eMs);
-  const blockLines = allLines.length <= 6 ? allLines : [];
-
-  const enough = present.length > 0 && (inPeriod.length >= 2 || meetsIn.length >= 2);
-  // The axis from what's drawn (lines and meet marks), with a little room: "auto" clipped the top line.
-  const yDomain = useMemo<[number, number]>(() => {
-    const vals: number[] = [];
-    for (const r of rows) for (const l of shown) if (r[l] != null) vals.push(r[l]!);
-    for (const m of meetMarks) if (shown.includes(m.lift)) vals.push(m.value);
-    if (!vals.length) return [0, 1];
-    const lo = Math.min(...vals);
-    const hi = Math.max(...vals);
-    const pad = Math.max((hi - lo) * 0.08, rel ? 0.05 : 5);
-    const step = rel ? 0.1 : 5;
-    return [Math.floor((lo - pad) / step) * step, Math.ceil((hi + pad) / step) * step];
-  }, [rows, meetMarks, shown, rel]);
-  const fmtVal = (v: number) => (rel ? `${v.toFixed(2)}× BW` : `${Math.round(v)} ${unit}`);
-  const tickFmt = (t: number) =>
-    format(new Date(t), spanDays > 400 ? "MMM yy" : spanDays > 120 ? "MMM" : "MMM d");
-
+  if (!everTrained.length) return null;
   return (
-    <Card className={cn("p-4", compact && "p-3.5")} data-competition-strength>
-      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Lifts shown">
-        {(["all", ...present] as const).map((k) => (
+    <Card className="p-4" data-competition-strength data-strength-view={view}>
+      <div
+        className="grid grid-cols-4 gap-1 rounded-lg bg-muted/60 p-1"
+        role="tablist"
+        aria-label="Lift"
+      >
+        {([...COMP_LIFTS, "compare"] as View[]).map((k) => (
           <button
             key={k}
             type="button"
-            onClick={() => setOnly(k as CompLift | "all")}
-            aria-pressed={only === k}
+            role="tab"
+            aria-selected={view === k}
+            onClick={() => setPicked(k)}
             className={cn(
-              "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium transition",
-              only === k
-                ? "border-foreground bg-foreground text-background"
-                : "border-border text-muted-foreground hover:text-foreground",
+              "inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-md px-1 text-[13px] font-medium transition",
+              view === k
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
             )}
             data-lift-toggle={k}
           >
-            {k !== "all" && (
+            {k !== "compare" && (
               <span
-                className="h-2 w-2 rounded-full"
-                style={{ background: LIFT_SERIES[k as CompLift] }}
+                className="h-2 w-2 shrink-0 rounded-full max-[359px]:hidden"
+                style={{ background: LIFT_SERIES[k] }}
                 aria-hidden
               />
             )}
-            {k === "all" ? "All" : COMP_LIFT_LABEL[k as CompLift]}
+            <span className="truncate">{k === "compare" ? "Compare" : COMP_LIFT_LABEL[k]}</span>
           </button>
         ))}
-        {hasBw && (
-          <button
-            type="button"
-            onClick={() => setRelative((v) => !v)}
-            aria-pressed={rel}
-            className={cn(
-              "ml-auto inline-flex h-8 items-center rounded-full border px-3 text-[13px] font-medium transition",
-              rel
-                ? "border-foreground bg-foreground text-background"
-                : "border-border text-muted-foreground hover:text-foreground",
-            )}
-            title="Each estimate over your average bodyweight that week"
-          >
-            × bodyweight
-          </button>
-        )}
       </div>
+
+      {view === "compare" ? (
+        <CompareView points={points} start={start} end={end} conv={conv} unit={unit} />
+      ) : (
+        <LiftView
+          lift={view}
+          points={points}
+          lightSessions={lightSessions}
+          meets={meets}
+          maxes={maxes}
+          blocks={blocks}
+          start={start}
+          end={end}
+          unit={unit}
+          conv={conv}
+          weighIns={weighIns}
+          relative={relative}
+          onRelative={setRelative}
+          onWiden={onWiden}
+        />
+      )}
+    </Card>
+  );
+}
+
+function LiftView({
+  lift,
+  points,
+  lightSessions,
+  meets,
+  maxes,
+  blocks,
+  start,
+  end,
+  unit,
+  conv,
+  weighIns,
+  relative,
+  onRelative,
+  onWiden,
+}: {
+  lift: CompLift;
+  points: StrengthPoint[];
+  lightSessions: number;
+  meets: MeetResult[];
+  maxes: MaxOnFile[];
+  blocks?: Array<{ id: string; name: string | null; start_date: string | null }>;
+  start: Date;
+  end: Date;
+  unit: "lb" | "kg";
+  conv: (lb: number) => number;
+  weighIns?: Array<{ day: string; lb: number }>;
+  relative: boolean;
+  onRelative: (v: boolean) => void;
+  onWiden?: () => void;
+}) {
+  const eMs = end.getTime() + DAY - 1;
+  const endDay = toDay(end);
+  const periodStart = toDay(start);
+  const count = (from: string) =>
+    points.filter((p) => p.lift === lift && p.day >= from && p.day <= endDay).length;
+  // A short period with under two hard sessions of this lift (a block's first
+  // week) reads the 12 weeks up to it instead of an empty chart, and says so.
+  const shortAndEmpty = (eMs - start.getTime()) / DAY < WIDEN_DAYS && count(periodStart) < 2;
+  const widenFrom = toDay(new Date(eMs - WIDEN_DAYS * DAY));
+  const widened = shortAndEmpty && count(widenFrom) >= 2;
+  const startDay = widened ? (widenFrom < periodStart ? widenFrom : periodStart) : periodStart;
+  const sMs = dayMs(startDay);
+  const spanDays = Math.round((eMs - sMs) / DAY);
+  const grain = grainFor(spanDays);
+  const hasBw = (weighIns?.length ?? 0) >= 3;
+  const rel = relative && hasBw;
+
+  const series = useMemo(
+    () => liftSeries(points, lift, startDay, endDay, grain),
+    [points, lift, startDay, endDay, grain],
+  );
+  const summary = useMemo(
+    () => liftSummary(points, lift, startDay, endDay),
+    [points, lift, startDay, endDay],
+  );
+  const rows = useMemo(() => {
+    if (!rel || !weighIns)
+      return series.map((p) => ({
+        ...p,
+        v: p.value == null ? null : Math.round(conv(p.value) * 10) / 10,
+      }));
+    const withBw = relativeToBodyweight(
+      series.filter((p) => p.value != null).map((p) => ({ ...p, value: p.value! })),
+      weighIns,
+    );
+    const byT = new Map(withBw.map((p) => [p.t, p.value]));
+    return series.map((p) => ({ ...p, v: p.value == null ? null : (byT.get(p.t) ?? null) }));
+  }, [series, rel, weighIns, conv]);
+
+  const meetMarks = useMemo(
+    () =>
+      meets
+        .filter((m) => m.date >= startDay && m.date <= endDay)
+        .map((m) => {
+          const v = rel
+            ? m.bodyweightLb
+              ? m.lifts[lift] / m.bodyweightLb
+              : null
+            : conv(m.lifts[lift]);
+          return v == null ? null : { t: dayMs(m.date), v: Math.round(v * 100) / 100, meet: m };
+        })
+        .filter(Boolean) as Array<{ t: number; v: number; meet: MeetResult }>,
+    [meets, startDay, endDay, rel, conv, lift],
+  );
+  const testedMarks = useMemo(
+    () =>
+      rel
+        ? []
+        : testedNotMeet(
+            maxes.filter(
+              (m) =>
+                m.lift === lift &&
+                m.kind === "tested" &&
+                m.date &&
+                m.date >= startDay &&
+                m.date <= endDay,
+            ),
+            meets,
+          ).map((m) => ({ t: dayMs(m.date!), v: Math.round(conv(m.lb)), max: m })),
+    [maxes, meets, lift, startDay, endDay, rel, conv],
+  );
+
+  const values = [
+    ...rows.map((r) => r.v).filter((v): v is number => v != null),
+    ...meetMarks.map((m) => m.v),
+    ...testedMarks.map((m) => m.v),
+  ];
+  const axis = niceDomain(values, { minSpan: rel ? 0.15 : strengthMinSpan(values), floor: 0 });
+  const plotted = rows.filter((r) => r.v != null).length;
+  const enough = plotted >= 2 || plotted + meetMarks.length + testedMarks.length >= 2;
+  const latest = summary.latest;
+  const change = changeWords(summary.trend, conv, unit, fmtDay);
+  const fmtVal = (v: number) => (rel ? `${v.toFixed(2)}× bodyweight` : `${Math.round(v)} ${unit}`);
+  const tickFmt = (t: number) =>
+    format(new Date(t), spanDays > 400 ? "MMM yy" : spanDays > 120 ? "MMM" : "MMM d");
+  const label = COMP_LIFT_LABEL[lift];
+
+  return (
+    <div className="mt-4" data-strength-lift={lift}>
+      {/* The answer first: where this lift is now and how it's moved, measured from a stated day.
+          With nothing to show, only the empty state below says so (never twice). */}
+      {latest && (
+        <>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-baseline gap-1.5">
+                <span
+                  className="text-3xl font-semibold tabular-nums tracking-tight"
+                  data-strength-latest
+                >
+                  {Math.round(conv(latest.e1rm))}
+                </span>
+                <span className="text-sm text-muted-foreground">{unit}</span>
+              </div>
+              <div className="mt-0.5 flex items-center gap-1 text-[13px] text-muted-foreground">
+                <span className="truncate">Estimated max</span>
+                <InfoTip
+                  label="How the estimated max is worked out"
+                  title="Estimated max"
+                  align="start"
+                >
+                  Each point is a session's best hard set (RPE 7 or harder, 10 reps or fewer), read
+                  with how hard it felt. Lighter sessions aren't plotted: they say little about a
+                  max. It's an estimate, not a tested max.
+                  {grain !== "session" ? ` On long periods each point is the ${grain}'s best.` : ""}{" "}
+                  A gap of more than a few weeks between hard sets breaks the line.
+                  {lightSessions > 0
+                    ? ` ${lightSessions} lighter session${lightSessions === 1 ? " isn't" : "s aren't"} plotted in this period.`
+                    : ""}
+                </InfoTip>
+              </div>
+              <div className="text-[12px] text-muted-foreground" data-strength-set>
+                {fmtDay(latest.day)} · from {fmtNum(conv(latest.set.load))} × {latest.set.reps} @
+                RPE {latest.set.effort}
+              </div>
+            </div>
+            {hasBw && enough && (
+              <button
+                type="button"
+                onClick={() => onRelative(!relative)}
+                aria-pressed={rel}
+                className={cn(
+                  "inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-[12px] font-medium transition",
+                  rel
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border text-muted-foreground hover:text-foreground",
+                )}
+                title="Each estimate over your average bodyweight that week"
+              >
+                × bodyweight
+              </button>
+            )}
+          </div>
+          <div
+            className={cn(
+              "mt-2 text-[13px] font-medium",
+              change.tone === "up"
+                ? "text-emerald-600 dark:text-emerald-400"
+                : change.tone === "none"
+                  ? "text-muted-foreground"
+                  : "text-foreground",
+            )}
+            data-strength-change
+          >
+            {change.text}
+          </div>
+        </>
+      )}
 
       {widened && (
         <p className="mt-2 text-[12px] text-muted-foreground" data-strength-widened>
-          No hard sets in this period yet, so this shows the last 12 weeks.
+          No hard {label.toLowerCase()} sets in this period yet. Showing the last 12 weeks.
         </p>
       )}
+
       {!enough ? (
         <div
-          className="mt-4 rounded-xl border border-dashed border-border p-5 text-center"
+          className={cn(
+            "rounded-xl border border-dashed border-border p-5 text-center",
+            latest ? "mt-4" : "mt-1",
+          )}
           data-strength-empty
         >
           <p className="text-sm font-medium text-foreground">
-            {inPeriod.length === 0
-              ? "No hard competition-lift sets in this period"
-              : "Only one heavy session in this period"}
+            No hard {label.toLowerCase()} sets in this period
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             A point needs a set at RPE 7 or harder, 10 reps or fewer.
@@ -241,8 +382,7 @@ export function CompetitionStrengthChart({
               ? ` ${lightSessions} lighter session${lightSessions === 1 ? "" : "s"} logged here.`
               : ""}
           </p>
-          {/* only when older hard sets exist to show (a wider empty chart helps nobody) */}
-          {onWiden && points.some((p) => dayMs(p.day) < sMs) && (
+          {onWiden && points.some((p) => p.lift === lift && p.day < startDay) && (
             <button
               type="button"
               onClick={onWiden}
@@ -255,18 +395,19 @@ export function CompetitionStrengthChart({
       ) : (
         <>
           <div
-            className="mt-3 h-[220px] w-full"
+            className="mt-3 h-[200px] w-full"
             role="img"
-            aria-label="Estimated max over time for the competition lifts"
+            aria-label={`${label} estimated max over time`}
           >
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
+              <ComposedChart data={rows} margin={{ top: 6, right: 6, bottom: 0, left: -6 }}>
                 <CartesianGrid vertical={false} stroke="var(--border)" strokeOpacity={0.6} />
                 <XAxis
                   dataKey="t"
                   type="number"
                   scale="time"
                   domain={[sMs, eMs]}
+                  ticks={timeTicks(sMs, eMs)}
                   tickFormatter={tickFmt}
                   tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                   tickLine={false}
@@ -274,184 +415,285 @@ export function CompetitionStrengthChart({
                   minTickGap={28}
                 />
                 <YAxis
-                  domain={yDomain}
+                  domain={axis.domain}
+                  ticks={axis.ticks}
                   allowDataOverflow={false}
                   tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                   tickLine={false}
                   axisLine={false}
-                  width={44}
+                  width={42}
                   tickFormatter={(v: number) => (rel ? v.toFixed(1) : String(Math.round(v)))}
                 />
-                {blockLines.map((b) => (
-                  <ReferenceLine
-                    key={b.id}
-                    x={b.t}
-                    stroke="var(--muted-foreground)"
-                    strokeOpacity={0.35}
-                    strokeDasharray="3 3"
-                  />
-                ))}
                 <Tooltip
                   cursor={{ stroke: "var(--muted-foreground)", strokeOpacity: 0.4 }}
-                  content={({ active, payload, label }) => {
+                  content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
-                    const t = Number(label);
-                    const row = rows.find((r) => r.t === t);
-                    const meetHere = meetMarks.filter((m) => m.t === t);
+                    const pl: any = payload[0]?.payload;
+                    if (!pl) return null;
+                    const t = Number(pl.t);
                     const block = [...(blocks ?? [])]
                       .filter((b) => b.start_date && dayMs(b.start_date) <= t)
                       .pop();
                     return (
-                      <div className="min-w-[160px] rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-sm">
+                      <div className="min-w-[170px] max-w-[230px] rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-sm">
                         <div className="font-medium text-foreground">
-                          {grain === "month"
-                            ? format(new Date(t), "MMMM yyyy")
-                            : grain === "week"
-                              ? `Week of ${format(new Date(t), "MMM d")}`
-                              : format(new Date(t), "EEE, MMM d")}
+                          {format(new Date(t), "EEE, MMM d, yyyy")}
+                          {!pl.meet && !pl.max && grain !== "session" ? (
+                            <span className="font-normal text-muted-foreground">
+                              {" "}
+                              · the {grain}'s best
+                            </span>
+                          ) : null}
                         </div>
-                        {block?.name && <div className="text-muted-foreground">{block.name}</div>}
-                        {shown.map(
-                          (l) =>
-                            row?.[l] != null && (
-                              <div key={l} className="mt-1 flex items-center gap-1.5">
-                                <span
-                                  className="h-2 w-2 rounded-full"
-                                  style={{ background: LIFT_SERIES[l] }}
-                                />
-                                <span className="text-foreground">
-                                  {COMP_LIFT_LABEL[l]} {fmtVal(row[l]!)}
-                                </span>
-                                {row.sets?.[l] && (
-                                  <span className="text-muted-foreground">
-                                    · {fmtNum(conv(row.sets[l]!.load))}×{row.sets[l]!.reps} @
-                                    {row.sets[l]!.effort}
-                                  </span>
-                                )}
+                        {pl.meet ? (
+                          <>
+                            <div className="mt-1 text-foreground">
+                              ◆ Meet: {fmtVal(pl.v)} lifted
+                            </div>
+                            <div className="text-muted-foreground">
+                              {pl.meet.name ?? "Competition"}
+                            </div>
+                          </>
+                        ) : pl.max ? (
+                          <div className="mt-1 text-foreground">▲ Tested max: {fmtVal(pl.v)}</div>
+                        ) : pl.v != null ? (
+                          <>
+                            <div className="mt-1 text-foreground">Estimated max {fmtVal(pl.v)}</div>
+                            {pl.point && (
+                              <div className="text-muted-foreground">
+                                From {fmtNum(conv(pl.point.set.load))} × {pl.point.set.reps} @ RPE{" "}
+                                {pl.point.set.effort}
                               </div>
-                            ),
-                        )}
-                        {meetHere.length > 0 && (
-                          <div className="mt-1 text-foreground">
-                            Meet: {meetHere[0].meet.name ?? "result"}
-                          </div>
+                            )}
+                          </>
+                        ) : null}
+                        {block?.name && (
+                          <div className="mt-0.5 text-muted-foreground">{block.name}</div>
                         )}
                       </div>
                     );
                   }}
                 />
-                {shown.map((l) => (
-                  <Line
-                    key={l}
-                    type="monotone"
-                    dataKey={l}
-                    stroke={LIFT_SERIES[l]}
-                    strokeWidth={2}
-                    dot={{ r: 3, strokeWidth: 0, fill: LIFT_SERIES[l] }}
-                    activeDot={{ r: 5, stroke: "var(--card)", strokeWidth: 2 }}
-                    connectNulls
-                    isAnimationActive={false}
-                  />
-                ))}
-                {shown.map((l) => (
+                <Line
+                  type="linear"
+                  dataKey="v"
+                  stroke={LIFT_SERIES[lift]}
+                  strokeWidth={2}
+                  dot={{ r: 3, strokeWidth: 0, fill: LIFT_SERIES[lift] }}
+                  activeDot={{ r: 5, stroke: "var(--card)", strokeWidth: 2 }}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
+                {meetMarks.length > 0 && (
                   <Scatter
-                    key={`meet-${l}`}
-                    data={meetMarks.filter((m) => m.lift === l)}
-                    dataKey="value"
+                    data={meetMarks}
+                    dataKey="v"
                     fill="var(--card)"
-                    stroke={LIFT_SERIES[l]}
+                    stroke="var(--foreground)"
                     strokeWidth={2}
                     shape="diamond"
                     isAnimationActive={false}
                   />
-                ))}
+                )}
+                {testedMarks.length > 0 && (
+                  <Scatter
+                    data={testedMarks}
+                    dataKey="v"
+                    fill="var(--foreground)"
+                    shape="triangle"
+                    isAnimationActive={false}
+                  />
+                )}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-
-          {/* The table view and direct labels: each lift, its latest estimate and trend in this period. */}
-          <ul className="mt-3 divide-y divide-border/60" data-strength-table>
-            {present.map((l) => {
-              const lp = inPeriod.filter((p) => p.lift === l);
-              const tr = trends[l];
-              if (!lp.length) {
-                const bestMeet = meetsIn.reduce<MeetResult | null>(
-                  (a, m) => (!a || m.lifts[l] > a.lifts[l] ? m : a),
-                  null,
-                );
-                return (
-                  <li key={l} className="flex min-h-11 items-center gap-2 py-1.5 text-[13px]">
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ background: LIFT_SERIES[l] }}
-                      aria-hidden
-                    />
-                    <span className="w-[68px] shrink-0 font-medium text-foreground">
-                      {COMP_LIFT_LABEL[l]}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                      {bestMeet
-                        ? `Best meet ${fmtNum(conv(bestMeet.lifts[l]))} (${format(parseLocalDate(bestMeet.date)!, "MMM yyyy")})`
-                        : "No hard sets"}
-                    </span>
-                  </li>
-                );
-              }
-              const last = lp[lp.length - 1];
-              const best = lp.reduce((a, p) => (p.e1rm > a.e1rm ? p : a), lp[0]);
-              return (
-                <li key={l} className="flex min-h-11 items-center gap-2 py-1.5 text-[13px]">
-                  <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ background: LIFT_SERIES[l] }}
-                    aria-hidden
-                  />
-                  <span className="w-[68px] shrink-0 font-medium text-foreground">
-                    {COMP_LIFT_LABEL[l]}
-                  </span>
-                  <span className="min-w-0 flex-1 text-muted-foreground">
-                    <span className="block truncate">
-                      <span className="font-medium text-foreground tabular-nums">
-                        {Math.round(conv(last.e1rm))}
-                      </span>{" "}
-                      · {format(parseLocalDate(last.day)!, "MMM d")}
-                    </span>
-                    {best.e1rm - last.e1rm >= 2 && (
-                      <span className="block truncate text-[12px]">
-                        best {Math.round(conv(best.e1rm))} ·{" "}
-                        {format(parseLocalDate(best.day)!, "MMM d")}
-                      </span>
-                    )}
-                  </span>
-                  <span
-                    className={cn(
-                      "shrink-0 tabular-nums",
-                      tr.kind === "up"
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : tr.kind === "down"
-                          ? "text-foreground"
-                          : "text-muted-foreground",
-                    )}
-                  >
-                    {trendWords(tr)}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-            Estimated max ({unit}) from hard sets: RPE 7+, 10 reps or fewer.{" "}
-            {grain !== "session" ? `Each point is the ${grain}'s best. ` : ""}
-            {meetMarks.length
-              ? "◆ marks what you lifted at a meet; a peak and the lighter weeks after it move these lines, so compare like phases. "
-              : ""}
-            {blockLines.length ? "Dashed lines are block starts. " : ""}
-            {lightSessions > 0
-              ? `${lightSessions} lighter session${lightSessions === 1 ? "" : "s"} not plotted.`
-              : ""}
-          </p>
+          {/* the key, only for what's drawn */}
+          <div
+            className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground"
+            data-strength-key
+          >
+            <span className="inline-flex items-center gap-1">
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ background: LIFT_SERIES[lift] }}
+                aria-hidden
+              />{" "}
+              Estimated max
+            </span>
+            {meetMarks.length > 0 && <span>◆ Meet (lifted)</span>}
+            {testedMarks.length > 0 && <span>▲ Tested max</span>}
+          </div>
         </>
       )}
-    </Card>
+    </div>
+  );
+}
+
+/** The three lifts as % change from each one's first hard set in the period: the only fair way to put them on one axis. */
+function CompareView({
+  points,
+  start,
+  end,
+  conv,
+  unit,
+}: {
+  points: StrengthPoint[];
+  start: Date;
+  end: Date;
+  conv: (lb: number) => number;
+  unit: "lb" | "kg";
+}) {
+  const startDay = toDay(start);
+  const endDay = toDay(end);
+  const sMs = start.getTime();
+  const eMs = end.getTime() + DAY - 1;
+  const spanDays = Math.round((eMs - sMs) / DAY);
+  const data = useMemo(
+    () => normalizedSeries(points, startDay, endDay),
+    [points, startDay, endDay],
+  );
+  const last = (l: CompLift) => {
+    const v = [...data.rows].reverse().find((r) => typeof r[l] === "number")?.[l];
+    return typeof v === "number" ? v : null;
+  };
+  const vals = data.rows.flatMap((r) =>
+    data.lifts.map((l) => r[l]).filter((v): v is number => typeof v === "number"),
+  );
+  const axis = niceDomain([0, ...vals], { minSpan: 6 });
+  const tickFmt = (t: number) =>
+    format(new Date(t), spanDays > 400 ? "MMM yy" : spanDays > 120 ? "MMM" : "MMM d");
+
+  if (data.lifts.length < 2) {
+    return (
+      <div
+        className="mt-4 rounded-xl border border-dashed border-border p-5 text-center"
+        data-strength-compare-empty
+      >
+        <p className="text-sm font-medium text-foreground">Not enough to compare yet</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Comparing needs two or more lifts with at least two hard sets each in this period. Try a
+          longer period.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-4" data-strength-compare>
+      <div className="flex items-center gap-1 text-[13px] font-medium text-foreground">
+        Change in estimated max
+        <InfoTip label="How the comparison works" title="Comparing lifts" align="start">
+          Each lift is measured against its own first hard set in this period, so lifts hundreds of
+          pounds apart can share one axis. 0% is where each one started.{" "}
+          {data.lifts
+            .map(
+              (l) =>
+                `${COMP_LIFT_LABEL[l]}: ${Math.round(conv(data.baselines[l]!.value))} ${unit} on ${fmtDay(data.baselines[l]!.day)}`,
+            )
+            .join(". ")}
+          .
+        </InfoTip>
+      </div>
+      <ul className="mt-2 grid grid-cols-3 gap-2" data-strength-compare-values>
+        {data.lifts.map((l) => {
+          const v = last(l);
+          return (
+            <li key={l} className="min-w-0">
+              <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ background: LIFT_SERIES[l] }}
+                  aria-hidden
+                />
+                {COMP_LIFT_LABEL[l]}
+              </div>
+              <div className="text-lg font-semibold tabular-nums">
+                {v == null ? "—" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v)}%`}
+              </div>
+              <div className="truncate text-[11px] text-muted-foreground">
+                since {fmtDay(data.baselines[l]!.day)}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <div
+        className="mt-3 h-[200px] w-full"
+        role="img"
+        aria-label="Change in estimated max for each lift, in percent"
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={data.rows} margin={{ top: 6, right: 6, bottom: 0, left: -6 }}>
+            <CartesianGrid vertical={false} stroke="var(--border)" strokeOpacity={0.6} />
+            <XAxis
+              dataKey="t"
+              type="number"
+              scale="time"
+              domain={[sMs, eMs]}
+              ticks={timeTicks(sMs, eMs)}
+              tickFormatter={tickFmt}
+              tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+              tickLine={false}
+              axisLine={false}
+              minTickGap={28}
+            />
+            <YAxis
+              domain={axis.domain}
+              ticks={axis.ticks}
+              tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+              tickLine={false}
+              axisLine={false}
+              width={42}
+              tickFormatter={(v: number) => `${v > 0 ? "+" : ""}${Math.round(v)}%`}
+            />
+            <ReferenceLine y={0} stroke="var(--muted-foreground)" strokeOpacity={0.5} />
+            <Tooltip
+              cursor={{ stroke: "var(--muted-foreground)", strokeOpacity: 0.4 }}
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                const row: any = payload[0]?.payload;
+                if (!row) return null;
+                return (
+                  <div className="min-w-[150px] rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-sm">
+                    <div className="font-medium text-foreground">
+                      {spanDays > 400
+                        ? format(new Date(row.t), "MMMM yyyy")
+                        : `Week of ${format(new Date(row.t), "MMM d")}`}
+                    </div>
+                    {data.lifts.map((l) =>
+                      row[l] != null ? (
+                        <div key={l} className="mt-1 flex items-center gap-1.5">
+                          <span
+                            className="h-2 w-2 rounded-full"
+                            style={{ background: LIFT_SERIES[l] }}
+                          />
+                          {COMP_LIFT_LABEL[l]} {Number(row[l]) > 0 ? "+" : ""}
+                          {row[l]}%
+                        </div>
+                      ) : null,
+                    )}
+                  </div>
+                );
+              }}
+            />
+            {/* one line per unbroken stretch of each lift (weeks it wasn't trained hard in between are skipped, a long gap breaks it) */}
+            {data.lifts.flatMap((l) =>
+              Array.from({ length: data.segments[l] ?? 1 }, (_, n) => (
+                <Line
+                  key={`${l}-${n}`}
+                  type="linear"
+                  dataKey={`${l}__${n}`}
+                  stroke={LIFT_SERIES[l]}
+                  strokeWidth={2}
+                  dot={{ r: 2.5, strokeWidth: 0, fill: LIFT_SERIES[l] }}
+                  activeDot={{ r: 4.5, stroke: "var(--card)", strokeWidth: 2 }}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+              )),
+            )}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
   );
 }

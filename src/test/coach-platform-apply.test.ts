@@ -77,7 +77,7 @@ describe("the coach early-access application", () => {
     expect(PRIVACY_NOTICE).toMatch(/isn't shared or sold/);
     expect(PRIVACY_NOTICE).toMatch(/support@jfeffect\.com/);
     expect(MARKETING_CONSENT).toMatch(/unsubscribe/);
-    const sql = readFileSync("supabase/migrations/20270508090000_coach_platform_early_access.sql", "utf8");
+    const sql = readFileSync("supabase/migrations/20270509090000_coach_platform_early_access.sql", "utf8");
     for (const v of ["powerlifting", "bodybuilding", "strength", "general", "nutrition", "running", "sport", "other"]) expect(sql).toContain(`'${v}'`);
     for (const v of ["'0'", "'1-5'", "'6-15'", "'16-40'", "'41+'"]) expect(sql).toContain(v);
     // there is no switch that opens registration: it's always closed until a migration says otherwise

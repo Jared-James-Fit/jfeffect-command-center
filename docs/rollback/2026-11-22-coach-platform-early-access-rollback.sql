@@ -1,4 +1,4 @@
--- Rollback for 20270508090000_coach_platform_early_access.sql
+-- Rollback for 20270509090000_coach_platform_early_access.sql
 -- (JF Effect for coaches: early-access waitlist, launch settings, pricing history).
 --
 -- Nothing else depends on these objects. Export the waitlist first if any

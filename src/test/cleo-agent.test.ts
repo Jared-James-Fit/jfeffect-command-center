@@ -3,7 +3,7 @@ import {
   bodyweightSummary, estimate1rm, formatLoad, formatSessions, groupSessions, matchesExercise, mergeBodyweight,
   type LoggedSet,
 } from "@/lib/cleo-data";
-import { CLEO_ACTION_PARAMS, actionPermission, isStale, routeFor, statusLabel } from "@/lib/cleo-actions";
+import { CLEO_ACTION_PARAMS, isStale, routeFor, statusLabel } from "@/lib/cleo-actions";
 
 const set = (over: Partial<LoggedSet> = {}): LoggedSet => ({
   completed_at: "2026-10-08T23:10:00Z",
@@ -121,20 +121,23 @@ describe("Cleo actions: who can do what", () => {
   const finance = { isAdmin: false, permissions: ["admin.view", "payments.record", "payments.request", "tasks.manage", "discounts.manage"] };
 
   it("admins run everything themselves", () => {
-    expect(routeFor("admin", admin)).toBe("run");
-    expect(routeFor("tasks.manage", admin)).toBe("run");
+    expect(routeFor("send_message", admin)).toBe("run");
+    expect(routeFor("create_task", admin)).toBe("run");
+    expect(routeFor("record_payment", admin)).toBe("run");
   });
 
-  it("the finance login runs what's in its role and asks the owner for the rest", () => {
-    expect(routeFor(actionPermission("create_task", {}), finance)).toBe("run");
-    expect(routeFor(actionPermission("send_payment_link", {}), finance)).toBe("run");
-    expect(routeFor(actionPermission("record_payment", {}), finance)).toBe("run");
-    expect(routeFor(actionPermission("send_message", {}), finance)).toBe("ask_owner");
-    expect(routeFor(actionPermission("book_appointment", {}), finance)).toBe("ask_owner");
+  it("the finance login runs what's in its role and is never offered client coaching work", () => {
+    expect(routeFor("create_task", finance)).toBe("run");
+    expect(routeFor("send_payment_link", finance)).toBe("run");
+    expect(routeFor("record_payment", finance)).toBe("run");
+    // It used to "ask the owner", and the owner's Approve then ran it as the owner.
+    expect(routeFor("send_message", finance)).toBe("not_allowed");
+    expect(routeFor("book_appointment", finance)).toBe("not_allowed");
   });
 
-  it("someone with no role permissions always asks", () => {
-    expect(routeFor("tasks.manage", { isAdmin: false, permissions: [] })).toBe("ask_owner");
+  it("someone with no role permissions is never offered anything", () => {
+    expect(routeFor("create_task", { isAdmin: false, permissions: [] })).toBe("not_allowed");
+    expect(routeFor("send_message", { isAdmin: false, permissions: [] })).toBe("not_allowed");
   });
 
   it("validates what Cleo proposes", () => {

@@ -4,29 +4,43 @@
  *
  * - The card's words come from the database, not from the model, so what the
  *   person confirms is what runs.
- * - An action always runs with the session of the person who tapped: the
- *   requester when it's within their role, otherwise the business owner when
- *   they approve. It goes through the same server functions and RLS as the
- *   app's own buttons, so nobody can do more through Cleo than in the app.
+ * - An action always runs as the person who asked for it, never as whoever
+ *   approved it. Within their role it runs on Confirm with their own session
+ *   (the same server functions and RLS as the app's own buttons). A coach's
+ *   card for their own client waits for the business owner, whose Approve only
+ *   authorizes it: it then runs as the coach, written with the service role
+ *   after their role and the client's assignment are checked again
+ *   (`cleo_action_target_allowed`), every row naming the coach. What a role
+ *   could never do (money for a coach) is never offered or run, and kinds that
+ *   only work through request-bound server functions stay the owner's to do
+ *   himself (CLEO_ACTION_RULES).
  * - cleo_actions rows are written with the service key only after the caller
  *   is checked, and every status change is a compare-and-set, so a double tap
- *   can't run something twice.
+ *   can't run something twice. `executed_as` records who it ran as, and the
+ *   database holds it to the requester.
  */
 import { BUSINESS_TZ, businessToday } from "@/lib/billing-schedule";
 import { clientTaxRate } from "@/lib/client-billing-summary";
 import { taxInside } from "@/lib/sale-money";
 import { wallTimeToUtc } from "@/lib/schedule-time";
 import {
-  CLEO_ACTION_INFO, CLEO_ACTION_PARAMS, actionPermission, isCleoActionKind, isStale, routeFor,
+  CLEO_ACTION_INFO, CLEO_ACTION_PARAMS, CLEO_ACTION_RULES, actionPermission, isCleoActionKind, isStale, notAllowedReason, routeFor,
   type Caller, type CleoActionKind, type CleoActionStatus, type CleoActionView,
 } from "@/lib/cleo-actions";
 
 export type ActorCtx = {
-  /** The caller's own client (writes). */
+  /** The caller's own client (writes). On an approved request: the service role. */
   supabase: any;
-  /** What to read with: the caller's client, or the finance login's admin view. */
+  /** What to read with: the caller's client, or the finance login's admin view. On an approved request: the service role. */
   db: any;
+  /** Who it runs as: always the person who asked for it. */
   userId: string;
+  /**
+   * Set only when the owner's approval runs a coach's request: every write is
+   * the service role's, so the code names the requester on every row itself,
+   * and nothing request-bound (server functions that read the tapper's session) may run.
+   */
+  asRequester?: { role: "admin" | "coach" };
 };
 
 async function service(): Promise<any> {
@@ -41,12 +55,58 @@ export async function loadCaller(supabase: any, userId: string): Promise<Caller 
   ]);
   const roleList: string[] = (roles ?? []).map((r: any) => r.role);
   const isAdmin = roleList.includes("admin");
+  const isCoach = roleList.includes("coach");
+  // A coach role never carries money through Cleo: permissions come only from the person's other roles.
+  const permissionRoles = roleList.filter((r) => r !== "coach");
   let permissions: string[] = [];
-  if (!isAdmin && roleList.length) {
-    const { data } = await supabase.from("role_permissions").select("permission").in("role", roleList);
+  if (!isAdmin && permissionRoles.length) {
+    const { data } = await supabase.from("role_permissions").select("permission").in("role", permissionRoles);
     permissions = (data ?? []).map((r: any) => r.permission);
   }
-  return { isAdmin, permissions, isOwner: owner?.data === true };
+  return { isAdmin, isCoach, permissions, isOwner: owner?.data === true };
+}
+
+/** The database doesn't have a function this needs yet (the app shipped before its migration). */
+function missingFunction(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return error.code === "PGRST202" || error.code === "42883" || /could not find the function|function .* does not exist/i.test(error.message ?? "");
+}
+
+/** The client a client-scoped card acts on, read with the service role (a missing row is a refusal). */
+export async function targetClientOf(admin: any, kind: CleoActionKind, p: any): Promise<string> {
+  let id: string | null = null;
+  switch (kind) {
+    case "edit_program_day":
+      id = await clientOfDay(admin, p.day_id);
+      break;
+    case "publish_program": {
+      const { data } = await admin.from("pl_blocks").select("client_id").eq("id", p.block_id).maybeSingle();
+      id = data?.client_id ?? null;
+      break;
+    }
+    case "correct_logged_exercise": {
+      const { data } = await admin.from("pl_exercise_rows").select("day_id").eq("id", p.row_id).maybeSingle();
+      id = data?.day_id ? await clientOfDay(admin, data.day_id) : null;
+      break;
+    }
+    default:
+      id = typeof p?.client_id === "string" ? p.client_id : null;
+  }
+  if (!id) throw new Error("I couldn't find whose that is.");
+  return id;
+}
+
+/**
+ * May this person act on this client right now? The admin, or the client's
+ * own active coach (`cleo_action_target_allowed`, a definer check that reads
+ * the requester's roles and coach record, never the caller's session).
+ * Fails closed when the database can't answer.
+ */
+export async function assertRequesterReaches(admin: any, requester: string, clientId: string): Promise<void> {
+  const { data, error } = await admin.rpc("cleo_action_target_allowed", { _requester: requester, _client: clientId });
+  if (missingFunction(error)) throw new Error("Cleo can't run coach requests until the database is updated.");
+  if (error) throw new Error(error.message);
+  if (data !== true) throw new Error("They're not this client's coach any more, so it wasn't done.");
 }
 
 function clientLabel(c: any): string {
@@ -216,30 +276,42 @@ export async function actionLink(db: any, kind: CleoActionKind, p: any): Promise
 
 /** A new card. Returns what Cleo should tell the person. */
 export async function proposeAction(actor: ActorCtx, caller: Caller, kind: CleoActionKind, raw: unknown) {
+  // Who may ask comes first: nothing is looked up (least of all with the service role) for a card that isn't theirs.
+  const route = routeFor(kind, caller);
+  if (route === "not_allowed") throw new Error(notAllowedReason(kind, "the owner"));
   const params = CLEO_ACTION_PARAMS[kind].parse(raw);
+  const admin = await service();
+  // A request the owner will approve runs as this person: their client, checked now and again when it runs.
+  if (route === "ask_owner") await assertRequesterReaches(admin, actor.userId, await targetClientOf(admin, kind, params));
   const summary = await describeAction(actor.db, kind, params);
   const permission = actionPermission(kind, params);
   // Kept with the params (the schema drops unknown keys when it runs).
   const link = await actionLink(actor.db, kind, params);
-  const admin = await service();
   const { data, error } = await admin
     .from("cleo_actions")
     .insert({ requested_by: actor.userId, kind, params: { ...params, ...(link ? { _link: link } : {}) }, summary, permission, status: "proposed" })
     .select("id")
     .single();
   if (error) throw new Error(error.message);
-  return { id: data.id as string, summary, route: routeFor(permission, caller) };
+  return { id: data.id as string, summary, route };
 }
 
-/** Runs it with this actor's own session (same server functions and RLS as the app). */
+/**
+ * Runs it as `actor.userId`: with their own session on Confirm (same server
+ * functions and RLS as the app), or with the service role on an approved
+ * request (`asRequester`), where every row this writes names the requester.
+ */
 async function execute(actor: ActorCtx, kind: CleoActionKind, raw: unknown): Promise<string> {
   const p: any = CLEO_ACTION_PARAMS[kind].parse(raw);
+  // Defense in depth: request-bound kinds would act as whoever tapped Approve.
+  if (actor.asRequester && !CLEO_ACTION_RULES[kind].approvable) throw new Error("Only the owner can do this one himself.");
+  const senderRole: "admin" | "coach" = actor.asRequester?.role ?? "admin";
   if (kind === "restore_program_version") {
     const { restoreVersion } = await import("@/lib/cleo-history.server");
     return restoreVersion(actor, p.version_id);
   }
   const program = await import("@/lib/cleo-program.server");
-  if (program.isProgramKind(kind)) return program.executeProgramAction(actor, kind, p, businessToday());
+  if (program.isProgramKind(kind)) return program.executeProgramAction({ ...actor, role: senderRole }, kind, p, businessToday());
   const sb = actor.supabase;
   const myCoachId = async () => (await sb.from("coaches").select("id").eq("user_id", actor.userId).maybeSingle()).data?.id ?? null;
   switch (kind) {
@@ -273,30 +345,35 @@ async function execute(actor: ActorCtx, kind: CleoActionKind, raw: unknown): Pro
         .insert({
           client_id: p.client_id,
           sender_id: actor.userId,
-          sender_role: "admin",
+          sender_role: senderRole,
           body: p.body,
           attachments: [],
           message_type: "General",
           is_internal_note: false,
-          read_by_admin_at: new Date().toISOString(),
+          read_by_admin_at: senderRole === "admin" ? new Date().toISOString() : null,
         })
-        .select("id")
+        .select("id, client_id, sender_id, sender_role, is_internal_note, attachments")
         .single();
       if (error) throw new Error(error.message);
       await sb.from("conversation_state").update({ status: "open" }).eq("client_id", p.client_id).eq("status", "needs_response").then(() => {}, () => {});
       try {
-        const { notifyNewMessage } = await import("@/lib/push/events.functions");
-        await notifyNewMessage({ data: { messageId: data.id } });
+        // The push the inbox sends (notifyNewMessage), for the message just written as its sender.
+        const { pushNewMessage } = await import("@/lib/push/message-push.server");
+        await pushNewMessage(await service(), data);
       } catch (e) {
         console.warn("[cleo] message push failed", e);
       }
       return "Message sent.";
     }
     case "schedule_message": {
-      const { scheduleMessage } = await import("@/lib/scheduled-messages.functions");
-      await scheduleMessage({
-        data: { clientId: p.client_id, body: p.body, scheduledAtIso: wallTimeToUtc(p.date, p.time, BUSINESS_TZ).toISOString(), scheduledTz: BUSINESS_TZ },
-      });
+      // The same row scheduleMessage writes, as the person who asked.
+      const at = wallTimeToUtc(p.date, p.time, BUSINESS_TZ);
+      if (at.getTime() < Date.now() - 30_000) throw new Error("That time has already passed.");
+      const { scheduledMessageRow } = await import("@/lib/scheduled-messages.functions");
+      const { error } = await sb
+        .from("messages")
+        .insert(scheduledMessageRow({ clientId: p.client_id, senderId: actor.userId, senderRole, body: p.body.trim(), when: at, tz: BUSINESS_TZ }));
+      if (error) throw new Error(error.message);
       return `Scheduled for ${when(p.date, p.time)}.`;
     }
     case "add_client_note": {
@@ -305,7 +382,11 @@ async function execute(actor: ActorCtx, kind: CleoActionKind, raw: unknown): Pro
       return "Note added.";
     }
     case "mark_check_ins_reviewed": {
-      const { data, error } = await sb.rpc("mark_client_reviews_reviewed", { _client_id: p.client_id });
+      // On an approved request: the same updates, reviewed by the coach who asked (the RPC checks them again).
+      const { data, error } = actor.asRequester
+        ? await sb.rpc("cleo_mark_client_reviews_reviewed_as", { _actor: actor.userId, _client: p.client_id })
+        : await sb.rpc("mark_client_reviews_reviewed", { _client_id: p.client_id });
+      if (missingFunction(error)) throw new Error("Cleo can't run coach requests until the database is updated.");
       if (error) throw new Error(error.message);
       const n = Number(data ?? 0);
       return n ? `Marked ${n} item${n === 1 ? "" : "s"} reviewed.` : "Nothing was waiting.";
@@ -362,18 +443,28 @@ function errText(e: unknown): string {
 /** Compare-and-set: moves one row from one of `from` to `to`, or returns null if someone else already did. */
 async function move(id: string, from: CleoActionStatus[], to: CleoActionStatus, extra: Record<string, unknown> = {}, requester?: string) {
   const admin = await service();
-  let q = admin.from("cleo_actions").update({ status: to, updated_at: new Date().toISOString(), ...extra }).eq("id", id).in("status", from);
-  if (requester) q = q.eq("requested_by", requester);
-  const { data, error } = await q.select("*").maybeSingle();
+  const run = (fields: Record<string, unknown>) => {
+    let q = admin.from("cleo_actions").update({ status: to, updated_at: new Date().toISOString(), ...fields }).eq("id", id).in("status", from);
+    if (requester) q = q.eq("requested_by", requester);
+    return q.select("*").maybeSingle();
+  };
+  let { data, error } = await run(extra);
+  // Before 20270507093000 there's no executed_as column: who it ran as is still the requester (the code holds it).
+  if (error && "executed_as" in extra && /executed_as/.test(String(error.message ?? ""))) {
+    const { executed_as: _skip, ...rest } = extra;
+    ({ data, error } = await run(rest));
+  }
   if (error) throw new Error(error.message);
   return data as any | null;
 }
 
-async function runClaimed(actor: ActorCtx, row: any, decidedBy: string | null) {
+/** Runs a claimed card as `actor` (who is always its requester) and records the outcome. */
+async function runClaimed(actor: ActorCtx, row: any) {
   const admin = await service();
   try {
     const kind: unknown = row.kind;
     if (!isCleoActionKind(kind)) throw new Error("Unknown action.");
+    if (actor.userId !== row.requested_by) throw new Error("A card only ever runs as the person who asked for it.");
     // Program history: the state right before, so it can be undone.
     const history = await import("@/lib/cleo-history.server");
     const params = CLEO_ACTION_PARAMS[kind].parse(row.params);
@@ -383,11 +474,11 @@ async function runClaimed(actor: ActorCtx, row: any, decidedBy: string | null) {
     });
     const result = await execute(actor, kind, row.params);
     if (before) await history.saveVersion(actor.supabase, before, kind, params, row.summary, row.id, actor.userId);
-    await admin.from("cleo_actions").update({ status: "done", result, done_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...(decidedBy ? { decided_by: decidedBy, decided_at: new Date().toISOString() } : {}) }).eq("id", row.id);
+    await admin.from("cleo_actions").update({ status: "done", result, done_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", row.id);
     return { status: "done" as const, result };
   } catch (e) {
     const error = errText(e);
-    await admin.from("cleo_actions").update({ status: "failed", error, updated_at: new Date().toISOString(), ...(decidedBy ? { decided_by: decidedBy, decided_at: new Date().toISOString() } : {}) }).eq("id", row.id);
+    await admin.from("cleo_actions").update({ status: "failed", error, updated_at: new Date().toISOString() }).eq("id", row.id);
     return { status: "failed" as const, error };
   }
 }
@@ -409,12 +500,23 @@ export async function confirmAction(actor: ActorCtx, id: string) {
     await move(id, ["proposed"], "cancelled", { error: "Expired" }, actor.userId);
     throw new Error("This card is more than a day old. Ask Cleo again so it's up to date.");
   }
+  if (!isCleoActionKind(row.kind)) throw new Error("Unknown action.");
+  const kind: CleoActionKind = row.kind;
   const caller = await loadCaller(actor.supabase, actor.userId);
-  if (routeFor(row.permission, caller) === "run") {
-    const claimed = await move(id, ["proposed"], "running", {}, actor.userId);
-    if (!claimed) throw new Error("This was already handled.");
-    return runClaimed(actor, claimed, null);
+  // The rule for the kind now, never the permission stored on an older card.
+  const route = routeFor(kind, caller);
+  if (route === "not_allowed") {
+    await move(id, ["proposed"], "cancelled", { error: "Not in their role" }, actor.userId);
+    throw new Error(notAllowedReason(kind, "the owner"));
   }
+  if (route === "run") {
+    const claimed = await move(id, ["proposed"], "running", { executed_as: actor.userId }, actor.userId);
+    if (!claimed) throw new Error("This was already handled.");
+    return runClaimed(actor, claimed);
+  }
+  // Checked before it goes to the owner, and again when it runs.
+  const admin = await service();
+  await assertRequesterReaches(admin, actor.userId, await targetClientOf(admin, kind, CLEO_ACTION_PARAMS[kind].parse(row.params)));
   const waiting = await move(id, ["proposed"], "awaiting_approval", {}, actor.userId);
   if (!waiting) throw new Error("This was already handled.");
   await pushOwners(actor.userId, waiting);
@@ -433,12 +535,44 @@ async function assertOwner(actor: ActorCtx) {
   if (!caller.isOwner || !caller.isAdmin) throw new Error("Only the business owner can approve Cleo requests.");
 }
 
-/** The owner approves: it runs now, with the owner's session. */
+/**
+ * The context an approved request runs in: the requester, written with the
+ * service role, after checking again (now, not when they asked) that their
+ * role can still do this kind and that the client is still theirs.
+ */
+export async function requesterActor(row: any): Promise<ActorCtx> {
+  const kind: unknown = row.kind;
+  if (!isCleoActionKind(kind)) throw new Error("Unknown action.");
+  const rule = CLEO_ACTION_RULES[kind];
+  if (!rule.approvable) throw new Error("Only the owner can do this one himself. Ask Cleo for it yourself.");
+  const admin = await service();
+  const requester = await loadCaller(admin, row.requested_by);
+  const route = routeFor(kind, requester);
+  if (route === "not_allowed") throw new Error("Their role can't do this any more, so it wasn't done.");
+  const params = CLEO_ACTION_PARAMS[kind].parse(row.params);
+  await assertRequesterReaches(admin, row.requested_by, await targetClientOf(admin, kind, params));
+  return { supabase: admin, db: admin, userId: row.requested_by, asRequester: { role: requester.isAdmin ? "admin" : "coach" } };
+}
+
+/**
+ * The owner approves: his OK authorizes it, and it runs as the person who
+ * asked (never with the owner's session or in his name).
+ */
 export async function approveAction(actor: ActorCtx, id: string) {
   await assertOwner(actor);
-  const claimed = await move(id, ["awaiting_approval"], "running");
+  const row = await getRow(id);
+  if (row.status !== "awaiting_approval") throw new Error("This was already handled.");
+  const now = new Date().toISOString();
+  const claimed = await move(id, ["awaiting_approval"], "running", { decided_by: actor.userId, decided_at: now, executed_as: row.requested_by }, row.requested_by);
   if (!claimed) throw new Error("This was already handled.");
-  const out = await runClaimed(actor, claimed, actor.userId);
+  let out: { status: "done"; result: string } | { status: "failed"; error: string };
+  try {
+    out = await runClaimed(await requesterActor(claimed), claimed);
+  } catch (e) {
+    const error = errText(e);
+    await (await service()).from("cleo_actions").update({ status: "failed", error, updated_at: new Date().toISOString() }).eq("id", id);
+    out = { status: "failed", error };
+  }
   await pushRequester(actor.userId, claimed, out.status === "done" ? "approved" : "failed");
   return out;
 }
@@ -509,7 +643,7 @@ function toView(row: any, caller: Caller, names: Map<string, string>, versions: 
     title: CLEO_ACTION_INFO[kind].title,
     summary: row.summary,
     status: row.status === "proposed" && isStale(row.created_at) ? "cancelled" : row.status,
-    route: routeFor(row.permission, caller),
+    route: routeFor(kind, caller),
     result: row.result ?? null,
     error: row.error ?? null,
     requestedBy: row.requested_by,

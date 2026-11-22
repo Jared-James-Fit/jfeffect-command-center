@@ -473,14 +473,13 @@ describe("Workouts reads today first, and every page under it has a way back", (
   });
 
   it("no empty readiness or month card before there's anything in them", () => {
-    expect(workouts).toMatch(/<RecoveryPreviewCard[\s\S]{0,160}hideWhenEmpty/);
-    expect(workouts).toContain(
-      "<TrainingAnalyticsPreviewCard clientId={clientId} hideWhenEmpty bare part={part} />",
-    );
+    // readiness only when it's news (a workout still to do today), never an empty card
+    expect(workouts).toMatch(/<RecoveryPreviewCard[\s\S]{0,160}hideWhenEmpty onlyWhenNews/);
+    expect(workouts).toMatch(/<TrainingAnalyticsPreviewCard[\s\S]{0,240}hideWhenEmpty/);
     const ready = readFileSync("src/components/analytics/recovery-preview-card.tsx", "utf8");
     expect(ready.match(/if \(hideWhenEmpty\) return null;/g)?.length).toBe(2);
-    const month = readFileSync("src/components/training-analytics-preview-card.tsx", "utf8");
-    expect(month).toContain("if (hideWhenEmpty && (isLoading || empty)) return null;");
+    const snap = readFileSync("src/components/training-analytics-preview-card.tsx", "utf8");
+    expect(snap).toContain("if (hideWhenEmpty) return null;");
   });
 
   it("Programs and Move workouts have Back like the program, plan, builder and analytics pages", () => {

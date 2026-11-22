@@ -31,7 +31,8 @@ never hit the gateway's 524 or hold a request open).
 | `construct`, `repair` | GPT-5.5, GPT-6 Astra | low |
 | `edit` (Edit with AI) | GPT-5.5, GPT-5-mini | medium |
 | `nutrition` (Nutrition Update targets, strong only) | GPT-6 Astra, GPT-5.5 | medium |
-| `nutrition_write` (meal plans, their fix, coach updates) | GPT-5.5, GPT-5-mini | low |
+| `nutrition_write` (meal plans, their fix, coach updates, a member's Create with Cleo draft: 10 AI credits) | GPT-5.5, GPT-5-mini | low |
+| `nutrition_import` (reading a meal plan from a PDF, photos or a file the app's own reader can't take; copying only, checked against the file by `planGroundingFlags`; a member's costs 5 AI credits, a coach's nothing) | GPT-5.5, GPT-6 Astra | medium |
 | `roadmap` (block purpose, weekly focus) | GPT-5-mini, GPT-5.5 | low |
 | `nutrition_roadmap` (two lines of words for a nutrition roadmap revision; the engine decides every number, code rejects any added number) | GPT-5-mini, GPT-5.5 | low |
 | `meal_estimate` (a member's or client's AI food log, metered by AI credits) | GPT-5-mini, GPT-5.5 | low |

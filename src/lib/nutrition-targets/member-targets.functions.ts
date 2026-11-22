@@ -209,6 +209,9 @@ export const getCoachAssignedMealPlan = createServerFn({ method: "GET" })
       supplements: (target as any).supplements ?? null,
       pdf_name: (target as any).pdf_name ?? null,
       pdf_signed_url,
+      // a JF member's own plan (the Nutrition Studio), never their coach's
+      own: !coachId,
+      client_id: client.id as string,
       days: days.map((d: any) => ({
         id: d.id,
         day_label: d.day_label,
