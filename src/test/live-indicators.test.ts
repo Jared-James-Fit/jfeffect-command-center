@@ -7,19 +7,22 @@ describe("live indicators: one animated look across the app", () => {
   const ui = read("src/components/live-indicator.tsx");
   const css = read("src/styles.css");
 
-  it("the dot breathes with two waves; a live avatar gets a turning ring and a LIVE tag; red pills glow; still with reduced motion", () => {
+  it("the dot breathes with two waves; a live avatar gets a still dot on its corner, never a ring (a ring means a story); red pills glow; still with reduced motion", () => {
     expect(ui).toContain('"jf-live-wave jf-live-wave-2 absolute inset-0 rounded-full"');
     expect(ui).toContain('"jf-live-core relative inline-flex h-full w-full rounded-full"');
-    expect(ui).toContain('"jf-live-ring pointer-events-none absolute rounded-full"');
+    // Nov 22 2026: the turning ring + LIVE tag read as a story ring
+    expect(ui).toContain("data-live-dot");
+    expect(ui).not.toContain("jf-live-ring pointer-events-none");
+    expect(ui).not.toContain("jf-live-halo pointer-events-none");
     for (const k of ["@keyframes jf-live-wave", "@keyframes jf-live-breathe", "@keyframes jf-live-turn", "@keyframes jf-live-pill"]) expect(css).toContain(k);
     expect(css).toContain(".jf-live-wave, .jf-live-core, .jf-live-ring, .jf-live-halo, .jf-live-pill { animation: none; }");
     // the old chat dot now is this one
     expect(read("src/hooks/use-chat-presence.tsx")).toContain('export { LiveDot } from "@/components/live-indicator";');
   });
 
-  it("a pinned chat shows one signal at a time: live (ring + LIVE) or the unread dot, never both", () => {
+  it("a pinned chat shows one signal at a time: live (the dot) or the unread dot, never both, and the muted bell takes the live dot's corner", () => {
     const tile = read("src/components/messages/inbox-parts.tsx");
-    expect(tile).toContain("<LiveAvatar live={live} size={60}>{avatar}</LiveAvatar>");
+    expect(tile).toContain("<LiveAvatar live={live && !muted} size={60}>{avatar}</LiveAvatar>");
     expect(tile).toContain("{unread && !live && (");
     expect(tile).toContain("data-pin-unread");
     expect(tile).not.toContain("<LiveDot");
@@ -29,7 +32,7 @@ describe("live indicators: one animated look across the app", () => {
     expect(read("src/components/group-chats-pane.tsx")).toContain("<LiveAvatar live={pinned.live} size={CHAT_ROW_AVATAR}>");
     expect(read("src/routes/_authenticated/portal/messages.tsx")).toContain("<LiveAvatar live={coachLive} size={40} tag={false}>");
     expect(read("src/route-pages/_authenticated/admin/messages.tsx")).toContain("<LiveAvatar live={selectedClientLive || isClientActive((selected as any).last_active_at)} size={40} tag={false}>");
-    expect(read("src/components/community/crew-list.tsx")).toContain('<LiveAvatar live={m.live} size={44} tone="red" tag={false}>');
+    expect(read("src/components/community/crew-list.tsx")).toContain('<LiveAvatar live={m.live} size={44} tone="red" tag={false} className="ml-3.5">');
     expect(read("src/components/community/post-card.tsx")).toContain('<LiveDot size={6} tone="white" ring={false} /> Training now');
     expect(read("src/components/community/community-entry.tsx")).toContain('<LivePill className="shrink-0" />');
     for (const f of ["src/components/portal/athlete-level-card.tsx", "src/components/portal/powerlifting-career.tsx", "src/components/community/post-tile.tsx"]) {
@@ -38,9 +41,9 @@ describe("live indicators: one animated look across the app", () => {
     }
   });
 
-  it("the coach's inbox and group chats show live the way the client's inbox does: the ring, never a small green dot", () => {
+  it("the coach's inbox and group chats show live the way the client's inbox does, through LiveAvatar, never a dot of their own", () => {
     const admin = read("src/route-pages/_authenticated/admin/messages.tsx");
-    // each client row: the ring + LIVE tag, like the coach pin in the client's inbox
+    // each client row: LiveAvatar's dot, like the coach pin in the client's inbox
     expect(admin).toContain("live={isClientActive((client as any).last_active_at) || (client.id === selectedId && selectedClientLive)}");
     expect(admin).not.toContain("<LiveDot");
     expect(admin).toContain('{selectedClientLive ? "Live in chat" : "Active now"}');

@@ -127,6 +127,7 @@ async function pump() {
               : undefined,
           dirHint: repDirection(job.exerciseName) ?? undefined,
           lift: guideLift(job.exerciseName),
+          exclude: re?.mode === "keys" ? re.exclude : undefined,
           onProgress: (p) => setRunning(job.setVideoId, p),
         });
         // read again meanwhile by hand (Fix tracking, Start over): theirs wins

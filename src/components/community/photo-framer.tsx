@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { GradedLayer } from "@/components/community/graded-layer";
 import { TrimmedVideo } from "@/components/video-trimmer";
 import type { VideoTrim } from "@/lib/video-edit/plan";
+import type { CompiledGrade } from "@/lib/media-grade";
 import {
   POST_ASPECTS,
   SCREEN_ZONES,
@@ -202,6 +204,7 @@ export function PhotoFramer({
   flash = 0,
   onActive,
   onClaim,
+  grade = null,
 }: {
   src: string | null;
   video?: { src: string; trim?: VideoTrim | null; poster?: string; sound?: boolean } | null;
@@ -218,8 +221,12 @@ export function PhotoFramer({
   flash?: number;
   onActive?: (on: boolean) => void;
   onClaim?: () => void;
+  /** Its filter: graded live over the photo or clip (the export bakes the same program in). */
+  grade?: CompiledGrade | null;
 }) {
   const [active, setActive] = useState(false);
+  // the element the filter reads (kept on screen under it, loaded and playing)
+  const [mediaEl, setMediaEl] = useState<HTMLImageElement | HTMLVideoElement | null>(null);
   const [snap, setSnap] = useState({ v: false, h: false });
   const raw = useRef(framing);
   const pinch0 = useRef(framing);
@@ -275,6 +282,8 @@ export function PhotoFramer({
   }, [flash]);
   const f = clampFraming(framing, size, frame);
   const p = placement(f, size, frame);
+  const at: React.CSSProperties = { width: p.w, height: p.h, transform: `translate3d(${p.x}px, ${p.y}px, 0)` };
+  const graded = !!grade && showImage;
   return (
     <div className="absolute inset-0 touch-none select-none overflow-hidden" {...g} data-photo-framer>
       {showImage && video ? (
@@ -284,23 +293,26 @@ export function PhotoFramer({
           trim={video.trim}
           poster={video.poster}
           sound={!!video.sound}
-          className="pointer-events-none absolute left-0 top-0 max-w-none select-none object-fill"
-          style={{ width: p.w, height: p.h, transform: `translate3d(${p.x}px, ${p.y}px, 0)` }}
+          videoRef={setMediaEl}
+          className={cn("pointer-events-none absolute left-0 top-0 max-w-none select-none object-fill", graded && "opacity-0")}
+          style={at}
           data-framed-clip
         />
       ) : (
         showImage &&
         src && (
           <img
+            ref={setMediaEl}
             src={src}
             alt=""
             draggable={false}
-            className="pointer-events-none absolute left-0 top-0 max-w-none select-none"
-            style={{ width: p.w, height: p.h, transform: `translate3d(${p.x}px, ${p.y}px, 0)` }}
+            className={cn("pointer-events-none absolute left-0 top-0 max-w-none select-none", graded && "opacity-0")}
+            style={at}
             data-framed-photo
           />
         )
       )}
+      {graded && grade && <GradedLayer source={mediaEl} grade={grade} className="absolute left-0 top-0 max-w-none" style={at} />}
       <FrameGuides active={active || flashing} snapV={snap.v} snapH={snap.h} aspect={frame.w / (frame.h || 1)} gridPreview={gridPreview} />
     </div>
   );

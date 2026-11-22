@@ -145,7 +145,7 @@ export function outputSize(src: Pick<SourceInfo, "width" | "height">, longEdge: 
  * is: the audio track is left out of a copy (still a remux, ~instant) or a
  * re-encode, and the re-encode spends the audio's bits on the picture.
  */
-export function planVideo(src: SourceInfo, trim: VideoTrim | null | undefined, ctx: VideoContext, caps: { canEncode: boolean; muted?: boolean }): VideoPlan {
+export function planVideo(src: SourceInfo, trim: VideoTrim | null | undefined, ctx: VideoContext, caps: { canEncode: boolean; muted?: boolean; graded?: boolean }): VideoPlan {
   const plan = planSelection(src, trim, ctx, caps);
   if (!caps.muted || !src.hasAudio || plan.mode === "reject") return plan;
   if (plan.mode === "original") {
@@ -155,7 +155,13 @@ export function planVideo(src: SourceInfo, trim: VideoTrim | null | undefined, c
   return { ...plan, muted: true };
 }
 
-function planSelection(src: SourceInfo, trim: VideoTrim | null | undefined, ctx: VideoContext, caps: { canEncode: boolean; muted?: boolean }): VideoPlan {
+/**
+ * `caps.graded`: a filter is baked into the picture (media-grade.ts). Only a
+ * re-encode can carry it, so nothing goes as it is and the slow-encoder
+ * fallback (a copy) is never offered: a copy would post the clip without the
+ * filter it showed. A phone that can't encode never offers a filter on a clip.
+ */
+function planSelection(src: SourceInfo, trim: VideoTrim | null | undefined, ctx: VideoContext, caps: { canEncode: boolean; muted?: boolean; graded?: boolean }): VideoPlan {
   const sel = selectionOf(src, trim);
   const len = sel.end - sel.start;
   const limit = videoLimit(ctx);
@@ -176,7 +182,8 @@ function planSelection(src: SourceInfo, trim: VideoTrim | null | undefined, ctx:
   const exactCopy = whole || src.container !== "webm";
 
   // Nothing to gain from work on the phone.
-  if (copyFits && (small || isLean(src)) && (exactCopy || !caps.canEncode)) {
+  const graded = !!caps.graded && caps.canEncode;
+  if (!graded && copyFits && (small || isLean(src)) && (exactCopy || !caps.canEncode)) {
     return whole ? { mode: "original" } : { mode: "copy", start: sel.start, end: sel.end, estBytes: copy };
   }
   if (!caps.canEncode) {
@@ -204,7 +211,7 @@ function planSelection(src: SourceInfo, trim: VideoTrim | null | undefined, ctx:
     videoBitrate,
     ...(frameRate ? { frameRate } : {}),
     estBytes,
-    copyFallback: copyAllowed && exactCopy ? { estBytes: copy } : null,
+    copyFallback: copyAllowed && exactCopy && !graded ? { estBytes: copy } : null,
   };
 }
 

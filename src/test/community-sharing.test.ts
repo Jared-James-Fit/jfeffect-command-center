@@ -515,7 +515,7 @@ describe("community photos are the athlete's own", () => {
   it("lets you add, change or remove it from your own profile only", () => {
     // adding (a tap on the empty circle) and changing (the camera badge) render only on your own profile;
     // on anyone's, a tap on the photo opens it big (photo-viewer.tsx)
-    expect(profile).toContain("{profile.is_me && !profile.author.avatar_url ? (");
+    expect(profile).toContain("{story.state === \"none\" && profile.is_me && !profile.author.avatar_url ? (");
     expect(profile).toMatch(/\{profile\.is_me && \(\s*<button[^>]*?\s*type="button"\s*disabled=\{setAvatar\.isPending\}\s*onClick=\{\(\) => photoRef\.current\?\.click\(\)\}\s*data-profile-photo-change/);
     expect(profile).toContain("{profile.is_me && profile.author.avatar_url && (");
     expect(profile).toContain("setAvatar.mutate(null");
@@ -955,7 +955,7 @@ describe("share studio: lock in cards, camera first, text + stickers", () => {
   it("stickers: on top of the card or photo, baked into what's posted exactly where they sit (the editor is the post's own shape)", () => {
     const studio = read("src/components/community/share-studio.tsx");
     // the framed photo (its shape, 1080 wide), stickers drawn at the same spots
-    expect(studio).toContain("const c = framedCanvas(shot.src as Drawable, framing, frameShape);");
+    expect(studio).toContain("const c = shotMedia(shot.src as Drawable, frameShape, 1080);");
     expect(studio).toContain("if (items.length) drawStickers(context2d(c), items, c.width, c.height);");
     // a card: painted at its format, the same stickers on top
     expect(studio).toContain("drawStickers(context2d(c), items, c.width, c.height);\n      return await canvasToBlob(c, \"image/jpeg\", 0.92);");
@@ -1145,7 +1145,7 @@ describe("feels like our app, not Instagram", () => {
   it("Post is the app's own red button; save is a download icon", () => {
     const studio = read("src/components/community/share-studio.tsx");
     expect(studio).toContain('posted ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground"');
-    expect(studio).toContain('aria-label="Save image"');
+    expect(studio).toContain('aria-label="Share outside the app, or save it"');
     expect(studio).toContain("<Download className=");
   });
   it("the text editor previews at the card's real size, wrap and font; long text is fine", () => {
@@ -1164,7 +1164,7 @@ describe("post what you see; rotate smooth and sharp; snap to centre", () => {
   const studio = read("src/components/community/share-studio.tsx");
   const layer = read("src/components/community/sticker-layer.tsx");
   it("the post is the look you're on (4:5), 'No filter' and Hide weights post just the photo", () => {
-    expect(studio).toContain('const bare = card.look === "plain" || (post?.showHideLoads && hideLoads);');
+    expect(studio).toContain('const bare = (card.look === "plain" && !card.paint) || (post?.showHideLoads && hideLoads && !card.paint);');
     expect(studio).toContain("if (shot && bare) return finalPhoto();");
     expect(studio).toContain('const b = await cardImage("feed");');
     expect(studio).toContain("paintCard(c, card, media, fmt, frozenLockedIn(card.data), logo, 1);");

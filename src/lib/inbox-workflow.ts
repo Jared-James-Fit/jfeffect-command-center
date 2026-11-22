@@ -66,6 +66,7 @@ export function deriveInboxWorkflow(input: {
     else if (reason === "lift_video_uploaded" || input.lastInboundKind === "lift_video" || input.pendingLiftReview) detail = "Lift review";
     // a note from their workout (pain first: it's what can't wait)
     else if (((last?.attachments ?? []) as { set_video?: unknown }[]).some((x) => x?.set_video)) detail = "Set video";
+    else if (((last?.attachments ?? []) as { film_note?: unknown }[]).some((x) => x?.film_note)) detail = "Film note";
     else if (k.includes("workout_note")) detail = ((last?.attachments ?? []) as { kind?: string; pain?: unknown }[]).some((x) => x?.kind === "workout_note" && x.pain) ? "Pain flagged" : "Workout note";
   }
 

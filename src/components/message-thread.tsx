@@ -82,7 +82,7 @@ import { belongsInInbox, resolveOptimistic, upsertRow } from "@/lib/inbox-cache"
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
 import { ChatVideoTile } from "@/components/chat-video-tile";
-import { LiftAnalysisEntry } from "@/components/lift-analysis/lift-analysis-entry";
+import { FilmNoteOpen, LiftAnalysisEntry } from "@/components/lift-analysis/lift-analysis-entry";
 import { BarPathOverlay } from "@/components/lift-analysis/bar-path-overlay";
 import {
   ChatLiftOffer,
@@ -173,11 +173,19 @@ function useSignedUrlFor(path?: string): string | undefined {
 
 /* ------------------------------- Attachment Renderers ------------------------------- */
 
-function ImageAttachment({ att, messageId }: { att: MessageAttachment; messageId?: string }) {
+function ImageAttachment({ att, messageId, mine }: { att: MessageAttachment; messageId?: string; mine?: boolean }) {
   const signed = useSignedUrlFor(att.storage_path);
   const { pending } = useContext(SignedUrlContext);
   // While the shared batch is in flight, don't let every image sign itself too.
-  return <ChatImageAttachment att={att} messageId={messageId} initialSignedUrl={signed} deferSign={!signed && pending} />;
+  const img = <ChatImageAttachment att={att} messageId={messageId} initialSignedUrl={signed} deferSign={!signed && pending} />;
+  // a film note: the marked frame, and the clip opened on it
+  if (!att.film_note?.set_video_id) return img;
+  return (
+    <div className="space-y-1">
+      {img}
+      <FilmNoteOpen note={att.film_note} className={mine ? "text-current hover:text-current" : undefined} />
+    </div>
+  );
 }
 
 function VideoAttachment({
@@ -636,7 +644,7 @@ function AttachmentView({
       </a>
     );
   }
-  if (att.type === "image") return <ImageAttachment att={att} messageId={message?.id} />;
+  if (att.type === "image") return <ImageAttachment att={att} messageId={message?.id} mine={mine} />;
   if (att.type === "video")
     return <VideoAttachment att={att} mine={mine} message={message} role={role} clientId={clientId} />;
   if (att.type === "audio") return <AudioAttachment att={att} mine={mine} message={message} />;

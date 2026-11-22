@@ -7,6 +7,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/user-avatar";
+import { StoryAvatar } from "@/components/community/story-ring";
 import { CoachBadge } from "@/components/community/post-card";
 import { SharedCommentCard } from "@/components/community/shared-comment";
 import { useAuth } from "@/lib/auth";
@@ -676,13 +677,10 @@ function CommentRow({
       )}
       style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", WebkitTapHighlightColor: "transparent" }}
     >
-      {toProfile ? (
-        <button type="button" onClick={toProfile} className="shrink-0 rounded-full active:scale-95" aria-label={`Open ${c.author.name}'s profile`} data-comment-person>
-          <UserAvatar src={c.author.avatar_url} name={c.author.name} size={size} expandable={false} />
-        </button>
-      ) : (
-        <UserAvatar src={c.author.avatar_url} name={c.author.name} size={size} expandable={false} />
-      )}
+      {/* their story ring when they have one up (a tap plays it), else the photo opens their profile */}
+      <span className="shrink-0" data-comment-person>
+        <StoryAvatar userId={c.pending ? null : c.author.user_id} src={c.author.avatar_url} name={c.author.name} size={size} onPress={toProfile} pressLabel={`Open ${c.author.name}'s profile`} />
+      </span>
       <div className="min-w-0 flex-1">
         {pinned && (
           <div className="mb-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">

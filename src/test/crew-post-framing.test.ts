@@ -119,14 +119,14 @@ describe("the studio frames every slide, and what's posted is what it showed", (
 
   it("Post frames each slide at the post's shape: a photo baked to it, a clip keeps its frame and gets a poster baked to it", () => {
     expect(studio).toContain("const extras = await tray.ready(frameAspect);");
-    expect(tray).toContain("const { main, thumb: small } = await framedPhoto(src, f, shape);");
+    expect(tray).toContain("const { main, thumb: small } = await framedPhoto(src, f, shape, grade);");
     // a phone holds a few big canvases, not ten: two slides at a time, the thumbnail drawn from the framed photo
     expect(tray).toContain("const FRAME_PARALLEL = 2;");
     expect(tray).toContain("const small = framedCanvas(big, { z: 1, cx: 0.5, cy: 0.5 }, aspect, thumbWidth(aspect));");
     expect(tray).toContain("const focus = frameFocus(f, shape);");
-    expect(tray).toContain('const poster = src ? await framedFile(src, f, shape, thumbWidth(shape), "poster.jpg") : null;');
-    // a photo already the post's shape and untouched goes as it was uploaded; a slide already on the post stays as it is
-    expect(tray).toContain("if (Math.abs(size.w / size.h - shape) < 0.01 && f.z <= 1.001) return slide;");
+    expect(tray).toContain('const poster = src ? await framedFile(src, f, shape, thumbWidth(shape), "poster.jpg", grade) : null;');
+    // a photo already the post's shape and untouched (no filter) goes as it was uploaded; a slide already on the post stays as it is
+    expect(tray).toContain("if (!grade && Math.abs(size.w / size.h - shape) < 0.01 && f.z <= 1.001) return slide;");
     expect(tray).toContain("if (it.existing || !uid) return slide;");
   });
 

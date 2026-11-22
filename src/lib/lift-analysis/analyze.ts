@@ -22,14 +22,23 @@ import {
   loess,
   metric,
   NONE,
+  type IgnoredRise,
   type Metric,
   type RepMetrics,
   type Tier,
 } from "@/lib/lift-analysis/kinematics";
+import { packTrack } from "@/lib/lift-analysis/raw-track";
 import type { TrackPoint } from "@/lib/lift-analysis/track";
 import { velocityVerdict, type VelocityVerdict } from "@/lib/lift-analysis/verdict";
 
-export const ENGINE_VERSION = "bar-path/4";
+export const ENGINE_VERSION = "bar-path/5";
+
+/**
+ * The packed track is ~40 characters a frame once stored; past this many
+ * frames (100 s at 60 fps) it's left off so a read stays well inside the
+ * server's 600 KB cap (that read just can't have a rep taken out in place).
+ */
+export const RAW_MAX_FRAMES = 6000;
 
 export type SetMetrics = {
   reps: number;
@@ -62,7 +71,11 @@ export type QualityNote =
   /** The plate's outer edge barely showed (black plate on a black background): the scale is less certain. */
   | "plate_edge_faint"
   /** The plate was lost for a stretch inside the set (shown for the athlete to fix). */
-  | "tracking_gaps";
+  | "tracking_gaps"
+  /** A rise after the set, never seen coming back down, wasn't counted as a rep. */
+  | "after_set"
+  /** The athlete took out a rise that isn't a rep. */
+  | "reps_edited";
 
 export type LiftAnalysis = {
   engine: string;
@@ -104,7 +117,20 @@ export type LiftAnalysis = {
     lost: { start: number; end: number }[];
     /** Frames where following forward and backward disagreed (left out, never guessed). */
     conflicts: number;
+    /** Frames got back by reading lost stretches again from both ends. */
+    recovered?: number;
+    /** The whole followed track, packed (raw-track.ts), and what reading it needs: read again with no video. */
+    raw?: string;
+    reread?: {
+      size: RimSizeInput | null;
+      shake: number | null;
+      dirHint: "lower_first" | "lift_first" | null;
+    };
   };
+  /** Rises the athlete said aren't reps (when each concentric started, s). */
+  exclude?: number[];
+  /** Rises left out of the reps, and why. */
+  ignored?: IgnoredRise[];
 };
 
 export type AnalyzeOptions = {
@@ -120,6 +146,12 @@ export type AnalyzeOptions = {
   size?: RimSizeInput | null;
   keys?: TrackKey[];
   conflicts?: number;
+  /** Frames got back by reading lost stretches again from both ends (recover.ts). */
+  recovered?: number;
+  /** Rises the athlete said aren't reps (when each concentric started, s). */
+  exclude?: number[];
+  /** Keep the followed track on the read (packed) so it can be read again without the video. */
+  keepRaw?: boolean;
 };
 
 const round = (v: number, d: number) => {
@@ -152,6 +184,9 @@ export const MAX_REP_ROM_MM = 1100;
 /** The least position noise a margin assumes (px): a small plate's sub-pixel jitter. */
 export const MARGIN_FLOOR_PX = 0.13;
 export const MAX_PEAK_M_S = 3.5;
+/** Velocity loss is a measurement within ± this many percentage points (95 %), an estimate within VL_ESTIMATE_PTS, else not shown. */
+export const VL_MEASURED_PTS = 4;
+export const VL_ESTIMATE_PTS = 7;
 
 export function analyzeTrack(points: TrackPoint[], opts: AnalyzeOptions): LiftAnalysis {
   const plate = opts.plate ?? { ...DEFAULT_PLATE, confirmed: false };
@@ -209,6 +244,7 @@ function readTrack(
   // that much frame to frame however smooth the path looks, and on a small plate that's millimetres
   const sigmaRaw = Math.max(sigmaMove, cal.ok ? MARGIN_FLOOR_PX * sy : MARGIN_FLOOR_PX);
   const minRom = cal.ok ? 60 : 6 * sigmaMove;
+  const ignored: IgnoredRise[] = [];
   const reps = analyzeReps({
     raw: { t: times, y: Y, found },
     s,
@@ -229,8 +265,10 @@ function readTrack(
     bridged,
     dirHint: opts.dirHint,
     minRom,
+    exclude: opts.exclude,
+    ignored,
   });
-  return { cal, times, fps, found, units, sy, sxs, s, sxSm, sigmaRaw, reps, bridged };
+  return { cal, times, fps, found, units, sy, sxs, s, sxSm, sigmaRaw, reps, bridged, ignored };
 }
 
 function finish(
@@ -240,8 +278,11 @@ function finish(
   read: Read,
   implausible: boolean,
 ): LiftAnalysis {
-  const { cal, times, fps, found, units, sy, sxs, s, sxSm, sigmaRaw, reps, bridged } = read;
+  const { cal, times, fps, found, units, sy, sxs, s, sxSm, sigmaRaw, reps, bridged, ignored } =
+    read;
   const notes = new Set<QualityNote>();
+  if (ignored.some((g) => g.why === "after_set")) notes.add("after_set");
+  if (ignored.some((g) => g.why === "athlete")) notes.add("reps_edited");
   if (implausible) notes.add("implausible_scale");
   if (!cal.ok) notes.add("not_calibrated");
   if (cal.ok && cal.faint) notes.add("plate_edge_faint");
@@ -301,14 +342,22 @@ function finish(
     };
   });
   let velocityLoss: Metric = NONE(complete.length < 2 ? "one_rep" : "not_measurable");
-  if (raw.length >= 2) {
+  // only from a set whose every rep was read: the fastest or the last could be the one that wasn't
+  const everyRepRead = complete.every((r) =>
+    units === "mm" ? r.mcv.tier !== "unavailable" && r.mcv.v != null : r.coverage >= 0.75,
+  );
+  if (raw.length >= 2 && !everyRepRead) velocityLoss = NONE("partial_set");
+  else if (raw.length >= 2) {
     const fastest = raw.reduce((b, x) => (x.speed > b.speed ? x : b));
     const lastR = raw[raw.length - 1];
     const ratio = lastR.speed / fastest.speed;
     const vl = (1 - ratio) * 100;
     const sd = ratio * Math.hypot(fastest.rel, lastR.rel) * 100;
     const u95 = 2 * sd;
-    const tier: Tier | null = u95 <= 5 ? "measured" : u95 <= 12 ? "estimated" : null;
+    // a few points either way changes what velocity loss says (a 10 % or 20 % stop); wider than
+    // that it can't tell a fresh set from a hard one, so it isn't shown
+    const tier: Tier | null =
+      u95 <= VL_MEASURED_PTS ? "measured" : u95 <= VL_ESTIMATE_PTS ? "estimated" : null;
     velocityLoss = tier
       ? { v: vl, u: u95, tier, ...(moved ? { why: "camera_moved" } : {}) }
       : NONE("too_uncertain");
@@ -440,9 +489,22 @@ function finish(
             })),
             lost: lost.map((l) => ({ start: round(l.start, 3), end: round(l.end, 3) })),
             conflicts: opts.conflicts ?? 0,
+            recovered: opts.recovered ?? 0,
+            ...(opts.keepRaw === false || points.length > RAW_MAX_FRAMES
+              ? {}
+              : {
+                  raw: packTrack(points),
+                  reread: {
+                    size: opts.size ?? null,
+                    shake: opts.shake?.length ? median(opts.shake) : null,
+                    dirHint: opts.dirHint ?? null,
+                  },
+                }),
           },
         }
       : {}),
+    ...(opts.exclude?.length ? { exclude: opts.exclude.map((t) => round(t, 3)) } : {}),
+    ...(ignored.length ? { ignored: ignored.map((g) => ({ ...g, t: round(g.t, 3) })) } : {}),
   };
   return { ...out, velocity: velocityVerdict(out as LiftAnalysis) };
 }

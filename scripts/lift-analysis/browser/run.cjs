@@ -16,6 +16,10 @@ const [dir, filterArg, ...rest] = process.argv.slice(2);
 const filter = filterArg && !filterArg.startsWith("--") ? filterArg : "";
 const all = process.argv.slice(2);
 const mode = all.includes("--mode") ? all[all.indexOf("--mode") + 1] : "auto";
+const showStages = all.includes("--stages");
+const detectOnly = all.includes("--detect");
+// the athlete's flow: find the bar (detection only), then analyze from the ring it showed
+const confirmFlow = all.includes("--confirm-flow");
 const root = path.resolve(__dirname, "../../..");
 execFileSync(
   path.join(root, "node_modules/.bin/esbuild"),
@@ -77,6 +81,33 @@ const server = http.createServer((req, res) => {
   const rows = [];
   for (const sc of scenes.filter((s) => !filter || s.name.includes(filter))) {
     const truth = JSON.parse(fs.readFileSync(path.join(dir, `${sc.name}.mp4.json`), "utf8"));
+    if (confirmFlow) {
+      const d = await page.evaluate(
+        ([url, opts]) => window.analyze(url, opts),
+        [`/${sc.name}.mp4`, { dirHint: sc.dir, lift: sc.lift, detectOnly: true }],
+      );
+      const key = d.res.proposal && d.res.proposal.key;
+      if (!key) {
+        console.log(`${sc.name.padEnd(22)} find ${d.ms} ms · no ring`);
+        continue;
+      }
+      const a = await page.evaluate(
+        ([url, opts]) => window.analyze(url, opts),
+        [
+          `/${sc.name}.mp4`,
+          {
+            dirHint: sc.dir,
+            lift: sc.lift,
+            plate: { mm: sc.plateMm, rel: 0.005, confirmed: true },
+            seed: { kind: "marker", t: key.t, fx: key.fx, fy: key.fy, fa: key.fa, fb: key.fb },
+          },
+        ],
+      );
+      console.log(
+        `${sc.name.padEnd(22)} find ${String(d.ms).padStart(5)} ms · analyze ${String(a.ms).padStart(6)} ms (tracking@${a.stages.tracking}) ${a.res.ok ? "ok" : a.res.why}`,
+      );
+      continue;
+    }
     const out = await page.evaluate(
       ([url, opts]) => window.analyze(url, opts),
       [
@@ -86,10 +117,17 @@ const server = http.createServer((req, res) => {
           lift: sc.lift,
           plate: { mm: sc.plateMm, rel: 0.005, confirmed: true },
           seed: { kind: mode === "confirm" ? "proposal" : "auto" },
+          detectOnly,
         },
       ],
     );
     const res = out.res;
+    if (showStages)
+      console.log(
+        `${sc.name.padEnd(22)} stages ${Object.entries(out.stages)
+          .map(([k, v]) => `${k}@${v}`)
+          .join(" ")} end@${out.ms}`,
+      );
     const conf = res.proposal ? res.proposal.confidence : "-";
     if (!res.ok) {
       rows.push({ name: sc.name, ok: false, why: res.why, ms: out.ms });

@@ -229,6 +229,8 @@ export function DirectRow({ thread, me, selected, onClick, unread: markedUnread,
       at={thread.last?.created_at}
       unreadLabel="New"
       avatar={<UserAvatar src={thread.other.avatar_url} name={thread.other.name} size={CHAT_ROW_AVATAR} expandable={false} />}
+      storyUserId={leading ? null : thread.other.user_id}
+      storyName={thread.other.name}
       name={thread.other.name}
       preview={thread.incoming ? `${thread.other.name} wants to message you` : previewLine(thread, me)}
     />

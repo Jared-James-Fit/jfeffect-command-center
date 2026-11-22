@@ -16,6 +16,7 @@
  *           the selection's first moment, so the feed never loads video bytes
  *           up front.
  */
+import type { CompiledGrade } from "@/lib/media-grade";
 import { compressImage } from "@/lib/image-compress";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,7 +44,7 @@ export type PickedMedia = {
   /** JPEG thumbnail (images: downscaled copy; videos: poster frame). May be null for videos. */
   thumb: Blob | null;
   /** A clip: what it is, where it's going and which part goes. */
-  video?: PickedVideo & { context: VideoContext };
+  video?: PickedVideo & { context: VideoContext; grade?: CompiledGrade | null };
 };
 
 export function releasePicked(m: PickedMedia | null) {
@@ -155,6 +156,19 @@ export function withSound(m: PickedMedia, sound: boolean): PickedMedia | null {
   return { ...m, video: { ...m.video, muted: !sound } };
 }
 
+/**
+ * The same picked clip with a filter baked into it (media-grade.ts), or none.
+ * Like `withSound`: a new PickedMedia with its own upload, sharing the old
+ * one's preview and poster (the caller drops the old one without releasing
+ * it). Null when it's already that.
+ */
+export function withGrade(m: PickedMedia, grade: CompiledGrade | null): PickedMedia | null {
+  if (!m.video) return null;
+  const next = grade && !grade.identity ? grade : null;
+  if ((m.video.grade ?? null) === next) return null;
+  return { ...m, video: { ...m.video, grade: next } };
+}
+
 /** Seconds a picked clip will run once trimmed. */
 export function pickedSeconds(m: PickedMedia | null | undefined): number | null {
   const v = m?.video;
@@ -207,6 +221,30 @@ export async function uploadPicked(m: PickedMedia, userId: string, onProgress?: 
   return { media_path: up.path, media_thumb_path: thumbPath, media_type: m.kind, media_width: m.width, media_height: m.height };
 }
 
+/** A JPEG with a filter on it (a filtered clip's poster); null when it can't be made here. */
+async function gradedJpeg(b: Blob, grade: CompiledGrade): Promise<Blob | null> {
+  if (typeof document === "undefined") return null;
+  const url = URL.createObjectURL(b);
+  try {
+    const img = await loadImageEl(url);
+    if (!img) return null;
+    const c = document.createElement("canvas");
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    c.getContext("2d")?.drawImage(img, 0, 0);
+    const { gradeCanvasInPlace } = await import("@/lib/media-grade-gl");
+    gradeCanvasInPlace(c, grade);
+    const out = await new Promise<Blob | null>((res) => c.toBlob(res, "image/jpeg", 0.88));
+    c.width = 0;
+    c.height = 0;
+    return out;
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 /** One send per picked clip: trying again carries on from what's done (cut, uploaded, checked). */
 const clipSends = new WeakMap<PickedMedia, { userId: string; stem: string; send: VideoSend; poster: Promise<string | null> | null }>();
 
@@ -221,13 +259,16 @@ async function uploadVideo(m: PickedMedia, userId: string, onProgress?: (pct: nu
   let entry = clipSends.get(m);
   if (!entry || entry.userId !== userId) {
     const stem = `${userId}/${Date.now()}-${crypto.randomUUID()}`;
-    entry = { userId, stem, send: createVideoSend({ file: m.file, info: v.info, canEncode: v.canEncode, trim: v.trim, context: v.context, bucket: COMMUNITY_BUCKET, userId, stem, muted: v.muted }), poster: null };
+    entry = { userId, stem, send: createVideoSend({ file: m.file, info: v.info, canEncode: v.canEncode, trim: v.trim, context: v.context, bucket: COMMUNITY_BUCKET, userId, stem, muted: v.muted, grade: v.grade ?? null }), poster: null };
     clipSends.set(m, entry);
   }
   const e = entry;
   // a missing poster only costs feed speed: never fails the post
   if (!e.poster && m.thumb) {
-    e.poster = uploadLiftFileToStorage({ file: new File([m.thumb], "poster.jpg", { type: "image/jpeg" }), userId, bucket: COMMUNITY_BUCKET, path: `${e.stem}-poster.jpg` }).then((r) => r.path, () => {
+    const thumb = m.thumb;
+    // a filtered clip's poster carries the filter too (what the feed shows before it plays)
+    const posterFile = v.grade ? gradedJpeg(thumb, v.grade).then((b) => b ?? thumb) : Promise.resolve(thumb);
+    e.poster = posterFile.then((b) => uploadLiftFileToStorage({ file: new File([b], "poster.jpg", { type: "image/jpeg" }), userId, bucket: COMMUNITY_BUCKET, path: `${e.stem}-poster.jpg` })).then((r) => r.path, () => {
       e.poster = null;
       return null;
     });

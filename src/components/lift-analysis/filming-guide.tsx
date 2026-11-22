@@ -140,9 +140,44 @@ const LINES: { icon: typeof Camera; text: (lift: GuideLift) => string }[] = [
   },
 ];
 
-export function FilmingGuide({ lift }: { lift: GuideLift }) {
+/** For technique: which view shows what (the body read can't see what the camera doesn't). */
+const TECHNIQUE_LINES: { icon: typeof Camera; text: (lift: GuideLift) => string }[] = [
+  {
+    icon: Smartphone,
+    text: (lift) =>
+      lift === "bench"
+        ? "Side-on at bench height shows the elbow, the forearm and where the bar touches. One side-on video gives the bar's speed and the angles together."
+        : "Side-on at hip height shows the knee, hip, torso and shin angles. One side-on video gives the bar's speed and the angles together.",
+  },
+  {
+    icon: Camera,
+    text: (lift) =>
+      lift === "bench"
+        ? "Your whole upper body and the bar in the frame the whole set."
+        : "Your whole body, head to feet, in the frame the whole set.",
+  },
+  {
+    icon: Ruler,
+    text: () =>
+      "From the front or behind (at hip height) shows side-to-side shifts instead. A single video can't measure both sides in 3D.",
+  },
+  {
+    icon: Lightbulb,
+    text: () =>
+      "Fitted clothes that stand out from the background help it find the joints. Baggy clothes, a rack upright or someone in front hides them.",
+  },
+];
+
+export function FilmingGuide({
+  lift,
+  mode = "velocity",
+}: {
+  lift: GuideLift;
+  mode?: "velocity" | "technique";
+}) {
+  const lines = mode === "technique" ? TECHNIQUE_LINES : LINES;
   return (
-    <div data-filming-guide={lift}>
+    <div data-filming-guide={lift} data-filming-mode={mode}>
       <div className="flex items-end justify-center gap-6 rounded-2xl bg-muted/50 px-3 py-4">
         <div className="flex flex-col items-center gap-1">
           <PhoneView lift={lift} />
@@ -154,7 +189,7 @@ export function FilmingGuide({ lift }: { lift: GuideLift }) {
         </div>
       </div>
       <ul className="mt-3 space-y-2.5">
-        {LINES.map(({ icon: Icon, text }, i) => (
+        {lines.map(({ icon: Icon, text }, i) => (
           <li key={i} className="flex gap-3 text-sm leading-snug">
             <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             <span>{text(lift)}</span>

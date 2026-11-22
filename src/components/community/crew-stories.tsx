@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronRight, Eye, Heart, Play, Plus, Send, Sticker as StickerIcon, Trophy, VolumeX, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
+import { ClipFrameBox } from "@/components/community/clip-frame-box";
+import { clipFrame, type ClipFrame } from "@/lib/photo-frame";
 import { PREVIEW_ONLY_MESSAGE, canShareToStory, crewStories, isPulsePost, myStory, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, storyFrameKind, storyTarget, storyWords, workoutHeadline, type CommunityAuthor, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
 import { useCommunityProfile, useFullMediaUrl, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { WIN_STYLE } from "@/components/community/pulse-style";
@@ -25,6 +27,9 @@ import { feedback } from "@/lib/feedback";
 import { MentionText } from "@/components/community/mentions";
 import { noteAutoplayRefused } from "@/lib/autoplay-notice";
 import { startDecodedClip, type DecodedClip } from "@/lib/decoded-clip";
+import { StoryHostContext, StoryRing, type StoryHost } from "@/components/community/story-ring";
+import { groupRing, storyGroupFor, storyRings } from "@/lib/story-ring";
+import { markStorySeen, useSeenStories, useStoryClock } from "@/lib/story-seen";
 
 /** How long one moment shows before the next. */
 const FRAME_MS = 5000;
@@ -70,15 +75,17 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson
    */
   rankings?: { label: string; onOpen: () => void };
 }) {
-  const [seenNow, setSeenNow] = useState<Set<string>>(() => new Set());
+  // what's been watched since the feed loaded (and your own, on this phone): the same store every ring reads
+  const seenNow = useSeenStories();
   const { data: follows } = useFollowState();
   const groups = useMemo(() => {
     const g = crewStories(posts, Date.now(), new Set(follows?.following ?? []));
-    // what's been watched since the feed loaded counts too
     return g.map((x) => ({ ...x, unseen: x.items.some((p) => !p.seen && !seenNow.has(p.id)) }));
   }, [posts, seenNow, follows]);
   // yours: the stories you shared in the last day, with who saw it
   const mine = useMemo(() => myStory(posts), [posts]);
+  // your own ring: the brand colour until you've watched all of it yourself (on this phone), then grey
+  const mineRing = mine ? (mine.items.some((p) => !seenNow.has(p.id)) ? "unseen" : "seen") : "none";
   const [open, setOpen] = useState<number | null>(null);
   // the order is fixed while watching (rings change as you go)
   const frozen = useRef<StoryGroup<CommunityPost>[]>([]);
@@ -104,12 +111,11 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson
             return (
               <div className="relative flex w-[64px] shrink-0 flex-col items-center gap-1" data-story-mine={mine ? "" : "empty"}>
                 {/* your story plays from the picture; with nothing in it yet, the picture adds one */}
-                <button type="button" onClick={mine ? () => watch(-1) : begin} className="active:scale-95" aria-label={mine ? `Your story${mine.prs ? `, ${prTag(mine.prs)}` : ""}` : "Add to your story"}>
-                  <span className={cn("relative grid h-[64px] w-[64px] place-items-center rounded-full p-[2.5px]", mine ? "bg-[conic-gradient(from_200deg,#ef3340,#f59e0b,#ef3340)]" : "bg-transparent")}>
-                    <span className="grid h-full w-full place-items-center rounded-full bg-background p-[2px]">
-                      <UserAvatar src={who?.avatar_url ?? null} name={who?.name ?? "You"} size={54} expandable={false} />
-                    </span>
-                  </span>
+                <button type="button" onClick={mine ? () => watch(-1) : begin} className="grid h-[64px] w-[64px] place-items-center active:scale-95" aria-label={mine ? `Your story${mine.prs ? `, ${prTag(mine.prs)}` : ""}` : "Add to your story"}>
+                  {/* nothing up: just your photo with the + (no ring); a story: its ring, grey once you've watched it */}
+                  <StoryRing state={mineRing} size={54}>
+                    <UserAvatar src={who?.avatar_url ?? null} name={who?.name ?? "You"} size={54} expandable={false} />
+                  </StoryRing>
                 </button>
                 <button
                   type="button"
@@ -126,10 +132,10 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson
           })
         ) : mine && (
           <button type="button" onClick={() => watch(-1)} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={`Your story${mine.prs ? `, ${prTag(mine.prs)}` : ""}`} data-story-mine>
-            <span className="relative grid h-[64px] w-[64px] place-items-center rounded-full bg-[conic-gradient(from_200deg,#ef3340,#f59e0b,#ef3340)] p-[2.5px]">
-              <span className="grid h-full w-full place-items-center rounded-full bg-background p-[2px]">
+            <span className="relative grid h-[64px] w-[64px] place-items-center">
+              <StoryRing state={mineRing} size={54}>
                 <UserAvatar src={mine.author.avatar_url} name={mine.author.name} size={54} expandable={false} />
-              </span>
+              </StoryRing>
               <PrTag prs={mine.prs} />
             </span>
             <span className="w-full truncate text-center text-[11px] font-bold">Your story</span>
@@ -137,29 +143,32 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson
         )}
         {rankings && (
           <button type="button" onClick={rankings.onOpen} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={rankings.label} data-story-rankings>
-            {/* a thin neutral ring (never a story's ring), the trophy in the records' amber */}
-            <span className="relative grid h-[64px] w-[64px] place-items-center rounded-full bg-border p-[2.5px]">
-              <span className="grid h-full w-full place-items-center rounded-full bg-background p-[2px]">
-                <span className="grid h-full w-full place-items-center rounded-full bg-muted text-warning">
-                  <Trophy className="h-[26px] w-[26px]" strokeWidth={2} />
-                </span>
+            {/* no ring (a ring means a story), the trophy in the records' amber */}
+            <span className="relative grid h-[64px] w-[64px] place-items-center">
+              <span className="grid h-[54px] w-[54px] place-items-center rounded-full bg-muted text-warning">
+                <Trophy className="h-[26px] w-[26px]" strokeWidth={2} />
               </span>
             </span>
             <span className="w-full truncate text-center text-[11px] font-medium">{rankings.label}</span>
           </button>
         )}
-        {groups.map((g, i) => (
-          <button key={g.author.user_id} type="button" onClick={() => watch(i)} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={`${g.author.name}'s story${g.prs ? `, ${prTag(g.prs)}` : ""}${g.unseen ? ", new" : ""}`} data-story-unseen={g.unseen ? "" : undefined}>
-            {/* Close Friends: green ring, as on Instagram */}
-            <span data-story-close-friends={g.unseen && g.closeFriends ? "" : undefined} className={cn("relative grid h-[64px] w-[64px] place-items-center rounded-full p-[2.5px]", g.unseen ? (g.closeFriends ? "bg-emerald-500" : "bg-[conic-gradient(from_200deg,#ef3340,#f59e0b,#ef3340)]") : "bg-border")}>
-              <span className="grid h-full w-full place-items-center rounded-full bg-background p-[2px]">
-                <UserAvatar src={g.author.avatar_url} name={g.author.name} size={54} expandable={false} />
+        {groups.map((g, i) => {
+          // the same rule as every other photo (story-ring.ts): grey the moment it's all watched
+          const ring = groupRing(g.items, seenNow);
+          const fresh = ring !== "seen";
+          return (
+            <button key={g.author.user_id} type="button" onClick={() => watch(i)} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={`${g.author.name}'s story${g.prs ? `, ${prTag(g.prs)}` : ""}${fresh ? ", new" : ""}`} data-story-unseen={fresh ? "" : undefined}>
+              {/* Close Friends: green ring, as on Instagram */}
+              <span data-story-close-friends={ring === "close_friends" ? "" : undefined} className="relative grid h-[64px] w-[64px] place-items-center">
+                <StoryRing state={ring} size={54}>
+                  <UserAvatar src={g.author.avatar_url} name={g.author.name} size={54} expandable={false} />
+                </StoryRing>
+                <PrTag prs={g.prs} />
               </span>
-              <PrTag prs={g.prs} />
-            </span>
-            <span className={cn("w-full truncate text-center text-[11px]", g.unseen ? "font-bold" : "font-medium text-muted-foreground")}>{g.author.name.split(" ")[0]}</span>
-          </button>
-        ))}
+              <span className={cn("w-full truncate text-center text-[11px]", fresh ? "font-bold" : "font-medium text-muted-foreground")}>{g.author.name.split(" ")[0]}</span>
+            </button>
+          );
+        })}
       </div>
       {open != null && (
         <StoryViewer
@@ -168,7 +177,7 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson
           start={open}
           unit={unit}
           viewerIsStaff={viewerIsStaff}
-          onSeen={(id) => setSeenNow((s) => (s.has(id) ? s : new Set(s).add(id)))}
+          onSeen={() => undefined}
           onClose={() => setOpen(null)}
           onOpenPost={(id) => {
             setOpen(null);
@@ -185,6 +194,115 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson
         />
       )}
     </>
+  );
+}
+
+/**
+ * Story rings for every photo under it, and a person's story played from
+ * their photo (Nov 22 2026): the rings come from the same last day of
+ * stories the rail reads (`posts`), watched moments from the shared store,
+ * so a ring is never decoration and turns grey, or goes, the moment that's
+ * true. A tap on a ringed photo plays that one person's story, then closes.
+ */
+export function StoryHostProvider({
+  posts,
+  unit,
+  viewerIsStaff,
+  onOpenPost,
+  onJumpTo,
+  onOpenPerson,
+  enabled = true,
+  children,
+}: {
+  posts: CommunityPost[];
+  unit: "kg" | "lb";
+  viewerIsStaff: boolean;
+  onOpenPost: (id: string) => void;
+  onJumpTo?: (id: string) => void;
+  onOpenPerson?: (a: CommunityAuthor) => void;
+  /** Off: no rings and nothing plays (e.g. a view-only look at the crew). */
+  enabled?: boolean;
+  children: ReactNode;
+}) {
+  const seen = useSeenStories();
+  const now = useStoryClock();
+  const rings = useMemo(() => (enabled ? storyRings(posts, { seen, now }) : new Map<string, never>()), [enabled, posts, seen, now]);
+  // what's playing: a person's group, and where its live copies come from (the rail's posts, or the caller's)
+  const [playing, setPlaying] = useState<{ groups: StoryGroup<CommunityPost>[]; posts: CommunityPost[] | null } | null>(null);
+  const postsRef = useRef(posts);
+  postsRef.current = posts;
+  const host = useMemo<StoryHost>(
+    () => ({
+      ring: (id) => rings.get(id) ?? "none",
+      open: (id) => {
+        if (!enabled) return false;
+        const g = storyGroupFor(postsRef.current, id);
+        if (!g) return false;
+        setPlaying({ groups: [g], posts: null });
+        return true;
+      },
+      play: (g, extra) => enabled && setPlaying({ groups: [g], posts: extra }),
+    }),
+    [rings, enabled],
+  );
+  return (
+    <StoryHostContext.Provider value={host}>
+      {children}
+      {playing && (
+        <PersonStory
+          group={playing.groups[0]}
+          posts={playing.posts ?? posts}
+          unit={unit}
+          viewerIsStaff={viewerIsStaff}
+          onClose={() => setPlaying(null)}
+          onOpenPost={onOpenPost}
+          onJumpTo={onJumpTo}
+          onOpenPerson={onOpenPerson}
+        />
+      )}
+    </StoryHostContext.Provider>
+  );
+}
+
+/** One person's story played from their photo (the Crew's host and the app's own, global-story-host.tsx). */
+export function PersonStory({
+  group,
+  posts,
+  unit,
+  viewerIsStaff,
+  onClose,
+  onOpenPost,
+  onJumpTo,
+  onOpenPerson,
+}: {
+  group: StoryGroup<CommunityPost>;
+  posts: CommunityPost[];
+  unit: "kg" | "lb";
+  viewerIsStaff: boolean;
+  onClose: () => void;
+  onOpenPost: (id: string) => void;
+  onJumpTo?: (id: string) => void;
+  onOpenPerson?: (a: CommunityAuthor) => void;
+}) {
+  return (
+    <StoryViewer
+      groups={[group]}
+      posts={posts}
+      start={0}
+      unit={unit}
+      viewerIsStaff={viewerIsStaff}
+      onSeen={() => undefined}
+      onClose={onClose}
+      onOpenPost={(id) => {
+        onClose();
+        onOpenPost(id);
+      }}
+      onJumpTo={(id) => {
+        onClose();
+        (onJumpTo ?? onOpenPost)(id);
+      }}
+      onOpenPerson={onOpenPerson}
+    />
   );
 }
 
@@ -361,6 +479,8 @@ function StoryViewer({
     setProgress(0);
     if (!post) return;
     watched.current.add(post.id);
+    // every ring for this person (the rail, their profile, their posts, comments, chats) catches up at once
+    markStorySeen(post.id, !!post.is_mine);
     onSeen(post.id);
     if (!isImpersonating) markPostViewed(post.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -711,7 +831,7 @@ let storySoundBlocked = false;
 /** A story plays up to a minute of a clip (Instagram's story length); the post itself can run longer. */
 const STORY_CLIP_MAX_SECONDS = videoLimit("story");
 
-function StoryClip({ path, poster, paused, onProgress, onEnd, onFail }: { path: string; poster: string | null } & ClipControl) {
+function StoryClip({ path, poster, frame = null, shape = null, paused, onProgress, onEnd, onFail }: { path: string; poster: string | null; frame?: ClipFrame | null; shape?: number | null } & ClipControl) {
   const { data: url, isError } = useFullMediaUrl(path, true);
   const vid = useRef<HTMLVideoElement | null>(null);
   const [muted, setMuted] = useState(storySoundBlocked);
@@ -818,22 +938,43 @@ function StoryClip({ path, poster, paused, onProgress, onEnd, onFail }: { path: 
     v.setAttribute("webkit-playsinline", "");
   }, []);
 
-  return (
-    <div className="relative flex flex-1 items-center justify-center bg-black" data-story-frame="clip">
-      {poster && !started && <img src={poster} alt="" className="absolute max-h-full w-full object-contain" draggable={false} />}
+  // framed in the studio (filling the story): its 9:16 frame, exactly the part framed; else the clip whole over a blur of itself
+  const media = (fit: string, style?: React.CSSProperties) => (
+    <>
+      {poster && !started && !frame && <img src={poster} alt="" className="absolute max-h-full w-full object-contain" draggable={false} />}
       {url && (
         <video
           ref={attach}
           src={url}
           playsInline
           preload="auto"
-          className={cn("max-h-full w-full object-contain", (!started || lowPower) && "opacity-0", lowPower && "absolute")}
+          style={style}
+          className={cn(fit, (!started || lowPower) && "opacity-0", lowPower && "absolute")}
           onPlaying={() => setStarted(true)}
           onEnded={() => onEnd()}
           onError={() => failRef.current()}
         />
       )}
-      {lowPower && <canvas ref={canvasRef} className={cn("max-h-full w-full object-contain", !started && "opacity-0")} data-decoded-clip />}
+      {lowPower && <canvas ref={canvasRef} style={style} className={cn(fit, !started && "opacity-0")} data-decoded-clip />}
+    </>
+  );
+  return (
+    <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black" data-story-frame="clip" data-story-clip-fit={frame ? "fill" : "whole"}>
+      {frame ? (
+        <ClipFrameBox
+          frame={frame}
+          media={shape}
+          fit="contain"
+          poster={poster && !started ? <img src={poster} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} /> : null}
+        >
+          {(style) => media("max-w-none object-fill", style)}
+        </ClipFrameBox>
+      ) : (
+        <>
+          {poster && <img src={poster} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-45 blur-2xl" draggable={false} data-story-backdrop />}
+          {media("relative max-h-full w-full object-contain")}
+        </>
+      )}
       {(muted || lowPower) && started && (
         <button
           type="button"
@@ -1033,7 +1174,7 @@ function StoryFrame({ post, unit, clip }: { post: CommunityPost; unit: "kg" | "l
     );
   }
   if (kind === "media" && post.media_type === "video" && clip && post.media_path) {
-    return <StoryClip path={post.media_path} poster={thumb} {...clip} />;
+    return <StoryClip path={post.media_path} poster={thumb} frame={clipFrame(post.media_focus)} shape={post.media_width && post.media_height ? post.media_width / post.media_height : null} {...clip} />;
   }
   if (kind === "media") {
     const src = full ?? thumb ?? (post.media_type ? null : post.gif_url ?? null);
@@ -1382,10 +1523,10 @@ function StoryEndCard({
                 const g = groups[j];
                 return (
                   <button key={g.author.user_id} type="button" onClick={() => onWatch(j)} className="flex w-[62px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={`Watch ${g.author.name}'s story`}>
-                    <span className="grid h-[60px] w-[60px] place-items-center rounded-full bg-[conic-gradient(from_200deg,#ef3340,#f59e0b,#ef3340)] p-[2.5px]">
-                      <span className="grid h-full w-full place-items-center rounded-full bg-zinc-950 p-[2px]">
+                    <span className="grid h-[60px] w-[60px] place-items-center">
+                      <StoryRing state="unseen" size={50}>
                         <UserAvatar src={g.author.avatar_url} name={g.author.name} size={50} expandable={false} />
-                      </span>
+                      </StoryRing>
                     </span>
                     <span className="w-full truncate text-center text-[11px] font-bold">{g.author.name.split(" ")[0]}</span>
                   </button>

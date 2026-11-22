@@ -36,7 +36,7 @@ describe("Crew video: pick it or film it, it's up while you write the caption", 
   it("uploads only the trimmed part, cut and shrunk on the phone, resumably, then checked by the server", () => {
     const media = read("src/lib/community-media.ts");
     expect(media).toContain("if (m.kind === \"video\") return uploadVideo(m, userId, onProgress, signal);");
-    expect(media).toContain("createVideoSend({ file: m.file, info: v.info, canEncode: v.canEncode, trim: v.trim, context: v.context, bucket: COMMUNITY_BUCKET, userId, stem, muted: v.muted })");
+    expect(media).toContain("createVideoSend({ file: m.file, info: v.info, canEncode: v.canEncode, trim: v.trim, context: v.context, bucket: COMMUNITY_BUCKET, userId, stem, muted: v.muted, grade: v.grade ?? null })");
     // one send per picked clip: a retry carries on from what's done
     expect(media).toContain("const clipSends = new WeakMap<PickedMedia,");
     const pipe = read("src/lib/video-edit/pipeline.ts");
@@ -82,7 +82,7 @@ describe("Crew video: pick it or film it, it's up while you write the caption", 
     expect(inline).toContain("prefers-reduced-motion: reduce");
     expect(read("src/components/community/post-card.tsx")).toContain('controls={shrunk ? "corner" : page ? "top" : "bottom"}');
     const stories = read("src/components/community/crew-stories.tsx");
-    expect(stories).toContain("return <StoryClip path={post.media_path} poster={thumb} {...clip} />;");
+    expect(stories).toContain("return <StoryClip path={post.media_path} poster={thumb} frame={clipFrame(post.media_focus)}");
     expect(stories).toContain("progressRef.current(Math.min(1, v.currentTime / span));");
     expect(stories).toContain('const STORY_CLIP_MAX_SECONDS = videoLimit("story");');
     expect(stories).toContain("onEnded={() => onEnd()}");

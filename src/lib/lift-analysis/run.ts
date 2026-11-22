@@ -26,6 +26,7 @@ import {
   calibrationTimes,
   keyFromMarker,
   plateAtTap,
+  shapeAtMarker,
   proposePlate,
   supportFor,
   type Proposal,
@@ -40,7 +41,10 @@ import { footageIssues, meanBrightness, type FootageIssue } from "@/lib/lift-ana
 import { rgbaToGray, rgbaToGrayHalf, type Frame, type Gray } from "@/lib/lift-analysis/image";
 import { KeyedPass, mergePasses, type KeyedPoint, type TrackKey } from "@/lib/lift-analysis/keyed";
 import { cameraShift } from "@/lib/lift-analysis/motion";
-import { outerRim, rimSize, type OuterRim } from "@/lib/lift-analysis/rim-outer";
+import { frameSightings, type Sighting } from "@/lib/lift-analysis/find";
+import { outerRim, plateSizedRims, rimSize, type OuterRim } from "@/lib/lift-analysis/rim-outer";
+import { applyRecovered, gapsToRecover, recoverGap } from "@/lib/lift-analysis/recover";
+import type { FollowPoint } from "@/lib/lift-analysis/follow";
 import { loadMediabunny } from "@/lib/video-edit/probe";
 
 /** The long side frames are analysed at: the plate's rim spans ~40–60 px across, plenty for sub-pixel fits. */
@@ -113,6 +117,8 @@ export type RunInput = {
   dirHint?: "lower_first" | "lift_first";
   /** Which lift (the exercise's name), for checking a read made on its own (auto-check.ts). */
   lift?: GuideLift;
+  /** Rises the athlete said aren't reps (kept when a read is done again from its keys). */
+  exclude?: number[];
   signal?: AbortSignal;
   onProgress?: (p: RunProgress) => void;
 };
@@ -170,6 +176,30 @@ function shownProposal(
     edgeShare: p.edgeShare,
     footage,
   };
+}
+
+/**
+ * The last clip's sampled frames and the circles found in them, kept for the
+ * next read of the same clip (Confirm → Analyze, Fix tracking, Start over), so
+ * it never decodes and searches them twice: the same frames give the same
+ * circles. One clip at a time (a few MB at the working size).
+ */
+let lastDetected: { key: string; samples: Frame[]; seen: Sighting[][] } | null = null;
+const blobIds = new WeakMap<Blob, number>();
+let nextBlobId = 1;
+function sourceKey(src: Blob | string): string {
+  if (typeof src !== "string") {
+    let id = blobIds.get(src);
+    if (!id) blobIds.set(src, (id = nextBlobId++));
+    return `blob:${id}`;
+  }
+  // a signed link's token changes each time it's signed; the object is its path
+  try {
+    const u = new URL(src, typeof location !== "undefined" ? location.href : "http://x");
+    return u.origin + u.pathname;
+  } catch {
+    return src;
+  }
 }
 
 export async function analyzeVideo(input: RunInput): Promise<RunResult> {
@@ -242,23 +272,33 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
       poolSize: 1,
     });
 
-    // ── detect: four frames a second ──
+    // ── detect: four frames a second, each searched for circles as it's decoded ──
     report("finding", 0);
     const span = end - start;
     const n = sampleCount(span);
     const sampleTimes = Array.from({ length: n }, (_, i) => start + (span * (i + 0.5)) / n);
-    const samples: Frame[] = [];
-    let k = 0;
-    for await (const wc of sink.canvasesAtTimestamps(sampleTimes)) {
+    const cacheKey = `${sourceKey(input.source)}|${start}|${end}|${w}x${h}|${scale}|${n}`;
+    const cached = lastDetected?.key === cacheKey ? lastDetected : null;
+    const samples: Frame[] = cached ? cached.samples.slice() : [];
+    const seen: Sighting[][] = cached ? cached.seen : [];
+    if (!cached) {
+      let k = 0;
+      for await (const wc of sink.canvasesAtTimestamps(sampleTimes)) {
+        check();
+        k++;
+        if (!wc) continue;
+        const f = toFrame(wc);
+        if (f) {
+          samples.push(f);
+          await yieldToPage();
+          seen.push(frameSightings(f, samples.length - 1));
+        }
+        report("finding", (0.92 * k) / sampleTimes.length);
+        await yieldToPage();
+      }
       check();
-      k++;
-      if (!wc) continue;
-      const f = toFrame(wc);
-      if (f) samples.push(f);
-      report("finding", (0.8 * k) / sampleTimes.length);
-      await yieldToPage();
+      lastDetected = { key: cacheKey, samples: samples.slice(), seen };
     }
-    check();
     const frameNear = async (t: number): Promise<Frame | null> => {
       const wc = await sink.getCanvas(Math.max(first, t));
       return wc ? toFrame(wc) : null;
@@ -267,7 +307,7 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
     let keys: TrackKey[] = [];
     let proposal: Proposal | null = null;
     if (seed.kind === "auto" || seed.kind === "proposal" || input.detectOnly) {
-      proposal = proposePlate(samples);
+      proposal = proposePlate(samples, seen);
       const footage = footageIssues({
         fps: clip.fps,
         frame: { width: dw, height: dh, w, h },
@@ -308,6 +348,14 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
       ];
     } else {
       keys = seed.keys.map((s) => fromShownKey(s, w, h));
+      // a ring kept from an earlier read is a circle; the plate off side-on is an ellipse: its shape
+      // learned on the key's own frame (detect.ts shapeAtMarker), so the tracker expects what it sees
+      const k0 = keys[0];
+      if (k0 && k0.source !== "auto" && Math.abs(k0.a / k0.b - 1) < 0.03) {
+        const f = await frameNear(k0.t);
+        const shape = f ? shapeAtMarker(f, k0) : null;
+        if (shape) keys[0] = { ...k0, ...shape };
+      }
     }
     const main = keys[0];
     if (!main) return fail("no_plate");
@@ -327,7 +375,7 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
     const support =
       proposal && proposal.key === main
         ? { backbone: proposal.backbone, decoys: proposal.decoys }
-        : supportFor(main, samples);
+        : supportFor(main, samples, seen);
     const R = Math.sqrt(main.a * main.b);
     // every key's own picture of the plate (each follower matches against all of them)
     const keyViews: { frame: Frame; x: number; y: number; r: number }[] = [];
@@ -407,7 +455,36 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
       check();
       edge = from;
     }
-    const merged = mergePasses(fwd.points(), bwd.points(), R);
+    const passes = mergePasses(fwd.points(), bwd.points(), R);
+    check();
+
+    // ── recover: each stretch lost with the plate seen either side, read again from both ends ──
+    // (recover.ts: only those frames are decoded again; nothing is drawn across what isn't followed)
+    const gaps = gapsToRecover(passes.points);
+    const got: FollowPoint[] = [];
+    if (gaps.length) report("recovering", 0);
+    for (let g = 0; g < gaps.length; g++) {
+      check();
+      const gap = gaps[g];
+      const span: Frame[] = [];
+      for await (const wc of sink.canvases(
+        Math.max(start, gap.before.t - 0.02),
+        gap.after.t + 0.05,
+      )) {
+        const f = toFrame(wc);
+        if (f && f.t >= gap.before.t - 1e-4 && f.t <= gap.after.t + 1e-4) span.push(f);
+        if (now() - slice > 10) {
+          await yieldToPage();
+          slice = now();
+        }
+      }
+      span.sort((a, b) => a.t - b.t);
+      got.push(...recoverGap(span, gap, { a: main.a, b: main.b }, setup));
+      report("recovering", (g + 1) / gaps.length);
+      await yieldToPage();
+    }
+    const rec = applyRecovered(passes.points, got);
+    const merged = { points: rec.points, conflicts: passes.conflicts };
     check();
 
     // ── measure: the plate's outer edge at full resolution, in the still frames ──
@@ -431,13 +508,13 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
           lo: 0.75,
           hi: 1.3,
         });
-        if (rim && Math.abs(rim.r / (R * k2) - 1) <= 0.12)
-          rims.push({ ...rim, scale: 1 / k2, y: (rim.y + roi.y0) / k2 });
+        if (rim) rims.push({ ...rim, scale: 1 / k2, y: (rim.y + roi.y0) / k2 });
         report("measuring", j / times.length);
         await yieldToPage();
       }
     }
-    const size = rimSize(rims);
+    // the plate's own rim, even when the ring the track started from was another size (rim-outer.ts)
+    const size = rimSize(plateSizedRims(rims, R * k2));
 
     // ── read ──
     report("reading", 0);
@@ -451,6 +528,8 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
       size,
       keys,
       conflicts: merged.conflicts,
+      recovered: rec.recovered,
+      exclude: input.exclude,
     });
     report("reading", 1);
     if (rimNeverMeasured(analysis, main.source === "auto" ? "auto" : "tap"))

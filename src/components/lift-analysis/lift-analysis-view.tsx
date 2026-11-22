@@ -47,7 +47,14 @@ import {
   BarPathPlayer,
   type Marker,
   type PickSuggestion,
+  type PlayerApi,
 } from "@/components/lift-analysis/bar-path-player";
+import {
+  TechniquePanel,
+  useNoteDraft,
+  useTechnique,
+} from "@/components/lift-analysis/technique-panel";
+import { useFilmNotes } from "@/lib/lift-analysis/film-notes";
 import { FilmingGuide } from "@/components/lift-analysis/filming-guide";
 import {
   LoadVelocityChart,
@@ -104,6 +111,7 @@ import { oneRing } from "@/lib/lift-analysis/suggestions";
 import { rereadPlan } from "@/lib/lift-analysis/reread";
 import { queueLiftReread } from "@/lib/lift-analysis/auto";
 import { ENGINE_VERSION } from "@/lib/lift-analysis/analyze";
+import { canEditReps, toggleRep } from "@/lib/lift-analysis/reps-edit";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -118,14 +126,21 @@ type Props = {
   setLabel?: string;
   /** Start finding the bar straight away when there's no analysis yet. */
   startOnOpen?: boolean;
+  /** Open on Technique at this moment (a film note from the chat), with that note picked. */
+  openAt?: { t: number; noteId?: string | null; layers?: Record<string, boolean> } | null;
 };
 
+type Mode = "velocity" | "technique";
+
+/** Each stage as it really is (progress.ts): what's happening, never a timer. */
 const STAGE_WORDS: Record<RunProgress["stage"], string> = {
-  opening: "Opening the video",
-  finding: "Finding the bar",
-  tracking: "Following the bar through every frame",
-  measuring: "Measuring the plate",
-  reading: "Reading the reps",
+  opening: "Preparing video",
+  finding: "Identifying the barbell",
+  tracking: "Tracking repetitions",
+  recovering: "Recovering frames where the bar was lost",
+  // the plate's outer edge read in the still frames: its shape is how far the camera is turned or tilted
+  measuring: "Adapting to the camera angle",
+  reading: "Calculating velocity",
 };
 
 /** The plates a bar can carry, by diameter. */
@@ -164,6 +179,7 @@ function Body({
   exerciseName,
   setLabel,
   startOnOpen,
+  openAt,
 }: Props) {
   const { data: storedMap, isLoading } = useSetVideoAnalyses([setVideoId]);
   const stored = storedMap?.[setVideoId] ?? null;
@@ -193,6 +209,25 @@ function Body({
   const analysis = fresh ?? saved?.result ?? null;
   const dirHint = repDirection(exerciseName) ?? undefined;
   const lift = guideLift(exerciseName);
+  // Velocity (the bar) or Technique (the body, overlays, film notes): the bar's read never waits on the body's
+  const [mode, setMode] = useState<Mode>(openAt ? "technique" : "velocity");
+  const api = useRef<PlayerApi | null>(null);
+  const tech = useTechnique({
+    active: mode === "technique",
+    src,
+    analysis,
+    lift,
+    initialLayers: openAt?.layers as never,
+  });
+  const { data: notes = [] } = useFilmNotes(setVideoId);
+  const noteDraft = useNoteDraft(api);
+  const [focusNote, setFocusNote] = useState<string | null>(openAt?.noteId ?? null);
+  const [seekTo, setSeekTo] = useState<{ t: number; n: number } | null>(null);
+  // a rep picked and a moment in it, in one render: the player shows the rep, then lands on the moment
+  const jumpTo = (t: number, rep: number | null) => {
+    if (rep != null) setSelected(rep);
+    setSeekTo((s) => ({ t, n: (s?.n ?? 0) + 1 }));
+  };
 
   useEffect(() => () => ctrl.current?.abort(), []);
   // each step (and the guide) starts at its own top
@@ -296,6 +331,8 @@ function Body({
       corrections: extra,
       plate: plateFor(knownPlate),
       dirHint,
+      // read again from the same keys: what the athlete took out of the reps stays out
+      exclude: seed.kind === "keys" ? analysis?.exclude : undefined,
       signal: c.signal,
       onProgress: setProgress,
     });
@@ -335,6 +372,11 @@ function Body({
     if (saved) {
       started.current = true;
       setStep("results");
+      return;
+    }
+    // opened on a film note: the note and the body, never the bar's confirm step
+    if (openAt) {
+      started.current = true;
       return;
     }
     if (!src) return;
@@ -436,6 +478,28 @@ function Body({
     );
   };
 
+  /** "Not a rep" or put one back: the read done again from its own track, here, in an instant. */
+  const editRep = async (conStart: number, out: boolean) => {
+    if (!analysis) return;
+    const next = toggleRep(analysis, conStart, out);
+    if (!next) return;
+    setFresh(next);
+    setSelected(null);
+    try {
+      await saveAnalysis(setVideoId, next);
+      toast.success(out ? "Taken out of the reps" : "Put back");
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : "Couldn't save that.");
+    }
+  };
+
+  /** An older read (no track kept): followed again from its own keys, so its reps can be edited. */
+  const readAgain = () => {
+    if (!analysis) return;
+    setCorrections([]);
+    reanalyzeWithFixes();
+  };
+
   const remove = async () => {
     try {
       await deleteAnalysis(setVideoId);
@@ -459,6 +523,12 @@ function Body({
       : { fa: analysis.plate.r / w, fb: analysis.plate.r / h };
   }, [analysis]);
   const lostStretches = analysis?.track?.lost ?? [];
+
+  // Technique is offered wherever the clip is just being watched (never over Find, Confirm or Fix)
+  const watching = step === "results" || step === "idle" || step === "failed";
+  const showModes = watching && !guide && !!src;
+  const techniqueOn = mode === "technique" && watching;
+  const shownNotes = useMemo(() => notes.filter((n) => !n.hidden_at), [notes]);
 
   const playerMarker =
     step === "confirm"
@@ -503,7 +573,11 @@ function Body({
           <div className="truncate text-[15px] font-semibold">{exerciseName}</div>
           <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             <span className="truncate">
-              {setLabel ? `${setLabel} · bar path & speed` : "Bar path & speed"}
+              {setLabel
+                ? `${setLabel} · ${mode === "technique" ? "technique" : "bar path & speed"}`
+                : mode === "technique"
+                  ? "Technique"
+                  : "Bar path & speed"}
             </span>
             <span
               className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10px] font-semibold text-muted-foreground"
@@ -513,7 +587,7 @@ function Body({
             </span>
           </div>
         </div>
-        {step === "results" && analysis && (
+        {step === "results" && analysis && mode === "velocity" && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -560,8 +634,14 @@ function Body({
             ? (marker?.t ?? candidates[0]?.t ?? null)
             : step === "fix"
               ? (lostStretches[0]?.start ?? analysis?.window.start ?? null)
-              : null
+              : (openAt?.t ?? null)
         }
+        technique={techniqueOn ? tech.scene : null}
+        notes={techniqueOn ? shownNotes : undefined}
+        focusNote={techniqueOn ? focusNote : null}
+        draw={techniqueOn ? noteDraft.draw : null}
+        apiRef={api}
+        seekTo={seekTo}
         className="h-[min(56dvh,520px)] shrink-0"
       />
 
@@ -569,16 +649,68 @@ function Body({
         ref={panel}
         className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3"
       >
+        {showModes && (
+          <div
+            className="mb-3 grid grid-cols-2 gap-1 rounded-full bg-secondary p-1"
+            role="tablist"
+            aria-label="Analysis"
+            data-analysis-modes
+          >
+            {(["velocity", "technique"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={mode === m}
+                onClick={() => {
+                  setMode(m);
+                  if (m === "velocity") noteDraft.end();
+                }}
+                className={cn(
+                  "h-9 rounded-full text-[14px] font-medium",
+                  mode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
+                )}
+                data-mode={m}
+              >
+                {m === "velocity" ? "Velocity" : "Technique"}
+              </button>
+            ))}
+          </div>
+        )}
         {guide ? (
           <section data-guide-panel>
-            <h3 className="text-[16px] font-semibold">How to film a set for bar speed</h3>
+            <h3 className="text-[16px] font-semibold">
+              {mode === "technique"
+                ? "How to film a set for technique"
+                : "How to film a set for bar speed"}
+            </h3>
             <div className="mt-3">
-              <FilmingGuide lift={lift} />
+              <FilmingGuide lift={lift} mode={mode} />
             </div>
             <Button variant="outline" className="mt-4 h-11 w-full" onClick={() => setGuide(false)}>
               Done
             </Button>
           </section>
+        ) : techniqueOn ? (
+          <TechniquePanel
+            tech={tech}
+            analysis={step === "results" ? analysis : null}
+            setVideoId={setVideoId}
+            src={src}
+            exerciseName={exerciseName}
+            selected={selected}
+            onSelectRep={setSelected}
+            onJump={jumpTo}
+            api={api}
+            notes={notes}
+            focusNote={focusNote}
+            onFocusNote={setFocusNote}
+            noteDraft={noteDraft}
+            onNeedBar={() => {
+              setMode("velocity");
+              void detect();
+            }}
+          />
         ) : running && shownProgress ? (
           <ProgressPanel
             progress={shownProgress}
@@ -652,6 +784,8 @@ function Body({
               onFix={startFix}
               onGuide={() => setGuide(true)}
               exerciseName={exerciseName}
+              onEditRep={editRep}
+              onReadAgain={readAgain}
             />
           </>
         ) : !isLoading ? (
@@ -687,7 +821,12 @@ function ProgressPanel({ progress, onCancel }: { progress: RunProgress; onCancel
   return (
     <div className="rounded-2xl border border-border p-4" data-lift-analysis-progress>
       <div className="flex items-center justify-between text-sm">
-        <span className="font-medium">{STAGE_WORDS[progress.stage]}…</span>
+        <span className="min-w-0 flex-1 font-medium">
+          {STAGE_WORDS[progress.stage]}…{" "}
+          <span className="tabular-nums text-muted-foreground">
+            {Math.round(100 * overallProgress(progress))}%
+          </span>
+        </span>
         {onCancel && (
           <button
             type="button"
@@ -956,6 +1095,8 @@ function Results({
   onFix,
   onGuide,
   exerciseName,
+  onEditRep,
+  onReadAgain,
 }: {
   exerciseName: string;
   analysis: LiftAnalysis;
@@ -969,6 +1110,10 @@ function Results({
   fresh: boolean;
   onFix: () => void;
   onGuide: () => void;
+  /** "Not a rep" / put it back (by the rep's concentric start). */
+  onEditRep: (conStart: number, out: boolean) => void;
+  /** Read it again from its keys (an older read that kept no track to edit). */
+  onReadAgain: () => void;
 }) {
   const calibrated = a.units === "mm";
   const headline = a.set.reps > 1 ? a.set.bestMcv : a.set.firstMcv;
@@ -1065,6 +1210,32 @@ function Results({
         </div>
       </section>
 
+      {/* the reps the athlete logged, against the lifts the video shows: said, never forced */}
+      {loggedSet?.actual_reps != null &&
+        loggedSet.actual_reps > 0 &&
+        a.set.completeReps !== loggedSet.actual_reps && (
+          <div className="rounded-xl bg-muted/50 p-3 text-sm" data-reps-mismatch>
+            <p>
+              You logged {loggedSet.actual_reps} rep{loggedSet.actual_reps === 1 ? "" : "s"}; the
+              video shows {a.set.completeReps} full lift{a.set.completeReps === 1 ? "" : "s"}.
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {canEditReps(a)
+                ? "If one isn't a rep (a setup pull, moving the bar after the set), pick it above and tap Not a rep."
+                : "Read it again to edit the reps."}
+            </p>
+            {!canEditReps(a) && (
+              <button
+                type="button"
+                className="mt-1.5 h-9 text-sm font-medium underline-offset-2 hover:underline"
+                onClick={onReadAgain}
+              >
+                Read it again
+              </button>
+            )}
+          </div>
+        )}
+
       {/* each rep */}
       <section className="rounded-2xl border border-border p-3">
         <div className="mb-1 flex items-baseline justify-between">
@@ -1080,7 +1251,34 @@ function Results({
             onSelect={(i) => onSelect(selected === i ? null : i)}
           />
         )}
-        {rep && <RepDetail analysis={a} index={repIdx} lift={guideLift(exerciseName)} />}
+        {rep && (
+          <RepDetail
+            analysis={a}
+            index={repIdx}
+            lift={guideLift(exerciseName)}
+            onNotARep={canEditReps(a) ? () => onEditRep(rep.con.start, true) : undefined}
+          />
+        )}
+        {(a.exclude?.length ?? 0) > 0 && (
+          <div
+            className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+            data-reps-excluded
+          >
+            <span>
+              {a.exclude!.length === 1 ? "1 rise" : `${a.exclude!.length} rises`} taken out
+            </span>
+            {a.exclude!.map((t) => (
+              <button
+                key={t}
+                type="button"
+                className="h-8 rounded-full bg-secondary px-3 font-medium text-foreground"
+                onClick={() => onEditRep(t, false)}
+              >
+                Put back the one at {t.toFixed(1)} s
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       {notes.length > 0 && (
@@ -1237,10 +1435,12 @@ function RepDetail({
   analysis: a,
   index,
   lift,
+  onNotARep,
 }: {
   analysis: LiftAnalysis;
   index: number;
   lift: ReturnType<typeof guideLift>;
+  onNotARep?: () => void;
 }) {
   const r = a.reps[index];
   const calibrated = a.units === "mm";
@@ -1251,12 +1451,20 @@ function RepDetail({
   const stickReadable = !!stick || (r.peak.tier !== "unavailable" && a.fps >= 50);
   return (
     <div className="mt-2 border-t border-border/60 pt-3" data-rep-detail={index + 1}>
-      <div className="mb-2 text-sm font-semibold">
-        Rep {index + 1}
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+        <span>Rep {index + 1}</span>
         {!r.complete && (
-          <span className="ml-2 text-xs font-normal text-muted-foreground">
-            didn't reach the top
-          </span>
+          <span className="text-xs font-normal text-muted-foreground">didn't reach the top</span>
+        )}
+        {onNotARep && (
+          <button
+            type="button"
+            className="ml-auto h-8 rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={onNotARep}
+            data-not-a-rep
+          >
+            Not a rep
+          </button>
         )}
       </div>
       {calibrated && <RepSpeedCurve analysis={a} rep={index} />}
@@ -1283,6 +1491,18 @@ function RepDetail({
           }
           testId="peak"
         />
+        {/* the propulsive phase: a heavy rep's whole press, so shown only when it says something the mean doesn't */}
+        {r.mpv.tier !== "unavailable" &&
+          r.mpv.v != null &&
+          r.mcv.v != null &&
+          Math.abs(r.mpv.v - r.mcv.v) >= 0.01 && (
+            <Stat
+              label="Mean propulsive velocity"
+              value={speed(r.mpv)}
+              sub="up to where the bar slows faster than gravity"
+              testId="mpv"
+            />
+          )}
         {lowerFirst && <Stat label={words.down} value={seconds(r.eccDur)} testId="ecc" />}
         {lowerFirst && r.pause.v != null && r.pause.tier !== "unavailable" && (
           <Stat
