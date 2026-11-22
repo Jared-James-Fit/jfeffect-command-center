@@ -465,7 +465,7 @@ export function shortDay(day: string): string {
   return `${MONTHS[Number(day.slice(5, 7)) - 1]} ${Number(day.slice(8, 10))}`;
 }
 
-const REASON_WORDS: Record<CoachReason, string> = {
+export const REASON_WORDS: Record<CoachReason, string> = {
   red_flag: "a warning sign",
   severe: "severe",
   stopped: "stopped a session",

@@ -27,7 +27,7 @@ import {
   MessageCircle, Megaphone, LayoutGrid, Phone, Sparkles, MessagesSquare,
   UserCheck, CreditCard, Ticket, Calendar,
   Layers, Briefcase, Archive, UserPlus, UserCog, Settings, AlertCircle,
-  FileSignature, ShoppingBag, Library, KeyRound, BarChart3, RefreshCw,
+  FileSignature, ShoppingBag, Tags, Library, KeyRound, BarChart3, RefreshCw,
   Link as LinkIcon, Trophy, ShieldCheck, UsersRound, Contact,
   ListChecks, FileText, PowerOff, Landmark, Wallet, BadgeCheck, Image as ImageIcon, Swords,
 } from "lucide-react";
@@ -192,6 +192,9 @@ const REGISTRY: Entry[] = [
   { to: "/admin/sales?tab=reports", label: "Money reports", icon: Landmark, group: "Sales", searchOnly: true,
     visibleTo: ["admin"],
     keywords: ["reports", "profit and loss", "p&l", "export", "csv", "pdf", "accountant", "receipts book"] },
+  { to: "/admin/sales?tab=coaching", label: "Coaching packages", icon: Tags, group: "Sales", searchOnly: true,
+    visibleTo: ["admin"],
+    keywords: ["pricing", "price", "packages", "coaching plus", "complete coaching", "nutrition coaching", "pricing card", "share card", "price list", "tiers"] },
   { to: "/admin/payment-links", label: "Products", icon: ShoppingBag, group: "Sales", searchOnly: true,
     visibleTo: ["admin", "sales"],
     keywords: ["products", "offers", "memberships", "coaching", "programs", "digital products", "merchandise", "checkout links", "payment links", "stripe"] },

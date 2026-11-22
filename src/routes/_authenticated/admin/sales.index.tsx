@@ -13,18 +13,23 @@ import { MoneyWorkspace } from "@/components/admin/money/money-workspace";
 import type { MoneyView } from "@/components/admin/money/money-context";
 import type { CompareMode } from "@/lib/books/period";
 import { useIsBusinessOwner } from "@/lib/business-owner";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
+
+const CoachingSalesToolkit = lazyWithRetry(() => import("@/components/admin/coaching-sales/coaching-sales-toolkit"));
 import {
-  Activity, BarChart3, FileText, Landmark, LayoutTemplate, ListOrdered, Package, Settings2, Ticket,
+  Activity, BarChart3, FileText, Landmark, LayoutTemplate, ListOrdered, Package, Settings2, Tags, Ticket,
 } from "lucide-react";
 
 /**
  * Sales: the business's money first (Overview, Transactions, Taxes, Reports:
  * the books, private to the business owner and the finance login), then what
- * it sells (Products, Discount codes, Stripe activity, Settings). One menu: a
- * rail on a computer, a row of words on a phone.
+ * it sells (Coaching packages: what the site and pricing cards say; Products,
+ * Discount codes, Stripe activity, Settings). One menu: a rail on a computer,
+ * a row of words on a phone.
  */
 type SectionKey =
   | MoneyView
+  | "coaching"
   | "products"
   | "discount-codes"
   | "stripe"
@@ -46,6 +51,7 @@ const SECTIONS: {
   { value: "transactions", label: "Transactions", icon: ListOrdered, roles: ["admin"], books: true, group: "money" },
   { value: "taxes", label: "Taxes", icon: Landmark, roles: ["admin"], books: true, group: "money" },
   { value: "reports", label: "Reports", icon: FileText, roles: ["admin"], books: true, group: "money" },
+  { value: "coaching", label: "Coaching packages", icon: Tags, roles: ["admin"], group: "selling" },
   { value: "products", label: "Products", icon: Package, roles: ["admin"], group: "selling" },
   { value: "discount-codes", label: "Discount codes", icon: Ticket, roles: ["admin"], group: "selling" },
   { value: "stripe", label: "Stripe activity", icon: Activity, roles: ["admin"], group: "selling" },
@@ -64,6 +70,7 @@ function normalizeSection(tab: unknown, sub: unknown): SectionKey | "redirect:cr
   if (t === "promotions") return "discount-codes";
   if (t === "books") return "overview";
   if (t === "tax") return "taxes";
+  if (t === "packages" || t === "pricing") return "coaching";
   if (t === "products-payments") {
     if (s === "overview") return "overview";
     if (s === "transactions" || s === "payments" || s === "purchases") return "transactions";
@@ -193,6 +200,7 @@ function SalesWorkspace() {
               }
             />
           )}
+          {active === "coaching" && <CoachingSalesToolkit />}
           {active === "products" && <PaymentLinksPage embedded />}
           {active === "stripe" && <AdminTransactionsPage embedded />}
           {active === "discount-codes" && <DiscountCodesPage embedded />}

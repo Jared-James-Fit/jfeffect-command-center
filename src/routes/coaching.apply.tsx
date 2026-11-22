@@ -18,6 +18,8 @@ import {
   type ApplyAnswers,
 } from "@/lib/apply-form";
 import { bookOnline, getBookingPage, getBookingSlots } from "@/lib/booking.functions";
+import { getPublicPackage } from "@/lib/coaching-packages/packages.functions";
+import { TAX_NOTE, intervalLabel, priceLabel, type PublicPackage } from "@/lib/coaching-packages/packages";
 import { toast } from "sonner";
 import { shareMeta } from "@/lib/share-meta";
 
@@ -90,6 +92,16 @@ function QuestionFlow() {
   const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   /** The goal they tapped on the coaching page (`?goal=`): already answered, so Next steps over it (Back still reaches it). */
   const goalPicked = useRef(false);
+  /** The package card they tapped (`?package=`): said at the top and sent with the application. */
+  const [packageSlug, setPackageSlug] = useState("");
+  const getPackage = useServerFn(getPublicPackage);
+  const pkgQuery = useQuery({
+    queryKey: ["apply-package", packageSlug],
+    queryFn: () => getPackage({ data: { slug: packageSlug } }),
+    enabled: !!packageSlug,
+    staleTime: 5 * 60_000,
+  });
+  const pkg: PublicPackage | null = pkgQuery.data && pkgQuery.data.kind !== "free" ? pkgQuery.data : null;
 
   const total = APPLY_STEPS.length;
   const current = APPLY_STEPS[step]!;
@@ -112,6 +124,8 @@ function QuestionFlow() {
     }
     if (saved) setStep(Math.max(0, Math.min(total - 1, Number(saved.step) || 0)));
     sourcePage.current = clip(params.get("from") || "coaching_apply", 80);
+    const linkedPackage = (params.get("package") || "").trim().toLowerCase();
+    if (/^[a-z0-9]+(-[a-z0-9]+)*$/.test(linkedPackage) && linkedPackage.length <= 48) setPackageSlug(linkedPackage);
     ready.current = true;
   }, [total]);
 
@@ -136,13 +150,14 @@ function QuestionFlow() {
           page_url: clip(window.location.href, 500),
           referrer: clip(document.referrer, 500),
           honeypot,
+          package: pkg?.slug ?? "",
         },
       }).catch(() => { /* best effort: the real application is what counts */ });
     }, DRAFT_SAVE_MS);
     return () => {
       if (draftTimer.current) clearTimeout(draftTimer.current);
     };
-  }, [answers, step, result, honeypot, saveDraft]);
+  }, [answers, step, result, honeypot, saveDraft, pkg?.slug]);
 
   // The field takes focus when a new question comes up (not on the first one, so the page opens calm).
   useEffect(() => {
@@ -161,6 +176,7 @@ function QuestionFlow() {
           referrer: clip(document.referrer, 500),
           form_name: "Public Coaching Application",
           draft_id: draftId.current || undefined,
+          package: pkg?.slug ?? "",
         },
       }),
     onSuccess: (next) => {
@@ -258,11 +274,37 @@ function QuestionFlow() {
             <div className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none" style={{ width: `${pct}%` }} />
           </div>
 
+          {pkg && (
+            <div
+              className="mt-5 flex items-center justify-between gap-3 rounded-2xl bg-muted/60 px-4 py-3 ring-1 ring-border/70"
+              data-apply-package={pkg.slug}
+            >
+              <div className="min-w-0">
+                <p className="text-[12px] font-medium text-muted-foreground">Applying for</p>
+                <p className="truncate text-[15px] font-semibold">{pkg.name}</p>
+                {pkg.priceCents ? (
+                  <p className="text-[13px] text-muted-foreground">
+                    {priceLabel(pkg.priceCents)}
+                    {intervalLabel(pkg)} · {TAX_NOTE}
+                  </p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setPackageSlug("")}
+                className="h-10 shrink-0 rounded-full px-3 text-[14px] font-medium text-muted-foreground hover:text-foreground"
+              >
+                Not sure yet
+              </button>
+            </div>
+          )}
+
           {step === 0 && (
             <div className="mt-7">
               <p className="text-[13px] font-semibold text-primary">JF Effect Coaching</p>
               <p className="mt-1 text-[15px] leading-relaxed text-muted-foreground">
-                Online coaching. {total} quick questions, about a minute. Free to apply.
+                Online coaching. {total} quick questions, about a minute. Free to apply, and applying
+                doesn't sign you up or charge you anything.
               </p>
             </div>
           )}

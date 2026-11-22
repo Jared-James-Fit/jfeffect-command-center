@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -28,6 +28,10 @@ import { todayLocalISO } from "@/lib/today";
 import { COACH_NOTES_KEY, saveCoachNote, useCoachNote } from "@/lib/session-coach-notes";
 import { cn } from "@/lib/utils";
 import { SessionPaymentLine } from "@/components/schedule/session-payment-line";
+import { isTrainingSessionType } from "@/lib/booking-types";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
+
+const CallPrepSheet = lazyWithRetry(() => import("@/components/schedule/call-prep-sheet").then((m) => ({ default: m.CallPrepSheet })));
 
 export type ActionSession = {
   id: string;
@@ -148,6 +152,9 @@ export function SessionActionsSheet({
         | null,
   });
   const { data: coachNote = null } = useCoachNote(session?.id, open);
+  // A call (not training): the overview before it and the action items after it.
+  const [prepOpen, setPrepOpen] = useState(false);
+  const isCall = !!session && !isTrainingSessionType(session.session_type ?? null);
   useEffect(() => {
     if (open) setNoteDraft(coachNote ?? "");
   }, [open, coachNote]);
@@ -504,6 +511,12 @@ export function SessionActionsSheet({
             )
           )}
 
+          {mode === "menu" && isCall && (
+            <Button variant="outline" className="h-11 w-full justify-start" onClick={() => setPrepOpen(true)} data-open-call-prep>
+              Call prep and next steps
+            </Button>
+          )}
+
           {mode === "menu" && <SessionPaymentLine session={session} first={first} />}
 
           {request && mode === "menu" && (
@@ -686,6 +699,11 @@ export function SessionActionsSheet({
           )}
         </div>
       </SheetContent>
+      {prepOpen && session && (
+        <Suspense fallback={null}>
+          <CallPrepSheet sessionId={session.id} open={prepOpen} onOpenChange={setPrepOpen} />
+        </Suspense>
+      )}
     </Sheet>
   );
 }

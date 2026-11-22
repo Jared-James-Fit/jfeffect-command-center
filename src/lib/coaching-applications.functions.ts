@@ -39,6 +39,8 @@ export const publicCoachingApplicationSchema = z.object({
   is_test: z.boolean().optional().default(false),
   // The unfinished copy saved while they answered, marked done once this is in.
   draft_id: z.string().uuid().optional(),
+  // The coaching package card they tapped (its link name); kept only when it's an active package.
+  package: z.string().trim().toLowerCase().max(60).optional().default(""),
 }).refine((d) => !d.honeypot, { message: "Spam detected", path: ["honeypot"] });
 
 type Submission = z.infer<typeof publicCoachingApplicationSchema>;
@@ -126,6 +128,19 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
       form_name: data.form_name || "Quick Apply",
       default_source_label: DEFAULT_QUICK_APPLY_SOURCE,
     });
+    // The package they applied for, as it is now (an application is never a sale or a price promise).
+    let pkg: { slug: string; name: string; price_cents: number | null; billing_interval: string | null } | null = null;
+    if (data.package && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(data.package)) {
+      const { data: row } = await (supabaseAdmin as any).rpc("coaching_package_public", { _slug: data.package });
+      if (row && (row as any).kind !== "free") {
+        pkg = {
+          slug: String((row as any).slug),
+          name: String((row as any).name),
+          price_cents: (row as any).price_cents ?? null,
+          billing_interval: (row as any).billing_interval ?? null,
+        };
+      }
+    }
     const full_name = data.full_name.trim();
     const [first_name, ...lastNameParts] = full_name.split(/\s+/);
     const last_name = lastNameParts.join(" ");
@@ -170,7 +185,8 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
         obstacle: null,
         obstacle_other: null,
         training_location: null,
-        coaching_interest: null,
+        coaching_interest: pkg?.name ?? null,
+        ...({ package_slug: pkg?.slug ?? null, package_snapshot: pkg } as unknown as Record<string, never>),
         readiness: null,
         tracking_willingness: null,
         investment_readiness: null,
@@ -479,6 +495,7 @@ const DraftInput = z.object({
   page_url: z.string().optional().default("").transform((v) => clip(v, 500)),
   referrer: z.string().optional().default("").transform((v) => clip(v, 500)),
   honeypot: z.string().optional().default(""),
+  package: z.string().optional().default("").transform((v) => clip(v, 60).toLowerCase()),
 });
 
 /**
@@ -518,6 +535,7 @@ export const saveApplicationDraft = createServerFn({ method: "POST" })
       source_page: data.source_page || null,
       page_url: data.page_url || null,
       referrer: data.referrer || null,
+      package_slug: /^[a-z0-9]+(-[a-z0-9]+)*$/.test(data.package) ? data.package : null,
       updated_at: new Date().toISOString(),
     };
     const { error } = existing
