@@ -57,6 +57,9 @@ export const assignGoogleEventToClient = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
+    // Only a client the caller reaches: appointments RLS checks the host, not the client.
+    const { staffCanReachClient } = await import("@/lib/staff-client-access.server");
+    if (!(await staffCanReachClient(supabase, userId, data.clientId))) throw new Error("Client not found.");
 
     // Resolve coach: explicit > current user's coach > any coach (admin-safe fallback)
     let coachId = data.coachId ?? null;

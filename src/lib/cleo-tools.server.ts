@@ -63,20 +63,30 @@ function answerText(v: unknown): string {
   return String(v).slice(0, 600);
 }
 
-/** `books`: the owner or the finance login, who may read the books and ledgers. */
-type ToolCtx = { db: any; tz: string; today: string; books?: boolean };
+/**
+ * `books`: the owner or the finance login, who may read the books and ledgers.
+ * `money`: clients' sales and payments (the admin, the owner, the finance login; never a coach). Defaults to `books`.
+ * `caller`: the signed-in login, so nothing one person's lookups learned is handed to another.
+ */
+type ToolCtx = { db: any; tz: string; today: string; books?: boolean; money?: boolean; caller: string };
 
-// What exists is the same for every admin; reading still goes through each caller's own login.
+// Kept per login: the database decides who may see the list of tables (cleo_data_catalog answers
+// coaches with nothing), so one person's answer is never reused for anyone else's question.
 const CATALOG_TTL = 10 * 60_000;
-let catalogCache: { at: number; tables: CatalogTable[] } | null = null;
+const catalogCache = new Map<string, { at: number; tables: CatalogTable[] }>();
 
-async function loadCatalog(db: any): Promise<CatalogTable[]> {
-  if (catalogCache && Date.now() - catalogCache.at < CATALOG_TTL) return catalogCache.tables;
+export async function loadCatalog(db: any, caller: string): Promise<CatalogTable[]> {
+  const hit = catalogCache.get(caller);
+  if (hit && Date.now() - hit.at < CATALOG_TTL) return hit.tables;
   const { data, error } = await rpcRead(db, "cleo_data_catalog", {});
   if (error) throw new Error(error.message);
-  if (!Array.isArray(data)) throw new Error("the data list is for admins only");
-  catalogCache = { at: Date.now(), tables: data as CatalogTable[] };
-  return catalogCache.tables;
+  if (!Array.isArray(data)) {
+    catalogCache.delete(caller);
+    throw new Error("the data list is for admins only");
+  }
+  if (catalogCache.size > 50) catalogCache.clear();
+  catalogCache.set(caller, { at: Date.now(), tables: data as CatalogTable[] });
+  return data as CatalogTable[];
 }
 
 /** The Coaching Agreement (from the code), every legal document's current version (Admin → Legal) and the coach FAQs. */
@@ -153,8 +163,9 @@ function safe<A>(name: string, fn: (args: A) => Promise<string>) {
 export function cleoReadTools(ctx: ToolCtx) {
   const { db, tz, today } = ctx;
   const books = !!ctx.books;
+  const moneyAccess = ctx.money ?? books;
 
-  return {
+  const tools = {
     business_documents: tool({
       description:
         "The business's own documents, word for word: the Coaching Agreement every coaching client signs (billing, cancelling, ending coaching, refunds, fixed terms, freezes, sessions, conduct...), the Terms of Service, Privacy Policy, Cancellation & Refund Policy, JF Membership Agreement, Recurring Billing Disclosure, and the coach FAQs. Use for any question about what a policy, agreement or FAQ says. Pass `search` with the topic (e.g. 'ending coaching cancel notice') to get the sections that answer it; `document` to read one (e.g. 'coaching-agreement'); nothing to list them.",
@@ -170,7 +181,7 @@ export function cleoReadTools(ctx: ToolCtx) {
         "Find where anything in the app is kept when no other lookup covers it: offers and prices, discount codes, coaching applications and leads, forms and their questions, tasks, community posts and comments, agreements sent, booking types and hours, settings, the exercise library, program templates, payments, app members and more. Give a few words (e.g. 'coaching applications', 'discount codes', 'offer price'); returns the matching tables with their columns, to read with read_data.",
       inputSchema: z.object({ query: z.string().trim().min(2).max(120) }),
       execute: safe("the data list", async ({ query }) => {
-        const catalog = visibleCatalog(await loadCatalog(db), { books });
+        const catalog = visibleCatalog(await loadCatalog(db, ctx.caller), { books, money: moneyAccess });
         const exact = catalog.find((t) => t.t === query.trim());
         const found = exact ? [exact] : findTables(catalog, query, 10);
         if (!found.length) return `No table matches "${query}". Try other words (what it's called in the app, or what it holds).`;
@@ -198,7 +209,7 @@ export function cleoReadTools(ctx: ToolCtx) {
         limit: z.number().int().min(1).max(READ_MAX_ROWS).optional(),
       }),
       execute: safe("that data", async (req: ReadRequest) => {
-        const catalog = visibleCatalog(await loadCatalog(db), { books });
+        const catalog = visibleCatalog(await loadCatalog(db, ctx.caller), { books, money: moneyAccess });
         const { table, columns, limit } = checkRead(catalog, req);
         let q = db.from(table.t).select(columns.join(","), { count: "exact" });
         for (const f of req.filters ?? []) {
@@ -642,4 +653,7 @@ export function cleoReadTools(ctx: ToolCtx) {
       }),
     }),
   };
+  // A client's sales and payments are the admin's and the finance login's, never a coach's (record_payment / send_payment_link aren't offered to a coach either).
+  if (!moneyAccess) delete (tools as Partial<typeof tools>).purchases;
+  return tools;
 }

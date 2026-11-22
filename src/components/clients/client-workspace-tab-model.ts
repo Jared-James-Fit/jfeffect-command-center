@@ -20,6 +20,7 @@ export type WorkspaceTab =
   | "goals-setup"
   | "coaching"
   | "notes"
+  | "files"
   | "account";
 
 /**
@@ -43,6 +44,7 @@ export const CLIENT_WORKSPACE_MORE_TABS = [
   { value: "goals-setup", label: "Goals & intake" },
   { value: "coaching", label: "Coaching setup" },
   { value: "notes", label: "Coach notes" },
+  { value: "files", label: "Documents" },
   { value: "account", label: "Login & access" },
 ] satisfies { value: WorkspaceTab; label: string }[];
 

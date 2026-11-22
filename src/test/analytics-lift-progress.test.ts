@@ -37,9 +37,10 @@ describe("lift progress: touch to inspect, open on purpose", () => {
 
 describe("analytics page order and headers", () => {
   it("puts training (lift progress, PRs, muscle volume) before recovery and lifestyle", () => {
+    // Strength reads: the lifts, where you stand, records, then any exercise as the deep dive
     const lift = dash.indexOf('aria-label="Lift Progress"');
     expect(lift).toBeGreaterThan(-1);
-    expect(lift).toBeLessThan(dash.indexOf('aria-label="All-time PRs"'));
+    expect(dash.indexOf('aria-label="All-time PRs"')).toBeLessThan(lift);
     const volume = dash.indexOf("<TrainingLoadSection");
     expect(volume).toBeGreaterThan(-1);
     expect(volume).toBeLessThan(dash.indexOf('id="recovery"'));

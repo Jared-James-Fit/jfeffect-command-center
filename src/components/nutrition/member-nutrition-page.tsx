@@ -9,6 +9,10 @@ import { MemberMealPlanPanel } from "@/components/nutrition/MemberMealPlanPanel"
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { Suspense } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
+import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
+import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
+import { FoodLogPlanProvider } from "@/components/nutrition/food-log-context";
+import { useMemberFoodLogPlan } from "@/components/nutrition-studio/member-food-log-plan";
 
 const NutritionRoadmapCard = lazyWithRetry(() => import("@/components/nutrition-roadmap/roadmap-athlete").then((m) => ({ default: m.NutritionRoadmapCard })));
 
@@ -50,6 +54,12 @@ export function MemberNutritionPage() {
     retry: false,
   });
 
+  // their plan (their own from the Nutrition Studio, or one a coach assigned): the food log reads each day's targets and meals from it
+  const planFn = usePovFn(useServerFn(getCoachAssignedMealPlan));
+  const povKey = usePovArgs().viewAsClientId ?? null;
+  const planQ = useQuery({ queryKey: ["m-coach-meal-plan", povKey], queryFn: () => planFn({}), staleTime: 60_000 });
+  const foodLogPlan = useMemberFoodLogPlan((planQ.data as any) ?? null);
+
   const saved = targetsQ.data ?? null;
   const targets: NutritionTargets | undefined = saved
     ? {
@@ -77,6 +87,7 @@ export function MemberNutritionPage() {
         <MemberMealPlanPanel />
       </SectionErrorBoundary>
       <SectionErrorBoundary label="Nutrition dashboard" className="mx-4 md:mx-6">
+        <FoodLogPlanProvider value={foodLogPlan}>
         <NutritionDashboard
           viewer="member"
           userId={data?.userId}
@@ -84,6 +95,7 @@ export function MemberNutritionPage() {
           targets={targets}
           hasCoachApprovedTargets={(saved as any)?.source === "coach"}
         />
+        </FoodLogPlanProvider>
       </SectionErrorBoundary>
     </div>
   );

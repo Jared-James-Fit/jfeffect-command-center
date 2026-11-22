@@ -98,7 +98,7 @@ export function WorkoutStatusMark({ mark, onPrimary = false, className }: { mark
   }
   return (
     <span className={box} aria-label="Scheduled">
-      <span className={cn("h-1.5 w-1.5 rounded-full", onPrimary ? "bg-white/70" : "bg-muted-foreground/50")} />
+      <span className={cn("h-1.5 w-1.5 rounded-full", onPrimary ? "bg-white/70" : "bg-muted-foreground/70")} />
     </span>
   );
 }

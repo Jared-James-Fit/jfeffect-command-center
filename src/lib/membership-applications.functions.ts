@@ -501,9 +501,15 @@ export const activateMembership = createServerFn({ method: "POST" })
         .string()
         .min(8, "Use at least 8 characters.")
         .max(72, "Use 72 characters or fewer."),
+      /** The unticked "I agree to the Terms and Privacy Policy" box (legal-signup.ts). */
+      agreed: z.boolean().optional(),
     }).parse(i),
   )
   .handler(async ({ data }) => {
+    if (data.agreed !== true) {
+      const { SIGNUP_ACK_MISSING } = await import("@/lib/legal-signup");
+      throw new Error(SIGNUP_ACK_MISSING);
+    }
     const app = await appForToken(data.token);
     const view = await viewFor(app, data.proof);
     if (view.state === "joined" || view.state === "has_account")
@@ -563,6 +569,21 @@ export const activateMembership = createServerFn({ method: "POST" })
       throw new Error(
         "Your account is made, but it didn't finish joining. Sign in and it'll finish, or ask Jared.",
       );
+    }
+    // The box they ticked, kept as evidence (the published Terms and Privacy Policy, this
+    // application as the reference). A failure here never undoes the account: they're
+    // asked again in the app, where the same documents show as not yet accepted.
+    try {
+      const legal = await import("@/lib/legal-signup.server");
+      const r = await legal.recordSignupAcceptances(sb, {
+        userId: loginId,
+        contextRef: `membership_application:${app.id}`,
+        ip: await legal.requestIp(),
+        userAgent: await legal.requestUserAgent(),
+      });
+      if (r.missing.length) console.warn("[member-activate] not published, not recorded:", r.missing.join(", "));
+    } catch (e: any) {
+      console.error("[member-activate] signup acceptance not recorded", e?.message ?? e);
     }
     return {
       ok: true,

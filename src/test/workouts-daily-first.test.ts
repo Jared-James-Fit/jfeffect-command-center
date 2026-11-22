@@ -17,7 +17,7 @@ describe("the day is the page's card", () => {
     expect(page).toMatch(/dayOff && \(dayCardio \? \([\s\S]{0,400}emphasis="primary"[\s\S]{0,120}footer=\{nextRow\}/);
     // loading never flashes "Rest day" before the cardio arrives
     expect(page).toContain(": cardio.isLoading ? (\n        <WorkoutCardSkeleton />");
-    expect(page).toContain("<RestDayCard dayText={dayText} next={next} nextRow={nextRow} />");
+    expect(page).toContain("<RestDayCard dayText={dayText} next={next} onSelectDate={onSelectDate} />");
     // a training day whose workout doesn't hold the plan's cardio: under it, secondary
     expect(page).toMatch(/!dayOff && dayCardio && \([\s\S]{0,300}emphasis="secondary"/);
     // never a cardio section at the bottom of the page again
@@ -50,10 +50,10 @@ describe("the day is the page's card", () => {
     expect(read("src/components/workouts/week-strip.tsx")).toContain('const Wrap = flat ? "div" : Card;');
   });
 
-  it("readiness and the month are one quiet card, gone until there's something in it", () => {
-    expect(page).toContain('<Card className="divide-y divide-border overflow-hidden p-0 empty:hidden" data-workouts-progress>');
-    expect(page).toMatch(/<RecoveryPreviewCard[\s\S]{0,160}bare/);
-    expect(read("src/components/analytics/recovery-preview-card.tsx")).toContain('const Wrap = bare ? "div" : Card;');
+  it("progress is one snapshot card (gone until there's a workout); readiness only when it's news for today", () => {
+    expect(page).toMatch(/<TrainingAnalyticsPreviewCard[\s\S]{0,240}month=\{monthProgress\}[\s\S]{0,60}hideWhenEmpty/);
+    expect(page).toMatch(/todayOpen && isSameDay\(selectedDate, today\) && \([\s\S]{0,40}<RecoveryPreviewCard[\s\S]{0,160}onlyWhenNews/);
+    expect(read("src/components/analytics/recovery-preview-card.tsx")).toContain('if (onlyWhenNews && !bd.limiter && (tier.label === "Ready" || tier.label === "Good")) return null;');
   });
 });
 
@@ -94,11 +94,11 @@ describe("the cardio card", () => {
 
 describe("the program card is one glance", () => {
   const card = read("src/components/workouts/program-roadmap.tsx");
-  it("shows the phases with this week's focus under the block it's in; every week is one tap away in the plan sheet", () => {
+  it("names the current phase in one line; upcoming phases and every week are one tap away in the plan sheet", () => {
+    expect(card).toContain("data-program-phase");
     expect(card).toContain("data-roadmap-week");
-    expect(card).toContain("data-roadmap-now");
-    expect(card).toContain("line-clamp-2");
-    expect(card).toContain("data-roadmap-timeline");
+    expect(card).not.toContain("data-roadmap-timeline");
     expect(card).not.toContain("<span>Plan details</span>");
+    expect(card).toContain("function ProgramPlanSheet(");
   });
 });

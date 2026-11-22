@@ -26,6 +26,7 @@ import {
   calibrationTimes,
   keyFromMarker,
   plateAtTap,
+  shapeAtMarker,
   proposePlate,
   supportFor,
   type Proposal,
@@ -41,7 +42,9 @@ import { rgbaToGray, rgbaToGrayHalf, type Frame, type Gray } from "@/lib/lift-an
 import { KeyedPass, mergePasses, type KeyedPoint, type TrackKey } from "@/lib/lift-analysis/keyed";
 import { cameraShift } from "@/lib/lift-analysis/motion";
 import { frameSightings, type Sighting } from "@/lib/lift-analysis/find";
-import { outerRim, rimSize, type OuterRim } from "@/lib/lift-analysis/rim-outer";
+import { outerRim, plateSizedRims, rimSize, type OuterRim } from "@/lib/lift-analysis/rim-outer";
+import { applyRecovered, gapsToRecover, recoverGap } from "@/lib/lift-analysis/recover";
+import type { FollowPoint } from "@/lib/lift-analysis/follow";
 import { loadMediabunny } from "@/lib/video-edit/probe";
 
 /** The long side frames are analysed at: the plate's rim spans ~40–60 px across, plenty for sub-pixel fits. */
@@ -114,6 +117,8 @@ export type RunInput = {
   dirHint?: "lower_first" | "lift_first";
   /** Which lift (the exercise's name), for checking a read made on its own (auto-check.ts). */
   lift?: GuideLift;
+  /** Rises the athlete said aren't reps (kept when a read is done again from its keys). */
+  exclude?: number[];
   signal?: AbortSignal;
   onProgress?: (p: RunProgress) => void;
 };
@@ -343,6 +348,14 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
       ];
     } else {
       keys = seed.keys.map((s) => fromShownKey(s, w, h));
+      // a ring kept from an earlier read is a circle; the plate off side-on is an ellipse: its shape
+      // learned on the key's own frame (detect.ts shapeAtMarker), so the tracker expects what it sees
+      const k0 = keys[0];
+      if (k0 && k0.source !== "auto" && Math.abs(k0.a / k0.b - 1) < 0.03) {
+        const f = await frameNear(k0.t);
+        const shape = f ? shapeAtMarker(f, k0) : null;
+        if (shape) keys[0] = { ...k0, ...shape };
+      }
     }
     const main = keys[0];
     if (!main) return fail("no_plate");
@@ -442,7 +455,36 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
       check();
       edge = from;
     }
-    const merged = mergePasses(fwd.points(), bwd.points(), R);
+    const passes = mergePasses(fwd.points(), bwd.points(), R);
+    check();
+
+    // ── recover: each stretch lost with the plate seen either side, read again from both ends ──
+    // (recover.ts: only those frames are decoded again; nothing is drawn across what isn't followed)
+    const gaps = gapsToRecover(passes.points);
+    const got: FollowPoint[] = [];
+    if (gaps.length) report("recovering", 0);
+    for (let g = 0; g < gaps.length; g++) {
+      check();
+      const gap = gaps[g];
+      const span: Frame[] = [];
+      for await (const wc of sink.canvases(
+        Math.max(start, gap.before.t - 0.02),
+        gap.after.t + 0.05,
+      )) {
+        const f = toFrame(wc);
+        if (f && f.t >= gap.before.t - 1e-4 && f.t <= gap.after.t + 1e-4) span.push(f);
+        if (now() - slice > 10) {
+          await yieldToPage();
+          slice = now();
+        }
+      }
+      span.sort((a, b) => a.t - b.t);
+      got.push(...recoverGap(span, gap, { a: main.a, b: main.b }, setup));
+      report("recovering", (g + 1) / gaps.length);
+      await yieldToPage();
+    }
+    const rec = applyRecovered(passes.points, got);
+    const merged = { points: rec.points, conflicts: passes.conflicts };
     check();
 
     // ── measure: the plate's outer edge at full resolution, in the still frames ──
@@ -466,13 +508,13 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
           lo: 0.75,
           hi: 1.3,
         });
-        if (rim && Math.abs(rim.r / (R * k2) - 1) <= 0.12)
-          rims.push({ ...rim, scale: 1 / k2, y: (rim.y + roi.y0) / k2 });
+        if (rim) rims.push({ ...rim, scale: 1 / k2, y: (rim.y + roi.y0) / k2 });
         report("measuring", j / times.length);
         await yieldToPage();
       }
     }
-    const size = rimSize(rims);
+    // the plate's own rim, even when the ring the track started from was another size (rim-outer.ts)
+    const size = rimSize(plateSizedRims(rims, R * k2));
 
     // ── read ──
     report("reading", 0);
@@ -486,6 +528,8 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
       size,
       keys,
       conflicts: merged.conflicts,
+      recovered: rec.recovered,
+      exclude: input.exclude,
     });
     report("reading", 1);
     if (rimNeverMeasured(analysis, main.source === "auto" ? "auto" : "tap"))

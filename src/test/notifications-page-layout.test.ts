@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { NotificationPanel } from "@/components/notification-bell";
 import {
   initialNotificationView,
@@ -21,9 +22,14 @@ describe("notifications page responsive layout", () => {
     expect(NOTIFICATIONS_PWA_SAFE_AREA_BOTTOM).toContain("env(safe-area-inset-bottom)");
   });
 
-  it("opens the full page on All while preserving New as the compact bell default", () => {
+  it("opens the full page and the compact bell alike on All, the complete inbox", () => {
+    // "Default notification center to complete inbox" (Sep 20 2026): the bell opens on All
+    // too, and its filters are All and Archived (no New tab to land on)
     expect(initialNotificationView(true)).toBe("all");
-    expect(initialNotificationView(false)).toBe("new");
+    expect(initialNotificationView(false)).toBe("all");
+    const bell = readFileSync("src/components/notification-bell.tsx", "utf8");
+    expect(bell).toContain("useState<View>(() => initialNotificationView(fullPage))");
+    expect(bell).toContain('<FilterChip active={view === "all"} onClick={() => setView("all")}>All</FilterChip>');
   });
 
   it("uses natural page scrolling for the full page and bounded scrolling for transient bell surfaces", () => {

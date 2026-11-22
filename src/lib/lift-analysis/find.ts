@@ -233,6 +233,24 @@ export type CircleTrack = {
 };
 
 /** The same circle linked across sampled frames: about the same size, a move the bar could make. */
+/**
+ * How far a bar's plate can get in dt (px): up or down `vert` radii a second
+ * (a loaded bar's ~2.5 m/s), at most 4.5 radii (a deep squat's range);
+ * sideways about 7 radii a second (~1.6 m/s, a fast walk-out or re-rack),
+ * at most 2.5 radii (~0.55 m).
+ */
+export function reachOf(r: number, dt: number, vert = 11): { x: number; y: number } {
+  return {
+    x: r * Math.min(2.5, 0.6 + Math.min(7, vert) * dt),
+    y: r * Math.min(4.5, 0.6 + vert * dt),
+  };
+}
+
+/** A move against what's reachable (≤ 1: reachable), the two directions judged apart. */
+export function reachDistance(dx: number, dy: number, reach: { x: number; y: number }): number {
+  return Math.hypot(dx / reach.x, dy / reach.y);
+}
+
 export function linkTracks(perFrame: Sighting[][], nFrames: number): CircleTrack[] {
   type Open = { hits: Sighting[]; rs: number[] };
   const tracks: Open[] = [];
@@ -248,17 +266,19 @@ export function linkTracks(perFrame: Sighting[][], nFrames: number): CircleTrack
         const rr = median(tr.rs);
         if (Math.abs(c.r - rr) > 0.18 * rr) continue;
         const dt = Math.max(0.01, c.t - last.t);
-        // a bar moves at most ~2.5 m/s, ~11 plate radii a second, and never further from where it
-        // was than a deep squat's whole range (~0.75 m, under 4.5 radii) however long it was unseen
-        const reach = rr * Math.min(4.5, 0.6 + 11 * dt);
-        const d = Math.hypot(c.x - last.x, c.y - last.y);
-        if (d > reach) continue;
+        // a bar moves at most ~2.5 m/s up or down, ~11 plate radii a second, and never further than
+        // a deep squat's whole range (~0.75 m, under 4.5 radii) however long it was unseen; sideways
+        // far less (a walk-out, ~0.4 m: reachOf). A plate on the tree a metre across the frame is
+        // never the bar's next sighting
+        const reach = reachOf(rr, dt);
+        const d = reachDistance(c.x - last.x, c.y - last.y, reach);
+        if (d > 1) continue;
         // the same plate: as near as it could be, its rim showing, its size the track's own
         // (an arc of the lifter's body beside it is close by, but a part-circle a size off)
         pairs.push({
           c,
           tr,
-          cost: d / reach + 0.5 * (1 - c.coverage) + 2 * (Math.abs(c.r - rr) / rr),
+          cost: d + 0.5 * (1 - c.coverage) + 2 * (Math.abs(c.r - rr) / rr),
         });
       }
     }
@@ -301,8 +321,11 @@ export function linkTracks(perFrame: Sighting[][], nFrames: number): CircleTrack
         // a short gap only: over a long one anything could join anything
         if (dt > 0.8) ok = false;
         else if (
-          Math.hypot(all[k].p.x - all[k - 1].p.x, all[k].p.y - all[k - 1].p.y) >
-          ra * Math.min(4.5, 0.6 + 6 * dt)
+          reachDistance(
+            all[k].p.x - all[k - 1].p.x,
+            all[k].p.y - all[k - 1].p.y,
+            reachOf(ra, dt, 6),
+          ) > 1
         )
           ok = false;
       }

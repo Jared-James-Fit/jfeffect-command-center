@@ -10,7 +10,12 @@ describe("fast media upload paths", () => {
   const progressLib = readFileSync("src/lib/progress.ts", "utf8");
 
   it("uses one direct storage request for small media and TUS only for larger files", () => {
-    expect(storage).toContain("DIRECT_UPLOAD_MAX_BYTES = 6 * 1024 * 1024");
+    // one direct request up to 6 MB (40 MB for a chat attachment that isn't resumable,
+    // "Speed up messenger video uploads"); a resumable upload goes by TUS over 6 MB (#631)
+    expect(storage).toMatch(
+      /const DIRECT_UPLOAD_MAX_BYTES =\s*bucket === "message-attachments" && !args\.resume \? 40 \* 1024 \* 1024 : 6 \* 1024 \* 1024;/,
+    );
+    expect(storage).toContain("if (args.file.size <= DIRECT_UPLOAD_MAX_BYTES && typeof XMLHttpRequest !== \"undefined\")");
     expect(storage).toContain("uploadDirectWithProgress");
     expect(storage).toContain('xhr.open("POST"');
     expect(storage).toContain('new tus.Upload');

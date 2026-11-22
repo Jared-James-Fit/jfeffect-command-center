@@ -8,14 +8,16 @@ describe("Workouts page: program roadmap under the calendar", () => {
     const card = src.indexOf("<ProgramRoadmapCard");
     expect(blockView).toBeGreaterThan(-1);
     expect(card).toBeGreaterThan(blockView);
-    expect(card).toBeLessThan(src.indexOf("data-workouts-progress"));
+    // the program summary, then the progress snapshot
+    expect(card).toBeLessThan(src.indexOf("<TrainingAnalyticsPreviewCard"));
     // the day's cardio is the day's (useDayCardio in SelectedDayList), never a section at the bottom
     expect(src).not.toContain("<ClientCardioSection");
   });
-  it("shows its phases at a glance and every week one tap away; one bar, no week pills, no fold", () => {
+  it("is a compact summary (name, week, phase, one bar); every phase and week one tap away; no fold", () => {
     const card = readFileSync("src/components/workouts/program-roadmap.tsx", "utf8");
-    // every block on the card (done, now with this week, next), never behind a "Plan details" fold
-    expect(card).toContain("data-roadmap-timeline");
+    // the card names the current phase in its one line; upcoming phases are the full plan's (Nov 22 2026)
+    expect(card).toContain("data-program-phase");
+    expect(card).not.toContain("data-roadmap-timeline");
     expect(card).not.toContain("<span>Plan details</span>");
     // the whole plan (every week and what it's for) opens in one sheet from "Full plan" or a block
     expect(card).toContain("data-roadmap-toggle");

@@ -140,7 +140,9 @@ describe("Home's Crew feed", () => {
 
   it("new to you: a dot by the time; training right now: Live", () => {
     expect(entry).toContain('<span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ff5a4e]" aria-hidden />');
-    expect(entry).toContain(">Live</span>");
+    // the app's one live look (live-indicator.tsx, #577): the Crew's red "Live" pill
+    expect(entry).toMatch(/\{live \? \(\s*<LivePill className="shrink-0" \/>\s*\) : fresh \? \(/);
+    expect(read("src/components/live-indicator.tsx")).toContain('export function LivePill({ children = "Live"');
   });
 
   it("the profile grid and the shelf draw posts the same way, from a small file (no feed card in the app shell)", () => {

@@ -31,6 +31,8 @@ import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { WorkoutMealTagger } from "@/components/nutrition/WorkoutMealTagger";
 import { AutoLabelWorkoutMeals } from "@/components/nutrition/AutoLabelWorkoutMeals";
 import { MealPlanBulkPaste, type ParsedDay } from "@/components/nutrition/MealPlanBulkPaste";
+import { PlanFileImport } from "@/components/nutrition-studio/plan-file-import";
+import { MealBuilder } from "@/components/nutrition-studio/meal-builder";
 import { PlanDayUseEditor, PlanDayWeekPreview } from "@/components/nutrition/PlanDayRules";
 import { resolveTrainingWeekdays } from "@/lib/cardio-prescription";
 import { cardioDraftsFor, dayKey, parseAiCardio, type CardioDraft } from "@/lib/nutrition-cardio-sync";
@@ -95,6 +97,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
   const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
   const [days, setDays] = useState<Day[]>([]);
+  // the meals: built food by food (the default), or the plan text itself
+  const [mealsMode, setMealsMode] = useState<"build" | "text">("build");
   const [saving, setSaving] = useState(false);
   /** True while Phase / Goal holds a value detected from a paste (cleared on manual change). */
   const [phaseAuto, setPhaseAuto] = useState(false);
@@ -391,6 +395,21 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
   const numberField = (i: number, k: keyof Day) => (e: React.ChangeEvent<HTMLInputElement>) =>
     updateDay(i, k, e.target.value.replace(/[^0-9.]/g, ""));
   const fmtNum = (v: number | null | undefined) => (v == null ? "—" : Math.round(v));
+  /** A pasted or imported plan fills the days (the paste box and Import a file alike). */
+  const applyPlanDays = (parsed: ParsedDay[], rules: string | null, phase: string | null, from: "pasted" | "imported" = "pasted") => {
+    setDays(parsed.map((d, i) => ({ ...d, sort_order: i })));
+    setOpenDays([]);
+    setForm((f: any) => ({
+      ...f,
+      ...(rules ? { food_weighing_rules: rules } : {}),
+      ...(phase ? { phase, goal: PHASE_GOAL[phase] ?? f.goal } : {}),
+    }));
+    if (phase) {
+      setPhaseAuto(true);
+      setPhaseFrom("paste");
+      setPhaseSource(`From the ${from} plan's PHASE line`);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -474,21 +493,11 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
               <MealPlanBulkPaste
                 clientId={form.client_id || clientId || null}
                 phase={initial || phasePicked || phaseAuto ? (form.phase === "Custom" ? form.custom_phase || null : form.phase) : null}
-                onApply={(parsed: ParsedDay[], rules: string | null, phase: string | null) => {
-                  setDays(parsed.map((d, i) => ({ ...d, sort_order: i })));
-                  setOpenDays([]);
-                  setForm((f: any) => ({
-                    ...f,
-                    ...(rules ? { food_weighing_rules: rules } : {}),
-                    ...(phase ? { phase, goal: PHASE_GOAL[phase] ?? f.goal } : {}),
-                  }));
-                  if (phase) {
-                    setPhaseAuto(true);
-                    setPhaseFrom("paste");
-                    setPhaseSource("From the pasted plan's PHASE line");
-                  }
-                }}
+                onApply={(parsed: ParsedDay[], rules: string | null, phase: string | null) => applyPlanDays(parsed, rules, phase)}
               />
+              <div className="mt-3 border-t border-border pt-3">
+                <PlanFileImport clientId={form.client_id || clientId || null} onApply={(parsed, rules, phase) => applyPlanDays(parsed, rules, phase, "imported")} />
+              </div>
             </Section>
           </Accordion>
 
@@ -536,17 +545,44 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
                       <DayNumbersCheck day={d} onUseCalories={(kcal) => updateDay(i, "calories", String(kcal))} />
                       <DayCardio draft={d.cardio} onChange={(patch) => setCardio(i, patch)} willSync={form.status === "Active"} />
                       <div className="space-y-1.5">
-                        <Label className="text-[13px] text-muted-foreground">Meals</Label>
-                        <Textarea
-                          rows={8}
-                          placeholder={`Meal 1\n120 g oats\n3 whole eggs\n\nApproximate macros:\n40 g protein\n70 g carbohydrates\n18 g fat`}
-                          value={d.notes ?? ""}
-                          onChange={(e) => updateDay(i, "notes", e.target.value)}
-                          className="font-mono text-xs leading-relaxed whitespace-pre"
-                          spellCheck={false}
-                        />
-                        <WorkoutMealTagger text={d.notes ?? ""} onChange={(t) => updateDay(i, "notes", t)} />
-                        <p className="text-[13px] text-muted-foreground">Write "Meal 1", "Meal 2"… on their own lines; the client sees each meal as a card.</p>
+                        <div className="flex items-center gap-2">
+                          <Label className="text-[13px] text-muted-foreground">Meals</Label>
+                          <div className="ml-auto flex rounded-lg bg-muted p-0.5 text-[13px]" role="tablist" aria-label="How to edit the meals">
+                            {(["build", "text"] as const).map((mode) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                role="tab"
+                                aria-selected={mealsMode === mode}
+                                onClick={() => setMealsMode(mode)}
+                                className={`h-8 rounded-md px-3 ${mealsMode === mode ? "bg-background font-medium shadow-sm" : "text-muted-foreground"}`}
+                              >
+                                {mode === "build" ? "Build" : "Text"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        {mealsMode === "build" ? (
+                          <MealBuilder
+                            notes={d.notes ?? ""}
+                            onChange={(t) => updateDay(i, "notes", t)}
+                            targets={{ calories: d.calories, protein: d.protein, carbs: d.carbs, fats: d.fats }}
+                            dayLabel={d.day_label}
+                          />
+                        ) : (
+                          <>
+                            <Textarea
+                              rows={8}
+                              placeholder={`Meal 1\n120 g oats\n3 whole eggs\n\nApproximate macros:\n40 g protein\n70 g carbohydrates\n18 g fat`}
+                              value={d.notes ?? ""}
+                              onChange={(e) => updateDay(i, "notes", e.target.value)}
+                              className="font-mono text-xs leading-relaxed whitespace-pre"
+                              spellCheck={false}
+                            />
+                            <WorkoutMealTagger text={d.notes ?? ""} onChange={(t) => updateDay(i, "notes", t)} />
+                            <p className="text-[13px] text-muted-foreground">Write "Meal 1", "Meal 2"… on their own lines; the client sees each meal as a card.</p>
+                          </>
+                        )}
                       </div>
                     </div>
                   </Section>

@@ -608,7 +608,7 @@ export async function cleoAnswer(
       import("@/lib/cleo-model.server"),
     ]),
   ]);
-  const [{ summerSystemPrompt }, { buildVoicePrompt, casualize }, { cleoReadTools }, { proposeAction, discardProposals }, { CLEO_ACTION_INFO, CLEO_ACTION_KINDS, CLEO_ACTION_PARAMS }, { cleoProgramTools }, { looksLikeLeakedInstructions }, { generateText, stepCountIs, tool }, { cleoRoute, cleoModel, cleoFailure }] = mods;
+  const [{ summerSystemPrompt }, { buildVoicePrompt, casualize }, { cleoReadTools }, { proposeAction, discardProposals }, { CLEO_ACTION_INFO, CLEO_ACTION_PARAMS, availableKinds }, { cleoProgramTools }, { looksLikeLeakedInstructions }, { generateText, stepCountIs, tool }, { cleoRoute, cleoModel, cleoFailure }] = mods;
   const { owner, finance, section: booksSection } = booksPart;
 
   // Stable first, so the instructions, the books and the app are read from the
@@ -644,8 +644,10 @@ export async function cleoAnswer(
   const past = ((history.data ?? []) as Array<{ role: string; content: string; attachments?: CleoAttachment[] | null }>).reverse();
   const boss = ownerName ?? "the owner";
   const proposed: string[] = [];
+  // Only the cards this person's own role can ask for: money is never a coach's,
+  // and the owner's own kinds are never offered to anyone else.
   const actionTools = Object.fromEntries(
-    CLEO_ACTION_KINDS.map((kind) => [
+    availableKinds(caller).map((kind) => [
       `propose_${kind}`,
       tool({
         description: `${CLEO_ACTION_INFO[kind].tool} Puts a card on screen; nothing happens until the person taps it.`,
@@ -658,7 +660,7 @@ export async function cleoAnswer(
             return wellFormed(
               r.route === "run"
                 ? `Card is on screen: ${r.summary}\nTell them to tap Confirm. It hasn't happened yet.`
-                : `Card is on screen: ${r.summary}\nThis isn't in their role, so it needs ${boss}'s OK. Tell them "I'll have to ask ${boss} for permission" and that tapping "Ask ${boss}" sends the request.`,
+                : `Card is on screen: ${r.summary}\nThis needs ${boss}'s OK. Tell them "I'll have to ask ${boss} for permission" and that tapping "Ask ${boss}" sends the request; once ${boss} approves, it's done as them.`,
             );
           } catch (e: any) {
             return wellFormed(`Couldn't set that up: ${String(e?.message ?? e).slice(0, 300)}`);
@@ -686,7 +688,7 @@ export async function cleoAnswer(
   // Not strict: OpenAI's Responses API makes every field of a strict tool required, and the model then fills
   // the optional ones with placeholders (Nov 18 2026's benchmark: a calf raise card at "0.0001 lb, 1% of 1RM").
   const tools = Object.fromEntries(
-    Object.entries({ ...cleoReadTools({ db: supabase, tz, today: businessToday(), books: owner || finance }), ...cleoProgramTools({ db: supabase, today: businessToday() }), ...actionTools, ask_choice: askChoice }).map(([name, t]) => [name, { ...(t as any), strict: false }]),
+    Object.entries({ ...cleoReadTools({ db: supabase, tz, today: businessToday(), books: owner || finance, money: owner || finance || caller.isAdmin, caller: userId }), ...cleoProgramTools({ db: supabase, today: businessToday() }), ...actionTools, ask_choice: askChoice }).map(([name, t]) => [name, { ...(t as any), strict: false }]),
   );
 
   // Earlier attachments come back as words (what was read from them); the

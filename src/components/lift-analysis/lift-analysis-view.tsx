@@ -111,6 +111,7 @@ import { oneRing } from "@/lib/lift-analysis/suggestions";
 import { rereadPlan } from "@/lib/lift-analysis/reread";
 import { queueLiftReread } from "@/lib/lift-analysis/auto";
 import { ENGINE_VERSION } from "@/lib/lift-analysis/analyze";
+import { canEditReps, toggleRep } from "@/lib/lift-analysis/reps-edit";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -131,11 +132,14 @@ type Props = {
 
 type Mode = "velocity" | "technique";
 
+/** Each stage as it really is (progress.ts): what's happening, never a timer. */
 const STAGE_WORDS: Record<RunProgress["stage"], string> = {
-  opening: "Preparing the video",
-  finding: "Locating the barbell",
-  tracking: "Tracking the bar through every frame",
-  measuring: "Measuring the plate",
+  opening: "Preparing video",
+  finding: "Identifying the barbell",
+  tracking: "Tracking repetitions",
+  recovering: "Recovering frames where the bar was lost",
+  // the plate's outer edge read in the still frames: its shape is how far the camera is turned or tilted
+  measuring: "Adapting to the camera angle",
   reading: "Calculating velocity",
 };
 
@@ -327,6 +331,8 @@ function Body({
       corrections: extra,
       plate: plateFor(knownPlate),
       dirHint,
+      // read again from the same keys: what the athlete took out of the reps stays out
+      exclude: seed.kind === "keys" ? analysis?.exclude : undefined,
       signal: c.signal,
       onProgress: setProgress,
     });
@@ -470,6 +476,28 @@ function Body({
       { kind: "keys", keys },
       corrections.map((c) => ({ t: c.t, fx: c.fx, fy: c.fy })),
     );
+  };
+
+  /** "Not a rep" or put one back: the read done again from its own track, here, in an instant. */
+  const editRep = async (conStart: number, out: boolean) => {
+    if (!analysis) return;
+    const next = toggleRep(analysis, conStart, out);
+    if (!next) return;
+    setFresh(next);
+    setSelected(null);
+    try {
+      await saveAnalysis(setVideoId, next);
+      toast.success(out ? "Taken out of the reps" : "Put back");
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : "Couldn't save that.");
+    }
+  };
+
+  /** An older read (no track kept): followed again from its own keys, so its reps can be edited. */
+  const readAgain = () => {
+    if (!analysis) return;
+    setCorrections([]);
+    reanalyzeWithFixes();
   };
 
   const remove = async () => {
@@ -756,6 +784,8 @@ function Body({
               onFix={startFix}
               onGuide={() => setGuide(true)}
               exerciseName={exerciseName}
+              onEditRep={editRep}
+              onReadAgain={readAgain}
             />
           </>
         ) : !isLoading ? (
@@ -1065,6 +1095,8 @@ function Results({
   onFix,
   onGuide,
   exerciseName,
+  onEditRep,
+  onReadAgain,
 }: {
   exerciseName: string;
   analysis: LiftAnalysis;
@@ -1078,6 +1110,10 @@ function Results({
   fresh: boolean;
   onFix: () => void;
   onGuide: () => void;
+  /** "Not a rep" / put it back (by the rep's concentric start). */
+  onEditRep: (conStart: number, out: boolean) => void;
+  /** Read it again from its keys (an older read that kept no track to edit). */
+  onReadAgain: () => void;
 }) {
   const calibrated = a.units === "mm";
   const headline = a.set.reps > 1 ? a.set.bestMcv : a.set.firstMcv;
@@ -1174,6 +1210,32 @@ function Results({
         </div>
       </section>
 
+      {/* the reps the athlete logged, against the lifts the video shows: said, never forced */}
+      {loggedSet?.actual_reps != null &&
+        loggedSet.actual_reps > 0 &&
+        a.set.completeReps !== loggedSet.actual_reps && (
+          <div className="rounded-xl bg-muted/50 p-3 text-sm" data-reps-mismatch>
+            <p>
+              You logged {loggedSet.actual_reps} rep{loggedSet.actual_reps === 1 ? "" : "s"}; the
+              video shows {a.set.completeReps} full lift{a.set.completeReps === 1 ? "" : "s"}.
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {canEditReps(a)
+                ? "If one isn't a rep (a setup pull, moving the bar after the set), pick it above and tap Not a rep."
+                : "Read it again to edit the reps."}
+            </p>
+            {!canEditReps(a) && (
+              <button
+                type="button"
+                className="mt-1.5 h-9 text-sm font-medium underline-offset-2 hover:underline"
+                onClick={onReadAgain}
+              >
+                Read it again
+              </button>
+            )}
+          </div>
+        )}
+
       {/* each rep */}
       <section className="rounded-2xl border border-border p-3">
         <div className="mb-1 flex items-baseline justify-between">
@@ -1189,7 +1251,34 @@ function Results({
             onSelect={(i) => onSelect(selected === i ? null : i)}
           />
         )}
-        {rep && <RepDetail analysis={a} index={repIdx} lift={guideLift(exerciseName)} />}
+        {rep && (
+          <RepDetail
+            analysis={a}
+            index={repIdx}
+            lift={guideLift(exerciseName)}
+            onNotARep={canEditReps(a) ? () => onEditRep(rep.con.start, true) : undefined}
+          />
+        )}
+        {(a.exclude?.length ?? 0) > 0 && (
+          <div
+            className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+            data-reps-excluded
+          >
+            <span>
+              {a.exclude!.length === 1 ? "1 rise" : `${a.exclude!.length} rises`} taken out
+            </span>
+            {a.exclude!.map((t) => (
+              <button
+                key={t}
+                type="button"
+                className="h-8 rounded-full bg-secondary px-3 font-medium text-foreground"
+                onClick={() => onEditRep(t, false)}
+              >
+                Put back the one at {t.toFixed(1)} s
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       {notes.length > 0 && (
@@ -1346,10 +1435,12 @@ function RepDetail({
   analysis: a,
   index,
   lift,
+  onNotARep,
 }: {
   analysis: LiftAnalysis;
   index: number;
   lift: ReturnType<typeof guideLift>;
+  onNotARep?: () => void;
 }) {
   const r = a.reps[index];
   const calibrated = a.units === "mm";
@@ -1360,12 +1451,20 @@ function RepDetail({
   const stickReadable = !!stick || (r.peak.tier !== "unavailable" && a.fps >= 50);
   return (
     <div className="mt-2 border-t border-border/60 pt-3" data-rep-detail={index + 1}>
-      <div className="mb-2 text-sm font-semibold">
-        Rep {index + 1}
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+        <span>Rep {index + 1}</span>
         {!r.complete && (
-          <span className="ml-2 text-xs font-normal text-muted-foreground">
-            didn't reach the top
-          </span>
+          <span className="text-xs font-normal text-muted-foreground">didn't reach the top</span>
+        )}
+        {onNotARep && (
+          <button
+            type="button"
+            className="ml-auto h-8 rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={onNotARep}
+            data-not-a-rep
+          >
+            Not a rep
+          </button>
         )}
       </div>
       {calibrated && <RepSpeedCurve analysis={a} rep={index} />}

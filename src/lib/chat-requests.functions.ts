@@ -33,6 +33,9 @@ export const shareRecipeWithClients = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const ids = Array.from(new Set(data.client_ids));
+    // Only clients this coach can reach through their own login (the admin: everyone).
+    const { staffUnreachableClients } = await import("@/lib/staff-client-access.server");
+    if ((await staffUnreachableClients(supabase, userId, ids)).length) throw new Error("You can only share with your own clients.");
 
     const { data: recipe, error: rErr } = await supabaseAdmin
       .from("recipes").select("id, access_scope").eq("id", data.recipe_id).maybeSingle();

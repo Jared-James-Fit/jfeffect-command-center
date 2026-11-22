@@ -20,6 +20,8 @@ const args = process.argv.slice(2);
 const dir = args[0];
 const filter = args[1] && !args[1].startsWith("--") ? args[1] : "";
 const force = args.includes("--render");
+// --no-recover: the engine without reading lost stretches again (to measure what it adds)
+const recover = !args.includes("--no-recover");
 const mode = (args.includes("--mode") ? args[args.indexOf("--mode") + 1] : "auto") as
   | "auto"
   | "confirm";
@@ -62,6 +64,7 @@ async function main() {
       dirHint: dirOf(sc.lift),
       lift: sc.lift === "sumo" ? "deadlift" : sc.lift,
       plate,
+      recover,
     });
     let tapped = false;
     if (mode === "confirm" && !res.ok) {
@@ -74,6 +77,7 @@ async function main() {
         seed: { kind: "tap", t: f.t, x: cx * k, y: cy * k },
         dirHint: dirOf(sc.lift),
         plate,
+        recover,
       });
       tapped = true;
     }
@@ -99,6 +103,13 @@ async function main() {
       tracked: a.quality.tracked,
       repsTrue: truth.reps.length,
       reps: a.reps.length,
+      complete: a.reps.filter((r) => r.complete).length,
+      lost: (a.track?.lost ?? []).map((l) => `${l.start.toFixed(1)}-${l.end.toFixed(1)}`).join(" "),
+      recovered: a.track?.recovered ?? 0,
+      vl:
+        a.set.velocityLoss.tier === "unavailable"
+          ? `— (${a.set.velocityLoss.why})`
+          : `${a.set.velocityLoss.v?.toFixed(1)}±${a.set.velocityLoss.u?.toFixed(1)}`,
       found: m.filter((x) => x.got != null).length,
       maxErr: errs.length ? Math.max(...errs) : null,
       meanErr: errs.length ? errs.reduce((s, x) => s + x, 0) / errs.length : null,
@@ -126,7 +137,7 @@ async function main() {
       )
       .join(" ");
     console.log(
-      `${String(r.name).padEnd(22)} ${String(r.units).padEnd(2)} ${String(r.source).padEnd(4)} trk ${(Number(r.tracked) * 100).toFixed(0).padStart(3)}% reps ${r.reps}/${r.repsTrue} scale ${r.scale ?? "—"} acc ${r.accepted ? "Y" : "n"} | ${per} | ${r.reasons}`,
+      `${String(r.name).padEnd(22)} ${String(r.units).padEnd(2)} ${String(r.source).padEnd(4)} trk ${(Number(r.tracked) * 100).toFixed(0).padStart(3)}% reps ${r.reps}/${r.repsTrue} (${r.complete} complete) scale ${r.scale ?? "—"} acc ${r.accepted ? "Y" : "n"} | ${per} | ${r.reasons} | lost ${r.lost || "none"} rec ${r.recovered} | VL ${r.vl}`,
     );
   }
 }

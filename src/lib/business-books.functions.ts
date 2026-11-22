@@ -697,8 +697,9 @@ export const saveSummerSettings = createServerFn({ method: "POST" })
 
 // ---------------------------------------------------------------------------
 // Cleo's action cards (cleo-actions.server.ts). Whoever has Cleo (the admin;
-// the finance login or a coach while switched on). Each action then runs through the app's own server
-// functions with the tapper's session, so their permissions decide.
+// the finance login or a coach while switched on). Each action runs as the person who asked for it:
+// on Confirm with their own session, or (a coach's request) after the owner's Approve, as the coach,
+// never as the owner (cleo-actions.server.ts).
 
 async function cleoActor(context: any) {
   const { db } = await assertCleo(context);

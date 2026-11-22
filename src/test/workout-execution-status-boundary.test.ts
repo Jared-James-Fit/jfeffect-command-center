@@ -25,7 +25,13 @@ describe("workout execution status boundary", () => {
   });
 
   it("keeps the normal finish-workout completion path in the execution view", () => {
-    expect(executionViewSource).toContain("async function handleFinishWorkout()");
+    // Finish Workout is still the one shared handler; it also serves the automatic
+    // finish, so it takes how it was finished (manual by default) and whether to
+    // open the review after
+    expect(executionViewSource).toMatch(
+      /async function handleFinishWorkout\(\s*completionMethod: "manual" \| "automatic" = "manual",\s*openReviewAfterFinish = true,\s*\): Promise<boolean> \{/,
+    );
     expect(executionViewSource).toContain("await completeWorkoutSrv({");
+    expect(executionViewSource).toContain("await handleFinishWorkout();");
   });
 });
