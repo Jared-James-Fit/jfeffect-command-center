@@ -200,7 +200,7 @@ SELECT public.rls_evaluate_once('nutrition_roadmap_checkins');
 -- fixed UTC-5 from Nov 1, 2026): every roadmap is read against the day's data,
 -- its status and next check-in kept, a reforecast proposed only when the
 -- journey really changed, a due check-in reminded once by push, and the coach
--- told only about what genuinely needs them (nutrition-roadmap.server.ts).
+-- told only about what genuinely needs them (nutrition-roadmap/evaluate.server.ts).
 do $$
 begin
   perform cron.unschedule(jobid) from cron.job where jobname = 'nutrition-roadmap-tick';
