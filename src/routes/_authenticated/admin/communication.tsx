@@ -42,7 +42,7 @@ function isTab(v: unknown): v is TabKey {
   return typeof v === "string" && TABS.some((t) => t.value === v);
 }
 
-type Search = { tab: TabKey; client?: string; sub?: string; support?: string; msg?: string };
+type Search = { tab: TabKey; client?: string; sub?: string; support?: string; msg?: string; recovery?: string };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -58,6 +58,8 @@ export const Route = createFileRoute("/_authenticated/admin/communication")({
     const support = typeof raw?.support === "string" && UUID.test(raw.support) ? raw.support
       : ticket && UUID.test(ticket) ? ticket : undefined;
     if (support) return { tab: "messages", support };
+    // the Recovery queue on one item (a push about a reply waiting for approval)
+    if (typeof raw?.recovery === "string" && UUID.test(raw.recovery)) return { tab: "messages", recovery: raw.recovery };
     if (isTab(t)) return { tab: t, client, sub, ...(msg && t === "messages" ? { msg } : {}) };
     // No ?tab= opens Chats, never whichever tab was used last.
     return { tab: "messages", client, sub, ...(msg ? { msg } : {}) };

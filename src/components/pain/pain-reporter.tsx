@@ -10,42 +10,25 @@
  * That's the only advice the athlete sees here; anything about training or
  * recovery comes from their coach.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, ChevronRight, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { feedback } from "@/lib/feedback";
-import { AnatomyFigure, placeKey } from "@/components/pain/anatomy-figure";
-import { PainMap, partForPlace, viewForPlace, type PainMapContext } from "@/components/pain/pain-map";
+import { AnatomyFigure } from "@/components/pain/anatomy-figure";
+import { PainMap, type PainMapContext } from "@/components/pain/pain-map";
+import { PlaceThumb as Thumb } from "@/components/pain/place-thumb";
 import { atlasView } from "@/lib/pain/anatomy/atlas";
 import { FEELS, TIMINGS, placeLabel } from "@/lib/pain/report";
-import { siteAnatomy, siteOf } from "@/lib/pain/sites";
+import { siteAnatomy } from "@/lib/pain/sites";
 import { regionOf } from "@/lib/pain/regions";
 import { pickScore, unrated, type PainPick } from "@/lib/pain/picks";
 import { CLIENT_SAFETY_NOTICE, needsSafetyNotice, URGENT_SIGNS } from "@/lib/pain/safety";
 
 export type PainContext = PainMapContext;
 
-/** A small picture of where a spot is: its part of the body, framed. */
 function PlaceThumb({ pick }: { pick: PainPick }) {
-  const art = useMemo(() => {
-    if (pick.region === "other") return null;
-    const where = viewForPlace(pick.site, pick.region, pick.side ?? null);
-    const view = atlasView(where.view, where.facing);
-    const part = partForPlace(view, pick.site, pick.region, pick.side ?? null);
-    if (!part) return null;
-    const size = Math.max(part.box.w, part.box.h) * (pick.site ? 2.2 : 1.4) + 24;
-    const cx = part.box.x + part.box.w / 2;
-    const cy = part.box.y + part.box.h / 2;
-    const picked = new Set(pick.site ? [placeKey(pick.site, siteOf(pick.site)?.midline ? null : pick.side ?? null)] : []);
-    const areas = new Set(pick.site ? [] : [`${pick.region}:${pick.side ?? "-"}`]);
-    return { view, deep: !!siteOf(pick.site)?.deep, box: { x: cx - size / 2, y: cy - size / 2, w: size, h: size }, picked, areas };
-  }, [pick.site, pick.region, pick.side]);
-  return (
-    <span className="relative block h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-[#0b0b0d] ring-1 ring-border" aria-hidden>
-      {art && <AnatomyFigure view={art.view} box={art.box} deep={art.deep} picked={art.picked} pickedAreas={art.areas} detail className="h-full w-full" />}
-    </span>
-  );
+  return <Thumb place={pick} />;
 }
 
 function detailLine(p: PainPick): string {

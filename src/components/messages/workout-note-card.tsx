@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { AlertTriangle, ArrowDown, ChevronRight, History, NotebookPen, StickyNote } from "lucide-react";
+import { ArrowDown, ChevronRight, NotebookPen, StickyNote } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { painLine, type WorkoutNoteCardAttachment, type WorkoutNotePain } from "@/lib/workout-notes";
@@ -11,13 +11,15 @@ import { OpenWorkout } from "@/components/messages/open-client-workout";
 import { EditedToggle, NoteVersions } from "@/components/workout/shared/note-edit-history";
 import type { NoteDates } from "@/lib/exercise-note-versions";
 import { PainReviewSheet } from "@/components/pain/pain-review-sheet";
-import { FEELS, TIMINGS, reportLine, type Severity } from "@/lib/pain/report";
+import { FEELS, TIMINGS, placeLabel, severityLabel, type Severity } from "@/lib/pain/report";
 import { siteAnatomy } from "@/lib/pain/sites";
+import { PlaceThumb } from "@/components/pain/place-thumb";
+import type { PainSide } from "@/lib/pain/regions";
 
 const sb = supabase as any;
 
 /** One place from the review's body map (pain_reports), as the card shows it. */
-type Place = { line: string; extra: string | null };
+type Place = { region: string; side: PainSide | null; site: string | null; name: string; score: string | null; level: number; extra: string | null; impact: string | null };
 
 type Live = {
   note: string | null;
@@ -106,24 +108,47 @@ export function WorkoutNoteCard({ att, messageId, role, clientId, version }: {
     );
   }
 
+  const places = live?.places ?? [];
+  // the worst place leads the card (its picture); the rest are lines under it
+  const lead = places.length ? [...places].sort((a, b) => b.level - a.level)[0] : null;
+  const impact = places.find((p) => p.impact === "stopped")?.impact ?? places.find((p) => p.impact)?.impact ?? null;
+
   return (
     <div className="w-[min(78vw,320px)] overflow-hidden rounded-2xl border border-border/70 bg-background text-left text-foreground" data-workout-note={pain ? "pain" : source}>
-      <div className={cn("flex items-center gap-2 px-3.5 py-2", pain ? "bg-red-500/12 text-red-600 dark:text-red-400" : "bg-muted/60 text-muted-foreground")}>
-        {pain ? <AlertTriangle className="h-4 w-4 shrink-0" /> : source === "exercise" ? <StickyNote className="h-4 w-4 shrink-0" /> : <NotebookPen className="h-4 w-4 shrink-0" />}
-        <span className="text-[11px] font-bold uppercase tracking-[0.12em]">{pain ? "Pain flagged" : source === "exercise" ? "Exercise note" : "Workout note"}</span>
-      </div>
+      {pain ? (
+        <div className="flex items-center gap-3 px-3.5 pt-3" data-recovery-card>
+          {lead ? <PlaceThumb place={lead} className="h-11 w-11" /> : null}
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-semibold leading-tight">Recovery update</p>
+            <p className="truncate text-[12px] text-muted-foreground">{[att.workout, when && format(when, "EEE, MMM d")].filter(Boolean).join(" · ")}</p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 bg-muted/60 px-3.5 py-2 text-muted-foreground">
+          {source === "exercise" ? <StickyNote className="h-4 w-4 shrink-0" /> : <NotebookPen className="h-4 w-4 shrink-0" />}
+          <span className="text-[13px] font-semibold">{source === "exercise" ? "Exercise note" : "Workout note"}</span>
+        </div>
+      )}
       <div className="space-y-1.5 px-3.5 py-2.5">
-        {pain && (live?.places?.length ? (
-          <ul className="space-y-1" data-workout-note-pain>
-            {live.places.map((p, i) => (
+        {pain && (places.length ? (
+          <ul className="space-y-1.5" data-workout-note-pain>
+            {places.map((p, i) => (
               <li key={i} className="leading-snug">
-                <span className="text-[15px] font-bold">{p.line}</span>
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="min-w-0 text-[15px] font-semibold">{p.name}</span>
+                  {p.score && <span className={cn("shrink-0 text-[14px] font-semibold tabular-nums", p.level >= 6 ? "text-warning" : "text-foreground")}>{p.score}</span>}
+                </span>
                 {p.extra && <span className="block text-[12px] text-muted-foreground">{p.extra}</span>}
               </li>
             ))}
+            {impact && (
+              <li className="pt-0.5 text-[12px] text-muted-foreground" data-recovery-impact>
+                Training impact: <span className="font-semibold text-foreground">{impact === "stopped" ? "had to stop" : "changed the session"}</span>
+              </li>
+            )}
           </ul>
         ) : (
-          <div className="text-[15px] font-bold leading-snug" data-workout-note-pain>{painLine(pain)}</div>
+          <div className="text-[15px] font-semibold leading-snug" data-workout-note-pain>{painLine(pain)}</div>
         ))}
         {exercise && <div className="text-[13px] font-bold">{exercise}</div>}
         {removed ? (
@@ -132,7 +157,7 @@ export function WorkoutNoteCard({ att, messageId, role, clientId, version }: {
           note && <p className="whitespace-pre-wrap break-words text-[14px] leading-snug">“{note}”</p>
         )}
         <div className="flex flex-wrap items-center gap-x-1 text-[11px] text-muted-foreground">
-          <span>{[att.workout, when && format(when, "EEE, MMM d"), source === "review" && live?.edited ? "edited" : null, source === "review" && att.rpe ? `effort ${att.rpe}/10` : null].filter(Boolean).join(" · ")}</span>
+          <span>{[pain ? null : att.workout, pain ? null : when && format(when, "EEE, MMM d"), source === "review" && live?.edited ? "edited" : null, source === "review" && att.rpe ? `effort ${att.rpe}/10` : null].filter(Boolean).join(" · ")}</span>
           {source === "exercise" && live?.dates && live.edited && (
             <>
               <span aria-hidden>·</span>
@@ -149,8 +174,8 @@ export function WorkoutNoteCard({ att, messageId, role, clientId, version }: {
           <>
             <OpenWorkout clientId={clientId} dayId={att.day_id ?? null} rowId={att.row_id ?? null} />
             {pain && (
-              <button type="button" onClick={() => setPainOpen(true)} className="ml-auto inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] font-bold text-muted-foreground active:bg-muted" data-workout-note-pain-history>
-                <History className="h-3.5 w-3.5" /> Pain history
+              <button type="button" onClick={() => setPainOpen(true)} className="ml-auto inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] font-semibold text-foreground active:bg-muted" data-workout-note-pain-history>
+                Open report <ChevronRight className="h-3.5 w-3.5" />
               </button>
             )}
             {!pain && (
@@ -180,17 +205,26 @@ function placeOf(r: any): Place {
   const feel = ((r.feel ?? []) as string[]).map((f) => FEELS.find((x) => x.v === f)?.label.toLowerCase() ?? f);
   const when = ((r.timing ?? []) as string[]).map((t) => TIMINGS.find((x) => x.v === t)?.label.toLowerCase() ?? t);
   const anat = siteAnatomy(r.site);
+  const side: PainSide | null = r.side === "L" || r.side === "R" ? r.side : null;
   const extra = [
     anat,
     r.same_issue && r.change ? `${r.change} than last time` : r.same_issue === false ? "new" : null,
     feel.length ? feel.join(", ") : null,
     when.length ? when.join(", ") : null,
-    r.impact === "stopped" ? "had to stop" : r.impact === "modified" ? "changed the session" : null,
+    r.exercise_name,
     r.region !== "other" && r.note ? `“${r.note}”` : null,
   ].filter(Boolean).join(" · ");
+  const score = typeof r.score === "number" ? r.score : null;
+  const level = score ?? (r.severity === "severe" ? 8 : r.severity === "moderate" ? 5 : 3);
   return {
-    line: reportLine({ region: r.region, side: r.side ?? null, site: r.site ?? null, severity: (r.severity as Severity) ?? null, score: r.score ?? null, exerciseName: r.exercise_name, note: r.note }),
+    region: r.region,
+    side,
+    site: r.site ?? null,
+    name: placeLabel({ region: r.region, side, site: r.site ?? null, note: r.note }),
+    score: score != null ? `${score}/10` : severityLabel((r.severity as Severity) ?? null),
+    level,
     extra: extra || null,
+    impact: r.impact === "stopped" || r.impact === "modified" ? r.impact : null,
   };
 }
 

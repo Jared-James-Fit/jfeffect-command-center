@@ -90,6 +90,8 @@ export function messageAction(attachments: AttachmentLike[] | null | undefined, 
   if (kinds.has("recipe_share")) return `shared a recipe`;
   if (kinds.has("community_post")) return `sent${you} a post`;
   if (kinds.has("staff_invite")) return `sent${you} a team account invite`;
+  // a recovery reply automation wrote: its marker is no attachment to the person reading it
+  if (kinds.has("recovery_auto")) return `sent${you} a message`;
   // a video of one set, from the workout logger (DB-made)
   if (atts.some((a) => (a as { set_video?: unknown }).set_video)) return `sent${you} a set video`;
   // a marked frame of a set video (a film note): opens the clip on that frame
