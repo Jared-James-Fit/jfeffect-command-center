@@ -11,6 +11,7 @@
 import type { SearchableExercise } from "@/lib/exercise-search";
 import {
   MAX_BLOCKS,
+  linkTopSets,
   MAX_DAYS,
   MAX_EXERCISES,
   MAX_WEEKS,
@@ -205,7 +206,8 @@ export function toDraft<T extends SearchableExercise & { muscle_group?: string |
   return {
     title: title.length >= 2 ? title : "Imported program",
     description: desc.text,
-    plan: { v: 1, blocks: out.length ? out : [] },
+    // a top set and its back-offs read as one exercise (set groups), as the builder makes them
+    plan: linkTopSets({ v: 1, blocks: out.length ? out : [] }),
     flags: sortFlags(flags),
     weeks: weeksTotal,
     oneWeek: weeksTotal === 1,

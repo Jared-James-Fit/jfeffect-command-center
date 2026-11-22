@@ -1,20 +1,27 @@
 import { useEffect } from "react";
-import { Check, ChevronDown, Layers, MoreHorizontal } from "lucide-react";
+import { GripVertical, Layers, MoreHorizontal } from "lucide-react";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import { useScrollFade } from "@/hooks/use-scroll-fade";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  exerciseUnits,
+  fmtWeight,
+  linkedLoad,
   programWeek,
-  scopeLabel,
+  scopeOptions,
+  setGroupName,
   totalWeeks as totalWeeksOf,
   type Cursor,
+  type ExerciseUnit,
+  type PlanDay,
   type PlanExercise,
   type ProgramPlan,
   type Scope,
@@ -26,12 +33,12 @@ import { Cell } from "./cells";
 /** The columns, in the order a coach writes them. */
 const FIELDS: CellField[] = ["sets", "reps", "effort", "load", "rest"];
 
-/** Phone: the name over its five cells. Desktop: one row of a sheet. */
-export const PHONE_GRID = "grid grid-cols-[0.8fr_1.15fr_0.95fr_1.3fr_1fr] gap-1.5";
+/** Phone: the name over its five cells, full width. Desktop: one row of a sheet. */
+export const PHONE_GRID = "grid grid-cols-[0.8fr_1.1fr_0.95fr_1.35fr_1fr] gap-1.5";
 export const DESK_GRID =
-  "grid grid-cols-[1.75rem_minmax(0,1fr)_4rem_5.5rem_4.5rem_6.5rem_5rem_2.5rem] items-center gap-2";
+  "grid grid-cols-[2rem_minmax(0,1fr)_4rem_5.5rem_4.5rem_6.5rem_5rem_2.5rem] items-center gap-2";
 
-/** Column names once over the list (a phone's cells are too small to label each). */
+/** Column names, held at the top of the screen with the scope so a number always says what it is. */
 export function ColumnHeads({ desktop }: { desktop: boolean }) {
   const heads = FIELDS.map((f) => (
     <span key={f} className="text-center">
@@ -39,122 +46,287 @@ export function ColumnHeads({ desktop }: { desktop: boolean }) {
     </span>
   ));
   return desktop ? (
-    <div className={cn(DESK_GRID, "px-3 pb-1 text-[11px] font-medium text-muted-foreground")} aria-hidden>
+    <div className={cn(DESK_GRID, "px-3 pb-1.5 pt-1 text-[12px] font-medium text-muted-foreground")} aria-hidden data-column-heads>
       <span />
       <span>Exercise</span>
       {heads}
       <span />
     </div>
   ) : (
-    <div className={cn(PHONE_GRID, "pb-1 pl-7 text-[11px] font-medium text-muted-foreground")} aria-hidden>
+    <div className={cn(PHONE_GRID, "pb-1.5 pt-1 text-[12px] font-medium text-muted-foreground")} aria-hidden data-column-heads>
       {heads}
     </div>
   );
 }
 
 /**
- * One exercise: its name (a tap opens what else it can do: swap, notes,
- * progression, back-offs, move, remove) and its numbers typed straight in.
+ * Which weeks an edit changes, always in view above the exercises: each
+ * choice named plainly with its exact weeks ("This week · Week 3", "Rest of
+ * block · Weeks 3–4", "This block · Weeks 1–4", "All weeks · Weeks 1–12").
+ * The weeks it reaches are outlined in the week bar too.
  */
-export function ExerciseRow({
+export function ScopeBar({
+  plan,
+  cursor,
+  scope,
+  onScope,
+}: {
+  plan: ProgramPlan;
+  cursor: Cursor;
+  scope: Scope;
+  onScope: (s: Scope) => void;
+}) {
+  const opts = scopeOptions(plan, cursor);
+  if (opts.length < 2) return null;
+  // four choices (a program in blocks) need a big phone for their full names
+  const dense = opts.length >= 4;
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Which weeks your changes reach"
+      className="grid gap-1 rounded-xl bg-muted/70 p-1"
+      style={{ gridTemplateColumns: `repeat(${opts.length}, minmax(0, 1fr))` }}
+      data-scope-bar
+    >
+      {opts.map((o) => {
+        const on = o.scope === scope;
+        return (
+          <button
+            key={o.scope}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            aria-label={`${o.title}, ${o.range}`}
+            onClick={() => onScope(o.scope)}
+            className={cn(
+              "min-w-0 rounded-lg px-1 py-1 text-center transition-colors",
+              on ? "bg-background text-foreground ring-1 ring-border" : "text-muted-foreground hover:text-foreground",
+            )}
+            data-scope-option={o.scope}
+            data-scope-on={on ? "" : undefined}
+          >
+            {/* the narrowest phones get the short words; the weeks are never cut */}
+            <span className={cn("block truncate text-[13px] font-semibold leading-tight", dense ? "max-[429px]:hidden" : "max-[379px]:hidden")}>
+              {o.title}
+            </span>
+            <span className={cn("block truncate text-[13px] font-semibold leading-tight", dense ? "min-[430px]:hidden" : "min-[380px]:hidden")}>
+              {o.short}
+            </span>
+            <span className="block whitespace-nowrap text-[11px] leading-tight tabular-nums max-[379px]:hidden">{o.range}</span>
+            <span className="block whitespace-nowrap text-[11px] leading-tight tabular-nums min-[380px]:hidden">{o.shortRange}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The line over a set group of an exercise with more than one: its name, the weight a % of the top set comes to, its ⋯. */
+function GroupCaption({
   e,
-  index,
-  changed,
-  onPatch,
+  day,
   onOpen,
   desktop,
 }: {
   e: PlanExercise;
-  index: number;
-  changed: Set<string>;
-  onPatch: (p: Partial<PlanExercise>) => void;
+  day: Pick<PlanDay, "exercises">;
   onOpen: () => void;
   desktop: boolean;
 }) {
-  const backoff = e.pct != null && e.pct_of === "top_set";
+  const linked = linkedLoad(day, e.key);
+  const of = e.pct != null && e.pct_of === "top_set" ? (e.role === "warmup" ? `${fmtWeight(e.pct)}% of top set` : null) : null;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn(
+        "flex min-h-8 w-full min-w-0 items-center gap-1.5 text-left",
+        desktop ? "pr-1" : "pt-2",
+      )}
+      aria-label={`${setGroupName(e)}: options`}
+      data-pb-group={e.key}
+      data-pb-role={e.role ?? undefined}
+    >
+      <span className={cn("shrink-0 text-[13px] font-semibold", e.role === "warmup" ? "text-muted-foreground" : "text-foreground")}>
+        {setGroupName(e)}
+      </span>
+      {(linked || of) && (
+        <span className="min-w-0 truncate text-[12px] tabular-nums text-muted-foreground" data-pb-linked>
+          {linked ? `= ${fmtWeight(linked.load)} ${linked.unit}` : of}
+        </span>
+      )}
+      <MoreHorizontal className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+    </button>
+  );
+}
+
+/**
+ * One exercise: a handle to drag it by (press and hold on a phone), its name
+ * (a tap opens what else it can do), and each set group's numbers typed
+ * straight in. An exercise with more than one set group (a top set and its
+ * back-offs, warm-ups, groups the person names) says what each group is over
+ * its numbers.
+ */
+export function ExerciseBlock({
+  unit,
+  id,
+  day,
+  desktop,
+  changedOf,
+  onPatch,
+  onOpen,
+  onOpenGroup,
+}: {
+  unit: ExerciseUnit;
+  /** the drag id (the exercise's group, else its key) */
+  id: string;
+  day: Pick<PlanDay, "exercises">;
+  desktop: boolean;
+  changedOf: (exKey: string) => Set<string>;
+  onPatch: (exKey: string, p: Partial<PlanExercise>, session?: string) => void;
+  onOpen: () => void;
+  onOpenGroup: (exKey: string) => void;
+}) {
+  const sortable = useSortable({ id });
+  const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition, isDragging } = sortable;
+  const head = unit.entries[0];
+  const multi = unit.entries.length > 1;
+  const backoff = !multi && head.pct != null && head.pct_of === "top_set";
   // an imported exercise still waiting for its library pick says so; one matched under
   // another name says what the file called it (both only while it's being reviewed)
-  const unmatched = !e.exercise_id;
-  const fromFile = !unmatched && e.source_name ? `From your file: ${e.source_name}` : null;
+  const unmatched = !head.exercise_id;
+  const fromFile = !unmatched && head.source_name ? `From your file: ${head.source_name}` : null;
+  const sub = unmatched
+    ? null
+    : [fromFile, backoff ? "Back-off sets" : null, head.tempo ? `Tempo ${head.tempo}` : null, head.notes].filter(Boolean).join(" · ");
   const name = (
     <>
-      <span className={cn("block truncate text-[15px] font-medium leading-snug", unmatched && "text-warning")}>
-        {unmatched ? e.source_name ?? e.name ?? "Exercise" : e.name ?? "Exercise"}
+      <span
+        className={cn("block truncate text-[16px] font-semibold leading-snug", unmatched && "text-warning")}
+        data-pb-name
+      >
+        {unmatched ? head.source_name ?? head.name ?? "Exercise" : head.name ?? "Exercise"}
       </span>
       {unmatched ? (
         <span className="block truncate text-[12px] font-medium text-warning" data-pb-unmatched>
           Not matched yet · tap to pick the exercise
         </span>
       ) : (
-        (fromFile || backoff || e.notes || e.tempo) && (
-          <span className="block truncate text-[12px] text-muted-foreground">
-            {[fromFile, backoff ? "Back-off sets" : null, e.tempo ? `Tempo ${e.tempo}` : null, e.notes].filter(Boolean).join(" · ")}
-          </span>
-        )
+        sub && <span className="block truncate text-[12.5px] text-muted-foreground">{sub}</span>
       )}
     </>
   );
-  const cells = FIELDS.map((f) => (
-    <Cell key={f} e={e} field={f} onPatch={onPatch} changed={changed.has(f === "effort" ? (e.rir ? "rir" : "rpe") : f)} label={!desktop} />
-  ));
+  const cells = (e: PlanExercise) => {
+    const changed = changedOf(e.key);
+    return FIELDS.map((f) => (
+      <Cell
+        key={f}
+        e={e}
+        field={f}
+        onPatch={(p, session) => onPatch(e.key, p, session)}
+        changed={changed.has(f === "effort" ? (e.rir ? "rir" : "rpe") : f)}
+        label={!desktop}
+      />
+    ));
+  };
+  const grip = (
+    <button
+      type="button"
+      ref={setActivatorNodeRef}
+      {...attributes}
+      {...listeners}
+      aria-label={`Reorder ${head.name ?? "exercise"}: press and hold, then drag`}
+      aria-roledescription="Drag handle"
+      className={cn(
+        "grid shrink-0 cursor-grab touch-manipulation select-none place-items-center rounded-lg text-muted-foreground/80 transition-colors [-webkit-touch-callout:none] hover:bg-secondary hover:text-foreground active:cursor-grabbing",
+        desktop ? "h-9 w-8" : "-ml-2 h-11 w-9",
+        isDragging && "text-foreground",
+      )}
+      data-pb-grip
+    >
+      <GripVertical className="h-5 w-5" aria-hidden />
+    </button>
+  );
+  const more = (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`More for ${head.name ?? "this exercise"}`}
+      className={cn("grid shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-secondary", desktop ? "h-9 w-9" : "-mr-1.5 h-11 w-10")}
+      data-pb-more
+    >
+      <MoreHorizontal className="h-5 w-5" />
+    </button>
+  );
+  const style = { transform: CSS.Translate.toString(transform), transition };
+  // the exercise being dragged lifts off the list and follows the finger; the others slide out of its way
+  const shell = cn(
+    "relative bg-background",
+    isDragging && "z-30 rounded-xl ring-1 ring-border shadow-[0_12px_32px_-8px_rgb(0_0_0/0.35)]",
+  );
 
   if (desktop) {
     return (
-      <div className={cn(DESK_GRID, "rounded-xl px-3 py-1.5 hover:bg-muted/30")} data-pb-row={e.key}>
-        <span className="text-center text-[12px] tabular-nums text-muted-foreground">{index + 1}</span>
-        <button type="button" onClick={onOpen} className="min-w-0 text-left" aria-label={`${e.name ?? "Exercise"}: more`}>
-          {name}
-        </button>
-        {cells}
-        <button
-          type="button"
-          onClick={onOpen}
-          aria-label={`More for ${e.name ?? "this exercise"}`}
-          className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-secondary"
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </button>
+      <div ref={setNodeRef} style={style} className={cn(shell, "rounded-xl py-1 hover:bg-muted/30")} data-pb-unit={id} data-pb-row={head.key}>
+        {unit.entries.map((e, i) => (
+          <div key={e.key} className={cn(DESK_GRID, "px-3 py-0.5")} data-pb-entry={e.key}>
+            {i === 0 ? grip : <span />}
+            {i === 0 ? (
+              <button type="button" onClick={onOpen} className="min-w-0 text-left" aria-label={`${head.name ?? "Exercise"}: more`}>
+                {name}
+                {multi && (
+                  <span className="mt-0.5 block text-[12px] font-medium text-muted-foreground">{setGroupName(e)}</span>
+                )}
+              </button>
+            ) : (
+              <GroupCaption e={e} day={day} onOpen={() => onOpenGroup(e.key)} desktop />
+            )}
+            {cells(e)}
+            {i === 0 ? (
+              more
+            ) : (
+              <span />
+            )}
+          </div>
+        ))}
       </div>
     );
   }
   return (
-    <div className="py-2" data-pb-row={e.key}>
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex min-h-9 w-full items-center gap-2 text-left"
-        aria-label={`${e.name ?? "Exercise"}: more`}
-      >
-        <span className="w-5 shrink-0 text-center text-[12px] tabular-nums text-muted-foreground">{index + 1}</span>
-        <span className="min-w-0 flex-1">{name}</span>
-        <MoreHorizontal className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-      </button>
-      <div className={cn(PHONE_GRID, "mt-1 pl-7")}>{cells}</div>
+    <div ref={setNodeRef} style={style} className={cn(shell, "py-3")} data-pb-unit={id} data-pb-row={head.key}>
+      <div className="flex items-center gap-1">
+        {grip}
+        <button type="button" onClick={onOpen} className="min-w-0 flex-1 py-1 text-left" aria-label={`${head.name ?? "Exercise"}: more`}>
+          {name}
+        </button>
+        {more}
+      </div>
+      {unit.entries.map((e) => (
+        <div key={e.key} data-pb-entry={e.key}>
+          {multi && <GroupCaption e={e} day={day} onOpen={() => onOpenGroup(e.key)} desktop={false} />}
+          <div className={cn(PHONE_GRID, multi ? "mt-1" : "mt-1.5")}>{cells(e)}</div>
+        </div>
+      ))}
     </div>
   );
 }
 
 /**
  * The bottom of the builder, Google Sheets' tabs: every week of the program
- * as a tab (grouped by block), the one on screen filled and the ones an edit
- * will reach outlined, with what an edit reaches said above them and the
- * week's own tools in ⋯.
+ * as a tab (grouped by block), the one on screen filled and the other weeks
+ * an edit will reach outlined, with the week's own tools in ⋯.
  */
 export function WeekBar({
   plan,
   cursor,
-  scope,
   targets,
-  onScope,
   onPick,
   weekMenu,
   desktop,
 }: {
   plan: ProgramPlan;
   cursor: Cursor;
-  scope: Scope;
   targets: WeekRef[];
-  onScope: (s: Scope) => void;
   onPick: (b: number, w: number) => void;
   weekMenu: React.ReactNode;
   desktop: boolean;
@@ -163,6 +335,7 @@ export function WeekBar({
   const hit = new Set(targets.map((t) => `${t.b}:${t.w}`));
   const multi = plan.blocks.length > 1;
   const g = programWeek(plan, cursor);
+  const total = totalWeeksOf(plan);
 
   // the week on screen stays in view as it changes
   useEffect(() => {
@@ -170,7 +343,6 @@ export function WeekBar({
     el?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
   }, [cursor.b, cursor.w]);
 
-  const scopes: Scope[] = plan.blocks[cursor.b].weeks.length > 1 ? ["week", "following", "block"] : ["week"];
   return (
     <div
       className={cn(
@@ -180,52 +352,26 @@ export function WeekBar({
       data-week-bar
       data-hide-on-keyboard
     >
-      <div className="flex items-center justify-between gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="-ml-1 inline-flex h-8 min-w-0 items-center gap-1.5 rounded-full px-2 text-[13px] text-muted-foreground transition hover:bg-secondary"
-              data-scope-chip={scope}
-            >
-              <span className="shrink-0">Edits apply to</span>
-              <span className="truncate font-semibold text-foreground">{scopeLabel(plan, cursor, scope)}</span>
-              <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="top" className="w-72">
-            <DropdownMenuLabel className="text-[12px] font-normal text-muted-foreground">
-              Which weeks an edit on this screen changes
-            </DropdownMenuLabel>
-            {scopes.map((s) => (
-              <DropdownMenuItem key={s} onSelect={() => onScope(s)} className="min-h-11 gap-2" data-scope-option={s}>
-                <Check className={cn("h-4 w-4", s === scope ? "opacity-100" : "opacity-0")} aria-hidden />
-                <span className="min-w-0">
-                  <span className="block text-[14px] font-medium">{scopeLabel(plan, cursor, s)}</span>
-                  <span className="block text-[12px] text-muted-foreground">
-                    {s === "week" ? "Make this week different" : s === "following" ? "From this week on" : "Keep every week the same"}
-                  </span>
-                </span>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        {/* the tabs say which week is on screen; a computer has room to say it in words too */}
-        {desktop && (
-          <span className="flex shrink-0 items-center gap-1 text-[12px] text-muted-foreground tabular-nums">
-            {multi && <Layers className="h-3.5 w-3.5" aria-hidden />}
-            {multi ? `${plan.blocks[cursor.b].name} · ` : ""}Week {g} of {plan.blocks.reduce((n, b) => n + b.weeks.length, 0)}
+      <div className="flex items-baseline justify-between gap-2 px-0.5 pb-0.5 text-[12px] text-muted-foreground">
+        <span className="truncate" data-week-now>
+          <span className="font-semibold text-foreground">Week {g}</span> of {total}
+          {multi ? ` · ${plan.blocks[cursor.b].name}` : ""}
+        </span>
+        {hit.size > 1 && (
+          <span className="shrink-0" data-week-reach>
+            Outlined weeks change too
           </span>
         )}
       </div>
-      <div className="mt-1 flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5">
         <div ref={strip} style={stripFade} className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto py-0.5 no-scrollbar" role="tablist" aria-label="Weeks">
           {plan.blocks.map((block, b) => (
             <div key={block.key} className="flex shrink-0 items-center gap-1">
               {b > 0 && <span aria-hidden className="mx-1 h-6 w-px shrink-0 bg-border" />}
               {multi && (
-                <span className="mr-0.5 max-w-[5.5rem] shrink-0 truncate text-[11px] font-medium text-muted-foreground">
-                  {block.name}
+                <span className="mr-0.5 flex max-w-[5.5rem] shrink-0 items-center gap-1 truncate text-[11px] font-medium text-muted-foreground">
+                  {b === 0 && <Layers className="h-3 w-3 shrink-0" aria-hidden />}
+                  <span className="truncate">{block.name}</span>
                 </span>
               )}
               {block.weeks.map((week, w) => {
@@ -237,14 +383,14 @@ export function WeekBar({
                     type="button"
                     role="tab"
                     aria-selected={on}
-                    aria-label={`Week ${programWeek(plan, { b, w })}${reached && !on ? ", changes with this edit" : ""}`}
+                    aria-label={`Week ${programWeek(plan, { b, w })}${reached && !on ? ", changes with your edits" : ""}`}
                     onClick={() => onPick(b, w)}
                     className={cn(
                       "grid h-10 min-w-10 shrink-0 place-items-center rounded-lg px-2 text-[14px] font-semibold tabular-nums transition-colors",
                       on
                         ? "bg-foreground text-background"
                         : reached
-                          ? "bg-foreground/[0.07] text-foreground ring-1 ring-inset ring-foreground/30"
+                          ? "bg-foreground/[0.07] text-foreground ring-1 ring-inset ring-foreground/35"
                           : "text-muted-foreground hover:bg-secondary",
                     )}
                     data-week-tab={`${b}:${w}`}
@@ -272,7 +418,7 @@ export function DayTabs({
   canAdd,
   onDayMenu,
 }: {
-  days: { key: string; title: string; exercises: unknown[] }[];
+  days: { key: string; title: string; exercises: PlanExercise[] }[];
   active: number;
   onPick: (i: number) => void;
   onAdd: () => void;
@@ -306,7 +452,7 @@ export function DayTabs({
             <span className="truncate">{d.title || `Day ${i + 1}`}</span>
             {d.exercises.length > 0 && (
               <span className={cn("text-[12px] tabular-nums", i === active ? "text-background/70" : "text-muted-foreground")}>
-                {d.exercises.length}
+                {exerciseUnits(d).length}
               </span>
             )}
           </button>

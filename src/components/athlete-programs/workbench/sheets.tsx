@@ -4,7 +4,9 @@ import {
   ArrowUp,
   Copy,
   CopyPlus,
+  Flame,
   Layers,
+  ListPlus,
   MoreHorizontal,
   Plus,
   Repeat2,
@@ -21,6 +23,8 @@ import {
   MAX_WEEKS,
   PROGRESS_LIMITS,
   fieldNumber,
+  fmtWeight,
+  setGroupName,
   progressionValues,
   programWeek,
   scopeWeeks,
@@ -30,6 +34,8 @@ import {
   type PlanExercise,
   type ProgramPlan,
   type ProgressField,
+  type SetGroupKind,
+  type SetRole,
   type WeekRef,
 } from "@/lib/program-plan";
 import { ProgramDetailsFields, Stepper } from "../program-builder-parts";
@@ -83,77 +89,270 @@ const Group = ({ children }: { children: React.ReactNode }) => (
 /*  An exercise                                                        */
 /* ------------------------------------------------------------------ */
 
+/** A big square action at the top of a sheet: icon over its word, one tap. */
+function QuickAction({
+  icon: Icon,
+  label,
+  onClick,
+  destructive,
+  disabled,
+  testid,
+}: {
+  icon: typeof Copy;
+  label: string;
+  onClick: () => void;
+  destructive?: boolean;
+  disabled?: boolean;
+  testid?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex min-h-[4.25rem] flex-col items-center justify-center gap-1 rounded-2xl bg-muted/70 px-2 py-2 text-center transition hover:bg-secondary disabled:opacity-40"
+      data-quick={testid}
+    >
+      <Icon className={cn("h-5 w-5", destructive && "text-destructive")} aria-hidden />
+      <span className={cn("text-[13px] font-medium leading-tight", destructive && "text-destructive")}>{label}</span>
+    </button>
+  );
+}
+
+/** Who an edit in a sheet reaches, said once under its title. */
+function ScopeLine({ scopeText }: { scopeText: string }) {
+  return (
+    <>
+      Changes reach <span className="font-medium text-foreground">{scopeText}</span>
+    </>
+  );
+}
+
+/**
+ * What an exercise can do, the common things first as one-tap squares
+ * (Duplicate, Swap, Remove), then set groups to add (back-offs, warm-ups,
+ * another group), its progression across weeks, and its notes. Order is
+ * changed by dragging its handle, so there's no Move up / Move down here.
+ */
 export function ExerciseSheet({
   open,
   onOpenChange,
   e,
+  groups,
   scopeText,
-  canUp,
-  canDown,
+  canAdd,
+  canDuplicate,
   onPatch,
+  onDuplicate,
   onSwap,
   onProgress,
-  onBackoff,
-  onMove,
+  onAddGroup,
   onRemove,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   e: PlanExercise | null;
+  /** how many set groups it has */
+  groups: number;
   scopeText: string;
-  canUp: boolean;
-  canDown: boolean;
-  onPatch: (p: Partial<PlanExercise>, merge: string) => void;
+  /** room in the day for another set group */
+  canAdd: boolean;
+  canDuplicate: boolean;
+  onPatch: (p: Partial<PlanExercise>, session: string) => void;
+  onDuplicate: () => void;
   onSwap: () => void;
   onProgress: () => void;
-  onBackoff: () => void;
-  onMove: (dir: -1 | 1) => void;
+  onAddGroup: (kind: SetGroupKind) => void;
   onRemove: () => void;
 }) {
   if (!e) return null;
-  const backoff = e.pct != null && e.pct_of === "top_set";
+  const hasBackoff = e.role === "top" || e.role === "backoff";
+  return (
+    <BuilderSheet open={open} onOpenChange={onOpenChange} title={e.name ?? "Exercise"} description={<ScopeLine scopeText={scopeText} />}>
+      <div className="space-y-4" data-exercise-sheet>
+        <div className="grid grid-cols-3 gap-2">
+          <QuickAction icon={CopyPlus} label="Duplicate" onClick={onDuplicate} disabled={!canDuplicate} testid="duplicate" />
+          <QuickAction icon={Repeat2} label="Swap" onClick={onSwap} testid="swap" />
+          <QuickAction icon={Trash2} label="Remove" onClick={onRemove} destructive testid="remove" />
+        </div>
+        <div>
+          <div className="mb-1.5 px-1 text-[13px] font-medium text-muted-foreground">Add sets to this exercise</div>
+          <Group>
+            <ActionRow
+              icon={ListPlus}
+              title="Back-off sets"
+              sub={hasBackoff ? "More back-offs after the last group" : "After the top set, at 90% of it (follows the top set they lift)"}
+              onClick={() => onAddGroup("backoff")}
+              disabled={!canAdd}
+            />
+            <ActionRow icon={Flame} title="Warm-up sets" sub="Before the working sets, at 60% of the top set" onClick={() => onAddGroup("warmup")} disabled={!canAdd} />
+            <ActionRow
+              icon={Plus}
+              title="Another set group"
+              sub={groups > 1 ? "A copy of the last group, to change" : "A copy of these sets, to change (drop sets, a lighter group…)"}
+              onClick={() => onAddGroup("more")}
+              disabled={!canAdd}
+            />
+          </Group>
+        </div>
+        <Group>
+          <ActionRow icon={TrendingUp} title="Progress across weeks" sub="See and set every week's numbers" onClick={onProgress} />
+        </Group>
+        <NotesFields e={e} onPatch={onPatch} />
+      </div>
+    </BuilderSheet>
+  );
+}
+
+function NotesFields({ e, onPatch }: { e: PlanExercise; onPatch: (p: Partial<PlanExercise>, session: string) => void }) {
+  return (
+    <div className="space-y-3">
+      <label className="block">
+        <span className="mb-1 block text-[13px] font-medium text-muted-foreground">Notes</span>
+        <Textarea
+          value={e.notes ?? ""}
+          onChange={(ev) => onPatch({ notes: ev.target.value.slice(0, 200) || null }, `${e.key}:notes`)}
+          placeholder="A cue, a setup, a substitution"
+          className="min-h-[72px] text-base"
+        />
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-[13px] font-medium text-muted-foreground">Tempo (optional)</span>
+        <Input
+          value={e.tempo ?? ""}
+          onChange={(ev) => onPatch({ tempo: ev.target.value.slice(0, 12) || null }, `${e.key}:tempo`)}
+          placeholder="3-1-1-0"
+          className="h-11 text-base"
+        />
+      </label>
+    </div>
+  );
+}
+
+const ROLE_CHOICES: { role: SetRole | null; label: string }[] = [
+  { role: "warmup", label: "Warm-up" },
+  { role: "top", label: "Top set" },
+  { role: "backoff", label: "Back-off" },
+  { role: null, label: "Working sets" },
+];
+
+/**
+ * One set group of an exercise: what it is (a role, or a name the person
+ * types), how a % of the top set rounds, and Duplicate / Progress / Remove.
+ * Its numbers are typed in its own row on the screen.
+ */
+export function SetGroupSheet({
+  open,
+  onOpenChange,
+  e,
+  exerciseName,
+  scopeText,
+  linked,
+  canAdd,
+  onPatch,
+  onDuplicate,
+  onProgress,
+  onRemove,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  e: PlanExercise | null;
+  exerciseName: string;
+  scopeText: string;
+  /** what its % of the top set comes to now ("= 365 lb"), when the top set has a weight */
+  linked: string | null;
+  canAdd: boolean;
+  onPatch: (p: Partial<PlanExercise>, session: string) => void;
+  onDuplicate: () => void;
+  onProgress: () => void;
+  onRemove: () => void;
+}) {
+  if (!e) return null;
+  const topPct = e.pct != null && e.pct_of === "top_set";
+  const custom = !!e.label?.trim();
   return (
     <BuilderSheet
       open={open}
       onOpenChange={onOpenChange}
-      title={e.name ?? "Exercise"}
-      description={<>Changes here apply to <span className="font-medium text-foreground">{scopeText}</span></>}
+      title={`${exerciseName} · ${setGroupName(e)}`}
+      description={<ScopeLine scopeText={scopeText} />}
     >
-      <div className="space-y-4">
-        <Group>
-          <ActionRow icon={Repeat2} title="Swap exercise" sub="Keeps its sets, reps and load" onClick={onSwap} />
-          <ActionRow icon={TrendingUp} title="Progress across weeks" sub="See and set every week's numbers" onClick={onProgress} />
-          {!backoff && (
-            <ActionRow icon={CopyPlus} title="Add back-off sets" sub="The same lift after it, at 90% of the top set" onClick={onBackoff} />
-          )}
-        </Group>
-        <div className="space-y-3">
-          <label className="block">
-            <span className="mb-1 block text-[13px] font-medium text-muted-foreground">Notes</span>
-            <Textarea
-              value={e.notes ?? ""}
-              onChange={(ev) => onPatch({ notes: ev.target.value.slice(0, 200) || null }, `${e.key}:notes`)}
-              placeholder="A cue, a setup, a substitution"
-              className="min-h-[72px] text-base"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[13px] font-medium text-muted-foreground">Tempo (optional)</span>
-            <Input
-              value={e.tempo ?? ""}
-              onChange={(ev) => onPatch({ tempo: ev.target.value.slice(0, 12) || null }, `${e.key}:tempo`)}
-              placeholder="3-1-1-0"
-              className="h-11 text-base"
-            />
-          </label>
+      <div className="space-y-4" data-set-group-sheet>
+        <div className="grid grid-cols-3 gap-2">
+          <QuickAction icon={CopyPlus} label="Duplicate" onClick={onDuplicate} disabled={!canAdd} testid="duplicate-group" />
+          <QuickAction icon={TrendingUp} label="Progress" onClick={onProgress} testid="progress-group" />
+          <QuickAction icon={Trash2} label="Remove" onClick={onRemove} destructive testid="remove-group" />
         </div>
-        <Group>
-          <ActionRow icon={ArrowUp} title="Move up" onClick={() => onMove(-1)} disabled={!canUp} />
-          <ActionRow icon={ArrowDown} title="Move down" onClick={() => onMove(1)} disabled={!canDown} />
-        </Group>
-        <Group>
-          <ActionRow icon={Trash2} title="Remove" sub={`From ${scopeText}`} onClick={onRemove} destructive />
-        </Group>
+        <section aria-label="What these sets are">
+          <div className="mb-1.5 px-1 text-[13px] font-medium text-muted-foreground">What these sets are</div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {ROLE_CHOICES.map((c) => {
+              const on = !custom && (e.role ?? null) === c.role;
+              return (
+                <button
+                  key={c.label}
+                  type="button"
+                  onClick={() => onPatch({ role: c.role, label: null }, `${e.key}:role`)}
+                  className={cn(
+                    "h-11 rounded-xl px-3 text-[14px] font-medium transition-colors",
+                    on ? "bg-foreground text-background" : "bg-muted/70 text-foreground hover:bg-secondary",
+                  )}
+                  aria-pressed={on}
+                  data-role-choice={c.role ?? "sets"}
+                >
+                  {c.label}
+                </button>
+              );
+            })}
+          </div>
+          <label className="mt-2 block">
+            <span className="sr-only">Or give these sets a name</span>
+            <Input
+              value={e.label ?? ""}
+              onChange={(ev) => onPatch({ label: ev.target.value.slice(0, 40) || null }, `${e.key}:label`)}
+              placeholder="Or name them: Pause singles, Drop set…"
+              className="h-11 text-base"
+              data-group-label
+            />
+          </label>
+        </section>
+        {topPct && (
+          <section aria-label="Weight from the top set" className="rounded-2xl bg-muted/50 p-3" data-group-link>
+            <div className="text-[14px] font-medium">
+              {fmtWeight(e.pct!)}% of the top set{linked ? ` ${linked}` : ""}
+            </div>
+            <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">
+              Linked: it follows the top set they lift, so a change to the top set changes it. Type a weight in its Load to set its own.
+            </p>
+            <div className="mt-2.5 text-[12px] font-medium text-muted-foreground">Round to</div>
+            <div className="mt-1 grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Round to">
+              {([
+                { v: null, label: "5 lb · 2.5 kg", sub: "Standard plates" },
+                { v: "fine" as const, label: "2.5 lb · 1 kg", sub: "Small plates" },
+              ]).map((o) => {
+                const on = (e.round ?? null) === o.v;
+                return (
+                  <button
+                    key={o.label}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => onPatch({ round: o.v }, `${e.key}:round`)}
+                    className={cn(
+                      "rounded-xl px-2 py-2 text-center transition-colors",
+                      on ? "bg-background ring-1 ring-foreground/60" : "bg-background/60 text-muted-foreground hover:text-foreground",
+                    )}
+                    data-round={o.v ?? "plates"}
+                  >
+                    <span className="block text-[14px] font-semibold tabular-nums">{o.label}</span>
+                    <span className="block text-[11px]">{o.sub}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
+        <NotesFields e={e} onPatch={onPatch} />
       </div>
     </BuilderSheet>
   );

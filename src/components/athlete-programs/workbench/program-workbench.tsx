@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -13,15 +13,31 @@ import {
   Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  DndContext,
+  KeyboardSensor,
+  MeasuringStrategy,
+  MouseSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+  type Modifier,
+} from "@dnd-kit/core";
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { cn } from "@/lib/utils";
+import { haptic } from "@/platform/haptics";
 import { Button } from "@/components/ui/button";
 import { useIsMobileNow } from "@/hooks/use-mobile";
 import type { ExerciseLite } from "@/components/workout-day/workout-add-exercise";
 import {
   MAX_DAYS,
   MAX_EXERCISES,
-  addBackoff,
   addBlock,
+  addSetGroup,
   addDay,
   addExercises,
   applyProgression,
@@ -32,21 +48,31 @@ import {
   defaultScope,
   duplicateBlock,
   duplicateDay,
+  duplicateExercise,
+  duplicateSetGroup,
   duplicateWeek,
+  exerciseUnits,
+  fmtWeight,
+  inStepWeeks,
+  linkedLoad,
   moveBlock,
   moveDay,
-  moveExercise,
   newPlanExercise,
+  offeredScope,
+  patchFields,
   planMeta,
   programWeek,
   refOfWeek,
   removeBlock,
   removeDay,
   removeExercise,
+  removeSetGroup,
   removeWeek,
   renameBlock,
+  reorderExercise,
   scopeLabel,
   scopeWeeks,
+  setGroupName,
   setBlockLength,
   setDay,
   setExercise,
@@ -55,9 +81,12 @@ import {
   swapExercise,
   totalWeeks,
   weekAt,
+  weeksWords,
   type Cursor,
+  type EditField,
   type PlanExercise,
   type Scope,
+  type SetGroupKind,
   type WeekRef,
   type ProgramPlan,
 } from "@/lib/program-plan";
@@ -73,7 +102,8 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  ExerciseRow,
+  ExerciseBlock,
+  ScopeBar,
   WeekBar,
 } from "./rows";
 import {
@@ -83,7 +113,56 @@ import {
   LeaveSheet,
   ProgramSheet,
   ProgressionSheet,
+  SetGroupSheet,
 } from "./sheets";
+
+/** Dragging an exercise only ever moves it up or down. */
+const upAndDown: Modifier = ({ transform }) => ({ ...transform, x: 0 });
+
+/** A typing session's edit across weeks: worked out once when it starts, so a value typed digit by digit reaches the same weeks. */
+type EditSession = {
+  id: string;
+  dayKey: string;
+  exKey: string;
+  at: Cursor;
+  fields: EditField[];
+  reach: WeekRef[];
+  own: WeekRef[];
+  changed: boolean;
+};
+
+const FIELD_WORD: Record<EditField, string> = {
+  sets: "sets",
+  reps: "reps",
+  effort: "effort",
+  load: "load",
+  rest: "rest",
+  tempo: "tempo",
+  notes: "notes",
+  exercise: "exercise",
+  role: "set name",
+  round: "rounding",
+};
+
+/** The fields of an exercise an edit session changed, as they are now (to give the weeks it skipped). */
+function pickFields(e: PlanExercise, fields: EditField[]): Partial<PlanExercise> {
+  const out: Partial<PlanExercise> = {};
+  for (const f of fields) {
+    if (f === "sets") out.sets = e.sets;
+    if (f === "reps") out.reps = e.reps;
+    if (f === "effort") Object.assign(out, { rpe: e.rpe ?? null, rir: e.rir ?? null });
+    if (f === "load") Object.assign(out, { load: e.load ?? null, unit: e.unit ?? null, pct: e.pct ?? null, pct_of: e.pct_of ?? null });
+    if (f === "rest") out.rest_seconds = e.rest_seconds ?? null;
+    if (f === "tempo") out.tempo = e.tempo ?? null;
+    if (f === "notes") out.notes = e.notes ?? null;
+    if (f === "exercise") Object.assign(out, { exercise_id: e.exercise_id, name: e.name, muscle_group: e.muscle_group ?? null, equipment: e.equipment ?? null });
+    if (f === "role") Object.assign(out, { role: e.role ?? null, label: e.label ?? null });
+    if (f === "round") out.round = e.round ?? null;
+  }
+  return out;
+}
+
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
 type Picker = null | { mode: "add" } | { mode: "swap"; exKey: string } | { mode: "resolve"; name: string };
 
@@ -123,11 +202,16 @@ export function ProgramWorkbench({
 
   const [cursorRaw, setCursor] = useState<Cursor>({ b: 0, w: 0, d: 0 });
   const cur = clampCursor(plan, cursorRaw);
-  const [scope, setScope] = useState<Scope>(() => defaultScope(plan, 0));
+  const [scopeRaw, setScope] = useState<Scope>(() => defaultScope(plan, 0));
+  // the choice as this week offers it ("rest of block" on its first week is the whole block)
+  const scope = offeredScope(plan, cur, scopeRaw);
   const week = weekAt(plan, cur)!;
   const day = week.days[cur.d] ?? null;
   const targets = useMemo(() => scopeWeeks(plan, cur, scope), [plan, cur.b, cur.w, scope]); // eslint-disable-line react-hooks/exhaustive-deps
   const scopeText = scopeLabel(plan, cur, scope);
+  const units = useMemo(() => (day ? exerciseUnits(day) : []), [day]);
+  const planRef = useRef(plan);
+  planRef.current = plan;
 
   // the cell being typed in, and the weight unit loads start in
   const [active, setActive] = useState<ActiveCell | null>(null);
@@ -137,6 +221,7 @@ export function ProgramWorkbench({
   });
 
   const [exSheet, setExSheet] = useState<string | null>(null);
+  const [groupSheet, setGroupSheet] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [daySheet, setDaySheet] = useState(false);
   const [programSheet, setProgramSheet] = useState(false);
@@ -190,7 +275,8 @@ export function ProgramWorkbench({
     const key = plan.blocks[at.b]?.weeks[at.w]?.days[at.d]?.exercises[at.e]?.key;
     if (!key) return;
     setTimeout(() => {
-      const el = document.querySelector<HTMLElement>(`[data-pb-row="${CSS.escape(key)}"]`);
+      const entry = document.querySelector<HTMLElement>(`[data-pb-entry="${CSS.escape(key)}"]`);
+      const el = (entry?.closest("[data-pb-row]") as HTMLElement | null) ?? entry;
       if (!el) return;
       el.scrollIntoView({ block: "center", behavior: "smooth" });
       el.setAttribute("data-pb-flash", "");
@@ -210,9 +296,136 @@ export function ProgramWorkbench({
   };
 
   /* ---- exercises ---- */
-  const patchEx = (exKey: string, p: Partial<PlanExercise>, merge?: string) => {
+  // An edit across weeks reaches the weeks in step with this one; a week given its
+  // own value on purpose (a progression, a deload) keeps it, and the builder says so
+  // once the edit is done, with a tap to change those weeks too.
+  const session = useRef<EditSession | null>(null);
+  const endSession = (id?: string) => {
+    const s = session.current;
+    if (!s || (id && s.id !== id)) return;
+    session.current = null;
+    if (!s.changed || !s.own.length) return;
+    const words = weeksWords(planRef.current, s.own);
+    const ex = weekAt(planRef.current, s.at)?.days.find((x) => x.key === s.dayKey)?.exercises.find((x) => x.key === s.exKey);
+    const what = s.fields.map((f) => (f === "effort" ? (ex?.rir ? "RIR" : "RPE") : FIELD_WORD[f])).join(" and ");
+    toast(`${cap(words)} kept their own ${what}`, {
+      description: "They were set differently, so this change left them as they were.",
+      duration: 7000,
+      action: {
+        label: "Change them too",
+        onClick: () => {
+          const now = weekAt(planRef.current, s.at)?.days.find((x) => x.key === s.dayKey)?.exercises.find((x) => x.key === s.exKey);
+          if (!now) return;
+          edit((x) => setExercise(x, s.own, s.dayKey, s.exKey, pickFields(now, s.fields)));
+        },
+      },
+    });
+  };
+  // a session never outlives the week, day or scope it was worked out for
+  useEffect(() => () => endSession(), [cur.b, cur.w, cur.d, scope]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const patchEx = (exKey: string, p: Partial<PlanExercise>, sessionId?: string) => {
     if (!day) return;
-    edit((x) => setExercise(x, targets, day.key, exKey, p), merge ?? `${exKey}:${Object.keys(p).join(",")}:${scope}`);
+    const fields = patchFields(p);
+    const id = sessionId ?? `once:${exKey}:${fields.join(",")}:${Date.now()}`;
+    let s = session.current;
+    if (!s || s.id !== id) {
+      endSession();
+      const split = targets.length > 1 ? inStepWeeks(plan, cur, targets, day.key, exKey, fields) : { reach: targets, own: [] };
+      s = { id, dayKey: day.key, exKey, at: { ...cur }, fields, ...split, changed: false };
+      session.current = s;
+    }
+    s.changed = true;
+    const reach = s.reach;
+    edit((x) => setExercise(x, reach, day.key, exKey, p), `${exKey}:${fields.join(",")}:${id}`);
+    if (!sessionId) endSession(id);
+  };
+  // a new set group or copy, scrolled to and lit for a moment
+  const flash = (exKey: string | null) => {
+    if (!exKey) return;
+    setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(`[data-pb-entry="${CSS.escape(exKey)}"]`);
+      const box = (el?.closest("[data-pb-unit]") as HTMLElement | null) ?? el;
+      if (!box) return;
+      box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      box.setAttribute("data-pb-flash", "new");
+      setTimeout(() => box.removeAttribute("data-pb-flash"), 1400);
+    }, 60);
+  };
+  const duplicateEx = (exKey: string) => {
+    if (!day) return;
+    const name = day.exercises.find((e) => e.key === exKey)?.name ?? "Exercise";
+    let r: ReturnType<typeof duplicateExercise> | null = null;
+    edit((x) => {
+      r = duplicateExercise(x, targets, day.key, exKey);
+      return r.plan;
+    });
+    setExSheet(null);
+    const out = r as ReturnType<typeof duplicateExercise> | null;
+    if (!out?.key) {
+      toast(`No room: a day holds ${MAX_EXERCISES} set groups.`);
+      return;
+    }
+    undoable(`Duplicated ${name} · ${scopeText}`);
+    if (out.skipped) toast(`${out.skipped} ${out.skipped === 1 ? "week was" : "weeks were"} too full for the copy.`);
+    flash(out.key);
+  };
+  const addGroup = (exKey: string, kind: SetGroupKind) => {
+    if (!day) return;
+    let key = "";
+    edit((x) => {
+      const r = addSetGroup(x, targets, day.key, exKey, kind);
+      key = r.key;
+      return r.plan;
+    });
+    setExSheet(null);
+    undoable(`Added ${kind === "backoff" ? "back-off sets" : kind === "warmup" ? "warm-up sets" : "a set group"} · ${scopeText}`);
+    flash(key);
+  };
+  const swapPicked = (exKey: string, ex: ExerciseLite) => {
+    if (!day) return;
+    const split = targets.length > 1 ? inStepWeeks(plan, cur, targets, day.key, exKey, ["exercise"]) : { reach: targets, own: [] };
+    edit((x) => swapExercise(x, split.reach, day.key, exKey, ex));
+    if (split.own.length) {
+      const own = split.own;
+      const dayKey = day.key;
+      toast(`Swapped in ${ex.name}. ${cap(weeksWords(plan, own))} kept the exercise they have.`, {
+        duration: 7000,
+        action: { label: "Swap them too", onClick: () => edit((x) => swapExercise(x, own, dayKey, exKey, ex)) },
+      });
+    } else undoable(`Swapped in ${ex.name} · ${scopeText}`);
+  };
+
+  /* ---- dragging an exercise ---- */
+  const sensors = useSensors(
+    // a mouse drags at once; a finger presses and holds the handle, so a swipe still scrolls
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 160, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const unitIds = useMemo(() => units.map((u) => u.group ?? u.key), [units]);
+  const overRef = useRef<string | null>(null);
+  const onDragStart = (ev: DragStartEvent) => {
+    endSession();
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    overRef.current = String(ev.active.id);
+    haptic("medium");
+  };
+  const onDragOver = (ev: DragOverEvent) => {
+    const id = ev.over ? String(ev.over.id) : null;
+    if (id && id !== overRef.current) haptic("selection");
+    overRef.current = id;
+  };
+  const onDragEnd = (ev: DragEndEvent) => {
+    overRef.current = null;
+    if (!day || !ev.over) return;
+    const from = unitIds.indexOf(String(ev.active.id));
+    const to = unitIds.indexOf(String(ev.over.id));
+    if (from < 0 || to < 0 || from === to) return;
+    const first = units[from].entries[0];
+    edit((x) => reorderExercise(x, targets, cur, day.key, first.key, to));
+    haptic("light");
+    if (targets.length > 1) undoable(`Moved ${first.name ?? "exercise"} · ${scopeText}`);
   };
   const addPicked = (picked: ExerciseLite[]) => {
     if (!day) return;
@@ -232,7 +445,7 @@ export function ProgramWorkbench({
     const name = day.exercises.find((e) => e.key === exKey)?.name ?? "Exercise";
     edit((x) => removeExercise(x, targets, day.key, exKey));
     setExSheet(null);
-    undoable(`Removed ${name} from ${scopeText}`);
+    undoable(`Removed ${name} · ${scopeText}`);
   };
 
   /* ---- days ---- */
@@ -302,13 +515,29 @@ export function ProgramWorkbench({
   const hasExercises = plan.blocks.some((bl) => bl.weeks.some((w) => w.days.some((x) => x.exercises.length > 0)));
   const readyToSave = editor.dirty && hasExercises;
   const exSheetEx = exSheet && day ? day.exercises.find((e) => e.key === exSheet) ?? null : null;
-  const exIndex = exSheetEx && day ? day.exercises.indexOf(exSheetEx) : -1;
+  const exUnit = exSheetEx ? units.find((u) => u.entries.some((e) => e.key === exSheetEx.key)) ?? null : null;
+  const groupEx = groupSheet && day ? day.exercises.find((e) => e.key === groupSheet) ?? null : null;
+  const groupLinked = groupEx && day ? linkedLoad(day, groupEx.key) : null;
+  const room = day ? MAX_EXERCISES - day.exercises.length : 0;
+  // the header's height on a phone (it holds the days, the scope and the column names)
+  const headerRef = useRef<HTMLElement>(null);
+  const [headerH, setHeaderH] = useState(0);
+  useLayoutEffect(() => {
+    const el = headerRef.current;
+    if (!el || desktop) return;
+    const set = () => setHeaderH(el.getBoundingClientRect().height);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [desktop]);
 
   return (
-    <CellsProvider value={{ active, setActive, unit, setUnit }}>
+    <CellsProvider value={{ active, setActive, unit, setUnit, endSession }}>
       <div className={cn("mx-auto w-full", desktop ? "max-w-5xl px-4 pb-6 md:px-8" : "pb-[calc(env(safe-area-inset-bottom)+7.5rem)]")} data-program-workbench>
         {/* Header: back, the name, Undo / Redo, Save; the days under it */}
         <header
+          ref={headerRef}
           className={cn(
             "z-40 border-b border-border/60 bg-background",
             desktop ? "sticky top-0 -mx-4 px-4 pt-3 md:-mx-8 md:px-8" : "pb-header phone-column fixed inset-x-0 px-3",
@@ -375,7 +604,7 @@ export function ProgramWorkbench({
               {editor.saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editor.editing && !editor.dirty ? "Saved" : "Save"}
             </Button>
           </div>
-          <div className="pb-1.5">
+          <div className="pb-1">
             <DayTabs
               days={week.days}
               active={cur.d}
@@ -385,9 +614,19 @@ export function ProgramWorkbench({
               onDayMenu={() => setDaySheet(true)}
             />
           </div>
+          {/* which weeks an edit changes, always in view while editing */}
+          <div className="pb-1.5">
+            <ScopeBar plan={plan} cursor={cur} scope={scope} onScope={setScope} />
+          </div>
+          {day && day.exercises.length > 0 && <ColumnHeads desktop={desktop} />}
         </header>
         {/* the fixed header's room on a phone */}
-        {!desktop && <div aria-hidden style={{ height: "calc(var(--app-chrome-top) + var(--app-safe-top) + 6.6rem)" }} />}
+        {!desktop && (
+          <div
+            aria-hidden
+            style={{ height: headerH ? `${headerH}px` : "calc(var(--app-chrome-top) + var(--app-safe-top) + 10rem)" }}
+          />
+        )}
 
         {review && (
           <div className={cn(desktop ? "pt-4" : "px-3 pt-2")} data-workbench-review>
@@ -404,22 +643,44 @@ export function ProgramWorkbench({
         <section className={cn(desktop ? "pt-4" : "px-3 pt-2")} aria-label={day ? day.title : "Day"}>
           {day && day.exercises.length > 0 ? (
             <>
-              <ColumnHeads desktop={desktop} />
-              <div className={cn(desktop ? "space-y-0.5" : "divide-y divide-border/50")} data-day-list>
-                {day.exercises.map((e, i) => (
-                  <ExerciseRow
-                    key={e.key}
-                    e={e}
-                    index={i}
-                    desktop={desktop}
-                    changed={changedFromLastWeek(plan, cur, day.key, e.key) as Set<string>}
-                    onPatch={(p) => patchEx(e.key, p)}
-                    onOpen={() =>
-                      e.exercise_id ? setExSheet(e.key) : setPicker({ mode: "resolve", name: e.source_name ?? e.name ?? "" })
-                    }
-                  />
-                ))}
-              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                modifiers={[upAndDown]}
+                measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+                autoScroll={{ threshold: { x: 0, y: 0.25 }, acceleration: 14 }}
+                onDragStart={onDragStart}
+                onDragOver={onDragOver}
+                onDragEnd={onDragEnd}
+                onDragCancel={() => (overRef.current = null)}
+                accessibility={{
+                  screenReaderInstructions: {
+                    draggable: "To move an exercise, press space or enter, use the arrow keys, then press space or enter again.",
+                  },
+                }}
+              >
+                <SortableContext items={unitIds} strategy={verticalListSortingStrategy}>
+                  <div className={cn(desktop ? "space-y-1" : "divide-y divide-border/60")} data-day-list>
+                    {units.map((u, i) => (
+                      <ExerciseBlock
+                        key={unitIds[i]}
+                        id={unitIds[i]}
+                        unit={u}
+                        day={day}
+                        desktop={desktop}
+                        changedOf={(k) => changedFromLastWeek(plan, cur, day.key, k) as Set<string>}
+                        onPatch={patchEx}
+                        onOpen={() => {
+                          const head = u.entries[0];
+                          if (head.exercise_id) setExSheet(head.key);
+                          else setPicker({ mode: "resolve", name: head.source_name ?? head.name ?? "" });
+                        }}
+                        onOpenGroup={(k) => setGroupSheet(k)}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
               {day.exercises.length < MAX_EXERCISES && (
                 <button
                   type="button"
@@ -449,16 +710,7 @@ export function ProgramWorkbench({
           )}
         </section>
 
-        <WeekBar
-          plan={plan}
-          cursor={cur}
-          scope={scope}
-          targets={targets}
-          onScope={setScope}
-          onPick={goWeek}
-          weekMenu={weekMenu}
-          desktop={desktop}
-        />
+        <WeekBar plan={plan} cursor={cur} targets={targets} onPick={goWeek} weekMenu={weekMenu} desktop={desktop} />
       </div>
 
       <KeyboardBar />
@@ -489,21 +741,26 @@ export function ProgramWorkbench({
             edit((x) => resolveName(x, name, picked[0]));
             undoable(`"${name}" is now ${picked[0].name} everywhere`);
           } else if (picker?.mode === "swap" && day && picked[0]) {
-            const exKey = picker.exKey;
-            edit((x) => swapExercise(x, targets, day.key, exKey, picked[0]));
-            undoable(`Swapped in ${picked[0].name} (${scopeText})`);
+            swapPicked(picker.exKey, picked[0]);
           } else addPicked(picked);
         }}
       />
 
       <ExerciseSheet
         open={!!exSheetEx}
-        onOpenChange={(o) => !o && setExSheet(null)}
+        onOpenChange={(o) => {
+          if (!o) {
+            setExSheet(null);
+            endSession();
+          }
+        }}
         e={exSheetEx}
+        groups={exUnit?.entries.length ?? 1}
         scopeText={scopeText}
-        canUp={exIndex > 0}
-        canDown={!!day && exIndex >= 0 && exIndex < day.exercises.length - 1}
-        onPatch={(p, merge) => exSheetEx && patchEx(exSheetEx.key, p, merge)}
+        canAdd={room > 0}
+        canDuplicate={!!exUnit && room >= exUnit.entries.length}
+        onPatch={(p, sid) => exSheetEx && patchEx(exSheetEx.key, p, sid)}
+        onDuplicate={() => exSheetEx && duplicateEx(exSheetEx.key)}
         onSwap={() => {
           if (!exSheetEx) return;
           setPicker({ mode: "swap", exKey: exSheetEx.key });
@@ -514,14 +771,47 @@ export function ProgramWorkbench({
           setProgress(exSheetEx.key);
           setExSheet(null);
         }}
-        onBackoff={() => {
-          if (!exSheetEx || !day) return;
-          edit((x) => addBackoff(x, targets, day.key, exSheetEx.key));
-          setExSheet(null);
-          undoable(`Added back-off sets (${scopeText})`);
-        }}
-        onMove={(dir) => exSheetEx && day && edit((x) => moveExercise(x, targets, day.key, exSheetEx.key, dir))}
+        onAddGroup={(kind) => exSheetEx && addGroup(exSheetEx.key, kind)}
         onRemove={() => exSheetEx && removeEx(exSheetEx.key)}
+      />
+
+      <SetGroupSheet
+        open={!!groupEx}
+        onOpenChange={(o) => {
+          if (!o) {
+            setGroupSheet(null);
+            endSession();
+          }
+        }}
+        e={groupEx}
+        exerciseName={groupEx?.name ?? "Exercise"}
+        scopeText={scopeText}
+        linked={groupLinked ? `= ${fmtWeight(groupLinked.load)} ${groupLinked.unit} (of ${fmtWeight(groupLinked.of)} ${groupLinked.unit})` : null}
+        canAdd={room > 0}
+        onPatch={(p, sid) => groupEx && patchEx(groupEx.key, p, sid)}
+        onDuplicate={() => {
+          if (!groupEx || !day) return;
+          let key = "";
+          edit((x) => {
+            const r = duplicateSetGroup(x, targets, day.key, groupEx.key);
+            key = r.key;
+            return r.plan;
+          });
+          setGroupSheet(null);
+          undoable(`Duplicated ${setGroupName(groupEx).toLowerCase()} · ${scopeText}`);
+          flash(key);
+        }}
+        onProgress={() => {
+          if (!groupEx) return;
+          setProgress(groupEx.key);
+          setGroupSheet(null);
+        }}
+        onRemove={() => {
+          if (!groupEx || !day) return;
+          edit((x) => removeSetGroup(x, targets, day.key, groupEx.key));
+          setGroupSheet(null);
+          undoable(`Removed ${setGroupName(groupEx).toLowerCase()} · ${scopeText}`);
+        }}
       />
 
       {progress && day && (

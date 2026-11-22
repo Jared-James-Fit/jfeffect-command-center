@@ -1727,8 +1727,14 @@ html[data-holding] *:not(input):not(textarea):not([contenteditable="true"]) {
   50% { transform: scaleY(1); }
 }
 
+/* The builder: a copy or a new set group, lit for a moment where it landed (program-workbench flash). */
+[data-pb-unit][data-pb-flash="new"] {
+  background-color: color-mix(in oklch, var(--foreground) 7%, transparent);
+  border-radius: 0.75rem;
+  transition: background-color 0.5s ease;
+}
 /* The builder: an exercise a review flag pointed at, lit for a moment (program-workbench goTo). */
-[data-pb-row][data-pb-flash] {
+[data-pb-row][data-pb-flash]:not([data-pb-flash="new"]) {
   background-color: color-mix(in oklch, var(--warning) 16%, transparent);
   border-radius: 0.75rem;
   transition: background-color 0.4s ease;
