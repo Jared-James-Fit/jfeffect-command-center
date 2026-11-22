@@ -22,6 +22,7 @@ import { useDirectThreads, useMessageAuthor } from "@/lib/direct-chats";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { videoLimit } from "@/lib/video-edit/limits";
 import { feedback } from "@/lib/feedback";
+import { MentionText } from "@/components/community/mentions";
 import { noteAutoplayRefused } from "@/lib/autoplay-notice";
 
 /** How long one moment shows before the next. */
@@ -672,6 +673,7 @@ function StoryViewer({
             <StoryBar
               post={post}
               viewerIsStaff={viewerIsStaff}
+              onOpenPerson={openPerson}
               onOpen={() => onOpenPost(storyTarget(post))}
               onComposing={setComposing}
               // a moment that's a crew-wide post: ✈️ adds it to your story (the story slides away, the camera opens)
@@ -1020,7 +1022,7 @@ const QUICK_POST = ["😍", "😂", "🔥", "👏", "😮", "🙌", "💯", "�
  * "Replied to your story" with the moment. Swipe up (or View workout) opens
  * the post itself.
  */
-function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare }: { post: CommunityPost; viewerIsStaff: boolean; onOpen: () => void; onComposing: (on: boolean) => void; onShare?: () => void }) {
+function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare, onOpenPerson }: { post: CommunityPost; viewerIsStaff: boolean; onOpen: () => void; onComposing: (on: boolean) => void; onShare?: () => void; onOpenPerson?: (a: CommunityAuthor) => void }) {
   const { role } = useAuth();
   const { isImpersonating } = useClientImpersonation();
   const react = useReact(post, viewerIsStaff);
@@ -1155,7 +1157,12 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare }: { post:
       >
         {!focused && (
           <div className="mb-3 px-1">
-            {caption && <p className="mb-2.5 line-clamp-3 whitespace-pre-wrap text-[15px] leading-snug">{caption}</p>}
+            {/* its words, the people it tags tappable (their profile) */}
+            {caption && (
+              <p className="dark mb-2.5 line-clamp-3 whitespace-pre-wrap text-[15px] leading-snug text-white" data-story-caption>
+                <MentionText text={caption} mentions={post.mentions} onOpen={onOpenPerson} />
+              </p>
+            )}
             <div className="flex items-center gap-2">
               <button type="button" onClick={onOpen} className="inline-flex h-8 items-center gap-0.5 rounded-full bg-white/15 pl-3 pr-2 text-[13px] font-bold backdrop-blur-sm active:scale-95">
                 {win ? "View workout" : post.shared_post && post.shared_post.author.user_id !== post.author.user_id ? `View ${post.shared_post.author.name.split(" ")[0]}'s post` : "View post"} <ChevronRight className="h-4 w-4" />

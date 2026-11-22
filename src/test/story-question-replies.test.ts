@@ -141,7 +141,10 @@ describe("who answered stays between the asker and the poster (Instagram's)", ()
     expect(layer).toContain("export function responseCardItem(question: string, answer: string): StickerItem {");
     expect(layer).toContain("function responseCard(question: string, answer: string): Bitmap {");
     const studio = read("src/components/community/share-studio.tsx");
-    expect(studio).toContain('const id = await createCommunityPost(qc, { userId: user.id, caption: "", visibility: audience, photo, extras, story: true, sharedPostId });');
+    // a story's caption is only the people it tags; an answer's story can't tag anyone (the reply host never turns tagging on)
+    expect(studio).toContain('const id = await createCommunityPost(qc, { userId: user.id, caption: withTags("", tags), visibility: audience, photo, extras, story: true, sharedPostId });');
+    expect(studio).toContain("{story && tagPeople && <TagPeopleSheet");
+    expect(read("src/components/community/story-reply-host.tsx")).not.toContain("tagPeople");
     // the asker's id only ever goes to marking it answered (the poster's own call)
     const host = read("src/components/community/story-reply-host.tsx");
     expect(host.match(/reply\.userId/g)?.length).toBe(2);

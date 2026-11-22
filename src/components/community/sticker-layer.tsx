@@ -63,6 +63,8 @@ export type StickerItem = {
   size?: number;
   align?: TextAlign;
   sticker?: string;
+  /** A person tagged on a story: their @ sticker (the tag itself rides on the story's caption). */
+  mention?: { userId: string; handle: string };
   /** The rendered bitmap, drawn straight onto the card or photo. */
   canvas: HTMLCanvasElement;
   url: string;
@@ -464,6 +466,31 @@ function responseCard(question: string, answer: string): Bitmap {
 export function responseCardItem(question: string, answer: string): StickerItem {
   const { b, make } = made(() => responseCard(question, answer));
   return { id: 1_000_000, kind: "sticker", sticker: "response", canvas: b.canvas, url: b.url, bw: b.bw, bh: b.bh, res: b.px, make, x: 0.5, y: 0.4, s: 1, r: 0 };
+}
+
+/**
+ * Someone tagged on a story, Instagram's mention sticker: "@handle" on a
+ * white pill, placed a little lower for each one tagged. Moved, pinched and
+ * binned like any sticker (binning it untags them).
+ */
+export function mentionStickerItem(userId: string, handle: string, n = 0): StickerItem {
+  const { b, make } = made(() => pillSticker(`@${handle}`, { bg: "#ffffff", ink: "#0a0a0a", size: 50 }));
+  return {
+    id: 2_000_000 + Math.floor(Math.random() * 1_000_000),
+    kind: "sticker",
+    sticker: "mention",
+    mention: { userId, handle },
+    canvas: b.canvas,
+    url: b.url,
+    bw: b.bw,
+    bh: b.bh,
+    res: b.px,
+    make,
+    x: 0.5,
+    y: Math.min(0.78, 0.58 + n * 0.07),
+    s: 1,
+    r: 0,
+  };
 }
 
 /** A picture ready to draw (a decoded bitmap, so the story canvas never gets tainted). */

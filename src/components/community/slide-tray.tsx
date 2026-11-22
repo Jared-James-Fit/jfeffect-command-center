@@ -446,10 +446,11 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
    * Throws if something still won't go up, so nothing is posted half done.
    */
   const ready = useCallback(
-    async (shape: number | null = null): Promise<PostSlide[]> => {
-      for (const it of itemsRef.current) if (it.status === "error") retry(it.id);
-      // (in order; anything still being read or uploading is waited for)
-      const list = itemsRef.current;
+    async (shape: number | null = null, except: string | null = null): Promise<PostSlide[]> => {
+      for (const it of itemsRef.current) if (it.status === "error" && it.id !== except) retry(it.id);
+      // (in order; anything still being read or uploading is waited for; `except`: a slide the caller
+      // posts itself, re-drawn with a filter or stickers on it)
+      const list = itemsRef.current.filter((it) => it.id !== except);
       const got: { it: TrayItem; slide: PostSlide }[] = [];
       let failed = 0;
       for (const it of list) {
@@ -498,6 +499,8 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
       jobs.current.get(it.id)?.ctl?.abort();
     }
     if (landed.length) void removeCommunityFiles(landed);
+    // anything still being read (added a moment ago, not in the list yet) is dropped when it's read, never uploaded
+    for (const id of jobs.current.keys()) removed.current.add(id);
     releaseAll();
     seeded.current = null;
     itemsRef.current = [];
@@ -509,8 +512,23 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
   discardRef.current = discard;
   useEffect(() => () => discardRef.current(), []);
 
+  /** Move a slide to another place in the post (the New post screen's long-press drag). */
+  const move = useCallback((id: string, to: number) => {
+    setItems((list) => {
+      const from = list.findIndex((x) => x.id === id);
+      if (from < 0) return list;
+      const next = list.slice();
+      const [it] = next.splice(from, 1);
+      next.splice(Math.max(0, Math.min(next.length, to)), 0, it);
+      itemsRef.current = next;
+      return next;
+    });
+  }, []);
+  /** A picked photo, decoded (a filter or stickers are drawn on it): null until it's been read, or for a clip. */
+  const drawable = useCallback((id: string): Drawable | null => jobs.current.get(id)?.picked?.drawable ?? null, []);
+
   const uploading = items.filter((it) => it.status === "preparing" || it.status === "uploading").length;
-  return { items, add, remove, retry, edit, trimToLift, undoLift, setSound, ready, commit, discard, setCover, setFraming, uploading, total: coverCount + items.length, full: coverCount + items.length >= MAX_SLIDES, trimmer: trimmer.element };
+  return { items, add, remove, retry, edit, trimToLift, undoLift, setSound, ready, commit, discard, setCover, setFraming, move, drawable, uploading, total: coverCount + items.length, full: coverCount + items.length >= MAX_SLIDES, trimmer: trimmer.element };
 }
 
 /** What the strip shows for a picked photo or clip. */
