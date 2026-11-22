@@ -11,7 +11,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { EXPENSE_CATEGORIES, PICKABLE_CATEGORIES } from "@/lib/business-expense-categories";
 import { RECEIPTS_BUCKET, type ExpenseRow, type OtherIncomeRow, type RecurringExpenseRow } from "@/lib/business-books";
 import { businessToday } from "@/lib/billing-schedule";
-import { assertAdminView } from "@/lib/permissions.server";
+import { assertCleo } from "@/lib/cleo-access.server";
 import { AttachmentsInput } from "@/lib/cleo-attachments";
 
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -554,8 +554,8 @@ export const getSummerMessages = createServerFn({ method: "GET" })
   .inputValidator((d: unknown) => z.object({ chatId: ChatId.nullish() }).parse(d ?? {}))
   .handler(async ({ data, context }) => {
     const { userId } = context as any;
-    // The admin, or the finance login (view-only: its own Cleo, nothing else).
-    const { db: supabase } = await assertAdminView(context as any);
+    // Whoever has Cleo (the admin; the finance login or a coach while switched on).
+    const { db: supabase } = await assertCleo(context as any);
     const { openChat } = await import("@/lib/cleo-chats.server");
     return openChat(supabase, userId, data.chatId);
   });
@@ -566,7 +566,7 @@ export const listSummerChats = createServerFn({ method: "GET" })
   .inputValidator((d: unknown) => z.object({ q: z.string().max(120).nullish() }).parse(d ?? {}))
   .handler(async ({ data, context }) => {
     const { userId } = context as any;
-    const { db: supabase } = await assertAdminView(context as any);
+    const { db: supabase } = await assertCleo(context as any);
     const { listChats } = await import("@/lib/cleo-chats.server");
     return listChats(supabase, userId, data.q);
   });
@@ -577,7 +577,7 @@ export const deleteSummerChat = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ chatId: ChatId.nullable() }).parse(d))
   .handler(async ({ data, context }) => {
     const { userId } = context as any;
-    const { db: supabase } = await assertAdminView(context as any);
+    const { db: supabase } = await assertCleo(context as any);
     const { deleteChats } = await import("@/lib/cleo-chats.server");
     await deleteChats(supabase, userId, data.chatId);
     return { ok: true };
@@ -600,10 +600,10 @@ export const askSummer = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => AskInput.parse(d))
   .handler(async ({ data, context }) => {
     const { userId } = context as any;
-    // The admin, or the finance login (view-only: its own Cleo, nothing else).
-    const { db: supabase, viewOnly } = await assertAdminView(context as any);
+    // Whoever has Cleo (the admin; the finance login or a coach while switched on).
+    const { db: supabase, viewOnly, coach } = await assertCleo(context as any);
     const { answerSummer } = await import("@/lib/summer.server");
-    return answerSummer(supabase, userId, { message: data.message, year: data.year, route: data.route, voice: data.voice, finance: viewOnly, own: (context as any).supabase, chatId: data.chatId, attachments: data.attachments });
+    return answerSummer(supabase, userId, { message: data.message, year: data.year, route: data.route, voice: data.voice, finance: viewOnly, coach, own: (context as any).supabase, chatId: data.chatId, attachments: data.attachments });
   });
 
 const VoiceInput = z.object({
@@ -622,14 +622,14 @@ export const askSummerVoice = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => VoiceInput.parse(d))
   .handler(async ({ data, context }) => {
     const { userId } = context as any;
-    // The admin, or the finance login (view-only: its own Cleo, nothing else).
-    const { db: supabase, viewOnly } = await assertAdminView(context as any);
+    // Whoever has Cleo (the admin; the finance login or a coach while switched on).
+    const { db: supabase, viewOnly, coach } = await assertCleo(context as any);
     const { answerSummer, transcribeAudio } = await import("@/lib/summer.server");
     const { data: people } = await supabase.from("clients").select("full_name").not("full_name", "is", null).limit(400);
     const names = ((people ?? []) as Array<{ full_name: string | null }>).map((c) => (c.full_name ?? "").trim()).filter(Boolean);
     const transcript = await transcribeAudio(data.audio, data.mime, names);
     if (!transcript) return { transcript: "", user: null, assistant: null, chatId: data.chatId ?? null };
-    const res = await answerSummer(supabase, userId, { message: transcript, year: data.year, route: data.route, voice: true, finance: viewOnly, own: (context as any).supabase, chatId: data.chatId, attachments: data.attachments });
+    const res = await answerSummer(supabase, userId, { message: transcript, year: data.year, route: data.route, voice: true, finance: viewOnly, coach, own: (context as any).supabase, chatId: data.chatId, attachments: data.attachments });
     return { transcript, ...res };
   });
 
@@ -649,18 +649,18 @@ export const summerSpeech = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { userId } = context as any;
-    // The admin, or the finance login (view-only: its own Cleo, nothing else).
-    const { db: supabase, viewOnly } = await assertAdminView(context as any);
+    // Whoever has Cleo (the admin; the finance login or a coach while switched on).
+    await assertCleo(context as any);
     const { synthesizeSpeech } = await import("@/lib/summer.server");
     return synthesizeSpeech(data);
   });
 
-/** Light read for the global Cleo button: this admin's Cleo settings and whether they own the books. */
+/** Light read for the global Cleo button: this person's Cleo settings, whether they own the books, and which kind of Cleo user they are. */
 export const getSummerProfile = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { userId } = context as any;
-    const { db: supabase, viewOnly } = await assertAdminView(context as any);
+    const { db: supabase, viewOnly, coach } = await assertCleo(context as any);
     const { isBusinessOwner } = await import("@/lib/business-books.server");
     const [{ data }, owner] = await Promise.all([
       supabase.from("summer_profiles").select("tone, instructions").eq("user_id", userId).maybeSingle(),
@@ -671,6 +671,7 @@ export const getSummerProfile = createServerFn({ method: "GET" })
       instructions: (data?.instructions as string | null) ?? null,
       isOwner: owner,
       isFinance: viewOnly,
+      isCoach: coach,
     };
   });
 
@@ -685,8 +686,8 @@ export const saveSummerSettings = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => SummerSettingsInput.parse(d))
   .handler(async ({ data, context }) => {
     const { userId } = context as any;
-    // The admin, or the finance login (view-only: its own Cleo, nothing else).
-    const { db: supabase, viewOnly } = await assertAdminView(context as any);
+    // Whoever has Cleo (the admin; the finance login or a coach while switched on).
+    const { db: supabase } = await assertCleo(context as any);
     const { error } = await supabase
       .from("summer_profiles")
       .upsert({ user_id: userId, tone: data.tone, instructions: data.instructions || null, updated_at: new Date().toISOString() });
@@ -695,12 +696,12 @@ export const saveSummerSettings = createServerFn({ method: "POST" })
   });
 
 // ---------------------------------------------------------------------------
-// Cleo's action cards (cleo-actions.server.ts). Staff only: the admin, or the
-// finance login. Each action then runs through the app's own server
+// Cleo's action cards (cleo-actions.server.ts). Whoever has Cleo (the admin;
+// the finance login or a coach while switched on). Each action then runs through the app's own server
 // functions with the tapper's session, so their permissions decide.
 
 async function cleoActor(context: any) {
-  const { db } = await assertAdminView(context);
+  const { db } = await assertCleo(context);
   return { supabase: context.supabase, db, userId: context.userId as string };
 }
 

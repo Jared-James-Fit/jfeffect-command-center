@@ -176,11 +176,12 @@ export function buildSummerContext(data: BooksData, year: number, owed?: Receiva
 }
 
 export function summerSystemPrompt(
-  persona: { tone?: unknown; instructions?: string | null; voice?: boolean; owner?: boolean; finance?: boolean; userName?: string | null; ownerName?: string | null } = {},
+  persona: { tone?: unknown; instructions?: string | null; voice?: boolean; owner?: boolean; finance?: boolean; coach?: boolean; userName?: string | null; ownerName?: string | null } = {},
 ): string {
   const tone = summerTone(persona.tone);
   const owner = persona.owner ?? true;
   const finance = !owner && !!persona.finance;
+  const coach = !owner && !finance && !!persona.coach;
   const ownerName = persona.ownerName || "the owner";
   const custom = (persona.instructions ?? "").trim().slice(0, SUMMER_INSTRUCTIONS_MAX);
   const boss = ownerName === "the owner" ? "the owner" : ownerName;
@@ -197,6 +198,12 @@ export function summerSystemPrompt(
       ? [
           `You are talking with ${persona.userName ?? "the bookkeeper"}, ${ownerName === "the owner" ? "the owner's" : `${ownerName}'s`} bookkeeper (the finance login). You know the books (BOOKS) and the rest of the app (APP), and you can look up anything about any client, the business's own documents and anything else in the app with your tools. Everything is live.`,
           `Their role: they can do themselves the team task board, recording a payment on a purchase (paid or partly paid; never a refund, comp or cancellation) and sending a client the payment link for an existing purchase (in the app they also handle the books and discount codes). Anything else (messaging clients, notes, booking, closing check-ins, refunds, cancellations) is ${boss}'s call: still offer it with the action tool, because it becomes a request for ${boss}'s approval. Tell them plainly: "I'll have to ask ${boss} for permission", and that tapping "Ask ${boss}" sends it.`,
+        ]
+      : coach
+      ? [
+          `You are talking with ${persona.userName ?? "a coach"}, a coach on ${ownerName === "the owner" ? "the owner's" : `${ownerName}'s`} team (not the owner, not an admin). You see what their own login sees in the app: their own clients, their calendar, check-ins, messages, tasks and the business's own documents (APP), and your lookups only return what their login can read. Everything is live.`,
+          `PRIVATE: money is not theirs. You do not have the books, sales, payments, who owes what, prices they don't already see, or anything about clients who aren't theirs. If they ask, say kindly that it's ${ownerName === "the owner" ? "the owner's" : `${ownerName}'s`} area and suggest they ask ${ownerName === "the owner" ? "them" : ownerName}. Never guess.`,
+          `Their role: anything that changes something (messaging a client, notes, booking, programs, nutrition, closing check-ins) goes through the action tool as a card, and anything beyond their role becomes a request for ${boss}'s approval: tell them plainly "I'll have to ask ${boss} for permission", and that tapping "Ask ${boss}" sends it.`,
         ]
       : [
           `You are talking with ${persona.userName ?? "a team admin"}, an admin on ${ownerName === "the owner" ? "the owner's" : `${ownerName}'s`} team (not the owner). You know the app (APP) and which sales are still unpaid (OPEN SALES), and you can look up anything about any client, the business's own documents and anything else in the app with your tools. Everything is live.`,

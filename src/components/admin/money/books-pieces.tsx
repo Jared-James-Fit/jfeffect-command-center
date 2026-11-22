@@ -6,7 +6,9 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
+import { Loader2, SlidersHorizontal, Trash2 } from "lucide-react";
+import { CleoAvatar } from "@/components/summer/cleo-avatar";
+import { useCleoAccess } from "@/hooks/use-cleo-access";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -126,9 +128,7 @@ function SummerSettingsCard({ onSaved }: { onSaved: () => void }) {
     <Card className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-            <Sparkles className="h-4 w-4" />
-          </div>
+          <CleoAvatar />
           <div className="min-w-0">
             <div className="text-sm font-semibold">{ASSISTANT_NAME}</div>
             <p className="text-xs text-muted-foreground">Vibe: {tone.label}. {persona.instructions?.trim() ? "Your custom instructions are on." : "No custom instructions yet."}</p>
@@ -152,9 +152,10 @@ function SummerSettingsCard({ onSaved }: { onSaved: () => void }) {
 }
 
 export function TaxSettings({ data, onSaved }: { data: BooksData; onSaved: () => void }) {
+  const cleoOn = useCleoAccess();
   return (
     <div className="space-y-4">
-      <SummerSettingsCard onSaved={onSaved} />
+      {cleoOn && <SummerSettingsCard onSaved={onSaved} />}
       <TaxSettingsForm data={data} onSaved={onSaved} />
     </div>
   );

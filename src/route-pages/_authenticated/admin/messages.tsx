@@ -41,7 +41,9 @@ import { applyMessageChange, INBOX_MESSAGE_COLUMNS } from "@/lib/inbox-cache";
 import { waitingState, type WaitingState } from "@/lib/inbox-waiting";
 import { deriveRequests, latestToReview, oldestPending, requestChip } from "@/lib/inbox-requests";
 import { TO_REVIEW_DAYS } from "@/lib/review-queue";
-import { Check, ChevronRight, MessageCircle, Mic, Sparkles } from "lucide-react";
+import { Check, ChevronRight, MessageCircle, Mic } from "lucide-react";
+import { CleoAvatar, CLEO_ROLE_LINE } from "@/components/summer/cleo-avatar";
+import { useCleoAccess } from "@/hooks/use-cleo-access";
 import { useAuth } from "@/lib/auth";
 import { openSummer } from "@/components/summer/summer-assistant";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
@@ -240,6 +242,7 @@ export function MessagesInbox({
   const tab = view ?? ownTab;
   const [massOpen, setMassOpen] = useState(false);
   const { role } = useAuth();
+  const cleoOn = useCleoAccess();
 
   useEffect(() => { if (selectedFromUrl) { setSelectedId(selectedFromUrl); setSupportId(null); } }, [selectedFromUrl]);
   useEffect(() => { if (initialSupport) { setSupportId(initialSupport); setSelectedId(null); } }, [initialSupport]);
@@ -1016,17 +1019,16 @@ export function MessagesInbox({
               : "pb-[calc(var(--bottom-nav-clearance,0px)+max(env(safe-area-inset-bottom),1.5rem))]",
           )}
         >
-          {role === "admin" && !search && (
-            // Cleo's way in on admin: pinned at the top of the inbox (there is
-            // no floating button). Not a client thread: nothing is ever sent.
+          {cleoOn && !search && (
+            // Cleo's way in: pinned at the top of the inbox (there is no
+            // floating button), for whoever has Cleo (useCleoAccess). Not a
+            // client thread: nothing is ever sent.
             <div className="flex items-stretch" data-cleo-row>
               <button type="button" onClick={() => openSummer()} className="flex min-h-[72px] min-w-0 flex-1 items-center gap-3 py-2 pl-4 text-left transition hover:bg-muted/60">
-                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
-                  <Sparkles className="h-6 w-6" />
-                </span>
+                <CleoAvatar size="lg" />
                 <span className="min-w-0">
                   <span className="block truncate text-[16px] leading-5">Cleo</span>
-                  <span className="mt-0.5 block truncate text-[15px] leading-5 text-muted-foreground">Ask anything, or tap the mic</span>
+                  <span className="mt-0.5 block truncate text-[15px] leading-5 text-muted-foreground">{CLEO_ROLE_LINE} · Ask anything, or tap the mic</span>
                 </span>
               </button>
               <button
@@ -1227,7 +1229,7 @@ export function MessagesInbox({
               </ClientNameLink>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 truncate text-sm font-bold">
-                  {/* Their name opens the Brief: everything waiting + an AI read */}
+                  {/* Their name opens the Brief: everything waiting, read for you */}
                   <button
                     type="button"
                     data-open-brief
@@ -1236,7 +1238,7 @@ export function MessagesInbox({
                     aria-label={`Brief: ${selected.full_name ?? "client"}`}
                   >
                     <span className="truncate">{selected.full_name}</span>
-                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   </button>
                   {(selectedClientLive || isClientActive((selected as any).last_active_at)) && (
                     <LiveMark className="hidden shrink-0 text-[11px] font-semibold sm:inline-flex" size={6}>

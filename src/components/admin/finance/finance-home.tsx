@@ -2,7 +2,8 @@ import { useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowRight, BookOpen, Camera, Loader2, Receipt, Sparkles, Ticket } from "lucide-react";
+import { ArrowRight, BookOpen, Camera, Loader2, MessageCircle, Receipt, Ticket } from "lucide-react";
+import { useCleoAccess } from "@/hooks/use-cleo-access";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ASSISTANT_NAME, toExpenseEntry, toTaxPaymentEntry, toTaxSettings, type OpenSaleRow } from "@/lib/business-books";
@@ -46,6 +47,7 @@ const HOME_LATEST = 4;
  */
 export function FinanceHome() {
   const qc = useQueryClient();
+  const cleoOn = useCleoAccess();
   const { snap, scanning, label: snapLabel } = useSnapReceipts();
   const fileRef = useRef<HTMLInputElement>(null);
   const [recording, setRecording] = useState<PaymentToRecord | null>(null);
@@ -125,9 +127,9 @@ export function FinanceHome() {
       </div>
 
       <input ref={fileRef} type="file" accept={RECEIPT_ACCEPT} multiple className="hidden" onChange={(e) => { void onSnap(e.target.files); e.target.value = ""; }} />
-      <div className="grid grid-cols-4 gap-2 sm:gap-3">
+      <div className={cn("grid gap-2 sm:gap-3", cleoOn ? "grid-cols-4" : "grid-cols-3")}>
         <QuickAction icon={Camera} label={snapLabel} primary busy={scanning} onClick={() => fileRef.current?.click()} />
-        <QuickAction icon={Sparkles} label={`Ask ${ASSISTANT_NAME}`} onClick={() => openSummer({ year: Number(today.slice(0, 4)) })} />
+        {cleoOn && <QuickAction icon={MessageCircle} label={`Ask ${ASSISTANT_NAME}`} onClick={() => openSummer({ year: Number(today.slice(0, 4)) })} />}
         <QuickAction icon={BookOpen} label="Books" to="/admin/finance/books" />
         <QuickAction icon={Ticket} label="Discounts" to="/admin/discount-codes" />
       </div>
