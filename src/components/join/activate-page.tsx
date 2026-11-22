@@ -14,6 +14,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { AuthShell, AuthLogo } from "@/components/auth/auth-shell";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { SIGNUP_ACK_MISSING } from "@/lib/legal-signup";
 import { cn } from "@/lib/utils";
 import { SOCIAL } from "@/lib/social-links";
 import {
@@ -52,6 +54,7 @@ export function ActivatePage({
   const [proof, setProof] = useState<string | null>(initialProof);
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resendIn, setResendIn] = useState(0);
@@ -131,10 +134,11 @@ export function ActivatePage({
     e.preventDefault();
     if (!token || busy || phase.kind !== "password") return;
     if (password.length < 8) return setError("Use at least 8 characters.");
+    if (!agreed) return setError(SIGNUP_ACK_MISSING);
     setBusy(true);
     setError(null);
     try {
-      const r = await activate({ data: { token, proof, password } });
+      const r = await activate({ data: { token, proof, password, agreed } });
       // never act on another account that happens to be signed in on this phone
       await supabase.auth.signOut({ scope: "local" }).catch(() => {});
       const { error: signErr } = await supabase.auth.signInWithPassword({
@@ -208,6 +212,33 @@ export function ActivatePage({
             className="h-[54px] rounded-2xl text-[17px]"
             aria-label="Password"
           />
+          <div className="flex items-start gap-3 px-1 pt-1" data-signup-agree>
+            <Checkbox
+              id="signup-agree"
+              checked={agreed}
+              onCheckedChange={(v) => {
+                setAgreed(v === true);
+                if (error === SIGNUP_ACK_MISSING) setError(null);
+              }}
+              className="mt-0.5 h-5 w-5"
+              aria-describedby="signup-agree-text"
+            />
+            <label
+              htmlFor="signup-agree"
+              id="signup-agree-text"
+              className="text-[13px] leading-relaxed text-muted-foreground"
+            >
+              I agree to the JF Effect{" "}
+              <Link to="/terms" target="_blank" className="underline underline-offset-2">
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link to="/privacy" target="_blank" className="underline underline-offset-2">
+                Privacy Policy
+              </Link>
+              .
+            </label>
+          </div>
           {error && <p className="text-center text-[13px] text-destructive">{error}</p>}
           <button type="submit" disabled={busy} className={BTN}>
             {busy ? (
@@ -216,17 +247,6 @@ export function ActivatePage({
               "Create my account"
             )}
           </button>
-          <p className="pt-1 text-center text-[12px] leading-relaxed text-muted-foreground">
-            By joining you agree to the{" "}
-            <Link to="/terms" className="underline underline-offset-2">
-              Terms
-            </Link>{" "}
-            and{" "}
-            <Link to="/privacy" className="underline underline-offset-2">
-              Privacy Policy
-            </Link>
-            .
-          </p>
         </form>
       </AuthShell>
     );

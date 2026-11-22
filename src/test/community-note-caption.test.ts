@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { captionBreaks } from "@/lib/community";
+import { previewLine } from "@/lib/caption-preview";
 import { NOTE_CUT_LINES, NOTE_SHOW_ALL_LINES } from "@/components/community/note-caption";
 
 const read = (f: string) => readFileSync(f, "utf8");
@@ -37,7 +38,10 @@ describe("coach posts in the feed: whole, or cut on a full thought with … more
     expect(NOTE_SHOW_ALL_LINES).toBe(12);
     expect(NOTE_CUT_LINES).toBe(9);
     const cap = read("src/components/community/note-caption.tsx");
-    expect(cap).toContain('text.slice(0, breaks[mid]).trimEnd() + "… more"');
+    // the measuring pass tests the exact preview shown, "… more" included (previewLine, #803),
+    // so a stop that fits in the cut-off lines never spills onto another once its "… more" is on
+    expect(cap).toContain("lines(previewLine(text, breaks[mid])) <= limits.cut");
+    expect(previewLine("strength is sneaky. it adds up", 19)).toBe("strength is sneaky… more");
     expect(cap).toContain("e.stopPropagation();\n        setOpen(true);");
     expect(read("src/components/community/post-card.tsx")).toContain(
       "<NoteCaption text={post.caption} mentions={post.mentions} onOpenPerson={onOpenPerson} clamp={clamp} />",

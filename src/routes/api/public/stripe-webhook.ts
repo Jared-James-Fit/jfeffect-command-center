@@ -1461,6 +1461,18 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
           }
         } catch (e: any) {
           console.error("[stripe-webhook] error", e?.message ?? e);
+          // The event id was claimed above before handling. A failure must give
+          // the claim back, or Stripe's retry is read as a duplicate and the
+          // event is lost for good. Every handler dedupes its own writes
+          // (ledger by external_reference, credits by session), so the retry
+          // is safe to run again.
+          if (event?.id) {
+            const { error: releaseErr } = await supabase
+              .from("processed_stripe_events")
+              .delete()
+              .eq("event_id", event.id);
+            if (releaseErr) console.error("[stripe-webhook] could not release the dedupe claim", releaseErr);
+          }
           return new Response("Internal error", { status: 500 });
         }
 

@@ -50,7 +50,12 @@ describe("her calendar on the finance home", () => {
     expect(home).toContain("<MyCalendarCard />");
     const card = read("src/components/admin/finance/my-calendar-card.tsx");
     expect(card).toContain("<UpcomingScheduleCard clientId={mine.id} links={false} />");
-    expect(card).toContain("{!preview && <CalendarSyncCard />}");
+    // the owner previewing sees her subscription's status read-only, never sets it up for her
+    expect(card).toContain("<CalendarSyncCard viewAsClientId={preview ? mine.id : null} />");
+    const sync = read("src/components/schedule/calendar-sync-card.tsx");
+    expect(sync).toContain("const isPov = !!pov.viewAsClientId || !!previewId;");
+    // the subscribe link (getMyCalendarFeed mints one) is never fetched in a preview
+    expect(sync).toMatch(/queryFn: \(\) => feedFn\(\{ data: \{\} \}\) as Promise<Feed>,\s*enabled: open && !isPov,/);
     expect(card).toContain("fn({ data: { userId: preview?.userId ?? null } })");
   });
 
