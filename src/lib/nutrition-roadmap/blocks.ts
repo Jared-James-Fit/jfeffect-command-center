@@ -70,6 +70,11 @@ export type BlocksInput = {
   recentEvent: { name: string | null; date: string; physique: boolean } | null;
   /** The next competition after the goal's, for the transition. */
   nextEvent: { name: string | null; date: string } | null;
+  /**
+   * A competition ahead with no target weight (no class on file): the phase runs to a fueled peak,
+   * meet week, recovery and a transition around its date, without a weight to make.
+   */
+  phaseMeet?: { name: string | null; date: string; physique: boolean } | null;
   noiseKg: number | null;
 };
 
@@ -129,6 +134,28 @@ export function planSegments(x: BlocksInput): { segs: Seg[]; endsShort: boolean 
   }
 
   const baseline = (slackDays: number) => (x.needsBaseline && slackDays >= BASELINE_DAYS + 7 ? [{ kind: "baseline" as const, days: BASELINE_DAYS, kgPerWeek: 0 }] : []);
+
+  // a meet ahead with no weight to make: the phase until the peak, then fueled into it
+  const meet = x.phaseMeet && x.phaseMeet.date >= today && (!g || g.kg == null || g.kind === "maintain") ? x.phaseMeet : null;
+  if (meet) {
+    const D = daysBetween(today, meet.date);
+    const taperDays = Math.min(7, D + 1);
+    const peakDays = meet.physique ? 0 : Math.max(0, Math.min(21, D + 1 - taperDays));
+    const leadDays = D + 1 - taperDays - peakDays;
+    const kind: BlockKind = g?.kind === "fat_loss" ? "fat_loss" : g?.kind === "muscle_gain" ? "surplus" : g?.kind === "recomp" ? "recomp" : "maintenance";
+    const rate = kind === "surplus" ? comfKg : kind === "recomp" ? -(0.25 / 100) * cur : kind === "fat_loss" ? -comfKg * 0.8 : 0;
+    if (leadDays >= 7) {
+      const base = baseline(leadDays);
+      segs.push(...base, ...chunk(kind, leadDays - (base[0]?.days ?? 0), x.safety.noDeficit && rate < 0 ? 0 : rate));
+    }
+    // a lead too short to be its own block is fueled with the peak
+    const fueled = peakDays + (leadDays < 7 ? Math.max(0, leadDays) : 0);
+    if (fueled) segs.push({ kind: "performance", days: fueled, kgPerWeek: 0, note: "peak" });
+    segs.push({ kind: "taper", days: taperDays, kgPerWeek: 0 });
+    segs.push({ kind: "post_comp", days: meet.physique ? POST_COMP_DAYS.physique : POST_COMP_DAYS.strength, kgPerWeek: 0 });
+    segs.push({ kind: "transition", days: TRANSITION_DAYS, kgPerWeek: 0, note: x.nextEvent ? "next" : undefined });
+    return { segs, endsShort };
+  }
 
   if (!g || g.kg == null || g.kind === "maintain") {
     const horizon = g?.date ? Math.max(14, daysBetween(today, g.date) + 1) : OPEN_HORIZON_WEEKS * 7;
@@ -294,7 +321,8 @@ function blockEnergy(seg: Seg, x: BlocksInput, startKg: number, endKg: number, c
   const est = macrosFor({ kcal, kg: midKg, heightCm: x.heightCm, vsMaintenance, lean, strengthSport: x.strengthSport });
   notes.push(...est.notes);
   const engine: Macros = { kcal: est.kcal, proteinG: est.proteinG, carbsG: est.carbsG, fatG: est.fatG };
-  const fromPlan = current && x.plan ? planEnergy(x.plan, x.trainingDays) : null;
+  // the plan they're on is this block's numbers only when it's a plan for this phase (or doesn't say)
+  const fromPlan = current && x.plan && (!x.plan.phase || samePhase(seg.kind, x.plan.phase)) ? planEnergy(x.plan, x.trainingDays) : null;
   if (fromPlan) {
     const diff = fromPlan.avg.kcal - kcal;
     if (Math.abs(diff) >= Math.max(150, kcal * 0.07)) notes.push(`The plan they're on averages ${fromPlan.avg.kcal} kcal a day; this block calls for about ${r25(kcal)}.`);
@@ -391,7 +419,7 @@ function texts(seg: Seg, x: BlocksInput, w: { startKg: number; targetKg: number;
     case "performance":
       return {
         objective: seg.note === "peak" ? `Fuel the strength peak at ${W(w.targetKg)}: maintenance, carbohydrate prioritised.` : "Fuel training at maintenance: no deficit, no surplus.",
-        priorities: ["Carbohydrate high around every session", `Protein ${energy.proteinG} g a day`, "Hold bodyweight steady: the class is already made"],
+        priorities: ["Carbohydrate high around every session", `Protein ${energy.proteinG} g a day`, x.phaseMeet && !g?.weightClass ? "Hold bodyweight steady, and confirm the weight class" : "Hold bodyweight steady: the class is already made"],
         moveOnWhen: seg.note === "peak" ? ["Meet week"] : ["The weight-change block starts"],
         rules: { keep: "Weight steady and training strong: change nothing.", change: "Drifting up past the class weight: trim 100–150 kcal from fats, never carbs before a session.", extend: "With the meet.", end: "At meet week." },
         why: seg.note === "peak" ? "Heavy singles need glycogen and recovery. Dieting through a peak costs strength the meet can't get back." : "With time to spare before the cut, training is fueled first and the weight comes off later at a gentle pace.",
