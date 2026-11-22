@@ -1,7 +1,7 @@
 /**
  * A lift video sent in the coach chat, read like a set video (see
  * chat-lift.ts for which set it is, and the migration
- * 20270503090000_lift_videos_in_chat.sql for what's stored).
+ * 20270504090000_lift_videos_in_chat.sql for what's stored).
  *
  * Runs on whichever device has the video to hand: the athlete's phone right
  * after it's sent (from the very file when it went as it was, else from its

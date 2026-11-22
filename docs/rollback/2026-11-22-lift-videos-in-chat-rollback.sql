@@ -1,4 +1,4 @@
--- Rollback for 20270503090000_lift_videos_in_chat.sql (lift videos sent in the
+-- Rollback for 20270504090000_lift_videos_in_chat.sql (lift videos sent in the
 -- coach chat). Run only if that change has to come out; the app code that
 -- calls chat_video_lift / chat_video_unlift and selects pl_set_videos.origin
 -- must be reverted first, or chat videos and the logger's set videos stop
