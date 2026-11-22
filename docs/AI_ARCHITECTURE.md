@@ -33,6 +33,7 @@ never hit the gateway's 524 or hold a request open).
 | `nutrition` (Nutrition Update targets, strong only) | GPT-6 Astra, GPT-5.5 | medium |
 | `nutrition_write` (meal plans, their fix, coach updates) | GPT-5.5, GPT-5-mini | low |
 | `roadmap` (block purpose, weekly focus) | GPT-5-mini, GPT-5.5 | low |
+| `nutrition_roadmap` (two lines of words for a nutrition roadmap revision; the engine decides every number, code rejects any added number) | GPT-5-mini, GPT-5.5 | low |
 | `meal_estimate` (a member's or client's AI food log, metered by AI credits) | GPT-5-mini, GPT-5.5 | low |
 | `form_draft` (a coach's Draft with AI form) | GPT-5-mini, GPT-5.5 | low |
 | `coach_write` (the weekly check-in recap and suggested reply, AI drafts of a form reply, a lead's first text, the inbox Brief, My Voice's Try it) | GPT-5-mini, GPT-5.5 | low |

@@ -231,6 +231,11 @@ const LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = {
     cardio_issue: "Cardio",
     water_issue: "Water",
     weight_making: "Making weight",
+    tracking_accuracy: "Tracking",
+    nutrition_barriers: "What got in the way",
+    scale_confounders: "Water on the scale",
+    cycle_changes: "Cycle changes",
+    training_note: "Heavy lower sessions",
     bodyweight_logged: "Weighed in",
     photos_added: "Progress photos",
     measurements_added: "Measurements",
@@ -782,6 +787,7 @@ const EXTRA_LABEL: Record<CheckinExtra, string> = {
   photos: "Progress photos",
   measurements: "Measurements",
   nutrition_update: "Nutrition Update",
+  roadmap: "Nutrition roadmap",
 };
 
 /** What this week's check-in added and what it left out, and why (the plan kept on the check-in). */

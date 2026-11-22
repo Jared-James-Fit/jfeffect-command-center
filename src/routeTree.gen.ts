@@ -270,6 +270,7 @@ import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as ApiPublicHooksMeetChecklistRemindersRouteImport } from './routes/api/public/hooks/meet-checklist-reminders'
 import { Route as ApiPublicHooksNutritionPlansTickRouteImport } from './routes/api/public/hooks/nutrition-plans-tick'
+import { Route as ApiPublicHooksNutritionRoadmapTickRouteImport } from './routes/api/public/hooks/nutrition-roadmap-tick'
 import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/public/hooks/nutrition-tick'
 import { Route as ApiPublicHooksPaymentProofImportRouteImport } from './routes/api/public/hooks/payment-proof-import'
 import { Route as ApiPublicHooksPaymentReminderSmsRouteImport } from './routes/api/public/hooks/payment-reminder-sms'
@@ -1809,6 +1810,12 @@ const ApiPublicHooksNutritionPlansTickRoute =
     path: '/api/public/hooks/nutrition-plans-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksNutritionRoadmapTickRoute =
+  ApiPublicHooksNutritionRoadmapTickRouteImport.update({
+    id: '/api/public/hooks/nutrition-roadmap-tick',
+    path: '/api/public/hooks/nutrition-roadmap-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksNutritionTickRoute =
   ApiPublicHooksNutritionTickRouteImport.update({
     id: '/api/public/hooks/nutrition-tick',
@@ -2297,6 +2304,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/meet-checklist-reminders': typeof ApiPublicHooksMeetChecklistRemindersRoute
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
+  '/api/public/hooks/nutrition-roadmap-tick': typeof ApiPublicHooksNutritionRoadmapTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
@@ -2596,6 +2604,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/meet-checklist-reminders': typeof ApiPublicHooksMeetChecklistRemindersRoute
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
+  '/api/public/hooks/nutrition-roadmap-tick': typeof ApiPublicHooksNutritionRoadmapTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
@@ -2901,6 +2910,7 @@ export interface FileRoutesById {
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/meet-checklist-reminders': typeof ApiPublicHooksMeetChecklistRemindersRoute
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
+  '/api/public/hooks/nutrition-roadmap-tick': typeof ApiPublicHooksNutritionRoadmapTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-proof-import': typeof ApiPublicHooksPaymentProofImportRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
@@ -3206,6 +3216,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/meet-checklist-reminders'
     | '/api/public/hooks/nutrition-plans-tick'
+    | '/api/public/hooks/nutrition-roadmap-tick'
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
@@ -3505,6 +3516,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/meet-checklist-reminders'
     | '/api/public/hooks/nutrition-plans-tick'
+    | '/api/public/hooks/nutrition-roadmap-tick'
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
@@ -3809,6 +3821,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/meet-checklist-reminders'
     | '/api/public/hooks/nutrition-plans-tick'
+    | '/api/public/hooks/nutrition-roadmap-tick'
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-proof-import'
     | '/api/public/hooks/payment-reminder-sms'
@@ -3943,6 +3956,7 @@ export interface RootRouteChildren {
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
   ApiPublicHooksMeetChecklistRemindersRoute: typeof ApiPublicHooksMeetChecklistRemindersRoute
   ApiPublicHooksNutritionPlansTickRoute: typeof ApiPublicHooksNutritionPlansTickRoute
+  ApiPublicHooksNutritionRoadmapTickRoute: typeof ApiPublicHooksNutritionRoadmapTickRoute
   ApiPublicHooksNutritionTickRoute: typeof ApiPublicHooksNutritionTickRoute
   ApiPublicHooksPaymentProofImportRoute: typeof ApiPublicHooksPaymentProofImportRoute
   ApiPublicHooksPaymentReminderSmsRoute: typeof ApiPublicHooksPaymentReminderSmsRoute
@@ -5802,6 +5816,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksNutritionPlansTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/nutrition-roadmap-tick': {
+      id: '/api/public/hooks/nutrition-roadmap-tick'
+      path: '/api/public/hooks/nutrition-roadmap-tick'
+      fullPath: '/api/public/hooks/nutrition-roadmap-tick'
+      preLoaderRoute: typeof ApiPublicHooksNutritionRoadmapTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/nutrition-tick': {
       id: '/api/public/hooks/nutrition-tick'
       path: '/api/public/hooks/nutrition-tick'
@@ -6822,6 +6843,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksMeetChecklistRemindersRoute:
     ApiPublicHooksMeetChecklistRemindersRoute,
   ApiPublicHooksNutritionPlansTickRoute: ApiPublicHooksNutritionPlansTickRoute,
+  ApiPublicHooksNutritionRoadmapTickRoute:
+    ApiPublicHooksNutritionRoadmapTickRoute,
   ApiPublicHooksNutritionTickRoute: ApiPublicHooksNutritionTickRoute,
   ApiPublicHooksPaymentProofImportRoute: ApiPublicHooksPaymentProofImportRoute,
   ApiPublicHooksPaymentReminderSmsRoute: ApiPublicHooksPaymentReminderSmsRoute,

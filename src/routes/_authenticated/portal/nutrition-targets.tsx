@@ -10,7 +10,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServiceTier } from "@/lib/service-tier";
 import { MemberNutritionPage } from "@/components/nutrition/member-nutrition-page";
-import { useMemo, useRef, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { format } from "date-fns";
@@ -54,6 +54,10 @@ import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
 import { FoodLogPlanProvider, type FoodLogPlan } from "@/components/nutrition/food-log-context";
 import { planMealsFromNotes } from "@/lib/food-log-plan";
 import type { DayTarget, PlanMeal } from "@/lib/food-log";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
+
+// the roadmap card (and its chart) loads after the page: nothing on Nutrition waits for it
+const NutritionRoadmapCard = lazyWithRetry(() => import("@/components/nutrition-roadmap/roadmap-athlete").then((m) => ({ default: m.NutritionRoadmapCard })));
 
 export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")({
   component: PortalNutritionByTier,
@@ -268,6 +272,13 @@ function PortalNutrition() {
       <PageHeader title="Nutrition" />
 
       <div className="space-y-4 px-4 pb-[max(6rem,env(safe-area-inset-bottom))] pt-4 md:px-6">
+        {/* 0. The roadmap (only once their coach approved one): the block, the goal, where they stand. */}
+        <SectionErrorBoundary label="Nutrition roadmap">
+          <Suspense fallback={null}>
+            <NutritionRoadmapCard />
+          </Suspense>
+        </SectionErrorBoundary>
+
         {/* 1. Which day's plan: a slim switch (date + chips), not a hero; the targets card names the day. */}
         <SectionErrorBoundary label="Today's plan">
           <TodaysPlanHero

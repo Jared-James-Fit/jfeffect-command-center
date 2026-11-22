@@ -8,6 +8,8 @@
 import type { CheckinExtra, CheckinPlan } from "@/lib/checkin-coordination/plan";
 import { CHANGED, CHANGED_OPTIONS, MEAL_OPTIONS, NU } from "@/lib/checkin-coordination/nutrition-fold";
 import { MEAL_CHOICE } from "@/lib/nutrition-history";
+import { askQuestion } from "@/lib/nutrition-roadmap/questions";
+import type { CheckinAsk } from "@/lib/nutrition-roadmap/types";
 
 export type PlanStep = {
   key: string;
@@ -68,6 +70,14 @@ export function nutritionSteps(extra: { since?: string | null; options?: { goal:
   ];
 }
 
+/** The nutrition roadmap's follow-ups as check-in steps (the same questions a self-coached athlete answers). */
+export function roadmapSteps(asks: string[], sex: "M" | "F" | null = null): PlanStep[] {
+  return asks
+    .map((a) => askQuestion(a as CheckinAsk, sex))
+    .filter((q): q is NonNullable<typeof q> => !!q)
+    .map((q) => ({ key: q.key, type: q.type, prompt: q.prompt, helper: q.helper, options: q.options, scale: q.scale, exclusive: q.exclusive, optional: q.optional, showWhen: q.showWhen as PlanStep["showWhen"] }));
+}
+
 export function addPlanSteps<T extends { key: string }>(base: T[], plan: CheckinPlan | null): Array<T | PlanStep> {
   if (!plan) return base;
   const has = (k: CheckinExtra) => plan.extras.some((e) => e.key === k);
@@ -84,6 +94,10 @@ export function addPlanSteps<T extends { key: string }>(base: T[], plan: Checkin
       if (nutrition) out.push(...nutritionSteps(nutrition));
     }
     out.push(q);
+    if (q.key === "nutrition_rating") {
+      const r = plan.extras.find((e) => e.key === "roadmap");
+      if (r?.asks?.length) out.push(...roadmapSteps(r.asks, r.sex ?? null));
+    }
     if (q.key === "nutrition_rating" && has("weight_making")) {
       const why = plan.extras.find((e) => e.key === "weight_making")?.reason;
       out.push({

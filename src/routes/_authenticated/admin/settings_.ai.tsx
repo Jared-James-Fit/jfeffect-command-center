@@ -28,6 +28,8 @@ const TASK_LABEL: Record<string, string> = {
   assistant: "Cleo (chat and voice, with live look-ups)",
   exercise_identify: "Exercise search: finding an exercise someone described",
   post_write: "Crew's lesson and tip posts: slides and captions, and the editor's read",
+  program_import: "Reading a program someone uploaded",
+  nutrition_roadmap: "Nutrition roadmap words (the engine decides the numbers)",
 };
 
 /** Admin only: which models run the coaching AI, whether they're reachable, and how the calls have gone. Nothing here changes a program. */
