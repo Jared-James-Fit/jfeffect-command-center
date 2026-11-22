@@ -353,7 +353,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300">
                   <Trophy className="h-3.5 w-3.5" />
-                  ATPR breakdown
+                  All-time PR breakdown
                 </div>
                 <div className="mt-1.5 space-y-1">
                   {prList.slice(0, 3).map((pr) => (
