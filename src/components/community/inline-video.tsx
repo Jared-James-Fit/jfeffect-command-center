@@ -5,7 +5,19 @@ import { CLIP_ZOOM_MAX_TRIM, photoZoomBox, type ClipFrame } from "@/lib/photo-fr
 import { ClipFrameBox } from "@/components/community/clip-frame-box";
 import { useFullMediaUrl } from "@/lib/community.queries";
 import { preferAmbientAudio } from "@/lib/audio-session";
-import { SOUND_BLOCKED_EVENT, acquireFeedVideo, playFeedVideo, releaseFeedVideo, setSoundWanted, soundBlocked, unmuteBlocked } from "@/lib/video-pool";
+import {
+  PLAY_REFUSED_EVENT,
+  SOUND_BLOCKED_EVENT,
+  acquireFeedVideo,
+  pauseFeedVideo,
+  playFeedVideo,
+  playRefused,
+  releaseFeedVideo,
+  setSoundWanted,
+  soundBlocked,
+  startRefused,
+  unmuteBlocked,
+} from "@/lib/video-pool";
 import { clipIsSilent, type SilentProbe } from "@/lib/video-silent";
 import { VideoScrubber } from "@/components/community/video-scrubber";
 import { ActivitySpinner } from "@/components/activity-spinner";
@@ -186,6 +198,8 @@ export function InlineVideo({
   const [postUp, setPostUp] = useState(false);
   const [tapped, setTapped] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  // the phone won't start it by itself, even muted (Low Power Mode): a play button, and the next tap starts it
+  const [refused, setRefused] = useState(false);
   // no sound track (posted with no sound): no speaker, no "Tap for sound"
   const [silent, setSilent] = useState(false);
   // a finger held on it (on a post's own screen): paused until it lets go
@@ -268,6 +282,7 @@ export function InlineVideo({
       // scrubbed while paused: the frame it's on is what shows (once there is one to show)
       ["seeked", () => v.readyState >= 2 && setShown(true)],
       [SOUND_BLOCKED_EVENT, () => setBlocked(soundBlocked(v))],
+      [PLAY_REFUSED_EVENT, () => setRefused(playRefused(v))],
       ["loadedmetadata", readSound],
       ["timeupdate", readSound],
     ];
@@ -280,6 +295,7 @@ export function InlineVideo({
       setPlaying(false);
       setShown(false);
       setBlocked(false);
+      setRefused(false);
       setSilent(false);
       setBuffering(false);
     };
@@ -340,7 +356,8 @@ export function InlineVideo({
   useEffect(() => {
     if (!el) return;
     if (!shouldPlay) {
-      el.pause();
+      // no tap will start it while it isn't wanted
+      pauseFeedVideo(el);
       return;
     }
     if (mode === "auto") preferAmbientAudio();
@@ -364,7 +381,7 @@ export function InlineVideo({
 
   const soundOn = sound && !blocked;
   // the phone is holding its sound back until a tap: say so, plainly (TikTok's "Tap for sound")
-  const askTap = sound && blocked && !silent && controls !== "corner";
+  const askTap = sound && blocked && !silent && !refused && controls !== "corner";
   // on a post's screen (controls up top), shown whole: between the bars
   const between = controls === "top" && fit === "contain";
   // shown whole there, a clip a little taller than the room fills its width instead of leaving black down both sides
@@ -426,7 +443,7 @@ export function InlineVideo({
         </>
       )}
       {/* loading: a quiet spinner in the middle, so a clip waiting on the network never reads as frozen */}
-      {buffering && shouldPlay && (
+      {buffering && shouldPlay && !refused && (
         <div className="pointer-events-none absolute inset-0 z-[1] grid place-items-center" style={between ? BETWEEN_BARS : undefined} data-video-buffering>
           <ActivitySpinner size={28} className="text-white/85 drop-shadow" />
         </div>
@@ -445,6 +462,25 @@ export function InlineVideo({
         >
           <span className="grid h-14 w-14 place-items-center rounded-full bg-black/55 text-white backdrop-blur">
             <Play className="ml-0.5 h-6 w-6 fill-current" />
+          </span>
+        </button>
+      )}
+      {/* the phone wouldn't start it by itself (Low Power Mode): say so with a play button, never a frame that just sits
+          there; any tap starts it (video-pool.ts), this one too */}
+      {refused && shouldPlay && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (el && playRefused(el)) startRefused(el);
+          }}
+          className="absolute inset-0 z-[2] grid place-items-center"
+          style={between ? BETWEEN_BARS : undefined}
+          aria-label="Play video"
+          data-video-refused
+        >
+          <span className="grid h-16 w-16 place-items-center rounded-full bg-black/55 text-white backdrop-blur">
+            <Play className="ml-1 h-7 w-7 fill-current" />
           </span>
         </button>
       )}

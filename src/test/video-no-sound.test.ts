@@ -134,7 +134,7 @@ describe("where it shows", () => {
 
   it("the feed: a silent clip has no speaker or Tap for sound, and a tap on its screen just says no sound", () => {
     const v = read("components/community/inline-video.tsx");
-    expect(v).toContain("const askTap = sound && blocked && !silent && controls !== \"corner\";");
+    expect(v).toContain("const askTap = sound && blocked && !silent && !refused && controls !== \"corner\";");
     expect(v).toContain("(auto || tapped) && !failed && !silent &&");
     expect(v).toContain('data-silent={silent ? "" : undefined}');
     const card = read("components/community/post-card.tsx");

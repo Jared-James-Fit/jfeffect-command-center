@@ -23,6 +23,7 @@ import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { videoLimit } from "@/lib/video-edit/limits";
 import { feedback } from "@/lib/feedback";
 import { MentionText } from "@/components/community/mentions";
+import { noteAutoplayRefused } from "@/lib/autoplay-notice";
 
 /** How long one moment shows before the next. */
 const FRAME_MS = 5000;
@@ -734,13 +735,18 @@ function StoryClip({ path, poster, paused, onProgress, onEnd, onFail }: { path: 
       v.pause();
       return;
     }
-    v.play().catch(() => {
+    // refused even muted (Low Power Mode): the story clock takes over, and the first time the app says why
+    const refusedMuted = (e: unknown) => {
+      if ((e as { name?: string } | null)?.name === "NotAllowedError") noteAutoplayRefused();
+      failRef.current();
+    };
+    v.play().catch((e: unknown) => {
       if (!v.muted) {
         storySoundBlocked = true;
         setMuted(true);
         v.muted = true;
-        void v.play().catch(() => failRef.current());
-      } else failRef.current();
+        void v.play().catch(refusedMuted);
+      } else refusedMuted(e);
     });
   }, [paused, url]);
 
