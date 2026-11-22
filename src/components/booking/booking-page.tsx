@@ -414,15 +414,19 @@ export function BookingPage({
           <div className="space-y-3 p-5 sm:p-6">
             <p className="text-[15px] font-semibold">For JF Effect coaching clients</p>
             <p className="text-sm text-muted-foreground">
-              {who
-                ? "Your account doesn't include calls with a coach. Coaching does: a coach, a program written for you, and calls like this one."
-                : "Sign in with your client account to pick a time."}
+              {who && page.includedCall
+                ? "This call is included with a coaching package your account isn't on. Message your coach if you'd like it added."
+                : who
+                  ? "Your account doesn't include calls with a coach. Coaching does: a coach, a program written for you, and calls like this one."
+                  : "Sign in with your client account to pick a time."}
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
               {!who && signInLink}
-              <Button asChild variant="outline" className="h-11">
-                <Link to="/coaching/apply">Apply for coaching</Link>
-              </Button>
+              {!(who && page.includedCall) && (
+                <Button asChild variant="outline" className="h-11">
+                  <Link to="/coaching/apply">Apply for coaching</Link>
+                </Button>
+              )}
             </div>
           </div>
         </div>

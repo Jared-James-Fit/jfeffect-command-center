@@ -76,6 +76,9 @@ export type LeadApplication = {
   is_test: boolean | null;
   source_label?: string | null;
   booking_link_slug?: string | null;
+  /** The coaching package they applied for (the card they tapped), by name. */
+  coaching_interest?: string | null;
+  package_slug?: string | null;
 };
 
 const label = (list: ReadonlyArray<{ v: string; l: string }>, v: string | null | undefined) =>
@@ -108,8 +111,8 @@ export function leadNeeds(app: NeedsInput, now = Date.now()): "reply" | "follow_
 export const isLeadWaiting = (app: NeedsInput, now = Date.now()) => leadNeeds(app, now) !== null;
 
 /** "Fat Loss · ASAP": what they're after, for a row. */
-export function leadLine(app: Pick<LeadApplication, "main_goal" | "timeline">): string {
-  return [goalLabel(app.main_goal), timelineLabel(app.timeline)].filter(Boolean).join(" · ");
+export function leadLine(app: Pick<LeadApplication, "main_goal" | "timeline"> & { coaching_interest?: string | null }): string {
+  return [app.coaching_interest ?? null, goalLabel(app.main_goal), timelineLabel(app.timeline)].filter(Boolean).join(" · ");
 }
 
 /** Where the lead stands, in a word. */

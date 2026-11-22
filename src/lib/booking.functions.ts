@@ -163,16 +163,22 @@ export const getBookingPage = createServerFn({ method: "GET" })
         .maybeSingle();
       if (s) booked = { start: s.starts_at, end: s.ends_at, timezone: s.timezone ?? null, done: s.status !== "Scheduled" };
     }
+    // A package's included call (Coaching Plus) books only for a client on that package.
+    const { isIncludedCallType, includedCallTypesFor } = await import("@/lib/booking.server");
+    const includedCall = await isIncludedCallType(db, type.id);
+    const onPackage = includedCall && client ? (await includedCallTypesFor(db, client.id)).has(type.id) : !includedCall;
     const who = client
       ? {
           // Only the first name: the link's holder already knows who it's for.
           firstName: (client.full_name ?? "").trim().split(/\s+/)[0] || "you",
-          canBook: audienceAllows(type, { serviceTier: client.service_tier }),
+          canBook: audienceAllows(type, { serviceTier: client.service_tier }) && onPackage,
           signedIn: identity.via === "client_app",
         }
       : null;
     return {
       ...publicView(type, host.name),
+      /** A package's included call: bookable only on that package. */
+      includedCall,
       who,
       /** Older pages read this. */
       invitee: who ? { firstName: who.firstName, canBook: who.canBook } : null,
@@ -469,6 +475,19 @@ export const listMyBookingTypes = createServerFn({ method: "POST" })
       const { data: c } = await db.from("clients").select("service_tier").eq("id", clientId).maybeSingle();
       const tier = (c as any)?.service_tier ?? null;
       rows = rows.filter((t) => audienceAllows(t, { serviceTier: tier }));
+    }
+    // A package's included call (Coaching Plus) shows only to a client on that package.
+    {
+      const { data: calls } = await db
+        .from("coaching_packages")
+        .select("call_booking_card_id")
+        .in("call_booking_card_id", rows.map((t) => t.id));
+      const callTypes = new Set(((calls ?? []) as any[]).map((c) => c.call_booking_card_id as string));
+      if (callTypes.size) {
+        const { includedCallTypesFor } = await import("@/lib/booking.server");
+        const mine = await includedCallTypesFor(db, clientId);
+        rows = rows.filter((t) => !callTypes.has(t.id) || mine.has(t.id));
+      }
     }
     let trainsInPerson = false;
     if (rows.some((t) => t.location_mode === "in_person")) {
