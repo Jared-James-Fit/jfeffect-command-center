@@ -1,16 +1,30 @@
 /**
- * Branded JF Effect meal plan PDF (A4).
+ * The nutrition plan PDF (Nov 22 2026), drawn with the JF Effect PDF kit
+ * (src/lib/pdf). One document wherever it's downloaded: the client's Meal
+ * plan, a member's plan, the coach's Clients ⋯ and the plan's ⋯ on the
+ * client's Nutrition tab.
  *
- * Page 1: client overview, daily targets table, food-weighing rules and
- * coach notes. Then one page per day type: macro tiles and each meal as a
- * card (foods with amounts in a column, per-meal macros in the header).
- * Disclaimer always prints at the end. Cards never split awkwardly: a card
- * that doesn't fit moves to the next page; a card taller than a page flows.
+ * First: the plan in brief (phase, goal, the period and when it's next
+ * reviewed, coach, water), the daily targets with when each day type is used
+ * (`planDayRule`: "Training days · Fri"), the coach's notes, supplements, the
+ * food-weighing rules and the disclaimer. Then a section per day type: its
+ * targets as tiles and each meal as a table (amounts in a column, the meal's
+ * macros and calories on its title line, pre / post-workout named), kept whole
+ * on a page.
+ *
+ * Numbers are the plan's as written: the day's targets from its row, a meal's
+ * macros from its own line, its calories worked out from them (4 / 4 / 9, only
+ * when all three are written). Nothing is averaged across days and no
+ * coverage check is printed (that's the coach's screen, never the client's).
  */
-import { jsPDF } from "jspdf";
+import { PdfDoc, PDF_COLOR, type TableSpec } from "@/lib/pdf/kit";
+import { pdfDate, pdfFileName, pdfNumber, pdfRange, pdfText } from "@/lib/pdf/text";
+import { deliverPdf, loadPdfLogo } from "@/lib/pdf/deliver";
 import { NUTRITION_DISCLAIMER, NUTRITION_DISCLAIMER_TITLE } from "@/lib/nutrition-disclaimer";
-import { macroSummary, structureMealPlanDay, type PlanMeal } from "@/lib/nutrition-targets/meal-plan-structure";
+import { structureMealPlanDay, type PlanMacros, type PlanMeal } from "@/lib/nutrition-targets/meal-plan-structure";
 import { MEAL_TIMING_LABEL } from "@/lib/nutrition-targets/meal-timing";
+import { planDayRule, PLAN_DAY_USE_LABEL } from "@/lib/client-nutrition-day";
+import { readPlanSupplements } from "@/lib/nutrition-targets/supplements";
 
 type Day = {
   id?: string;
@@ -20,7 +34,10 @@ type Day = {
   carbs: number | null;
   fats: number | null;
   fibre?: number | null;
+  steps?: number | null;
   notes?: string | null;
+  use_on?: string | null;
+  weekdays?: string[] | null;
 };
 
 export type MealPlanPdfData = {
@@ -28,6 +45,8 @@ export type MealPlanPdfData = {
   coach_name?: string | null;
   updated_at?: string | null;
   start_date?: string | null;
+  /** When it's next reviewed (the plan's end date). */
+  end_date?: string | null;
   phase?: string | null;
   goal?: string | null;
   structure?: string | null;
@@ -35,363 +54,204 @@ export type MealPlanPdfData = {
   sleep?: string | null;
   client_notes?: string | null;
   food_weighing_rules?: string | null;
+  /** What the coach published (supplements.ts): { items, notes }. */
+  supplements?: unknown;
   disclaimer?: string | null;
   days: Day[];
 };
 
-type RGB = [number, number, number];
-const INK: RGB = [17, 17, 20];
-const RED: RGB = [239, 51, 64];
-const MUTED: RGB = [110, 114, 124];
-const LINE: RGB = [228, 230, 235];
-const SOFT: RGB = [246, 246, 248];
-const RED_SOFT: RGB = [253, 236, 238];
+const SHORT_DAY: Record<string, string> = { Monday: "Mon", Tuesday: "Tue", Wednesday: "Wed", Thursday: "Thu", Friday: "Fri", Saturday: "Sat", Sunday: "Sun" };
 
-function fmtDate(iso?: string | null) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso.length === 10 ? `${iso}T12:00:00` : iso).toLocaleDateString("en-CA", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return iso;
-  }
+/** "Training days · Fri", "Rest days", "Every day", "Only when picked"; "" when the plan can't say. */
+export function planDayWhen(day: Day, planSize: number): string {
+  const rule = planDayRule(day, planSize);
+  const use = rule.use ? PLAN_DAY_USE_LABEL[rule.use] : "";
+  const days = rule.weekdays.map((d) => SHORT_DAY[d] ?? d).join(", ");
+  return [use, days].filter(Boolean).join(" · ");
 }
 
-/** jsPDF's Helvetica is Latin-1 only. */
-const clean = (s: string) =>
-  String(s ?? "")
-    .replace(/≈/g, "~")
-    .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/[^\x00-\xFF—–·×…]/g, "")
-    .trim();
+/** A meal's calories from its macros (4 / 4 / 9), only when all three are written. */
+export function mealCalories(m: PlanMacros | null): number | null {
+  if (!m || m.protein == null || m.carbs == null || m.fat == null) return null;
+  return Math.round(m.protein * 4 + m.carbs * 4 + m.fat * 9);
+}
 
-export function generateMealPlanPdf(data: MealPlanPdfData, logoDataUrl?: string | null): jsPDF {
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const W = doc.internal.pageSize.getWidth();
-  const H = doc.internal.pageSize.getHeight();
-  const mx = 40;
-  const cw = W - mx * 2;
-  const bottom = H - 56;
-  let y = 0;
+const g = (v: number | null | undefined) => (v != null ? `${pdfNumber(Number(v), 0)} g` : null);
+const kcal = (v: number | null | undefined) => (v != null ? `${pdfNumber(Number(v), 0)} kcal` : null);
 
-  const color = (c: RGB, kind: "text" | "fill" | "draw" = "text") => {
-    if (kind === "text") doc.setTextColor(c[0], c[1], c[2]);
-    else if (kind === "fill") doc.setFillColor(c[0], c[1], c[2]);
-    else doc.setDrawColor(c[0], c[1], c[2]);
+function mealTable(meal: PlanMeal): TableSpec {
+  const macros = meal.macros;
+  const parts = [
+    macros?.protein != null ? `P ${pdfNumber(macros.protein, 0)} g` : null,
+    macros?.carbs != null ? `C ${pdfNumber(macros.carbs, 0)} g` : null,
+    macros?.fat != null ? `F ${pdfNumber(macros.fat, 0)} g` : null,
+  ].filter(Boolean);
+  const cal = mealCalories(macros);
+  const right = [parts.join(" · "), cal != null ? `${cal} kcal` : null].filter(Boolean).join("  ·  ");
+  const title = pdfText(meal.title) + (meal.timing ? ` · ${MEAL_TIMING_LABEL[meal.timing]}` : "");
+  return {
+    columns: [
+      { header: "Amount", width: 92, align: "right", bold: true },
+      { header: "Food", width: "auto" },
+    ],
+    rows: meal.foods.map((f) => [pdfText(f.amount), pdfText(f.name.charAt(0).toUpperCase() + f.name.slice(1))]),
+    title: { text: title, right: right || null, rightTone: "muted" },
+    footnotes: meal.notes,
+    hideHeader: true,
+    gapAfter: 10,
   };
-  const font = (style: "normal" | "bold" | "italic", size: number, c: RGB = INK) => {
-    doc.setFont("helvetica", style);
-    doc.setFontSize(size);
-    color(c);
-  };
+}
 
-  const header = () => {
-    color(INK, "fill");
-    doc.rect(0, 0, W, 64, "F");
-    color(RED, "fill");
-    doc.rect(0, 64, W, 3, "F");
-    let x = mx;
-    if (logoDataUrl) {
-      try {
-        doc.addImage(logoDataUrl, "PNG", mx, 14, 36, 36);
-        x = mx + 46;
-      } catch { /* logo is optional */ }
-    }
-    font("bold", 17, [255, 255, 255]);
-    doc.text("JF EFFECT", x, 32);
-    font("normal", 8, [170, 170, 178]);
-    doc.text("N U T R I T I O N   P L A N", x, 46);
-    if (data.client_name) {
-      font("bold", 11, [255, 255, 255]);
-      doc.text(clean(data.client_name), W - mx, 32, { align: "right" });
-    }
-    font("normal", 8, [170, 170, 178]);
-    doc.text(`Updated ${fmtDate(data.updated_at)}`, W - mx, 46, { align: "right" });
-  };
-  const newPage = () => {
-    doc.addPage();
-    header();
-    y = 92;
-  };
-  const ensure = (need: number) => {
-    if (y + need > bottom) newPage();
-  };
-  const sectionTitle = (t: string) => {
-    ensure(30);
-    color(RED, "fill");
-    doc.rect(mx, y - 9, 3, 12, "F");
-    font("bold", 10, INK);
-    doc.text(t.toUpperCase(), mx + 10, y);
-    y += 14;
-  };
-  const textBlock = (text: string, size = 9.5, c: RGB = [55, 58, 66], style: "normal" | "italic" = "normal") => {
-    font(style, size, c);
-    const lh = size * 1.35;
-    for (const line of doc.splitTextToSize(clean(text), cw) as string[]) {
-      ensure(lh);
-      doc.text(line, mx, y);
-      y += lh;
-    }
-  };
-
-  // ── Page 1: overview ────────────────────────────────────────────────
-  header();
-  y = 104;
-  font("bold", 22, INK);
-  doc.text(clean(data.client_name || "Your Nutrition Plan"), mx, y);
-  y += 20;
-
-  const phase = [data.phase, data.goal && data.goal !== data.phase ? data.goal : null].filter(Boolean).join(" · ");
-  const chips = [
-    phase ? `Phase: ${phase}` : null,
-    data.structure ? `Structure: ${data.structure}` : null,
-    `Start: ${fmtDate(data.start_date)}`,
-    data.coach_name ? `Coach: ${data.coach_name}` : null,
-    data.water ? `Water: ${data.water}` : null,
-    data.sleep ? `Sleep: ${data.sleep}` : null,
-  ].filter(Boolean) as string[];
-  font("bold", 8.5, [70, 72, 80]);
-  let cx = mx;
-  for (const chip of chips) {
-    const t = clean(chip);
-    const w = doc.getTextWidth(t) + 16;
-    if (cx + w > W - mx) { cx = mx; y += 22; }
-    color(SOFT, "fill");
-    color(LINE, "draw");
-    doc.roundedRect(cx, y - 11, w, 17, 8.5, 8.5, "FD");
-    doc.text(t, cx + 8, y);
-    cx += w + 6;
-  }
-  y += 30;
-
-  // Daily targets table
-  sectionTitle("Daily targets");
-  const cols = [
-    { label: "Day", w: 0.32, align: "left" as const },
-    { label: "Calories", w: 0.16 },
-    { label: "Protein", w: 0.13 },
-    { label: "Carbs", w: 0.13 },
-    { label: "Fat", w: 0.13 },
-    { label: "Fibre", w: 0.13 },
-  ];
-  const rowH = 24;
-  color(INK, "fill");
-  doc.roundedRect(mx, y, cw, rowH, 5, 5, "F");
-  doc.rect(mx, y + rowH - 6, cw, 6, "F");
-  font("bold", 8, [255, 255, 255]);
-  let tx = mx;
-  for (const c of cols) {
-    const colW = c.w * cw;
-    if (c.align === "left") doc.text(c.label.toUpperCase(), tx + 10, y + 15.5);
-    else doc.text(c.label.toUpperCase(), tx + colW / 2, y + 15.5, { align: "center" });
-    tx += colW;
-  }
-  y += rowH;
-  data.days.forEach((d, i) => {
-    color(i % 2 ? [255, 255, 255] : SOFT, "fill");
-    doc.rect(mx, y, cw, rowH, "F");
-    const vals = [
-      d.day_label || "Day",
-      d.calories != null ? `${d.calories}` : "—",
-      d.protein != null ? `${d.protein} g` : "—",
-      d.carbs != null ? `${d.carbs} g` : "—",
-      d.fats != null ? `${d.fats} g` : "—",
-      d.fibre != null ? `${d.fibre} g` : "—",
-    ];
-    let x = mx;
-    cols.forEach((c, ci) => {
-      const colW = c.w * cw;
-      if (ci === 0) {
-        font("bold", 9.5, INK);
-        doc.text(clean(vals[ci]), x + 10, y + 15.5);
-      } else {
-        font(ci === 1 ? "bold" : "normal", 9.5, ci === 1 ? RED : INK);
-        doc.text(vals[ci], x + colW / 2, y + 15.5, { align: "center" });
-      }
-      x += colW;
-    });
-    y += rowH;
+export function buildMealPlanPdf(data: MealPlanPdfData, opts: { logo?: string | null; generatedAt?: Date; compress?: boolean } = {}): PdfDoc {
+  const days = data.days ?? [];
+  const phase = pdfText(data.phase);
+  const goal = pdfText(data.goal);
+  const period = data.start_date && data.end_date ? pdfRange(data.start_date, data.end_date) : data.start_date ? `From ${pdfDate(data.start_date)}` : "";
+  const pdf = new PdfDoc({
+    kind: "Nutrition plan",
+    title: phase ? `${phase}${goal && goal !== phase ? ` · ${goal}` : ""}` : "Nutrition plan",
+    subtitle: [period, data.updated_at ? `Updated ${pdfDate(data.updated_at)}` : null].filter(Boolean).join(" · ") || null,
+    person: data.client_name ?? null,
+    logo: opts.logo,
+    generatedAt: opts.generatedAt,
+    compress: opts.compress,
+    facts: [
+      ["For", data.client_name ?? null],
+      ["Coach", data.coach_name ?? null],
+      ["Next update", data.end_date ? pdfDate(data.end_date) : null],
+      ["Water", pdfText(data.water) || null],
+    ],
   });
-  color(LINE, "draw");
-  doc.roundedRect(mx, y - rowH * (data.days.length + 1), cw, rowH * (data.days.length + 1), 5, 5, "S");
-  y += 26;
 
-  if (data.food_weighing_rules?.trim()) {
-    sectionTitle("Food-weighing rules");
-    textBlock(data.food_weighing_rules);
-    y += 14;
-  }
-  if (data.client_notes?.trim()) {
-    sectionTitle("Coach notes");
-    textBlock(data.client_notes);
-    y += 14;
-  }
-
-  // ── One page per day ────────────────────────────────────────────────
-  const mealCard = (meal: PlanMeal) => {
-    const foodH = 16;
-    const noteLines = meal.notes.flatMap((n) => doc.splitTextToSize(clean(n), cw - 36) as string[]);
-    const h = 30 + meal.foods.length * foodH + noteLines.length * 12 + 2;
-    if (h < bottom - 92) ensure(h + 10);
-    const top = y;
-    // header strip
-    color(SOFT, "fill");
-    color(LINE, "draw");
-    doc.roundedRect(mx, top, cw, h, 7, 7, "FD");
-    color(RED_SOFT, "fill");
-    doc.roundedRect(mx, top, cw, 24, 7, 7, "F");
-    doc.rect(mx, top + 14, cw, 10, "F");
-    font("bold", 9.5, RED);
-    const titleText = clean(meal.title).toUpperCase();
-    doc.text(titleText, mx + 12, top + 16);
-    if (meal.timing) {
-      // Pre / Post-Workout pill next to the meal title.
-      const label = MEAL_TIMING_LABEL[meal.timing].toUpperCase();
-      const px = mx + 12 + doc.getTextWidth(titleText) + 8;
-      font("bold", 7, [255, 255, 255]);
-      const pw = doc.getTextWidth(label) + 12;
-      color(meal.timing === "post" ? [16, 140, 96] : [214, 120, 18], "fill");
-      doc.roundedRect(px, top + 7, pw, 13, 6.5, 6.5, "F");
-      doc.text(label, px + 6, top + 16);
-    }
-    const ms = macroSummary(meal.macros);
-    if (ms) {
-      font("bold", 8.5, [90, 50, 55]);
-      doc.text(ms, W - mx - 12, top + 16, { align: "right" });
-    }
-    y = top + 24 + 15;
-    meal.foods.forEach((f, i) => {
-      if (i > 0) {
-        color(LINE, "draw");
-        doc.line(mx + 12, y - 11, W - mx - 12, y - 11);
-      }
-      font("bold", 9.5, INK);
-      doc.text(clean(f.amount), mx + 74, y, { align: "right" });
-      font("normal", 9.5, [40, 42, 48]);
-      doc.text(clean(f.name.charAt(0).toUpperCase() + f.name.slice(1)), mx + 86, y);
-      y += foodH;
-    });
-    for (const n of noteLines) {
-      font("italic", 8.5, MUTED);
-      doc.text(n, mx + 12, y);
-      y += 12;
-    }
-    y = top + h + 10;
-  };
-
-  for (const day of data.days) {
-    newPage();
-    // Day title + macro tiles
-    color(RED, "fill");
-    doc.rect(mx, y - 14, 4, 20, "F");
-    font("bold", 18, INK);
-    doc.text(clean(day.day_label || "Day").toUpperCase(), mx + 12, y + 2);
-    y += 18;
-    const tiles: [string, string][] = [
-      ["Calories", day.calories != null ? `${day.calories}` : "—"],
-      ["Protein", day.protein != null ? `${day.protein} g` : "—"],
-      ["Carbs", day.carbs != null ? `${day.carbs} g` : "—"],
-      ["Fat", day.fats != null ? `${day.fats} g` : "—"],
-      ["Fibre", day.fibre != null ? `${day.fibre} g` : "—"],
+  // ── the plan in brief ──
+  if (days.length) {
+    const hasFibre = days.some((d) => d.fibre != null);
+    const hasSteps = days.some((d) => d.steps != null && Number(d.steps) > 0);
+    const columns: TableSpec["columns"] = [
+      { header: "Day", width: "auto", bold: true },
+      { header: "Calories", width: 62, align: "right" },
+      { header: "Protein", width: 52, align: "right" },
+      { header: "Carbs", width: 52, align: "right" },
+      { header: "Fat", width: 46, align: "right" },
     ];
-    const gap = 8;
-    const tw = (cw - gap * (tiles.length - 1)) / tiles.length;
-    tiles.forEach(([label, val], i) => {
-      const x = mx + i * (tw + gap);
-      color(i === 0 ? INK : SOFT, "fill");
-      color(i === 0 ? INK : LINE, "draw");
-      doc.roundedRect(x, y, tw, 46, 7, 7, "FD");
-      font("bold", 15, i === 0 ? [255, 255, 255] : INK);
-      doc.text(val, x + tw / 2, y + 22, { align: "center" });
-      font("bold", 7, i === 0 ? [190, 190, 198] : MUTED);
-      doc.text(label.toUpperCase(), x + tw / 2, y + 36, { align: "center" });
+    if (hasFibre) columns.push({ header: "Fibre", width: 46, align: "right" });
+    if (hasSteps) columns.push({ header: "Steps", width: 54, align: "right" });
+    const sub = new Map<string, string>();
+    const rows = days.map((d, i) => {
+      const when = planDayWhen(d, days.length);
+      if (when && when.toLowerCase() !== pdfText(d.day_label).toLowerCase()) sub.set(`${i}:0`, when);
+      const r: Array<string | null> = [pdfText(d.day_label) || `Day ${i + 1}`, kcal(d.calories), g(d.protein), g(d.carbs), g(d.fats)];
+      if (hasFibre) r.push(g(d.fibre));
+      if (hasSteps) r.push(d.steps != null && Number(d.steps) > 0 ? pdfNumber(Number(d.steps), 0) : null);
+      return r;
     });
-    y += 64;
+    pdf.heading("Daily targets", { keepWith: 80 });
+    pdf.table({ columns, rows, sub });
+  } else {
+    pdf.paragraph("No day targets are set on this plan yet.", { color: PDF_COLOR.muted });
+  }
 
-    const s = structureMealPlanDay(day.notes);
+  if (pdfText(data.structure) || pdfText(data.sleep)) {
+    pdf.details([
+      ["Structure", pdfText(data.structure) || null],
+      ["Sleep", pdfText(data.sleep) || null],
+    ]);
+  }
+
+  if (pdfText(data.client_notes)) {
+    pdf.heading("From your coach", { level: 2, keepWith: 40 });
+    pdf.paragraph(data.client_notes, { size: 9.25 });
+  }
+
+  const supps = readPlanSupplements(data.supplements ?? null);
+  if (supps.items.length) {
+    pdf.heading("Supplements", { level: 2, keepWith: 60 });
+    const notes = new Map<number, string>();
+    supps.items.forEach((s, i) => {
+      const extra = [pdfText(s.why), pdfText(s.note)].filter(Boolean).join(" ");
+      if (extra) notes.set(i, extra);
+    });
+    pdf.table({
+      columns: [
+        { header: "Supplement", width: "auto", bold: true },
+        { header: "Dose", width: "fit", max: 150 },
+        { header: "When", width: "fit", max: 170 },
+      ],
+      rows: supps.items.map((s) => [pdfText(s.name), pdfText(s.dose) || null, pdfText(s.timing) || null]),
+      notes,
+      footnotes: supps.notes,
+    });
+  }
+
+  if (pdfText(data.food_weighing_rules)) {
+    pdf.heading("Weighing your food", { level: 2, keepWith: 40 });
+    pdf.paragraph(data.food_weighing_rules, { size: 9.25 });
+  }
+  pdf.gap(4);
+  pdf.callout(NUTRITION_DISCLAIMER_TITLE, (data.disclaimer && data.disclaimer.trim()) || NUTRITION_DISCLAIMER, { size: 7.75 });
+
+  // ── each day type: a new page unless a good part of this one is still free ──
+  days.forEach((d, i) => {
+    const when = planDayWhen(d, days.length);
+    const label = pdfText(d.day_label) || `Day ${i + 1}`;
+    pdf.heading(label, {
+      newPage: pdf.bottom - pdf.y < pdf.pageContentHeight * 0.35,
+      right: kcal(d.calories),
+      rightTone: "neutral",
+      sub: when && when.toLowerCase() !== label.toLowerCase() ? when : null,
+    });
+    pdf.tiles(
+      [
+        { label: "Calories", value: d.calories != null ? pdfNumber(Number(d.calories), 0) : "" },
+        { label: "Protein", value: g(d.protein) ?? "" },
+        { label: "Carbs", value: g(d.carbs) ?? "" },
+        { label: "Fat", value: g(d.fats) ?? "" },
+        { label: "Fibre", value: g(d.fibre) ?? "" },
+        { label: "Steps", value: d.steps != null && Number(d.steps) > 0 ? pdfNumber(Number(d.steps), 0) : "" },
+      ],
+      { columns: 6 },
+    );
+    const s = structureMealPlanDay(d.notes);
     if (s.meals.length) {
-      s.meals.forEach(mealCard);
-      if (s.notes.length) {
-        sectionTitle("Notes");
-        textBlock(s.notes.join("\n"));
+      for (const meal of s.meals) {
+        if (!meal.foods.length) {
+          pdf.heading(pdfText(meal.title), { level: 3, right: mealCalories(meal.macros) != null ? `${mealCalories(meal.macros)} kcal` : null, keepWith: 24 });
+          if (meal.notes.length) pdf.paragraph(meal.notes.join("\n"), { size: 9, color: PDF_COLOR.muted });
+          continue;
+        }
+        pdf.table(mealTable(meal));
       }
-    } else if (day.notes?.trim()) {
-      textBlock(day.notes);
+      if (s.notes.length) {
+        pdf.heading("Notes", { level: 3, keepWith: 30 });
+        pdf.paragraph(s.notes.join("\n"), { size: 9 });
+      }
+    } else if (pdfText(d.notes)) {
+      pdf.paragraph(d.notes, { size: 9.5 });
+    } else {
+      pdf.paragraph("No meals are written for this day yet.", { color: PDF_COLOR.muted });
     }
-  }
+  });
 
-  // ── Disclaimer ──────────────────────────────────────────────────────
-  {
-    const text = (data.disclaimer && data.disclaimer.trim()) || NUTRITION_DISCLAIMER;
-    const lines = doc.splitTextToSize(clean(text), cw - 24) as string[];
-    const h = 34 + lines.length * 9.6;
-    y += 6;
-    ensure(h);
-    color([250, 250, 251], "fill");
-    color(LINE, "draw");
-    doc.roundedRect(mx, y, cw, h, 7, 7, "FD");
-    font("bold", 8.5, [60, 62, 70]);
-    doc.text(NUTRITION_DISCLAIMER_TITLE.toUpperCase(), mx + 12, y + 17);
-    font("italic", 8, MUTED);
-    doc.setLineHeightFactor(1.2);
-    doc.text(lines, mx + 12, y + 30);
-    doc.setLineHeightFactor(1.15);
-    y += h;
-  }
-
-  // Footer on every page
-  const pages = (doc as any).internal.getNumberOfPages();
-  for (let i = 1; i <= pages; i++) {
-    doc.setPage(i);
-    color(LINE, "draw");
-    doc.line(mx, H - 38, W - mx, H - 38);
-    font("normal", 7.5, [150, 152, 160]);
-    doc.text(`JF Effect · Nutrition plan${data.client_name ? ` for ${clean(data.client_name)}` : ""}`, mx, H - 24);
-    doc.text(`${i} / ${pages}`, W - mx, H - 24, { align: "right" });
-  }
-  return doc;
+  return pdf;
 }
 
-async function loadLogo(): Promise<string | null> {
-  try {
-    const res = await fetch("/logo.png");
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return await new Promise((resolve) => {
-      const r = new FileReader();
-      r.onload = () => resolve(typeof r.result === "string" ? r.result : null);
-      r.onerror = () => resolve(null);
-      r.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
+/** The plan as jsPDF, uncompressed (tests read its text). */
+export function generateMealPlanPdf(data: MealPlanPdfData, logoDataUrl?: string | null) {
+  return buildMealPlanPdf(data, { logo: logoDataUrl, compress: false }).finish();
 }
 
-function mealPlanFileName(data: MealPlanPdfData): string {
-  const safeName = (data.client_name || "meal-plan")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-  return `${safeName || "meal-plan"}-jf-effect-nutrition-plan.pdf`;
+/** "jared-mcintyre-nutrition-plan-2026-11-22.pdf". */
+export function mealPlanFileName(data: MealPlanPdfData, date = new Date()): string {
+  return pdfFileName({ person: data.client_name, document: "nutrition plan", date });
 }
 
-export async function downloadMealPlanPdf(data: MealPlanPdfData) {
-  const doc = generateMealPlanPdf(data, await loadLogo());
-  doc.save(mealPlanFileName(data));
-}
-
-/**
- * The same PDF as a File, for the phone's share sheet (saveFiles): jsPDF's
- * save() does nothing in the iPhone app's web view, so the client's Meal Plan
- * PDF tile hands this over instead (Save to Files, Print, Messages…).
- */
+/** The plan as a File, for the share sheet (Save to Files, Print, Messages) or a download. */
 export async function mealPlanPdfFile(data: MealPlanPdfData): Promise<File> {
-  const doc = generateMealPlanPdf(data, await loadLogo());
-  const blob = doc.output("blob");
-  return new File([blob], mealPlanFileName(data), { type: "application/pdf" });
+  return buildMealPlanPdf(data, { logo: await loadPdfLogo() }).toFile(mealPlanFileName(data));
+}
+
+/** Makes the plan's PDF and hands it over (the share sheet on a phone, a download on a computer). */
+export async function downloadMealPlanPdf(data: MealPlanPdfData) {
+  const file = await mealPlanPdfFile(data);
+  return deliverPdf(file, "Nutrition plan");
 }

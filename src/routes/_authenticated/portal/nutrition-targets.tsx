@@ -214,7 +214,7 @@ function PortalNutrition() {
   const supplements = readPlanSupplements(plan?.supplements ?? null);
   const [disclaimerOpen, setDisclaimerOpen] = useState(false);
   const weighingRules = plan?.food_weighing_rules ? String(plan.food_weighing_rules).trim() : "";
-  const pdfKey = `${plan?.id ?? ""}:${plan?.updated_at ?? ""}:${days.length}`;
+  const pdfKey = `${plan?.id ?? ""}:${plan?.updated_at ?? ""}:${days.length}:v2`;
   const handleDownload = async () => {
     if (!plan) return;
     let file = preparedPdf.current?.key === pdfKey ? preparedPdf.current.file : null;
@@ -227,12 +227,14 @@ function PortalNutrition() {
           coach_name: plan.coach_name ?? null,
           updated_at: plan.updated_at ?? null,
           start_date: plan.start_date ?? null,
+          end_date: plan.end_date ?? null,
           phase: plan.phase ?? null,
           goal: plan.goal ?? null,
           structure: plan.structure ?? null,
           water: plan.water ?? null,
           client_notes: plan.client_notes ?? null,
           food_weighing_rules: plan.food_weighing_rules ?? null,
+          supplements: plan.supplements ?? null,
           days: days as any[],
         });
         preparedPdf.current = { key: pdfKey, file };

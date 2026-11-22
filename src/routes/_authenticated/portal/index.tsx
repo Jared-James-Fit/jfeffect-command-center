@@ -17,6 +17,7 @@ import { HomeWaterCard } from "@/components/home/home-water-card";
 import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-card";
 import { WearablesCard } from "@/components/portal/wearables-card";
 import { SessionsCard } from "@/components/portal/sessions-card";
+import { IncludedCallsCard } from "@/components/portal/included-calls-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { AgreementDashboardCard } from "@/components/coaching-agreement/agreement-dashboard-card";
 import { LevelCelebrations } from "@/components/portal/athlete-level-card";
@@ -268,6 +269,12 @@ function PortalHome() {
           {client?.id && coaching && (
             <SectionErrorBoundary label="Sessions">
               <SessionsCard clientId={client.id} />
+            </SectionErrorBoundary>
+          )}
+          {/* Included video calls (a package like Coaching Plus): nothing for anyone without them */}
+          {client?.id && coaching && (
+            <SectionErrorBoundary label="Coaching calls">
+              <IncludedCallsCard />
             </SectionErrorBoundary>
           )}
           <DeferRender placeholderHeight="h-0">

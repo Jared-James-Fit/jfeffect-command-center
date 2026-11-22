@@ -16,13 +16,42 @@ import shotPrs from "@/assets/coaching/app-analytics-prs.webp";
 import shotChat from "@/assets/coaching/app-coach-chat.webp";
 import shotNutrition from "@/assets/coaching/app-nutrition.webp";
 import { shareMeta } from "@/lib/share-meta";
+import { CoachingPackagesGrid } from "@/components/sales/coaching-packages";
+import { getPublicPackages } from "@/lib/coaching-packages/packages.functions";
+import { costAnswer, listedPackages, paidPackages, type PublicPackage } from "@/lib/coaching-packages/packages";
+
+/** The packages on the site, waited on for at most 2 s (the page never hangs on them). */
+async function packagesForPage(): Promise<PublicPackage[]> {
+  return Promise.race([
+    getPublicPackages(),
+    new Promise<PublicPackage[]>((resolve) => setTimeout(() => resolve([]), 2000)),
+  ]);
+}
+
+/** Each listed coaching package as a schema.org Offer (price in CAD before tax). */
+function offersLd(packages: readonly PublicPackage[]) {
+  return paidPackages(listedPackages(packages))
+    .filter((p) => p.priceCents)
+    .map((p) => ({
+      "@type": "Offer",
+      name: p.name,
+      price: ((p.priceCents ?? 0) / 100).toFixed(2),
+      priceCurrency: p.currency || "CAD",
+      url: `https://jfeffect.com/coaching/apply?package=${p.slug}`,
+      ...(p.interval === "month"
+        ? { priceSpecification: { "@type": "UnitPriceSpecification", price: ((p.priceCents ?? 0) / 100).toFixed(2), priceCurrency: p.currency || "CAD", unitCode: "MON", valueAddedTaxIncluded: false } }
+        : {}),
+    }));
+}
 
 const DESCRIPTION =
   "1:1 online coaching for strength, fat loss, muscle and powerlifting with Jared McIntyre, Team Canada powerlifter. Your program, nutrition and a weekly check-in, run through the JF Effect app wherever you train. By application.";
 
 export const Route = createFileRoute("/coaching/")({
   component: CoachingPage,
-  head: () => ({
+  loader: async () => ({ packages: await packagesForPage() }),
+  staleTime: 5 * 60_000,
+  head: ({ loaderData }) => ({
     meta: [
       { title: "Online Coaching with Jared McIntyre | Strength, Muscle, Fat Loss, Powerlifting | JF Effect" },
       { name: "description", content: DESCRIPTION },
@@ -44,6 +73,7 @@ export const Route = createFileRoute("/coaching/")({
           provider: { "@type": "Organization", "@id": "https://jfeffect.com/#organization", name: "JF Effect", url: "https://jfeffect.com" },
           areaServed: "Worldwide",
           availableChannel: { "@type": "ServiceChannel", serviceUrl: "https://jfeffect.com/coaching/apply" },
+          ...(offersLd(loaderData?.packages ?? []).length ? { offers: offersLd(loaderData?.packages ?? []) } : {}),
           url: "https://jfeffect.com/coaching",
           description: DESCRIPTION,
         }),
@@ -112,7 +142,7 @@ const ALSO_INCLUDED = [
 
 const STEPS: Array<{ title: string; body: string }> = [
   { title: "Apply", body: "Seven questions about you and your goal. Free, no card." },
-  { title: "Book a call", body: "Pick a time right after you apply. We talk about your goal, how I'd coach you, and price." },
+  { title: "Book a call", body: "Pick a time right after you apply. We talk about your goal and how I'd coach you, before you commit to anything." },
   { title: "Start training", body: "If we're a fit, you're set up in the app with your program, your nutrition and your first check-in." },
 ];
 
@@ -151,7 +181,7 @@ const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: "What does it cost?",
-    a: "Applying is free and there's no card. Coaching is a paid service, and we go over the options and the price on your call, before you commit to anything.",
+    a: "Applying is free and there's no card. Coaching is a paid service, and we talk on your call before you commit to anything.",
   },
   {
     q: "Is there a free option?",
@@ -177,6 +207,9 @@ function CheckList({ items }: { items: string[] }) {
 }
 
 function CoachingPage() {
+  const { packages } = Route.useLoaderData();
+  const pricing = paidPackages(listedPackages(packages)).length > 0;
+  const cost = costAnswer(packages);
   return (
     <SalesPageShell pageId="coaching">
       {/* 1. What it is, and the one button */}
@@ -281,11 +314,29 @@ function CoachingPage() {
               <CheckList items={ALSO_INCLUDED.slice(2)} />
             </div>
           </Surface>
-          <div className="mt-8 flex justify-center" data-inline-cta>
-            <PrimaryCta to={APPLY_TO} className="w-full sm:w-auto sm:min-w-[280px]">{CTA}</PrimaryCta>
-          </div>
+          {!pricing && (
+            <div className="mt-8 flex justify-center" data-inline-cta>
+              <PrimaryCta to={APPLY_TO} className="w-full sm:w-auto sm:min-w-[280px]">{CTA}</PrimaryCta>
+            </div>
+          )}
         </Block>
       </Reveal>
+
+      {/* 5b. What it costs: the packages on the site (coaching_packages), never typed here */}
+      {pricing && (
+        <Reveal>
+          <Block id="pricing" className="!pt-0">
+            <Heading
+              eyebrow="What it costs"
+              title="What coaching costs."
+              sub="In Canadian dollars, plus applicable tax. Applying is free and doesn't commit you to anything."
+            />
+            <div data-inline-cta>
+              <CoachingPackagesGrid packages={packages} from="coaching" />
+            </div>
+          </Block>
+        </Reveal>
+      )}
 
       {/* 6. How it starts */}
       <Reveal>
@@ -384,7 +435,9 @@ function CoachingPage() {
               {FAQ.map((it, i) => (
                 <AccordionItem key={it.q} value={`faq-${i}`} className="border-0 px-5 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border/70">
                   <AccordionTrigger className="py-4 text-left text-[17px] font-medium hover:no-underline">{it.q}</AccordionTrigger>
-                  <AccordionContent className="text-[15px] leading-relaxed text-muted-foreground">{it.a}</AccordionContent>
+                  <AccordionContent className="text-[15px] leading-relaxed text-muted-foreground">
+                    {it.q === "What does it cost?" && cost ? cost : it.a}
+                  </AccordionContent>
                 </AccordionItem>
               ))}
             </Accordion>

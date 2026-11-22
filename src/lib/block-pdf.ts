@@ -1,131 +1,107 @@
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+/**
+ * The block review PDF (Nov 22 2026), drawn with the JF Effect PDF kit: the
+ * end-of-block read the coach sees in Block Progress, as a document. Every
+ * number is `computeBlockAnalytics`'s (block-analytics.ts), the same the card
+ * shows; the charts are drawn from the weekly rows printed beside them.
+ */
 import { format, parseISO } from "date-fns";
+import { PdfDoc, PDF_COLOR } from "@/lib/pdf/kit";
+import { chartRow, drawBarChart } from "@/lib/pdf/charts";
+import { pdfFileName, pdfNumber, pdfRange, pdfText } from "@/lib/pdf/text";
+import { deliverPdf, loadPdfLogo } from "@/lib/pdf/deliver";
 import type { BlockAnalytics } from "./block-analytics";
 
-function formatGeneratedDate(d: Date): string {
-  const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  return `Generated ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-}
-
-/** Generate a PDF summary of a block's analytics and trigger a download. */
-export function exportBlockPDF(a: BlockAnalytics): void {
-  const doc = new jsPDF({ unit: "pt", format: "letter" });
-  const margin = 40;
-  let y = margin;
-
-  // Brand header
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.setTextColor(20);
-  doc.text("JF Effect", margin, y);
-  y += 16;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(120);
-  doc.text(formatGeneratedDate(new Date()), margin, y);
-  y += 16;
-  doc.setTextColor(0);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text(a.block.name ?? "Training Block", margin, y);
-  y += 18;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(120);
-  const subtitleParts: string[] = [];
-  if (a.block.start_date) subtitleParts.push(`Start ${a.block.start_date}`);
-  if (a.block.end_date) subtitleParts.push(`End ${a.block.end_date}`);
-  if (a.block.status) subtitleParts.push(a.block.status);
-  doc.text(subtitleParts.join("  ·  "), margin, y);
-  y += 18;
-  doc.setTextColor(0);
-
-  autoTable(doc, {
-    startY: y,
-    head: [["Metric", "Value"]],
-    body: [
-      ["Workouts Completed", `${a.summary.workouts_completed}/${a.summary.total_workouts}`],
-      ["Completion %", `${a.summary.completion_pct}%`],
-      ["Sets Completed", `${a.summary.sets_completed}/${a.summary.total_sets}`],
-      ["Total Volume", `${a.summary.total_volume.toLocaleString()} ${a.unit}`],
-      ["Avg RPE", a.summary.avg_rpe?.toString() ?? "—"],
-      ["Missed Workouts", String(a.summary.missed_workouts)],
-      ["Manual Weeks", String(a.summary.manual_weeks)],
-      ["Training Minutes", String(a.summary.total_training_min)],
+export function buildBlockPdf(a: BlockAnalytics, opts: { logo?: string | null; clientName?: string | null; generatedAt?: Date } = {}): PdfDoc {
+  const s = a.summary;
+  const u = a.unit;
+  const pdf = new PdfDoc({
+    kind: "Block review",
+    title: pdfText(a.block?.name) || "Training block",
+    subtitle: pdfRange(a.block?.start_date ?? null, a.block?.end_date ?? null) || null,
+    person: opts.clientName ?? null,
+    logo: opts.logo,
+    generatedAt: opts.generatedAt,
+    facts: [
+      ["Athlete", opts.clientName ?? null],
+      ["Status", pdfText(a.block?.status) || null],
+      ["Weeks", a.weekly.length ? String(a.weekly.length) : null],
     ],
-    styles: { fontSize: 9 },
-    headStyles: { fillColor: [40, 40, 40] },
-    margin: { left: margin, right: margin },
   });
 
+  pdf.heading("Summary", { keepWith: 80 });
+  pdf.tiles([
+    { label: "Workouts done", value: `${s.workouts_completed}/${s.total_workouts}`, sub: `${s.completion_pct}% of the block`, tone: s.completion_pct >= 85 ? "good" : s.completion_pct >= 60 ? "neutral" : "warn" },
+    { label: "Sets done", value: `${s.sets_completed}/${s.total_sets}` },
+    { label: `Volume (${u})`, value: pdfNumber(s.total_volume, 0) },
+    { label: "Average RPE", value: s.avg_rpe != null ? pdfNumber(s.avg_rpe, 1) : "–" },
+    { label: "Missed workouts", value: String(s.missed_workouts), tone: s.missed_workouts ? "bad" : "neutral" },
+    { label: "Training time", value: s.total_training_min ? `${pdfNumber(s.total_training_min, 0)} min` : "–" },
+  ]);
+
+  if (a.weekly.length >= 2) {
+    chartRow(pdf, 150, [
+      (doc, box) => drawBarChart(doc, box, { title: `Volume each week (${u})`, bars: a.weekly.map((w) => ({ label: `W${w.week_index}`, value: w.volume })), valueLabels: false }),
+      (doc, box) => drawBarChart(doc, box, { title: "Workouts done each week", bars: a.weekly.map((w) => ({ label: `W${w.week_index}`, value: w.workouts_completed, target: w.workouts_total })), targetLabel: "Planned" }),
+    ]);
+  }
+
   if (a.weekly.length) {
-    autoTable(doc, {
-      head: [["Week", "Volume", "Workouts", "Avg RPE", "Top Set", "e1RM", "Completion %"]],
-      body: a.weekly.map((w) => [
+    pdf.heading("Week by week", { level: 2, keepWith: 80 });
+    pdf.table({
+      columns: [
+        { header: "Week", width: 44, bold: true },
+        { header: `Volume (${u})`, width: "auto", align: "right" },
+        { header: "Workouts", width: 62, align: "center" },
+        { header: "Avg RPE", width: 52, align: "center" },
+        { header: "Top set", width: 62, align: "right" },
+        { header: "Best e1RM", width: 66, align: "right" },
+        { header: "Done", width: 46, align: "right" },
+      ],
+      rows: a.weekly.map((w) => [
         `W${w.week_index}`,
-        w.volume.toLocaleString(),
+        pdfNumber(w.volume, 0),
         `${w.workouts_completed}/${w.workouts_total}`,
-        w.avg_rpe ?? "—",
-        w.top_set ?? "—",
-        w.est_1rm ?? "—",
+        w.avg_rpe != null ? pdfNumber(w.avg_rpe, 1) : null,
+        w.top_set != null ? `${pdfNumber(w.top_set, 1)} ${u}` : null,
+        w.est_1rm != null ? `${pdfNumber(w.est_1rm, 1)} ${u}` : null,
         `${w.completion_pct}%`,
       ]),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [40, 40, 40] },
-      margin: { left: margin, right: margin },
+      cellTone: (r, c) => (c === 6 ? (a.weekly[r].completion_pct >= 85 ? "good" : a.weekly[r].completion_pct < 60 ? "warn" : null) : null),
     });
   }
 
   if (a.prs.length) {
-    autoTable(doc, {
-      head: [["PR", "Value", "Exercise", "Date"]],
-      body: a.prs.map((pr) => [
-        pr.label,
-        pr.value,
-        pr.exercise,
-        pr.date ? format(parseISO(pr.date), "MMM d, yyyy") : "—",
-      ]),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [40, 40, 40] },
-      margin: { left: margin, right: margin },
+    pdf.heading("Records in this block", { level: 2, keepWith: 60 });
+    pdf.table({
+      columns: [
+        { header: "Record", width: "fit", max: 140 },
+        { header: "Exercise", width: "auto", bold: true },
+        { header: "Set", width: "fit", max: 130, align: "right" },
+        { header: "Date", width: 76, muted: true },
+      ],
+      rows: a.prs.map((p) => [pdfText(p.label), pdfText(p.exercise), pdfText(p.value), p.date ? format(parseISO(p.date), "MMM d, yyyy") : null]),
     });
   }
 
-  if (a.insights.length) {
-    autoTable(doc, {
-      head: [["Insight", "Value"]],
-      body: a.insights.map((i) => [i.label, i.value]),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [40, 40, 40] },
-      margin: { left: margin, right: margin },
-    });
+  if (a.insights.length || a.flags.length) {
+    pdf.heading("What stands out", { level: 2, keepWith: 50 });
+    if (a.insights.length) {
+      pdf.table({
+        columns: [
+          { header: "", width: 170, muted: true },
+          { header: "", width: "auto" },
+        ],
+        rows: a.insights.map((i) => [pdfText(i.label), pdfText(i.value)]),
+        hideHeader: true,
+      });
+    }
+    if (a.flags.length) pdf.bullets(a.flags.map((f) => f.label), { marker: PDF_COLOR.warn });
   }
+  return pdf;
+}
 
-  if (a.flags.length) {
-    autoTable(doc, {
-      head: [["Flag"]],
-      body: a.flags.map((f) => [f.label]),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [40, 40, 40] },
-      margin: { left: margin, right: margin },
-    });
-  }
-
-  // Footer on every page
-  const pageCount = doc.getNumberOfPages();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const footerText = "Generated from JF Effect Client Portal";
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(128);
-    const w = doc.getTextWidth(footerText);
-    doc.text(footerText, (pageWidth - w) / 2, pageHeight - 16);
-    doc.setTextColor(0);
-  }
-
-  doc.save(`${(a.block.name ?? "block").replace(/\s+/g, "-")}-summary.pdf`);
+/** Makes the block review and hands it over (the share sheet on a phone, a download on a computer). */
+export async function exportBlockPDF(a: BlockAnalytics, clientName?: string | null): Promise<void> {
+  const file = buildBlockPdf(a, { logo: await loadPdfLogo(), clientName }).toFile(pdfFileName({ person: clientName, document: "block review", detail: a.block?.name ?? null }));
+  await deliverPdf(file, "Block review");
 }

@@ -114,7 +114,7 @@ const WEEK_WORDS: Record<keyof typeof WEEK_PRESETS, string> = { 4: "4 weeks", 8:
 
 /** "since Aug 31" / "since Nov 23, 2025": a period that runs to today. */
 function sinceWords(start: Date): string {
-  return `since ${format(start, start.getFullYear() === new Date().getFullYear() ? "MMM d" : "MMM d, yyyy")}`;
+  return `since ${format(start, start.getFullYear() === new Date().getFullYear() ? "MMM d" : "MMM yyyy")}`;
 }
 
 export function lastNWeeks(n: keyof typeof WEEK_PRESETS): AnalyticsFilter {

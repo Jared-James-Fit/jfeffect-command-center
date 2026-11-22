@@ -21,7 +21,7 @@ import { deriveTarget, phaseLabel } from "@/lib/nutrition-cardio";
 import { WaterTargetDialog } from "@/components/progress/water-target-dialog";
 import { ensureWaterTarget, formatWater } from "@/lib/water";
 import { useAuth } from "@/lib/auth";
-import { downloadNutritionTargetsPdf } from "@/lib/nutrition-targets-pdf";
+import { makeAndDeliverPdf } from "@/lib/pdf/deliver";
 import { GroceryListSheet } from "@/components/nutrition/GroceryListSheet";
 import { prefillPlanAiChange } from "@/lib/weight-management/handoff";
 import { BRING_MEALS_TO_TARGETS } from "@/lib/nutrition-targets/plan-coverage";
@@ -102,31 +102,37 @@ export function NutritionTargetsPanel({ clientId, className = "md:col-span-3" }:
     toast.success("Deleted");
   };
 
+  // The plan as the client reads it (meal-plan-pdf.ts): every day type with its meals, never an average of the days.
   const downloadPdf = (t: any) => {
-    try {
-      const days: any[] = t.nutrition_target_days ?? [];
-      const valued = days.filter((d) => d.calories != null || d.protein != null || d.carbs != null || d.fats != null);
-      const avg = (key: string) => {
-        if (!valued.length) return 0;
-        const sum = valued.reduce((acc, d) => acc + (Number(d[key]) || 0), 0);
-        return sum / valued.length;
-      };
-      const phaseName = t.phase === "Custom" ? t.custom_phase : t.phase;
-      const goalName = t.goal === "Custom" ? t.custom_goal : t.goal;
-      downloadNutritionTargetsPdf({
-        name: [phaseName, goalName].filter(Boolean).join(" · "),
-        calories: avg("calories"),
-        protein: avg("protein"),
-        carbs: avg("carbs"),
-        fats: avg("fats"),
-        water: waterTarget?.active_ml ?? undefined,
-        notes: t.notes ?? undefined,
-        updatedAt: t.updated_at ? new Date(t.updated_at).toLocaleDateString() : undefined,
+    void makeAndDeliverPdf("Nutrition plan", async () => {
+      const { mealPlanPdfFile } = await import("@/lib/nutrition-targets/meal-plan-pdf");
+      const days = ((t.nutrition_target_days ?? []) as any[]).slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      return mealPlanPdfFile({
+        client_name: (clientRow as any)?.full_name ?? null,
+        updated_at: planUpdatedAt(t) ?? null,
+        start_date: t.start_date ?? null,
+        end_date: t.end_date ?? null,
+        phase: t.phase === "Custom" ? t.custom_phase : t.phase,
+        goal: t.goal === "Custom" ? t.custom_goal : t.goal,
+        structure: t.structure ?? null,
+        water: t.water ?? (waterTarget?.active_ml ? formatWater(waterTarget.active_ml) : null),
+        client_notes: t.client_notes ?? null,
+        food_weighing_rules: t.food_weighing_rules ?? null,
+        supplements: t.supplements ?? null,
+        days: days.map((d) => ({
+          day_label: d.day_label,
+          calories: d.calories ?? null,
+          protein: d.protein ?? null,
+          carbs: d.carbs ?? null,
+          fats: d.fats ?? null,
+          fibre: d.fibre ?? null,
+          steps: d.steps ?? null,
+          notes: d.notes ?? null,
+          use_on: d.use_on ?? null,
+          weekdays: d.weekdays ?? null,
+        })),
       });
-    } catch (err) {
-      console.error("Nutrition targets PDF failed", err);
-      toast.error("Couldn't generate PDF. Please try again.");
-    }
+    });
   };
 
   const startNewPlan = () => {

@@ -95,6 +95,7 @@ const PriceCardPickerDialog = lazyDefault(() => import("@/components/price-card-
 const AgreementsPanel = lazyDefault(() => import("@/components/agreements-panel"), "AgreementsPanel");
 const ClientBillingPanel = lazyDefault(() => import("@/components/admin/client-billing-panel"), "ClientBillingPanel");
 const ClientPackageSnapshot = lazyDefault(() => import("@/components/billing/package-snapshot"), "ClientPackageSnapshot");
+const ClientPackageCard = lazyDefault(() => import("@/components/admin/coaching-sales/enrollments-sheet"), "ClientPackageCard");
 const GoalsSetupPanel = lazyDefault(() => import("@/components/clients/goals-setup-panel"), "GoalsSetupPanel");
 const ClientTrainingTab = lazyDefault(() => import("@/components/clients/client-training-tab"), "ClientTrainingTab");
 
@@ -1876,6 +1877,12 @@ function ClientOverviewSnapshot({
           onOpenBilling={() => onGoToTab("purchases")}
         />
       </Suspense>
+      {/* Which coaching package they're on (coaching_package_enrollments): what they pay, their included calls. */}
+      {form.service_tier !== "self_serve" && (
+        <Suspense fallback={null}>
+          <ClientPackageCard clientId={clientId} />
+        </Suspense>
+      )}
       {/* The coach's notes on this client (Quick Notes saved to them land here). */}
       <Suspense fallback={<div className="h-24 rounded-2xl bg-muted" />}>
         <ClientFileNotes clientId={clientId} limit={3} />

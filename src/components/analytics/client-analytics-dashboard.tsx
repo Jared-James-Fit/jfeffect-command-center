@@ -6,7 +6,9 @@ import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { TrendingUp, Trophy, Dumbbell, Calendar, Flame, PieChart, Clock, BarChart3, Check, Moon } from "lucide-react";
+import { TrendingUp, Trophy, Dumbbell, Calendar, Flame, PieChart, Clock, BarChart3, Check, Moon, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { loadPdfLogo, makeAndDeliverPdf } from "@/lib/pdf/deliver";
 import {
   getClientResults, buildExerciseHistory, recentPRs,
 } from "@/lib/pl-programs";
@@ -357,6 +359,38 @@ export function ClientAnalyticsDashboard({
     />
   );
 
+  // The period on screen as a document (progress-report-pdf.ts): this page's training load and records,
+  // plus weigh-ins and nutrition read for it; made on the tap and handed to the share sheet.
+  const [reportBusy, setReportBusy] = useState(false);
+  const downloadReport = () => {
+    if (reportBusy) return;
+    setReportBusy(true);
+    const from = format(filter.start, "yyyy-MM-dd");
+    const to = format(filter.end, "yyyy-MM-dd");
+    void makeAndDeliverPdf("Progress report", async () => {
+      const [{ buildProgressReport, progressReportFileName }, { loadProgressReportExtras }, logo] = await Promise.all([
+        import("@/lib/analytics/progress-report-pdf"),
+        import("@/lib/analytics/progress-report-data"),
+        loadPdfLogo(),
+      ]);
+      const extra = await loadProgressReportExtras(clientId, displayUnit, from, to);
+      const doc = buildProgressReport(
+        {
+          athlete: extra.athlete,
+          audience: coach ? "coach" : "client",
+          period: { label: filter.label, start: filter.start, end: filter.end },
+          unit: displayUnit,
+          load: trainingLoad.load,
+          prs: prs as any[],
+          bodyweight: extra.bodyweight,
+          nutrition: extra.nutrition,
+        },
+        { logo },
+      );
+      return doc.toFile(progressReportFileName(extra.athlete, filter.label));
+    }).finally(() => setReportBusy(false));
+  };
+
   return (
     <>
       <div className={`space-y-4 ${className ?? ""}`}>
@@ -386,6 +420,20 @@ export function ClientAnalyticsDashboard({
                 kg
               </ToggleGroupItem>
             </ToggleGroup>
+          )}
+          {/* The period on screen as a document (progress report PDF), handed to the share sheet. */}
+          {(allResults as any[]).length > 0 && (
+            <Button
+              variant="outline"
+              className="h-10 w-10 shrink-0 p-0"
+              onClick={downloadReport}
+              disabled={reportBusy || trainingLoad.planLoading}
+              aria-label="Download progress report (PDF)"
+              title="Progress report (PDF)"
+              data-progress-report
+            >
+              <Download className="h-4 w-4" aria-hidden />
+            </Button>
           )}
         </div>
 
