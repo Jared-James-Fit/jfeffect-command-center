@@ -56,6 +56,7 @@ export function SalesPageShell({
           <Link to="/" className="hover:text-foreground">Home</Link>
           <Link to="/" hash="app" className="hover:text-foreground">Free app</Link>
           <Link to="/coaching" className="hover:text-foreground">Online coaching</Link>
+          <Link to="/coaches" className="hover:text-foreground">For coaches</Link>
           <Link to="/about" className="hover:text-foreground">About</Link>
           <Link to="/auth" className="hover:text-foreground">Sign in</Link>
           <Link to="/privacy" className="hover:text-foreground">Privacy</Link>

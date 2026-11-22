@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   APPLY_CHOICE,
+  COACH_EARLY_ACCESS_CHOICE,
   HOME_CTA_ZONES,
   JOIN_CHOICE,
   PUBLIC_NAV,
@@ -11,13 +12,16 @@ import {
 import { stickyCtaChoice, stickyCtaState } from "@/lib/sticky-cta";
 
 describe("the public navigation", () => {
-  it("is Home, Free app, Online coaching, About, in that order", () => {
+  it("is Home, Free app, Online coaching, For coaches, About, in that order", () => {
     expect(PUBLIC_NAV.map((n) => n.label)).toEqual([
       "Home",
       "Free app",
       "Online coaching",
+      "For coaches",
       "About",
     ]);
+    // the coach platform is early access, and says so where it's offered
+    expect(PUBLIC_NAV.find((n) => n.key === "coaches")!.hint).toMatch(/Early access/);
     const app = PUBLIC_NAV.find((n) => n.key === "app")!;
     expect([app.to, app.hash]).toEqual(["/", "app"]);
     expect(PUBLIC_NAV.find((n) => n.key === "coaching")!.to).toBe("/coaching");
@@ -37,6 +41,8 @@ describe("the public navigation", () => {
     expect(activeNavKey("/coaching/")).toBe("coaching");
     expect(activeNavKey("/coaching/apply")).toBe("coaching");
     expect(activeNavKey("/about")).toBe("about");
+    expect(activeNavKey("/coaches")).toBe("coaches");
+    expect(activeNavKey("/coaches/apply")).toBe("coaches");
     expect(activeNavKey("/auth")).toBeNull();
     expect(activeNavKey("/privacy")).toBeNull();
   });
@@ -48,6 +54,8 @@ describe("the public navigation", () => {
     expect(headerCtaFor("/about")).toEqual(APPLY_CHOICE);
     expect(headerCtaFor("/join")).toBeNull();
     expect(headerCtaFor("/coaching/apply")).toBeNull();
+    expect(headerCtaFor("/coaches")).toEqual(COACH_EARLY_ACCESS_CHOICE);
+    expect(headerCtaFor("/coaches/apply")).toBeNull();
     expect(JOIN_CHOICE).toEqual({ label: "Join free", href: "/join" });
     expect(APPLY_CHOICE).toEqual({ label: "Apply for coaching", href: "/coaching/apply" });
   });

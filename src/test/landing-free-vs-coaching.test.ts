@@ -1,13 +1,17 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  COACHES_TO,
   COACHING_APPLY_TO,
   COACHING_CTA,
   COACHING_TO,
   JOIN_CTA,
   JOIN_TO,
   LANDING_COPY,
+  coachingPriceLine,
+  coachingPriceTitle,
 } from "@/components/landing/landing-page";
+import type { PublicPackage } from "@/lib/coaching-packages/packages";
 
 const read = (path: string) => readFileSync(path, "utf8");
 /** What a visitor reads: the file without its comments. */
@@ -31,6 +35,9 @@ const PUBLIC_PAGES = [
   "src/components/join/membership-application.tsx",
   "src/components/sales/public-header.tsx",
   "src/lib/public-nav.ts",
+  "src/components/coaches/coaches-page.tsx",
+  "src/components/coaches/coach-application.tsx",
+  "src/lib/coach-platform/apply.ts",
 ];
 
 describe("the landing page sells the free app first and online coaching as its own offer", () => {
@@ -121,6 +128,64 @@ describe("the landing page sells the free app first and online coaching as its o
     expect(LANDING_COPY.FAQ.find((f) => f.q.startsWith("I'm new"))?.a).toContain(
       "Four of my programs",
     );
+  });
+});
+
+describe("value first, then the price (Nov 22 2026)", () => {
+  const pkg = (over: Partial<PublicPackage>): PublicPackage => ({
+    slug: "complete",
+    kind: "subscription",
+    name: "Complete Online Coaching",
+    tagline: "Your training and nutrition, run by me.",
+    description: null,
+    bestFor: null,
+    features: [],
+    priceCents: 13000,
+    currency: "CAD",
+    interval: "month",
+    recommended: true,
+    ctaLabel: null,
+    includedCalls: 0,
+    callMinutes: 0,
+    sortOrder: 1,
+    listed: true,
+    ...over,
+  });
+
+  it("the free app shows what it does, then reveals $0 inside its own section", () => {
+    expect(LANDING_COPY.FREE_REVEAL.title).toBe("Serious tools. Serious progress.");
+    expect(LANDING_COPY.FREE_REVEAL.price).toBe("$0.");
+    expect(LANDING_COPY.FREE_REVEAL.answer).toBe("Yes. Free.");
+    // the $0 is the app's: it sits in the app section, before the coaching section
+    const app = visible.slice(visible.indexOf('<Block id="app"'), visible.indexOf('<Block id="own"'));
+    expect(app).toContain("data-landing-free-price");
+    expect(app.indexOf("data-landing-free")).toBeLessThan(app.indexOf("data-landing-free-price"));
+    expect(visible.indexOf("data-landing-free-price")).toBeLessThan(visible.indexOf("data-landing-coaching"));
+    // never "Here's what you get, free." before the reveal
+    expect(visible).not.toContain("Here's what you get, free.");
+    // same promise as the FAQ's "What's free?"
+    expect(LANDING_COPY.FREE_REVEAL.detail).toContain("No card, and nothing turns into a charge later.");
+  });
+
+  it("coaching's price is the recommended package's, said once with its one-liner", () => {
+    expect(coachingPriceTitle([pkg({})])).toBe("Complete coaching is $130 a month.");
+    expect(coachingPriceTitle([pkg({}), pkg({ slug: "plus", name: "Coaching Plus", recommended: false, priceCents: 24900 })])).toBe(
+      "Complete coaching starts at $130 a month.",
+    );
+    // a draft (unlisted) higher tier changes nothing
+    expect(coachingPriceTitle([pkg({}), pkg({ slug: "plus", recommended: false, priceCents: 24900, listed: false })])).toBe(
+      "Complete coaching is $130 a month.",
+    );
+    expect(coachingPriceTitle([])).toBeNull();
+    expect(coachingPriceLine([pkg({})])).toBe("Your training and nutrition, run by me. ");
+    expect(visible).toContain("coachingPriceTitle(list)");
+  });
+
+  it("coaches get one band that sends them to their own page", () => {
+    expect(COACHES_TO).toBe("/coaches");
+    expect(visible).toContain("data-landing-coaches");
+    expect(LANDING_COPY.COACHES_BAND.body).toMatch(/Early access/);
+    expect(LANDING_COPY.FAQ.find((f) => f.q.startsWith("I'm a coach"))?.a).toMatch(/early access/);
   });
 });
 

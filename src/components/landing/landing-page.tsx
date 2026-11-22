@@ -41,7 +41,14 @@ import { trackJoin } from "@/lib/join-funnel";
 import { currentLaunchMode } from "@/lib/landing-launch";
 import { HOME_CTA_ZONES } from "@/lib/public-nav";
 import { CoachingPackagesGrid } from "@/components/sales/coaching-packages";
-import { costAnswer, listedPackages, paidPackages, type PublicPackage } from "@/lib/coaching-packages/packages";
+import {
+  centerpiece,
+  costAnswer,
+  listedPackages,
+  paidPackages,
+  priceLabel,
+  type PublicPackage,
+} from "@/lib/coaching-packages/packages";
 import { cn } from "@/lib/utils";
 import jaredAsset from "@/assets/athletes/jared-napf-2026.jpg.asset.json";
 import shotLog from "@/assets/landing/app-log.webp";
@@ -58,11 +65,55 @@ export const COACHING_APPLY_TO = "/coaching/apply" as const;
 export const COACHING_TO = "/coaching" as const;
 export const JOIN_CTA = "Join free";
 export const COACHING_CTA = "Apply for coaching";
+/** JF Effect for coaches: its own page (early access), never sold here. */
+export const COACHES_TO = "/coaches" as const;
 
 const HERO = {
   title: "Train in the same app my clients use.",
   body: "Follow my programs, build your own, or upload a plan you already have. Track every workout, PR and progression in one place. Use it free, or hire me to coach you online.",
 };
+
+/** The free app's reveal: what it does first, then the price. Every claim is the FAQ's "What's free?". */
+const FREE_REVEAL = {
+  title: "Serious tools. Serious progress.",
+  sub: "Programs, a training log, PRs and progress, nutrition and the Crew. Here's what's in it.",
+  ask: "And the price?",
+  price: "$0.",
+  answer: "Yes. Free.",
+  detail:
+    "No coaching subscription needed. Use it to build, track and improve your own training. No card, and nothing turns into a charge later.",
+};
+
+/** JF Effect for coaches, one band on this page (its own page has the rest). */
+const COACHES_BAND = {
+  eyebrow: "For coaches",
+  title: "Coach your own clients on JF Effect.",
+  body: "The tools I run my coaching business on, for independent coaches. Early access, starting with a small group.",
+  cta: "JF Effect for coaches",
+};
+
+/**
+ * The coaching price as a headline, from the recommended listed package
+ * (never typed): "Complete coaching starts at <price> a month." when a
+ * listed plan costs more, "… is <price> a month." when it's the only one. Null with no
+ * listed monthly plan (the page keeps its own words).
+ */
+export function coachingPriceTitle(list: readonly PublicPackage[]): string | null {
+  const plans = paidPackages(listedPackages(list)).filter((p) => p.kind === "subscription" && p.priceCents);
+  const main = centerpiece(plans);
+  if (!main?.priceCents) return null;
+  const higher = plans.some((p) => (p.priceCents ?? 0) > (main.priceCents ?? 0));
+  const what = /^complete\b/i.test(main.name) ? "Complete coaching" : main.name;
+  return `${what} ${higher ? "starts at" : "is"} ${priceLabel(main.priceCents)} a month.`;
+}
+
+/** The recommended plan's own one-liner, to lead the line under the price ("" when there isn't one). */
+export function coachingPriceLine(list: readonly PublicPackage[]): string {
+  const plans = paidPackages(listedPackages(list)).filter((p) => p.kind === "subscription" && p.priceCents);
+  const main = centerpiece(plans);
+  const tag = main?.tagline?.trim();
+  return tag ? `${tag.replace(/[.!]?$/, ".")} ` : "";
+}
 
 /** Who's behind it, in numbers that are true and easy to check. */
 const PROOF: Array<[string, string, string]> = [
@@ -175,6 +226,10 @@ const FAQ: Array<{ q: string; a: string }> = [
   {
     q: "Can I start with the app and get coaching later?",
     a: "Yes. Your training history stays, so when you move to coaching I start from everything you've already logged.",
+  },
+  {
+    q: "I'm a coach. Can I use JF Effect with my own clients?",
+    a: "It's in early access for independent coaches, starting with a small group. Have a look at JF Effect for coaches and apply there.",
   },
 ];
 
@@ -291,7 +346,7 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
       {/* 3. The app: free, on its real screens */}
       <Reveal>
         <Block id="app" tint>
-          <Heading eyebrow="The app" title="Here's what you get, free." />
+          <Heading eyebrow="The free app" title={FREE_REVEAL.title} sub={FREE_REVEAL.sub} />
           <div className="-mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:gap-8 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
             {SCREENS.map((s) => (
               <div
@@ -319,7 +374,18 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
               </li>
             ))}
           </ul>
-          <div className="mt-10 flex flex-col items-center" data-inline-cta>
+          {/* The price, after what it buys */}
+          <div className="mx-auto mt-16 max-w-xl text-center" data-landing-free-price>
+            <p className="text-[17px] font-medium text-muted-foreground">{FREE_REVEAL.ask}</p>
+            <p className="mt-2 text-[80px] font-semibold leading-none tracking-[-0.045em] tabular-nums md:text-[112px]">
+              {FREE_REVEAL.price}
+            </p>
+            <p className="mt-4 text-[24px] font-semibold tracking-[-0.01em] md:text-[28px]">{FREE_REVEAL.answer}</p>
+            <p className="mx-auto mt-3 max-w-md text-[17px] leading-relaxed text-muted-foreground">
+              {FREE_REVEAL.detail}
+            </p>
+          </div>
+          <div className="mt-8 flex flex-col items-center" data-inline-cta>
             <PrimaryCta to={JOIN_TO} className="w-full sm:w-auto sm:min-w-[260px]">
               {JOIN_CTA}
             </PrimaryCta>
@@ -426,9 +492,9 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
               <Reveal>
                 <Block id="pricing" className="!pt-0">
                   <Heading
-                    eyebrow="Coaching packages"
-                    title="What coaching costs."
-                    sub="In Canadian dollars, plus applicable tax. Applying is free and doesn't commit you to anything."
+                    eyebrow="And the price?"
+                    title={coachingPriceTitle(list) ?? "What coaching costs."}
+                    sub={`${coachingPriceLine(list)}In Canadian dollars, plus applicable tax. Applying is free and doesn't commit you to anything.`}
                   />
                   <CoachingPackagesGrid packages={list} from="home" />
                 </Block>
@@ -485,6 +551,27 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
           </Block>
         </Reveal>
       </div>
+
+      {/* 4b. For coaches: its own page, one band here */}
+      <Reveal>
+        <Block>
+          <div
+            className="mx-auto flex max-w-4xl flex-col items-start gap-6 rounded-[28px] bg-muted/50 px-6 py-10 ring-1 ring-border/70 sm:px-10 md:flex-row md:items-center md:justify-between"
+            data-landing-coaches
+          >
+            <div className="max-w-xl">
+              <p className="text-[13px] font-semibold text-muted-foreground">{COACHES_BAND.eyebrow}</p>
+              <h2 className="mt-1.5 text-balance text-[28px] font-semibold leading-[1.1] tracking-[-0.02em] md:text-[34px]">
+                {COACHES_BAND.title}
+              </h2>
+              <p className="mt-3 text-[16px] leading-relaxed text-muted-foreground">{COACHES_BAND.body}</p>
+            </div>
+            <SecondaryCta to={COACHES_TO} className="w-full shrink-0 sm:w-auto">
+              {COACHES_BAND.cta}
+            </SecondaryCta>
+          </div>
+        </Block>
+      </Reveal>
 
       {/* 5. Questions */}
       <Reveal>
@@ -558,4 +645,4 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
 }
 
 /** For the tests: what the page promises, kept with the page. */
-export const LANDING_COPY = { HERO, FREE, COACHING, FAQ, PROOF, SCREENS, OWN } as const;
+export const LANDING_COPY = { HERO, FREE, COACHING, FAQ, PROOF, SCREENS, OWN, FREE_REVEAL, COACHES_BAND } as const;

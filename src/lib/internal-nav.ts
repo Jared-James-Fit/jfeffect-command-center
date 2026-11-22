@@ -177,6 +177,9 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "sales"] },
   { to: "/admin/sales/coaching-applications", label: "Coaching Applications", icon: ClipboardList, group: "Sales",
     visibleTo: ["admin", "sales"] },
+  // JF Effect for coaches (early access): the owner's alone, apart from his coaching clients.
+  { to: "/admin/coach-platform", label: "Coach platform", icon: Briefcase, group: "Sales",
+    visibleTo: ["admin"], keywords: ["coaches", "early access", "seat pricing", "independent coaches", "b2b"] },
   { to: "/admin/payments", label: "Overview", icon: BarChart3, group: "Sales", searchOnly: true,
     visibleTo: ["admin", "sales"],
     keywords: ["overview", "dashboard", "revenue", "mrr", "gross", "net", "sales"] },

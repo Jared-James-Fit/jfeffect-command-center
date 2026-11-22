@@ -47,6 +47,8 @@ import { Route as BTokenRouteImport } from './routes/b.$token'
 import { Route as BookRouteImport } from './routes/book.'
 import { Route as BookSlugRouteImport } from './routes/book.$slug'
 import { Route as ChallengesIndexRouteImport } from './routes/challenges.index'
+import { Route as CoachesIndexRouteImport } from './routes/coaches.index'
+import { Route as CoachesApplyRouteImport } from './routes/coaches.apply'
 import { Route as CoachingIndexRouteImport } from './routes/coaching.index'
 import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
@@ -77,6 +79,7 @@ import { Route as AuthenticatedAdminCheckInReviewsRouteImport } from './routes/_
 import { Route as AuthenticatedAdminCheckInsRouteImport } from './routes/_authenticated/admin/check-ins'
 import { Route as AuthenticatedAdminClientActionRequestsRouteImport } from './routes/_authenticated/admin/client-action-requests'
 import { Route as AuthenticatedAdminClientPovRouteImport } from './routes/_authenticated/admin/client-pov'
+import { Route as AuthenticatedAdminCoachPlatformRouteImport } from './routes/_authenticated/admin/coach-platform'
 import { Route as AuthenticatedAdminCoachingRouteImport } from './routes/_authenticated/admin/coaching'
 import { Route as AuthenticatedAdminCoachingAgreementsRouteImport } from './routes/_authenticated/admin/coaching-agreements'
 import { Route as AuthenticatedAdminCommunicationRouteImport } from './routes/_authenticated/admin/communication'
@@ -504,6 +507,16 @@ const ChallengesIndexRoute = ChallengesIndexRouteImport.update({
   path: '/challenges/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CoachesIndexRoute = CoachesIndexRouteImport.update({
+  id: '/coaches/',
+  path: '/coaches/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CoachesApplyRoute = CoachesApplyRouteImport.update({
+  id: '/coaches/apply',
+  path: '/coaches/apply',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CoachingIndexRoute = CoachingIndexRouteImport.update({
   id: '/coaching/',
   path: '/coaching/',
@@ -671,6 +684,12 @@ const AuthenticatedAdminClientPovRoute =
   AuthenticatedAdminClientPovRouteImport.update({
     id: '/client-pov',
     path: '/client-pov',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminCoachPlatformRoute =
+  AuthenticatedAdminCoachPlatformRouteImport.update({
+    id: '/coach-platform',
+    path: '/coach-platform',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminCoachingRoute =
@@ -2099,6 +2118,7 @@ export interface FileRoutesByFullPath {
   '/autopay/$token': typeof AutopayTokenRoute
   '/b/$token': typeof BTokenRoute
   '/book/$slug': typeof BookSlugRoute
+  '/coaches/apply': typeof CoachesApplyRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/legal/$slug': typeof LegalSlugRoute
@@ -2109,6 +2129,7 @@ export interface FileRoutesByFullPath {
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
   '/challenges/': typeof ChallengesIndexRoute
+  '/coaches/': typeof CoachesIndexRoute
   '/coaching/': typeof CoachingIndexRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -2129,6 +2150,7 @@ export interface FileRoutesByFullPath {
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
+  '/admin/coach-platform': typeof AuthenticatedAdminCoachPlatformRoute
   '/admin/coaching': typeof AuthenticatedAdminCoachingRoute
   '/admin/coaching-agreements': typeof AuthenticatedAdminCoachingAgreementsRoute
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
@@ -2400,6 +2422,7 @@ export interface FileRoutesByTo {
   '/autopay/$token': typeof AutopayTokenRoute
   '/b/$token': typeof BTokenRoute
   '/book/$slug': typeof BookSlugRoute
+  '/coaches/apply': typeof CoachesApplyRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/legal/$slug': typeof LegalSlugRoute
@@ -2410,6 +2433,7 @@ export interface FileRoutesByTo {
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
   '/challenges': typeof ChallengesIndexRoute
+  '/coaches': typeof CoachesIndexRoute
   '/coaching': typeof CoachingIndexRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -2430,6 +2454,7 @@ export interface FileRoutesByTo {
   '/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
+  '/admin/coach-platform': typeof AuthenticatedAdminCoachPlatformRoute
   '/admin/coaching': typeof AuthenticatedAdminCoachingRoute
   '/admin/coaching-agreements': typeof AuthenticatedAdminCoachingAgreementsRoute
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
@@ -2705,6 +2730,7 @@ export interface FileRoutesById {
   '/autopay/$token': typeof AutopayTokenRoute
   '/b/$token': typeof BTokenRoute
   '/book/$slug': typeof BookSlugRoute
+  '/coaches/apply': typeof CoachesApplyRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/legal/$slug': typeof LegalSlugRoute
@@ -2715,6 +2741,7 @@ export interface FileRoutesById {
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
   '/challenges/': typeof ChallengesIndexRoute
+  '/coaches/': typeof CoachesIndexRoute
   '/coaching/': typeof CoachingIndexRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
   '/_authenticated/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -2735,6 +2762,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/check-ins': typeof AuthenticatedAdminCheckInsRoute
   '/_authenticated/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/_authenticated/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
+  '/_authenticated/admin/coach-platform': typeof AuthenticatedAdminCoachPlatformRoute
   '/_authenticated/admin/coaching': typeof AuthenticatedAdminCoachingRoute
   '/_authenticated/admin/coaching-agreements': typeof AuthenticatedAdminCoachingAgreementsRoute
   '/_authenticated/admin/communication': typeof AuthenticatedAdminCommunicationRoute
@@ -3011,6 +3039,7 @@ export interface FileRouteTypes {
     | '/autopay/$token'
     | '/b/$token'
     | '/book/$slug'
+    | '/coaches/apply'
     | '/coaching/apply'
     | '/email/unsubscribe'
     | '/legal/$slug'
@@ -3021,6 +3050,7 @@ export interface FileRouteTypes {
     | '/sign/$token'
     | '/signup/jf'
     | '/challenges/'
+    | '/coaches/'
     | '/coaching/'
     | '/admin/account'
     | '/admin/appointments'
@@ -3041,6 +3071,7 @@ export interface FileRouteTypes {
     | '/admin/check-ins'
     | '/admin/client-action-requests'
     | '/admin/client-pov'
+    | '/admin/coach-platform'
     | '/admin/coaching'
     | '/admin/coaching-agreements'
     | '/admin/communication'
@@ -3312,6 +3343,7 @@ export interface FileRouteTypes {
     | '/autopay/$token'
     | '/b/$token'
     | '/book/$slug'
+    | '/coaches/apply'
     | '/coaching/apply'
     | '/email/unsubscribe'
     | '/legal/$slug'
@@ -3322,6 +3354,7 @@ export interface FileRouteTypes {
     | '/sign/$token'
     | '/signup/jf'
     | '/challenges'
+    | '/coaches'
     | '/coaching'
     | '/admin/account'
     | '/admin/appointments'
@@ -3342,6 +3375,7 @@ export interface FileRouteTypes {
     | '/admin/check-ins'
     | '/admin/client-action-requests'
     | '/admin/client-pov'
+    | '/admin/coach-platform'
     | '/admin/coaching'
     | '/admin/coaching-agreements'
     | '/admin/communication'
@@ -3616,6 +3650,7 @@ export interface FileRouteTypes {
     | '/autopay/$token'
     | '/b/$token'
     | '/book/$slug'
+    | '/coaches/apply'
     | '/coaching/apply'
     | '/email/unsubscribe'
     | '/legal/$slug'
@@ -3626,6 +3661,7 @@ export interface FileRouteTypes {
     | '/sign/$token'
     | '/signup/jf'
     | '/challenges/'
+    | '/coaches/'
     | '/coaching/'
     | '/_authenticated/admin/account'
     | '/_authenticated/admin/appointments'
@@ -3646,6 +3682,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/check-ins'
     | '/_authenticated/admin/client-action-requests'
     | '/_authenticated/admin/client-pov'
+    | '/_authenticated/admin/coach-platform'
     | '/_authenticated/admin/coaching'
     | '/_authenticated/admin/coaching-agreements'
     | '/_authenticated/admin/communication'
@@ -3916,6 +3953,7 @@ export interface RootRouteChildren {
   AutopayTokenRoute: typeof AutopayTokenRoute
   BTokenRoute: typeof BTokenRoute
   BookSlugRoute: typeof BookSlugRoute
+  CoachesApplyRoute: typeof CoachesApplyRoute
   CoachingApplyRoute: typeof CoachingApplyRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
   LegalSlugRoute: typeof LegalSlugRoute
@@ -3925,6 +3963,7 @@ export interface RootRouteChildren {
   SignTokenRoute: typeof SignTokenRoute
   SignupJfRoute: typeof SignupJfRoute
   ChallengesIndexRoute: typeof ChallengesIndexRoute
+  CoachesIndexRoute: typeof CoachesIndexRoute
   CoachingIndexRoute: typeof CoachingIndexRoute
   ApiPublicBulkExerciseImportRoute: typeof ApiPublicBulkExerciseImportRoute
   ApiPublicCalendarFeedRoute: typeof ApiPublicCalendarFeedRoute
@@ -4255,6 +4294,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChallengesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/coaches/': {
+      id: '/coaches/'
+      path: '/coaches'
+      fullPath: '/coaches/'
+      preLoaderRoute: typeof CoachesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/coaches/apply': {
+      id: '/coaches/apply'
+      path: '/coaches/apply'
+      fullPath: '/coaches/apply'
+      preLoaderRoute: typeof CoachesApplyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/coaching/': {
       id: '/coaching/'
       path: '/coaching'
@@ -4463,6 +4516,13 @@ declare module '@tanstack/react-router' {
       path: '/client-pov'
       fullPath: '/admin/client-pov'
       preLoaderRoute: typeof AuthenticatedAdminClientPovRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/coach-platform': {
+      id: '/_authenticated/admin/coach-platform'
+      path: '/coach-platform'
+      fullPath: '/admin/coach-platform'
+      preLoaderRoute: typeof AuthenticatedAdminCoachPlatformRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/coaching': {
@@ -6291,6 +6351,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminCheckInsRoute: typeof AuthenticatedAdminCheckInsRoute
   AuthenticatedAdminClientActionRequestsRoute: typeof AuthenticatedAdminClientActionRequestsRoute
   AuthenticatedAdminClientPovRoute: typeof AuthenticatedAdminClientPovRoute
+  AuthenticatedAdminCoachPlatformRoute: typeof AuthenticatedAdminCoachPlatformRoute
   AuthenticatedAdminCoachingRoute: typeof AuthenticatedAdminCoachingRoute
   AuthenticatedAdminCoachingAgreementsRoute: typeof AuthenticatedAdminCoachingAgreementsRoute
   AuthenticatedAdminCommunicationRoute: typeof AuthenticatedAdminCommunicationRoute
@@ -6421,6 +6482,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminClientActionRequestsRoute:
       AuthenticatedAdminClientActionRequestsRoute,
     AuthenticatedAdminClientPovRoute: AuthenticatedAdminClientPovRoute,
+    AuthenticatedAdminCoachPlatformRoute: AuthenticatedAdminCoachPlatformRoute,
     AuthenticatedAdminCoachingRoute: AuthenticatedAdminCoachingRoute,
     AuthenticatedAdminCoachingAgreementsRoute:
       AuthenticatedAdminCoachingAgreementsRoute,
@@ -6796,6 +6858,7 @@ const rootRouteChildren: RootRouteChildren = {
   AutopayTokenRoute: AutopayTokenRoute,
   BTokenRoute: BTokenRoute,
   BookSlugRoute: BookSlugRoute,
+  CoachesApplyRoute: CoachesApplyRoute,
   CoachingApplyRoute: CoachingApplyRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
   LegalSlugRoute: LegalSlugRoute,
@@ -6805,6 +6868,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignTokenRoute: SignTokenRoute,
   SignupJfRoute: SignupJfRoute,
   ChallengesIndexRoute: ChallengesIndexRoute,
+  CoachesIndexRoute: CoachesIndexRoute,
   CoachingIndexRoute: CoachingIndexRoute,
   ApiPublicBulkExerciseImportRoute: ApiPublicBulkExerciseImportRoute,
   ApiPublicCalendarFeedRoute: ApiPublicCalendarFeedRoute,

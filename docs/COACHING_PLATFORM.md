@@ -166,6 +166,14 @@ off behind an admin setting.
 Gate: tests pass, nothing user-visible changes except the sign-up box and the
 coach page's access record. **Passed.**
 
+### Phase 1b: early access, pricing and marketing (Nov 22 2026)
+The coach early-access page and waitlist, the seat pricing engine, the
+owner's Coach platform page (applications, pricing calculator, publish a
+price, launch gates) and the landing page's three journeys. Registration
+stays closed in SQL. Business plan, pricing review, unit economics and the
+seat-billing design: `docs/COACH_PLATFORM_BUSINESS_2026-11.md`.
+Gate: tests pass; nothing opens a workspace or charges anyone. **Passed.**
+
 ### Phase 2: Nutrition Studio and nutrition import (members)
 - Members own a plan in the same tables coaches use (`nutrition_targets` +
   days on their own `clients` row). RLS: a self-serve client writes plans

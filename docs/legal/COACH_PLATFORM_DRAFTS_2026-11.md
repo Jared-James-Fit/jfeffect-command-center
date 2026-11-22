@@ -20,6 +20,14 @@ repeat it. Where a section here builds on one there, it says so.
 | F. Health information and consent | Privacy Policy and in-app consent | Framework memo |
 | G. What the app records | Implementation notes | Built / to build |
 | H. Questions for counsel | | |
+| I. Fees and recurring billing (fills A11) | Schedule to A, accepted at the first paid client | New draft (Nov 22) |
+| J. Acceptable use for coaching businesses | Schedule to A | New draft (Nov 22) |
+| K. Subprocessors | Public page, referenced by C | List to confirm |
+| L. Security incidents | Internal procedure, referenced by C | New draft (Nov 22) |
+| M. Retention and deletion | Privacy Policy and C | New draft (Nov 22) |
+| N. Minors | A and the Terms | Points for counsel |
+| O. Early-access waitlist notice | In use on /coaches/apply | Published text, for review |
+| P. Tax, app stores and anti-spam | Memo | Notes (Nov 22) |
 
 Principles, same as the earlier draft: say plainly who does what; never claim
 a waiver removes all liability; limit and allocate liability only as far as
@@ -402,3 +410,186 @@ To build (Phase 6):
    whether JF Effect has any merchant obligations with Standard accounts.
 8. The copyright complaint process (notice and notice) and whether a
    takedown policy for shared programs is advisable on top of it.
+
+
+---
+
+## I. Fees and recurring billing (Schedule to A; fills A11)
+
+Accepted with its own unticked box when a coach adds their first paid client
+(recorded in `legal_acceptances` with this schedule's version). Brackets are
+the owner's decisions.
+
+> **1. What you pay.** JF Effect charges your coaching business a monthly
+> platform fee for each billable client, after your free client[s]:
+> [$5] CAD a client a month[, $3 from your 26th client], plus applicable
+> taxes. There is no base fee and no minimum term.
+>
+> **2. Billable client.** A client is billable while they have accepted your
+> invitation and you are coaching them (the relationship is active). Pending
+> or expired invitations, paused, ended, archived or removed clients, your
+> own account and those of your team, and duplicate records of the same
+> person are never billable. The billing screen shows who counts and why.
+>
+> **3. When you're charged.** Your subscription renews monthly on the date
+> you first add a paid client, by the payment method you authorize, until you
+> cancel. Before you add a client that changes your monthly total, the app
+> shows the new total and asks you to confirm. Clients added or removed
+> during a month are prorated: the difference for the rest of the month is
+> added to, or credited on, your next invoice. Nothing is charged on its own
+> in the middle of a month.
+>
+> **4. Authorization.** By ticking the box and saving a payment method you
+> authorize JF Effect (through Stripe) to charge it each month for the
+> platform fee and taxes then due, as described above, until you cancel.
+>
+> **5. Failed payments.** If a payment fails we'll tell you and retry for
+> [14] days. After that, clients past your free client[s] are paused (you
+> can't program or message them, and they keep using the app themselves)
+> until the payment succeeds. Nothing is deleted for non-payment.
+>
+> **6. Price changes.** We'll give you at least [30] days' notice in the app
+> and by email before a price change applies to you [(founding coaches: 12
+> months)]. You can cancel before it takes effect.
+>
+> **7. Cancelling.** You can cancel any time in the app. Cancelling stops
+> renewal at the end of the paid month; you keep your free client[s] and
+> your records. Fees already paid aren't refunded except where the law
+> requires or where we billed in error.
+>
+> **8. Taxes.** Prices exclude taxes. We charge the GST/HST and provincial
+> sales tax that apply to where your business is, based on the address you
+> give us.
+>
+> **9. Invoices.** Every charge has an invoice in the app and by email.
+
+Review notes: confirm 3–4 meet the card networks' and Stripe's rules for
+recurring-payment disclosure and consent; confirm whether provincial consumer
+protection rules for distance contracts apply to a sole-proprietor coach (a
+business customer); confirm 5's pause doesn't harm the coach's clients (it
+removes the coach's access only).
+
+## J. Acceptable use for coaching businesses (Schedule to A)
+
+> In addition to the Terms of Service, you and anyone in your organization
+> won't:
+> (a) invite or bill a person without their agreement, or add people only to
+> message or market to them;
+> (b) send clients messages they didn't agree to receive, or use JF Effect to
+> send commercial messages that break anti-spam law;
+> (c) upload programs, recipes, images or other content you don't own or have
+> permission to use;
+> (d) try to access another organization's information, test the platform's
+> security without our written permission, or get around limits, metering or
+> billing;
+> (e) give medical, dietetic or other regulated advice you aren't licensed to
+> give, or present yourself as holding a title you don't hold;
+> (f) coach a minor without the consent required where you and they are
+> (see N);
+> (g) use JF Effect to discriminate against, harass or endanger anyone.
+> We may suspend access for a breach as described in A12.
+
+## K. Subprocessors (to confirm with each vendor's terms and data region)
+
+| Vendor | What for | Data | Region (to confirm) |
+|---|---|---|---|
+| Supabase | Database, files, sign-in | Everything stored | US |
+| Hosting (Lovable / Cloudflare) | Serving the app | Requests | Global edge |
+| Stripe | Payments, billing, tax | Billing details, payment metadata | US / Canada |
+| OpenAI | AI drafts and reads | The text sent for that draft | US |
+| Mux | Video copies for the feed | Videos a person posts to the Crew | US |
+| Twilio | Text messages | Phone number, message | US |
+| Resend | Email | Email address, message | US |
+| Google | Calendar sync (opt-in) | Event details | US |
+
+Review notes: PIPEDA requires disclosure that information may be processed
+and stored outside Canada; Quebec's Law 25 adds a privacy impact assessment
+before transferring a Quebec resident's information outside Quebec (H6).
+
+## L. Security incidents (procedure)
+
+1. Anyone who suspects a breach of security safeguards tells the owner at
+   once. The owner opens a record in the breach log (date, what happened,
+   whose information, how many people, what was done).
+2. Contain it, then assess whether it creates a real risk of significant
+   harm (sensitivity of the information, probability of misuse).
+3. If it does: report to the Office of the Privacy Commissioner of Canada and
+   notify affected people as soon as feasible; notify any organization whose
+   records were involved (for a coach's clients, the coach, within [72] hours
+   of determining it, so they can meet their own obligations).
+4. Keep every breach record, reportable or not, for at least 24 months
+   (Breach of Security Safeguards Regulations, SOR/2018-64).
+5. After: what changed so it doesn't happen again, in the record.
+
+## M. Retention and deletion
+
+- A person's own account: the existing 30-day Recently deleted, then deletion
+  except records the law requires (financial, tax, signed agreements).
+- A coaching relationship ending: the organization loses access at once;
+  the client keeps their records.
+- An organization closing: [30] days to export, then deletion or
+  de-identification of what's held for the organization, except legally
+  required records and anything needed for a dispute.
+- Early-access applications: kept while the waitlist runs and up to [24]
+  months after the last contact, then deleted; deleted sooner on request.
+- Marketing consent: kept with its words and time for as long as it's relied
+  on, plus [3] years (proof of consent is the sender's burden under CASL).
+- Breach log: at least 24 months (L4).
+
+## N. Minors (points for counsel)
+
+- Confirm the Terms' minimum age for the app and whether coaches may coach
+  clients under 18 (and under the age of majority in their province).
+- If allowed: a parent or guardian's consent recorded before a coach can
+  invite a minor, no public Crew profile by default, and no weight-loss
+  targets for minors without a health professional.
+- The nutrition engine already refuses weight-loss plans for under-18s
+  (`screenSafety`); keep that for coaches' clients.
+
+## O. Early-access waitlist notice (in use on /coaches/apply)
+
+Shown above an unticked box that must be ticked to send:
+
+> I use what you send here to review your application, set up your workspace
+> if you're invited, and email you about early access. It isn't shared or
+> sold. Ask me to delete it any time at support@jfeffect.com. See the
+> Privacy Policy.
+
+And, as its own optional unticked box:
+
+> Also send me JF Effect news for coaches by email (from JF Effect,
+> support@jfeffect.com). I can unsubscribe any time.
+
+Both are stored word for word with their version and time
+(`coach_platform_applications`). Review notes: confirm the Privacy Policy
+covers applicants who aren't members. CASL wants the consent request itself
+to identify the sender with a mailing address plus a phone, email or web
+address; the request names JF Effect and its email, and the only mailing
+address on file names the gym's town, which the owner keeps off public pages
+(coaching is marketed online only). Confirm whether a linked page with the
+address is enough, or use a mailing address or PO box he's happy to show.
+
+## P. Tax, app stores and anti-spam (notes for the accountant and counsel)
+
+- **Manitoba RST:** since Jan 1 2026 software as a service and cloud services
+  are subject to 7% RST when used in Manitoba (Budget 2025, Bill 46, S.M.
+  2025 c. 48; Manitoba Finance Bulletin 033). JF Effect would collect it on
+  platform fees from Manitoba coaches, and likely has to register and
+  self-assess on its own cloud bills from vendors that don't collect it
+  (Supabase, OpenAI, Mux, Twilio) whether or not coaches ever pay. Confirm
+  registration and the small-seller threshold.
+- **GST/HST:** charged by the province of the coach's Canadian address
+  (place of supply, CRA Memorandum 3-3-6). Foreign coaches: likely
+  zero-rated as an exported service; confirm characterization.
+- **BC PST** (software as a service; register past $10k a year of BC sales)
+  and **Quebec QST** (specified registration past $30k a year to
+  non-registered Quebec buyers).
+- **App stores:** coach purchasing stays on the web; the native apps show no
+  coach price or call to buy (Apple 3.1.1 / 3.1.3, Google Play payments
+  policy). Confirm the Canadian storefront position before any change.
+- **CASL:** emails about an application rely on implied consent from the
+  inquiry (6 months); marketing needs the separate express consent above;
+  every commercial message identifies JF Effect, gives a mailing address and
+  a working unsubscribe honoured within 10 business days. Because a public
+  form can't prove the email is the applicant's, confirm marketing consent by
+  email (double opt-in) before relying on it.
