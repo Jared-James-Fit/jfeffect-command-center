@@ -321,6 +321,9 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
   // ── SETTINGS ────────────────────────────────────────────────────────
   { id: "settings", label: "Settings", to: "/admin/settings", category: "Settings",
     parent: "Admin → Settings", roles: ALL, icon: Settings },
+  { id: "documents", label: "My Documents", to: "/admin/documents", category: "Settings",
+    parent: "Admin → Settings", roles: ALL, icon: FileText,
+    keywords: ["documents", "files", "uploads", "pdf", "templates"] },
   { id: "account", label: "My Account", to: "/admin/account", category: "Settings",
     parent: "Admin → Settings", roles: ALL, icon: UserCog },
   { id: "apps", label: "Connected Apps", to: "/admin/apps", category: "Settings",

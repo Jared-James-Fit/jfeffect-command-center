@@ -17,6 +17,7 @@ const ALL_CLIENT_WORKSPACE_TABS = [
   "goals-setup",
   "coaching",
   "notes",
+  "files",
   "account",
 ] as const;
 
@@ -40,7 +41,7 @@ describe("client workspace tabs", () => {
       "sessions",
       "purchases",
     ]);
-    expect(CLIENT_WORKSPACE_MORE_TABS.map((tab) => tab.value)).toEqual(["info", "goals-setup", "coaching", "notes", "account"]);
+    expect(CLIENT_WORKSPACE_MORE_TABS.map((tab) => tab.value)).toEqual(["info", "goals-setup", "coaching", "notes", "files", "account"]);
   });
 
   it("redirects merged tabs to where their content lives now", () => {
