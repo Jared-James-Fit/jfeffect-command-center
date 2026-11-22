@@ -53,11 +53,12 @@ export const ANALYTICS_COLORS = {
 } as const;
 
 /** Competition-lift accents (consistent across the app). */
+/** The three lifts in the validated split palette (styles.css --split-*), the same everywhere they're charted. */
 export const LIFT_COLORS: Record<string, string> = {
-  squat: ANALYTICS_COLORS.red,
-  bench: ANALYTICS_COLORS.blue,
-  "bench press": ANALYTICS_COLORS.blue,
-  deadlift: ANALYTICS_COLORS.purple,
+  squat: "var(--split-squat)",
+  bench: "var(--split-bench)",
+  "bench press": "var(--split-bench)",
+  deadlift: "var(--split-deadlift)",
 };
 
 /** Detect the competition lift family from an exercise name. */

@@ -266,6 +266,20 @@ function weekLabel(monday: string): string {
     : `${M[a.getUTCMonth()]} ${a.getUTCDate()} – ${M[b.getUTCMonth()]} ${b.getUTCDate()}`;
 }
 
+/**
+ * How a "per week" number is said: an average over the weeks that are over,
+ * or, before a week is over, this week so far (never an average).
+ */
+export function perWeekWords(load: Pick<TrainingLoad, "perWeekBasis">): { label: string; unit: string; note: string } {
+  const b = load.perWeekBasis;
+  if (b.partial) return { label: "this week so far", unit: "this week", note: "No full week yet" };
+  return {
+    label: "a week",
+    unit: "a week",
+    note: `Average of ${b.weeks} full week${b.weeks === 1 ? "" : "s"}`,
+  };
+}
+
 // ── the read ───────────────────────────────────────────────────────────
 
 export type LiftWeek = { sets: number; sessions: number; heavy: number };
@@ -275,6 +289,8 @@ export type WeekLoad = {
   label: string;
   /** the week isn't over yet (it holds today) */
   current: boolean;
+  /** the week hasn't started: only what's written for it (never part of an average) */
+  future: boolean;
   phase: string | null;
   sets: number;
   hardSets: number;
@@ -367,6 +383,13 @@ export type TrainingLoad = {
   weeks: WeekLoad[];
   /** weeks that are over (the averages read these when there are any) */
   completeWeeks: number;
+  /**
+   * What every "a week" number divides by: the weeks that are over, from the
+   * first week with training or a written workout (weeks off in between count
+   * as zero), never a week that hasn't happened. With none over yet it's this
+   * week so far (`partial`), said as such, never an average.
+   */
+  perWeekBasis: { weeks: number; partial: boolean };
   totals: {
     sets: number;
     hardSets: number;
@@ -378,6 +401,9 @@ export type TrainingLoad = {
     prescribed: number | null;
     completedOfPrescribed: number | null;
     completionPct: number | null;
+    /** workouts written for days that have passed, and how many of them have a logged set */
+    plannedSessions: number | null;
+    plannedSessionsDone: number | null;
   };
   muscles: MuscleLoad[];
   patterns: PatternLoad[];
@@ -411,7 +437,13 @@ function rpeOfText(t: string | null | undefined): number | null {
  * The read. `today` (yyyy-mm-dd) decides which weeks are over and which
  * written workouts were missed rather than still ahead.
  */
-export function buildTrainingLoad(input: { sets: LoadSet[]; plan?: PlanRow[]; today: string }): TrainingLoad {
+export function buildTrainingLoad(input: {
+  sets: LoadSet[];
+  plan?: PlanRow[];
+  today: string;
+  /** the period read (yyyy-mm-dd): a week mostly outside it never counts as a week of training */
+  range?: { start: string; end: string };
+}): TrainingLoad {
   const today = input.today;
   const currentWeek = weekOf(today);
   const sets: Enriched[] = [];
@@ -445,6 +477,12 @@ export function buildTrainingLoad(input: { sets: LoadSet[]; plan?: PlanRow[]; to
   const weekKeys = new Set<string>();
   for (const s of sets) weekKeys.add(s.week);
   for (const p of plan) weekKeys.add(weekOf(p.day!));
+  // A week with nothing logged and nothing written between two that have
+  // something is still a week (a week off): it counts as zero, never skipped.
+  const active = [...weekKeys].filter((k) => k <= currentWeek).sort();
+  if (active.length) {
+    for (let n = dayNum(active[0]); n < dayNum(active[active.length - 1]); n += 7) weekKeys.add(dayStr(n));
+  }
   const keys = [...weekKeys].sort();
   const doneByRow = new Map<string, number>();
   for (const s of sets) if (s.rowId) doneByRow.set(s.rowId, (doneByRow.get(s.rowId) ?? 0) + 1);
@@ -501,6 +539,7 @@ export function buildTrainingLoad(input: { sets: LoadSet[]; plan?: PlanRow[]; to
       key,
       label: weekLabel(key),
       current: key === currentWeek,
+      future: key > currentWeek,
       phase,
       sets: ws.length,
       hardSets: hard,
@@ -519,7 +558,20 @@ export function buildTrainingLoad(input: { sets: LoadSet[]; plan?: PlanRow[]; to
   });
 
   const done = weeks.filter((w) => !w.current && w.key < currentWeek);
-  const basis = done.length ? done : weeks;
+  // Averages read the weeks that are over; a week the period barely touches
+  // (a block starting on a Sunday) isn't a week of training. With none over
+  // yet, this week so far, said as such. Never a week that hasn't happened:
+  // dividing this week's sets by the block's four weeks read 37 sets as 9.3 a week.
+  const inRange = (w: WeekLoad) => {
+    if (!input.range) return true;
+    const a = Math.max(dayNum(w.key), dayNum(input.range.start));
+    const b = Math.min(dayNum(w.key) + 6, dayNum(input.range.end), dayNum(today));
+    return b - a + 1 >= 4;
+  };
+  const counted = done.filter(inRange);
+  const partial = counted.length === 0;
+  const thisWeek = weeks.filter((w) => w.current);
+  const basis = !partial ? counted : thisWeek.length ? thisWeek : done;
   const n = Math.max(1, basis.length);
   const lastDone = done[done.length - 1] ?? null;
 
@@ -535,6 +587,8 @@ export function buildTrainingLoad(input: { sets: LoadSet[]; plan?: PlanRow[]; to
     prescribed: null as number | null,
     completedOfPrescribed: null as number | null,
     completionPct: null as number | null,
+    plannedSessions: null as number | null,
+    plannedSessionsDone: null as number | null,
   };
   // completion reads only weeks that are over or days that have passed
   const pastPlan = plan.filter((p) => p.day! < today);
@@ -549,6 +603,10 @@ export function buildTrainingLoad(input: { sets: LoadSet[]; plan?: PlanRow[]; to
     totals.prescribed = want;
     totals.completedOfPrescribed = got;
     totals.completionPct = want > 0 ? Math.round((got / want) * 100) : null;
+    const trainedDays = new Set(sets.map((x) => x.dayId).filter(Boolean));
+    const plannedDays = new Set(pastPlan.map((p) => p.dayId));
+    totals.plannedSessions = plannedDays.size;
+    totals.plannedSessionsDone = [...plannedDays].filter((d) => trainedDays.has(d)).length;
   }
 
   // ── muscles ──
@@ -683,6 +741,7 @@ export function buildTrainingLoad(input: { sets: LoadSet[]; plan?: PlanRow[]; to
   const load: TrainingLoad = {
     weeks,
     completeWeeks: done.length,
+    perWeekBasis: { weeks: partial ? 0 : basis.length, partial },
     totals,
     muscles,
     patterns,

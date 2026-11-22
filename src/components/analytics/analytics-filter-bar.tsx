@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { format, parseISO, subDays } from "date-fns";
+import { Check, ChevronDown, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CalendarSearch, Layers, RotateCcw } from "lucide-react";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
 import {
   type AnalyticsBlock as SharedAnalyticsBlock,
   parseLocalDate,
@@ -13,10 +15,19 @@ import {
 /** Re-export so existing consumers keep importing from this module. */
 export type AnalyticsBlock = SharedAnalyticsBlock;
 
+type Said = {
+  /** what the period is, in a word or two ("This block", "12 weeks") */
+  short: string;
+  /** its dates ("Nov 15 – Dec 12") */
+  range: string;
+  /** both, for older readers ("This block · Nov 15 – Dec 12") */
+  label: string;
+};
+
 export type AnalyticsFilter =
-  | { preset: "current_block"; blockId: string; start: Date; end: Date; label: string }
-  | { preset: "previous_block"; blockId: string; start: Date; end: Date; label: string }
-  | {
+  | ({ preset: "current_block"; blockId: string; start: Date; end: Date } & Said)
+  | ({ preset: "previous_block"; blockId: string; start: Date; end: Date } & Said)
+  | ({
       preset: "exact_block";
       blockId: string;
       /** For undated blocks these fall back to lifetime bounds — blockId is the authoritative boundary. */
@@ -24,19 +35,29 @@ export type AnalyticsFilter =
       end: Date;
       /** True when the underlying block has real start/end dates. */
       hasBlockDates: boolean;
-      label: string;
-    }
-  | { preset: "last_4w" | "last_8w" | "last_12w" | "lifetime"; start: Date; end: Date; label: string }
-  | { preset: "custom"; start: Date; end: Date; label: string };
+    } & Said)
+  | ({ preset: "last_4w" | "last_8w" | "last_12w" | "last_26w" | "last_52w" | "lifetime"; start: Date; end: Date } & Said)
+  | ({ preset: "custom"; start: Date; end: Date } & Said);
+
+export type PeriodPreset = AnalyticsFilter["preset"];
+
+/** "Nov 15 – Dec 12", with the year only when it isn't this year or the range crosses one. */
+export function rangeWords(start: Date, end: Date): string {
+  const now = new Date().getFullYear();
+  const sy = start.getFullYear();
+  const ey = end.getFullYear();
+  if (sy === ey) return sy === now ? `${format(start, "MMM d")} – ${format(end, "MMM d")}` : `${format(start, "MMM d")} – ${format(end, "MMM d, yyyy")}`;
+  return `${format(start, "MMM d, yyyy")} – ${format(end, "MMM d, yyyy")}`;
+}
+
+function said(short: string, start: Date, end: Date, range = rangeWords(start, end)): Said {
+  return { short, range, label: `${short} · ${range}` };
+}
 
 function blockRange(b: AnalyticsBlock): { start: Date; end: Date } {
   const start = parseLocalDate(b.start_date) ?? subDays(new Date(), 28);
   const end = parseLocalDate(b.end_date) ?? new Date();
   return { start, end };
-}
-
-function blockRangeMaybe(b: AnalyticsBlock): { start: Date | null; end: Date | null } {
-  return { start: parseLocalDate(b.start_date), end: parseLocalDate(b.end_date) };
 }
 
 function lifetimeBounds(blocks: AnalyticsBlock[]): { start: Date; end: Date } {
@@ -52,52 +73,32 @@ function lifetimeBounds(blocks: AnalyticsBlock[]): { start: Date; end: Date } {
 
 function currentBlockFilter(b: AnalyticsBlock): AnalyticsFilter {
   const { start, end } = blockRange(b);
-  const name = (b.name ?? "").trim();
-  return {
-    preset: "current_block",
-    blockId: b.id,
-    start,
-    end,
-    label: name
-      ? `Current Block · ${name} · ${format(start, "MMM d")}–${format(end, "MMM d")}`
-      : `Current Block · ${format(start, "MMM d")}–${format(end, "MMM d")}`,
-  };
+  return { preset: "current_block", blockId: b.id, start, end, ...said("This block", start, end) };
 }
 
 function previousBlockFilter(b: AnalyticsBlock): AnalyticsFilter {
   const { start, end } = blockRange(b);
-  return {
-    preset: "previous_block",
-    blockId: b.id,
-    start,
-    end,
-    label: `Previous Block · ${format(start, "MMM d")}–${format(end, "MMM d")}`,
-  };
+  return { preset: "previous_block", blockId: b.id, start, end, ...said("Last block", start, end) };
 }
 
-export function exactBlockFilter(
-  b: AnalyticsBlock,
-  allBlocks: AnalyticsBlock[],
-): AnalyticsFilter {
-  const { start, end } = blockRangeMaybe(b);
+export function exactBlockFilter(b: AnalyticsBlock, allBlocks: AnalyticsBlock[]): AnalyticsFilter {
+  const start = parseLocalDate(b.start_date);
+  const end = parseLocalDate(b.end_date);
   const hasBlockDates = !!start;
-  const dateLabel =
-    start && end
-      ? `${format(start, "MMM d")}–${format(end, "MMM d, yyyy")}`
-      : start
-        ? `from ${format(start, "MMM d, yyyy")}`
-        : "Not scheduled";
-  // Fallback: undated blocks use lifetime bounds for chart display only.
-  // blockId remains the authoritative data boundary — downstream analytics
-  // that need real dates should key off `hasBlockDates`.
+  const range = start && end ? rangeWords(start, end) : start ? `from ${format(start, "MMM d, yyyy")}` : "Not scheduled";
+  // Undated blocks use lifetime bounds for chart display only; blockId stays
+  // the data boundary (downstream reads key off `hasBlockDates`).
   const fallback = lifetimeBounds(allBlocks);
+  const name = (b.name ?? "").trim() || "Block";
   return {
     preset: "exact_block",
     blockId: b.id,
     start: start ?? fallback.start,
     end: end ?? fallback.end,
     hasBlockDates,
-    label: `${b.name} · ${dateLabel}`,
+    short: name,
+    range,
+    label: `${name} · ${range}`,
   };
 }
 
@@ -105,281 +106,216 @@ export function exactBlockFilter(
 export function defaultAnalyticsFilter(blocks: AnalyticsBlock[]): AnalyticsFilter {
   const current = resolveCurrentBlock(blocks);
   if (current) return currentBlockFilter(current);
-  const end = new Date();
-  const start = subDays(end, 56);
-  return {
-    preset: "last_8w",
-    start,
-    end,
-    label: `Last 8W · ${format(start, "MMM d")}–${format(end, "MMM d")}`,
-  };
+  return lastNWeeks(12);
 }
 
-function lastNWeeks(n: number): AnalyticsFilter {
+const WEEK_PRESETS = { 4: "last_4w", 8: "last_8w", 12: "last_12w", 26: "last_26w", 52: "last_52w" } as const;
+const WEEK_WORDS: Record<keyof typeof WEEK_PRESETS, string> = { 4: "4 weeks", 8: "8 weeks", 12: "12 weeks", 26: "6 months", 52: "1 year" };
+
+/** "since Aug 31" / "since Nov 23, 2025": a period that runs to today. */
+function sinceWords(start: Date): string {
+  return `since ${format(start, start.getFullYear() === new Date().getFullYear() ? "MMM d" : "MMM yyyy")}`;
+}
+
+export function lastNWeeks(n: keyof typeof WEEK_PRESETS): AnalyticsFilter {
   const end = new Date();
   const start = subDays(end, n * 7);
-  const key = (`last_${n}w`) as "last_4w" | "last_8w" | "last_12w";
-  return {
-    preset: key,
-    start,
-    end,
-    label: `Last ${n}W · ${format(start, "MMM d")}–${format(end, "MMM d")}`,
-  };
+  return { preset: WEEK_PRESETS[n], start, end, ...said(WEEK_WORDS[n], start, end, sinceWords(start)) };
 }
 
-function lifetimeFilter(blocks: AnalyticsBlock[]): AnalyticsFilter {
-  const earliest = blocks
-    .map((b) => b.start_date)
-    .filter((s): s is string => !!s)
-    .sort()[0];
-  const start = earliest ? parseISO(earliest) : subDays(new Date(), 365);
+export function lifetimeFilter(blocks: AnalyticsBlock[], firstDataDate?: Date | null): AnalyticsFilter {
+  const b = lifetimeBounds(blocks).start;
+  const start = firstDataDate && firstDataDate < b ? firstDataDate : b;
   const end = new Date();
-  return {
-    preset: "lifetime",
-    start,
-    end,
-    label: `Lifetime · ${format(start, "MMM d, yyyy")}–${format(end, "MMM d, yyyy")}`,
-  };
+  return { preset: "lifetime", start, end, ...said("All time", start, end, `since ${format(start, "MMM yyyy")}`) };
 }
 
-interface Props {
-  blocks: AnalyticsBlock[];
-  value: AnalyticsFilter;
-  onChange: (f: AnalyticsFilter) => void;
-  /** ID of the block currently being viewed (may be historical). */
-  selectedBlockId?: string | null;
-  /** ID of the resolved *actual* current block, independent of what's selected. */
-  resolvedCurrentBlockId?: string | null;
-  /** Called when the user taps "Browse Blocks". */
-  onOpenPicker?: () => void;
+export function customFilter(start: Date, end: Date): AnalyticsFilter {
+  return { preset: "custom", start, end, ...said("Custom", start, end) };
 }
 
-export function AnalyticsFilterBar({
+/** Days the period covers (the strength chart's resolution reads it). */
+export function periodDays(f: Pick<AnalyticsFilter, "start" | "end">): number {
+  return Math.max(1, Math.round((f.end.getTime() - f.start.getTime()) / 86_400_000));
+}
+
+/**
+ * The page's one period control: a button that says what's shown ("This
+ * block · Nov 15 – Dec 12") and opens one sheet with every choice, including
+ * a block by name. Replaces two rows of chips, a full-width "Browse Blocks"
+ * button and a line that repeated the selection.
+ */
+export function AnalyticsPeriodControl({
   blocks,
   value,
   onChange,
-  selectedBlockId,
-  resolvedCurrentBlockId,
-  onOpenPicker,
-}: Props) {
+  onOpenBlocks,
+  firstDataDate,
+  className,
+}: {
+  blocks: AnalyticsBlock[];
+  value: AnalyticsFilter;
+  onChange: (f: AnalyticsFilter) => void;
+  /** Opens the block picker (search, years). */
+  onOpenBlocks?: () => void;
+  /** The first logged set: "All time" starts there when it's before any block. */
+  firstDataDate?: Date | null;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
   const current = useMemo(() => resolveCurrentBlock(blocks), [blocks]);
   const prev = useMemo(() => resolvePreviousBlock(blocks, current), [blocks, current]);
-  const [customOpen, setCustomOpen] = useState(value.preset === "custom");
-  const [customStart, setCustomStart] = useState<string>(
-    format(value.start ?? new Date(), "yyyy-MM-dd"),
-  );
-  const [customEnd, setCustomEnd] = useState<string>(
-    format(value.end ?? new Date(), "yyyy-MM-dd"),
-  );
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customStart, setCustomStart] = useState(() => format(value.start ?? new Date(), "yyyy-MM-dd"));
+  const [customEnd, setCustomEnd] = useState(() => format(value.end ?? new Date(), "yyyy-MM-dd"));
 
-  const selectedBlock = useMemo(
-    () => blocks.find((b) => b.id === (selectedBlockId ?? "")) ?? null,
-    [blocks, selectedBlockId],
-  );
-  const isViewingHistorical =
-    value.preset === "exact_block" &&
-    !!resolvedCurrentBlockId &&
-    selectedBlockId !== resolvedCurrentBlockId;
-
-  const chips: {
-    key: AnalyticsFilter["preset"];
-    label: string;
-    disabled?: boolean;
-    disabledHint?: string;
-    onSelect: () => void;
-  }[] = [
-    {
-      key: "current_block",
-      label: "Current Block",
-      disabled: !current,
-      disabledHint: current ? undefined : "No active block detected for this client.",
-      onSelect: () => {
-        if (!current) return;
-        onChange(currentBlockFilter(current));
-        setCustomOpen(false);
-      },
-    },
-    {
-      key: "previous_block",
-      label: "Previous Block",
-      disabled: !prev,
-      disabledHint: prev ? undefined : "No previous block is available.",
-      onSelect: () => {
-        if (!prev) return;
-        onChange(previousBlockFilter(prev));
-        setCustomOpen(false);
-      },
-    },
-    {
-      key: "last_4w",
-      label: "Last 4W",
-      onSelect: () => {
-        onChange(lastNWeeks(4));
-        setCustomOpen(false);
-      },
-    },
-    {
-      key: "last_8w",
-      label: "Last 8W",
-      onSelect: () => {
-        onChange(lastNWeeks(8));
-        setCustomOpen(false);
-      },
-    },
-    {
-      key: "last_12w",
-      label: "Last 12W",
-      onSelect: () => {
-        onChange(lastNWeeks(12));
-        setCustomOpen(false);
-      },
-    },
-    { key: "custom", label: "Custom", onSelect: () => setCustomOpen(true) },
-    {
-      key: "lifetime",
-      label: "Lifetime",
-      onSelect: () => {
-        onChange(lifetimeFilter(blocks));
-        setCustomOpen(false);
-      },
-    },
-  ];
-
-  const returnToCurrent = () => {
-    if (!current) return;
-    onChange(currentBlockFilter(current));
+  const pick = (f: AnalyticsFilter) => {
+    onChange(f);
+    setOpen(false);
     setCustomOpen(false);
   };
 
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-1.5">
-        {chips.map((c) => {
-          const activeChip = value.preset === c.key;
-          return (
-            <button
-              key={c.key}
-              type="button"
-              onClick={c.onSelect}
-              disabled={c.disabled}
-              title={c.disabledHint}
-              className={[
-                "h-8 rounded-full border px-3 text-xs font-semibold transition-colors",
-                activeChip
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border bg-card text-muted-foreground hover:text-foreground",
-                c.disabled ? "opacity-40 cursor-not-allowed" : "",
-              ].join(" ")}
-            >
-              {c.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Browse Blocks — mandatory obvious action */}
-      {onOpenPicker && (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onOpenPicker}
-            className="h-9 gap-1.5 w-full sm:w-auto"
-          >
-            <Layers className="h-4 w-4" />
-            {value.preset === "lifetime" ? "Browse history by block" : "Browse Blocks"}
-          </Button>
-          {isViewingHistorical && current && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={returnToCurrent}
-              className="h-9 gap-1.5 text-foreground"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Return to Current Block
-            </Button>
-          )}
-        </div>
-      )}
-
-      {customOpen && (
-        <div className="flex flex-wrap items-end gap-2 rounded-md border border-border bg-card p-3">
-          <label className="text-xs font-semibold text-muted-foreground">
-            Start
-            <Input
-              type="date"
-              value={customStart}
-              onChange={(e) => setCustomStart(e.target.value)}
-              className="mt-1 h-8 w-40"
-            />
-          </label>
-          <label className="text-xs font-semibold text-muted-foreground">
-            End
-            <Input
-              type="date"
-              value={customEnd}
-              onChange={(e) => setCustomEnd(e.target.value)}
-              className="mt-1 h-8 w-40"
-            />
-          </label>
-          <Button
-            size="sm"
-            onClick={() => {
-              const start = parseISO(customStart);
-              const end = parseISO(customEnd);
-              if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
-              onChange({
-                preset: "custom",
-                start,
-                end,
-                label: `Custom · ${format(start, "MMM d")}–${format(end, "MMM d")}`,
-              });
-            }}
-          >
-            Apply
-          </Button>
-        </div>
-      )}
-
-      {/* Selected-block summary line (Change button opens picker). */}
-      {value.preset === "exact_block" && selectedBlock ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2">
-          <div className="min-w-0 text-xs">
-            <div className="truncate text-sm font-bold text-foreground">
-              {selectedBlock.name}
-            </div>
-            <div className="truncate text-muted-foreground">
-              {selectedBlock.start_date
-                ? `${format(parseLocalDate(selectedBlock.start_date)!, "MMM d, yyyy")}${
-                    selectedBlock.end_date
-                      ? ` – ${format(parseLocalDate(selectedBlock.end_date)!, "MMM d, yyyy")}`
-                      : ""
-                  }`
-                : "Not scheduled"}
-              {" · "}
-              {selectedBlock.id === resolvedCurrentBlockId
-                ? "Current"
-                : selectedBlock.status ?? "Block"}
-            </div>
-          </div>
-          {onOpenPicker && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onOpenPicker}
-              className="h-8 gap-1.5"
-            >
-              <CalendarSearch className="h-3.5 w-3.5" /> Change
-            </Button>
-          )}
-        </div>
-      ) : (
-        <div className="text-xs font-semibold text-muted-foreground">{value.label}</div>
-      )}
-    </div>
+  const options: Array<{ key: PeriodPreset; short: string; range?: string; build: () => AnalyticsFilter; disabled?: boolean }> = [];
+  if (current) options.push({ key: "current_block", short: "This block", range: rangeWords(blockRange(current).start, blockRange(current).end), build: () => currentBlockFilter(current) });
+  if (prev) options.push({ key: "previous_block", short: "Last block", range: rangeWords(blockRange(prev).start, blockRange(prev).end), build: () => previousBlockFilter(prev) });
+  options.push(
+    { key: "last_4w", short: "4 weeks", build: () => lastNWeeks(4) },
+    { key: "last_12w", short: "12 weeks", build: () => lastNWeeks(12) },
+    { key: "last_26w", short: "6 months", build: () => lastNWeeks(26) },
+    { key: "last_52w", short: "1 year", build: () => lastNWeeks(52) },
+    { key: "lifetime", short: "All time", build: () => lifetimeFilter(blocks, firstDataDate) },
   );
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={cn(
+          "inline-flex h-10 min-w-0 max-w-full items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-left transition hover:bg-muted/50 active:scale-[0.99]",
+          className,
+        )}
+        aria-haspopup="dialog"
+        aria-label={`Period: ${value.label}. Change`}
+        data-analytics-period
+      >
+        <span className="shrink-0 text-[14px] font-semibold text-foreground">{value.short}</span>
+        <span className="min-w-0 truncate text-[13px] text-muted-foreground">{value.range}</span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+      </button>
+
+      <Sheet open={open} onOpenChange={(o) => { setOpen(o); if (!o) setCustomOpen(false); }}>
+        <SheetContent side="bottom" swipeToClose className="max-h-[88dvh] overflow-y-auto rounded-t-2xl p-0">
+          <div className="mx-auto max-w-lg px-4 pb-6 pt-3">
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/30" aria-hidden />
+            <SheetHeader className="text-left">
+              <SheetTitle className="text-lg">Period</SheetTitle>
+              <SheetDescription className="sr-only">What every chart and number on this page covers</SheetDescription>
+            </SheetHeader>
+            <ul className="mt-2 divide-y divide-border/60" role="listbox" aria-label="Periods">
+              {options.map((o) => {
+                const on = value.preset === o.key;
+                return (
+                  <li key={o.key}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={on}
+                      onClick={() => pick(o.build())}
+                      className="flex min-h-12 w-full items-center gap-3 px-1 text-left"
+                      data-period-option={o.key}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[15px] font-medium text-foreground">{o.short}</span>
+                        {o.range && <span className="block truncate text-[12px] text-muted-foreground">{o.range}</span>}
+                      </span>
+                      {on && <Check className="h-4 w-4 shrink-0 text-foreground" aria-hidden />}
+                    </button>
+                  </li>
+                );
+              })}
+              <li>
+                <button
+                  type="button"
+                  aria-expanded={customOpen}
+                  onClick={() => setCustomOpen((v) => !v)}
+                  className="flex min-h-12 w-full items-center gap-3 px-1 text-left"
+                  data-period-option="custom"
+                >
+                  <span className="min-w-0 flex-1 text-[15px] font-medium text-foreground">Custom dates</span>
+                  {value.preset === "custom" && <Check className="h-4 w-4 shrink-0 text-foreground" aria-hidden />}
+                </button>
+                {customOpen && (
+                  <div className="flex flex-wrap items-end gap-2 px-1 pb-3">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      From
+                      <Input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="mt-1 h-10 w-40" />
+                    </label>
+                    <label className="text-xs font-medium text-muted-foreground">
+                      To
+                      <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="mt-1 h-10 w-40" />
+                    </label>
+                    <Button
+                      className="h-10"
+                      onClick={() => {
+                        const s = parseISO(customStart);
+                        const e = parseISO(customEnd);
+                        if (isNaN(s.getTime()) || isNaN(e.getTime())) return;
+                        pick(customFilter(s <= e ? s : e, s <= e ? e : s));
+                      }}
+                    >
+                      Show
+                    </Button>
+                  </div>
+                )}
+              </li>
+              {onOpenBlocks && blocks.length > 0 && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => { setOpen(false); onOpenBlocks(); }}
+                    className="flex min-h-12 w-full items-center gap-3 px-1 text-left"
+                    data-period-option="block"
+                  >
+                    <Layers className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[15px] font-medium text-foreground">A block…</span>
+                      <span className="block text-[12px] text-muted-foreground">{blocks.length} on file</span>
+                    </span>
+                    {value.preset === "exact_block" && <Check className="h-4 w-4 shrink-0 text-foreground" aria-hidden />}
+                  </button>
+                </li>
+              )}
+            </ul>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
+  );
+}
+
+/** The period as the page's address keeps it (`?filter=` / `?blockId=`), so Back and links land on it. */
+export function searchFromFilter(f: AnalyticsFilter): { filter: string; blockId: string } {
+  if (f.preset === "exact_block") return { filter: "exact_block", blockId: f.blockId };
+  if (f.preset === "current_block" || f.preset === "custom") return { filter: "", blockId: "" };
+  return { filter: f.preset, blockId: "" };
+}
+
+/** The period an address asks for, else the default (this block, or 12 weeks). */
+export function filterFromSearch(filter: string, blockId: string, blocks: AnalyticsBlock[]): AnalyticsFilter {
+  if (filter === "exact_block" && blockId) {
+    const b = blocks.find((x) => x.id === blockId);
+    if (b) return exactBlockFilter(b, blocks);
+  }
+  if (filter === "previous_block") {
+    const prev = resolvePreviousBlock(blocks, resolveCurrentBlock(blocks));
+    if (prev) return previousBlockFilter(prev);
+  }
+  if (filter === "last_4w") return lastNWeeks(4);
+  if (filter === "last_8w") return lastNWeeks(8);
+  if (filter === "last_12w") return lastNWeeks(12);
+  if (filter === "last_26w") return lastNWeeks(26);
+  if (filter === "last_52w") return lastNWeeks(52);
+  if (filter === "lifetime") return lifetimeFilter(blocks);
+  return defaultAnalyticsFilter(blocks);
 }

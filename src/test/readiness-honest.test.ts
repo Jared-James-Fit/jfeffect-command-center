@@ -6,7 +6,7 @@ const f = (score: number, isMissing = false) => ({ score, isMissing }) as any;
 describe("readiness says only what was logged", () => {
   it("missing sleep or energy is never read as short sleep or poor recovery", () => {
     const factors = { pain: f(100), sleep: f(0, true), load: f(80), recovery: f(0, true), consistency: f(90), performance: f(85) };
-    expect(pickRecommendation(factors, null)).toMatch(/^Everything is in a great window/);
+    expect(pickRecommendation(factors, null)).toMatch(/^Nothing stands out in what you logged/);
     expect(pickRecommendation({ ...factors, sleep: f(20) }, null)).toMatch(/^Sleep was short/);
   });
 

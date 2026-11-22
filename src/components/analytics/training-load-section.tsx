@@ -70,7 +70,11 @@ export function TrainingLoadSection({
       <Card className="space-y-4 p-4">
         {/* the range in four numbers */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat label="Working sets a week" value={String(t.setsPerWeek)} sub={`${t.sets} in all`} />
+          <Stat
+            label={load.perWeekBasis.partial ? "Working sets this week" : "Working sets a week"}
+            value={String(t.setsPerWeek)}
+            sub={load.perWeekBasis.partial ? "No full week yet" : `${t.sets} in all · ${load.perWeekBasis.weeks} wk`}
+          />
           <Stat
             label="Hard sets"
             value={t.sets ? `${Math.round((t.hardSets / t.sets) * 100)}%` : "—"}
@@ -194,8 +198,40 @@ export function InsightList({ insights, coach, onSeeNumbers, titled = true }: { 
 
 // ── the weeks ────────────────────────────────────────────────────────────
 
-function WeeklyChart({ weeks, unit }: { weeks: WeekLoad[]; unit: "kg" | "lb" }) {
-  const shown = weeks.slice(-16);
+/** A long period (6 months, a year) reads by month: 52 weekly bars don't fit a phone. */
+function byMonth(weeks: WeekLoad[]): WeekLoad[] {
+  const M = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const out = new Map<string, WeekLoad>();
+  for (const w of weeks) {
+    // a week belongs to the month its Thursday falls in
+    const thu = new Date(Date.parse(`${w.key}T00:00:00Z`) + 3 * 86_400_000);
+    const key = `${thu.getUTCFullYear()}-${String(thu.getUTCMonth() + 1).padStart(2, "0")}`;
+    const cur = out.get(key);
+    if (!cur) {
+      out.set(key, { ...w, key, label: `${M[thu.getUTCMonth()]} ${thu.getUTCFullYear()}`, phase: null, muscles: {}, patterns: {} });
+      continue;
+    }
+    cur.sets += w.sets;
+    cur.hardSets += w.hardSets;
+    cur.unratedSets += w.unratedSets;
+    cur.reps += w.reps;
+    cur.tonnageKg += w.tonnageKg;
+    cur.sessions += w.sessions;
+    cur.current = cur.current || w.current;
+    cur.future = cur.future && w.future;
+    if (w.prescribed != null) {
+      cur.prescribed = (cur.prescribed ?? 0) + w.prescribed;
+      cur.completedOfPrescribed = (cur.completedOfPrescribed ?? 0) + (w.completedOfPrescribed ?? 0);
+      cur.missed = (cur.missed ?? 0) + (w.missed ?? 0);
+      cur.extra = (cur.extra ?? 0) + (w.extra ?? 0);
+    }
+  }
+  return [...out.values()];
+}
+
+export function WeeklyChart({ weeks, unit }: { weeks: WeekLoad[]; unit: "kg" | "lb" }) {
+  const monthly = weeks.length > 20;
+  const shown = monthly ? byMonth(weeks) : weeks;
   const [picked, setPicked] = useState<string | null>(null);
   const max = Math.max(1, ...shown.map((w) => Math.max(w.sets, w.prescribed ?? 0)));
   const sel = shown.find((w) => w.key === picked) ?? [...shown].reverse().find((w) => w.sets > 0) ?? shown[shown.length - 1];
@@ -205,7 +241,7 @@ function WeeklyChart({ weeks, unit }: { weeks: WeekLoad[]; unit: "kg" | "lb" }) 
   return (
     <div data-load-weeks>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">Working sets by week</span>
+        <span className="font-medium text-foreground">Working sets by {monthly ? "month" : "week"}</span>
         <Legend swatch={<span className="h-2.5 w-2.5 rounded-sm" style={{ background: SERIES }} />} label="Hard (RPE 7+)" />
         <Legend swatch={<span className="h-2.5 w-2.5 rounded-sm" style={{ background: SERIES_SOFT }} />} label="Other working" />
         {hasPlan && <Legend swatch={<span className="h-0 w-3 border-t-2 border-dashed border-foreground/60" />} label="Written" />}
@@ -238,7 +274,7 @@ function WeeklyChart({ weeks, unit }: { weeks: WeekLoad[]; unit: "kg" | "lb" }) 
       </div>
       {sel && (
         <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs" data-load-week-detail>
-          <span className="font-semibold">{sel.label}{sel.current ? " · this week" : ""}{sel.phase ? ` · ${sel.phase}` : ""}</span>
+          <span className="font-semibold">{sel.label}{sel.current ? (monthly ? " · this month" : " · this week") : ""}{sel.phase ? ` · ${sel.phase}` : ""}</span>
           <span className="tabular-nums text-muted-foreground">
             {sel.sets} sets · {sel.hardSets} hard{sel.unratedSets ? ` · ${sel.unratedSets} unrated` : ""}
             {sel.prescribed != null ? ` · ${sel.completedOfPrescribed} of ${sel.prescribed} written done${sel.missed ? `, ${sel.missed} missed` : ""}${sel.extra ? `, ${sel.extra} extra` : ""}` : ""}
@@ -257,14 +293,14 @@ function Legend({ swatch, label }: { swatch: React.ReactNode; label: string }) {
 
 // ── muscles and patterns ─────────────────────────────────────────────────
 
-function Muscles({ load, coach }: { load: TrainingLoad; coach: boolean }) {
+export function Muscles({ load, coach }: { load: TrainingLoad; coach: boolean }) {
   const rows = load.muscles.filter((m) => m.perWeek > 0);
   const max = Math.max(1, ...rows.map((m) => m.perWeek));
   if (!rows.length) return <p className="text-sm text-muted-foreground">No sets credited to a muscle in this range.</p>;
   return (
     <div aria-label="Volume by Muscle Group" data-load-muscles>
       <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <span>Sets a week</span>
+        <span>{load.perWeekBasis.partial ? "Sets this week so far" : "Sets a week"}</span>
         <Legend swatch={<span className="h-2.5 w-2.5 rounded-sm" style={{ background: SERIES }} />} label="Aimed at it" />
         <Legend swatch={<span className="h-2.5 w-2.5 rounded-sm" style={{ background: SERIES_SOFT }} />} label="Helping (½ set)" />
       </div>
@@ -304,7 +340,7 @@ function Patterns({ load }: { load: TrainingLoad }) {
   if (!rows.length) return <p className="text-sm text-muted-foreground">No working sets in this range.</p>;
   return (
     <div data-load-patterns>
-      <p className="mb-2 text-xs text-muted-foreground">Working sets a week by movement</p>
+      <p className="mb-2 text-xs text-muted-foreground">{load.perWeekBasis.partial ? "Working sets this week so far, by movement" : "Working sets a week by movement"}</p>
       <ul className="space-y-2.5">
         {rows.map((p) => (
           <li key={p.pattern} className="text-sm">

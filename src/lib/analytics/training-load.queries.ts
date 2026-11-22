@@ -155,7 +155,12 @@ export function useTrainingLoad(opts: { clientId: string; results: any[]; start:
       return t >= sMs && t <= eMs;
     });
     // never a plan for days after today: those are ahead, not missed
-    return buildTrainingLoad({ sets: resultsToLoadSets(inRange), plan: plan.data ?? [], today });
+    return buildTrainingLoad({
+      sets: resultsToLoadSets(inRange),
+      plan: plan.data ?? [],
+      today,
+      range: { start: format(new Date(sMs), "yyyy-MM-dd"), end: format(new Date(eMs), "yyyy-MM-dd") },
+    });
   }, [results, sMs, eMs, plan.data, today]);
   return { load, planLoading: plan.isLoading, planError: plan.isError };
 }
