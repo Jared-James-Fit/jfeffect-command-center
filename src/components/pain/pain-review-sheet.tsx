@@ -10,12 +10,12 @@
  * code (src/lib/pain/); the AI only drafts the words, on the coach_write
  * route (OpenAI key), and only when he asks.
  */
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { AlertTriangle, Check, Loader2, MessageCircle, PenLine, RotateCcw, X } from "lucide-react";
+import { AlertTriangle, Check, Dumbbell, Loader2, MessageCircle, PenLine, RotateCcw, X } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +30,21 @@ import { FEELS, TIMINGS, placeLabel, severityLabel } from "@/lib/pain/report";
 import { siteAnatomy } from "@/lib/pain/sites";
 import { areaLabel } from "@/lib/pain/regions";
 import { insertIntoComposer, queueComposerInsert } from "@/lib/composer-insert";
+import { approveRecoveryItemFn, dismissRecoveryItemFn, getClientRecoveryFn, setClientRecoveryModeFn } from "@/lib/recovery-automation/queue.functions";
+import { CATEGORIES, MODES, modeAllowed, type AutomationCategory, type AutomationMode } from "@/lib/recovery-automation/rules";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
+
+const EditWithAiSheet = lazyWithRetry(() => import("@/components/program-ai/edit-with-ai").then((m) => ({ default: m.EditWithAiSheet })));
+
+/** What Adjust program starts with: the places, and only proposals, never applied by itself. */
+export function adjustInstruction(first: string, areas: PainArea[]): string {
+  const lines = areas.slice(0, 3).map((a) => `${a.label}: ${areaSummary(a)}${a.named.length ? ` (named: ${a.named.map((n) => n.name).join(", ")})` : ""}`);
+  return [
+    `${first} reported pain: ${lines.join("; ")}.`,
+    "Look at their next two weeks only. Where an exercise loads that area, propose the smallest change that keeps the training goal: less load or fewer sets, a shorter range, a different grip or stance, or a swap for a close variation that doesn't aggravate it.",
+    "Don't change anything that doesn't load that area, and nothing already done.",
+  ].join(" ");
+}
 
 export const PAIN_SHEET_KEY = "client-pain";
 
@@ -100,12 +115,31 @@ export function PainReviewSheet({ clientId, onClose, inChat = false }: { clientI
   const history = useMemo(() => (data ? buildPainHistory(data.entries, data.today) : null), [data]);
   const suggestions = useMemo(() => (data && history ? recoverySuggestions(history, data.sessions, data.given) : []), [data, history]);
   const flags = useMemo(() => (history ? redFlags(history.areas.filter((a) => a.status !== "quiet").flatMap((a) => a.entries)) : []), [history]);
-  const [draft, setDraft] = useState<{ message: string; insights: string[]; keys: string[] } | null>(null);
+  const [draft, setDraft] = useState<{ message: string; insights: string[]; keys: string[]; itemId?: string } | null>(null);
   const [text, setText] = useState("");
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const recoveryFn = useServerFn(getClientRecoveryFn);
+  const approveFn = useServerFn(approveRecoveryItemFn);
+  const dismissFn = useServerFn(dismissRecoveryItemFn);
+  const ruleFn = useServerFn(setClientRecoveryModeFn);
+  const { data: auto } = useQuery({
+    queryKey: ["client-recovery", clientId],
+    enabled: !!clientId,
+    staleTime: 30_000,
+    retry: false,
+    queryFn: () => recoveryFn({ data: { clientId: clientId! } }),
+  });
+  // a reply automation drafted and is waiting on the coach
+  const waiting = auto?.items.find((i: any) => (i.status === "awaiting_approval" || i.status === "draft") && i.draft) ?? null;
 
-  // the last draft, while it still covers the latest report
+  // the reply waiting for approval, else the last draft while it still covers the latest report
   useEffect(() => {
     if (!data || !history) return;
+    if (waiting) {
+      setDraft({ message: waiting.draft, insights: [], keys: [], itemId: waiting.id });
+      setText(waiting.draft);
+      return;
+    }
     const d = data.draft;
     if (d && d.text && (!history.latestAt || (d.through ?? "") >= history.latestAt)) {
       setDraft({ message: d.text, insights: [], keys: d.keys });
@@ -114,7 +148,7 @@ export function PainReviewSheet({ clientId, onClose, inChat = false }: { clientI
       setDraft(null);
       setText("");
     }
-  }, [data, history]);
+  }, [data, history, waiting?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const write = useMutation({
     mutationFn: () => draftFn({ data: { clientId: clientId! } }),
@@ -150,11 +184,31 @@ export function PainReviewSheet({ clientId, onClose, inChat = false }: { clientI
     onError: (e: any) => toast.error(e?.message ?? "Couldn't save"),
   });
 
+  const sendNow = useMutation({
+    mutationFn: () => approveFn({ data: { id: draft!.itemId!, text: text.trim() } }),
+    onSuccess: () => {
+      toast.success(`Sent to ${first}`);
+      qc.invalidateQueries({ queryKey: ["client-recovery", clientId] });
+      qc.invalidateQueries({ queryKey: ["recovery-queue"] });
+      qc.invalidateQueries({ queryKey: ["pain-watch"] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't send it"),
+  });
+
+  const setRule = useMutation({
+    mutationFn: (v: { category: AutomationCategory; mode: AutomationMode | null }) => ruleFn({ data: { clientId: clientId!, ...v } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["client-recovery", clientId] }),
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't save"),
+  });
+
   const useInChat = useMutation({
     mutationFn: async () => {
       const words = text.trim();
       if (!words) throw new Error("Nothing to send");
       await record("used", draft?.keys ?? []);
+      // they'll send it from the chat themselves: the queued one goes
+      if (draft?.itemId) await dismissFn({ data: { id: draft.itemId } }).catch(() => undefined);
       return words;
     },
     onSuccess: (words) => {
@@ -261,7 +315,9 @@ export function PainReviewSheet({ clientId, onClose, inChat = false }: { clientI
                     </ul>
                   )}
                   <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={5} className="resize-none text-base" aria-label="Your reply" />
-                  <p className="text-[11px] text-muted-foreground">Drafted for you to edit. Nothing goes to {first} until you send it.</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {draft.itemId ? "Drafted when the report came in." : "Drafted for you to edit."} Nothing goes to {first} until you send it.
+                  </p>
                 </>
               ) : (
                 <Button type="button" variant="outline" className="w-full" onClick={() => write.mutate()} disabled={write.isPending} data-pain-draft-button>
@@ -271,18 +327,83 @@ export function PainReviewSheet({ clientId, onClose, inChat = false }: { clientI
               )}
             </div>
           )}
+          {history && history.flagged.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setAdjustOpen(true)}
+              className="flex w-full items-center gap-3 rounded-xl border border-border p-3 text-left hover:bg-muted/50"
+              data-pain-adjust
+            >
+              <Dumbbell className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-semibold">Adjust their next sessions</span>
+                <span className="block text-[12px] text-muted-foreground">See proposed changes around it first. Nothing changes until you apply it.</span>
+              </span>
+            </button>
+          )}
+
+          {auto && (
+            <div className="space-y-2 border-t border-border pt-4" data-pain-automation>
+              <h3 className="text-[15px] font-semibold">Automation for {first}</h3>
+              {CATEGORIES.map((c) => {
+                const own = (auto.rules as any)[c.key] as AutomationMode | undefined;
+                const general = (auto.settings.modes as any)[c.key] ?? "approval";
+                const options = MODES.filter((m) => modeAllowed(auto.caps.features, c.key, m.key));
+                return (
+                  <label key={c.key} className="flex items-center justify-between gap-3 text-[13px]">
+                    <span className="min-w-0">{c.label}</span>
+                    <select
+                      value={own ?? ""}
+                      onChange={(e) => setRule.mutate({ category: c.key, mode: (e.target.value || null) as AutomationMode | null })}
+                      className="h-9 max-w-[55%] rounded-lg border border-border bg-background px-2 text-[13px]"
+                      aria-label={`${c.label} for ${first}`}
+                    >
+                      <option value="">Your default ({MODES.find((m) => m.key === general)?.label ?? general})</option>
+                      {options.map((m) => (
+                        <option key={m.key} value={m.key}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                );
+              })}
+              {auto.settings.paused && <p className="text-[12px] text-warning">Paused for everyone in Recovery settings.</p>}
+            </div>
+          )}
         </div>
 
+        {adjustOpen && clientId && history && (
+          <Suspense fallback={null}>
+            <EditWithAiSheet
+              open
+              onOpenChange={(v) => !v && setAdjustOpen(false)}
+              target={{ kind: "client", clientId }}
+              title={`${first} · around their pain`}
+              initialText={adjustInstruction(first, history.flagged)}
+            />
+          </Suspense>
+        )}
+
         {history && history.areas.length > 0 && (
-          <div className="flex shrink-0 gap-2 border-t bg-background px-5 py-3" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}>
+          <div className="flex shrink-0 flex-wrap gap-2 border-t bg-background px-5 py-3" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}>
             <Button variant="outline" className="flex-1" onClick={() => markReviewed.mutate()} disabled={markReviewed.isPending || reviewedSinceLatest}>
               <Check className="mr-1.5 h-4 w-4" /> {reviewedSinceLatest ? "Reviewed" : "Mark reviewed"}
             </Button>
-            {draft && (
+            {draft && draft.itemId ? (
+              <>
+                <Button variant="outline" className="flex-1" onClick={() => useInChat.mutate()} disabled={useInChat.isPending || !text.trim()} data-pain-use-draft>
+                  <MessageCircle className="mr-1.5 h-4 w-4" /> Edit in chat
+                </Button>
+                <Button className="flex-1" onClick={() => sendNow.mutate()} disabled={sendNow.isPending || !text.trim()} data-pain-send-now>
+                  {sendNow.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Check className="mr-1.5 h-4 w-4" />} Send
+                </Button>
+              </>
+            ) : draft ? (
               <Button className="flex-1" onClick={() => useInChat.mutate()} disabled={useInChat.isPending || !text.trim()} data-pain-use-draft>
                 <MessageCircle className="mr-1.5 h-4 w-4" /> Use in chat
               </Button>
-            )}
+            ) : null}
           </div>
         )}
       </SheetContent>

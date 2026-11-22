@@ -15,7 +15,7 @@
  */
 import type { Effort } from "./model-client.server";
 
-export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write" | "program_import" | "nutrition_roadmap" | "nutrition_import";
+export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write" | "program_import" | "nutrition_roadmap" | "nutrition_import" | "pain_describe" | "recovery_write";
 export type Route = {
   /** Tried in order. */
   models: string[];
@@ -132,6 +132,21 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
    * revision; the engine's own words stand in when no model answers. OpenAI key only.
    */
   nutrition_roadmap: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "low", maxOutputTokens: 2_000, strongOnly: false },
+  /**
+   * "Describe it" in a pain report (pain/describe.server.ts, Nov 22 2026): only when the app's own
+   * reader (describe.ts) found nothing it could place. The model copies places, sides, numbers and
+   * exercises out of what the athlete said, never adds any; code keeps only region and spot keys
+   * that exist and a number or exercise that's in their words. One short answer someone is waiting
+   * on, at minimal effort. Never metered (reporting pain never costs a credit); rate-limited.
+   */
+  pain_describe: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "minimal", maxOutputTokens: 1_500, strongOnly: false },
+  /**
+   * Recovery automation's replies and follow-ups (recovery-automation/run.server.ts, Nov 22 2026):
+   * a message the coach approves, or a routine one sent under his name by his own rule, so the
+   * stronger writer first; checked in code before anything goes (draftProblems, autoMessageProblems).
+   * In the background, never a client waiting. OpenAI key only.
+   */
+  recovery_write: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "low", maxOutputTokens: 6_000, strongOnly: false },
 };
 
 /**

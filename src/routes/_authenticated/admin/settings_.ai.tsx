@@ -13,6 +13,7 @@ import { getCleoAccessSettingsFn, setCleoAccessFn, type CleoAccessSettings } fro
 import { CleoAvatar, CLEO_ROLE_LINE } from "@/components/summer/cleo-avatar";
 import { aiCheckNowFn, aiStatusFn } from "@/lib/ai/ai-status.functions";
 import { AiCreditsAdminCard } from "@/components/ai-credits/ai-credits-admin";
+import { CapabilityLevelsCard } from "@/components/recovery/capability-levels-card";
 
 export const Route = createFileRoute("/_authenticated/admin/settings_/ai")({ component: AiSettingsPage });
 
@@ -40,6 +41,8 @@ const TASK_LABEL: Record<string, string> = {
   program_import: "Import a program: reading a PDF, photos or a messy file (members and clients, metered by credits)",
   nutrition_roadmap: "Nutrition roadmap words (the engine decides the numbers)",
   nutrition_import: "Import a meal plan: reading a PDF, photos or a file (members metered by credits; coaches in the plan editor)",
+  pain_describe: "Pain reports: reading what an athlete described when the app's own reader can't (athletes, never metered)",
+  recovery_write: "Recovery replies and follow-ups: drafted for approval or sent under your rules (owner)",
 };
 
 /** Admin only: who has Cleo. The admin always; the finance login and coaches by switch. Clients and members have no Cleo. */
@@ -147,6 +150,7 @@ function AiSettingsBody() {
       <PageHeader title="AI & Cleo" />
       <p className="text-[13px] text-muted-foreground">Who has Cleo, where AI runs in the app and which models answer, and the credits members and clients use. Every default runs on the OpenAI key, never Lovable credits. Coaching decisions only ever go to the top tier; if none answers, the run stops and says so. Nothing here changes a program.</p>
       <CleoAccessCard />
+      <CapabilityLevelsCard />
       <AiCreditsAdminCard />
       {q.isLoading ? (
         <Loader2 className="h-5 w-5 animate-spin" />

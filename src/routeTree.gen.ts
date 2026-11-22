@@ -263,6 +263,7 @@ import { Route as ApiPublicHooksCleanupPendingSignupsRouteImport } from './route
 import { Route as ApiPublicHooksCleoAttachmentsSweepRouteImport } from './routes/api/public/hooks/cleo-attachments-sweep'
 import { Route as ApiPublicHooksCleoBenchRouteImport } from './routes/api/public/hooks/cleo-bench'
 import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/api/public/hooks/client-calendars-tick'
+import { Route as ApiPublicHooksCoachAutomationTickRouteImport } from './routes/api/public/hooks/coach-automation-tick'
 import { Route as ApiPublicHooksDailyVisualsTickRouteImport } from './routes/api/public/hooks/daily-visuals-tick'
 import { Route as ApiPublicHooksDocumentsPurgeRouteImport } from './routes/api/public/hooks/documents-purge'
 import { Route as ApiPublicHooksFeedCopiesTickRouteImport } from './routes/api/public/hooks/feed-copies-tick'
@@ -1774,6 +1775,12 @@ const ApiPublicHooksClientCalendarsTickRoute =
     path: '/api/public/hooks/client-calendars-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksCoachAutomationTickRoute =
+  ApiPublicHooksCoachAutomationTickRouteImport.update({
+    id: '/api/public/hooks/coach-automation-tick',
+    path: '/api/public/hooks/coach-automation-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksDailyVisualsTickRoute =
   ApiPublicHooksDailyVisualsTickRouteImport.update({
     id: '/api/public/hooks/daily-visuals-tick',
@@ -2332,6 +2339,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
+  '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
@@ -2637,6 +2645,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
+  '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
@@ -2948,6 +2957,7 @@ export interface FileRoutesById {
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
+  '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
@@ -3259,6 +3269,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/cleo-bench'
     | '/api/public/hooks/client-calendars-tick'
+    | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
@@ -3564,6 +3575,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/cleo-bench'
     | '/api/public/hooks/client-calendars-tick'
+    | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
@@ -3874,6 +3886,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/cleo-bench'
     | '/api/public/hooks/client-calendars-tick'
+    | '/api/public/hooks/coach-automation-tick'
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
@@ -4011,6 +4024,7 @@ export interface RootRouteChildren {
   ApiPublicHooksCleoAttachmentsSweepRoute: typeof ApiPublicHooksCleoAttachmentsSweepRoute
   ApiPublicHooksCleoBenchRoute: typeof ApiPublicHooksCleoBenchRoute
   ApiPublicHooksClientCalendarsTickRoute: typeof ApiPublicHooksClientCalendarsTickRoute
+  ApiPublicHooksCoachAutomationTickRoute: typeof ApiPublicHooksCoachAutomationTickRoute
   ApiPublicHooksDailyVisualsTickRoute: typeof ApiPublicHooksDailyVisualsTickRoute
   ApiPublicHooksDocumentsPurgeRoute: typeof ApiPublicHooksDocumentsPurgeRoute
   ApiPublicHooksFeedCopiesTickRoute: typeof ApiPublicHooksFeedCopiesTickRoute
@@ -5834,6 +5848,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksClientCalendarsTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/coach-automation-tick': {
+      id: '/api/public/hooks/coach-automation-tick'
+      path: '/api/public/hooks/coach-automation-tick'
+      fullPath: '/api/public/hooks/coach-automation-tick'
+      preLoaderRoute: typeof ApiPublicHooksCoachAutomationTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/daily-visuals-tick': {
       id: '/api/public/hooks/daily-visuals-tick'
       path: '/api/public/hooks/daily-visuals-tick'
@@ -6941,6 +6962,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksCleoBenchRoute: ApiPublicHooksCleoBenchRoute,
   ApiPublicHooksClientCalendarsTickRoute:
     ApiPublicHooksClientCalendarsTickRoute,
+  ApiPublicHooksCoachAutomationTickRoute:
+    ApiPublicHooksCoachAutomationTickRoute,
   ApiPublicHooksDailyVisualsTickRoute: ApiPublicHooksDailyVisualsTickRoute,
   ApiPublicHooksDocumentsPurgeRoute: ApiPublicHooksDocumentsPurgeRoute,
   ApiPublicHooksFeedCopiesTickRoute: ApiPublicHooksFeedCopiesTickRoute,

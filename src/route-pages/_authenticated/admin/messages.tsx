@@ -1,5 +1,6 @@
 import { Link, redirect, useNavigate } from "@tanstack/react-router";
 import { LeadsInboxRow } from "@/components/leads/leads-inbox-row";
+import { RecoveryInboxRow } from "@/components/recovery/recovery-queue";
 import { MemberApplicationsInboxRow } from "@/components/applications/member-applications-entry";
 import { useProgramGaps } from "@/components/program-gaps/use-program-gaps";
 import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
@@ -1044,6 +1045,8 @@ export function MessagesInbox({
               </button>
             </div>
           )}
+          {/* Replies and follow-ups to pain reports waiting for approval (whoever has automation; it hides itself otherwise). */}
+          {!search && filter === "Inbox" && <RecoveryInboxRow />}
           {/* New coaching applications, with the AI's read and a text to send (admin). */}
           {role === "admin" && !search && filter === "Inbox" && <LeadsInboxRow />}
           {/* Free membership applications waiting on a decision (admin). */}

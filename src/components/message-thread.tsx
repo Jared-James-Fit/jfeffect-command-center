@@ -613,6 +613,15 @@ function AttachmentView({
   if ((att as any).kind === "auto_pay_setup") {
     return <AutoPaySetupCard att={att as any} staff={role !== "client"} />;
   }
+  // a recovery reply automation wrote: the words are the message; this only says how it went out
+  if ((att as any).kind === "recovery_auto") {
+    if (!(att as any).automatic) return null;
+    return (
+      <p className={cn("px-0.5 text-[11px] opacity-70", mine ? "text-right" : "text-left")} data-recovery-auto>
+        Sent automatically
+      </p>
+    );
+  }
   if (att.kind === "nutrition_plan") {
     return <NutritionPlanChatCard att={att as unknown as PlanMessageAttachment} staff={role !== "client"} clientId={clientId} />;
   }

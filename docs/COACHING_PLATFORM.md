@@ -268,3 +268,23 @@ feature turns on, and the founding-coach pilot's results.
   permissions without client scope, coach actions on any client through the
   service role, Cleo actions running as the owner) is the next step and
   is held to direct-API tests, not only screens.
+
+## Cleo capability levels (Nov 22 2026)
+
+`20270509100000_cleo_capabilities_recovery_automation.sql` separates what Cleo
+may do for a person from their role, so automation can become a paid add-on
+later without rebuilding anything, and the owner stays above every plan.
+
+| Level | Who | What | How it's decided |
+|---|---|---|---|
+| Assist | Every active coach and admin, for their own clients | Recovery reports and trends, drafts on request, program suggestions. The coach does every action. | `cleo_has_feature`: staff role + active coach record |
+| Automation | Nobody yet (a future paid add-on) | Replies drafted as reports come in and queued for approval, routine replies sent automatically, follow-ups three days later | An active row in `cleo_entitlement_grants` (source plan, account, trial or promo; dates; revocation) |
+| Owner | `business_owners` only | Everything above, plus automated messages in the owner's private voice and examples, follow-ups timed to the athlete's next session that loads the area, oversight (capability overview, the record) | Ownership; a trigger refuses an owner key in any grant, so no purchase, plan or promo reaches it |
+
+Every server function asks `cleo_feature(key)` with the caller's own session
+(two-step sign-in included); the background worker asks `cleo_has_feature`
+again at execution, so a revoked or expired grant stops at once. Pricing and
+subscriptions stay outside this: a future plan only writes grants. Owner
+automation acts only on clients assigned to the owner's own coach record; it
+never reaches another coach's clients. Database tests:
+`supabase/tests/recovery-automation/` (64 checks, real Postgres).

@@ -15,22 +15,28 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { ChevronLeft, Layers, List, Search, X, AlertTriangle, ArrowLeftRight, Trash2 } from "lucide-react";
+import { ChevronLeft, Layers, List, Search, X, AlertTriangle, Trash2, Mic, Square, Loader2, PenLine, Check } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { feedback } from "@/lib/feedback";
 import { noAutofill } from "@/lib/no-autofill";
 import { AnatomyFigure, placeKey } from "@/components/pain/anatomy-figure";
 import { atlasView, hasDeep, partAt, regionBox, type AtlasPart, type AtlasView, type SideFacing, type ViewKey } from "@/lib/pain/anatomy/atlas";
-import { DETAIL_SCALE, IDENTITY, LABEL_TYPE, centerOn, clampXf, fitView, frameBox, labelHeight, layoutCallouts, toDrawing, toScreen, wrapLines, zoomAt, type Size, type Xf } from "@/lib/pain/anatomy/stage";
+import { DETAIL_SCALE, IDENTITY, centerOn, clampXf, fitView, frameBox, toDrawing, toScreen, zoomAt, type Size, type Xf } from "@/lib/pain/anatomy/stage";
 import { PAIN_REGIONS, areaLabel, regionOf, type PainSide } from "@/lib/pain/regions";
 import { PAIN_SITES, searchSites, siteAnatomy, siteLabel, siteOf } from "@/lib/pain/sites";
 import { CHANGES, FEELS, FEEL_CHOICES, FEEL_SIGNS, IMPACTS, NOTE_MAX, TIMINGS, placeLabel, scoreWord, type Feel, type Timing } from "@/lib/pain/report";
 import { followUpFor, shortDay, type PainEntry } from "@/lib/pain/history";
-import { addPick, answerFollowUp, pickScore, recentSites, scorePatch, unrated, updatePick, type PainPick } from "@/lib/pain/picks";
+import { addPick, answerFollowUp, applyDescribed, mirrorOf, pickScore, recentSites, scorePatch, setSideChoice, sideChoiceOf, unrated, updatePaired, type PainPick, type SideChoice } from "@/lib/pain/picks";
+import { chooseSide, describePain, describedGroups, describedLine, type DescribeResult, type DescribedPlace } from "@/lib/pain/describe";
+import { readPainDescriptionFn, transcribePainVoiceFn } from "@/lib/pain/describe.functions";
+import { blobToBase64, micSupported, useSummerMic } from "@/hooks/use-summer-mic";
 import { CLIENT_SAFETY_NOTICE, needsSafetyNotice, URGENT_SIGNS } from "@/lib/pain/safety";
 import { useSwipeDownToClose } from "@/hooks/use-swipe-down-to-close";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { revealDelta } from "@/lib/equipment/setup-draft";
+import { viewForPlace, partForPlace } from "@/lib/pain/anatomy/place-view";
 
 export type PainMapContext = {
   today: string;
@@ -47,28 +53,7 @@ const VIEWS: { v: ViewKey; facing: SideFacing; key: string; label: string }[] = 
   { v: "side", facing: "L", key: "side-L", label: "Left side" },
 ];
 
-/** A spot's best view to show it in: front, then back, then side (its side of the body). */
-export function viewForPlace(site: string | null | undefined, region: string, side: PainSide | null): { view: ViewKey; facing: SideFacing } {
-  for (const v of ["front", "back", "side"] as ViewKey[]) {
-    for (const f of (v === "side" ? [side === "L" ? "L" : "R"] : ["R"]) as SideFacing[]) {
-      const av = atlasView(v, f);
-      const has = av.parts.some((p) => (site ? p.site === site : p.region === region) && (side == null || p.side == null || p.side === side));
-      if (has) return { view: v, facing: f };
-    }
-  }
-  return { view: "front", facing: "R" };
-}
-
-/** The part to frame for a place (its largest drawn part on that view). */
-export function partForPlace(view: AtlasView, site: string | null | undefined, region: string, side: PainSide | null): AtlasPart | null {
-  let best: AtlasPart | null = null;
-  for (const p of view.parts) {
-    if (site ? p.site !== site : p.region !== region) continue;
-    if (side != null && p.side != null && p.side !== side) continue;
-    if (!best || p.box.w * p.box.h > best.box.w * best.box.h) best = p;
-  }
-  return best;
-}
+export { viewForPlace, partForPlace };
 
 /**
  * How much of the stage a spot's details take: the sheet is always this tall
@@ -178,17 +163,30 @@ type ViewportBox = { top: number; height: number; keyboard: boolean } | null;
 
 function PlaceDetails({
   pick,
+  mirror,
+  sideChoice,
   ctx,
   vv,
+  undo,
   onChange,
+  onMirrorScore,
+  onSide,
   onRemove,
   onDone,
 }: {
   pick: PainPick;
+  /** The same spot on the other side, while both are picked. */
+  mirror: PainPick | null;
+  /** Left · Right · Both (null: a place with no sides). */
+  sideChoice: SideChoice | null;
   ctx: PainMapContext | null;
   /** The visible part of the screen (useVisualViewportBox): with the keyboard up the details are pinned to it. */
   vv: ViewportBox;
+  /** "Right side removed · Undo", while it can still be put back. */
+  undo: { label: string; onUndo: () => void } | null;
   onChange: (patch: Partial<PainPick>) => void;
+  onMirrorScore: (n: number) => void;
+  onSide: (choice: SideChoice) => void;
   onRemove: () => void;
   onDone: () => void;
 }) {
@@ -211,9 +209,12 @@ function PlaceDetails({
     if (kb) reveal(document.activeElement);
   }, [kb, vv?.height, vv?.top, reveal]);
   const pull = useRef<number | null>(null);
-  const name = placeLabel(pick);
+  const both = sideChoice === "both" && !!mirror;
+  const name = both ? (pick.site ? siteOf(pick.site)?.label ?? placeLabel(pick) : regionOf(pick.region)?.label ?? placeLabel(pick)) : placeLabel(pick);
   const anat = siteAnatomy(pick.site);
   const region = regionOf(pick.region);
+  const left = both ? (pick.side === "L" ? pick : mirror!) : null;
+  const right = both ? (pick.side === "R" ? pick : mirror!) : null;
   const prior = useMemo(
     () => (ctx ? followUpFor(ctx.entries, pick.region, pick.side ?? null, { today: ctx.today, feedbackId: ctx.feedbackId, site: pick.site }) : null),
     [ctx, pick.region, pick.side, pick.site],
@@ -275,6 +276,40 @@ function PlaceDetails({
           <Trash2 className="h-[18px] w-[18px]" />
         </button>
       </div>
+      {sideChoice && (
+        <div className="shrink-0 px-5 pb-2">
+          <div className="grid grid-cols-3 rounded-lg bg-white/[0.07] p-0.5" role="radiogroup" aria-label="Which side" data-pain-side-control>
+            {(["L", "R", "both"] as SideChoice[]).map((c) => {
+              const on = sideChoice === c;
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => {
+                    if (on) return;
+                    feedback("tap");
+                    onSide(c);
+                  }}
+                  className={cn("h-10 rounded-md text-[14px] font-semibold transition-colors", on ? "bg-white/[0.16] text-foreground" : "text-muted-foreground")}
+                  data-pain-side={c}
+                >
+                  {c === "L" ? "Left" : c === "R" ? "Right" : "Both"}
+                </button>
+              );
+            })}
+          </div>
+          {undo && (
+            <div className="mt-2 flex items-center justify-between gap-2 text-[13px] text-muted-foreground" data-pain-undo>
+              <span>{undo.label}</span>
+              <button type="button" onClick={undo.onUndo} className="inline-flex h-9 items-center rounded-full px-3 font-semibold text-foreground hover:bg-white/10">
+                Undo
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       <div
         ref={scroller}
         className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 pb-4 pt-1"
@@ -285,10 +320,25 @@ function PlaceDetails({
           for (const ms of [0, 160, 380]) window.setTimeout(() => reveal(t), ms);
         }}
       >
-        <div className="space-y-2">
-          {label("How bad is it?")}
-          <ScoreScale value={score} onPick={(n) => onChange(scorePatch(n))} label={`${name}: how bad, 0 to 10`} />
-        </div>
+        {both ? (
+          <div className="space-y-4" data-pain-both-scores>
+            {[left!, right!].map((p) => (
+              <div key={p.uid} className="space-y-2">
+                {label(`${p.side === "L" ? "Left" : "Right"}: how bad is it?`)}
+                <ScoreScale
+                  value={pickScore(p)}
+                  onPick={(n) => (p.uid === pick.uid ? onChange(scorePatch(n)) : onMirrorScore(n))}
+                  label={`${p.side === "L" ? "Left" : "Right"} ${name.toLowerCase()}: how bad, 0 to 10`}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {label("How bad is it?")}
+            <ScoreScale value={score} onPick={(n) => onChange(scorePatch(n))} label={`${name}: how bad, 0 to 10`} />
+          </div>
+        )}
 
         {prior && (
           <div className="space-y-2" data-pain-followup>
@@ -315,7 +365,7 @@ function PlaceDetails({
         <div className="space-y-2">
           {label("What does it feel like?")}
           <div className="flex flex-wrap gap-2">
-            {FEEL_CHOICES.map((f) => {
+            {[...FEEL_CHOICES, ...((pick.feel ?? []).includes("pinch") ? (["pinch"] as Feel[]) : [])].map((f) => {
               const on = (pick.feel ?? []).includes(f);
               return (
                 <button key={f} type="button" className={chip(on)} aria-pressed={on} onClick={() => toggleFeel(f)} data-pain-feel={f}>
@@ -449,7 +499,7 @@ function PlaceDetails({
           className="h-12 w-full rounded-lg bg-primary text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-50"
           data-pain-details-done
         >
-          {score == null ? "Done (rate it later)" : "Done"}
+          {score == null || (both && pickScore(mirror!) == null) ? "Done (rate it later)" : "Done"}
         </button>
       </div>
     </div>
@@ -546,6 +596,225 @@ function PlaceSearch({ onPick }: { onPick: (place: { region: string; side: PainS
   );
 }
 
+// ── describe it ─────────────────────────────────────────────────────────
+
+/**
+ * Type or say what hurts. The app's own reader goes first (instant, free);
+ * only when it can't place anything does the server read it. Every place comes
+ * back as a row to confirm or change before anything is added.
+ */
+function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: (places: DescribedPlace[]) => void }) {
+  const [text, setText] = useState("");
+  const [result, setResult] = useState<DescribeResult | null>(null);
+  const [choices, setChoices] = useState<Record<string, SideChoice>>({});
+  const [reading, setReading] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [hearing, setHearing] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const readFn = useServerFn(readPainDescriptionFn);
+  const hearFn = useServerFn(transcribePainVoiceFn);
+  const mic = useSummerMic({ dictate: true, maxMs: 60_000 });
+  const canMic = typeof window !== "undefined" && micSupported();
+
+  const read = async (words: string) => {
+    const t = words.trim();
+    if (t.length < 3) return;
+    setNote(null);
+    setChoices({});
+    const local = describePain(t, { exercises: ctx?.exercises ?? [] });
+    if (local.places.length || local.unclear.length) {
+      setResult(local);
+      return;
+    }
+    setReading(true);
+    try {
+      const r = await readFn({ data: { text: t.slice(0, 600), exercises: (ctx?.exercises ?? []).slice(0, 40) } });
+      if (r.ok && (r.places.length || r.unclear.length)) setResult({ places: r.places, unclear: r.unclear });
+      else {
+        setResult({ places: [], unclear: [] });
+        setNote(r.ok ? "Couldn't place that. Name the body part (knee, low back, left shoulder), or tap it on the body." : r.reason === "busy" ? "Too many tries right now. Tap it on the body instead." : "Couldn't read that right now. Tap it on the body instead.");
+      }
+    } catch {
+      setResult({ places: [], unclear: [] });
+      setNote("Couldn't read that right now. Tap it on the body instead.");
+    } finally {
+      setReading(false);
+    }
+  };
+
+  const record = async () => {
+    if (recording) {
+      mic.stop();
+      return;
+    }
+    feedback("tap");
+    setRecording(true);
+    try {
+      const take = await mic.start();
+      setRecording(false);
+      if (!take) return;
+      setHearing(true);
+      const r = await hearFn({ data: { audio: await blobToBase64(take.blob), mime: take.mime } });
+      if (r.ok && r.text) {
+        const next = text.trim() ? `${text.trim()} ${r.text}` : r.text;
+        setText(next);
+        await read(next);
+      } else toast.error(r.ok ? "Didn't catch that. Try again, or type it." : r.reason);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't use the microphone.");
+    } finally {
+      setRecording(false);
+      setHearing(false);
+    }
+  };
+
+  const groups = useMemo(() => (result ? describedGroups(result.places) : []), [result]);
+  const finalPlaces = useMemo(
+    () => groups.flatMap((g) => (choices[g.key] ? chooseSide(g, choices[g.key]) : g.places)),
+    [groups, choices],
+  );
+  const addUnclear = (region: string) => {
+    feedback("tap");
+    setResult((r) => {
+      if (!r) return r;
+      const place: DescribedPlace = { region, site: null, side: null, score: null, feel: [], timing: [], exerciseName: null, exerciseId: null, impact: null, change: null, note: text.trim().slice(0, 300), needs: ["score"] };
+      if (regionOf(region)?.sided) place.needs.push("side");
+      return { places: [...r.places, place], unclear: r.unclear.filter((u) => !u.options.includes(region)) };
+    });
+  };
+  const busy = reading || hearing;
+
+  return (
+    <div className="flex h-full flex-col" data-pain-describe>
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 pb-4 pt-1">
+        <div className="space-y-2">
+          <div className="relative">
+            <textarea
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value.slice(0, 600));
+                if (result) setResult(null);
+              }}
+              rows={4}
+              placeholder="e.g. both knees bother me on squats, the left is about a 5. my right shoulder pinches on bench"
+              aria-label="Describe where it hurts"
+              {...noAutofill("pain-describe")}
+              autoCapitalize="sentences"
+              className="w-full resize-none rounded-xl border border-white/15 bg-white/[0.04] px-3 py-3 pr-14 text-base leading-snug outline-none placeholder:text-muted-foreground/80 focus:border-white/40"
+              data-pain-describe-text
+            />
+            {canMic && (
+              <button
+                type="button"
+                onClick={record}
+                disabled={busy}
+                className={cn(
+                  "absolute bottom-2.5 right-2.5 inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+                  recording ? "bg-primary text-primary-foreground" : "bg-white/[0.1] text-foreground hover:bg-white/[0.16]",
+                )}
+                aria-label={recording ? "Stop and use what I said" : "Say it instead"}
+                data-pain-describe-mic
+              >
+                {hearing ? <Loader2 className="h-4 w-4 animate-spin" /> : recording ? <Square className="h-4 w-4" fill="currentColor" /> : <Mic className="h-5 w-5" />}
+              </button>
+            )}
+          </div>
+          <p className="text-[12px] text-muted-foreground">
+            {recording ? `Listening… tap the square when you're done (${Math.round(mic.elapsedMs / 1000)}s)` : "Say where, which side, how bad out of 10 and what it hurt on. Recordings are turned into words and never kept."}
+          </p>
+          {!result && (
+            <button
+              type="button"
+              onClick={() => read(text)}
+              disabled={busy || text.trim().length < 3}
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-white/[0.1] text-[15px] font-semibold disabled:opacity-40"
+              data-pain-describe-read
+            >
+              {reading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {reading ? "Reading it…" : "Show me what you got"}
+            </button>
+          )}
+        </div>
+
+        {result && (
+          <div className="space-y-2" data-pain-describe-result>
+            {groups.length > 0 && <p className="text-[13px] font-semibold text-muted-foreground">Check these. Change anything that's off.</p>}
+            {groups.map((g) => {
+              const choice = choices[g.key] ?? g.choice;
+              const places = choices[g.key] ? chooseSide(g, choices[g.key]) : g.places;
+              const name = g.site ? siteOf(g.site)?.label ?? "" : regionOf(g.region)?.label ?? g.region;
+              const scores = places.map((p) => (p.score != null ? `${p.side ? `${p.side === "L" ? "Left" : "Right"} ` : ""}${p.score}/10` : null)).filter(Boolean).join(" · ");
+              const rest = places[0] ? describedLine({ ...places[0], score: null }) : "";
+              return (
+                <div key={g.key} className="space-y-2 rounded-xl border border-white/10 p-3" data-pain-describe-row={g.key}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-[15px] font-semibold">{name}</p>
+                    <p className={cn("shrink-0 text-[13px] font-semibold tabular-nums", scores ? "text-foreground" : "text-warning")}>{scores || "rate it next"}</p>
+                  </div>
+                  {(rest || places[0]?.feel.length) && (
+                    <p className="text-[12px] text-muted-foreground">
+                      {[places[0]?.feel.map((f) => FEELS.find((x) => x.v === f)?.label.toLowerCase()).filter(Boolean).join(", "), rest].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
+                  {g.sided && (
+                    <div className={cn("grid grid-cols-3 rounded-lg p-0.5", choice ? "bg-white/[0.07]" : "bg-warning/15 ring-1 ring-warning/50")} role="radiogroup" aria-label={`${name}: which side`}>
+                      {(["L", "R", "both"] as SideChoice[]).map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          role="radio"
+                          aria-checked={choice === c}
+                          onClick={() => {
+                            feedback("tap");
+                            setChoices((x) => ({ ...x, [g.key]: c }));
+                          }}
+                          className={cn("h-9 rounded-md text-[13px] font-semibold", choice === c ? "bg-white/[0.16] text-foreground" : "text-muted-foreground")}
+                        >
+                          {c === "L" ? "Left" : c === "R" ? "Right" : "Both"}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {g.sided && !choice && <p className="text-[12px] font-medium text-warning">Which side?</p>}
+                </div>
+              );
+            })}
+            {result.unclear.map((u) => (
+              <div key={u.word} className="space-y-2 rounded-xl border border-warning/50 p-3" data-pain-describe-unclear={u.word}>
+                <p className="text-[14px] font-semibold">Which part of your {u.word}?</p>
+                <div className="flex flex-wrap gap-2">
+                  {u.options.map((r) => (
+                    <button key={r} type="button" onClick={() => addUnclear(r)} className={chip(false)}>
+                      {regionOf(r)?.label ?? r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {note && <p className="text-[13px] text-muted-foreground">{note}</p>}
+            <button type="button" onClick={() => setResult(null)} className="inline-flex h-10 items-center gap-1.5 text-[14px] font-semibold text-muted-foreground hover:text-foreground">
+              <PenLine className="h-4 w-4" aria-hidden /> Change what I wrote
+            </button>
+          </div>
+        )}
+      </div>
+      {result && finalPlaces.length > 0 && (
+        <div className="shrink-0 border-t border-white/10 px-4 pt-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+          <button
+            type="button"
+            disabled={groups.some((g) => g.sided && !(choices[g.key] ?? g.choice))}
+            onClick={() => onApply(finalPlaces)}
+            className="h-12 w-full rounded-lg bg-primary text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-50"
+            data-pain-describe-add
+          >
+            Add {finalPlaces.length === 1 ? "this" : `these ${finalPlaces.length}`}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── the map ─────────────────────────────────────────────────────────────
 
 type Gesture = {
@@ -560,23 +829,13 @@ type Gesture = {
   mid0: { x: number; y: number };
 };
 
-const labelWidth = (w: number) => Math.min(148, Math.round(w * 0.36));
-/** What framing keeps clear on each side for the labels (they may overlap the drawing's edge a little). */
-const labelRoom = (w: number) => Math.round(labelWidth(w) * 0.72);
-/** Inside a label: its side padding (px-2.5) and border, and a hair of slack for the font's rounding. */
-const LABEL_INSET = 2 * 10 + 2 + 2;
-
-/** Text widths for sizing labels to their names, on one shared canvas. */
-let measureCtx: CanvasRenderingContext2D | null | undefined;
-function textMeasure(font: string): (s: string) => number {
-  if (measureCtx === undefined) measureCtx = typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
-  const ctx = measureCtx;
-  if (!ctx) return (t) => t.length * (parseFloat(font.split(" ")[1]) || 13) * 0.58;
-  return (t) => {
-    ctx.font = font;
-    return ctx.measureText(t).width;
-  };
-}
+/** How much of the stage the "In view" list takes while zoomed in (the map frames the area above it). */
+const PANEL_SHARE = 0.36;
+/** The notch, or the notch and iOS's blur band where it's added (styles.css --app-safe-top); never less than the notch. */
+const SAFE_TOP = "max(env(safe-area-inset-top, 0px), var(--app-safe-top, 0px))";
+const PANEL_MIN = 168;
+/** Structures listed (and numbered on the drawing) at most. */
+const IN_VIEW_MAX = 10;
 
 export function PainMap({
   open,
@@ -597,7 +856,9 @@ export function PainMap({
   const [viewKey, setViewKey] = useState<ViewKey>("front");
   const [facing, setFacing] = useState<SideFacing>("R");
   const [deep, setDeep] = useState(false);
-  const [mode, setMode] = useState<"map" | "list">("map");
+  const [mode, setMode] = useState<"map" | "list" | "describe">("map");
+  // what was just taken off, while it can be put back
+  const [undo, setUndo] = useState<{ label: string; before: PainPick[]; at: number } | null>(null);
   const [xf, setXf] = useState<Xf>(IDENTITY);
   const [animate, setAnimate] = useState(false);
   const [gesturing, setGesturing] = useState(false);
@@ -620,8 +881,10 @@ export function PainMap({
   const view = atlasView(viewKey, facing);
   const fit = useMemo(() => fitView(size), [size]);
   const sheetH = active ? Math.round(size.h * DETAILS_SHARE) : 0;
-  const vis = useMemo(() => ({ top: 0, bottom: sheetH }), [sheetH]);
-  const detail = xf.s >= DETAIL_SCALE;
+  // zoomed in on an area (tapped, or pinched in): the spots there are listed under the drawing
+  const detail = xf.s >= DETAIL_SCALE || !!focus;
+  const panelH = !active && detail && mode === "map" ? Math.max(PANEL_MIN, Math.round(size.h * PANEL_SHARE)) : 0;
+  const vis = useMemo(() => ({ top: 0, bottom: sheetH || panelH }), [sheetH, panelH]);
 
   const picked = useMemo(() => new Set(picks.filter((p) => p.site).map((p) => placeKey(p.site!, siteOf(p.site)?.midline ? null : p.side ?? null))), [picks]);
   const pickedAreas = useMemo(() => new Set(picks.filter((p) => !p.site && p.region !== "other").map((p) => `${p.region}:${p.side ?? "-"}`)), [picks]);
@@ -683,6 +946,9 @@ export function PainMap({
   useEffect(() => {
     if (open && !wasOpen.current) {
       setMode("map");
+      setUndo(null);
+      // the review's "removed · Undo" would sit on top of the map
+      toast.dismiss();
       setPressed(null);
       const p = editUid ? latest.current.picks.find((x) => x.uid === editUid) : null;
       if (p && p.region !== "other") {
@@ -712,14 +978,14 @@ export function PainMap({
       framedFor.current = "";
       return;
     }
-    const key = `${viewKey}:${facing}:${focus.region}:${focus.side}:${deep}:${size.w}x${size.h}:${!!active}`;
+    const key = `${viewKey}:${facing}:${focus.region}:${focus.side}:${deep}:${size.w}x${size.h}:${!!active}:${vis.bottom}`;
     if (framedFor.current === key) return;
     framedFor.current = key;
     const box = regionBox(view, focus.region, focus.side, { deep, pad: 16 });
     if (!box) return;
     const p = active ? latest.current.picks.find((x) => x.uid === active) : null;
     const part = p ? partForPlace(view, p.site, p.region, p.side ?? null) : null;
-    const framed = frameBox(box, size, fit, vis, 0.86, labelRoom(size.w));
+    const framed = frameBox(box, size, fit, vis, 0.86);
     go(part ? centerOn(part.center, framed, size, fit, vis) : framed);
   }, [open, focus, viewKey, facing, deep, size, fit, vis, view, active, go]);
 
@@ -835,9 +1101,9 @@ export function PainMap({
     go(clampXf(zoomAt(xf, xf.s * Math.exp(-e.deltaY * 0.0018), [p.x, p.y]), size, fit, vis), false);
   };
 
-  // labels for what's in view, zoomed in
-  const callouts = useMemo(() => {
-    if (!detail || gesturing || mode !== "map") return [];
+  // what's in view, zoomed in: numbered on the drawing, named in the list under it
+  const inView = useMemo(() => {
+    if (!detail || mode !== "map") return [];
     const seen = new Map<string, AtlasPart>();
     for (const p of layer) {
       if (!p.site) continue;
@@ -845,43 +1111,22 @@ export function PainMap({
       const prev = seen.get(k);
       if (!prev || p.box.w * p.box.h > prev.box.w * prev.box.h) seen.set(k, p);
     }
-    const visibleH = size.h - sheetH;
-    const anchors: (AtlasPart & { sx: number; sy: number; rank: number })[] = [];
+    const visibleH = size.h - (sheetH || panelH);
+    const anchors: { part: AtlasPart; sx: number; sy: number; rank: number }[] = [];
     for (const p of seen.values()) {
       const [sx, sy] = toScreen(p.center, fit, xf);
       if (sx < 10 || sx > size.w - 10 || sy < 10 || sy > visibleH - 10) continue;
       const inFocus = !!focus && p.region === focus.region && (focus.side == null || p.side == null || p.side === focus.side);
       const d = Math.hypot(sx - size.w / 2, sy - visibleH / 2);
-      anchors.push({ ...p, sx, sy, rank: (inFocus ? 0 : 10_000) + d });
+      anchors.push({ part: p, sx, sy, rank: (inFocus ? 0 : 10_000) + d });
     }
     anchors.sort((a, b) => a.rank - b.rank);
-    const keep = anchors.slice(0, 8);
-    const labelW = labelWidth(size.w);
-    // both sides of one structure in view: each label says which
+    const keep = anchors.slice(0, IN_VIEW_MAX);
+    // both sides of one structure in view: each says which
     const count = new Map<string, number>();
-    for (const a of keep) count.set(a.site!, (count.get(a.site!) ?? 0) + 1);
-    // each label as tall as its name needs: a long name wraps, never cut off with "…"
-    fontFamily.current ??= stage.current ? getComputedStyle(stage.current).fontFamily : "system-ui, sans-serif";
-    const nameW = textMeasure(`600 13px ${fontFamily.current}`);
-    const tagW = textMeasure(`700 11px ${fontFamily.current}`);
-    const sized = keep.map((a) => {
-      const s = siteOf(a.site);
-      const sideTag = (count.get(a.site!) ?? 0) > 1 ? a.side : null;
-      const lines = wrapLines(s?.label ?? "", labelW - LABEL_INSET, nameW, sideTag ? tagW(sideTag) + 4 : 0);
-      return { a, sideTag, ...labelHeight(lines, !!s?.anat) };
-    });
-    const placed = layoutCallouts(
-      sized.map(({ a, h }) => ({ id: a.id, x: a.sx, y: a.sy, h })),
-      { w: size.w, h: visibleH },
-      // the "pick the whole area" pill only shows with no details open
-      { labelW, labelH: LABEL_TYPE.minH, gap: 6, top: 52, bottom: focus && !active ? 52 : 12 },
-    );
-    const byId = new Map(sized.map((x) => [x.a.id, x]));
-    return placed.map((c) => {
-      const x = byId.get(c.id)!;
-      return { ...c, part: x.a, w: labelW, sideTag: x.sideTag, lines: x.lines, anat: x.anat };
-    });
-  }, [detail, gesturing, mode, layer, size, sheetH, fit, xf, focus, active]);
+    for (const a of keep) count.set(a.part.site!, (count.get(a.part.site!) ?? 0) + 1);
+    return keep.map((a, i) => ({ ...a, n: i + 1, sideTag: (count.get(a.part.site!) ?? 0) > 1 ? a.part.side : null }));
+  }, [detail, mode, layer, size, sheetH, panelH, fit, xf, focus]);
 
   const activePick = active ? picks.find((p) => p.uid === active) ?? null : null;
   const focusLabel = focus ? areaLabel(focus.region, focus.side) : null;
@@ -894,7 +1139,7 @@ export function PainMap({
   };
   const back = () => {
     if (active) return setActive(null);
-    if (mode === "list") return setMode("map");
+    if (mode !== "map") return setMode("map");
     if (focus || xf.s > 1.01) return reset();
     close();
   };
@@ -921,10 +1166,56 @@ export function PainMap({
     if (viewKey === "side") setFacing(next);
     setFocus({ region: focus.region, side: next });
   };
+  // Undo goes away by itself after a few seconds
+  useEffect(() => {
+    if (!undo) return;
+    const t = window.setTimeout(() => setUndo((u) => (u && u.at === undo.at ? null : u)), 6000);
+    return () => window.clearTimeout(t);
+  }, [undo]);
+  const offerUndo = (label: string, before: PainPick[]) => setUndo({ label, before, at: Date.now() });
+  const takeBack = () => {
+    if (!undo) return;
+    feedback("tap");
+    onChange(undo.before);
+    setUndo(null);
+  };
   const remove = (uid: string) => {
     feedback("tap");
-    onChange(picks.filter((p) => p.uid !== uid));
+    const before = latest.current.picks;
+    const p = before.find((x) => x.uid === uid);
+    const mirror = p ? mirrorOf(before, p) : null;
+    // both sides open together come off together
+    onChange(before.filter((x) => x.uid !== uid && x.uid !== mirror?.uid));
+    if (p) offerUndo(`${mirror ? (siteOf(p.site)?.label ?? regionOf(p.region)?.label ?? placeLabel(p)) + " (both sides)" : placeLabel(p)} removed`, before);
     setActive(null);
+  };
+  const chooseSideFor = (uid: string, choice: SideChoice) => {
+    const before = latest.current.picks;
+    const res = setSideChoice(before, uid, choice);
+    onChange(res.picks);
+    if (res.removed) offerUndo(`${res.removed.side === "L" ? "Left" : "Right"} side removed`, before);
+    else setUndo(null);
+    if (res.uid !== uid) setActive(res.uid);
+  };
+  const applyDescription = (places: DescribedPlace[]) => {
+    const prior = ctx ? (pl: { region: string; side: PainSide | null; site: string | null }) => followUpFor(ctx.entries, pl.region, pl.side, { today: ctx.today, feedbackId: ctx.feedbackId, site: pl.site }) : undefined;
+    const res = applyDescribed(latest.current.picks, places, prior);
+    onChange(res.picks);
+    feedback("tap");
+    setMode("map");
+    // the one question that's left: how bad, for the first place without a number
+    const first = res.picks.find((p) => res.uids.includes(p.uid) && unrated(p)) ?? null;
+    if (first && first.region !== "other") {
+      const where = viewForPlace(first.site, first.region, first.side ?? null);
+      setViewKey(where.view);
+      setFacing(where.facing);
+      setDeep(!!siteOf(first.site)?.deep);
+      setFocus({ region: first.region, side: siteOf(first.site)?.midline ? null : first.side ?? null });
+      setActive(first.uid);
+    } else {
+      setFocus(null);
+      go(IDENTITY, false);
+    }
   };
 
   return (
@@ -938,7 +1229,8 @@ export function PainMap({
           ref={setContentEl}
           className="dark fixed inset-x-0 z-[90] flex flex-col bg-[#0b0b0d] text-foreground outline-none"
           // typing in the list's search: the dialog ends at the keyboard, so the whole list scrolls into view
-          style={kb && vv ? { top: vv.top, height: vv.height, paddingTop: "env(safe-area-inset-top)" } : { top: 0, bottom: 0, paddingTop: "env(safe-area-inset-top)" }}
+          // below the notch and, on a home-screen app added before Nov 13 2026, below the band iOS blurs (--app-safe-top)
+          style={kb && vv ? { top: vv.top, height: vv.height, paddingTop: SAFE_TOP } : { top: 0, bottom: 0, paddingTop: SAFE_TOP }}
           data-pain-keyboard={kb ? "up" : undefined}
           onEscapeKeyDown={(e) => {
             e.preventDefault();
@@ -957,20 +1249,20 @@ export function PainMap({
               <ChevronLeft className="h-6 w-6" />
             </button>
             <div className="min-w-0 flex-1 text-center">
-              <p className="truncate text-[17px] font-semibold leading-tight" data-pain-title>{mode === "list" ? "Find it by name" : focusLabel ?? "Where does it hurt?"}</p>
+              <p className="truncate text-[17px] font-semibold leading-tight" data-pain-title>{mode === "list" ? "Find it by name" : mode === "describe" ? "Describe it" : focusLabel ?? "Where does it hurt?"}</p>
               <p className="truncate text-[12px] text-muted-foreground">
-                {mode === "list" ? "Plain names, with the anatomy beside them" : detail ? "Tap the exact spot, or a label" : "Tap the area to zoom in"}
+                {mode === "list" ? "Plain names, with the anatomy beside them" : mode === "describe" ? "Type it or say it, then check it" : detail ? "Tap the exact spot, or pick it below" : "Tap the area to zoom in"}
               </p>
             </div>
             <button
               type="button"
-              onClick={() => setMode(mode === "list" ? "map" : "list")}
+              onClick={() => setMode(mode === "map" ? "list" : "map")}
               className={cn("inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/10", mode === "list" && "bg-white/10")}
-              aria-label={mode === "list" ? "Back to the body map" : "Find it by name"}
+              aria-label={mode !== "map" ? "Back to the body map" : "Find it by name"}
               aria-pressed={mode === "list"}
               data-pain-list-toggle
             >
-              {mode === "list" ? <X className="h-5 w-5" /> : <List className="h-5 w-5" />}
+              {mode !== "map" ? <X className="h-5 w-5" /> : <List className="h-5 w-5" />}
             </button>
           </div>
 
@@ -997,7 +1289,9 @@ export function PainMap({
           )}
 
           <div className="relative min-h-0 flex-1">
-            {mode === "list" ? (
+            {mode === "describe" ? (
+              <DescribePanel ctx={ctx} onApply={applyDescription} />
+            ) : mode === "list" ? (
               <PlaceSearch
                 onPick={(place) => {
                   const where = place.region === "other" ? null : viewForPlace(place.site, place.region, place.side);
@@ -1053,65 +1347,31 @@ export function PainMap({
                   </div>
                 )}
 
-                {/* labels with leader lines */}
-                {callouts.length > 0 && !animate && (
-                  <>
-                    <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
-                      {callouts.map((c) => {
-                        const x1 = c.side === "l" ? c.x + c.w : c.x;
-                        const y1 = c.y + c.h / 2;
-                        return (
-                          <g key={c.id}>
-                            <line x1={x1} y1={y1} x2={c.ax} y2={c.ay} stroke="rgba(255,255,255,0.55)" strokeWidth={1} />
-                            <circle cx={c.ax} cy={c.ay} r={3} fill="#fff" />
-                          </g>
-                        );
-                      })}
-                    </svg>
-                    {callouts.map((c) => {
-                      const k = placeKey(c.part.site!, c.part.side);
-                      const on = picked.has(k);
-                      const s = siteOf(c.part.site);
+                {/* what's in view, numbered (the list under the drawing names them) */}
+                {inView.length > 0 && !animate && !gesturing && (
+                  <div className="pointer-events-none absolute inset-0" aria-hidden data-pain-markers>
+                    {inView.map((c) => {
+                      const on = picked.has(placeKey(c.part.site!, c.part.side));
                       return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => openPlace({ region: c.part.region!, side: c.part.side, site: c.part.site }, c.part)}
+                        <span
+                          key={c.part.id}
                           className={cn(
-                            "absolute flex flex-col justify-center rounded-lg border px-2.5 text-left leading-tight shadow-[0_4px_14px_rgba(0,0,0,0.45)] backdrop-blur-[2px] transition-colors",
-                            on ? "border-primary bg-primary/90 text-white" : "border-white/20 bg-black/70 text-white active:bg-white/20",
+                            "absolute flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold tabular-nums shadow-[0_1px_4px_rgba(0,0,0,0.6)]",
+                            on ? "bg-primary text-primary-foreground" : pressed === c.part.id ? "bg-white text-black ring-2 ring-white/60" : "bg-white/90 text-black",
                           )}
-                          style={{ left: c.x, top: c.y, width: c.w, height: c.h }}
-                          aria-label={`${siteLabel(c.part.site!, c.part.side)}${s?.anat ? `, ${s.anat}` : ""}`}
-                          aria-pressed={on}
-                          data-pain-label={c.part.site!}
+                          style={{ left: c.sx - 10, top: c.sy - 10 }}
+                          data-pain-marker={c.part.site!}
                         >
-                          <span className={cn("block break-words text-[13px] font-semibold leading-[15px]", c.lines >= 3 ? "line-clamp-3" : c.lines === 2 ? "line-clamp-2" : "truncate")}>
-                            {c.sideTag && <span className={cn("mr-1 text-[11px] font-bold", on ? "text-white/85" : "text-white/60")}>{c.sideTag}</span>}
-                            {s?.label}
-                          </span>
-                          {c.anat && s?.anat && <span className={cn("block truncate text-[11px] leading-[13px]", on ? "text-white/85" : "text-white/60")}>{s.anat}</span>}
-                        </button>
+                          {c.n}
+                        </span>
                       );
                     })}
-                  </>
+                  </div>
                 )}
 
-                {/* tools on the stage */}
-                <div className="absolute inset-x-0 top-2 flex items-start justify-between gap-2 px-3">
-                  <div className="flex gap-2">
-                    {focus && focusRegionDef?.sided && (
-                      <button
-                        type="button"
-                        onClick={otherSide}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-full bg-black/60 px-3.5 text-[13px] font-semibold text-white backdrop-blur-[2px]"
-                        data-pain-other-side
-                      >
-                        <ArrowLeftRight className="h-3.5 w-3.5" aria-hidden /> {focus.side === "L" ? "Right" : "Left"} side
-                      </button>
-                    )}
-                  </div>
-                  {(deepHere || deep) && (
+                {/* the deeper layer, where this area has one */}
+                {(deepHere || deep) && (
+                  <div className="absolute right-3 top-2">
                     <button
                       type="button"
                       onClick={() => {
@@ -1119,27 +1379,104 @@ export function PainMap({
                         setDeep((d) => !d);
                       }}
                       aria-pressed={deep}
-                      className={cn("inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold backdrop-blur-[2px]", deep ? "bg-white text-black" : "bg-black/60 text-white")}
+                      className={cn("inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold", deep ? "bg-white text-black" : "bg-black/70 text-white ring-1 ring-white/15")}
                       data-pain-deep
                     >
                       <Layers className="h-3.5 w-3.5" aria-hidden /> {deep ? "Deeper" : "Show deeper"}
                     </button>
-                  )}
-                </div>
-
-                {/* the whole area, when they can't say exactly */}
-                {focus && !active && (
-                  <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center px-4">
-                    <button
-                      type="button"
-                      onClick={() => openPlace({ region: focus.region, side: focus.side, site: null }, null)}
-                      className="pointer-events-auto inline-flex h-10 items-center rounded-full bg-black/70 px-4 text-[13px] font-semibold text-white ring-1 ring-white/15 backdrop-blur-[2px]"
-                      data-pain-whole-area
-                    >
-                      Not sure exactly? Pick the whole {(focusRegionDef?.label ?? "area").toLowerCase()}
-                    </button>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* zoomed in: the spots in view, plain names first, the anatomy under them */}
+            {panelH > 0 && (
+              <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col border-t border-white/10 bg-[#0b0b0d]" style={{ height: panelH }} data-pain-in-view>
+                <div className="flex shrink-0 items-center gap-2 px-4 pb-1.5 pt-3">
+                  <p className="min-w-0 flex-1 truncate text-[15px] font-semibold">{focus ? "Where exactly?" : "In view"}</p>
+                  {focus && focusRegionDef?.sided && (
+                    <div className="grid grid-cols-2 rounded-lg bg-white/[0.07] p-0.5" role="radiogroup" aria-label="Which side" data-pain-focus-side>
+                      {(["L", "R"] as PainSide[]).map((side) => {
+                        const on = focus.side === side;
+                        return (
+                          <button
+                            key={side}
+                            type="button"
+                            role="radio"
+                            aria-checked={on}
+                            onClick={() => !on && otherSide()}
+                            className={cn("h-8 rounded-md px-3 text-[13px] font-semibold", on ? "bg-white/[0.16] text-foreground" : "text-muted-foreground")}
+                          >
+                            {side === "L" ? "Left" : "Right"}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2" aria-label="Spots in view">
+                  {focus && (
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => openPlace({ region: focus.region, side: focus.side, site: null }, null)}
+                        className="flex min-h-12 w-full items-center gap-3 rounded-lg px-2 text-left hover:bg-white/[0.06]"
+                        data-pain-whole-area
+                      >
+                        <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-white/30 text-[11px] font-bold text-muted-foreground" aria-hidden>
+                          ·
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[15px] font-medium leading-tight">The whole {(focusRegionDef?.label ?? "area").toLowerCase()}</span>
+                          <span className="block text-[12px] leading-snug text-muted-foreground">Not sure exactly where</span>
+                        </span>
+                        {pickedAreas.has(`${focus.region}:${focus.side ?? "-"}`) && <Check className="h-4 w-4 shrink-0 text-primary" aria-label="Picked" />}
+                      </button>
+                    </li>
+                  )}
+                  {inView.map((c) => {
+                    const k = placeKey(c.part.site!, c.part.side);
+                    const on = picked.has(k);
+                    const s = siteOf(c.part.site);
+                    const p = on ? picks.find((x) => x.site === c.part.site && (siteOf(x.site)?.midline || (x.side ?? null) === (c.part.side ?? null))) : null;
+                    const sc = p ? pickScore(p) : null;
+                    return (
+                      <li key={c.part.id}>
+                        <button
+                          type="button"
+                          onClick={() => openPlace({ region: c.part.region!, side: c.part.side, site: c.part.site }, c.part)}
+                          onPointerDown={() => setPressed(c.part.id)}
+                          onPointerUp={() => setPressed(null)}
+                          onPointerLeave={() => setPressed(null)}
+                          onPointerCancel={() => setPressed(null)}
+                          className="flex min-h-12 w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-white/[0.06]"
+                          aria-label={`${siteLabel(c.part.site!, c.part.side)}${s?.anat ? `, ${s.anat}` : ""}`}
+                          aria-pressed={on}
+                          data-pain-label={c.part.site!}
+                        >
+                          <span
+                            className={cn(
+                              "flex h-[22px] min-w-[22px] shrink-0 items-center justify-center rounded-full px-1 text-[11px] font-bold tabular-nums",
+                              on ? "bg-primary text-primary-foreground" : "bg-white/90 text-black",
+                            )}
+                            aria-hidden
+                          >
+                            {c.n}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[15px] font-medium leading-tight">
+                              {c.sideTag && <span className="mr-1 text-[12px] font-bold text-muted-foreground">{c.sideTag === "L" ? "Left" : "Right"}</span>}
+                              {s?.label}
+                            </span>
+                            {s?.anat && <span className="block text-[12px] leading-snug text-muted-foreground">{s.anat}</span>}
+                          </span>
+                          {on && <span className="shrink-0 text-[13px] font-semibold tabular-nums text-muted-foreground">{sc != null ? `${sc}/10` : "rate it"}</span>}
+                        </button>
+                      </li>
+                    );
+                  })}
+                  {!inView.length && !focus && <li className="px-2 py-3 text-[13px] text-muted-foreground">Move the body to see the spots here.</li>}
+                </ul>
               </div>
             )}
 
@@ -1147,9 +1484,17 @@ export function PainMap({
               <PlaceDetails
                 key={activePick.uid}
                 pick={activePick}
+                mirror={mirrorOf(picks, activePick)}
+                sideChoice={sideChoiceOf(picks, activePick)}
                 ctx={ctx}
                 vv={vv}
-                onChange={(patch) => onChange(updatePick(latest.current.picks, activePick.uid, patch))}
+                undo={undo && Date.now() - undo.at < 6000 ? { label: undo.label, onUndo: takeBack } : null}
+                onChange={(patch) => onChange(updatePaired(latest.current.picks, activePick.uid, patch))}
+                onMirrorScore={(n) => {
+                  const m = mirrorOf(latest.current.picks, activePick);
+                  if (m) onChange(updatePaired(latest.current.picks, m.uid, scorePatch(n)));
+                }}
+                onSide={(c) => chooseSideFor(activePick.uid, c)}
                 onRemove={() => remove(activePick.uid)}
                 onDone={() => setActive(null)}
               />
@@ -1157,8 +1502,29 @@ export function PainMap({
           </div>
 
           {/* what's picked, and the way back */}
-          {!activePick && !kb && (
+          {!activePick && !kb && mode !== "describe" && (
             <div className="shrink-0 border-t border-white/10 bg-[#0b0b0d] px-4 pt-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+              {undo && (
+                <div className="mb-2 flex items-center justify-between gap-2 text-[13px] text-muted-foreground" data-pain-undo>
+                  <span className="min-w-0 truncate">{undo.label}</span>
+                  <button type="button" onClick={takeBack} className="inline-flex h-9 shrink-0 items-center rounded-full px-3 font-semibold text-foreground hover:bg-white/10">
+                    Undo
+                  </button>
+                </div>
+              )}
+              {mode === "map" && !detail && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    feedback("tap");
+                    setMode("describe");
+                  }}
+                  className="mb-2 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-white/15 text-[14px] font-semibold text-foreground hover:bg-white/[0.06]"
+                  data-pain-describe-open
+                >
+                  <Mic className="h-4 w-4" aria-hidden /> Type or say where it hurts
+                </button>
+              )}
               {picks.length > 0 && (
                 <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-0.5" data-pain-tray>
                   {picks.map((p) => {

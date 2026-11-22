@@ -8,7 +8,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { buildPainHistory, areaSummary, type PainEntry } from "@/lib/pain/history";
-import type { RecoverySuggestion } from "@/lib/pain/recovery";
 import type { PainSession } from "@/lib/pain/sessions";
 
 async function isStaffFor(supabase: any, userId: string, clientId: string): Promise<boolean> {
@@ -168,15 +167,11 @@ export const listPainWatchFn = createServerFn({ method: "POST" })
     return out.sort((a, b) => Number(b.redFlag) - Number(a.redFlag) || b.latestAt.localeCompare(a.latestAt));
   });
 
-function suggestionKey(s: RecoverySuggestion): string {
-  return `${s.key}:${s.region ?? ""}`;
-}
-
 /**
- * A reply in the coach's voice about the client's pain, with a few
- * coach-facing insights, for the coach to edit and send himself. Written on
- * the coach_write route (OpenAI key); kept as a draft so opening the sheet
- * again doesn't ask again until a new report comes in.
+ * A reply about the client's pain for the coach to edit and send himself
+ * (Assist: every coach and admin, for their own clients). Written by
+ * pain-draft.server.ts; in the owner's own voice only for the owner. Kept as
+ * a draft so opening the sheet again doesn't ask again until a new report.
  */
 export const draftPainReplyFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -185,113 +180,23 @@ export const draftPainReplyFn = createServerFn({ method: "POST" })
     const { userId } = context;
     const supabase = context.supabase as any;
     await assertStaff(supabase, userId, data.clientId);
-    const { loadPainEntries, loadPainSessions, loadGivenSuggestions, todayIn } = await import("@/lib/pain/load");
-    const { data: client } = await supabase.from("clients").select("id, full_name, preferred_name, timezone").eq("id", data.clientId).maybeSingle();
-    if (!client) throw new Error("Client not found.");
-    const tz = client.timezone ?? null;
-    const today = todayIn(tz);
-    const [byClient, sessions, given] = await Promise.all([
-      loadPainEntries(supabase, [client.id], { tz: new Map([[client.id, tz]]) }),
-      loadPainSessions(supabase, client.id, tz).catch(() => [] as PainSession[]),
-      loadGivenSuggestions(supabase, client.id),
-    ]);
-    // the engine and the prompt rules load only here (the athlete's review imports this file)
-    const [{ recoverySuggestions }, { painHistoryForAi, PAIN_RULES, draftProblems, URGENT_LINE }, { redFlags }] = await Promise.all([
-      import("@/lib/pain/recovery"),
-      import("@/lib/pain/ai"),
-      import("@/lib/pain/safety"),
-    ]);
-    const history = buildPainHistory(byClient.get(client.id) ?? [], today);
-    if (!history.areas.length) throw new Error("No pain reported in the last 12 weeks.");
-    const suggestions = recoverySuggestions(history, sessions, given.given);
-    const painText = painHistoryForAi(history, { sessions })!;
-    const first = (client.preferred_name || client.full_name || "").trim().split(/\s+/)[0] || "them";
-
-    const [{ voicePromptForClient }, { casualize }, { askRoute }, { loadProgramContext }, { programContextText }, health] = await Promise.all([
-      import("@/lib/coach-voice.functions"),
-      import("@/lib/coach-voice"),
-      import("@/lib/ai/route-call.server"),
-      import("@/lib/program-context.server"),
-      import("@/lib/program-context"),
-      import("@/lib/health/health-load"),
-    ]);
-    const [voice, program, records] = await Promise.all([
-      voicePromptForClient(supabase, client.id).catch(() => ""),
-      loadProgramContext(supabase, client.id).catch(() => null),
-      health.loadHealthRecords(supabase, client.id, { today }).catch(() => null),
-    ]);
-    const { healthProfileForAi } = await import("@/lib/health/health-profile");
-    const healthText = records ? healthProfileForAi(health.healthProfileFromRecords(records, today), "training") : null;
-    const recent = sessions.slice(-12);
-    const trainingLine = recent.length
-      ? `RECENT TRAINING: ${recent.length} workouts finished in the last ${Math.max(1, Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${recent[0].date}T00:00:00Z`)) / 86_400_000))} days; session effort ${recent.filter((s) => s.sessionRpe != null).map((s) => s.sessionRpe).join(", ") || "not rated"}; sleep under 6h before ${recent.filter((s) => s.sleep === "lt5" || s.sleep === "5_6").length} of them.`
-      : "";
-    const options = suggestions.map((s) => `- [${suggestionKey(s)}] ${s.area ? `${s.area}: ` : ""}${s.title} (why: ${s.why})`);
-
-    const system = [
-      `You draft a short message from a strength coach to his client ${first} about pain they reported. The coach reads it, edits it and sends it himself; it is never sent automatically.`,
-      "Sound like an experienced powerlifting and bodybuilding coach texting a client he knows: direct, specific, practical, conversational. No generic motivation, no wellness-app language, no 'listen to your body', no 'you got this', no dashes, at most one emoji and only if his voice uses them.",
-      "The message: 2 to 4 short sentences, under 70 words. Lead with what you noticed, specifically (which place, how often, what it came up on). Then the one thing that matters most. Ask one short, useful question only if the answer would change what the coach does (e.g. which part of the lift hurts).",
-      "Training changes: say what we'll do in plain coach words ('let's stop forcing the movements that aggravate it', 'I'll look at the pressing'), never claim the program was already changed.",
-      "Recovery: only an option from RECOVERY OPTIONS, at most one, and only if it fits. Heat or massage is for comfort, never a fix. If an assessment is listed, say it plainly ('if it's not settling I'd rather you get it assessed than keep guessing').",
-      "If WARNING SIGNS are listed, the message asks about them directly and says to get it checked; if one is urgent, it says to get medical help right away if any of those are there.",
-      "Never diagnose, never name a condition or injury type, never mention medication, ice protocols or a return date.",
-      PAIN_RULES,
-      URGENT_LINE,
-      voice,
-      'Return ONLY JSON: {"insights": string[] (2 to 4 short coach-facing lines: the pattern, and what to consider in his training; facts only from the data), "message": string, "options_used": string[] (the [keys] of RECOVERY OPTIONS the message uses)}',
-    ].filter(Boolean).join("\n\n");
-    const prompt = [
-      `CLIENT: ${first}`,
-      `TODAY: ${today}`,
-      "",
-      painText,
-      "",
-      options.length ? ["RECOVERY OPTIONS (keys in brackets):", ...options].join("\n") : "RECOVERY OPTIONS: none. Suggest no recovery action.",
-      "",
-      healthText ?? "",
-      program ? `PROGRAM:\n${programContextText(program)}` : "",
-      trainingLine,
-      "",
-      "Write the insights and the message.",
-    ].filter((x) => x !== undefined).join("\n");
-
-    const parse = (text: string) => {
-      const stripped = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
-      try {
-        return JSON.parse(stripped);
-      } catch {
-        const m = stripped.match(/\{[\s\S]*\}/);
-        try { return m ? JSON.parse(m[0]) : null; } catch { return null; }
-      }
-    };
-    let reply = await askRoute("coach_write", { system, prompt, timeoutMs: 45_000 }, { sb: supabase });
-    let parsed = parse(reply.text ?? "");
-    let message = casualize(String(parsed?.message ?? "").trim());
-    const problems = message ? draftProblems(message) : ["empty"];
-    if (problems.length) {
-      // one more go, told what to leave out
-      reply = await askRoute("coach_write", { system, prompt: `${prompt}\n\nYour last draft used words the coach never uses about pain (${problems.join(", ")}). Write it again without them.`, timeoutMs: 45_000 }, { sb: supabase });
-      parsed = parse(reply.text ?? "") ?? parsed;
-      message = casualize(String(parsed?.message ?? "").trim());
-    }
-    if (!message) throw new Error("Couldn't write a draft. Try again.");
-    const offered = new Set(suggestions.map(suggestionKey));
-    const used = (Array.isArray(parsed?.options_used) ? parsed.options_used : []).map(String).map((k: string) => k.replace(/^\[|\]$/g, "")).filter((k: string) => offered.has(k));
-    const insights = (Array.isArray(parsed?.insights) ? parsed.insights : []).map(String).filter(Boolean).slice(0, 4);
-    const warnings = draftProblems(message);
-
+    const { assertCallerFeature, callerHasFeature } = await import("@/lib/cleo-capabilities.server");
+    await assertCallerFeature(supabase, userId, "assist.message_drafts", "Drafts aren't part of your plan.");
+    // the owner's own voice and examples are the owner's; anyone else gets a plain coach voice
+    const voice = await callerHasFeature(supabase, userId, "owner.voice").catch(() => false);
+    const { writePainDraft } = await import("@/lib/pain/pain-draft.server");
+    const d = await writePainDraft(supabase, { clientId: data.clientId, voice, automatic: false });
     const { error } = await supabase.from("pain_coach_reviews").insert({
-      client_id: client.id,
+      client_id: data.clientId,
       kind: "draft",
-      through_at: history.latestAt,
-      regions: history.flagged.map((a) => a.region),
-      suggestion_keys: used,
-      draft: message.slice(0, 2000),
-      insights,
-      model: reply.model,
+      through_at: d.history.latestAt,
+      regions: d.history.flagged.map((a) => a.region),
+      suggestion_keys: d.used,
+      draft: d.message,
+      insights: d.insights,
+      model: d.model,
       created_by: userId,
     });
     if (error) console.error("[pain] draft not kept", error.message);
-    return { message, insights, suggestionKeys: used, model: reply.model, warnings, redFlags: redFlags(history.flagged.flatMap((a) => a.entries)).length };
+    return { message: d.message, insights: d.insights, suggestionKeys: d.used, model: d.model, warnings: d.warnings, redFlags: d.redFlags };
   });

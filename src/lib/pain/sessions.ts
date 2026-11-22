@@ -67,7 +67,7 @@ function cleanName(n: string): string {
  * share the days (squats with an elbow, say) is never offered as a pattern;
  * the bar on the back keeps the squat for shoulders, elbows and wrists.
  */
-const PLAUSIBLE: Record<string, Pattern[]> = {
+export const PLAUSIBLE: Record<string, Pattern[]> = {
   neck: ["Horizontal press", "Vertical press", "Horizontal pull", "Vertical pull", "Shoulder isolation", "Squat", "Hip hinge"],
   shoulder: ["Horizontal press", "Vertical press", "Horizontal pull", "Vertical pull", "Shoulder isolation", "Arms", "Squat"],
   chest: ["Horizontal press", "Vertical press"],
