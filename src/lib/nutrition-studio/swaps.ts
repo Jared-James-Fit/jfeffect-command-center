@@ -39,6 +39,12 @@ function roundAmount(food: StudioFood, grams: number): { qty: number; unit: Stud
   return { qty: Math.max(step, Math.round(grams / step) * step), unit: "g" };
 }
 
+/** Cooked, raw or dry, from a built-in food's id (a swap keeps the same, so the weight means the same thing). */
+export function formOf(f: StudioFood): "cooked" | "raw" | "dry" | null {
+  const m = f.id.match(/_(cooked|raw|dry)$/);
+  return m ? (m[1] as "cooked" | "raw" | "dry") : null;
+}
+
 export function swapOptions(item: StudioItem, current: StudioFood, all: StudioFood[], limit = 8): SwapOption[] {
   const now = itemMacros(current, item.qty, item.unit);
   if (!now) return [];
@@ -47,6 +53,10 @@ export function swapOptions(item: StudioItem, current: StudioFood, all: StudioFo
   const out: SwapOption[] = [];
   for (const f of all) {
     if (f.id === current.id || GROUP[f.category] !== GROUP[current.category]) continue;
+    // cooked for cooked: a raw or dry weight in place of a cooked one is a different amount of food
+    const wantForm = formOf(current);
+    const form = formOf(f);
+    if (wantForm && form && form !== wantForm) continue;
     let qty: number;
     let unit: StudioUnit;
     if (f.per100) {
@@ -65,5 +75,7 @@ export function swapOptions(item: StudioItem, current: StudioFood, all: StudioFo
     if (unit === "g" && qty > 600) continue;
     out.push({ food: f, qty, unit, macros, kcalDelta: Math.round(macros.kcal - now.kcal) });
   }
-  return out.sort((a, b) => Math.abs(a.kcalDelta) - Math.abs(b.kcalDelta)).slice(0, limit);
+  // the same kind of food first (a carb for a carb, before fruit), then the closest in calories
+  const same = (o: SwapOption) => (o.food.category === current.category ? 0 : 1);
+  return out.sort((a, b) => same(a) - same(b) || Math.abs(a.kcalDelta) - Math.abs(b.kcalDelta)).slice(0, limit);
 }

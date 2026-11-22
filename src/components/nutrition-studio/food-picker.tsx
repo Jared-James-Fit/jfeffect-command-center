@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { searchFoods } from "@/lib/nutrition-studio/search";
 import type { StudioFood } from "@/lib/nutrition-studio/foods";
-import { itemMacros, type StudioUnit } from "@/lib/nutrition-studio/model";
+import { amountProblem, itemMacros, type StudioUnit } from "@/lib/nutrition-studio/model";
 import { CustomFoodForm } from "@/components/nutrition-studio/custom-food-form";
 
 export type PickedFood = { foodId: string; qty: number; unit: StudioUnit };
@@ -162,7 +162,8 @@ export function AmountStep({ food, onAdd, initial, action = "Add" }: { food: Stu
   const [unit, setUnit] = useState<StudioUnit>(start.unit);
   const [qtyText, setQtyText] = useState(String(start.qty));
   const qty = Number(qtyText.replace(",", "."));
-  const m = Number.isFinite(qty) ? itemMacros(food, qty, unit) : null;
+  const problem = amountProblem(Number.isFinite(qty) ? qty : null, unit);
+  const m = !problem ? itemMacros(food, qty, unit) : null;
   const choices = unitChoices(food);
   return (
     <div className="space-y-4 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -191,7 +192,7 @@ export function AmountStep({ food, onAdd, initial, action = "Add" }: { food: Stu
             <span className="text-muted-foreground"> · {Math.round(m.protein)} g protein · {Math.round(m.carbs)} g carbs · {Math.round(m.fat)} g fat</span>
           </>
         ) : (
-          <span className="text-muted-foreground">Enter an amount</span>
+          <span className="text-muted-foreground">{problem ?? "Enter an amount"}</span>
         )}
       </div>
       {food.source === "usda" && <p className="text-[12px] text-muted-foreground">USDA values, {/raw|dry/i.test(food.name) ? "as weighed" : "cooked weight unless it says otherwise"}.</p>}

@@ -45,6 +45,8 @@ export function searchFoods(query: string, foods: StudioFood[], limit = 40): Stu
     if (full === query.trim().toLowerCase()) s += 50;
     else if (full.startsWith(query.trim().toLowerCase())) s += 12;
     if (f.source === "label") s += 4;
+    // a recipe is a whole dish: an ingredient that matches as well comes first
+    if (f.source === "recipe") s -= 4;
     s -= name.length * 0.3;
     scored.push({ f, s });
   }

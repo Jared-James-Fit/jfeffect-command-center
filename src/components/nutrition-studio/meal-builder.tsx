@@ -26,6 +26,7 @@ import {
   updateMeal,
   writeDay,
   itemLine,
+  amountProblem,
   type Macros,
   type StudioDay,
   type StudioItem,
@@ -36,8 +37,17 @@ import type { StudioFood } from "@/lib/nutrition-studio/foods";
 import { swapOptions } from "@/lib/nutrition-studio/swaps";
 import { MEAL_TIMING_LABEL, type MealTiming } from "@/lib/nutrition-targets/meal-timing";
 import { COVER_KCAL_SHARE, COVER_PROTEIN_G } from "@/lib/nutrition-targets/plan-coverage";
+import { DAILY_TOTAL_HEADING } from "@/lib/nutrition-targets/macro-line";
 import { AmountStep, FoodPicker, unitChoices } from "@/components/nutrition-studio/food-picker";
 import { useSaveMealTemplate, useStudioFoods, type SavedMeal } from "@/components/nutrition-studio/use-studio-foods";
+
+/** The day's tail without its Daily Total (the builder shows that live). */
+export function tailNotes(tail: string): string {
+  const lines = tail.split("\n");
+  const at = lines.findIndex((l) => DAILY_TOTAL_HEADING.test(l.trim()));
+  const kept = at < 0 ? lines : lines.slice(0, at);
+  return kept.join("\n").trim();
+}
 
 export type DayTargets = { calories?: number | null; protein?: number | null; carbs?: number | null; fats?: number | null };
 
@@ -126,7 +136,8 @@ export function MealBuilder({
           }}
         />
       ))}
-      {day.tail.trim() && <p className="whitespace-pre-wrap text-[13px] text-muted-foreground">{day.tail}</p>}
+      {/* what follows the meals (flexible calories); the Daily Total is the bar above, worked out live */}
+      {tailNotes(day.tail) && <p className="whitespace-pre-wrap text-[13px] text-muted-foreground">{tailNotes(day.tail)}</p>}
       <div className="flex gap-2">
         <Button variant="outline" className="h-11 flex-1 gap-1.5" onClick={() => commit({ ...day, meals: [...day.meals, newMeal(day)] })}>
           <Plus className="h-4 w-4" /> Add meal
@@ -157,7 +168,8 @@ export function MealBuilder({
         foods={all}
         onPick={(food, qty, unit) => {
           if (!swap) return;
-          setItems(swap.mealId, (items) => items.map((i) => (i.id === swap.item.id ? { ...i, foodId: food, qty, unit } : i)));
+          // a different food: the old one's name goes with it
+          setItems(swap.mealId, (items) => items.map((i) => (i.id === swap.item.id ? { id: i.id, foodId: food, qty, unit } : i)));
           setSwap(null);
         }}
       />
@@ -365,9 +377,10 @@ function ItemRow({
         onChange={(e) => {
           setQty(e.target.value);
           const n = Number(e.target.value.replace(",", "."));
-          if (Number.isFinite(n) && n > 0) onChange({ ...item, qty: n });
+          // an amount that can't be right (2 kg of rice, 200 eggs) isn't taken until it's fixed
+          if (Number.isFinite(n) && !amountProblem(n, item.unit)) onChange({ ...item, qty: n });
         }}
-        className="h-9 w-16 px-2 text-right text-[15px] tabular-nums"
+        className={cn("h-9 w-16 px-2 text-right text-[15px] tabular-nums", amountProblem(Number(qty.replace(",", ".")), item.unit) && qty !== "" ? "border-destructive" : "")}
         aria-label={`Amount of ${food.name}`}
         name="search-amount"
         autoComplete="off"
@@ -388,7 +401,7 @@ function ItemRow({
       ) : (
         <span className="w-9 shrink-0 text-[13px] text-muted-foreground">{unitLabel}</span>
       )}
-      <span className="min-w-0 flex-1 truncate text-[14px]">{food.name}</span>
+      <span className="line-clamp-2 min-w-0 flex-1 text-[14px] leading-tight">{food.name}</span>
       <span className="shrink-0 text-[12px] tabular-nums text-muted-foreground">{m ? `${r(m.kcal)}` : "–"}</span>
       <CardMenu name={food.name} description="Options for this food" buttonClassName="h-8 w-8" align="end">
         <CardMenuItem onSelect={onSwap}>

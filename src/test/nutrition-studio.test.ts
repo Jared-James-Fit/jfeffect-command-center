@@ -233,3 +233,52 @@ describe("recipes and label foods in a plan", () => {
     expect(itemMacros(r, 2, "each")!.protein).toBe(r.perServing!.protein * 2);
   });
 });
+
+describe("what the browser run found (Nov 22 2026)", () => {
+  it("an edited meal keeps the plan's own name for a food", () => {
+    const day = readDay(`Meal 1\n150 g berries\n100 g chicken breast\n\nApproximate macros:\n32 g protein\n16 g carbohydrates\n4 g fat`);
+    const edited = updateMeal(day, day.meals[0].id, (m) => ({ ...m, items: m.items.map((i) => (i.foodId === "b:chicken_breast_cooked" ? { ...i, qty: 200 } : i)) }));
+    const text = writeDay(edited, lookup);
+    expect(text).toContain("150 g berries");
+    expect(text).toContain("200 g chicken breast");
+  });
+
+  it("an ingredient ranks above a recipe that matches as well", async () => {
+    const { RECIPE_FOODS } = await import("@/components/nutrition-studio/use-studio-foods");
+    const top = searchFoods("greek yog", [...BUILTIN_FOODS, ...RECIPE_FOODS])[0];
+    expect(top.id).toBe("b:greek_yogurt");
+  });
+
+  it("a swap keeps cooked for cooked", () => {
+    const sweet = builtinFood("b:sweet_potato_cooked")!;
+    const opts = swapOptions({ id: "i", foodId: sweet.id, qty: 250, unit: "g" }, sweet, BUILTIN_FOODS, 40);
+    expect(opts.some((o) => /_raw$|_dry$/.test(o.food.id))).toBe(false);
+    expect(opts.some((o) => o.food.id === "b:potatoes_cooked")).toBe(true);
+  });
+
+  it("an amount that can't be right isn't taken", async () => {
+    const { amountProblem } = await import("@/lib/nutrition-studio/model");
+    expect(amountProblem(200, "each")).toMatch(/lot/);
+    expect(amountProblem(2500, "g")).toMatch(/lot/);
+    expect(amountProblem(250, "g")).toBeNull();
+    expect(amountProblem(2, "each")).toBeNull();
+    expect(amountProblem(0, "g")).toBe("Enter an amount");
+  });
+});
+
+describe("a swapped food is written as the new food", () => {
+  it("never keeps the old food's name on the line", () => {
+    const day = readDay(`Meal 1\n250 g cooked sweet potatoes\n\nApproximate macros:\n5 g protein\n52 g carbohydrates\n0 g fat`);
+    const m = day.meals[0];
+    // even if a label were left on the item, it only shows while it still reads as the same food
+    const swapped = updateMeal(day, m.id, (x) => ({ ...x, items: x.items.map((i) => ({ ...i, foodId: "b:berries", qty: 495 })) }));
+    const text = writeDay(swapped, lookup);
+    expect(text).toContain("495 g mixed berries");
+    expect(text).not.toContain("sweet potatoes");
+  });
+  it("a carb swaps for a carb before a fruit", () => {
+    const sweet = builtinFood("b:sweet_potato_cooked")!;
+    const [first] = swapOptions({ id: "i", foodId: sweet.id, qty: 250, unit: "g" }, sweet, BUILTIN_FOODS);
+    expect(first.food.category).toBe("carb");
+  });
+});

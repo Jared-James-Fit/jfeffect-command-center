@@ -30,6 +30,8 @@ export type StudioItem = {
   unit: StudioUnit;
   /** A kept line's exact text (foodId null). */
   text?: string;
+  /** The food's name as the plan wrote it ("berries"), kept while the food stays the same. */
+  label?: string;
 };
 
 export type StudioMeal = {
@@ -172,6 +174,14 @@ export function matchFood(name: string, customs: StudioFood[] = []): StudioFood 
   return null;
 }
 
+/** An amount that can't be right: more than 2 kg of a food, 20 of something counted, and so on. Null when it's fine. */
+export function amountProblem(qty: number | null, unit: StudioUnit): string | null {
+  if (qty == null || !Number.isFinite(qty) || qty <= 0) return "Enter an amount";
+  const max: Record<StudioUnit, number> = { g: 2000, ml: 2000, oz: 70, each: 20, tbsp: 20, tsp: 30 };
+  if (qty > max[unit]) return unit === "each" ? "That's a lot of them: check the amount" : "That's a lot: check the amount";
+  return null;
+}
+
 /** One plan line read as an item: a food and its amount, else kept as written. */
 export function readItemLine(line: string, customs: StudioFood[] = []): StudioItem {
   const text = line.trim();
@@ -183,7 +193,7 @@ export function readItemLine(line: string, customs: StudioFood[] = []): StudioIt
       let qty = a.qty;
       if (a.unit === "kg" || a.unit === "l") qty = a.qty * 1000;
       if (!unit && (food.each || food.perServing)) unit = "each";
-      if (unit) return { id: newId("i"), foodId: food.id, qty: round2(qty), unit };
+      if (unit) return { id: newId("i"), foodId: food.id, qty: round2(qty), unit, label: a.rest };
     }
   }
   return { id: newId("i"), foodId: null, qty: null, unit: "g", text };
@@ -273,7 +283,9 @@ export function itemLine(it: StudioItem, lookup: FoodLookup): string {
     const name = it.qty > 1 && f.plural ? f.plural : f.lineName;
     return [q, word, name].filter(Boolean).join(" ");
   }
-  return `${q} ${it.unit} ${f.lineName}`;
+  // a weighed food keeps the name the plan gave it ("berries", "chicken breast"), as long as that name still reads as this food
+  const label = it.label && matchFood(it.label)?.id === f.id ? it.label : null;
+  return `${q} ${it.unit} ${label ?? f.lineName}`;
 }
 
 /** The meal's header ("Meal 2 (Pre-Workout)"). */
