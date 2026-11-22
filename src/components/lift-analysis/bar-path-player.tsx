@@ -19,6 +19,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 import type { LiftAnalysis } from "@/lib/lift-analysis/analyze";
+import { noteShownAt, type Shape } from "@/lib/lift-analysis/film-notes";
+import { frameAt } from "@/lib/lift-analysis/pose/skeleton";
+import {
+  drawBarPath,
+  drawPose,
+  drawShapes,
+  nearestJoint,
+  repAt,
+  repSpan,
+  valueAt,
+  type PoseScene,
+} from "@/components/lift-analysis/overlay-draw";
 import { cn } from "@/lib/utils";
 
 type Rect = { ox: number; oy: number; dw: number; dh: number };
@@ -43,48 +55,29 @@ export type MarkerMode = {
   busy?: boolean;
 };
 
+export type DrawTool = "line" | "arrow" | "circle" | "joint";
+
+/** Drawing a film note: the tool, the marks so far (shown while drawing), and each new mark. */
+export type DrawMode = {
+  tool: DrawTool;
+  shapes: Shape[];
+  onAdd: (shape: Shape, t: number) => void;
+};
+
+/** What a parent can ask of the player. */
+export type PlayerApi = {
+  time: () => number;
+  seek: (t: number) => void;
+  pause: () => void;
+  /** Draws the overlays at a given size onto a frame the parent decoded (a saved frame). */
+  drawOverlays: (ctx: CanvasRenderingContext2D, w: number, h: number, t: number) => void;
+};
+
 const SPEEDS = [1, 0.5, 0.25] as const;
 /** How far (px) from the ring's edge handle a finger still grabs it, and from the ring the marker. */
 const HANDLE_GRAB = 26;
 const RING_GRAB = 18;
 const LOUPE = { size: 124, zoom: 2.5, gap: 28 };
-
-export function repSpan(a: LiftAnalysis, i: number): { start: number; end: number } | null {
-  const r = a.reps[i];
-  if (!r) return null;
-  const s = Math.min(r.con.start, r.ecc?.start ?? Infinity);
-  const e = Math.max(r.con.end, r.ecc?.end ?? -Infinity);
-  return { start: s, end: e };
-}
-
-/** Which rep a moment belongs to (the one it's in, else the last one before it). */
-export function repAt(a: LiftAnalysis, t: number): number {
-  let best = -1;
-  for (let i = 0; i < a.reps.length; i++) {
-    const sp = repSpan(a, i);
-    if (!sp) continue;
-    if (t >= sp.start - 0.25) best = i;
-  }
-  return best;
-}
-
-function valueAt(t: number[], arr: (number | null)[], at: number): number | null {
-  if (!t.length) return null;
-  let lo = 0;
-  let hi = t.length - 1;
-  if (at <= t[0]) return arr[0];
-  if (at >= t[hi]) return arr[hi];
-  while (hi - lo > 1) {
-    const m = (lo + hi) >> 1;
-    if (t[m] <= at) lo = m;
-    else hi = m;
-  }
-  const a = arr[lo];
-  const b = arr[hi];
-  if (a == null || b == null) return a ?? b;
-  const f = (at - t[lo]) / (t[hi] - t[lo] || 1);
-  return a + (b - a) * f;
-}
 
 /**
  * Where the read path has the plate at a moment (shares of the frame), and
@@ -138,6 +131,12 @@ export function BarPathPlayer({
   lost,
   initialTime,
   onVideoSize,
+  technique,
+  notes,
+  focusNote,
+  draw: drawMode,
+  seekTo,
+  apiRef,
   className,
 }: {
   src?: string;
@@ -153,6 +152,17 @@ export function BarPathPlayer({
   initialTime?: number | null;
   /** The clip's own size, once it's known (for sizing a ring as a circle). */
   onVideoSize?: (width: number, height: number) => void;
+  /** Technique: the athlete's body and the layers switched on (the bar path follows `layers.bar`). */
+  technique?: PoseScene | null;
+  /** Film notes, each shown around its moment. */
+  notes?: { id: string; t: number; shapes: Shape[] }[];
+  /** The note picked: shown whatever the time. */
+  focusNote?: string | null;
+  /** Drawing a film note (the player takes the finger instead of the marker). */
+  draw?: DrawMode | null;
+  /** Jump here (paused): a new `n` each time. */
+  seekTo?: { t: number; n: number } | null;
+  apiRef?: React.MutableRefObject<PlayerApi | null>;
   className?: string;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -167,6 +177,8 @@ export function BarPathPlayer({
   const dragRef = useRef<Drag | null>(null);
   /** The marker while a finger moves it (drawn without waiting for the parent). */
   const liveRef = useRef<Marker | null>(null);
+  /** A mark being drawn (from where the finger went down to where it is). */
+  const sketchRef = useRef<{ id: number; a: [number, number]; b: [number, number] } | null>(null);
   const fps = analysis?.fps && analysis.fps > 1 ? analysis.fps : 30;
 
   const rect = useCallback((): Rect | null => {
@@ -196,6 +208,31 @@ export function BarPathPlayer({
     }
     return null;
   }, [analysis, fps, marker]);
+
+  /** Everything over the video at a moment: the bar, the body, the notes, a mark being drawn. */
+  const drawScene = useCallback(
+    (
+      ctx: CanvasRenderingContext2D,
+      P: (fx: number, fy: number) => [number, number],
+      now: number,
+      k: number,
+    ) => {
+      const pose = technique ? frameAt(technique.track, now) : null;
+      if (technique) drawPose(ctx, technique, analysis ?? null, P, now, { selectedRep, scale: k });
+      if (analysis && (technique ? technique.layers.bar : true))
+        drawBarPath(ctx, analysis, P, now, { selectedRep, playing, scale: k });
+      for (const n of notes ?? []) {
+        if (n.id === focusNote || noteShownAt(n, now)) drawShapes(ctx, n.shapes, P, pose, k);
+      }
+      if (drawMode) {
+        drawShapes(ctx, drawMode.shapes, P, pose, k);
+        const sk = sketchRef.current;
+        if (sk && drawMode.tool !== "joint")
+          drawShapes(ctx, [{ kind: drawMode.tool, a: sk.a, b: sk.b }], P, pose, k, true);
+      }
+    },
+    [analysis, drawMode, focusNote, notes, playing, selectedRep, technique],
+  );
 
   const draw = useCallback(() => {
     const c = canvasRef.current;
@@ -227,83 +264,8 @@ export function BarPathPlayer({
       if (marker.value || marker.corrections || !analysis) return;
     }
 
-    const a = analysis;
-    if (!a) return;
-    const S = a.series;
-    const current = selectedRep ?? repAt(a, now);
-    const line = (
-      from: number,
-      to: number,
-      upTo: number,
-      style: { w: number; color: string; shadow?: boolean },
-    ) => {
-      ctx.lineJoin = "round";
-      ctx.lineCap = "round";
-      const paths: [number, number][][] = [];
-      let cur: [number, number][] = [];
-      for (let i = 0; i < S.t.length; i++) {
-        if (S.t[i] < from || S.t[i] > to || S.t[i] > upTo) continue;
-        if (!S.ok[i]) {
-          if (cur.length) paths.push(cur);
-          cur = [];
-          continue;
-        }
-        cur.push(P(S.x[i], S.y[i]));
-      }
-      if (cur.length) paths.push(cur);
-      for (const pass of style.shadow ? [0, 1] : [1]) {
-        ctx.lineWidth = pass === 0 ? style.w + 3 : style.w;
-        ctx.strokeStyle = pass === 0 ? "rgba(0,0,0,0.55)" : style.color;
-        for (const p of paths) {
-          if (p.length < 2) continue;
-          ctx.beginPath();
-          ctx.moveTo(p[0][0], p[0][1]);
-          for (let k = 1; k < p.length; k++) ctx.lineTo(p[k][0], p[k][1]);
-          ctx.stroke();
-        }
-      }
-    };
-    a.reps.forEach((rep, i) => {
-      const sp = repSpan(a, i);
-      if (!sp) return;
-      if (i === current) {
-        // the rep on screen: drawn as far as the video has got (all of it when it's selected and paused before it)
-        const upTo = selectedRep === i && !playing && now < sp.start ? sp.end : now;
-        line(sp.start, sp.end, upTo, { w: 3, color: "#ffffff", shadow: true });
-        if (rep.sticking && rep.sticking.time <= upTo) {
-          const sx = valueAt(S.t, S.x, rep.sticking.time);
-          const sy = valueAt(S.t, S.y, rep.sticking.time);
-          if (sx != null && sy != null) {
-            const [x, y] = P(sx, sy);
-            ctx.fillStyle = "#f59e0b";
-            ctx.strokeStyle = "rgba(0,0,0,0.6)";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(x, y, 5, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-          }
-        }
-      } else if (sp.end <= now || selectedRep != null) {
-        line(sp.start, sp.end, Infinity, { w: 2, color: "rgba(255,255,255,0.35)" });
-      }
-    });
-    // the plate's spot now
-    if (now >= S.t[0] && now <= S.t[S.t.length - 1]) {
-      const x = valueAt(S.t, S.x, now);
-      const y = valueAt(S.t, S.y, now);
-      if (x != null && y != null) {
-        const [px, py] = P(x, y);
-        ctx.fillStyle = "#ffffff";
-        ctx.strokeStyle = "rgba(0,0,0,0.6)";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(px, py, 4.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      }
-    }
-  }, [analysis, marker, playing, rect, selectedRep, shownMarker]);
+    drawScene(ctx, P, now, 1);
+  }, [analysis, marker, rect, shownMarker, drawScene]);
 
   // follow the video frame by frame (requestVideoFrameCallback where there is one)
   useEffect(() => {
@@ -384,6 +346,34 @@ export function BarPathPlayer({
     seek(initialTime);
   }, [initialTime, seek, ready]);
 
+  // asked to jump to a moment (a note, an observation): pause there
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !seekTo) return;
+    v.pause();
+    seek(seekTo.t);
+  }, [seekTo, seek]);
+
+  useEffect(() => {
+    if (!apiRef) return;
+    apiRef.current = {
+      time: () => videoRef.current?.currentTime ?? timeRef.current,
+      seek: (t: number) => {
+        videoRef.current?.pause();
+        seek(t);
+      },
+      pause: () => videoRef.current?.pause(),
+      drawOverlays: (ctx, w, h, t) => {
+        // drawn at the frame's own size: lines and labels scaled to read the same as on a phone
+        const k = Math.max(1, Math.max(w, h) / 640);
+        drawScene(ctx, (fx, fy) => [fx * w, fy * h], t, k);
+      },
+    };
+    return () => {
+      if (apiRef.current) apiRef.current = null;
+    };
+  }, [apiRef, seek, drawScene]);
+
   const step = (dir: 1 | -1) => {
     const v = videoRef.current;
     if (!v) return;
@@ -416,6 +406,26 @@ export function BarPathPlayer({
   };
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (drawMode && !marker) {
+      const p = toFrame(e.clientX, e.clientY);
+      if (!p || sketchRef.current) return;
+      videoRef.current?.pause();
+      if (drawMode.tool === "joint") {
+        const pose = technique ? frameAt(technique.track, timeRef.current) : null;
+        const j = nearestJoint(pose, p.fx, p.fy, p.r.dw, p.r.dh, 36);
+        if (j != null) drawMode.onAdd({ kind: "joint", j }, timeRef.current);
+        return;
+      }
+      sketchRef.current = { id: e.pointerId, a: [p.fx, p.fy], b: [p.fx, p.fy] };
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* the moves still come while the finger stays inside */
+      }
+      e.preventDefault();
+      draw();
+      return;
+    }
     if (!marker || dragRef.current) return;
     const p = toFrame(e.clientX, e.clientY);
     if (!p) return;
@@ -456,6 +466,15 @@ export function BarPathPlayer({
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const sk = sketchRef.current;
+    if (sk && sk.id === e.pointerId) {
+      const p = toFrame(e.clientX, e.clientY);
+      if (p) {
+        sk.b = [p.fx, p.fy];
+        draw();
+      }
+      return;
+    }
     const d = dragRef.current;
     if (!d || d.id !== e.pointerId || !marker) return;
     const p = toFrame(e.clientX, e.clientY);
@@ -485,6 +504,18 @@ export function BarPathPlayer({
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const sk = sketchRef.current;
+    if (sk && sk.id === e.pointerId) {
+      sketchRef.current = null;
+      if (
+        drawMode &&
+        drawMode.tool !== "joint" &&
+        Math.hypot(sk.a[0] - sk.b[0], sk.a[1] - sk.b[1]) > 0.01
+      )
+        drawMode.onAdd({ kind: drawMode.tool, a: sk.a, b: sk.b }, timeRef.current);
+      draw();
+      return;
+    }
     const d = dragRef.current;
     if (!d || d.id !== e.pointerId) return;
     dragRef.current = null;
@@ -504,7 +535,11 @@ export function BarPathPlayer({
   };
 
   const liveV =
-    analysis && analysis.units === "mm" && !marker
+    analysis &&
+    analysis.units === "mm" &&
+    !marker &&
+    !drawMode &&
+    (technique ? technique.layers.bar : true)
       ? valueAt(analysis.series.t, analysis.series.v, time)
       : null;
 
@@ -512,13 +547,19 @@ export function BarPathPlayer({
     <div className={cn("flex flex-col", className)}>
       <div
         ref={boxRef}
-        className={cn("relative min-h-0 flex-1 overflow-hidden bg-black", marker && "touch-none")}
+        className={cn(
+          "relative min-h-0 flex-1 overflow-hidden bg-black",
+          (marker || drawMode) && "touch-none",
+          drawMode && "cursor-crosshair",
+        )}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         data-bar-path-player
         data-marker-mode={marker ? (marker.size ? "fix" : "confirm") : undefined}
+        data-draw-tool={drawMode?.tool}
+        data-technique={technique ? "on" : undefined}
         data-marker={
           marker?.value
             ? [marker.value.fx, marker.value.fy, marker.value.fa, marker.value.fb]

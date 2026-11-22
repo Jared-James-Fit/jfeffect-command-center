@@ -40,6 +40,7 @@ import { footageIssues, meanBrightness, type FootageIssue } from "@/lib/lift-ana
 import { rgbaToGray, rgbaToGrayHalf, type Frame, type Gray } from "@/lib/lift-analysis/image";
 import { KeyedPass, mergePasses, type KeyedPoint, type TrackKey } from "@/lib/lift-analysis/keyed";
 import { cameraShift } from "@/lib/lift-analysis/motion";
+import { frameSightings, type Sighting } from "@/lib/lift-analysis/find";
 import { outerRim, rimSize, type OuterRim } from "@/lib/lift-analysis/rim-outer";
 import { loadMediabunny } from "@/lib/video-edit/probe";
 
@@ -172,6 +173,30 @@ function shownProposal(
   };
 }
 
+/**
+ * The last clip's sampled frames and the circles found in them, kept for the
+ * next read of the same clip (Confirm → Analyze, Fix tracking, Start over), so
+ * it never decodes and searches them twice: the same frames give the same
+ * circles. One clip at a time (a few MB at the working size).
+ */
+let lastDetected: { key: string; samples: Frame[]; seen: Sighting[][] } | null = null;
+const blobIds = new WeakMap<Blob, number>();
+let nextBlobId = 1;
+function sourceKey(src: Blob | string): string {
+  if (typeof src !== "string") {
+    let id = blobIds.get(src);
+    if (!id) blobIds.set(src, (id = nextBlobId++));
+    return `blob:${id}`;
+  }
+  // a signed link's token changes each time it's signed; the object is its path
+  try {
+    const u = new URL(src, typeof location !== "undefined" ? location.href : "http://x");
+    return u.origin + u.pathname;
+  } catch {
+    return src;
+  }
+}
+
 export async function analyzeVideo(input: RunInput): Promise<RunResult> {
   const report = (stage: RunStage, progress: number) =>
     input.onProgress?.({ stage, progress: Math.max(0, Math.min(1, progress)) });
@@ -242,23 +267,33 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
       poolSize: 1,
     });
 
-    // ── detect: four frames a second ──
+    // ── detect: four frames a second, each searched for circles as it's decoded ──
     report("finding", 0);
     const span = end - start;
     const n = sampleCount(span);
     const sampleTimes = Array.from({ length: n }, (_, i) => start + (span * (i + 0.5)) / n);
-    const samples: Frame[] = [];
-    let k = 0;
-    for await (const wc of sink.canvasesAtTimestamps(sampleTimes)) {
+    const cacheKey = `${sourceKey(input.source)}|${start}|${end}|${w}x${h}|${scale}|${n}`;
+    const cached = lastDetected?.key === cacheKey ? lastDetected : null;
+    const samples: Frame[] = cached ? cached.samples.slice() : [];
+    const seen: Sighting[][] = cached ? cached.seen : [];
+    if (!cached) {
+      let k = 0;
+      for await (const wc of sink.canvasesAtTimestamps(sampleTimes)) {
+        check();
+        k++;
+        if (!wc) continue;
+        const f = toFrame(wc);
+        if (f) {
+          samples.push(f);
+          await yieldToPage();
+          seen.push(frameSightings(f, samples.length - 1));
+        }
+        report("finding", (0.92 * k) / sampleTimes.length);
+        await yieldToPage();
+      }
       check();
-      k++;
-      if (!wc) continue;
-      const f = toFrame(wc);
-      if (f) samples.push(f);
-      report("finding", (0.8 * k) / sampleTimes.length);
-      await yieldToPage();
+      lastDetected = { key: cacheKey, samples: samples.slice(), seen };
     }
-    check();
     const frameNear = async (t: number): Promise<Frame | null> => {
       const wc = await sink.getCanvas(Math.max(first, t));
       return wc ? toFrame(wc) : null;
@@ -267,7 +302,7 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
     let keys: TrackKey[] = [];
     let proposal: Proposal | null = null;
     if (seed.kind === "auto" || seed.kind === "proposal" || input.detectOnly) {
-      proposal = proposePlate(samples);
+      proposal = proposePlate(samples, seen);
       const footage = footageIssues({
         fps: clip.fps,
         frame: { width: dw, height: dh, w, h },
@@ -327,7 +362,7 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
     const support =
       proposal && proposal.key === main
         ? { backbone: proposal.backbone, decoys: proposal.decoys }
-        : supportFor(main, samples);
+        : supportFor(main, samples, seen);
     const R = Math.sqrt(main.a * main.b);
     // every key's own picture of the plate (each follower matches against all of them)
     const keyViews: { frame: Frame; x: number; y: number; r: number }[] = [];

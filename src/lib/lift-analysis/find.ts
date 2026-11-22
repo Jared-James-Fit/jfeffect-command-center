@@ -661,27 +661,33 @@ export function stillCircles(tracks: CircleTrack[], nFrames: number): CircleTrac
   return tracks.filter((t) => t.seen >= minSeen && t.travelY < 0.15 && t.travelX < 0.15);
 }
 
-/** Circles in each sampled frame (found at half size, reported in the frame's own pixels). */
-export function sightings(samples: Frame[]): Sighting[][] {
-  return samples.map((f, fi) => {
-    const small = halfSize(f);
-    const range = radiusRange(small.w, small.h);
-    return circleCandidates(small, { ...range, max: 8 }).map((c) => ({
-      ...c,
-      x: c.x * 2 + 0.5,
-      y: c.y * 2 + 0.5,
-      r: c.r * 2,
-      a: c.a * 2,
-      b: c.b * 2,
-      t: f.t,
-      fi,
-    }));
-  });
+/** Circles in one sampled frame (found at half size, reported in the frame's own pixels). */
+export function frameSightings(f: Frame, fi: number): Sighting[] {
+  const small = halfSize(f);
+  const range = radiusRange(small.w, small.h);
+  return circleCandidates(small, { ...range, max: 8 }).map((c) => ({
+    ...c,
+    x: c.x * 2 + 0.5,
+    y: c.y * 2 + 0.5,
+    r: c.r * 2,
+    a: c.a * 2,
+    b: c.b * 2,
+    t: f.t,
+    fi,
+  }));
 }
 
-/** The plate in a clip, from frames spread over it. */
-export function findPlate(samples: Frame[]): PlateFind {
-  const seen = sightings(samples);
+/** Circles in each sampled frame. */
+export function sightings(samples: Frame[]): Sighting[][] {
+  return samples.map((f, fi) => frameSightings(f, fi));
+}
+
+/**
+ * The plate in a clip, from frames spread over it. `seen` is the frames'
+ * circles when they were found already (each frame's as it was decoded: the
+ * same result, without the second search).
+ */
+export function findPlate(samples: Frame[], seen: Sighting[][] = sightings(samples)): PlateFind {
   return pickPlate(linkTracks(seen, samples.length), samples.length, samples);
 }
 

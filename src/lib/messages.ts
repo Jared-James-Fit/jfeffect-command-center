@@ -33,6 +33,17 @@ export type MessageAttachment = {
     /** A chat lift not on a set: the set it's probably from, for one tap. */
     suggest?: { row_id: string; set: number; exercise?: string; set_name?: string } | null;
   };
+  /** Images: a film note's frame (lift_video_notes): the moment of a set video it marks, opened from the card. */
+  film_note?: {
+    note_id: string;
+    set_video_id: string;
+    t: number;
+    exercise?: string;
+    label?: string;
+    video_path: string;
+    poster_path?: string | null;
+    layers?: Record<string, boolean>;
+  };
   width?: number;
   height?: number;
   peaks?: number[];
