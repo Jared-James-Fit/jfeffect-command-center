@@ -301,6 +301,9 @@ export function MemberPlanStudio({ seed }: { seed?: { days: StudioPlanDay[]; pha
   );
 }
 
+/** Import a plan and Create with Cleo show once their flows ship (studio-start.tsx); until then, Build it yourself. */
+export const STUDIO_DRAFTS_READY = false;
+
 /** The three ways in, on a member's Nutrition page when they have no plan of their own. */
 export function StudioStartOptions() {
   const navigate = useNavigate();
@@ -314,7 +317,7 @@ export function StudioStartOptions() {
   );
   return (
     <div className="grid gap-2" data-studio-start>
-      {opts.map((o) => (
+      {opts.filter((o) => STUDIO_DRAFTS_READY || o.key === "build").map((o) => (
         <button key={o.key} type="button" onClick={() => navigate({ to: o.to, search: o.search as any })} className="rounded-2xl border border-border bg-card px-4 py-3 text-left hover:bg-muted/60" data-studio-option={o.key}>
           <div className="text-[15px] font-semibold">{o.title}</div>
           <div className="text-[13px] text-muted-foreground">{o.text}</div>
