@@ -59,7 +59,8 @@ describe("press and hold pauses a clip, Reels' way, everywhere a clip plays", ()
     expect(reels).toContain("if (hold.justReleased()) return;");
     expect(reels).toContain('(hold.holding || scrubShown) && "opacity-0 [&_*]:pointer-events-none"');
     // no play button left behind: letting go plays it again
-    expect(reels).not.toContain("<Play ");
+    // no play / pause icon for a tap (a tap is the sound); only the button for a clip the phone won't start (Low Power Mode)
+    expect(reels.replace(/data-video-refused[\s\S]*?<\/button>/, "")).not.toContain("<Play ");
   });
 });
 
