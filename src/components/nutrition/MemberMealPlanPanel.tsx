@@ -1,3 +1,4 @@
+import { makeAndDeliverPdf } from "@/lib/pdf/deliver";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -9,7 +10,6 @@ import { MacroTargetsChart } from "@/components/nutrition/MacroTargetsChart";
 import { MealPlanReader } from "@/components/nutrition/MealPlanReader";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 
 export function MemberMealPlanPanel() {
   const fn = usePovFn(useServerFn(getCoachAssignedMealPlan));
@@ -32,26 +32,25 @@ export function MemberMealPlanPanel() {
     if (!plan) return;
     setDownloading(true);
     try {
-      const { downloadMealPlanPdf } = await import(
-        "@/lib/nutrition-targets/meal-plan-pdf"
-      );
-      await downloadMealPlanPdf({
-        client_name: (plan as any).client_name ?? null,
-        coach_name: (plan as any).coach_name ?? null,
-        updated_at: (plan as any).updated_at ?? null,
-        start_date: (plan as any).start_date ?? null,
-        phase: plan.phase ?? null,
-        goal: plan.goal ?? null,
-        structure: plan.structure ?? null,
-        water: plan.water ?? null,
-        sleep: (plan as any).sleep ?? null,
-        client_notes: plan.client_notes ?? null,
-        disclaimer: "Consult a healthcare professional before starting any new diet or nutrition program.",
-        days: days as any[],
+      await makeAndDeliverPdf("Nutrition plan", async () => {
+        const { mealPlanPdfFile } = await import("@/lib/nutrition-targets/meal-plan-pdf");
+        return mealPlanPdfFile({
+          client_name: (plan as any).client_name ?? null,
+          coach_name: (plan as any).coach_name ?? null,
+          updated_at: (plan as any).updated_at ?? null,
+          start_date: (plan as any).start_date ?? null,
+          end_date: (plan as any).end_date ?? null,
+          phase: plan.phase ?? null,
+          goal: plan.goal ?? null,
+          structure: plan.structure ?? null,
+          water: plan.water ?? null,
+          sleep: (plan as any).sleep ?? null,
+          client_notes: plan.client_notes ?? null,
+          food_weighing_rules: (plan as any).food_weighing_rules ?? null,
+          supplements: (plan as any).supplements ?? null,
+          days: days as any[],
+        });
       });
-    } catch (err) {
-      console.error("Failed to generate meal plan PDF", err);
-      toast.error("Could not generate PDF. Please try again.");
     } finally {
       setDownloading(false);
     }

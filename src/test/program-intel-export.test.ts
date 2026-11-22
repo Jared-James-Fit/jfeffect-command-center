@@ -47,7 +47,7 @@ describe("Program Intelligence exports keep every record", () => {
     expect(csvCell(null)).toBe("");
   });
   it("PDF builds with the full log", () => {
-    const doc = buildIntelPdf(report, rec, { privacySafe: false });
+    const doc = buildIntelPdf(report, rec, { privacySafe: false }).finish();
     expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(2);
   });
 });

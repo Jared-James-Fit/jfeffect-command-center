@@ -225,9 +225,11 @@ describe("the PDF reads meals the same way as every screen", () => {
       ],
     });
     const pdf = doc.output();
-    expect(pdf).toContain("36P");
+    // the meal's title line carries its macros and the calories they make (36·4 + 65·4 + 12·9)
+    expect(pdf).toContain("P 36 g");
+    expect(pdf).toContain("512 kcal");
     expect(pdf).not.toContain("protein, 65 g carbohydrates");
-    expect(pdf).toContain("2579");
+    expect(pdf).toContain("2,579");
     // a Daily Total line in the meal text is never printed as a meal or a food
     expect(pdf).not.toContain("Approximately 180 g protein");
     expect(structureMealPlanDay(DEVIN_TRAINING).meals).toHaveLength(3);

@@ -15,7 +15,7 @@
 import { chunk, fetchAllPages } from "@/lib/supabase-paginate";
 import { isAtHomeBackupDefinitionsBlock, isAtHomeBackupReservedBlock } from "@/lib/at-home-backup";
 import { formatDaySubtitle } from "@/lib/workout-day-label";
-import type { FullTrainingReportBlock, FullTrainingReportData, LoggedSet } from "@/lib/workouts/workout-pdf";
+import type { FullTrainingReportBlock, FullTrainingReportData, LoggedSet, ReportMax } from "@/lib/workouts/workout-pdf";
 
 /* ───────────────────────────── Records ───────────────────────────── */
 
@@ -40,6 +40,7 @@ export type SrcDay = {
   notes?: string | null;
   notes_client_visible?: boolean | null;
   scheduled_date?: string | null;
+  is_optional?: boolean | null;
   archived?: boolean | null;
   deleted_at?: string | null;
 };
@@ -65,6 +66,17 @@ export type SrcNote = {
   updated_at?: string | null;
 };
 
+/** A max on file (pl_client_maxes), as the program PDF lists it. */
+export type SrcMax = {
+  lift: string;
+  unit: string | null;
+  one_rm: number | null;
+  training_max: number | null;
+  estimated_1rm: number | null;
+  active: boolean | null;
+  block_id: string | null;
+};
+
 export type ReportSource = {
   blocks: SrcBlock[];
   weeks: SrcWeek[];
@@ -73,12 +85,17 @@ export type ReportSource = {
   completions: SrcCompletion[];
   results: SrcResult[];
   notes: SrcNote[];
+  /** The maxes on file (a program whose loads are a % of one lists them); empty when they can't be read. */
+  maxes?: SrcMax[];
   /** Sources that couldn't be read (the report is made without them, and says so). */
   missing: string[];
 };
 
 /** Who the report is for: a coach sees their private day notes, a client never does. */
 export type ReportAudience = "coach" | "client";
+
+/** Program: what to do (every workout of a block). Report: what happened (prescribed against logged). */
+export type TrainingPdfMode = "program" | "report";
 
 /* ───────────────────────────── Reading ───────────────────────────── */
 
@@ -87,13 +104,14 @@ export const trainingReportSourceKey = (clientId: string) => ["training-report-s
 
 const BLOCK_COLS = "id, name, status, archived, client_visible, start_date, end_date, created_at, source_template_block_key";
 const WEEK_COLS = "id, block_id, week_index, notes, archived, deleted_at";
-const DAY_COLS = "id, week_id, day_index, title, subtitle, notes, notes_client_visible, scheduled_date, archived, deleted_at";
+const DAY_COLS = "id, week_id, day_index, title, subtitle, notes, notes_client_visible, scheduled_date, is_optional, archived, deleted_at";
 const ROW_COLS =
-  "id, day_id, sort_order, exercise_name_override, sets, reps_text, rpe, rir, percentage, percentage_basis, load_kg, load_lb, rest_seconds, tempo, notes, measurement_type, duration_seconds, purpose_label, movement_family, exercises(name)";
+  "id, day_id, sort_order, exercise_name_override, sets, reps_text, rpe, rir, percentage, percentage_basis, load_kg, load_lb, load_unit, rest_seconds, tempo, notes, measurement_type, duration_seconds, purpose_label, movement_family, exercises(name)";
 const COMPLETION_COLS = "id, day_id, scheduled_workout_id, started_at, in_progress_at, completed_at, client_notes";
 const RESULT_COLS =
-  "id, row_id, scheduled_workout_id, set_index, actual_reps, actual_load, actual_load_lb, actual_load_kg, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_rpe, actual_rpe_num, actual_rir, completed_duration_seconds, actual_calories, notes";
+  "id, row_id, scheduled_workout_id, set_index, actual_reps, actual_load, actual_load_lb, actual_load_kg, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_rpe, actual_rpe_num, actual_rir, completed_duration_seconds, actual_calories, actual_distance_m, actual_distance_unit, notes";
 const NOTE_COLS = "id, day_id, row_id, exercise_name, content, status, created_at, updated_at";
+const MAX_COLS = "lift, unit, one_rm, training_max, estimated_1rm, active, block_id";
 
 type Db = any;
 type Page<T> = PromiseLike<{ data: T[] | null; error: any }>;
@@ -118,6 +136,8 @@ export async function loadTrainingReportSource(sb: Db, clientId: string): Promis
     missing.push("exercise notes");
     return [] as SrcNote[];
   });
+  // a program's % loads say what they're of; a report made without them is still right
+  const maxesP = byClient<SrcMax>("pl_client_maxes", MAX_COLS).catch(() => [] as SrcMax[]);
   // Don't leave a rejection unhandled while the program loads.
   completionsP.catch(() => {});
   resultsP.catch(() => {});
@@ -132,8 +152,8 @@ export async function loadTrainingReportSource(sb: Db, clientId: string): Promis
   const rows = await readByIds<SrcRow>(days.map((d) => d.id), (ids, f, t) =>
     sb.from("pl_exercise_rows").select(ROW_COLS).in("day_id", ids).order("id").range(f, t),
   );
-  const [completions, results, notes] = await Promise.all([completionsP, resultsP, notesP]);
-  return { blocks, weeks, days, rows, completions, results, notes, missing };
+  const [completions, results, notes, maxes] = await Promise.all([completionsP, resultsP, notesP, maxesP]);
+  return { blocks, weeks, days, rows, completions, results, notes, maxes, missing };
 }
 
 /* ───────────────────────────── Reading a set ───────────────────────────── */
@@ -230,8 +250,9 @@ function dayFacts(day: SrcDay, ix: Indexed): DayFacts {
  * archived block, an at-home backup or one hidden from the client shows only
  * the days that were trained, and so does a removed day or week.
  */
-function blockDays(block: SrcBlock, ix: Indexed): Array<{ week: SrcWeek; days: DayFacts[] }> {
-  const historyOnly = isArchivedBlock(block) || isAtHomeBackupReservedBlock(block) || block.client_visible === false;
+function blockDays(block: SrcBlock, ix: Indexed, mode: TrainingPdfMode = "report"): Array<{ week: SrcWeek; days: DayFacts[] }> {
+  // a program is the whole block as written (a finished one too); a report of an archived, backup or hidden block is what was trained
+  const historyOnly = mode === "report" && (isArchivedBlock(block) || isAtHomeBackupReservedBlock(block) || block.client_visible === false);
   return (ix.weeksByBlock.get(block.id) ?? [])
     .slice()
     .sort((a, b) => (a.week_index ?? 0) - (b.week_index ?? 0))
@@ -241,7 +262,7 @@ function blockDays(block: SrcBlock, ix: Indexed): Array<{ week: SrcWeek; days: D
         .slice()
         .sort((a, b) => (a.day_index ?? 0) - (b.day_index ?? 0))
         .map((d) => dayFacts(d, ix))
-        .filter((f) => f.trained || !(historyOnly || weekGone || f.day.archived || f.day.deleted_at));
+        .filter((f) => (mode === "report" && f.trained) || !(historyOnly || weekGone || f.day.archived || f.day.deleted_at));
       return { week, days };
     })
     .filter((w) => w.days.length > 0);
@@ -259,6 +280,10 @@ export type ReportBlockOption = {
   done: number;
   sets: number;
   archived: boolean;
+  /** Not shown to the client yet (a coach's draft). */
+  hidden: boolean;
+  /** Finished or archived. */
+  ended: boolean;
   /** Running today. */
   current: boolean;
   /** Not started and nothing trained yet (left out of the default pick). */
@@ -271,19 +296,26 @@ function byDateAsc(a: SrcBlock, b: SrcBlock): number {
   return as.localeCompare(bs) || String(a.created_at ?? "").localeCompare(String(b.created_at ?? ""));
 }
 
-/** The blocks a report can cover: everything given to the client, plus any other block they trained. */
-export function reportBlockOptions(src: ReportSource, today: string): ReportBlockOption[] {
+/**
+ * The blocks a PDF can cover: everything given to the client, plus any other
+ * block they trained. A coach's program PDF also offers a block the client
+ * can't see yet (a draft), marked Hidden.
+ */
+export function reportBlockOptions(src: ReportSource, today: string, opts: { mode?: TrainingPdfMode; audience?: ReportAudience } = {}): ReportBlockOption[] {
+  const mode = opts.mode ?? "report";
   const ix = index(src);
   const out: Array<ReportBlockOption & { _b: SrcBlock }> = [];
   for (const b of src.blocks) {
     if (isAtHomeBackupDefinitionsBlock(b)) continue;
-    const weeks = blockDays(b, ix);
+    const weeks = blockDays(b, ix, mode);
     const days = weeks.flatMap((w) => w.days);
     const done = days.filter((d) => d.done).length;
     const sets = days.reduce((n, d) => n + d.sets, 0);
     const trained = days.some((d) => d.trained);
+    const hidden = b.client_visible === false && !isArchivedBlock(b) && !isAtHomeBackupReservedBlock(b);
     const offered = !isArchivedBlock(b) && b.client_visible !== false && !isAtHomeBackupReservedBlock(b);
-    if (!trained && !offered) continue;
+    const draftForCoach = mode === "program" && opts.audience === "coach" && hidden;
+    if (!trained && !offered && !draftForCoach) continue;
     if (!days.length) continue;
     const started = trained || (!!b.start_date && b.start_date <= today);
     out.push({
@@ -297,6 +329,8 @@ export function reportBlockOptions(src: ReportSource, today: string): ReportBloc
       done,
       sets,
       archived: isArchivedBlock(b),
+      hidden,
+      ended: isArchivedBlock(b) || (!!b.end_date && b.end_date < today),
       current: !isArchivedBlock(b) && !!b.start_date && b.start_date <= today && (!b.end_date || b.end_date >= today),
       upcoming: !started,
     });
@@ -307,8 +341,19 @@ export function reportBlockOptions(src: ReportSource, today: string): ReportBloc
     .map(({ _b, ...o }) => o);
 }
 
-/** What's ticked when the picker opens: every block that has started or been trained (all of them for a client who hasn't started). */
-export function defaultReportSelection(options: ReportBlockOption[]): string[] {
+/**
+ * What's ticked when the picker opens. A report: every block that has started
+ * or been trained (all of them for a client who hasn't started). A program:
+ * what's running and what's next, never a finished or hidden one (the latest
+ * block when nothing is running or ahead).
+ */
+export function defaultReportSelection(options: ReportBlockOption[], mode: TrainingPdfMode = "report"): string[] {
+  if (mode === "program") {
+    const live = options.filter((o) => !o.ended && !o.hidden && (o.current || o.upcoming)).map((o) => o.id);
+    if (live.length) return live;
+    const visible = options.filter((o) => !o.hidden);
+    return visible.length ? [visible[0].id] : options.slice(0, 1).map((o) => o.id);
+  }
   const started = options.filter((o) => !o.upcoming).map((o) => o.id);
   return started.length ? started : options.map((o) => o.id);
 }
@@ -336,8 +381,9 @@ export function blockRangeLabel(start: string | null, end: string | null, today:
 export function buildTrainingReport(
   src: ReportSource,
   blockIds: string[],
-  opts: { clientName?: string | null; audience: ReportAudience; generatedAt?: Date },
+  opts: { clientName?: string | null; audience: ReportAudience; generatedAt?: Date; mode?: TrainingPdfMode; today?: string },
 ): FullTrainingReportData {
+  const mode = opts.mode ?? "report";
   const ix = index(src);
   const wanted = new Set(blockIds);
   const blocks: FullTrainingReportBlock[] = src.blocks
@@ -348,7 +394,7 @@ export function buildTrainingReport(
       block_status: isArchivedBlock(b) ? "Archived" : b.status ?? null,
       block_start: b.start_date,
       block_end: b.end_date,
-      weeks: blockDays(b, ix).map(({ week, days }) => ({
+      weeks: blockDays(b, ix, mode).map(({ week, days }) => ({
         id: week.id,
         week_index: week.week_index,
         notes: week.notes ?? null,
@@ -362,6 +408,7 @@ export function buildTrainingReport(
             notes: showNote ? day.notes ?? null : null,
             notes_client_visible: day.notes_client_visible ?? null,
             scheduled_date: day.scheduled_date ?? null,
+            is_optional: day.is_optional ?? null,
             started_at: completion?.started_at ?? null,
             in_progress_at: completion?.in_progress_at ?? null,
             completed_at: completion?.completed_at ?? null,
@@ -377,10 +424,25 @@ export function buildTrainingReport(
         }),
       })),
     }));
+  const picked = src.blocks.filter((b) => wanted.has(b.id));
+  const nameOf = new Map(src.blocks.map((b) => [b.id, (b.name ?? "").trim() || "Training block"]));
+  const maxes: ReportMax[] = (src.maxes ?? [])
+    .filter((m) => m.active !== false && (!m.block_id || picked.some((b) => b.id === m.block_id)))
+    .map((m) => ({
+      lift: m.lift,
+      unit: (m.unit === "kg" ? "kg" : "lb") as "kg" | "lb",
+      one_rm: m.one_rm != null ? Number(m.one_rm) : null,
+      training_max: m.training_max != null ? Number(m.training_max) : null,
+      estimated_1rm: m.estimated_1rm != null ? Number(m.estimated_1rm) : null,
+      block: m.block_id ? nameOf.get(m.block_id) ?? null : null,
+    }))
+    .sort((a, b) => a.lift.localeCompare(b.lift) || String(a.block ?? "").localeCompare(String(b.block ?? "")));
   return {
     client_name: opts.clientName ?? null,
     generated_at: opts.generatedAt ?? new Date(),
     audience: opts.audience,
+    today: opts.today,
+    maxes,
     blocks,
   };
 }

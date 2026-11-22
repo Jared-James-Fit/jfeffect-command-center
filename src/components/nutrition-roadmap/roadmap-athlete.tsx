@@ -10,7 +10,8 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { CalendarCheck, ChevronRight, Flag, Loader2, Route, ShieldAlert } from "lucide-react";
+import { CalendarCheck, ChevronRight, Download, Flag, Loader2, Route, ShieldAlert } from "lucide-react";
+import { makeAndDeliverPdf } from "@/lib/pdf/deliver";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -327,6 +328,16 @@ export function RoadmapSheet({ open, onOpenChange, view, onEditGoal }: { open: b
           Change the goal
         </Button>
       )}
+
+      <Button
+        variant="ghost"
+        className="h-11 w-full text-muted-foreground"
+        data-roadmap-pdf
+        onClick={() => void makeAndDeliverPdf("Nutrition roadmap", async () => (await import("@/lib/nutrition-roadmap/roadmap-pdf")).roadmapPdfFile(view, "athlete"))}
+      >
+        <Download className="mr-2 h-4 w-4" aria-hidden />
+        Download PDF
+      </Button>
     </SheetFrame>
   );
 }
