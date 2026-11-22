@@ -220,3 +220,16 @@ describe("swapping a food", () => {
     expect(bagel.qty * 2).toBe(Math.round(bagel.qty * 2));
   });
 });
+
+describe("recipes and label foods in a plan", () => {
+  it("a cookbook recipe reads and writes as servings", async () => {
+    const { RECIPE_FOODS } = await import("@/components/nutrition-studio/use-studio-foods");
+    const r = RECIPE_FOODS[0];
+    const it = readItemLine(`1 serving ${r.lineName}`, RECIPE_FOODS);
+    expect(it.foodId).toBe(r.id);
+    expect(it.unit).toBe("each");
+    const look = (id: string) => RECIPE_FOODS.find((f) => f.id === id) ?? builtinFood(id);
+    expect(itemLine({ ...it, qty: 2 }, look)).toBe(`2 servings ${r.lineName}`);
+    expect(itemMacros(r, 2, "each")!.protein).toBe(r.perServing!.protein * 2);
+  });
+});

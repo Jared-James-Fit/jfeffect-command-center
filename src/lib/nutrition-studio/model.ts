@@ -182,7 +182,7 @@ export function readItemLine(line: string, customs: StudioFood[] = []): StudioIt
       let unit: StudioUnit | null = PLAIN_UNIT[a.unit] ?? null;
       let qty = a.qty;
       if (a.unit === "kg" || a.unit === "l") qty = a.qty * 1000;
-      if (!unit && food.each) unit = "each";
+      if (!unit && (food.each || food.perServing)) unit = "each";
       if (unit) return { id: newId("i"), foodId: food.id, qty: round2(qty), unit };
     }
   }
