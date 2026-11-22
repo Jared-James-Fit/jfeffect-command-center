@@ -269,6 +269,10 @@ const REGISTRY: Entry[] = [
   // tab row that holds most of it.
   { to: "/admin/account", label: "Account", icon: UserCog, group: "Settings",
     visibleTo: ["admin", "coach", "assistant_coach", "media_manager", "sales", "support", "operations", "staff"] },
+  // Your own documents (private to you); a client's live on their profile's Documents tab.
+  { to: "/admin/documents", label: "Documents", icon: FileText, group: "Settings", searchOnly: true,
+    visibleTo: ["admin", "coach", "assistant_coach", "media_manager", "sales", "support", "operations", "staff"],
+    keywords: ["documents", "files", "uploads", "pdf", "templates", "my files"] },
   { to: "/admin/settings", label: "Workspace", icon: Settings, group: "Settings",
     visibleTo: ["admin", "coach", "assistant_coach", "sales", "support", "operations", "staff"],
     keywords: ["app settings", "email sender", "drive", "archive", "signnow"] },
