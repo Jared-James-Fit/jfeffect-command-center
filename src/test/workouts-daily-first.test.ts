@@ -94,10 +94,11 @@ describe("the cardio card", () => {
 
 describe("the program card is one glance", () => {
   const card = read("src/components/workouts/program-roadmap.tsx");
-  it("shows the block and this week's focus; what the week is for and the roadmap fold under Plan details", () => {
+  it("shows the phases with this week's focus under the block it's in; every week is one tap away in the plan sheet", () => {
     expect(card).toContain("data-roadmap-week");
-    expect(card).toContain("{showAll && line && (");
-    expect(card).toContain("data-roadmap-week-detail");
-    expect(card).toContain("<span>Plan details</span>");
+    expect(card).toContain("data-roadmap-now");
+    expect(card).toContain("line-clamp-2");
+    expect(card).toContain("data-roadmap-timeline");
+    expect(card).not.toContain("<span>Plan details</span>");
   });
 });

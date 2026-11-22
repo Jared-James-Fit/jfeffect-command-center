@@ -39,11 +39,12 @@ describe("analytics page order and headers", () => {
   it("puts training (lift progress, PRs, muscle volume) before recovery and lifestyle", () => {
     const lift = dash.indexOf('aria-label="Lift Progress"');
     expect(lift).toBeGreaterThan(-1);
-    expect(lift).toBeLessThan(dash.indexOf('aria-label="Recent ATPRs"'));
+    expect(lift).toBeLessThan(dash.indexOf('aria-label="All-time PRs"'));
     const volume = dash.indexOf("<TrainingLoadSection");
     expect(volume).toBeGreaterThan(-1);
     expect(volume).toBeLessThan(dash.indexOf('id="recovery"'));
-    expect(dash.indexOf('id="recovery"')).toBeLessThan(dash.indexOf('label="Sleep"'));
+    // Recovery opens on what was logged at check-out (sleep, recovered, pain), never a model score
+    expect(dash.indexOf('id="recovery"')).toBeLessThan(dash.indexOf("<RecoveryTrendsCard"));
   });
 
   it("section titles sit on their own row, so a long block name can't hide them", () => {

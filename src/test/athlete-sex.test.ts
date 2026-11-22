@@ -152,7 +152,7 @@ describe("one field, kept honest", () => {
   });
 
   it("readers use the profile: SBD card (no device-only toggle) and the macro calculator (no male default)", () => {
-    const sbd = read("src/components/analytics/sbd-split-card.tsx");
+    const sbd = read("src/lib/analytics/competition-strength.queries.ts");
     expect(sbd).not.toContain("localStorage");
     expect(sbd).toContain('supabase.from("clients").select("sex")');
     const calc = read("src/components/nutrition/MacroCalculatorDialog.tsx");

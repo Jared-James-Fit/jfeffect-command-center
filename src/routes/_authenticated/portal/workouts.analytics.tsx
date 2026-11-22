@@ -7,8 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
 import {
-  exactBlockFilter,
-  defaultAnalyticsFilter,
+  filterFromSearch,
+  searchFromFilter,
   type AnalyticsFilter,
 } from "@/components/analytics/analytics-filter-bar";
 import {
@@ -68,20 +68,15 @@ function PortalAnalytics() {
 
   // Resolve URL-requested initial filter so deep-links keep working.
   const initialFilter: AnalyticsFilter | null = useMemo(() => {
-    if (!clientBlocks.length) return null;
-    if (search.filter === "exact_block" && search.blockId) {
-      const block = clientBlocks.find((b) => b.id === search.blockId);
-      if (block) return exactBlockFilter(block, clientBlocks);
-    }
-    return defaultAnalyticsFilter(clientBlocks);
+    if (!clientBlocks.length && !search.filter) return null;
+    return filterFromSearch(search.filter, search.blockId, clientBlocks);
   }, [clientBlocks, search.filter, search.blockId]);
 
   const handleFilterChange = (next: AnalyticsFilter) => {
     navigate({
       search: (prev: any) => ({
         ...prev,
-        filter: next.preset === "exact_block" ? "exact_block" : "",
-        blockId: next.preset === "exact_block" ? (next as any).blockId : "",
+        ...searchFromFilter(next),
       }),
       replace: true,
     });
@@ -93,12 +88,11 @@ function PortalAnalytics() {
     <>
       {/* the same header (and back) as every other client page that opens from a tab */}
       <PageHeader
-        title="Training Analytics"
-        subtitle="Your lifts, volume and recovery over time."
+        title="Training analytics"
         backTo="/portal/workouts"
         backLabel="Workouts"
       />
-      <div className="p-4 pb-10 md:p-8">
+      <div className="px-4 pb-10 pt-3 md:p-8">
         {client?.id ? (
           <ClientAnalyticsDashboard
             clientId={client.id}

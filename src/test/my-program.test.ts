@@ -306,8 +306,9 @@ describe("the screens: one Programs page, every program says where it's from, an
     expect(card).toContain("data-manage-program");
     expect(card).not.toContain("data-manage-program-row");
     expect(card).not.toContain('aria-label="Manage program"');
+    // the card is always today's program (another one is only looked at in the plan sheet)
     expect(card).toContain(
-      "onManage={!browsing && !(allDone && nextProgramTo) ? onManage : undefined}",
+      "onManage={!(allDone && nextProgramTo) ? onManage : undefined}",
     );
     // the Programs page's running program is the same heading, with one way to Workouts
     expect(hub).toContain("<ActiveProgramHeader");
@@ -318,15 +319,15 @@ describe("the screens: one Programs page, every program says where it's from, an
     expect(workouts).toContain('<CalendarCheck className="mr-2 h-4 w-4" /> Training days');
   });
 
-  it("a finished program of their own points at the next one; a one-block program's weeks fold like a roadmap", () => {
-    expect(card).toContain("{!browsing && nextProgramTo && allDone && (");
+  it("a finished program of their own points at the next one; every week of the plan is one tap away, never a fold", () => {
+    expect(card).toContain("{nextProgramTo && allDone ? (");
     expect(card).toContain("<span>Choose your next program</span>");
     expect(workouts).toContain(
       'nextProgramTo={mode === "self" && isSelfServe ? "/portal/programs" : undefined}',
     );
-    expect(card).toContain("<span>Plan details</span>");
-    expect(card).toContain("{showAll && (");
-    expect(card).not.toContain("(showAll || blocks.length === 1)");
+    expect(card).toContain("<span>Full plan</span>");
+    expect(card).not.toContain("<span>Plan details</span>");
+    expect(card).toContain("function ProgramPlanSheet(");
   });
 
   it("a rest day says what's next, and a member with no program sees only the way to one", () => {
@@ -438,9 +439,9 @@ describe("the membership screens stay calm and never dead-end", () => {
   it("training analytics' picked chips and unit switch are neutral, never the brand red", () => {
     const bar = readFileSync("src/components/analytics/analytics-filter-bar.tsx", "utf8");
     const dash = readFileSync("src/components/analytics/client-analytics-dashboard.tsx", "utf8");
-    expect(bar).not.toContain("border-primary bg-primary text-primary-foreground");
-    expect(bar).toContain('? "border-foreground bg-foreground text-background"');
+    expect(bar).not.toContain("bg-primary");
     expect(dash).not.toContain("data-[state=on]:bg-primary");
+    expect(dash).toContain("data-[state=on]:bg-foreground data-[state=on]:text-background");
   });
 
   it("Programs pages light the Workouts tab, and the start sheet replaces itself in history", () => {
@@ -474,7 +475,7 @@ describe("Workouts reads today first, and every page under it has a way back", (
   it("no empty readiness or month card before there's anything in them", () => {
     expect(workouts).toMatch(/<RecoveryPreviewCard[\s\S]{0,160}hideWhenEmpty/);
     expect(workouts).toContain(
-      "<TrainingAnalyticsPreviewCard clientId={clientId} hideWhenEmpty bare />",
+      "<TrainingAnalyticsPreviewCard clientId={clientId} hideWhenEmpty bare part={part} />",
     );
     const ready = readFileSync("src/components/analytics/recovery-preview-card.tsx", "utf8");
     expect(ready.match(/if \(hideWhenEmpty\) return null;/g)?.length).toBe(2);

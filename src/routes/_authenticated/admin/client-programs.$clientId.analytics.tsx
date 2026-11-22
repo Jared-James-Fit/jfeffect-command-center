@@ -6,8 +6,8 @@ import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import {
-  defaultAnalyticsFilter,
-  exactBlockFilter,
+  filterFromSearch,
+  searchFromFilter,
   type AnalyticsFilter,
 } from "@/components/analytics/analytics-filter-bar";
 import { type AnalyticsBlock, normalizeAnalyticsBlock } from "@/lib/analytics/blocks";
@@ -57,24 +57,20 @@ function AnalyticsPage() {
     },
   });
   const initialFilter: AnalyticsFilter | null = useMemo(() => {
-    if (!clientBlocks.length) return null;
-    if (search.filter === "exact_block" && search.blockId) {
-      const block = clientBlocks.find((b) => b.id === search.blockId);
-      if (block) return exactBlockFilter(block, clientBlocks);
-    }
-    return defaultAnalyticsFilter(clientBlocks);
+    if (!clientBlocks.length && !search.filter) return null;
+    return filterFromSearch(search.filter, search.blockId, clientBlocks);
   }, [clientBlocks, search.filter, search.blockId]);
   const initialView = ANALYTICS_VIEWS.some(([v]) => v === search.view) ? (search.view as AnalyticsView) : undefined;
 
   return (
     <>
       <PageHeader
-        title="Training Analytics"
+        title="Training analytics"
         subtitle={client?.full_name ?? ""}
         backTo={clientTrainingHref(clientId)}
         backLabel="Training"
       />
-      <div className="p-4 pb-10 md:p-8">
+      <div className="px-4 pb-10 pt-3 md:p-8">
         <ClientAnalyticsDashboard
           clientId={clientId}
           preferredUnit={client?.preferred_weight_unit === "kg" ? "kg" : "lb"}
@@ -87,8 +83,7 @@ function AnalyticsPage() {
             navigate({
               search: (prev: any) => ({
                 ...prev,
-                filter: next.preset === "exact_block" ? "exact_block" : "",
-                blockId: next.preset === "exact_block" ? (next as any).blockId : "",
+                ...searchFromFilter(next),
               }),
               replace: true,
             })
