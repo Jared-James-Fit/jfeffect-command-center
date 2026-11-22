@@ -28,8 +28,14 @@ const ICON: Record<ShareTemplate, LucideIcon> = {
   plain: Circle,
 };
 
-/** One circle in the row: a look on a card, or Normal (no card). Keys are unique across the row. */
-export type LookItem = { key: string; look: ShareTemplate; label: string };
+/**
+ * One circle in the row: a look on a card, Normal (no card), or a story
+ * filter (`emoji` on its circle). `group`: which chip over the row it's under
+ * (Today, Lock in, Train…). Keys are unique across the row.
+ */
+export type LookItem = { key: string; look: ShareTemplate; label: string; emoji?: string; group?: string };
+/** A chip over the row: tap it and the row glides to its first filter. */
+export type LookGroup = { key: string; label: string };
 
 /** A card's looks as circles (the studio for one workout or one lock in). */
 export function lookItems(looks: ShareTemplate[] | null | undefined): LookItem[] | null {
@@ -56,6 +62,7 @@ export function LookCarousel({
   counting = false,
   showName = true,
   hold,
+  groups,
 }: {
   looks: LookItem[] | null;
   /** The key of the one in the ring. */
@@ -69,11 +76,13 @@ export function LookCarousel({
   showName?: boolean;
   /** Hold to film (Normal, no card): start / stop, and how far into the clip limit it is (null: not filming). */
   hold?: { onStart: () => void; onEnd: () => void; progress: number | null; seconds: number };
+  /** Chips over the row (the filters' groups), in the row's order. */
+  groups?: LookGroup[];
 }) {
   const many = !!looks && looks.length > 1 && !!look && looks.some((l) => l.key === look);
   if (!many) return <Shutter onShoot={onShoot} disabled={disabled} counting={counting} hold={hold} />;
   // a new set of filters starts a fresh row, on the one you're on
-  return <Glide key={looks!.map((l) => l.key).join("|")} looks={looks!} look={look!} onLook={onLook} onShoot={onShoot} disabled={disabled} counting={counting} showName={showName} hold={hold} />;
+  return <Glide key={looks!.map((l) => l.key).join("|")} looks={looks!} look={look!} onLook={onLook} onShoot={onShoot} disabled={disabled} counting={counting} showName={showName} hold={hold} groups={groups} />;
 }
 
 type Hold = { onStart: () => void; onEnd: () => void; progress: number | null; seconds: number };
@@ -177,7 +186,8 @@ function Shutter({ onShoot, disabled, counting, hold }: { onShoot: () => void; d
   );
 }
 
-function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hold }: {
+function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hold, groups }: {
+  groups?: LookGroup[];
   looks: LookItem[];
   look: string;
   onLook: (key: string) => void;
@@ -263,8 +273,12 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
     el.scrollTo({ left: i * STEP, behavior: "smooth" });
   };
 
+  // the chips: only groups that have a filter in this row
+  const chips = (groups ?? []).filter((g) => looks.some((l) => l.group === g.key));
+  const onGroup = looks[at]?.group ?? null;
   return (
     <div className="relative" data-look-carousel>
+      {chips.length > 1 && !filming && <GroupChips chips={chips} on={onGroup} onPick={(k) => bring(Math.max(0, looks.findIndex((l) => l.group === k)))} />}
       {/* what the ring holds, above it (the clip's time while filming) */}
       <div className={cn("pointer-events-none mb-1.5 flex justify-center", !showName && !filming && "sr-only")}>
         {filming ? (
@@ -332,9 +346,13 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
                   </span>
                 ) : on && counting ? (
                   <span className="block h-6 w-6 rounded-md bg-red-500" />
-                ) : on && l.look === "plain" ? (
+                ) : on && l.look === "plain" && !l.emoji ? (
                   // no filter in the ring: just the shutter, like Instagram's
                   <span className="sr-only">{l.label}</span>
+                ) : l.emoji ? (
+                  <span className="text-[26px] leading-none" aria-hidden>
+                    {l.emoji}
+                  </span>
                 ) : (
                   <Icon className="h-6 w-6" strokeWidth={2.2} />
                 )}
@@ -347,4 +365,61 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
       </div>
     </div>
   );
+}
+
+/**
+ * The filters' groups over the row (Today · Lock in · Train · Block · Fuel ·
+ * Time · Mindset · Vibe): the one the ring is in is lit as you swipe, and a
+ * tap glides the row to that group's first filter. Scrolls on a narrow
+ * phone, keeping the lit one in view.
+ */
+function GroupChips({ chips, on, onPick }: { chips: LookGroup[]; on: string | null; onPick: (key: string) => void }) {
+  const row = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = row.current;
+    const lit = el?.querySelector<HTMLElement>("[aria-pressed=true]");
+    if (!el || !lit) return;
+    const left = lit.offsetLeft - (el.clientWidth - lit.offsetWidth) / 2;
+    el.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+  }, [on]);
+  return (
+    <div
+      ref={row}
+      className="mb-2 flex gap-1.5 overflow-x-auto px-4 [mask-image:linear-gradient(90deg,transparent,#000_16px,#000_calc(100%-16px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      role="group"
+      aria-label="Filter groups"
+      data-filter-groups
+    >
+      {chips.map((g) => (
+        <button
+          key={g.key}
+          type="button"
+          aria-pressed={g.key === on}
+          onClick={() => {
+            feedback("tap");
+            onPick(g.key);
+          }}
+          className={cn(
+            "h-8 shrink-0 rounded-full px-3 text-[13px] font-bold transition-colors duration-200 active:scale-95",
+            g.key === on ? "bg-white text-black" : "bg-black/40 text-white/85 backdrop-blur-md",
+          )}
+          data-filter-group={g.key}
+        >
+          {g.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** A filter's glyph, as on its circle: its emoji, else its card's icon (Normal: an empty ring). */
+export function LookGlyph({ item, className }: { item: LookItem; className?: string }) {
+  if (item.emoji)
+    return (
+      <span className={cn("leading-none", className)} aria-hidden>
+        {item.emoji}
+      </span>
+    );
+  const Icon = ICON[item.look];
+  return <Icon className={className} aria-hidden />;
 }

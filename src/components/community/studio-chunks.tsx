@@ -65,6 +65,7 @@ export function StudioLoading() {
 export const ShareStudio = lazyWithRetry(() => import("@/components/community/share-studio").then((m) => ({ default: m.ShareStudio })), { fallback: LoadFailed });
 export const ShareComposer = lazyWithRetry(() => import("@/components/community/share-composer").then((m) => ({ default: m.ShareComposer })), { fallback: LoadFailed });
 export const NoteEditor = lazyWithRetry(() => import("@/components/community/note-editor").then((m) => ({ default: m.NoteEditor })), { fallback: LoadFailed });
+export const PostComposer = lazyWithRetry(() => import("@/components/community/post-composer").then((m) => ({ default: m.PostComposer })), { fallback: LoadFailed });
 
 let preloaded = false;
 export function preloadStudio() {
@@ -73,6 +74,7 @@ export function preloadStudio() {
   void ShareStudio.preload();
   void ShareComposer.preload();
   void NoteEditor.preload();
+  void PostComposer.preload();
 }
 
 /** Fetch the studio while the phone is idle, so Post opens instantly (and still works after a publish). */

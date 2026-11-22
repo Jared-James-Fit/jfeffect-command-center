@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { CalendarClock, Cake, CheckCircle2, ChevronDown, ChevronRight, Eye, Flag, Flame, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -11,7 +11,10 @@ import { CommunityScreen } from "@/components/community/community-screen";
 import { CoachPostsTab } from "@/components/community/posts-schedule";
 import { PostScoreBoard } from "@/components/community/post-score-board";
 import { CoachPostRow } from "@/components/community/community-entry";
-import { NoteEditor } from "@/components/community/note-editor";
+import { PostComposer, StudioShell, preloadStudio } from "@/components/community/studio-chunks";
+import { opensLibraryOnTap, useComposerPicker } from "@/components/community/composer-pick";
+import { NORMAL_KEY, buildFilterRow, fxCard, isFxKey, useFilterContext } from "@/components/community/crew-filters";
+import { mealCameraCard } from "@/lib/community";
 import { PostDetailDialog } from "@/components/community/post-detail";
 import { ReportsReviewSheet, useOpenReports } from "@/components/community/reports-review";
 import { MANAGE_TABS, manageTabFromHash, type ManageTab } from "@/lib/crew-manage";
@@ -96,7 +99,20 @@ export function AdminCommunityHub() {
   useEffect(() => {
     if (hubTabFromHash(`#${routeHash}`) === "league") void navigate({ to: "/admin/league", replace: true });
   }, [routeHash, navigate]);
+  // + : the New post screen (Instagram's), the coach's way: a post to the crew, a poll allowed
   const [writing, setWriting] = useState(false);
+  const [incoming, setIncoming] = useState<{ files: File[]; live: boolean; n: number } | null>(null);
+  const picks = useRef(0);
+  const picker = useComposerPicker((files, live) => {
+    picks.current += 1;
+    setIncoming({ files, live, n: picks.current });
+    setWriting(true);
+  });
+  const [fx, setFx] = useState<string | null>(null);
+  const filterCtx = useFilterContext({ enabled: writing, firstName: null, session: null, finished: null, blockTitle: null, fuel: null });
+  const filterRow = useMemo(() => buildFilterRow(filterCtx), [filterCtx]);
+  const baseCard = useMemo(() => mealCameraCard({ athleteName: null }).data, []);
+  const fxOn = useMemo(() => (fx ? fxCard(fx, filterCtx, baseCard) : null), [fx, filterCtx, baseCard]);
   const act = useSeriesAction();
   const { data: pulse } = useCommunityPulse(!viewOnly);
   const reports = useOpenReports(!viewOnly).data?.length ?? 0;
@@ -117,28 +133,47 @@ export function AdminCommunityHub() {
     <>
       <CommunityScreen
         coach={{
-          onWrite: () => setWriting(true),
+          onWrite: () => {
+            preloadStudio();
+            setFx(null);
+            setIncoming(null);
+            setWriting(true);
+            // a finger: the photo library opens in this same tap (a browser only opens one from a tap)
+            if (opensLibraryOnTap()) picker.library();
+          },
           waiting: counts.needs > 0,
           startTab: counts.needs > 0 ? "needs" : "posts",
           manage: <CrewManage counts={counts} />,
         }}
       />
-      <NoteEditor
-        open={writing}
-        title="Write a post"
-        initial=""
-        saving={act.isPending}
-        onClose={() => setWriting(false)}
-        allowPoll
-        media={{ initial: null, key: "new-post" }}
-        attach={{ initial: null, key: "new-post" }}
-        onSave={async (body, poll, media) => {
-          const r = await act.mutateAsync({ kind: "note", body, poll, media });
-          feedback("post");
-          toast.success(poll ? "Poll posted to the community" : "Posted to the community");
-          return r?.id;
-        }}
-      />
+      {picker.inputs}
+      {writing && (
+        <StudioShell onClose={() => setWriting(false)}>
+          <PostComposer
+            open={writing}
+            onClose={() => setWriting(false)}
+            incoming={incoming}
+            onPick={(how) => (how === "camera" ? picker.camera() : picker.library())}
+            filters={{
+              items: filterRow.items,
+              groups: filterRow.groups,
+              on: fx ?? NORMAL_KEY,
+              pick: (k) => setFx(isFxKey(k) ? k : null),
+              card: fxOn?.card ?? null,
+              gradeOnly: fxOn?.grade ?? false,
+            }}
+            post={null}
+            coach={{
+              save: async ({ caption, poll, media }) => {
+                const r = await act.mutateAsync({ kind: "note", body: caption, poll, media });
+                feedback("post");
+                toast.success(poll ? "Poll posted to the community" : "Posted to the community");
+                return r?.id;
+              },
+            }}
+          />
+        </StudioShell>
+      )}
     </>
   );
 }

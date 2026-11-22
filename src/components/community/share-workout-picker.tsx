@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Check, ChevronRight, Plus, X } from "lucide-react";
@@ -7,8 +7,8 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTi
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { PREVIEW_ONLY_MESSAGE, formatWorkoutDuration, groupSessions, lockInCameraCard, mealCameraCard, mealFuelMoment, sessionDisplayTitle, sessionWhen } from "@/lib/community";
-import { createCommunityPost, shareToCommunity, useCreateCommunityPost, useDayPlan, useMyPostForCompletion, usePublicSessionTitle, useRecentCompletions, useTodaySession, type RecentCompletion } from "@/lib/community.queries";
+import { PREVIEW_ONLY_MESSAGE, POST_POINTS_RECENT_DAYS, formatWorkoutDuration, groupSessions, lockInCameraCard, mealCameraCard, mealFuelMoment, postPointsHint, sessionDisplayTitle, sessionWhen } from "@/lib/community";
+import { createCommunityPost, shareToCommunity, useDayPlan, useMyPostForCompletion, usePostPointsStatus, usePublicSessionTitle, useRecentCompletions, useTodaySession, type RecentCompletion } from "@/lib/community.queries";
 import { TEMPLATE_LABEL, type ShareTemplate } from "@/lib/workout-share-card";
 import type { CameraCard, ShareKind, StudioPost } from "@/components/community/share-studio";
 import type { LookItem } from "@/components/community/look-carousel";
@@ -17,10 +17,12 @@ import { audienceDoneLabel } from "@/components/community/audience-picker";
 import { CameraChip } from "@/components/community/camera-overlays";
 import { postedToast, useWorkoutStudio } from "@/components/community/use-workout-studio";
 
-import { NoteEditor, ShareComposer, ShareStudio, StudioShell, preloadStudio, usePreloadStudio } from "@/components/community/studio-chunks";
+import { PostComposer, ShareComposer, ShareStudio, StudioShell, preloadStudio, usePreloadStudio } from "@/components/community/studio-chunks";
+import { opensLibraryOnTap, useComposerPicker } from "@/components/community/composer-pick";
+import { NORMAL_KEY, buildFilterRow, fxCard, isFxKey, useFilterContext } from "@/components/community/crew-filters";
 import { primeCamera, studioCameraAsk } from "@/lib/camera/camera-prime";
 
-type Mode = "post" | "meal" | "lockin" | "workout";
+type Mode = "post" | "meal" | "lockin" | "workout" | "fx";
 /** A plain post (any photo or video, no workout on it): one per person at a time while it's being made. */
 const plainKey = (userId: string | undefined) => `post:new:${userId ?? ""}`;
 /** A meal photo: its own draft, so a half-made workout post isn't touched. */
@@ -28,7 +30,7 @@ const mealKey = (userId: string | undefined) => `meal:new:${userId ?? ""}`;
 type MealLook = Extract<ShareTemplate, "mealprep" | "onplan" | "fuel" | "highday" | "cheat" | "plain">;
 type LockLook = Extract<ShareTemplate, "lockin" | "lockclock" | "lockplan">;
 /** A filter's name over the shutter, where the card's own name alone would be unclear in one long row. */
-const FILTER_LABEL: Partial<Record<Exclude<Mode, "post">, Partial<Record<ShareTemplate, string>>>> = {
+const FILTER_LABEL: Partial<Record<Exclude<Mode, "post" | "fx">, Partial<Record<ShareTemplate, string>>>> = {
   lockin: { lockclock: "Lock in clock", lockplan: "Today's plan" },
   workout: { photo: "Workout photo", stats: "Workout stats" },
 };
@@ -37,23 +39,21 @@ const FILTER_LABEL: Partial<Record<Exclude<Mode, "post">, Partial<Record<ShareTe
 export const SHARE_GRADIENT = "bg-primary";
 
 /**
- * "+ Post" — the whole thing on one screen (ShareStudio), Instagram-style:
- * one tap and the camera is up. Along the bottom, what you're making (Post /
- * Story, Instagram's row); around the shutter, the filters, one row of
- * circles (swipe the camera or the row):
- *   Normal   any photo, carousel or clip, words optional; or Write for a
- *            words-first post. Nothing to do with a workout (no points).
- *   Lock in  today's session (Locked in / Clock / Today's plan); posting
- *            starts the session.
- *   Workout  a finished session with its card (Workout photo, vs last time,
- *            Receipt, Streak, Stats, Volume); the chip above the shutter
- *            picks which session.
- *   Meal     a food photo with a look: Meal prep, On plan, Fuel, High day,
- *            Cheat meal. A plain post too (no points).
- * It opens on whatever fits right now: Lock in when there's a session to
- * start, Workout when one finished in the last day, else Normal. Snap, the
- * frame freezes in place, frame it, add text or stickers, a caption, Post.
- * Every post is kept as a draft on the phone until it's up.
+ * "+": Instagram's two ways to share, Nov 22 2026.
+ *
+ *   Post   the New post screen (PostComposer): the tap on + opens the
+ *          phone's photo library (a finger) and what's picked lands there:
+ *          frame it, a filter on the first photo (Normal, the looks, today's
+ *          lock in, the workout's cards, a meal's), text and stickers, then
+ *          the caption, tags, who sees it and the workout it's for.
+ *   Story  the story camera (ShareStudio): the filters around the shutter,
+ *          in groups (Today · Lock in · Train · Block · Fuel · Time ·
+ *          Mindset · Vibe, story-filters.ts), and @ to tag people.
+ *
+ * Which post a filter makes: today's lock in starts the session, a workout
+ * card (or the Workout row switched on) posts that workout (League points),
+ * a meal look or any other filter is a plain post. Post · Story along the
+ * bottom of each moves to the other.
  */
 export function ShareWorkoutButton({
   unit,
@@ -75,69 +75,131 @@ export function ShareWorkoutButton({
   variant?: "pill" | "block" | "bubble" | "tile";
   /** Coach viewing as a client: looks the same, but never posts as them. */
   previewOnly?: boolean;
-  /** Opened from "Your story": its clips are trimmed to a story's 60 seconds. */
+  /** Opened from "Your story": the story camera, its clips trimmed to a story's 60 seconds. */
   story?: boolean;
 }) {
   const { user } = useAuth();
   const qc = useQueryClient();
-  // The session list (from the camera's chip).
+  // The session list (from the camera's chip, or the New post screen's Workout row).
   const [rawOpen, setRawOpen] = useState(false);
   const open = rawOpen && !previewOnly;
+  // the story camera / the New post screen
   const [capturing, setCapturing] = useState(false);
-  const { data: sessions, isLoading } = useRecentCompletions(open || capturing);
+  const [composing, setComposing] = useState(false);
+  const active = capturing || composing;
+  const { data: sessions, isLoading } = useRecentCompletions(open || active);
   // The workout the shot is for: their pick, else the newest finished one.
   const [chosen, setChosen] = useState<RecentCompletion | null>(null);
   const target = chosen ?? sessions?.[0] ?? null;
-  // A video from the library goes to the full editor (cards can't sit on video).
+  // A video from the library on a workout card (the camera): the full editor (cards can't sit on video).
   const [videoFor, setVideoFor] = useState<{ session: RecentCompletion; file: File } | null>(null);
   // Fetched up front so the camera opens on the right mode.
   const { data: today } = useTodaySession(!previewOnly);
-  // null = not picked yet: on a post Lock in leads when there's a session to train today; a story starts on Normal.
+  // null = not picked yet: the story camera and the New post screen both start on Normal
   const [mode, setMode] = useState<Mode | null>(null);
-  // Post or Story in the camera (a filter picked by hand stays when it's switched)
-  const [kind, setKind] = useState<ShareKind>(story ? "story" : "post");
-  // what a post opens on: a session to start, else a workout from the last day, else a plain post
+  const [fx, setFx] = useState<string | null>(null);
   const freshWorkout = !!target && Date.now() - new Date(target.completed_at).getTime() < 86_400_000;
-  const fallbackMode: Mode = kind === "story" ? "post" : today ? "lockin" : freshWorkout ? "workout" : "post";
-  const activeMode: Mode = mode === "lockin" && !today ? fallbackMode : mode === "workout" && !target && !isLoading ? fallbackMode : mode ?? fallbackMode;
-  const [writing, setWriting] = useState(false);
-  const createPost = useCreateCommunityPost();
+  const activeMode: Mode = mode === "lockin" && !today ? "post" : mode === "workout" && !target && !isLoading ? "post" : mode ?? "post";
   usePreloadStudio(!previewOnly);
   const [startedId, setStartedId] = useState<string | null>(null);
   const lockCompletionId = today ? startedId ?? today.completionId : null;
-  const lockExistingQ = useMyPostForCompletion(lockCompletionId, capturing && !!lockCompletionId, "lockin");
+  const lockExistingQ = useMyPostForCompletion(lockCompletionId, active && !!lockCompletionId, "lockin");
   const lockExisting = lockExistingQ.data;
   // a session not started yet has no post to wait for
   const lockKnown = !lockCompletionId || lockExisting !== undefined;
-  const { data: plan } = useDayPlan(capturing ? today?.dayId ?? null : null);
+  const { data: plan } = useDayPlan(active ? today?.dayId ?? null : null);
   const startSrv = useServerFn(startWorkoutFn);
+  // the New post screen: posted as the workout (League points), on by default for a fresh one not shared yet
+  const [linked, setLinked] = useState<boolean | null>(null);
+  const workoutLinked = activeMode === "workout" || (linked ?? (freshWorkout && !target?.post_id));
+  const { data: pointsStatus } = usePostPointsStatus(composing);
 
   // The look they're on (swipe to change).
   const [lockLook, setLockLook] = useState<LockLook>("lockin");
   const [mealLook, setMealLook] = useState<MealLook>("mealprep");
   const fuel = mealFuelMoment({ lastFinishedAt: target?.completed_at ?? null, sessionToday: !!today });
   const mealCard = useMemo(() => mealCameraCard({ athleteName: today?.athleteName ?? target?.athlete_name ?? null, fuel }), [today?.athleteName, target?.athlete_name, fuel]);
-  const workout = useWorkoutStudio(target, unit, capturing);
+  const workout = useWorkoutStudio(target, unit, active);
   const { data: publicTitle } = usePublicSessionTitle({ dayId: today?.dayId }, !!today);
+  const { data: finishedTitle } = usePublicSessionTitle({ completionId: target?.completion_id }, active && !!target && !today);
   const lockCard = useMemo(() => (today ? lockInCameraCard({ workoutTitle: publicTitle ?? "Workout", athleteName: today.athleteName, plan: plan ?? [] }) : null), [today, plan, publicTitle]);
-  const cameraCard: CameraCard | null =
-    activeMode === "meal"
-      ? { data: mealCard.data, looks: mealCard.looks, look: mealLook, onLook: (t) => setMealLook(t as MealLook) }
-      : activeMode === "lockin" && lockCard
-        ? { data: lockCard.data, looks: lockCard.looks, look: lockCard.looks.includes(lockLook) ? lockLook : "lockin", onLook: (t) => setLockLook(t as LockLook) }
-        : workout.card;
 
-  const begin = () => {
+  // What the story filters can show (story-filters.ts): the athlete's own, already-public things.
+  const wd = workout.card?.data;
+  const filterCtx = useFilterContext({
+    enabled: active,
+    firstName: (today?.athleteName ?? target?.athlete_name ?? "").trim().split(/\s+/)[0] || null,
+    session: today ? { title: publicTitle ?? "Today's session", started: today.started } : null,
+    finished:
+      freshWorkout && wd
+        ? {
+            title: wd.workoutTitle,
+            duration: wd.extras?.duration ?? null,
+            sets: wd.extras?.sets ?? null,
+            volume: wd.volume,
+            lift: wd.lift ? { name: wd.lift.name, detail: wd.lift.detail, alt: wd.lift.alt ?? null, pr: !!wd.lift.prLabel } : null,
+            workoutNumber: wd.extras?.workoutNumber ?? null,
+            streakWeeks: wd.extras?.streak?.weeks ?? null,
+          }
+        : null,
+    blockTitle: publicTitle ?? finishedTitle ?? null,
+    fuel,
+  });
+  // (kept while the filter and the minute hold, so the editors only repaint when something changed)
+  const fxOn = useMemo(() => (activeMode === "fx" && fx ? fxCard(fx, filterCtx, mealCard.data) : null), [activeMode, fx, filterCtx, mealCard.data]);
+
+  const cameraCard: CameraCard | null = useMemo(
+    () =>
+      activeMode === "fx"
+        ? fxOn?.card ?? null
+        : activeMode === "meal"
+          ? { data: mealCard.data, looks: mealCard.looks, look: mealLook, onLook: (t) => setMealLook(t as MealLook) }
+          : activeMode === "lockin" && lockCard
+            ? { data: lockCard.data, looks: lockCard.looks, look: lockCard.looks.includes(lockLook) ? lockLook : "lockin", onLook: (t) => setLockLook(t as LockLook) }
+            : activeMode === "workout"
+              ? workout.card
+              : null,
+    [activeMode, fxOn, mealCard, mealLook, lockCard, lockLook, workout.card],
+  );
+
+  const reset = () => {
+    setMode(null);
+    setFx(null);
+    setChosen(null);
+    setLinked(null);
+    workout.resetLook();
+  };
+
+  // the phone's library and camera, in the page so the tap on + can open them
+  const [incoming, setIncoming] = useState<{ files: File[]; live: boolean; n: number } | null>(null);
+  const n = useRef(0);
+  const picker = useComposerPicker((files, live) => {
+    n.current += 1;
+    setIncoming({ files, live, n: n.current });
+    setComposing(true);
+  });
+
+  /** Post: the New post screen (a finger: the library opens in the same tap, Instagram's). */
+  const beginPost = (pickNow = opensLibraryOnTap()) => {
+    if (previewOnly) return void toast.message(PREVIEW_ONLY_MESSAGE);
+    preloadStudio();
+    reset();
+    setIncoming(null);
+    setCapturing(false);
+    setComposing(true);
+    if (pickNow) picker.library();
+  };
+  /** Story: the camera, its filters around the shutter. */
+  const beginStory = () => {
     if (previewOnly) return void toast.message(PREVIEW_ONLY_MESSAGE);
     // the studio's camera asked for in this tap, so a camera already allowed opens without asking again
     primeCamera(studioCameraAsk("environment"));
     preloadStudio();
-    setMode(null);
-    setKind(story ? "story" : "post");
-    setChosen(null);
-    workout.resetLook();
+    reset();
+    setComposing(false);
     setCapturing(true);
   };
+  const begin = () => (story ? beginStory() : beginPost());
 
   // Locking in IS starting the session (same server path as the first logged
   // set). A row can exist without being started (a placeholder made ahead of
@@ -179,7 +241,7 @@ export function ShareWorkoutButton({
     : null;
   const changeTarget = () => setRawOpen(true);
 
-  // POST: any photo or clip, no workout card on it
+  // POST: any photo or clip, no workout on it
   const plainPost: StudioPost = {
     key: plainKey(user?.id),
     label: "Post",
@@ -201,32 +263,66 @@ export function ShareWorkoutButton({
       toast.success(t.title, { description: t.description });
     },
   };
-  // The filters around the shutter: Normal, then what fits right now (today's
-  // lock in, the workout just finished), then the meal looks. "No filter"
-  // inside a card's own looks stays a swipe away once the photo's taken.
-  const named = (m: Exclude<Mode, "post">, t: ShareTemplate): LookItem => ({ key: `${m}:${t}`, look: t, label: FILTER_LABEL[m]?.[t] ?? TEMPLATE_LABEL[t] });
-  // a card's own "No filter" only shows in the row while it's the one you're on (swiped to after a shot)
-  const group = (m: Exclude<Mode, "post">, looks: ShareTemplate[]) =>
-    looks.filter((t) => t !== "plain" || (activeMode === m && cameraCard?.look === "plain")).map((t) => named(m, t));
-  const filters: LookItem[] = [
-    { key: "post:normal", look: "plain", label: "Normal" },
-    ...(today && lockCard ? group("lockin", lockCard.looks) : []),
-    ...(target || isLoading
-      ? workout.card
-        ? group("workout", workout.card.looks)
-        : [{ key: "workout:pending", look: "photo" as ShareTemplate, label: "Workout" }]
-      : []),
-    ...group("meal", mealCard.looks),
-  ];
+
+  // The filters, one row (Normal, then the groups in the order that fits right now): the cards a lock in,
+  // a workout and a meal have lead their groups; the story filters fill every group.
+  const named = (m: Exclude<Mode, "post" | "fx">, t: ShareTemplate): LookItem => ({ key: `${m}:${t}`, look: t, label: FILTER_LABEL[m]?.[t] ?? TEMPLATE_LABEL[t] });
+  const group = (m: Exclude<Mode, "post" | "fx">, looks: ShareTemplate[]) => looks.filter((t) => t !== "plain").map((t) => named(m, t));
+  const row = useMemo(
+    () =>
+      buildFilterRow(filterCtx, {
+        lockin: today && lockCard ? group("lockin", lockCard.looks) : [],
+        today: target || isLoading
+          ? workout.card
+            ? group("workout", workout.card.looks)
+            : target || isLoading
+              ? [{ key: "workout:pending", look: "photo" as ShareTemplate, label: "Workout" }]
+              : []
+          : [],
+        fuel: group("meal", mealCard.looks),
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filterCtx, today, lockCard, target, isLoading, workout.card?.looks.join("|"), mealCard.looks.join("|")],
+  );
   const filterOn =
-    activeMode === "post" ? "post:normal" : activeMode === "workout" && !workout.card ? "workout:pending" : cameraCard ? `${activeMode}:${cameraCard.look}` : "post:normal";
+    activeMode === "post"
+      ? NORMAL_KEY
+      : activeMode === "fx" && fx
+        ? fx
+        : activeMode === "workout" && !workout.card
+          ? "workout:pending"
+          : cameraCard
+            ? `${activeMode}:${cameraCard.look}`
+            : NORMAL_KEY;
   const onFilter = (key: string) => {
+    if (key === NORMAL_KEY) {
+      setMode("post");
+      setFx(null);
+      return;
+    }
+    if (isFxKey(key)) {
+      setMode("fx");
+      setFx(key);
+      return;
+    }
     const [m, look] = key.split(":") as [Mode, string];
     setMode(m);
+    setFx(null);
     if (m === "meal") setMealLook(look as MealLook);
     else if (m === "lockin") setLockLook(look as LockLook);
     else if (m === "workout" && look !== "pending") workout.card?.onLook(look as ShareTemplate);
   };
+
+  // the post a New post screen makes: the lock in, the workout (its card, or the Workout row on), else plain / meal
+  const composerPost: StudioPost | null =
+    activeMode === "lockin" ? lockPost : workoutLinked && target ? workout.post : activeMode === "meal" ? mealPost : plainPost;
+  const composerPoints = (v: Parameters<typeof postPointsHint>[1]) =>
+    activeMode === "lockin"
+      ? postPointsHint(pointsStatus, v, !!lockExisting, { lockIn: true })
+      : workoutLinked && target
+        ? postPointsHint(pointsStatus, v, !!target.post_id, { completedAt: target.completed_at })
+        : null;
+  const recentEnough = !!target && Date.now() - new Date(target.completed_at).getTime() < POST_POINTS_RECENT_DAYS * 86_400_000;
 
   return (
     <>
@@ -348,13 +444,44 @@ export function ShareWorkoutButton({
         </StudioShell>
       )}
 
+      {/* the library and camera the New post screen opens (always here, so the + tap can open them) */}
+      {picker.inputs}
+
+      {composing && (
+        <StudioShell onClose={() => setComposing(false)}>
+          <PostComposer
+            open={composing}
+            onClose={() => setComposing(false)}
+            incoming={incoming}
+            onPick={(how) => (how === "camera" ? picker.camera() : picker.library())}
+            filters={{ items: row.items, groups: row.groups, on: filterOn, pick: onFilter, card: cameraCard, gradeOnly: fxOn?.grade ?? false }}
+            post={composerPost}
+            plainPost={plainPost}
+            onStory={beginStory}
+            points={composerPoints}
+            videoContext={workoutLinked && target ? "workout" : "post"}
+            workout={
+              target && recentEnough
+                ? {
+                    title: sessionDisplayTitle(target.title),
+                    sub: sessionWhen(target.completed_at).when,
+                    on: workoutLinked,
+                    locked: activeMode === "workout",
+                    onToggle: (on) => setLinked(on),
+                    onChange: (sessions?.length ?? 0) > 1 ? changeTarget : undefined,
+                  }
+                : null
+            }
+          />
+        </StudioShell>
+      )}
+
       {capturing && (
         <StudioShell onClose={() => setCapturing(false)}>
           <ShareStudio
             open={capturing}
             onClose={() => setCapturing(false)}
             accept={activeMode === "lockin" || activeMode === "meal" ? "image/*" : "image/*,video/*"}
-            onWrite={activeMode === "post" ? () => setWriting(true) : undefined}
             onVideo={
               activeMode === "workout" && target
                 ? (file) => {
@@ -363,23 +490,25 @@ export function ShareWorkoutButton({
                   }
                 : undefined
             }
-            filters={filters}
+            filters={row.items}
+            filterGroups={row.groups}
             filter={filterOn}
             onFilter={onFilter}
-            // opened from Your story: straight onto Story (its clips are trimmed to a story's 60 s)
-            startAs={story ? "story" : "post"}
-            onKind={setKind}
+            // the story camera (Post is the New post screen's, a tap away along the bottom)
+            startAs="story"
+            onPostFlow={() => beginPost(true)}
+            tagPeople
             videoContext={activeMode === "workout" ? "workout" : "post"}
             // shoot straight away: the card's numbers land on the photo when they arrive
-            canShoot={activeMode === "post" || activeMode === "meal" ? true : activeMode === "lockin" ? !!today : !!target}
-            allowNoPhoto={activeMode !== "meal"}
+            canShoot={activeMode === "lockin" ? !!today : activeMode === "workout" ? !!target : true}
+            allowNoPhoto={activeMode !== "meal" && activeMode !== "fx"}
             card={activeMode === "post" ? null : cameraCard}
-            post={activeMode === "post" ? plainPost : activeMode === "meal" ? mealPost : activeMode === "lockin" ? lockPost : workout.post}
-            // Normal and Meal need no chip (the filter's name is over the shutter, and a chip sat on the card's words)
+            post={activeMode === "lockin" ? lockPost : activeMode === "workout" ? workout.post : activeMode === "meal" ? mealPost : plainPost}
+            // the lock in's and the workout's say what they're for; the rest need no chip (the filter's name is over the shutter)
             chip={
-              activeMode === "post" || activeMode === "meal" ? undefined : activeMode === "lockin" && today ? (
-                <CameraChip icon="🔒" title={sessionDisplayTitle(today.title)} sub={lockExisting ? "Update your lock in" : today.started ? "In progress" : "Posting it starts your session"} />
-              ) : target ? (
+              activeMode === "lockin" && today ? (
+                <CameraChip icon="🔒" title={sessionDisplayTitle(today.title)} sub={lockExisting ? "Update your lock in" : today.started ? "In progress" : "Your story starts your session"} />
+              ) : activeMode !== "workout" ? undefined : target ? (
                 <CameraChip
                   icon={sessionWhen(target.completed_at).group === "today" ? "🔥" : "🏋️"}
                   title={sessionDisplayTitle(target.title)}
@@ -392,29 +521,6 @@ export function ShareWorkoutButton({
                 <CameraChip icon="🏁" title="Finish a workout to share it" sub="Or post a photo instead" tone="muted" />
               )
             }
-          />
-        </StudioShell>
-      )}
-
-      {/* POST → Write: a words-first post (photos optional) */}
-      {writing && (
-        <StudioShell onClose={() => setWriting(false)}>
-          <NoteEditor
-            open={writing}
-            title="New post"
-            saveLabel="Post"
-            wordsOptional
-            initial=""
-            saving={createPost.isPending}
-            media={{ initial: null, key: "member-write", hint: "Add photos or a clip" }}
-            onClose={() => setWriting(false)}
-            onSave={async (body, _poll, media) => {
-              const id = await createPost.mutateAsync({ caption: body, media });
-              toast.success("You're in the feed 🔥");
-              setWriting(false);
-              setCapturing(false);
-              return id;
-            }}
           />
         </StudioShell>
       )}

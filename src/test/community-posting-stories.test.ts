@@ -48,22 +48,27 @@ describe("posting never strands people", () => {
 });
 
 describe("members post anything, not only workouts", () => {
-  it("the + opens on Normal next to the Lock in / Workout filters, with Write for words", () => {
+  it("the + is Instagram's New post (Nov 22 2026): the library in the same tap, Normal first, Write for words", () => {
     const btn = read("src/components/community/share-workout-picker.tsx");
-    expect(btn).toContain('{ key: "post:normal", look: "plain", label: "Normal" }');
+    expect(read("src/components/community/crew-filters.ts")).toContain('const items: LookItem[] = [{ key: NORMAL_KEY, look: "plain", label: "Normal" }];');
     expect(btn).toContain("createCommunityPost(qc,");
-    expect(btn).toContain('const fallbackMode: Mode = kind === "story" ? "post" : today ? "lockin" : freshWorkout ? "workout" : "post";');
-    expect(btn).toContain('saveLabel="Post"');
+    // a post and a story both start on Normal (mode null), never a card nobody picked
+    expect(btn).toContain('const activeMode: Mode = mode === "lockin" && !today ? "post" : mode === "workout" && !target && !isLoading ? "post" : mode ?? "post";');
+    expect(btn).toContain("if (pickNow) picker.library();");
+    expect(btn).toContain("const begin = () => (story ? beginStory() : beginPost());");
+    // Write: a words-only post is always a plain one
+    expect(btn).toContain("plainPost={plainPost}");
+    expect(read("src/components/community/post-composer.tsx")).toContain("const target = words ? (plainPost ?? post)! : post!;");
     expect(read("src/lib/community.queries.ts")).toContain('db.rpc("community_create_post"');
   });
-  it("a story starts on Normal (no filter), from Your story or switched to from Post; a filter picked by hand stays", () => {
+  it("Story is the camera, Post the New post screen: each one's Post · Story moves to the other", () => {
     const btn = read("src/components/community/share-workout-picker.tsx");
     const studio = read("src/components/community/share-studio.tsx");
-    // the picker hears Post / Story from the camera and only changes the default (mode null), never a pick
-    expect(btn).toContain('const [kind, setKind] = useState<ShareKind>(story ? "story" : "post");');
-    expect(btn).toContain("onKind={setKind}");
-    expect(btn).toMatch(/setMode\(null\);\s*setKind\(story \? "story" : "post"\);/);
-    // the camera says which it's on as it opens and on every switch
+    expect(btn).toContain('startAs="story"');
+    expect(btn).toContain("onPostFlow={() => beginPost(true)}");
+    expect(btn).toContain("onStory={beginStory}");
+    expect(studio).toContain('if (k === "post" && onPostFlow) return onPostFlow();');
+    // the camera still says which it's on as it opens and on every switch
     expect(studio).toContain("const [kind, setKind] = useState<ShareKind>(startAs);");
     expect(studio).toMatch(/useEffect\(\(\) => \{\s*if \(open\) onKindRef\.current\?\.\(kind\);\s*\}, \[open, kind\]\);/);
   });
@@ -177,7 +182,7 @@ describe("Crew Stories", () => {
       expect(viewer).toContain('const QUICK_WIN = ["🔥", "💪", "👏", "🙌", "😤", "🐐", "💯", "🎉"];');
       expect(viewer).toContain("quick.slice(0, 2).map((e) =>");
       expect(viewer).toContain("placeholder={full ? `You can message ${first} again once they reply` : `Message ${first}…`}");
-      expect(viewer).toContain("<StoryBar\n              post={post}\n              viewerIsStaff={viewerIsStaff}\n              onOpen={() => onOpenPost(storyTarget(post))}\n              onComposing={setComposing}");
+      expect(viewer).toContain("<StoryBar\n              post={post}\n              viewerIsStaff={viewerIsStaff}\n              onOpenPerson={openPerson}\n              onOpen={() => onOpenPost(storyTarget(post))}\n              onComposing={setComposing}");
     });
     it("the story waits while you write; a tap or Esc puts the keyboard away; swipe up opens the post (on yours, its Activity)", () => {
       expect(viewer).toContain("if (!frameKey || paused || end || composing || clipDrives) return;");

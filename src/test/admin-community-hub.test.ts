@@ -14,7 +14,9 @@ describe("the coach's community, in one place", () => {
     const screen = read("src/components/community/community-screen.tsx");
     // the same screen as the clients', with the coach's tools passed in
     expect(hub).toContain("<CommunityScreen\n        coach={{");
-    expect(hub).toContain("onWrite: () => setWriting(true),");
+    // + opens the New post screen (PostComposer, Instagram's), the photo library in the same tap on a phone
+    expect(hub).toContain("if (opensLibraryOnTap()) picker.library();");
+    expect(hub).toContain("<PostComposer");
     expect(hub).toContain('startTab: counts.needs > 0 ? "needs" : "posts",');
     expect(hub).toContain("manage: <CrewManage counts={counts} />,");
     // the shell's bar steps aside on Crew, like the clients' (not for the finance login)
@@ -57,7 +59,7 @@ describe("the coach's community, in one place", () => {
     expect(hub).toContain('if (hubTabFromHash(`#${routeHash}`) === "league") void navigate({ to: "/admin/league", replace: true });');
     expect(read("src/routes/_authenticated/admin/league.tsx")).toContain("component: AdminLeaguePage,");
     expect(read("src/routes/_authenticated/admin/athlete-records.tsx")).toContain('backTo="/admin/league" backLabel="League"');
-    expect(hub).toContain('await act.mutateAsync({ kind: "note", body, poll, media });');
+    expect(hub).toContain('const r = await act.mutateAsync({ kind: "note", body: caption, poll, media });');
     // the composer lives on the page now, not at the bottom of the schedule
     expect(read("src/components/community/coach-weekly-posts.tsx")).not.toContain("Write a post for the crew");
     // every daily series starts closed (a full Recap preview opening on its own tripled the page)

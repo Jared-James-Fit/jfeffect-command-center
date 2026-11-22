@@ -211,8 +211,11 @@ describe("every place a video can be picked uses the trimmer and the pipeline", 
     expect(studio).toContain('coverCount: card || shot ? 1 : 0, videoContext: story ? "story" : videoContext })');
     expect(studio).toContain("{tray.trimmer}");
     const picker = read("src/components/community/share-workout-picker.tsx");
-    expect(picker).toContain('startAs={story ? "story" : "post"}');
+    // + is the story camera (a story's 60 s) or the New post screen (a workout's 90 s, a post's 3 min)
+    expect(picker).toContain('startAs="story"');
     expect(picker).toContain('videoContext={activeMode === "workout" ? "workout" : "post"}');
+    expect(picker).toContain('videoContext={workoutLinked && target ? "workout" : "post"}');
+    expect(read("src/components/community/post-composer.tsx")).toContain("{tray.trimmer}");
     expect(read("src/components/community/community-screen.tsx")).toContain("trigger={t} story />");
     expect(read("src/components/community/share-composer.tsx")).toContain("pickMedia(file, { context: videoContext, trim: trimmer.request })");
     expect(read("src/components/community/comments-sheet.tsx")).toContain('pickMedia(file, { context: "comment", trim: trimmer.request })');

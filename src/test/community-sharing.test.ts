@@ -929,8 +929,8 @@ describe("share studio: lock in cards, camera first, text + stickers", () => {
     const studio = read("src/components/community/share-studio.tsx");
     expect(picker).toContain("<ShareStudio");
     expect(bar).toContain("<ShareStudio");
-    // opens on a session to start, else a workout from the last day, else a plain post
-    expect(picker).toContain('const fallbackMode: Mode = kind === "story" ? "post" : today ? "lockin" : freshWorkout ? "workout" : "post";');
+    // opens on Normal; a workout from the last day not shared yet is linked on the New post screen (League points)
+    expect(picker).toContain("const workoutLinked = activeMode === \"workout\" || (linked ?? (freshWorkout && !target?.post_id));");
     // the shutter freezes the frame in place: same dialog, no second screen
     // (framed the way the camera's 4:5 guide showed it)
     expect(studio).toContain("freeze({ src: c, file: null, live: true, at: new Date() }, card ? CENTRED : framingFromGuide(");
@@ -1003,7 +1003,8 @@ describe("share camera: options right away, no list in the way", () => {
   it("the viewfinder is the real card, live; swipe changes the look, before and after the shot", () => {
     expect(picker).toContain('card={activeMode === "post" ? null : cameraCard}');
     expect(read("src/components/community/lock-in.tsx")).toContain("lockInCameraCard({ workoutTitle: cardTitle, athleteName, plan: plan ?? [] })");
-    expect(cam).toContain("paintShareCard(cardEl, { ...c.data, format: cardFormat, lockedIn, template: c.look, media }, logo, LIVE_SCALE);");
+    expect(cam).toContain("paintCard(cardEl, c, media, cardFormat, lockedIn, logo, LIVE_SCALE);");
+    expect(read("src/components/community/card-paint.ts")).toContain("paintShareCard(canvas, { ...c.data, format: fmt, lockedIn, template: c.look, media }, logo, scale);");
     expect(cam).toContain("if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) changeLook(dx < 0 ? 1 : -1);");
     // the camera is exactly 9:16 (edge to edge when it fits above the bar); editing, the frame is the post's own shape
     expect(cam).toContain("const w = fullScreen ? areaSize.w : Math.min(areaSize.w, areaSize.h * boxAspect);");
@@ -1111,7 +1112,7 @@ describe("every Share is the same one-screen studio", () => {
   });
   it("Community Share and the recap build workout looks and posts the same way", () => {
     const hook = read("src/components/community/use-workout-studio.ts");
-    expect(read("src/components/community/share-workout-picker.tsx")).toContain("const workout = useWorkoutStudio(target, unit, capturing);");
+    expect(read("src/components/community/share-workout-picker.tsx")).toContain("const workout = useWorkoutStudio(target, unit, active);");
     expect(read("src/components/community/workout-share-studio.tsx")).toContain("const w = useWorkoutStudio(target, unit, open, draftCaption);");
     expect(hook).toContain("return { data, looks: cameraLooks(data) };");
     expect(hook).toContain("await shareToCommunity(qc, {");
@@ -1128,7 +1129,7 @@ describe("lock in on a session row that was never started", () => {
     expect(read("src/lib/community.queries.ts")).toContain("started: !!(it.completion?.started_at || it.completion?.in_progress_at)");
   });
   it("only says In progress when it really is", () => {
-    expect(read("src/components/community/share-workout-picker.tsx")).toContain('sub={lockExisting ? "Update your lock in" : today.started ? "In progress" : "Posting it starts your session"}');
+    expect(read("src/components/community/share-workout-picker.tsx")).toContain('sub={lockExisting ? "Update your lock in" : today.started ? "In progress" : "Your story starts your session"}');
   });
 });
 
@@ -1166,7 +1167,7 @@ describe("post what you see; rotate smooth and sharp; snap to centre", () => {
     expect(studio).toContain('const bare = card.look === "plain" || (post?.showHideLoads && hideLoads);');
     expect(studio).toContain("if (shot && bare) return finalPhoto();");
     expect(studio).toContain('const b = await cardImage("feed");');
-    expect(studio).toContain("paintShareCard(c, { ...card.data, format: fmt, lockedIn: frozenLockedIn(card.data), template: card.look, media }, logo, 1);");
+    expect(studio).toContain("paintCard(c, card, media, fmt, frozenLockedIn(card.data), logo, 1);");
     // no photo: nothing posted, unless it's a carousel (then slide 1 is the card itself)
     expect(studio).toContain("if (!shot && (!carousel || bare)) return null;");
     expect(studio).toContain("await post.onPost({ photo: await postPhoto(extras.length > 0),");

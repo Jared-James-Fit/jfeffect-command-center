@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
-import { Camera, Check, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Scissors, Send, Smartphone, Smile, Square, Star, Timer, Type, User, Users, Volume2, VolumeX, X } from "lucide-react";
+import { AtSign, Camera, Check, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Scissors, Send, Smartphone, Smile, Square, Star, Timer, Type, User, Users, Volume2, VolumeX, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { pickerAudience, type CommunityVisibility } from "@/lib/community";
+import { pickerAudience, type CommunityAuthor, type CommunityVisibility } from "@/lib/community";
 import { useFollowState } from "@/lib/community-social";
-import { TEMPLATE_LABEL, canvasToBlob, cardLogo, ensureDisplayFont, paintShareCard, shareCardImage, type ShareCardData, type ShareFormat, type ShareTemplate } from "@/lib/workout-share-card";
+import { TEMPLATE_LABEL, canvasToBlob, cardLogo, ensureDisplayFont, shareCardImage, type ShareCardData, type ShareCardMedia, type ShareFormat, type ShareTemplate } from "@/lib/workout-share-card";
 import { CaptionEditor, CaptionField, captionThumb } from "@/components/community/caption-editor";
 import { AttachButtons, AttachGifPicker, AttachPreview, usePostAttach, type PostAttachInitial } from "@/components/community/post-attach";
 import { SlideTray, useSlideTray, type TrayItem } from "@/components/community/slide-tray";
 import { MAX_SLIDES, type PostSlide } from "@/lib/community";
-import { StickerLayer, drawStickers, SHARE_CARD_ID, responseCardItem, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
+import { StickerLayer, drawStickers, SHARE_CARD_ID, mentionStickerItem, responseCardItem, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
+import { TagPeopleSheet } from "@/components/community/tag-people-sheet";
+import { tagHandle, uniqueTags, withTags } from "@/lib/crew-tags";
 import { paintReplyBackdrop } from "@/lib/story-reply";
 import { StickerEditorSheet } from "@/components/community/sticker-editor";
 import { StickerPreview } from "@/components/community/story-sticker";
@@ -22,7 +24,7 @@ import { context2d, releaseCanvas } from "@/lib/canvas-memory";
 import { clearDraft, draftWorthKeeping, loadDraft, saveDraft } from "@/lib/post-draft";
 import { getPlatform, iosAppTooOldForCamera, isNative, openAppSettings, openTestFlight } from "@/platform";
 import { reportCameraTrouble } from "@/lib/camera-report";
-import { LookCarousel, lookItems, type LookItem } from "@/components/community/look-carousel";
+import { LookCarousel, lookItems, type LookGroup, type LookItem } from "@/components/community/look-carousel";
 import { canRecordClips, useClipRecorder } from "@/components/community/clip-recorder";
 import { readFilmSettings } from "@/lib/camera/film-settings";
 import { studioCameraAsk, takePrimedCamera } from "@/lib/camera/camera-prime";
@@ -48,6 +50,8 @@ import { TrimmedVideo } from "@/components/video-trimmer";
 import { useSoundFlash } from "@/components/community/clip-gestures";
 import { preloadMediaTools } from "@/lib/community-media";
 import { formatClock, type VideoContext } from "@/lib/video-edit/limits";
+import { feedback } from "@/lib/feedback";
+import { paintCard } from "@/components/community/card-paint";
 
 /**
  * What you're making, along the bottom like Instagram's POST / STORY: a post
@@ -70,7 +74,14 @@ export type CameraCard = {
   looks: ShareTemplate[];
   look: ShareTemplate;
   onLook: (t: ShareTemplate) => void;
+  /**
+   * A story filter's own painter (story-filters.ts) in place of the share
+   * card's: the picture (`media`, the camera or the frozen shot) and the
+   * filter on it, at the format's size × `scale`.
+   */
+  paint?: (canvas: HTMLCanvasElement, media: ShareCardMedia | null, format: ShareFormat | { w: number; h: number }, scale: number, logo: HTMLImageElement | null) => void;
 };
+
 
 export type StudioPostArgs = {
   photo: File | null;
@@ -175,6 +186,9 @@ export function ShareStudio({
   onKind,
   reply = null,
   share = null,
+  filterGroups,
+  onPostFlow,
+  tagPeople = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -215,6 +229,12 @@ export function ShareStudio({
    * backdrop with the post's card on it; the story keeps which post it shares.
    */
   share?: StudioShare | null;
+  /** The chips over the filters (story-filters.ts' groups), in the row's order. */
+  filterGroups?: LookGroup[];
+  /** Post is its own screen (PostComposer, Instagram's New post): tapping Post here goes there. */
+  onPostFlow?: () => void;
+  /** A story can tag people: an @ sticker on it, and the tag on the story (tappable for the crew). */
+  tagPeople?: boolean;
 }) {
   // No iOS focus-zoom anywhere in the studio: it left the editor zoomed and off-centre.
   useNoAutoZoom(open);
@@ -262,6 +282,17 @@ export function ShareStudio({
   const [cardFailed, setCardFailed] = useState(false);
   const [items, setItems] = useState<StickerItem[]>([]);
   const [request, setRequest] = useState<StickerRequest>(null);
+  // a story's tags: the people on it (their @ sticker on a photo, the tag itself on the story's caption)
+  const [tags, setTags] = useState<CommunityAuthor[]>([]);
+  const [tagging, setTagging] = useState(false);
+  // a tag's sticker binned: they're untagged too
+  const mentionIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const now = new Set(items.filter((i) => i.mention).map((i) => i.mention!.userId));
+    const gone = [...mentionIds.current].filter((id) => !now.has(id));
+    mentionIds.current = now;
+    if (gone.length) setTags((t) => t.filter((a) => !gone.includes(a.user_id)));
+  }, [items]);
   // replying to a response: which backdrop colour it's on
   const [backdrop, setBackdrop] = useState(0);
   // a story's live sticker (Questions, Poll, Slider): shown where it'll sit, put on once the story's up
@@ -318,6 +349,8 @@ export function ShareStudio({
     setCoverFor(null);
     setLive(null);
     setLiveForm(null);
+    setTags([]);
+    setTagging(false);
     if (reply) {
       // straight into the editor: the backdrop, the response card on it, the keyboard up for the answer
       setKind("story");
@@ -690,7 +723,7 @@ export function ShareStudio({
       const lockedIn = c.data.lockedIn?.live ? { time: timeLabel(new Date()), live: true } : c.data.lockedIn;
       try {
         // a post's card is the feed's 4:5 (in the middle of the camera), a story's the full 9:16
-        paintShareCard(cardEl, { ...c.data, format: cardFormat, lockedIn, template: c.look, media }, logo, LIVE_SCALE);
+        paintCard(cardEl, c, media, cardFormat, lockedIn, logo, LIVE_SCALE);
       } catch {
         alive = false;
         setCardFailed(true);
@@ -716,7 +749,7 @@ export function ShareStudio({
     raf = requestAnimationFrame(() => {
       const media = shot ? framedCanvas(framingLive && light ? light.src : shot.src, framing, frameAspect, framingLive ? 540 : 1080) : null;
       try {
-        paintShareCard(cardEl, { ...card.data, format: cardFormat, lockedIn: frozenLockedIn(card.data), template: card.look, media }, logo, framingLive ? 0.6 : 1);
+        paintCard(cardEl, card, media, cardFormat, frozenLockedIn(card.data), logo, framingLive ? 0.6 : 1);
       } catch {
         setCardFailed(true);
       } finally {
@@ -725,13 +758,19 @@ export function ShareStudio({
     });
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, cardEl, card?.look, card?.data, shot, logo, framing, framingLive, cardFormat, frameAspect]);
+  }, [phase, cardEl, card?.look, card?.data, card?.paint, shot, logo, framing, framingLive, cardFormat, frameAspect]);
 
   const changeLook = (dir: 1 | -1) => {
-    // on the camera, a swipe walks the whole row of filters (Normal, meal, lock in, workout)
-    if (phase === "shoot" && filters && filters.length > 1 && onFilter) {
+    // on the camera, a swipe walks the whole row of filters (Normal, meal, lock in, workout); a story's
+    // photo, after the shot, too (Instagram's: swipe the filters over what you took)
+    if ((phase === "shoot" || (story && !!shot && !reply && !share)) && filters && filters.length > 1 && onFilter) {
       const i = Math.max(0, filters.findIndex((f) => f.key === filter));
-      onFilter(filters[(i + dir + filters.length) % filters.length].key);
+      const next = filters[(i + dir + filters.length) % filters.length];
+      onFilter(next.key);
+      if (phase === "edit") {
+        feedback("detent");
+        setLookFlash(next.label);
+      }
       return;
     }
     if (!card || card.looks.length < 2) return;
@@ -747,7 +786,9 @@ export function ShareStudio({
     return () => clearTimeout(t);
   }, [lookFlash]);
   const [pinchHint, setPinchHint] = useState(false);
-  const hasCard = !!card;
+  // a story's photo walks the filters with one finger (so moving it is two), card or not
+  const storySwipe = story && !!filters && filters.length > 1 && !!onFilter && !reply && !share;
+  const hasCard = !!card || storySwipe;
   useEffect(() => {
     if (phase !== "edit" || !shot || !hasCard || cardFailed) return setPinchHint(false);
     setPinchHint(true);
@@ -884,6 +925,13 @@ export function ShareStudio({
       files.splice(1);
     }
     const heroAt = files.findIndex((x) => !isVideo(x));
+    // a story's filters are painted on photos: a clip goes on as it is (the row back on Normal)
+    if (heroAt === -1 && story && card && filters?.length && onFilter) {
+      onFilter(filters[0].key);
+      skipPhoto();
+      void tray.add(files);
+      return;
+    }
     if (heroAt === -1) {
       // a plain post (no card): the clips are the post
       if (!card) {
@@ -971,7 +1019,7 @@ export function ShareStudio({
     const c = document.createElement("canvas");
     const media = shot ? framedCanvas(shot.src as Drawable, framing, fmt === "feed" ? FEED_CARD_ASPECT : STORY_ASPECT) : null;
     try {
-      paintShareCard(c, { ...card.data, format: fmt, lockedIn: frozenLockedIn(card.data), template: card.look, media }, logo, 1);
+      paintCard(c, card, media, fmt, frozenLockedIn(card.data), logo, 1);
       drawStickers(context2d(c), items, c.width, c.height);
       return await canvasToBlob(c, "image/jpeg", 0.92);
     } finally {
@@ -1021,7 +1069,7 @@ export function ShareStudio({
     const t = setTimeout(() => setCoverThumb(smallFrame()), 120);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, cardEl, card?.look, shot, framing, framingLive, frameAspect]);
+  }, [phase, cardEl, card?.look, card?.paint, shot, framing, framingLive, frameAspect]);
 
   // The caption screen's preview: the card as it is now, stickers and all, small.
   const openCaption = () => {
@@ -1035,6 +1083,18 @@ export function ShareStudio({
   const needsMedia = !story && !!post?.needsMedia && visibility !== "private" && !shot && tray.items.length === 0 && !post.hasCover;
   const qc = useQueryClient();
   const { user } = useAuth();
+  /** Tag or untag someone on the story: their @ sticker goes on a photo (a clip just carries the tag). */
+  const toggleTag = (a: CommunityAuthor) => {
+    setPosted(false);
+    if (tags.some((t) => t.user_id === a.user_id)) {
+      setTags((t) => t.filter((x) => x.user_id !== a.user_id));
+      setItems((list) => list.filter((i) => i.mention?.userId !== a.user_id));
+      return;
+    }
+    setTags((t) => uniqueTags([...t, a]));
+    if (card || shot) setItems((list) => [...list, mentionStickerItem(a.user_id, tagHandle(a), list.filter((i) => i.mention).length)]);
+  };
+
   /** STORY: the picture (or the clip) goes to your story, never the feed. */
   const postStory = async () => {
     if (!user?.id) throw new Error("Sign in again to post");
@@ -1047,7 +1107,8 @@ export function ShareStudio({
     const audience: CommunityVisibility = STORY_AUDIENCE.includes(visibility) ? visibility : "community";
     // (a shared post's story links to it while its card is on it)
     const sharedPostId = share && items.some((i) => i.id === SHARE_CARD_ID) ? share.postId : null;
-    const id = await createCommunityPost(qc, { userId: user.id, caption: "", visibility: audience, photo, extras, story: true, sharedPostId });
+    // the people tagged ride on its caption (the database reads them into its mentions; the story shows them, tappable)
+    const id = await createCommunityPost(qc, { userId: user.id, caption: withTags("", tags), visibility: audience, photo, extras, story: true, sharedPostId });
     if (!photo) tray.commit();
     else tray.discard();
     if (live) {
@@ -1142,6 +1203,8 @@ export function ShareStudio({
   const storyable = post?.allowStory !== false;
   const pickKind = (k: ShareKind) => {
     cancelCount();
+    // a post is the New post screen's (the composer): leave the camera for it
+    if (k === "post" && onPostFlow) return onPostFlow();
     setKind(k);
     if (k === "story" && !STORY_AUDIENCE.includes(visibility)) setVisibility("community");
   };
@@ -1212,7 +1275,7 @@ export function ShareStudio({
                 frame={box}
                 framing={framing}
                 onFraming={setFraming}
-                oneFinger={!showCard}
+                oneFinger={!showCard && !storySwipe}
                 showImage={!showCard}
                 gridPreview={!story}
                 flash={shapeFlash}
@@ -1520,6 +1583,21 @@ export function ShareStudio({
                       </button>
                     </>
                   )}
+                  {/* a story tags people (a photo gets their @ sticker; a clip just carries the tag) */}
+                  {story && tagPeople && (card || shot || !!clip0) && (
+                    <button
+                      type="button"
+                      onClick={() => setTagging(true)}
+                      className={cn(pill, "relative", !(card || shot) && "ml-auto")}
+                      aria-label={tags.length ? `Tagged ${tags.length}. Tap to change` : "Tag people"}
+                      data-story-tag
+                    >
+                      <AtSign className="h-5 w-5" />
+                      {tags.length > 0 && (
+                        <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[11px] font-bold text-black animate-in zoom-in-50">{tags.length}</span>
+                      )}
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -1559,6 +1637,7 @@ export function ShareStudio({
                 <LookCarousel
                   // the whole row of filters (Normal, meal, lock in, workout), else this card's looks
                   looks={filters ?? lookItems(card?.looks)}
+                  groups={filterGroups}
                   look={filters ? (filter ?? null) : (card?.look ?? null)}
                   onLook={(k) => (filters ? onFilter?.(k) : card?.onLook(k as ShareTemplate))}
                   onShoot={shoot}
@@ -1718,6 +1797,7 @@ export function ShareStudio({
             thumb={thumb}
           />
         )}
+        {story && tagPeople && <TagPeopleSheet open={tagging} onClose={() => setTagging(false)} tagged={tags} onToggle={toggleTag} dark />}
         {/* a story's Questions / Poll / Slider: write it, it goes where it's dragged */}
         <StickerEditorSheet
           open={!!liveForm}

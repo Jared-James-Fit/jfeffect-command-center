@@ -51,11 +51,17 @@ describe("writing a poll", () => {
     expect(cleanPollOptions(["Squat", "squat"])).toEqual({ ok: false, reason: "Each option needs to be different" });
     expect(cleanPollOptions(["a", "x".repeat(61)])).toMatchObject({ ok: false });
   });
-  it("only the coach's Write a post offers it; the text is the question", () => {
-    expect(hub).toContain("allowPoll");
-    expect(hub).toContain('await act.mutateAsync({ kind: "note", body, poll, media });');
+  it("only the coach's New post offers it; the text is the question", () => {
+    // the coach's + is the New post screen (PostComposer) with a coach save: a note, a poll allowed
+    expect(hub).toContain('const r = await act.mutateAsync({ kind: "note", body: caption, poll, media });');
+    const composer = read("src/components/community/post-composer.tsx");
+    expect(composer).toContain("{coach && !poll && (");
+    expect(composer).toContain('placeholder={poll ? "Ask the crew something…" : writing ? "Write something…" : "Add a caption…"}');
+    // a coach's post always has words (the question, on a poll; community_create_note takes 1-1200)
+    expect(composer).toContain("(coach ? caption.trim().length > 0 : words ? caption.trim().length > 0 : tray.items.length > 0)");
+    expect(composer).toContain("const COACH_CAPTION_MAX = 1200;");
+    // editing an existing note keeps its editor and its rules
     expect(editor).toContain('placeholder={poll ? "Ask the crew something…" : undefined}');
-    // words are needed unless it's a member's photo post (never for a poll: the text is the question)
     expect(editor).toContain("disabled={saving || (!trimmed && !(wordsOptional && !poll && draft.tray.items.length > 0)) || !pollReady || draft.tray.uploading > 0 || att.recorder.recording}");
     // a poll (and photos) only go when there are some
     expect(queries).toContain('...(a.poll?.length ? { _poll: a.poll } : {}),');

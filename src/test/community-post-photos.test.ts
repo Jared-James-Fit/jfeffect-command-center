@@ -70,8 +70,11 @@ describe("photos on every post, same rules as sharing a workout", () => {
     expect(read("src/components/community/community-entry.tsx")).toContain("const photo = !art && !!(post.media_type && thumb);");
   });
 
-  it("the coach's + Post takes photos", () => {
-    expect(read("src/components/community/admin-community-hub.tsx")).toContain('media={{ initial: null, key: "new-post" }}');
+  it("the coach's + Post takes photos (the New post screen: up to 10, uploaded as they're picked)", () => {
+    const hub = read("src/components/community/admin-community-hub.tsx");
+    expect(hub).toContain("<PostComposer");
+    expect(hub).toContain("onPick={(how) => (how === \"camera\" ? picker.camera() : picker.library())}");
+    expect(read("src/components/community/post-composer.tsx")).toContain("const tray = useSlideTray({ open, initial: null, resetKey: draftKey, coverCount: 0, videoContext });");
   });
 });
 
