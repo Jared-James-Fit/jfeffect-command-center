@@ -12,7 +12,7 @@ import { DAILY_TOTAL_HEADING, isTotalLine, readMacroLine } from "@/lib/nutrition
 export type PlanMeal = { title: string; foods: PlanFood[]; macros: PlanMacros | null; notes: string[]; timing: MealTiming };
 export type StructuredDay = { meals: PlanMeal[]; notes: string[] };
 
-const MEAL_HEADER = /^(meal\s*\d+|breakfast|lunch|dinner|snack(\s*\d+)?|pre[- ]?workout|post[- ]?workout|intra[- ]?workout)\b\s*:?\s*(.*)$/i;
+export const MEAL_HEADER = /^(meal\s*\d+|breakfast|lunch|dinner|snack(\s*\d+)?|pre[- ]?workout|post[- ]?workout|intra[- ]?workout)\b\s*:?\s*(.*)$/i;
 /** "Approximate macros:", "Approx:" (the macros follow on their own lines). */
 const MACROS_LABEL = /^approx(?:imate)?\.?\s*(?:macros?)?\s*[:.]?$/i;
 /** A coach's "Flexible calories" allowance: its own section after the meals, never part of one. */

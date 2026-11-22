@@ -20,6 +20,7 @@ import {
   Camera,
   CreditCard,
   FileSignature,
+  FolderOpen,
   HeartPulse,
   Image as ImageIcon,
   KeyRound,
@@ -507,6 +508,9 @@ function AccountPage() {
                 {equipmentGuide && <EquipmentSetupTips onClose={() => setEquipmentGuide(false)} unit={client?.preferred_weight_unit === "kg" ? "kg" : "lb"} />}
               </SettingsSection>
             )}
+
+            {/* Documents: their own files and what their coach shared with them (its own page). */}
+            <SettingsLink to="/portal/documents" icon={FolderOpen} title="Documents" />
 
             <SettingsSection id="notifications" icon={Bell} title="Notifications, sounds & haptics">
               <SectionErrorBoundary label="Push Notifications">

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { rxText, rxToRow, trainingDayDates } from "@/lib/cleo-program";
-import { CLEO_ACTION_PARAMS, actionPermission, routeFor } from "@/lib/cleo-actions";
+import { CLEO_ACTION_PARAMS, routeFor } from "@/lib/cleo-actions";
 
 const id = (n: number) => `${String(n).padStart(8, "0")}-1111-4111-8111-111111111111`;
 
@@ -36,10 +36,10 @@ describe("dates for a new block", () => {
 });
 
 describe("program cards", () => {
-  it("are the owner's call for the finance login", () => {
+  it("are never the finance login's, even with the owner's OK", () => {
     const finance = { isAdmin: false, permissions: ["admin.view", "payments.record", "payments.request", "tasks.manage"] };
     for (const k of ["build_program", "edit_program_day", "add_workout", "assign_program_template", "publish_program", "move_workout", "correct_logged_exercise", "set_nutrition_targets"] as const) {
-      expect(routeFor(actionPermission(k, {}), finance)).toBe("ask_owner");
+      expect(routeFor(k, finance)).toBe("not_allowed");
     }
   });
 

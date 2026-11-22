@@ -86,6 +86,7 @@ const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-met
 const ClientAnalyticsDashboard = lazyDefault(() => import("@/components/analytics/client-analytics-dashboard"), "ClientAnalyticsDashboard");
 const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), "BasicInfoForm");
 const ClientFileNotes = lazyDefault(() => import("@/components/clients/client-file-notes"), "ClientFileNotes");
+const ClientDocumentsPanel = lazyDefault(() => import("@/components/documents/documents-pages"), "ClientDocumentsPanel");
 const HealthCard = lazyDefault(() => import("@/components/health/HealthCard"), "HealthCard");
 const ProfilePictureCapture = lazyDefault(() => import("@/components/profile-picture-capture"), "ProfilePictureCapture");
 const AgreementStatusPanel = lazyDefault(() => import("@/components/agreement-status-panel"), "AgreementStatusPanel");
@@ -926,6 +927,12 @@ export function ClientProfileWorkspace({
           <Suspense fallback={<TabFallback />}>
             <ClientBillingPanel clientId={id} onOpenSessions={() => setTab("sessions")} />
             <ClientSalesTable clientId={id} />
+          </Suspense>
+        </TabsContent>
+
+        <TabsContent value="files" className={WORKSPACE_GRID_CLASS}>
+          <Suspense fallback={<TabFallback />}>
+            <ClientDocumentsPanel clientId={id} clientName={form.full_name} clientUserId={form.user_id ?? null} className="md:col-span-3" />
           </Suspense>
         </TabsContent>
 

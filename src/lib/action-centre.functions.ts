@@ -414,6 +414,9 @@ export const generateNextOccurrence = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { clientId: string; taskType: string }) => d)
   .handler(async ({ data, context }) => {
+    // Only a client the caller can see (their own, or one they coach): the next row is written as the server.
+    const { data: visible } = await context.supabase.from("clients").select("id").eq("id", data.clientId).maybeSingle();
+    if (!visible) throw new Error("Client not found");
     await ensureNextOccurrence(context.supabase, data.clientId, data.taskType, new Date());
     return { ok: true };
   });

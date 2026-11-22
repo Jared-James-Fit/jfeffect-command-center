@@ -245,7 +245,10 @@ async function restoreDays(sb: Db, days: NonNullable<Snapshot["days"]>): Promise
 }
 
 /** Undo one change with the restorer's own session. Returns what happened, in words. */
-export async function restoreVersion(actor: { supabase: Db; userId: string }, versionId: string): Promise<string> {
+export async function restoreVersion(actor: { supabase: Db; userId: string; asRequester?: unknown }, versionId: string): Promise<string> {
+  // An undo is the admin's own act, with their own session: it never runs on someone's
+  // approval (restore_program_version isn't approvable), where its moves would act as the approver.
+  if (actor.asRequester) throw new Error("Only the owner can undo a change, himself.");
   const sb = actor.supabase;
   const admin = await service();
   const v = await getVersion(admin, versionId);

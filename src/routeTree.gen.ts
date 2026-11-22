@@ -84,6 +84,7 @@ import { Route as AuthenticatedAdminCommunityRouteImport } from './routes/_authe
 import { Route as AuthenticatedAdminContentRouteImport } from './routes/_authenticated/admin/content'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
 import { Route as AuthenticatedAdminDiscountCodesRouteImport } from './routes/_authenticated/admin/discount-codes'
+import { Route as AuthenticatedAdminDocumentsRouteImport } from './routes/_authenticated/admin/documents'
 import { Route as AuthenticatedAdminExercisesRouteImport } from './routes/_authenticated/admin/exercises'
 import { Route as AuthenticatedAdminFaqsRouteImport } from './routes/_authenticated/admin/faqs'
 import { Route as AuthenticatedAdminFeatureFlagsRouteImport } from './routes/_authenticated/admin/feature-flags'
@@ -143,12 +144,14 @@ import { Route as AuthenticatedPortalCalendarRouteImport } from './routes/_authe
 import { Route as AuthenticatedPortalCheckInRouteImport } from './routes/_authenticated/portal/check-in'
 import { Route as AuthenticatedPortalCheckInsRouteImport } from './routes/_authenticated/portal/check-ins'
 import { Route as AuthenticatedPortalCommunityRouteImport } from './routes/_authenticated/portal/community'
+import { Route as AuthenticatedPortalDocumentsRouteImport } from './routes/_authenticated/portal/documents'
 import { Route as AuthenticatedPortalExercisesRouteImport } from './routes/_authenticated/portal/exercises'
 import { Route as AuthenticatedPortalGoalsSetupRouteImport } from './routes/_authenticated/portal/goals-setup'
 import { Route as AuthenticatedPortalLiftVideosRouteImport } from './routes/_authenticated/portal/lift-videos'
 import { Route as AuthenticatedPortalMediaRouteImport } from './routes/_authenticated/portal/media'
 import { Route as AuthenticatedPortalMembershipRouteImport } from './routes/_authenticated/portal/membership'
 import { Route as AuthenticatedPortalMessagesRouteImport } from './routes/_authenticated/portal/messages'
+import { Route as AuthenticatedPortalNutritionStudioRouteImport } from './routes/_authenticated/portal/nutrition-studio'
 import { Route as AuthenticatedPortalNutritionTargetsRouteImport } from './routes/_authenticated/portal/nutrition-targets'
 import { Route as AuthenticatedPortalProgressRouteImport } from './routes/_authenticated/portal/progress'
 import { Route as AuthenticatedPortalProgressMetricsRouteImport } from './routes/_authenticated/portal/progress-metrics'
@@ -261,6 +264,7 @@ import { Route as ApiPublicHooksCleoAttachmentsSweepRouteImport } from './routes
 import { Route as ApiPublicHooksCleoBenchRouteImport } from './routes/api/public/hooks/cleo-bench'
 import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/api/public/hooks/client-calendars-tick'
 import { Route as ApiPublicHooksDailyVisualsTickRouteImport } from './routes/api/public/hooks/daily-visuals-tick'
+import { Route as ApiPublicHooksDocumentsPurgeRouteImport } from './routes/api/public/hooks/documents-purge'
 import { Route as ApiPublicHooksFeedCopiesTickRouteImport } from './routes/api/public/hooks/feed-copies-tick'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
 import { Route as ApiPublicHooksGcalSessionImportRouteImport } from './routes/api/public/hooks/gcal-session-import'
@@ -715,6 +719,12 @@ const AuthenticatedAdminDiscountCodesRoute =
     path: '/discount-codes',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminDocumentsRoute =
+  AuthenticatedAdminDocumentsRouteImport.update({
+    id: '/documents',
+    path: '/documents',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminExercisesRoute =
   AuthenticatedAdminExercisesRouteImport.update({
     id: '/exercises',
@@ -1058,6 +1068,12 @@ const AuthenticatedPortalCommunityRoute =
     path: '/community',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedPortalDocumentsRoute =
+  AuthenticatedPortalDocumentsRouteImport.update({
+    id: '/documents',
+    path: '/documents',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
 const AuthenticatedPortalExercisesRoute =
   AuthenticatedPortalExercisesRouteImport.update({
     id: '/exercises',
@@ -1092,6 +1108,12 @@ const AuthenticatedPortalMessagesRoute =
   AuthenticatedPortalMessagesRouteImport.update({
     id: '/messages',
     path: '/messages',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalNutritionStudioRoute =
+  AuthenticatedPortalNutritionStudioRouteImport.update({
+    id: '/nutrition-studio',
+    path: '/nutrition-studio',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedPortalNutritionTargetsRoute =
@@ -1757,6 +1779,12 @@ const ApiPublicHooksDailyVisualsTickRoute =
     path: '/api/public/hooks/daily-visuals-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksDocumentsPurgeRoute =
+  ApiPublicHooksDocumentsPurgeRouteImport.update({
+    id: '/api/public/hooks/documents-purge',
+    path: '/api/public/hooks/documents-purge',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksFeedCopiesTickRoute =
   ApiPublicHooksFeedCopiesTickRouteImport.update({
     id: '/api/public/hooks/feed-copies-tick',
@@ -2136,6 +2164,7 @@ export interface FileRoutesByFullPath {
   '/admin/content': typeof AuthenticatedAdminContentRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
+  '/admin/documents': typeof AuthenticatedAdminDocumentsRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
   '/admin/feature-flags': typeof AuthenticatedAdminFeatureFlagsRoute
@@ -2193,12 +2222,14 @@ export interface FileRoutesByFullPath {
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/check-ins': typeof AuthenticatedPortalCheckInsRoute
   '/portal/community': typeof AuthenticatedPortalCommunityRoute
+  '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
   '/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
   '/portal/media': typeof AuthenticatedPortalMediaRoute
   '/portal/membership': typeof AuthenticatedPortalMembershipRoute
   '/portal/messages': typeof AuthenticatedPortalMessagesRoute
+  '/portal/nutrition-studio': typeof AuthenticatedPortalNutritionStudioRoute
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/progress': typeof AuthenticatedPortalProgressRoute
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
@@ -2295,6 +2326,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
+  '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
@@ -2437,6 +2469,7 @@ export interface FileRoutesByTo {
   '/admin/content': typeof AuthenticatedAdminContentRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
+  '/admin/documents': typeof AuthenticatedAdminDocumentsRoute
   '/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/admin/faqs': typeof AuthenticatedAdminFaqsRoute
   '/admin/feature-flags': typeof AuthenticatedAdminFeatureFlagsRoute
@@ -2493,12 +2526,14 @@ export interface FileRoutesByTo {
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/check-ins': typeof AuthenticatedPortalCheckInsRoute
   '/portal/community': typeof AuthenticatedPortalCommunityRoute
+  '/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
   '/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
   '/portal/media': typeof AuthenticatedPortalMediaRoute
   '/portal/membership': typeof AuthenticatedPortalMembershipRoute
   '/portal/messages': typeof AuthenticatedPortalMessagesRoute
+  '/portal/nutrition-studio': typeof AuthenticatedPortalNutritionStudioRoute
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/progress': typeof AuthenticatedPortalProgressRoute
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
@@ -2595,6 +2630,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
+  '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
@@ -2742,6 +2778,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/content': typeof AuthenticatedAdminContentRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/_authenticated/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
+  '/_authenticated/admin/documents': typeof AuthenticatedAdminDocumentsRoute
   '/_authenticated/admin/exercises': typeof AuthenticatedAdminExercisesRoute
   '/_authenticated/admin/faqs': typeof AuthenticatedAdminFaqsRoute
   '/_authenticated/admin/feature-flags': typeof AuthenticatedAdminFeatureFlagsRoute
@@ -2799,12 +2836,14 @@ export interface FileRoutesById {
   '/_authenticated/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/_authenticated/portal/check-ins': typeof AuthenticatedPortalCheckInsRoute
   '/_authenticated/portal/community': typeof AuthenticatedPortalCommunityRoute
+  '/_authenticated/portal/documents': typeof AuthenticatedPortalDocumentsRoute
   '/_authenticated/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/_authenticated/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
   '/_authenticated/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
   '/_authenticated/portal/media': typeof AuthenticatedPortalMediaRoute
   '/_authenticated/portal/membership': typeof AuthenticatedPortalMembershipRoute
   '/_authenticated/portal/messages': typeof AuthenticatedPortalMessagesRoute
+  '/_authenticated/portal/nutrition-studio': typeof AuthenticatedPortalNutritionStudioRoute
   '/_authenticated/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/_authenticated/portal/progress': typeof AuthenticatedPortalProgressRoute
   '/_authenticated/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
@@ -2901,6 +2940,7 @@ export interface FileRoutesById {
   '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
+  '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
@@ -3048,6 +3088,7 @@ export interface FileRouteTypes {
     | '/admin/content'
     | '/admin/content-ideas'
     | '/admin/discount-codes'
+    | '/admin/documents'
     | '/admin/exercises'
     | '/admin/faqs'
     | '/admin/feature-flags'
@@ -3105,12 +3146,14 @@ export interface FileRouteTypes {
     | '/portal/check-in'
     | '/portal/check-ins'
     | '/portal/community'
+    | '/portal/documents'
     | '/portal/exercises'
     | '/portal/goals-setup'
     | '/portal/lift-videos'
     | '/portal/media'
     | '/portal/membership'
     | '/portal/messages'
+    | '/portal/nutrition-studio'
     | '/portal/nutrition-targets'
     | '/portal/progress'
     | '/portal/progress-metrics'
@@ -3207,6 +3250,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleo-bench'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/daily-visuals-tick'
+    | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
@@ -3349,6 +3393,7 @@ export interface FileRouteTypes {
     | '/admin/content'
     | '/admin/content-ideas'
     | '/admin/discount-codes'
+    | '/admin/documents'
     | '/admin/exercises'
     | '/admin/faqs'
     | '/admin/feature-flags'
@@ -3405,12 +3450,14 @@ export interface FileRouteTypes {
     | '/portal/check-in'
     | '/portal/check-ins'
     | '/portal/community'
+    | '/portal/documents'
     | '/portal/exercises'
     | '/portal/goals-setup'
     | '/portal/lift-videos'
     | '/portal/media'
     | '/portal/membership'
     | '/portal/messages'
+    | '/portal/nutrition-studio'
     | '/portal/nutrition-targets'
     | '/portal/progress'
     | '/portal/progress-metrics'
@@ -3507,6 +3554,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleo-bench'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/daily-visuals-tick'
+    | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
@@ -3653,6 +3701,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/content'
     | '/_authenticated/admin/content-ideas'
     | '/_authenticated/admin/discount-codes'
+    | '/_authenticated/admin/documents'
     | '/_authenticated/admin/exercises'
     | '/_authenticated/admin/faqs'
     | '/_authenticated/admin/feature-flags'
@@ -3710,12 +3759,14 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/check-in'
     | '/_authenticated/portal/check-ins'
     | '/_authenticated/portal/community'
+    | '/_authenticated/portal/documents'
     | '/_authenticated/portal/exercises'
     | '/_authenticated/portal/goals-setup'
     | '/_authenticated/portal/lift-videos'
     | '/_authenticated/portal/media'
     | '/_authenticated/portal/membership'
     | '/_authenticated/portal/messages'
+    | '/_authenticated/portal/nutrition-studio'
     | '/_authenticated/portal/nutrition-targets'
     | '/_authenticated/portal/progress'
     | '/_authenticated/portal/progress-metrics'
@@ -3812,6 +3863,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleo-bench'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/daily-visuals-tick'
+    | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
@@ -3947,6 +3999,7 @@ export interface RootRouteChildren {
   ApiPublicHooksCleoBenchRoute: typeof ApiPublicHooksCleoBenchRoute
   ApiPublicHooksClientCalendarsTickRoute: typeof ApiPublicHooksClientCalendarsTickRoute
   ApiPublicHooksDailyVisualsTickRoute: typeof ApiPublicHooksDailyVisualsTickRoute
+  ApiPublicHooksDocumentsPurgeRoute: typeof ApiPublicHooksDocumentsPurgeRoute
   ApiPublicHooksFeedCopiesTickRoute: typeof ApiPublicHooksFeedCopiesTickRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksGcalSessionImportRoute: typeof ApiPublicHooksGcalSessionImportRoute
@@ -4514,6 +4567,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminDiscountCodesRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/documents': {
+      id: '/_authenticated/admin/documents'
+      path: '/documents'
+      fullPath: '/admin/documents'
+      preLoaderRoute: typeof AuthenticatedAdminDocumentsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/exercises': {
       id: '/_authenticated/admin/exercises'
       path: '/exercises'
@@ -4927,6 +4987,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalCommunityRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/portal/documents': {
+      id: '/_authenticated/portal/documents'
+      path: '/documents'
+      fullPath: '/portal/documents'
+      preLoaderRoute: typeof AuthenticatedPortalDocumentsRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
     '/_authenticated/portal/exercises': {
       id: '/_authenticated/portal/exercises'
       path: '/exercises'
@@ -4967,6 +5034,13 @@ declare module '@tanstack/react-router' {
       path: '/messages'
       fullPath: '/portal/messages'
       preLoaderRoute: typeof AuthenticatedPortalMessagesRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/nutrition-studio': {
+      id: '/_authenticated/portal/nutrition-studio'
+      path: '/nutrition-studio'
+      fullPath: '/portal/nutrition-studio'
+      preLoaderRoute: typeof AuthenticatedPortalNutritionStudioRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/nutrition-targets': {
@@ -5753,6 +5827,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksDailyVisualsTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/documents-purge': {
+      id: '/api/public/hooks/documents-purge'
+      path: '/api/public/hooks/documents-purge'
+      fullPath: '/api/public/hooks/documents-purge'
+      preLoaderRoute: typeof ApiPublicHooksDocumentsPurgeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/feed-copies-tick': {
       id: '/api/public/hooks/feed-copies-tick'
       path: '/api/public/hooks/feed-copies-tick'
@@ -6298,6 +6379,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminContentRoute: typeof AuthenticatedAdminContentRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
   AuthenticatedAdminDiscountCodesRoute: typeof AuthenticatedAdminDiscountCodesRoute
+  AuthenticatedAdminDocumentsRoute: typeof AuthenticatedAdminDocumentsRoute
   AuthenticatedAdminExercisesRoute: typeof AuthenticatedAdminExercisesRoute
   AuthenticatedAdminFaqsRoute: typeof AuthenticatedAdminFaqsRoute
   AuthenticatedAdminFeatureFlagsRoute: typeof AuthenticatedAdminFeatureFlagsRoute
@@ -6429,6 +6511,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminContentRoute: AuthenticatedAdminContentRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
     AuthenticatedAdminDiscountCodesRoute: AuthenticatedAdminDiscountCodesRoute,
+    AuthenticatedAdminDocumentsRoute: AuthenticatedAdminDocumentsRoute,
     AuthenticatedAdminExercisesRoute: AuthenticatedAdminExercisesRoute,
     AuthenticatedAdminFaqsRoute: AuthenticatedAdminFaqsRoute,
     AuthenticatedAdminFeatureFlagsRoute: AuthenticatedAdminFeatureFlagsRoute,
@@ -6624,12 +6707,14 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalCheckInRoute: typeof AuthenticatedPortalCheckInRoute
   AuthenticatedPortalCheckInsRoute: typeof AuthenticatedPortalCheckInsRoute
   AuthenticatedPortalCommunityRoute: typeof AuthenticatedPortalCommunityRoute
+  AuthenticatedPortalDocumentsRoute: typeof AuthenticatedPortalDocumentsRoute
   AuthenticatedPortalExercisesRoute: typeof AuthenticatedPortalExercisesRoute
   AuthenticatedPortalGoalsSetupRoute: typeof AuthenticatedPortalGoalsSetupRoute
   AuthenticatedPortalLiftVideosRoute: typeof AuthenticatedPortalLiftVideosRoute
   AuthenticatedPortalMediaRoute: typeof AuthenticatedPortalMediaRoute
   AuthenticatedPortalMembershipRoute: typeof AuthenticatedPortalMembershipRoute
   AuthenticatedPortalMessagesRoute: typeof AuthenticatedPortalMessagesRoute
+  AuthenticatedPortalNutritionStudioRoute: typeof AuthenticatedPortalNutritionStudioRoute
   AuthenticatedPortalNutritionTargetsRoute: typeof AuthenticatedPortalNutritionTargetsRoute
   AuthenticatedPortalProgressRoute: typeof AuthenticatedPortalProgressRoute
   AuthenticatedPortalProgressMetricsRoute: typeof AuthenticatedPortalProgressMetricsRoute
@@ -6671,12 +6756,15 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalCheckInRoute: AuthenticatedPortalCheckInRoute,
     AuthenticatedPortalCheckInsRoute: AuthenticatedPortalCheckInsRoute,
     AuthenticatedPortalCommunityRoute: AuthenticatedPortalCommunityRoute,
+    AuthenticatedPortalDocumentsRoute: AuthenticatedPortalDocumentsRoute,
     AuthenticatedPortalExercisesRoute: AuthenticatedPortalExercisesRoute,
     AuthenticatedPortalGoalsSetupRoute: AuthenticatedPortalGoalsSetupRoute,
     AuthenticatedPortalLiftVideosRoute: AuthenticatedPortalLiftVideosRoute,
     AuthenticatedPortalMediaRoute: AuthenticatedPortalMediaRoute,
     AuthenticatedPortalMembershipRoute: AuthenticatedPortalMembershipRoute,
     AuthenticatedPortalMessagesRoute: AuthenticatedPortalMessagesRoute,
+    AuthenticatedPortalNutritionStudioRoute:
+      AuthenticatedPortalNutritionStudioRoute,
     AuthenticatedPortalNutritionTargetsRoute:
       AuthenticatedPortalNutritionTargetsRoute,
     AuthenticatedPortalProgressRoute: AuthenticatedPortalProgressRoute,
@@ -6833,6 +6921,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksClientCalendarsTickRoute:
     ApiPublicHooksClientCalendarsTickRoute,
   ApiPublicHooksDailyVisualsTickRoute: ApiPublicHooksDailyVisualsTickRoute,
+  ApiPublicHooksDocumentsPurgeRoute: ApiPublicHooksDocumentsPurgeRoute,
   ApiPublicHooksFeedCopiesTickRoute: ApiPublicHooksFeedCopiesTickRoute,
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksGcalSessionImportRoute: ApiPublicHooksGcalSessionImportRoute,
@@ -6882,7 +6971,6 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
 import type { getRouter } from './router.tsx'
 import type { startInstance } from './start.ts'
 declare module '@tanstack/react-start' {

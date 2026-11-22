@@ -19,6 +19,18 @@ async function admin(): Promise<any> {
   return supabaseAdmin;
 }
 
+/** Staff who may act on this client: the admin, or the client's own coach (never another coach's client). */
+async function staffForClient(supabase: any, userId: string, clientId: string | null | undefined) {
+  const { staffCanReachClient } = await import("@/lib/staff-client-access.server");
+  return staffCanReachClient(supabase, userId, clientId);
+}
+
+/** The client a submission belongs to (read as the server), or null. */
+async function submissionClient(submissionId: string): Promise<string | null> {
+  const { data } = await (await admin()).from("nf_submissions").select("client_id").eq("id", submissionId).maybeSingle();
+  return (data?.client_id as string | null) ?? null;
+}
+
 async function isStaff(supabase: any, userId: string) {
   const [{ data: a }, { data: c }] = await Promise.all([
     supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
@@ -39,7 +51,7 @@ export const sendNutritionRequestFn = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    if (!(await staffForClient(context.supabase, context.userId, data.clientId))) throw new Error("Coach access required");
     const sb = await admin();
     const formId = NUTRITION_REQUEST_FORM_ID;
     const { data: form } = await sb.from("nf_forms").select("id, title").eq("id", formId).maybeSingle();
@@ -99,13 +111,14 @@ export const generateNutritionPlanFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const sb = await admin();
-    const staff = await isStaff(context.supabase, context.userId);
     const { data: sub } = await sb
       .from("nf_submissions")
-      .select("id, form_id, status, client:client_id(user_id)")
+      .select("id, form_id, status, client_id, client:client_id(user_id)")
       .eq("id", data.submissionId)
       .maybeSingle();
     if (!sub) throw new Error("Submission not found");
+    // Staff powers (regenerate, pick the phase) only on a client they coach.
+    const staff = await staffForClient(context.supabase, context.userId, (sub as any).client_id);
     if (sub.form_id !== NUTRITION_REQUEST_FORM_ID) throw new Error("Not a nutrition request");
     if (!staff && sub.client?.user_id !== context.userId) throw new Error("Not allowed");
     if (sub.status === "in_progress") throw new Error("Submit the form first");
@@ -145,7 +158,7 @@ export const reviseNutritionPlanFn = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    if (!(await staffForClient(context.supabase, context.userId, await submissionClient(data.submissionId)))) throw new Error("Coach access required");
     return (await aiPlans()).queueNutritionRevision(await admin(), data.submissionId, data.instructions);
   });
 
@@ -153,7 +166,7 @@ export const undoNutritionRevisionFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ submissionId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    if (!(await staffForClient(context.supabase, context.userId, await submissionClient(data.submissionId)))) throw new Error("Coach access required");
     return (await aiPlans()).undoNutritionRevision(await admin(), data.submissionId);
   });
 
@@ -162,7 +175,7 @@ export const listNutritionRequestsFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ clientId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    if (!(await staffForClient(context.supabase, context.userId, data.clientId))) throw new Error("Coach access required");
     const sb = await admin();
     const { data: subs } = await sb
       .from("nf_submissions")
@@ -221,7 +234,7 @@ export const getClientTrainingPatternFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ clientId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    if (!(await staffForClient(context.supabase, context.userId, data.clientId))) throw new Error("Coach access required");
     return (await aiPlans()).loadTrainingPattern(await admin(), data.clientId);
   });
 
@@ -230,7 +243,7 @@ export const markNutritionPlanAppliedFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ submissionId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    if (!(await staffForClient(context.supabase, context.userId, await submissionClient(data.submissionId)))) throw new Error("Coach access required");
     const sb = await admin();
     const now = new Date().toISOString();
     await sb.from("nutrition_ai_plans").update({ applied_at: now, applied_by: context.userId, updated_at: now }).eq("submission_id", data.submissionId);
@@ -359,7 +372,7 @@ export const setAiPlanSupplementsFn = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    if (!(await staffForClient(context.supabase, context.userId, await submissionClient(data.submissionId)))) throw new Error("Coach access required");
     // staff who can see this plan through their own login
     const { data: row } = await (context.supabase as any).from("nutrition_ai_plans").select("supplements").eq("submission_id", data.submissionId).maybeSingle();
     if (!row) throw new Error("Plan not found");

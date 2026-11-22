@@ -31,6 +31,7 @@ import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { WorkoutMealTagger } from "@/components/nutrition/WorkoutMealTagger";
 import { AutoLabelWorkoutMeals } from "@/components/nutrition/AutoLabelWorkoutMeals";
 import { MealPlanBulkPaste, type ParsedDay } from "@/components/nutrition/MealPlanBulkPaste";
+import { MealBuilder } from "@/components/nutrition-studio/meal-builder";
 import { PlanDayUseEditor, PlanDayWeekPreview } from "@/components/nutrition/PlanDayRules";
 import { resolveTrainingWeekdays } from "@/lib/cardio-prescription";
 import { cardioDraftsFor, dayKey, parseAiCardio, type CardioDraft } from "@/lib/nutrition-cardio-sync";
@@ -95,6 +96,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
   const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
   const [days, setDays] = useState<Day[]>([]);
+  // the meals: built food by food (the default), or the plan text itself
+  const [mealsMode, setMealsMode] = useState<"build" | "text">("build");
   const [saving, setSaving] = useState(false);
   /** True while Phase / Goal holds a value detected from a paste (cleared on manual change). */
   const [phaseAuto, setPhaseAuto] = useState(false);
@@ -536,17 +539,44 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
                       <DayNumbersCheck day={d} onUseCalories={(kcal) => updateDay(i, "calories", String(kcal))} />
                       <DayCardio draft={d.cardio} onChange={(patch) => setCardio(i, patch)} willSync={form.status === "Active"} />
                       <div className="space-y-1.5">
-                        <Label className="text-[13px] text-muted-foreground">Meals</Label>
-                        <Textarea
-                          rows={8}
-                          placeholder={`Meal 1\n120 g oats\n3 whole eggs\n\nApproximate macros:\n40 g protein\n70 g carbohydrates\n18 g fat`}
-                          value={d.notes ?? ""}
-                          onChange={(e) => updateDay(i, "notes", e.target.value)}
-                          className="font-mono text-xs leading-relaxed whitespace-pre"
-                          spellCheck={false}
-                        />
-                        <WorkoutMealTagger text={d.notes ?? ""} onChange={(t) => updateDay(i, "notes", t)} />
-                        <p className="text-[13px] text-muted-foreground">Write "Meal 1", "Meal 2"… on their own lines; the client sees each meal as a card.</p>
+                        <div className="flex items-center gap-2">
+                          <Label className="text-[13px] text-muted-foreground">Meals</Label>
+                          <div className="ml-auto flex rounded-lg bg-muted p-0.5 text-[13px]" role="tablist" aria-label="How to edit the meals">
+                            {(["build", "text"] as const).map((mode) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                role="tab"
+                                aria-selected={mealsMode === mode}
+                                onClick={() => setMealsMode(mode)}
+                                className={`h-8 rounded-md px-3 ${mealsMode === mode ? "bg-background font-medium shadow-sm" : "text-muted-foreground"}`}
+                              >
+                                {mode === "build" ? "Build" : "Text"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        {mealsMode === "build" ? (
+                          <MealBuilder
+                            notes={d.notes ?? ""}
+                            onChange={(t) => updateDay(i, "notes", t)}
+                            targets={{ calories: d.calories, protein: d.protein, carbs: d.carbs, fats: d.fats }}
+                            dayLabel={d.day_label}
+                          />
+                        ) : (
+                          <>
+                            <Textarea
+                              rows={8}
+                              placeholder={`Meal 1\n120 g oats\n3 whole eggs\n\nApproximate macros:\n40 g protein\n70 g carbohydrates\n18 g fat`}
+                              value={d.notes ?? ""}
+                              onChange={(e) => updateDay(i, "notes", e.target.value)}
+                              className="font-mono text-xs leading-relaxed whitespace-pre"
+                              spellCheck={false}
+                            />
+                            <WorkoutMealTagger text={d.notes ?? ""} onChange={(t) => updateDay(i, "notes", t)} />
+                            <p className="text-[13px] text-muted-foreground">Write "Meal 1", "Meal 2"… on their own lines; the client sees each meal as a card.</p>
+                          </>
+                        )}
                       </div>
                     </div>
                   </Section>
