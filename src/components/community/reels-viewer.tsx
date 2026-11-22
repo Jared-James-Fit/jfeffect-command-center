@@ -31,6 +31,7 @@ import { keepPlaying } from "@/lib/video-keep-playing";
 import { clipFrame } from "@/lib/photo-frame";
 import { ClipFrameBox } from "@/components/community/clip-frame-box";
 import { cn } from "@/lib/utils";
+import { noteAutoplayRefused } from "@/lib/autoplay-notice";
 
 export type ReelStart = { postId: string; path: string | null };
 
@@ -346,14 +347,20 @@ function ReelPage({
       const notAllowed = (e as { name?: string } | null)?.name === "NotAllowedError";
       // refused even muted: the phone starts nothing by itself (Low Power Mode) until a tap
       if (v.muted) {
-        if (notAllowed) setNeedsTap(true);
+        if (notAllowed) {
+          setNeedsTap(true);
+          noteAutoplayRefused();
+        }
         return;
       }
       // sound without a tap first: the phone said no, so it plays muted (the speaker turns it on)
       setSoundRef.current(false);
       v.muted = true;
       void (v.play() as Promise<void> | undefined)?.catch?.((e2: unknown) => {
-        if ((e2 as { name?: string } | null)?.name === "NotAllowedError") setNeedsTap(true);
+        if ((e2 as { name?: string } | null)?.name === "NotAllowedError") {
+          setNeedsTap(true);
+          noteAutoplayRefused();
+        }
       });
     });
   }, []);

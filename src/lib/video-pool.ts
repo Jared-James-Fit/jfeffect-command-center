@@ -16,6 +16,7 @@
  * moment the phone allows it. The installed app (Capacitor) never asks, so
  * there clips have sound from the first one.
  */
+import { noteAutoplayRefused } from "@/lib/autoplay-notice";
 import { REEL_SLOTS } from "@/lib/reels";
 
 /**
@@ -116,6 +117,8 @@ function setRefused(v: HTMLVideoElement, on: boolean) {
   if (on) refused.add(v);
   else refused.delete(v);
   v.dispatchEvent(new Event(PLAY_REFUSED_EVENT));
+  // the first time, say why (Low Power Mode), once
+  if (on) noteAutoplayRefused();
 }
 
 /** The caller stops wanting it to play (off screen, held, scrubbed): paused, and no tap will start it or give it sound. */
