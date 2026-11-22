@@ -10,7 +10,12 @@ describe("instant notification center", () => {
     expect(initialNotificationView(true)).toBe("all");
     expect(source).toContain("autoSeenOnceRef");
     expect(source).toContain('rpc("notif_mark_read", toPairs(targets))');
-    expect(source).toContain("Mark notifications seen once per center open");
+    // once per center open ("Mark notifications seen once per center open", Sep 20 2026):
+    // the effect waits for the feed to load, then never fires again for that open
+    expect(source).toContain(
+      "if (autoSeenOnceRef.current || query.isLoading || markSeenMut.isPending) return;\n    autoSeenOnceRef.current = true;",
+    );
+    expect(source).toMatch(/const markSeenMut = useMutation\(\{\s*mutationFn: async \(targets: BellItem\[\]\) => \{\s*await rpc\("notif_mark_read", toPairs\(targets\)\);/);
   });
 
   it("does not let an old read/archive state hide a newer source event", () => {

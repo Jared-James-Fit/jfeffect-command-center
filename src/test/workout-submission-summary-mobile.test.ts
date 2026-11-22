@@ -5,7 +5,8 @@ const summary = readFileSync("src/components/workout-submission-summary.tsx", "u
 
 describe("workout submission summary mobile layout", () => {
   it("uses a bounded mobile sheet with a scrollable body and fixed footer", () => {
-    expect(summary).toContain('maxHeight: "min(94svh, 800px)"');
+    // bounded by the dynamic viewport ("Optimize workout recap…", Sep 27 2026: was min(94svh, 800px))
+    expect(summary).toContain('style={{ height: "min(96dvh, 820px)", maxHeight: "96dvh" }}');
     expect(summary).toContain("sm:max-w-[520px]");
     expect(summary).toContain("min-h-0 flex-1 overflow-y-auto");
     expect(summary).toContain("shrink-0 border-t");
@@ -32,6 +33,10 @@ describe("workout submission summary mobile layout", () => {
 
   it("does not repeat the PR takeaway when a dedicated PR reveal is present", () => {
     expect(summary).toContain("takeaways.filter((t) => !/^🏆/.test(t.trim()))");
-    expect(summary).toContain("Personal records");
+    // the dedicated reveal: the server's records under "New records" (the headline-PR rule),
+    // else (memberships' session PRs) its own all-time record box
+    expect(summary).toContain("{records && <NewRecordsSection records={records} unit={displayUnit} setUnit={setUnit} highlight={!!lead} />}");
+    expect(readFileSync("src/components/records/training-records.tsx", "utf8")).toContain(">New records</div>");
+    expect(summary).toContain('{prList.length === 1 ? "New all-time record" : `${prList.length} all-time records`}');
   });
 });
