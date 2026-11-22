@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ChevronRight, Crown, Dumbbell, Info, Landmark, Loader2, Medal, Scale, ShieldCheck, Trophy } from "lucide-react";
+import { ChevronRight, Crown, Dumbbell, Info, Landmark, Loader2, Medal, Scale, ShieldCheck, Swords, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -19,6 +19,8 @@ import { useWeightUnit } from "@/lib/use-weight-unit";
 import { PowerliftingCareer } from "@/components/portal/powerlifting-career";
 import { LEVELS, type MeetLevel } from "@/lib/powerlifting-career";
 import type { WeightUnit } from "@/lib/weight-lifted";
+import { CompareSheet, LifterSplitSheet, SplitBar, SplitLegend } from "@/components/portal/strength-split-view";
+import { splitOf } from "@/lib/strength-split";
 import {
   BOARD_LIFTS,
   LIFT_NAME,
@@ -284,9 +286,12 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
   /** A Rankings podium's division (Women, Men); otherwise your own. */
   initialDivision?: Division | null;
 } = {}) {
-  // Tapping a powerlifter opens their career (the only sheet left).
+  // Tapping a lifter opens their total taken apart (the split, what it says,
+  // ratios), with their meet career and the head to head a tap from there.
   const [careerId, setCareerId] = useState<string | null>(null);
-  const show = (athleteId: string | null = null) => { if (athleteId) setCareerId(athleteId); };
+  const [lifterKey, setLifterKey] = useState<string | null>(null);
+  const show = (key: string) => setLifterKey(key);
+  const [compare, setCompare] = useState<{ open: boolean; a: string | null; b: string | null }>({ open: false, a: null, b: null });
   const [source, setSource] = useState<BoardSource>("all");
   const [mode, setMode] = useState<BoardMode>(initialMode);
   const [lift, setLift] = useState<BoardLift>("total");
@@ -310,6 +315,16 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
   const meBelow = ranked && me && !top10.some((r) => r.key === me.key) ? me : null;
   const unranked = showAll && source === "all" && roster.data && !isPending ? unrankedFor(roster.data, data, mode, lift, division) : [];
   const pick = <T,>(set: (v: T) => void) => (v: T) => { set(v); setShowAll(false); };
+  // the viewer's own heaviest total on this board, the head to head's left side
+  const myTotalKey = data.find((r) => r.is_me && r.lift === "total" && r.all_rank != null)?.key ?? null;
+  const openCompare = (with_: string | null = null) => {
+    setLifterKey(null);
+    const a = myTotalKey && myTotalKey !== with_ ? myTotalKey : with_;
+    setCompare({ open: true, a, b: a === with_ ? null : with_ });
+  };
+  const sourceLabel = source === "all" ? "All-time bests · training and meets" : "Meet results · sanctioned meets";
+  // the split shows on the Total board: a fingerprint under every lifter
+  const splits = lift === "total";
   const hint =
     source === "meets" ? null
     : status.kind === "no-bodyweight" ? "Log your bodyweight to rank pound for pound"
@@ -402,12 +417,14 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
           </div>
         ) : (
           <>
+            {/* the Total board's split fingerprints: the key once, above them */}
+            {splits && <SplitLegend className="mx-3 mt-2.5 justify-end" />}
             {/* The podium: Top 3 as tiles, like the League */}
             <div className="mt-2.5 grid grid-cols-3 gap-1.5 px-3">
               {podium.map((r) => {
                 const place = rankOf(r, mode, division)!;
                 return (
-                  <button type="button" key={r.key} onClick={() => show(r.athlete_id)}
+                  <button type="button" key={r.key} onClick={() => show(r.key)}
                     className={cn("min-w-0 rounded-xl bg-muted/40 px-1.5 py-2 text-center transition-colors active:bg-muted", r.is_me && "bg-muted ring-1 ring-foreground/20")}>
                     <div className="text-base leading-none">{MEDAL[place - 1] ?? place}</div>
                     <div className="mt-1 truncate text-xs font-semibold">{r.is_me ? "You" : r.display_name}</div>
@@ -415,6 +432,7 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
                     <div className="truncate text-[10px] text-muted-foreground">
                       {r.source === "meet" ? "Meet" : "Training"}{mode === "p4p" ? ` · ${formatLoad(r.kg, unit)}` : ""}
                     </div>
+                    {splits && <RowSplit row={r} className="mx-auto mt-1.5 w-[80%]" />}
                   </button>
                 );
               })}
@@ -424,9 +442,12 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
               <ol className="mx-3 mt-2 divide-y divide-border/60 overflow-hidden rounded-xl bg-muted/25">
                 {[...rest, ...(meBelow ? [meBelow] : [])].map((r) => (
                   <li key={r.key}>
-                    <button type="button" onClick={() => show(r.athlete_id)} className={cn("flex min-h-11 w-full items-center gap-2.5 px-3 py-2 text-left text-[14px] active:bg-muted", r.is_me && "bg-muted/80")}>
+                    <button type="button" onClick={() => show(r.key)} className={cn("flex min-h-11 w-full items-center gap-2.5 px-3 py-2 text-left text-[14px] active:bg-muted", r.is_me && "bg-muted/80")}>
                       <span className="w-6 shrink-0 text-center text-[12px] font-bold tabular-nums text-muted-foreground">{rankOf(r, mode, division)}</span>
-                      <span className={cn("min-w-0 flex-1 truncate", r.is_me ? "font-semibold" : "font-medium")}>{r.is_me ? "You" : r.display_name}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className={cn("block truncate", r.is_me ? "font-semibold" : "font-medium")}>{r.is_me ? "You" : r.display_name}</span>
+                        {splits && <RowSplit row={r} className="mt-1 w-24" />}
+                      </span>
                       <span className="shrink-0 text-[11px] text-muted-foreground">{r.source === "meet" ? "Meet" : "Training"}</span>
                       <span className="shrink-0 text-[14px] font-semibold tabular-nums">{boardValue(r, mode, unit)}</span>
                     </button>
@@ -437,6 +458,12 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
           </>
         )}
         <div className="mt-auto space-y-2 px-3 pb-3 pt-2.5">
+          {/* two lifters side by side: lifts, splits, and what sets each apart */}
+          {!isPending && data.some((r) => r.lift === "total" && r.all_rank != null) && (
+            <button type="button" onClick={() => openCompare()} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-foreground text-sm font-semibold text-background active:opacity-90" data-compare-open>
+              <Swords className="h-4 w-4" /> Compare two lifters
+            </button>
+          )}
           {/* everyone else on this board (and who isn't ranked yet), opened right here */}
           {count > TOP && (
             <button type="button" onClick={() => setShowAll((v) => !v)} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border bg-background text-sm font-semibold active:bg-muted">
@@ -447,8 +474,24 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
         </div>
       </div>
       <HallOfStrengthSheet careerOnly open={!!careerId} onOpenChange={(o) => !o && setCareerId(null)} initialSource={source} initialMode={mode} initialLift={lift} initialDivision={division} initialCareer={careerId} />
+      <LifterSplitSheet
+        rows={data}
+        personKey={lifterKey}
+        sourceLabel={sourceLabel}
+        unit={unit}
+        onClose={() => setLifterKey(null)}
+        onCompare={(key) => openCompare(key)}
+        onCareer={(id) => { setLifterKey(null); setCareerId(id); }}
+      />
+      <CompareSheet rows={data} open={compare.open} initial={compare} sourceLabel={sourceLabel} unit={unit} onClose={() => setCompare((c) => ({ ...c, open: false }))} />
     </>
   );
+}
+
+/** A lifter's split as the board's small fingerprint (the Total board): nothing when the row has no parts. */
+function RowSplit({ row, className }: { row: StrengthRow; className?: string }) {
+  const split = splitOf(row);
+  return split ? <SplitBar split={split} className={className} /> : null;
 }
 
 function KingTile({ label, row, value, loading, className }: {

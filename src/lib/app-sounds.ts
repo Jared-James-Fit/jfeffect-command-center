@@ -16,15 +16,17 @@ import { installMediaPlaybackSession, setBaseAudioSessionType } from "@/lib/audi
 export type AppSound =
   | "message" | "sent" | "notify" | "success" | "celebrate" | "reply"
   // Workout logging — short and soft, so a session full of them never nags.
-  | "tick" | "set" | "exercise" | "pr" | "timer" | "milestone" | "error";
+  | "tick" | "set" | "exercise" | "pr" | "timer" | "milestone" | "error"
+  // Rankings: switching boards, two lifters squaring up, a lifter's card opening.
+  | "whoosh" | "clash" | "clang";
 
 /**
  * Sounds that matter more win over a cue that just played (a set's "tock"
  * must not swallow the PR sparkle that lands 200 ms later).
  */
-const PRIORITY: Partial<Record<AppSound, number>> = { pr: 2, celebrate: 2, milestone: 2, exercise: 1, timer: 1 };
+const PRIORITY: Partial<Record<AppSound, number>> = { pr: 2, celebrate: 2, milestone: 2, exercise: 1, timer: 1, clash: 1 };
 /** Same-sound spacing: fast cues may repeat sooner than the 2.5 s default. */
-const MIN_GAP: Partial<Record<AppSound, number>> = { tick: 90, set: 450, exercise: 900, error: 900 };
+const MIN_GAP: Partial<Record<AppSound, number>> = { tick: 90, set: 450, exercise: 900, error: 900, whoosh: 350, clang: 700, clash: 900 };
 
 const KEY = "jf-app-sounds";
 const listeners = new Set<(on: boolean) => void>();
@@ -182,6 +184,40 @@ function click(c: BaseAudioContext, out: AudioNode, t: number, freq: number, dur
   src.start(t);
 }
 
+/** Noise swept through a band-pass (air moving past: a board sliding in). */
+function sweep(c: BaseAudioContext, out: AudioNode, t: number, from: number, to: number, dur: number, vel: number) {
+  const len = Math.max(1, Math.floor(c.sampleRate * dur));
+  const buf = c.createBuffer(1, len, c.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  const f = c.createBiquadFilter();
+  f.type = "bandpass";
+  f.Q.value = 1.1;
+  f.frequency.setValueAtTime(from, t);
+  f.frequency.exponentialRampToValueAtTime(to, t + dur);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vel, t + dur * 0.45);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(f).connect(g).connect(out);
+  src.start(t);
+  src.stop(t + dur + 0.02);
+}
+
+/**
+ * A struck iron plate: inharmonic partials (a free plate's modes sit near
+ * 1 : 2.76 : 5.40 : 8.93, not a harmonic series), each dying away at its own
+ * rate, the high ones first. The Hall of Strength's signature sound.
+ */
+export function plateStrike(c: BaseAudioContext, out: AudioNode, t: number, base: number, vel: number, ring = 1) {
+  ([[1, 1, 0.9], [2.76, 0.55, 0.6], [5.4, 0.32, 0.38], [8.93, 0.18, 0.22]] as const).forEach(([mult, level, decay]) => {
+    tone(c, out, t, base * mult, decay * ring, vel * level);
+  });
+  click(c, out, t, 5200, 0.025, vel * 0.6);
+}
+
 const PATTERNS: Record<AppSound, (c: BaseAudioContext, out: AudioNode, t: number) => void> = {
   // Soft two-note "blip" — new message.
   message: (c, o, t) => { tone(c, o, t, 880, 0.18, 0.16); tone(c, o, t + 0.09, 1320, 0.26, 0.12); },
@@ -222,6 +258,17 @@ const PATTERNS: Record<AppSound, (c: BaseAudioContext, out: AudioNode, t: number
   },
   // Something failed: low, short, not alarming.
   error: (c, o, t) => { tone(c, o, t, 300, 0.12, 0.08, "triangle", 240); tone(c, o, t + 0.12, 220, 0.16, 0.07, "triangle"); },
+  // Monthly League ⇄ Hall of Strength: a soft rising swish, felt as the board slides in.
+  whoosh: (c, o, t) => { sweep(c, o, t, 380, 2600, 0.26, 0.07); },
+  // Two lifters squaring up: a low hit with an iron ring over it. Short, so it lands and gets out of the way.
+  clash: (c, o, t) => {
+    tone(c, o, t, 120, 0.42, 0.16, "sine", 42);
+    click(c, o, t, 900, 0.06, 0.09);
+    plateStrike(c, o, t + 0.01, 420, 0.05, 0.9);
+    plateStrike(c, o, t + 0.07, 610, 0.035, 0.7);
+  },
+  // A lifter's breakdown opening: one light plate tap.
+  clang: (c, o, t) => { plateStrike(c, o, t, 560, 0.032, 0.55); },
 };
 
 /** Schedule one sound on any context (offline rendering for checks and previews). */
@@ -306,6 +353,71 @@ export function playSynth(build: (c: AudioContext, out: AudioNode, t: number) =>
       m.gain.setValueAtTime(m.gain.value, now);
       m.gain.linearRampToValueAtTime(0, now + 0.25);
       window.setTimeout(() => { try { m.disconnect(); } catch { /* gone */ } }, 400);
+    } catch { /* gone */ }
+  };
+}
+
+/**
+ * A piece of music that loops until it's stopped (the Rankings themes,
+ * rankings-music.ts): `build` sets up its sound and returns a scheduler that
+ * adds every note up to a time, topped up a little ahead on a timer. On the
+ * same context, toggle and audio session as every other sound ("ambient":
+ * it mixes with the athlete's own music and follows the silent switch). If
+ * the context is waiting for a tap it starts on that tap, not dropped.
+ * Returns stop(fadeSeconds).
+ */
+export type MusicLoop = { schedule: (until: number) => void };
+export function startAppMusic(
+  build: (c: BaseAudioContext, out: AudioNode, t0: number) => MusicLoop,
+  opts: { volume?: number; fadeIn?: number; lookahead?: number } = {},
+): (fade?: number) => void {
+  if (typeof window === "undefined" || !appSoundsEnabled()) return () => {};
+  const c = getCtx();
+  if (!c) return () => {};
+  const volume = opts.volume ?? 0.5;
+  const ahead = opts.lookahead ?? 0.9;
+  let master: GainNode | null = null;
+  let timer: number | undefined;
+  let stopped = false;
+  const begin = () => {
+    if (stopped || master || c.state !== "running") return;
+    try {
+      const t0 = c.currentTime + 0.06;
+      const m = c.createGain();
+      m.gain.setValueAtTime(0, t0);
+      m.gain.linearRampToValueAtTime(volume, t0 + (opts.fadeIn ?? 1.2));
+      const limiter = c.createDynamicsCompressor();
+      limiter.threshold.value = -12;
+      limiter.knee.value = 8;
+      limiter.ratio.value = 5;
+      limiter.attack.value = 0.004;
+      limiter.release.value = 0.2;
+      m.connect(limiter).connect(c.destination);
+      master = m;
+      const music = build(c, m, t0);
+      music.schedule(c.currentTime + ahead);
+      timer = window.setInterval(() => music.schedule(c.currentTime + ahead), 200);
+    } catch { /* never let music break the UI */ }
+  };
+  const onState = () => begin();
+  wake(c);
+  if (c.state === "running") begin();
+  else c.addEventListener?.("statechange", onState);
+  return (fade = 0.8) => {
+    if (stopped) return;
+    stopped = true;
+    c.removeEventListener?.("statechange", onState);
+    window.clearInterval(timer);
+    const m = master;
+    master = null;
+    if (!m) return;
+    try {
+      const t = c.currentTime;
+      m.gain.cancelScheduledValues(t);
+      m.gain.setValueAtTime(m.gain.value, t);
+      m.gain.linearRampToValueAtTime(0, t + fade);
+      // notes already scheduled ring out under the fade, then everything is let go
+      window.setTimeout(() => { try { m.disconnect(); } catch { /* gone */ } }, (fade + 0.3) * 1000);
     } catch { /* gone */ }
   };
 }

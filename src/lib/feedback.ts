@@ -20,6 +20,9 @@
  *   - picking, switching and swipes crossing their point are the selection
  *     tick (the iPhone's own), a checkbox adds its soft tick sound;
  *   - a timer going off is the one long buzz and its chime;
+ *   - Rankings: switching boards is the selection tick and a soft swish,
+ *     two lifters squaring up a medium tap and a short iron hit, a lifter's
+ *     breakdown opening a light tap and one plate tap;
  *   - typing, scrolling and navigating say nothing.
  * Sounds follow their own switch, the silent switch and the spacing in
  * app-sounds.ts; haptics their own switch and the spacing in haptics.ts
@@ -69,7 +72,13 @@ export type FeedbackEvent =
   /** something new came in (a notification while the app is open) */
   | "notify"
   /** Cleo's answer is in */
-  | "reply";
+  | "reply"
+  /** Rankings: Monthly League ⇄ Hall of Strength */
+  | "board"
+  /** Rankings: two lifters side by side */
+  | "versus"
+  /** Rankings: a lifter's breakdown opened */
+  | "reveal";
 
 export type FeedbackSpec = { haptic: HapticStyle | null; sound: AppSound | null };
 
@@ -98,6 +107,9 @@ export const FEEDBACK: Record<FeedbackEvent, FeedbackSpec> = {
   message: { haptic: null, sound: "message" },
   notify: { haptic: null, sound: "notify" },
   reply: { haptic: null, sound: "reply" },
+  board: { haptic: "selection", sound: "whoosh" },
+  versus: { haptic: "medium", sound: "clash" },
+  reveal: { haptic: "light", sound: "clang" },
 };
 
 /**

@@ -1714,6 +1714,19 @@ html[data-holding] *:not(input):not(textarea):not([contenteditable="true"]) {
 :root { --money-in: #2a78d6; --money-out: #eb6834; --money-profit: #1baf7a; }
 .dark { --money-in: #3987e5; --money-out: #d95926; --money-profit: #199e70; }
 
+/* Hall of Strength splits (strength-split.ts): squat, bench, deadlift, always
+   these three, in this order. The same validated slots as the money charts
+   (light and dark); the bars always carry their own labels (aqua is under
+   3:1 on white, so its identity never rests on the colour). */
+:root { --split-squat: #2a78d6; --split-bench: #eb6834; --split-deadlift: #1baf7a; }
+.dark { --split-squat: #3987e5; --split-bench: #d95926; --split-deadlift: #199e70; }
+
+/* Rankings theme music: the playing bars on its button. */
+@keyframes jf-eq {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
 /* The builder: an exercise a review flag pointed at, lit for a moment (program-workbench goTo). */
 [data-pb-row][data-pb-flash] {
   background-color: color-mix(in oklch, var(--warning) 16%, transparent);
