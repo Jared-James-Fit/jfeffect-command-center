@@ -27,6 +27,7 @@ import {
   ChevronDown,
   ChevronLeft,
   Crosshair,
+  Loader2,
   MoreHorizontal,
   RotateCcw,
   Ruler,
@@ -100,6 +101,9 @@ import {
 } from "@/lib/lift-analysis/run";
 import { useRunningAnalysis } from "@/lib/lift-analysis/store";
 import { oneRing } from "@/lib/lift-analysis/suggestions";
+import { rereadPlan } from "@/lib/lift-analysis/reread";
+import { queueLiftReread } from "@/lib/lift-analysis/auto";
+import { ENGINE_VERSION } from "@/lib/lift-analysis/analyze";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -355,6 +359,15 @@ function Body({
     void detect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startOnOpen, isLoading, !!saved, notRead?.status, autoRun, src]);
+
+  // a read an older engine refused or left partial: read again by this one in the background, the
+  // old results on screen meanwhile (reread.ts; the new read replaces it only when it stands up)
+  useEffect(() => {
+    if (!src || !saved) return;
+    const plan = rereadPlan(saved as Parameters<typeof rereadPlan>[0], ENGINE_VERSION);
+    if (plan) queueLiftReread({ setVideoId, file: src, exerciseName, plan });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src, saved?.updated_at]);
 
   // a read by itself landed while this was open
   useEffect(() => {
@@ -616,19 +629,31 @@ function Body({
             </Button>
           </div>
         ) : step === "results" && analysis ? (
-          <Results
-            analysis={analysis}
-            selected={selected}
-            onSelect={setSelected}
-            setVideoId={setVideoId}
-            clientId={saved?.client_id ?? null}
-            exerciseId={saved?.exercise_id ?? null}
-            loggedSet={loggedSet ?? null}
-            fresh={!!fresh}
-            onFix={startFix}
-            onGuide={() => setGuide(true)}
-            exerciseName={exerciseName}
-          />
+          <>
+            {autoRun && saved && !fresh && (
+              <p
+                className="mb-2 flex items-center gap-2 text-xs text-muted-foreground tabular-nums"
+                data-lift-analysis-rereading
+              >
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                Reading it again with the improved tracker…{" "}
+                {Math.round(100 * overallProgress(autoRun))}%
+              </p>
+            )}
+            <Results
+              analysis={analysis}
+              selected={selected}
+              onSelect={setSelected}
+              setVideoId={setVideoId}
+              clientId={saved?.client_id ?? null}
+              exerciseId={saved?.exercise_id ?? null}
+              loggedSet={loggedSet ?? null}
+              fresh={!!fresh}
+              onFix={startFix}
+              onGuide={() => setGuide(true)}
+              exerciseName={exerciseName}
+            />
+          </>
         ) : !isLoading ? (
           <div className="rounded-2xl border border-border p-4">
             <p className="text-sm text-muted-foreground">
