@@ -24,6 +24,7 @@ import { PlanDayUseEditor } from "@/components/nutrition/PlanDayRules";
 import { archiveReplacedPlans } from "@/lib/nutrition-targets/plan-publish";
 import { getActiveMemberTargets } from "@/lib/nutrition-targets/member-targets.functions";
 import { plainPastedText } from "@/lib/nutrition-targets/plain-paste";
+import { PHASE_GOAL } from "@/lib/nutrition-cardio";
 
 export type StudioPlanDay = {
   day_label: string;
@@ -37,6 +38,9 @@ export type StudioPlanDay = {
 };
 
 const today = () => new Date().toLocaleDateString("en-CA");
+
+/** The plan's phase, the same names a coach's plan uses. */
+export const PHASES = ["Fat Loss", "Maintenance", "Muscle Gain", "Recomp", "Performance"] as const;
 
 export function blankDay(label: string, t?: { calories?: number | null; protein_g?: number | null; carbs_g?: number | null; fat_g?: number | null } | null): StudioPlanDay {
   return {
@@ -120,7 +124,7 @@ export function MemberPlanStudio({ seed }: { seed?: { days: StudioPlanDay[]; pha
     setSaving(true);
     try {
       const existing = info.plan && !info.plan.assigned_coach_id ? info.plan : null;
-      const payload = { client_id: info.clientId, phase, start_date: existing?.start_date ?? today(), status: "Active", visible_to_client: true, last_updated_at: new Date().toISOString(), food_weighing_rules: seed?.weighing ?? existing?.food_weighing_rules ?? null };
+      const payload = { client_id: info.clientId, phase, goal: PHASE_GOAL[phase] ?? null, start_date: existing?.start_date ?? today(), status: "Active", visible_to_client: true, last_updated_at: new Date().toISOString(), food_weighing_rules: seed?.weighing ?? existing?.food_weighing_rules ?? null };
       let id = existing?.id as string | undefined;
       if (id) {
         const { error } = await (supabase as any).from("nutrition_targets").update(payload).eq("id", id);
@@ -173,6 +177,23 @@ export function MemberPlanStudio({ seed }: { seed?: { days: StudioPlanDay[]; pha
         actionsInline
       />
       <div className="space-y-4 px-4">
+        <div className="flex gap-1.5 overflow-x-auto pb-1" role="radiogroup" aria-label="Phase" data-studio-phase>
+          {PHASES.map((p) => (
+            <button
+              key={p}
+              type="button"
+              role="radio"
+              aria-checked={phase === p}
+              onClick={() => {
+                setPhase(p);
+                setDirty(true);
+              }}
+              className={cn("h-8 shrink-0 rounded-lg px-2.5 text-[13px]", phase === p ? "bg-secondary font-medium text-foreground" : "text-muted-foreground")}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
         <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="Days">
           {days.map((d, j) => (
             <button

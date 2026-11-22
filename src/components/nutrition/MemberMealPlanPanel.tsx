@@ -10,10 +10,14 @@ import { MacroTargetsChart } from "@/components/nutrition/MacroTargetsChart";
 import { MealPlanReader } from "@/components/nutrition/MealPlanReader";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
 import { cn } from "@/lib/utils";
+import { Link } from "@tanstack/react-router";
+import { StudioStartOptions } from "@/components/nutrition-studio/member-plan-studio";
+import { GroceryListEntryCard } from "@/components/nutrition/GroceryListSheet";
 
 export function MemberMealPlanPanel() {
   const fn = usePovFn(useServerFn(getCoachAssignedMealPlan));
   const povKey = usePovArgs().viewAsClientId ?? null;
+  const povUserId = usePovArgs().viewAsUserId ?? null;
   const q = useQuery({
     queryKey: ["m-coach-meal-plan", povKey],
     queryFn: () => fn({}),
@@ -56,8 +60,22 @@ export function MemberMealPlanPanel() {
     }
   };
 
-  if (q.isLoading || !plan) return null;
-  if (!days.length && !plan.pdf_signed_url && !plan.client_notes) return null;
+  if (q.isLoading) return null;
+  // no plan yet: a JF member makes their own (Nutrition Studio); a coach previewing sees nothing to do
+  if (!plan || (!days.length && !plan.pdf_signed_url && !plan.client_notes)) {
+    if (povKey) return null;
+    return (
+      <div className="px-4 md:px-6" data-studio-empty>
+        <Card className="space-y-3 p-4 md:p-5">
+          <div>
+            <div className="text-[16px] font-semibold">Make your meal plan</div>
+            <div className="text-[13px] text-muted-foreground">Your days, your foods, your numbers. It adds up every meal for you.</div>
+          </div>
+          <StudioStartOptions />
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="px-4 md:px-6">
@@ -70,11 +88,16 @@ export function MemberMealPlanPanel() {
             <div>
               <div className="text-sm font-semibold">Your Meal Plan</div>
               <div className="text-[11px] text-muted-foreground">
-                {[plan.phase, plan.goal, plan.structure].filter(Boolean).join(" · ") || "Assigned by your coach"}
+                {[plan.phase, plan.goal, plan.structure].filter(Boolean).join(" · ") || ((plan as any).own ? "Your plan" : "Assigned by your coach")}
               </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {(plan as any).own && !povKey && (
+              <Button asChild size="sm" variant="outline" className="gap-1.5" data-edit-own-plan>
+                <Link to="/portal/nutrition-studio">Edit plan</Link>
+              </Button>
+            )}
             {plan.pdf_signed_url && (
               <Button asChild size="sm" variant="default" className="gap-1.5">
                 <a href={plan.pdf_signed_url} target="_blank" rel="noreferrer" download={plan.pdf_name || "meal-plan.pdf"}>
@@ -136,7 +159,7 @@ export function MemberMealPlanPanel() {
               <MealPlanReader text={String(active.notes)} water={plan.water ?? null} />
             ) : !anyNotes && !plan.pdf_signed_url ? (
               <div className="text-xs text-muted-foreground">
-                Your coach hasn't added meal details for this day yet.
+                {(plan as any).own ? "No meals on this day yet. Edit your plan to add them." : "Your coach hasn't added meal details for this day yet."}
               </div>
             ) : null}
           </div>
@@ -148,6 +171,7 @@ export function MemberMealPlanPanel() {
             {plan.client_notes}
           </div>
         )}
+        {anyNotes && (plan as any).client_id && <GroceryListEntryCard clientId={(plan as any).client_id} viewAsUserId={povUserId} />}
       </Card>
     </div>
   );

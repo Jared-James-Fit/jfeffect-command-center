@@ -149,6 +149,7 @@ import { Route as AuthenticatedPortalLiftVideosRouteImport } from './routes/_aut
 import { Route as AuthenticatedPortalMediaRouteImport } from './routes/_authenticated/portal/media'
 import { Route as AuthenticatedPortalMembershipRouteImport } from './routes/_authenticated/portal/membership'
 import { Route as AuthenticatedPortalMessagesRouteImport } from './routes/_authenticated/portal/messages'
+import { Route as AuthenticatedPortalNutritionStudioRouteImport } from './routes/_authenticated/portal/nutrition-studio'
 import { Route as AuthenticatedPortalNutritionTargetsRouteImport } from './routes/_authenticated/portal/nutrition-targets'
 import { Route as AuthenticatedPortalProgressRouteImport } from './routes/_authenticated/portal/progress'
 import { Route as AuthenticatedPortalProgressMetricsRouteImport } from './routes/_authenticated/portal/progress-metrics'
@@ -1092,6 +1093,12 @@ const AuthenticatedPortalMessagesRoute =
   AuthenticatedPortalMessagesRouteImport.update({
     id: '/messages',
     path: '/messages',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalNutritionStudioRoute =
+  AuthenticatedPortalNutritionStudioRouteImport.update({
+    id: '/nutrition-studio',
+    path: '/nutrition-studio',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedPortalNutritionTargetsRoute =
@@ -2199,6 +2206,7 @@ export interface FileRoutesByFullPath {
   '/portal/media': typeof AuthenticatedPortalMediaRoute
   '/portal/membership': typeof AuthenticatedPortalMembershipRoute
   '/portal/messages': typeof AuthenticatedPortalMessagesRoute
+  '/portal/nutrition-studio': typeof AuthenticatedPortalNutritionStudioRoute
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/progress': typeof AuthenticatedPortalProgressRoute
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
@@ -2499,6 +2507,7 @@ export interface FileRoutesByTo {
   '/portal/media': typeof AuthenticatedPortalMediaRoute
   '/portal/membership': typeof AuthenticatedPortalMembershipRoute
   '/portal/messages': typeof AuthenticatedPortalMessagesRoute
+  '/portal/nutrition-studio': typeof AuthenticatedPortalNutritionStudioRoute
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/progress': typeof AuthenticatedPortalProgressRoute
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
@@ -2805,6 +2814,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/media': typeof AuthenticatedPortalMediaRoute
   '/_authenticated/portal/membership': typeof AuthenticatedPortalMembershipRoute
   '/_authenticated/portal/messages': typeof AuthenticatedPortalMessagesRoute
+  '/_authenticated/portal/nutrition-studio': typeof AuthenticatedPortalNutritionStudioRoute
   '/_authenticated/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/_authenticated/portal/progress': typeof AuthenticatedPortalProgressRoute
   '/_authenticated/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
@@ -3111,6 +3121,7 @@ export interface FileRouteTypes {
     | '/portal/media'
     | '/portal/membership'
     | '/portal/messages'
+    | '/portal/nutrition-studio'
     | '/portal/nutrition-targets'
     | '/portal/progress'
     | '/portal/progress-metrics'
@@ -3411,6 +3422,7 @@ export interface FileRouteTypes {
     | '/portal/media'
     | '/portal/membership'
     | '/portal/messages'
+    | '/portal/nutrition-studio'
     | '/portal/nutrition-targets'
     | '/portal/progress'
     | '/portal/progress-metrics'
@@ -3716,6 +3728,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/media'
     | '/_authenticated/portal/membership'
     | '/_authenticated/portal/messages'
+    | '/_authenticated/portal/nutrition-studio'
     | '/_authenticated/portal/nutrition-targets'
     | '/_authenticated/portal/progress'
     | '/_authenticated/portal/progress-metrics'
@@ -4967,6 +4980,13 @@ declare module '@tanstack/react-router' {
       path: '/messages'
       fullPath: '/portal/messages'
       preLoaderRoute: typeof AuthenticatedPortalMessagesRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/nutrition-studio': {
+      id: '/_authenticated/portal/nutrition-studio'
+      path: '/nutrition-studio'
+      fullPath: '/portal/nutrition-studio'
+      preLoaderRoute: typeof AuthenticatedPortalNutritionStudioRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/nutrition-targets': {
@@ -6630,6 +6650,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalMediaRoute: typeof AuthenticatedPortalMediaRoute
   AuthenticatedPortalMembershipRoute: typeof AuthenticatedPortalMembershipRoute
   AuthenticatedPortalMessagesRoute: typeof AuthenticatedPortalMessagesRoute
+  AuthenticatedPortalNutritionStudioRoute: typeof AuthenticatedPortalNutritionStudioRoute
   AuthenticatedPortalNutritionTargetsRoute: typeof AuthenticatedPortalNutritionTargetsRoute
   AuthenticatedPortalProgressRoute: typeof AuthenticatedPortalProgressRoute
   AuthenticatedPortalProgressMetricsRoute: typeof AuthenticatedPortalProgressMetricsRoute
@@ -6677,6 +6698,8 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalMediaRoute: AuthenticatedPortalMediaRoute,
     AuthenticatedPortalMembershipRoute: AuthenticatedPortalMembershipRoute,
     AuthenticatedPortalMessagesRoute: AuthenticatedPortalMessagesRoute,
+    AuthenticatedPortalNutritionStudioRoute:
+      AuthenticatedPortalNutritionStudioRoute,
     AuthenticatedPortalNutritionTargetsRoute:
       AuthenticatedPortalNutritionTargetsRoute,
     AuthenticatedPortalProgressRoute: AuthenticatedPortalProgressRoute,
@@ -6882,7 +6905,6 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
 import type { getRouter } from './router.tsx'
 import type { startInstance } from './start.ts'
 declare module '@tanstack/react-start' {
