@@ -95,12 +95,11 @@ describe("camera like Instagram's", () => {
     expect(carousel).toContain('el.scrollTo({ left: at * STEP, behavior: "smooth" });');
     expect(carousel).toContain("if (steering.current != null) {");
   });
-  it("Post / Story is in view under the camera (Instagram's row); flip sits up top", () => {
-    expect(cam).toContain("<ModeTabs");
-    // no spacers pushing the row wider than the screen; it scrolls only when a tiny screen can't fit them
+  it("Post / Story is in view under the camera (Instagram's row); flip sits where the thumb is", () => {
+    expect(cam).toContain("<ModeSelector modes={CAMERA_MODES} value={kind} onChange={(k) => pickKind(k as ShareKind)} enterFrom={modeFrom} />");
+    // no spacers pushing the row wider than the screen: the one you're on is centred under the shutter
     expect(cam).not.toContain('<span className="w-1/2 shrink-0" aria-hidden />');
-    expect(cam).toContain('<div className="mx-auto flex w-max">');
-    expect(cam).toContain("setOver(el.scrollWidth > el.clientWidth + 1)");
-    expect(cam).toContain('<button type="button" onClick={flip} className={pill} aria-label="Flip camera">');
+    expect(cam).toContain('aria-label="Flip camera" data-studio-flip');
+    expect(cam).not.toContain('<button type="button" onClick={flip} className={pill} aria-label="Flip camera">');
   });
 });

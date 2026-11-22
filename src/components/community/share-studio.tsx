@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
-import { AtSign, Camera, Check, SlidersHorizontal, Expand, Shrink, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Scissors, Send, Smartphone, Smile, Square, Star, Timer, Type, User, Users, Volume2, VolumeX, X } from "lucide-react";
+import { AtSign, Camera, Check, SlidersHorizontal, Zap, ZapOff, Expand, Shrink, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Scissors, Send, Smartphone, Smile, Square, Star, Timer, Type, User, Users, Volume2, VolumeX, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -59,6 +59,10 @@ import { PhotoFramer } from "@/components/community/photo-framer";
 import { CoverPicker } from "@/components/community/cover-picker";
 import { TrimmedVideo } from "@/components/video-trimmer";
 import { useSoundFlash } from "@/components/community/clip-gestures";
+import { CAMERA_MODES, ModeSelector } from "@/components/community/mode-selector";
+import { DiscardConfirm } from "@/components/community/discard-confirm";
+import { phoneLayoutNow } from "@/lib/portrait-only";
+import { SCREEN_FLASH_MS, TORCH_SETTLE_MS, switchTorch, torchSupported } from "@/lib/camera/torch";
 import { preloadMediaTools } from "@/lib/community-media";
 import { formatClock, type VideoContext } from "@/lib/video-edit/limits";
 import { feedback } from "@/lib/feedback";
@@ -71,11 +75,10 @@ import { paintCard } from "@/components/community/card-paint";
  * a workout's) are the circles around the shutter.
  */
 export type ShareKind = "post" | "story";
-type CameraMode = { key: string; label: string };
-const KINDS: { key: ShareKind; label: string }[] = [
-  { key: "post", label: "Post" },
-  { key: "story", label: "Story" },
-];
+/** How long the camera takes to slide back out to the feed. */
+const LEAVE_MS = 260;
+const SLIDE_EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
+
 /** A card in a post is the feed's 4:5. */
 const FEED_CARD_ASPECT = 4 / 5;
 
@@ -202,6 +205,8 @@ export function ShareStudio({
   filterGroups,
   onPostFlow,
   tagPeople = false,
+  entry = "pop",
+  modeFrom = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -248,6 +253,15 @@ export function ShareStudio({
   onPostFlow?: () => void;
   /** A story can tag people: an @ sticker on it, and the tag on the story (tappable for the crew). */
   tagPeople?: boolean;
+  /**
+   * How it comes in: "slide" from the left on a phone (the camera sits left of
+   * the feed, where Crew's + is), "fade" in place (switched to from the New
+   * post screen), "none" (the feed's swipe already slid its stand-in in),
+   * "pop" (everything else).
+   */
+  entry?: "pop" | "slide" | "fade" | "none";
+  /** The mode the last screen was on (Post): the selector opens there and slides to Story. */
+  modeFrom?: ShareKind | null;
 }) {
   // No iOS focus-zoom anywhere in the studio: it left the editor zoomed and off-centre.
   useNoAutoZoom(open);
@@ -298,6 +312,17 @@ export function ShareStudio({
   const statusRef = useRef(status);
   statusRef.current = status;
   const [flash, setFlash] = useState(false);
+  // the flash: the back camera's light when it has one, the screen itself for a selfie; never offered where it can't fire
+  const [flashOn, setFlashOn] = useState(false);
+  const [torchOk, setTorchOk] = useState(false);
+  const [screenFlash, setScreenFlash] = useState(false);
+  const torchOn = useRef(false);
+  // leaving: the camera slides back out the way it came (the feed's on its right)
+  const [leaving, setLeaving] = useState(false);
+  // the one question before work is thrown away
+  const [discard, setDiscard] = useState<null | { title: string; body: string; action: string; run: () => void }>(null);
+  // (posting leaves the same way, from its own callbacks)
+  const leaveRef = useRef<() => void>(() => undefined);
   const [timer, setTimer] = useState<0 | 3 | 10>(0);
   const [count, setCount] = useState<number | null>(null);
   const [lookFlash, setLookFlash] = useState<string | null>(null);
@@ -364,6 +389,10 @@ export function ShareStudio({
     setPosted(false);
     setBusy(null);
     setKind(startAs);
+    setLeaving(false);
+    setDiscard(null);
+    setFlashOn(false);
+    setScreenFlash(false);
     setAspect("portrait");
     aspectPicked.current = false;
     setSel(null);
@@ -560,6 +589,8 @@ export function ShareStudio({
   };
   const stop = () => {
     cancelCount();
+    torchOn.current = false;
+    setTorchOk(false);
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     // Drop the element's hold on the stream too, so the camera light goes off.
@@ -641,6 +672,7 @@ export function ShareStudio({
         stop();
         step = "showing";
         streamRef.current = stream;
+        setTorchOk(torchSupported(stream.getVideoTracks()[0]));
         // iOS plays a camera inline only when the element is muted + playsinline as attributes
         video.muted = true;
         video.setAttribute("muted", "");
@@ -956,6 +988,34 @@ export function ShareStudio({
     setAdding(false);
     setPhase("edit");
   };
+  /** The camera's light on or off for a moment (a photo) or a clip (filming). */
+  const torch = (on: boolean) => {
+    if (on === torchOn.current) return Promise.resolve(on);
+    torchOn.current = on;
+    return switchTorch(streamRef.current?.getVideoTracks()[0], on);
+  };
+  /** The photo, with the flash when it's on: the back camera's light a moment first, or the screen white for a selfie. */
+  const snap = () => {
+    if (!flashOn || status !== "live") return capture();
+    if (facing === "user") {
+      setScreenFlash(true);
+      window.setTimeout(() => {
+        capture();
+        window.setTimeout(() => setScreenFlash(false), 90);
+      }, SCREEN_FLASH_MS);
+      return;
+    }
+    if (!torchOk) return capture();
+    void torch(true).then((on) =>
+      window.setTimeout(
+        () => {
+          capture();
+          void torch(false);
+        },
+        on ? TORCH_SETTLE_MS : 0,
+      ),
+    );
+  };
   // Hold the shutter to film a clip (a plain post: looks and cards are painted on photos)
   const recordable = useMemo(() => canRecordClips(), []) && !card && status === "live" && canShoot && count == null;
   const hints = useHintsSeen();
@@ -976,6 +1036,11 @@ export function ShareStudio({
       void tray.add([file]);
     },
   });
+  // the light goes off with the clip
+  useEffect(() => {
+    if (!recorder.recording && torchOn.current) void torch(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recorder.recording]);
   // off the camera, or onto a mode with a card, mid-clip: it's thrown away
   useEffect(() => {
     if (recorder.recording && (!shooting || !recordable)) recorder.stop(false);
@@ -990,14 +1055,14 @@ export function ShareStudio({
     // no live camera: the phone's own (never on an iPhone app too old for it: that would close the app)
     if (status !== "live") return oldApp ? libRef.current?.click() : capRef.current?.click();
     if (count != null) return cancelCount();
-    if (!timer) return capture();
+    if (!timer) return snap();
     let n = timer;
     setCount(n);
     countRef.current = setInterval(() => {
       n -= 1;
       if (n <= 0) {
         cancelCount();
-        capture();
+        snap();
       } else setCount(n);
     }, 1000);
   };
@@ -1254,7 +1319,7 @@ export function ShareStudio({
         void clearDraft();
         draftOff.current = true;
         setPosted(true);
-        setTimeout(onClose, 900);
+        setTimeout(() => leaveRef.current(), 900);
         return;
       }
       // the extras have been uploading all along; this only waits for any still going, and frames each at the post's shape
@@ -1265,7 +1330,7 @@ export function ShareStudio({
       void clearDraft();
       draftOff.current = true;
       setPosted(true);
-      setTimeout(onClose, 900);
+      setTimeout(() => leaveRef.current(), 900);
     } catch (e: any) {
       if (e?.posted) {
         // the post is up (only the GIF / voice memo missed): its photos are the post's now
@@ -1273,7 +1338,7 @@ export function ShareStudio({
         void clearDraft();
         draftOff.current = true;
         setPosted(true);
-        setTimeout(onClose, 900);
+        setTimeout(() => leaveRef.current(), 900);
         toast.warning(e.message);
       } else toast.error(e?.message ?? "Couldn't post. Try again.");
     } finally {
@@ -1313,6 +1378,41 @@ export function ShareStudio({
   const pill = "grid h-11 w-11 place-items-center rounded-full bg-black/40 backdrop-blur active:scale-95";
   // Post or Story (Story is off only where this can only update a post that's already up)
   const storyable = post?.allowStory !== false;
+  /** Back to where it came from: on a phone it slides out to the left (the feed is on its right), then closes. */
+  const leave = () => {
+    if (leaving) return;
+    cancelCount();
+    const ms = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : LEAVE_MS;
+    setLeaving(true);
+    window.setTimeout(onClose, ms);
+  };
+  leaveRef.current = leave;
+  // what closing would lose: their own photo or clip, words or stickers on it, a caption (a reply's backdrop is ours, not theirs)
+  const unsaved = phase === "edit" && !posted && ((!!shot && !reply && !share) || items.length > 0 || caption.trim().length > 0 || tray.items.length > 0);
+  const requestLeave = () => {
+    if (busy) return;
+    if (!unsaved) return leave();
+    setDiscard({ title: story ? "Discard story?" : "Discard post?", body: "If you leave now, you'll lose your edits.", action: "Discard", run: leave });
+  };
+  /** Back to the camera: a photo with words or stickers on it asks first (Retake is a tap from losing them). */
+  const requestRetake = () => {
+    if (!items.length) return retake();
+    setDiscard({ title: "Discard edits?", body: "Your text and stickers on this photo will be lost.", action: "Retake", run: retake });
+  };
+  // a phone's camera comes in from the left and goes back out that way; anywhere else (and a camera opened
+  // from somewhere other than the feed, a story reply) it fades
+  const phone = useMemo(() => (typeof window === "undefined" ? true : phoneLayoutNow()), [open]);
+  const motion: React.CSSProperties | undefined = leaving
+    ? phone && entry !== "pop"
+      ? { transform: "translate3d(-100%,0,0)", transition: `transform ${LEAVE_MS}ms ${SLIDE_EASE}` }
+      : { opacity: 0, transition: `opacity ${LEAVE_MS}ms ease-out` }
+    : entry === "slide" && phone
+      ? { animation: `jf-camera-in 320ms ${SLIDE_EASE} both` }
+      : entry === "fade"
+        ? { animation: "jf-create-fade 200ms ease-out both" }
+        : entry === "none"
+          ? { animation: "none" }
+          : undefined;
   const pickKind = (k: ShareKind) => {
     cancelCount();
     // a post is the New post screen's (the composer): leave the camera for it
@@ -1322,9 +1422,12 @@ export function ShareStudio({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && requestLeave()}>
       <DialogContent
         ref={setScreenEl}
+        style={motion}
+        overlayStyle={leaving ? { opacity: 0, transition: `opacity ${LEAVE_MS}ms ease-out` } : undefined}
+        data-share-studio={kind}
         className="fixed inset-0 left-0 top-0 flex h-[100dvh] max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-black p-0 text-white dark:bg-black sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,920px)] sm:max-w-[480px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] outline-none [&>button]:hidden"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
@@ -1639,8 +1742,24 @@ export function ShareStudio({
                         <ChevronLeft className="h-6 w-6" />
                       </button>
                     ) : (
-                      <button type="button" onClick={onClose} className={pill} aria-label="Close">
+                      <button type="button" onClick={requestLeave} className={pill} aria-label="Close" data-studio-close>
                         <X className="h-6 w-6" />
+                      </button>
+                    )}
+                    {/* the flash: the back camera's light (where it has one), or the screen for a selfie */}
+                    {status === "live" && (facing === "user" || torchOk) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          feedback("toggle");
+                          setFlashOn((l) => !l);
+                        }}
+                        className={cn(pill, flashOn && "bg-white text-black")}
+                        aria-label={flashOn ? "Flash on" : "Flash off"}
+                        aria-pressed={flashOn}
+                        data-studio-flash={flashOn ? "on" : "off"}
+                      >
+                        {flashOn ? <Zap className="h-5 w-5" /> : <ZapOff className="h-5 w-5" />}
                       </button>
                     )}
                     {status === "live" && (
@@ -1664,19 +1783,13 @@ export function ShareStudio({
                           <PenLine className="h-4 w-4" /> Write
                         </button>
                       ) : null)}
-                      {/* up here (Snapchat / TikTok's spot) so every mode fits along the bottom; double-tap the camera flips too */}
-                      {status === "live" && (
-                        <button type="button" onClick={flip} className={pill} aria-label="Flip camera">
-                          <RefreshCcw className="h-5 w-5" />
-                        </button>
-                      )}
                     </div>
                   </>
                 ) : (
                   <>
                     {reply || share ? (
                       <>
-                        <button type="button" onClick={onClose} className={pill} aria-label="Close">
+                        <button type="button" onClick={requestLeave} className={pill} aria-label="Close">
                           <X className="h-6 w-6" />
                         </button>
                         {/* the backdrop's colour, Instagram's colour wheel */}
@@ -1697,7 +1810,7 @@ export function ShareStudio({
                         </button>
                       </>
                     ) : (
-                      <button type="button" onClick={retake} className={pill} aria-label={shot ? "Retake" : "Back to the camera"}>
+                      <button type="button" onClick={requestRetake} className={pill} aria-label={shot ? "Retake" : "Back to the camera"}>
                         <ChevronLeft className="h-6 w-6" />
                       </button>
                     )}
@@ -1832,7 +1945,16 @@ export function ShareStudio({
                   showName={fullScreen}
                   hold={
                     recordable || recorder.recording
-                      ? { onStart: () => void recorder.start(), onEnd: recorder.release, progress: recorder.recording ? recorder.progress : null, seconds: recorder.seconds }
+                      ? {
+                          onStart: () => {
+                            // the flash on a clip: the light stays on while it films (a selfie keeps the screen for the picture)
+                            if (flashOn && facing === "environment" && torchOk) void torch(true);
+                            void recorder.start();
+                          },
+                          onEnd: recorder.release,
+                          progress: recorder.recording ? recorder.progress : null,
+                          seconds: recorder.seconds,
+                        }
                       : undefined
                   }
                 />
@@ -1843,11 +1965,17 @@ export function ShareStudio({
                   <Images className="h-5 w-5" />
                 </button>
                 <div className="flex min-w-0 flex-1 justify-center">
-                  {/* what you're making: Post or Story (Instagram's row); the filters are the circles above */}
-                  {storyable && !adding && !recorder.recording && <ModeTabs modes={KINDS} mode={kind} onMode={(k) => pickKind(k as ShareKind)} />}
+                  {/* what you're making: Post or Story (Instagram's row: tap or swipe it); the filters are the circles above */}
+                  {storyable && !adding && !recorder.recording && <ModeSelector modes={CAMERA_MODES} value={kind} onChange={(k) => pickKind(k as ShareKind)} enterFrom={modeFrom} />}
                 </div>
-                {/* keeps the row's middle under the shutter */}
-                <span className="h-11 w-11 shrink-0" aria-hidden />
+                {/* flip, where the thumb is (Instagram's); a double tap on the camera flips too. Its spot is kept so the row's middle stays under the shutter */}
+                {status === "live" && !recorder.recording ? (
+                  <button type="button" onClick={flip} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/10 active:scale-95" aria-label="Flip camera" data-studio-flip>
+                    <RefreshCcw className="h-5 w-5" />
+                  </button>
+                ) : (
+                  <span className="h-11 w-11 shrink-0" aria-hidden />
+                )}
               </div>
             </>
           ) : (
@@ -2015,6 +2143,22 @@ export function ShareStudio({
           promoLine={shareCaptionSrc ? promoLine(shareCaptionSrc) : JF_HANDLE}
           make={makeShareFile}
         />
+        {/* a selfie's flash: the screen, white and bright, a moment before the photo */}
+        {screenFlash && <div className="pointer-events-none absolute inset-0 z-[80] bg-white" aria-hidden data-studio-screen-flash />}
+        {discard && (
+          <DiscardConfirm
+            tag="studio-discard"
+            title={discard.title}
+            body={discard.body}
+            action={discard.action}
+            onConfirm={() => {
+              const run = discard.run;
+              setDiscard(null);
+              run();
+            }}
+            onCancel={() => setDiscard(null)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -2071,53 +2215,6 @@ function LiveStickerSpot({ sticker, height, onMove, onEdit }: { sticker: Sticker
       data-studio-live-sticker={sticker.type}
     >
       <StickerPreview sticker={sticker} />
-    </div>
-  );
-}
-
-/**
- * What you're making, under the camera like Instagram's POST / STORY: every
- * one is in view; only a screen too narrow for them all scrolls, and then it
- * keeps the one you're on in view.
- */
-function ModeTabs({ modes, mode, onMode }: { modes: CameraMode[]; mode?: string; onMode: (key: string) => void }) {
-  const row = useRef<HTMLDivElement | null>(null);
-  const [over, setOver] = useState(false);
-  useEffect(() => {
-    const el = row.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => setOver(el.scrollWidth > el.clientWidth + 1));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  useEffect(() => {
-    const el = row.current;
-    const on = el?.querySelector<HTMLElement>("[aria-selected=true]");
-    if (!el || !on || el.scrollWidth <= el.clientWidth + 1) return;
-    on.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
-  }, [mode]);
-  return (
-    <div
-      ref={row}
-      className={cn("min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", over && "[mask-image:linear-gradient(90deg,#000_88%,transparent)]")}
-      role="tablist"
-      aria-label="Post or story"
-      data-modes-over={over ? "" : undefined}
-    >
-      <div className="mx-auto flex w-max">
-        {modes.map((m) => (
-          <button
-            key={m.key}
-            type="button"
-            role="tab"
-            aria-selected={mode === m.key}
-            onClick={() => onMode(m.key)}
-            className={cn("h-10 shrink-0 px-[6px] text-[12px] font-bold uppercase tracking-[0.06em] transition-colors min-[375px]:px-[7px] min-[375px]:text-[13px] min-[385px]:px-2 min-[420px]:px-3", mode === m.key ? "text-white" : "text-white/50")}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

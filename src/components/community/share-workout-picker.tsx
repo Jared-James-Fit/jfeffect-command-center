@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Check, ChevronRight, Plus, X } from "lucide-react";
@@ -64,6 +64,7 @@ export function ShareWorkoutButton({
   labelClassName,
   trigger,
   story = false,
+  cameraRef,
 }: {
   unit: "kg" | "lb";
   className?: string;
@@ -77,6 +78,8 @@ export function ShareWorkoutButton({
   previewOnly?: boolean;
   /** Opened from "Your story": the story camera, its clips trimmed to a story's 60 seconds. */
   story?: boolean;
+  /** Filled with "open the story camera" for Crew's swipe to create (called inside the touch that ends the swipe). */
+  cameraRef?: React.MutableRefObject<(() => void) | null>;
 }) {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -87,6 +90,9 @@ export function ShareWorkoutButton({
   const [capturing, setCapturing] = useState(false);
   const [composing, setComposing] = useState(false);
   const active = capturing || composing;
+  // how each screen comes in, and the mode the last one was on (POST · STORY slides on from it)
+  const [camVia, setCamVia] = useState<{ entry: "slide" | "fade" | "none"; from: "post" | null }>({ entry: "slide", from: null });
+  const [postVia, setPostVia] = useState<{ entry: "rise" | "fade"; from: "story" | null }>({ entry: "rise", from: null });
   const { data: sessions, isLoading } = useRecentCompletions(open || active);
   // The workout the shot is for: their pick, else the newest finished one.
   const [chosen, setChosen] = useState<RecentCompletion | null>(null);
@@ -179,27 +185,42 @@ export function ShareWorkoutButton({
     setComposing(true);
   });
 
-  /** Post: the New post screen (a finger: the library opens in the same tap, Instagram's). */
-  const beginPost = (pickNow = opensLibraryOnTap()) => {
+  /** Post: the New post screen (a finger: the library opens in the same tap, Instagram's). `fromCamera`: switched to from the camera's POST. */
+  const beginPost = (pickNow = opensLibraryOnTap(), fromCamera = false) => {
     if (previewOnly) return void toast.message(PREVIEW_ONLY_MESSAGE);
     preloadStudio();
+    setPostVia(fromCamera ? { entry: "fade", from: "story" } : { entry: "rise", from: null });
     reset();
     setIncoming(null);
     setCapturing(false);
     setComposing(true);
     if (pickNow) picker.library();
   };
-  /** Story: the camera, its filters around the shutter. */
-  const beginStory = () => {
+  /**
+   * Story: the camera, its filters around the shutter. It sits left of the
+   * feed, so it slides in from there; switched to from the New post screen's
+   * STORY it fades in place, and from the feed's swipe it's already where the
+   * finger pulled its stand-in (swipe-to-create.tsx), so it just appears.
+   */
+  const beginStory = (how: "tap" | "post" | "swipe" = "tap") => {
     if (previewOnly) return void toast.message(PREVIEW_ONLY_MESSAGE);
     // the studio's camera asked for in this tap, so a camera already allowed opens without asking again
     primeCamera(studioCameraAsk("environment"));
     preloadStudio();
+    setCamVia(how === "post" ? { entry: "fade", from: "post" } : { entry: how === "swipe" ? "none" : "slide", from: null });
     reset();
     setComposing(false);
     setCapturing(true);
   };
   const begin = () => (story ? beginStory() : beginPost());
+  // Crew's swipe to create: the story camera, from the touch that ends the swipe
+  useEffect(() => {
+    if (!cameraRef) return;
+    cameraRef.current = () => beginStory("swipe");
+    return () => {
+      cameraRef.current = null;
+    };
+  });
 
   // Locking in IS starting the session (same server path as the first logged
   // set). A row can exist without being started (a placeholder made ahead of
@@ -457,7 +478,9 @@ export function ShareWorkoutButton({
             filters={{ items: row.items, groups: row.groups, on: filterOn, pick: onFilter, card: cameraCard, gradeOnly: fxOn?.grade ?? false }}
             post={composerPost}
             plainPost={plainPost}
-            onStory={beginStory}
+            onStory={() => beginStory("post")}
+            modeFrom={postVia.from}
+            entry={postVia.entry}
             points={composerPoints}
             videoContext={workoutLinked && target ? "workout" : "post"}
             workout={
@@ -496,7 +519,9 @@ export function ShareWorkoutButton({
             onFilter={onFilter}
             // the story camera (Post is the New post screen's, a tap away along the bottom)
             startAs="story"
-            onPostFlow={() => beginPost(true)}
+            onPostFlow={() => beginPost(true, true)}
+            entry={camVia.entry}
+            modeFrom={camVia.from}
             tagPeople
             videoContext={activeMode === "workout" ? "workout" : "post"}
             // shoot straight away: the card's numbers land on the photo when they arrive
