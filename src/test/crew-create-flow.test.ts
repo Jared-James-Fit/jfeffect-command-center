@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import {
+  CAMERA_PARALLAX,
   CREATE_COMMIT_SHARE,
+  cameraUnderFeed,
   CREATE_NO_START,
   createProgress,
   createSettleMs,
@@ -68,6 +70,23 @@ describe("swipe to create: letting go", () => {
   });
 });
 
+describe("swipe to create: the feed is pushed off, the camera is underneath (Instagram's)", () => {
+  it("the camera's right edge is always the feed's edge, whatever the progress", () => {
+    const W = 390;
+    for (const p of [0, 0.1, 0.33, 0.5, 0.8, 1]) {
+      const { shiftPct, clipRightPct } = cameraUnderFeed(p);
+      // the camera's box is shifted, then clipped from its right: its visible right edge on screen
+      const right = W + (shiftPct / 100) * W - (clipRightPct / 100) * W;
+      expect(right).toBeCloseTo(p * W, 6);
+    }
+  });
+  it("it moves a third as fast as the feed, and is dimmed until it's in", () => {
+    expect(CAMERA_PARALLAX).toBeCloseTo(0.3);
+    expect(cameraUnderFeed(0)).toEqual({ shiftPct: -30, clipRightPct: 70, dim: 0.5 });
+    expect(cameraUnderFeed(1)).toEqual({ shiftPct: -0, clipRightPct: 0, dim: 0 });
+  });
+});
+
 describe("POST · STORY: the selector's swipe", () => {
   it("the camera's row moves with the finger: left brings the next one in", () => {
     expect(modeAfterSwipe(0, 2, -MODE_SWIPE_PX - 1, 0, "row")).toBe(1);
@@ -114,8 +133,16 @@ describe("Crew's create flow, wired", () => {
     expect(studio).toContain("data-share-studio={kind}");
   });
   it("the camera slides in from the left and back out that way (the + and the swipe), fades when switched to from Post", () => {
-    expect(studio).toContain('animation: `jf-camera-in 320ms ${SLIDE_EASE} both`');
-    expect(studio).toContain('transform: "translate3d(-100%,0,0)", transition: `transform ${LEAVE_MS}ms ${SLIDE_EASE}`');
+    expect(studio).toContain('animation: `jf-camera-in ${ENTER_MS}ms ${SLIDE_EASE} both`');
+    // closing: the camera a third slower than the feed sliding back over it, clipped at its edge
+    expect(studio).toContain('transform: "translate3d(-30%,0,0)", clipPath: "inset(0 70% 0 0)"');
+    expect(studio).toContain("window.dispatchEvent(new CustomEvent(CAMERA_LEAVE_EVENT, { detail: { ms } }));");
+    expect(studio).toContain("window.dispatchEvent(new CustomEvent(CAMERA_ENTER_EVENT, { detail: { ms } }));");
+    // the feed, both its bars and its rounded edge move together
+    const hook = read("src/components/community/swipe-to-create.tsx");
+    expect(hook).toContain('const FEED_LAYERS = "[data-feed-pager], [data-crew-bar], [data-mobile-bottom-nav]";');
+    expect(hook).toContain("window.addEventListener(CAMERA_LEAVE_EVENT, onLeave);");
+    expect(hook).toContain("data-create-swipe-edge");
     expect(btn).toContain('setCamVia(how === "post" ? { entry: "fade", from: "post" } : { entry: how === "swipe" ? "none" : "slide", from: null });');
     expect(btn).toContain('setPostVia(fromCamera ? { entry: "fade", from: "story" } : { entry: "rise", from: null });');
     expect(read("src/styles.css")).toContain("@keyframes jf-camera-in");
@@ -130,6 +157,18 @@ describe("Crew's create flow, wired", () => {
     expect(studio).toContain('{status === "live" && (facing === "user" || torchOk) && (');
     expect(studio).toContain("setTorchOk(torchSupported(stream.getVideoTracks()[0]));");
     expect(studio).toContain("data-studio-screen-flash");
+    // in the middle of the top, Instagram's
+    expect(studio).toContain('className={cn("absolute left-1/2 top-2.5 -translate-x-1/2", pill, flashOn && "bg-white text-black")}');
+  });
+  it("the camera's tools are a rail down the left, names first then icons, only what works right now", () => {
+    expect(studio).toContain("<CameraRail");
+    expect(studio).toContain('setTimeout(() => setRailLabels(false), RAIL_LABELS_MS)');
+    // Type: a words story on a colour (the story reply's backdrop), the keyboard up, the colour wheel to change it
+    expect(studio).toContain('story && !card && canShoot && !adding && !reply && !share');
+    expect(studio).toContain('freeze({ src: paintReplyBackdrop(0), file: null, live: false, at: new Date() });\n    // a colour is the picture as it is');
+    expect(studio).toContain("data-studio-typed-colour");
+    // the active mode is bold white, no dot (Instagram's)
+    expect(selector).not.toContain("rounded-full bg-white\" aria-hidden />");
   });
   it("nothing is lost by accident: leaving, retaking a photo with words on it and switching to Story ask first", () => {
     expect(studio).toContain('setDiscard({ title: story ? "Discard story?" : "Discard post?"');

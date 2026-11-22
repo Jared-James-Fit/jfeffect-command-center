@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
-import { AtSign, Camera, Check, SlidersHorizontal, Zap, ZapOff, Expand, Shrink, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Scissors, Send, Smartphone, Smile, Square, Star, Timer, Type, User, Users, Volume2, VolumeX, X } from "lucide-react";
+import { AtSign, Camera, Check, ImageOff, SlidersHorizontal, Zap, ZapOff, Expand, Shrink, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Scissors, Send, Smartphone, Smile, Square, Star, Timer, Type, User, Users, Volume2, VolumeX, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -62,6 +62,7 @@ import { useSoundFlash } from "@/components/community/clip-gestures";
 import { CAMERA_MODES, ModeSelector } from "@/components/community/mode-selector";
 import { DiscardConfirm } from "@/components/community/discard-confirm";
 import { phoneLayoutNow } from "@/lib/portrait-only";
+import { CAMERA_ENTER_EVENT, CAMERA_LEAVE_EVENT } from "@/lib/swipe-to-create";
 import { SCREEN_FLASH_MS, TORCH_SETTLE_MS, switchTorch, torchSupported } from "@/lib/camera/torch";
 import { preloadMediaTools } from "@/lib/community-media";
 import { formatClock, type VideoContext } from "@/lib/video-edit/limits";
@@ -76,7 +77,11 @@ import { paintCard } from "@/components/community/card-paint";
  */
 export type ShareKind = "post" | "story";
 /** How long the camera takes to slide back out to the feed. */
-const LEAVE_MS = 260;
+const LEAVE_MS = 280;
+/** How long the camera takes to come in from the left (the + and Your story). */
+const ENTER_MS = 320;
+/** How long the rail's names show before it folds to icons. */
+const RAIL_LABELS_MS = 2600;
 const SLIDE_EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
 
 /** A card in a post is the feed's 4:5. */
@@ -319,6 +324,16 @@ export function ShareStudio({
   const torchOn = useRef(false);
   // leaving: the camera slides back out the way it came (the feed's on its right)
   const [leaving, setLeaving] = useState(false);
+  // a words story (the rail's Type, Instagram's Create): words on a colour, posted as the story's picture
+  const [typed, setTyped] = useState(false);
+  // the rail's labels show as it opens, then fold to icons (Instagram's)
+  const [railLabels, setRailLabels] = useState(true);
+  useEffect(() => {
+    if (!open || phase !== "shoot") return;
+    setRailLabels(true);
+    const t = window.setTimeout(() => setRailLabels(false), RAIL_LABELS_MS);
+    return () => window.clearTimeout(t);
+  }, [open, phase]);
   // the one question before work is thrown away
   const [discard, setDiscard] = useState<null | { title: string; body: string; action: string; run: () => void }>(null);
   // (posting leaves the same way, from its own callbacks)
@@ -391,6 +406,8 @@ export function ShareStudio({
     setKind(startAs);
     setLeaving(false);
     setDiscard(null);
+    setTyped(false);
+    setRailLabels(true);
     setFlashOn(false);
     setScreenFlash(false);
     setAspect("portrait");
@@ -750,7 +767,7 @@ export function ShareStudio({
   // photo you took or picked is changed exactly the way the camera picks one. A story's photo walks the
   // whole row; otherwise a card's looks. Never on a clip, a reply's or a shared post's backdrop.
   const editRing: { looks: LookItem[]; look: string | null; onLook: (k: string) => void; groups?: LookGroup[] } | null =
-    phase !== "edit" || reply || share || adding || selItem || enhancing
+    phase !== "edit" || reply || share || typed || adding || selItem || enhancing
       ? null
       : story && !!shot && filters && filters.length > 1 && onFilter
         ? { looks: filters, look: filter ?? null, onLook: onFilter, groups: filterGroups }
@@ -819,7 +836,7 @@ export function ShareStudio({
   const gradeGpu = useMemo(() => typeof window !== "undefined" && !!sharedGradeGL(), []);
   // what Enhance works on: the photo up front, or a story's clip (one this phone can re-encode)
   const enhanceTarget: "shot" | "clip" | null =
-    phase !== "edit" || reply || share || adding || selItem
+    phase !== "edit" || reply || share || typed || adding || selItem
       ? null
       : shot
         ? "shot"
@@ -1129,6 +1146,7 @@ export function ShareStudio({
     setPhase("edit");
   };
   const retake = () => {
+    setTyped(false);
     dropShot(shotRef.current);
     setShot(null);
     setItems([]);
@@ -1137,6 +1155,17 @@ export function ShareStudio({
   };
 
   const flip = () => status === "live" && setFacing((f) => (f === "user" ? "environment" : "user"));
+  /** Type (Instagram's Create): a story of words on a colour, the keyboard up; the colour wheel changes the colour. */
+  const startTyped = () => {
+    cancelCount();
+    setTyped(true);
+    setBackdrop(0);
+    freeze({ src: paintReplyBackdrop(0), file: null, live: false, at: new Date() });
+    // a colour is the picture as it is: no filter, never shown whole over a blur
+    setShotGrade(null);
+    setShotWhole(false);
+    setRequest({ kind: "text", n: Date.now() });
+  };
   const onDown = (e: React.PointerEvent) => {
     if ((e.target as Element).closest("button, input, textarea")) return void (swipe.current = null);
     swipe.current = { x: e.clientX, y: e.clientY };
@@ -1378,17 +1407,22 @@ export function ShareStudio({
   const pill = "grid h-11 w-11 place-items-center rounded-full bg-black/40 backdrop-blur active:scale-95";
   // Post or Story (Story is off only where this can only update a post that's already up)
   const storyable = post?.allowStory !== false;
-  /** Back to where it came from: on a phone it slides out to the left (the feed is on its right), then closes. */
+  /**
+   * Back to where it came from: on a phone the feed slides back in from the
+   * right over it (CAMERA_LEAVE_EVENT; the camera moves slower under it, its
+   * edge always the feed's), then it closes.
+   */
   const leave = () => {
     if (leaving) return;
     cancelCount();
     const ms = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : LEAVE_MS;
+    if (phone && entry !== "pop") window.dispatchEvent(new CustomEvent(CAMERA_LEAVE_EVENT, { detail: { ms } }));
     setLeaving(true);
     window.setTimeout(onClose, ms);
   };
   leaveRef.current = leave;
   // what closing would lose: their own photo or clip, words or stickers on it, a caption (a reply's backdrop is ours, not theirs)
-  const unsaved = phase === "edit" && !posted && ((!!shot && !reply && !share) || items.length > 0 || caption.trim().length > 0 || tray.items.length > 0);
+  const unsaved = phase === "edit" && !posted && ((!!shot && !reply && !share && !typed) || items.length > 0 || caption.trim().length > 0 || tray.items.length > 0);
   const requestLeave = () => {
     if (busy) return;
     if (!unsaved) return leave();
@@ -1402,12 +1436,20 @@ export function ShareStudio({
   // a phone's camera comes in from the left and goes back out that way; anywhere else (and a camera opened
   // from somewhere other than the feed, a story reply) it fades
   const phone = useMemo(() => (typeof window === "undefined" ? true : phoneLayoutNow()), [open]);
+  // the + / Your story: the feed slides off to the right as the camera comes in under it (swipe-to-create.tsx)
+  useEffect(() => {
+    if (!open || entry !== "slide" || !phone) return;
+    const ms = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : ENTER_MS;
+    window.dispatchEvent(new CustomEvent(CAMERA_ENTER_EVENT, { detail: { ms } }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  // (a push: the camera a third slower than the feed and clipped at the feed's edge, swipe-to-create.ts cameraUnderFeed)
   const motion: React.CSSProperties | undefined = leaving
     ? phone && entry !== "pop"
-      ? { transform: "translate3d(-100%,0,0)", transition: `transform ${LEAVE_MS}ms ${SLIDE_EASE}` }
+      ? { transform: "translate3d(-30%,0,0)", clipPath: "inset(0 70% 0 0)", transition: `transform ${LEAVE_MS}ms ${SLIDE_EASE}, clip-path ${LEAVE_MS}ms ${SLIDE_EASE}` }
       : { opacity: 0, transition: `opacity ${LEAVE_MS}ms ease-out` }
     : entry === "slide" && phone
-      ? { animation: `jf-camera-in 320ms ${SLIDE_EASE} both` }
+      ? { animation: `jf-camera-in ${ENTER_MS}ms ${SLIDE_EASE} both` }
       : entry === "fade"
         ? { animation: "jf-create-fade 200ms ease-out both" }
         : entry === "none"
@@ -1426,7 +1468,8 @@ export function ShareStudio({
       <DialogContent
         ref={setScreenEl}
         style={motion}
-        overlayStyle={leaving ? { opacity: 0, transition: `opacity ${LEAVE_MS}ms ease-out` } : undefined}
+        // on a phone the camera is the whole screen; its dim would only darken the feed it pushes aside
+        overlayStyle={phone ? { opacity: 0 } : leaving ? { opacity: 0, transition: `opacity ${LEAVE_MS}ms ease-out` } : undefined}
         data-share-studio={kind}
         className="fixed inset-0 left-0 top-0 flex h-[100dvh] max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-black p-0 text-white dark:bg-black sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,920px)] sm:max-w-[480px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] outline-none [&>button]:hidden"
         onOpenAutoFocus={(e) => e.preventDefault()}
@@ -1733,6 +1776,34 @@ export function ShareStudio({
                 </div>
               )}
 
+              {/* the camera's tools down the left (Instagram's rail): each one's name as the camera opens, then just the icons */}
+              {phase === "shoot" && !recorder.recording && count == null && (
+                <CameraRail
+                  labels={railLabels}
+                  tools={[
+                    story && !card && canShoot && !adding && !reply && !share
+                      ? { key: "type", icon: <Type className="h-7 w-7" strokeWidth={1.9} />, label: "Type", onClick: startTyped }
+                      : null,
+                    status === "live"
+                      ? {
+                          key: "timer",
+                          icon: <Timer className="h-7 w-7" strokeWidth={1.9} />,
+                          label: timer ? `Timer · ${timer}s` : "Timer",
+                          on: !!timer,
+                          onClick: () => {
+                            feedback("toggle");
+                            setTimer((t) => (t === 0 ? 3 : t === 3 ? 10 : 0));
+                          },
+                        }
+                      : null,
+                    canShoot && !adding && card && allowNoPhoto
+                      ? { key: "nophoto", icon: <ImageOff className="h-7 w-7" strokeWidth={1.9} />, label: "No photo", onClick: skipPhoto }
+                      : canShoot && !adding && !card && onWrite && !story
+                        ? { key: "write", icon: <PenLine className="h-7 w-7" strokeWidth={1.9} />, label: "Write", onClick: onWrite }
+                        : null,
+                  ]}
+                />
+              )}
               {/* Top bar, on the card */}
               <div className="absolute inset-x-0 top-0 flex items-center gap-2 p-2.5">
                 {phase === "shoot" ? (
@@ -1746,7 +1817,7 @@ export function ShareStudio({
                         <X className="h-6 w-6" />
                       </button>
                     )}
-                    {/* the flash: the back camera's light (where it has one), or the screen for a selfie */}
+                    {/* the flash, in the middle (Instagram's): the back camera's light where it has one, the screen for a selfie */}
                     {status === "live" && (facing === "user" || torchOk) && (
                       <button
                         type="button"
@@ -1754,7 +1825,7 @@ export function ShareStudio({
                           feedback("toggle");
                           setFlashOn((l) => !l);
                         }}
-                        className={cn(pill, flashOn && "bg-white text-black")}
+                        className={cn("absolute left-1/2 top-2.5 -translate-x-1/2", pill, flashOn && "bg-white text-black")}
                         aria-label={flashOn ? "Flash on" : "Flash off"}
                         aria-pressed={flashOn}
                         data-studio-flash={flashOn ? "on" : "off"}
@@ -1762,28 +1833,6 @@ export function ShareStudio({
                         {flashOn ? <Zap className="h-5 w-5" /> : <ZapOff className="h-5 w-5" />}
                       </button>
                     )}
-                    {status === "live" && (
-                      <button
-                        type="button"
-                        onClick={() => setTimer((t) => (t === 0 ? 3 : t === 3 ? 10 : 0))}
-                        className={cn("inline-flex h-11 items-center gap-1 rounded-full px-3 text-[13px] font-bold backdrop-blur active:scale-95", timer ? "bg-white text-black" : "bg-black/40")}
-                        aria-label={timer ? `Self-timer ${timer} seconds` : "Self-timer off"}
-                      >
-                        <Timer className="h-5 w-5" />
-                        {timer ? `${timer}s` : null}
-                      </button>
-                    )}
-                    <div className="ml-auto flex items-center gap-2">
-                      {canShoot && !adding && (card && allowNoPhoto ? (
-                        <button type="button" onClick={skipPhoto} className="h-10 rounded-full bg-black/40 px-4 text-[13px] font-bold backdrop-blur active:scale-95">
-                          No photo
-                        </button>
-                      ) : onWrite && !story ? (
-                        <button type="button" onClick={onWrite} className="inline-flex h-10 items-center gap-1.5 rounded-full bg-black/40 px-4 text-[13px] font-bold backdrop-blur active:scale-95">
-                          <PenLine className="h-4 w-4" /> Write
-                        </button>
-                      ) : null)}
-                    </div>
                   </>
                 ) : (
                   <>
@@ -1812,6 +1861,24 @@ export function ShareStudio({
                     ) : (
                       <button type="button" onClick={requestRetake} className={pill} aria-label={shot ? "Retake" : "Back to the camera"}>
                         <ChevronLeft className="h-6 w-6" />
+                      </button>
+                    )}
+                    {/* a words story: its colour, Instagram's colour wheel */}
+                    {typed && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = backdrop + 1;
+                          setBackdrop(next);
+                          dropShot(shotRef.current);
+                          setShot({ src: paintReplyBackdrop(next), file: null, live: false, at: new Date() });
+                          setPosted(false);
+                        }}
+                        className={pill}
+                        aria-label="Change the background colour"
+                        data-studio-typed-colour
+                      >
+                        <span className="h-6 w-6 rounded-full border-2 border-white bg-[conic-gradient(#ef3340,#f97316,#facc15,#22c55e,#2563eb,#a855f7,#ef3340)]" />
                       </button>
                     )}
                     {/* Enhance: the photo's or clip's filter and adjustments; Fill / Fit: a story's picture filling it or whole */}
@@ -2215,6 +2282,38 @@ function LiveStickerSpot({ sticker, height, onMove, onEdit }: { sticker: Sticker
       data-studio-live-sticker={sticker.type}
     >
       <StickerPreview sticker={sticker} />
+    </div>
+  );
+}
+
+type RailTool = { key: string; icon: ReactNode; label: string; onClick: () => void; on?: boolean };
+
+/**
+ * The camera's tools down the left of the picture (Instagram's rail): an icon
+ * each, its name beside it as the camera opens, then just the icons so the
+ * picture stays clear. Only the tools that work right now are there.
+ */
+function CameraRail({ tools, labels }: { tools: (RailTool | null)[]; labels: boolean }) {
+  const list = tools.filter((t): t is RailTool => !!t);
+  if (!list.length) return null;
+  return (
+    <div className="absolute left-1.5 top-[38%] z-[5] flex flex-col gap-2" data-studio-rail>
+      {list.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          onClick={t.onClick}
+          aria-label={t.label}
+          aria-pressed={t.on}
+          className="group flex h-12 items-center gap-2.5 pr-3 text-white active:scale-95"
+          data-studio-tool={t.key}
+        >
+          <span className={cn("grid h-11 w-11 place-items-center rounded-full [filter:drop-shadow(0_1px_3px_rgba(0,0,0,0.55))]", t.on && "bg-white text-black [filter:none]")}>{t.icon}</span>
+          <span className={cn("whitespace-nowrap text-[15px] font-semibold transition-opacity duration-300 [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]", labels ? "opacity-100" : "opacity-0")} aria-hidden>
+            {t.label}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }

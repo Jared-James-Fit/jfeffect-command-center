@@ -648,11 +648,12 @@ html, body { @variant max-md { overflow-x: hidden; } }
   to { opacity: 1; }
 }
 .jf-arrive { animation: jf-arrive 240ms ease-out both; }
-/* Crew's camera (share-studio.tsx): it sits left of the feed, so it slides in from the left (the + and the
-   feed's swipe to create) and back out the same way; switched to from the New post screen, it fades in place */
+/* Crew's camera (share-studio.tsx): it sits left of the feed, Instagram's way, so the + pushes the feed off to
+   the right and the camera comes in under it, a third slower, clipped at the feed's edge (swipe-to-create.ts
+   cameraUnderFeed); closing runs it backwards; switched to from the New post screen, it fades in place */
 @keyframes jf-camera-in {
-  from { transform: translate3d(-100%, 0, 0); }
-  to { transform: none; }
+  from { transform: translate3d(-30%, 0, 0); clip-path: inset(0 70% 0 0); }
+  to { transform: none; clip-path: inset(0 0 0 0); }
 }
 @keyframes jf-create-fade {
   from { opacity: 0; }
