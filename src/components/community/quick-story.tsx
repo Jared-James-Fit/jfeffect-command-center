@@ -106,12 +106,14 @@ export function useQuickStory({
   };
 
   /** Paint the story as it'll post, into a canvas (the thumbnail, the editor, the file). */
-  const paint = (canvas: HTMLCanvasElement, opts: { scale: number; live?: boolean }) => {
+  const paint = (canvas: HTMLCanvasElement, opts: { scale: number; live?: boolean; format?: "story" | "feed" }) => {
     if (!data || !look) return false;
+    const feed = opts.format === "feed";
     const src = photo ? ((opts.live && light ? light.src : photo.img) as Drawable) : null;
-    const media = src ? framedCanvas(src, framing, STORY_ASPECT, Math.max(270, Math.round(1080 * opts.scale))) : null;
+    // the feed's 4:5 (shared to an Instagram post) is the same photo framed the same way, cut to its shape
+    const media = src ? framedCanvas(src, framing, feed ? 4 / 5 : STORY_ASPECT, Math.max(270, Math.round(1080 * opts.scale))) : null;
     try {
-      const card: ShareCardData = { ...data, format: "story", template: look, media };
+      const card: ShareCardData = { ...data, format: feed ? "feed" : "story", template: look, media };
       paintShareCard(canvas, card, logo, opts.scale);
       return true;
     } finally {

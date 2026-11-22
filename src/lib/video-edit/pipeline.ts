@@ -33,6 +33,8 @@ export type VideoSendOptions = {
   stem: string;
   /** Posted with no sound: the audio track is left out. */
   muted?: boolean;
+  /** A filter baked into the picture (media-grade.ts): always a re-encode. */
+  grade?: import("@/lib/media-grade").CompiledGrade | null;
 };
 
 /** How the bar is shared between the steps (a re-encode is most of the wait). */
@@ -66,7 +68,8 @@ export function createVideoSend(o: VideoSendOptions) {
   let uploadedPath: string | null = null;
   let checked: VideoCheck | null = null;
   let upMs = 0;
-  const plan = planVideo(o.info, o.trim, o.context, { canEncode: o.canEncode, muted: o.muted });
+  const graded = !!o.grade && !o.grade.identity;
+  const plan = planVideo(o.info, o.trim, o.context, { canEncode: o.canEncode, muted: o.muted, graded });
 
   const extOf = (f: File) => (f.type.includes("webm") ? "webm" : f.type.includes("quicktime") ? "mov" : "mp4");
 
@@ -87,6 +90,7 @@ export function createVideoSend(o: VideoSendOptions) {
         uplinkBytesPerSec: () => measuredUplink() ?? 1_250_000,
         limitSeconds: videoLimit(o.context),
         maxBytes: videoBudget(o.context).max,
+        grade: graded ? o.grade : null,
       });
     }
     w = weights(rendered.mode);

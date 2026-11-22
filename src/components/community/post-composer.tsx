@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   AtSign, BarChart3, Camera, Check, ChevronLeft, ChevronRight, Dumbbell, Film, Images, Loader2, Lock, Maximize2, PenLine, Play,
-  Scissors, Smile, Sparkles, Star, Type, UserRound, Users, Volume2, VolumeX, X,
+  Scissors, Smile, Sparkles, Star, Type, UserRound, Users, Volume2, VolumeX, Wand2, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,12 @@ import { LookCarousel, type LookGroup, type LookItem } from "@/components/commun
 import { CoverPicker } from "@/components/community/cover-picker";
 import { TrimmedVideo } from "@/components/video-trimmer";
 import { paintCard } from "@/components/community/card-paint";
+import { FilterPanel } from "@/components/community/filter-panel";
+import { GradedLayer } from "@/components/community/graded-layer";
+import { loadGradeSource, useGradeSource } from "@/components/community/use-grade-source";
+import { useFilterDefaults, type FilterDefaults, type FilterKind } from "@/lib/media-filter-prefs";
+import { compiledFor, consistentStats, ORIGINAL, type MediaGrade } from "@/lib/media-grade";
+import { sharedGradeGL } from "@/lib/media-grade-gl";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import type { CameraCard, StudioPost } from "@/components/community/share-studio";
@@ -80,6 +86,7 @@ export type ComposerWorkout = {
   onChange?: () => void;
 };
 
+type ComposerTool = "filters" | "enhance" | null;
 type Step = "select" | "edit" | "details";
 const STEPS: Step[] = ["select", "edit", "details"];
 const EASE = "cubic-bezier(0.32,0.72,0,1)";
@@ -157,7 +164,9 @@ export function PostComposer({
   const [poll, setPoll] = useState<string[] | null>(null);
   const [items, setItems] = useState<StickerItem[]>([]);
   const [request, setRequest] = useState<StickerRequest>(null);
-  const [tool, setTool] = useState<"filters" | null>("filters");
+  const [tool, setTool] = useState<ComposerTool>("filters");
+  // the person's default filter for posts: on every new photo or clip (never one already on the post)
+  const { defaults: filterDefaults, setDefault: setFilterDefault } = useFilterDefaults(open);
   const [slide, setSlide] = useState(0);
   const [coverFor, setCoverFor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -276,7 +285,7 @@ export function PostComposer({
 
   /** The first photo as it'll be posted (or shown, smaller): framed at the post's shape, its filter on it. */
   const drawCover = (out: HTMLCanvasElement, width: number, src: Drawable) => {
-    const media = framedCanvas(src, clampFraming(coverFraming, drawableSize(src), { w: shape, h: 1 }), shape, width);
+    const media = framedCanvas(src, clampFraming(coverFraming, drawableSize(src), { w: shape, h: 1 }), shape, width, compiledFor(coverImage?.grade));
     try {
       if (useCard && card) {
         const size = aspect === "full" ? "story" : aspect === "portrait" ? "feed" : { w: 1080, h: Math.round(1080 / shape) };
@@ -302,7 +311,24 @@ export function PostComposer({
     });
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coverEl, light, step, card, useCard, coverFraming, aspect, lockedIn, logo]);
+  }, [coverEl, light, step, card, useCard, coverFraming, aspect, lockedIn, logo, coverImage?.grade]);
+
+  // a new photo or clip starts with the person's default filter (read from the picture itself for Auto)
+  const defaulted = useRef(new Set<string>());
+  useEffect(() => {
+    const d = filterDefaults.post;
+    for (const it of list) {
+      if (defaulted.current.has(it.id)) continue;
+      if (it.existing || it.grade !== undefined || !d || it.canGrade === false || (it.kind === "video" && !videoGradeReady())) {
+        defaulted.current.add(it.id);
+        continue;
+      }
+      if (!it.preview) continue;
+      defaulted.current.add(it.id);
+      void loadGradeSource(it.preview).then((r) => tray.setGrade(it.id, { ...d, stats: r?.stats ?? null }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list, filterDefaults.post]);
 
   const needsRender = !!coverImage && (useCard || items.length > 0);
 
@@ -527,6 +553,8 @@ export function PostComposer({
                   onTag={() => setTagging(true)}
                   tags={tags.length}
                   hideLoadsOn={!!post?.showHideLoads && hideLoads && !!card && !card.paint}
+                  filterDefaults={filterDefaults}
+                  setFilterDefault={setFilterDefault}
                 />
               )}
             </section>
@@ -990,6 +1018,8 @@ function EditStep({
   onTag,
   tags,
   hideLoadsOn,
+  filterDefaults,
+  setFilterDefault,
 }: {
   active: boolean;
   tray: ReturnType<typeof useSlideTray>;
@@ -1003,8 +1033,8 @@ function EditStep({
   setItems: React.Dispatch<React.SetStateAction<StickerItem[]>>;
   request: StickerRequest;
   setRequest: (r: StickerRequest) => void;
-  tool: "filters" | null;
-  setTool: (t: "filters" | null) => void;
+  tool: ComposerTool;
+  setTool: (t: ComposerTool) => void;
   filters: ComposerFilters;
   design: boolean;
   onAspect: () => void;
@@ -1013,8 +1043,11 @@ function EditStep({
   onTag: () => void;
   tags: number;
   hideLoadsOn: boolean;
+  filterDefaults: FilterDefaults;
+  setFilterDefault: (kind: FilterKind, g: MediaGrade | null) => void;
 }) {
   const shape = POST_ASPECTS[aspect];
+  const enhanceable = (it: TrayItem | null | undefined): it is TrayItem => !!it && !it.existing && it.canGrade !== false && (it.kind === "image" || videoGradeReady());
   const [vh, setVh] = useState(800);
   useEffect(() => setVh(window.innerHeight), []);
   const stage = useStage(shape, Math.round(vh * 0.56));
@@ -1083,10 +1116,12 @@ function EditStep({
             <LookCarousel looks={filters.items} groups={filters.groups} look={filters.on} onLook={filters.pick} />
           </div>
         )}
-        {cur?.kind === "video" && <ClipTools tray={tray} it={cur} onCover={() => onCover(cur.id)} />}
+        {tool === "enhance" && enhanceable(cur) && <EnhanceTool tray={tray} it={cur} list={list} defaults={filterDefaults} setDefault={setFilterDefault} />}
+        {cur?.kind === "video" && tool !== "enhance" && <ClipTools tray={tray} it={cur} onCover={() => onCover(cur.id)} />}
       </div>
       <div className="shrink-0 px-3 pt-2" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}>
         <div className="flex justify-around pb-3">
+          {enhanceable(cur) && <Tool icon={<Wand2 className="h-5 w-5" />} label="Enhance" on={tool === "enhance"} onClick={() => setTool(tool === "enhance" ? null : "enhance")} />}
           {onCoverSlide && filters.items.length > 1 && <Tool icon={<Sparkles className="h-5 w-5" />} label="Filter" on={tool === "filters"} onClick={() => setTool(tool === "filters" ? null : "filters")} />}
           {onCoverSlide && <Tool icon={<Type className="h-5 w-5" />} label="Text" onClick={() => setRequest({ kind: "text", n: Date.now() })} />}
           {onCoverSlide && <Tool icon={<Smile className="h-5 w-5" />} label="Stickers" onClick={() => setRequest({ kind: "stickers", n: Date.now() })} />}
@@ -1126,8 +1161,69 @@ function SlideView({ it, box, shape, playing }: { it: TrayItem; box: { w: number
   const f = clampFraming(it.framing ?? CENTRED, size, { w: shape, h: 1 });
   const p = placement(f, size, box);
   const style = { position: "absolute" as const, width: p.w, height: p.h, left: p.x, top: p.y, maxWidth: "none" };
-  if (it.kind === "video" && it.video && playing) return <TrimmedVideo key={it.video} src={it.video} trim={it.trim} poster={it.preview ?? undefined} style={style} className="object-cover" />;
-  return it.preview ? <img src={it.preview} alt="" style={style} className="object-cover" draggable={false} /> : null;
+  return <SlideMedia it={it} style={style} playing={playing} />;
+}
+
+/** A slide's photo or clip, its filter graded live over it (the same program the post bakes in). */
+function SlideMedia({ it, style, playing }: { it: TrayItem; style: React.CSSProperties; playing: boolean }) {
+  const [el, setEl] = useState<HTMLImageElement | HTMLVideoElement | null>(null);
+  const grade = compiledFor(it.grade);
+  const media =
+    it.kind === "video" && it.video && playing ? (
+      <TrimmedVideo key={it.video} src={it.video} trim={it.trim} poster={it.preview ?? undefined} style={style} className={cn("object-cover", grade && "opacity-0")} videoRef={setEl} />
+    ) : it.preview ? (
+      <img ref={setEl} src={it.preview} alt="" style={style} className={cn("object-cover", grade && "opacity-0")} draggable={false} />
+    ) : null;
+  return (
+    <>
+      {media}
+      {grade && media && <GradedLayer source={el} grade={grade} style={style} />}
+    </>
+  );
+}
+
+/** A clip's filter is shown live by the GPU and re-encoded into it: only offered where WebGL is there. */
+function videoGradeReady(): boolean {
+  return typeof window !== "undefined" && !!sharedGradeGL();
+}
+
+/**
+ * Enhance: the photo's or clip's filter and adjustments (FilterPanel), its
+ * default for posts, and putting the same filter on other slides (Auto reads
+ * each picture, pulled a little toward the set so the post looks like one).
+ */
+function EnhanceTool({ tray, it, list, defaults, setDefault }: { tray: ReturnType<typeof useSlideTray>; it: TrayItem; list: TrayItem[]; defaults: FilterDefaults; setDefault: (kind: FilterKind, g: MediaGrade | null) => void }) {
+  const { img, stats } = useGradeSource(it.preview);
+  const others = list.filter((x) => !x.existing && x.canGrade !== false && (x.kind === "image" || videoGradeReady()));
+  const applyTo = async (ids: string[]) => {
+    const g = it.grade ?? ORIGINAL;
+    const targets = others.filter((x) => ids.includes(x.id));
+    const read = await Promise.all(targets.map((x) => (x.preview ? loadGradeSource(x.preview) : Promise.resolve(null))));
+    const all = read.map((r) => r?.stats ?? null);
+    targets.forEach((x, i) => tray.setGrade(x.id, { filter: g.filter, intensity: g.intensity, adjust: g.adjust, stats: g.filter === "auto" ? consistentStats(all[i], all) : all[i] }));
+    toast.message(targets.length === others.length ? "On every slide" : `On ${targets.length} slide${targets.length === 1 ? "" : "s"}`, { description: "Change any one on its own any time." });
+  };
+  return (
+    <div className="px-4 pt-3 animate-in fade-in-0 duration-200" data-composer-enhance>
+      <FilterPanel
+        grade={it.grade ?? null}
+        stats={stats}
+        onChange={(g) => tray.setGrade(it.id, g)}
+        source={img}
+        sourceSize={img ? { w: img.naturalWidth, h: img.naturalHeight } : null}
+        defaultGrade={defaults.post}
+        onSaveDefault={() => {
+          setDefault("post", it.grade ?? null);
+          toast.message(it.grade && it.grade.filter !== "original" ? "Saved as your default for posts" : "No default filter for posts", { description: "New photos and clips start with it. This post's own changes never change it." });
+        }}
+        onClearDefault={() => {
+          setDefault("post", null);
+          toast.message("Default removed", { description: "New photos and clips start as shot." });
+        }}
+        scope={others.length > 1 ? { items: others.map((x) => ({ id: x.id, thumb: x.preview })), currentId: it.id, onApply: (ids) => void applyTo(ids) } : null}
+      />
+    </div>
+  );
 }
 
 /** A clip's tools: trim it, sound on or off, its cover, the lift found in it. */

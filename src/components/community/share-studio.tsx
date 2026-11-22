@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
-import { AtSign, Camera, Check, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Scissors, Send, Smartphone, Smile, Square, Star, Timer, Type, User, Users, Volume2, VolumeX, X } from "lucide-react";
+import { AtSign, Camera, Check, Wand2, Expand, Shrink, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Scissors, Send, Smartphone, Smile, Square, Star, Timer, Type, User, Users, Volume2, VolumeX, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -35,6 +35,9 @@ import {
   POST_ASPECTS,
   POST_ASPECT_LABEL,
   STORY_ASPECT,
+  storyCanFit,
+  storyStartsWhole,
+  wholeRect,
   closestAspect,
   framingFromGuide,
   slideAspect,
@@ -43,7 +46,15 @@ import {
   type Framing,
   type PostAspect,
 } from "@/lib/photo-frame";
-import { drawableSize, framedCanvas, lightCopy, type Drawable } from "@/lib/photo-frame-draw";
+import { drawableSize, framedCanvas, lightCopy, wholeStoryCanvas, type Drawable } from "@/lib/photo-frame-draw";
+import { FilterPanel } from "@/components/community/filter-panel";
+import { ShareOutSheet } from "@/components/community/share-out-sheet";
+import { JF_HANDLE, promoLine, shareFileName, workoutShareCaption } from "@/lib/share-out";
+import { GradedLayer } from "@/components/community/graded-layer";
+import { statsFor, useGradeSource, loadGradeSource } from "@/components/community/use-grade-source";
+import { useFilterDefaults } from "@/lib/media-filter-prefs";
+import { compiledFor, type MediaGrade } from "@/lib/media-grade";
+import { sharedGradeGL } from "@/lib/media-grade-gl";
 import { PhotoFramer } from "@/components/community/photo-framer";
 import { CoverPicker } from "@/components/community/cover-picker";
 import { TrimmedVideo } from "@/components/video-trimmer";
@@ -258,6 +269,15 @@ export function ShareStudio({
   const [framing, setFraming] = useState<Framing>(CENTRED);
   // a finger is on it: the card repaints at preview quality until it lifts
   const [framingLive, setFramingLive] = useState(false);
+  // the photo's filter (media-grade.ts), its panel, and a finger on one of its sliders (the card repaints lighter)
+  const [shotGrade, setShotGrade] = useState<MediaGrade | null>(null);
+  const [enhancing, setEnhancing] = useState(false);
+  const [gradeLive, setGradeLive] = useState(false);
+  // a story's photo shown whole over a blur of itself (storyStartsWhole), else filling the story
+  const [shotWhole, setShotWhole] = useState(false);
+  const { defaults: filterDefaults, setDefault: setFilterDefault } = useFilterDefaults(open);
+  const defaultsRef = useRef(filterDefaults);
+  defaultsRef.current = filterDefaults;
   const [shapeFlash, setShapeFlash] = useState(0);
   // the clip on the stage plays with its sound once the speaker turned it on (a tap: the phone allows it)
   const [hear, setHear] = useState(false);
@@ -497,6 +517,8 @@ export function ShareStudio({
   // 1:1 / 16:9, Instagram's carousel rule), set from its first photo or clip
   // until it's picked by hand. The camera is 9:16.
   const clip0 = phase === "edit" && !card && !shot ? tray.items[0] ?? null : null;
+  // a story's clip: whole over a blur of itself when it's much wider or taller than the story, else filling it (Fill / Fit switches)
+  const clipWhole = !!clip0 && (clip0.whole ?? storyStartsWhole({ w: clip0.w ?? 9, h: clip0.h ?? 16 }));
   const frameAspect = story ? STORY_ASPECT : card && !cardFailed ? FEED_CARD_ASPECT : POST_ASPECTS[aspect];
   // a post with nothing up front (no card, no photo): its first photo or clip sets the shape (one already on
   // the post, being edited: the shape it shows at, so what's added matches it)
@@ -696,7 +718,7 @@ export function ShareStudio({
   // photo you took or picked is changed exactly the way the camera picks one. A story's photo walks the
   // whole row; otherwise a card's looks. Never on a clip, a reply's or a shared post's backdrop.
   const editRing: { looks: LookItem[]; look: string | null; onLook: (k: string) => void; groups?: LookGroup[] } | null =
-    phase !== "edit" || reply || share || adding || selItem
+    phase !== "edit" || reply || share || adding || selItem || enhancing
       ? null
       : story && !!shot && filters && filters.length > 1 && onFilter
         ? { looks: filters, look: filter ?? null, onLook: onFilter, groups: filterGroups }
@@ -757,15 +779,65 @@ export function ShareStudio({
   const light = useMemo(() => (shot ? lightCopy(shot.src) : null), [shot]);
   useEffect(() => () => light?.release(), [light]);
   const shotSize = useMemo(() => (shot ? drawableSize(shot.src) : null), [shot]);
+  const shotCompiled = compiledFor(shotGrade);
+  /** The photo as it goes under a card or posts: whole over its blur (a story's, when picked) or framed; its filter on it. */
+  const shotMedia = (src: Drawable, aspect: number, width: number) =>
+    story && shotWhole && Math.abs(aspect - STORY_ASPECT) < 0.01 ? wholeStoryCanvas(src, width, shotCompiled) : framedCanvas(src, framing, aspect, width, shotCompiled);
+  // a clip's filter is previewed by the GPU and re-encoded into it: only offered where WebGL is there
+  const gradeGpu = useMemo(() => typeof window !== "undefined" && !!sharedGradeGL(), []);
+  // what Enhance works on: the photo up front, or a story's clip (one this phone can re-encode)
+  const enhanceTarget: "shot" | "clip" | null =
+    phase !== "edit" || reply || share || adding || selItem
+      ? null
+      : shot
+        ? "shot"
+        : story && clip0?.video && clip0.canGrade !== false && !clip0.existing && gradeGpu
+          ? "clip"
+          : null;
+  // Fill / Fit: only on a story whose picture isn't already its shape
+  const fitTarget: "whole" | "fill" | null =
+    phase !== "edit" || !story || reply || share || adding
+      ? null
+      : shot && shotSize
+        ? storyCanFit(shotSize)
+          ? shotWhole
+            ? "whole"
+            : "fill"
+          : null
+        : !shot && clip0?.video && clip0.w && clip0.h && storyCanFit({ w: clip0.w, h: clip0.h })
+          ? clipWhole
+            ? "whole"
+            : "fill"
+          : null;
+  useEffect(() => {
+    if (!enhanceTarget) setEnhancing(false);
+  }, [enhanceTarget]);
+  // a new clip or slide starts with the person's default filter (stories' for a story, posts' otherwise)
+  const defaulted = useRef(new Set<string>());
+  useEffect(() => {
+    const d = filterDefaults[story ? "story" : "post"];
+    for (const it of tray.items) {
+      if (defaulted.current.has(it.id)) continue;
+      if (it.existing || it.grade !== undefined || !d || it.canGrade === false || (it.kind === "video" && !gradeGpu)) {
+        defaulted.current.add(it.id);
+        continue;
+      }
+      if (!it.preview) continue;
+      defaulted.current.add(it.id);
+      void loadGradeSource(it.preview).then((r) => tray.setGrade(it.id, { ...d, stats: r?.stats ?? null }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tray.items, filterDefaults, story]);
 
   // Frozen: the card over the photo as it's framed, full res once a finger lifts.
   useEffect(() => {
     if (phase !== "edit" || !cardEl || !card || !logo) return;
     let raf = 0;
     raf = requestAnimationFrame(() => {
-      const media = shot ? framedCanvas(framingLive && light ? light.src : shot.src, framing, frameAspect, framingLive ? 540 : 1080) : null;
+      const quick = framingLive || gradeLive;
+      const media = shot ? shotMedia(quick && light ? light.src : shot.src, frameAspect, quick ? 540 : 1080) : null;
       try {
-        paintCard(cardEl, card, media, cardFormat, frozenLockedIn(card.data), logo, framingLive ? 0.6 : 1);
+        paintCard(cardEl, card, media, cardFormat, frozenLockedIn(card.data), logo, quick ? 0.6 : 1);
       } catch {
         setCardFailed(true);
       } finally {
@@ -774,7 +846,7 @@ export function ShareStudio({
     });
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, cardEl, card?.look, card?.data, card?.paint, shot, logo, framing, framingLive, cardFormat, frameAspect]);
+  }, [phase, cardEl, card?.look, card?.data, card?.paint, shot, logo, framing, framingLive, cardFormat, frameAspect, shotGrade, gradeLive, shotWhole]);
 
   const changeLook = (dir: 1 | -1) => {
     // on the camera, a swipe walks the whole row of filters (Normal, meal, lock in, workout); a story's
@@ -837,6 +909,10 @@ export function ShareStudio({
     setShot(s);
     setItems([]);
     setFraming(f);
+    // a new photo starts with the person's default filter (Auto reads this photo); a story's wide or tall one starts whole
+    const d = defaultsRef.current[story ? "story" : "post"];
+    setShotGrade(d && !reply && !share ? { ...d, stats: statsFor(s.src as Drawable) } : null);
+    setShotWhole(story && !reply && !share && storyStartsWhole(drawableSize(s.src as Drawable)));
     // the camera's shot was framed by its 4:5 guide; a photo from the library starts at the shape closest to its own
     const own = drawableSize(s.src as Drawable);
     setAspect(s.live ? "portrait" : closestAspect(own.w, own.h));
@@ -1039,7 +1115,7 @@ export function ShareStudio({
   // shapes any more: the editor already shows the post's own shape.
   const framedFile = async (frameShape: number, name: string): Promise<File | null> => {
     if (!shot) return null;
-    const c = framedCanvas(shot.src as Drawable, framing, frameShape);
+    const c = shotMedia(shot.src as Drawable, frameShape, 1080);
     try {
       if (items.length) drawStickers(context2d(c), items, c.width, c.height);
       const b = await canvasToBlob(c, "image/jpeg", 0.92);
@@ -1053,7 +1129,7 @@ export function ShareStudio({
   const cardImage = async (fmt: ShareFormat): Promise<Blob | null> => {
     if (!card) return null;
     const c = document.createElement("canvas");
-    const media = shot ? framedCanvas(shot.src as Drawable, framing, fmt === "feed" ? FEED_CARD_ASPECT : STORY_ASPECT) : null;
+    const media = shot ? shotMedia(shot.src as Drawable, fmt === "feed" ? FEED_CARD_ASPECT : STORY_ASPECT, 1080) : null;
     try {
       paintCard(c, card, media, fmt, frozenLockedIn(card.data), logo, 1);
       drawStickers(context2d(c), items, c.width, c.height);
@@ -1071,7 +1147,8 @@ export function ShareStudio({
   // (what you see as slide 1).
   const postPhoto = async (carousel: boolean): Promise<File | null> => {
     if (!card) return finalPhoto();
-    const bare = card.look === "plain" || (post?.showHideLoads && hideLoads);
+    // a story filter is a "plain" card with its own painter: it goes as painted, never as the bare photo
+    const bare = (card.look === "plain" && !card.paint) || (post?.showHideLoads && hideLoads && !card.paint);
     // editing without a new photo: the post keeps the one it has (a bare card never replaces it)
     if (!shot && post?.hasCover) return null;
     if (!shot && (!carousel || bare)) return null;
@@ -1081,7 +1158,7 @@ export function ShareStudio({
   };
   /** A story's picture: the card (9:16) or the framed photo; null for a clip (it goes up as it is). */
   const storyPhoto = async (): Promise<File | null> => {
-    if (card && !(card.look === "plain" && shot)) {
+    if (card && !(card.look === "plain" && !card.paint && shot)) {
       const b = await cardImage("story");
       return b ? new File([b], `jf-story-${card.look}.jpg`, { type: "image/jpeg" }) : finalPhoto();
     }
@@ -1092,7 +1169,7 @@ export function ShareStudio({
   const smallFrame = (extra?: (ctx: CanvasRenderingContext2D, w: number, h: number) => void) => {
     if (cardEl) return captionThumb(cardEl, extra) ?? null;
     if (!shot) return null;
-    const c = framedCanvas((light?.src ?? shot.src) as Drawable, framing, frameAspect, 378);
+    const c = shotMedia((light?.src ?? shot.src) as Drawable, frameAspect, 378);
     try {
       return captionThumb(c, extra) ?? null;
     } finally {
@@ -1105,7 +1182,7 @@ export function ShareStudio({
     const t = setTimeout(() => setCoverThumb(smallFrame()), 120);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, cardEl, card?.look, card?.paint, shot, framing, framingLive, frameAspect]);
+  }, [phase, cardEl, card?.look, card?.paint, shot, framing, framingLive, frameAspect, shotGrade, shotWhole]);
 
   // The caption screen's preview: the card as it is now, stickers and all, small.
   const openCaption = () => {
@@ -1136,7 +1213,10 @@ export function ShareStudio({
     if (!user?.id) throw new Error("Sign in again to post");
     const photo = await storyPhoto();
     // a clip story: the clip itself (it's been uploading since it was picked)
-    const extras = photo ? [] : (await tray.ready()).slice(0, 1);
+    // (a clip filling the story goes with its 9:16 frame and a poster baked to it; one shown whole goes as it is)
+    const storyClip = tray.items[0];
+    const fill = !!storyClip && storyClip.kind === "video" && !(storyClip.whole ?? storyStartsWhole({ w: storyClip.w ?? 9, h: storyClip.h ?? 16 }));
+    const extras = photo ? [] : (await tray.ready(fill ? STORY_ASPECT : null)).slice(0, 1);
     if (!photo && !extras.length) throw new Error("Add a photo or a clip to your story");
     await post?.beforeStory?.();
     // (the button only offers the crew or Close friends; whatever the post it's for had, a story is one of those)
@@ -1202,21 +1282,17 @@ export function ShareStudio({
   };
   // Save the card to the phone. On phones that's the system sheet (its "Save
   // Image" puts it in Photos); elsewhere it downloads.
-  const doSave = async () => {
-    if (busy || (!card && !shot)) return;
-    setBusy("save");
-    try {
-      const blob = card ? await cardBlob() : await finalPhoto();
-      if (!blob) throw new Error("Couldn't build the card");
-      const outcome = await shareCardImage(blob, { filename: `jf-effect-${card?.look ?? "photo"}.jpg`, title: "JF Effect" });
-      if (outcome === "downloaded") toast.success("Saved to your phone");
-      else if (outcome === "failed") toast.error("Couldn't save on this device");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Couldn't save the card");
-    } finally {
-      setBusy(null);
+  // Share outside the app / Save: the card (or photo) as it's shown, at the shape where it's going
+  const [sharingOut, setSharingOut] = useState(false);
+  const makeShareFile = async (format: ShareFormat): Promise<File | null> => {
+    if (card) {
+      const b = await cardImage(format);
+      return b ? new File([b], shareFileName(format, card.look), { type: "image/jpeg" }) : null;
     }
+    if (!shot) return null;
+    return framedFile(format === "feed" ? FEED_CARD_ASPECT : STORY_ASPECT, shareFileName(format));
   };
+  const shareCaptionSrc = card?.data && (card.data.lift || card.data.workoutTitle) && card.look !== "plain" ? { workoutTitle: card.data.workoutTitle, lift: card.data.lift, isPr: card.data.isPr, hideLoads: !!(post?.showHideLoads && hideLoads) } : null;
 
   // The frozen photo shown bare (no card on it): encoded once, not on every keystroke of the caption.
   const shotUrl = useMemo(() => {
@@ -1295,7 +1371,15 @@ export function ShareStudio({
               )}
               {/* a story's clip: the whole picture, as the story viewer shows it (a lift is never cropped off) */}
               {story && clip0?.video ? (
-                <TrimmedVideo key={clip0.video} src={clip0.video} trim={clip0.trim} poster={clip0.preview ?? undefined} sound={hear && !clip0.muted} className="absolute inset-0 h-full w-full bg-black object-contain" data-studio-clip />
+                <StoryClipStage
+                  it={clip0}
+                  box={box}
+                  whole={clipWhole}
+                  sound={hear && !clip0.muted}
+                  grade={compiledFor(clip0.grade)}
+                  onFraming={(f) => tray.setFraming(clip0.id, f)}
+                  onClaim={() => (swipe.current = null)}
+                />
               ) : (
                 !story && !selItem && clip0?.preview && <img src={clip0.preview} alt="" className="absolute inset-0 h-full w-full object-cover" />
               )}
@@ -1308,8 +1392,11 @@ export function ShareStudio({
                 />
               )}
               {/* the photo, framed: drag and pinch (a card on it: two fingers, one swipes the looks). Over the card, so its grid shows; the card paints the photo itself */}
-              {phase === "edit" && shot && shotSize && !selItem && (
+              {/* a story's photo shown whole, over a blur of itself (no card on it: the card paints the same) */}
+              {phase === "edit" && shot && story && shotWhole && !showCard && !selItem && <WholePreview src={(gradeLive && light ? light.src : shot.src) as Drawable} grade={shotCompiled} quick={gradeLive} />}
+              {phase === "edit" && shot && shotSize && !selItem && !(story && shotWhole) && (
                 <PhotoFramer
+                  grade={!showCard ? shotCompiled : null}
                   src={shotUrl}
                   size={shotSize}
                   frame={box}
@@ -1332,6 +1419,7 @@ export function ShareStudio({
                   size={{ w: selItem.w ?? 4, h: selItem.h ?? 5 }}
                   frame={box}
                   framing={selItem.framing ?? CENTRED}
+                  grade={compiledFor(selItem.grade)}
                   onFraming={(f) => tray.setFraming(selItem.id, f)}
                   oneFinger
                   gridPreview
@@ -1524,7 +1612,7 @@ export function ShareStudio({
               )}
               {flash && <div className="pointer-events-none absolute inset-0 bg-white/80" />}
               {/* a card on a photo: one finger swipes the looks, so moving the photo is two fingers (said once per shot) */}
-              {pinchHint && (
+              {pinchHint && !(story && shotWhole) && (
                 <div className="pointer-events-none absolute inset-x-0 top-16 flex justify-center" data-pinch-hint>
                   <span className="animate-in fade-in rounded-full bg-black/55 px-3 py-1 text-[12px] font-bold backdrop-blur">Two fingers to move or zoom the photo</span>
                 </div>
@@ -1613,10 +1701,31 @@ export function ShareStudio({
                         <ChevronLeft className="h-6 w-6" />
                       </button>
                     )}
+                    {/* Enhance: the photo's or clip's filter and adjustments; Fill / Fit: a story's picture filling it or whole */}
+                    {enhanceTarget && (
+                      <button type="button" onClick={() => setEnhancing((e) => !e)} className={cn(pill, "ml-auto", enhancing && "bg-white text-black")} aria-pressed={enhancing} aria-label="Enhance: filters and adjustments" data-studio-enhance>
+                        <Wand2 className="h-5 w-5" />
+                      </button>
+                    )}
+                    {fitTarget && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          feedback("tap");
+                          if (shot) setShotWhole((w) => !w);
+                          else if (clip0) tray.setWhole(clip0.id, !clipWhole);
+                        }}
+                        className={cn(pill, !enhanceTarget && "ml-auto")}
+                        aria-label={fitTarget === "whole" ? "Fill the story" : "Show it whole"}
+                        data-studio-fit={fitTarget}
+                      >
+                        {fitTarget === "whole" ? <Expand className="h-5 w-5" /> : <Shrink className="h-5 w-5" />}
+                      </button>
+                    )}
                     {/* text and stickers go on a card or a photo (never on a clip) */}
                     {(card || shot) && (
                       <>
-                        <button type="button" onClick={() => setRequest({ kind: "text", n: Date.now() })} className={cn(pill, "ml-auto")} aria-label="Add text">
+                        <button type="button" onClick={() => setRequest({ kind: "text", n: Date.now() })} className={cn(pill, !enhanceTarget && !fitTarget && "ml-auto")} aria-label="Add text">
                           <Type className="h-5 w-5" />
                         </button>
                         <button type="button" onClick={() => setRequest({ kind: "stickers", n: Date.now() })} className={pill} aria-label="Add a sticker">
@@ -1629,7 +1738,7 @@ export function ShareStudio({
                       <button
                         type="button"
                         onClick={() => setTagging(true)}
-                        className={cn(pill, "relative", !(card || shot) && "ml-auto")}
+                        className={cn(pill, "relative", !(card || shot) && !enhanceTarget && !fitTarget && "ml-auto")}
                         aria-label={tags.length ? `Tagged ${tags.length}. Tap to change` : "Tag people"}
                         data-story-tag
                       >
@@ -1643,6 +1752,29 @@ export function ShareStudio({
                 )}
               </div>
             </div>
+            {/* Enhance: the filters and adjustments over the picture's foot (the picture shows every change at once) */}
+            {enhancing && enhanceTarget && (
+              <div className="absolute inset-x-0 bottom-0 z-[7] rounded-t-2xl bg-black/85 px-4 pb-3 pt-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-200" data-studio-enhance-panel>
+                <StudioEnhance
+                  target={enhanceTarget}
+                  grade={enhanceTarget === "shot" ? shotGrade : (clip0?.grade ?? null)}
+                  shotSrc={shot ? (light?.src ?? shot.src) as Drawable : null}
+                  clipPoster={clip0?.preview ?? null}
+                  onChange={(g) => (enhanceTarget === "shot" ? setShotGrade(g) : clip0 && tray.setGrade(clip0.id, g))}
+                  onLive={setGradeLive}
+                  defaultGrade={filterDefaults[story ? "story" : "post"]}
+                  onSaveDefault={(g) => {
+                    setFilterDefault(story ? "story" : "post", g);
+                    toast.message(g && g.filter !== "original" ? `Saved as your default for ${story ? "stories" : "posts"}` : "No default filter", { description: "New photos and clips start with it. Changing this one never changes it." });
+                  }}
+                  onClearDefault={() => {
+                    setFilterDefault(story ? "story" : "post", null);
+                    toast.message("Default removed", { description: "New photos and clips start as shot." });
+                  }}
+                  onDone={() => setEnhancing(false)}
+                />
+              </div>
+            )}
             {/* editing: the camera's filter row over the picture's foot (the ring shows what's on; swipe or tap a circle) */}
             {editRing && (
               <div
@@ -1761,9 +1893,10 @@ export function ShareStudio({
                 <button
                   type="button"
                   disabled={!!busy || (!card && !shot)}
-                  onClick={() => void doSave()}
+                  onClick={() => setSharingOut(true)}
                   className="grid h-14 w-12 shrink-0 place-items-center rounded-2xl bg-white/10 active:scale-[0.97] disabled:opacity-60"
-                  aria-label="Save image"
+                  aria-label="Share outside the app, or save it"
+                  data-studio-share-out
                 >
                   {busy === "save" ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <Download className="h-6 w-6" />}
                 </button>
@@ -1874,6 +2007,14 @@ export function ShareStudio({
         />
         {/* a clip that's too long (or tapped in the strip) is trimmed here, on top of the studio */}
         {tray.trimmer}
+        <ShareOutSheet
+          open={sharingOut}
+          onOpenChange={setSharingOut}
+          look={`${card?.look ?? "photo"}:${shotGrade?.filter ?? ""}:${shotWhole}`}
+          caption={shareCaptionSrc ? workoutShareCaption(shareCaptionSrc, { promo: false }) : ""}
+          promoLine={shareCaptionSrc ? promoLine(shareCaptionSrc) : JF_HANDLE}
+          make={makeShareFile}
+        />
       </DialogContent>
     </Dialog>
   );
@@ -1977,6 +2118,131 @@ function ModeTabs({ modes, mode, onMode }: { modes: CameraMode[]; mode?: string;
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Enhance in the studio: the photo's or a story clip's filter (FilterPanel)
+ * over the picture's foot, with Done. Auto reads the picture itself (the photo,
+ * or the clip's poster), and the export bakes exactly what's shown.
+ */
+function StudioEnhance({
+  target,
+  grade,
+  shotSrc,
+  clipPoster,
+  onChange,
+  onLive,
+  defaultGrade,
+  onSaveDefault,
+  onClearDefault,
+  onDone,
+}: {
+  target: "shot" | "clip";
+  grade: MediaGrade | null;
+  shotSrc: Drawable | null;
+  clipPoster: string | null;
+  onChange: (g: MediaGrade) => void;
+  onLive: (on: boolean) => void;
+  defaultGrade: MediaGrade | null;
+  onSaveDefault: (g: MediaGrade | null) => void;
+  onClearDefault: () => void;
+  onDone: () => void;
+}) {
+  const poster = useGradeSource(target === "clip" ? clipPoster : null);
+  const shotStats = useMemo(() => (target === "shot" && shotSrc ? statsFor(shotSrc) : null), [target, shotSrc]);
+  const source = target === "shot" ? shotSrc : poster.img;
+  const size = source ? drawableSize(source as Drawable) : null;
+  return (
+    <div className="text-white">
+      <FilterPanel
+        grade={grade}
+        stats={target === "shot" ? shotStats : poster.stats}
+        onChange={onChange}
+        onLive={onLive}
+        source={source as CanvasImageSource | null}
+        sourceSize={size}
+        defaultGrade={defaultGrade}
+        onSaveDefault={() => onSaveDefault(grade)}
+        onClearDefault={onClearDefault}
+      />
+      <div className="mt-2 flex justify-end">
+        <button type="button" onClick={onDone} className="h-9 rounded-full bg-white px-5 text-[13px] font-semibold text-black active:scale-95" data-studio-enhance-done>
+          Done
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** A story's photo shown whole over a blur of itself (wholeStoryCanvas): exactly what's posted. */
+function WholePreview({ src, grade, quick }: { src: Drawable; grade: ReturnType<typeof compiledFor>; quick: boolean }) {
+  const ref = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    const out = ref.current;
+    if (!out) return;
+    const raf = requestAnimationFrame(() => {
+      const c = wholeStoryCanvas(src, quick ? 540 : 1080, grade);
+      try {
+        out.width = c.width;
+        out.height = c.height;
+        out.getContext("2d")?.drawImage(c, 0, 0);
+      } finally {
+        releaseCanvas(c);
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [src, grade, quick]);
+  return <canvas ref={ref} className="pointer-events-none absolute inset-0 h-full w-full" data-story-whole />;
+}
+
+/**
+ * A story's clip on the stage, as the story will show it: filling the story
+ * (drag and pinch to frame it, posted with that frame) or whole over a blur of
+ * its poster. Its filter is graded live over it.
+ */
+function StoryClipStage({
+  it,
+  box,
+  whole,
+  sound,
+  grade,
+  onFraming,
+  onClaim,
+}: {
+  it: TrayItem;
+  box: { w: number; h: number };
+  whole: boolean;
+  sound: boolean;
+  grade: ReturnType<typeof compiledFor>;
+  onFraming: (f: Framing) => void;
+  onClaim: () => void;
+}) {
+  const [el, setEl] = useState<HTMLVideoElement | null>(null);
+  const size = { w: it.w ?? 9, h: it.h ?? 16 };
+  if (!whole)
+    return (
+      <PhotoFramer
+        key={it.id}
+        src={null}
+        video={it.video ? { src: it.video, trim: it.trim, poster: it.preview ?? undefined, sound } : null}
+        size={size}
+        frame={box}
+        framing={it.framing ?? CENTRED}
+        onFraming={onFraming}
+        oneFinger
+        grade={grade}
+        onClaim={onClaim}
+      />
+    );
+  const r = wholeRect(size, box);
+  const at: React.CSSProperties = { position: "absolute", left: r.x, top: r.y, width: r.w, height: r.h };
+  return (
+    <div className="absolute inset-0 overflow-hidden bg-black" data-studio-clip data-story-clip-fit="whole">
+      {it.preview && <img src={it.preview} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-45 blur-2xl" />}
+      {it.video && <TrimmedVideo key={it.video} src={it.video} trim={it.trim} poster={it.preview ?? undefined} sound={sound} videoRef={setEl} style={at} className={cn("max-w-none object-fill", grade && "opacity-0")} />}
+      {grade && <GradedLayer source={el} grade={grade} style={at} />}
     </div>
   );
 }

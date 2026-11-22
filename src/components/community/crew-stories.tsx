@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
+import { ClipFrameBox } from "@/components/community/clip-frame-box";
+import { clipFrame, type ClipFrame } from "@/lib/photo-frame";
 import { PREVIEW_ONLY_MESSAGE, canShareToStory, crewStories, isPulsePost, myStory, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, storyFrameKind, storyTarget, storyWords, workoutHeadline, type CommunityAuthor, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
 import { useCommunityProfile, useFullMediaUrl, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { WIN_STYLE } from "@/components/community/pulse-style";
@@ -711,7 +713,7 @@ let storySoundBlocked = false;
 /** A story plays up to a minute of a clip (Instagram's story length); the post itself can run longer. */
 const STORY_CLIP_MAX_SECONDS = videoLimit("story");
 
-function StoryClip({ path, poster, paused, onProgress, onEnd, onFail }: { path: string; poster: string | null } & ClipControl) {
+function StoryClip({ path, poster, frame = null, shape = null, paused, onProgress, onEnd, onFail }: { path: string; poster: string | null; frame?: ClipFrame | null; shape?: number | null } & ClipControl) {
   const { data: url, isError } = useFullMediaUrl(path, true);
   const vid = useRef<HTMLVideoElement | null>(null);
   const [muted, setMuted] = useState(storySoundBlocked);
@@ -818,22 +820,43 @@ function StoryClip({ path, poster, paused, onProgress, onEnd, onFail }: { path: 
     v.setAttribute("webkit-playsinline", "");
   }, []);
 
-  return (
-    <div className="relative flex flex-1 items-center justify-center bg-black" data-story-frame="clip">
-      {poster && !started && <img src={poster} alt="" className="absolute max-h-full w-full object-contain" draggable={false} />}
+  // framed in the studio (filling the story): its 9:16 frame, exactly the part framed; else the clip whole over a blur of itself
+  const media = (fit: string, style?: React.CSSProperties) => (
+    <>
+      {poster && !started && !frame && <img src={poster} alt="" className="absolute max-h-full w-full object-contain" draggable={false} />}
       {url && (
         <video
           ref={attach}
           src={url}
           playsInline
           preload="auto"
-          className={cn("max-h-full w-full object-contain", (!started || lowPower) && "opacity-0", lowPower && "absolute")}
+          style={style}
+          className={cn(fit, (!started || lowPower) && "opacity-0", lowPower && "absolute")}
           onPlaying={() => setStarted(true)}
           onEnded={() => onEnd()}
           onError={() => failRef.current()}
         />
       )}
-      {lowPower && <canvas ref={canvasRef} className={cn("max-h-full w-full object-contain", !started && "opacity-0")} data-decoded-clip />}
+      {lowPower && <canvas ref={canvasRef} style={style} className={cn(fit, !started && "opacity-0")} data-decoded-clip />}
+    </>
+  );
+  return (
+    <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black" data-story-frame="clip" data-story-clip-fit={frame ? "fill" : "whole"}>
+      {frame ? (
+        <ClipFrameBox
+          frame={frame}
+          media={shape}
+          fit="contain"
+          poster={poster && !started ? <img src={poster} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} /> : null}
+        >
+          {(style) => media("max-w-none object-fill", style)}
+        </ClipFrameBox>
+      ) : (
+        <>
+          {poster && <img src={poster} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-45 blur-2xl" draggable={false} data-story-backdrop />}
+          {media("relative max-h-full w-full object-contain")}
+        </>
+      )}
       {(muted || lowPower) && started && (
         <button
           type="button"
@@ -1033,7 +1056,7 @@ function StoryFrame({ post, unit, clip }: { post: CommunityPost; unit: "kg" | "l
     );
   }
   if (kind === "media" && post.media_type === "video" && clip && post.media_path) {
-    return <StoryClip path={post.media_path} poster={thumb} {...clip} />;
+    return <StoryClip path={post.media_path} poster={thumb} frame={clipFrame(post.media_focus)} shape={post.media_width && post.media_height ? post.media_width / post.media_height : null} {...clip} />;
   }
   if (kind === "media") {
     const src = full ?? thumb ?? (post.media_type ? null : post.gif_url ?? null);

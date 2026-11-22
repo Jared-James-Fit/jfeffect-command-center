@@ -752,9 +752,26 @@ export function TrimmedVideo({
   className,
   style,
   sound = false,
+  videoRef,
   ...rest
-}: { src: string; trim: VideoTrim | null | undefined; poster?: string; className?: string; style?: React.CSSProperties; sound?: boolean } & Record<`data-${string}`, string | boolean | undefined>) {
+}: {
+  src: string;
+  trim: VideoTrim | null | undefined;
+  poster?: string;
+  className?: string;
+  style?: React.CSSProperties;
+  sound?: boolean;
+  /** The element itself (the studio's filter preview reads its frames). */
+  videoRef?: (el: HTMLVideoElement | null) => void;
+} & Record<`data-${string}`, string | boolean | undefined>) {
   const ref = useRef<HTMLVideoElement | null>(null);
+  const setRef = useCallback(
+    (el: HTMLVideoElement | null) => {
+      ref.current = el;
+      videoRef?.(el);
+    },
+    [videoRef],
+  );
   const start = trim?.start ?? 0;
   const end = trim?.end ?? null;
   useEffect(() => {
@@ -791,5 +808,5 @@ export function TrimmedVideo({
       v.removeEventListener("ended", onEnded);
     };
   }, [start, end, src]);
-  return <video ref={ref} src={src} poster={poster} muted loop={end == null} autoPlay playsInline className={className} style={style} {...rest} />;
+  return <video ref={setRef} src={src} poster={poster} muted loop={end == null} autoPlay playsInline className={className} style={style} {...rest} />;
 }
