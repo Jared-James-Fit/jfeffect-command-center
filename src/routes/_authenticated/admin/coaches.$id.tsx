@@ -16,6 +16,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { assignClientToCoach, setCoachStatus } from "@/lib/coaches.functions";
 import { useAuth } from "@/lib/auth";
 import { UserAvatar } from "@/components/user-avatar";
+import { CoachAccessRecord } from "@/components/admin/coach-access-record";
 const ProfilePictureCapture = lazyWithRetry(() =>
   import("@/components/profile-picture-capture").then((m) => ({
     default: m.ProfilePictureCapture,
@@ -76,6 +77,7 @@ function CoachDetailPage() {
       toast.success("Client assigned");
       qc.invalidateQueries({ queryKey: ["clients-assignable"] });
       qc.invalidateQueries({ queryKey: ["clients"] });
+      qc.invalidateQueries({ queryKey: ["coach-access-record"] });
     } catch (e: any) { toast.error(e?.message ?? "Failed"); }
   };
 
@@ -85,6 +87,7 @@ function CoachDetailPage() {
       toast.success("Client unassigned");
       qc.invalidateQueries({ queryKey: ["clients-assignable"] });
       qc.invalidateQueries({ queryKey: ["clients"] });
+      qc.invalidateQueries({ queryKey: ["coach-access-record"] });
     } catch (e: any) { toast.error(e?.message ?? "Failed"); }
   };
 
@@ -94,6 +97,7 @@ function CoachDetailPage() {
       toast.success("Status updated");
       qc.invalidateQueries({ queryKey: ["coach", id] });
       qc.invalidateQueries({ queryKey: ["coaches"] });
+      qc.invalidateQueries({ queryKey: ["coach-access-record"] });
     } catch (e: any) { toast.error(e?.message ?? "Failed"); }
   };
 
@@ -213,6 +217,9 @@ function CoachDetailPage() {
               </SelectContent>
             </Select>
           </div>
+          <p className="mt-3 text-[13px] text-muted-foreground" data-coach-status-note>
+            Only Active can coach. Anything else takes their coach access away at once, and Active gives it back.
+          </p>
         </Card>
         <Card className="p-5">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Workload</h3>
@@ -272,6 +279,10 @@ function CoachDetailPage() {
             ))}
           </ul>
         </Card>
+      </div>
+
+      <div className="px-6 pb-8 md:px-8">
+        <CoachAccessRecord coachId={coach.id} userId={coach.user_id ?? null} />
       </div>
     </>
   );

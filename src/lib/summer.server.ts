@@ -686,7 +686,7 @@ export async function cleoAnswer(
   // Not strict: OpenAI's Responses API makes every field of a strict tool required, and the model then fills
   // the optional ones with placeholders (Nov 18 2026's benchmark: a calf raise card at "0.0001 lb, 1% of 1RM").
   const tools = Object.fromEntries(
-    Object.entries({ ...cleoReadTools({ db: supabase, tz, today: businessToday(), books: owner || finance }), ...cleoProgramTools({ db: supabase, today: businessToday() }), ...actionTools, ask_choice: askChoice }).map(([name, t]) => [name, { ...(t as any), strict: false }]),
+    Object.entries({ ...cleoReadTools({ db: supabase, tz, today: businessToday(), books: owner || finance, caller: userId }), ...cleoProgramTools({ db: supabase, today: businessToday() }), ...actionTools, ask_choice: askChoice }).map(([name, t]) => [name, { ...(t as any), strict: false }]),
   );
 
   // Earlier attachments come back as words (what was read from them); the

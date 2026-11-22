@@ -15,12 +15,20 @@ function fakeDb(opts: {
     from(table: string) {
       const q: any = {
         _filters: {} as Record<string, any>,
-        select() { return q; },
+        select() {
+          return q;
+        },
         in(_c: string, vals: string[]) {
           q._in = vals;
-          return Promise.resolve({ data: opts.docs.filter((d) => vals.includes(d.slug)), error: null });
+          return Promise.resolve({
+            data: opts.docs.filter((d) => vals.includes(d.slug)),
+            error: null,
+          });
         },
-        eq(col: string, v: any) { q._filters[col] = v; return q; },
+        eq(col: string, v: any) {
+          q._filters[col] = v;
+          return q;
+        },
         maybeSingle: async () => {
           if (table === "clients") return { data: { id: "client-1" }, error: null };
           if (table === "legal_document_versions")
@@ -51,7 +59,10 @@ describe("recordSignupAcceptances", () => {
         { id: "v-priv", status: "published", body: "Privacy text" },
       ],
     });
-    const r = await recordSignupAcceptances(db, { userId: "u-1", contextRef: "membership_application:a-1" });
+    const r = await recordSignupAcceptances(db, {
+      userId: "u-1",
+      contextRef: "membership_application:a-1",
+    });
     expect(r).toEqual({ recorded: ["terms-of-service", "privacy-policy"], missing: [] });
     expect(db.inserted).toHaveLength(2);
     const row = db.inserted[0].row;

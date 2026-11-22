@@ -17,7 +17,12 @@ export type SignupAcceptanceResult = {
 
 export async function recordSignupAcceptances(
   sb: any,
-  input: { userId: string; contextRef?: string | null; ip?: string | null; userAgent?: string | null },
+  input: {
+    userId: string;
+    contextRef?: string | null;
+    ip?: string | null;
+    userAgent?: string | null;
+  },
 ): Promise<SignupAcceptanceResult> {
   const recorded: SignupLegalSlug[] = [];
   const missing: SignupLegalSlug[] = [];
@@ -28,7 +33,11 @@ export async function recordSignupAcceptances(
     .in("slug", SIGNUP_LEGAL_SLUGS as unknown as string[]);
   if (error) throw new Error(error.message);
 
-  const { data: clientRow } = await sb.from("clients").select("id").eq("user_id", input.userId).maybeSingle();
+  const { data: clientRow } = await sb
+    .from("clients")
+    .select("id")
+    .eq("user_id", input.userId)
+    .maybeSingle();
 
   for (const slug of SIGNUP_LEGAL_SLUGS) {
     const doc = (docs ?? []).find((d: any) => d.slug === slug && !d.archived);

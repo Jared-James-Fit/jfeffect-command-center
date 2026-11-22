@@ -2,6 +2,20 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+/**
+ * May this login accept this coach invite? Only a pending, unarchived invite,
+ * and only one sent to this login (or to nobody yet). Everything else is the
+ * admin's call: setting the coach Active again, or sending a new invite.
+ */
+export function coachInviteAcceptable(
+  coach: { status?: string | null; archived?: boolean | null; user_id?: string | null },
+  userId: string,
+): boolean {
+  if (coach.archived) return false;
+  if (coach.status !== "Pending Invite") return false;
+  return !coach.user_id || coach.user_id === userId;
+}
+
 async function assertAdmin(supabase: any, userId: string) {
   const { data, error } = await supabase
     .from("user_roles").select("role").eq("user_id", userId).eq("role", "admin").maybeSingle();
@@ -97,9 +111,14 @@ export const acceptCoachInvite = createServerFn({ method: "POST" })
     if (!email) throw new Error("Missing email on auth user");
 
     const { data: coach, error: cErr } = await supabaseAdmin
-      .from("coaches").select("id, email, user_id").eq("id", coachId).single();
+      .from("coaches").select("id, email, user_id, status, archived").eq("id", coachId).single();
     if (cErr) throw new Error(cErr.message);
     if (coach.email.toLowerCase() !== email) throw new Error("Coach email mismatch");
+    // Only a pending invite is accepted. The invite's coach_id stays in the login's metadata
+    // for good, so without this a suspended or archived coach could call this again and put
+    // themselves back to Active with the coach role. Access comes back only when the admin
+    // sets the coach Active or sends a new invite (coaches_access_follows_status).
+    if (!coachInviteAcceptable(coach, userId)) return { ok: false, reason: "not_pending" as const };
 
     // Link + activate
     await supabaseAdmin.from("coaches").update({
