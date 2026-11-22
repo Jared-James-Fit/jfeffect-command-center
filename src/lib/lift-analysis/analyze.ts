@@ -29,7 +29,7 @@ import {
 import type { TrackPoint } from "@/lib/lift-analysis/track";
 import { velocityVerdict, type VelocityVerdict } from "@/lib/lift-analysis/verdict";
 
-export const ENGINE_VERSION = "bar-path/3";
+export const ENGINE_VERSION = "bar-path/4";
 
 export type SetMetrics = {
   reps: number;
@@ -115,6 +115,7 @@ export type AnalyzeOptions = {
   dirHint?: "lower_first" | "lift_first";
   /** Per-frame camera shift (px), when it was measured. */
   shake?: number[];
+
   /** The plate's size from its outer edge in still frames (rim-outer.ts), when measured. */
   size?: RimSizeInput | null;
   keys?: TrackKey[];

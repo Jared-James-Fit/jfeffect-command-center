@@ -199,6 +199,8 @@ import {
 } from "@/lib/log-as-override";
 import { Timer, Heart, Activity, ChevronRight } from "lucide-react";
 import { LIFT_ANALYSIS_CHANGED } from "@/lib/lift-analysis/store";
+import { useVelocityModel } from "@/lib/lift-analysis/queries";
+import { predictVelocity } from "@/lib/lift-analysis/velocity-model";
 import { DayCoachNotes, ScheduledDayLine, loggerMeta, loggerTitle } from "@/components/workout-day/logger-top";
 import { exerciseNoteForAthlete } from "@/lib/workouts/coach-notes";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
@@ -6342,6 +6344,9 @@ function SetRow({
   serverVelocityRef.current = serverVelocityText;
   const velocityFromVideo = (existing as any)?.velocity_source === "video";
   const [velocity, setVelocity] = useState(serverVelocityText);
+  // what this set is expected to move at, from the athlete's own measured sets (velocity-model.ts):
+  // shown only in the empty box, as "≈0.42", never as a value
+  const velocityModel = useVelocityModel(clientId, exerciseId, showVelocity);
   const velocityRef = useRef(velocity);
   velocityRef.current = velocity;
   const velocityFocusedRef = useRef(false);
@@ -6428,6 +6433,18 @@ function SetRow({
   })();
   // Initialize reps/RPE from actual (if logged) OR fall back to prescribed (Quick Log).
   const [reps, setReps] = useState(existing?.actual_reps?.toString() ?? prescribedRepsStr);
+  // the set's expected bar speed: its weight (typed, else what a tap logs it at) and reps against the
+  // athlete's own line, moved by how today's measured sets ran; null when the line can't speak for it
+  const expectedVelocity = useMemo(() => {
+    if (!showVelocity || !velocityModel?.model.ok || loadType !== "external") return null;
+    const typed = Number(load);
+    const w = typed > 0 ? typed : Number(suggestedWeight ?? 0);
+    const inKg = typed > 0 ? loadUnit === "kg" : unit === "kg";
+    const kg = inKg ? w : w * 0.45359237;
+    const r = Number(reps);
+    if (!(kg > 0) || !(r >= 1)) return null;
+    return predictVelocity(velocityModel.model, kg, r, velocityModel.today);
+  }, [showVelocity, velocityModel, loadType, load, loadUnit, unit, suggestedWeight, reps]);
   const [rpe, setRpe] = useState(existing?.actual_rpe_num != null ? String(existing.actual_rpe_num) : (existing?.actual_rpe ?? prescribedRpeStr));
   // Track whether the client has manually edited reps/RPE away from the prescription.
   const [repsEdited, setRepsEdited] = useState(Boolean(existing?.actual_reps));
@@ -7688,14 +7705,21 @@ function SetRow({
         <div className="relative min-w-0">
           <Input
             value={velocity}
+            data-velocity-expected={expectedVelocity ? expectedVelocity.v.toFixed(2) : undefined}
             onChange={(e) => setVelocity(e.target.value.replace(/[^0-9.]/g, "").slice(0, 5))}
             onFocus={() => { velocityFocusedRef.current = true; }}
             onBlur={() => { velocityFocusedRef.current = false; flushSaveAfterEdit(); }}
             onKeyDown={onEnter}
             inputMode="decimal"
-            placeholder="m/s"
-            aria-label={`Set ${setIndex} average concentric velocity in metres per second${velocityFromVideo && !velocityChanged(velocity) ? ", read from the set video" : ""}`}
-            title={velocityFromVideo && !velocityChanged(velocity) ? "Read from the set video (average of every rep)" : undefined}
+            placeholder={expectedVelocity ? `≈${expectedVelocity.v.toFixed(2)}` : "m/s"}
+            aria-label={`Set ${setIndex} average concentric velocity in metres per second${velocityFromVideo && !velocityChanged(velocity) ? ", read from the set video" : expectedVelocity ? `, expected about ${expectedVelocity.v.toFixed(2)}` : ""}`}
+            title={
+              velocityFromVideo && !velocityChanged(velocity)
+                ? "Read from the set video (average of every rep)"
+                : expectedVelocity
+                  ? `Expected ${expectedVelocity.lo.toFixed(2)}–${expectedVelocity.hi.toFixed(2)} m/s, from ${expectedVelocity.sets} of your measured sets${expectedVelocity.today ? " and today's" : ""}. An estimate, not a measurement.`
+                  : undefined
+            }
             disabled={readonly}
             data-velocity-source={velocityFromVideo && !velocityChanged(velocity) ? "video" : undefined}
             className={cn(

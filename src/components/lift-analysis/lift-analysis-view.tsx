@@ -69,14 +69,20 @@ import {
   withinNoise,
 } from "@/lib/lift-analysis/format";
 import type { Metric } from "@/lib/lift-analysis/kinematics";
-import { compareToProfile, fitProfile } from "@/lib/lift-analysis/profile";
+import type { LvPoint, LvProfile } from "@/lib/lift-analysis/profile";
+import {
+  compareToExpected,
+  fitLoadVelocity,
+  predictVelocity,
+  whyNoPrediction,
+} from "@/lib/lift-analysis/velocity-model";
 import {
   deleteAnalysis,
   isRead,
   preselectOf,
   saveAnalysis,
   type Suggestion,
-  useLoadVelocityPoints,
+  useVelocityHistory,
   useSetForVideo,
   useSetVideoAnalyses,
 } from "@/lib/lift-analysis/queries";
@@ -1048,7 +1054,7 @@ function Results({
       <MoreDetail>
         <Consistency analysis={a} />
         {clientId && exerciseId && calibrated && (
-          <Compare setVideoId={setVideoId} clientId={clientId} exerciseId={exerciseId} />
+          <Compare setVideoId={setVideoId} clientId={clientId} exerciseId={exerciseId} analysis={a} />
         )}
         <HowMeasured analysis={a} />
       </MoreDetail>
@@ -1273,48 +1279,74 @@ function Compare({
   setVideoId,
   clientId,
   exerciseId,
+  analysis,
 }: {
   setVideoId: string;
   clientId: string;
   exerciseId: string;
+  analysis: LiftAnalysis;
 }) {
-  const { data: points } = useLoadVelocityPoints(clientId, exerciseId);
+  // one definition throughout: each measured set's average speed (the logger's), the athlete's own line
+  const { data: rows } = useVelocityHistory(clientId, exerciseId);
+  const { data: set } = useSetForVideo(setVideoId);
   const { unit } = useClientWeightUnit(clientId);
-  const today = points?.find((p) => p.id === setVideoId) ?? null;
-  const others = useMemo(
-    () => (points ?? []).filter((p) => p.id !== setVideoId),
-    [points, setVideoId],
-  );
-  const profile = useMemo(() => fitProfile(others), [others]);
-  if (!points || points.length < 2 || !today) return null;
+  const others = useMemo(() => (rows ?? []).filter((r) => r.id !== setVideoId), [rows, setVideoId]);
+  const model = useMemo(() => fitLoadVelocity(others.map((r) => r.sample)), [others]);
+  if (!rows) return null;
   const fmtLoad = (kg: number) =>
     unit === "lb" ? `${Math.round(kg * 2.20462)} lb` : `${Math.round(kg * 2) / 2} kg`;
-  const cmp = profile ? compareToProfile(profile, today.kg, today.v, today.u ?? 0) : null;
-  // the closest earlier set at the same weight (±2.5 %), when there's no line yet
-  const same = others
-    .filter((p) => Math.abs(p.kg / today.kg - 1) <= 0.025)
-    .sort((x, y) => (x.at < y.at ? 1 : -1))[0];
+  const kg = set?.actual_load_kg != null ? Number(set.actual_load_kg) : null;
+  const reps = set?.actual_reps ?? analysis.reps.length;
+  const measured = analysis.velocity?.accepted ? analysis.velocity.value : null;
+  const pred = kg && kg > 0 && !set?.is_bodyweight ? predictVelocity(model, kg, reps) : null;
   let line: string;
-  if (cmp) {
-    const pct = Math.round(Math.abs(cmp.diff) * 100);
-    line =
-      cmp.call === "usual"
-        ? `At ${fmtLoad(today.kg)} the bar moved about as usual for you (${cmp.expected.toFixed(2)} m/s expected).`
-        : `At ${fmtLoad(today.kg)} the bar moved ${pct}% ${cmp.call} than usual for you (${cmp.expected.toFixed(2)} m/s expected).`;
-  } else if (same) {
-    const d = today.v / same.v - 1;
-    line = `Last time at ${fmtLoad(same.kg)}: ${same.v.toFixed(2)} m/s (${new Date(same.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}). Today ${Math.abs(d) < 0.06 ? "about the same" : `${Math.round(Math.abs(d) * 100)}% ${d > 0 ? "faster" : "slower"}`}.`;
+  if (pred) {
+    const range = `${pred.lo.toFixed(2)}–${pred.hi.toFixed(2)}`;
+    const basis = `from ${pred.sets} of your measured sets`;
+    if (measured != null) {
+      const call = compareToExpected(measured, pred);
+      line = `At ${fmtLoad(kg!)} you were expected to move ${pred.v.toFixed(2)} m/s (${range}, ${basis}). Measured ${measured.toFixed(2)}: ${
+        call === "as_expected" ? "about as expected" : call === "faster" ? "faster than expected" : "slower than expected"
+      }.`;
+    } else {
+      line = `At ${fmtLoad(kg!)} you're expected to move ${pred.v.toFixed(2)} m/s (${range}, ${basis}). This video's average wasn't measured closely enough to compare.`;
+    }
   } else {
-    line = `${others.length} other ${others.length === 1 ? "set" : "sets"} analysed. A line of your speed by load shows once there are 3 at weights 15% or more apart.`;
+    line = `No expected speed yet. ${whyNoPrediction(model)}`;
   }
+  const points: LvPoint[] = (rows ?? []).map((r) => ({
+    id: r.id,
+    kg: r.sample.loadKg,
+    v: r.sample.mcv,
+    tier: "measured",
+    at: r.sample.at,
+  }));
+  const profile: LvProfile | null =
+    model.ok && model.kind === "line"
+      ? {
+          slope: model.b,
+          intercept: model.a - model.b * model.meanLoad,
+          r2: 1,
+          n: model.n,
+          minKg: model.loadRange[0],
+          maxKg: model.loadRange[1],
+        }
+      : null;
   return (
     <section className="rounded-2xl border border-border p-3" data-load-velocity>
-      <h3 className="text-[15px] font-semibold">Compared with your other sets</h3>
-      <p className="mt-1 text-sm">{line}</p>
-      <LoadVelocityChart points={points} profile={profile} todayId={setVideoId} unit={unit} />
-      <p className="text-[11px] text-muted-foreground">
-        Fastest rep of each analysed set by load. Today ringed and filled.
+      <h3 className="text-[15px] font-semibold">Expected and measured</h3>
+      <p className="mt-1 text-sm" data-expected-velocity={pred ? pred.v.toFixed(2) : undefined}>
+        {line}
       </p>
+      {points.length >= 2 && (
+        <>
+          <LoadVelocityChart points={points} profile={profile} todayId={setVideoId} unit={unit} />
+          <p className="text-[11px] text-muted-foreground">
+            Each measured set's average speed by load. This set filled. Expected speeds are worked
+            out from your own sets only, never a chart for everyone.
+          </p>
+        </>
+      )}
     </section>
   );
 }

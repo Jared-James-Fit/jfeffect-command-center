@@ -17,6 +17,8 @@
  * The work yields to the page every few milliseconds, so logging carries on
  * smoothly while it runs, and stops the moment it's cancelled.
  */
+import { autoReadCheck } from "@/lib/lift-analysis/auto-check";
+import type { GuideLift } from "@/lib/lift-analysis/exercise";
 import { analyzeTrack, type LiftAnalysis } from "@/lib/lift-analysis/analyze";
 import type { RunProgress, RunStage } from "@/lib/lift-analysis/progress";
 import type { PlateSize } from "@/lib/lift-analysis/calibrate";
@@ -109,6 +111,8 @@ export type RunInput = {
   detectOnly?: boolean;
   plate?: PlateSize & { confirmed?: boolean };
   dirHint?: "lower_first" | "lift_first";
+  /** Which lift (the exercise's name), for checking a read made on its own (auto-check.ts). */
+  lift?: GuideLift;
   signal?: AbortSignal;
   onProgress?: (p: RunProgress) => void;
 };
@@ -285,7 +289,7 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
     if (seed.kind === "auto" || seed.kind === "proposal") {
       if (!proposal!.key || proposal!.confidence === "low")
         return fail(proposal!.why === "ambiguous" ? "ambiguous" : "no_plate");
-      if (seed.kind === "auto" && proposal!.confidence !== "high") return fail("needs_confirm");
+      // a medium proposal is read too, on its own only when the read proves it was the plate
       keys = [proposal!.key];
     } else if (seed.kind === "tap") {
       const f = await frameNear(seed.t);
@@ -451,6 +455,12 @@ export async function analyzeVideo(input: RunInput): Promise<RunResult> {
     report("reading", 1);
     if (rimNeverMeasured(analysis, main.source === "auto" ? "auto" : "tap"))
       return fail("no_plate");
+    // on its own: kept only when what it measured is a lift (a ring it can't vouch for waits for a look)
+    if (
+      seed.kind === "auto" &&
+      !autoReadCheck(analysis, input.lift ?? "other", proposal?.confidence ?? "high").ok
+    )
+      return fail("needs_confirm");
     return { ok: true, analysis, proposal: proposalOut, clip };
   } catch (e) {
     if (e instanceof Cancelled || input.signal?.aborted)

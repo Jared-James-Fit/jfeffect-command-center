@@ -45,6 +45,12 @@ export type GymScene = {
   yawDeg?: number;
   pitchDeg?: number;
   /**
+   * How thick the plates on the near sleeve are (mm, the whole stack): a
+   * turned phone sees their edge as a band beside the face, as a real plate
+   * does (cast iron ~40 mm a plate, bumpers ~65). Default 90.
+   */
+  stackMm?: number;
+  /**
    * The far end's plate in view (the phone not straight on): offset from the
    * near plate by (dx, dy) of its radius, `scale` of its size, moving by
    * `scale` of the bar's travel. `true`: a mild offset.
@@ -198,6 +204,14 @@ class Canvas {
 const shade = (c: RGB, k: number): RGB => [c[0] * k, c[1] * k, c[2] * k];
 
 /** The plate stack's face at (u, v) from its centre, in units of its radius (u right, v down). */
+/** The plates' rolled edge seen from the side: darker than the face, a sheen along the top. */
+function plateEdge(style: PlateStyle, v: number, light: number): RGB {
+  const k = light * (1 + 0.25 * -v);
+  if (style === "comp") return shade([110, 22, 26], k);
+  if (style === "bumper") return shade([24, 24, 26], k);
+  return shade([30, 30, 32], k * (1 + 0.15 * Math.cos(v * 9)));
+}
+
 function plateColor(style: PlateStyle, u: number, v: number, spin: number, light: number): RGB {
   const d = Math.hypot(u, v);
   const th = Math.atan2(v, u) + spin;
@@ -517,7 +531,10 @@ export async function renderGymClip(scene: GymScene, file: string): Promise<Rend
       );
     }
     // the plate, blurred over the exposure: coverage and colour averaged over sub-moments
-    drawPlate(fr, posAt, toPx, t, exposure, R, yawQ, pitchQ, style, light, sx, sy);
+    // the stack's edge: a turned phone sees it beside the face, away from the lifter
+    const band =
+      ((scene.stackMm ?? 90) / mmPerPx) * Math.sin(((scene.yawDeg ?? 0) * Math.PI) / 180);
+    drawPlate(fr, posAt, toPx, t, exposure, R, yawQ, pitchQ, style, light, sx, sy, band);
     if (scene.bottle) {
       // a bottle near the camera, in front of the plate's lower part when the bar is low
       const [px0] = toPx(0, 0);
@@ -581,6 +598,7 @@ function drawPlate(
   light: number,
   sx: number,
   sy: number,
+  band = 0,
 ) {
   const N = 6;
   const subs: [number, number][] = [];
@@ -592,8 +610,8 @@ function drawPlate(
   }
   const xs = subs.map((p) => p[0]);
   const ys = subs.map((p) => p[1]);
-  const x0 = Math.max(0, Math.floor(Math.min(...xs) - R - 2));
-  const x1 = Math.min(fr.w - 1, Math.ceil(Math.max(...xs) + R + 2));
+  const x0 = Math.max(0, Math.floor(Math.min(...xs) - R - 2 - Math.max(0, -band)));
+  const x1 = Math.min(fr.w - 1, Math.ceil(Math.max(...xs) + R + 2 + Math.max(0, band)));
   const y0 = Math.max(0, Math.floor(Math.min(...ys) - R - 2));
   const y1 = Math.min(fr.h - 1, Math.ceil(Math.max(...ys) + R + 2));
   // the bar spins a little as it moves (lettering turns)
@@ -609,10 +627,18 @@ function drawPlate(
       for (const [px, py] of subs)
         for (let qy = 0; qy < 2; qy++)
           for (let qx = 0; qx < 2; qx++) {
-            const u = (x + 0.25 + 0.5 * qx - px) / a;
+            const dxp = x + 0.25 + 0.5 * qx - px;
+            const u = dxp / a;
             const v = (y + 0.25 + 0.5 * qy - py) / b;
-            if (u * u + v * v > 1) continue;
-            const c = plateColor(style, u, v, spin, light);
+            let c: RGB;
+            if (u * u + v * v <= 1) c = plateColor(style, u, v, spin, light);
+            else if (band) {
+              // the edge of the stack: the face swept back by the stack's depth
+              const sh = Math.max(0, Math.min(1, dxp / band)) * band;
+              const ue = (dxp - sh) / a;
+              if (ue * ue + v * v > 1) continue;
+              c = plateEdge(style, v, light);
+            } else continue;
             cov++;
             cr += c[0];
             cg += c[1];

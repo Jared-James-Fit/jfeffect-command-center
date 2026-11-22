@@ -83,6 +83,7 @@ const server = http.createServer((req, res) => {
         `/${sc.name}.mp4`,
         {
           dirHint: sc.dir,
+          lift: sc.lift,
           plate: { mm: sc.plateMm, rel: 0.005, confirmed: true },
           seed: { kind: mode === "confirm" ? "proposal" : "auto" },
         },

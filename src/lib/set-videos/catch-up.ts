@@ -155,8 +155,9 @@ export async function findCatchUpClips(uid: string): Promise<CatchUpClip[]> {
     .eq("uploaded_by", uid)
     .is("deleted_at", null)
     .is("feed_path", null)
-    // a warm-up's clip (set 0) is never in the film
+    // a warm-up's clip (set 0) and a video sent in the coach chat are never in the film
     .gt("set_index", 0)
+    .eq("origin", "set")
     .gt("size_bytes", FILM_CLIP_MAX_BYTES)
     .gte("created_at", since);
   if (until) q = q.lte("created_at", until);

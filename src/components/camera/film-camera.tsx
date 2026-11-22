@@ -91,6 +91,7 @@ export function FilmCamera({
   maxSeconds,
   title,
   detail,
+  tip,
 }: {
   onClose: () => void;
   onClip: (file: File) => void;
@@ -102,6 +103,8 @@ export function FilmCamera({
   title?: string;
   /** The set to lift, "140 kg × 3 @ RPE 7": big enough to read from the bench, and kept on screen while it films. */
   detail?: string;
+  /** One line on how to stand the phone (a barbell lift read for bar speed), until it films. */
+  tip?: string;
 }) {
   const [settings, setSettings] = useState<FilmSettings>(() => readFilmSettings());
   const [lensId, setLensId] = useState<string | null>(null);
@@ -610,6 +613,11 @@ export function FilmCamera({
             data-film-detail
           >
             {detail}
+          </p>
+        )}
+        {tip && !recording && (
+          <p className="mx-auto mt-1 max-w-[20rem] text-center text-[12px] leading-snug text-white/75 [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]" data-film-tip>
+            {tip}
           </p>
         )}
       </div>

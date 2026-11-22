@@ -21,7 +21,7 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 import { analyzeVideo } from "@/lib/lift-analysis/run";
-import { analysableExercise, repDirection } from "@/lib/lift-analysis/exercise";
+import { analysableExercise, guideLift, repDirection } from "@/lib/lift-analysis/exercise";
 import {
   hasAnalysis,
   proposalSuggestions,
@@ -78,6 +78,7 @@ async function pump() {
         const res = await analyzeVideo({
           source: job.file,
           dirHint: repDirection(job.exerciseName) ?? undefined,
+          lift: guideLift(job.exerciseName),
           onProgress: (p) => setRunning(job.setVideoId, p),
         });
         if (res.ok) {

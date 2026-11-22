@@ -106,7 +106,9 @@ export default function SetVideoSheet({
       // let go of on purpose: stop offering it for the phone
       dismissPhoneCopyOffer(jobIdForSetVideo(v.id, unsaved));
       if (user?.id) forgetFilmed(user.id, { setVideoIds: [v.id] });
-      toast.success("Video removed from the set and the chat");
+      toast.success(
+        v.origin === "chat" ? "Taken off the set. It's still in the chat." : "Video removed from the set and the chat",
+      );
       if (videos.length <= 1 && !jobs.length) onOpenChange(false);
     } catch (e) {
       toast.error(e instanceof Error && e.message ? e.message : "Couldn't remove it. Try again.");
@@ -300,7 +302,11 @@ export default function SetVideoSheet({
                             onClick={() => void remove(v)}
                             disabled={removing === v.id}
                           >
-                            {removing === v.id ? "Removing…" : "Remove from set and chat"}
+                            {removing === v.id
+                              ? "Removing…"
+                              : v.origin === "chat"
+                                ? "Take off this set"
+                                : "Remove from set and chat"}
                           </Button>
                         </div>
                       )
@@ -359,6 +365,7 @@ export default function SetVideoSheet({
                     video={v}
                     dayId={dayId}
                     clientId={clientId}
+                    chat={v.origin === "chat"}
                     onCancel={() => setMoving(null)}
                     onMoved={() => {
                       setMoving(null);

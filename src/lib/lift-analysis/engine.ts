@@ -7,6 +7,8 @@
  * steps while decoding, without holding every frame.
  */
 import { analyzeTrack, type LiftAnalysis } from "@/lib/lift-analysis/analyze";
+import { autoReadCheck } from "@/lib/lift-analysis/auto-check";
+import type { GuideLift } from "@/lib/lift-analysis/exercise";
 import type { PlateSize } from "@/lib/lift-analysis/calibrate";
 import {
   calibrationTimes,
@@ -92,8 +94,7 @@ export function resolveKeys(
     proposal = proposePlate(samples);
     if (!proposal.key || proposal.confidence === "low")
       return { keys: [], proposal, why: proposal.why === "ambiguous" ? "ambiguous" : "no_plate" };
-    if (seed.kind === "auto" && proposal.confidence !== "high")
-      return { keys: [], proposal, why: "needs_confirm" };
+    // a medium proposal is read too: kept on its own only when the read proves it (runEngine)
     keys = [proposal.key];
   } else if (seed.kind === "tap") {
     const f = frameAt(frames, seed.t);
@@ -170,6 +171,7 @@ export function runEngine(
     corrections?: { t: number; x: number; y: number }[];
     plate?: PlateSize & { confirmed?: boolean };
     dirHint?: "lower_first" | "lift_first";
+    lift?: GuideLift;
   } = {},
 ): EngineResult {
   const seed = opts.seed ?? { kind: "auto" };
@@ -208,6 +210,11 @@ export function runEngine(
   });
   if (rimNeverMeasured(analysis, keys[0].source === "auto" ? "auto" : "tap"))
     return { ok: false, why: "no_plate", proposal };
+  if (
+    seed.kind === "auto" &&
+    !autoReadCheck(analysis, opts.lift ?? "other", proposal?.confidence ?? "high").ok
+  )
+    return { ok: false, why: "needs_confirm", proposal };
   return { ok: true, analysis, proposal };
 }
 

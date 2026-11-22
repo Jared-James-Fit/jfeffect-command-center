@@ -66,6 +66,7 @@ export function SetVideoMovePicker({
   clientId,
   onCancel,
   onMoved,
+  chat = false,
 }: {
   video: SetVideo;
   dayId: string;
@@ -73,6 +74,8 @@ export function SetVideoMovePicker({
   onCancel: () => void;
   /** It left this set. */
   onMoved: () => void;
+  /** A video sent in the coach chat, put on its set: working sets only, the chat's own words kept. */
+  chat?: boolean;
 }) {
   const qc = useQueryClient();
   const { data: exercises, isLoading, isError } = useMoveChoices(dayId, clientId);
@@ -177,9 +180,12 @@ export function SetVideoMovePicker({
     <div className="rounded-xl border border-border p-3" data-set-video-move>
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold">Move to which set?</p>
+          <p className="text-sm font-semibold">{chat ? "Which set is this?" : "Move to which set?"}</p>
           <p className="text-xs text-muted-foreground">
-            W is a warm-up. It moves in your coach chat too.{waitsOk ? "" : " Only sets already logged, since it's an older clip."}
+            {chat
+              ? "Its bar speed goes on that set."
+              : "W is a warm-up. It moves in your coach chat too."}
+            {waitsOk ? "" : " Only sets already logged, since it's an older clip."}
           </p>
         </div>
         <Button size="sm" variant="ghost" className="h-10 shrink-0" onClick={onCancel} disabled={!!busy}>
@@ -199,7 +205,7 @@ export function SetVideoMovePicker({
             <div key={ex.rowId} className="flex flex-wrap items-center gap-x-3 gap-y-1.5" data-move-exercise={ex.name}>
               <span className="min-w-[9rem] flex-1 break-words text-sm leading-snug">{ex.name}</span>
               <div className="ml-auto flex flex-wrap justify-end gap-1.5">
-                {ex.warmups.map((w, i) => {
+                {(chat ? [] : ex.warmups).map((w, i) => {
                   const here = ex.rowId === video.row_id && video.set_index === 0 && (video.warmup_id ?? null) === w.id;
                   const spot = spotOfWarmup(w);
                   const key = `${ex.rowId}:0:${w.id ?? ""}`;

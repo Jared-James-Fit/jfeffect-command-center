@@ -3,11 +3,17 @@
  * person's own login (RLS: the athlete, their coach, admins), written only
  * through set_video_analysis_save / _delete.
  */
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { LiftAnalysis } from "@/lib/lift-analysis/analyze";
 import type { LvPoint } from "@/lib/lift-analysis/profile";
+import {
+  fitLoadVelocity,
+  splitToday,
+  type VelocityModel,
+  type VelocitySample,
+} from "@/lib/lift-analysis/velocity-model";
 import type { LoggedSet } from "@/lib/lift-analysis/verdict";
 import { announceChanged, LIFT_ANALYSIS_CHANGED } from "@/lib/lift-analysis/store";
 import type { Suggestion } from "@/lib/lift-analysis/suggestions";
@@ -236,4 +242,68 @@ export function useVideoSpeedsByResult(
       return out;
     },
   });
+}
+
+/**
+ * The athlete's measured set speeds for one exercise (accepted video reads:
+ * the set-average MCV the logger holds), as the velocity model's samples
+ * (velocity-model.ts). Sets from today come back apart: they move today's
+ * expectation instead of the line itself.
+ */
+export function useVelocityHistory(
+  clientId: string | null | undefined,
+  exerciseId: string | null | undefined,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["lift-velocity-history", clientId, exerciseId],
+    enabled: enabled && !!clientId && !!exerciseId,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<{ id: string; sample: VelocitySample }[]> => {
+      const { data, error } = await db
+        .from("pl_set_video_analyses")
+        .select(
+          "set_video_id, set_mcv, reps, created_at, sv:set_video_id(day_id), logged:result_id(actual_load_kg, actual_reps, completed_at, is_bodyweight)",
+        )
+        .eq("client_id", clientId)
+        .eq("exercise_id", exerciseId)
+        .eq("velocity_accepted", true)
+        .not("set_mcv", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(300);
+      if (error) throw error;
+      const out: { id: string; sample: VelocitySample }[] = [];
+      for (const r of (data ?? []) as any[]) {
+        const kg = Number(r.logged?.actual_load_kg);
+        const reps = Number(r.logged?.actual_reps ?? r.reps);
+        if (!(kg > 0) || r.logged?.is_bodyweight || !(reps >= 1)) continue;
+        const at = r.logged?.completed_at ?? r.created_at;
+        out.push({
+          id: r.set_video_id,
+          sample: {
+            loadKg: kg,
+            reps,
+            mcv: Number(r.set_mcv),
+            at,
+            session: r.sv?.day_id ?? at.slice(0, 10),
+          },
+        });
+      }
+      return out;
+    },
+  });
+}
+
+/** The athlete's own load–velocity model for one exercise, and today's measured sets beside it. */
+export function useVelocityModel(
+  clientId: string | null | undefined,
+  exerciseId: string | null | undefined,
+  enabled = true,
+): { model: VelocityModel; today: VelocitySample[] } | null {
+  const { data } = useVelocityHistory(clientId, exerciseId, enabled);
+  return useMemo(() => {
+    if (!data) return null;
+    const { history, today } = splitToday(data);
+    return { model: fitLoadVelocity(history), today };
+  }, [data]);
 }
