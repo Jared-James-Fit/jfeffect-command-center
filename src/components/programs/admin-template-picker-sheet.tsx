@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, Search, Check } from "lucide-react";
+import { Search, Check } from "lucide-react";
 import { deriveFacets, facetChips, type FacetSource } from "@/lib/programs/facets";
 import { rankRecommendations, type GoalsSetupInput } from "@/lib/programs/recommend";
 
@@ -128,7 +128,6 @@ export function AdminTemplatePickerSheet({
           {!ql && recommended.length > 0 && (
             <section>
               <div className="flex items-center gap-1.5 px-1 mb-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
                 <h3 className="text-xs font-semibold uppercase tracking-wide">
                   Recommended for {clientName ?? "this client"}
                 </h3>

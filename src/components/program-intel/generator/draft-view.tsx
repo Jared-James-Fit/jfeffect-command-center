@@ -180,7 +180,8 @@ export function DraftView({
   busy: boolean;
   onAssign: (startDate: string, acknowledge: boolean, allowOverlap: boolean) => void;
   onDiscard: () => void;
-  onInspect: () => void;
+  /** The run's inspector: the admin's only (undefined hides it and the model name). */
+  onInspect?: () => void;
   /** Where the next program goes: its planned start, when the current one ends, and the deadline on file. */
   plan?: { start: string; currentEnd: string | null; deadline: { name: string; date: string } | null };
 }) {
@@ -209,9 +210,9 @@ export function DraftView({
         <div className="min-w-0">
           <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{job.status === "assigned" ? "Assigned" : job.status === "discarded" ? "Discarded draft" : "Draft · hidden from the client"}</div>
           <div className="text-base font-bold leading-tight">{program.program_name}</div>
-          <div className="text-[11px] text-muted-foreground">{BRAIN_LABEL[job.brain]} · {job.created_at.slice(0, 10)}{job.model ? ` · ${job.model}` : ""}{job.result?.strategySource === "coach" ? " · from your approved strategy" : " · recommended strategy auto-accepted"}</div>
+          <div className="text-[11px] text-muted-foreground">{BRAIN_LABEL[job.brain]} · {job.created_at.slice(0, 10)}{onInspect && job.model ? ` · ${job.model}` : ""}{job.result?.strategySource === "coach" ? " · from your approved strategy" : " · recommended strategy auto-accepted"}</div>
         </div>
-        <Button size="sm" variant="ghost" className="h-8 shrink-0 px-2 text-[11px]" onClick={onInspect} data-testid="gen-inspect"><FileSearch className="mr-1 h-3.5 w-3.5" /> Context</Button>
+        {onInspect && <Button size="sm" variant="ghost" className="h-8 shrink-0 px-2 text-[11px]" onClick={onInspect} data-testid="gen-inspect"><FileSearch className="mr-1 h-3.5 w-3.5" /> Context</Button>}
       </div>
       {audit && <Scorecard audit={audit} />}
       {unmatched.length > 0 && (

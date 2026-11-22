@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, Plus, RotateCcw, Save, Search, Sparkles, Trash2, X } from "lucide-react";
+import { Loader2, PenLine, Plus, RotateCcw, Save, Search, Trash2, X } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { Card } from "@/components/ui/card";
@@ -114,7 +114,7 @@ export function CoachVoicePage() {
             <Card className="space-y-2 p-4">
               <div>
                 <div className="text-sm font-bold">How I text</div>
-                <div className="text-xs text-muted-foreground">Plain rules, one per line. The AI follows these first.</div>
+                <div className="text-xs text-muted-foreground">Plain rules, one per line. Everything written for you follows these first.</div>
               </div>
               <Textarea
                 value={draft.rules}
@@ -410,7 +410,7 @@ function TryItCard({ profile, clients }: { profile: VoiceProfile; clients: Clien
           </SelectContent>
         </Select>
         <Button type="button" size="sm" onClick={() => run.mutate()} disabled={run.isPending}>
-          {run.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+          {run.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <PenLine className="mr-1.5 h-3.5 w-3.5" />}
           Write a sample
         </Button>
       </div>

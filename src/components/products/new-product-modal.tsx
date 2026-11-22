@@ -11,7 +11,7 @@ import {
   ChevronRight,
   GripVertical,
   Trash2,
-  Sparkles,
+  CheckCircle2,
   Info,
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -1469,7 +1469,7 @@ function SummaryContent({
       ) : (
         form.name && (
           <div className="mt-3 flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2 text-[11px] text-emerald-700">
-            <Sparkles className="h-3 w-3" /> Ready to create.
+            <CheckCircle2 className="h-3 w-3" /> Ready to create.
           </div>
         )
       )}

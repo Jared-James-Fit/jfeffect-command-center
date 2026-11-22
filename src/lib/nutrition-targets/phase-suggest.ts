@@ -74,7 +74,7 @@ export function phaseSourceText(
     case "request":
       return `The phase you picked when you sent ${who} Nutrition Update`;
     case "ai":
-      return `From ${who} Nutrition Update${when}, the phase the AI plan was written for`;
+      return `From ${who} Nutrition Update${when}, the phase its plan was written for`;
     case "form":
       return `From ${who} Nutrition Update${when}${s.detail ? `: goal "${s.detail}"` : ""}`;
     case "current":

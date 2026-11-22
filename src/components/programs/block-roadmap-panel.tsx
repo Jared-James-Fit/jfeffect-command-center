@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { formatDistanceToNow } from "date-fns";
-import { Eye, EyeOff, Loader2, Pencil, RotateCcw, Sparkles } from "lucide-react";
+import { Eye, EyeOff, Loader2, Milestone, Pencil, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -60,10 +60,10 @@ export function BlockRoadmapPanel({ blockId, bare }: { blockId: string; bare?: b
     try {
       const r = await rewriteFn({ data: { blockId } });
       if (r.outcome === "empty") toast.message("Nothing programmed in this block yet, so there's nothing to describe.");
-      else toast.success("Cleo rewrote this block's notes. Your own wording was kept.");
+      else toast.success("Rewrote this block's notes from the program. Your own wording was kept.");
       refresh();
     } catch (e: any) {
-      toast.error(e?.message ?? "Cleo couldn't rewrite these right now.");
+      toast.error(e?.message ?? "Couldn't rewrite these right now.");
     } finally {
       setRewriting(false);
     }
@@ -79,28 +79,28 @@ export function BlockRoadmapPanel({ blockId, bare }: { blockId: string; bare?: b
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <div className={bare ? "flex items-center gap-2 empty:hidden" : "flex items-center gap-2"}>
-            {!bare && <Sparkles className="h-4 w-4 text-primary" />}
+            {!bare && <Milestone className="h-4 w-4 text-muted-foreground" />}
             {!bare && <h3 className="text-sm font-bold">Athlete roadmap</h3>}
             {blockNote?.ai_style && STYLE_LABEL[blockNote.ai_style] && (
               <Badge variant="outline" className="text-[10px]">{STYLE_LABEL[blockNote.ai_style]}</Badge>
             )}
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            What the athlete reads about this block and each week. Cleo writes it from the program and updates it a few
+            What the athlete reads about this block and each week. It's written from the program and updated a few
             minutes after you change the program. Your edits always win and are never overwritten.
-            {generatedAt ? ` Cleo last updated it ${formatDistanceToNow(new Date(generatedAt), { addSuffix: true })}.` : ""}
+            {generatedAt ? ` Last updated ${formatDistanceToNow(new Date(generatedAt), { addSuffix: true })}.` : ""}
           </p>
         </div>
         <Button size="sm" variant="outline" className="h-8 gap-1" onClick={rewrite} disabled={rewriting}>
           {rewriting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-          {rewriting ? "Cleo is reading…" : "Rewrite with Cleo"}
+          {rewriting ? "Rewriting…" : "Rewrite from the program"}
         </Button>
       </div>
 
       {!blockNote?.ai_summary && !blockNote?.coach_summary && (
         <p className="rounded-md bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">
-          Cleo hasn't written this block's notes yet. They appear a few minutes after the program has exercises, or tap
-          Rewrite with Cleo.
+          This block's notes aren't written yet. They appear a few minutes after the program has exercises, or tap
+          Rewrite from the program.
         </p>
       )}
 
@@ -188,7 +188,7 @@ function NoteEditor({
         {shown.byCoach ? (
           <Badge variant="outline" className="h-4 px-1 text-[9px]">Your words</Badge>
         ) : shown.label || shown.summary ? (
-          <Badge variant="outline" className="h-4 gap-0.5 px-1 text-[9px]"><Sparkles className="h-2.5 w-2.5" />Cleo</Badge>
+          <Badge variant="outline" className="h-4 px-1 text-[9px]">Auto</Badge>
         ) : null}
         {hidden && <Badge variant="outline" className="h-4 px-1 text-[9px]">Hidden from athlete</Badge>}
         <div className="ml-auto flex items-center gap-0.5">
@@ -205,7 +205,7 @@ function NoteEditor({
               onClick={() => write({ coach_label: null, coach_summary: null })}
               disabled={busy}
             >
-              Use Cleo's
+              Use the auto version
             </Button>
           )}
           {!editing && note && (

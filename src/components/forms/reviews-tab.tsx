@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Sparkles, Send, Save, Clock, AlertTriangle, RefreshCw, Inbox,
+  PenLine, Send, Save, Clock, AlertTriangle, RefreshCw, Inbox,
   Loader2, CheckCircle2, XCircle, ChevronRight, Archive, FileText,
   CheckCheck, RotateCcw, UserCog, Ban, FileIcon, History, Eye,
   Download, FileImage, FileVideo, FileAudio, X as XIcon,
@@ -28,6 +28,7 @@ import {
   type ReviewStatus, type ReviewPriority,
 } from "@/lib/submission-reviews";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 import { formatDistanceToNow, format } from "date-fns";
 import { AiAssistanceLabel, deriveAiAssistance } from "@/components/legal/ai-assistance-label";
 
@@ -287,7 +288,7 @@ export function ReviewsTab() {
                         </Badge>
                         {r.ai_status && r.ai_status !== "pending" && (
                           <Badge variant="outline" className="text-[10px] py-0">
-                            AI: {AI_STATUS_LABELS[r.ai_status as keyof typeof AI_STATUS_LABELS] ?? r.ai_status}
+                            Draft: {AI_STATUS_LABELS[r.ai_status as keyof typeof AI_STATUS_LABELS] ?? r.ai_status}
                           </Badge>
                         )}
                         {r.priority && r.priority !== "normal" && (
@@ -316,9 +317,9 @@ export function ReviewsTab() {
         ) : (
           <div className="grid h-full place-items-center p-8 text-center text-sm text-muted-foreground">
             <div>
-              <Sparkles className="mx-auto h-8 w-8 opacity-60" />
+              <FileText className="mx-auto h-8 w-8 opacity-60" />
               <div className="mt-2 font-medium">Select a submission to review.</div>
-              <p className="mt-1 text-xs">AI will draft a coach-editable response you can approve or schedule.</p>
+              <p className="mt-1 text-xs">A draft reply is written for you to edit, approve or schedule.</p>
             </div>
           </div>
         )}
@@ -333,6 +334,8 @@ export function ReviewsTab() {
 
 function ReviewDetail({ reviewId, coaches, onDeleted }: { reviewId: string; coaches: any[]; onDeleted: () => void }) {
   const qc = useQueryClient();
+  // Which model wrote a draft, and its config versions, are AI infrastructure: the admin's only.
+  const isAdmin = useAuth().role === "admin";
   const fetchDetail = useServerFn(getSubmissionReviewDetail);
   const generate = useServerFn(generateSubmissionDraft);
   const saveDraft = useServerFn(saveCoachDraft);
@@ -413,7 +416,7 @@ function ReviewDetail({ reviewId, coaches, onDeleted }: { reviewId: string; coac
 
   const generateMutation = useMutation({
     mutationFn: () => generate({ data: { reviewId, submissionInstruction: instruction || undefined } }),
-    onSuccess: () => { toast.success("AI draft generated"); setInstruction(""); setDraftLocal(null); invalidate(); },
+    onSuccess: () => { toast.success("Draft written"); setInstruction(""); setDraftLocal(null); invalidate(); },
     onError: (e: any) => toast.error(e?.message ?? "Generation failed"),
   });
 
@@ -520,7 +523,7 @@ function ReviewDetail({ reviewId, coaches, onDeleted }: { reviewId: string; coac
             <Badge variant="outline" className={cn("text-[10px]", REVIEW_STATUS_TONE[review.review_status as ReviewStatus])}>
               {REVIEW_STATUS_LABELS[review.review_status as ReviewStatus] ?? review.review_status}
             </Badge>
-            <Badge variant="outline" className="text-[10px]">AI: {AI_STATUS_LABELS[review.ai_status as keyof typeof AI_STATUS_LABELS]}</Badge>
+            <Badge variant="outline" className="text-[10px]">Draft: {AI_STATUS_LABELS[review.ai_status as keyof typeof AI_STATUS_LABELS]}</Badge>
             <AiAssistanceLabel
               state={deriveAiAssistance({
                 ai_used: ["draft_ready","approved","sent","scheduled","processing"].includes(review.ai_status),
@@ -612,11 +615,11 @@ function ReviewDetail({ reviewId, coaches, onDeleted }: { reviewId: string; coac
         </Card>
       )}
 
-      {/* AI Analysis */}
+      {/* Analysis */}
       <Card className="p-4 border-primary/30">
         <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
           <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            <Sparkles className="inline h-3.5 w-3.5 mr-1" /> AI Analysis (internal)
+            Analysis (internal)
           </div>
           <div className="flex items-center gap-2">
             <Input value={instruction} onChange={(e) => setInstruction(e.target.value)}
@@ -624,7 +627,7 @@ function ReviewDetail({ reviewId, coaches, onDeleted }: { reviewId: string; coac
             <Button size="sm" onClick={() => generateMutation.mutate()} disabled={isProcessing || generateMutation.isPending}>
               {isProcessing || generateMutation.isPending
                 ? (<><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Generating…</>)
-                : (<><Sparkles className="h-3.5 w-3.5 mr-1" /> {latestGen ? "Regenerate" : "Generate"}</>)}
+                : (<><PenLine className="h-3.5 w-3.5 mr-1" /> {latestGen ? "Regenerate" : "Generate"}</>)}
             </Button>
           </div>
         </div>
@@ -638,7 +641,7 @@ function ReviewDetail({ reviewId, coaches, onDeleted }: { reviewId: string; coac
           <AnalysisView output={latestGen.structured_output} />
         ) : (
           <div className="text-sm text-muted-foreground italic">
-            {isProcessing ? "AI is analysing this submission…" : "No AI analysis yet. Click Generate to produce a draft."}
+            {isProcessing ? "Reading this submission…" : "No analysis yet. Tap Generate to write a draft."}
           </div>
         )}
       </Card>
@@ -663,11 +666,11 @@ function ReviewDetail({ reviewId, coaches, onDeleted }: { reviewId: string; coac
                     <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
                       <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
                         <span className="font-mono">{format(new Date(g.created_at), "yyyy-MM-dd HH:mm")}</span>
-                        {g.model && <Badge variant="outline" className="text-[10px]">{g.model}</Badge>}
-                        {g.global_config_version != null && (
+                        {isAdmin && g.model && <Badge variant="outline" className="text-[10px]">{g.model}</Badge>}
+                        {isAdmin && g.global_config_version != null && (
                           <Badge variant="outline" className="text-[10px]">g-v{g.global_config_version}</Badge>
                         )}
-                        {g.form_config_version != null && (
+                        {isAdmin && g.form_config_version != null && (
                           <Badge variant="outline" className="text-[10px]">f-v{g.form_config_version}</Badge>
                         )}
                         {isCurrent
@@ -711,7 +714,7 @@ function ReviewDetail({ reviewId, coaches, onDeleted }: { reviewId: string; coac
       <Card className="p-4">
         <div className="flex items-center justify-between gap-2 mb-2">
           <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            Internal notes (staff only — never sent to client or AI)
+            Internal notes (staff only: never sent to the client or put in a draft)
           </div>
           <div className="text-[10px] text-muted-foreground">
             {notesSavedAt
@@ -745,7 +748,7 @@ function ReviewDetail({ reviewId, coaches, onDeleted }: { reviewId: string; coac
         <Textarea
           value={currentDraft}
           onChange={(e) => setDraftLocal(e.target.value)}
-          placeholder="The AI draft will appear here. Edit as needed before sending."
+          placeholder="The draft will appear here. Edit as needed before sending."
           className="min-h-[180px] text-sm"
           disabled={isNoResponse || isSent}
         />

@@ -21,8 +21,8 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import {
-  AlertTriangle, Archive, BarChart3, Trash2, BookOpen, BrainCircuit, CalendarDays, CalendarPlus, ChevronDown, ChevronRight,
-  Download, Dumbbell, Flame, FlagOff, HeartPulse, History, Layers, Loader2, MoreHorizontal, Pencil, Plus, SlidersHorizontal, Sparkles, Trophy, Wand2,
+  AlertTriangle, Archive, BarChart3, Trash2, BookOpen, CalendarDays, CalendarPlus, ChevronDown, ChevronRight,
+  Download, Dumbbell, Flame, FlagOff, HeartPulse, FilePlus2, History, Layers, LineChart, Loader2, MoreHorizontal, Pencil, PenLine, Plus, SlidersHorizontal, Trophy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -248,7 +248,7 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
                 </>
               )}
               <DropdownMenuItem asChild>
-                <Link to="/admin/client-programs/$clientId/intelligence" params={{ clientId }} search={{ scope: "program", from: "", to: "", tab: "summary" }}><BrainCircuit className="mr-2 h-4 w-4" /> Program Intelligence</Link>
+                <Link to="/admin/client-programs/$clientId/intelligence" params={{ clientId }} search={{ scope: "program", from: "", to: "", tab: "summary" }}><LineChart className="mr-2 h-4 w-4" /> Program Intelligence</Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link to="/admin/client-programs/$clientId/analytics" params={{ clientId }}><BarChart3 className="mr-2 h-4 w-4" /> Analytics &amp; PRs</Link>
@@ -347,11 +347,11 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
                 <BookOpen className="mr-2 h-4 w-4" /> Assign from library
               </Button>
               <Button variant="outline" className="min-h-[48px]" onClick={() => setNewOpen(true)}>
-                <Sparkles className="mr-2 h-4 w-4" /> Build a new block
+                <PenLine className="mr-2 h-4 w-4" /> Build a new block
               </Button>
               <Button asChild variant="outline" className="min-h-[48px] sm:col-span-2" data-testid="training-write-with-ai">
                 <Link to="/admin/client-programs/$clientId/next-program" params={{ clientId }}>
-                  <Wand2 className="mr-2 h-4 w-4" /> Write it with AI
+                  <FilePlus2 className="mr-2 h-4 w-4" /> Generate a program
                 </Link>
               </Button>
             </div>
@@ -611,8 +611,8 @@ function AddTrainingSheet({
         </SheetHeader>
         <div className="space-y-2">
           <ChoiceRow icon={<BookOpen className="h-5 w-5" />} title="From your library" text="A ready-made program, placed on their training days." onClick={onLibrary} />
-          <ChoiceRow icon={<Wand2 className="h-5 w-5" />} title="Write it with AI" text="From their training so far, or their Goals & Setup when it's their first, plus your notes. You review it before they see it." onClick={() => { onOpenChange(false); void navigate({ to: "/admin/client-programs/$clientId/next-program", params: { clientId } }); }} />
-          <ChoiceRow icon={<Sparkles className="h-5 w-5" />} title="Build a new block" text="Start blank and write it in the program builder." onClick={onNew} />
+          <ChoiceRow icon={<FilePlus2 className="h-5 w-5" />} title="Generate a program" text="From their training so far, or their Goals & Setup when it's their first, plus your notes. You review it before they see it." onClick={() => { onOpenChange(false); void navigate({ to: "/admin/client-programs/$clientId/next-program", params: { clientId } }); }} />
+          <ChoiceRow icon={<PenLine className="h-5 w-5" />} title="Build a new block" text="Start blank and write it in the program builder." onClick={onNew} />
           {hasDrafts && (
             <ChoiceRow icon={<CalendarPlus className="h-5 w-5" />} title="Schedule a built block" text="Put a block you've already built onto the calendar." onClick={onSchedule} />
           )}
@@ -772,7 +772,7 @@ function AthleteSetupCard({ clientId, client }: { clientId: string; client: Clie
                 : sheet === "maxes"
                   ? "1RMs and training maxes for this athlete."
                   : sheet === "health"
-                    ? "Generate Next Program and Edit with AI train around everything here."
+                    ? "Generate Next Program and Adjust program train around everything here."
                     : sheet === "competition"
                       ? "Their powerlifting forms start from this, and what they send updates it."
                       : sheet === "equipment"

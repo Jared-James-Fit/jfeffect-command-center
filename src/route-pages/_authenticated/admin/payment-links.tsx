@@ -18,7 +18,7 @@ import { AssignOfferDialog } from "@/components/assign-offer-dialog";
 import { OfferDetailDialog } from "@/components/offer-detail-dialog";
 import { toast } from "sonner";
 import { runJob } from "@/lib/progress-jobs";
-import { Copy, ExternalLink, Loader2, Plus, Trash2, ImagePlus, Pencil, Archive, ArchiveRestore, FileSignature, AlertTriangle, CheckCircle2, Search, X, ListChecks, Sparkles, Eye, CreditCard, Link2, Share2, Wand2, MoreHorizontal } from "lucide-react";
+import { Copy, ExternalLink, Loader2, Plus, Trash2, ImagePlus, Pencil, Archive, ArchiveRestore, FileSignature, AlertTriangle, CheckCircle2, Search, X, ListChecks, Eye, CreditCard, Link2, Share2, MoreHorizontal } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -608,7 +608,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
                       )}
                       {!hasLink && hasPriceId && r.ready && (
                         <DropdownMenuItem onClick={() => handleGenerateLink(p)} disabled={generatingLink === p.id}>
-                          <Wand2 className="mr-2 h-3.5 w-3.5" /> Generate payment link
+                          <Link2 className="mr-2 h-3.5 w-3.5" /> Generate payment link
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuItem onClick={() => setPreviewing(p)}>

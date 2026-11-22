@@ -10,11 +10,12 @@ export const TABS = [
   { value: "builder",                label: "Forms" },
   { value: "applications",           label: "Applications" },
   { value: "agreements",             label: "Agreements" },
-  { value: "reviews",                label: "AI drafts",            more: true },
+  { value: "reviews",                label: "Reply drafts",         more: true },
   { value: "fillout",                label: "Fillout inbox",        more: true },
   { value: "schedules",              label: "Check-in schedules",   more: true },
   { value: "scheduler",              label: "Scheduler",            more: true },
-  { value: "ai-settings",            label: "AI settings",          more: true },
+  // Which model drafts replies and its brand voice: AI infrastructure, the admin's only.
+  { value: "ai-settings",            label: "AI settings",          more: true, adminOnly: true },
   { value: "integrations",           label: "Integrations",         more: true },
   // Legacy / hidden keys kept so old links keep working.
   { value: "website-forms",          label: "Website Forms",        hidden: true },
@@ -48,5 +49,8 @@ export const LEGACY_SUB: Record<string, string> = {
 export function isTab(v: unknown): v is TabKey {
   return typeof v === "string" && TABS.some((t) => t.value === v);
 }
+
+/** Tabs only the admin login sees (and opens). */
+export const isAdminOnlyTab = (t: TabKey) => TABS.some((x) => x.value === t && "adminOnly" in x && x.adminOnly);
 
 export const isMoreTab = (t: TabKey) => TABS.some((x) => x.value === t && "more" in x && x.more);

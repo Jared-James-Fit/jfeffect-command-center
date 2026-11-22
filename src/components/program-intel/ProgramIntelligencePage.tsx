@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
-import { BrainCircuit, ClipboardCopy, Download, FileJson, FileSpreadsheet, FileText, ListTree, Loader2, ShieldCheck, Wand2 } from "lucide-react";
+import { ClipboardCopy, Download, Dumbbell, FileJson, FilePlus2, FileSpreadsheet, FileText, ListTree, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -114,7 +114,7 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
     if (!x) return;
     // built and copied inside the tap (iPhones refuse a copy after a wait)
     const text = buildAiPrompt(x.rep, x.rec, x.meta);
-    void copyText(text).then((ok) => (ok ? toast.success(`AI coaching prompt copied (${Math.round(text.length / 1000)}k characters, every record included)`) : toast.error("Couldn't copy. Download the Markdown instead.")));
+    void copyText(text).then((ok) => (ok ? toast.success(`Coaching prompt copied (${Math.round(text.length / 1000)}k characters, every record included)`) : toast.error("Couldn't copy. Download the Markdown instead.")));
   };
 
   const doDownload = async (kind: "pdf" | "md" | "json" | "csv") => {
@@ -138,7 +138,7 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
     setInterpreting(true);
     try {
       const r = await queue({ data: { clientId, kind: "interpret", scope, brain: report.brain, options: {}, privacySafe } });
-      toast.success(r.alreadyRunning ? "Already reading this report." : "The AI is reading the report. Its proposals will appear here to review.");
+      toast.success(r.alreadyRunning ? "Already reading this report." : "Reading the report. Its proposals will appear here to review.");
       void qc.invalidateQueries({ queryKey: ["program-intel-jobs", clientId] });
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't start");
@@ -209,7 +209,7 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
                   <div className="text-[11px] text-muted-foreground">{c.firstDate ?? "—"} → {c.lastDate ?? "—"} · {c.blocks} block{c.blocks === 1 ? "" : "s"}, {c.weeks} weeks</div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
-                  <BrainCircuit className="h-4 w-4 text-muted-foreground" />
+                  <Dumbbell className="h-4 w-4 text-muted-foreground" />
                   <Select value={brain.override ?? "auto"} onValueChange={(v) => brain.set.mutate(v === "auto" ? null : (v as Brain), { onError: (e: any) => toast.error(e?.message ?? "Couldn't save") })}>
                     <SelectTrigger className="h-8 w-[150px] text-xs" aria-label="Coaching brain">
                       <SelectValue />
@@ -257,7 +257,7 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
             <div className="grid grid-cols-2 gap-2">
               <Button variant="outline" className="h-auto min-h-12 flex-col gap-0.5 py-2" onClick={copyPrompt} data-testid="intel-copy-prompt">
                 <ClipboardCopy className="h-4 w-4" />
-                <span className="text-xs font-bold">Copy AI coaching prompt</span>
+                <span className="text-xs font-bold">Copy coaching prompt</span>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -268,13 +268,13 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuItem onSelect={() => void doDownload("pdf")}><FileText className="mr-2 h-4 w-4" /> PDF · for reading</DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => void doDownload("md")}><FileText className="mr-2 h-4 w-4" /> Markdown · for AI uploads</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void doDownload("md")}><FileText className="mr-2 h-4 w-4" /> Markdown</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => void doDownload("json")}><FileJson className="mr-2 h-4 w-4" /> JSON · complete records</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => void doDownload("csv")}><FileSpreadsheet className="mr-2 h-4 w-4" /> CSV · raw training log</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
               <Button className="h-auto min-h-12 flex-col gap-0.5 py-2" onClick={() => void navigate({ to: "/admin/client-programs/$clientId/next-program", params: { clientId } })} data-testid="intel-generate">
-                <Wand2 className="h-4 w-4" />
+                <FilePlus2 className="h-4 w-4" />
                 <span className="text-xs font-bold">{c.loggedSets === 0 ? "Generate first program" : "Generate next program"}</span>
               </Button>
               <Button

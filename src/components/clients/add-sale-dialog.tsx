@@ -30,7 +30,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  ChevronLeft, Loader2, Search, Ticket, User, Sparkles, PackageSearch, X, CalendarClock,
+  ChevronLeft, Loader2, Search, Ticket, User, PenLine, PackageSearch, X, CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { listCoachingProducts, createCoachingProduct } from "@/lib/coaching-products.functions";
@@ -197,7 +197,7 @@ export function AddSaleDialog({
                   <PackageSearch className="mr-1.5 h-3.5 w-3.5" />Existing product
                 </TabsTrigger>
                 <TabsTrigger value="custom">
-                  <Sparkles className="mr-1.5 h-3.5 w-3.5" />Custom sale
+                  <PenLine className="mr-1.5 h-3.5 w-3.5" />Custom sale
                 </TabsTrigger>
               </TabsList>
             </div>

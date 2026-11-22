@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { FileText, Loader2, Paperclip, Sparkles, Trash2 } from "lucide-react";
+import { FileText, Loader2, Paperclip, ReceiptText, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -197,7 +197,7 @@ export function ExpenseDialog({
 
         {ai && (expense?.status === "needs_review" || ai.notes || ai.pst) && (
           <div className={cn("flex gap-2 rounded-md border p-3 text-sm", expense?.status === "needs_review" ? "border-amber-500/40 bg-amber-500/10" : "bg-muted/40")}>
-            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <ReceiptText className={cn("mt-0.5 h-4 w-4 shrink-0", expense?.status === "needs_review" ? "text-amber-500" : "text-muted-foreground")} />
             <div className="space-y-1">
               {ai.read === false ? (
                 <p>{ASSISTANT_NAME} couldn't read this one{ai.notes ? ` (${ai.notes})` : ""}. Fill in the details from the receipt.</p>

@@ -1,4 +1,4 @@
-import { Sparkles, UserRoundCheck, PencilLine } from "lucide-react";
+import { FileText, UserRoundCheck, PencilLine } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type AiAssistanceState =
@@ -35,9 +35,10 @@ export interface AiAssistanceLabelProps {
 
 const COPY: Record<AiAssistanceState["kind"], { label: string; icon: any; tone: string }> = {
   coach_written: { label: "Coach-written", icon: PencilLine, tone: "text-muted-foreground" },
-  ai_assisted_draft: { label: "AI-assisted draft", icon: Sparkles, tone: "text-violet-600 dark:text-violet-400" },
-  ai_assisted_coach_edited: { label: "AI-assisted · coach-edited", icon: Sparkles, tone: "text-violet-600 dark:text-violet-400" },
-  ai_assisted_coach_approved: { label: "AI-assisted · coach-reviewed", icon: UserRoundCheck, tone: "text-emerald-600 dark:text-emerald-400" },
+  // Coach-facing (Forms → Reply drafts): where a reply came from, said plainly, never a badge of the tech behind it.
+  ai_assisted_draft: { label: "Auto draft", icon: FileText, tone: "text-muted-foreground" },
+  ai_assisted_coach_edited: { label: "Auto draft · edited", icon: PencilLine, tone: "text-muted-foreground" },
+  ai_assisted_coach_approved: { label: "Reviewed", icon: UserRoundCheck, tone: "text-success" },
 };
 
 export function AiAssistanceLabel({ state, className, size = "xs" }: AiAssistanceLabelProps) {

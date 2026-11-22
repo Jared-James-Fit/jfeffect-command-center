@@ -324,7 +324,7 @@ export function recommendSetup(x: {
 
   // the strategy decides the phases and block lengths for this athlete and timeline (no fixed 4-week blocks)
   const blocks: BlockPlan[] = [];
-  why.blocks = { source: "Strategy", reason: `The AI picks the phases, block lengths and any lighter weeks for this athlete${hz.deadline ? ` and ${hz.deadline.name}` : ""}; set your own in Advanced if you want them fixed.`, confidence: "medium" };
+  why.blocks = { source: "Strategy", reason: `Phases, block lengths and any lighter weeks are picked for this athlete${hz.deadline ? ` and ${hz.deadline.name}` : ""}; set your own in Advanced if you want them fixed.`, confidence: "medium" };
 
   // Priorities: what the evidence says is lagging (never invented).
   const priorities: string[] = [];

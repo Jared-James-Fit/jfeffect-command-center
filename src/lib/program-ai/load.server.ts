@@ -204,7 +204,7 @@ export async function loadTemplateSnapshot(db: Db, templateId: string): Promise<
   const { data: t, error } = await db.from("pl_templates").select("id, name, template_type, payload, payload_revision, archived, weeks, days_per_week").eq("id", templateId).maybeSingle();
   if (error) throw new Error(`template: ${error.message}`);
   if (!t) throw new Error("That template wasn't found (or only an admin can edit it).");
-  if (!["block", "full_prep", "program"].includes(t.template_type)) throw new Error("Edit with AI works on block and program templates.");
+  if (!["block", "full_prep", "program"].includes(t.template_type)) throw new Error("Adjust program works on block and program templates.");
   const { normalizeTemplatePayload, isPayloadInRecovery, getActiveTemplateBlocks } = await import("@/lib/pl-template-blocks");
   const v2 = normalizeTemplatePayload(t.payload, { templateType: t.template_type, templateId: t.id });
   if (isPayloadInRecovery(v2)) throw new Error("This template's saved data is damaged; fix it in the template editor first.");

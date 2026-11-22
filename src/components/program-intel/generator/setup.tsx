@@ -231,7 +231,7 @@ export function SetupCard({
         </div>
       </Row>
       <CardioRow setup={setup} recommended={intel.recommendation.setup.cardio} why={why.cardio} edited={edited.has("cardio")} onChange={onChange} />
-      <Row label="Block structure" value={setup.blocks.length ? setup.blocks.map((b) => `${b.name} ${b.weeks}w`).join(" → ") : "The AI decides"} why={why.blocks} edited={edited.has("blocks")}>
+      <Row label="Block structure" value={setup.blocks.length ? setup.blocks.map((b) => `${b.name} ${b.weeks}w`).join(" → ") : "Decided for them"} why={why.blocks} edited={edited.has("blocks")}>
         <BlocksEditor setup={setup} onChange={onChange} meetWeeks={meetWeeks} />
       </Row>
       <Row label="Priorities" value={setup.priorities.join(", ") || "None set"} why={why.priorities} edited={edited.has("priorities")}>
@@ -452,7 +452,7 @@ function BlocksEditor({ setup, onChange, meetWeeks }: { setup: GenerationSetup; 
   if (!setup.blocks.length)
     return (
       <div className="space-y-2 text-[12px]">
-        <p className="text-muted-foreground">The AI picks the phases, how long each runs and any lighter weeks, from how this athlete trains and recovers{setup.meetDate ? " and the meet" : ""}.</p>
+        <p className="text-muted-foreground">Phases, block lengths and lighter weeks are picked for this athlete from how they train and recover{setup.meetDate ? " and the meet" : ""}.</p>
         <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => onChange("blocks", startingBlocks(setup, meetWeeks))}>Set them myself</Button>
       </div>
     );
@@ -472,7 +472,7 @@ function BlocksEditor({ setup, onChange, meetWeeks }: { setup: GenerationSetup; 
         <span className={cn("font-semibold", total !== setup.weeks && "text-destructive")}>{total} of {setup.weeks} weeks</span>
         {setup.blocks.length < 6 && <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => onChange("blocks", [...setup.blocks, { name: `Block ${setup.blocks.length + 1}`, weeks: Math.min(12, Math.max(1, setup.weeks - total)), objective: "" }])}>Add block</Button>}
         <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => onChange("blocks", startingBlocks(setup, meetWeeks))}>Fit to {setup.weeks} weeks</Button>
-        <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => onChange("blocks", [])}>Let the AI decide</Button>
+        <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => onChange("blocks", [])}>Decide for me</Button>
       </div>
     </div>
   );
@@ -606,7 +606,7 @@ export function ConflictsCard({ conflicts }: { conflicts: Conflict[] }) {
           </div>
         </div>
       ))}
-      <p className="text-[11px] text-muted-foreground">Warnings go to the AI with your setup, which must address each one; nothing is dropped silently.</p>
+      <p className="text-[11px] text-muted-foreground">Warnings go in with your setup, and the program must address each one; nothing is dropped silently.</p>
     </Card>
   );
 }

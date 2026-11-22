@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Save, Sparkles, FlaskConical } from "lucide-react";
+import { Loader2, Save, MessageSquareQuote, FlaskConical } from "lucide-react";
 import {
   getGlobalAiConfig, updateGlobalAiConfig, getFormAiConfig, upsertFormAiConfig, runAiPlayground,
 } from "@/lib/ai-config.functions";
@@ -79,7 +79,7 @@ function GlobalConfigPanel() {
   if (isLoading || !form) return <div className="text-sm text-muted-foreground">Loading…</div>;
   return (
     <Card className="p-5 space-y-4 max-w-3xl">
-      <h3 className="text-base font-bold flex items-center gap-1.5"><Sparkles className="h-4 w-4 text-primary" /> Global brand voice</h3>
+      <h3 className="text-base font-bold flex items-center gap-1.5"><MessageSquareQuote className="h-4 w-4 text-muted-foreground" /> Global brand voice</h3>
       <Field label="Brand voice">
         <Textarea value={form.brand_voice ?? ""} onChange={(e) => setForm({ ...form, brand_voice: e.target.value })} className="min-h-[80px]" />
       </Field>
@@ -314,7 +314,7 @@ function PlaygroundPanel() {
         <Textarea value={sample} onChange={(e) => setSample(e.target.value)} className="min-h-[180px] font-mono text-xs" />
       </Field>
       <Button onClick={go} disabled={busy}>
-        {busy ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1" />} Run test
+        {busy ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <FlaskConical className="h-3.5 w-3.5 mr-1" />} Run test
       </Button>
       {output && (
         <div className="space-y-3 pt-2 border-t border-border">

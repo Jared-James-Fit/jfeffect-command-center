@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertTriangle, ArrowUp, Check, ChevronDown, Loader2, Plus, ShieldCheck, Sparkles, Trash2, Undo2, Wand2 } from "lucide-react";
+import { AlertTriangle, ArrowUp, Check, ChevronDown, Loader2, Plus, ShieldCheck, SlidersHorizontal, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,7 @@ const RULE_LABEL: Record<string, string> = {
 const CLIENT_STARTERS = ["Review the program and fix anything you'd improve", "Make every workout fit in 60 minutes", "Which lift is progressing the slowest?", "Is their weekly volume recoverable?"];
 const TEMPLATE_STARTERS = ["Make a 3-day version of this", "Adapt it for a home gym with dumbbells and a rack", "Turn it into a powerbuilding program", "Simplify the accessories"];
 
-export function EditWithAiButton({ target, title, onApplied, beforeOpen, className, size = "default", variant = "outline", label = "Edit with AI" }: {
+export function EditWithAiButton({ target, title, onApplied, beforeOpen, className, size = "default", variant = "outline", label = "Adjust program" }: {
   target: ProgramAiTarget;
   title: string;
   onApplied?: () => void | Promise<void>;
@@ -84,7 +84,7 @@ export function EditWithAiButton({ target, title, onApplied, beforeOpen, classNa
           }
         }}
       >
-        {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+        {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SlidersHorizontal className="mr-2 h-4 w-4" />}
         {label}
       </Button>
       {open && <EditWithAiSheet open={open} onOpenChange={setOpen} target={target} title={title} onApplied={onApplied} />}
@@ -92,7 +92,7 @@ export function EditWithAiButton({ target, title, onApplied, beforeOpen, classNa
   );
 }
 
-/** `initialText`: what the box starts with (Missing program data's "Fill in with AI"); the coach still sends it and reviews the changes. */
+/** `initialText`: what the box starts with (Missing program data's "Fill in"); the coach still sends it and reviews the changes. */
 export function EditWithAiSheet({ open, onOpenChange, target, title, onApplied, initialText }: { open: boolean; onOpenChange: (v: boolean) => void; target: ProgramAiTarget; title: string; onApplied?: () => void | Promise<void>; initialText?: string }) {
   const [tab, setTab] = useState<Tab>("chat");
   const clientId = target.kind === "client" ? target.clientId : null;
@@ -103,12 +103,12 @@ export function EditWithAiSheet({ open, onOpenChange, target, title, onApplied, 
           <div className="flex min-h-10 items-center pl-24">
             <div className="min-w-0">
               <SheetTitle className="flex items-center gap-2 text-base">
-                <Sparkles className="h-4 w-4" /> Edit with AI
+                Adjust program
               </SheetTitle>
               <SheetDescription className="truncate text-xs">{target.kind === "template" ? `Template · ${title}` : title}</SheetDescription>
             </div>
           </div>
-          <div className="mt-3 grid grid-cols-3 gap-1 rounded-lg border border-border p-1" role="tablist" aria-label="Edit with AI">
+          <div className="mt-3 grid grid-cols-3 gap-1 rounded-lg border border-border p-1" role="tablist" aria-label="Adjust program">
             {(["chat", "rules", "history"] as Tab[]).map((t) => (
               <button
                 key={t}
@@ -143,7 +143,7 @@ function AthleteGaps({ clientId }: { clientId: string }) {
   if (!missing.length) return null;
   return (
     <div className="mb-4 rounded-lg border border-border p-3 text-sm" data-athlete-gaps>
-      <p className="font-medium">Not on file, so the AI won't assume it:</p>
+      <p className="font-medium">Not on file, so it won't be assumed:</p>
       <ul className="mt-1.5 space-y-1">
         {missing.map((m) => (
           <li key={m.field} className="flex items-baseline justify-between gap-3">
@@ -687,7 +687,7 @@ function RulesPanel({ clientId }: { clientId: string | null }) {
   return (
     <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
       <p className="text-sm text-muted-foreground">
-        {clientId ? "What the AI always follows for this athlete. Your instruction in the moment wins over ordinary rules; hard constraints and restrictions only give way when you say so." : "Rules for every athlete and template (admins)."}
+        {clientId ? "What every change always follows for this athlete. Your instruction in the moment wins over ordinary rules; hard constraints and restrictions only give way when you say so." : "Rules for every athlete and template (admins)."}
       </p>
       <div className="space-y-2 rounded-xl border border-border p-3">
         <Select value={kind} onValueChange={setKind}>
@@ -746,7 +746,7 @@ function RulesPanel({ clientId }: { clientId: string | null }) {
                       <span className={cn(!r.active && "text-muted-foreground line-through")}>{r.rule}</span>
                       <span className="block text-xs text-muted-foreground">
                         {r.expires_on ? `Until ${r.expires_on} · ` : ""}
-                        {r.source === "ai_suggested" ? "Suggested by the AI, saved by you" : "Yours"} · tap to edit
+                        {r.source === "ai_suggested" ? "Suggested, saved by you" : "Yours"} · tap to edit
                       </span>
                     </button>
                     <div className="flex shrink-0 items-center gap-1">
@@ -774,7 +774,7 @@ function RulesPanel({ clientId }: { clientId: string | null }) {
       )}
       {(rules.data?.observations ?? []).length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-semibold">AI observations you confirmed</p>
+          <p className="text-sm font-semibold">Observations you confirmed</p>
           <p className="text-xs text-muted-foreground">From Program Intelligence. Unconfirmed ones are never treated as facts about the athlete.</p>
           {(rules.data?.observations ?? []).map((o: any) => (
             <p key={o.id} className="rounded-lg border border-border p-3 text-sm">
@@ -809,12 +809,12 @@ function HistoryPanel({ target, onChanged }: { target: ProgramAiTarget; onChange
   const list: any[] = q.data?.versions ?? [];
   return (
     <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-      <p className="text-sm text-muted-foreground">Every change made by Edit with AI or Cleo, newest first. Undo puts it back; workouts trained since stay as trained.</p>
+      <p className="text-sm text-muted-foreground">Every change made with Adjust program or by Cleo, newest first. Undo puts it back; workouts trained since stay as trained.</p>
       {q.isLoading && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
       {!q.isLoading && !list.length && <p className="text-sm text-muted-foreground">No changes yet.</p>}
       {list.map((v) => {
         const when = new Date(v.created_at).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-        const who = v.source === "restore" ? "Before an undo" : v.source === "ai_editor" ? "Edit with AI" : "Cleo";
+        const who = v.source === "restore" ? "Before an undo" : v.source === "ai_editor" ? "Adjust program" : "Cleo";
         return (
           <div key={v.id} className="flex items-start justify-between gap-3 rounded-lg border border-border p-3">
             <div className="min-w-0 text-sm">

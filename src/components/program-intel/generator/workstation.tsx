@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
-import { ListChecks, Loader2, ShieldCheck, Wand2 } from "lucide-react";
+import { FilePlus2, ListChecks, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,9 @@ const HISTORY = { kind: "history" } as const;
 
 /** prefill: what Edit with AI handed over ("rebuild the next 12 weeks…"): the coach's words as notes, and the weeks / days it read from them. */
 export function NextProgramWorkstation({ clientId, prefill }: { clientId: string; prefill?: { notes?: string; weeks?: number; days?: number; duration?: "goal" } }) {
-  const { viewOnly } = useAuth();
+  const { viewOnly, role } = useAuth();
+  // The run's inspector (models, prompts, calls) is AI infrastructure: the admin's, never a coach's.
+  const canInspect = role === "admin";
   const qc = useQueryClient();
   const records = useIntelRecords(clientId, HISTORY);
   const brain = useBrainOverride(clientId);
@@ -221,7 +223,7 @@ export function NextProgramWorkstation({ clientId, prefill }: { clientId: string
                 job={activeGenerate}
                 today={intel.ctx.today}
                 busy={busy}
-                onInspect={() => setInspecting(activeGenerate)}
+                onInspect={canInspect ? () => setInspecting(activeGenerate) : undefined}
                 plan={assignPlan} onAssign={(startDate, ack, allowOverlap) => run(() => assign({ data: { jobId: activeGenerate.id, startDate, acknowledgeAudit: ack, allowOverlap } }), "Assigned to the client")}
                 onDiscard={() => run(() => discard({ data: { jobId: activeGenerate.id } }), "Draft discarded")}
               />
@@ -256,7 +258,7 @@ export function NextProgramWorkstation({ clientId, prefill }: { clientId: string
 
             <Card className="space-y-2 p-3.5" data-testid="gen-actions">
               <Button className="h-12 w-full text-[14px]" disabled={busy || blockers.length > 0 || running(activeGenerate) || running(activeStrategy)} onClick={() => start("generate")} data-testid="gen-fast">
-                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />} Generate with the recommended strategy
+                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus2 className="mr-2 h-4 w-4" />} Generate with the recommended strategy
               </Button>
               <Button variant="outline" className="h-11 w-full" disabled={busy || blockers.length > 0 || running(activeGenerate) || running(activeStrategy)} onClick={() => start("strategy")} data-testid="gen-review-first">
                 <ListChecks className="mr-2 h-4 w-4" /> Review the strategy first
@@ -265,12 +267,12 @@ export function NextProgramWorkstation({ clientId, prefill }: { clientId: string
               <label className="flex items-start gap-2 pt-1 text-[11px] text-muted-foreground">
                 <Switch checked={privacySafe} onCheckedChange={setPrivacySafe} aria-label="Privacy-safe" />
                 <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <span>Privacy-safe: the AI gets the training data without the athlete's name, their own notes or check-ins.</span>
+                <span>Privacy-safe: the program writer gets the training data without the athlete's name, their own notes or check-ins.</span>
               </label>
               <p className="text-[11px] text-muted-foreground">
                 {intel.firstProgram
-                  ? <>No training logged yet: the AI writes their first program from their Goals & Setup (goal, experience, days, session length, equipment, injuries), the starting point above and your notes & ideas, builds each block from your library ({intel.ctx.equipment.confidence === "unknown" ? "any equipment" : "only exercises their equipment allows"}, demo videos first), keeps week 1 easier to find their working weights, and never makes up a starting weight. It's audited before you see it and never assigned for you.</>
-                  : <>The AI reads everything above ({intel.history.coverage.loggedSets} set records, the previous program set by set) plus your setup and notes, writes the strategy, builds each block from your library ({intel.ctx.equipment.confidence === "unknown" ? "any equipment" : "only exercises their equipment allows"}), and the result is audited before you see it. It never assigns anything.</>}
+                  ? <>No training logged yet: their first program is written from their Goals & Setup (goal, experience, days, session length, equipment, injuries), the starting point above and your notes & ideas, with each block built from your library ({intel.ctx.equipment.confidence === "unknown" ? "any equipment" : "only exercises their equipment allows"}, demo videos first), with week 1 kept easier to find their working weights and never a made-up starting weight. It's audited before you see it and never assigned for you.</>
+                  : <>It reads everything above ({intel.history.coverage.loggedSets} set records, the previous program set by set) plus your setup and notes, writes the strategy, builds each block from your library ({intel.ctx.equipment.confidence === "unknown" ? "any equipment" : "only exercises their equipment allows"}), and the result is audited before you see it. It never assigns anything.</>}
               </p>
             </Card>
 
@@ -279,13 +281,13 @@ export function NextProgramWorkstation({ clientId, prefill }: { clientId: string
                 <summary className="cursor-pointer select-none font-semibold text-muted-foreground">Earlier programs generated ({earlier.length})</summary>
                 <div className="mt-2 space-y-2">
                   {earlier.map((j) => (
-                    <DraftView key={j.id} job={j} today={intel.ctx.today} busy={busy} onInspect={() => setInspecting(j)} plan={assignPlan} onAssign={(startDate, ack, allowOverlap) => run(() => assign({ data: { jobId: j.id, startDate, acknowledgeAudit: ack, allowOverlap } }), "Assigned to the client")} onDiscard={() => run(() => discard({ data: { jobId: j.id } }), "Draft discarded")} />
+                    <DraftView key={j.id} job={j} today={intel.ctx.today} busy={busy} onInspect={canInspect ? () => setInspecting(j) : undefined} plan={assignPlan} onAssign={(startDate, ack, allowOverlap) => run(() => assign({ data: { jobId: j.id, startDate, acknowledgeAudit: ack, allowOverlap } }), "Assigned to the client")} onDiscard={() => run(() => discard({ data: { jobId: j.id } }), "Draft discarded")} />
                   ))}
                 </div>
               </details>
             )}
             {equipmentOpen && <EquipmentSheet open={equipmentOpen} onOpenChange={setEquipmentOpen} intel={intel} saving={saveEquipment.isPending} onSave={(p) => saveEquipment.mutateAsync(p)} />}
-            <ContextInspector open={!!inspecting} onOpenChange={(v) => !v && setInspecting(null)} job={inspecting} />
+            {canInspect && <ContextInspector open={!!inspecting} onOpenChange={(v) => !v && setInspecting(null)} job={inspecting} />}
           </>
         )}
       </div>

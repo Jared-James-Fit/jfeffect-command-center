@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Sparkles } from "lucide-react";
+import { Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
@@ -93,7 +93,7 @@ export function ClientLinkDialog({
           {suggested.length > 0 && (
             <>
               <div className="flex items-center gap-1 px-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                <Sparkles className="h-3 w-3" /> {suggestedLabel}
+                {suggestedLabel}
               </div>
               <ul>{suggested.map((c) => row(c, "Suggested"))}</ul>
               <div className="my-2 h-px bg-border" />

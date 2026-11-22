@@ -11,7 +11,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarX2, Check, ChevronRight, Dumbbell, Gauge, Layers, Wand2 } from "lucide-react";
+import { CalendarX2, Check, ChevronRight, Dumbbell, Gauge, Layers, SlidersHorizontal } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -148,7 +148,7 @@ function ClientGapsCard({ g, focused, onAi }: { g: ClientProgramGaps; focused: b
           count={g.workouts.length}
           action={
             <Button size="sm" variant="outline" className="h-9" onClick={onAi} data-program-gaps-ai>
-              <Wand2 className="mr-1.5 h-4 w-4" /> Fill in with AI
+              <SlidersHorizontal className="mr-1.5 h-4 w-4" /> Fill in
             </Button>
           }
         >

@@ -150,14 +150,14 @@ export function CompetitionPlanSummary({ submissionId, formId, compact = false }
                 Dismiss
               </Button>
             </div>
-            {!compact && <p className="mt-1.5 text-[11px] text-muted-foreground">Approving lets the program AI plan around it. It never changes a program by itself.</p>}
+            {!compact && <p className="mt-1.5 text-[11px] text-muted-foreground">Approving lets their programs plan around it. It never changes a program by itself.</p>}
           </>
         ) : (
           <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
             <span className="min-w-0 flex-1">
               {row.status === "approved"
-                ? `Approved${row.reviewed_at ? ` ${new Date(row.reviewed_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : ""}. The program AI reads it${row.goal_set ? ", and the primary meet is the program goal" : ""}.`
-                : "Dismissed. The program AI doesn't read it."}
+                ? `Approved${row.reviewed_at ? ` ${new Date(row.reviewed_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : ""}. Their programs plan around it${row.goal_set ? ", and the primary meet is the program goal" : ""}.`
+                : "Dismissed. Their programs don't plan around it."}
             </span>
             <Button size="sm" variant="ghost" className="h-9" disabled={busy} onClick={() => review("submitted")}>
               Undo

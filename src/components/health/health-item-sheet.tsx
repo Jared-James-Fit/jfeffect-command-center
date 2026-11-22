@@ -84,7 +84,7 @@ export function HealthItemSheet({
         if (error) throw error;
         onSaved(data?.id ?? null);
       }
-      toast.success(mode === "coach" ? "Saved. Their nutrition and training AI plan around it." : "Saved. Your coach can see it.");
+      toast.success(mode === "coach" ? "Saved. Their nutrition and training plans work around it." : "Saved. Your coach can see it.");
       onClose();
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't save it");
@@ -200,7 +200,7 @@ export function HealthItemSheet({
             <label className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-border px-3">
               <span>
                 <span className="block text-[14px] font-medium">Only you see it</span>
-                <span className="block text-[12px] text-muted-foreground">Hidden from their app. The AI still plans around it.</span>
+                <span className="block text-[12px] text-muted-foreground">Hidden from their app. Their plans still work around it.</span>
               </span>
               <Switch checked={coachOnly} onCheckedChange={setCoachOnly} />
             </label>
