@@ -71,7 +71,7 @@ describe("Crew video: pick it or film it, it's up while you write the caption", 
     expect(shutter).toContain("holdRef.current?.onStart();");
     expect(shutter).toContain("conic-gradient(rgb(239 68 68)");
     // Normal in the ring of filters films too: the same element keeps the finger (no swap mid-hold)
-    expect(shutter).toContain("{...(on ? h.handlers : {})}");
+    expect(shutter).toContain("{...(on && !pick ? h.handlers : {})}");
   });
 
   it("the feed plays a clip with its sound while it's on screen, the speaker one tap away; a story plays up to its first minute, its length runs the bar", () => {

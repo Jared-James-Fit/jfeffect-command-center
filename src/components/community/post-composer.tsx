@@ -26,7 +26,7 @@ import { AttachButtons, AttachGifPicker, AttachPreview, usePostAttach } from "@/
 import { MentionSuggestBar } from "@/components/community/mentions";
 import { TagPeopleSheet } from "@/components/community/tag-people-sheet";
 import { useAudiences } from "@/components/community/audience-picker";
-import { LookGlyph, type LookGroup, type LookItem } from "@/components/community/look-carousel";
+import { LookCarousel, type LookGroup, type LookItem } from "@/components/community/look-carousel";
 import { CoverPicker } from "@/components/community/cover-picker";
 import { TrimmedVideo } from "@/components/video-trimmer";
 import { paintCard } from "@/components/community/card-paint";
@@ -1077,7 +1077,12 @@ function EditStep({
 
       {/* the tools for what's on screen */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {onCoverSlide && tool === "filters" && filters.items.length > 1 && <FilterStrip filters={filters} />}
+        {onCoverSlide && tool === "filters" && filters.items.length > 1 && (
+          // the camera's own row (chips, the ring, the name): a photo picked here is filtered exactly the way the camera picks one
+          <div className="pt-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-200" data-composer-filters>
+            <LookCarousel looks={filters.items} groups={filters.groups} look={filters.on} onLook={filters.pick} />
+          </div>
+        )}
         {cur?.kind === "video" && <ClipTools tray={tray} it={cur} onCover={() => onCover(cur.id)} />}
       </div>
       <div className="shrink-0 px-3 pt-2" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}>
@@ -1149,71 +1154,6 @@ function ClipTools({ tray, it, onCover }: { tray: ReturnType<typeof useSlideTray
           <Scissors className="h-4 w-4" /> {it.liftBefore !== undefined ? "Whole clip" : `Trim to the lift · ${formatClock(it.lift.end - it.lift.start)}`}
         </button>
       )}
-    </div>
-  );
-}
-
-/** The filters for the first photo: chips for the groups, then a circle each with its name. */
-function FilterStrip({ filters }: { filters: ComposerFilters }) {
-  const row = useRef<HTMLDivElement | null>(null);
-  const chips = (filters.groups ?? []).filter((g) => filters.items.some((l) => l.group === g.key));
-  const onItem = filters.items.find((l) => l.key === filters.on);
-  // the one on, glided to the middle of its own row (never scrollIntoView: that scrolls every box up the page,
-  // the steps' too, and slid the Edit step in over New post)
-  useEffect(() => {
-    const r = row.current;
-    const el = r?.querySelector<HTMLElement>(`[data-filter-key="${CSS.escape(filters.on)}"]`);
-    if (!r || !el) return;
-    r.scrollTo({ left: Math.max(0, el.offsetLeft - (r.clientWidth - el.offsetWidth) / 2), behavior: "smooth" });
-  }, [filters.on]);
-  const jump = (g: string) => {
-    const it = filters.items.find((l) => l.group === g);
-    if (it) {
-      filters.pick(it.key);
-      feedback("tap");
-    }
-  };
-  return (
-    <div className="pt-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-200" data-composer-filters>
-      {chips.length > 1 && (
-        <div className="mb-2 flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {chips.map((g) => (
-            <button
-              key={g.key}
-              type="button"
-              onClick={() => jump(g.key)}
-              aria-pressed={onItem?.group === g.key}
-              className={cn("h-8 shrink-0 rounded-full px-3 text-[13px] font-semibold transition-colors", onItem?.group === g.key ? "bg-white text-black" : "bg-white/10 text-white/80")}
-            >
-              {g.label}
-            </button>
-          ))}
-        </div>
-      )}
-      <div ref={row} className="flex gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="listbox" aria-label="Filters">
-        {filters.items.map((l) => {
-          const on = l.key === filters.on;
-          return (
-            <button
-              key={l.key}
-              type="button"
-              role="option"
-              aria-selected={on}
-              onClick={() => {
-                feedback("detent");
-                filters.pick(l.key);
-              }}
-              className="flex w-[66px] shrink-0 flex-col items-center gap-1.5"
-              data-filter-key={l.key}
-            >
-              <span className={cn("grid h-[58px] w-[58px] place-items-center rounded-full text-[26px] transition-all duration-200", on ? "scale-105 bg-white text-black ring-2 ring-white ring-offset-2 ring-offset-black" : "bg-white/12 text-white")}>
-                {l.look === "plain" && !l.emoji ? <span className="h-6 w-6 rounded-full border-2 border-current" /> : <LookGlyph item={l} className="h-6 w-6 text-[26px]" />}
-              </span>
-              <span className={cn("line-clamp-2 h-[26px] w-full text-center text-[11px] leading-[1.15]", on ? "font-bold text-white" : "font-medium text-white/65")}>{l.label}</span>
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }

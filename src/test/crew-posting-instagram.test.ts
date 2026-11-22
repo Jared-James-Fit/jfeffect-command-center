@@ -82,6 +82,20 @@ describe("New post, Instagram's way (Nov 22 2026)", () => {
     expect(studio).toContain("mentionStickerItem(a.user_id, tagHandle(a)");
     expect(read("src/components/community/crew-stories.tsx")).toContain("<MentionText text={caption} mentions={post.mentions} onOpen={onOpenPerson} />");
   });
+  it("a photo taken or picked is filtered with the camera's own row (chips, ring, name), in the story editor and on New post alike", () => {
+    const carousel = read("src/components/community/look-carousel.tsx");
+    // without a shutter it's a picker: the ring shows what's on and is never a photo button
+    expect(carousel).toContain("if (!many) return onShoot ? <Shutter");
+    expect(carousel).toContain("if (pick) return;");
+    // the story editor: the whole row over the picture's foot, stepping aside for a peek, framing or a sticker on its way to the bin
+    expect(studio).toContain("? { looks: filters, look: filter ?? null, onLook: onFilter, groups: filterGroups }");
+    expect(studio).toContain("<LookCarousel looks={editRing.looks} groups={editRing.groups} look={editRing.look} onLook={editRing.onLook} />");
+    expect(studio).toContain("peek || framingLive || stickerDrag ?");
+    expect(studio).toContain("onDragging={setStickerDrag}");
+    // New post's Edit step: the same row, not a strip of its own
+    expect(composer).toContain("<LookCarousel looks={filters.items} groups={filters.groups} look={filters.on} onLook={filters.pick} />");
+    expect(composer).not.toContain("function FilterStrip");
+  });
   it("leaving with something picked asks first; Share shows its upload in the button", () => {
     expect(composer).toContain("Discard post?");
     expect(composer).toContain('{uploading ? `Uploading… ${progress}%` : "Sharing…"}');
