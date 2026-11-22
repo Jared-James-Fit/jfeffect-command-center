@@ -44,7 +44,7 @@ export type Proposal = {
   confidence: Confidence;
   /** The preselected marker (medium / high). */
   key: TrackKey | null;
-  /** Other circles that moved, for the athlete to pick from. */
+  /** Other circles that moved, best first: the ring when there's no key, and where a tap snaps. */
   candidates: Candidate[];
   why: PlateFind["why"] | "edge_unclear";
   find: PlateFind | null;
@@ -72,7 +72,9 @@ export function toDecoys(still: CircleTrack[], plate: CircleTrack | null): Decoy
       const h = t.hits[t.hits.length >> 1];
       return { x: h.x, y: h.y, r: t.r };
     })
-    .filter((d) => !plate || !plate.hits.some((h) => Math.hypot(h.x - d.x, h.y - d.y) <= 0.6 * plate.r));
+    .filter(
+      (d) => !plate || !plate.hits.some((h) => Math.hypot(h.x - d.x, h.y - d.y) <= 0.6 * plate.r),
+    );
 }
 
 const keyOf = (
@@ -81,8 +83,9 @@ const keyOf = (
   source: KeySource,
 ): TrackKey => ({ t, x: rim.x, y: rim.y, a: rim.a, b: rim.b, source });
 
+/** The circles seen, best first, each once (the finder's best is also first among its others). */
 const candidatesOf = (tracks: CircleTrack[], skip: CircleTrack | null): Candidate[] =>
-  tracks
+  [...new Set(tracks)]
     .filter((t) => t !== skip)
     .slice(0, 4)
     .map((c) => {

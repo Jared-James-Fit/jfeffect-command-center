@@ -224,11 +224,8 @@ export async function liftChatVideo(
         engine: ENGINE_VERSION,
         status: "needs_tap",
         why: res.why,
-        suggestions: proposalSuggestions(
-          res.why === "needs_confirm"
-            ? res.proposal
-            : res.proposal && { ...res.proposal, key: null },
-        ),
+        // its best guess whatever the doubt: opening it is one ring to check
+        suggestions: proposalSuggestions(res.proposal ?? null),
       });
     } else if (res.why === "unreadable" || res.why === "too_short") {
       await saveNotRead(id, { engine: ENGINE_VERSION, status: "failed", why: res.why });
