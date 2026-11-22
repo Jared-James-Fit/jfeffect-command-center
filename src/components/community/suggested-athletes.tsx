@@ -1,6 +1,6 @@
 import { EyeOff, MoreHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
-import { UserAvatar } from "@/components/user-avatar";
+import { StoryAvatar } from "@/components/community/story-ring";
 import { CoachBadge } from "@/components/community/post-card";
 import { FollowButton } from "@/components/community/follow-button";
 import { MutualFaces } from "@/components/community/discover";
@@ -108,8 +108,9 @@ function SuggestionCard({ p, onOpen, onHide }: { p: DiscoverPerson; onOpen: (a: 
       >
         <X className="h-4 w-4" />
       </button>
+      {/* the photo plays their story when they have one up, else it opens their profile like the rest */}
+      <StoryAvatar userId={p.user_id} src={p.avatar_url} name={p.name} size={84} onPress={() => onOpen(p)} pressLabel={`${p.name}'s profile`} />
       <button type="button" onClick={() => onOpen(p)} className="flex w-full min-w-0 flex-col items-center active:opacity-80">
-        <UserAvatar src={p.avatar_url} name={p.name} size={84} expandable={false} />
         <span className="mt-2.5 flex w-full min-w-0 items-center justify-center gap-1">
           <span className="truncate text-[14px] font-bold">{p.name}</span>
           {p.is_coach && <CoachBadge className="h-3.5 w-3.5" />}

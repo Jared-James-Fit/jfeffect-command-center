@@ -17,7 +17,7 @@ import { OPEN_PERSON_EVENT } from "@/lib/community-notifications";
 import { PostDetailDialog } from "@/components/community/post-detail";
 import { MyTabPhoto, ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
-import { StoryRail } from "@/components/community/crew-stories";
+import { StoryHostProvider, StoryRail } from "@/components/community/crew-stories";
 import { StoryReplyHost } from "@/components/community/story-reply-host";
 import { ShareNudge } from "@/components/community/share-nudge";
 import { DiscoverPage } from "@/components/community/discover";
@@ -710,7 +710,8 @@ export function CommunityScreen({
   ) : null;
 
   return (
-    <>
+    // every photo under Crew rings when that person has a story up, and plays it on a tap (story-ring.tsx)
+    <StoryHostProvider posts={posts} unit={unit} viewerIsStaff={viewerIsStaff} onOpenPost={(id) => setDetailId(id)} onJumpTo={setJumpTo} onOpenPerson={openAuthor}>
     {crewBar}
     {/* Find athletes has no bar: its search field starts right under the status bar */}
     {ownBar && !crewBar && <div aria-hidden className="md:hidden" style={{ height: "var(--app-safe-top)" }} />}
@@ -953,7 +954,7 @@ export function CommunityScreen({
     <SwipeBack enabled={canSwipeBack} target={rootRef} onBack={swipeBack} onUsed={onSwipeUsed} />
     {swipeTip && <SwipeBackTip onDismiss={() => setSwipeTip(false)} />}
     {scope.kind === "feed" && <NewPostsPill count={newPosts.count} onShow={newPosts.show} />}
-    </>
+    </StoryHostProvider>
   );
 }
 

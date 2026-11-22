@@ -160,7 +160,7 @@ export function AccountProfileSettings({
 
       {!editing ? (
         <div className="flex items-center gap-4">
-          <UserAvatar src={path} name={fullName} size={72} ring />
+          <UserAvatar src={path} name={fullName} size={72} />
           <div className="min-w-0 flex-1">
             <div className="truncate text-base font-bold">{fullName || user.email}</div>
             <div className="truncate text-xs text-muted-foreground">{user.email}</div>

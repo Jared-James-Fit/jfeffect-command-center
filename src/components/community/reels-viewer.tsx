@@ -4,7 +4,7 @@ import { ChevronLeft, Heart, MessageCircle, Play, Volume2, VolumeX } from "lucid
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { ActivitySpinner } from "@/components/activity-spinner";
-import { UserAvatar } from "@/components/user-avatar";
+import { StoryAvatar } from "@/components/community/story-ring";
 import { ReactionBurst, useBurst } from "@/components/community/reaction-button";
 import { useHoldToPause, useSoundFlash } from "@/components/community/clip-gestures";
 import { holdFeedVideos } from "@/components/community/inline-video";
@@ -558,22 +558,13 @@ function ReelPage({
         )}
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}
       >
-        <button
-          type="button"
-          onClick={() => onOpenAuthor(post.author)}
-          className="pointer-events-auto flex max-w-full items-center gap-2.5 text-left active:opacity-70"
-          data-reel-author
-        >
-          <UserAvatar
-            src={post.author.avatar_url}
-            name={post.author.name}
-            size={34}
-            expandable={false}
-          />
-          <span className="truncate text-[15px] font-semibold [text-shadow:0_1px_2px_rgb(0_0_0/0.5)]">
+        <div className="pointer-events-auto flex max-w-full items-center gap-2.5" data-reel-author>
+          {/* their story ring when they have one up (a tap plays it), else their profile */}
+          <StoryAvatar userId={post.author.user_id} src={post.author.avatar_url} name={post.author.name} size={34} onPress={() => onOpenAuthor(post.author)} pressLabel={`${post.author.name}'s profile`} />
+          <button type="button" onClick={() => onOpenAuthor(post.author)} className="min-w-0 truncate text-left text-[15px] font-semibold [text-shadow:0_1px_2px_rgb(0_0_0/0.5)] active:opacity-70">
             {post.author.name}
-          </span>
-        </button>
+          </button>
+        </div>
         {item.slide.caption && (
           <div className="mt-2.5" data-reel-slide-caption>
             <div className="truncate text-[15px] font-semibold leading-tight [text-shadow:0_1px_2px_rgb(0_0_0/0.5)]">

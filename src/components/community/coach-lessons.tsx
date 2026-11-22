@@ -20,6 +20,7 @@ import {
 } from "@/lib/lessons";
 import { lessonKeys, useLessonAct, useLessonLibrary, useLessonsOverview, useLessonsSettings, useSaveLessonItem, type LessonAction } from "@/lib/lessons.queries";
 import { PostArtImage } from "@/components/community/post-art";
+import { StoryRing } from "@/components/community/story-ring";
 import { AutoPostHero } from "@/components/community/post-card";
 import { deckOf } from "@/lib/post-decks";
 import { StickerEditorSheet } from "@/components/community/sticker-editor";
@@ -312,10 +313,12 @@ function PlanRow({ row, mode, onOpen, onPlay }: { row: LessonPlanRow; mode: "rev
       </button>
       {onPlay && (
         // the story, one tap: a story ring, like the Crew's
-        <button type="button" onClick={onPlay} className="mr-3 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[conic-gradient(from_180deg,#ef3340,#f59e0b,#ef3340)] p-[2px] active:scale-95" aria-label={`Play ${it?.title ?? "this lesson"} as a story`} data-lesson-row-play>
-          <span className="grid h-full w-full place-items-center rounded-full bg-card">
-            <Play className="ml-0.5 h-3.5 w-3.5 fill-current" />
-          </span>
+        <button type="button" onClick={onPlay} className="mr-3 grid h-10 w-10 shrink-0 place-items-center rounded-full active:scale-95" aria-label={`Play ${it?.title ?? "this lesson"} as a story`} data-lesson-row-play>
+          <StoryRing state="unseen" size={32}>
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-muted">
+              <Play className="ml-0.5 h-3.5 w-3.5 fill-current" />
+            </span>
+          </StoryRing>
         </button>
       )}
     </li>

@@ -119,7 +119,7 @@ export function SettingsMenu({
               className="shrink-0"
               aria-label="View profile picture"
             >
-              <UserAvatar src={mePic} name={meName} size={40} ring expandable={false} />
+              <UserAvatar src={mePic} name={meName} size={40} expandable={false} />
             </button>
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold">{meName || user?.email}</div>

@@ -124,7 +124,6 @@ export function BirthdayCardView({
               src={avatarSrc ?? null}
               name={fullName || firstName || ""}
               size={compact ? 72 : 88}
-              ring
               expandable={false}
               tone="primary"
             />

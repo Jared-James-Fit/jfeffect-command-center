@@ -222,10 +222,12 @@ export function PinTile({
         </span>
       )}
       <span className="relative">
-        {/* one signal at a time: live is the turning ring and LIVE tag (an unread
-            chat still shows in the bold name); otherwise the unread badge,
-            sitting on the face's left edge, clear of the bubble */}
-        <LiveAvatar live={live} size={60}>{avatar}</LiveAvatar>
+        {/* one signal at a time: live is the dot on the photo (an unread chat
+            still shows in the bold name); otherwise the unread badge, sitting
+            on the face's left edge, clear of the bubble. A muted chat's bell
+            takes the dot's corner. A ring around a photo only ever means a
+            story. */}
+        <LiveAvatar live={live && !muted} size={60}>{avatar}</LiveAvatar>
         {unread && !live && (
           <span
             data-pin-unread

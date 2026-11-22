@@ -3,6 +3,7 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTi
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
+import { StoryAvatar } from "@/components/community/story-ring";
 import { cn } from "@/lib/utils";
 import { REACTION, likedByLine, reactionEmoji, reactionKinds, reactorsSeenAs, type CommunityAuthor, type CommunityPost } from "@/lib/community";
 import { usePostReactors, usePovViewer, usePrefetchPostReactors } from "@/lib/community.queries";
@@ -70,16 +71,17 @@ export function ReactorsSheet({
             const sub = r.author.username ? `@${r.author.username}` : r.author.title;
             return (
               <div key={r.author.user_id} className="flex w-full items-center gap-2 rounded-xl pr-3" data-reactor-row>
-                <button type="button" disabled={!open} onClick={open} className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2 text-left active:bg-muted disabled:active:bg-transparent">
-                  {/* another reaction sits on the photo (a ❤️ is the like itself), so it lines up whatever the Follow button says */}
-                  <span className="relative shrink-0">
-                    <UserAvatar src={r.author.avatar_url} name={r.author.name} size={44} expandable={false} />
-                    {other && (
-                      <span className="absolute -bottom-1 -right-1 grid h-[20px] w-[20px] place-items-center rounded-full bg-background text-[12px] leading-none shadow-sm" aria-label={`Reacted ${other}`}>
-                        {other}
-                      </span>
-                    )}
-                  </span>
+                {/* another reaction sits on the photo (a ❤️ is the like itself), so it lines up whatever the Follow button says;
+                    the photo plays their story when they have one up */}
+                <span className="relative ml-3 shrink-0">
+                  <StoryAvatar userId={r.author.user_id} src={r.author.avatar_url} name={r.author.name} size={44} onPress={open} pressLabel={`${r.author.name}'s profile`} />
+                  {other && (
+                    <span className="pointer-events-none absolute -bottom-1 -right-1 grid h-[20px] w-[20px] place-items-center rounded-full bg-background text-[12px] leading-none shadow-sm" aria-label={`Reacted ${other}`}>
+                      {other}
+                    </span>
+                  )}
+                </span>
+                <button type="button" disabled={!open} onClick={open} className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1 py-2 text-left active:bg-muted disabled:active:bg-transparent">
                   <span className="min-w-0 flex-1">
                     <span className="flex min-w-0 items-center gap-1 text-[14px] font-semibold">
                       <span className="truncate">{r.is_me ? "You" : r.author.name}</span>

@@ -1,7 +1,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { LiveAvatar, LivePill } from "@/components/live-indicator";
 import { cn } from "@/lib/utils";
-import { UserAvatar } from "@/components/user-avatar";
+import { StoryAvatar } from "@/components/community/story-ring";
 import { CoachBadge } from "@/components/community/post-card";
 import { FollowButton } from "@/components/community/follow-button";
 import { communityIsoDow, trainedLabel, trainingSinceLabel, type CommunityAuthor, type CommunityMember } from "@/lib/community";
@@ -80,13 +80,14 @@ export function CrewList({ onOpen, onOpenMe }: { onOpen: (a: CommunityAuthor) =>
       <div className="divide-y divide-border/60">
         {/* you first: your profile, your posts, your photo and bio */}
         {onOpenMe && me && (
-          <button type="button" data-crew-me onClick={onOpenMe} className="flex w-full items-center gap-3 px-3.5 py-3 text-left active:bg-muted">
-            <UserAvatar src={me.author.avatar_url} name={me.author.name} size={44} expandable={false} />
-            <span className="min-w-0 flex-1">
+          <div className="flex w-full items-center gap-3 px-3.5 py-3">
+            {/* your story ring when you have one up (a tap plays it), else your profile */}
+            <StoryAvatar userId={me.author.user_id} src={me.author.avatar_url} name={me.author.name} size={44} onPress={onOpenMe} pressLabel="Your profile" />
+            <button type="button" data-crew-me onClick={onOpenMe} className="min-w-0 flex-1 text-left active:opacity-70">
               <span className="block truncate text-[15px] font-bold">You</span>
               <span className="block truncate text-[12px] text-muted-foreground">Your profile · {me.posts === 1 ? "1 post" : `${me.posts ?? 0} posts`}</span>
-            </span>
-          </button>
+            </button>
+          </div>
         )}
         {members.map((m) => (
           <CrewRow key={m.author.user_id} m={m} today={today} onOpen={onOpen} />
@@ -102,11 +103,12 @@ function CrewRow({ m, today, onOpen }: { m: CommunityMember; today: number; onOp
   const days = m.week_days ?? [];
   return (
     <div data-crew-row className="flex w-full items-center gap-2 pr-3">
-    <button type="button" onClick={() => onOpen(m.author)} className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-3.5 text-left active:bg-muted">
-      {/* training now: the red ring turning around them (the Live pill sits by the name) */}
-      <LiveAvatar live={m.live} size={44} tone="red" tag={false}>
-        <UserAvatar src={m.author.avatar_url} name={m.author.name} size={44} expandable={false} />
-      </LiveAvatar>
+    {/* their story ring when they have one up (a tap plays it); training now: a red dot on the photo
+        (the Live pill sits by the name), never a ring */}
+    <LiveAvatar live={m.live} size={44} tone="red" tag={false} className="ml-3.5">
+      <StoryAvatar userId={m.author.user_id} src={m.author.avatar_url} name={m.author.name} size={44} onPress={() => onOpen(m.author)} pressLabel={`${m.author.name}'s profile`} />
+    </LiveAvatar>
+    <button type="button" onClick={() => onOpen(m.author)} className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-0 text-left active:bg-muted">
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
           <span className="truncate text-[15px] font-bold">{m.author.name}</span>

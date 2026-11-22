@@ -113,8 +113,6 @@ export interface UserAvatarProps {
   size?: number;
   /** Visual tone for the initials fallback. */
   tone?: Tone;
-  /** Add a thin border ring. */
-  ring?: boolean;
   className?: string;
   /**
    * Tap the avatar to open the photo viewer (photo-viewer.tsx: full screen,
@@ -134,7 +132,6 @@ export function UserAvatar({
   name,
   size = 36,
   tone = "neutral",
-  ring = false,
   className,
   expandable = true,
 }: UserAvatarProps) {
@@ -204,7 +201,6 @@ export function UserAvatar({
         onClick={handleClick}
         className={cn(
           "relative shrink-0 overflow-hidden rounded-full",
-          ring && "ring-1 ring-border",
           canExpand &&
             "cursor-zoom-in transition-transform duration-150 hover:scale-[1.04] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
           className,
