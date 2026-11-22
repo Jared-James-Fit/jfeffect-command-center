@@ -37,6 +37,8 @@ type Item = {
   draft: string | null;
   message_id: string | null;
   sent_at: string | null;
+  locked_at: string | null;
+  decided_by: string | null;
 };
 
 export type TickResult = { id: string; outcome: string };
@@ -46,14 +48,57 @@ async function event(admin: any, item: Pick<Item, "id" | "coach_user_id" | "clie
   if (error) console.error("[recovery-automation] event not recorded", kind, error.message);
 }
 
-async function finish(admin: any, item: Item, status: string, patch: Record<string, unknown> = {}, why?: string) {
-  await admin.from("coach_automation_items").update({ status, locked_at: null, updated_at: new Date().toISOString(), ...(why ? { why: why.slice(0, 400) } : {}), ...patch }).eq("id", item.id);
+/**
+ * A write only the run holding the item may make: the status it holds it in and
+ * the moment it took it. A coach's Dismiss (or Pause, or an approval) in the
+ * meantime moves the item on, and then nothing the run does afterwards lands.
+ */
+function held(q: any, item: Pick<Item, "id" | "status" | "locked_at">) {
+  q = q.eq("id", item.id).eq("status", item.status);
+  return item.locked_at ? q.eq("locked_at", item.locked_at) : q.is("locked_at", null);
+}
+
+/** Moves a held item on; false when it was taken away meanwhile (nothing was written). */
+async function finish(admin: any, item: Item, status: string, patch: Record<string, unknown> = {}, why?: string): Promise<boolean> {
+  const { data } = await held(
+    admin.from("coach_automation_items").update({ status, locked_at: null, updated_at: new Date().toISOString(), ...(why ? { why: why.slice(0, 400) } : {}), ...patch }),
+    item,
+  )
+    .select("id")
+    .maybeSingle();
+  return !!data;
 }
 
 async function cancel(admin: any, item: Item, why: string): Promise<TickResult> {
-  await finish(admin, item, "cancelled", {}, why);
+  if (!(await finish(admin, item, "cancelled", {}, why))) return { id: item.id, outcome: "taken away" };
   await event(admin, item, "cancelled", { why });
   return { id: item.id, outcome: `cancelled: ${why}` };
+}
+
+/** The item's message, when one already went (a run cut off after sending). */
+async function sentMessage(admin: any, item: Pick<Item, "id" | "client_id">): Promise<string | null> {
+  const { data } = await admin
+    .from("messages")
+    .select("id")
+    .eq("client_id", item.client_id)
+    .contains("attachments", JSON.stringify([{ kind: "recovery_auto", item_id: item.id }]))
+    .limit(1);
+  return data?.[0]?.id ?? null;
+}
+
+/**
+ * Takes a held item for one send: status `sending`, a fresh lock, the text that
+ * will go. Nothing else (Dismiss, another run, a second approval) can touch it
+ * after this, and a run cut off here is retried with exactly this text.
+ */
+export async function takeForSending(admin: any, item: Item, text: string, patch: Record<string, unknown> = {}): Promise<Item | null> {
+  const { data } = await held(
+    admin.from("coach_automation_items").update({ status: "sending", locked_at: new Date().toISOString(), draft: text, updated_at: new Date().toISOString(), ...patch }),
+    item,
+  )
+    .select("*")
+    .maybeSingle();
+  return (data as Item) ?? null;
 }
 
 /** The client as the worker needs them, still this coach's active coaching client. */
@@ -104,20 +149,23 @@ async function upcomingSessions(admin: any, clientId: string, today: string, reg
   });
 }
 
-/** Sends the text in the client's coach chat as the coach, tells the client, and plans the follow-up. */
-export async function sendItem(admin: any, item: Item, text: string, opts: { approvedBy: string | null; edited: boolean }): Promise<string> {
+/**
+ * Sends a taken item's text (status `sending`) in the client's coach chat as the
+ * coach, tells the client, and plans the follow-up. Never twice: a message for
+ * the item already in the chat is the send.
+ */
+export async function deliver(admin: any, item: Item, opts: { approvedBy: string | null; edited: boolean }): Promise<string> {
+  if (item.status !== "sending" || !item.draft) throw new Error("Not taken for sending.");
+  const text = item.draft;
   const now = new Date().toISOString();
   const automatic = !opts.approvedBy;
-  // never twice: a retry after a send that went finds it in the chat
-  const { data: already } = await admin
-    .from("messages")
-    .select("id")
-    .eq("client_id", item.client_id)
-    .contains("attachments", JSON.stringify([{ kind: "recovery_auto", item_id: item.id }]))
-    .limit(1);
-  if (already?.length) {
-    await admin.from("coach_automation_items").update({ status: "sent", message_id: already[0].id, sent_at: now, locked_at: null, updated_at: now }).eq("id", item.id);
-    return already[0].id;
+  const done = async (messageId: string) => {
+    await held(admin.from("coach_automation_items").update({ status: "sent", message_id: messageId, sent_at: now, locked_at: null, updated_at: now }), item);
+  };
+  const already = await sentMessage(admin, item);
+  if (already) {
+    await done(already);
+    return already;
   }
   const { data: msg, error } = await admin
     .from("messages")
@@ -138,10 +186,7 @@ export async function sendItem(admin: any, item: Item, text: string, opts: { app
     .select("id, client_id, sender_id, sender_role, is_internal_note, body, attachments")
     .single();
   if (error) throw new Error(`Message not sent: ${error.message}`);
-  await admin
-    .from("coach_automation_items")
-    .update({ status: "sent", message_id: msg.id, sent_at: now, draft: text, decided_by: opts.approvedBy, decided_at: opts.approvedBy ? now : null, locked_at: null, updated_at: now })
-    .eq("id", item.id);
+  await done(msg.id);
   if (opts.edited) await event(admin, item, "edited", {}, opts.approvedBy);
   if (opts.approvedBy) await event(admin, item, "approved", {}, opts.approvedBy);
   await event(admin, item, "sent", { automatic, message_id: msg.id }, opts.approvedBy);
@@ -156,6 +201,25 @@ export async function sendItem(admin: any, item: Item, text: string, opts: { app
   }
   if (item.category === "recovery_reply") await planItemFollowUp(admin, { ...item, status: "sent", sent_at: now }).catch((e) => console.error("[recovery-automation] follow-up not planned", e?.message));
   return msg.id;
+}
+
+/**
+ * The worker's own send (automatic): taken first, then the coach's setting read
+ * again right before it goes, so a Pause or a change of mode while it was being
+ * written is honoured: off cancels it, anything but automatic asks him instead.
+ */
+async function sendAutomatically(admin: any, item: Item, text: string): Promise<TickResult> {
+  const taken = await takeForSending(admin, item, text);
+  if (!taken) return { id: item.id, outcome: "taken away" };
+  const { data: mode } = await admin.rpc("coach_automation_mode_for", { _uid: item.coach_user_id, _client: item.client_id, _category: item.category });
+  if (mode !== "automatic") {
+    const status = mode === "off" || !mode ? "cancelled" : "awaiting_approval";
+    await held(admin.from("coach_automation_items").update({ status, locked_at: null, updated_at: new Date().toISOString(), why: status === "cancelled" ? "Switched off while it was being written" : "Your setting changed while it was being written, so it waits for you" }), taken);
+    await event(admin, item, status === "cancelled" ? "cancelled" : "awaiting_approval", { mode });
+    return { id: item.id, outcome: status };
+  }
+  await deliver(admin, taken, { approvedBy: null, edited: false });
+  return { id: item.id, outcome: "sent" };
 }
 
 async function planItemFollowUp(admin: any, item: Item) {
@@ -217,6 +281,9 @@ async function processReply(admin: any, item: Item, mode: string): Promise<TickR
   if (!client) return cancel(admin, item, "not an active coaching client of this coach any more");
   const { data: rows } = await admin.from("pain_reports").select("*").eq("feedback_id", item.source_id).order("created_at");
   if (!rows?.length) return cancel(admin, item, "the pain came off their review");
+  // a reply is about something they just said: never about a report two days old
+  const newest = Math.max(...(rows as any[]).map((r) => Date.parse(r.reported_at ?? r.created_at)));
+  if (Date.now() - newest > 2 * 86_400_000) return cancel(admin, item, "the report is too old to reply to now");
   const [{ entriesFromReports, buildPainHistory }, { loadPainEntries }, { redFlags }] = await Promise.all([
     import("@/lib/pain/history"),
     import("@/lib/pain/load"),
@@ -241,17 +308,19 @@ async function processReply(admin: any, item: Item, mode: string): Promise<TickR
   const { reportLine } = await import("@/lib/pain/report");
   const context = { reports: focus.map((e) => reportLine(e)), exercises: [...new Set(focus.map((e) => e.exerciseName).filter(Boolean))] };
   const next: Item = { ...item, regions, risk, risk_reasons: reasons, context, mode, draft: draft.message };
-  await admin
-    .from("coach_automation_items")
-    .update({ regions, risk, risk_reasons: reasons, mode, draft: draft.message, insights: draft.insights, model: draft.model, context, updated_at: new Date().toISOString(), ...(why ? { why } : {}) })
-    .eq("id", item.id);
+  const { data: kept } = await held(
+    admin
+      .from("coach_automation_items")
+      .update({ regions, risk, risk_reasons: reasons, mode, draft: draft.message, insights: draft.insights, model: draft.model, context, updated_at: new Date().toISOString(), ...(why ? { why } : {}) }),
+    item,
+  )
+    .select("id")
+    .maybeSingle();
+  if (!kept) return { id: item.id, outcome: "taken away" };
   await event(admin, item, "drafted", { risk, reasons, model: draft.model });
-  if (route === "send") {
-    await sendItem(admin, next, draft.message, { approvedBy: null, edited: false });
-    return { id: item.id, outcome: "sent" };
-  }
+  if (route === "send") return sendAutomatically(admin, next, draft.message);
   if (route === "draft") {
-    await finish(admin, next, "draft");
+    if (!(await finish(admin, next, "draft"))) return { id: item.id, outcome: "taken away" };
     await admin.from("pain_coach_reviews").insert({
       client_id: client.id,
       kind: "draft",
@@ -265,7 +334,7 @@ async function processReply(admin: any, item: Item, mode: string): Promise<TickR
     });
     return { id: item.id, outcome: "draft" };
   }
-  await finish(admin, next, "awaiting_approval");
+  if (!(await finish(admin, next, "awaiting_approval"))) return { id: item.id, outcome: "taken away" };
   await event(admin, item, risk === "urgent" ? "escalated" : "awaiting_approval", { risk, reasons });
   await tellCoach(admin, next, risk, draft.firstName);
   return { id: item.id, outcome: "awaiting_approval" };
@@ -320,19 +389,35 @@ async function processFollowUp(admin: any, item: Item, mode: string): Promise<Ti
     why = `The draft needs a look before it goes (${draft.warnings.join(", ")}).`;
   }
   const next: Item = { ...item, mode, draft: draft.message, risk };
-  await admin.from("coach_automation_items").update({ mode, draft: draft.message, insights: draft.insights, model: draft.model, updated_at: new Date().toISOString(), ...(why ? { why } : {}) }).eq("id", item.id);
+  const { data: kept } = await held(
+    admin.from("coach_automation_items").update({ mode, draft: draft.message, insights: draft.insights, model: draft.model, updated_at: new Date().toISOString(), ...(why ? { why } : {}) }),
+    item,
+  )
+    .select("id")
+    .maybeSingle();
+  if (!kept) return { id: item.id, outcome: "taken away" };
   await event(admin, item, "drafted", { model: draft.model, follow_up: true });
-  if (route === "send") {
-    await sendItem(admin, next, draft.message, { approvedBy: null, edited: false });
-    return { id: item.id, outcome: "sent" };
-  }
-  await finish(admin, next, "awaiting_approval");
+  if (route === "send") return sendAutomatically(admin, next, draft.message);
+  if (!(await finish(admin, next, "awaiting_approval"))) return { id: item.id, outcome: "taken away" };
   await event(admin, item, "awaiting_approval", { follow_up: true });
   await tellCoach(admin, next, risk, draft.firstName);
   return { id: item.id, outcome: "awaiting_approval" };
 }
 
 async function processItem(admin: any, item: Item): Promise<TickResult> {
+  // a run cut off after its message went: that was the send
+  const already = await sentMessage(admin, item);
+  if (already) {
+    await finish(admin, item, "sent", { message_id: already, sent_at: new Date().toISOString() });
+    return { id: item.id, outcome: "already sent" };
+  }
+  // a send the coach approved that was cut off: only ever his own words, never a new draft
+  if (item.decided_by && item.draft) {
+    const taken = await takeForSending(admin, item, item.draft);
+    if (!taken) return { id: item.id, outcome: "taken away" };
+    await deliver(admin, taken, { approvedBy: item.decided_by, edited: false });
+    return { id: item.id, outcome: "sent (approved)" };
+  }
   if (!(await userHasFeature(admin, item.coach_user_id, "automation.approval_queue"))) return cancel(admin, item, "automation isn't part of the coach's plan");
   const { data: mode, error } = await admin.rpc("coach_automation_mode_for", { _uid: item.coach_user_id, _client: item.client_id, _category: item.category });
   if (error) throw new Error(error.message);
@@ -340,9 +425,13 @@ async function processItem(admin: any, item: Item): Promise<TickResult> {
   return item.category === "recovery_follow_up" ? processFollowUp(admin, item, mode) : processReply(admin, item, mode);
 }
 
+/**
+ * New items are claimed only in a run's first 15 s: one item can take about a
+ * minute and a half (two model calls), and the database's call gives up at 120 s.
+ */
 export async function runAutomationTick(admin: any, opts: { itemId?: string | null; budgetMs?: number } = {}): Promise<{ processed: TickResult[] }> {
   const started = Date.now();
-  const budget = opts.budgetMs ?? 50_000;
+  const budget = opts.budgetMs ?? 15_000;
   const processed: TickResult[] = [];
   while (Date.now() - started < budget) {
     const { data, error } = await admin.rpc("coach_automation_claim", { _id: opts.itemId ?? null });
@@ -354,7 +443,9 @@ export async function runAutomationTick(admin: any, opts: { itemId?: string | nu
     } catch (e: any) {
       const message = String(e?.message ?? e).slice(0, 500);
       console.error("[recovery-automation] item failed", item.id, message);
-      await admin.from("coach_automation_items").update({ status: "failed", error: message, locked_at: null, updated_at: new Date().toISOString() }).eq("id", item.id);
+      // only while this run still holds it (in either state it can hold it in)
+      const now = new Date().toISOString();
+      await admin.from("coach_automation_items").update({ status: "failed", error: message, locked_at: null, updated_at: now }).eq("id", item.id).in("status", ["working", "sending"]);
       await event(admin, item, "failed", { error: message, attempt: item.attempts });
       processed.push({ id: item.id, outcome: `failed: ${message}` });
     }

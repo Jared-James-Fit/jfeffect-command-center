@@ -61,7 +61,7 @@ DROP POLICY IF EXISTS "Staff read the capability catalog" ON public.cleo_feature
 CREATE POLICY "Staff read the capability catalog" ON public.cleo_features FOR SELECT TO authenticated
   USING ((SELECT public.has_role((SELECT auth.uid()), 'admin'::public.app_role)) OR (SELECT public.has_role((SELECT auth.uid()), 'coach'::public.app_role)));
 REVOKE ALL ON public.cleo_features FROM anon;
-REVOKE INSERT, UPDATE, DELETE ON public.cleo_features FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.cleo_features FROM authenticated;
 GRANT SELECT ON public.cleo_features TO authenticated;
 GRANT ALL ON public.cleo_features TO service_role;
 
@@ -107,7 +107,7 @@ DROP POLICY IF EXISTS "People read their own grants" ON public.cleo_entitlement_
 CREATE POLICY "People read their own grants" ON public.cleo_entitlement_grants FOR SELECT TO authenticated
   USING (user_id = (SELECT auth.uid()));
 REVOKE ALL ON public.cleo_entitlement_grants FROM anon;
-REVOKE INSERT, UPDATE, DELETE ON public.cleo_entitlement_grants FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.cleo_entitlement_grants FROM authenticated;
 GRANT SELECT ON public.cleo_entitlement_grants TO authenticated;
 GRANT ALL ON public.cleo_entitlement_grants TO service_role;
 
@@ -313,7 +313,7 @@ DROP POLICY IF EXISTS "Coaches read their own client rules" ON public.coach_auto
 CREATE POLICY "Coaches read their own client rules" ON public.coach_automation_client_rules FOR SELECT TO authenticated
   USING (user_id = (SELECT auth.uid()));
 REVOKE ALL ON public.coach_automation_settings, public.coach_automation_client_rules FROM anon;
-REVOKE INSERT, UPDATE, DELETE ON public.coach_automation_settings, public.coach_automation_client_rules FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.coach_automation_settings, public.coach_automation_client_rules FROM authenticated;
 GRANT SELECT ON public.coach_automation_settings, public.coach_automation_client_rules TO authenticated;
 GRANT ALL ON public.coach_automation_settings, public.coach_automation_client_rules TO service_role;
 
@@ -376,8 +376,9 @@ CREATE TABLE IF NOT EXISTS public.coach_automation_items (
   source_id uuid,
   parent_id uuid REFERENCES public.coach_automation_items(id) ON DELETE SET NULL,
   regions text[] NOT NULL DEFAULT '{}',
+  -- sending: taken for one send (the worker's or an approval's), so nothing else can touch it
   status text NOT NULL DEFAULT 'queued' CHECK (status IN (
-    'queued', 'working', 'draft', 'awaiting_approval', 'sent', 'dismissed', 'cancelled', 'failed')),
+    'queued', 'working', 'sending', 'draft', 'awaiting_approval', 'sent', 'dismissed', 'cancelled', 'failed')),
   mode text CHECK (mode IN ('manual', 'approval', 'automatic')),
   risk text CHECK (risk IN ('routine', 'review', 'urgent')),
   risk_reasons text[] NOT NULL DEFAULT '{}',
@@ -397,7 +398,7 @@ CREATE TABLE IF NOT EXISTS public.coach_automation_items (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS coach_automation_items_due ON public.coach_automation_items (due_at) WHERE status IN ('queued', 'working', 'failed');
+CREATE INDEX IF NOT EXISTS coach_automation_items_due ON public.coach_automation_items (due_at) WHERE status IN ('queued', 'working', 'sending', 'failed');
 CREATE INDEX IF NOT EXISTS coach_automation_items_coach ON public.coach_automation_items (coach_user_id, status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS coach_automation_items_client ON public.coach_automation_items (client_id, created_at DESC);
 
@@ -406,7 +407,7 @@ DROP POLICY IF EXISTS "Coaches read their own automation items" ON public.coach_
 CREATE POLICY "Coaches read their own automation items" ON public.coach_automation_items FOR SELECT TO authenticated
   USING (coach_user_id = (SELECT auth.uid()) AND (SELECT public.cleo_feature('automation.approval_queue')));
 REVOKE ALL ON public.coach_automation_items FROM anon;
-REVOKE INSERT, UPDATE, DELETE ON public.coach_automation_items FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.coach_automation_items FROM authenticated;
 GRANT SELECT ON public.coach_automation_items TO authenticated;
 GRANT ALL ON public.coach_automation_items TO service_role;
 
@@ -445,7 +446,7 @@ DROP POLICY IF EXISTS "Coaches read their own automation record" ON public.coach
 CREATE POLICY "Coaches read their own automation record" ON public.coach_automation_events FOR SELECT TO authenticated
   USING (coach_user_id = (SELECT auth.uid()) AND (SELECT public.cleo_feature('automation.approval_queue')));
 REVOKE ALL ON public.coach_automation_events FROM anon;
-REVOKE INSERT, UPDATE, DELETE ON public.coach_automation_events FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.coach_automation_events FROM authenticated;
 GRANT SELECT ON public.coach_automation_events TO authenticated;
 GRANT INSERT, SELECT ON public.coach_automation_events TO service_role;
 
@@ -540,6 +541,9 @@ DECLARE
   v_mode text;
 BEGIN
   IF NEW.source <> 'review' OR NEW.feedback_id IS NULL THEN RETURN NEW; END IF;
+  -- only a report made in the last day: saving or tidying an old review (or a link to it
+  -- clearing) never queues a reply about pain from weeks ago
+  IF NEW.reported_at < now() - interval '1 day' THEN RETURN NEW; END IF;
   SELECT co.user_id INTO v_coach
     FROM public.clients c JOIN public.coaches co ON co.id = c.assigned_coach_id
    WHERE c.id = NEW.client_id AND c.service_tier = 'coaching' AND NOT coalesce(c.archived, false)
@@ -567,26 +571,34 @@ CREATE TRIGGER pain_reports_queue_reply AFTER INSERT OR UPDATE ON public.pain_re
   FOR EACH ROW EXECUTE FUNCTION public.tg_pain_reports_queue_reply();
 
 -- The worker claims one item at a time (no double sends across overlapping runs).
+-- An item a run was cut off in (working or sending for 10 minutes) is tried again,
+-- three tries in all; after that it's failed, never retried forever.
 CREATE OR REPLACE FUNCTION public.coach_automation_claim(_id uuid DEFAULT NULL)
 RETURNS SETOF public.coach_automation_items
-LANGUAGE sql
+LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
+BEGIN
+  UPDATE public.coach_automation_items
+     SET status = 'failed', error = 'Stopped after three tries', locked_at = NULL, updated_at = now()
+   WHERE status IN ('working', 'sending') AND locked_at < now() - interval '10 minutes' AND attempts >= 3;
+  RETURN QUERY
   UPDATE public.coach_automation_items i
-     SET status = 'working', locked_at = now(), attempts = i.attempts + 1, updated_at = now()
+     SET status = 'working', locked_at = clock_timestamp(), attempts = i.attempts + 1, updated_at = now()
    WHERE i.id = (
      SELECT x.id FROM public.coach_automation_items x
       WHERE (_id IS NULL OR x.id = _id)
         AND x.due_at <= now()
         AND (x.status = 'queued'
-          OR (x.status = 'working' AND x.locked_at < now() - interval '10 minutes')
+          OR (x.status IN ('working', 'sending') AND x.locked_at < now() - interval '10 minutes' AND x.attempts < 3)
           OR (x.status = 'failed' AND x.attempts < 3 AND x.updated_at < now() - interval '10 minutes'))
       ORDER BY x.due_at
       LIMIT 1
       FOR UPDATE SKIP LOCKED
    )
   RETURNING i.*;
+END;
 $$;
 REVOKE ALL ON FUNCTION public.coach_automation_claim(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.coach_automation_claim(uuid) TO service_role;
@@ -612,7 +624,7 @@ BEGIN
       SELECT 1 FROM public.coach_automation_items
        WHERE due_at <= now()
          AND (status = 'queued'
-           OR (status = 'working' AND locked_at < now() - interval '10 minutes')
+           OR (status IN ('working', 'sending') AND locked_at < now() - interval '10 minutes')
            OR (status = 'failed' AND attempts < 3 AND updated_at < now() - interval '10 minutes'))
     );
     $cmd$

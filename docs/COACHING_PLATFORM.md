@@ -287,4 +287,4 @@ again at execution, so a revoked or expired grant stops at once. Pricing and
 subscriptions stay outside this: a future plan only writes grants. Owner
 automation acts only on clients assigned to the owner's own coach record; it
 never reaches another coach's clients. Database tests:
-`supabase/tests/recovery-automation/` (64 checks, real Postgres).
+`supabase/tests/recovery-automation/` (68 checks, real Postgres).

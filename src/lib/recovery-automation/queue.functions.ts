@@ -11,7 +11,10 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { MyCapabilities } from "@/lib/cleo-capabilities";
 
-const OPEN = ["queued", "working", "draft", "awaiting_approval", "failed"];
+/** Still open (not sent, dismissed or cancelled). `sending` is open but can't be dismissed: it's going. */
+const OPEN = ["queued", "working", "sending", "draft", "awaiting_approval", "failed"];
+/** What Dismiss can stop: anything not already being sent. A reply being written is stopped too; its run's later writes never land. */
+const STOPPABLE = ["queued", "working", "draft", "awaiting_approval", "failed"];
 
 export type RecoveryItem = {
   id: string;
@@ -144,21 +147,25 @@ export const approveRecoveryItemFn = createServerFn({ method: "POST" })
     if (!["draft", "awaiting_approval", "failed"].includes(item.status)) throw new Error("This one isn't waiting to be sent.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = supabaseAdmin as any;
-    // take it, so a second tap (or the worker) can't send it too
+    const userId = (context as any).userId as string;
+    const now = new Date().toISOString();
+    // take it with his words and his name on it, so a second tap, the worker or Dismiss can't
+    // touch it, and a send that's cut off is retried with exactly these words
     const { data: taken } = await admin
       .from("coach_automation_items")
-      .update({ status: "working", locked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .update({ status: "sending", draft: data.text, decided_by: userId, decided_at: now, locked_at: now, updated_at: now })
       .eq("id", item.id)
       .in("status", ["draft", "awaiting_approval", "failed"])
       .select("*")
       .maybeSingle();
     if (!taken) throw new Error("It was already sent or dismissed.");
-    const { sendItem } = await import("@/lib/recovery-automation/run.server");
+    const { deliver } = await import("@/lib/recovery-automation/run.server");
     try {
-      const messageId = await sendItem(admin, taken, data.text, { approvedBy: (context as any).userId, edited: data.text.trim() !== String(item.draft ?? "").trim() });
+      const messageId = await deliver(admin, taken, { approvedBy: userId, edited: data.text.trim() !== String(item.draft ?? "").trim() });
       return { messageId };
     } catch (e: any) {
-      await admin.from("coach_automation_items").update({ status: item.status, locked_at: null }).eq("id", item.id);
+      // nothing went: back to waiting for him, with what he wrote kept
+      await admin.from("coach_automation_items").update({ status: "awaiting_approval", decided_by: null, decided_at: null, locked_at: null }).eq("id", item.id).eq("status", "sending").is("message_id", null);
       throw e;
     }
   });
@@ -175,10 +182,10 @@ export const dismissRecoveryItemFn = createServerFn({ method: "POST" })
       .from("coach_automation_items")
       .update({ status: "dismissed", decided_by: (context as any).userId, decided_at: new Date().toISOString(), locked_at: null, updated_at: new Date().toISOString() })
       .eq("id", item.id)
-      .in("status", OPEN)
+      .in("status", STOPPABLE)
       .select("id")
       .maybeSingle();
-    if (!done) throw new Error("It isn't waiting any more.");
+    if (!done) throw new Error("It's already going, or it isn't waiting any more.");
     await admin.from("coach_automation_events").insert({ item_id: item.id, coach_user_id: item.coach_user_id, client_id: item.client_id, kind: "dismissed", actor: (context as any).userId, detail: {} });
     return { ok: true };
   });
@@ -212,7 +219,7 @@ export const unsendRecoveryItemFn = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     await admin.from("coach_automation_items").update({ status: "cancelled", why: "Taken back by you after it went", updated_at: new Date().toISOString() }).eq("id", item.id);
     // its follow-up goes with it
-    await admin.from("coach_automation_items").update({ status: "cancelled", why: "The reply it followed was taken back", updated_at: new Date().toISOString() }).eq("parent_id", item.id).in("status", OPEN);
+    await admin.from("coach_automation_items").update({ status: "cancelled", why: "The reply it followed was taken back", locked_at: null, updated_at: new Date().toISOString() }).eq("parent_id", item.id).in("status", STOPPABLE);
     await admin.from("coach_automation_events").insert({ item_id: item.id, coach_user_id: item.coach_user_id, client_id: item.client_id, kind: "unsent", actor: (context as any).userId, detail: { message_id: item.message_id } });
     return { ok: true };
   });

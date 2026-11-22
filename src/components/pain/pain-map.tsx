@@ -607,6 +607,8 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
   const [text, setText] = useState("");
   const [result, setResult] = useState<DescribeResult | null>(null);
   const [choices, setChoices] = useState<Record<string, SideChoice>>({});
+  // rows they took off the confirm list
+  const [dropped, setDropped] = useState<Set<string>>(new Set());
   const [reading, setReading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [hearing, setHearing] = useState(false);
@@ -621,6 +623,7 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
     if (t.length < 3) return;
     setNote(null);
     setChoices({});
+    setDropped(new Set());
     const local = describePain(t, { exercises: ctx?.exercises ?? [] });
     if (local.places.length || local.unclear.length) {
       setResult(local);
@@ -668,7 +671,7 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
     }
   };
 
-  const groups = useMemo(() => (result ? describedGroups(result.places) : []), [result]);
+  const groups = useMemo(() => (result ? describedGroups(result.places).filter((g) => !dropped.has(g.key)) : []), [result, dropped]);
   const finalPlaces = useMemo(
     () => groups.flatMap((g) => (choices[g.key] ? chooseSide(g, choices[g.key]) : g.places)),
     [groups, choices],
@@ -747,9 +750,23 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
               const rest = places[0] ? describedLine({ ...places[0], score: null }) : "";
               return (
                 <div key={g.key} className="space-y-2 rounded-xl border border-white/10 p-3" data-pain-describe-row={g.key}>
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p className="text-[15px] font-semibold">{name}</p>
-                    <p className={cn("shrink-0 text-[13px] font-semibold tabular-nums", scores ? "text-foreground" : "text-warning")}>{scores || "rate it next"}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="min-w-0 text-[15px] font-semibold">{name}</p>
+                    <span className="flex shrink-0 items-center gap-1">
+                      <span className={cn("text-[13px] font-semibold tabular-nums", scores ? "text-foreground" : "text-warning")}>{scores || "rate it next"}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          feedback("tap");
+                          setDropped((d) => new Set([...d, g.key]));
+                        }}
+                        className="-mr-1.5 inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-white/10"
+                        aria-label={`Not ${name.toLowerCase()}`}
+                        data-pain-describe-drop
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </span>
                   </div>
                   {(rest || places[0]?.feel.length) && (
                     <p className="text-[12px] text-muted-foreground">

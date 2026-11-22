@@ -433,6 +433,9 @@ export function describedLine(p: DescribedPlace): string {
 
 // ── what the server's reader sent back, checked against their words ─────
 
+/** A body part said in the plural ("my knees"): both sides. */
+const PLURAL_PLACES = /\b(?:knees|shoulders|elbows|wrists|hands|hips|ankles|calves|quads|hamstrings|glutes|shins|feet|heels|thumbs|thighs|delts|lats|traps|forearms|arms|legs|pecs)\b/;
+
 const FEEL_SET = new Set<Feel>(["sore", "tight", "ache", "sharp", "pinch", "numb", "swollen", "pop", "burning", "other"]);
 const TIMING_SET = new Set<Timing>(["during", "after", "rest", "movement"]);
 const IMPACT_SET = new Set<Impact>(["none", "modified", "stopped"]);
@@ -461,11 +464,18 @@ export function groundedPlaces(raw: unknown, original: string, opts: { exercises
     const site = siteDef && siteDef.region === region ? siteDef.key : null;
     const sided = site ? !siteDef!.midline && sidedRegion(region) : sidedRegion(region);
     const canSide = site ? !siteDef!.midline : sidedRegion(region) || lateralRegion(region);
-    const rawSide = p.side === "L" || p.side === "R" || p.side === "both" ? p.side : null;
+    // a side only when they said one (left, right, both, or a plural): else it's asked
+    const saidSide = sidesIn(text).length > 0 || PLURAL_PLACES.test(text);
+    const rawSide = saidSide && (p.side === "L" || p.side === "R" || p.side === "both") ? p.side : null;
     const score = typeof p.score === "number" && Number.isInteger(p.score) && p.score >= 0 && p.score <= 10 && numberSaid(text, p.score) ? p.score : null;
-    const feel = (Array.isArray(p.feel) ? p.feel : []).filter((f): f is Feel => typeof f === "string" && FEEL_SET.has(f as Feel));
-    const timing = (Array.isArray(p.timing) ? p.timing : []).filter((t): t is Timing => typeof t === "string" && TIMING_SET.has(t as Timing));
-    const impact = typeof p.impact === "string" && IMPACT_SET.has(p.impact as Impact) ? (p.impact as Impact) : null;
+    // what it feels like, when, and what it did to the session: only what their own words say
+    // (a made-up "numb" would raise a warning sign that was never reported)
+    const saidFeels = new Set(feelsIn(text));
+    const saidTiming = new Set(TIMING_WORDS.filter(([re]) => re.test(text)).map(([, t]) => t));
+    const saidImpact = firstOf(IMPACT_WORDS, text);
+    const feel = (Array.isArray(p.feel) ? p.feel : []).filter((f): f is Feel => typeof f === "string" && FEEL_SET.has(f as Feel) && saidFeels.has(f as Feel));
+    const timing = (Array.isArray(p.timing) ? p.timing : []).filter((t): t is Timing => typeof t === "string" && TIMING_SET.has(t as Timing) && saidTiming.has(t as Timing));
+    const impact = typeof p.impact === "string" && IMPACT_SET.has(p.impact as Impact) && saidImpact === p.impact ? (p.impact as Impact) : null;
     const said = typeof p.exercise === "string" ? norm(p.exercise) : "";
     const exWords = said.split(/[^a-z0-9]+/).filter((w) => w.length >= 4);
     const exercise = said && exWords.some((w) => text.includes(w)) ? exerciseIn(said, opts.exercises ?? []) ?? exerciseIn(text, opts.exercises ?? []) : null;

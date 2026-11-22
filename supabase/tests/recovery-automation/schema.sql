@@ -43,7 +43,8 @@ create table messages (id uuid primary key default gen_random_uuid(), client_id 
 create table pl_workout_feedback (id uuid primary key default gen_random_uuid(), client_id uuid);
 create table pain_reports (
   id uuid primary key default gen_random_uuid(), client_id uuid not null references clients(id),
-  feedback_id uuid, checkin_id uuid, source text not null, region text not null, side text, site text, score smallint);
+  feedback_id uuid, checkin_id uuid, source text not null, region text not null, side text, site text, score smallint,
+  reported_at timestamptz not null default now());
 
 create function t_assert(_ok boolean, _msg text) returns void language plpgsql as $$
 begin if not coalesce(_ok, false) then raise exception 'ASSERT FAILED: %', _msg; end if; raise notice 'ok: %', _msg; end $$;

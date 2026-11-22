@@ -217,7 +217,8 @@ describe("the server reader's answer is checked against their words", () => {
     const raw = { places: [{ region: "knee", site: "biceps", side: "L", score: 7, feel: ["sharp", "made-up"], timing: ["during"], exercise: "bench press", impact: null, words: "left knee feels off" }] };
     const r = groundedPlaces(raw, "my left knee feels off when I squat", { sites, exercises: [{ id: "x", name: "Competition Squat" }] });
     expect(r.places).toHaveLength(1);
-    expect(r.places[0]).toMatchObject({ region: "knee", site: null, side: "L", score: null, feel: ["sharp"], exerciseName: null, note: "left knee feels off" });
+    // "sharp" was never said, so it's dropped too
+    expect(r.places[0]).toMatchObject({ region: "knee", site: null, side: "L", score: null, feel: [], exerciseName: null, note: "left knee feels off" });
   });
 
   it("keeps what they did say, both sides included", () => {
@@ -226,6 +227,16 @@ describe("the server reader's answer is checked against their words", () => {
     expect(r.places.map((p) => [p.side, p.score, p.exerciseName])).toEqual([["L", 4, "Overhead press"], ["R", 4, "Overhead press"]]);
     expect(r.places[0].note).toBe("shoulders are about a 4 on overhead press");
     expect(r.unclear.map((u) => u.word)).toEqual(["back"]);
+  });
+
+  it("never keeps a feeling, a timing, an impact or a side they didn't say (a made-up numb would raise a warning sign)", () => {
+    const raw = { places: [{ region: "low_back", side: "R", score: null, feel: ["numb", "ache"], timing: ["rest"], impact: "stopped", words: "lowr bak is achy" }] };
+    const r = groundedPlaces(raw, "lowr bak is achy", { sites });
+    expect(r.places[0]).toMatchObject({ region: "low_back", side: null, feel: ["ache"], timing: [], impact: null });
+    const sided = groundedPlaces({ places: [{ region: "knee", side: "L" }] }, "my left kneee is sore", { sites });
+    expect(sided.places[0].side).toBe("L");
+    const unsaid = groundedPlaces({ places: [{ region: "knee", side: "L" }] }, "kneee is sore", { sites });
+    expect(unsaid.places[0]).toMatchObject({ side: null, needs: ["score", "side"] });
   });
 
   it("an unknown region or 'other' is never a place", () => {

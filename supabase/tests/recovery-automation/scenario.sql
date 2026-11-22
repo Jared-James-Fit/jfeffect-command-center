@@ -227,6 +227,30 @@ exception when insufficient_privilege then raise notice 'ok: claiming is the wor
 end $$;
 reset role;
 
+-- A report from an old review that's saved again (or touched by a link clearing) queues nothing.
+reset role; select t_as_service(); set role service_role;
+insert into pain_reports (client_id, feedback_id, source, region, reported_at) values (:devin, '00000000-0000-0000-0000-00000000fb09', 'review', 'calf', now() - interval '3 days');
+reset role;
+reset role; select t_as(:owner); set role authenticated;
+select coach_automation_settings_set(false, '{"recovery_reply":"approval"}');
+select coach_automation_client_rule_set(:devin, 'recovery_reply', null);
+reset role;
+reset role; select t_as_service(); set role service_role;
+update pain_reports set score = 4 where feedback_id = '00000000-0000-0000-0000-00000000fb09';
+select t_assert((select count(*) = 0 from coach_automation_items where dedupe_key like '%fb09'), 'an old review edited later queues nothing');
+reset role;
+
+-- A run cut off mid-item is retried, three tries in all, then failed (never forever).
+update coach_automation_items set status = 'working', attempts = 3, locked_at = now() - interval '11 minutes' where client_id = :marc;
+reset role; select t_as_service(); set role service_role;
+select t_assert((select count(*) = 0 from coach_automation_claim((select id from coach_automation_items where client_id = :marc))), 'a third cut-off run is not claimed again');
+select t_assert((select status = 'failed' and error like 'Stopped%' from coach_automation_items where client_id = :marc), 'it''s failed, saying why');
+reset role;
+update coach_automation_items set status = 'sending', attempts = 1, locked_at = now() - interval '11 minutes', error = null where client_id = :marc;
+reset role; select t_as_service(); set role service_role;
+select t_assert((select count(*) = 1 from coach_automation_claim((select id from coach_automation_items where client_id = :marc))), 'a send that was cut off is picked up again');
+reset role;
+
 -- ════ 6. The record is never rewritten ═══════════════════════════════════════
 do $$ begin
   update coach_automation_events set kind = 'sent';

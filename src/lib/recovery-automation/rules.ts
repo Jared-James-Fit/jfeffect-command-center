@@ -244,6 +244,7 @@ export function followUpStillRelevant(opts: {
 export const STATUS_WORDS: Record<string, string> = {
   queued: "Waiting a moment",
   working: "Writing it",
+  sending: "Sending",
   draft: "Draft ready",
   awaiting_approval: "Needs your OK",
   sent: "Sent",

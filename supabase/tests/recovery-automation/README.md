@@ -26,4 +26,4 @@ PSQL="psql -h /tmp/pgsec -p 54331 -U postgres" supabase/tests/recovery-automatio
 
 The migration runs twice (it's idempotent). The last lines are
 `recovery-automation: all assertions passed` and
-`recovery-automation: rolled back cleanly` (64 checks).
+`recovery-automation: rolled back cleanly` (68 checks).

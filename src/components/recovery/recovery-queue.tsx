@@ -37,7 +37,7 @@ import { regionOf } from "@/lib/pain/regions";
 export const RECOVERY_QUEUE_KEY = ["recovery-queue"] as const;
 
 const TODO = new Set(["awaiting_approval", "draft", "failed"]);
-const COMING = new Set(["queued", "working"]);
+const COMING = new Set(["queued", "working", "sending"]);
 
 function rank(i: RecoveryItem): number {
   if (i.risk === "urgent") return 0;
@@ -282,7 +282,7 @@ function ItemCard({ item, focused, onOpenChat, onOpenReport }: { item: RecoveryI
             {retry.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-1.5 h-4 w-4" />} Try again
           </Button>
         )}
-        {COMING.has(item.status) && (
+        {(item.status === "queued" || item.status === "working") && (
           <Button size="sm" variant="ghost" onClick={() => dismiss.mutate()} disabled={dismiss.isPending}>
             Don't send this
           </Button>
