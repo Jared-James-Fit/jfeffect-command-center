@@ -20726,6 +20726,7 @@ export type Database = {
           is_optional: boolean
           load_kg: number | null
           load_lb: number | null
+          load_round: string | null
           load_unit: string | null
           manual_override: boolean
           measurement_type: string
@@ -20766,6 +20767,7 @@ export type Database = {
           is_optional?: boolean
           load_kg?: number | null
           load_lb?: number | null
+          load_round?: string | null
           load_unit?: string | null
           manual_override?: boolean
           measurement_type?: string
@@ -20806,6 +20808,7 @@ export type Database = {
           is_optional?: boolean
           load_kg?: number | null
           load_lb?: number | null
+          load_round?: string | null
           load_unit?: string | null
           manual_override?: boolean
           measurement_type?: string

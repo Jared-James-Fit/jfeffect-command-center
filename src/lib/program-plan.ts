@@ -15,6 +15,10 @@
 export type Effort = "rpe" | "rir";
 export type LoadBasis = "1rm" | "top_set";
 export type WeightUnit = "kg" | "lb";
+/** What a set group is in its exercise (null: plain working sets). */
+export type SetRole = "warmup" | "top" | "backoff";
+/** How a % of the top set rounds: "fine" is 2.5 lb / 1 kg (small plates); null is 5 lb / 2.5 kg. */
+export type LoadRound = "fine";
 
 export type PlanExercise = {
   key: string;
@@ -32,6 +36,20 @@ export type PlanExercise = {
   rest_seconds?: number | null;
   tempo?: string | null;
   notes?: string | null;
+  /**
+   * Set groups: one exercise written as several prescriptions (a top set,
+   * its back-offs, warm-ups, or groups the person names), each its own entry
+   * in the day, next to each other, sharing `group`. Started, each working
+   * group is its own row in the logger (the role its label), so a back-off
+   * at a % of the top set follows the top set they lift.
+   */
+  role?: SetRole | null;
+  /** A set group's own name ("Pause singles") when it isn't a role. */
+  label?: string | null;
+  /** Shared by the set groups of one exercise; null for an exercise of one group. */
+  group?: string | null;
+  /** How a % of the top set rounds (null: 5 lb / 2.5 kg). */
+  round?: LoadRound | null;
   /** read back from the library (never saved) */
   name?: string | null;
   /** An imported exercise's name as its file wrote it, while the person reviews the import (never saved). */
@@ -47,8 +65,8 @@ export type ProgramPlan = { v: 1; blocks: PlanBlock[] };
 /** Where the builder is: a block, a week in it, a day in that week (indexes). */
 export type Cursor = { b: number; w: number; d: number };
 export type WeekRef = { b: number; w: number };
-/** Which weeks an edit reaches. */
-export type Scope = "week" | "following" | "block";
+/** Which weeks an edit reaches: this week, this week to the end of its block, its block, or every week. */
+export type Scope = "week" | "following" | "block" | "program";
 
 /** What the database takes (athlete_program_clean_plan). */
 export const MAX_BLOCKS = 8;
@@ -223,6 +241,10 @@ export function normalizePlan(
             rest_seconds: numOrNull(e.rest_seconds),
             tempo: e.tempo ? str(e.tempo) : null,
             notes: e.notes ? str(e.notes) : null,
+            role: e.role === "warmup" || e.role === "top" || e.role === "backoff" ? e.role : null,
+            label: e.label ? str(e.label).slice(0, 40) : null,
+            group: typeof e.group === "string" && KEY_RE.test(e.group) ? e.group : null,
+            round: e.round === "fine" ? "fine" : null,
             name: e.name ?? lib?.name ?? null,
             source_name: e.source_name ?? null,
             muscle_group: e.muscle_group ?? lib?.muscle_group ?? null,
@@ -295,6 +317,7 @@ export function planSummary(plan: ProgramPlan) {
 /* ------------------------------------------------------------------ */
 
 export function scopeWeeks(plan: ProgramPlan, at: WeekRef, scope: Scope): WeekRef[] {
+  if (scope === "program") return flatWeeks(plan).map(({ b, w }) => ({ b, w }));
   const n = plan.blocks[at.b]?.weeks.length ?? 0;
   if (scope === "week") return [{ b: at.b, w: at.w }];
   const from = scope === "following" ? at.w : 0;
@@ -307,6 +330,7 @@ export function scopeLabel(plan: ProgramPlan, at: WeekRef, scope: Scope): string
   const lo = weeks[0];
   const hi = weeks[weeks.length - 1];
   if (scope === "week" || weeks.length === 1) return `Week ${lo} only`;
+  if (scope === "program") return `All ${weeks.length} weeks`;
   if (scope === "block") {
     if (plan.blocks.length === 1) return `All ${weeks.length} weeks`;
     return `All of ${plan.blocks[at.b].name} (weeks ${lo}–${hi})`;
@@ -320,7 +344,7 @@ export function sameWeek(a: PlanWeek, b: PlanWeek): boolean {
 }
 const exSig = (e: PlanExercise) =>
   [e.exercise_id, e.sets, e.reps, e.rpe ?? "", e.rir ?? "", e.load ?? "", e.unit ?? "", e.pct ?? "", e.pct_of ?? "",
-    e.rest_seconds ?? "", e.tempo ?? "", e.notes ?? ""].join("|");
+    e.rest_seconds ?? "", e.tempo ?? "", e.notes ?? "", e.role ?? "", e.label ?? "", e.group ? "g" : "", e.round ?? ""].join("|");
 const weekSig = (w: PlanWeek) =>
   w.days.map((d) => [d.title, d.focus ?? "", d.exercises.map(exSig).join(";")].join("#")).join("\n");
 
@@ -332,6 +356,166 @@ const weekSig = (w: PlanWeek) =>
 export function defaultScope(plan: ProgramPlan, b: number): Scope {
   const weeks = plan.blocks[b]?.weeks ?? [];
   return weeks.every((w) => sameWeek(w, weeks[0])) ? "block" : "week";
+}
+
+/** One choice of which weeks an edit changes: its short name and the exact weeks. */
+export type ScopeOption = {
+  scope: Scope;
+  title: string;
+  range: string;
+  /** the same on the narrowest phones ("Rest" · "Wk 6–8"), never cut short */
+  short: string;
+  shortRange: string;
+  weeks: number;
+};
+
+const weekRange = (lo: number, hi: number) => (lo === hi ? `Week ${lo}` : `Weeks ${lo}–${hi}`);
+const shortWeekRange = (lo: number, hi: number) => (lo === hi ? `Wk ${lo}` : `Wk ${lo}–${hi}`);
+
+/**
+ * The choices the builder offers for the week on screen, each named plainly
+ * with the exact weeks it reaches ("This week · Week 3", "Rest of block ·
+ * Weeks 3–4", "This block · Weeks 1–4", "All weeks · Weeks 1–12"). A choice
+ * that would reach the same weeks as another isn't offered twice; one block
+ * makes "This block" the whole program, so it reads "All weeks".
+ */
+export function scopeOptions(plan: ProgramPlan, at: WeekRef): ScopeOption[] {
+  const multi = plan.blocks.length > 1;
+  const n = plan.blocks[at.b]?.weeks.length ?? 1;
+  const opt = (scope: Scope, title: string, short: string): ScopeOption => {
+    const g = scopeWeeks(plan, at, scope).map((x) => programWeek(plan, x));
+    const lo = g[0];
+    const hi = g[g.length - 1];
+    return { scope, title, range: weekRange(lo, hi), short, shortRange: shortWeekRange(lo, hi), weeks: g.length };
+  };
+  const out: ScopeOption[] = [opt("week", "This week", "Week")];
+  // the rest of the block only when it's neither just this week nor the whole block
+  if (at.w > 0 && at.w < n - 1) out.push(opt("following", multi ? "Rest of block" : "Rest of program", "Rest"));
+  if (multi) {
+    if (n > 1) out.push(opt("block", "This block", "Block"));
+    out.push(opt("program", "All weeks", "All"));
+  } else if (n > 1) {
+    out.push(opt("block", "All weeks", "All"));
+  }
+  return out;
+}
+
+/** The scope on offer closest to `scope` (a choice that isn't offered here reads as the one that reaches the same weeks). */
+export function offeredScope(plan: ProgramPlan, at: WeekRef, scope: Scope): Scope {
+  const opts = scopeOptions(plan, at);
+  if (opts.some((o) => o.scope === scope)) return scope;
+  const want = scopeWeeks(plan, at, scope).map((x) => `${x.b}:${x.w}`).join(",");
+  const same = opts.find((o) => scopeWeeks(plan, at, o.scope).map((x) => `${x.b}:${x.w}`).join(",") === want);
+  if (same) return same.scope;
+  return plan.blocks.length > 1 && scope === "program" ? "program" : opts[opts.length - 1].scope;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Weeks that keep their own numbers                                  */
+/* ------------------------------------------------------------------ */
+
+/** What an edit changes, field by field, so a week can be told "in step" or "its own". */
+export type EditField = "sets" | "reps" | "effort" | "load" | "rest" | "tempo" | "notes" | "exercise" | "role" | "round";
+
+const FIELD_OF: Record<string, EditField> = {
+  sets: "sets",
+  reps: "reps",
+  rpe: "effort",
+  rir: "effort",
+  load: "load",
+  unit: "load",
+  pct: "load",
+  pct_of: "load",
+  rest_seconds: "rest",
+  tempo: "tempo",
+  notes: "notes",
+  exercise_id: "exercise",
+  name: "exercise",
+  muscle_group: "exercise",
+  equipment: "exercise",
+  role: "role",
+  label: "role",
+  round: "round",
+};
+
+/** The fields a patch changes (its keys, grouped: a weight and a % are one "load"). */
+export function patchFields(p: Partial<PlanExercise>): EditField[] {
+  return [...new Set(Object.keys(p).map((k) => FIELD_OF[k]).filter(Boolean))];
+}
+
+function fieldValue(e: PlanExercise, f: EditField): string {
+  switch (f) {
+    case "sets":
+      return String(e.sets ?? "");
+    case "reps":
+      return String(e.reps ?? "").trim();
+    case "effort":
+      return `${e.rpe ?? ""}|${e.rir ?? ""}`;
+    case "load":
+      return e.pct != null ? `pct:${e.pct}:${e.pct_of ?? "1rm"}` : e.load != null ? `w:${e.load}:${e.unit ?? ""}` : "";
+    case "rest":
+      return String(e.rest_seconds ?? "");
+    case "tempo":
+      return e.tempo ?? "";
+    case "notes":
+      return e.notes ?? "";
+    case "exercise":
+      return e.exercise_id;
+    case "role":
+      return `${e.role ?? ""}|${e.label ?? ""}`;
+    case "round":
+      return e.round ?? "";
+  }
+}
+
+/**
+ * Which of `targets` an edit to `fields` should reach: the week on screen,
+ * and every other week whose values for them are what the week on screen has
+ * now (in step with it). A week where that value was made different on
+ * purpose (a progression, a deload) keeps it, so building "all weeks" never
+ * flattens week-by-week progression; `own` lists those weeks so the builder
+ * can say so and offer to change them too.
+ */
+export function inStepWeeks(
+  plan: ProgramPlan,
+  at: WeekRef,
+  targets: WeekRef[],
+  dayKey: string,
+  exKey: string,
+  fields: EditField[],
+): { reach: WeekRef[]; own: WeekRef[] } {
+  const here = weekAt(plan, at)?.days.find((d) => d.key === dayKey)?.exercises.find((e) => e.key === exKey) ?? null;
+  const self = targets.find((t) => t.b === at.b && t.w === at.w);
+  if (!here) return { reach: targets, own: [] };
+  const reach: WeekRef[] = self ? [self] : [];
+  const own: WeekRef[] = [];
+  for (const t of targets) {
+    if (t.b === at.b && t.w === at.w) continue;
+    const e = weekAt(plan, t)?.days.find((d) => d.key === dayKey)?.exercises.find((x) => x.key === exKey);
+    if (!e) continue;
+    if (fields.every((f) => fieldValue(e, f) === fieldValue(here, f))) reach.push(t);
+    else own.push(t);
+  }
+  return { reach, own };
+}
+
+/** "week 5" · "weeks 5–8" · "weeks 2, 5 and 9": the program weeks of `refs`, in words. */
+export function weeksWords(plan: ProgramPlan, refs: WeekRef[]): string {
+  const g = [...new Set(refs.map((r) => programWeek(plan, r)))].sort((a, b) => a - b);
+  if (!g.length) return "";
+  if (g.length === 1) return `week ${g[0]}`;
+  const runs: string[] = [];
+  let lo = g[0];
+  let prev = g[0];
+  for (const n of [...g.slice(1), Infinity]) {
+    if (n === prev + 1) {
+      prev = n;
+      continue;
+    }
+    runs.push(lo === prev ? String(lo) : `${lo}–${prev}`);
+    lo = prev = n;
+  }
+  return `weeks ${runs.length === 1 ? runs[0] : `${runs.slice(0, -1).join(", ")} and ${runs[runs.length - 1]}`}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -402,18 +586,130 @@ export function addExercises(
   return { plan: next, added: n, skipped: items.length - n };
 }
 
-export function removeExercise(plan: ProgramPlan, targets: WeekRef[], dayKey: string, exKey: string): ProgramPlan {
-  return mapDay(plan, targets, dayKey, (d) => ({ ...d, exercises: d.exercises.filter((e) => e.key !== exKey) }));
+/* ------------------------------------------------------------------ */
+/*  An exercise and its set groups                                     */
+/* ------------------------------------------------------------------ */
+
+/** One exercise as the builder shows it: its set groups (one or more entries next to each other). */
+export type ExerciseUnit = { key: string; group: string | null; entries: PlanExercise[]; start: number };
+
+/** A day's exercises, each with its set groups: entries next to each other that share `group` are one exercise. */
+export function exerciseUnits(day: Pick<PlanDay, "exercises">): ExerciseUnit[] {
+  const out: ExerciseUnit[] = [];
+  day.exercises.forEach((e, i) => {
+    const last = out[out.length - 1];
+    if (last && e.group && last.group === e.group) last.entries.push(e);
+    else out.push({ key: e.key, group: e.group ?? null, entries: [e], start: i });
+  });
+  return out;
 }
 
-export function moveExercise(plan: ProgramPlan, targets: WeekRef[], dayKey: string, exKey: string, dir: -1 | 1): ProgramPlan {
+const unitOf = (day: Pick<PlanDay, "exercises">, exKey: string) =>
+  exerciseUnits(day).find((u) => u.entries.some((e) => e.key === exKey)) ?? null;
+
+/** The set group the others are read against: the one marked top set, else the first that isn't a warm-up. */
+export function topOf(unit: { entries: PlanExercise[] }): PlanExercise {
+  return unit.entries.find((e) => e.role === "top") ?? unit.entries.find((e) => e.role !== "warmup") ?? unit.entries[0];
+}
+
+/** What a set group is called: "Warm-up", "Top set", "Back-off", its own name, else "Working sets". */
+export function setGroupName(e: Pick<PlanExercise, "role" | "label">): string {
+  if (e.label?.trim()) return e.label.trim();
+  if (e.role === "warmup") return "Warm-up";
+  if (e.role === "top") return "Top set";
+  if (e.role === "backoff") return "Back-off";
+  return "Working sets";
+}
+
+/** Replaces the unit holding `exKey` (in each week) with what `fn` makes of its entries. */
+function mapUnit(
+  plan: ProgramPlan,
+  targets: WeekRef[],
+  dayKey: string,
+  exKey: string,
+  fn: (entries: PlanExercise[], day: PlanDay) => PlanExercise[] | null,
+): ProgramPlan {
   return mapDay(plan, targets, dayKey, (d) => {
-    const i = d.exercises.findIndex((e) => e.key === exKey);
-    return i < 0 ? d : { ...d, exercises: moveItem(d.exercises, i, dir) };
+    const u = unitOf(d, exKey);
+    if (!u) return d;
+    const next = fn(u.entries, d);
+    if (!next) return d;
+    const exercises = [...d.exercises.slice(0, u.start), ...next, ...d.exercises.slice(u.start + u.entries.length)];
+    return exercises.length > MAX_EXERCISES ? d : { ...d, exercises };
   });
 }
 
-/** Another library exercise in the same spot, keeping its prescription. */
+/** An exercise left with one set group is a plain exercise again. */
+const settle = (entries: PlanExercise[]): PlanExercise[] => {
+  if (entries.length !== 1) return entries;
+  const e = entries[0];
+  return [{ ...e, group: null, role: e.role === "warmup" || e.role === "top" ? null : e.role ?? null }];
+};
+
+/** Removes the whole exercise (every set group of it). */
+export function removeExercise(plan: ProgramPlan, targets: WeekRef[], dayKey: string, exKey: string): ProgramPlan {
+  return mapUnit(plan, targets, dayKey, exKey, () => []);
+}
+
+/** Moves the whole exercise up or down one place (past one exercise, set groups and all). */
+export function moveExercise(plan: ProgramPlan, targets: WeekRef[], dayKey: string, exKey: string, dir: -1 | 1): ProgramPlan {
+  return mapDay(plan, targets, dayKey, (d) => {
+    const units = exerciseUnits(d);
+    const i = units.findIndex((u) => u.entries.some((e) => e.key === exKey));
+    if (i < 0) return d;
+    return { ...d, exercises: moveItem(units, i, dir).flatMap((u) => u.entries) };
+  });
+}
+
+/**
+ * Puts an exercise (set groups and all) at `to` in the week on screen, and in
+ * each other week of the scope right after the exercise that comes before it
+ * here (or before the one after it, or first), so a week whose order differs
+ * still gets a sensible order and nothing else moves.
+ */
+export function reorderExercise(
+  plan: ProgramPlan,
+  targets: WeekRef[],
+  at: WeekRef,
+  dayKey: string,
+  exKey: string,
+  to: number,
+): ProgramPlan {
+  const day = weekAt(plan, at)?.days.find((d) => d.key === dayKey);
+  if (!day) return plan;
+  const units = exerciseUnits(day);
+  const from = units.findIndex((u) => u.entries.some((e) => e.key === exKey));
+  if (from < 0) return plan;
+  const dest = Math.max(0, Math.min(units.length - 1, to));
+  if (dest === from) return plan;
+  const order = units.slice();
+  const [moved] = order.splice(from, 1);
+  order.splice(dest, 0, moved);
+  const before = order[dest - 1]?.entries.map((e) => e.key) ?? null;
+  const after = order[dest + 1]?.entries.map((e) => e.key) ?? null;
+  const has = (u: ExerciseUnit, keys: string[] | null) => !!keys && u.entries.some((e) => keys.includes(e.key));
+  return mapDay(plan, targets, dayKey, (d) => {
+    const us = exerciseUnits(d);
+    const i = us.findIndex((u) => u.entries.some((e) => e.key === exKey));
+    if (i < 0) return d;
+    const rest = us.filter((_, j) => j !== i);
+    let at2: number;
+    if (!before) at2 = 0;
+    else {
+      const b = rest.findIndex((u) => has(u, before));
+      if (b >= 0) at2 = b + 1;
+      else {
+        const a = rest.findIndex((u) => has(u, after));
+        if (a < 0) return d;
+        at2 = a;
+      }
+    }
+    rest.splice(at2, 0, us[i]);
+    return { ...d, exercises: rest.flatMap((u) => u.entries) };
+  });
+}
+
+/** Another library exercise in the same spot (every set group of it), keeping its prescriptions. */
 export function swapExercise(
   plan: ProgramPlan,
   targets: WeekRef[],
@@ -421,39 +717,201 @@ export function swapExercise(
   exKey: string,
   ex: { id: string; name: string; muscle_group?: string | null; equipment?: string | null },
 ): ProgramPlan {
-  return setExercise(plan, targets, dayKey, exKey, {
-    exercise_id: ex.id,
-    name: ex.name,
-    muscle_group: ex.muscle_group ?? null,
-    equipment: ex.equipment ?? null,
-  });
+  const patch = { exercise_id: ex.id, name: ex.name, muscle_group: ex.muscle_group ?? null, equipment: ex.equipment ?? null };
+  return mapUnit(plan, targets, dayKey, exKey, (entries) => entries.map((e) => ({ ...e, ...patch })));
 }
 
 /**
- * Back-off sets under a top set: the same exercise again right after it, at
- * 90% of the top set they logged (the logger works the weight out), 2 sets,
- * the same reps and rest.
+ * A copy of the whole exercise (every set group, its numbers and notes)
+ * right under it, in every week of the scope; the copy has its own keys (the
+ * same in each week), so it's edited on its own. `key` is the copy's first
+ * set group; a week too full for it is left out (`skipped`).
  */
-export function addBackoff(plan: ProgramPlan, targets: WeekRef[], dayKey: string, exKey: string): ProgramPlan {
-  const key = makeKey();
-  return mapDay(plan, targets, dayKey, (d) => {
-    const i = d.exercises.findIndex((e) => e.key === exKey);
-    if (i < 0 || d.exercises.length >= MAX_EXERCISES) return d;
-    const top = d.exercises[i];
-    const backoff: PlanExercise = {
-      ...top,
-      key,
-      sets: 2,
-      rpe: null,
-      rir: null,
-      load: null,
-      unit: null,
-      pct: 90,
-      pct_of: "top_set",
-      notes: null,
-    };
-    return { ...d, exercises: [...d.exercises.slice(0, i + 1), backoff, ...d.exercises.slice(i + 1)] };
+export function duplicateExercise(
+  plan: ProgramPlan,
+  targets: WeekRef[],
+  dayKey: string,
+  exKey: string,
+): { plan: ProgramPlan; key: string | null; skipped: number } {
+  const keys = new Map<string, string>();
+  const newKey = (k: string) => {
+    if (!keys.has(k)) keys.set(k, makeKey());
+    return keys.get(k)!;
+  };
+  let skipped = 0;
+  let first: string | null = null;
+  const next = mapDay(plan, targets, dayKey, (d) => {
+    const u = unitOf(d, exKey);
+    if (!u) return d;
+    if (d.exercises.length + u.entries.length > MAX_EXERCISES) {
+      skipped++;
+      return d;
+    }
+    const copy = u.entries.map((e) => ({ ...cloneEx(e), key: newKey(e.key), group: e.group ? newKey(`group:${e.group}`) : null }));
+    first = first ?? copy[0].key;
+    const end = u.start + u.entries.length;
+    return { ...d, exercises: [...d.exercises.slice(0, end), ...copy, ...d.exercises.slice(end)] };
   });
+  return { plan: next, key: first, skipped };
+}
+
+/** What a new set group is. */
+export type SetGroupKind = "backoff" | "warmup" | "more";
+
+/**
+ * Another set group on an exercise, in every week of the scope (one key
+ * across them), so a top set and its back-offs are one exercise instead of
+ * the lift written out twice:
+ *   backoff  after the last group: 2 sets of the top set's reps at 90% of
+ *            the top set (the logger works the weight out from the top set
+ *            they lift); the top set is marked as one;
+ *   warmup   before the working sets: 2 × 5 at 60% of the top set;
+ *   more     after the last group, a copy of it to change.
+ * `key` is the new group's.
+ */
+export function addSetGroup(
+  plan: ProgramPlan,
+  targets: WeekRef[],
+  dayKey: string,
+  exKey: string,
+  kind: SetGroupKind,
+): { plan: ProgramPlan; key: string } {
+  const key = makeKey();
+  const next = mapUnit(plan, targets, dayKey, exKey, (entries, d) => {
+    if (d.exercises.length >= MAX_EXERCISES) return null;
+    const group = entries[0].group ?? entries[0].key;
+    const top = topOf({ entries });
+    const base = entries.map((e) => ({
+      ...e,
+      group,
+      // the set the back-offs follow says it's the top set
+      role: kind === "backoff" && e.key === top.key && !e.role && !e.label ? ("top" as const) : e.role ?? null,
+    }));
+    if (kind === "warmup") {
+      const w: PlanExercise = {
+        ...cloneEx(top), key, group, role: "warmup", label: null, sets: 2, reps: "5", rpe: null, rir: null,
+        load: null, unit: null, pct: 60, pct_of: "top_set", rest_seconds: 90, tempo: null, notes: null, round: null,
+      };
+      const at = base.findIndex((e) => e.role !== "warmup");
+      const i = at < 0 ? base.length : at;
+      return [...base.slice(0, i), w, ...base.slice(i)];
+    }
+    if (kind === "backoff") {
+      const b: PlanExercise = {
+        ...cloneEx(top), key, group, role: "backoff", label: null, sets: 2, rpe: null, rir: null,
+        load: null, unit: null, pct: 90, pct_of: "top_set", notes: null,
+      };
+      return [...base, b];
+    }
+    const last = [...base].reverse().find((e) => e.role !== "warmup") ?? base[base.length - 1];
+    return [...base, { ...cloneEx(last), key, group, role: last.role === "top" ? null : last.role ?? null, label: last.label ?? null }];
+  });
+  return { plan: next, key };
+}
+
+/** Back-off sets under a top set (addSetGroup "backoff"). */
+export function addBackoff(plan: ProgramPlan, targets: WeekRef[], dayKey: string, exKey: string): ProgramPlan {
+  return addSetGroup(plan, targets, dayKey, exKey, "backoff").plan;
+}
+
+/** A copy of one set group right after it (its own key, the same in each week). */
+export function duplicateSetGroup(
+  plan: ProgramPlan,
+  targets: WeekRef[],
+  dayKey: string,
+  exKey: string,
+): { plan: ProgramPlan; key: string } {
+  const key = makeKey();
+  const next = mapUnit(plan, targets, dayKey, exKey, (entries, d) => {
+    if (d.exercises.length >= MAX_EXERCISES) return null;
+    const group = entries[0].group ?? entries[0].key;
+    const i = entries.findIndex((e) => e.key === exKey);
+    const all = entries.map((e) => ({ ...e, group }));
+    const src = all[i];
+    // a second top set would read as two; the copy is plain working sets unless it's a back-off or warm-up
+    const copy: PlanExercise = { ...cloneEx(src), key, role: src.role === "top" ? null : src.role ?? null };
+    return [...all.slice(0, i + 1), copy, ...all.slice(i + 1)];
+  });
+  return { plan: next, key };
+}
+
+/** Takes one set group off an exercise (the last one left is the exercise: remove it instead). */
+export function removeSetGroup(plan: ProgramPlan, targets: WeekRef[], dayKey: string, exKey: string): ProgramPlan {
+  return mapUnit(plan, targets, dayKey, exKey, (entries) =>
+    entries.length <= 1 ? null : settle(entries.filter((e) => e.key !== exKey)),
+  );
+}
+
+/**
+ * A top set and the back-offs written right under it as the same lift (an
+ * imported program writes them as separate lines) made one exercise: set
+ * groups sharing the top set's key, the top set marked as one. Exercises
+ * already in set groups are left alone.
+ */
+export function linkTopSets(plan: ProgramPlan): ProgramPlan {
+  const same = (a: PlanExercise, b: PlanExercise) =>
+    a.exercise_id ? a.exercise_id === b.exercise_id : !!a.name && a.name === b.name && !b.exercise_id;
+  return {
+    ...plan,
+    blocks: plan.blocks.map((bl) => ({
+      ...bl,
+      weeks: bl.weeks.map((w) => ({
+        ...w,
+        days: w.days.map((d) => {
+          const out = d.exercises.map((e) => ({ ...e }));
+          for (let i = 0; i < out.length; i++) {
+            const head = out[i];
+            if (head.group || head.pct_of === "top_set") continue;
+            let j = i + 1;
+            while (j < out.length && !out[j].group && out[j].pct_of === "top_set" && same(head, out[j])) j++;
+            if (j === i + 1) continue;
+            out[i] = { ...head, group: head.key, role: head.role ?? "top" };
+            for (let k = i + 1; k < j; k++) out[k] = { ...out[k], group: head.key, role: out[k].role ?? "backoff" };
+            i = j - 1;
+          }
+          return { ...d, exercises: out };
+        }),
+      })),
+    })),
+  };
+}
+
+/** The step a % of the top set rounds to, in the weight's unit. */
+export function roundStep(unit: WeightUnit, round?: LoadRound | null): number {
+  if (round === "fine") return unit === "kg" ? 1 : 2.5;
+  return unit === "kg" ? 2.5 : 5;
+}
+
+/**
+ * The weight a set group at a % of the top set comes to, when the top set it
+ * follows has a weight written in: "90% of 405 lb = 365 lb". Worked out from
+ * the plan as it is, so changing the top set's weight changes it. The top set
+ * is its exercise's (topOf), else, as the logger reads it, the same exercise
+ * just above it. Null when it isn't a % of the top set or there's no weight
+ * to work from (an RPE top set: the logger works it out from what's lifted).
+ */
+export function linkedLoad(day: Pick<PlanDay, "exercises">, exKey: string): { load: number; unit: WeightUnit; of: number } | null {
+  const i = day.exercises.findIndex((e) => e.key === exKey);
+  const e = day.exercises[i];
+  if (!e || e.pct == null || e.pct_of !== "top_set") return null;
+  let ref: PlanExercise | null = null;
+  const u = unitOf(day, exKey);
+  if (u && u.entries.length > 1) {
+    const t = topOf(u);
+    ref = t.key === e.key ? null : t;
+  } else {
+    for (let j = i - 1; j >= 0; j--) {
+      if (day.exercises[j].exercise_id === e.exercise_id) {
+        ref = day.exercises[j];
+        break;
+      }
+    }
+  }
+  if (!ref || ref.load == null || ref.pct != null) return null;
+  const unit = ref.unit ?? "lb";
+  const step = roundStep(unit, e.round);
+  const load = Math.round((ref.load * e.pct) / 100 / step) * step;
+  return { load: Number(load.toFixed(2)), unit, of: ref.load };
 }
 
 export function setDay(plan: ProgramPlan, targets: WeekRef[], dayKey: string, patch: { title?: string; focus?: string | null }): ProgramPlan {
@@ -498,7 +956,9 @@ export function duplicateDay(plan: ProgramPlan, targets: WeekRef[], dayKey: stri
       title: `${src.title} (copy)`.slice(0, 40),
       exercises: src.exercises.map((e) => {
         if (!exKeys.has(e.key)) exKeys.set(e.key, makeKey());
-        return { ...e, key: exKeys.get(e.key)! };
+        const g = e.group ? `group:${e.group}` : null;
+        if (g && !exKeys.has(g)) exKeys.set(g, makeKey());
+        return { ...e, key: exKeys.get(e.key)!, group: g ? exKeys.get(g)! : null };
       }),
     };
     return { ...week, days: [...week.days.slice(0, i + 1), copy, ...week.days.slice(i + 1)] };
@@ -672,6 +1132,8 @@ export const PROGRESS_LIMITS: Record<ProgressField, { min: number; max: number; 
 
 const roundTo = (n: number, step: number) => Math.round(n / step) * step;
 const fmtNum = (n: number) => String(Number(n.toFixed(2)));
+/** A weight or a percentage as people write it: 365, 382.5, 92.5. */
+export const fmtWeight = (n: number) => fmtNum(n);
 
 /**
  * A straight line across weeks: `start`, then `step` more each week, kept in
@@ -793,6 +1255,10 @@ export function planPayload(plan: ProgramPlan) {
             rest_seconds: e.rest_seconds ?? null,
             tempo: e.tempo?.trim() || null,
             notes: e.notes?.trim() || null,
+            role: e.role === "warmup" || e.role === "top" || e.role === "backoff" ? e.role : null,
+            label: e.label?.trim().slice(0, 40) || null,
+            group: e.group || null,
+            round: e.round === "fine" && e.pct != null && e.pct_of === "top_set" ? "fine" : null,
           })),
         })),
       })),

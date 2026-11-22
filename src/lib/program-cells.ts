@@ -108,7 +108,15 @@ export function cellPatch(
     }
     case "load": {
       if (!t) return { load: null, pct: null, pct_of: null, unit: null };
-      const v = t.replace(",", ".");
+      const m0 = mode ?? loadModeOf(e);
+      // "-10" on a % of the top set is 10% under it (90%); "+5" is 105%
+      const rel = /^([-−–+])\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*%?$/.exec(t);
+      if (rel && m0 === "pct_top") {
+        const n = Number(rel[2].replace(",", "."));
+        const pct = rel[1] === "+" ? 100 + n : 100 - n;
+        return pct > 0 && pct <= 150 ? { pct: Number(pct.toFixed(2)), pct_of: "top_set", load: null, unit: null } : null;
+      }
+      const v = t.replace(",", ".").replace(/%$/, "");
       if (!/^\d{1,4}(\.\d{0,2})?$/.test(v)) return null;
       const n = Number(v);
       if (!(n > 0)) return null;

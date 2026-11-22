@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
+  exerciseUnits,
   flatWeeks,
   prescriptionText,
+  setGroupName,
   programWeek,
   refOfWeek,
   sameWeek,
@@ -83,19 +85,43 @@ export function PlanView({ plan }: { plan: ProgramPlan }) {
             <span className="shrink-0 text-[12px] text-muted-foreground">{d.focus || `Day ${i + 1}`}</span>
           </div>
           <ol className="divide-y divide-border">
-            {d.exercises.map((e) => (
-              <li key={e.key} className="flex items-start justify-between gap-3 px-4 py-3">
-                <div className="min-w-0">
-                  <div className="text-[15px] font-medium">{e.name ?? "Exercise"}</div>
-                  {(e.notes || e.tempo) && (
-                    <div className="mt-0.5 text-[13px] text-muted-foreground">
-                      {[e.tempo ? `Tempo ${e.tempo}` : null, e.notes].filter(Boolean).join(" · ")}
+            {exerciseUnits(d).map((u) => {
+              const e = u.entries[0];
+              // an exercise in set groups: its name once, then each group's line (Top set, Back-off…)
+              if (u.entries.length > 1) {
+                return (
+                  <li key={e.key} className="px-4 py-3" data-plan-groups>
+                    <div className="text-[15px] font-medium">{e.name ?? "Exercise"}</div>
+                    {(e.notes || e.tempo) && (
+                      <div className="mt-0.5 text-[13px] text-muted-foreground">
+                        {[e.tempo ? `Tempo ${e.tempo}` : null, e.notes].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
+                    <div className="mt-1.5 space-y-1">
+                      {u.entries.map((g) => (
+                        <div key={g.key} className="flex items-baseline justify-between gap-3 text-[13px]">
+                          <span className={g.role === "warmup" ? "text-muted-foreground" : "font-medium"}>{setGroupName(g)}</span>
+                          <span className="max-w-[60%] text-right tabular-nums">{prescriptionText(g)}</span>
+                        </div>
+                      ))}
                     </div>
-                  )}
-                </div>
-                <div className="max-w-[55%] shrink-0 text-right text-[13px] tabular-nums">{prescriptionText(e)}</div>
-              </li>
-            ))}
+                  </li>
+                );
+              }
+              return (
+                <li key={e.key} className="flex items-start justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <div className="text-[15px] font-medium">{e.name ?? "Exercise"}</div>
+                    {(e.notes || e.tempo) && (
+                      <div className="mt-0.5 text-[13px] text-muted-foreground">
+                        {[e.tempo ? `Tempo ${e.tempo}` : null, e.notes].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
+                  </div>
+                  <div className="max-w-[55%] shrink-0 text-right text-[13px] tabular-nums">{prescriptionText(e)}</div>
+                </li>
+              );
+            })}
           </ol>
         </section>
       ))}

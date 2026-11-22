@@ -302,6 +302,12 @@ function weightIncrement(unit: "kg" | "lb"): number {
   return unit === "kg" ? 2.5 : 5;
 }
 
+/** The step a % of the top set rounds to: a program's small plates (`load_round` "fine": 2.5 lb / 1 kg), else 5 lb / 2.5 kg. */
+function backoffRoundStep(unit: "kg" | "lb", round: string | null | undefined): number {
+  if (round === "fine") return unit === "kg" ? 1 : 2.5;
+  return weightIncrement(unit);
+}
+
 function fmtNum(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
@@ -4198,7 +4204,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
       ? topSetBasis.value
       : convertLoad(topSetBasis.value, topSetBasis.unit, activeUnit);
     const exact = baseInUnit * Number(row.percentage) / 100;
-    const step = weightIncrement(activeUnit);
+    // the builder's "Round to": small plates (2.5 lb / 1 kg) when the program says so, else 5 lb / 2.5 kg
+    const step = backoffRoundStep(activeUnit, row.load_round);
     const plain = Math.round(exact / step) * step;
     const adj = topSetAdjustment({ reps: topSetBasis.reps, rpe: topSetBasis.rpe, target: topSetBasis.target });
     if (!adj) return { load: plain, plain, adjust: null };
@@ -4208,7 +4215,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, setS
       ? Math.min(plain, Math.floor(moved / step) * step)
       : Math.max(plain, Math.round(moved / step) * step);
     return { load, plain, adjust: load !== plain ? adj : null };
-  }, [row.percentage_basis, row.percentage, topSetBasis?.value, topSetBasis?.unit, topSetBasis?.reps, topSetBasis?.rpe, topSetBasis?.target, activeUnit]);
+  }, [row.percentage_basis, row.percentage, row.load_round, topSetBasis?.value, topSetBasis?.unit, topSetBasis?.reps, topSetBasis?.rpe, topSetBasis?.target, activeUnit]);
   const percentageBackoffWeight: number | null = backoffPlan?.load ?? null;
 
   const suggestedWeight: number | null = useMemo(() => {
