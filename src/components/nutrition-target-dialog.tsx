@@ -31,6 +31,7 @@ import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { WorkoutMealTagger } from "@/components/nutrition/WorkoutMealTagger";
 import { AutoLabelWorkoutMeals } from "@/components/nutrition/AutoLabelWorkoutMeals";
 import { MealPlanBulkPaste, type ParsedDay } from "@/components/nutrition/MealPlanBulkPaste";
+import { PlanFileImport } from "@/components/nutrition-studio/plan-file-import";
 import { MealBuilder } from "@/components/nutrition-studio/meal-builder";
 import { PlanDayUseEditor, PlanDayWeekPreview } from "@/components/nutrition/PlanDayRules";
 import { resolveTrainingWeekdays } from "@/lib/cardio-prescription";
@@ -394,6 +395,21 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
   const numberField = (i: number, k: keyof Day) => (e: React.ChangeEvent<HTMLInputElement>) =>
     updateDay(i, k, e.target.value.replace(/[^0-9.]/g, ""));
   const fmtNum = (v: number | null | undefined) => (v == null ? "—" : Math.round(v));
+  /** A pasted or imported plan fills the days (the paste box and Import a file alike). */
+  const applyPlanDays = (parsed: ParsedDay[], rules: string | null, phase: string | null, from: "pasted" | "imported" = "pasted") => {
+    setDays(parsed.map((d, i) => ({ ...d, sort_order: i })));
+    setOpenDays([]);
+    setForm((f: any) => ({
+      ...f,
+      ...(rules ? { food_weighing_rules: rules } : {}),
+      ...(phase ? { phase, goal: PHASE_GOAL[phase] ?? f.goal } : {}),
+    }));
+    if (phase) {
+      setPhaseAuto(true);
+      setPhaseFrom("paste");
+      setPhaseSource(`From the ${from} plan's PHASE line`);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -477,21 +493,11 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
               <MealPlanBulkPaste
                 clientId={form.client_id || clientId || null}
                 phase={initial || phasePicked || phaseAuto ? (form.phase === "Custom" ? form.custom_phase || null : form.phase) : null}
-                onApply={(parsed: ParsedDay[], rules: string | null, phase: string | null) => {
-                  setDays(parsed.map((d, i) => ({ ...d, sort_order: i })));
-                  setOpenDays([]);
-                  setForm((f: any) => ({
-                    ...f,
-                    ...(rules ? { food_weighing_rules: rules } : {}),
-                    ...(phase ? { phase, goal: PHASE_GOAL[phase] ?? f.goal } : {}),
-                  }));
-                  if (phase) {
-                    setPhaseAuto(true);
-                    setPhaseFrom("paste");
-                    setPhaseSource("From the pasted plan's PHASE line");
-                  }
-                }}
+                onApply={(parsed: ParsedDay[], rules: string | null, phase: string | null) => applyPlanDays(parsed, rules, phase)}
               />
+              <div className="mt-3 border-t border-border pt-3">
+                <PlanFileImport clientId={form.client_id || clientId || null} onApply={(parsed, rules, phase) => applyPlanDays(parsed, rules, phase, "imported")} />
+              </div>
             </Section>
           </Accordion>
 

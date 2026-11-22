@@ -273,6 +273,7 @@ import { Route as ApiPublicHooksLeadRepliesTickRouteImport } from './routes/api/
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as ApiPublicHooksMeetChecklistRemindersRouteImport } from './routes/api/public/hooks/meet-checklist-reminders'
+import { Route as ApiPublicHooksNutritionImportsTickRouteImport } from './routes/api/public/hooks/nutrition-imports-tick'
 import { Route as ApiPublicHooksNutritionPlansTickRouteImport } from './routes/api/public/hooks/nutrition-plans-tick'
 import { Route as ApiPublicHooksNutritionRoadmapTickRouteImport } from './routes/api/public/hooks/nutrition-roadmap-tick'
 import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/public/hooks/nutrition-tick'
@@ -1832,6 +1833,12 @@ const ApiPublicHooksMeetChecklistRemindersRoute =
     path: '/api/public/hooks/meet-checklist-reminders',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksNutritionImportsTickRoute =
+  ApiPublicHooksNutritionImportsTickRouteImport.update({
+    id: '/api/public/hooks/nutrition-imports-tick',
+    path: '/api/public/hooks/nutrition-imports-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksNutritionPlansTickRoute =
   ApiPublicHooksNutritionPlansTickRouteImport.update({
     id: '/api/public/hooks/nutrition-plans-tick',
@@ -2335,6 +2342,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/meet-checklist-reminders': typeof ApiPublicHooksMeetChecklistRemindersRoute
+  '/api/public/hooks/nutrition-imports-tick': typeof ApiPublicHooksNutritionImportsTickRoute
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
   '/api/public/hooks/nutrition-roadmap-tick': typeof ApiPublicHooksNutritionRoadmapTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
@@ -2639,6 +2647,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/meet-checklist-reminders': typeof ApiPublicHooksMeetChecklistRemindersRoute
+  '/api/public/hooks/nutrition-imports-tick': typeof ApiPublicHooksNutritionImportsTickRoute
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
   '/api/public/hooks/nutrition-roadmap-tick': typeof ApiPublicHooksNutritionRoadmapTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
@@ -2949,6 +2958,7 @@ export interface FileRoutesById {
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/meet-checklist-reminders': typeof ApiPublicHooksMeetChecklistRemindersRoute
+  '/api/public/hooks/nutrition-imports-tick': typeof ApiPublicHooksNutritionImportsTickRoute
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
   '/api/public/hooks/nutrition-roadmap-tick': typeof ApiPublicHooksNutritionRoadmapTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
@@ -3259,6 +3269,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/meet-checklist-reminders'
+    | '/api/public/hooks/nutrition-imports-tick'
     | '/api/public/hooks/nutrition-plans-tick'
     | '/api/public/hooks/nutrition-roadmap-tick'
     | '/api/public/hooks/nutrition-tick'
@@ -3563,6 +3574,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/meet-checklist-reminders'
+    | '/api/public/hooks/nutrition-imports-tick'
     | '/api/public/hooks/nutrition-plans-tick'
     | '/api/public/hooks/nutrition-roadmap-tick'
     | '/api/public/hooks/nutrition-tick'
@@ -3872,6 +3884,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/meet-checklist-reminders'
+    | '/api/public/hooks/nutrition-imports-tick'
     | '/api/public/hooks/nutrition-plans-tick'
     | '/api/public/hooks/nutrition-roadmap-tick'
     | '/api/public/hooks/nutrition-tick'
@@ -4008,6 +4021,7 @@ export interface RootRouteChildren {
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
   ApiPublicHooksMeetChecklistRemindersRoute: typeof ApiPublicHooksMeetChecklistRemindersRoute
+  ApiPublicHooksNutritionImportsTickRoute: typeof ApiPublicHooksNutritionImportsTickRoute
   ApiPublicHooksNutritionPlansTickRoute: typeof ApiPublicHooksNutritionPlansTickRoute
   ApiPublicHooksNutritionRoadmapTickRoute: typeof ApiPublicHooksNutritionRoadmapTickRoute
   ApiPublicHooksNutritionTickRoute: typeof ApiPublicHooksNutritionTickRoute
@@ -5890,6 +5904,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksMeetChecklistRemindersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/nutrition-imports-tick': {
+      id: '/api/public/hooks/nutrition-imports-tick'
+      path: '/api/public/hooks/nutrition-imports-tick'
+      fullPath: '/api/public/hooks/nutrition-imports-tick'
+      preLoaderRoute: typeof ApiPublicHooksNutritionImportsTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/nutrition-plans-tick': {
       id: '/api/public/hooks/nutrition-plans-tick'
       path: '/api/public/hooks/nutrition-plans-tick'
@@ -6931,6 +6952,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
   ApiPublicHooksMeetChecklistRemindersRoute:
     ApiPublicHooksMeetChecklistRemindersRoute,
+  ApiPublicHooksNutritionImportsTickRoute:
+    ApiPublicHooksNutritionImportsTickRoute,
   ApiPublicHooksNutritionPlansTickRoute: ApiPublicHooksNutritionPlansTickRoute,
   ApiPublicHooksNutritionRoadmapTickRoute:
     ApiPublicHooksNutritionRoadmapTickRoute,
@@ -6971,6 +6994,7 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
 import type { getRouter } from './router.tsx'
 import type { startInstance } from './start.ts'
 declare module '@tanstack/react-start' {

@@ -29,7 +29,7 @@ const TASK_LABEL: Record<string, string> = {
   repair: "Generate Next Program: targeted fixes (coaches)",
   edit: "Adjust program (coaches: Training tab, program and template editors)",
   nutrition: "Nutrition Update: the draft targets (coaches review before publishing)",
-  nutrition_write: "Nutrition Update: draft meal plans, Adjust plan (coaches)",
+  nutrition_write: "Nutrition Update: draft meal plans, Adjust plan (coaches); Create with Cleo: a member's meal plan draft (metered by credits)",
   roadmap: "Athlete roadmap words: block purpose, weekly focus (athletes read them)",
   meal_estimate: "Food log: meal estimates from a description (members and clients, metered by credits)",
   form_draft: "Forms: Draft from a description (coaches)",
@@ -39,6 +39,7 @@ const TASK_LABEL: Record<string, string> = {
   post_write: "Crew's lesson and tip posts: slides and captions (the crew reads them)",
   program_import: "Import a program: reading a PDF, photos or a messy file (members and clients, metered by credits)",
   nutrition_roadmap: "Nutrition roadmap words (the engine decides the numbers)",
+  nutrition_import: "Import a meal plan: reading a PDF, photos or a file (members metered by credits; coaches in the plan editor)",
 };
 
 /** Admin only: who has Cleo. The admin always; the finance login and coaches by switch. Clients and members have no Cleo. */

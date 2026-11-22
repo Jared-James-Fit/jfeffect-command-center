@@ -80,7 +80,14 @@ export function useMyStudioPlan() {
   });
 }
 
-export function MemberPlanStudio({ seed }: { seed?: { days: StudioPlanDay[]; phase?: string | null; weighing?: string | null } | null }) {
+export function MemberPlanStudio({
+  seed,
+  onSaved,
+}: {
+  seed?: { days: StudioPlanDay[]; phase?: string | null; weighing?: string | null } | null;
+  /** After the plan is saved (an import files its original in their documents); never blocks the save. */
+  onSaved?: (planId: string) => void | Promise<void>;
+}) {
   const planQ = useMyStudioPlan();
   const targetsFn = useServerFn(getActiveMemberTargets);
   const targetsQ = useQuery({ queryKey: ["m-nutrition-targets-studio"], queryFn: () => targetsFn({}), retry: false });
@@ -143,6 +150,7 @@ export function MemberPlanStudio({ seed }: { seed?: { days: StudioPlanDay[]; pha
       setDirty(false);
       for (const k of [["nutrition-studio-plan"], ["m-coach-meal-plan"], ["grocery-list"], ["nutrition-dashboard"]]) qc.invalidateQueries({ queryKey: k });
       toast.success("Plan saved");
+      if (onSaved) await Promise.resolve(onSaved(id!)).catch(() => undefined);
       navigate({ to: "/portal/nutrition-targets" });
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't save the plan");
