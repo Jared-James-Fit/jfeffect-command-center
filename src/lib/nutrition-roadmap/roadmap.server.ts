@@ -7,7 +7,7 @@ import { buildRoadmap } from "@/lib/nutrition-roadmap/build";
 import { loadRoadmap, REVISION_SELECT, type LoadedRoadmap, type RevisionRow } from "@/lib/nutrition-roadmap/load.server";
 import { activateRevision, evaluateRoadmap, writeMemberTargets } from "@/lib/nutrition-roadmap/evaluate.server";
 import { explainRead } from "@/lib/nutrition-roadmap/explain.server";
-import { planChangeInstruction, sortBoard, type BoardRow, type CoachRoadmapView, type PendingRevision, type RevisionSummary, type RoadmapView } from "@/lib/nutrition-roadmap/view";
+import { athleteSees, planChangeInstruction, sortBoard, type BoardRow, type CoachRoadmapView, type PendingRevision, type RevisionSummary, type RoadmapView } from "@/lib/nutrition-roadmap/view";
 import { compareRoadmaps } from "@/lib/nutrition-roadmap/build";
 import type { CheckinAsk, Decision } from "@/lib/nutrition-roadmap/types";
 import { addDays } from "@/lib/weight-management/units";
@@ -27,10 +27,11 @@ const summaryOf = (r: RevisionRow): RevisionSummary => ({
 const pendingOf = (r: RevisionRow | null): PendingRevision | null =>
   r ? { ...summaryOf(r), decider: r.decider, plan: r.plan, proposal: (r.proposal as Decision | null) ?? null } : null;
 
-async function history(sb: any, clientId: string): Promise<RevisionSummary[]> {
+async function history(sb: any, clientId: string, forAthlete: boolean): Promise<RevisionSummary[]> {
   try {
-    const { data } = await sb.from("nutrition_roadmap_revisions").select(REVISION_SELECT).eq("client_id", clientId).order("created_at", { ascending: false }).limit(20);
-    return ((data ?? []) as RevisionRow[]).map(summaryOf);
+    const { data } = await sb.from("nutrition_roadmap_revisions").select(REVISION_SELECT).eq("client_id", clientId).order("created_at", { ascending: false }).limit(forAthlete ? 40 : 20);
+    const rows = (data ?? []) as RevisionRow[];
+    return (forAthlete ? rows.filter(athleteSees).slice(0, 20) : rows).map(summaryOf);
   } catch {
     return [];
   }
@@ -79,7 +80,11 @@ export function assemble(loaded: LoadedRoadmap, hist: RevisionSummary[], opts: {
 }
 
 /** The athlete's own view. A self-coached athlete with a goal and no roadmap gets one built now. */
-export async function myRoadmapView(sb: any, admin: any, clientId: string, opts: { canEdit: boolean }): Promise<RoadmapView> {
+export async function myRoadmapView(_sb: any, admin: any, clientId: string, opts: { canEdit: boolean }): Promise<RoadmapView> {
+  // read on the server: the caller is already checked to be this athlete (or staff previewing them), and
+  // `assemble` only hands out what an athlete may see; a coached athlete can't read the roadmap tables
+  // directly (the coach's draft and decision stay the coach's until approved)
+  const sb = admin;
   let loaded = await loadRoadmap(sb, clientId);
   if (opts.canEdit && loaded.selfCoached && !loaded.active) {
     const { fresh } = buildRoadmap(loaded.ctx);
@@ -88,7 +93,7 @@ export async function myRoadmapView(sb: any, admin: any, clientId: string, opts:
       loaded = await loadRoadmap(sb, clientId);
     }
   }
-  return assemble(loaded, await history(sb, clientId), { canEdit: opts.canEdit, coach: false });
+  return assemble(loaded, await history(sb, clientId, true), { canEdit: opts.canEdit, coach: false });
 }
 
 /** The coach's view: a first draft is made the first time there's something to plan. */
@@ -99,7 +104,7 @@ export async function coachRoadmapView(sb: any, admin: any, clientId: string): P
     await evaluateRoadmap(admin, clientId, { trigger: "coach" });
     loaded = await loadRoadmap(sb, clientId);
   }
-  const view = assemble(loaded, await history(sb, clientId), { canEdit: true, coach: true });
+  const view = assemble(loaded, await history(sb, clientId, false), { canEdit: true, coach: true });
   const { fresh } = buildRoadmap(loaded.ctx);
   const diff = loaded.active ? compareRoadmaps(loaded.active.plan, fresh, loaded.ctx.today) : null;
   const p = loaded.row?.prefs ?? {};

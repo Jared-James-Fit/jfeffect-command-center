@@ -206,9 +206,7 @@ export const explainRoadmapFn = createServerFn({ method: "POST" })
     const clientId = data.clientId ?? (await resolvePovClientId(context.supabase, context.userId, data));
     if (!clientId) return null;
     if (data.clientId) await requireCoachOf(context.supabase, context.userId, clientId);
-    // the caller can see this roadmap (their own, or as its coach): the server writes the words once
-    const { data: row } = await (context.supabase as any).from("nutrition_roadmaps").select("client_id").eq("client_id", clientId).maybeSingle();
-    if (!row) return null;
+    // the caller is this athlete (or staff previewing them) or their coach; only an approved roadmap is worded
     return (await server()).explainActive(await admin(), clientId);
   });
 
