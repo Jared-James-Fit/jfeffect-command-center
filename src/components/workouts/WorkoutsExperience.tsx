@@ -187,6 +187,29 @@ export function WorkoutsExperience({
   // from another block than the current one (a week ahead or behind) names
   // its own block on its card.
   const currentBlockId = todayItem?.block?.id ?? pickCurrentBlock(allBlocks, today)?.id ?? null;
+  // This calendar month's program workouts that are due (today included) and how
+  // many are done: the progress snapshot's "4 of 5 planned so far in November".
+  // Optional sessions and at-home backups never count as planned.
+  const monthProgress = useMemo(() => {
+    const from = toLocalISO(new Date(today.getFullYear(), today.getMonth(), 1));
+    const to = toLocalISO(today);
+    let planned = 0;
+    let done = 0;
+    for (const [iso, list] of byDate) {
+      if (iso < from || iso > to) continue;
+      for (const it of list) {
+        if (isAtHomeBackupSessionBlock(it.block) || it.day?.is_optional) continue;
+        const mk = workoutMark(it);
+        if (iso === to && mk?.kind !== "done") continue; // today's still to do, not missed
+        planned++;
+        if (mk?.kind === "done") done++;
+      }
+    }
+    return { label: format(today, "MMMM"), planned, done };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [byDate, toLocalISO(today)]);
+  // Readiness speaks on the dashboard only when it's news for a workout still to do today.
+  const todayOpen = !!todayItem && workoutMark(todayItem)?.kind !== "done";
   const [historyOpen, setHistoryOpen] = useState(false);
   const [daysOpen, setDaysOpen] = useState(false);
   // ?days=1 (after a program's workouts a week changed): the days editor, once
@@ -457,6 +480,10 @@ export function WorkoutsExperience({
                 )}
                 {/* No legend under the strip: the dot, ring and check say it, and a day with a
                     session lists it right under its workout. Appointments live in the header's ⋯. */}
+                {/* readiness only when it's news, for a workout still to do today */}
+                {mode === "self" && todayOpen && isSameDay(selectedDate, today) && (
+                  <RecoveryPreviewCard clientId={clientId} analyticsTo="/portal/workouts/analytics" hideWhenEmpty onlyWhenNews />
+                )}
                 <SelectedDayList
                   next={nextWorkoutAfter(byDate, selectedDate)}
                   onSelectDate={setSelectedDate}
@@ -514,21 +541,16 @@ export function WorkoutsExperience({
           </div>
         )}
 
-        {/* How it's going, secondary to the day: readiness and the month in one quiet card,
-            each a row that opens its detail. Gone entirely until there's something in it
-            (the day's cardio is the day's, up with the workout). */}
+        {/* Am I making progress? One to three numbers, one tap into analytics. */}
         {mode === "self" && !noProgram && (
-          <Card className="divide-y divide-border overflow-hidden p-0 empty:hidden" data-workouts-progress>
-            {/* The way into analytics first, then readiness (a status, not a score), then the trend. */}
-            <DeferredAnalytics clientId={clientId} part="entry" />
-            <RecoveryPreviewCard
+          <Suspense fallback={null}>
+            <TrainingAnalyticsPreviewCard
               clientId={clientId}
-              analyticsTo={"/portal/workouts/analytics"}
+              unit={(client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb"}
+              month={monthProgress}
               hideWhenEmpty
-              bare
             />
-            <DeferredAnalytics clientId={clientId} part="trend" />
-          </Card>
+          </Suspense>
         )}
         {footer}
       </div>
@@ -572,17 +594,6 @@ export function WorkoutsExperience({
 /* recharts bundle + data query never block the initial workouts paint.   */
 /* ---------------------------------------------------------------------- */
 
-function DeferredAnalytics({ clientId, part }: { clientId: string; part: "entry" | "trend" }) {
-  // Render the analytics rows immediately alongside the rest of the page so
-  // sections appear together instead of popping in one-by-one on scroll.
-  return (
-    // no reserved height: the rows aren't there at all until there's a workout to count
-    // (empty:hidden, so an empty wrapper takes no gap in the column either)
-    <Suspense fallback={null}>
-      <TrainingAnalyticsPreviewCard clientId={clientId} hideWhenEmpty bare part={part} />
-    </Suspense>
-  );
-}
 
 
 /* ---------------------------------------------------------------------- */
@@ -846,7 +857,7 @@ function SelectedDayList({
       ) : cardio.isLoading ? (
         <WorkoutCardSkeleton />
       ) : (
-        <RestDayCard dayText={dayText} next={next} nextRow={nextRow} />
+        <RestDayCard dayText={dayText} next={next} onSelectDate={onSelectDate} />
       ))}
       {primaryItems.map(card)}
       {/* a training day whose workout doesn't hold the plan's cardio: under the workout,
@@ -875,17 +886,6 @@ function SelectedDayList({
   );
 }
 
-/** A day with nothing on it: what it is, then the next workout, one tap to its day. */
-function RestDayCard({ dayText, next, nextRow }: { dayText: string; next: NextWorkout | null; nextRow: React.ReactNode }) {
-  return (
-    <Card className="p-4 md:p-5" data-rest-day>
-      <div className="text-lg font-semibold leading-snug">{next ? "Rest day" : "No workout"}</div>
-      <div className="mt-1 text-[13px] text-muted-foreground">{dayText}</div>
-      {nextRow}
-    </Card>
-  );
-}
-
 function NextWorkoutRow({ next, onSelectDate }: { next: NextWorkout; onSelectDate: (d: Date) => void }) {
   return (
     <button
@@ -894,12 +894,41 @@ function NextWorkoutRow({ next, onSelectDate }: { next: NextWorkout; onSelectDat
       className="mt-3 flex min-h-11 w-full items-center gap-2 border-t border-border pt-3 text-left"
       data-next-workout
     >
-      <span className="min-w-0 flex-1">
-        <span className="block text-[13px] text-muted-foreground">Next workout · {format(next.date, "EEE, MMM d")}</span>
-        <span className="block truncate text-[15px] font-semibold">{next.title}</span>
+      <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
+        Next: <span className="text-foreground/90">{next.title}</span> · {format(next.date, "EEE, MMM d")}
       </span>
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
     </button>
+  );
+}
+
+/** A day with nothing on it, compact: what it is and the next workout, one tap to its day. */
+function RestDayCard({ dayText, next, onSelectDate }: { dayText: string; next: NextWorkout | null; onSelectDate?: (d: Date) => void }) {
+  const body = (
+    <>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-semibold leading-snug">
+          {next ? "Rest day" : "No workout"} <span className="font-normal text-muted-foreground">· {dayText}</span>
+        </span>
+        {next && (
+          <span className="mt-0.5 block truncate text-[13px] text-muted-foreground" data-next-workout>
+            Next: <span className="text-foreground/90">{next.title}</span> · {format(next.date, "EEE, MMM d")}
+          </span>
+        )}
+      </span>
+      {next && onSelectDate && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />}
+    </>
+  );
+  return (
+    <Card className="p-0" data-rest-day>
+      {next && onSelectDate ? (
+        <button type="button" onClick={() => onSelectDate(next.date)} className="flex min-h-[60px] w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition active:bg-muted/40">
+          {body}
+        </button>
+      ) : (
+        <div className="flex min-h-[60px] items-center gap-3 px-4 py-3">{body}</div>
+      )}
+    </Card>
   );
 }
 
@@ -1333,8 +1362,31 @@ function SelectedDayCard({
           )}
         </div>
 
-        {/* One main button, then Preview (the workout's exercises right here,
+        {/* Done: a clean completion state, one quiet way to the recap (no buttons to do it again).
+            Otherwise one main button, then Preview (the workout's exercises right here,
             without opening it). Everything else is in the ⋯ above. */}
+        {isCompleted && !needsReviewToFinish && tone === "done" ? (
+          <Link
+            to="/portal/workouts/$dayId"
+            params={{ dayId: item.day.id }}
+            search={{ recap: 1, ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any}
+            className="mt-3 flex min-h-11 items-center gap-2.5 border-t border-border pt-3 text-sm"
+            data-day-complete
+          >
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-success/15 text-success" aria-hidden>
+              <Check className="h-4 w-4" strokeWidth={3} />
+            </span>
+            <span className="min-w-0 flex-1 truncate text-muted-foreground">
+              {[
+                progress?.completedSets ? `${progress.completedSets} set${progress.completedSets === 1 ? "" : "s"}` : null,
+                (item.completion as any)?.actual_duration_min ? `${(item.completion as any).actual_duration_min} min` : null,
+              ].filter(Boolean).join(" · ") || "Completed"}
+            </span>
+            <span className="inline-flex shrink-0 items-center gap-0.5 font-medium text-foreground">
+              Recap <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+            </span>
+          </Link>
+        ) : (
         <div className="mt-4 flex items-center gap-2">
           <Button asChild size="lg" variant={cta.variant ?? "default"} className="min-w-0 flex-1 px-5 sm:flex-none">
             <Link
@@ -1356,6 +1408,7 @@ function SelectedDayCard({
             {inlineOpen ? "Hide preview" : "Preview"}
           </Button>
         </div>
+        )}
         {/* The day's cardio, its own thing: done before, during or after the
             lifting, or later in the day. One tap opens the workout on it
             (?focus=, never Focus mode), and logging it doesn't start the

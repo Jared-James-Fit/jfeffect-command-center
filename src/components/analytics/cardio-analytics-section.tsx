@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Heart, ChevronDown, TrendingDown, TrendingUp, Minus } from "lucide-react";
+import { Activity, Heart, ChevronDown, TrendingDown, TrendingUp, Minus } from "lucide-react";
 import { format } from "date-fns";
 import {
   BarChart,
@@ -138,7 +138,7 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
   const header = (
     <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:justify-between">
       <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-semibold text-foreground">
-        <Heart className="h-5 w-5 shrink-0 text-primary" />
+        <Activity className="h-5 w-5 shrink-0 text-muted-foreground" />
         <span className="truncate">Cardio</span>
         <InfoTip label="About cardio analytics" title="Cardio" align="start">
           Prescribed cardio comes from the client's cardio targets (weekly

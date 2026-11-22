@@ -40,6 +40,8 @@ interface Props {
   hideWhenEmpty?: boolean;
   /** A row inside another card (Workouts groups it with the month): no card of its own. */
   bare?: boolean;
+  /** The Workouts dashboard: only when there's something to watch (a lower tier or a limiter), else nothing. */
+  onlyWhenNews?: boolean;
 }
 
 type Tier = "Ready" | "Good" | "Take it easier" | "Low";
@@ -97,7 +99,7 @@ const statusColor: Record<FactorStatus, { ring: string; soft: string; text: stri
   },
 };
 
-export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false, bare = false }: Props) {
+export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false, bare = false, onlyWhenNews = false }: Props) {
   const { data, isLoading } = useQuery({
     queryKey: ["training-readiness", clientId],
     enabled: !!clientId,
@@ -518,6 +520,8 @@ export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false, bare = fa
 
   const tier = tierFor(data.latest);
   const bd = data.breakdown;
+  // "Ready, nothing stands out" is the normal day: the dashboard says nothing about it
+  if (onlyWhenNews && !bd.limiter && (tier.label === "Ready" || tier.label === "Good")) return null;
   const activeFactor = view && view !== "overview" ? bd.factors[view] : null;
   // The row's one line: the call's first sentence ("Sleep was short."), plus
   // what's limiting it; the whole call and every factor are one tap away.

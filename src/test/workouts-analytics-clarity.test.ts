@@ -342,9 +342,10 @@ describe("the screens", () => {
     expect(preview).not.toContain("Collapsible");
     expect(preview).not.toContain("More about");
   });
-  it("the program card shows its phases without a Plan details fold", () => {
+  it("the program card is a compact summary; its phases are the full plan's, never a Plan details fold", () => {
     const card = read("src/components/workouts/program-roadmap.tsx");
-    expect(card).toContain("data-roadmap-timeline");
+    expect(card).toContain("data-program-phase");
+    expect(card).not.toContain("data-roadmap-timeline");
     expect(card).not.toContain("Plan details");
     expect(card).toContain("ProgramPlanSheet");
   });

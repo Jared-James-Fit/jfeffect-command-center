@@ -1,3 +1,4 @@
+import { niceDomain } from "@/lib/analytics/analytics-areas";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Scale } from "lucide-react";
@@ -5,7 +6,6 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { InfoTip } from "@/components/analytics/info-tip";
-import { ANALYTICS_COLORS } from "@/lib/analytics-format";
 import { getCombinedBodyweightSeries, toKg, toLb } from "@/lib/bodyweight";
 
 type Unit = "lb" | "kg";
@@ -62,9 +62,9 @@ export function BodyweightTrendCard({ clientId, displayUnit, rangeStart, rangeEn
         <Scale className="h-5 w-5 shrink-0 text-muted-foreground" />
         <span className="truncate">Bodyweight</span>
         <InfoTip label="About bodyweight" title="Bodyweight" align="start">
-          Bodyweight helps explain performance changes. Compare it with
-          strength, volume, recovery, and sleep. A drop in bodyweight with
-          stable or improved performance is usually a positive sign.
+          Every weigh-in, with the change measured between weekly averages
+          (single weigh-ins swing with water and food). Read it beside
+          strength: a lighter body lifting the same weights is a gain.
         </InfoTip>
       </h2>
       <span className="shrink-0 text-xs font-semibold text-muted-foreground">{rangeLabel}</span>
@@ -112,44 +112,54 @@ export function BodyweightTrendCard({ clientId, displayUnit, rangeStart, rangeEn
   const avg7 = last7.reduce((s, p) => s + p.value, 0) / last7.length;
 
   const single = points.length < 2;
-  const rangeChange = single ? null : latest.value - first.value;
+  // Change from the first week's average to the last week's: one weigh-in to
+  // another is mostly water and food, and read as a trend it can say anything.
+  const firstDate = new Date(first.date + "T00:00:00");
+  const firstWeekEnd = format(new Date(firstDate.getTime() + 6 * 86_400_000), "yyyy-MM-dd");
+  const firstWeek = points.filter((p) => p.date <= firstWeekEnd);
+  const avgFirst = firstWeek.reduce((s, p) => s + p.value, 0) / Math.max(1, firstWeek.length);
   const spanDays = single
     ? 0
-    : Math.max(
-        1,
-        Math.round((latestDate.getTime() - new Date(first.date + "T00:00:00").getTime()) / 86_400_000),
-      );
-  const weeklyChange = rangeChange == null || spanDays < 7 ? null : (rangeChange / spanDays) * 7;
+    : Math.max(1, Math.round((latestDate.getTime() - firstDate.getTime()) / 86_400_000));
+  const comparable = !single && spanDays >= 14 && last7[0]?.date > firstWeekEnd;
+  const rangeChange = comparable ? avg7 - avgFirst : null;
+  const weeklyChange = rangeChange == null ? null : (rangeChange / spanDays) * 7;
 
   // Up or down is neither good nor bad on its own (a gain phase, a cut): no colour judges it.
   const changeTone = rangeChange == null || Math.abs(rangeChange) < 0.05 ? "text-muted-foreground" : "text-foreground";
-  const signed = (n: number) => `${n > 0 ? "+" : ""}${fmt1(n)} ${displayUnit}`;
+  const signed = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${fmt1(Math.abs(n))} ${displayUnit}`;
+  // the axis never zooms in past normal day-to-day swing (3% of bodyweight)
+  const bwAxis = niceDomain(
+    points.map((p) => p.value),
+    { minSpan: Math.max(displayUnit === "kg" ? 2 : 4, (points[points.length - 1]?.value ?? 0) * 0.03) },
+  );
 
   const insight = single
-    ? "Only 1 entry — trend not available yet."
-    : Math.abs(rangeChange!) < 0.3
-      ? `Bodyweight held steady across ${rangeLabel.toLowerCase()}.`
-      : rangeChange! < 0
-        ? `Bodyweight down ${fmt1(Math.abs(rangeChange!))} ${displayUnit} across this range.`
-        : `Bodyweight up ${fmt1(rangeChange!)} ${displayUnit} across this range.`;
+    ? "One weigh-in so far: a trend needs a few more."
+    : rangeChange == null
+      ? "Needs two weeks of weigh-ins to compare."
+      : Math.abs(rangeChange) < 0.3
+        ? `Holding steady: the last week's average is within 0.3 ${displayUnit} of the first week's.`
+        : `${rangeChange < 0 ? "Down" : "Up"} ${fmt1(Math.abs(rangeChange))} ${displayUnit}, first week's average to the last week's.`;
 
   return (
     <section aria-label="Bodyweight">
       {header}
       <Card className="border-border/80 bg-card p-4">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat label="Latest" value={`${fmt1(latest.value)} ${displayUnit}`} sub={format(latestDate, "MMM d, yyyy")} />
-          <Stat label="7-day avg" value={`${fmt1(avg7)} ${displayUnit}`} sub={`${last7.length} entr${last7.length === 1 ? "y" : "ies"}`} />
+        <div className="grid grid-cols-3 gap-3">
+          <Stat label="7-day average" value={`${fmt1(avg7)}`} unit={displayUnit} sub={`to ${format(latestDate, "MMM d")} · ${last7.length} weigh-in${last7.length === 1 ? "" : "s"}`} />
           <Stat
-            label="Range change"
-            value={rangeChange == null ? "—" : signed(rangeChange)}
-            sub={rangeChange == null ? "Needs 2+ entries" : rangeLabel}
+            label="Change"
+            value={rangeChange == null ? "—" : signed(rangeChange).replace(` ${displayUnit}`, "")}
+            unit={rangeChange == null ? undefined : displayUnit}
+            sub={rangeChange == null ? "Needs 2+ weeks" : `since ${format(firstDate, "MMM d")}`}
             valueClass={changeTone}
           />
           <Stat
-            label="Weekly change"
-            value={weeklyChange == null ? "—" : signed(weeklyChange)}
-            sub={`${points.length} weigh-in${points.length === 1 ? "" : "s"}`}
+            label="A week"
+            value={weeklyChange == null ? "—" : signed(weeklyChange).replace(` ${displayUnit}`, "")}
+            unit={weeklyChange == null ? undefined : displayUnit}
+            sub={weeklyChange == null ? "Needs 2+ weeks" : "on average"}
           />
         </div>
 
@@ -165,13 +175,13 @@ export function BodyweightTrendCard({ clientId, displayUnit, rangeStart, rangeEn
                   stroke="var(--muted-foreground)"
                   minTickGap={24}
                 />
-                <YAxis tick={{ fontSize: 10 }} stroke="var(--muted-foreground)" domain={["auto", "auto"]} width={44} />
+                <YAxis tick={{ fontSize: 10 }} stroke="var(--muted-foreground)" domain={bwAxis.domain} ticks={bwAxis.ticks} width={44} />
                 <Tooltip
                   contentStyle={{ fontSize: 12 }}
                   labelFormatter={(v) => format(new Date(String(v) + "T00:00:00"), "MMM d, yyyy")}
                   formatter={(v: any) => [`${fmt1(Number(v))} ${displayUnit}`, "Bodyweight"]}
                 />
-                <Line type="monotone" dataKey="value" stroke={ANALYTICS_COLORS.red} strokeWidth={2} dot={{ r: 2, fill: ANALYTICS_COLORS.red }} />
+                <Line type="linear" dataKey="value" stroke="var(--foreground)" strokeOpacity={0.75} strokeWidth={1.75} dot={{ r: 2, fill: "var(--foreground)", fillOpacity: 0.75, strokeWidth: 0 }} isAnimationActive={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -183,12 +193,15 @@ export function BodyweightTrendCard({ clientId, displayUnit, rangeStart, rangeEn
   );
 }
 
-function Stat({ label, value, sub, valueClass }: { label: string; value: string; sub?: string; valueClass?: string }) {
+function Stat({ label, value, unit, sub, valueClass }: { label: string; value: string; unit?: string; sub?: string; valueClass?: string }) {
   return (
-    <div className="min-w-0 rounded-lg border border-border/70 bg-muted/20 p-2.5">
+    <div className="min-w-0">
       <div className="truncate text-[12px] text-muted-foreground">{label}</div>
-      <div className={`mt-0.5 truncate text-lg font-bold ${valueClass ?? "text-foreground"}`}>{value}</div>
-      {sub && <div className="truncate text-[10px] text-muted-foreground">{sub}</div>}
+      <div className={`mt-0.5 truncate text-lg font-semibold tabular-nums ${valueClass ?? "text-foreground"}`}>
+        {value}
+        {unit && <span className="ml-1 text-xs font-normal text-muted-foreground">{unit}</span>}
+      </div>
+      {sub && <div className="truncate text-[11px] text-muted-foreground">{sub}</div>}
     </div>
   );
 }

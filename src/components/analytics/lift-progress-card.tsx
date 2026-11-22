@@ -25,6 +25,7 @@ import {
   liftFamily,
 } from "@/lib/analytics-format";
 import { strengthTrend, trendWords } from "@/lib/analytics/strength-read";
+import { niceDomain, strengthMinSpan } from "@/lib/analytics/analytics-areas";
 import {
   fmtEffort,
   groupLiftSessions,
@@ -253,6 +254,13 @@ export function LiftProgressCard({
   // than three such sessions it says it's too early, never a % from every set
   // read as all-out: that compared a 40 lb × 8 primary set with 55 lb × 12
   // accessory sets in another gym and called it "Up 51.9%".
+  // An axis that never zooms in past a change worth drawing: a 1 lb dip on a
+  // 308–312 axis read as a crash (Nov 22 2026). At least 6% of the lift, 10 lb.
+  const loadAxis = useMemo(() => {
+    const key = activeMetric === "top" ? "top" : "est";
+    const vals = chartData.map((d: any) => d[key]).filter((v: unknown): v is number => typeof v === "number");
+    return niceDomain(vals, { minSpan: Math.max(conv(10), strengthMinSpan(vals)), floor: 0 });
+  }, [chartData, activeMetric, conv]);
   const trend = useMemo<ReturnType<typeof strengthTrend>>(
     () => comparable
       ? strengthTrend(sessions.filter((s) => s.strength != null).map((s) => ({ date: s.date, value: s.strength! })))
@@ -429,8 +437,9 @@ export function LiftProgressCard({
                         ? [(min: number) => Math.max(0, Math.floor(min) - 1), 10]
                         : activeMetric === "volume" || activeMetric === "velocity"
                           ? [0, "auto"]
-                          : ["auto", "auto"]
+                          : loadAxis.domain
                     }
+                    ticks={activeMetric === "est" || activeMetric === "top" ? loadAxis.ticks : undefined}
                     allowDecimals={activeMetric === "velocity" || activeMetric === "effort"}
                   />
                   {/* Mounted only so Recharts wires touch; the readout replaces the floating tooltip. */}
@@ -458,7 +467,7 @@ export function LiftProgressCard({
                     </Bar>
                   ) : (
                     <Line
-                      type="monotone"
+                      type="linear"
                       dataKey={activeMetric}
                       stroke={color}
                       strokeWidth={2.5}
@@ -515,9 +524,7 @@ export function LiftProgressCard({
                     ? trend.reason === "few"
                       ? "Needs 4+ hard sessions"
                       : "Needs 3+ weeks"
-                    : latestLighter
-                      ? "Best recent vs earlier · latest session lighter"
-                      : "Best recent vs earlier sessions"
+                    : `${fmtEst(trend.first)} → ${fmtEst(trend.last)} ${displayUnit} since ${format(parseISO(trend.firstDate), "MMM d")}${latestLighter ? " · latest session lighter" : ""}`
                 }
                 tone={trend.kind === "up" ? "up" : trend.kind === "down" ? "down" : undefined}
               />

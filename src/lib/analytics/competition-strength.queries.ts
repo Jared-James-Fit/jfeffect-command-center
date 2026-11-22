@@ -11,13 +11,20 @@ import {
   type CompLift,
   type MeetResult,
 } from "@/lib/analytics/competition-strength";
+import { maxesFromRows, type MaxOnFile } from "@/lib/analytics/analytics-areas";
 import { asAthleteSex, type AthleteSex } from "@/lib/athlete-sex";
 
 const LB_PER_KG = 2.2046226;
 
 export type CompetitionData = {
   meets: MeetResult[];
+  /**
+   * The coach's training max per lift (`pl_client_maxes.training_max`, the
+   * number % loads read): never a 1RM and never an estimate of the athlete.
+   */
   trainingMaxes: Partial<Record<CompLift, { lb: number; date: string | null }>>;
+  /** Every competition-lift max on file, each said for what it is (tested / entered / training max). */
+  maxes: MaxOnFile[];
   sex: "male" | "female" | null;
   profileSex: AthleteSex | null;
 };
@@ -31,7 +38,7 @@ async function loadCompetitionData(clientId: string): Promise<CompetitionData> {
       .maybeSingle(),
     supabase
       .from("pl_client_maxes")
-      .select("lift, one_rm, estimated_1rm, unit, tested_at, updated_at")
+      .select("lift, one_rm, training_max, source, unit, tested_at, updated_at")
       .eq("client_id", clientId)
       .eq("active", true),
     supabase.from("clients").select("sex").eq("id", clientId).maybeSingle(),
@@ -47,17 +54,14 @@ async function loadCompetitionData(clientId: string): Promise<CompetitionData> {
     .order("meet_date", { ascending: false })
     .limit(60);
 
+  // Three kinds of number live in pl_client_maxes and they're never the same thing:
+  // a tested 1RM (source "tested" or a test date), a 1RM a coach typed in with no
+  // test date, and the training max the program reads % loads from. Before Nov 22
+  // 2026 the screen called whichever was newest "Training max" (Jared's "600"
+  // deadlift was an entered 1RM; his real training max column was empty).
   const trainingMaxes: CompetitionData["trainingMaxes"] = {};
-  for (const m of (maxRes.data ?? []) as any[]) {
-    const lift = compLiftFromName(m.lift);
-    const raw = Number(m.one_rm ?? m.estimated_1rm);
-    if (!lift || !(raw > 0)) continue;
-    const lb = m.unit === "kg" ? raw * LB_PER_KG : raw;
-    const date = m.tested_at ?? m.updated_at ?? null;
-    const cur = trainingMaxes[lift];
-    // the most recently set one: a training max is the coach's current number
-    if (!cur || (date ?? "") > (cur.date ?? "")) trainingMaxes[lift] = { lb, date };
-  }
+  const maxes = maxesFromRows((maxRes.data ?? []) as any[], compLiftFromName);
+  for (const m of maxes) if (m.kind === "training_max") trainingMaxes[m.lift] = { lb: m.lb, date: m.date };
   const profileSex = asAthleteSex((clientRes.data as any)?.sex);
   const asSex = (v: unknown) => {
     const s = String(v ?? "").toLowerCase();
@@ -67,6 +71,7 @@ async function loadCompetitionData(clientId: string): Promise<CompetitionData> {
   return {
     meets,
     trainingMaxes,
+    maxes,
     sex:
       profileSex === "male" || profileSex === "female"
         ? profileSex

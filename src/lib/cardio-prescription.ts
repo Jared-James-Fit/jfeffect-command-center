@@ -20,7 +20,8 @@ export const INCLINE_TREADMILL_DEFAULT = {
   speed_max_mph: 3,
   intensity: "Zone 2",
   completion_rule: "any_target",
-  client_notes: "Complete the session when ANY ONE target is reached. Stop when whichever target comes first.",
+  // No boilerplate note: the cardio card shows the target and what else counts as done.
+  client_notes: "",
 } as const;
 
 export type DefaultCardioConfig = {
@@ -148,5 +149,5 @@ export function resolveCompletionTarget(input: {
 }
 
 export function cardioCompletionRuleLabel(): string {
-  return "Complete the session when ANY ONE target is reached. Stop when whichever target comes first.";
+  return "Done when you reach the time, or the steps or calories first, whichever comes first.";
 }

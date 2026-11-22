@@ -1,27 +1,15 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import type { SleepBucket } from "@/lib/analytics/recovery-score";
-import {
-  recoverySummary,
-  sleepPatternInsight,
-  type CheckoutRow,
-  type RecoveryWeek,
-} from "@/lib/analytics/recovery-trends";
-
-function localDay(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+import { recoverySummary, sleepPatternInsight, type RecoveryWeek } from "@/lib/analytics/recovery-trends";
+import { useCheckouts } from "@/lib/analytics/recovery-trends.queries";
 
 /**
  * Recovery over the period from what was logged at check-out: sleep (hours,
  * from the range picked), how recovered they felt (1–5) and pain, week by
- * week. Observations only; the readiness score is an estimate and lives on
- * the Workouts page. A sleep pattern is said only when there is one.
+ * week. Observations only; the readiness score is an estimate and is shown
+ * apart, labelled as one. A sleep pattern is said only when there is one.
  */
 export function RecoveryTrendsCard({
   clientId,
@@ -32,46 +20,7 @@ export function RecoveryTrendsCard({
   start: Date;
   end: Date;
 }) {
-  const startISO = format(start, "yyyy-MM-dd");
-  const endISO = format(end, "yyyy-MM-dd");
-  const { data, isLoading } = useQuery({
-    queryKey: ["recovery-trends", clientId, startISO, endISO],
-    enabled: !!clientId,
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data: rows, error } = await (supabase as any)
-        .from("pl_workout_feedback")
-        .select(
-          "created_at, sleep_bucket, recovery_today, pain, pl_day_completions!inner(completed_at, logging_percentage, session_rating, client_id)",
-        )
-        .eq("client_id", clientId)
-        .gte("pl_day_completions.completed_at", `${startISO}T00:00:00`)
-        .lte("pl_day_completions.completed_at", `${endISO}T23:59:59`);
-      if (error) throw error;
-      const out: CheckoutRow[] = ((rows ?? []) as any[])
-        .filter((r) => r.pl_day_completions?.completed_at)
-        // the period, on the athlete's own days (never trusting the embed filter alone)
-        .filter((r) => {
-          const d = localDay(r.pl_day_completions.completed_at);
-          return d >= startISO && d <= endISO;
-        })
-        .map((r) => ({
-          day: localDay(r.pl_day_completions.completed_at),
-          sleepBucket: (r.sleep_bucket ?? null) as SleepBucket | null,
-          recovery: r.recovery_today != null ? Number(r.recovery_today) : null,
-          pain: r.pain ?? null,
-          rating:
-            r.pl_day_completions.session_rating != null
-              ? Number(r.pl_day_completions.session_rating)
-              : null,
-          logging:
-            r.pl_day_completions.logging_percentage != null
-              ? Number(r.pl_day_completions.logging_percentage)
-              : null,
-        }));
-      return out;
-    },
-  });
+  const { data, isLoading } = useCheckouts(clientId, start, end);
 
   const summary = useMemo(() => (data ? recoverySummary(data) : null), [data]);
   const pattern = useMemo(() => (data ? sleepPatternInsight(data) : null), [data]);

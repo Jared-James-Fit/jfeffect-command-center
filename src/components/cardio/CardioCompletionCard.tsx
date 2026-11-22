@@ -10,6 +10,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ import {
   type CardioCompletionRow,
 } from "@/lib/cardio-completion";
 import { resolveCardioTargets, resolveCompletionTarget } from "@/lib/cardio-prescription";
+import { cardioNoteForAthlete, cardioTargetsView } from "@/lib/analytics/analytics-areas";
 import {
   completionTargetParts,
   formatSpeedRange,
@@ -241,11 +243,21 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false,
   const settings = [inclineLabel ? `${inclineLabel} incline` : null, speedLabel ? `${speedLabel}${kph ? ` (${kph})` : ""}` : null]
     .filter(Boolean)
     .join(" · ");
-  // "any one of": said only when there's more than the time to reach.
-  const finishLine = !isCompleted && finishParts.length > 1 ? `Done at any one: ${finishParts.join(" · ")}` : null;
+  // The main target said big; anything else that also counts as done, under it
+  // (calories are a machine's or a watch's estimate and say so).
+  void finishParts;
+  const targets = cardioTargetsView({
+    minutes: target.duration_minutes,
+    steps: smartTargets.steps,
+    calories: smartTargets.calories,
+    showCalories: target.show_calories_to_client,
+  });
+  const finishLine = !isCompleted ? targets.alternatives : null;
+  // A note that only restates the old "ANY ONE target" rule says nothing the targets don't.
+  const coachNote = cardioNoteForAthlete(target.client_notes);
   const title = [view.activity, view.modeLabel].filter(Boolean).join(" · ");
   const logLine = isCompleted ? formatCardioLogLine(completion as any) : "";
-  const meta = [dayLabel, target.duration_minutes ? `${target.duration_minutes} min` : null].filter(Boolean).join(" · ");
+  const meta = [dayLabel, isCompleted || isSkipped ? (target.duration_minutes ? `${target.duration_minutes} min` : null) : null].filter(Boolean).join(" · ");
   const isPrimary = emphasis === "primary";
 
   return (
@@ -306,9 +318,14 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false,
           )}
         </div>
 
-        {/* What to do, said once: the machine's settings, the effort, the finish rule. */}
+        {/* What to do, said once: the target, the machine's settings, the effort, what else counts. */}
+        {!isCompleted && !isSkipped && targets.primary && (
+          <div className={cn("mt-2 font-semibold tabular-nums tracking-tight", isPrimary ? "text-2xl" : "text-xl")} data-cardio-target>
+            {targets.primary}
+          </div>
+        )}
         {!isCompleted && (settings || effort || hrZone || finishLine) && (
-          <div className="mt-2 space-y-0.5 text-[14px] leading-snug" data-cardio-prescription>
+          <div className="mt-1 space-y-0.5 text-[14px] leading-snug" data-cardio-prescription>
             {settings && <p className="text-foreground/90">{settings}</p>}
             {(effort || hrZone) && <p className="text-[13px] text-muted-foreground">{[effort, hrZone].filter(Boolean).join(" · ")}</p>}
             {finishLine && <p className="text-[13px] text-muted-foreground">{finishLine}</p>}
@@ -322,7 +339,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false,
           <p className="mt-1 text-[13px] italic text-muted-foreground">"{completion.notes}"</p>
         )}
 
-        {target.client_notes && !isCompleted && (
+        {coachNote && !isCompleted && (
           <button
             type="button"
             onClick={() => setNoteOpen((v) => !v)}
@@ -332,7 +349,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false,
           >
             <span className={noteOpen ? "whitespace-pre-wrap" : "line-clamp-2"}>
               <span className="font-medium text-foreground/80">Coach: </span>
-              {target.client_notes}
+              {coachNote}
             </span>
           </button>
         )}
