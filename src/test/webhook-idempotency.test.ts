@@ -14,6 +14,8 @@ if (!(globalThis as any).crypto) (globalThis as any).crypto = webcrypto as any;
 let processedEventIds = new Set<string>();
 let trackedInserts: Array<{ table: string; row: any }> = [];
 let trackedUpdates: Array<{ table: string; patch: any }> = [];
+/** A table whose reads throw, to make a handler fail part way. */
+let failReadsOn: string | null = null;
 
 vi.mock("@supabase/supabase-js", () => {
   const makeClient = () => ({
@@ -24,9 +26,13 @@ vi.mock("@supabase/supabase-js", () => {
         eq() { return this; },
         in() { return this; },
         is() { return this; },
+        ilike() { return this; },
         order() { return this; },
         limit() { return this; },
-        maybeSingle: async () => ({ data: null, error: null }),
+        maybeSingle: async () => {
+          if (failReadsOn === table) throw new Error(`read failed on ${table}`);
+          return { data: null, error: null };
+        },
         single: async () => ({ data: null, error: null }),
         insert(row: any) {
           if (table === "processed_stripe_events") {
@@ -51,7 +57,13 @@ vi.mock("@supabase/supabase-js", () => {
           return Promise.resolve({ data: null, error: null });
         },
         delete() {
-          return { eq: async () => ({ data: null, error: null, count: 0 }), in: async () => ({ data: null, error: null, count: 0 }) };
+          return {
+            eq: async (col: string, val: any) => {
+              if (table === "processed_stripe_events" && col === "event_id") processedEventIds.delete(val);
+              return { data: null, error: null, count: 0 };
+            },
+            in: async () => ({ data: null, error: null, count: 0 }),
+          };
         },
       };
       // Chain "then" so `await sb.from(...).insert(...).then(...)` works
@@ -111,6 +123,7 @@ beforeEach(() => {
   processedEventIds = new Set<string>();
   trackedInserts = [];
   trackedUpdates = [];
+  failReadsOn = null;
 });
 
 const EVENT_TYPES = [
@@ -156,6 +169,27 @@ describe("Stripe webhook idempotency", () => {
       expect(trackedUpdates.length).toBe(updatesAfterFirst);
     });
   }
+
+  it("gives the event back when handling fails, so Stripe's retry is processed", async () => {
+    const ev = syntheticEvent("checkout.session.completed", "evt_handler_throws", {
+      customer: "cus_retry", customer_email: "retry@example.com", status: "complete",
+      payment_status: "paid", mode: "payment", metadata: {},
+    });
+    // The guest-email lookup reads clients; a failing database makes it throw.
+    failReadsOn = "clients";
+    const r1 = await postEvent(ev);
+    expect(r1.status).toBe(500);
+    // The claim was released: the event isn't marked processed.
+    expect(processedEventIds.has("evt_handler_throws")).toBe(false);
+
+    // Stripe retries once the store is healthy: it's handled, not dropped as a duplicate.
+    failReadsOn = null;
+    const r2 = await postEvent(ev);
+    expect(r2.status).toBe(200);
+    const body2 = await r2.json();
+    expect(body2.duplicate).not.toBe(true);
+    expect(processedEventIds.has("evt_handler_throws")).toBe(true);
+  });
 
   it("rejects an event with an invalid signature without touching state", async () => {
     const ev = syntheticEvent("checkout.session.completed", "evt_badsig");
