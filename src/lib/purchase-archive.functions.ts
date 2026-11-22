@@ -15,12 +15,10 @@ async function assertCanManagePurchase(supabase: any, userId: string, purchaseId
 
   const { data: roleRows } = await supabase.from("user_roles").select("role").eq("user_id", userId);
   const roles = (roleRows ?? []).map((r: any) => r.role);
+  // Archiving, restoring or removing a sale is the admin's: a coach reads their
+  // clients' sales, never changes them (20270507094000_coach_money_read_only.sql).
   if (roles.includes("admin")) return { purchase, actorRole: "admin" } as const;
-  if (roles.includes("coach")) {
-    const { data: allowed } = await supabase.rpc("is_assigned_coach", { _client_id: purchase.client_id });
-    if (allowed) return { purchase, actorRole: "coach" } as const;
-  }
-  throw new Error("Forbidden");
+  throw new Error("Only an admin can change a sale.");
 }
 
 async function getAdminClient() {

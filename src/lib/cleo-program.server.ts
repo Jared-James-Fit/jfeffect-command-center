@@ -595,7 +595,7 @@ async function insertRows(sb: Db, dayId: string, exercises: Array<Rx & { exercis
   if (error) throw new Error(error.message);
 }
 
-export async function executeProgramAction(actor: { supabase: Db; userId: string }, kind: ProgramKind, p: any, today: string): Promise<string> {
+export async function executeProgramAction(actor: { supabase: Db; userId: string; role?: "admin" | "coach" }, kind: ProgramKind, p: any, today: string): Promise<string> {
   const sb = actor.supabase;
   p = await withUnits(sb, kind, p);
   switch (kind) {
@@ -656,7 +656,7 @@ export async function executeProgramAction(actor: { supabase: Db; userId: string
       if (!p.training_days) {
         try {
           const { realignClientToCommittedDays } = await import("@/lib/schedule-bulk.functions");
-          await realignClientToCommittedDays({ clientId: p.client_id, userId: actor.userId, role: "admin", includePinned: false });
+          await realignClientToCommittedDays({ clientId: p.client_id, userId: actor.userId, role: actor.role ?? "admin", includePinned: false });
         } catch (e) {
           console.warn("[cleo] realign after build failed", e);
         }
@@ -678,7 +678,10 @@ export async function executeProgramAction(actor: { supabase: Db; userId: string
         const { data: dayRows } = await sb.from("pl_exercise_rows").select("id, sort_order, exercise_id").eq("day_id", day.id).order("sort_order");
         const bySort = new Map((dayRows ?? []).map((r: any) => [r.sort_order, r]));
         // Same slot AND same exercise: a later week the coach changed by hand is left alone.
+        // Only rows that are on the day being edited: a row id from anywhere else (another
+        // client's program) is never touched, whoever runs the card.
         const target = (originRowId: string) => {
+          if (!orderOf.has(originRowId)) return undefined;
           if (day.id === p.day_id) return originRowId;
           const r: any = bySort.get(orderOf.get(originRowId));
           return r && r.exercise_id === exerciseOf.get(originRowId) ? r.id : undefined;

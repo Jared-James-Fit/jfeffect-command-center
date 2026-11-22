@@ -81,7 +81,7 @@ export const checkSessionConflicts = createServerFn({ method: "POST" })
         .gt("ends_at", minISO),
       supabaseAdmin
         .from("appointments")
-        .select("id, title, appointment_type, starts_at, ends_at, external_name, client:clients(full_name)")
+        .select("id, title, appointment_type, starts_at, ends_at, external_name, host_coach_id, client:clients(full_name, assigned_coach_id)")
         .eq("status", "Scheduled")
         .lt("starts_at", maxISO)
         .gt("ends_at", minISO),
@@ -101,10 +101,16 @@ export const checkSessionConflicts = createServerFn({ method: "POST" })
       });
     }
     for (const a of (apptRes.data ?? []) as any[]) {
+      // Who it's with only for the admin, the call's host, or the client's own coach.
+      const mine =
+        staff.isAdmin ||
+        (!!staff.coachId && (a.host_coach_id === staff.coachId || a.client?.assigned_coach_id === staff.coachId));
       busy.push({
         source: "app",
         id: a.id,
-        title: `${a.client?.full_name ?? a.external_name ?? "Call"} · ${a.title || a.appointment_type || "Appointment"}`,
+        title: mine
+          ? `${a.client?.full_name ?? a.external_name ?? "Call"} · ${a.title || a.appointment_type || "Appointment"}`
+          : "Another appointment",
         start: new Date(a.starts_at).getTime(),
         end: new Date(a.ends_at).getTime(),
       });

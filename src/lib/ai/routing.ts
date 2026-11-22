@@ -15,7 +15,7 @@
  */
 import type { Effort } from "./model-client.server";
 
-export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write" | "program_import" | "nutrition_roadmap";
+export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate" | "form_draft" | "coach_write" | "assistant" | "exercise_identify" | "post_write" | "program_import" | "nutrition_roadmap" | "nutrition_import";
 export type Route = {
   /** Tried in order. */
   models: string[];
@@ -115,6 +115,16 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
    * metered with AI credits (program_import).
    */
   program_import: { models: ["openai:gpt-5.5", "openai:gpt-6-astra"], effort: "medium", maxOutputTokens: 100_000, strongOnly: false },
+  /**
+   * Reading a meal plan someone already has (a PDF, photos, a spreadsheet or document the app's own
+   * reader can't take) into the app's meal-plan text (nutrition-import, Nov 22 2026): copying, never
+   * deciding, the same as program_import. Checked by code against the file before the person sees it
+   * (planGroundingFlags: a number or a food word the file doesn't have is flagged). GPT-5.5 reads PDFs
+   * and photos directly, Astra backs it up; never GPT-5 mini. In the background (staged calls); a
+   * member's or client's own AI use, metered with AI credits (nutrition_import), never a staff
+   * member's. Create with Cleo's drafts are writing to targets and go through nutrition_write.
+   */
+  nutrition_import: { models: ["openai:gpt-5.5", "openai:gpt-6-astra"], effort: "medium", maxOutputTokens: 40_000, strongOnly: false },
   /**
    * A nutrition roadmap revision's two lines of words (nutrition-roadmap/explain.server.ts, Nov 22
    * 2026): the engine decides every number, the model only words it, and code throws the answer

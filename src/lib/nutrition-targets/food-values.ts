@@ -13,8 +13,8 @@
  */
 import { structureMealPlanDay, type PlanMeal } from "@/lib/nutrition-targets/meal-plan-structure";
 
-type Per100 = readonly [kcal: number, protein: number, carbs: number, fat: number];
-type Food = {
+export type Per100 = readonly [kcal: number, protein: number, carbs: number, fat: number];
+export type StapleFood = {
   key: string;
   match: RegExp;
   per100: Per100;
@@ -25,7 +25,7 @@ type Food = {
 };
 
 // Order matters: the first match wins ("egg whites" before "eggs", "sweet potato" before "potato", "peanut butter" before "butter").
-const FOODS: Food[] = [
+const FOODS: StapleFood[] = [
   { key: "egg whites", match: /egg\s*whites?|liquid egg/, per100: [52, 10.9, 0.7, 0.2] },
   { key: "eggs", match: /\beggs?\b/, per100: [143, 12.6, 0.7, 9.5], each: 50 },
   { key: "greek yogurt", match: /greek\s+yog(?:h)?urt|skyr/, per100: [59, 10.3, 3.6, 0.4] },
@@ -80,6 +80,10 @@ const BEEF_BY_LEAN: Record<number, Per100> = {
   80: [272, 25.8, 0, 17.8],
 };
 
+/** The staples above and the ground beef by leanness, for the Nutrition Studio's food list (the same values, never a second table). */
+export const STAPLE_FOODS: readonly StapleFood[] = FOODS;
+export const BEEF_PER100_BY_LEAN: Readonly<Record<number, Per100>> = BEEF_BY_LEAN;
+
 /** Free, never counted (FOOD-WEIGHING RULES): spices, sauces with no calories, water. */
 const FREE = /\b(salt|pepper|spices?|seasonings?|herbs?|garlic|cinnamon|lemon|lime|vinegar|mustard|hot sauce|salsa|zero[- ]?cal\w*|water|coffee|tea|sweetener|stevia|to taste|as desired|cooking spray)\b/i;
 const COUNT_UNIT = /^(?:whole|large|medium|small|pieces?|servings?)$/i;
@@ -100,6 +104,21 @@ function num(s: string): number | null {
 }
 
 const AMOUNT = /^~?\s*(\d+\s+\d+\/\d+|\d+\s*[½¼¾⅓⅔]|[½¼¾⅓⅔]|\d+\/\d+|\d+(?:[.,]\d+)?)\s*(kg|g|grams?|ml|l|oz|lbs?|tbsp|tsp|scoops?|slices?|cans?|whole|large|medium|small|pieces?|servings?)?\b\.?\s*(.*)$/i;
+
+/** A food line's amount: "2 slices bread" → { qty: 2, unit: "slices", rest: "bread" }; "½ bagel" → { qty: 0.5, unit: "", rest: "bagel" }. Null when it doesn't start with one. */
+export function splitAmount(line: string): { qty: number; unit: string; rest: string } | null {
+  const m = line.trim().match(AMOUNT);
+  if (!m) return null;
+  const qty = num(m[1]);
+  if (qty == null) return null;
+  return { qty, unit: (m[2] ?? "").toLowerCase(), rest: m[3].trim() };
+}
+
+/** The staple a food name reads as (the same first-match order the plan checks use), or null. */
+export function stapleFor(name: string): StapleFood | null {
+  const n = name.toLowerCase().replace(/^(small|medium|large)\s+/, "");
+  return FOODS.find((f) => f.match.test(n)) ?? null;
+}
 
 export type FoodValues = { kcal: number; protein: number; carbs: number; fat: number };
 

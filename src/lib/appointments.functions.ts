@@ -24,6 +24,29 @@ async function isAdmin(supabase: any, userId: string): Promise<boolean> {
   return (data ?? []).some((r: any) => r.role === "admin");
 }
 
+/**
+ * An appointment that names a client is the admin's, or that client's own
+ * coach's (staffCanReachClient): appointments RLS only checks the host, and
+ * the credit, CRM note and reminder texts below run as the server, so a coach
+ * hosting a call must never reach another coach's client through it.
+ */
+async function assertApptClient(supabase: any, userId: string, clientId: string | null | undefined) {
+  if (!clientId) return;
+  const { staffCanReachClient } = await import("@/lib/staff-client-access.server");
+  if (!(await staffCanReachClient(supabase, userId, clientId))) {
+    throw new Error("You can't change this appointment.");
+  }
+}
+
+/** A linked session package is one of the appointment's own client's (read as the caller). */
+async function assertPackageForClient(supabase: any, packageId: string | null | undefined, clientId: string | null | undefined) {
+  if (!packageId) return;
+  const { data: pkg } = clientId
+    ? await supabase.from("purchase_records").select("id, client_id").eq("id", packageId).maybeSingle()
+    : { data: null };
+  if (!pkg || pkg.client_id !== clientId) throw new Error("That package isn't this client's.");
+}
+
 async function scheduleReminders(opts: {
   appointmentId: string;
   startsAt: string;
@@ -70,7 +93,8 @@ async function applyAppointmentCredit(appointmentId: string) {
     .select("id, client_id, sessions_used")
     .eq("id", appt.session_credit_package_id)
     .maybeSingle();
-  if (!pkg) return;
+  // Only ever the appointment's own client's package.
+  if (!pkg || !appt.client_id || pkg.client_id !== appt.client_id) return;
 
   await supabaseAdmin.from("purchase_records")
     .update({ sessions_used: (pkg.sessions_used ?? 0) + delta })
@@ -96,7 +120,7 @@ async function reverseAppointmentCredit(appointmentId: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: appt } = await supabaseAdmin
     .from("appointments")
-    .select("id, session_credit_package_id, credits_used, credit_deducted")
+    .select("id, client_id, session_credit_package_id, credits_used, credit_deducted")
     .eq("id", appointmentId)
     .maybeSingle();
   if (!appt) return;
@@ -109,7 +133,7 @@ async function reverseAppointmentCredit(appointmentId: string) {
     .select("id, client_id, sessions_used")
     .eq("id", appt.session_credit_package_id)
     .maybeSingle();
-  if (!pkg) return;
+  if (!pkg || !appt.client_id || pkg.client_id !== appt.client_id) return;
 
   await supabaseAdmin.from("purchase_records")
     .update({ sessions_used: Math.max(0, (pkg.sessions_used ?? 0) - delta) })
@@ -198,6 +222,8 @@ export const createAppointment = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     let coachId = data.host_coach_id ?? (await getCoachIdForUser(supabase, userId));
     if (!coachId) throw new Error("No host coach selected");
+    await assertApptClient(supabase, userId, data.client_id);
+    await assertPackageForClient(supabase, data.session_credit_package_id, data.client_id);
 
     // Resolve attendee info
     let attendeeEmail = data.external_email || null;
@@ -288,6 +314,12 @@ export const updateAppointment = createServerFn({ method: "POST" })
     const { id, ...patch } = data as any;
     const { data: existing } = await supabase.from("appointments").select("*").eq("id", id).maybeSingle();
     if (!existing) throw new Error("Appointment not found");
+    const clientId = "client_id" in patch ? patch.client_id : existing.client_id;
+    await assertApptClient(supabase, userId, clientId);
+    const packageId = "session_credit_package_id" in patch ? patch.session_credit_package_id : existing.session_credit_package_id;
+    if (packageId && (packageId !== existing.session_credit_package_id || clientId !== existing.client_id)) {
+      await assertPackageForClient(supabase, packageId, clientId);
+    }
     const update: any = { ...patch };
     delete update.meet_enabled;
     delete update.reminder_offsets_minutes;
@@ -334,6 +366,7 @@ export const cancelAppointment = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     const { data: existing } = await supabase.from("appointments").select("*").eq("id", data.id).maybeSingle();
     if (!existing) throw new Error("Appointment not found");
+    await assertApptClient(supabase, userId, existing.client_id);
     const { data: changed, error } = await supabase.from("appointments").update({
       status: "Cancelled",
       cancelled_at: new Date().toISOString(),
@@ -371,6 +404,7 @@ export const markAppointmentStatus = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     const { data: before } = await supabase.from("appointments").select("*").eq("id", data.id).maybeSingle();
     if (!before) throw new Error("Appointment not found");
+    await assertApptClient(supabase, userId, before.client_id);
     const { data: changed, error } = await supabase.from("appointments").update({ status: data.status }).eq("id", data.id).select("id");
     if (error) throw new Error(error.message);
     if (!changed?.length) throw new Error("You can't change this appointment.");
@@ -475,6 +509,8 @@ export const rescheduleAppointment = createServerFn({ method: "POST" })
     const isCoach = coach && existing.host_coach_id === coach.id;
     const adminFlag = await isAdmin(supabase, userId);
     if (!isClientOwner && !isCoach && !adminFlag) throw new Error("Not allowed");
+    // Staff: only an appointment with a client they reach (its reminders text that client).
+    if (!isClientOwner) await assertApptClient(supabase, userId, existing.client_id);
 
     const { data: updated, error } = await supabase.from("appointments").update({
       starts_at: data.starts_at,

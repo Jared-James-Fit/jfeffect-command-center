@@ -12,6 +12,39 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const isoUuid = z.string().uuid();
 
+/**
+ * The row a scheduled 1:1 message is (the worker sends it when it's due). One
+ * shape for scheduleMessage and for a Cleo card the owner approved, which
+ * writes it as the coach who asked (cleo-actions.server.ts).
+ */
+export function scheduledMessageRow(m: {
+  clientId: string;
+  senderId: string;
+  senderRole: "admin" | "coach";
+  body: string;
+  when: Date;
+  tz: string | null;
+  messageType?: string;
+  attachments?: unknown[];
+  priority?: string | null;
+}) {
+  return {
+    client_id: m.clientId,
+    sender_id: m.senderId,
+    sender_role: m.senderRole,
+    body: m.body,
+    attachments: m.attachments ?? [],
+    message_type: m.messageType ?? "General",
+    is_internal_note: false,
+    priority: m.priority ?? null,
+    delivery_status: "scheduled",
+    scheduled_at: m.when.toISOString(),
+    scheduled_by: m.senderId,
+    scheduled_tz: m.tz,
+    read_by_admin_at: m.senderRole === "admin" ? new Date().toISOString() : null,
+  };
+}
+
 // --------------------------------------------------------------------------
 // Schedule a new 1:1 message for future delivery.
 // --------------------------------------------------------------------------
@@ -56,21 +89,17 @@ export const scheduleMessage = createServerFn({ method: "POST" })
 
     const { data: row, error } = await supabase
       .from("messages")
-      .insert({
-        client_id: data.clientId,
-        sender_id: userId,
-        sender_role: senderRole,
+      .insert(scheduledMessageRow({
+        clientId: data.clientId,
+        senderId: userId,
+        senderRole,
         body: trimmed,
-        attachments: data.attachments ?? [],
-        message_type: data.messageType ?? "General",
-        is_internal_note: false,
+        when,
+        tz: data.scheduledTz ?? null,
+        messageType: data.messageType,
+        attachments: data.attachments,
         priority: data.priority ?? null,
-        delivery_status: "scheduled",
-        scheduled_at: when.toISOString(),
-        scheduled_by: userId,
-        scheduled_tz: data.scheduledTz ?? null,
-        read_by_admin_at: senderRole === "admin" ? new Date().toISOString() : null,
-      })
+      }))
       .select("*")
       .single();
     if (error) throw new Error(error.message);
