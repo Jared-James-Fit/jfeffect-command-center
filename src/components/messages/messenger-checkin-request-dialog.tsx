@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ClipboardCheck, Loader2, Sparkles } from "lucide-react";
+import { ClipboardCheck, ClipboardList, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { sendNutritionRequestFn } from "@/lib/nutrition-ai-plans.functions";
 import { NUTRITION_PHASES, PHASE_GOAL } from "@/lib/nutrition-cardio";
@@ -124,12 +124,12 @@ export function MessengerCheckinRequestDialog({
             )}
           >
             <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
+              <ClipboardList className="h-5 w-5 text-primary" />
               <div className="text-sm font-bold">Nutrition Update</div>
-              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">AI plan</span>
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold text-foreground">Plan written for you</span>
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
-              About 3–4 minutes · AI builds new calorie, macro & cardio targets and a paste-ready meal plan for you.
+              About 3–4 minutes · new calorie, macro and cardio targets and a meal plan are written from it, ready for you to check.
             </div>
           </button>
         </div>

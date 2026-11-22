@@ -10,7 +10,7 @@
 import {
   LayoutDashboard, Users, ClipboardList, Activity, ClipboardCheck,
   Dumbbell, Heart, Flame, ChefHat, BookOpen, FileEdit, HelpCircle,
-  MessageCircle, Megaphone, Phone, Sparkles, MessagesSquare,
+  MessageCircle, Megaphone, Phone, LayoutTemplate, MessageSquareQuote, MessagesSquare,
   UserCheck, CreditCard, DollarSign, Ticket, Calendar, Film,
   Layers, Briefcase, Archive, UserPlus, UserCog, Settings, AlertCircle,
   FileSignature, ShoppingBag, Library, KeyRound, BarChart3, RefreshCw,
@@ -251,9 +251,9 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
     category: "Sales & Payments", parent: "Admin → Sales", roles: ADMIN, icon: Ticket,
     keywords: ["discount", "coupon", "promo"] },
   { id: "sales-coaching-page", label: "Coaching Sales Page", to: "/admin/sales/coaching",
-    category: "Sales & Payments", parent: "Admin → Sales", roles: ADMIN, icon: Sparkles, hidden: true },
+    category: "Sales & Payments", parent: "Admin → Sales", roles: ADMIN, icon: LayoutTemplate, hidden: true },
   { id: "sales-membership-page", label: "Membership Sales Page", to: "/admin/sales/membership",
-    category: "Sales & Payments", parent: "Admin → Sales", roles: ADMIN, icon: Sparkles, hidden: true },
+    category: "Sales & Payments", parent: "Admin → Sales", roles: ADMIN, icon: LayoutTemplate, hidden: true },
   { id: "coaching-apps", label: "Coaching Applications", to: "/admin/sales/coaching-applications",
     category: "Sales & Payments", parent: "Admin → Sales", roles: ADMIN_COACH, icon: ClipboardList, hidden: true,
     keywords: ["applications", "leads", "website form"] },
@@ -266,7 +266,7 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
 
   // ── MEMBERSHIP ──────────────────────────────────────────────────────
   { id: "membership-home", label: "Membership Home", to: "/admin/membership",
-    category: "Membership", parent: "Admin → Membership", roles: ADMIN, icon: Sparkles },
+    category: "Membership", parent: "Admin → Membership", roles: ADMIN, icon: CreditCard },
   { id: "membership-billing", label: "Membership Billing", to: "/admin/membership/billing",
     category: "Membership", parent: "Admin → Membership", roles: ADMIN, icon: CreditCard,
     keywords: ["subscriptions", "recurring billing", "stripe"] },
@@ -336,7 +336,7 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
   { id: "settings-nutrition-auto", label: "Nutrition Automation", to: "/admin/settings/nutrition-automation",
     category: "Settings", parent: "Admin → Settings", roles: ADMIN, icon: ChefHat, hidden: true },
   { id: "coach-voice", label: "My Voice (how the app texts as you)", to: "/admin/voice",
-    category: "Settings", parent: "Admin → Settings", roles: ADMIN_COACH, icon: Sparkles,
+    category: "Settings", parent: "Admin → Settings", roles: ADMIN_COACH, icon: MessageSquareQuote,
     keywords: ["voice", "tone", "slang", "emoji", "ai replies", "suggested response", "nickname"] },
   { id: "floating-bar", label: "Floating Bar Settings", to: "/admin/floating-bar",
     category: "Settings", parent: "Admin → Settings", roles: ADMIN_COACH, icon: Wrench, hidden: true },

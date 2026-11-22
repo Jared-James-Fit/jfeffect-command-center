@@ -85,11 +85,11 @@ async function callModel(admin: Db, edit: any, label: string, system: string, pr
     } catch (e: any) {
       await logCall(admin, edit.id, { label, model, system, prompt, response: null, ok: false, ms: Date.now() - t0, error: String(e?.message ?? e).slice(0, 500) });
       last = e;
-      if (e instanceof ModelHttpError && e.status === 402) throw new Error("AI credits are used up.");
+      if (e instanceof ModelHttpError && e.status === 402) throw new Error("The writing service is out of credits. Ask an admin to top it up.");
       // busy or too slow: the next model may not be
     }
   }
-  throw new Error(`The AI service didn't answer: ${String(last?.message ?? last).slice(0, 200)}`);
+  throw new Error(`The writing service didn't answer: ${String(last?.message ?? last).slice(0, 200)}`);
 }
 
 async function logCall(admin: Db, editId: string, x: { label: string; model: string; system: string; prompt: string; response: string | null; ok: boolean; ms: number; error?: string; usage?: any }) {
@@ -262,7 +262,7 @@ export async function runProgramAiEdit(admin: Db, editId: string | null): Promis
       model = r.model;
       const parsed = parseReply(r.text);
       if (!parsed.ok) {
-        if (call === MAX_CALLS || Date.now() - started > FIX_ROUND_BEFORE_MS) throw new Error(`The AI's reply wasn't usable: ${parsed.error}`);
+        if (call === MAX_CALLS || Date.now() - started > FIX_ROUND_BEFORE_MS) throw new Error(`The reply wasn't usable: ${parsed.error}`);
         prompt = `${user}\n\nYour previous reply couldn't be used: ${parsed.error}\nReply again with ONE valid JSON object in exactly the required shape.`;
         continue;
       }
@@ -286,7 +286,7 @@ export async function runProgramAiEdit(admin: Db, editId: string | null): Promis
       await stage(admin, edit.id, "Fixing a few details");
       prompt = `${user}\n\nYour previous reply:\n${r.text.slice(0, 20_000)}\n\nIt has problems the app won't accept:\n${problems.map((p) => `- ${p}`).join("\n")}\nReply again with the whole JSON object, fixed (same ids). Only codes from the catalog or the ones listed above.`;
     }
-    if (!reply) throw new Error("The AI didn't reply.");
+    if (!reply) throw new Error("No reply came back.");
 
     // 5. the proposal
     await stage(admin, edit.id, "Checking the changes");

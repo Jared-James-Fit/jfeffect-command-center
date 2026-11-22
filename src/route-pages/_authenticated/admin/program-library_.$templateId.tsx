@@ -769,7 +769,7 @@ export function TemplateEditor() {
           size="sm"
           variant="ghost"
           className="h-9 px-2.5"
-          label={phoneNow ? "AI" : "Edit with AI"}
+          label={phoneNow ? "Adjust" : "Adjust program"}
           // the AI reads what's saved: save what's on screen first
           beforeOpen={async () => { if (dirty || autosave.hasPending()) await save(); }}
           onApplied={async () => {

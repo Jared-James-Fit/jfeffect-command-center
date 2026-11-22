@@ -26,7 +26,7 @@ export function ContextInspector({ open, onOpenChange, job }: { open: boolean; o
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto rounded-t-2xl" data-testid="gen-inspector">
         <SheetHeader className="text-left">
-          <SheetTitle>Context the AI received</SheetTitle>
+          <SheetTitle>What the generator read</SheetTitle>
           <SheetDescription>Everything this run used, so a decision can be traced to its inputs.</SheetDescription>
         </SheetHeader>
         {ctx.isLoading ? (

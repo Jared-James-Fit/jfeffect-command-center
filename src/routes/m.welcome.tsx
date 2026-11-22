@@ -7,7 +7,7 @@ import { completeJfSignup } from "@/lib/jf-billing.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Sparkles, Loader2, AlertCircle } from "lucide-react";
+import { CheckCircle2, Loader2, AlertCircle } from "lucide-react";
 
 export const Route = createFileRoute("/m/welcome")({
   component: Welcome,
@@ -118,7 +118,7 @@ function Welcome() {
       <div className="container mx-auto max-w-2xl px-4 py-12 space-y-6">
         <Card className="border-emerald-500/30 bg-emerald-500/5 p-6">
           <div className="flex items-center gap-3">
-            <Sparkles className="h-6 w-6 text-emerald-400" />
+            <CheckCircle2 className="h-6 w-6 text-emerald-400" />
             <div>
               <h1 className="text-2xl font-bold">Welcome to JF Membership</h1>
               <p className="text-sm text-muted-foreground">Finalizing your account…</p>

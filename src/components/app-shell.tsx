@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { GlobalStoryHost } from "@/components/community/global-story-host";
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -681,7 +682,7 @@ export function AppShell({
                 align="start"
                 trigger={
                   <button type="button" className="rounded-full" aria-label="Account menu">
-                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring expandable={false} />
+                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} expandable={false} />
                   </button>
                 }
               />
@@ -711,7 +712,7 @@ export function AppShell({
                 align="start"
                 trigger={
                   <button type="button" className="shrink-0 rounded-full" aria-label="Account menu">
-                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring expandable={false} />
+                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} expandable={false} />
                   </button>
                 }
               />
@@ -1007,7 +1008,7 @@ export function AppShell({
                 onSignOut={handleSignOut}
                 trigger={
                   <button type="button" aria-label="Account menu" className="shrink-0 rounded-full">
-                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring expandable={false} />
+                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} expandable={false} />
                   </button>
                 }
               />
@@ -1026,7 +1027,8 @@ export function AppShell({
           />
           {/* a page with its own bar puts the switch under it */}
           {!pageBar && <DualAccountSwitcher />}
-          <ShellPageContext.Provider value>{children}</ShellPageContext.Provider>
+          {/* story rings on photos outside Crew (Messages, chat lists): the crew's stories already on the phone */}
+          <ShellPageContext.Provider value><GlobalStoryHost>{children}</GlobalStoryHost></ShellPageContext.Provider>
         </main>
 
         {/* Mobile bottom nav — fixed, app-like tab bar */}
@@ -1077,7 +1079,7 @@ export function AppShell({
                 onSignOut={handleSignOut}
                 trigger={
                   <button type="button" aria-label="Account" className="flex min-h-[56px] w-full items-center gap-3 rounded-md px-2 py-2 text-left active:bg-sidebar-accent/70">
-                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={36} ring expandable={false} />
+                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={36} expandable={false} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[15px] font-semibold">{me?.name || user?.email}</span>
                       <span className="block truncate text-[12px] text-muted-foreground">Photo, email, sign out</span>

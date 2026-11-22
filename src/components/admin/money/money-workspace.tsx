@@ -10,7 +10,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Camera, ChevronDown, FilePlus2, HandCoins, Landmark, Loader2, Plus, Repeat, Sparkles } from "lucide-react";
+import { Camera, ChevronDown, FilePlus2, HandCoins, Landmark, Loader2, MessageCircle, Plus, Repeat } from "lucide-react";
+import { useCleoAccess } from "@/hooks/use-cleo-access";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -56,6 +57,7 @@ export function MoneyWorkspace({ view, periodCode, compare = "previous", onState
 }) {
   const qc = useQueryClient();
   const today = businessToday();
+  const cleoOn = useCleoAccess();
   const books = useBooksData();
   const receivables = useReceivables();
   const { snap, scanning, label: snapLabel } = useSnapReceipts();
@@ -201,9 +203,11 @@ export function MoneyWorkspace({ view, periodCode, compare = "previous", onState
                   <DropdownMenuItem onSelect={() => setTaxPay(true)}><Landmark className="mr-2 h-4 w-4" /> Record a payment to CRA</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button variant="outline" className="h-10" onClick={() => openSummer({ year: Number(elapsed(period, today).end.slice(0, 4)) })} aria-label={`Ask ${ASSISTANT_NAME}`}>
-                <Sparkles className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Ask {ASSISTANT_NAME}</span>
-              </Button>
+              {cleoOn && (
+                <Button variant="outline" className="h-10" onClick={() => openSummer({ year: Number(elapsed(period, today).end.slice(0, 4)) })} aria-label={`Ask ${ASSISTANT_NAME}`}>
+                  <MessageCircle className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Ask {ASSISTANT_NAME}</span>
+                </Button>
+              )}
             </div>
           </div>
 

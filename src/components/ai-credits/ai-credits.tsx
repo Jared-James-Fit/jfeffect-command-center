@@ -1,11 +1,12 @@
 /**
- * AI credits in the app: where they show and how more are bought.
+ * Credits in the app ("AI credits" in code and the admin's books; the
+ * person only ever reads "Credits"): where they show and how more are bought.
  *
  *   AiCreditsChip     beside an AI action ("12 left"), the moment it matters
  *   AiCreditsSheet    opens from the chip, or by itself when an AI action is
  *                     refused for credits: the balance, when the free ones
  *                     come back, and the packs
- *   AiCreditsPanel    the same content, inside Account → AI credits
+ *   AiCreditsPanel    the same content, inside Account → Credits
  *   AiCreditsReturn   back from Stripe: adds the pack's credits and says so
  *
  * Packs are sold on the web only: the App Store and Play builds never offer
@@ -16,7 +17,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Sparkles } from "lucide-react";
+import { Coins, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -37,6 +38,7 @@ import {
 } from "@/lib/ai-credits.functions";
 import {
   CREDIT_PACKS,
+  FEATURE_COSTS,
   FEATURE_LABEL,
   chipLabel,
   creditsBreakdown,
@@ -84,7 +86,7 @@ export function useSetCreditState() {
   };
 }
 
-/** "12 left" beside an AI action. Nothing for staff, or before it's known. */
+/** "12 left" beside a metered action. Nothing for staff, or before it's known. */
 export function AiCreditsChip({
   state,
   onClick,
@@ -107,12 +109,22 @@ export function AiCreditsChip({
         out ? "text-warning" : "text-muted-foreground",
         className,
       )}
-      aria-label={`AI credits: ${label}`}
+      aria-label={`Credits: ${label}`}
     >
-      <Sparkles className="h-3.5 w-3.5" aria-hidden />
+      <Coins className="h-3.5 w-3.5" aria-hidden />
       {label}
     </button>
   );
+}
+
+/**
+ * What credits pay for, in plain words: the feature the person was using
+ * first. Never "AI": the feature is what they bought.
+ */
+export function coverLine(feature?: AiFeature): string {
+  const meal = `Describing a meal to log it takes ${FEATURE_COSTS.meal_estimate} credit.`;
+  const program = `Reading a PDF or photos of a program takes ${FEATURE_COSTS.program_import} credits, given back if it can't be read.`;
+  return feature === "program_import" ? `${program} ${meal}` : `${meal} ${program}`;
 }
 
 /** The balance, the reset date, and (on the web) the packs. */
@@ -140,7 +152,7 @@ export function AiCreditsPanel({
   if (state.unlimited) {
     return (
       <p className="text-[15px] text-muted-foreground" data-ai-credits-unlimited>
-        Staff accounts have unlimited AI credits.
+        Staff accounts have unlimited credits.
       </p>
     );
   }
@@ -173,14 +185,13 @@ export function AiCreditsPanel({
         `${creditsNumber(used[f]!)} ${used[f] === 1 ? FEATURE_LABEL[f].one : FEATURE_LABEL[f].many}`,
     );
   const history = detail.history ?? [];
-  const what = FEATURE_LABEL[feature ?? "meal_estimate"].one;
 
   return (
     <div className="space-y-5" data-ai-credits-panel>
       <div>
         {out ? (
           <>
-            <div className="text-[17px] font-semibold">You've used this month's AI credits</div>
+            <div className="text-[17px] font-semibold">You've used this month's credits</div>
             <p className="mt-1 text-[14px] text-muted-foreground">
               {native || preview
                 ? `Your free credits come back ${resetDay(state.resets_on)}.`
@@ -196,13 +207,13 @@ export function AiCreditsPanel({
               >
                 {creditsNumber(state.left ?? 0)}
               </span>
-              <span className="text-[15px] text-muted-foreground">AI credits left</span>
+              <span className="text-[15px] text-muted-foreground">credits left</span>
             </div>
             <p className="mt-2 text-[14px] text-muted-foreground">{creditsBreakdown(state)}</p>
           </>
         )}
         <p className="mt-1 text-[13px] text-muted-foreground">
-          {resetLine(state)} 1 credit = 1 {what}.
+          {resetLine(state)} {coverLine(feature)}
         </p>
       </div>
 
@@ -311,9 +322,9 @@ export function AiCreditsSheet({
         className="max-h-[88svh] overflow-y-auto rounded-t-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))]"
       >
         <SheetHeader className="mb-4 text-left">
-          <SheetTitle>AI credits</SheetTitle>
+          <SheetTitle>Credits</SheetTitle>
           <SheetDescription className="sr-only">
-            Your AI credits and how to get more.
+            Your credits and how to get more.
           </SheetDescription>
         </SheetHeader>
         {q.error ? (
@@ -361,7 +372,7 @@ export function AiCreditsReturn() {
         const r = await confirm({ data: { sessionId } });
         if (r.pending)
           toast("Your payment is processing. Your credits show up as soon as it clears.");
-        else toast.success(`${creditsNumber(r.credits)} AI credits added`);
+        else toast.success(`${creditsNumber(r.credits)} credits added`);
       } catch (e: any) {
         toast.error(
           e?.message ??

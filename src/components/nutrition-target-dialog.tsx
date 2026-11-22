@@ -145,7 +145,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
           ...(prefill.phase ? { phase: prefill.phase, goal: PHASE_GOAL[prefill.phase] ?? f.goal } : {}),
         });
         setPhaseAuto(!!prefill.phase);
-        setPhaseSource(prefill.phase ? "From the AI plan for their Nutrition Update" : null);
+        setPhaseSource(prefill.phase ? "From the plan written for their Nutrition Update" : null);
         setPhaseFrom(prefill.phase ? "prefill" : null);
         Object.assign(f, {
           food_weighing_rules: prefill.food_weighing_rules ?? "",
@@ -716,7 +716,7 @@ function DayCardio({ draft, onChange, willSync }: { draft?: CardioDraft; onChang
         <span className="text-sm font-medium">Cardio</span>
         <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
           {on ? draft?.cardio_type ?? "On" : "None on this day"}
-          {draft?.fromAi ? " · from the AI" : ""}
+          {draft?.fromAi ? " · drafted" : ""}
           {!willSync ? " · saved to Cardio when the plan is Active" : ""}
         </span>
       </div>

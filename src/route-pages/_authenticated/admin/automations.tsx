@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   Bell, CalendarClock, Cake, ChevronRight, ClipboardList, CreditCard, Lock, Mail, Megaphone,
-  MessageSquare, MessagesSquare, Smartphone, Sparkles, Zap,
+  MessageSquare, MessagesSquare, Smartphone, UserRound, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -150,7 +150,7 @@ export function AutomationsHub() {
             when="Master switch. Off pauses every text below." note={smsNote}
             on={!!sms?.enabled} locked={!isAdmin}
             onToggle={(v) => run(() => saveSms({ data: { enabled: v } }), v ? "Texts are on" : "All texts paused")} />
-          <Row icon={Sparkles} tone="bg-primary/15 text-primary" title="Who texts are from" to="/admin/settings/sms"
+          <Row icon={UserRound} tone="bg-muted text-muted-foreground" title="Who texts are from" to="/admin/settings/sms"
             when={`"Hi Alex, this is ${smsSender(sms?.default_coach_name, sms?.brand_name)}…" — change the business or fallback coach name.`} />
           <Row icon={Bell} tone="bg-sky-500/15 text-sky-500" title="Unread message reminder" to="/admin/settings/sms"
             when={`Texts a client when they haven't read your message (${steps.filter((s) => s.enabled).map((s) => `${Math.round(s.delay_minutes / 60)}h`).join(" + ") || "no steps"}). 9am–8pm their time, max 1 a day.`}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
-import { AtSign, Camera, Check, Wand2, Expand, Shrink, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Scissors, Send, Smartphone, Smile, Square, Star, Timer, Type, User, Users, Volume2, VolumeX, X } from "lucide-react";
+import { AtSign, Camera, Check, SlidersHorizontal, Expand, Shrink, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Scissors, Send, Smartphone, Smile, Square, Star, Timer, Type, User, Users, Volume2, VolumeX, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -1704,7 +1704,7 @@ export function ShareStudio({
                     {/* Enhance: the photo's or clip's filter and adjustments; Fill / Fit: a story's picture filling it or whole */}
                     {enhanceTarget && (
                       <button type="button" onClick={() => setEnhancing((e) => !e)} className={cn(pill, "ml-auto", enhancing && "bg-white text-black")} aria-pressed={enhancing} aria-label="Enhance: filters and adjustments" data-studio-enhance>
-                        <Wand2 className="h-5 w-5" />
+                        <SlidersHorizontal className="h-5 w-5" />
                       </button>
                     )}
                     {fitTarget && (

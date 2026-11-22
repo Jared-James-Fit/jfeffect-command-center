@@ -149,12 +149,12 @@ export async function loadAppSnapshot(supabase: any): Promise<AppSnapshot> {
   };
 }
 
-/** Pages from the admin route registry, for Cleo's link list. */
-export async function summerLinkCatalog(): Promise<LinkEntry[]> {
+/** Pages from the admin route registry, for Cleo's link list: a coach's only the pages a coach can open. */
+export async function summerLinkCatalog(role: "admin" | "coach" = "admin"): Promise<LinkEntry[]> {
   try {
     const { ADMIN_ROUTE_REGISTRY } = await import("@/lib/admin-route-registry");
     return ADMIN_ROUTE_REGISTRY
-      .filter((e) => e.roles.includes("admin") && !e.isAction && e.to.startsWith("/admin"))
+      .filter((e) => (e.roles as readonly string[]).includes(role) && !e.isAction && e.to.startsWith("/admin"))
       .map((e) => ({ label: e.label, to: e.to, keywords: e.keywords }));
   } catch {
     return [];
@@ -504,7 +504,7 @@ export async function probeSpeechProviders(sample = "Hi, it's Cleo. Your books a
 
 export type SummerMsg = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices?: string[] | null; chat_id?: string | null; attachments?: CleoAttachment[] | null };
 
-type CleoInput = { message: string; year?: number | null; voice?: boolean; route?: string | null; finance?: boolean; own?: any; chatId?: string | null; attachments?: CleoAttachment[] };
+type CleoInput = { message: string; year?: number | null; voice?: boolean; route?: string | null; finance?: boolean; coach?: boolean; own?: any; chatId?: string | null; attachments?: CleoAttachment[] };
 
 /** How one answer went: which model answered, how long each part took and what it read. For the log and the benchmark. */
 export type CleoTrace = {
@@ -554,6 +554,8 @@ export async function cleoAnswer(
   // money, which is operational. Read alongside everything else.
   const booksRead = books.isBusinessOwner(supabase, userId).then(async (owner) => {
     const finance = !!input.finance && !owner;
+    // A coach's Cleo never reads money: not the books, not who owes what.
+    if (input.coach && !owner) return { owner, finance: false, section: "" };
     if (!owner && !finance) return { owner, finance, section: ["OPEN SALES", buildOpenSalesContext(await books.loadOpenSales(supabase))].join("\n") };
     const currentYear = Number(businessToday().slice(0, 4));
     // Who owes what, read the way each client's Billing tab reads it (service role, after the books check).
@@ -575,7 +577,7 @@ export async function cleoAnswer(
   const [booksPart, app, links, history, profile, me, ownerName, coachVoice, caller, override, mods] = await Promise.all([
     booksRead,
     loadAppSnapshot(supabase).catch(() => EMPTY_APP_SNAPSHOT),
-    summerLinkCatalog(),
+    summerLinkCatalog(input.coach ? "coach" : "admin"),
     // Only this chat: a new chat starts with a clean slate, so an old topic
     // never leaks into a new answer.
     input.chatId
@@ -618,6 +620,7 @@ export async function cleoAnswer(
       voice: input.voice,
       owner,
       finance,
+      coach: !!input.coach && !owner,
       userName: firstName(me.data?.full_name),
       ownerName,
     }),

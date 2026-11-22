@@ -5,7 +5,7 @@
  * rejected ones are kept out of every later report and prompt.
  */
 import { useState } from "react";
-import { Check, Pencil, Sparkles, X } from "lucide-react";
+import { Check, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -16,7 +16,7 @@ import type { RawObservation } from "@/lib/program-intel/types";
 import { KindChip } from "./sections";
 import { useReviewObservation, useSaveObservation, type IntelJob } from "./use-program-intel";
 
-const SOURCE: Record<RawObservation["source"], string> = { analysis: "From a report", ai: "AI proposal", coach: "Coach" };
+const SOURCE: Record<RawObservation["source"], string> = { analysis: "From a report", ai: "Proposed", coach: "Coach" };
 
 function ObservationRow({ o, clientId }: { o: RawObservation; clientId: string }) {
   const review = useReviewObservation(clientId);
@@ -95,10 +95,10 @@ export function MemorySection({
   return (
     <div className="space-y-4" data-testid="intel-memory">
       <Card className="space-y-2 p-3.5">
-        <div className="text-sm font-bold">AI interpretation</div>
-        <p className="text-xs text-muted-foreground">The AI reads this report (only the measured numbers) and proposes hypotheses about how this athlete responds. Each one waits here for you to approve, correct or reject; nothing it says counts as proven.</p>
+        <div className="text-sm font-bold">Interpretation</div>
+        <p className="text-xs text-muted-foreground">Reads this report (only the measured numbers) and proposes hypotheses about how this athlete responds. Each one waits here for you to approve, correct or reject; none of it counts as proven.</p>
         <Button size="sm" className="h-9" onClick={onInterpret} disabled={interpreting || !!running} data-testid="intel-interpret">
-          <Sparkles className="mr-1.5 h-4 w-4" /> {running ? "Reading the report…" : "Ask AI to interpret this report"}
+          {running ? "Reading the report…" : "Interpret this report"}
         </Button>
         {interpretJob?.status === "error" && <div className="text-xs text-destructive">Last run failed: {interpretJob.error}</div>}
         {interpretJob?.status === "ready" && interpretJob.result?.questions?.length > 0 && (
@@ -117,7 +117,7 @@ export function MemorySection({
       )}
       <section>
         <h3 className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">What we know about this athlete ({kept.length})</h3>
-        {kept.length ? <Card className="divide-y divide-border/60 p-0">{kept.map((o) => <ObservationRow key={o.id} o={o} clientId={clientId} />)}</Card> : <Card className="p-3 text-xs text-muted-foreground">Nothing kept yet. Keep a finding from the summary, approve an AI proposal or add your own note below. Kept observations go into every later report, prompt and generated program.</Card>}
+        {kept.length ? <Card className="divide-y divide-border/60 p-0">{kept.map((o) => <ObservationRow key={o.id} o={o} clientId={clientId} />)}</Card> : <Card className="p-3 text-xs text-muted-foreground">Nothing kept yet. Keep a finding from the summary, approve a proposal or add your own note below. Kept observations go into every later report, prompt and generated program.</Card>}
       </section>
       <Card className="space-y-2 p-3.5">
         <div className="text-sm font-bold">Add your own observation</div>

@@ -5,6 +5,7 @@ import { CLIP_HOLD_EVENT, InlineVideo, toggleFeedSound } from "@/components/comm
 import { CLIP_SCRUB_EVENT, inClipScrubBand } from "@/lib/video-scrub";
 import { justGaveSound, justStartedPlay } from "@/lib/video-pool";
 import { UserAvatar } from "@/components/user-avatar";
+import { StoryAvatar } from "@/components/community/story-ring";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { cn } from "@/lib/utils";
 import {
@@ -321,7 +322,8 @@ export function AuthorLine({
   if (!onOpen) {
     return (
       <div className="flex min-w-0 items-center gap-2.5">
-        <UserAvatar src={author.avatar_url} name={author.name} size={size} expandable={false} />
+        {/* their story ring when they have one up (a tap plays it); else a plain photo */}
+        <StoryAvatar userId={author.user_id} src={author.avatar_url} name={author.name} size={size} />
         <div className="min-w-0 text-left">
           {nameLine}
           {subLine}
@@ -329,12 +331,11 @@ export function AuthorLine({
       </div>
     );
   }
-  // the photo and the name lines open the profile; "· Follow" sits on the name's line, its own button
+  // the photo plays their story when they have one up (Instagram's), else it and the name lines open the
+  // profile; "· Follow" sits on the name's line, its own button
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      <button type="button" onClick={onOpen} className="shrink-0 rounded-full" aria-label={`${author.name}'s profile`}>
-        <UserAvatar src={author.avatar_url} name={author.name} size={size} expandable={false} />
-      </button>
+      <StoryAvatar userId={author.user_id} src={author.avatar_url} name={author.name} size={size} onPress={onOpen} pressLabel={`${author.name}'s profile`} />
       <div className="min-w-0 text-left">
         <div className="flex min-w-0 items-center gap-1.5">
           <button type="button" onClick={onOpen} className="flex min-w-0 items-center gap-1.5 rounded-md text-left" tabIndex={-1} aria-hidden>

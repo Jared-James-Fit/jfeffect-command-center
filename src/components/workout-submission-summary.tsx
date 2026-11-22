@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles, Medal, Share2, Download, Info } from "lucide-react";
+import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Medal, Share2, Download, Info } from "lucide-react";
 import { StudioShell } from "@/components/community/studio-chunks";
 import { explainWorkoutScore, type WorkoutSummary } from "@/lib/workout-summary";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -295,7 +295,6 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           <div className={`mx-auto flex w-full max-w-[calc(100%-4.5rem)] flex-col items-center text-center transition-all duration-500 ${revealStage >= 1 ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"}`}>
             <div className={`relative grid h-14 w-14 place-items-center rounded-full shadow-lg ${bigMoment ? "bg-amber-500 text-white ring-4 ring-amber-500/15" : "bg-primary text-primary-foreground"}`} data-recap-moment={bigMoment ? "pr" : "done"}>
               {bigMoment ? <Trophy className="h-7 w-7 animate-in zoom-in spin-in-6 duration-500" /> : <CheckCircle2 className="h-7 w-7" />}
-              {revealStage >= 2 && <Sparkles className="absolute -right-2 -top-1 h-5 w-5 animate-pulse text-primary" />}
             </div>
             <div className="mt-2 text-[10px] font-bold uppercase tracking-[0.22em] text-primary">Workout complete</div>
             <DialogHeader className="mx-auto mt-1 flex min-h-0 w-full flex-col items-center space-y-0 !pl-0 text-center sm:text-center">
@@ -343,7 +342,6 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
             {points && <WorkoutPointsCard points={points} />}
             {prList.length > 0 && (
               <section className="relative overflow-hidden animate-in zoom-in-90 fade-in slide-in-from-bottom-3 rounded-2xl border border-amber-500/40 bg-amber-500/[0.08] p-4 duration-700">
-                <Sparkles className="absolute right-3 top-3 h-5 w-5 animate-pulse text-amber-500" />
                 <div className="mb-2 flex items-center gap-2">
                   <div className="grid h-9 w-9 place-items-center rounded-full bg-amber-500 text-white shadow-md">
                     <Medal className="h-5 w-5" />

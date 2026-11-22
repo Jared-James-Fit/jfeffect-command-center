@@ -11,7 +11,7 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
-import { AlertTriangle, ChevronDown, MoreHorizontal, Sparkles, Target, Utensils, Zap } from "lucide-react";
+import { AlertTriangle, ChevronDown, MoreHorizontal, SlidersHorizontal, Target, Utensils, Zap } from "lucide-react";
 import { structureMealPlanDay, type PlanMacros } from "@/lib/nutrition-targets/meal-plan-structure";
 import { coachCoverageLine, dayCoverage, targetMathLine, type Coverage } from "@/lib/nutrition-targets/plan-coverage";
 import { mealFoodShort, mealMath, mealsOffTheirFoods, type MealMath } from "@/lib/nutrition-targets/food-values";
@@ -392,7 +392,7 @@ export function PlanDaysView({
             </div>
             {onFixMeals && (short || mislabelled.length) ? (
               <Button variant="outline" className="h-10 gap-1.5" onClick={onFixMeals}>
-                <Sparkles className="h-4 w-4" aria-hidden /> Fix the meals with AI
+                <SlidersHorizontal className="h-4 w-4" aria-hidden /> Fix the meals
               </Button>
             ) : null}
           </div>

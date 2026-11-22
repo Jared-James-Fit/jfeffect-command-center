@@ -448,7 +448,7 @@ export const parseMealFromText = createServerFn({ method: "POST" })
             timeoutMs: 25_000,
           });
           const value = parseMealEstimate(reply.text, data.text);
-          if (!value) throw new MeteredCallError("The AI couldn't make sense of that, so no credit was used. Try saying it another way.", reply.model, reply.usage);
+          if (!value) throw new MeteredCallError("Couldn't make sense of that, so no credit was used. Try saying it another way.", reply.model, reply.usage);
           return { value, model: reply.model, usage: reply.usage };
         } catch (e: any) {
           if (e instanceof MeteredCallError) throw e;
@@ -456,7 +456,7 @@ export const parseMealFromText = createServerFn({ method: "POST" })
           console.error("[meal-estimate] model failed", { model, message: lastError });
         }
       }
-      throw new MeteredCallError(`The AI couldn't estimate that right now, so no credit was used. Try again in a minute.`);
+      throw new MeteredCallError(`Couldn't estimate that right now, so no credit was used. Try again in a minute.`);
     });
     if (!r.ok) return { ok: false as const, outOfCredits: true as const, credits: r.credits };
     return { ok: true as const, ...r.value, credits: r.credits };

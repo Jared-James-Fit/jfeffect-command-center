@@ -5,7 +5,7 @@ import { CommentThread } from "@/components/community/comments-sheet";
 import { AutoPostCaption, CoachBadge } from "@/components/community/post-card";
 import { LikedBy, ReactorsSheet } from "@/components/community/reactors-sheet";
 import { WorkoutDetails } from "@/components/community/workout-details";
-import { UserAvatar } from "@/components/user-avatar";
+import { StoryAvatar } from "@/components/community/story-ring";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { isAutoPost, postTimeLabel, reactionTotal, withHandles, type CommunityAuthor, type CommunityPost } from "@/lib/community";
 import { cn } from "@/lib/utils";
@@ -226,17 +226,11 @@ function PostSheetCaption({ post, onOpenAuthor, onOpenLikes }: { post: Community
   const open = onOpenAuthor ? () => onOpenAuthor(post.author) : undefined;
   const collabs = post.collaborators ?? [];
   const also = collabs.length === 1 ? ` and ${collabs[0].name}` : collabs.length > 1 ? ` and ${collabs.length} others` : "";
-  const avatar = <UserAvatar src={post.author.avatar_url} name={post.author.name} size={32} expandable={false} />;
   return (
     <div className="-mx-4 mb-2 border-b border-border/60 px-4 pb-4 pt-1" data-post-sheet-caption>
       <div className="flex min-w-0 items-center gap-2.5">
-        {open ? (
-          <button type="button" onClick={open} className="shrink-0 rounded-full active:scale-95" aria-label={`Open ${post.author.name}'s profile`}>
-            {avatar}
-          </button>
-        ) : (
-          avatar
-        )}
+        {/* their story ring when they have one up (a tap plays it), else the photo opens their profile */}
+        <StoryAvatar userId={post.author.user_id} src={post.author.avatar_url} name={post.author.name} size={32} onPress={open} pressLabel={`Open ${post.author.name}'s profile`} />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5 text-[14px] leading-5">
             {open ? (

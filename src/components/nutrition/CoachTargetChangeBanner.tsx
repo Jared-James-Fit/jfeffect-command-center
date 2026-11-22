@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Sparkles, X, ArrowRight } from "lucide-react";
+import { Utensils, X, ArrowRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -77,10 +77,10 @@ export function CoachTargetChangeBanner() {
   })();
 
   return (
-    <Card className="border-primary/40 bg-primary/5 p-4">
+    <Card className="p-4">
       <div className="flex items-start gap-3">
-        <div className="rounded-full bg-primary/15 p-2 text-primary">
-          <Sparkles className="h-4 w-4" />
+        <div className="rounded-full bg-muted p-2 text-foreground">
+          <Utensils className="h-4 w-4" />
         </div>
         <div className="flex-1 space-y-3">
           <div>

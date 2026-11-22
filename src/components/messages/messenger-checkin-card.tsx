@@ -17,11 +17,11 @@ import {
   ChevronRight,
   CircleDashed,
   ClipboardCheck,
+  ClipboardList,
   Flag,
   Loader2,
   MessageSquareText,
   RotateCcw,
-  Sparkles,
   Target,
   Trophy,
 } from "lucide-react";
@@ -925,14 +925,14 @@ export function MessengerCheckinSubmissionCard({
     <div className={cn(FORM_CARD, "w-[min(78vw,390px)]")}>
       <div className="flex items-center gap-2">
         <span className={cn("grid h-9 w-9 place-items-center rounded-full", FORM_ICON)}>
-          <Sparkles className="h-5 w-5" />
+          <ClipboardList className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 text-sm font-bold">
             {titleFor(taskType)} recap
             {reviewedAt ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" aria-label="Reviewed" /> : null}
           </div>
-          <div className={cn("text-xs", FORM_MUTED)}>AI-assisted coach summary</div>
+          <div className={cn("text-xs", FORM_MUTED)}>Summary</div>
         </div>
       </div>
 
@@ -982,7 +982,7 @@ export function MessengerCheckinSubmissionCard({
               className="block rounded-xl border border-border px-3 py-2 text-xs font-medium hover:bg-muted/40"
               data-checkin-nutrition-folded
             >
-              This month's Nutrition Update came in with this check-in. Its AI plan is on their Nutrition tab ›
+              This month's Nutrition Update came in with this check-in. Its plan is on their Nutrition tab ›
             </a>
           )}
 
@@ -1034,7 +1034,7 @@ export function MessengerCheckinSubmissionCard({
         </div>
       ) : (
         <div className="mt-3 text-xs text-muted-foreground">
-          AI recap unavailable. Open all answers below.
+          Recap unavailable. Open all answers below.
           <details className="mt-2 rounded-xl border border-border p-3">
             <summary className="cursor-pointer font-semibold">All answers</summary>
             <div className="mt-2 space-y-2">
@@ -1609,12 +1609,12 @@ function SubmittedFormGlance({
   const planLine = !isNutrition
     ? null
     : !plan || plan.status === "pending" || plan.status === "generating"
-      ? { text: "AI is writing the targets and meal plan…", tone: "busy" as const }
+      ? { text: "Writing the targets and meal plan…", tone: "busy" as const }
       : plan.status === "error"
-        ? { text: "The AI plan didn't finish. Open it to try again.", tone: "error" as const }
+        ? { text: "The plan didn't finish. Open it to try again.", tone: "error" as const }
         : plan.applied_at
-          ? { text: "AI plan applied to their targets", tone: "done" as const }
-          : { text: "AI targets and meal plan are ready to review", tone: "done" as const };
+          ? { text: "Plan applied to their targets", tone: "done" as const }
+          : { text: "Targets and meal plan are ready to review", tone: "done" as const };
 
   if (isLoading) {
     return (
@@ -1645,7 +1645,7 @@ function SubmittedFormGlance({
           ) : planLine.tone === "error" ? (
             <Flag className="h-3.5 w-3.5 shrink-0" />
           ) : (
-            <Sparkles className="h-3.5 w-3.5 shrink-0" />
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
           )}
           <span className="min-w-0 flex-1">{planLine.text}</span>
           {planLine.tone !== "busy" && <ChevronRight className="h-4 w-4 shrink-0" />}

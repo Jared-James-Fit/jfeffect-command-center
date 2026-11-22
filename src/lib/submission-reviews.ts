@@ -129,7 +129,7 @@ export type FormAiConfigRow = {
 
 export const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = {
   submitted: "New",
-  processing: "AI processing",
+  processing: "Writing draft",
   needs_review: "Needs review",
   draft_ready: "Draft ready",
   coach_editing: "Coach editing",

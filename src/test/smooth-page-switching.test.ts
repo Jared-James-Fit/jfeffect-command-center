@@ -135,7 +135,8 @@ describe("switching pages never waits on Supabase or swaps the whole app", () =>
     const pending = read("src/components/route-pending.tsx");
     expect(pending).toContain("if (inShell) return <RoutePendingSkeleton />;");
     expect(pending).toContain("if (signedIn) return <DashboardSplash />;");
-    expect(read("src/components/app-shell.tsx")).toContain("<ShellPageContext.Provider value>{children}</ShellPageContext.Provider>");
+    // (the story rings' host wraps the page, story-ring.tsx; it draws nothing of its own)
+    expect(read("src/components/app-shell.tsx")).toContain("<ShellPageContext.Provider value><GlobalStoryHost>{children}</GlobalStoryHost></ShellPageContext.Provider>");
     expect(read("src/routes/_authenticated/route.tsx")).toContain("<SignedInAppContext.Provider value>");
   });
 

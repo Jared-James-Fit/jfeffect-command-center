@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Pill, Plus, ShieldCheck, Sparkles, X } from "lucide-react";
+import { ListChecks, Loader2, Pill, Plus, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -221,7 +221,7 @@ export function SupplementsEditor({
         </Button>
         {clientId && (
           <Button variant="outline" className="h-11 gap-1.5" onClick={suggest} disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Suggest from their record
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />} Suggest from their record
           </Button>
         )}
       </div>

@@ -37,7 +37,7 @@ export const FEATURE_COSTS: Record<AiFeature, number> = {
 };
 
 export const FEATURE_LABEL: Record<AiFeature, { one: string; many: string }> = {
-  meal_estimate: { one: "AI food log", many: "AI food logs" },
+  meal_estimate: { one: "meal estimate", many: "meal estimates" },
   program_import: { one: "program import", many: "program imports" },
 };
 

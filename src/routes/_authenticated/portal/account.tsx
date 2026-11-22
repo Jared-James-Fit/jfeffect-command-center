@@ -28,7 +28,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Smartphone,
-  Sparkles,
+  Coins,
   Target,
   PauseCircle,
   Trophy,
@@ -651,15 +651,15 @@ function AccountPage() {
               </div>
             </SettingsSection>
 
-            {/* ── AI credits: the month's free ones and any bought (never for staff, who are unlimited) ── */}
+            {/* ── Credits (ai_credits): the month's free ones and any bought (never for staff, who are unlimited) ── */}
             {aiCredits.data && !aiCredits.data.unlimited && (
               <SettingsSection
                 id="ai-credits"
-                icon={Sparkles}
-                title="AI credits"
+                icon={Coins}
+                title="Credits"
                 summary={{ text: chipLabel(aiCredits.data) ?? "", warn: (aiCredits.data.left ?? 0) <= 0 }}
               >
-                <SectionErrorBoundary label="AI credits">
+                <SectionErrorBoundary label="Credits">
                   <AiCreditsPanel state={aiCredits.data} />
                 </SectionErrorBoundary>
               </SettingsSection>

@@ -28,6 +28,7 @@ import {
   stillCircles,
   type CircleTrack,
   type PlateFind,
+  type Sighting,
 } from "@/lib/lift-analysis/find";
 import { bestSeed, type Decoy } from "@/lib/lift-analysis/follow";
 import { gradients, type Frame } from "@/lib/lift-analysis/image";
@@ -94,8 +95,8 @@ const candidatesOf = (tracks: CircleTrack[], skip: CircleTrack | null): Candidat
     });
 
 /** What to show the athlete, from the sampled frames. */
-export function proposePlate(samples: Frame[]): Proposal {
-  const find = findPlate(samples);
+export function proposePlate(samples: Frame[], seen?: Sighting[][]): Proposal {
+  const find = findPlate(samples, seen);
   const decoys = toDecoys(find.still ?? [], find.track);
   const others = find.others ?? [];
   if (!find.track) {
@@ -220,9 +221,10 @@ export function keyFromMarker(
 export function supportFor(
   key: TrackKey,
   samples: Frame[],
+  seen?: Sighting[][],
 ): { backbone: CircleTrack | null; decoys: Decoy[] } {
   if (!samples.length) return { backbone: null, decoys: [] };
-  const tracks = linkTracks(sightings(samples), samples.length);
+  const tracks = linkTracks(seen ?? sightings(samples), samples.length);
   const R = Math.sqrt(key.a * key.b);
   const near = tracks
     .filter((tr) => Math.abs(tr.r - R) <= 0.15 * R)

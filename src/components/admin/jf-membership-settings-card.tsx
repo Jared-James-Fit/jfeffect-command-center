@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { ActionButton } from "@/components/action-button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Sparkles, AlertTriangle, CheckCircle2, Circle, KeyRound, PowerOff } from "lucide-react";
+import { CreditCard, AlertTriangle, CheckCircle2, Circle, KeyRound, PowerOff } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 export function JfMembershipSettingsCard() {
@@ -62,7 +62,7 @@ export function JfMembershipSettingsCard() {
   return (
     <Card className="p-6 space-y-3 md:col-span-2">
       <div className="flex items-center gap-2">
-        <Sparkles className="h-4 w-4 text-muted-foreground" />
+        <CreditCard className="h-4 w-4 text-muted-foreground" />
         <h3 className="text-base font-semibold">JF Membership</h3>
       </div>
       <p className="text-xs text-muted-foreground">

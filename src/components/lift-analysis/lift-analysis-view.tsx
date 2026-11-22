@@ -47,7 +47,14 @@ import {
   BarPathPlayer,
   type Marker,
   type PickSuggestion,
+  type PlayerApi,
 } from "@/components/lift-analysis/bar-path-player";
+import {
+  TechniquePanel,
+  useNoteDraft,
+  useTechnique,
+} from "@/components/lift-analysis/technique-panel";
+import { useFilmNotes } from "@/lib/lift-analysis/film-notes";
 import { FilmingGuide } from "@/components/lift-analysis/filming-guide";
 import {
   LoadVelocityChart,
@@ -118,14 +125,18 @@ type Props = {
   setLabel?: string;
   /** Start finding the bar straight away when there's no analysis yet. */
   startOnOpen?: boolean;
+  /** Open on Technique at this moment (a film note from the chat), with that note picked. */
+  openAt?: { t: number; noteId?: string | null; layers?: Record<string, boolean> } | null;
 };
 
+type Mode = "velocity" | "technique";
+
 const STAGE_WORDS: Record<RunProgress["stage"], string> = {
-  opening: "Opening the video",
-  finding: "Finding the bar",
-  tracking: "Following the bar through every frame",
+  opening: "Preparing the video",
+  finding: "Locating the barbell",
+  tracking: "Tracking the bar through every frame",
   measuring: "Measuring the plate",
-  reading: "Reading the reps",
+  reading: "Calculating velocity",
 };
 
 /** The plates a bar can carry, by diameter. */
@@ -164,6 +175,7 @@ function Body({
   exerciseName,
   setLabel,
   startOnOpen,
+  openAt,
 }: Props) {
   const { data: storedMap, isLoading } = useSetVideoAnalyses([setVideoId]);
   const stored = storedMap?.[setVideoId] ?? null;
@@ -193,6 +205,25 @@ function Body({
   const analysis = fresh ?? saved?.result ?? null;
   const dirHint = repDirection(exerciseName) ?? undefined;
   const lift = guideLift(exerciseName);
+  // Velocity (the bar) or Technique (the body, overlays, film notes): the bar's read never waits on the body's
+  const [mode, setMode] = useState<Mode>(openAt ? "technique" : "velocity");
+  const api = useRef<PlayerApi | null>(null);
+  const tech = useTechnique({
+    active: mode === "technique",
+    src,
+    analysis,
+    lift,
+    initialLayers: openAt?.layers as never,
+  });
+  const { data: notes = [] } = useFilmNotes(setVideoId);
+  const noteDraft = useNoteDraft(api);
+  const [focusNote, setFocusNote] = useState<string | null>(openAt?.noteId ?? null);
+  const [seekTo, setSeekTo] = useState<{ t: number; n: number } | null>(null);
+  // a rep picked and a moment in it, in one render: the player shows the rep, then lands on the moment
+  const jumpTo = (t: number, rep: number | null) => {
+    if (rep != null) setSelected(rep);
+    setSeekTo((s) => ({ t, n: (s?.n ?? 0) + 1 }));
+  };
 
   useEffect(() => () => ctrl.current?.abort(), []);
   // each step (and the guide) starts at its own top
@@ -337,6 +368,11 @@ function Body({
       setStep("results");
       return;
     }
+    // opened on a film note: the note and the body, never the bar's confirm step
+    if (openAt) {
+      started.current = true;
+      return;
+    }
     if (!src) return;
     if (notRead?.status === "needs_tap") {
       started.current = true;
@@ -460,6 +496,12 @@ function Body({
   }, [analysis]);
   const lostStretches = analysis?.track?.lost ?? [];
 
+  // Technique is offered wherever the clip is just being watched (never over Find, Confirm or Fix)
+  const watching = step === "results" || step === "idle" || step === "failed";
+  const showModes = watching && !guide && !!src;
+  const techniqueOn = mode === "technique" && watching;
+  const shownNotes = useMemo(() => notes.filter((n) => !n.hidden_at), [notes]);
+
   const playerMarker =
     step === "confirm"
       ? {
@@ -503,7 +545,11 @@ function Body({
           <div className="truncate text-[15px] font-semibold">{exerciseName}</div>
           <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             <span className="truncate">
-              {setLabel ? `${setLabel} · bar path & speed` : "Bar path & speed"}
+              {setLabel
+                ? `${setLabel} · ${mode === "technique" ? "technique" : "bar path & speed"}`
+                : mode === "technique"
+                  ? "Technique"
+                  : "Bar path & speed"}
             </span>
             <span
               className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10px] font-semibold text-muted-foreground"
@@ -513,7 +559,7 @@ function Body({
             </span>
           </div>
         </div>
-        {step === "results" && analysis && (
+        {step === "results" && analysis && mode === "velocity" && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -560,8 +606,14 @@ function Body({
             ? (marker?.t ?? candidates[0]?.t ?? null)
             : step === "fix"
               ? (lostStretches[0]?.start ?? analysis?.window.start ?? null)
-              : null
+              : (openAt?.t ?? null)
         }
+        technique={techniqueOn ? tech.scene : null}
+        notes={techniqueOn ? shownNotes : undefined}
+        focusNote={techniqueOn ? focusNote : null}
+        draw={techniqueOn ? noteDraft.draw : null}
+        apiRef={api}
+        seekTo={seekTo}
         className="h-[min(56dvh,520px)] shrink-0"
       />
 
@@ -569,16 +621,68 @@ function Body({
         ref={panel}
         className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3"
       >
+        {showModes && (
+          <div
+            className="mb-3 grid grid-cols-2 gap-1 rounded-full bg-secondary p-1"
+            role="tablist"
+            aria-label="Analysis"
+            data-analysis-modes
+          >
+            {(["velocity", "technique"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={mode === m}
+                onClick={() => {
+                  setMode(m);
+                  if (m === "velocity") noteDraft.end();
+                }}
+                className={cn(
+                  "h-9 rounded-full text-[14px] font-medium",
+                  mode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
+                )}
+                data-mode={m}
+              >
+                {m === "velocity" ? "Velocity" : "Technique"}
+              </button>
+            ))}
+          </div>
+        )}
         {guide ? (
           <section data-guide-panel>
-            <h3 className="text-[16px] font-semibold">How to film a set for bar speed</h3>
+            <h3 className="text-[16px] font-semibold">
+              {mode === "technique"
+                ? "How to film a set for technique"
+                : "How to film a set for bar speed"}
+            </h3>
             <div className="mt-3">
-              <FilmingGuide lift={lift} />
+              <FilmingGuide lift={lift} mode={mode} />
             </div>
             <Button variant="outline" className="mt-4 h-11 w-full" onClick={() => setGuide(false)}>
               Done
             </Button>
           </section>
+        ) : techniqueOn ? (
+          <TechniquePanel
+            tech={tech}
+            analysis={step === "results" ? analysis : null}
+            setVideoId={setVideoId}
+            src={src}
+            exerciseName={exerciseName}
+            selected={selected}
+            onSelectRep={setSelected}
+            onJump={jumpTo}
+            api={api}
+            notes={notes}
+            focusNote={focusNote}
+            onFocusNote={setFocusNote}
+            noteDraft={noteDraft}
+            onNeedBar={() => {
+              setMode("velocity");
+              void detect();
+            }}
+          />
         ) : running && shownProgress ? (
           <ProgressPanel
             progress={shownProgress}
@@ -687,7 +791,12 @@ function ProgressPanel({ progress, onCancel }: { progress: RunProgress; onCancel
   return (
     <div className="rounded-2xl border border-border p-4" data-lift-analysis-progress>
       <div className="flex items-center justify-between text-sm">
-        <span className="font-medium">{STAGE_WORDS[progress.stage]}…</span>
+        <span className="min-w-0 flex-1 font-medium">
+          {STAGE_WORDS[progress.stage]}…{" "}
+          <span className="tabular-nums text-muted-foreground">
+            {Math.round(100 * overallProgress(progress))}%
+          </span>
+        </span>
         {onCancel && (
           <button
             type="button"
@@ -1283,6 +1392,18 @@ function RepDetail({
           }
           testId="peak"
         />
+        {/* the propulsive phase: a heavy rep's whole press, so shown only when it says something the mean doesn't */}
+        {r.mpv.tier !== "unavailable" &&
+          r.mpv.v != null &&
+          r.mcv.v != null &&
+          Math.abs(r.mpv.v - r.mcv.v) >= 0.01 && (
+            <Stat
+              label="Mean propulsive velocity"
+              value={speed(r.mpv)}
+              sub="up to where the bar slows faster than gravity"
+              testId="mpv"
+            />
+          )}
         {lowerFirst && <Stat label={words.down} value={seconds(r.eccDur)} testId="ecc" />}
         {lowerFirst && r.pause.v != null && r.pause.tier !== "unavailable" && (
           <Stat

@@ -35,7 +35,7 @@ export const askProgramAiFn = createServerFn({ method: "POST" })
     z
       .object({
         target: targetSchema,
-        instruction: z.string().trim().min(1, "Tell the AI what to change or ask a question.").max(4000),
+        instruction: z.string().trim().min(1, "Say what to change or ask a question.").max(4000),
         threadId: z.string().uuid().nullish(),
         rejected: z.array(z.string().max(16)).max(80).default([]),
       })

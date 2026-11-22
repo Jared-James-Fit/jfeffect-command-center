@@ -4,13 +4,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
-  ArrowUp, ArrowUpRight, Check, Copy, History, Keyboard, Loader2, Mic, Paperclip, SlidersHorizontal, Sparkles, Square, SquarePen, Volume2, X,
+  ArrowUp, ArrowUpRight, Check, Copy, History, Keyboard, Loader2, Mic, Paperclip, SlidersHorizontal, Square, SquarePen, Volume2, X,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { ASSISTANT_NAME } from "@/lib/business-books";
+import { CleoAvatar, CLEO_ROLE_LINE } from "@/components/summer/cleo-avatar";
 import { askSummer, askSummerVoice, getSummerMessages, summerSpeech } from "@/lib/business-books.functions";
 import { chatTitle, isCurrentChat, type CleoChat } from "@/lib/cleo-chats";
 import { summerTone } from "@/lib/summer-persona";
@@ -206,17 +207,17 @@ function DictationPanel({
       >
         <span
           className={cn(
-            "absolute inset-0 rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 opacity-25 transition-transform duration-100",
+            "absolute inset-0 rounded-full bg-foreground/10 transition-transform duration-100",
             (listening || speaking) && "animate-pulse",
           )}
           style={{ transform: `scale(${listening ? 1.1 + Math.min(0.3, level * 0.5) : 1.05})` }}
         />
-        {ready && <span className="absolute inset-0 animate-ping rounded-full bg-orange-400/30 [animation-duration:2s]" aria-hidden />}
-        <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 text-white shadow-lg">
+        {ready && <span className="absolute inset-0 animate-ping rounded-full bg-foreground/10 [animation-duration:2s]" aria-hidden />}
+        <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-foreground text-background">
           {listening ? (
             <span className="flex h-8 items-center gap-[3px]" aria-hidden>
               {bars.map((b, i) => (
-                <span key={i} className="w-[3px] rounded-full bg-white transition-[height] duration-100" style={{ height: `${Math.max(12, Math.min(100, 12 + level * 140 * b))}%` }} />
+                <span key={i} className="w-[3px] rounded-full bg-background transition-[height] duration-100" style={{ height: `${Math.max(12, Math.min(100, 12 + level * 140 * b))}%` }} />
               ))}
             </span>
           ) : state === "thinking" ? (
@@ -588,12 +589,10 @@ export function SummerChat({
         <SheetHeader className="border-b pb-3 pr-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 text-white">
-                <Sparkles className="h-4 w-4" />
-              </div>
+              <CleoAvatar size="sm" />
               <div className="min-w-0">
-                <SheetTitle className="text-base">{ASSISTANT_NAME}</SheetTitle>
-                <SheetDescription className="sr-only">Chat with {ASSISTANT_NAME}</SheetDescription>
+                <SheetTitle className="text-base leading-5">{ASSISTANT_NAME}</SheetTitle>
+                <SheetDescription className="text-[12px] leading-4 text-muted-foreground">{CLEO_ROLE_LINE}</SheetDescription>
               </div>
             </div>
             <div className="flex shrink-0 items-center">

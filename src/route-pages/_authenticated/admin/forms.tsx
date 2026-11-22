@@ -27,7 +27,8 @@ import { ActionButton } from "@/components/action-button";
 import { WEBSITE_FORMS, websiteFormUrl } from "@/lib/website-forms";
 import { getWebsiteFormStats } from "@/lib/coaching-applications.functions";
 import { useServerFn } from "@tanstack/react-start";
-import { TABS, LAST_TAB_KEY, isMoreTab, type TabKey } from "@/route-pages/_authenticated/admin/forms-tabs";
+import { TABS, LAST_TAB_KEY, isAdminOnlyTab, isMoreTab, type TabKey } from "@/route-pages/_authenticated/admin/forms-tabs";
+import { useAuth } from "@/lib/auth";
 import { SubmissionsInbox } from "@/components/forms/submissions-inbox";
 import { AdminCoachingSchedules } from "@/components/admin/coaching-schedules";
 import { getRouteApi as __getRouteApi } from "@tanstack/react-router";
@@ -51,7 +52,8 @@ export function FormsWorkspacePage() {
   };
 
   const mainTabs = TABS.filter((t) => !("hidden" in t && t.hidden) && !("more" in t && t.more));
-  const moreTabs = TABS.filter((t) => "more" in t && t.more);
+  const isAdmin = useAuth().accountRole === "admin";
+  const moreTabs = TABS.filter((t) => "more" in t && t.more && (isAdmin || !isAdminOnlyTab(t.value)));
   const moreActive = isMoreTab(tab) ? moreTabs.find((t) => t.value === tab) : undefined;
 
   return (
@@ -114,7 +116,7 @@ export function FormsWorkspacePage() {
         {tab === "integrations" && <IntegrationsPanel />}
         {tab === "scheduler" && <SchedulerTab />}
         {tab === "schedules" && <AdminCoachingSchedules />}
-        {tab === "ai-settings" && <AiSettingsTab />}
+        {tab === "ai-settings" && (isAdmin ? <AiSettingsTab /> : <p className="p-6 text-sm text-muted-foreground">Only an admin can open this.</p>)}
       </div>
     </>
   );

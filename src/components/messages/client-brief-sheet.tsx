@@ -5,7 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import {
   AlertTriangle, CalendarClock, Check, ChevronRight, ClipboardCheck, Clock, Dumbbell, Hourglass, Image as ImageIcon,
-  MessageCircle, RefreshCw, Sparkles,
+  MessageCircle, RefreshCw,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -88,7 +88,7 @@ export function ClientBriefSheet({
       >
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted" aria-hidden />
         <div className="flex items-center gap-3 border-b border-border px-4 pb-3 pt-3">
-          <UserAvatar src={client.profile_picture_url ?? null} name={client.full_name ?? "Client"} size={44} ring expandable={false} />
+          <UserAvatar src={client.profile_picture_url ?? null} name={client.full_name ?? "Client"} size={44} expandable={false} />
           <div className="min-w-0 flex-1">
             <SheetTitle className="truncate text-base font-bold tracking-tight">{client.full_name}</SheetTitle>
             <SheetDescription className="truncate text-xs text-muted-foreground">
@@ -100,9 +100,9 @@ export function ClientBriefSheet({
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
           {/* The AI read */}
-          <section className="rounded-2xl border border-border bg-gradient-to-br from-amber-500/[0.07] via-orange-500/[0.05] to-pink-500/[0.07] p-3.5" data-brief-ai>
+          <section className="rounded-2xl border border-border bg-muted/40 p-3.5" data-brief-ai>
             <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              <Sparkles className="h-3.5 w-3.5 text-orange-500" /> What's going on
+              What's going on
               {ai.data && (
                 <button
                   type="button"

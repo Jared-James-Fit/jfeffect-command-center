@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Sparkles, Star, Search, Play, Pause, Volume2 } from "lucide-react";
+import { Star, Search, Play, Pause, Volume2 } from "lucide-react";
 import { GifThumb } from "@/components/gif-thumb";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -365,11 +365,12 @@ export function GifPicker({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-10 w-10 shrink-0 rounded-full"
+            className="h-10 w-10 shrink-0 rounded-full text-[10px] font-bold tracking-tight"
             disabled={disabled}
             title="GIFs & effects"
+            aria-label="GIFs & effects"
           >
-            <Sparkles className="h-5 w-5" />
+            <span className="rounded-[5px] border-[1.5px] border-current px-[3px] leading-[14px]" aria-hidden>GIF</span>
           </Button>
         </PopoverTrigger>
       )}

@@ -52,7 +52,9 @@ describe("private accounts and Close Friends", () => {
       ({ id, created_at: new Date(now - 3600e3).toISOString(), auto: false, stats: null, visibility, is_mine: false, seen, story: true, author: { user_id: who, name: who, avatar_url: null, is_coach: false } }) as any;
     const g = crewStories([post("a", "ann", "close_friends"), post("b", "bob", "community"), post("c", "cat", "close_friends", true)], now);
     expect(Object.fromEntries(g.map((x) => [x.author.user_id, !!x.closeFriends]))).toEqual({ ann: true, bob: false, cat: false });
-    expect(readFileSync("src/components/community/crew-stories.tsx", "utf8")).toContain('g.closeFriends ? "bg-emerald-500"');
+    // one ring for every photo (story-ring.tsx): Close Friends green while something in them is new
+    expect(readFileSync("src/components/community/crew-stories.tsx", "utf8")).toContain("const ring = groupRing(g.items, seenNow);");
+    expect(readFileSync("src/components/community/story-ring.tsx", "utf8")).toContain('stroke={state === "close_friends" ? CLOSE_FRIENDS : `url(#sr${id})`}');
   });
 
   it("follow requests show in Activity under Follows", () => {

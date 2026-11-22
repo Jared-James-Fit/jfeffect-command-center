@@ -46,7 +46,7 @@ export const VOICE_LIST_LABELS: Record<VoiceListKey, { title: string; hint: stri
   for_guys: { title: "What I call guys", hint: "Only used when the client is marked as a guy." },
   for_women: { title: "What I call girls", hint: "Only used when the client is marked as a girl." },
   edgy: { title: "Edgy humour (guys only)", hint: "Only for guys you've marked as OK with it below." },
-  banned: { title: "Never say", hint: "AI words and anything that isn't you." },
+  banned: { title: "Never say", hint: "Robotic phrases and anything that isn't you." },
 };
 
 export const DEFAULT_VOICE: VoiceProfile = {

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, ArrowLeft, BarChart3, CalendarRange, Flame, Info, MessageSquare, MoreHorizontal, Save, Sparkles, User as UserIcon } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BarChart3, CalendarRange, Flame, Info, MessageSquare, Milestone, MoreHorizontal, Save, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { BuilderHeader, BuilderNotice, BuilderSection, BuilderTitleInput } from "@/components/program-editor/builder-chrome";
@@ -860,7 +860,7 @@ function BlockEditor() {
                 size="sm"
                 variant="ghost"
                 className="h-9 px-2.5"
-                label={phone ? "AI" : "Edit with AI"}
+                label={phone ? "Adjust" : "Adjust program"}
                 // the AI reads what's saved: save what's on screen first
                 beforeOpen={async () => {
                   if (dirty) await save();
@@ -981,7 +981,7 @@ function BlockEditor() {
         <BuilderSection icon={<CalendarRange className="h-4 w-4" />} title="Schedule" hint="Training days and dates">
           <AutoSchedulePanel blockId={blockId} bare />
         </BuilderSection>
-        <BuilderSection id="roadmap" icon={<Sparkles className="h-4 w-4" />} title="Athlete roadmap" hint="What they read about this block" defaultOpen={openRoadmap}>
+        <BuilderSection id="roadmap" icon={<Milestone className="h-4 w-4" />} title="Athlete roadmap" hint="What they read about this block" defaultOpen={openRoadmap}>
           <BlockRoadmapPanel blockId={blockId} bare />
         </BuilderSection>
         <BuilderSection icon={<Flame className="h-4 w-4" />} title="Warm-ups">

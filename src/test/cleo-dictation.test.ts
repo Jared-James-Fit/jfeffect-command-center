@@ -57,7 +57,8 @@ describe("Cleo in admin has no floating button", () => {
   });
 
   it("still opens from Messages, the shortcut and Cleo's pushes", () => {
-    expect(layout).toContain('{role === "admin" && <SummerAssistant />}');
+    // Mounted for whoever has Cleo (the admin always; finance and coaches by switch).
+    expect(layout).toContain("{cleoOn && <SummerAssistant />}");
     expect(assistant).toContain('window.addEventListener("summer:open", onOpen);');
     expect(assistant).toMatch(/e\.shiftKey && \(e\.key === "S" \|\| e\.key === "s"\)/);
     expect(assistant).toContain('if (hash !== "cleo" && hash !== "#cleo") return;');

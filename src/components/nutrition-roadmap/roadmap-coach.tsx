@@ -82,7 +82,7 @@ export function RoadmapCoachCard({ clientId, className }: { clientId: string; cl
       setNote("");
       if (decision === "approve" && r.instruction) {
         prefillPlanAiChange(clientId, r.instruction);
-        toast.success("Roadmap approved", { description: "The change to the targets is in Change it with AI for you to send and review.", duration: 8000 });
+        toast.success("Roadmap approved", { description: "The change to the targets is in Adjust plan for you to send and review.", duration: 8000 });
       } else toast.success(decision === "approve" ? "Roadmap approved: the athlete sees it now" : "Declined: the roadmap stays as it was");
     }, decision);
 
@@ -152,7 +152,7 @@ export function RoadmapCoachCard({ clientId, className }: { clientId: string; cl
             <div className="rounded-md bg-muted/50 p-2.5 text-[14px] tabular-nums">
               Targets: {p.proposal.next.kcal} kcal · P {p.proposal.next.proteinG} · C {p.proposal.next.carbsG} · F {p.proposal.next.fatG}
               {p.proposal.kcalChange !== 0 && <span className="text-muted-foreground"> ({kcalWords(p.proposal.kcalChange)})</span>}
-              <div className="mt-0.5 text-[12px] text-muted-foreground">Approving puts this in Change it with AI; the plan only changes once you send and review it there.</div>
+              <div className="mt-0.5 text-[12px] text-muted-foreground">Approving puts this in Adjust plan; the plan only changes once you send and review it there.</div>
             </div>
           )}
           <input value={note} onChange={(e) => setNote(e.target.value.slice(0, 1000))} placeholder="Note (optional, only you see it)" className="h-11 w-full rounded-lg border border-border bg-transparent px-3 text-base" />

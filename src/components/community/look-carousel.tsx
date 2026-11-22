@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import {
   BadgeCheck, BarChart3, Circle, Clock, Dumbbell, Flame, Image as ImageIcon, ListChecks, Lock, Pizza,
-  ReceiptText, Salad, Sparkles, Sticker, TrendingUp, Trophy, Zap, type LucideIcon,
+  ReceiptText, Salad, Sticker, TrendingUp, Trophy, Wheat, Zap, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TEMPLATE_LABEL, type ShareTemplate } from "@/lib/workout-share-card";
@@ -23,7 +23,7 @@ const ICON: Record<ShareTemplate, LucideIcon> = {
   mealprep: Salad,
   onplan: BadgeCheck,
   fuel: Zap,
-  highday: Sparkles,
+  highday: Wheat,
   cheat: Pizza,
   plain: Circle,
 };

@@ -1015,7 +1015,7 @@ export async function runRevision(sb: any, submissionId: string, instructions: s
     const modelId = `update · ${models.join(" · ")}`;
     const answered = cleanAiText(m.text);
     if (!revisionLooksRight("meals", row.meal_plan_text, answered)) {
-      throw new Error("The AI's answer didn't come back as a meal plan. Try wording the change differently");
+      throw new Error("The answer didn't come back as a meal plan. Try wording the change differently");
     }
     // the coach's words win, but a specialty food the AI brought in on its own goes back once;
     // and every Daily Total is what its meals add up to

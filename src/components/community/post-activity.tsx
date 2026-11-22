@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { UserAvatar } from "@/components/user-avatar";
+import { StoryAvatar } from "@/components/community/story-ring";
 import { FollowButton } from "@/components/community/follow-button";
 import { cn } from "@/lib/utils";
 import { activityNote, activityPeople, reactionEmoji, type ActivityFilter, type ActivityPerson, type CommunityAuthor, type CommunityPost } from "@/lib/community";
@@ -238,11 +238,12 @@ function PersonRow({ p, onOpen, follow = false }: { p: ActivityPerson; onOpen?: 
   const tint = p.shared_at ? "bg-[#7c3aed]" : p.reposted_at ? "bg-emerald-500" : p.reaction === "heart" ? "bg-[#ef3340]" : "bg-background";
   return (
     <div className="flex items-center gap-3 px-4 py-2" data-activity-person>
+      {/* the photo plays their story when they have one up, else it opens them like the name */}
+      <span className="relative shrink-0">
+        <StoryAvatar userId={p.user_id} src={p.avatar_url} name={p.name} size={48} onPress={onOpen} pressLabel={`${p.name}'s profile`} />
+        {badge && <span className={cn("pointer-events-none absolute -bottom-0.5 -right-0.5 grid h-5 w-5 place-items-center rounded-full text-white ring-2 ring-background", tint)}>{badge}</span>}
+      </span>
       <button type="button" disabled={!onOpen} onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left active:opacity-70 disabled:active:opacity-100">
-        <span className="relative shrink-0">
-          <UserAvatar src={p.avatar_url} name={p.name} size={48} expandable={false} />
-          {badge && <span className={cn("absolute -bottom-0.5 -right-0.5 grid h-5 w-5 place-items-center rounded-full text-white ring-2 ring-background", tint)}>{badge}</span>}
-        </span>
         <span className="min-w-0">
           <span className="flex min-w-0 items-center gap-1 text-[14px] font-semibold">
             <span className="truncate">{p.name}</span>

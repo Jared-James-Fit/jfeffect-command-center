@@ -11,7 +11,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Moon, Sparkles, Sun, X } from "lucide-react";
+import { Moon, Sun, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -151,8 +151,8 @@ export function ThemeAnnouncementDialog({ open, onClose }: { open: boolean; onCl
 
         <div className="space-y-4 px-6 pb-6 pt-5 text-center">
           <div className="jf-wn-rise space-y-1.5" style={{ animationDelay: "120ms" }}>
-            <div className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-primary">
-              <Sparkles className="h-3 w-3" /> New
+            <div className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
+              New
             </div>
             <DialogTitle className="text-xl font-bold tracking-tight">Dark mode is here</DialogTitle>
             <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
