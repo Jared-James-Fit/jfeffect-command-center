@@ -510,7 +510,7 @@ export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, t
         return was && (was.calories !== d.calories || was.protein !== d.protein || was.carbs !== d.carbs || was.fats !== d.fats);
       });
       if (moved.length)
-        lines.push(`Their meals stay as written on ${moved.map((d: any) => d.day_label).join(", ")}; to fit them to the new numbers, use Change it with AI on their Current plan.`);
+        lines.push(`Their meals stay as written on ${moved.map((d: any) => d.day_label).join(", ")}; to fit them to the new numbers, use Adjust plan on their Current plan.`);
       // the same checks the AI plan's review runs before publishing (calories against 4/4/9, the floors)
       const checks = await nutritionChecks(db, p.client_id, p.days);
       if (checks.length) lines.push(`Check before publishing: ${checks.join("; ")}.`);
