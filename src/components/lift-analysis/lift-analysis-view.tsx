@@ -4,10 +4,12 @@
  * each:
  *
  *   1. Find: the bar's plate is looked for on this device (a second or two).
- *   2. Confirm: the video paused on the plate with a ring on it. Drag the
- *      ring onto the plate (the picture under the finger magnified), drag
- *      its edge dot to the plate's rim, or tap the plate anywhere and the
- *      ring snaps to it. The plate's size is one row, changed only if it
+ *   2. Confirm: the video paused on the plate with one ring on it, the best
+ *      guess (never a choice of circles: a guess that's only a circle the
+ *      finder saw is snapped to the plate's rim first). Drag the ring onto
+ *      the plate (the picture under the finger magnified), drag its edge dot
+ *      to the plate's rim, or tap the plate anywhere and the ring snaps to
+ *      it. The plate's size is one row, changed only if it
  *      isn't a standard 450 mm plate. What about the footage will cost
  *      accuracy is said here, with how to film it better. Analyze.
  *   3. Analyze: followed through every frame, both ways from the marker.
@@ -97,6 +99,7 @@ import {
   type ShownSeed,
 } from "@/lib/lift-analysis/run";
 import { useRunningAnalysis } from "@/lib/lift-analysis/store";
+import { oneRing } from "@/lib/lift-analysis/suggestions";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -173,6 +176,8 @@ function Body({
   const [candidates, setCandidates] = useState<PickSuggestion[]>([]);
   const [marker, setMarker] = useState<Marker | null>(null);
   const [locating, setLocating] = useState(false);
+  /** Bumped whenever the ring is moved, so a snap that lands later never moves it back. */
+  const ringMoves = useRef(0);
   /** The clip's width ÷ height (a ring's height as a share of the frame follows from its width). */
   const [aspect, setAspect] = useState(9 / 16);
   const [corrections, setCorrections] = useState<Marker[]>([]);
@@ -227,16 +232,51 @@ function Body({
       );
       return setStep("failed");
     }
-    if (res.clip) setAspect(res.clip.width / Math.max(1, res.clip.height));
+    const shape = res.clip ? res.clip.width / Math.max(1, res.clip.height) : aspect;
+    setAspect(shape);
     setProposal(res.proposal);
     setCandidates(res.proposal?.candidates ?? []);
     const k = res.proposal?.key;
-    setMarker(
-      k && res.proposal!.confidence !== "low"
-        ? { t: k.t, fx: k.fx, fy: k.fy, fa: k.fa, fb: k.fb }
-        : null,
+    openOnRing(
+      k ? { t: k.t, fx: k.fx, fy: k.fy, fa: k.fa, fb: k.fb } : null,
+      res.proposal?.candidates ?? [],
+      shape,
     );
     setStep("confirm");
+  };
+
+  /** Confirm's one ring: the best guess, snapped to the plate's rim when it's only a circle the finder saw. */
+  const openOnRing = (pre: Marker | null, circles: PickSuggestion[], shape: number) => {
+    const one = oneRing(pre, circles, shape);
+    ringMoves.current++;
+    setMarker(one?.ring ?? null);
+    if (one?.fromCircle) void snapRing(one.ring);
+  };
+
+  const snapRing = async (ring: Marker) => {
+    if (!src) return;
+    const move = ++ringMoves.current;
+    setLocating(true);
+    const found = await locatePlate({ source: src, t: ring.t, fx: ring.fx, fy: ring.fy }).catch(
+      () => null,
+    );
+    if (move !== ringMoves.current) return; // moved meanwhile: theirs wins
+    setLocating(false);
+    if (found)
+      setMarker({
+        t: found.key.t,
+        fx: found.key.fx,
+        fy: found.key.fy,
+        fa: found.key.fa,
+        fb: found.key.fb,
+      });
+  };
+
+  /** The athlete dragged or resized the ring. */
+  const moveRing = (m: Marker) => {
+    ringMoves.current++;
+    setLocating(false);
+    setMarker(m);
   };
 
   /** 3. Follow it through the set and read it. */
@@ -280,6 +320,7 @@ function Body({
         : "The plate couldn't be followed from there. Put the ring on the plate where it's easy to see.",
     );
     if (res.proposal) setCandidates(res.proposal.candidates);
+    if (!marker && res.proposal) openOnRing(res.proposal.key, res.proposal.candidates, aspect);
     setStep("confirm");
   };
 
@@ -297,8 +338,14 @@ function Body({
       started.current = true;
       const s = (notRead.result as unknown as { suggestions?: Suggestion[] })?.suggestions ?? [];
       const pre = preselectOf(s);
+      // a read stored before Nov 22 2026 kept the other circles but not its best guess: find it again
+      // (a second or two) rather than open on a circle that isn't the plate
+      if (!pre) {
+        void detect();
+        return;
+      }
       setCandidates(s.filter((x) => !x.preselect));
-      setMarker(pre);
+      openOnRing(pre, [], aspect);
       setStep("confirm");
       return;
     }
@@ -318,8 +365,12 @@ function Body({
     if (!src) return;
     // a ringed circle: take it as it is
     const hit = candidates.find((c) => Math.hypot(c.fx - fx, (c.fy - fy) / aspect) <= c.fr * 1.1);
+    const move = ++ringMoves.current;
     setLocating(true);
-    const found = await locatePlate({ source: src, t, fx: hit?.fx ?? fx, fy: hit?.fy ?? fy });
+    const found = await locatePlate({ source: src, t, fx: hit?.fx ?? fx, fy: hit?.fy ?? fy }).catch(
+      () => null,
+    );
+    if (move !== ringMoves.current) return; // moved again meanwhile
     setLocating(false);
     if (found) {
       setMarker({
@@ -400,9 +451,8 @@ function Body({
     step === "confirm"
       ? {
           value: marker,
-          onChange: setMarker,
+          onChange: moveRing,
           onTap: (t: number, fx: number, fy: number) => void placeAt(t, fx, fy),
-          candidates,
           busy: locating,
         }
       : step === "fix"
@@ -491,6 +541,7 @@ function Body({
         onSelectRep={setSelected}
         marker={playerMarker}
         lost={step === "results" || step === "fix" ? lostStretches : undefined}
+        onVideoSize={(w, h) => setAspect(w / Math.max(1, h))}
         initialTime={
           step === "confirm"
             ? (marker?.t ?? candidates[0]?.t ?? null)
@@ -1054,7 +1105,12 @@ function Results({
       <MoreDetail>
         <Consistency analysis={a} />
         {clientId && exerciseId && calibrated && (
-          <Compare setVideoId={setVideoId} clientId={clientId} exerciseId={exerciseId} analysis={a} />
+          <Compare
+            setVideoId={setVideoId}
+            clientId={clientId}
+            exerciseId={exerciseId}
+            analysis={a}
+          />
         )}
         <HowMeasured analysis={a} />
       </MoreDetail>
@@ -1306,7 +1362,11 @@ function Compare({
     if (measured != null) {
       const call = compareToExpected(measured, pred);
       line = `At ${fmtLoad(kg!)} you were expected to move ${pred.v.toFixed(2)} m/s (${range}, ${basis}). Measured ${measured.toFixed(2)}: ${
-        call === "as_expected" ? "about as expected" : call === "faster" ? "faster than expected" : "slower than expected"
+        call === "as_expected"
+          ? "about as expected"
+          : call === "faster"
+            ? "faster than expected"
+            : "slower than expected"
       }.`;
     } else {
       line = `At ${fmtLoad(kg!)} you're expected to move ${pred.v.toFixed(2)} m/s (${range}, ${basis}). This video's average wasn't measured closely enough to compare.`;

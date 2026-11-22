@@ -88,17 +88,13 @@ async function pump() {
           res.why === "no_plate" ||
           res.why === "ambiguous"
         ) {
-          // not sure enough to read it alone: kept with where it thinks the bar is, so opening it is one
-          // look at the ring and Analyze
+          // not sure enough to read it alone: kept with where it thinks the bar is (its best guess,
+          // whatever the doubt), so opening it is one look at one ring and Analyze
           await saveNotRead(job.setVideoId, {
             engine: ENGINE_VERSION,
             status: "needs_tap",
             why: res.why,
-            suggestions: proposalSuggestions(
-              res.why === "needs_confirm"
-                ? res.proposal
-                : res.proposal && { ...res.proposal, key: null },
-            ),
+            suggestions: proposalSuggestions(res.proposal ?? null),
           });
         } else if (res.why === "unreadable" || res.why === "too_short") {
           await saveNotRead(job.setVideoId, {

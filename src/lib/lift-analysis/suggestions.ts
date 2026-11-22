@@ -1,6 +1,7 @@
 /**
  * What a read that didn't go ahead by itself keeps for the next open (pure):
- * the ring detection would have used, and the other circles worth offering.
+ * the ring detection would have used, and the other circles it saw (never
+ * drawn: a tap near one snaps to it).
  */
 /**
  * A circle worth offering on Confirm (shares of the frame). The one detection
@@ -46,4 +47,29 @@ export function proposalSuggestions(
       ]
     : [];
   return [...pre, ...p.candidates.slice(0, 6)];
+}
+
+/** A ring on Confirm: the plate's centre and semi-axes as shares of the frame. */
+export type Ring = { t: number; fx: number; fy: number; fa: number; fb: number };
+
+/**
+ * The one ring Confirm opens on (pure). Confirm never offers a choice of
+ * circles: it shows its best guess, which a drag or a tap moves. That's the
+ * ring detection preselected, else the best circle it saw (circles come
+ * best first), sized as a circle in a frame `aspect` (width ÷ height) wide.
+ * `fromCircle` says it's only a circle the finder saw, so the caller can
+ * snap it to the plate's real rim. Null only when nothing round was seen.
+ */
+export function oneRing(
+  pre: Ring | null,
+  circles: { t: number; fx: number; fy: number; fr: number }[],
+  aspect: number,
+): { ring: Ring; fromCircle: boolean } | null {
+  if (pre) return { ring: pre, fromCircle: false };
+  const c = circles.find((x) => Number.isFinite(x.fx) && Number.isFinite(x.fy) && x.fr > 0);
+  if (!c) return null;
+  return {
+    ring: { t: c.t, fx: c.fx, fy: c.fy, fa: c.fr, fb: c.fr * (aspect > 0 ? aspect : 9 / 16) },
+    fromCircle: true,
+  };
 }

@@ -7,7 +7,8 @@
  * bar's speed right now. Plays at full, half or quarter speed, steps a frame
  * at a time, and the scrubber marks where the plate was lost.
  *
- * Marker (confirm and fix): a ring on the plate's edge with its centre. A
+ * Marker (confirm and fix): one ring on the plate's edge with its centre,
+ * never a choice of circles (the parent hands it its one best guess). A
  * finger on the ring drags it (the picture under it magnified above the
  * finger, so the centre can be put exactly on the end of the bar), the
  * handle on its edge sizes it, and a tap elsewhere moves it there (the
@@ -38,8 +39,6 @@ export type MarkerMode = {
   onChange: (m: Marker) => void;
   /** A tap away from the marker (the parent finds the plate there). */
   onTap?: (t: number, fx: number, fy: number) => void;
-  /** Circles worth offering when nothing was preselected. */
-  candidates?: PickSuggestion[];
   /** Looking for the plate under a tap. */
   busy?: boolean;
 };
@@ -138,6 +137,7 @@ export function BarPathPlayer({
   marker,
   lost,
   initialTime,
+  onVideoSize,
   className,
 }: {
   src?: string;
@@ -151,6 +151,8 @@ export function BarPathPlayer({
   lost?: { start: number; end: number }[];
   /** Open paused on this moment (the marker's frame). */
   initialTime?: number | null;
+  /** The clip's own size, once it's known (for sizing a ring as a circle). */
+  onVideoSize?: (width: number, height: number) => void;
   className?: string;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -216,19 +218,6 @@ export function BarPathPlayer({
     const P = (fx: number, fy: number): [number, number] => [r.ox + fx * r.dw, r.oy + fy * r.dh];
 
     if (marker) {
-      // circles worth offering, when nothing was preselected
-      if (!marker.value && marker.candidates?.length && !marker.size) {
-        ctx.setLineDash([6, 5]);
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "rgba(255,255,255,0.85)";
-        for (const s of marker.candidates) {
-          const [x, y] = P(s.fx, s.fy);
-          ctx.beginPath();
-          ctx.arc(x, y, s.fr * r.dw, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-        ctx.setLineDash([]);
-      }
       const shown = shownMarker();
       if (shown) drawMarker(ctx, shown.m, r, shown.lost, !!marker.busy);
       const d = dragRef.current;
@@ -552,6 +541,7 @@ export function BarPathPlayer({
             setReady(true);
             const v = e.currentTarget;
             if (Number.isFinite(v.duration)) setDuration(v.duration);
+            if (v.videoWidth && v.videoHeight) onVideoSize?.(v.videoWidth, v.videoHeight);
             // open on the set itself (the clip is never cut: everything before it is still there)
             if (
               initialTime == null &&
