@@ -42,7 +42,10 @@ BEGIN
                           AND c.status = 'Active' AND NOT coalesce(c.archived, false));
   END IF;
 
-  IF now_active THEN
+  -- Granted only when the record becomes active (a new active coach, a restore,
+  -- a login moved onto it): re-saving a record that was already active never
+  -- adds the role, so the owner's own coach record doesn't make the admin a coach.
+  IF now_active AND (TG_OP = 'INSERT' OR NOT was_active OR NEW.user_id IS DISTINCT FROM OLD.user_id) THEN
     INSERT INTO public.user_roles (user_id, role) VALUES (NEW.user_id, 'coach')
     ON CONFLICT (user_id, role) DO NOTHING;
   ELSIF TG_OP = 'UPDATE' AND NEW.user_id IS NOT NULL

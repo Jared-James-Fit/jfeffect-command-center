@@ -51,6 +51,13 @@ insert into user_roles values ('00000000-0000-0000-0000-0000000000d1', 'coach');
 insert into coaches (user_id, full_name, email, status) values ('00000000-0000-0000-0000-0000000000d1', 'Dual', 'dual@example.test', 'Pending Invite');
 select t_assert(has_role('00000000-0000-0000-0000-0000000000d1', 'coach'), 'inserting a pending record leaves an existing role alone');
 
+-- The owner's own Active coach record, with no coach role: re-saving it Active never makes the admin a coach.
+insert into coaches (id, user_id, full_name, email, status) values ('00000000-0000-0000-0000-00000000c0a9', null, 'Jared Owner', 'owner@example.test', 'Active');
+update coaches set user_id = :owner where id = '00000000-0000-0000-0000-00000000c0a9';
+delete from user_roles where user_id = :owner and role = 'coach';
+update coaches set status = 'Active' where id = '00000000-0000-0000-0000-00000000c0a9';
+select t_assert(not has_role(:owner, 'coach'), 're-saving an already Active record adds no role');
+
 -- ── Client assignments are recorded ─────────────────────────────────────────
 update clients set assigned_coach_id = :ana_coach where id = :nico;
 select t_assert(exists (select 1 from organization_audit_log where action = 'client.assigned' and target_id = :nico and summary like 'Nico Client is now coached by Ana Coach%'), 'assigning a client is recorded');
