@@ -1501,11 +1501,14 @@ function SlideMedia({
   page = false,
   fit = "contain",
   shrunk = false,
+  warm,
 }: {
   slide: PostSlide;
   thumbUrl: string | null;
   full: boolean;
   active?: boolean;
+  /** Next to the slide showing: a clip keeps its element and loads ahead (InlineVideo `warm`). */
+  warm?: "next" | "prev";
   withDots?: boolean;
   page?: boolean;
   /** On a post's screen: fill it ("cover") or show it whole, centred ("contain"), screenFit. A frame at the picture's own shape is "contain" either way. */
@@ -1535,6 +1538,7 @@ function SlideMedia({
             frame={clipFrame(slide.focus)}
             media={slide.width && slide.height ? slide.width / slide.height : null}
             focusY={cleanFocus(slide.focus)?.y ?? 0.5}
+            warm={warm}
           />
         </div>
       ) : page && !shrunk && fit === "cover" ? (
@@ -1781,7 +1785,7 @@ function PostCarousel({
           const url = j === 0 ? coverUrl : (urls[slideThumbPath(sl) ?? ""] ?? null);
           return (
             <div key={`${sl.path}-${j}`} className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`${i + 1} of ${count}`} data-fit={page ? fits?.[j] : undefined}>
-              {near ? <SlideMedia slide={sl} thumbUrl={url} full={full} active={i === index} withDots={!page} page={page} fit={fits?.[j]} shrunk={shrunk} /> : <div className={cn("h-full w-full", page ? "bg-black" : "bg-muted")} />}
+              {near ? <SlideMedia slide={sl} thumbUrl={url} full={full} active={i === index} warm={i === index + 1 ? "next" : i === index - 1 ? "prev" : undefined} withDots={!page} page={page} fit={fits?.[j]} shrunk={shrunk} /> : <div className={cn("h-full w-full", page ? "bg-black" : "bg-muted")} />}
             </div>
           );
         })}

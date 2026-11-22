@@ -38,7 +38,7 @@
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { pickVideo, type PickedVideo, type TrimFn, type TrimOffer } from "@/lib/video-edit/pick";
-import { planVideo, selectionOf } from "@/lib/video-edit/plan";
+import { isWhole, planVideo, selectionOf } from "@/lib/video-edit/plan";
 import { renderVideo, VideoRenderError } from "@/lib/video-edit/render";
 import { videoBudget, videoLimit } from "@/lib/video-edit/limits";
 import { videoErrorMessage } from "@/lib/video-edit/pipeline";
@@ -106,7 +106,38 @@ export type StartSetVideo = {
   trim?: TrimFn;
   /** A quick look before it goes: the trimmer with the lift found for you, and Send (pick.ts, TrimOffer). */
   offer?: TrimOffer;
+  /** Filmed here: also make the copy for the phone's Photos (phoneCopyFor), returned as `phoneCopy`. */
+  phoneCopy?: boolean;
 };
+
+/**
+ * What goes to the phone's Photos for a clip filmed in the app (Nov 22 2026):
+ * the part that was sent, the trim, at the quality it was filmed (a remux, no
+ * re-encode: ~a second on a phone), never the whole recording with the walk to
+ * the bar and back. Nothing trimmed: the recording itself. null when this phone
+ * can't cut it: the stored copy (what the coach got, trimmed) is saved instead.
+ *
+ * Why: the "Save it to your Photos too?" offer and the set's Save to Photos
+ * handed over the recording as filmed, so the athlete trimmed a set, saved it
+ * and found the whole untrimmed clip in Photos.
+ */
+export async function phoneCopyFor(
+  video: Pick<PickedVideo, "file" | "info" | "trim">,
+): Promise<File | null> {
+  if (isWhole(video.info, video.trim)) return video.file;
+  const sel = selectionOf(video.info, video.trim);
+  try {
+    const out = await renderVideo(
+      video.file,
+      video.info,
+      { mode: "copy", start: sel.start, end: sel.end, estBytes: 0 },
+      { limitSeconds: sel.end - sel.start + 5, maxBytes: Number.MAX_SAFE_INTEGER },
+    );
+    return out.file;
+  } catch {
+    return null;
+  }
+}
 
 /** A "no" that trying again won't change. */
 export class SetVideoRefused extends Error {}
@@ -256,7 +287,7 @@ function alreadySentQuick(clientId: string, fileKey: string) {
 /** Pick → background send. Resolves once the clip is read (the upload carries on by itself). */
 export async function startSetVideo(
   input: StartSetVideo,
-): Promise<{ ok: boolean; id?: string; reason?: string }> {
+): Promise<{ ok: boolean; id?: string; reason?: string; phoneCopy?: Promise<File | null> }> {
   wireOnce();
   const fileKey = await setVideoFileKey(input.clientId, input.file);
   const dup = getSetVideoJobs().find(
@@ -327,8 +358,10 @@ export async function startSetVideo(
     savedAt: Date.now(),
   });
   pickedVideos.set(id, picked.video);
+  // the trimmed copy for Photos starts alongside (a remux: cheap, and nothing waits on it)
+  const phoneCopy = input.phoneCopy ? phoneCopyFor(picked.video) : undefined;
   enqueue(id);
-  return { ok: true, id };
+  return { ok: true, id, phoneCopy };
 }
 
 function enqueue(id: string) {

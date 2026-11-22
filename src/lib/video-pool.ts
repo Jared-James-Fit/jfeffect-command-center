@@ -18,7 +18,12 @@
  */
 import { REEL_SLOTS } from "@/lib/reels";
 
-export const FEED_POOL = 6;
+/**
+ * Enough for the post on screen, the slides either side of it in a carousel
+ * (they keep theirs, so a swipe never starts cold) and the posts within two
+ * screens; past it a clip gets a new element, which waits for a tap for sound.
+ */
+export const FEED_POOL = 8;
 
 /** Every element made here (pooled, plus any extra a busy feed borrowed). */
 const known = new Set<HTMLVideoElement>();
