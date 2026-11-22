@@ -17,6 +17,7 @@ import { OPEN_PERSON_EVENT } from "@/lib/community-notifications";
 import { PostDetailDialog } from "@/components/community/post-detail";
 import { MyTabPhoto, ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
+import { useSwipeToCreate } from "@/components/community/swipe-to-create";
 import { StoryHostProvider, StoryRail } from "@/components/community/crew-stories";
 import { StoryReplyHost } from "@/components/community/story-reply-host";
 import { ShareNudge } from "@/components/community/share-nudge";
@@ -596,6 +597,11 @@ export function CommunityScreen({
 
   const notAllowed = ((ranked.error ?? feed.error) as any)?.code === "42501";
 
+  // Swipe to create (Instagram's): on the feed, a finger moving right pulls the story camera in from the
+  // left, where the + is; let go past a third of the screen and it opens (swipe-to-create.tsx)
+  const cameraRef = useRef<(() => void) | null>(null);
+  const swipeToCreate = useSwipeToCreate({ enabled: paging && canShare && !coach && !previewOnly, onOpen: () => cameraRef.current?.() });
+
   // Crew's one bar, per page. Find athletes keeps its own search field at the top instead.
   const crewBar = !ownBar ? null : scope.kind === "feed" || scope.kind === "rankings" ? (
     <CrewBar
@@ -615,6 +621,7 @@ export function CommunityScreen({
             <ShareWorkoutButton
               unit={unit}
               previewOnly={previewOnly}
+              cameraRef={cameraRef}
               trigger={(begin) => (
                 <BarButton label="Create a post" onClick={begin} data-crew-create>
                   <SquarePlus className="h-[25px] w-[25px]" strokeWidth={1.9} />
@@ -713,6 +720,7 @@ export function CommunityScreen({
     // every photo under Crew rings when that person has a story up, and plays it on a tap (story-ring.tsx)
     <StoryHostProvider posts={posts} unit={unit} viewerIsStaff={viewerIsStaff} onOpenPost={(id) => setDetailId(id)} onJumpTo={setJumpTo} onOpenPerson={openAuthor}>
     {crewBar}
+    {swipeToCreate}
     {/* Find athletes has no bar: its search field starts right under the status bar */}
     {ownBar && !crewBar && <div aria-hidden className="md:hidden" style={{ height: "var(--app-safe-top)" }} />}
     {/* a staff login that's also a client: its My Workouts / Staff switch, under Crew's bar instead of the shell's */}

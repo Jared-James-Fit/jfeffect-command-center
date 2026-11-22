@@ -161,7 +161,7 @@ describe("stories (STORY on the camera)", () => {
     // the people it tags ride on its caption (withTags("") with nobody tagged is "")
     expect(cam).toContain("await createCommunityPost(qc, { userId: user.id, caption: withTags(\"\", tags), visibility: audience, photo, extras, story: true, sharedPostId });");
     expect(cam).toContain('const STORY_AUDIENCE: CommunityVisibility[] = ["community", "close_friends"];');
-    expect(cam).toContain("<ModeTabs modes={KINDS} mode={kind} onMode={(k) => pickKind(k as ShareKind)} />");
+    expect(cam).toContain("<ModeSelector modes={CAMERA_MODES} value={kind} onChange={(k) => pickKind(k as ShareKind)} enterFrom={modeFrom} />");
   });
 });
 

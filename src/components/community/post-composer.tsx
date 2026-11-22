@@ -39,6 +39,8 @@ import { sharedGradeGL } from "@/lib/media-grade-gl";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import type { CameraCard, StudioPost } from "@/components/community/share-studio";
+import { CAMERA_MODES, ModeSelector } from "@/components/community/mode-selector";
+import { DiscardConfirm } from "@/components/community/discard-confirm";
 
 /**
  * New post, Instagram's way (Nov 22 2026): the + opens the phone's photo
@@ -113,6 +115,8 @@ export function PostComposer({
   plainPost,
   coach,
   onStory,
+  modeFrom = null,
+  entry = "rise",
   workout,
   points,
   videoContext = "post",
@@ -134,6 +138,10 @@ export function PostComposer({
   coach?: { save: (a: { caption: string; poll?: string[]; media: PostSlide[] }) => Promise<string | void> } | null;
   /** Story along the bottom: leaves for the story camera. */
   onStory?: () => void;
+  /** The mode the last screen was on (the camera's Story): the selector opens there and slides to Post. */
+  modeFrom?: string | null;
+  /** How it comes in: rising from the bottom (from +), or fading in place (switched to from the camera). */
+  entry?: "rise" | "fade";
   workout?: ComposerWorkout | null;
   /** What posting earns, for who sees it. */
   points?: (v: CommunityVisibility) => { tone: "earn" | "muted"; text: string } | null;
@@ -147,7 +155,8 @@ export function PostComposer({
   const [step, setStep] = useState<Step>("select");
   const [writing, setWriting] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [confirmClose, setConfirmClose] = useState(false);
+  // the one question before work is thrown away: leaving, or switching to Story with photos picked
+  const [confirm, setConfirm] = useState<null | "close" | "story">(null);
   const draftKey = `composer:${coach ? "coach" : "member"}:${user?.id ?? ""}`;
   const tray = useSlideTray({ open, initial: null, resetKey: draftKey, coverCount: 0, videoContext });
   const att = usePostAttach({ initial: null, key: draftKey, open });
@@ -182,7 +191,7 @@ export function PostComposer({
     setStep(startWriting ? "details" : "select");
     setWriting(startWriting);
     setClosing(false);
-    setConfirmClose(false);
+    setConfirm(null);
     setFocus(null);
     setAspect("portrait");
     aspectPicked.current = false;
@@ -357,11 +366,17 @@ export function PostComposer({
   const dirty = tray.items.length > 0 || caption.trim().length > 0 || !!poll;
   const requestClose = () => {
     if (busy) return;
-    if (dirty && !posted) return setConfirmClose(true);
+    if (dirty && !posted) return setConfirm("close");
     close();
   };
+  /** Story along the bottom: the story camera (asked first when photos or words would be lost). */
+  const toStory = () => {
+    if (busy || !onStory) return;
+    if (dirty && !posted) return setConfirm("story");
+    onStory();
+  };
   const close = () => {
-    setConfirmClose(false);
+    setConfirm(null);
     setClosing(true);
     window.setTimeout(onClose, 240);
   };
@@ -469,7 +484,7 @@ export function PostComposer({
           className={cn(
             "fixed inset-0 z-50 flex flex-col overflow-clip bg-black text-white outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,920px)] sm:w-[480px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px]",
             "duration-300 motion-reduce:duration-0",
-            closing ? "translate-y-full opacity-0 transition-all ease-in sm:translate-y-[60%]" : "animate-in slide-in-from-bottom-[40%] fade-in-0",
+            closing ? "translate-y-full opacity-0 transition-all ease-in sm:translate-y-[60%]" : entry === "fade" ? "animate-in fade-in-0 duration-200" : "animate-in slide-in-from-bottom-[40%] fade-in-0",
           )}
           style={{ transitionTimingFunction: EASE }}
           onOpenAutoFocus={(e) => e.preventDefault()}
@@ -515,7 +530,12 @@ export function PostComposer({
                     : undefined
                 }
               />
-              {onStory && <KindPill onStory={onStory} />}
+              {onStory && (
+                // Post · Story (Instagram's floating pill): tap or swipe it; Story is the story camera
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.9rem)" }} data-composer-modes>
+                  <ModeSelector variant="pill" modes={CAMERA_MODES} value="post" onChange={(k) => k === "story" && toStory()} enterFrom={modeFrom} className="pointer-events-auto" />
+                </div>
+              )}
             </section>
 
             {/* 2. Edit */}
@@ -657,21 +677,20 @@ export function PostComposer({
             </section>
           </div>
 
-          {confirmClose && (
-            <div className="absolute inset-0 z-30 grid place-items-center bg-black/60 px-8 animate-in fade-in-0 duration-150" data-composer-discard>
-              <div className="w-full max-w-[300px] overflow-hidden rounded-2xl bg-[#262629] text-center animate-in zoom-in-95 duration-200">
-                <div className="px-5 pb-4 pt-5">
-                  <div className="text-[17px] font-semibold">Discard post?</div>
-                  <p className="mt-1 text-[13px] text-white/65">If you leave now, you'll lose your edits.</p>
-                </div>
-                <button type="button" onClick={close} className="h-12 w-full border-t border-white/10 text-[15px] font-semibold text-red-400 active:bg-white/5">
-                  Discard
-                </button>
-                <button type="button" onClick={() => setConfirmClose(false)} className="h-12 w-full border-t border-white/10 text-[15px] active:bg-white/5">
-                  Keep editing
-                </button>
-              </div>
-            </div>
+          {confirm && (
+            <DiscardConfirm
+              tag="composer-discard"
+              title="Discard post?"
+              body={confirm === "story" ? "Switching to Story leaves this post. You'll lose what you've picked and written." : "If you leave now, you'll lose your edits."}
+              onConfirm={() => {
+                if (confirm === "story") {
+                  setConfirm(null);
+                  // inside this tap: the story camera's ask goes out from it
+                  onStory?.();
+                } else close();
+              }}
+              onCancel={() => setConfirm(null)}
+            />
           )}
           {coverFor &&
             (() => {
@@ -739,22 +758,6 @@ function NextButton({ onClick, disabled }: { onClick: () => void; disabled?: boo
     >
       Next
     </button>
-  );
-}
-
-/** Post · Story along the bottom (Instagram's floating pill): Story leaves for the story camera. */
-function KindPill({ onStory }: { onStory: () => void }) {
-  return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.9rem)" }}>
-      <div className="pointer-events-auto flex rounded-full bg-zinc-800/90 p-1 shadow-lg backdrop-blur-md" role="tablist" aria-label="Post or story">
-        <span role="tab" aria-selected className="rounded-full bg-white/10 px-4 py-2 text-[13px] font-bold uppercase tracking-[0.08em]">
-          Post
-        </span>
-        <button type="button" role="tab" aria-selected={false} onClick={onStory} className="rounded-full px-4 py-2 text-[13px] font-bold uppercase tracking-[0.08em] text-white/60 active:text-white" data-composer-story>
-          Story
-        </button>
-      </div>
-    </div>
   );
 }
 

@@ -648,6 +648,19 @@ html, body { @variant max-md { overflow-x: hidden; } }
   to { opacity: 1; }
 }
 .jf-arrive { animation: jf-arrive 240ms ease-out both; }
+/* Crew's camera (share-studio.tsx): it sits left of the feed, so it slides in from the left (the + and the
+   feed's swipe to create) and back out the same way; switched to from the New post screen, it fades in place */
+@keyframes jf-camera-in {
+  from { transform: translate3d(-100%, 0, 0); }
+  to { transform: none; }
+}
+@keyframes jf-create-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-share-studio] { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+}
 /* "Swipe for workout" (a workout post's recap tip): the chevrons lean the way to swipe, twice, then rest.
    Only the little icon moves, never the post's screen (a moving screen is a layer an iPhone paints in strips). */
 @keyframes jf-recap-nudge {

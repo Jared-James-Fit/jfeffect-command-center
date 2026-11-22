@@ -65,8 +65,8 @@ describe("members post anything, not only workouts", () => {
     const btn = read("src/components/community/share-workout-picker.tsx");
     const studio = read("src/components/community/share-studio.tsx");
     expect(btn).toContain('startAs="story"');
-    expect(btn).toContain("onPostFlow={() => beginPost(true)}");
-    expect(btn).toContain("onStory={beginStory}");
+    expect(btn).toContain("onPostFlow={() => beginPost(true, true)}");
+    expect(btn).toContain('onStory={() => beginStory("post")}');
     expect(studio).toContain('if (k === "post" && onPostFlow) return onPostFlow();');
     // the camera still says which it's on as it opens and on every switch
     expect(studio).toContain("const [kind, setKind] = useState<ShareKind>(startAs);");
