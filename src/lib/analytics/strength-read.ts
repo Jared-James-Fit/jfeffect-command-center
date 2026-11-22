@@ -56,7 +56,18 @@ export function comparableE1rm(s: SetLike): number | null {
 }
 
 export type StrengthTrend =
-  | { kind: "up" | "down" | "steady"; pct: number; first: number; last: number; sessions: number; days: number }
+  | {
+      kind: "up" | "down" | "steady";
+      pct: number;
+      first: number;
+      last: number;
+      sessions: number;
+      days: number;
+      /** the day of the best of the first few sessions: what "up 9%" is measured from */
+      firstDate: string;
+      /** the day of the best of the last few */
+      lastDate: string;
+    }
   | { kind: "unclear"; sessions: number; days: number; reason: "few" | "short" };
 
 /** Up / down / steady from the best of the first and the last few points; "unclear" with too little to go on. */
@@ -66,11 +77,14 @@ export function strengthTrend(points: ReadonlyArray<{ date: string; value: numbe
   if (pts.length < TREND_MIN_SESSIONS) return { kind: "unclear", sessions: pts.length, days, reason: "few" };
   if (days < TREND_MIN_DAYS) return { kind: "unclear", sessions: pts.length, days, reason: "short" };
   const k = Math.min(3, Math.max(1, Math.floor(pts.length / 3)));
-  const first = Math.max(...pts.slice(0, k).map((p) => p.value));
-  const last = Math.max(...pts.slice(-k).map((p) => p.value));
+  const best = (xs: typeof pts) => xs.reduce((a, p) => (p.value > a.value ? p : a), xs[0]);
+  const firstP = best(pts.slice(0, k));
+  const lastP = best(pts.slice(-k));
+  const first = firstP.value;
+  const last = lastP.value;
   const pct = Math.round(((last - first) / first) * 1000) / 10;
   const kind = Math.abs(pct) < STEADY_PCT ? "steady" : pct > 0 ? "up" : "down";
-  return { kind, pct, first, last, sessions: pts.length, days };
+  return { kind, pct, first, last, sessions: pts.length, days, firstDate: firstP.date.slice(0, 10), lastDate: lastP.date.slice(0, 10) };
 }
 
 /** "Up 4.2%" / "Down 3%" / "Steady" / "Too early", for a tile or a line. */

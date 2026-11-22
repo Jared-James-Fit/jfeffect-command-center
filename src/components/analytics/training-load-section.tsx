@@ -13,12 +13,16 @@ import {
   LIFT_LABEL, TRAINING_LOAD_DEFINITIONS,
   type Insight, type LiftLoad, type TrainingLoad, type WeekLoad,
 } from "@/lib/analytics/training-load";
+import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/today";
+import type { BlockVolumeRow } from "@/lib/analytics/analytics-areas";
+import { BlockVolumeList } from "@/components/analytics/analytics-area-cards";
 
 const SERIES = "var(--chart-4)";
 const SERIES_SOFT = "color-mix(in oklch, var(--chart-4) 38%, transparent)";
 const heat = (share: number) => `color-mix(in oklch, var(--chart-4) ${Math.round(12 + share * 70)}%, transparent)`;
 
-type View = "muscles" | "patterns" | "lifts" | "days";
+type View = "muscles" | "patterns" | "lifts" | "days" | "blocks";
 
 export function TrainingLoadSection({
   load,
@@ -29,6 +33,7 @@ export function TrainingLoadSection({
   planError,
   header,
   hideInsights = false,
+  blockRows,
 }: {
   load: TrainingLoad;
   /** the coach's view: programming detail and coach-only flags */
@@ -40,15 +45,18 @@ export function TrainingLoadSection({
   header?: React.ReactNode;
   /** the insights are shown elsewhere on the page (the analytics Overview) */
   hideInsights?: boolean;
+  /** each block's weekly sets (By block); left out with under two */
+  blockRows?: BlockVolumeRow[];
 }) {
   const insights = hideInsights ? [] : load.insights.filter((i) => coach || i.audience === "both");
   const hasLifts = load.lifts.length > 0;
   const hasDays = !!load.distribution;
   const views: Array<[View, string]> = [
     ["muscles", "Muscles"],
-    ["patterns", "Patterns"],
+    ["patterns", "Movements"],
     ...(hasLifts ? ([["lifts", "Lifts"]] as Array<[View, string]>) : []),
-    ...(hasDays ? ([["days", "Week by day"]] as Array<[View, string]>) : []),
+    ...(hasDays ? ([["days", "By session"]] as Array<[View, string]>) : []),
+    ...((blockRows?.length ?? 0) >= 2 ? ([["blocks", "By block"]] as Array<[View, string]>) : []),
   ];
   const [view, setView] = useState<View>("muscles");
   const shown = views.some(([v]) => v === view) ? view : "muscles";
@@ -68,24 +76,22 @@ export function TrainingLoadSection({
       {insights.length > 0 && <InsightList insights={insights} coach={coach} />}
 
       <Card className="space-y-4 p-4">
-        {/* the range in four numbers */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* the period in two numbers, each said against what it's out of */}
+        <div className="grid grid-cols-2 gap-3">
           <Stat
             label={load.perWeekBasis.partial ? "Working sets this week" : "Working sets a week"}
             value={String(t.setsPerWeek)}
-            sub={load.perWeekBasis.partial ? "No full week yet" : `${t.sets} in all · ${load.perWeekBasis.weeks} wk`}
+            sub={load.perWeekBasis.partial ? "No full week yet" : `Average of ${load.perWeekBasis.weeks} full week${load.perWeekBasis.weeks === 1 ? "" : "s"}`}
           />
           <Stat
-            label="Hard sets"
-            value={t.sets ? `${Math.round((t.hardSets / t.sets) * 100)}%` : "—"}
-            sub={t.unratedSets ? `${t.unratedSets} unrated` : "RPE 7+"}
+            label="Hard sets (RPE 7+)"
+            value={t.sets - t.unratedSets > 0 ? `${Math.round((t.hardSets / (t.sets - t.unratedSets)) * 100)}%` : "—"}
+            sub={
+              t.sets - t.unratedSets > 0
+                ? `of ${(t.sets - t.unratedSets).toLocaleString()} rated sets${t.unratedSets ? ` · ${t.unratedSets} unrated` : ""}`
+                : "No sets rated yet"
+            }
           />
-          <Stat
-            label="Done as written"
-            value={t.completionPct != null ? `${t.completionPct}%` : planLoading && !planError ? "…" : "—"}
-            sub={t.prescribed != null ? `${t.completedOfPrescribed} of ${t.prescribed} sets` : planError ? "Couldn't read the program" : "No program dates in range"}
-          />
-          <Stat label="Sessions" value={String(t.sessions)} sub={`${load.quality.weeksWithData} week${load.quality.weeksWithData === 1 ? "" : "s"}`} />
         </div>
 
         <WeeklyChart weeks={load.weeks} unit={unit} />
@@ -114,6 +120,7 @@ export function TrainingLoadSection({
         {shown === "patterns" && <Patterns load={load} />}
         {shown === "lifts" && <Lifts lifts={load.lifts} coach={coach} unit={unit} />}
         {shown === "days" && load.distribution && <Days dist={load.distribution} />}
+        {shown === "blocks" && blockRows && <BlockVolumeList rows={blockRows} />}
       </Card>
 
       <Definitions />
@@ -306,17 +313,21 @@ export function Muscles({ load, coach }: { load: TrainingLoad; coach: boolean })
       </div>
       <ul className="space-y-2.5">
         {rows.map((m) => {
+          // each figure says what it is: sets a week, how many days a week it's trained,
+          // and a change only with the weeks it's measured against
           const meta = [
-            m.directPerWeek > 0 ? `${m.frequency}×/wk` : "helping only",
-            coach && m.topSessionShare != null && m.topSessionShare >= 0.7 ? `${Math.round(m.topSessionShare * 100)}% one day` : null,
-            m.changePct != null && Math.abs(m.changePct) >= 15 ? `${m.changePct > 0 ? "+" : ""}${m.changePct}%` : null,
+            m.directPerWeek > 0 ? `${m.frequency} day${m.frequency === 1 ? "" : "s"} a week` : "helping only",
+            coach && m.topSessionShare != null && m.topSessionShare >= 0.7 ? `${Math.round(m.topSessionShare * 100)}% in one session` : null,
           ].filter(Boolean).join(" · ");
+          const change = m.changePct != null && Math.abs(m.changePct) >= 15
+            ? `${m.changePct > 0 ? "up" : "down"} ${Math.abs(m.changePct)}% (last 2 weeks vs the 2 before)`
+            : null;
           return (
             <li key={m.muscle} className="text-sm" data-muscle={m.muscle} title={`${m.muscle}: ${m.perWeek} sets a week (${m.directPerWeek} aimed at it)`}>
               <div className="flex items-baseline justify-between gap-2">
                 <span className="truncate">{m.muscle}</span>
                 <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                  <span className="font-semibold text-foreground">{m.perWeek}</span>{meta ? ` · ${meta}` : ""}
+                  <span className="font-semibold text-foreground">{m.perWeek}</span> sets
                 </span>
               </div>
               {/* one scale for every row: the bar always spans the same track */}
@@ -325,6 +336,10 @@ export function Muscles({ load, coach }: { load: TrainingLoad; coach: boolean })
                 {m.perWeek - m.directPerWeek > 0.01 && (
                   <span className={cn("h-full", m.directPerWeek > 0 ? "rounded-r-[3px]" : "rounded-[3px]")} style={{ width: `${((m.perWeek - m.directPerWeek) / max) * 100}%`, background: SERIES_SOFT }} />
                 )}
+              </div>
+              <div className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
+                {meta}
+                {change ? ` · ${change}` : ""}
               </div>
             </li>
           );
@@ -348,7 +363,8 @@ function Patterns({ load }: { load: TrainingLoad }) {
               <span className="truncate">{p.pattern}</span>
               <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
                 <span className="font-semibold text-foreground">{p.perWeek}</span>
-                {p.changePct != null && Math.abs(p.changePct) >= 15 ? ` · ${p.changePct > 0 ? "+" : ""}${p.changePct}%` : ""}
+                {" sets"}
+                {p.changePct != null && Math.abs(p.changePct) >= 15 ? ` · ${p.changePct > 0 ? "up" : "down"} ${Math.abs(p.changePct)}% vs 2 weeks before` : ""}
               </span>
             </div>
             <div className="mt-1 h-2"><span className="block h-full rounded-[3px]" style={{ width: `${(p.perWeek / max) * 100}%`, background: SERIES }} /></div>
@@ -374,16 +390,17 @@ function Lifts({ lifts, coach, unit }: { lifts: LiftLoad[]; coach: boolean; unit
     <div className="space-y-4" data-load-lifts>
       {lifts.map((l) => {
         const known = l.intensity.lt70 + l.intensity.b70 + l.intensity.b80 + l.intensity.ge90;
-        const trend = l.trend.kind === "unclear" ? "Too early to call" : l.trend.kind === "steady" ? "Holding steady" : `${l.trend.kind === "up" ? "Up" : "Down"} ${Math.abs(l.trend.pct)}%`;
+        const since = l.trend.kind !== "unclear" ? (() => { const d = parseLocalDate(l.trend.firstDate); return d ? ` since ${format(d, "MMM d")}` : ""; })() : "";
+        const trend = l.trend.kind === "unclear" ? "too early to call" : l.trend.kind === "steady" ? `about the same${since}` : `${l.trend.kind === "up" ? "up" : "down"} ${Math.abs(l.trend.pct)}%${since}`;
         return (
           <div key={l.lift} className="space-y-2" data-lift={l.lift}>
             <div className="flex items-baseline justify-between gap-2">
               <h4 className="text-sm font-semibold">{LIFT_LABEL[l.lift]}</h4>
-              <span className="text-xs text-muted-foreground">Strength: {trend}</span>
+              <span className="text-xs text-muted-foreground">Est. max {trend}</span>
             </div>
             <div className="grid grid-cols-3 gap-2 text-xs sm:grid-cols-5">
-              <Mini label="Sessions / wk" value={String(l.sessionsPerWeek)} />
-              <Mini label="Sets / wk" value={String(l.setsPerWeek)} />
+              <Mini label="Days a week" value={String(l.sessionsPerWeek)} />
+              <Mini label="Sets a week" value={String(l.setsPerWeek)} />
               <Mini label="Heavy sessions" value={`${l.heavyExposures} of ${l.sessions}`} />
               <Mini label="Comp / var. sets" value={`${l.competitionSets} / ${l.variationSets}`} />
               <Mini label="Avg RPE" value={l.avgRpe != null ? String(l.avgRpe) : "—"} />

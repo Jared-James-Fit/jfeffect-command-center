@@ -31,16 +31,15 @@ describe("Workouts page: one card per section, nothing said twice", () => {
     }
   });
 
-  it("the month is one line (nothing at zero) on the row named Training analytics; nothing folds", () => {
-    expect(month).toContain("data-month-line");
-    expect(month).toContain("...(h.prLifts > 0 ?");
-    expect(month).toContain("...(h.streakWeeks > 0 ?");
+  it("progress is a snapshot of one to three numbers (nothing at zero); one tap to analytics; nothing folds", () => {
+    expect(month).toContain("data-progress-snapshot");
+    expect(month).toContain("data-snapshot-metric");
     expect(month).not.toContain("<Tile ");
     // neutral bars: colour on Workouts only ever means something
     expect(month).not.toContain("var(--chart-4)");
     // one tap to the analytics page, which has everything the old "More" fold held
     expect(month).not.toContain("<CollapsibleContent");
-    expect(month).toContain(">Training analytics</span>");
+    expect(month).toContain("Analytics <ChevronRight");
     expect(month).toContain('to="/portal/workouts/analytics"');
     for (const gone of ["weightComparison", "school bus", "backdrop-blur", "Athlete corner"]) {
       expect(month, gone).not.toContain(gone);

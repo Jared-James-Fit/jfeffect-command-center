@@ -174,84 +174,47 @@ export function ProgramRoadmapCard({
     setSheetOpen(true);
   };
 
+  // One line: where you are and what phase it is, then the meet (or the end).
+  // Upcoming phases and every week's notes are the full plan's, one tap away.
+  const phase = current && !allDone ? blockTitle(current) : null;
   return (
     <Card className="overflow-hidden p-0" aria-label="Your training program">
-      <div className="px-4 pb-3 pt-3.5">
+      <div className="px-4 pb-3.5 pt-3.5">
         <ActiveProgramHeader
           name={name}
           line={
-            progress.meet && roadmap.meet ? (
-              <span className="inline-flex flex-wrap items-center gap-x-1" title={[roadmap.meet.name, fmt(roadmap.meet.date)].filter(Boolean).join(" · ")}>
-                {progress.where && <>{progress.where} <span aria-hidden>·</span></>}
-                <Flag className="h-3 w-3" aria-hidden /> {progress.until}
-              </span>
-            ) : (
-              [progress.where, progress.until].filter(Boolean).join(" · ")
-            )
+            <span className="inline-flex flex-wrap items-center gap-x-1" data-program-line>
+              {progress.where && <span>{progress.where}</span>}
+              {phase && multi && (
+                <>
+                  {progress.where && <span aria-hidden>·</span>}
+                  <span className="text-foreground/85" data-program-phase>{phase}</span>
+                </>
+              )}
+              {progress.until && (
+                <>
+                  {(progress.where || (phase && multi)) && <span aria-hidden>·</span>}
+                  {progress.meet && roadmap.meet ? (
+                    <span className="inline-flex items-center gap-1" title={[roadmap.meet.name, fmt(roadmap.meet.date)].filter(Boolean).join(" · ")}>
+                      <Flag className="h-3 w-3" aria-hidden /> {progress.until}
+                    </span>
+                  ) : (
+                    <span>{progress.until}</span>
+                  )}
+                </>
+              )}
+            </span>
           }
           blocks={blocks}
           onManage={!(allDone && nextProgramTo) ? onManage : undefined}
         />
-
-        {/* This week, in the coach's (or Cleo's) words: what today's training is for. */}
-        {!allDone && (wk || focus) && !multi && (
-          <div className="mt-3" data-roadmap-now>
-            <p className="text-[14px] font-medium text-foreground" data-roadmap-week>
-              This week{wk?.name ? ` · ${wk.name}` : ""}
-            </p>
-            {focus && <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-muted-foreground">{focus}</p>}
-          </div>
+        {/* a one-block program has no phases to name: its week's focus, in one line */}
+        {!allDone && !multi && (wk?.name || focus) && (
+          <p className="mt-2.5 line-clamp-1 text-[13px] text-muted-foreground" data-roadmap-week>
+            This week{wk?.name ? ` · ${wk.name}` : focus ? ` · ${focus}` : ""}
+          </p>
         )}
       </div>
-
-      {/* The phases, always in view: done, now (with this week), what's next. A tap opens the full plan there. */}
-      {multi && (
-        <ol className="border-t border-border/60 px-2 py-1" aria-label="Blocks in this program" data-roadmap-timeline>
-          {blocks.map((b, i) => {
-            const isNow = b.id === current?.id && !allDone;
-            return (
-              <li key={b.id}>
-                <button
-                  type="button"
-                  onClick={() => open(b.id)}
-                  className={cn("flex w-full items-start gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-secondary/40 active:bg-secondary/60", isNow && "py-2.5")}
-                  data-roadmap-block={b.status}
-                >
-                  <span
-                    className={cn(
-                      "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-semibold tabular-nums",
-                      b.status === "completed" && "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-                      b.status === "current" && "bg-foreground text-background",
-                      b.status === "upcoming" && "border border-border text-muted-foreground",
-                    )}
-                    aria-hidden
-                  >
-                    {b.status === "completed" ? <Check className="h-3 w-3" /> : i + 1}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-baseline justify-between gap-2">
-                      <span className={cn("truncate text-[14px]", isNow ? "font-semibold text-foreground" : b.status === "completed" ? "text-muted-foreground" : "text-foreground/85")}>
-                        {blockTitle(b)}
-                      </span>
-                      <span className="shrink-0 text-[12px] tabular-nums text-muted-foreground">
-                        {isNow ? "Now" : b.status === "completed" ? "Done" : fmt(b.start) ?? weeksLabel(b.weekCount)}
-                      </span>
-                    </span>
-                    {isNow && (wk || focus) && (
-                      <span className="mt-1 block" data-roadmap-now>
-                        <span className="block text-[13px] font-medium text-foreground/90" data-roadmap-week>
-                          This week{wk?.name ? ` · ${wk.name}` : wk ? ` · week ${wk.number}` : ""}
-                        </span>
-                        {focus && <span className="mt-0.5 line-clamp-2 block text-[13px] leading-snug text-muted-foreground">{focus}</span>}
-                      </span>
-                    )}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      )}
 
       {/* A finished program of their own: the way to the next one. */}
       {nextProgramTo && allDone ? (

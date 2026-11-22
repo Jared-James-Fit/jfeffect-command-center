@@ -40,20 +40,20 @@ describe("one analytics experience for the coach and the athlete", () => {
     // squat · bench · deadlift sections only for someone who trains them; the
     // programming detail (roles, weekly session grid) only for the coach
     expect(dash).toContain("{hasPowerlifting && (");
-    expect(dash).toContain("{coach && (\n            <SectionErrorBoundary label=\"Powerlifting exposure\">");
+    expect(dash).toMatch(/\{coach && \(\s*<MoreDetail label="Programming detail">\s*<SectionErrorBoundary label="Powerlifting exposure">/);
   });
 
   it("the Working sets tile says what it counts (it used to claim warm-ups and drop bodyweight sets)", () => {
     // a week's average, or this week so far: never this week divided by weeks still ahead
-    expect(dash).toContain('label={trainingLoad.load.perWeekBasis.partial ? "Sets this week" : "Sets a week"}');
+    expect(dash).toContain('unit={trainingLoad.load.perWeekBasis.partial ? "sets this week" : "sets a week"}');
     expect(dash).not.toContain('label="Sets in range"');
   });
 
-  it("the Workouts card's header is the way in, with a real glance at the trend", () => {
+  it("the Workouts progress snapshot is the one way in, with a few numbers that say what they're measured against", () => {
     const card = read("src/components/training-analytics-preview-card.tsx");
     expect(card).toContain("data-analytics-entry");
-    expect(card).toContain("data-analytics-spark");
-    expect(card).toContain('search={{ view: "volume" } as any}');
+    expect(card).toContain("data-progress-snapshot");
+    expect(card).toContain("progressSnapshot({");
     // one way in, said once: no second "See all analytics" link under it
     expect(card).not.toContain("See all analytics");
   });
