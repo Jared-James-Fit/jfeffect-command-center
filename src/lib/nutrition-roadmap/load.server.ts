@@ -103,11 +103,13 @@ export async function loadRoadmap(sb: any, clientId: string, opts: { today?: str
   let current: Macros | null = null;
   let changedOn: string | null = null;
   const input: AssessmentInput = { ...wm.input };
-  const [planDays, member] = await Promise.all([
+  const [planDays, member, compProfile] = await Promise.all([
     !selfCoached && wm.refs.planId
       ? safe<any>(() => sb.from("nutrition_targets").select("id, start_date, phase, last_updated_at, updated_at, nutrition_target_days(day_label, calories, protein, carbs, fats)").eq("id", wm.refs.planId).maybeSingle(), null)
       : Promise.resolve(null),
     selfCoached && userId ? safe<any>(() => sb.from("app_members").select("id").eq("user_id", userId).maybeSingle(), null) : Promise.resolve(null),
+    // the class they compete in (the athlete, their coach or their own forms keep it), for a meet prep that doesn't name one
+    safe<any>(() => sb.from("athlete_competition_profiles").select("weight_class").eq("client_id", clientId).maybeSingle(), null),
   ]);
   if (planDays) {
     planNow = {
@@ -136,6 +138,10 @@ export async function loadRoadmap(sb: any, clientId: string, opts: { today?: str
   if (!input.meet && ag?.date && ag.date >= today) {
     input.meet = { name: ag.name ?? null, date: ag.date, weightClass: ag.weightClass ?? null, federation: ag.federation ?? null, sport: ag.sport ?? prepSport(null, ag.weightClass ?? null) };
   }
+
+  // a meet prep with no class: the one on their competition profile (a new object, so the assessment is read again)
+  const profileClass: string | null = compProfile?.weight_class ?? null;
+  if (input.meet && !input.meet.weightClass && profileClass) input.meet = { ...input.meet, weightClass: profileClass };
 
   // self-coached check-ins read like weekly ones: the same answer keys
   const submitted = roadmapCheckins.filter((r) => r.submitted_at);

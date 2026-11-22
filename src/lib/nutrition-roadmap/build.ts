@@ -189,6 +189,7 @@ export function buildRoadmap(x: RoadmapInput): { fresh: RoadmapPlan; read: Roadm
       needsBaseline: !t.trend && energy.source !== "observed" && energy.source !== "blend",
       recentEvent: x.recentEvent,
       nextEvent: x.nextEvent,
+      phaseMeet: inp.meet && inp.meet.date >= x.today && (!goal || goal.kg == null) ? { name: inp.meet.name, date: inp.meet.date, physique: inp.meet.sport === "bodybuilding" } : null,
       noiseKg: t.trend?.noiseKg ?? null,
     });
     blocks = res.blocks;

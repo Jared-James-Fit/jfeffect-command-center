@@ -8,7 +8,12 @@
  */
 import type { WeightUnit } from "@/lib/weight-management/units";
 
-export const ROADMAP_VERSION = 1;
+/**
+ * Bump when the engine's decisions change: it's in every plan's hash, so a waiting draft made by an
+ * older engine is superseded (kept as history) and made again. 2: Nov 22 2026, the first run on real
+ * clients (an on-track plan never moved to an estimate, a meet with no class still planned around).
+ */
+export const ROADMAP_VERSION = 2;
 
 /** What the whole roadmap is for. */
 export type RoadmapGoalKind = "fat_loss" | "muscle_gain" | "recomp" | "maintain" | "weight_class" | "contest_prep" | "event";

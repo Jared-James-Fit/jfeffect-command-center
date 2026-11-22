@@ -10,8 +10,13 @@
  *    settling, digestion, inconsistent eating, recovery, workload, a target
  *    that can't be made safely) come before the numbers (decision.ts).
  * 4. Losing too fast is fixed whatever the plan says.
- * 5. A block starting (or the plan not matching the block they're in): move
- *    to the block's targets, with approval.
+ * 5. A new kind of block starting (a diet break, the peak, recovery), or a
+ *    plan for another phase whose trend isn't already doing what the block
+ *    asks: move to the block's targets, with approval. The plan they're on
+ *    for this very block is never moved to an estimate (most estimates are
+ *    the formula): the trend judges it in 6. A coached athlete's numbers are
+ *    their coach's plan, so only a self-coached athlete is offered starting
+ *    targets from the estimate.
  * 6. Against the block, not the far-off goal: on track or ahead → hold;
  *    behind with poor adherence → find out why; behind with consistent
  *    eating and a reliable trend → the smallest change that closes it,
@@ -126,7 +131,8 @@ export function decideRoadmap(x: AdjustInput): Decision {
 
   // 2. data
   if (x.progress.status === "insufficient_data") {
-    if (!x.current && block && x.initial) {
+    // a member's first targets come from the estimate; a coached athlete's numbers are their coach's plan
+    if (!x.current && block && x.initial && x.selfCoached) {
       return out({ action: "adjust", headline: `Start with the ${BLOCK_LABEL[block.kind].toLowerCase()} targets`, reasons: ["A starting point from the estimate; the first weeks of weigh-ins set the real numbers."], kcalChange: 0, next: block.energy.engine });
     }
     return out({ action: "hold", headline: "Hold: not enough weigh-ins to judge yet", reasons: ["Weigh in 4+ mornings a week so the trend can be read. Nothing changes on too little data."], observeDays: 7 });
@@ -149,14 +155,16 @@ export function decideRoadmap(x: AdjustInput): Decision {
     }
   }
 
-  // 5. a block starting, or the plan not matching the block they're in
+  // 5. a new kind of block starting, or a plan for another phase that the trend says isn't working.
+  //    The plan they're on for this very block is never moved to an estimate: the trend judges it (6).
   if (block) {
     const engine = block.energy.engine;
     const cur = x.current;
     const blockAge = daysBetween(block.start, x.today);
     const maintenance = block.energy.maintenance;
     if (!cur) {
-      return out({ action: "adjust", headline: `Set your targets for ${block.title.toLowerCase()}`, reasons: [block.why], kcalChange: 0, next: engine });
+      if (x.selfCoached) return out({ action: "adjust", headline: `Set your targets for ${block.title.toLowerCase()}`, reasons: [block.why], kcalChange: 0, next: engine });
+      return out({ action: "hold", headline: "No calorie targets on the plan yet", reasons: [`${block.title} calls for about ${engine.kcal} kcal a day (protein ${engine.proteinG} g, carbs ${engine.carbsG} g, fat ${engine.fatG} g) as a starting point when the plan gets its numbers.`] });
     }
     const gap = engine.kcal - cur.kcal;
     const meaningful = Math.abs(gap) >= Math.max(150, cur.kcal * 0.07);
@@ -164,8 +172,17 @@ export function decideRoadmap(x: AdjustInput): Decision {
       (block.rate.kgPerWeek < 0 && cur.kcal >= maintenance - 50) ||
       (block.rate.kgPerWeek > 0 && cur.kcal <= maintenance + 25) ||
       (HOLD_KINDS.includes(block.kind) && Math.abs(cur.kcal - maintenance) > 200);
-    const transition = blockAge <= 10 && block.start <= x.today && x.plan.blocks.indexOf(block) > 0;
-    if (meaningful && (x.initial || transition || mismatch) && (settled || transition)) {
+    const idx = x.plan.blocks.indexOf(block);
+    const prev = idx > 0 ? x.plan.blocks[idx - 1] : null;
+    // a new kind of block (a diet break, the peak, recovery), not part 2 of the same one
+    const transition = !!prev && prev.kind !== block.kind && blockAge <= 10 && block.start <= x.today;
+    const planIsBlock = block.energy.from === "plan";
+    // a plan for another phase whose trend already does what the block asks needs nothing
+    const tr0 = t.trend;
+    const want0 = block.rate.kgPerWeek;
+    const alreadyMoving = !!tr0 && tr0.clear && want0 !== 0 && Math.sign(tr0.kgPerWeek) === Math.sign(want0) && Math.abs(tr0.kgPerWeek) >= Math.abs(want0) * 0.75;
+    const offPhase = !planIsBlock && !alreadyMoving && settled && (x.initial || mismatch);
+    if (meaningful && (transition || offPhase)) {
       const verb = gap > 0 ? "up" : "down";
       const reasons = [`${block.title} calls for about ${engine.kcal} kcal a day; the current targets average ${cur.kcal}.`, block.why];
       if (gap < 0 && x.safety.conservative) {

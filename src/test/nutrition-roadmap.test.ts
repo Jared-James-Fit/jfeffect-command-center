@@ -159,11 +159,18 @@ describe("1. a realistic 12-week fat-loss goal", () => {
     expect(fresh.blocks[fresh.blocks.length - 1].kind).toBe("transition");
   });
 
-  it("only the current block is final; with no targets yet, it offers the block's targets", () => {
+  it("only the current block is final; a coached athlete's numbers are their coach's plan, never offered from the estimate", () => {
     expect(fresh.blocks.filter((b) => b.final)).toHaveLength(1);
-    expect(read.decision.action).toBe("adjust");
-    expect(read.decision.next?.kcal).toBe(read.currentBlock!.energy.engine.kcal);
-    expect(read.decision.approval).toBe("coach");
+    expect(read.decision.action).toBe("hold");
+    expect(read.decision.kcalChange).toBeNull();
+    expect(read.decision.reasons.join(" ")).toContain(`${read.currentBlock!.energy.engine.kcal} kcal`);
+  });
+
+  it("a self-coached athlete with no targets yet is offered the block's targets, theirs to accept", () => {
+    const r = roadmap(inp, { selfCoached: true });
+    expect(r.read.decision.action).toBe("adjust");
+    expect(r.read.decision.next?.kcal).toBe(r.read.currentBlock!.energy.engine.kcal);
+    expect(r.read.decision.approval).toBe("athlete");
   });
 
   it("a coached athlete on a maintenance plan is offered the block's deficit, for the coach to approve", () => {
@@ -502,5 +509,64 @@ describe("the words around the numbers", () => {
       "Your current trajectory projects 70 kg. Reaching it needs a faster loss than your recent progress supports, without eating under your resting energy.",
     );
     expect(toYou("the lowest this plan goes for them")).toBe("the lowest this plan goes for you");
+  });
+});
+
+describe("live data, Nov 22 2026: the first run on every coaching client", () => {
+  // Colten, Marc and Nicole: on plans in the same phase, on track, and drafted a 150–275 kcal move to the formula's estimate
+  const start = addDays(TODAY, -42);
+  const onPlan = (phase: string, kcal: number, kgPerWeek: number, goal: AssessmentInput["goal"] = null) => {
+    const inp = athlete({ weighIns: series(42, 88, kgPerWeek), goal, plan: { start, weeklyKcal: kcal, phase, starts: [start] } });
+    return roadmap(inp, {
+      planNow: { start, phase, days: [{ label: "Training Day", kcal, protein: 180, carbs: 250, fat: 70 }], weeklyKcal: kcal },
+      current: { kcal, proteinG: 180, carbsG: 250, fatG: 70 },
+      targetsChangedOn: start,
+    });
+  };
+
+  it("the plan they're on for this block is never moved to an estimate while it's working", () => {
+    for (const [phase, kcal, rate] of [["Fat Loss", 2400, -0.5], ["Fat Loss", 1900, -0.5], ["Recomposition", 2000, -0.1], ["Muscle Gain", 3300, 0.2]] as const) {
+      const r = onPlan(phase, kcal, rate);
+      expect(r.read.currentBlock!.energy.from).toBe("plan");
+      expect(r.read.decision.kcalChange, `${phase} at ${kcal}`).toBeNull();
+    }
+  });
+
+  it("and the same with a target weight", () => {
+    const r = onPlan("Fat Loss", 2300, -0.5, { type: "lose", kg: 82, kgMax: null, date: null });
+    expect(r.read.decision.kcalChange).toBeNull();
+  });
+
+  it("a coached plan with no numbers and no recent weigh-ins holds (Nicolas: one day, no calories)", () => {
+    const inp = athlete({ weighIns: series(10, 75, 0, 0.2, addDays(TODAY, -35)), plan: { start: "2026-06-07", weeklyKcal: null, phase: "Muscle Gain", starts: ["2026-06-07"] } });
+    const r = roadmap(inp, { planNow: { start: "2026-06-07", phase: "Muscle Gain", days: [{ label: "Daily", kcal: null, protein: null, carbs: null, fat: null }], weeklyKcal: null } });
+    expect(r.read.progress.status).toBe("insufficient_data");
+    expect(r.read.decision.action).toBe("hold");
+    expect(r.read.decision.kcalChange).toBeNull();
+  });
+
+  // Jared: Nationals Feb 8, class not decided (66 or 74); his journey ignored the meet
+  it("a meet with no class still gets a fueled peak, meet week, recovery and a transition on its date", () => {
+    const meetDate = addDays(TODAY, 78);
+    const inp = athlete({ weighIns: series(28, 76, -0.4), powerlifter: true, meet: { name: "Nationals", date: meetDate, weightClass: null, federation: "CPU", sport: "powerlifting" }, plan: { start, weeklyKcal: 2500, phase: "Fat Loss", starts: [start] } });
+    const r = roadmap(inp, { planNow: { start, phase: "Fat Loss", days: [{ label: "Training Day", kcal: 2500, protein: 170, carbs: 280, fat: 70 }], weeklyKcal: 2500 }, current: { kcal: 2500, proteinG: 170, carbsG: 280, fatG: 70 }, targetsChangedOn: start });
+    const kinds = r.fresh.blocks.map((b) => b.kind);
+    expect(kinds.slice(-4)).toEqual(["performance", "taper", "post_comp", "transition"]);
+    expect(kinds[0]).toBe("fat_loss");
+    const taper = r.fresh.blocks.find((b) => b.kind === "taper")!;
+    expect(taper.end).toBe(meetDate);
+    const peak = r.fresh.blocks.find((b) => b.kind === "performance")!;
+    expect(daysBetween(peak.start, taper.start)).toBe(21);
+    expect(peak.priorities.join(" ")).toContain("confirm the weight class");
+    expect(r.fresh.missing.join(" ")).toContain("weight class for Nationals");
+    expect(r.read.decision.kcalChange).toBeNull();
+  });
+
+  it("a meet two weeks out with no class is fueled from today", () => {
+    const meetDate = addDays(TODAY, 13);
+    const inp = athlete({ weighIns: series(28, 74, 0), powerlifter: true, meet: { name: "Total Fortification", date: meetDate, weightClass: null, federation: null, sport: "powerlifting" }, plan: { start, weeklyKcal: 1800, phase: "Maintenance", starts: [start] } });
+    const r = roadmap(inp);
+    expect(r.fresh.blocks.map((b) => b.kind)).toEqual(["performance", "taper", "post_comp", "transition"]);
+    expect(r.fresh.blocks[0].start).toBe(TODAY);
   });
 });
