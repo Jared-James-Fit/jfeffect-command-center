@@ -93,7 +93,7 @@ GRANT ALL ON public.coach_platform_applications TO service_role;
 
 -- ── launch controls ──────────────────────────────────────────────────────
 INSERT INTO public.app_settings (key, value)
-VALUES ('coach_platform', '{"pricing_published": false, "free_clients": 1, "per_client_cents": 500, "volume_from": null, "volume_cents": null}')
+VALUES ('coach_platform', '{"pricing_published": false, "free_clients": 1, "per_client_cents": 500, "volume_from": 26, "volume_cents": 300}')
 ON CONFLICT (key) DO NOTHING;
 
 /** The owner's settings, cleaned (server and the functions below only). */

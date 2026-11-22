@@ -559,7 +559,7 @@ function LaunchTab({ pricingPublished }: { pricingPublished: boolean }) {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                 <span className="text-[14px] font-medium">{g.label}</span>
-                <span className={cn("text-[12px]", g.state === "owner" ? "text-warning" : "text-muted-foreground")}>{GATE_WORDS[g.state]}</span>
+                <span className={cn("text-[12px]", g.state === "owner" ? "text-warning" : g.state === "built" ? "text-foreground" : "text-muted-foreground")}>{GATE_WORDS[g.state]}</span>
               </div>
               <p className="text-[13px] text-muted-foreground">{g.detail}</p>
             </div>

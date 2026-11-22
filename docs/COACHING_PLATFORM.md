@@ -253,13 +253,13 @@ migrations applied with their rollbacks ready.
 
 | Question | Decision | What it means for the build |
 | --- | --- | --- |
-| Independent coach price | Founding price CAD $79/month, subject to market validation with a small founding-coach pilot | A subscription product on JF Effect's own Stripe account (the coach pays JF Effect); no code until the pilot is confirmed |
+| Independent coach price | **Changed Nov 22 2026 (the owner's later direction):** no base fee; the first active client free, CAD $5 a client to the 25th, $3 from the 26th. Unpublished, and no founding-coach guarantee committed, until the owner approves. (Replaces the earlier $79/month founding price.) | Seat billing on JF Effect's own Stripe account: one subscription, a graduated price, quantity = paid clients (`coach-billing.ts`, test mode only) |
 | Platform transaction fee | 0% to start, processor charges aside | Connect direct charges with no `application_fee_amount`; the fee stays a configurable, disclosed setting that defaults to 0 |
 | JF Effect team coaches' clients | Billed centrally by JF Effect by default | Team coaches work inside JF Effect's organization; sales stay on the owner's Stripe account and in the owner's books |
 | Team coach pay | A separate, authorized agreement and workflow | Not paid out through client checkouts; a coach's pay is its own record, never derived from a client's payment by code |
 | Independent coaches' billing | Their own business, through Stripe Connect, once validated | Standard connected accounts, the coach as merchant of record (Phase 5, `docs/STRIPE_CONNECT_DECISION.md`) |
 | Independent coaches' clients and Crew | Their coaching portal, not automatically in Crew | Crew membership is JF Effect's; an independent organization's clients get the portal only unless both sides opt in later |
-| External coaches | Off by default until security, legal and payment requirements are met | No sign-up path; organizations of kind `independent` can't be created (no function or policy writes one) |
+| External coaches | Off by default until security, legal and payment requirements are met | No sign-up path. Once 20270510090000 is applied, only the platform owner can make a pilot workspace (`coach_workspace_create`), and only with the pilot switched on, which refuses while any client table is unfenced |
 
 Still open: counsel's review of the drafts in `docs/legal/` before any coach
 feature turns on, and the founding-coach pilot's results.
@@ -276,3 +276,74 @@ feature turns on, and the founding-coach pilot's results.
   permissions without client scope, coach actions on any client through the
   service role, Cleo actions running as the owner) is the next step and
   is held to direct-API tests, not only screens.
+
+## 7. Phase 3 built, not applied (Nov 22 2026, second pass)
+
+Everything below is code and tests on the branch. Nothing is applied to
+production, no workspace exists, the pilot switch is off, and coach billing
+can only use a Stripe test key.
+
+- **Migration `20270510090000_coach_workspaces.sql`** (rollback
+  `docs/rollback/2026-11-22-coach-workspaces-rollback.sql`, which refuses
+  while any business still holds client records):
+  - `clients.organization_id` (JF Effect for every record today) and a new
+    tier, `org_coaching`, that only an independent business's records carry.
+    JF Effect's jobs read `service_tier` `coaching` / `self_serve`, so they
+    skip those clients; jobs that only check `archived` don't, and are on
+    the server-checks gate. A guard trigger stops anyone (admin and server
+    included) moving a record between businesses or making one outside an
+    invitation.
+  - `organization_clients` (one relationship per client record: active,
+    paused, ended, consent kept word for word), `organization_invitations`
+    (SHA-256 of the token only, the invited login's confirmed email required,
+    5 wrong logins lock a link, 30 a day per business),
+    `organization_member_permissions`, `support_access_grants` (asked by the
+    platform owner, approved by the business's owner, at most 72 hours).
+  - **The tenant fence**: a RESTRICTIVE policy `tenant_fence` on every table
+    with a uuid `client_id` (except the platform's own money, legal and
+    account-lifecycle records, `tenant_fence_platform_tables`) and on 23 more
+    keyed another way (`tenant_fence_registry`: clients, the program tree,
+    nutrition days, form answers, user-keyed coaching tables). It reads the
+    live catalog when applied (`tenant_fence_apply()`), so a policy made by
+    hand or by dynamic SQL is covered, and `tenant_fence_report()` lists
+    anything unfenced, with RLS off, or keyed by user_id and undecided.
+    Modes: `open` while no independent business exists (no effect), `hide`
+    for anyone JF Effect is theirs (a small set of other businesses' records
+    held back), `allow` for a login that only belongs to independent
+    businesses (only theirs shown). Measured locally: no measurable cost on
+    large scans, about 0.5 ms on a point lookup in `hide` mode.
+  - **Independent teams get nothing by default**: no JF Effect role, no
+    `coaches` row, never `coached_client_ids()`, so every existing JF Effect
+    policy stays shut to them. Access is an allow-list, `org_client_ids()`:
+    their clients' records, programs (read and write), logs and weigh-ins.
+    Writing stops (reading stays) once billing has lapsed past its grace
+    (`org_can_write`).
+  - Seats (`_org_seats_refresh`, by triggers): active relationship, signed
+    in, not archived or deactivated, not on the team; each change is a seat
+    revision so Stripe updates are idempotent.
+  - Billing and AI tables (`organization_billing`, `coach_billing_events`,
+    `org_ai_usage`, `org_ai_credit_grants`) and the AI meter
+    (`org_ai_reserve` / `org_ai_settle`, the server's only).
+- **Tests**: `supabase/tests/coach-workspaces` (131 checks as nine people:
+  the JF owner, a JF coach and client, a JF member who also runs a
+  business, her coach, her two clients, a second business and its client,
+  and a bare login; JF Effect's people see exactly what they saw before the
+  migration, with and without businesses running; rollback and re-apply).
+- **Seat billing** (`coach-billing.ts`, `coach-billing.server.ts`,
+  `/api/public/coach-billing-webhook`, `/api/public/hooks/coach-billing-tick`):
+  test mode only, own webhook secret, and JF Effect's payment webhook now
+  ignores coach seat objects so a coach's invoice never reads as a client's
+  unlinked or failed payment.
+- **AI allowance** (`ai-allowance.ts`, `ai-meter.server.ts`): see
+  docs/COACH_PLATFORM_BUSINESS_2026-11.md section 5b.
+- **Screens**: `/workspace` (a coach's roster, invitations, team and
+  billing) and `/invite/$token` (a client sees the business and the consent,
+  signs in or makes a login with a code sent to the invited email, then
+  accepts).
+
+Still before a pilot: org-scoping the rest of the coach's tools (messages,
+check-ins, nutrition, forms), definer functions and jobs that read clients
+past RLS, the workspace client's own portal, storage buckets and realtime in
+the isolation suite, Cleo per organization, counsel and tax sign-off, and a
+run of seat billing against a real Stripe test account.
+

@@ -18,6 +18,7 @@ import {
 import { matchPurchase, type MatchResult } from "@/lib/stripe-purchase-match";
 import { resolveInstallmentPlan } from "@/lib/installment-plan";
 import { isAiCreditsObject, recordCreditsFromSession, reverseCreditsForCharge } from "@/lib/ai-credits/stripe.server";
+import { isCoachSeatsObject } from "@/lib/coach-platform/coach-billing";
 
 // Verify Stripe signature using Web Crypto (HMAC-SHA256).
 // Header format: t=timestamp,v1=sig,v1=sig...
@@ -472,6 +473,10 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
         const supabase = admin();
         const obj = event?.data?.object ?? {};
         const now = new Date().toISOString();
+
+        // A coach's seat subscription is billed by its own webhook
+        // (/api/public/coach-billing-webhook): never a client's sale here.
+        if (isCoachSeatsObject(obj)) return Response.json({ received: true, ignored: "coach_seats" });
 
         // ── Mode-correct Stripe API key for any /v1 lookups in this event ──
         // The webhook signature was already verified against either the LIVE

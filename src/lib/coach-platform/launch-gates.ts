@@ -8,7 +8,8 @@
  * switch.
  */
 
-export type GateState = "done" | "owner" | "next" | "later";
+/** built: code and tests exist, nothing applied to production (a migration waits for the owner). */
+export type GateState = "done" | "built" | "owner" | "next" | "later";
 
 export type Gate = {
   key: string;
@@ -19,6 +20,7 @@ export type Gate = {
 
 export const GATE_WORDS: Record<GateState, string> = {
   done: "Done",
+  built: "Built, not applied",
   owner: "Needs you",
   next: "To build",
   later: "After the pilot",
@@ -53,38 +55,50 @@ export function launchGates(opts: { pricingPublished: boolean }): Gate[] {
     {
       key: "fence",
       label: "Tenant fence on every client table",
-      state: "next",
-      detail: "One restrictive policy per client-keyed table, generated from the live policies, so no business reads another's clients.",
+      state: "built",
+      detail: "20270510090000: one restrictive policy on every client_id table and 23 more (the program tree, nutrition days, form answers, user-keyed coaching tables), read from the live catalog when applied. A no-op until a second business exists. After applying, tenant_fence_report() on production must show nothing unfenced.",
+    },
+    {
+      key: "relationships",
+      label: "Client invitations, relationships and seats",
+      state: "built",
+      detail: "Invite by link (email proven by the login or a 6-digit code), consent kept word for word, pause, end, come back with a new invitation, one record per login, seats counted by the database.",
+    },
+    {
+      key: "seat_billing",
+      label: "Seat billing in Stripe test mode",
+      state: "built",
+      detail: "Graduated price, quantity = paid clients, prorations onto the next invoice, 14-day graces, its own webhook (idempotent, claim given back on failure), nightly reconciliation. Refuses a live key. Needs a Stripe test key and webhook secret to run end to end.",
+    },
+    {
+      key: "ai_allowance",
+      label: "AI allowance and cost cap per business",
+      state: "owner",
+      detail: "Built: credits per feature, a monthly allowance from each paid client's price, a hard spend cap, every call's real cost kept. The numbers are proposals for you to approve.",
     },
     {
       key: "org_scope",
       label: "Staff access scoped by organization",
       state: "next",
-      detail: "59 tables and 75 functions that trust the bare coach role move to organization membership.",
+      detail: "Workspace teams reach their clients' programs, logs and weigh-ins only (an allow-list). Messages, check-ins, nutrition, forms and the coach's own screens need the same, table by table.",
     },
     {
       key: "server_checks",
       label: "Organization checks on every server path",
       state: "next",
-      detail: "Every server function that acts as the server after a role check also checks the organization.",
+      detail: "Workspace functions check the business first (assertOrgAccess). Definer functions that read clients past RLS (the Clients list, jobs) must leave other businesses out before the pilot.",
     },
     {
-      key: "relationships",
-      label: "Client invitations and relationships",
+      key: "client_portal",
+      label: "What a workspace's client sees",
       state: "next",
-      detail: "Invite by link or email, accept with an existing account, end a relationship without losing history.",
+      detail: "Their coach's program, logs and progress, without JF Effect's coaching screens, Crew or JF jobs (which only read service_tier coaching / self_serve).",
     },
     {
       key: "isolation_suite",
       label: "Isolation tests pass with zero cross-business reads",
       state: "next",
-      detail: "Two businesses, every table, function, storage bucket, signed link, realtime channel and Cleo question.",
-    },
-    {
-      key: "seat_billing",
-      label: "Seat billing in Stripe test mode",
-      state: "next",
-      detail: "Subscription with paid seats as quantity, consent before the first paid client, webhook and reconciliation.",
+      detail: "Database: 131 checks pass as nine people (supabase/tests/coach-workspaces). Still to cover: storage buckets, signed links, realtime, every server function and Cleo.",
     },
     {
       key: "legal",

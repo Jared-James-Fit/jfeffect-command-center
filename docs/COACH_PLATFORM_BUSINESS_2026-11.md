@@ -18,10 +18,11 @@ for isolation lives in `docs/COACHING_PLATFORM.md`; the legal drafts in
 | Seat pricing engine | Built and tested: who counts, the fee, volume step, proration preview, Stripe tiers and quantity, idempotency key, unit economics | `seat-pricing.ts` |
 | Owner's Coach platform page | Built: applications, pricing calculator and recommendation, coach billing preview, publish-a-price switch (with history), launch gates, capability matrix | `/admin/coach-platform` |
 | Price shown publicly | **Off** until the owner publishes it from the page above | `app_settings 'coach_platform'` |
-| Independent coach workspaces | **Not built.** Registration is closed in SQL; there is no switch | Phase 3 of `COACHING_PLATFORM.md` |
-| Organization isolation | **Not built** (foundation only) | same |
-| Client invitations to a business | **Not built** | same |
-| Seat billing in Stripe | **Designed, not built** (section 5) | this doc |
+| Independent coach workspaces | **Built, not applied.** Only the platform owner can make a pilot workspace, only with the pilot on, which refuses while any client table is unfenced. Registration stays closed | `20270510090000_coach_workspaces.sql`, `/workspace` |
+| Organization isolation | **Built, not applied** for the database: the tenant fence on every client table, an allow-list for workspace teams; 131 checks pass. Coach tools beyond programs, definer functions, storage and Cleo still to do | `supabase/tests/coach-workspaces`, `COACHING_PLATFORM.md` §7 |
+| Client invitations to a business | **Built, not applied**: link + proven email (login or 6-digit code), consent kept word for word, pause / end / come back, one record per login | `/invite/$token` |
+| Seat billing in Stripe | **Built, test mode only** (section 5): never reaches a live key; not yet run against a real Stripe test account | `coach-billing.ts` |
+| AI allowance per business | **Built, numbers proposed** (section 5b): credits per feature, monthly allowance from each paid client's price, hard spend cap, real cost kept per call | `ai-allowance.ts` |
 | Stripe Connect for coaches' client payments | **Not built**, after the pilot | `COACHING_PLATFORM.md` Phase 5 |
 | Coach legal documents | Drafts, need counsel | `docs/legal/` |
 
@@ -170,7 +171,36 @@ billing date, projected next invoice, payment method, invoices, cancel. The
 owner's page shows a live preview of it for any client count, plus what
 adding one more client would say (`seatChangePreview`).
 
-## 5. Seat billing design (not built; build after isolation)
+## 5. Seat billing (built, test mode only)
+
+**Pricing direction (the owner, Nov 22 2026):** no base fee; the first active
+client free; CAD $5 a client through the 25th; $3 from the 26th. This is the
+default every new workspace's billing row freezes (`organization_billing.pricing`,
+from `app_settings 'coach_platform'`), never published until the owner flips
+the switch, and no founding-coach guarantee is committed.
+
+What was built differs from the design below in three places, on purpose:
+
+1. **A client is never held up by the coach's card.** The second client is
+   accepted straight away; the workspace moves to `needs_setup` and has 14
+   days to add a card (`writeAccess` / `org_can_write`). After that it reads
+   but can't write. The coach's invite screen still says what the next
+   client costs before they send it.
+2. **Back to the free tier keeps the subscription at quantity 0** (a $0
+   invoice) rather than cancelling, so the next paid client needs no new
+   Checkout.
+3. **Reconciliation** applies a recorded seat change that never synced, and
+   corrects an unexplained difference only downward; anything that would raise
+   the bill is flagged for the owner (`reconcile`).
+
+Still to do before a live run: recording consent to the billing terms in
+`legal_acceptances` (needs counsel's billing terms), the coach-platform
+revenue source in the books, Stripe Tax registrations, and an end-to-end run
+on a Stripe test account (needs `STRIPE_SECRET_KEY_TEST` and
+`COACH_BILLING_WEBHOOK_SECRET_TEST`, and the webhook endpoint added in
+Stripe's test dashboard).
+
+### The original design
 
 Stripe Billing on JF Effect's own Stripe account, kept apart in the books.
 
@@ -209,6 +239,42 @@ Stripe Billing on JF Effect's own Stripe account, kept apart in the books.
   province), Manitoba RST, and BC PST / Quebec QST once their thresholds are
   crossed. Foreign coaches are likely zero-rated exports; the accountant
   confirms.
+
+## 5b. AI allowance (built; the numbers are proposals)
+
+Coaches' AI costs more per use than anything a member triggers, and the
+spread is wide: a check-in summary on GPT-5 mini is about US$0.005, one
+program strategy on GPT-6 Astra measured US$1.20 to 2.50 (Nov 9 benchmark),
+a full "Generate a program" run about US$4. Unlimited AI at $5 a client
+would lose money on any coach who generates programs often. So
+(`src/lib/coach-platform/ai-allowance.ts`, tested):
+
+- **Credits per feature**, fixed so a coach can plan: 1 credit = US$0.05 of
+  model cost. Ask Cleo 2, adjust a program 4, adjust a nutrition plan 6, read
+  a file 8, draft a nutrition plan 22, generate a program 90. Check-in
+  summaries, reply drafts, form drafts and exercise search are included (each
+  under a cent). Each price sits near its estimate's 75th percentile
+  (estimates from list prices and the token sizes the prompts use).
+- **Monthly allowance**: 20 credits for every workspace, plus 23% of each
+  paid client's price in credits: 16 for a $5 client, 10 for a $3 one. At
+  50 clients that's 654 credits; every credit used would cost about 24% of
+  seat revenue, a typical month about half that.
+- **Hard cap** on what calls really cost (US$, from tokens), 1.5x the
+  credits' value (never under US$3), and 40% of it a day: a runaway loop
+  stops the same day whatever the credits say.
+- **Credit packs (proposed, web only, never in the native apps)**: 200 for
+  C$25 and 600 for C$69 + tax, about 35 to 39% margin even if every credit is
+  used.
+- **Real costs**: every call's model, tokens and cost is kept per business
+  (`org_ai_usage`), and `calibrate()` reprices each feature from its measured
+  75th percentile once it has 5 calls. The first calibration should read
+  production's existing call logs (`program_intel_job_calls`,
+  `nutrition_ai_plans`, `ai_credit_events`), read-only, with the owner's
+  approval.
+
+A proposal to decide alongside it: independent workspaces could default to
+GPT-5.5 for program strategy and review (about half Astra's cost) and keep
+Astra as an option that costs more credits.
 
 ## 6. App Store and Google Play
 
