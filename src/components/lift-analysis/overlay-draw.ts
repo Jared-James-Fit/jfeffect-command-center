@@ -33,6 +33,8 @@ export type Layers = {
   skeleton: boolean;
   angles: boolean;
   vertical: boolean;
+  /** A level line through the bar at the rep's turnaround (squat depth, the touch, the floor). */
+  horizontal: boolean;
   segments: boolean;
   paths: boolean;
 };
@@ -42,6 +44,7 @@ export const DEFAULT_LAYERS: Layers = {
   skeleton: true,
   angles: true,
   vertical: false,
+  horizontal: false,
   segments: false,
   paths: false,
 };
@@ -468,6 +471,24 @@ export function drawPose(
       ctx.beginPath();
       ctx.moveTo(px, top);
       ctx.lineTo(px, bottom);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // a level line through the bar at the turnaround: depth, the touch, the floor (compare it rep to rep)
+  if (layers.horizontal && a && rep >= 0) {
+    const r = a.reps[rep];
+    const y = r ? valueAt(a.series.t, a.series.y, r.con.start) : null;
+    if (y != null) {
+      const [x0, py] = P(0, y);
+      const [x1] = P(1, y);
+      ctx.strokeStyle = "rgba(255,255,255,0.55)";
+      ctx.lineWidth = 1.2 * k;
+      ctx.setLineDash([8 * k, 6 * k]);
+      ctx.beginPath();
+      ctx.moveTo(x0, py);
+      ctx.lineTo(x1, py);
       ctx.stroke();
       ctx.setLineDash([]);
     }

@@ -33,6 +33,45 @@ export function pausedBench(o: {
   return out;
 }
 
+/**
+ * A conventional deadlift set filmed the way athletes do it (the coach's 185 kg × 4, Nov 2026): a
+ * rep every ~3 s, reset on the floor between reps, a short hold at lockout. `after`: the bar picked
+ * part way up once the set is over (to roll it or move it) and the clip ending before it's down.
+ */
+export function cadenceDeadlift(o: {
+  reps: number;
+  rom: number;
+  up: number;
+  hold: number;
+  down: number;
+  rest: number;
+  after?: { wait: number; rom: number; dur: number; tail: number };
+}): Phase[] {
+  const out: Phase[] = [{ kind: "hold", dur: 1.5 }];
+  for (let r = 0; r < o.reps; r++) {
+    out.push({ kind: "up", rom: o.rom, dur: o.up * (1 + 0.06 * r), gradual: true });
+    out.push({ kind: "hold", dur: o.hold });
+    out.push({ kind: "down", rom: o.rom, dur: o.down });
+    out.push({ kind: "hold", dur: o.rest });
+  }
+  if (o.after) {
+    out.push({ kind: "hold", dur: o.after.wait });
+    out.push({ kind: "up", rom: o.after.rom, dur: o.after.dur });
+    out.push({ kind: "hold", dur: o.after.tail });
+  } else out.push({ kind: "hold", dur: 1 });
+  return out;
+}
+
+const DEADLIFT_185X4 = cadenceDeadlift({
+  reps: 4,
+  rom: 450,
+  up: 0.85,
+  hold: 0.35,
+  down: 0.55,
+  rest: 1.25,
+  after: { wait: 1.6, rom: 260, dur: 0.6, tail: 0.25 },
+});
+
 export const SCENARIOS: GymScene[] = [
   {
     // the coach's failing clip, as close as it can be drawn: black iron on black, the upright and the
@@ -294,7 +333,15 @@ export const SCENARIOS: GymScene[] = [
   {
     name: "squat-yaw35-30",
     lift: "squat",
-    phases: squatSet({ reps: 3, rom: 560, down: 1.5, up: 1.4, slowdown: 0.25, dip: 0.3, gradual: true }),
+    phases: squatSet({
+      reps: 3,
+      rom: 560,
+      down: 1.5,
+      up: 1.4,
+      slowdown: 0.25,
+      dip: 0.3,
+      gradual: true,
+    }),
     fps: 30,
     style: "iron",
     plateDiameterPx: 210,
@@ -350,6 +397,47 @@ export const SCENARIOS: GymScene[] = [
     yawDeg: 28,
     stackMm: 120,
     walker: { t0: 6.9, t1: 7.4 },
+  },
+  // ── the coach's 185 kg × 4 competition deadlift (Nov 2026): phone ~38° off side-on, 30 fps, a
+  // small plate (~120 px across at 720 wide), four reps every ~3 s and the bar picked part way up
+  // after the set with the clip ending before it's down; the first also has the plate covered for
+  // a moment at rep 4's lockout (someone passing), the way the real read lost it there
+  {
+    name: "deadlift-185x4-yaw38-30",
+    lift: "deadlift",
+    phases: DEADLIFT_185X4,
+    fps: 30,
+    style: "comp",
+    plateDiameterPx: 120,
+    yawDeg: 38,
+    stackMm: 220,
+    farPlate: { dx: 1.8, dy: -0.9, scale: 0.6 },
+    aeDrift: 0.08,
+    walker: { t0: 10.9, t1: 12.9 },
+  },
+  {
+    name: "deadlift-185x4-end-30",
+    lift: "deadlift",
+    phases: DEADLIFT_185X4,
+    fps: 30,
+    style: "comp",
+    plateDiameterPx: 120,
+    yawDeg: 38,
+    stackMm: 220,
+    farPlate: { dx: 1.8, dy: -0.9, scale: 0.6 },
+    aeDrift: 0.08,
+  },
+  {
+    // a phone well round toward the front: the plate a narrow ellipse (cos 58° ≈ 0.53 as wide as tall)
+    name: "deadlift-yaw58-30",
+    lift: "deadlift",
+    phases: deadliftSet({ reps: 3, rom: 480, up: 1.2, down: 0.8 }),
+    fps: 30,
+    style: "bumper",
+    plateDiameterPx: 200,
+    yawDeg: 58,
+    stackMm: 200,
+    farPlate: { dx: 1.2, dy: -0.6, scale: 0.6 },
   },
 ];
 

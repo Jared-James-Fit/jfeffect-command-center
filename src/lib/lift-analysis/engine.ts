@@ -15,6 +15,7 @@ import {
   keyFromMarker,
   plateAtTap,
   proposePlate,
+  shapeAtMarker,
   supportFor,
   type Proposal,
 } from "@/lib/lift-analysis/detect";
@@ -28,7 +29,8 @@ import type { CircleTrack } from "@/lib/lift-analysis/find";
 import type { Frame } from "@/lib/lift-analysis/image";
 import { KeyedPass, lostStretches, mergePasses, type TrackKey } from "@/lib/lift-analysis/keyed";
 import { cameraShift } from "@/lib/lift-analysis/motion";
-import { outerRim, rimSize } from "@/lib/lift-analysis/rim-outer";
+import { outerRim, plateSizedRims, rimSize } from "@/lib/lift-analysis/rim-outer";
+import { recoverInMemory } from "@/lib/lift-analysis/recover";
 
 /** How many frames to look for the plate on: four a second, between 12 and 40. */
 export function sampleCount(seconds: number): number {
@@ -106,6 +108,12 @@ export function resolveKeys(
     keys = [keyFromMarker(f, seed, "confirmed").key];
   } else {
     keys = [...seed.keys];
+    // a ring kept from an earlier read is a circle: the plate's real shape learned on its frame
+    const k0 = keys[0];
+    if (k0 && k0.source !== "auto" && Math.abs(k0.a / k0.b - 1) < 0.03) {
+      const shape = shapeAtMarker(frameAt(frames, k0.t), k0);
+      if (shape) keys[0] = { ...k0, ...shape };
+    }
   }
   const main = keys[0];
   for (const c of corrections) {
@@ -125,6 +133,8 @@ export type FollowContext = {
   views?: FollowSeed["more"];
   /** mm per px from the plate's known size, for the speed limits. */
   mmPerPx: number;
+  /** Read lost stretches again from both ends (default on; off only to measure what it adds). */
+  recover?: boolean;
 };
 
 /** Follow the plate both ways from the keys through frames in memory (ascending time). */
@@ -149,7 +159,11 @@ export function followKeys(frames: Frame[], keys: TrackKey[], ctx: FollowContext
   for (const f of frames) fwd.push(f);
   const bwd = new KeyedPass(-1, keys, setup);
   for (let i = frames.length - 1; i >= 0; i--) bwd.push(frames[i]);
-  return { ...mergePasses(fwd.points(), bwd.points(), R), R };
+  const merged = mergePasses(fwd.points(), bwd.points(), R);
+  // each stretch lost with the plate seen either side, read again from both ends (recover.ts)
+  if (ctx.recover === false) return { ...merged, R, recovered: 0 };
+  const rec = recoverInMemory(frames, merged.points, { a: keys[0].a, b: keys[0].b }, setup);
+  return { points: rec.points, conflicts: merged.conflicts, R, recovered: rec.recovered };
 }
 
 /**
@@ -160,8 +174,8 @@ export function followKeys(frames: Frame[], keys: TrackKey[], ctx: FollowContext
 export function measureSize(frames: Frame[], points: FollowPoint[], R: number) {
   const rims = calibrationTimes(points, R)
     .map((c) => outerRim(frameAt(frames, c.t), c.x, c.y, R, { lo: 0.75, hi: 1.3 }))
-    .filter((r): r is NonNullable<typeof r> => !!r && Math.abs(r.r / R - 1) <= 0.12);
-  return rimSize(rims);
+    .filter((r): r is NonNullable<typeof r> => !!r);
+  return rimSize(plateSizedRims(rims, R));
 }
 
 export function runEngine(
@@ -172,6 +186,7 @@ export function runEngine(
     plate?: PlateSize & { confirmed?: boolean };
     dirHint?: "lower_first" | "lift_first";
     lift?: GuideLift;
+    recover?: boolean;
   } = {},
 ): EngineResult {
   const seed = opts.seed ?? { kind: "auto" };
@@ -188,7 +203,12 @@ export function runEngine(
   const views = viewsFor(support.backbone, samples, main);
   const plateMm = opts.plate?.mm ?? 450;
   const mmPerPx = plateMm / (2 * Math.sqrt(main.a * main.b));
-  const { points, conflicts, R } = followKeys(frames, keys, { ...support, views, mmPerPx });
+  const { points, conflicts, R, recovered } = followKeys(frames, keys, {
+    ...support,
+    views,
+    mmPerPx,
+    recover: opts.recover,
+  });
   const shake: number[] = [];
   for (let i = 1; i < frames.length; i++) {
     const p = points[i];
@@ -207,6 +227,7 @@ export function runEngine(
     size,
     keys,
     conflicts,
+    recovered,
   });
   if (rimNeverMeasured(analysis, keys[0].source === "auto" ? "auto" : "tap"))
     return { ok: false, why: "no_plate", proposal };

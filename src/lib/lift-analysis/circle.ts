@@ -205,6 +205,9 @@ function ellipseResidual(p: { x: number; y: number }, e: Shape): number {
   return (u - 1) * Math.sqrt(e.a * e.b);
 }
 
+/** The narrowest a fitted plate may be (minor ÷ major axis). */
+export const MIN_ELLIPSE_RATIO = 0.4;
+
 export type FitOptions = {
   /** Rim points are looked for this far either side of the guess's outline (px; default 15% of r). */
   band?: number;
@@ -308,7 +311,8 @@ export function fitRim(g: Gradient, guess: Circle, opts: FitOptions = {}): RimFi
         if (
           el &&
           Math.abs(el.a - el.b) / Math.max(el.a, el.b) > 0.02 &&
-          Math.min(el.a, el.b) / Math.max(el.a, el.b) > 0.55
+          // down to a plate seen ~65° off side-on (narrower than that it's barely a face at all)
+          Math.min(el.a, el.b) / Math.max(el.a, el.b) > MIN_ELLIPSE_RATIO
         )
           next = el;
       }

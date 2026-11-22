@@ -562,7 +562,20 @@ export type RepInput = {
   dirHint?: "lower_first" | "lift_first";
   /** Smallest move that counts as a rep (series units). */
   minRom: number;
+  /**
+   * Rises the athlete said aren't reps ("Not a rep"): each by when its
+   * concentric started (s). Left out before anything about the set is read.
+   */
+  exclude?: number[];
+  /** What was left out and why, for the read's notes. */
+  ignored?: IgnoredRise[];
 };
+
+/** A rise that isn't counted: after the set and never seen back down, or the athlete said it isn't a rep. */
+export type IgnoredRise = { t: number; why: "after_set" | "athlete" };
+
+/** An excluded rise matches a rep that started within this long of it (s). */
+export const EXCLUDE_MATCH_S = 0.35;
 
 /**
  * Which way a rep goes, read from where the bar rests: before and after a set
@@ -652,6 +665,8 @@ export function analyzeReps(input: RepInput): RepMetrics[] {
   const roms = ups.map(({ l }) => s.y[l.to] - s.y[l.from]).sort((a, b) => a - b);
   const romRef = roms[roms.length >> 1] ?? 0;
   const out: RepMetrics[] = [];
+  /** Each counted rep's rise (its leg's index in allLegs). */
+  const outLeg: number[] = [];
   const toMs = units === "mm" ? 0.001 : 1; // mm/s → m/s; px/s stays px/s
   for (const { l, k } of ups) {
     const ph0 = mainPhase(sb, l, vthB);
@@ -914,6 +929,7 @@ export function analyzeReps(input: RepInput): RepMetrics[] {
         }
       }
     }
+    outLeg.push(k);
     out.push({
       n: out.length + 1,
       // reached the top: the highest the bar got on this rise, against the set's own tops (the
@@ -939,5 +955,24 @@ export function analyzeReps(input: RepInput): RepMetrics[] {
       coverage,
     });
   }
-  return out;
+  // a rise at the end that never reached the top and was never seen coming back down (the bar
+  // picked up to roll it or move it as the clip ends, or the clip ends mid-lift): it can't be
+  // told from a missed rep, so it isn't counted as one (a missed rep is seen falling back)
+  let kept = out;
+  const last = kept[kept.length - 1];
+  const lastLeg = outLeg[outLeg.length - 1];
+  if (last && !last.complete && !allLegs.slice(lastLeg + 1).some((l) => l.dir === "down")) {
+    input.ignored?.push({ t: last.con.start, why: "after_set" });
+    kept = kept.slice(0, -1);
+  }
+  // the athlete's "Not a rep"
+  const ex = input.exclude ?? [];
+  if (ex.length) {
+    kept = kept.filter((r) => {
+      const hit = ex.some((t) => Math.abs(t - r.con.start) <= EXCLUDE_MATCH_S);
+      if (hit) input.ignored?.push({ t: r.con.start, why: "athlete" });
+      return !hit;
+    });
+  }
+  return kept.map((r, i) => ({ ...r, n: i + 1 }));
 }
