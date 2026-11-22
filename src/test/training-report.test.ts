@@ -228,10 +228,10 @@ describe("the PDF", () => {
     expect(ms).toBeLessThan(15_000);
   }, 30_000);
 
-  it("keeps a block name's dash instead of dropping it", () => {
+  it("keeps a block name's dash instead of dropping it (the font's own em dash, WinAnsi 0x97)", () => {
     const doc = generateFullTrainingReportPdf({ client_name: "Jared", blocks: [{ block_name: "Block 2 — Volume", weeks: [] }] }, { compress: false });
     const text = doc.output();
-    expect(text).toContain("Block 2 - Volume");
+    expect(text).toContain("Block 2 \u0097 Volume");
   });
 });
 

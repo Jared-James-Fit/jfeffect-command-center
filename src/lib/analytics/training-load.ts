@@ -325,6 +325,8 @@ export type LiftLoad = {
   avgRpe: number | null;
   bestE1rmKg: number | null;
   trend: StrengthTrend;
+  /** The sessions `trend` reads: each one's best comparable estimated max, kg (the progress report draws these). */
+  points: Array<{ date: string; value: number }>;
   /** working sets, later half of the range against the earlier half (%), null with too little */
   volumeChangePct: number | null;
 };
@@ -662,6 +664,7 @@ export function buildTrainingLoad(input: { sets: LoadSet[]; plan?: PlanRow[]; to
       avgRpe: rpeN ? round1(rpeSum / rpeN) : null,
       bestE1rmKg: best[lift] > 0 ? Math.round(best[lift] * 10) / 10 : null,
       trend: strengthTrend(points),
+      points: points.slice().sort((a, b) => a.date.localeCompare(b.date)),
       volumeChangePct: basis.length >= 4 ? pctChange(late, early) : null,
     });
   }

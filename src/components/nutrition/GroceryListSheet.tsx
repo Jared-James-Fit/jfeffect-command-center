@@ -178,7 +178,7 @@ export function GroceryListSheet({
   const downloadPdf = async () => {
     try {
       const { downloadGroceryListPdf } = await import("@/lib/grocery-list-pdf");
-      downloadGroceryListPdf({
+      await downloadGroceryListPdf({
         clientName: (q.data?.plan?.client_name as string | undefined) ?? null,
         rangeLabel,
         spanLabel: span === 2 ? "2 weeks" : "1 week",

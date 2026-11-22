@@ -25,6 +25,7 @@ import { markClientReviewsReviewed, refreshReviewQueries } from "@/lib/checkin-r
 import { getClientMealPlanForCoach } from "@/lib/nutrition-targets/admin-meal-plan.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { TrainingReportSheet } from "@/components/workouts/training-report-sheet";
+import { makeAndDeliverPdf } from "@/lib/pdf/deliver";
 
 function useClientPdfDownloads(r: DirectoryRow) {
   const [mealPending, setMealPending] = useState(false);
@@ -32,36 +33,27 @@ function useClientPdfDownloads(r: DirectoryRow) {
 
   const downloadMealPlan = async () => {
     setMealPending(true);
-    const toastId = toast.loading("Generating meal plan PDF…");
     try {
-      const plan = await fetchMealPlan({ data: { clientId: r.id } });
-      if (!plan) {
-        toast.error(
-          `${r.full_name ?? "Client"} has no visible meal plan assigned.`,
-          { id: toastId },
-        );
-        return;
-      }
-      const { downloadMealPlanPdf } = await import(
-        "@/lib/nutrition-targets/meal-plan-pdf"
-      );
-      await downloadMealPlanPdf({
-        client_name: plan.client_name ?? r.full_name ?? null,
-        coach_name: plan.coach_name ?? null,
-        updated_at: plan.updated_at ?? null,
-        start_date: plan.start_date ?? null,
-        phase: plan.phase ?? null,
-        goal: plan.goal ?? null,
-        structure: plan.structure ?? null,
-        water: plan.water ?? null,
-        client_notes: plan.client_notes ?? null,
-        food_weighing_rules: (plan as any).food_weighing_rules ?? null,
-        days: (plan.days ?? []) as any[],
+      await makeAndDeliverPdf("Nutrition plan", async () => {
+        const plan = await fetchMealPlan({ data: { clientId: r.id } });
+        if (!plan) throw new Error(`PDF: ${r.full_name ?? "This client"} has no plan they can see yet.`);
+        const { mealPlanPdfFile } = await import("@/lib/nutrition-targets/meal-plan-pdf");
+        return mealPlanPdfFile({
+          client_name: plan.client_name ?? r.full_name ?? null,
+          coach_name: plan.coach_name ?? null,
+          updated_at: plan.updated_at ?? null,
+          start_date: plan.start_date ?? null,
+          end_date: (plan as any).end_date ?? null,
+          phase: plan.phase ?? null,
+          goal: plan.goal ?? null,
+          structure: plan.structure ?? null,
+          water: plan.water ?? null,
+          client_notes: plan.client_notes ?? null,
+          food_weighing_rules: (plan as any).food_weighing_rules ?? null,
+          supplements: (plan as any).supplements ?? null,
+          days: (plan.days ?? []) as any[],
+        });
       });
-      toast.success("Meal plan PDF downloaded", { id: toastId });
-    } catch (err) {
-      console.error("Meal plan PDF download failed", err);
-      toast.error("Could not generate meal plan PDF.", { id: toastId });
     } finally {
       setMealPending(false);
     }
@@ -201,7 +193,7 @@ export function ClientMoreMenu({
           <Archive className="h-4 w-4" /> Workout Archive
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setReportOpen(true); }}>
-          <Download className="h-4 w-4" /> Download Training Report
+          <Download className="h-4 w-4" /> Training PDF
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -238,7 +230,7 @@ export function ClientMoreMenu({
           ) : (
             <Download className="h-4 w-4" />
           )}
-          Download Meal Plan PDF
+          Nutrition plan PDF
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <ClientNameLink clientId={r.id} tab="messages" className="flex items-center gap-2">

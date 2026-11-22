@@ -1,30 +1,36 @@
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+/**
+ * The training PDFs (Nov 22 2026), drawn with the JF Effect PDF kit
+ * (src/lib/pdf): one set of records (training-report-data.ts), two documents.
+ *
+ * - Program: what to do. A cover with the blocks and the maxes any % reads
+ *   from, then every block, week and workout as a table (exercise with its
+ *   role, sets, reps or time, load as the coach wrote it, effort, rest, tempo;
+ *   a column only when the block uses it), the coach's exercise note under its
+ *   row, a day's note under its table. A week with exactly the workouts of the
+ *   week before says so in a line instead of printing them again.
+ * - Training report: what happened. A summary (workouts done of those due,
+ *   missed, sets logged, a chart of sets a week, each block), then every
+ *   trained workout as exercise · prescribed · logged (identical sets in a row
+ *   said once), its notes, and the workouts that weren't trained listed by
+ *   status in one compact table: Missed, Upcoming, Skipped (an optional day).
+ *
+ * A workout's status is read against today: done → Completed, sets logged but
+ * not finished → In progress (or Partly logged once its day has passed),
+ * nothing logged on a day that's over → Missed (Skipped for an optional
+ * workout), else Today / Upcoming. A load reads as the athlete typed it; a
+ * prescription as the coach wrote it (a % with what it's of, never a weight
+ * the app would work out on the day). The client's copy shows a generated
+ * exercise note without the app's boilerplate (`exerciseNoteForAthlete`) and
+ * only day notes marked for them (the data leaves the rest out).
+ */
+import { PdfDoc, PDF_COLOR, type Col, type TableSpec, type Tone } from "@/lib/pdf/kit";
+import { drawBarChart, chartRow } from "@/lib/pdf/charts";
+import { pdfDate, pdfDuration, pdfFileName, pdfNumber, pdfRange, pdfText, plural, isoDay } from "@/lib/pdf/text";
 import { loggedSetHasInput } from "@/lib/workouts/training-report-data";
+import { exerciseNoteForAthlete } from "@/lib/workouts/coach-notes";
+import { plannedLoadLabel } from "@/lib/workouts/load-reference";
 
-type Row = {
-  id?: string;
-  sort_order?: number | null;
-  exercise_name_override?: string | null;
-  exercises?: { name?: string | null } | null;
-  sets?: number | null;
-  reps_text?: string | null;
-  rpe?: string | null;
-  rir?: string | null;
-  percentage?: number | null;
-  percentage_basis?: string | null;
-  load_kg?: number | null;
-  load_lb?: number | null;
-  rest_seconds?: number | null;
-  tempo?: string | null;
-  notes?: string | null;
-  measurement_type?: string | null;
-  duration_seconds?: number | null;
-  purpose_label?: string | null;
-  movement_family?: string | null;
-  /** Actual logged sets for this row, in set_index order. */
-  logged_sets?: LoggedSet[];
-};
+/* ───────────────────────────── Records ───────────────────────────── */
 
 export type LoggedSet = {
   set_index?: number | null;
@@ -42,7 +48,34 @@ export type LoggedSet = {
   actual_rir?: string | number | null;
   completed_duration_seconds?: number | null;
   actual_calories?: number | null;
+  actual_distance_m?: number | null;
+  actual_distance_unit?: string | null;
   notes?: string | null;
+};
+
+type Row = {
+  id?: string;
+  sort_order?: number | null;
+  exercise_name_override?: string | null;
+  exercises?: { name?: string | null } | null;
+  sets?: number | null;
+  reps_text?: string | null;
+  rpe?: string | null;
+  rir?: string | null;
+  percentage?: number | null;
+  percentage_basis?: string | null;
+  load_kg?: number | null;
+  load_lb?: number | null;
+  load_unit?: string | null;
+  rest_seconds?: number | null;
+  tempo?: string | null;
+  notes?: string | null;
+  measurement_type?: string | null;
+  duration_seconds?: number | null;
+  purpose_label?: string | null;
+  movement_family?: string | null;
+  /** Actual logged sets for this row, in set_index order. */
+  logged_sets?: LoggedSet[];
 };
 
 type Day = {
@@ -52,17 +85,15 @@ type Day = {
   notes?: string | null;
   notes_client_visible?: boolean | null;
   scheduled_date?: string | null;
+  is_optional?: boolean | null;
   started_at?: string | null;
   in_progress_at?: string | null;
   completed_at?: string | null;
   completion_note?: string | null;
   rows: Row[];
-  /**
-   * Client-authored exercise-level notes (pl_exercise_notes). Rendered as a
-   * dedicated "Client exercise notes" section so coaches see them in every
-   * downloaded PDF, not just inline per-set notes.
-   */
+  /** The athlete's own notes on exercises that day (pl_exercise_notes). */
   client_exercise_notes?: Array<{
+    row_id?: string | null;
     exercise_name?: string | null;
     content: string;
     status?: string | null;
@@ -78,16 +109,6 @@ type Week = {
   days: Day[];
 };
 
-export type WorkoutPdfData = {
-  client_name?: string | null;
-  program_name?: string | null;
-  block_name?: string | null;
-  block_status?: string | null;
-  block_start?: string | null;
-  block_end?: string | null;
-  weeks: Week[];
-};
-
 export type FullTrainingReportBlock = {
   block_name?: string | null;
   block_status?: string | null;
@@ -96,978 +117,614 @@ export type FullTrainingReportBlock = {
   weeks: Week[];
 };
 
+/** A max a % prescription reads from (the program's cover lists them). */
+export type ReportMax = {
+  lift: string;
+  unit: "kg" | "lb";
+  one_rm: number | null;
+  training_max: number | null;
+  estimated_1rm: number | null;
+  /** The block it's held for, by name; null for every program. */
+  block: string | null;
+};
+
 export type FullTrainingReportData = {
   client_name?: string | null;
+  /** The program the blocks belong to (their meet prep's title), when they all share one. */
+  program_name?: string | null;
+  /** The meet they build to, when there is one. */
+  meet?: { name: string | null; date: string | null } | null;
+  /** A library plan's own words and facts (its level, style, equipment), for the program's cover. */
+  description?: string | null;
+  facts?: Array<[string, string | null | undefined]>;
   generated_at?: Date;
   /** A coach's copy carries their private day notes; a client's never does (the data leaves them out). */
   audience?: "coach" | "client";
   blocks: FullTrainingReportBlock[];
+  /** "YYYY-MM-DD": what counts as past (missed) and ahead (upcoming). Default: the device's today. */
+  today?: string;
+  /** The maxes on file, for a program whose loads are a % of one. */
+  maxes?: ReportMax[];
 };
 
-function fmtDate(iso?: string | null) {
-  if (!iso) return null;
-  try {
-    // DATE columns arrive as "YYYY-MM-DD" and must be treated as a local
-    // calendar day. `new Date("YYYY-MM-DD")` parses as UTC midnight, which
-    // renders as the previous day for any user west of UTC (Ashley/Jared).
-    // Full timestamps still parse normally.
-    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.exec(String(iso));
-    const d = dateOnly
-      ? new Date(Number(dateOnly[0].slice(0, 4)), Number(dateOnly[0].slice(5, 7)) - 1, Number(dateOnly[0].slice(8, 10)))
-      : new Date(iso);
-    return d.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return iso;
-  }
+type BuildOpts = { logo?: string | null; compress?: boolean };
+
+/* ───────────────────────────── Words ───────────────────────────── */
+
+const exerciseName = (r: Row) => pdfText(r.exercise_name_override) || pdfText(r.exercises?.name) || "Exercise";
+
+/** "Primary", "Top set": the coach's role for the exercise, never the default "Assistance". */
+function roleOf(r: Row): string | null {
+  const p = pdfText(r.purpose_label);
+  return p && p.toLowerCase() !== "assistance" ? p : null;
 }
 
-/**
- * jsPDF's default helvetica font is Latin-1 (Windows-1252) only. Emoji,
- * CJK, and other multi-byte characters render as tofu / random glyphs and
- * also break `getTextWidth`, which is why the status pill overlaps titles
- * containing emoji. Strip anything outside the printable Latin-1 range.
- */
-function sanitizeText(s: string | null | undefined): string {
-  if (!s) return "";
-  return s
-    // Typed punctuation the font can't draw, as its plain version (or "Block 2 — Volume" loses its dash).
-    .replace(/[\u2012-\u2015\u2212]/g, "-")
-    .replace(/[\u2018\u2019\u201B\u2032]/g, "'")
-    .replace(/[\u201C\u201D\u201F\u2033]/g, '"')
-    .replace(/\u2026/g, "...")
-    // eslint-disable-next-line no-control-regex
-    .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, "")
-    .replace(/[ \t]{2,}/g, " ")
-    .trim();
-}
-
-/**
- * Coaches often name days "Day 5 — Primer". Combined with our own
- * `Day ${index}` prefix that yields "Day 5 — Day 5 — Primer". Strip any
- * leading "Day N", "D5", "Day 5:" style prefix that matches the current
- * day index.
- */
-function normalizeDayTitle(title: string | null | undefined, index: number): string {
-  const cleaned = sanitizeText(title);
+/** "Day 5 — Primer" from a coach who typed the number again: "Primer". */
+export function dayTitleWithoutNumber(title: string | null | undefined, index: number): string {
+  const cleaned = pdfText(title);
   if (!cleaned) return "";
-  const re = new RegExp(`^(?:day|d)\\s*0*${index}\\b[\\s\\-–—:.]*`, "i");
-  return cleaned.replace(re, "").trim();
+  return cleaned.replace(new RegExp(`^(?:day|d)\\s*0*${index}\\b[\\s\\-–—:.]*`, "i"), "").trim();
 }
 
-/** Distinct colors per week so long blocks are easy to skim. */
-const WEEK_COLORS: [number, number, number][] = [
-  [30, 64, 175],    // indigo
-  [124, 58, 237],   // violet
-  [16, 145, 91],    // emerald
-  [217, 119, 6],    // amber
-  [190, 24, 93],    // pink
-  [8, 145, 178],    // cyan
-  [220, 38, 38],    // red
-  [5, 122, 85],     // teal
-];
-function weekColor(weekIndex: number): [number, number, number] {
-  const idx = ((weekIndex - 1) % WEEK_COLORS.length + WEEK_COLORS.length) % WEEK_COLORS.length;
-  return WEEK_COLORS[idx];
+function dayHeading(day: Day): string {
+  const t = dayTitleWithoutNumber(day.title, day.day_index);
+  return t ? `Day ${day.day_index} · ${t}` : `Day ${day.day_index}`;
 }
 
-/** Block accent colors, cycled per block. */
-const BLOCK_COLORS: [number, number, number][] = [
-  [15, 23, 42],     // slate-900
-  [67, 20, 7],      // deep brown
-  [23, 37, 84],     // navy
-  [59, 7, 100],     // deep purple
-];
-function blockColor(i: number): [number, number, number] {
-  return BLOCK_COLORS[((i % BLOCK_COLORS.length) + BLOCK_COLORS.length) % BLOCK_COLORS.length];
-}
-
-function formatLoad(r: Row): string {
-  if (r.percentage != null) {
-    const basis = r.percentage_basis ? ` ${r.percentage_basis}` : "";
-    return `${r.percentage}%${basis}`;
+/** The load as the coach wrote it: "140 kg", "75% TM", "92.5% of top set"; null when there's none. */
+export function prescribedLoad(r: Row): string | null {
+  const pct = Number(r.percentage);
+  if (r.percentage != null && Number.isFinite(pct) && pct > 0) {
+    return plannedLoadLabel({ percentage: pct, basis: r.percentage_basis }) ?? `${pdfNumber(pct, 2)}%`;
   }
-  if (r.load_kg != null) return `${r.load_kg} kg`;
-  if (r.load_lb != null) return `${r.load_lb} lb`;
-  return "—";
-}
-
-/** 45 → "45s", 600 → "10:00", 3725 → "1:02:05". */
-function formatSeconds(total: number): string {
-  const t = Math.round(total);
-  if (t < 60) return `${t}s`;
-  const h = Math.floor(t / 3600);
-  const m = Math.floor((t % 3600) / 60);
-  const sec = String(t % 60).padStart(2, "0");
-  return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
-}
-
-function formatReps(r: Row): string {
-  if (r.measurement_type === "time" && r.duration_seconds != null) {
-    return formatSeconds(r.duration_seconds);
-  }
-  return (r.reps_text ?? "").trim() || "—";
-}
-
-function formatRpe(r: Row): string {
-  if (r.rpe) return `RPE ${r.rpe}`;
-  if (r.rir) return `RIR ${r.rir}`;
-  return "—";
-}
-
-function formatRest(r: Row): string {
-  if (r.rest_seconds == null) return "—";
-  if (r.rest_seconds >= 60) {
-    const m = Math.floor(r.rest_seconds / 60);
-    const s = r.rest_seconds % 60;
-    return s ? `${m}m ${s}s` : `${m}m`;
-  }
-  return `${r.rest_seconds}s`;
-}
-
-function formatLoggedLoad(s: LoggedSet): string {
-  const enteredValue = s.entered_value ?? s.actual_load;
-  if (enteredValue != null) {
-    const unit = (s.entered_unit ?? s.actual_load_unit ?? "lb").toLowerCase();
-    return `${enteredValue} ${unit}`;
-  }
-  if (s.actual_load_lb != null) return `${s.actual_load_lb} lb`;
-  if (s.normalized_lb != null) return `${s.normalized_lb} lb`;
-  if (s.actual_load_kg != null) return `${s.actual_load_kg} kg`;
-  if (s.normalized_kg != null) return `${s.normalized_kg} kg`;
-  return "—";
-}
-
-function formatLoggedRepsOrTime(s: LoggedSet): string {
-  const cal = s.actual_calories != null && Number(s.actual_calories) > 0 ? `${s.actual_calories} cal` : null;
-  const main =
-    s.completed_duration_seconds != null && s.actual_reps == null
-      ? formatSeconds(s.completed_duration_seconds)
-      : s.actual_reps != null
-        ? String(s.actual_reps)
-        : null;
-  return [main, cal].filter(Boolean).join(" · ") || "—";
-}
-
-function formatLoggedEffort(s: LoggedSet): string {
-  const rpe = s.actual_rpe_num ?? s.actual_rpe;
-  if (rpe != null && rpe !== "") return `RPE ${rpe}`;
-  if (s.actual_rir != null && s.actual_rir !== "") return `RIR ${s.actual_rir}`;
-  return "—";
-}
-
-function isWorkoutCompleted(day: Day): boolean {
-  return !!day.completed_at;
-}
-
-function isWorkoutInProgress(day: Day): boolean {
-  return !isWorkoutCompleted(day) && (!!day.started_at || !!day.in_progress_at || countLoggedSets(day) > 0);
-}
-
-function countLoggedSets(day: Day): number {
-  return day.rows.reduce((sum, row) => sum + (row.logged_sets ?? []).filter(loggedSetHasInput).length, 0);
-}
-
-function drawStatusPill(
-  doc: jsPDF,
-  label: string,
-  x: number,
-  y: number,
-  fill: [number, number, number],
-  text: [number, number, number] = [255, 255, 255],
-) {
-  const pillW = doc.getTextWidth(label) + 14;
-  doc.setFillColor(...fill);
-  doc.roundedRect(x - pillW, y - 11, pillW, 16, 4, 4, "F");
-  doc.setTextColor(...text);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.text(label, x - pillW + 7, y);
-}
-
-/* ---------------------------------------------------------------------- */
-/* Powerlifting priority overview                                          */
-/* Derive per-day (label, family) chips from the same row metadata the     */
-/* app uses (purpose_label wins; else movement_family maps to Squat/Bench/ */
-/* Deadlift; Assistance/blank rows are excluded).                          */
-/* ---------------------------------------------------------------------- */
-
-const FAMILY_TITLE: Record<string, string> = {
-  squat: "Squat",
-  bench: "Bench",
-  deadlift: "Deadlift",
-  upper: "Upper",
-  lower: "Lower",
-  other: "Other",
-};
-
-function pdfDerivePriority(row: Row): { label: string; family: string } | null {
-  const label = (row.purpose_label ?? "").trim();
-  const allowed = ["Primary", "Secondary", "Tertiary", "Quaternary"];
-  const familyRaw = (row.movement_family ?? "").toLowerCase();
-  const family = FAMILY_TITLE[familyRaw] ?? "";
-  if (label && allowed.includes(label)) {
-    return { label, family: family || "" };
-  }
+  const unit = r.load_unit === "kg" || r.load_unit === "lb" ? r.load_unit : r.load_kg != null ? "kg" : r.load_lb != null ? "lb" : null;
+  const value = unit === "kg" ? (r.load_kg ?? null) : unit === "lb" ? (r.load_lb ?? null) : null;
+  if (unit && value != null && Number(value) > 0) return `${pdfNumber(Number(value), 2)} ${unit}`;
   return null;
 }
 
-function buildBlockPriorityRows(weeks: Week[]): Array<[string, string]> {
-  const out: Array<[string, string]> = [];
-  for (const w of weeks) {
-    for (const d of w.days) {
-      const priorities: string[] = [];
-      for (const r of (d.rows ?? [])
-        .slice()
-        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))) {
-        const p = pdfDerivePriority(r);
-        if (!p) continue;
-        priorities.push(p.family ? `${p.label} ${p.family}` : p.label);
-      }
-      if (!priorities.length) continue;
-      const cleanTitle = normalizeDayTitle(d.title, d.day_index);
-      const label = sanitizeText(
-        `W${w.week_index} · Day ${d.day_index}` +
-          (cleanTitle ? ` — ${cleanTitle}` : ""),
-      );
-      out.push([label, priorities.join(" · ")]);
-    }
+/** "8", "6-8", "10 min" for a timed row. */
+export function prescribedReps(r: Row): string | null {
+  if (r.measurement_type === "time" && r.duration_seconds != null) return pdfDuration(r.duration_seconds) || null;
+  const t = pdfText(r.reps_text);
+  return t || null;
+}
+
+export function prescribedEffort(r: Row): string | null {
+  const rpe = pdfText(r.rpe);
+  if (rpe) return `RPE ${rpe}`;
+  const rir = pdfText(r.rir);
+  if (rir) return `RIR ${rir}`;
+  return null;
+}
+
+/** "5 × 3 @ 140 kg · RPE 8 · rest 3 min · tempo 3-1-1": the prescription in one line. */
+export function prescriptionLine(r: Row): string {
+  const reps = prescribedReps(r);
+  const sets = r.sets != null && Number(r.sets) > 0 ? Number(r.sets) : null;
+  const head = sets && reps ? `${sets} × ${reps}` : sets ? `${plural(sets, "set")}` : reps ?? "";
+  const load = prescribedLoad(r);
+  return [head + (load ? ` @ ${load}` : ""), prescribedEffort(r), r.rest_seconds ? `rest ${pdfDuration(r.rest_seconds)}` : null, pdfText(r.tempo) ? `tempo ${pdfText(r.tempo)}` : null]
+    .filter((x) => x && String(x).trim())
+    .join(" · ");
+}
+
+/** A logged set's load as typed ("140 kg"), else from the stored mirrors. */
+export function loggedLoad(s: LoggedSet): string | null {
+  const typed = s.entered_value ?? s.actual_load;
+  if (typed != null && Number(typed) !== 0) {
+    const unit = String(s.entered_unit ?? s.actual_load_unit ?? "lb").toLowerCase();
+    return `${pdfNumber(Number(typed), 2)} ${unit}`;
+  }
+  if (s.actual_load_kg != null && Number(s.actual_load_kg) > 0) return `${pdfNumber(Number(s.actual_load_kg), 2)} kg`;
+  if (s.actual_load_lb != null && Number(s.actual_load_lb) > 0) return `${pdfNumber(Number(s.actual_load_lb), 2)} lb`;
+  return null;
+}
+
+/** "140 kg × 5 · RPE 8", "10 min · 120 cal · RPE 6", "5.2 km · 28:30 min". */
+export function loggedSetText(s: LoggedSet): string {
+  const load = loggedLoad(s);
+  const reps = s.actual_reps != null && Number(s.actual_reps) > 0 ? Number(s.actual_reps) : null;
+  const time = s.completed_duration_seconds != null && Number(s.completed_duration_seconds) > 0 ? pdfDuration(s.completed_duration_seconds) : null;
+  const dist =
+    s.actual_distance_m != null && Number(s.actual_distance_m) > 0
+      ? s.actual_distance_unit === "mi"
+        ? `${pdfNumber(Number(s.actual_distance_m) / 1609.344, 2)} mi`
+        : `${pdfNumber(Number(s.actual_distance_m) / 1000, 2)} km`
+      : null;
+  const cal = s.actual_calories != null && Number(s.actual_calories) > 0 ? `${Math.round(Number(s.actual_calories))} cal` : null;
+  const rpe = s.actual_rpe_num ?? s.actual_rpe;
+  const effort = rpe != null && rpe !== "" ? `RPE ${rpe}` : s.actual_rir != null && s.actual_rir !== "" ? `RIR ${s.actual_rir}` : null;
+  const main = load && reps ? `${load} × ${reps}` : load ? load : reps ? `${reps} reps` : null;
+  return [main, dist, time, cal, effort].filter(Boolean).join(" · ") || "Logged";
+}
+
+/** A row's logged sets as lines, identical sets in a row said once: "Set 1: 140 kg × 5 · RPE 8", "Sets 2–4: 135 kg × 5 · RPE 8". */
+export function loggedLines(sets: LoggedSet[]): string[] {
+  const list = sets.filter(loggedSetHasInput).slice().sort((a, b) => (a.set_index ?? 0) - (b.set_index ?? 0));
+  const out: string[] = [];
+  let i = 0;
+  while (i < list.length) {
+    const text = loggedSetText(list[i]);
+    let j = i;
+    while (j + 1 < list.length && loggedSetText(list[j + 1]) === text) j++;
+    const from = list[i].set_index ?? i + 1;
+    const to = list[j].set_index ?? j + 1;
+    out.push(`${from === to ? `Set ${from}` : `Sets ${from}–${to}`}: ${text}`);
+    i = j + 1;
   }
   return out;
 }
 
-function blockHasAnyPriorityData(weeks: Week[]): boolean {
-  for (const w of weeks) {
-    for (const d of w.days) {
-      for (const r of d.rows ?? []) {
-        if (pdfDerivePriority(r)) return true;
-        const fam = (r.movement_family ?? "").toLowerCase();
-        if (fam === "squat" || fam === "bench" || fam === "deadlift") return true;
-      }
-    }
+export type DayStatus = { key: "completed" | "in_progress" | "partial" | "missed" | "skipped" | "today" | "upcoming" | "unscheduled"; label: string; tone: Tone; trained: boolean };
+
+const countLogged = (day: Day) => day.rows.reduce((n, r) => n + (r.logged_sets ?? []).filter(loggedSetHasInput).length, 0);
+
+/** Where a workout stands, against today. */
+export function dayStatus(day: Day, today: string): DayStatus {
+  const date = day.scheduled_date?.slice(0, 10) ?? null;
+  if (day.completed_at) return { key: "completed", label: "Completed", tone: "good", trained: true };
+  const logged = countLogged(day);
+  if (logged > 0 || day.started_at || day.in_progress_at) {
+    if (logged > 0 && date && date < today) return { key: "partial", label: "Partly logged", tone: "warn", trained: true };
+    return { key: "in_progress", label: "In progress", tone: "warn", trained: logged > 0 };
   }
-  return false;
+  if (!date) return { key: "unscheduled", label: "Not scheduled", tone: "muted", trained: false };
+  if (date < today) return day.is_optional ? { key: "skipped", label: "Skipped (optional)", tone: "muted", trained: false } : { key: "missed", label: "Missed", tone: "bad", trained: false };
+  if (date === today) return { key: "today", label: "Today", tone: "neutral", trained: false };
+  return { key: "upcoming", label: "Upcoming", tone: "muted", trained: false };
 }
 
-export function generateWorkoutPdf(data: WorkoutPdfData): jsPDF {
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const marginX = 36;
-  let y = 48;
+const sortedRows = (d: Day) => d.rows.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
-  // Brand bar
-  doc.setFillColor(15, 15, 15);
-  doc.rect(0, 0, pageWidth, 72, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text("JF EFFECT", marginX, 36);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text("Workout Plan", marginX, 54);
+function weekDates(week: Week): string {
+  const dates = week.days.map((d) => d.scheduled_date?.slice(0, 10)).filter(Boolean).sort() as string[];
+  return dates.length ? pdfRange(dates[0], dates[dates.length - 1]) : "";
+}
 
-  doc.setTextColor(20, 20, 20);
-  y = 100;
+function blockDates(b: FullTrainingReportBlock): string {
+  if (b.block_start || b.block_end) return pdfRange(b.block_start, b.block_end);
+  const dates = b.weeks.flatMap((w) => w.days.map((d) => d.scheduled_date?.slice(0, 10))).filter(Boolean).sort() as string[];
+  return dates.length ? pdfRange(dates[0], dates[dates.length - 1]) : "";
+}
 
-  // Title
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text(data.block_name || data.program_name || "Training Block", marginX, y);
-  y += 18;
+function allDates(data: FullTrainingReportData): string {
+  const starts = data.blocks.map((b) => b.block_start ?? b.weeks[0]?.days[0]?.scheduled_date ?? null).filter(Boolean).sort() as string[];
+  const ends = data.blocks.map((b) => b.block_end ?? null).filter(Boolean).sort() as string[];
+  return starts.length || ends.length ? pdfRange(starts[0] ?? null, ends[ends.length - 1] ?? null) : "";
+}
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(80, 80, 80);
-  const metaLines: string[] = [];
-  if (data.client_name) metaLines.push(`Athlete: ${data.client_name}`);
-  if (data.program_name && data.program_name !== data.block_name) {
-    metaLines.push(`Program: ${data.program_name}`);
+/** Workouts a week (the most common count), and how many of them are optional. */
+function daysPerWeek(b: FullTrainingReportBlock): { core: number; optional: number } | null {
+  if (!b.weeks.length) return null;
+  const counts = new Map<string, number>();
+  for (const w of b.weeks) {
+    const key = `${w.days.filter((d) => !d.is_optional).length}:${w.days.filter((d) => d.is_optional).length}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  const dateRange = [fmtDate(data.block_start), fmtDate(data.block_end)]
-    .filter(Boolean)
-    .join(" – ");
-  if (dateRange) metaLines.push(dateRange);
-  if (data.block_status) metaLines.push(`Status: ${data.block_status}`);
-  const weekCount = data.weeks.length;
-  if (weekCount) {
-    const idxs = data.weeks.map((w) => w.week_index).sort((a, b) => a - b);
-    metaLines.push(
-      weekCount === 1
-        ? `Week ${idxs[0]}`
-        : `Weeks ${idxs[0]}–${idxs[idxs.length - 1]} (${weekCount} weeks)`,
-    );
-  }
-  for (const line of metaLines) {
-    doc.text(line, marginX, y);
-    y += 13;
-  }
-  y += 6;
+  const [best] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  const [core, optional] = best.split(":").map(Number);
+  return { core, optional };
+}
 
-  const ensureSpace = (needed: number) => {
-    if (y + needed > pageHeight - 60) {
-      doc.addPage();
-      y = 56;
-    }
+function perWeekWords(p: { core: number; optional: number } | null): string {
+  if (!p) return "";
+  return `${p.core} a week${p.optional ? ` + ${p.optional} optional` : ""}`;
+}
+
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+/** "Jared's " (for a title), or "" without a name. */
+function firstName(name: string | null | undefined): string {
+  const f = pdfText(name).split(/\s+/)[0];
+  if (!f) return "";
+  return `${f}${/s$/i.test(f) ? "'" : "'s"} `;
+}
+
+const noteFor = (r: Row, week: number, audience: "coach" | "client") => (audience === "client" ? exerciseNoteForAthlete(r.notes, week) : pdfText(r.notes) || null);
+
+/* ───────────────────────────── Program ───────────────────────────── */
+
+type BlockCols = { load: number | null; effort: number | null; rest: number | null; tempo: number | null; reps: number };
+
+function programTable(day: Day, week: Week, cols: BlockCols, audience: "coach" | "client"): TableSpec {
+  const rows = sortedRows(day);
+  const columns: Col[] = [
+    { header: "", width: 18, muted: true },
+    { header: "Exercise", width: "auto", bold: true },
+    { header: "Sets", width: 34, align: "center" },
+    { header: "Reps", width: cols.reps, align: "center" },
+  ];
+  if (cols.load) columns.push({ header: "Load", width: cols.load });
+  if (cols.effort) columns.push({ header: "Effort", width: cols.effort });
+  if (cols.rest) columns.push({ header: "Rest", width: cols.rest });
+  if (cols.tempo) columns.push({ header: "Tempo", width: cols.tempo });
+  const notes = new Map<number, string>();
+  const sub = new Map<string, string>();
+  const body = rows.map((r, i) => {
+    const note = noteFor(r, week.week_index, audience);
+    if (note) notes.set(i, note);
+    const role = roleOf(r);
+    if (role) sub.set(`${i}:1`, role);
+    const cells: string[] = [String(i + 1), exerciseName(r), r.sets != null ? String(r.sets) : "", prescribedReps(r) ?? ""];
+    if (cols.load) cells.push(prescribedLoad(r) ?? "");
+    if (cols.effort) cells.push(prescribedEffort(r) ?? "");
+    if (cols.rest) cells.push(r.rest_seconds ? pdfDuration(r.rest_seconds) : "");
+    if (cols.tempo) cells.push(pdfText(r.tempo));
+    return cells;
+  });
+  const dayNote = pdfText(day.notes);
+  return {
+    columns,
+    rows: body,
+    notes,
+    sub,
+    title: {
+      text: dayHeading(day) + (day.is_optional ? " (optional)" : ""),
+      atPageTop: `Week ${week.week_index} · ${dayHeading(day)}${day.is_optional ? " (optional)" : ""}`,
+      right: day.scheduled_date ? pdfDate(day.scheduled_date, { weekday: true, year: "never" }) : null,
+    },
+    footnotes: dayNote ? [`${audience === "coach" && day.notes_client_visible !== true ? "Coach note (private)" : "Coach note"}: ${dayNote}`] : [],
   };
+}
 
-  // Powerlifting priority overview — one row per day that has at least
-  // one Primary/Secondary/Tertiary/Quaternary priority. Only shown when
-  // the block has any priority-carrying rows at all.
-  if (blockHasAnyPriorityData(data.weeks)) {
-    const priorityRows = buildBlockPriorityRows(data.weeks);
-    if (priorityRows.length) {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.setTextColor(20, 20, 20);
-      ensureSpace(20);
-      doc.text(
-        sanitizeText(`Training Priorities — ${data.block_name || data.program_name || "Training Block"}`),
-        marginX,
-        y,
-      );
-      y += 8;
-      autoTable(doc, {
-        startY: y,
-        head: [["Day", "Powerlifting Priorities"]],
-        body: priorityRows,
-        styles: { fontSize: 9, cellPadding: 5, overflow: "linebreak" },
-        headStyles: { fillColor: [30, 30, 30], textColor: 255 },
-        columnStyles: {
-          0: { cellWidth: 150, fontStyle: "bold" },
-          1: { cellWidth: "auto" },
-        },
-        margin: { left: marginX, right: marginX },
-        didDrawPage: (hook) => {
-          y = hook.cursor?.y ?? y;
-        },
-      });
-      y = (doc as any).lastAutoTable?.finalY ?? y;
-      y += 12;
-    }
+/** What a day prescribes, for spotting a week that repeats the one before. */
+function daySignature(day: Day, week: number, audience: "coach" | "client"): string {
+  return [
+    dayHeading(day),
+    day.is_optional ? "opt" : "",
+    pdfText(day.notes),
+    ...sortedRows(day).map((r) => [exerciseName(r), roleOf(r), prescriptionLine(r), noteFor(r, week, audience)].join("|")),
+  ].join("#");
+}
+
+/** The block's columns, each as wide as its longest value anywhere in the block, so every table in it lines up. */
+function blockColumns(pdf: PdfDoc, b: FullTrainingReportBlock): BlockCols {
+  const rows = b.weeks.flatMap((w) => w.days.flatMap((d) => d.rows));
+  const width = (header: string, values: Array<string | null>, max: number): number | null => {
+    const v = values.filter((x): x is string => !!x);
+    if (!v.length) return null;
+    return Math.min(max, Math.ceil(Math.max(pdf.textWidth([header], 7.5, "bold"), pdf.textWidth(v, 9)) + 13));
+  };
+  return {
+    reps: width("Reps", rows.map((r) => prescribedReps(r)), 70) ?? 40,
+    load: width("Load", rows.map((r) => prescribedLoad(r)), 110),
+    effort: width("Effort", rows.map((r) => prescribedEffort(r)), 72),
+    rest: width("Rest", rows.map((r) => (r.rest_seconds ? pdfDuration(r.rest_seconds) : null)), 60),
+    tempo: width("Tempo", rows.map((r) => pdfText(r.tempo) || null), 60),
+  };
+}
+
+const MAX_BASES = new Set(["training_max", "1rm", "est_1rm"]);
+
+export function generateProgramPdf(data: FullTrainingReportData, opts: BuildOpts = {}): PdfDoc {
+  const audience = data.audience ?? "client";
+  const blocks = data.blocks.filter((b) => b.weeks.some((w) => w.days.length));
+  const one = blocks.length === 1 ? blocks[0] : null;
+  const weeks = blocks.reduce((n, b) => n + b.weeks.length, 0);
+  const meetLine = data.meet?.name || data.meet?.date ? [data.meet?.name, data.meet?.date ? pdfDate(data.meet.date) : null].filter(Boolean).join(" · ") : null;
+  const pdf = new PdfDoc({
+    kind: "Training program",
+    title: pdfText(data.program_name) || (one ? pdfText(one.block_name) || "Training program" : cap(`${firstName(data.client_name)}training program`)),
+    subtitle: allDates(data) || null,
+    person: data.client_name ?? null,
+    generatedAt: data.generated_at,
+    logo: opts.logo,
+    compress: opts.compress,
+    facts: [
+      ["Athlete", data.client_name ?? null],
+      ["Length", weeks ? `${plural(weeks, "week")}${blocks.length > 1 ? ` · ${plural(blocks.length, "block")}` : ""}` : null],
+      ["Workouts", one ? perWeekWords(daysPerWeek(one)) : perWeekWords(daysPerWeek({ weeks: blocks.flatMap((b) => b.weeks) }))],
+      ["Meet", meetLine],
+      ...(data.facts ?? []),
+    ],
+  });
+  if (pdfText(data.description)) pdf.paragraph(data.description, { gapAfter: 10 });
+
+  if (!blocks.length) {
+    pdf.paragraph("There are no workouts in the blocks picked.", { color: PDF_COLOR.muted });
+    return pdf;
   }
 
-  for (const week of data.weeks) {
-    ensureSpace(60);
-    const wc = weekColor(week.week_index);
-    doc.setFillColor(...wc);
-    doc.rect(marginX, y, pageWidth - marginX * 2, 22, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text(`Week ${week.week_index}`, marginX + 10, y + 15);
-    y += 30;
-    doc.setTextColor(20, 20, 20);
+  if (blocks.length > 1) {
+    pdf.heading("Blocks", { keepWith: 80 });
+    const dated = blocks.some((b) => blockDates(b));
+    pdf.table({
+      columns: [
+        { header: "Block", width: "auto", bold: true },
+        ...(dated ? [{ header: "Dates", width: "fit" as const, max: 170 }] : []),
+        { header: "Weeks", width: 44, align: "center" },
+        { header: "Workouts", width: "fit", max: 110 },
+      ],
+      rows: blocks.map((b) => [pdfText(b.block_name) || "Training block", ...(dated ? [blockDates(b) || "–"] : []), String(b.weeks.length), perWeekWords(daysPerWeek(b))]),
+    });
+  }
 
-    if (week.notes?.trim()) {
-      doc.setFont("helvetica", "italic");
-      doc.setFontSize(9);
-      doc.setTextColor(90, 90, 90);
-      const lines = doc.splitTextToSize(sanitizeText(week.notes), pageWidth - marginX * 2);
-      ensureSpace(lines.length * 11 + 6);
-      doc.text(lines, marginX, y);
-      y += lines.length * 11 + 6;
-    }
+  const usesMax = blocks.some((b) => b.weeks.some((w) => w.days.some((d) => d.rows.some((r) => Number(r.percentage) > 0 && MAX_BASES.has(String(r.percentage_basis))))));
+  const maxes = (data.maxes ?? []).filter((m) => m.one_rm != null || m.training_max != null || m.estimated_1rm != null);
+  if (usesMax && maxes.length) {
+    pdf.heading("Maxes the percentages use", { level: 2, keepWith: 60 });
+    const f = (v: number | null, u: string) => (v != null ? `${pdfNumber(v, 2)} ${u}` : "–");
+    pdf.table({
+      columns: [
+        { header: "Lift", width: "auto", bold: true },
+        { header: "1RM", width: "fit", align: "right" },
+        { header: "Training max", width: "fit", align: "right" },
+        { header: "Estimated 1RM", width: "fit", align: "right" },
+        { header: "Held for", width: "fit", max: 150, muted: true },
+      ],
+      rows: maxes.map((m) => [m.lift, f(m.one_rm, m.unit), f(m.training_max, m.unit), f(m.estimated_1rm, m.unit), m.block ?? "Every program"]),
+      gapAfter: 6,
+    });
+  }
 
-    for (const day of week.days) {
-      ensureSpace(50);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.setTextColor(...wc);
-      const cleanTitle = normalizeDayTitle(day.title, day.day_index);
-      const dayLabel =
-        `Day ${day.day_index}` +
-        (cleanTitle ? ` — ${cleanTitle}` : "") +
-        (day.scheduled_date ? `  (${fmtDate(day.scheduled_date)})` : "");
-      doc.text(sanitizeText(dayLabel), marginX, y);
-      doc.setTextColor(20, 20, 20);
-      y += 6;
+  pdf.heading("How to read it", { level: 3, keepWith: 30 });
+  pdf.paragraph(
+    "Load is a weight, or a percentage of a max (TM = training max, 1RM = one-rep max, e1RM = estimated 1RM) or of the top set you lift that day. Effort is RPE (how hard, out of 10) or RIR (reps left in reserve). Rest is between sets. The app shows each weight on the day and adjusts it to how your sets go.",
+    { size: 8.5, color: PDF_COLOR.muted, gapAfter: 4 },
+  );
 
-      if (!day.rows || day.rows.length === 0) {
-        y += 10;
-        doc.setFont("helvetica", "italic");
-        doc.setFontSize(9);
-        doc.setTextColor(120, 120, 120);
-        doc.text("Rest day / no exercises programmed.", marginX, y);
-        y += 14;
+  blocks.forEach((b, bi) => {
+    const cols = blockColumns(pdf, b);
+    const per = perWeekWords(daysPerWeek(b));
+    // a block starts a page, except the first when the cover leaves room for it; one block is the cover's own title
+    const coverRoom = bi === 0 && pdf.bottom - pdf.y > pdf.pageContentHeight * 0.4;
+    if (blocks.length > 1) pdf.heading(pdfText(b.block_name) || "Training block", {
+      newPage: !coverRoom,
+      right: blockDates(b) || null,
+      sub: [blocks.length > 1 ? `Block ${bi + 1} of ${blocks.length}` : null, plural(b.weeks.length, "week"), per || null].filter(Boolean).join(" · "),
+    });
+    let prev: { index: number; sig: string } | null = null;
+    for (const week of b.weeks) {
+      const sig = week.days.map((d) => daySignature(d, week.week_index, audience)).join("$");
+      const weekNote = pdfText(week.notes);
+      if (prev && sig === prev.sig && !weekNote) {
+        pdf.heading(`Week ${week.week_index}`, { level: 2, right: weekDates(week) || null, keepWith: 20, sub: `Same workouts as Week ${prev.index}.${week.days.some((d) => d.scheduled_date) ? ` ${week.days.map((d) => `Day ${d.day_index} ${pdfDate(d.scheduled_date, { weekday: true, year: "never" })}`.trim()).join(" · ")}` : ""}` });
         continue;
       }
-
-      autoTable(doc, {
-        startY: y + 6,
-        head: [["#", "Exercise", "Sets", "Reps", "Load", "RPE/RIR", "Rest", "Tempo"]],
-        body: day.rows
-          .slice()
-          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-          .map((r, i) => [
-            String(i + 1),
-            sanitizeText(r.exercise_name_override) ||
-              sanitizeText(r.exercises?.name) ||
-              "Exercise",
-            r.sets != null ? String(r.sets) : "—",
-            formatReps(r),
-            formatLoad(r),
-            formatRpe(r),
-            formatRest(r),
-            sanitizeText(r.tempo) || "—",
-          ]),
-        styles: { fontSize: 8, cellPadding: 4 },
-        headStyles: { fillColor: wc, textColor: 255 },
-        columnStyles: {
-          0: { cellWidth: 18 },
-          1: { cellWidth: "auto" },
-          2: { cellWidth: 32, halign: "center" },
-          3: { cellWidth: 50, halign: "center" },
-          4: { cellWidth: 60, halign: "center" },
-          5: { cellWidth: 50, halign: "center" },
-          6: { cellWidth: 42, halign: "center" },
-          7: { cellWidth: 48, halign: "center" },
-        },
-        margin: { left: marginX, right: marginX },
-        didDrawPage: (hook) => {
-          y = hook.cursor?.y ?? y;
-        },
+      prev = { index: week.week_index, sig };
+      const tables = week.days.map((d) => programTable(d, week, cols, audience));
+      const firstH = tables[0] ? Math.min(pdf.measure(tables[0]), 220) : 40;
+      pdf.heading(`Week ${week.week_index}`, { level: 2, right: weekDates(week) || null, sub: weekNote || null, keepWith: firstH });
+      week.days.forEach((d, i) => {
+        if (!d.rows.length) {
+          pdf.heading(dayHeading(d), { level: 3, right: d.scheduled_date ? pdfDate(d.scheduled_date, { weekday: true, year: "never" }) : null, sub: "Rest or nothing written yet.", keepWith: 10 });
+          return;
+        }
+        pdf.table(tables[i]);
       });
-      y = (doc as any).lastAutoTable?.finalY ?? y;
-      y += 6;
-
-      // Per-row notes (client-visible by default; no row-level visibility flag exists)
-      const noteRows = day.rows.filter((r) => r.notes?.trim());
-      if (noteRows.length) {
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        doc.setTextColor(80, 80, 80);
-        for (const r of noteRows) {
-          const name = sanitizeText(r.exercise_name_override) || sanitizeText(r.exercises?.name) || "Exercise";
-          const text = sanitizeText(`• ${name}: ${r.notes!.trim()}`);
-          const lines = doc.splitTextToSize(text, pageWidth - marginX * 2);
-          ensureSpace(lines.length * 10 + 2);
-          doc.text(lines, marginX, y);
-          y += lines.length * 10;
-        }
-        y += 4;
-      }
-
-      // Client-authored notes captured on the logged sets
-      const setNotes: string[] = [];
-      for (const r of day.rows) {
-        for (const s of r.logged_sets ?? []) {
-          const note = sanitizeText(s.notes);
-          if (!note) continue;
-          const name = sanitizeText(r.exercise_name_override) || sanitizeText(r.exercises?.name) || "Exercise";
-          setNotes.push(`• ${name} — set ${s.set_index ?? "?"}: ${note}`);
-        }
-      }
-      if (setNotes.length) {
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8);
-        doc.setTextColor(...wc);
-        ensureSpace(14);
-        doc.text("Client notes", marginX, y);
-        y += 10;
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(70, 70, 70);
-        for (const line of setNotes) {
-          const wrapped = doc.splitTextToSize(line, pageWidth - marginX * 2);
-          ensureSpace(wrapped.length * 10 + 2);
-          doc.text(wrapped, marginX, y);
-          y += wrapped.length * 10;
-        }
-        y += 4;
-      }
-
-      // Client-authored exercise-level notes (pl_exercise_notes) — shown even
-      // when the client hasn't logged any sets on the day.
-      const exNotes = (day.client_exercise_notes ?? []).filter((n) => sanitizeText(n.content));
-      if (exNotes.length) {
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8);
-        doc.setTextColor(...wc);
-        ensureSpace(14);
-        doc.text("Client exercise notes", marginX, y);
-        y += 10;
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(70, 70, 70);
-        for (const n of exNotes) {
-          const exName = sanitizeText(n.exercise_name) || "Exercise";
-          const body = sanitizeText(n.content);
-          const line = `• ${exName}: ${body}`;
-          const wrapped = doc.splitTextToSize(line, pageWidth - marginX * 2);
-          ensureSpace(wrapped.length * 10 + 2);
-          doc.text(wrapped, marginX, y);
-          y += wrapped.length * 10;
-        }
-        y += 4;
-      }
-
-      // Client completion note
-      if (day.completion_note?.trim()) {
-        doc.setFont("helvetica", "italic");
-        doc.setFontSize(9);
-        doc.setTextColor(60, 60, 60);
-        const lines = doc.splitTextToSize(
-          sanitizeText(`Client note: ${day.completion_note.trim()}`),
-          pageWidth - marginX * 2,
-        );
-        ensureSpace(lines.length * 11 + 4);
-        doc.text(lines, marginX, y);
-        y += lines.length * 11 + 4;
-      }
-
-      // Day note — only when explicitly client-visible
-      if (day.notes?.trim() && day.notes_client_visible !== false) {
-        doc.setFont("helvetica", "italic");
-        doc.setFontSize(9);
-        doc.setTextColor(90, 90, 90);
-        const lines = doc.splitTextToSize(
-          sanitizeText(`Coach note: ${day.notes.trim()}`),
-          pageWidth - marginX * 2,
-        );
-        ensureSpace(lines.length * 11 + 4);
-        doc.text(lines, marginX, y);
-        y += lines.length * 11 + 4;
-      }
-
-      y += 6;
     }
-
-    y += 6;
-  }
-
-  // Footer on every page
-  const pageCount = (doc as any).internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(140, 140, 140);
-    doc.text("Generated from JF Effect Client Portal", marginX, pageHeight - 24);
-    doc.text(`${i} / ${pageCount}`, pageWidth - marginX, pageHeight - 24, {
-      align: "right",
-    });
-  }
-
-  return doc;
+  });
+  return pdf;
 }
 
-export function downloadWorkoutPdf(data: WorkoutPdfData) {
-  const doc = generateWorkoutPdf(data);
-  const safeName = [data.client_name, data.block_name]
-    .filter(Boolean)
-    .join("-")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-  doc.save(`${safeName || "workout-plan"}.pdf`);
-}
+/* ───────────────────────────── Report ───────────────────────────── */
 
-/* ---------------------------------------------------------------------- */
-/* Full training report — every block, every completed workout, with     */
-/* prescribed sets AND the sets the athlete actually logged.              */
-/* ---------------------------------------------------------------------- */
-
-export function generateFullTrainingReportPdf(data: FullTrainingReportData, opts: { compress?: boolean } = {}): jsPDF {
-  // Compressed: a year of training is ~6 MB raw and a fraction of that packed.
-  const doc = new jsPDF({ unit: "pt", format: "a4", compress: opts.compress ?? true });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const marginX = 36;
-  let y = 48;
-
-  // Cover / brand bar
-  doc.setFillColor(15, 15, 15);
-  doc.rect(0, 0, pageWidth, 90, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
-  doc.text("JF EFFECT", marginX, 40);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text("Training Report", marginX, 60);
-  doc.setFontSize(9);
-  const generated = data.generated_at ?? new Date();
-  doc.text(
-    `Generated ${generated.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`,
-    marginX,
-    76,
-  );
-
-  doc.setTextColor(20, 20, 20);
-  y = 120;
-
-  if (data.client_name) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text(sanitizeText(`Athlete: ${data.client_name}`), marginX, y);
-    y += 22;
-  }
-
-  // Overall totals
-  let totalWorkouts = 0;
-  let completedWorkouts = 0;
-  for (const b of data.blocks) {
-    for (const w of b.weeks) {
-      for (const d of w.days) {
-        totalWorkouts += 1;
-        if (isWorkoutCompleted(d)) completedWorkouts += 1;
+function reportTable(day: Day, week: Week, status: DayStatus, audience: "coach" | "client"): TableSpec {
+  const rows = sortedRows(day);
+  const you = audience === "client" ? "Your note" : "Athlete's note";
+  const exNotes = (day.client_exercise_notes ?? []).filter((n) => pdfText(n.content));
+  const notes = new Map<number, string>();
+  const sub = new Map<string, string>();
+  const used = new Set<number>();
+  const body = rows.map((r, i) => {
+    const role = roleOf(r);
+    if (role) sub.set(`${i}:0`, role);
+    const parts: string[] = [];
+    const coach = noteFor(r, week.week_index, audience);
+    if (coach) parts.push(`Coach: ${coach}`);
+    exNotes.forEach((n, k) => {
+      if (n.row_id && n.row_id === r.id) {
+        parts.push(`${you}: ${pdfText(n.content)}`);
+        used.add(k);
       }
-    }
-  }
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(80, 80, 80);
-  doc.text(
-    `${data.blocks.length} block${data.blocks.length === 1 ? "" : "s"}  ·  ${completedWorkouts} of ${totalWorkouts} workouts completed`,
-    marginX,
-    y,
-  );
-  y += 24;
-
-  if (data.blocks.length) {
-    autoTable(doc, {
-      startY: y,
-      head: [["Block", "Dates", "Status", "Completed"]],
-      body: data.blocks.map((b) => {
-        const blockTotal = b.weeks.reduce((sum, w) => sum + w.days.length, 0);
-        const blockDone = b.weeks.reduce(
-          (sum, w) => sum + w.days.filter(isWorkoutCompleted).length,
-          0,
-        );
-        return [
-          sanitizeText(b.block_name) || "Training Block",
-          [fmtDate(b.block_start), fmtDate(b.block_end)].filter(Boolean).join(" - ") || "—",
-          sanitizeText(b.block_status) || "—",
-          `${blockDone}/${blockTotal}`,
-        ];
-      }),
-      styles: { fontSize: 9, cellPadding: 5, overflow: "linebreak" },
-      headStyles: { fillColor: [30, 30, 30], textColor: 255 },
-      columnStyles: {
-        0: { cellWidth: "auto", fontStyle: "bold" },
-        1: { cellWidth: 120 },
-        2: { cellWidth: 70 },
-        3: { cellWidth: 70, halign: "center" },
-      },
-      margin: { left: marginX, right: marginX },
-      didDrawPage: (hook) => {
-        y = hook.cursor?.y ?? y;
-      },
     });
-    y = (doc as any).lastAutoTable?.finalY ?? y;
-  }
-
-  const ensureSpace = (needed: number) => {
-    if (y + needed > pageHeight - 60) {
-      doc.addPage();
-      y = 56;
+    for (const s of r.logged_sets ?? []) {
+      const t = pdfText(s.notes);
+      if (t) parts.push(`${you} (set ${s.set_index ?? "?"}): ${t}`);
     }
+    if (parts.length) notes.set(i, parts.join("  ·  "));
+    const lines = loggedLines(r.logged_sets ?? []);
+    return [exerciseName(r), prescriptionLine(r) || "–", lines.length ? lines.join("\n") : status.key === "completed" ? "Nothing logged" : "–"];
+  });
+  const footnotes: string[] = [];
+  exNotes.forEach((n, k) => {
+    if (!used.has(k)) footnotes.push(`${you} on ${pdfText(n.exercise_name) || "an exercise"}: ${pdfText(n.content)}`);
+  });
+  if (pdfText(day.completion_note)) footnotes.push(`${audience === "client" ? "Your review" : "Athlete's review"}: ${pdfText(day.completion_note)}`);
+  if (pdfText(day.notes)) footnotes.push(`${audience === "coach" && day.notes_client_visible !== true ? "Coach note (private)" : "Coach note"}: ${pdfText(day.notes)}`);
+  const when = status.key === "completed" && day.completed_at ? pdfDate(day.completed_at, { weekday: true, year: "never" }) : day.scheduled_date ? pdfDate(day.scheduled_date, { weekday: true, year: "never" }) : "";
+  return {
+    columns: [
+      { header: "Exercise", width: 150, bold: true },
+      { header: "Prescribed", width: 150, muted: true },
+      { header: "Logged", width: "auto" },
+    ],
+    rows: body,
+    notes,
+    sub,
+    footnotes,
+    title: {
+      text: dayHeading(day) + (day.is_optional ? " (optional)" : ""),
+      atPageTop: `Week ${week.week_index} · ${dayHeading(day)}${day.is_optional ? " (optional)" : ""}`,
+      right: [status.label, when].filter(Boolean).join(" · "),
+      rightTone: status.tone,
+    },
   };
+}
 
-  for (let bi = 0; bi < data.blocks.length; bi++) {
-    const b = data.blocks[bi];
-    // Block header
-    doc.addPage();
-    y = 56;
-    const bc = blockColor(bi);
-    doc.setFillColor(...bc);
-    doc.rect(0, 0, pageWidth, 46, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text(sanitizeText(b.block_name) || "Training Block", marginX, 28);
-    doc.setTextColor(20, 20, 20);
-    y = 68;
+type Counts = { planned: number; due: number; done: number; missed: number; inProgress: number; sets: number };
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(80, 80, 80);
-    const range = [fmtDate(b.block_start), fmtDate(b.block_end)].filter(Boolean).join(" - ");
-    const bLines: string[] = [];
-    if (range) bLines.push(range);
-    if (b.block_status) bLines.push(`Status: ${b.block_status}`);
-    let bDone = 0;
-    let bTotal = 0;
-    for (const w of b.weeks) for (const d of w.days) { bTotal++; if (isWorkoutCompleted(d)) bDone++; }
-    bLines.push(`${bDone} of ${bTotal} workouts completed`);
-    for (const line of bLines) { doc.text(line, marginX, y); y += 13; }
-    y += 6;
-
-    // Powerlifting priority overview for this block
-    if (blockHasAnyPriorityData(b.weeks)) {
-      const priorityRows = buildBlockPriorityRows(b.weeks);
-      if (priorityRows.length) {
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(11);
-        doc.setTextColor(20, 20, 20);
-        ensureSpace(20);
-        doc.text(
-          sanitizeText(`Training Priorities — ${b.block_name || "Training Block"}`),
-          marginX,
-          y,
-        );
-        y += 8;
-        autoTable(doc, {
-          startY: y,
-          head: [["Day", "Powerlifting Priorities"]],
-          body: priorityRows,
-          styles: { fontSize: 9, cellPadding: 5, overflow: "linebreak" },
-          headStyles: { fillColor: [30, 30, 30], textColor: 255 },
-          columnStyles: {
-            0: { cellWidth: 150, fontStyle: "bold" },
-            1: { cellWidth: "auto" },
-          },
-          margin: { left: marginX, right: marginX },
-          didDrawPage: (hook) => {
-            y = hook.cursor?.y ?? y;
-          },
-        });
-        y = (doc as any).lastAutoTable?.finalY ?? y;
-        y += 12;
+function countDays(blocks: FullTrainingReportBlock[], today: string): Counts {
+  const c: Counts = { planned: 0, due: 0, done: 0, missed: 0, inProgress: 0, sets: 0 };
+  for (const b of blocks)
+    for (const w of b.weeks)
+      for (const d of w.days) {
+        const s = dayStatus(d, today);
+        c.planned++;
+        c.sets += countLogged(d);
+        if (s.key === "completed") c.done++;
+        if (s.key === "missed") c.missed++;
+        if (s.key === "in_progress" || s.key === "partial") c.inProgress++;
+        // due: its day has come (or it was trained anyway); an optional workout only counts when trained
+        const date = d.scheduled_date?.slice(0, 10);
+        if (s.trained || s.key === "completed" || (date && date <= today && !d.is_optional)) c.due++;
       }
-    }
+  return c;
+}
 
-    for (const week of b.weeks) {
-      ensureSpace(50);
-      const wc = weekColor(week.week_index);
-      doc.setFillColor(...wc);
-      doc.rect(marginX, y, pageWidth - marginX * 2, 20, "F");
-      doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.text(`Week ${week.week_index}`, marginX + 10, y + 14);
-      y += 34;
-      doc.setTextColor(20, 20, 20);
-
-      for (const day of week.days) {
-        ensureSpace(82);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(11);
-        doc.setTextColor(...wc);
-        const completed = isWorkoutCompleted(day);
-        const loggedCount = countLoggedSets(day);
-        const inProgress = isWorkoutInProgress(day);
-        const status = completed ? "COMPLETED" : inProgress ? "IN PROGRESS" : "NOT COMPLETED";
-        const statusFill: [number, number, number] = completed
-          ? [16, 145, 91]
-          : inProgress
-            ? [217, 119, 6]
-            : [128, 128, 128];
-        const cleanTitle = normalizeDayTitle(day.title, day.day_index);
-        const dayLabelText = sanitizeText(
-          `Day ${day.day_index}` +
-            (cleanTitle ? ` — ${cleanTitle}` : "") +
-            (day.scheduled_date ? `  (${fmtDate(day.scheduled_date)})` : ""),
-        );
-        const pillRight = pageWidth - marginX;
-        const pillReservedWidth = Math.max(100, doc.getTextWidth(status) + 24);
-        const availableWidth = pageWidth - marginX * 2 - pillReservedWidth - 8;
-        const dayLines = doc.splitTextToSize(dayLabelText, availableWidth);
-        doc.text(dayLines, marginX, y);
-        drawStatusPill(doc, status, pillRight, y, statusFill);
-        doc.setTextColor(20, 20, 20);
-
-        y += Math.max(14, dayLines.length * 12);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.setTextColor(90, 90, 90);
-        const detailParts = [
-          completed && day.completed_at ? `Completed ${fmtDate(day.completed_at)}` : null,
-          loggedCount > 0 ? `${loggedCount} logged set${loggedCount === 1 ? "" : "s"}` : null,
-        ].filter(Boolean);
-        if (detailParts.length) {
-          const detailLines = doc.splitTextToSize(detailParts.join("  ·  "), pageWidth - marginX * 2);
-          doc.text(detailLines, marginX, y);
-          y += detailLines.length * 11;
-        }
-        y += 4;
-
-        if (!day.rows || day.rows.length === 0) {
-          y += 10;
-          doc.setFont("helvetica", "italic");
-          doc.setFontSize(9);
-          doc.setTextColor(120, 120, 120);
-          doc.text("Rest day / no exercises programmed.", marginX, y);
-          y += 14;
-          continue;
-        }
-
-        const rowsSorted = day.rows
-          .slice()
-          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-
-        // Per-exercise: prescribed line + logged sets table
-        for (let i = 0; i < rowsSorted.length; i++) {
-          const r = rowsSorted[i];
-          ensureSpace(72);
-          const name =
-            sanitizeText(r.exercise_name_override) || sanitizeText(r.exercises?.name) || "Exercise";
-          const purpose = sanitizeText(r.purpose_label) || "";
-          const showPurpose = purpose && purpose.toLowerCase() !== "assistance";
-          const displayName = showPurpose ? `${purpose} — ${name}` : name;
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(10);
-          doc.setTextColor(20, 20, 20);
-          y += 10;
-          doc.text(`${i + 1}. ${displayName}`, marginX, y);
-          y += 12;
-
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(9);
-          doc.setTextColor(90, 90, 90);
-          const prescribed = [
-            r.sets != null ? `${r.sets} sets` : null,
-            formatReps(r) !== "—" ? `× ${formatReps(r)}` : null,
-            formatLoad(r) !== "—" ? `@ ${formatLoad(r)}` : null,
-            formatRpe(r) !== "—" ? formatRpe(r) : null,
-            formatRest(r) !== "—" ? `rest ${formatRest(r)}` : null,
-            r.tempo?.trim() ? `tempo ${r.tempo.trim()}` : null,
-          ]
-            .filter(Boolean)
-            .join("  ");
-          if (prescribed) {
-            const plines = doc.splitTextToSize(
-              sanitizeText(`Prescribed: ${prescribed}`),
-              pageWidth - marginX * 2,
-            );
-            doc.text(plines, marginX, y);
-            y += plines.length * 11 + 2;
-          }
-
-          const logged = (r.logged_sets ?? [])
-            .filter(loggedSetHasInput)
-            .slice()
-            .sort((a, b) => (a.set_index ?? 0) - (b.set_index ?? 0));
-          if (logged.length) {
-            autoTable(doc, {
-              startY: y + 2,
-              head: [["Set", "Reps / Time", "Load", "RPE / RIR", "Note"]],
-              body: logged.map((s, idx) => [
-                String(s.set_index ?? idx + 1),
-                formatLoggedRepsOrTime(s),
-                formatLoggedLoad(s),
-                formatLoggedEffort(s),
-                sanitizeText(s.notes) || "—",
-              ]),
-              styles: { fontSize: 8, cellPadding: 3 },
-              headStyles: { fillColor: wc, textColor: 255 },
-              columnStyles: {
-                0: { cellWidth: 30, halign: "center" },
-                1: { cellWidth: 70, halign: "center" },
-                2: { cellWidth: 70, halign: "center" },
-                3: { cellWidth: 60, halign: "center" },
-                4: { cellWidth: "auto" },
-              },
-              margin: { left: marginX, right: marginX },
-              didDrawPage: (hook) => {
-                y = hook.cursor?.y ?? y;
-              },
-            });
-            y = (doc as any).lastAutoTable?.finalY ?? y;
-            y += 6;
-          } else if (completed || inProgress) {
-            // A workout that wasn't trained says so once, on its pill; only a
-            // trained one says which exercises have nothing logged.
-            doc.setFont("helvetica", "italic");
-            doc.setFontSize(8);
-            doc.setTextColor(140, 140, 140);
-            doc.text("No sets logged for this exercise.", marginX, y);
-            y += 12;
-          }
-
-          if (r.notes?.trim()) {
-            doc.setFont("helvetica", "italic");
-            doc.setFontSize(8);
-            doc.setTextColor(90, 90, 90);
-            const nl = doc.splitTextToSize(
-              sanitizeText(`Coach note: ${r.notes.trim()}`),
-              pageWidth - marginX * 2,
-            );
-            ensureSpace(nl.length * 10 + 4);
-            doc.text(nl, marginX, y);
-            y += nl.length * 10 + 2;
-          }
-        }
-
-        if (day.completion_note?.trim()) {
-          doc.setFont("helvetica", "italic");
-          doc.setFontSize(9);
-          doc.setTextColor(60, 60, 60);
-          const lines = doc.splitTextToSize(
-            sanitizeText(`Client note: ${day.completion_note.trim()}`),
-            pageWidth - marginX * 2,
-          );
-          ensureSpace(lines.length * 11 + 4);
-          doc.text(lines, marginX, y);
-          y += lines.length * 11 + 4;
-        }
-
-        // Client-authored exercise-level notes for the full report.
-        const exNotesFull = (day.client_exercise_notes ?? []).filter((n) => sanitizeText(n.content));
-        if (exNotesFull.length) {
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(9);
-          doc.setTextColor(...wc);
-          ensureSpace(14);
-          doc.text("Client exercise notes", marginX, y);
-          y += 11;
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(9);
-          doc.setTextColor(70, 70, 70);
-          for (const n of exNotesFull) {
-            const exName = sanitizeText(n.exercise_name) || "Exercise";
-            const body = sanitizeText(n.content);
-            const line = `• ${exName}: ${body}`;
-            const wrapped = doc.splitTextToSize(line, pageWidth - marginX * 2);
-            ensureSpace(wrapped.length * 11 + 2);
-            doc.text(wrapped, marginX, y);
-            y += wrapped.length * 11;
-          }
-          y += 4;
-        }
-
-        // The data decides who sees a day note (a client only the ones marked for them).
-        if (day.notes?.trim()) {
-          doc.setFont("helvetica", "italic");
-          doc.setFontSize(9);
-          doc.setTextColor(90, 90, 90);
-          const label = data.audience === "coach" && day.notes_client_visible !== true ? "Coach day note (private)" : "Coach day note";
-          const lines = doc.splitTextToSize(
-            sanitizeText(`${label}: ${day.notes.trim()}`),
-            pageWidth - marginX * 2,
-          );
-          ensureSpace(lines.length * 11 + 4);
-          doc.text(lines, marginX, y);
-          y += lines.length * 11 + 4;
-        }
-
-        y += 8;
+/** Sets logged per week (Monday weeks), for the summary chart. */
+function setsByWeek(blocks: FullTrainingReportBlock[]): Array<{ label: string; value: number }> {
+  const byWeek = new Map<string, number>();
+  for (const b of blocks)
+    for (const w of b.weeks)
+      for (const d of w.days) {
+        const n = countLogged(d);
+        const when = (d.completed_at ?? d.scheduled_date)?.slice(0, 10);
+        if (!n || !when) continue;
+        const [y, m, dd] = when.split("-").map(Number);
+        const dt = new Date(y, m - 1, dd);
+        dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
+        const key = isoDay(dt);
+        byWeek.set(key, (byWeek.get(key) ?? 0) + n);
       }
+  const keys = [...byWeek.keys()].sort();
+  if (!keys.length) return [];
+  // every week between the first and the last, a week with nothing as 0
+  const out: Array<{ label: string; value: number }> = [];
+  const [y, m, d] = keys[0].split("-").map(Number);
+  const cur = new Date(y, m - 1, d);
+  const last = keys[keys.length - 1];
+  while (isoDay(cur) <= last && out.length < 80) {
+    const k = isoDay(cur);
+    out.push({ label: pdfDate(k, { year: "never" }), value: byWeek.get(k) ?? 0 });
+    cur.setDate(cur.getDate() + 7);
+  }
+  return out;
+}
 
-      y += 6;
-    }
+export function buildTrainingReportDoc(data: FullTrainingReportData, opts: BuildOpts = {}): PdfDoc {
+  const audience = data.audience ?? "coach";
+  const today = data.today ?? isoDay(new Date());
+  const blocks = data.blocks;
+  const one = blocks.length === 1 ? blocks[0] : null;
+  const all = countDays(blocks, today);
+  const pdf = new PdfDoc({
+    kind: "Training report",
+    title: pdfText(data.program_name) || (one ? pdfText(one.block_name) || "Training report" : cap(`${firstName(data.client_name)}training report`)),
+    subtitle: allDates(data) || null,
+    person: data.client_name ?? null,
+    generatedAt: data.generated_at,
+    logo: opts.logo,
+    compress: opts.compress,
+    facts: [
+      ["Athlete", data.client_name ?? null],
+      ["Blocks", blocks.length ? plural(blocks.length, "block") : null],
+      ["Workouts done", all.due ? `${all.done} of ${all.due} due` : null],
+      ["Sets logged", all.sets ? all.sets.toLocaleString("en-US") : null],
+    ],
+  });
+
+  if (!blocks.length) {
+    pdf.paragraph("No training blocks were picked.", { color: PDF_COLOR.muted });
+    return pdf;
   }
 
-  // Footer on every page
-  const pageCount = (doc as any).internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(140, 140, 140);
-    doc.text("JF Effect training report", marginX, pageHeight - 24);
-    doc.text(`${i} / ${pageCount}`, pageWidth - marginX, pageHeight - 24, {
-      align: "right",
+  pdf.heading("Summary", { keepWith: 90 });
+  const pct = all.due ? Math.round((all.done / all.due) * 100) : null;
+  pdf.tiles([
+    { label: "Workouts completed", value: `${all.done}`, sub: all.due ? `of ${all.due} due so far` : null },
+    { label: "Completion", value: pct != null ? `${pct}%` : "–", sub: "of workouts due", tone: pct == null ? "neutral" : pct >= 85 ? "good" : pct >= 60 ? "neutral" : "warn" },
+    { label: "Missed", value: `${all.missed}`, sub: all.inProgress ? `${all.inProgress} partly logged` : null, tone: all.missed ? "bad" : "neutral" },
+    { label: "Sets logged", value: all.sets.toLocaleString("en-US") },
+  ]);
+  const weekly = setsByWeek(blocks);
+  if (weekly.length >= 2) {
+    chartRow(pdf, 150, [(doc, box) => drawBarChart(doc, box, { title: "Sets logged each week", bars: weekly.map((w) => ({ label: w.label, value: w.value })), valueLabels: weekly.length <= 14 })]);
+  }
+  if (blocks.length > 1) {
+    pdf.table({
+      columns: [
+        { header: "Block", width: "auto", bold: true },
+        { header: "Dates", width: "fit", max: 160, muted: true },
+        { header: "Done", width: "fit", align: "center" },
+        { header: "Missed", width: "fit", align: "center" },
+        { header: "Sets logged", width: "fit", align: "right" },
+      ],
+      rows: blocks.map((b) => {
+        const c = countDays([b], today);
+        return [pdfText(b.block_name) || "Training block", blockDates(b) || "–", c.due ? `${c.done} of ${c.due}` : `${c.done}`, String(c.missed), c.sets.toLocaleString("en-US")];
+      }),
     });
   }
+  pdf.paragraph(
+    `Prescribed is what the program asked for; Logged is what was entered in the app, as typed (sets with the same numbers in a row are written once: "2–4" is sets 2 to 4). Workouts that weren't trained are listed at the end of each week.${audience === "coach" ? " Private coach notes are marked." : ""}`,
+    { size: 8.5, color: PDF_COLOR.muted },
+  );
 
-  return doc;
+  blocks.forEach((b, bi) => {
+    const c = countDays([b], today);
+    pdf.heading(pdfText(b.block_name) || "Training block", {
+      newPage: true,
+      right: blockDates(b) || null,
+      sub: [blocks.length > 1 ? `Block ${bi + 1} of ${blocks.length}` : null, pdfText(b.block_status) || null, c.due ? `${c.done} of ${c.due} workouts done` : null, c.missed ? `${c.missed} missed` : null].filter(Boolean).join(" · "),
+    });
+    if (!b.weeks.length) {
+      pdf.paragraph("Nothing trained in this block yet.", { color: PDF_COLOR.muted });
+      return;
+    }
+    for (const week of b.weeks) {
+      const statuses = week.days.map((d) => dayStatus(d, today));
+      const trained = week.days.filter((_, i) => statuses[i].trained || statuses[i].key === "completed");
+      const rest = week.days.filter((_, i) => !(statuses[i].trained || statuses[i].key === "completed"));
+      const tables = trained.map((d) => reportTable(d, week, dayStatus(d, today), audience));
+      const weekNote = pdfText(week.notes);
+      const core = week.days.filter((d) => !d.is_optional).length;
+      const doneCore = week.days.filter((d, i) => !d.is_optional && statuses[i].key === "completed").length;
+      const doneOptional = week.days.filter((d, i) => d.is_optional && statuses[i].key === "completed").length;
+      const firstH = tables[0] ? Math.min(pdf.measure(tables[0]), 220) : 50;
+      pdf.heading(`Week ${week.week_index}`, {
+        level: 2,
+        right: weekDates(week) || null,
+        sub: [core ? `${doneCore} of ${core} done` : null, doneOptional ? `${doneOptional} optional done` : null, weekNote || null].filter(Boolean).join(" · "),
+        keepWith: firstH,
+      });
+      tables.forEach((t) => pdf.table(t));
+      if (rest.length) {
+        pdf.table({
+          dense: true,
+          columns: [
+            { header: "Not trained", width: "auto" },
+            { header: "Date", width: "fit", muted: true },
+            { header: "Status", width: "fit", max: 120 },
+          ],
+          rows: rest.map((d) => [dayHeading(d) + (d.is_optional ? " (optional)" : ""), d.scheduled_date ? pdfDate(d.scheduled_date, { weekday: true, year: "never" }) : "–", dayStatus(d, today).label]),
+          cellTone: (r, col) => (col === 2 ? dayStatus(rest[r], today).tone : null),
+        });
+      }
+    }
+  });
+  return pdf;
+}
+
+/* ───────────────────────────── Files ───────────────────────────── */
+
+/** The training report as jsPDF (kept for callers and tests that read the document). */
+export function generateFullTrainingReportPdf(data: FullTrainingReportData, opts: BuildOpts = {}) {
+  return buildTrainingReportDoc(data, opts).finish();
 }
 
 /** The report as a PDF file, for the share sheet or a download (see training-report-sheet). */
-export function trainingReportPdfFile(data: FullTrainingReportData, fileName: string): File {
-  const blob = generateFullTrainingReportPdf(data).output("blob");
-  return new File([blob], fileName, { type: "application/pdf" });
+export function trainingReportPdfFile(data: FullTrainingReportData, fileName: string, logo?: string | null): File {
+  return buildTrainingReportDoc(data, { logo }).toFile(fileName);
+}
+
+/** The program as a PDF file. */
+export function programPdfFile(data: FullTrainingReportData, fileName: string, logo?: string | null): File {
+  return generateProgramPdf(data, { logo }).toFile(fileName);
+}
+
+/** "jared-mcintyre-training-program-block-2-volume-2026-11-22.pdf". */
+export function trainingPdfFileName(kind: "program" | "report", clientName: string | null | undefined, blockNames: string[], date = new Date()): string {
+  return pdfFileName({ person: clientName, document: kind === "program" ? "training program" : "training report", detail: blockNames.length === 1 ? blockNames[0] : null, date });
 }

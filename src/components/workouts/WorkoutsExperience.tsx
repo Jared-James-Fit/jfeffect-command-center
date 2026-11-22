@@ -377,7 +377,7 @@ export function WorkoutsExperience({
               <CardMenuSeparator />
               <CardMenuItem onSelect={() => setReportOpen(true)}>
                 <Download className="mr-2 h-4 w-4" />
-                Training report (PDF)
+                Training PDF
               </CardMenuItem>
             </CardMenu>
           </div>
