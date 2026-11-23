@@ -39,7 +39,8 @@ import { athleteCatalog, catalogText, equipmentFit, exerciseRow, parseJsonReply,
 import { programInLocalWeeks, withLocalWeeks } from "./program-view";
 import { generatedProgramOutcomes, outcomeLines } from "./outcomes";
 import { benchRecords } from "./bench";
-import { findConflicts, horizonFor, redistribution, type GenerationSetup, type SetupField } from "./recommend";
+import { findConflicts, horizonFor, redistribution, setupHorizon, type GenerationSetup, type SetupField } from "./recommend";
+import { programNameFor, type ProgramGoal } from "./program-name";
 import { BRAIN_LABEL, type Brain, type IntelRecords, type RawExercise } from "./types";
 import { briefScale, HEDGE_AFTER_MS, measuredTypical, pollWindowMs, stepOf, type RunProgress } from "./run-eta";
 
@@ -448,6 +449,10 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       },
     };
     result.setup = setup;
+    // the meet or dated goal these weeks build toward, which names the program when the strategy doesn't (program-name.ts)
+    const deadline = setupHorizon(setup, intel.ctx).deadline;
+    result.goal = deadline ? ({ kind: deadline.kind, name: deadline.name, date: deadline.date } satisfies ProgramGoal) : null;
+    result.firstName = job.privacy_safe ? null : ((rec.client?.full_name ?? "").trim().split(/\s+/)[0] || null);
     result.previousAdherencePct = intel.ctx.previous?.sessionAdherencePct ?? null;
     if (approved) {
       result.strategy = strategySchema.parse(job.options.strategy);
@@ -557,7 +562,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       return "next";
     }
     const program: BuiltProgram = {
-      program_name: `${BRAIN_LABEL[brain]} · ${setup.weeks} weeks · ${setup.daysPerWeek} days`,
+      program_name: programNameFor({ named: strategy.program_name, goal: result.goal ?? null, firstName: result.firstName ?? null, brain, weeks: setup.weeks, days: setup.daysPerWeek }),
       summary: [strategy.previous_program.outcome, strategy.progression.model].filter(Boolean).join(" "),
       // a run built before blocks were read in their own weeks is put right here, before it's judged
       blocks: programInLocalWeeks({ blocks: result.blocks as BuiltBlock[] }).program.blocks,

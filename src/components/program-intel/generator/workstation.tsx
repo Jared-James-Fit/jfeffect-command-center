@@ -31,7 +31,7 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/lib/auth";
-import { assignIntelDraftFn, discardIntelDraftFn, queueIntelJobFn, retryIntelJobFn } from "@/lib/program-intel/intel.functions";
+import { assignIntelDraftFn, discardIntelDraftFn, queueIntelJobFn, renameIntelProgramFn, retryIntelJobFn } from "@/lib/program-intel/intel.functions";
 import { generatedProgramOutcomes } from "@/lib/program-intel/outcomes";
 import { findConflicts, horizonFor, redistribution, type GenerationSetup, type SetupField } from "@/lib/program-intel/recommend";
 import { DEFAULT_PROGRAM_WEEKS, MAX_PROGRAM_WEEKS } from "@/lib/program-intel/horizon";
@@ -81,6 +81,7 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
   const retry = useServerFn(retryIntelJobFn);
   const assign = useServerFn(assignIntelDraftFn);
   const discard = useServerFn(discardIntelDraftFn);
+  const rename = useServerFn(renameIntelProgramFn);
   const [setup, setSetup] = useState<GenerationSetup | null>(null);
   const [edited, setEdited] = useState<Set<SetupField>>(new Set());
   const editedRef = useRef(edited);
@@ -252,6 +253,7 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
       setBusy(false);
     }
   };
+  const renameProgram = (jobId: string) => (name: string) => run(() => rename({ data: { jobId, name } }), "Renamed");
   type RunExtra = { strategy?: Strategy; strategyJobId?: string; setup?: GenerationSetup; edited?: string[] };
   const queueRun = (kind: "strategy" | "generate", extra: RunExtra = {}) => {
     const runSetup = extra.setup ?? setup!;
@@ -440,6 +442,7 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
                   onInspect={canInspect ? () => setInspecting(activeGenerate) : undefined}
                   plan={assignPlan} onAssign={(startDate, ack, allowOverlap) => run(() => assign({ data: { jobId: activeGenerate.id, startDate, acknowledgeAudit: ack, allowOverlap } }), "Assigned to the client")}
                   onDiscard={() => run(() => discard({ data: { jobId: activeGenerate.id } }), "Draft discarded")}
+                  onRename={renameProgram(activeGenerate.id)}
                 />
               )}
               {activeStrategy && (running(activeStrategy) || activeStrategy.status === "error") && (
@@ -464,7 +467,7 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
                   <summary className="cursor-pointer select-none font-medium">Earlier programs generated ({earlier.length})</summary>
                   <div className="mt-3 space-y-2">
                     {earlier.map((j) => (
-                      <DraftView key={j.id} job={j} today={intel.ctx.today} busy={busy} onInspect={canInspect ? () => setInspecting(j) : undefined} plan={assignPlan} onAssign={(startDate, ack, allowOverlap) => run(() => assign({ data: { jobId: j.id, startDate, acknowledgeAudit: ack, allowOverlap } }), "Assigned to the client")} onDiscard={() => run(() => discard({ data: { jobId: j.id } }), "Draft discarded")} />
+                      <DraftView key={j.id} job={j} today={intel.ctx.today} busy={busy} onInspect={canInspect ? () => setInspecting(j) : undefined} plan={assignPlan} onAssign={(startDate, ack, allowOverlap) => run(() => assign({ data: { jobId: j.id, startDate, acknowledgeAudit: ack, allowOverlap } }), "Assigned to the client")} onDiscard={() => run(() => discard({ data: { jobId: j.id } }), "Draft discarded")} onRename={renameProgram(j.id)} />
                     ))}
                   </div>
                 </details>

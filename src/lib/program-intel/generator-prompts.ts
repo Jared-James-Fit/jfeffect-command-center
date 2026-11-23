@@ -15,7 +15,7 @@ import type { BuiltBlock, Strategy } from "./generator-schemas";
 import type { CatalogExercise } from "./next-program";
 import type { GenerationSetup } from "./recommend";
 
-export const PIPELINE_PROMPT_VERSION = 12;
+export const PIPELINE_PROMPT_VERSION = 13;
 
 const EVIDENCE_RULES = `Evidence rules:
 - Facts about the past come only from the brief. Copy numbers exactly as they appear there (week labels like "B1·W2", exercises, loads, reps, RPE, percentages). Never compute, estimate or invent a past result.
@@ -87,6 +87,7 @@ Decisions: each important decision is Observation → Evidence → Proposed chan
 
 Reply with ONE JSON object and nothing else:
 {
+  "program_name": string (what the coach would call this program, 2-4 words: after the meet or dated goal it builds toward when there is one, in the coach's own words for it ("Westerns Prep" for the Western Canadian Championships, "Nationals Prep"), even when these weeks are only the first part of the road to it; else what it's for ("Off-Season Strength", "Summer Hypertrophy"). Never the athlete's name, a block, a length or a day count),
   "athlete_read": string (who they are, what they train for, their constraints; 3-5 sentences),
   "previous_program": { "intent": string, "outcome": string },
   "keep": [ { "item": string, "why": string, "evidence": [string] } ],
