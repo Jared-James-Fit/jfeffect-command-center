@@ -298,6 +298,8 @@ describe("the athlete reads plain words (Nov 23 2026: Dwayne's plan read \"RPE 6
     expect(plainProblems("Accumulation 1", 24)).toContain('it uses "Accumulation"');
     expect(plainProblems("SBD reintroduction", 24)).toContain('it uses "SBD"');
     expect(plainProblems("Re-Specificity", 32)).toContain('it uses "Re-Specificity"');
+    expect(plainProblems("Specific week", 24)).toContain('it uses "Specific"');
+    expect(plainProblems("Stay within the coach's effort cap.", 110)).toContain('it uses "cap"');
     expect(plainProblems("x".repeat(40), 24)).toContain("it's longer than 24 characters");
     expect(plainProblems("", 24)).toEqual(["it's empty"]);
   });
@@ -356,7 +358,7 @@ describe("the athlete reads plain words (Nov 23 2026: Dwayne's plan read \"RPE 6
     expect(server).toContain("Your last reply broke the plain-words rules.");
     expect(server).toContain("return plainReply(best.reply, digest, meet);");
     const { ROADMAP_PROMPT_VERSION, digestBlock: digest } = await import("@/lib/training-roadmap");
-    expect(ROADMAP_PROMPT_VERSION).toBe(4);
+    expect(ROADMAP_PROMPT_VERSION).toBe(5);
     const d = digest(block(3));
     expect(d.shapes.map((s) => s.week)).toEqual([1, 2, 3]);
     expect(d.shapes[0].start).toBe("first");
