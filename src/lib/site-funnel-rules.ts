@@ -13,6 +13,9 @@
 export const SITE_EVENTS = [
   "coaching_view",
   "pricing_view",
+  "cost_anchor_view",
+  "free_reveal_view",
+  "price_reveal_view",
   "cta_free",
   "cta_coaching",
   "package_select",
@@ -46,6 +49,12 @@ export type CoachingFunnel = {
   landingVisitors: number;
   coachingVisitors: number;
   pricingViews: number;
+  /** Saw what a personal trainer or higher-priced online coaching costs a year, near the top of the home page. */
+  anchorViews: number;
+  /** Saw the home page's $0 reveal of the free app. */
+  freeRevealViews: number;
+  /** Saw the coaching price reveal on the home page (Coaching Plus, then Complete Online Coaching). */
+  revealViews: number;
   ctaFree: number;
   ctaCoaching: number;
   freeStarts: number;
@@ -71,6 +80,9 @@ export function readCoachingFunnel(raw: unknown): CoachingFunnel {
     landingVisitors: num(r.landing_visitors),
     coachingVisitors: num(r.coaching_visitors),
     pricingViews: num(r.pricing_views),
+    anchorViews: num(r.anchor_views),
+    freeRevealViews: num(r.free_reveal_views),
+    revealViews: num(r.reveal_views),
     ctaFree: num(r.cta_free),
     ctaCoaching: num(r.cta_coaching),
     freeStarts: num(r.free_starts),

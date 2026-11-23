@@ -11,7 +11,7 @@ import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
 import { POLL_MAX_OPTIONS, POLL_OPTION_MAX, cleanPollOptions, pickerAudience, type CommunityAuthor, type CommunityVisibility, type PostSlide } from "@/lib/community";
 import { MAX_SLIDES } from "@/lib/community";
 import { pickMedia, releasePicked, uploadPicked } from "@/lib/community-media";
-import { CENTRED, POST_ASPECTS, POST_ASPECT_LABEL, closestAspect, nextAspect, placement, clampFraming, type PostAspect } from "@/lib/photo-frame";
+import { CENTRED, POST_ASPECTS, POST_ASPECT_LABEL, startAspect, nextAspect, placement, clampFraming, type PostAspect } from "@/lib/photo-frame";
 import { drawableSize, framedCanvas, lightCopy, type Drawable } from "@/lib/photo-frame-draw";
 import { canvasToBlob, cardLogo, ensureDisplayFont } from "@/lib/workout-share-card";
 import { releaseCanvas, context2d } from "@/lib/canvas-memory";
@@ -161,7 +161,8 @@ export function PostComposer({
   const tray = useSlideTray({ open, initial: null, resetKey: draftKey, coverCount: 0, videoContext });
   const att = usePostAttach({ initial: null, key: draftKey, open });
   const [focus, setFocus] = useState<string | null>(null);
-  const [aspect, setAspect] = useState<PostAspect>("portrait");
+  // a post starts at 9:16, filling its screen in the Crew feed (startAspect)
+  const [aspect, setAspect] = useState<PostAspect>("full");
   const aspectPicked = useRef(false);
   const [gridFlash, setGridFlash] = useState(0);
   const [caption, setCaption] = useState("");
@@ -193,7 +194,7 @@ export function PostComposer({
     setClosing(false);
     setConfirm(null);
     setFocus(null);
-    setAspect("portrait");
+    setAspect("full");
     aspectPicked.current = false;
     setCaption("");
     setVisibility(pickerAudience(post?.visibility ?? "community"));
@@ -258,14 +259,15 @@ export function PostComposer({
   const first = cover;
   useEffect(() => {
     if (aspectPicked.current || !first?.w || !first?.h) return;
-    setAspect(closestAspect(first.w, first.h));
+    setAspect(startAspect(first.w, first.h));
   }, [first?.id, first?.w, first?.h]);
 
-  // a design on the first photo (a card, a story filter's words) is drawn at 4:5 or 9:16
+  // a design on the first photo (a card, a story filter's words) is drawn at 9:16 (the full-screen card, its words
+  // clear of the feed's bars and buttons) or 4:5
   const card = coverImage ? filters.card : null;
   const design = !!card && !filters.gradeOnly;
   useEffect(() => {
-    if (design && aspect !== "portrait" && aspect !== "full") setAspect("portrait");
+    if (design && aspect !== "portrait" && aspect !== "full") setAspect("full");
   }, [design, aspect]);
   const shape = POST_ASPECTS[aspect];
   const cycleAspect = () => {
@@ -297,7 +299,7 @@ export function PostComposer({
     const media = framedCanvas(src, clampFraming(coverFraming, drawableSize(src), { w: shape, h: 1 }), shape, width, compiledFor(coverImage?.grade));
     try {
       if (useCard && card) {
-        const size = aspect === "full" ? "story" : aspect === "portrait" ? "feed" : { w: 1080, h: Math.round(1080 / shape) };
+        const size = aspect === "full" ? "full" : aspect === "portrait" ? "feed" : { w: 1080, h: Math.round(1080 / shape) };
         paintCard(out, card, media, size, lockedIn, logo, width / 1080);
       } else {
         out.width = media.width;

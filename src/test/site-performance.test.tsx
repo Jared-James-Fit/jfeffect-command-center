@@ -25,7 +25,7 @@ describe("hosted photos are asked for at the size they're drawn", () => {
       srcSet: hostedSrcSet(PHOTO),
       sizes: "58vw",
     });
-    expect(hostedImageProps("/logo-160.webp", { sizes: "28px" })).toEqual({ src: "/logo-160.webp" });
+    expect(hostedImageProps("/logo.png", { sizes: "28px" })).toEqual({ src: "/logo.png" });
   });
 
   it("every page that draws a hosted photo goes through it (never the 1–2 MB original)", () => {

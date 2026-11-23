@@ -5,6 +5,8 @@ import { FUNNEL_EVENTS } from "@/lib/membership-apply";
 
 const read = (p: string) => readFileSync(p, "utf8");
 const MIGRATION = read("supabase/migrations/20270513090000_coaching_site_launch.sql");
+/** The newest word on which steps the database takes (the price reveal added one). */
+const STEPS_MIGRATION = read("supabase/migrations/20270519090000_cost_anchor_funnel.sql");
 
 describe("the site's steps are counted anonymously (Nov 23 2026)", () => {
   it("keeps a step's detail short and plain", () => {
@@ -41,10 +43,11 @@ describe("the site's steps are counted anonymously (Nov 23 2026)", () => {
   });
 
   it("the database takes every step the site sends, and only those", () => {
-    for (const e of [...FUNNEL_EVENTS, ...SITE_EVENTS]) expect(MIGRATION).toContain(`'${e}'`);
+    for (const e of [...FUNNEL_EVENTS, ...SITE_EVENTS]) expect(STEPS_MIGRATION).toContain(`'${e}'`);
     expect(MIGRATION).toContain("device IN ('phone', 'tablet', 'desktop')");
     // the funnel is read only by the server after an admin check
     expect(MIGRATION).toContain("REVOKE ALL ON FUNCTION public.coaching_funnel(timestamptz) FROM PUBLIC, anon, authenticated;");
+    expect(STEPS_MIGRATION).toContain("REVOKE ALL ON FUNCTION public.coaching_funnel(timestamptz) FROM PUBLIC, anon, authenticated;");
     const fns = read("src/lib/site-funnel.functions.ts");
     expect(fns).toContain('rpc("has_role", { _user_id: ctx.userId, _role: "admin" })');
     expect(fns).toContain('onConflict: "visitor_id,event,step,day", ignoreDuplicates: true');
@@ -123,8 +126,10 @@ describe("the public site's app screens are current (Nov 23 2026)", () => {
   it("each screen is made by the capture scripts, from the app itself", () => {
     const scripts = read("scripts/coaching-screenshots/landing.cjs") + read("scripts/coaching-screenshots/run.cjs");
     for (const dir of ["landing", "coaching"]) {
-      for (const f of readdirSync(`src/assets/${dir}`).filter((x) => x.startsWith("app-") && x.endsWith(".webp"))) {
+      // the 390 / 585 px widths are made from each capture (scripts/landing/resize-shots.py), never captured
+      for (const f of readdirSync(`src/assets/${dir}`).filter((x) => x.startsWith("app-") && x.endsWith(".webp") && !/-(390|585)\.webp$/.test(x))) {
         expect(scripts, f).toContain(`name: "${f.replace(".webp", "")}"`);
+        for (const w of [390, 585]) expect(existsSync(`src/assets/${dir}/${f.replace(".webp", `-${w}.webp`)}`), `${f} at ${w} px: run scripts/landing/resize-shots.py`).toBe(true);
       }
     }
   });

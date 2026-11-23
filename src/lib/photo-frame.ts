@@ -237,6 +237,20 @@ export function closestAspect(w: number | null | undefined, h: number | null | u
   return best;
 }
 
+/**
+ * The shape a new post starts at (Nov 23 2026): the Crew feed is one post per
+ * screen, so anything upright (a phone's 9:16, an iPhone photo's 3:4, a 4:5)
+ * starts at 9:16 and fills its screen, the photo framed by drag and pinch;
+ * a square or sideways one keeps the closest of its own shapes (filling a
+ * phone's screen would cut away most of it). Unknown: 9:16. The shape button
+ * still offers the rest.
+ */
+export const START_FULL_MAX_ASPECT = 0.95;
+export function startAspect(w: number | null | undefined, h: number | null | undefined): PostAspect {
+  if (!w || !h || !(w > 0) || !(h > 0)) return "full";
+  return w / h < START_FULL_MAX_ASPECT ? "full" : closestAspect(w, h);
+}
+
 /** What's posted for a shape: 1080 wide. */
 export function outputSize(aspect: number): Size {
   return { w: OUTPUT_WIDTH, h: Math.round(OUTPUT_WIDTH / aspect) };

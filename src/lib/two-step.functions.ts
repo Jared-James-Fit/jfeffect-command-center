@@ -5,7 +5,9 @@
  * Confirming a session (callable before it's confirmed: MFA_EXEMPT_FNS):
  *   getTwoStepStatus          what the gate needs: the ways, whether this
  *                             session is confirmed, the preferred way
- *   sendTwoStepCode           text a 6-digit code (sign-in, or a new phone)
+ *   sendTwoStepCode           text a 6-digit code (sign-in, or a new phone), or
+ *                             email one to the login's own email (sign-in only,
+ *                             the backup: 20270515090000_two_step_email_backup.sql)
  *   verifyTwoStepCode         check it: confirms the session, or adds the phone
  *   startTwoStepPasskey       a one-time challenge for Face ID / Touch ID
  *   finishTwoStepPasskey      check the passkey: confirms, or adds it
@@ -16,7 +18,8 @@
  *
  * Managing (a confirmed session; the guard refuses anything else):
  *   confirmTwoStepTotp, trustThisDevice, listTwoStepDevices,
- *   forgetTwoStepDevice, removeTwoStepMethod, setTwoStepPreferred
+ *   forgetTwoStepDevice, removeTwoStepMethod, setTwoStepPreferred,
+ *   setTwoStepEmailBackup
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -28,6 +31,7 @@ import {
   MAX_PHONES,
   RESEND_AFTER_S,
   checkRefusalText,
+  maskEmail,
   maskPhone,
   normalizeSmsCode,
   sendRefusalText,
@@ -35,6 +39,7 @@ import {
   smsCodeText,
   smsLabel,
   twoStepPhone,
+  type EmailBackup,
   type TwoStepKind,
   type TwoStepStatus,
 } from "@/lib/two-step";
@@ -81,6 +86,7 @@ export const sendTwoStepCode = createServerFn({ method: "POST" })
         purpose: z.enum(["sign_in", "add_phone"]),
         methodId: z.string().uuid().nullable().optional(),
         phone: z.string().max(40).nullable().optional(),
+        channel: z.enum(["sms", "email"]).optional(),
       })
       .parse(i),
   )
@@ -90,6 +96,7 @@ export const sendTwoStepCode = createServerFn({ method: "POST" })
     const uid = context.userId;
     const sid = s.sessionIdOf(context.claims as any);
     await s.requireTeam(db, uid);
+    if (data.channel === "email") return emailCode(db, uid, sid, data.purpose);
     const own = await s.activeMethods(db, uid);
 
     let phone: string | null = null;
@@ -178,6 +185,58 @@ export const sendTwoStepCode = createServerFn({ method: "POST" })
     return { ok: true, to: maskPhone(phone), resendInS: RESEND_AFTER_S, expiresInS: CODE_TTL_S };
   });
 
+/**
+ * Email a sign-in code to the login's own email (the backup). The database
+ * decides whether one may go and where (two_step_code_issue with 'email'), so
+ * the address never comes from the request.
+ */
+async function emailCode(
+  db: any,
+  uid: string,
+  sid: string,
+  purpose: "sign_in" | "add_phone",
+): Promise<SendCodeResult> {
+  if (purpose !== "sign_in") throw new Error("An emailed code is only for signing in.");
+  const { newSmsCode } = await import("@/lib/two-step");
+  const code = newSmsCode();
+  const { data: issued, error } = await db.rpc("two_step_code_issue", {
+    _uid: uid,
+    _session: sid,
+    _purpose: "sign_in",
+    _phone: null,
+    _method: null,
+    _hash: await smsCodeHash(uid, sid, code),
+    _ttl_s: CODE_TTL_S,
+    _channel: "email",
+  });
+  if (error) throw new Error(`Couldn't make a code: ${error.message}`);
+  if (!issued?.ok || !issued.email) {
+    const waitS = typeof issued?.wait_s === "number" ? issued.wait_s : null;
+    const reason = String(issued?.reason ?? "email_failed");
+    return { ok: false, reason, waitS, message: sendRefusalText(reason, waitS) };
+  }
+  const { sendTemplateEmail } = await import("@/lib/transactional-email.server");
+  const sent = await sendTemplateEmail(db, {
+    template: "two-step-code",
+    to: String(issued.email),
+    data: { code },
+    idempotencyKey: `two_step:${issued.id}`,
+    sensitive: true,
+  });
+  if (!sent.sent) {
+    await db.rpc("two_step_code_unsent", { _id: issued.id });
+    const reason = sent.reason === "suppressed" ? "email_suppressed" : "email_failed";
+    console.warn("[two-step] code email didn't go", sent.reason);
+    return { ok: false, reason, waitS: null, message: sendRefusalText(reason) };
+  }
+  return {
+    ok: true,
+    to: maskEmail(String(issued.email)),
+    resendInS: RESEND_AFTER_S,
+    expiresInS: CODE_TTL_S,
+  };
+}
+
 export type ConfirmResult =
   | { ok: true; added?: TwoStepKind; trust: { id: string; token: string; until: string } | null }
   | { ok: false; reason: string; left?: number | null; waitS?: number | null; message: string };
@@ -222,7 +281,21 @@ export const verifyTwoStepCode = createServerFn({ method: "POST" })
     }
 
     if (data.purpose === "sign_in") {
-      await s.markSession(db, uid, sid, "sms");
+      const byEmail = r.channel === "email";
+      await s.markSession(db, uid, sid, byEmail ? "email" : "sms");
+      if (byEmail) {
+        // An emailed code is the backup: say so, in case it wasn't them.
+        await s.tellTwoStep(
+          db,
+          uid,
+          {
+            title: "You signed in with an emailed code",
+            body: "If this wasn't you, someone has your password and your email. Change both now.",
+          },
+          null,
+          uid,
+        );
+      }
       if (r.method_id)
         await db
           .from("two_step_methods")
@@ -638,7 +711,8 @@ export const removeTwoStepMethod = createServerFn({ method: "POST" })
     const pref = await s.preferredOf(db, uid);
     if (pref && !left.some((m) => m.kind === pref)) {
       if (left[0]) await s.setPreferred(db, uid, left[0].kind);
-      else await db.from("two_step_settings").delete().eq("user_id", uid);
+      // The row also keeps their email-backup choice: clear only the preferred way.
+      else await db.from("two_step_settings").update({ preferred: null }).eq("user_id", uid);
     }
     await s.tellTwoStep(
       db,
@@ -662,4 +736,34 @@ export const setTwoStepPreferred = createServerFn({ method: "POST" })
     if (!methods.some((m) => m.kind === data.kind)) throw new Error("Set that way up first.");
     await s.setPreferred(db, context.userId, data.kind);
     return { ok: true as const };
+  });
+
+/** Codes by email, on or off (the backup). On saves the login's email as it is now. */
+export const setTwoStepEmailBackup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ on: z.boolean() }).parse(i))
+  .handler(async ({ data, context }): Promise<EmailBackup | null> => {
+    const { s, db } = await requireConfirmed(context);
+    const before = await s.emailBackupOf(db, context.userId);
+    const { data: state, error } = await db.rpc("two_step_email_backup_set", {
+      _uid: context.userId,
+      _on: data.on,
+      _only_if_unset: false,
+    });
+    if (error) throw new Error(`Couldn't save that: ${error.message}`);
+    const { emailBackupFrom } = await import("@/lib/two-step");
+    const after = emailBackupFrom(state);
+    if (data.on && !(before?.on && before.why !== "changed") && after?.to) {
+      await s.tellTwoStep(
+        db,
+        context.userId,
+        {
+          title: "Sign-in codes can now be emailed",
+          body: `To ${after.to}. If this wasn't you, change your password now.`,
+        },
+        null,
+        context.userId,
+      );
+    }
+    return after;
   });

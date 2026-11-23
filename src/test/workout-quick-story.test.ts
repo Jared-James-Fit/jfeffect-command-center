@@ -155,7 +155,7 @@ describe("share cards say both units and never cut a lift's name", () => {
   it("the painter wraps a long name to two lines and puts the other unit under the load", () => {
     const card = read("src/lib/workout-share-card.ts");
     expect(card).toContain("const lines = wrapLines(ctx, r.name, Math.max(120, nameMax), 2);");
-    expect(card).toContain("ctx.fillText(r.alt, W - PAD, ry + 104);");
+    expect(card).toContain("ctx.fillText(r.alt, L.R, ry + 104);");
     expect(card).toContain('const alt = detail ? (lift?.alt ?? "").trim() : "";');
     expect(card).toContain("if (liftAlt && dw + altW <= innerW) {");
   });

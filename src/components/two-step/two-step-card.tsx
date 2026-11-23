@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Laptop, Loader2, MoreHorizontal, Plus, ShieldCheck, Smartphone } from "lucide-react";
+import { Laptop, Loader2, Mail, MoreHorizontal, Plus, ShieldCheck, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Sheet,
   SheetContent,
@@ -31,8 +32,11 @@ import {
 import { useAuth } from "@/lib/auth";
 import { billingDay } from "@/lib/date-range";
 import {
+  emailBackupLine,
+  emailBackupSwitchOn,
   KIND_TITLE,
   leavesOnlyPasskeys,
+  type EmailBackup,
   type TwoStepKind,
   type TwoStepMethod,
   type TwoStepStatus,
@@ -41,6 +45,7 @@ import {
   forgetTwoStepDevice,
   listTwoStepDevices,
   removeTwoStepMethod,
+  setTwoStepEmailBackup,
   setTwoStepPreferred,
   trustThisDevice,
   type TrustedDeviceRow,
@@ -260,6 +265,54 @@ export function TwoStepMethodList({
   );
 }
 
+/**
+ * "Email me a code": the backup for when they don't have their phone. On by
+ * default once a login has a way; it sends only to the login's own email.
+ */
+function EmailBackupRow({ backup, onChanged }: { backup: EmailBackup; onChanged: () => void }) {
+  const qc = useQueryClient();
+  const save = useServerFn(setTwoStepEmailBackup);
+  const [busy, setBusy] = useState(false);
+  const on = emailBackupSwitchOn(backup);
+
+  async function toggle(next: boolean) {
+    setBusy(true);
+    try {
+      await save({ data: { on: next } });
+      toast.success(next ? "Codes can be emailed to you" : "Email codes are off");
+      await qc.invalidateQueries({ queryKey: [TWO_STEP_STATUS_KEY] });
+      onChanged();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't save that. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className="flex items-center gap-3 rounded-xl border px-3 py-2.5"
+      data-two-step-email-backup={on ? "on" : "off"}
+    >
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted">
+        <Mail className="h-4 w-4" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium">
+          Email me a code{on && backup.to ? ` · ${backup.to}` : ""}
+        </span>
+        <span className="block text-xs text-muted-foreground">{emailBackupLine(backup, day)}</span>
+      </span>
+      <Switch
+        checked={on}
+        disabled={busy}
+        onCheckedChange={(v) => void toggle(v === true)}
+        aria-label="Email me a code"
+      />
+    </div>
+  );
+}
+
 /** Devices that skip the second step for 30 days. */
 function TrustedDevices({ uid }: { uid: string }) {
   const qc = useQueryClient();
@@ -393,8 +446,8 @@ export function TwoStepCard() {
         <h3 className="text-base font-semibold">Two-step sign-in</h3>
       </div>
       <p className="text-sm text-muted-foreground">
-        After your password you confirm it's you with one of these. Add two (Face ID and a text is
-        easiest), so a lost phone never locks you out.
+        After your password you confirm it's you with one of these. Face ID and a text are easiest.
+        Without your phone, a code can be emailed to you.
       </p>
 
       {status.isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
@@ -405,6 +458,9 @@ export function TwoStepCard() {
       )}
 
       {data && <TwoStepMethodList status={data} onChanged={() => void status.refetch()} />}
+      {has && data?.emailBackup && (
+        <EmailBackupRow backup={data.emailBackup} onChanged={() => void status.refetch()} />
+      )}
       {data && data.methods.length > 0 && data.methods.every((m) => m.kind === "passkey") && (
         <p className="text-xs text-muted-foreground" data-two-step-passkey-only>
           Add a text message too: Face ID works on jfeffect.com, not in the iPhone or Android app.

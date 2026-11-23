@@ -51,7 +51,7 @@ const AI_ALERT_TYPES = [
   "ai_budget",
 ];
 
-async function readHealthView(db: any): Promise<AiHealthView> {
+export async function readHealthView(db: any): Promise<AiHealthView> {
   const count = async (q: any) => (await q).count ?? 0;
   const head = { count: "exact" as const, head: true };
   const [h, alerts, replies, recaps, insights, decks] = await Promise.all([
@@ -249,24 +249,44 @@ export const getAiUsageFn = createServerFn({ method: "POST" })
 /** The month's AI budget in US$ (alerts at 80% and 100%); 0 or empty turns it off. */
 export const setAiBudgetFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { monthlyUsd: number | null }) =>
-    z.object({ monthlyUsd: z.number().min(0).max(100_000).nullable() }).parse(d),
+  .inputValidator((d: { monthlyUsd: number | null; holdBackground?: boolean }) =>
+    z
+      .object({
+        monthlyUsd: z.number().min(0).max(100_000).nullable(),
+        holdBackground: z.boolean().optional(),
+      })
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const db = await admin();
-    const value = JSON.stringify({ monthly_usd: data.monthlyUsd || 0 });
     const { data: row } = await db
       .from("app_settings")
-      .select("id")
+      .select("id, value")
       .eq("key", "ai_budget")
       .maybeSingle();
+    let before: { hold_background?: boolean } = {};
+    try {
+      before = JSON.parse(row?.value ?? "{}") ?? {};
+    } catch {
+      before = {};
+    }
+    // the hold is on unless the owner turned it off (it only ever acts with a budget set)
+    const hold = data.holdBackground ?? before.hold_background ?? true;
+    const value = JSON.stringify({ monthly_usd: data.monthlyUsd || 0, hold_background: hold });
     if (row?.id)
       await db
         .from("app_settings")
         .update({ value, updated_at: new Date().toISOString() })
         .eq("id", row.id);
     else await db.from("app_settings").insert({ key: "ai_budget", value });
+    // the hold follows the new budget at once, not at the next hourly read
+    try {
+      const { refreshSpendHold } = await import("./ai-monitor.server");
+      await refreshSpendHold(db);
+    } catch (e: any) {
+      console.error("[ai-budget] hold not refreshed", e?.message);
+    }
     return { ok: true };
   });
 

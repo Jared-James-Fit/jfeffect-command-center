@@ -79,6 +79,35 @@ export function effectiveRestSeconds(
   return defaultRestSeconds(ex);
 }
 
+/** A card's exercise as its metadata (the library fields that decide its category). */
+export function exerciseMetaOf(exercise: Partial<ExerciseMeta> | null | undefined): ExerciseMeta | null {
+  return exercise
+    ? {
+        exercise_category: exercise.exercise_category ?? null,
+        is_competition_lift: exercise.is_competition_lift ?? null,
+        competition_lift_type: exercise.competition_lift_type ?? null,
+        movement_family: exercise.movement_family ?? null,
+        name: exercise.name ?? null,
+      }
+    : null;
+}
+
+/**
+ * The rest a card shows the athlete ("Rest 3 min" above its sets): the
+ * program's, else the usual one for the kind of exercise (`usual`). One
+ * reading for the logger and the coach's workout quick view.
+ */
+export function cardRest(row: {
+  rest_seconds_override?: number | null;
+  rest_seconds?: number | null;
+  exercises?: Partial<ExerciseMeta> | null;
+}): { seconds: number | null; usual: boolean } {
+  return {
+    seconds: effectiveRestSeconds(row, exerciseMetaOf(row.exercises)),
+    usual: row.rest_seconds_override == null && row.rest_seconds == null,
+  };
+}
+
 /** Human-readable rest range label, e.g. "3–12 min". */
 export function restRangeLabel(cat: ExerciseCategory): string {
   const r = defaultRestRange(cat);

@@ -12,6 +12,7 @@ import {
   ctaText,
   fromPublicRow,
   listedPackages,
+  optionCards,
   packageProblems,
   paidPackages,
   priceLabel,
@@ -309,12 +310,12 @@ describe("only the approved offers are public", () => {
 describe("the public pages read the packages, never type them", () => {
   it("the landing page and the coaching page draw the packages from data", () => {
     const landing = read("src/components/landing/landing-page.tsx");
-    expect(landing).toContain("<CoachingPackagesGrid packages={list} from=\"home\" calls={false} />");
+    expect(landing).toContain("<CoachingPackagesGrid packages={list} from=\"home\" calls={false} free chooser />");
     expect(landing).not.toMatch(/\$130|\$99|\$249/);
     const coaching = read("src/routes/coaching.index.tsx");
     expect(coaching).toContain("<CoachingPackagesGrid packages={packages} from=\"coaching\" />");
     expect(coaching).not.toMatch(/\$130|\$99|\$249/);
-    expect(read("src/routes/index.tsx")).toContain("loader: () => ({ packages: getPublicPackages() }),");
+    expect(read("src/routes/index.tsx")).toContain("loader: () => ({ packages: getPublicPackages(), programs: getPublicProgramCount() }),");
   });
 
   it("every price says CAD plus applicable tax and the recommended one says so", () => {
@@ -386,5 +387,47 @@ describe("call prep keeps what's on file apart from the app's read", () => {
     expect(MIGRATION).toContain('CREATE POLICY "Staff manage call reviews" ON public.coaching_call_reviews');
     const fns = read("src/lib/coaching-packages/packages.functions.ts");
     expect(fns).toContain('.not("shared_at", "is", null)');
+  });
+});
+
+describe("every way in, side by side on the landing page (Nov 23 2026)", () => {
+  const nutrition = toPublic(pkg({ slug: "nutrition", name: "Nutrition Coaching", price_cents: 9900, recommended: false, sort_order: 20 }));
+  const plus = toPublic(pkg({ slug: "plus", name: "Coaching Plus", price_cents: 24900, recommended: false, included_calls: 2, sort_order: 40 }));
+
+  it("puts the free app first, then the monthly packages by price", () => {
+    // listed out of order on purpose: price decides, never the order rows came in
+    const cards = optionCards([plus, complete, free, nutrition], { free: true });
+    expect(cards.map((p) => p.slug)).toEqual(["free", "nutrition", "complete", "plus"]);
+    expect(optionCards([plus, complete, free, nutrition]).map((p) => p.slug)).toEqual(["nutrition", "complete", "plus"]);
+  });
+
+  it("shows only what's listed, and a draft never", () => {
+    expect(optionCards([free, complete, plusDraft], { free: true }).map((p) => p.slug)).toEqual(["free", "complete"]);
+    // a lone free card isn't a comparison
+    expect(optionCards([free, plusDraft], { free: true })).toEqual([]);
+  });
+
+  it("anchors the recommended card on the one just under it", () => {
+    const cards = optionCards([free, nutrition, complete, plus], { free: true });
+    expect(cards.map((p) => anchorLine(p, cards))).toEqual([null, null, "$31 more than Nutrition Coaching", null]);
+  });
+
+  it("the grid lays four out four across, two by two, then one under another", () => {
+    const grid = read("src/components/sales/coaching-packages.tsx");
+    expect(grid).toContain('four && "max-w-md md:max-w-3xl md:grid-cols-2 xl:max-w-6xl xl:grid-cols-4"');
+    expect(grid).toContain('? "xl:-my-4 xl:py-10"');
+    expect(grid).toContain("compact={four}");
+  });
+
+  it("is reachable from the top of the page and from every public page's navigation", () => {
+    const landing = read("src/components/landing/landing-page.tsx");
+    expect(landing).toContain('href="#pricing"');
+    expect(landing).toContain('export const PLANS_JUMP = "See plans and prices";');
+    expect(landing).toMatch(/id="pricing" className="scroll-mt-20" data-landing-pricing/);
+    // the jump comes before any price: the hero names no number
+    const hero = landing.slice(landing.indexOf("data-landing-hero"), landing.indexOf("<HeroDevices />"));
+    expect(hero).not.toMatch(/\$\d/);
+    // the bottom repeats the choice compactly
+    expect(landing).toContain("decisionRows(list)");
   });
 });

@@ -407,30 +407,31 @@ describe("cardio targets", () => {
 });
 
 describe("the screens", () => {
-  const chart = read("src/components/analytics/competition-strength-chart.tsx");
+  const chart = read("src/components/analytics/strength-trend-chart.tsx");
   const dash = read("src/components/analytics/client-analytics-dashboard.tsx");
-  it("the strength chart is one lift at a time by default, Compare in % change, lines that break and never curve", () => {
-    expect(chart).toContain('([...COMP_LIFTS, "compare"] as View[])');
+  it("the strength chart is one lift at a time by default, Compare in % change, a stepped line that never curves", () => {
+    expect(chart).toContain('{ key: "compare" as View, label: "Compare" }');
     expect(chart).not.toContain('"all"');
-    expect(chart).toContain("connectNulls={false}");
-    expect(chart).not.toContain('type="monotone"');
-    expect(chart).toContain("niceDomain(values, { minSpan:");
-    expect(chart).toContain("▲ Tested max");
-    expect(chart).toContain("◆ Meet (lifted)");
+    // a step: flat until the next session, then to its value (never a smoothed curve)
+    expect(chart).toContain("H${x(b.day)} V${y(b.value)}");
+    expect(chart).not.toContain("monotone");
+    // an honest axis: never zoomed in past a change worth drawing
+    expect(chart).toContain("niceTicks(Math.min(...vals), Math.max(...vals), 4, minSpan)");
+    expect(chart).toContain("Meet");
   });
-  it("analytics is Overview · Strength · Volume · Consistency · Recovery; recorded and estimated recovery are apart", () => {
-    expect(dash).toContain('["consistency", "Consistency"]');
-    expect(dash).toContain('title="What you logged"');
-    expect(dash).toContain('title="Readiness (estimate)"');
+  it("analytics is Overview · Strength · Training · Records; what was logged at check-out is its own section", () => {
+    expect(dash).toContain('["training", "Training"]');
+    expect(dash).toContain('["records", "Records"]');
+    expect(dash).toContain('title="Sleep, recovery and pain"');
+    // the readiness estimate isn't an analytics section (Workouts shows it when it's news)
+    expect(dash).not.toContain("<RecoveryPreviewCard");
   });
-  it("where you stand is one table of labelled numbers, with no 'typical range' read", () => {
-    const t = read("src/components/analytics/total-standing-card.tsx");
-    const flat = t.replace(/\s+/g, " ");
-    expect(flat).toContain("1RM on <br /> file");
-    expect(flat).toContain("Training <br /> max");
-    expect(t).not.toContain("typical {");
-    expect(t).not.toContain("inside the typical range");
-    expect(t).toContain("An estimated total needs all three.");
+  it("the total is an estimate or a meet, never mixed, with no 'typical range' read", () => {
+    const d = read("src/components/analytics/sbd-donut.tsx");
+    expect(d).not.toContain("typical");
+    expect(d).toContain("Shares describe the total; they don't mean a lift is weak.");
+    expect(d).toContain('Tested 1RM');
+    expect(d).toContain("Training max");
   });
   it("the cardio card never says 'Done at any one'", () => {
     const c = read("src/components/cardio/CardioCompletionCard.tsx");

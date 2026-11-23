@@ -70,6 +70,16 @@ id (never a second submission), up to `BACKGROUND_LIMIT_MS`. A finished answer i
 `result.calls[key]`, so a resumed stage never re-asks. A failed stage clears both, so Try again
 asks fresh.
 
+A slow tail gets a **backup** instead of a restart (Nov 23 2026): a call still running at
+`HEDGE_AFTER_MS` (run-eta.ts: strategy 15 min, build / repair 6, review 5) starts the route's next
+OpenAI model beside it, and whichever answers first is used (the other is cancelled). The 25-min
+limit only hands over to another model; the route's last model is waited on to 45 min. Each call
+keeps OpenAI's own status (`queued` / `in_progress`), so the run can say it's waiting in OpenAI's
+queue. Generate Next Program and its interpret job never use the gateway (`openaiOnly`), whatever
+`ai_routes` says; only a benchmark does. A worker request the host cuts off costs about two
+minutes (`program-intel-tick` every minute, a 2-min stale check on model stages), and no request
+is held through the quarter-hour rush of scheduled jobs.
+
 Gateway calls (Claude, and OpenAI / Google through the gateway) are **streamed**: the gateway
 answers 524 to a request that sends nothing back for ~125s, which a strong model thinking over a
 long brief always hits. Streamed, a call can run up to `SYNC_TIMEOUT_MS` (240s, inside the 300s

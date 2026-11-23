@@ -6,7 +6,7 @@ const read = (p: string) => readFileSync(p, "utf8");
 
 describe("Workouts page: one card per section, nothing said twice", () => {
   const readiness = read("src/components/analytics/recovery-preview-card.tsx");
-  const month = read("src/components/training-analytics-preview-card.tsx");
+  const month = read("src/components/performance-card.tsx");
 
   it("readiness is one compact row that opens the whole picture: a status, today's call, what to watch, what it read", () => {
     // In the page: one row (the score, the call's first line + limiter, a chevron)…
@@ -31,13 +31,12 @@ describe("Workouts page: one card per section, nothing said twice", () => {
     }
   });
 
-  it("progress is a snapshot of one to three numbers (nothing at zero); one tap to analytics; nothing folds", () => {
-    expect(month).toContain("data-progress-snapshot");
-    expect(month).toContain("data-snapshot-metric");
+  it("progress is one Performance card drawn from the athlete's training; one tap to analytics; nothing folds", () => {
+    expect(month).toContain("data-performance-card");
+    expect(month).toContain("data-performance-heatmap");
     expect(month).not.toContain("<Tile ");
-    // neutral bars: colour on Workouts only ever means something
+    // no blue bars on Workouts: green says trained, the rest is neutral
     expect(month).not.toContain("var(--chart-4)");
-    // one tap to the analytics page, which has everything the old "More" fold held
     expect(month).not.toContain("<CollapsibleContent");
     expect(month).toContain("Analytics <ChevronRight");
     expect(month).toContain('to="/portal/workouts/analytics"');

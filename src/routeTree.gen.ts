@@ -93,6 +93,7 @@ import { Route as AuthenticatedAdminFinanceRouteImport } from './routes/_authent
 import { Route as AuthenticatedAdminFloatingBarRouteImport } from './routes/_authenticated/admin/floating-bar'
 import { Route as AuthenticatedAdminFormsRouteImport } from './routes/_authenticated/admin/forms'
 import { Route as AuthenticatedAdminGoogleCalendarRouteImport } from './routes/_authenticated/admin/google-calendar'
+import { Route as AuthenticatedAdminInsightsRouteImport } from './routes/_authenticated/admin/insights'
 import { Route as AuthenticatedAdminLeadsRouteImport } from './routes/_authenticated/admin/leads'
 import { Route as AuthenticatedAdminLeagueRouteImport } from './routes/_authenticated/admin/league'
 import { Route as AuthenticatedAdminLegacyMigrationRouteImport } from './routes/_authenticated/admin/legacy-migration'
@@ -131,6 +132,7 @@ import { Route as AuthenticatedAdminTestimonialsRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminTrainingIntelligenceRouteImport } from './routes/_authenticated/admin/training-intelligence'
 import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_authenticated/admin/training-phases'
 import { Route as AuthenticatedAdminTransactionsRouteImport } from './routes/_authenticated/admin/transactions'
+import { Route as AuthenticatedAdminUsageRouteImport } from './routes/_authenticated/admin/usage'
 import { Route as AuthenticatedAdminVoiceRouteImport } from './routes/_authenticated/admin/voice'
 import { Route as AuthenticatedAdminWarmupProtocolsRouteImport } from './routes/_authenticated/admin/warmup-protocols'
 import { Route as AuthenticatedCoachProgramsRouteImport } from './routes/_authenticated/coach/programs'
@@ -160,6 +162,7 @@ import { Route as AuthenticatedPortalScheduleRouteImport } from './routes/_authe
 import { Route as AuthenticatedPortalSupportRouteImport } from './routes/_authenticated/portal/support'
 import { Route as AuthenticatedPortalToolsRouteImport } from './routes/_authenticated/portal/tools'
 import { Route as AuthenticatedPortalUpgradeRouteImport } from './routes/_authenticated/portal/upgrade'
+import { Route as ApiPublicAppPulseRouteImport } from './routes/api/public/app-pulse'
 import { Route as ApiPublicBulkExerciseImportRouteImport } from './routes/api/public/bulk-exercise-import'
 import { Route as ApiPublicCalendarFeedRouteImport } from './routes/api/public/calendar-feed'
 import { Route as ApiPublicSignnowWebhookRouteImport } from './routes/api/public/signnow-webhook'
@@ -265,6 +268,7 @@ import { Route as ApiPublicHooksCleoAttachmentsSweepRouteImport } from './routes
 import { Route as ApiPublicHooksCleoBenchRouteImport } from './routes/api/public/hooks/cleo-bench'
 import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/api/public/hooks/client-calendars-tick'
 import { Route as ApiPublicHooksCoachAutomationTickRouteImport } from './routes/api/public/hooks/coach-automation-tick'
+import { Route as ApiPublicHooksCoachingPackageStripeRouteImport } from './routes/api/public/hooks/coaching-package-stripe'
 import { Route as ApiPublicHooksDailyVisualsTickRouteImport } from './routes/api/public/hooks/daily-visuals-tick'
 import { Route as ApiPublicHooksDocumentsPurgeRouteImport } from './routes/api/public/hooks/documents-purge'
 import { Route as ApiPublicHooksFeedCopiesTickRouteImport } from './routes/api/public/hooks/feed-copies-tick'
@@ -774,6 +778,12 @@ const AuthenticatedAdminGoogleCalendarRoute =
     path: '/google-calendar',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminInsightsRoute =
+  AuthenticatedAdminInsightsRouteImport.update({
+    id: '/insights',
+    path: '/insights',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminLeadsRoute = AuthenticatedAdminLeadsRouteImport.update({
   id: '/leads',
   path: '/leads',
@@ -996,6 +1006,11 @@ const AuthenticatedAdminTransactionsRoute =
     path: '/transactions',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminUsageRoute = AuthenticatedAdminUsageRouteImport.update({
+  id: '/usage',
+  path: '/usage',
+  getParentRoute: () => AuthenticatedAdminRouteRoute,
+} as any)
 const AuthenticatedAdminVoiceRoute = AuthenticatedAdminVoiceRouteImport.update({
   id: '/voice',
   path: '/voice',
@@ -1167,6 +1182,11 @@ const AuthenticatedPortalUpgradeRoute =
     path: '/upgrade',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const ApiPublicAppPulseRoute = ApiPublicAppPulseRouteImport.update({
+  id: '/api/public/app-pulse',
+  path: '/api/public/app-pulse',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicBulkExerciseImportRoute =
   ApiPublicBulkExerciseImportRouteImport.update({
     id: '/api/public/bulk-exercise-import',
@@ -1788,6 +1808,12 @@ const ApiPublicHooksCoachAutomationTickRoute =
     path: '/api/public/hooks/coach-automation-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksCoachingPackageStripeRoute =
+  ApiPublicHooksCoachingPackageStripeRouteImport.update({
+    id: '/api/public/hooks/coaching-package-stripe',
+    path: '/api/public/hooks/coaching-package-stripe',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksDailyVisualsTickRoute =
   ApiPublicHooksDailyVisualsTickRouteImport.update({
     id: '/api/public/hooks/daily-visuals-tick',
@@ -2194,6 +2220,7 @@ export interface FileRoutesByFullPath {
   '/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
+  '/admin/insights': typeof AuthenticatedAdminInsightsRoute
   '/admin/leads': typeof AuthenticatedAdminLeadsRoute
   '/admin/league': typeof AuthenticatedAdminLeagueRoute
   '/admin/legacy-migration': typeof AuthenticatedAdminLegacyMigrationRoute
@@ -2232,6 +2259,7 @@ export interface FileRoutesByFullPath {
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
+  '/admin/usage': typeof AuthenticatedAdminUsageRoute
   '/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/coach/programs': typeof AuthenticatedCoachProgramsRoute
@@ -2259,6 +2287,7 @@ export interface FileRoutesByFullPath {
   '/portal/support': typeof AuthenticatedPortalSupportRoute
   '/portal/tools': typeof AuthenticatedPortalToolsRoute
   '/portal/upgrade': typeof AuthenticatedPortalUpgradeRoute
+  '/api/public/app-pulse': typeof ApiPublicAppPulseRoute
   '/api/public/bulk-exercise-import': typeof ApiPublicBulkExerciseImportRoute
   '/api/public/calendar-feed': typeof ApiPublicCalendarFeedRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
@@ -2348,6 +2377,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
+  '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
@@ -2502,6 +2532,7 @@ export interface FileRoutesByTo {
   '/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
+  '/admin/insights': typeof AuthenticatedAdminInsightsRoute
   '/admin/leads': typeof AuthenticatedAdminLeadsRoute
   '/admin/league': typeof AuthenticatedAdminLeagueRoute
   '/admin/legacy-migration': typeof AuthenticatedAdminLegacyMigrationRoute
@@ -2539,6 +2570,7 @@ export interface FileRoutesByTo {
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
+  '/admin/usage': typeof AuthenticatedAdminUsageRoute
   '/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/coach/programs': typeof AuthenticatedCoachProgramsRoute
@@ -2566,6 +2598,7 @@ export interface FileRoutesByTo {
   '/portal/support': typeof AuthenticatedPortalSupportRoute
   '/portal/tools': typeof AuthenticatedPortalToolsRoute
   '/portal/upgrade': typeof AuthenticatedPortalUpgradeRoute
+  '/api/public/app-pulse': typeof ApiPublicAppPulseRoute
   '/api/public/bulk-exercise-import': typeof ApiPublicBulkExerciseImportRoute
   '/api/public/calendar-feed': typeof ApiPublicCalendarFeedRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
@@ -2655,6 +2688,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
+  '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
@@ -2814,6 +2848,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/_authenticated/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/_authenticated/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
+  '/_authenticated/admin/insights': typeof AuthenticatedAdminInsightsRoute
   '/_authenticated/admin/leads': typeof AuthenticatedAdminLeadsRoute
   '/_authenticated/admin/league': typeof AuthenticatedAdminLeagueRoute
   '/_authenticated/admin/legacy-migration': typeof AuthenticatedAdminLegacyMigrationRoute
@@ -2852,6 +2887,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/_authenticated/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/_authenticated/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
+  '/_authenticated/admin/usage': typeof AuthenticatedAdminUsageRoute
   '/_authenticated/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/_authenticated/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/_authenticated/coach/programs': typeof AuthenticatedCoachProgramsRoute
@@ -2879,6 +2915,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/support': typeof AuthenticatedPortalSupportRoute
   '/_authenticated/portal/tools': typeof AuthenticatedPortalToolsRoute
   '/_authenticated/portal/upgrade': typeof AuthenticatedPortalUpgradeRoute
+  '/api/public/app-pulse': typeof ApiPublicAppPulseRoute
   '/api/public/bulk-exercise-import': typeof ApiPublicBulkExerciseImportRoute
   '/api/public/calendar-feed': typeof ApiPublicCalendarFeedRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
@@ -2968,6 +3005,7 @@ export interface FileRoutesById {
   '/api/public/hooks/cleo-bench': typeof ApiPublicHooksCleoBenchRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/coach-automation-tick': typeof ApiPublicHooksCoachAutomationTickRoute
+  '/api/public/hooks/coaching-package-stripe': typeof ApiPublicHooksCoachingPackageStripeRoute
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/documents-purge': typeof ApiPublicHooksDocumentsPurgeRoute
   '/api/public/hooks/feed-copies-tick': typeof ApiPublicHooksFeedCopiesTickRoute
@@ -3127,6 +3165,7 @@ export interface FileRouteTypes {
     | '/admin/floating-bar'
     | '/admin/forms'
     | '/admin/google-calendar'
+    | '/admin/insights'
     | '/admin/leads'
     | '/admin/league'
     | '/admin/legacy-migration'
@@ -3165,6 +3204,7 @@ export interface FileRouteTypes {
     | '/admin/training-intelligence'
     | '/admin/training-phases'
     | '/admin/transactions'
+    | '/admin/usage'
     | '/admin/voice'
     | '/admin/warmup-protocols'
     | '/coach/programs'
@@ -3192,6 +3232,7 @@ export interface FileRouteTypes {
     | '/portal/support'
     | '/portal/tools'
     | '/portal/upgrade'
+    | '/api/public/app-pulse'
     | '/api/public/bulk-exercise-import'
     | '/api/public/calendar-feed'
     | '/api/public/signnow-webhook'
@@ -3281,6 +3322,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleo-bench'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/coach-automation-tick'
+    | '/api/public/hooks/coaching-package-stripe'
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
@@ -3435,6 +3477,7 @@ export interface FileRouteTypes {
     | '/admin/floating-bar'
     | '/admin/forms'
     | '/admin/google-calendar'
+    | '/admin/insights'
     | '/admin/leads'
     | '/admin/league'
     | '/admin/legacy-migration'
@@ -3472,6 +3515,7 @@ export interface FileRouteTypes {
     | '/admin/training-intelligence'
     | '/admin/training-phases'
     | '/admin/transactions'
+    | '/admin/usage'
     | '/admin/voice'
     | '/admin/warmup-protocols'
     | '/coach/programs'
@@ -3499,6 +3543,7 @@ export interface FileRouteTypes {
     | '/portal/support'
     | '/portal/tools'
     | '/portal/upgrade'
+    | '/api/public/app-pulse'
     | '/api/public/bulk-exercise-import'
     | '/api/public/calendar-feed'
     | '/api/public/signnow-webhook'
@@ -3588,6 +3633,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleo-bench'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/coach-automation-tick'
+    | '/api/public/hooks/coaching-package-stripe'
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
@@ -3746,6 +3792,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/floating-bar'
     | '/_authenticated/admin/forms'
     | '/_authenticated/admin/google-calendar'
+    | '/_authenticated/admin/insights'
     | '/_authenticated/admin/leads'
     | '/_authenticated/admin/league'
     | '/_authenticated/admin/legacy-migration'
@@ -3784,6 +3831,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/training-intelligence'
     | '/_authenticated/admin/training-phases'
     | '/_authenticated/admin/transactions'
+    | '/_authenticated/admin/usage'
     | '/_authenticated/admin/voice'
     | '/_authenticated/admin/warmup-protocols'
     | '/_authenticated/coach/programs'
@@ -3811,6 +3859,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/support'
     | '/_authenticated/portal/tools'
     | '/_authenticated/portal/upgrade'
+    | '/api/public/app-pulse'
     | '/api/public/bulk-exercise-import'
     | '/api/public/calendar-feed'
     | '/api/public/signnow-webhook'
@@ -3900,6 +3949,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleo-bench'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/coach-automation-tick'
+    | '/api/public/hooks/coaching-package-stripe'
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/documents-purge'
     | '/api/public/hooks/feed-copies-tick'
@@ -4017,6 +4067,7 @@ export interface RootRouteChildren {
   SignupJfRoute: typeof SignupJfRoute
   ChallengesIndexRoute: typeof ChallengesIndexRoute
   CoachingIndexRoute: typeof CoachingIndexRoute
+  ApiPublicAppPulseRoute: typeof ApiPublicAppPulseRoute
   ApiPublicBulkExerciseImportRoute: typeof ApiPublicBulkExerciseImportRoute
   ApiPublicCalendarFeedRoute: typeof ApiPublicCalendarFeedRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
@@ -4039,6 +4090,7 @@ export interface RootRouteChildren {
   ApiPublicHooksCleoBenchRoute: typeof ApiPublicHooksCleoBenchRoute
   ApiPublicHooksClientCalendarsTickRoute: typeof ApiPublicHooksClientCalendarsTickRoute
   ApiPublicHooksCoachAutomationTickRoute: typeof ApiPublicHooksCoachAutomationTickRoute
+  ApiPublicHooksCoachingPackageStripeRoute: typeof ApiPublicHooksCoachingPackageStripeRoute
   ApiPublicHooksDailyVisualsTickRoute: typeof ApiPublicHooksDailyVisualsTickRoute
   ApiPublicHooksDocumentsPurgeRoute: typeof ApiPublicHooksDocumentsPurgeRoute
   ApiPublicHooksFeedCopiesTickRoute: typeof ApiPublicHooksFeedCopiesTickRoute
@@ -4672,6 +4724,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminGoogleCalendarRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/insights': {
+      id: '/_authenticated/admin/insights'
+      path: '/insights'
+      fullPath: '/admin/insights'
+      preLoaderRoute: typeof AuthenticatedAdminInsightsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/leads': {
       id: '/_authenticated/admin/leads'
       path: '/leads'
@@ -4938,6 +4997,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminTransactionsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/usage': {
+      id: '/_authenticated/admin/usage'
+      path: '/usage'
+      fullPath: '/admin/usage'
+      preLoaderRoute: typeof AuthenticatedAdminUsageRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/voice': {
       id: '/_authenticated/admin/voice'
       path: '/voice'
@@ -5140,6 +5206,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/portal/upgrade'
       preLoaderRoute: typeof AuthenticatedPortalUpgradeRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/api/public/app-pulse': {
+      id: '/api/public/app-pulse'
+      path: '/api/public/app-pulse'
+      fullPath: '/api/public/app-pulse'
+      preLoaderRoute: typeof ApiPublicAppPulseRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/public/bulk-exercise-import': {
       id: '/api/public/bulk-exercise-import'
@@ -5876,6 +5949,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksCoachAutomationTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/coaching-package-stripe': {
+      id: '/api/public/hooks/coaching-package-stripe'
+      path: '/api/public/hooks/coaching-package-stripe'
+      fullPath: '/api/public/hooks/coaching-package-stripe'
+      preLoaderRoute: typeof ApiPublicHooksCoachingPackageStripeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/daily-visuals-tick': {
       id: '/api/public/hooks/daily-visuals-tick'
       path: '/api/public/hooks/daily-visuals-tick'
@@ -6451,6 +6531,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminFloatingBarRoute: typeof AuthenticatedAdminFloatingBarRoute
   AuthenticatedAdminFormsRoute: typeof AuthenticatedAdminFormsRoute
   AuthenticatedAdminGoogleCalendarRoute: typeof AuthenticatedAdminGoogleCalendarRoute
+  AuthenticatedAdminInsightsRoute: typeof AuthenticatedAdminInsightsRoute
   AuthenticatedAdminLeadsRoute: typeof AuthenticatedAdminLeadsRoute
   AuthenticatedAdminLeagueRoute: typeof AuthenticatedAdminLeagueRoute
   AuthenticatedAdminLegacyMigrationRoute: typeof AuthenticatedAdminLegacyMigrationRoute
@@ -6489,6 +6570,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminTrainingIntelligenceRoute: typeof AuthenticatedAdminTrainingIntelligenceRoute
   AuthenticatedAdminTrainingPhasesRoute: typeof AuthenticatedAdminTrainingPhasesRoute
   AuthenticatedAdminTransactionsRoute: typeof AuthenticatedAdminTransactionsRoute
+  AuthenticatedAdminUsageRoute: typeof AuthenticatedAdminUsageRoute
   AuthenticatedAdminVoiceRoute: typeof AuthenticatedAdminVoiceRoute
   AuthenticatedAdminWarmupProtocolsRoute: typeof AuthenticatedAdminWarmupProtocolsRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
@@ -6585,6 +6667,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminFormsRoute: AuthenticatedAdminFormsRoute,
     AuthenticatedAdminGoogleCalendarRoute:
       AuthenticatedAdminGoogleCalendarRoute,
+    AuthenticatedAdminInsightsRoute: AuthenticatedAdminInsightsRoute,
     AuthenticatedAdminLeadsRoute: AuthenticatedAdminLeadsRoute,
     AuthenticatedAdminLeagueRoute: AuthenticatedAdminLeagueRoute,
     AuthenticatedAdminLegacyMigrationRoute:
@@ -6634,6 +6717,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminTrainingPhasesRoute:
       AuthenticatedAdminTrainingPhasesRoute,
     AuthenticatedAdminTransactionsRoute: AuthenticatedAdminTransactionsRoute,
+    AuthenticatedAdminUsageRoute: AuthenticatedAdminUsageRoute,
     AuthenticatedAdminVoiceRoute: AuthenticatedAdminVoiceRoute,
     AuthenticatedAdminWarmupProtocolsRoute:
       AuthenticatedAdminWarmupProtocolsRoute,
@@ -6957,6 +7041,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupJfRoute: SignupJfRoute,
   ChallengesIndexRoute: ChallengesIndexRoute,
   CoachingIndexRoute: CoachingIndexRoute,
+  ApiPublicAppPulseRoute: ApiPublicAppPulseRoute,
   ApiPublicBulkExerciseImportRoute: ApiPublicBulkExerciseImportRoute,
   ApiPublicCalendarFeedRoute: ApiPublicCalendarFeedRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
@@ -6986,6 +7071,8 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksClientCalendarsTickRoute,
   ApiPublicHooksCoachAutomationTickRoute:
     ApiPublicHooksCoachAutomationTickRoute,
+  ApiPublicHooksCoachingPackageStripeRoute:
+    ApiPublicHooksCoachingPackageStripeRoute,
   ApiPublicHooksDailyVisualsTickRoute: ApiPublicHooksDailyVisualsTickRoute,
   ApiPublicHooksDocumentsPurgeRoute: ApiPublicHooksDocumentsPurgeRoute,
   ApiPublicHooksFeedCopiesTickRoute: ApiPublicHooksFeedCopiesTickRoute,

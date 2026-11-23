@@ -1,15 +1,16 @@
 /**
- * Program Intelligence (coach / admin): what a client was supposed to do vs
- * what they did, how each lift and muscle group progressed, how they responded
- * to each block, and what that means for the next cycle. Every number comes
- * from the deterministic report built on the phone from the client's records;
- * the AI only interprets it or drafts the next program, and only when asked.
+ * Program Intelligence's full report (coach / admin): what a client was
+ * supposed to do vs what they did, how each lift and muscle group progressed,
+ * how they responded to each block. Every number comes from the deterministic
+ * report built on the phone from the client's records; the AI only interprets
+ * it when asked. Since Nov 23 2026 it's the evidence under the coach's
+ * workflow (generator/workstation.tsx), loaded only when opened; the page
+ * itself is the workflow.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
-import { ClipboardCopy, Download, Dumbbell, FileJson, FilePlus2, FileSpreadsheet, FileText, ListTree, Loader2, ShieldCheck } from "lucide-react";
+import { ClipboardCopy, Download, Dumbbell, FileJson, FileSpreadsheet, FileText, ListTree, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,7 @@ import { buildIntelReport } from "@/lib/program-intel/report";
 import { BRAIN_LABEL, BRAINS, type Brain, type Finding, type IntelScopeRequest } from "@/lib/program-intel/types";
 import { DetailedData } from "./detailed-data";
 import { MemorySection } from "./memory";
-import { NextProgramLink } from "./next-program-link";
+import { NextProgramWorkstation } from "./generator/workstation";
 import { BlocksSection, ExercisesSection, FindingsSummary, LiftsSection, MusclesSection, RecoveryCard, WeeksSection } from "./sections";
 import { logIntelExport, newId, useBrainOverride, useIntelJobs, useIntelRecords, useIntelReport, useObservations, useSaveObservation } from "./use-program-intel";
 
@@ -58,8 +59,21 @@ function download(name: string, text: string, type: string) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-export function ProgramIntelligencePage({ clientId, search: initial }: { clientId: string; search: IntelSearch }) {
-  const navigate = useNavigate();
+/** The page: the coach's workflow, with this report as its evidence. */
+export function ProgramIntelligencePage({ clientId, search }: { clientId: string; search: IntelSearch }) {
+  const { viewOnly } = useAuth();
+  if (viewOnly)
+    return (
+      <>
+        <PageHeader title="Program Intelligence" backTo={`/admin/client-programs/${clientId}`} backLabel="Training Program" />
+        <div className="p-4 text-sm text-muted-foreground">Program Intelligence is for coaches. It isn't available in a view-only login.</div>
+      </>
+    );
+  return <NextProgramWorkstation clientId={clientId} reportSearch={search} />;
+}
+
+/** The full report: its period, its numbers, its tabs and its downloads. Mounted only when the coach opens it. */
+export function FullReport({ clientId, search: initial, onSearch }: { clientId: string; search: IntelSearch; onSearch?: (s: IntelSearch) => void }) {
   const { viewOnly } = useAuth();
   const qc = useQueryClient();
   // The period and tab answer at once on screen; the address keeps them (back, a shared link).
@@ -67,7 +81,7 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
   const setSearch = (patch: Partial<IntelSearch>) => {
     const next = { ...search, ...patch };
     setLocal(next);
-    void navigate({ to: "/admin/client-programs/$clientId/intelligence", params: { clientId }, search: next as any, replace: true });
+    onSearch?.(next);
   };
 
   const scope: IntelScopeRequest = search.scope === "dates" ? { kind: "dates", from: search.from, to: search.to } : { kind: search.scope };
@@ -83,7 +97,6 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
   const tabsRef = useRef<HTMLDivElement | null>(null);
 
   const savedKeys = useMemo(() => new Set((observations.data ?? []).filter((o) => o.source === "analysis" && o.status !== "rejected").map((o) => o.finding_key ?? "").filter(Boolean)), [observations.data]);
-  const latestGenerate = (jobs.data ?? []).find((j) => (j.kind === "generate" || j.kind === "strategy") && j.status !== "discarded") ?? null;
   const latestInterpret = (jobs.data ?? []).find((j) => j.kind === "interpret") ?? null;
   // A run that just finished wrote observations or decisions: read the memory again.
   const finished = (jobs.data ?? []).filter((j) => j.status !== "pending" && j.status !== "running").map((j) => `${j.id}:${j.status}`).join(",");
@@ -91,13 +104,7 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
     if (finished) void qc.invalidateQueries({ queryKey: ["program-intel-observations", clientId] });
   }, [finished, clientId, qc]);
 
-  if (viewOnly)
-    return (
-      <>
-        <PageHeader title="Program Intelligence" backTo={`/admin/client-programs/${clientId}`} backLabel="Training Program" />
-        <div className="p-4 text-sm text-muted-foreground">Program Intelligence is for coaches. It isn't available in a view-only login.</div>
-      </>
-    );
+  if (viewOnly) return null;
 
   /** The export as the coach chose it: the full records, or a privacy-safe copy (re-measured from the safe copy). */
   const exportInputs = (action: string) => {
@@ -155,8 +162,7 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
 
   return (
     <>
-      <PageHeader title="Program Intelligence" subtitle={name || undefined} backTo={`/admin/client-programs/${clientId}`} backLabel="Training Program" />
-      <div className="mx-auto w-full max-w-3xl space-y-4 p-3 pb-28 sm:p-6" data-testid="program-intelligence">
+      <div className="space-y-4" data-testid="program-intelligence" data-client={name || undefined}>
         {/* What the report covers */}
         <div className="space-y-2">
           <div className="inline-flex rounded-full bg-secondary p-1" role="tablist" aria-label="What the report covers">
@@ -253,8 +259,8 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
               </details>
             </Card>
 
-            {/* The four actions */}
-            <div className="grid grid-cols-2 gap-2">
+            {/* Copy, download, the raw data */}
+            <div className="grid grid-cols-3 gap-2">
               <Button variant="outline" className="h-auto min-h-12 flex-col gap-0.5 py-2" onClick={copyPrompt} data-testid="intel-copy-prompt">
                 <ClipboardCopy className="h-4 w-4" />
                 <span className="text-xs font-bold">Copy coaching prompt</span>
@@ -273,10 +279,6 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
                   <DropdownMenuItem onSelect={() => void doDownload("csv")}><FileSpreadsheet className="mr-2 h-4 w-4" /> CSV · raw training log</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button className="h-auto min-h-12 flex-col gap-0.5 py-2" onClick={() => void navigate({ to: "/admin/client-programs/$clientId/next-program", params: { clientId } })} data-testid="intel-generate">
-                <FilePlus2 className="h-4 w-4" />
-                <span className="text-xs font-bold">{c.loggedSets === 0 ? "Generate first program" : "Generate next program"}</span>
-              </Button>
               <Button
                 variant="outline"
                 className="h-auto min-h-12 flex-col gap-0.5 py-2"
@@ -296,7 +298,6 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
               Privacy-safe copies and downloads: no name or personal notes (training data kept)
             </label>
 
-            {latestGenerate && <NextProgramLink job={latestGenerate} clientId={clientId} />}
 
             <div ref={tabsRef} className="scroll-mt-16">
               <Tabs value={TABS.some(([k]) => k === search.tab) ? search.tab : "summary"} onValueChange={(v) => setSearch({ tab: v })}>

@@ -10,6 +10,10 @@
  * confirmed any of these ways counts everywhere aal2 does: the app's gate, the
  * server's guard and the database's role checks.
  *
+ * A login with one of those can also have a code emailed to its own login
+ * email, a backup for when it doesn't have its phone
+ * (20270515090000_two_step_email_backup.sql). Email is never a way on its own.
+ *
  * Pure: the rules, the words, the code format. No Supabase, no React.
  */
 import { normalizePhone } from "@/lib/sms-policy";
@@ -91,6 +95,14 @@ export function smsCodeText(code: string, purpose: "sign_in" | "add_phone"): str
 export function twoStepPhone(raw: string | null | undefined): string | null {
   const e164 = normalizePhone(raw);
   return e164 && /^\+1\d{10}$/.test(e164) ? e164 : null;
+}
+
+/** "j•••@gmail.com": enough to know which inbox, never the address. */
+export function maskEmail(email: string | null | undefined): string {
+  const e = String(email ?? "").trim();
+  const at = e.lastIndexOf("@");
+  if (at < 1 || at === e.length - 1) return "your email";
+  return `${e[0]}•••${e.slice(at)}`;
 }
 
 /** "(•••) •••-4821": enough to know which phone, never the number. */
@@ -187,6 +199,61 @@ export function leavesOnlyPasskeys(methods: TwoStepMethod[], removing: TwoStepMe
   return rest.length > 0 && rest.every((m) => m.kind === "passkey");
 }
 
+// ── The email backup ────────────────────────────────────────────────────────
+export type EmailBackupHold = "no_way" | "changed" | "email_change" | "reset";
+
+/** Codes by email (a backup, never a way on its own), as the app shows it. */
+export type EmailBackup = {
+  on: boolean;
+  /** Where a code would go, masked ("j•••@gmail.com"); null while it's off. */
+  to: string | null;
+  /** A code may be emailed now. */
+  ready: boolean;
+  why: EmailBackupHold | null;
+  heldUntil: string | null;
+};
+
+/** The database's state (two_step_email_backup_state), masked for the app. */
+export function emailBackupFrom(raw: any): EmailBackup | null {
+  if (!raw || typeof raw !== "object") return null;
+  const why = ["no_way", "changed", "email_change", "reset"].includes(raw.why)
+    ? (raw.why as EmailBackupHold)
+    : null;
+  const on = raw.on === true;
+  return {
+    on,
+    to: on && raw.email ? maskEmail(raw.email) : null,
+    ready: raw.ready === true,
+    why: on ? why : null,
+    heldUntil: on && typeof raw.held_until === "string" ? raw.held_until : null,
+  };
+}
+
+/** What the Account row says under "Email me a code". */
+export function emailBackupLine(b: EmailBackup | null, dayOf: (iso: string) => string): string {
+  if (!b || !b.on) return "Off. Turn it on to get a code by email when you don't have your phone.";
+  if (b.ready) return "A backup for when you don't have your phone.";
+  switch (b.why) {
+    case "changed":
+      return "Your login email changed, so this stopped. Turn it on again to use the new one.";
+    case "reset":
+      return b.heldUntil
+        ? `Paused until ${dayOf(b.heldUntil)}: a password reset was sent to this email.`
+        : "Paused: a password reset was sent to this email.";
+    case "email_change":
+      return b.heldUntil
+        ? `Paused until ${dayOf(b.heldUntil)}: your login email is being changed.`
+        : "Paused while your login email is being changed.";
+    default:
+      return "Works once you have another way to confirm.";
+  }
+}
+
+/** The switch shows on unless the email it was for is gone. */
+export function emailBackupSwitchOn(b: EmailBackup | null): boolean {
+  return !!b && b.on && b.why !== "changed";
+}
+
 // ── The gate ────────────────────────────────────────────────────────────────
 export type TwoStepStatus = {
   team: boolean;
@@ -197,6 +264,8 @@ export type TwoStepStatus = {
   preferred: TwoStepKind | null;
   /** Their phone on file, offered when they add text messages (never anyone else's). */
   suggestedPhone: string | null;
+  /** Codes by email, a backup (null for a login with no way, or before the database has it). */
+  emailBackup: EmailBackup | null;
 };
 
 export type TwoStepGateStep = "pass" | "check" | "verify" | "enroll";
@@ -259,6 +328,19 @@ export function sendRefusalText(reason: SendRefusal | string, waitS?: number | n
       return "Texts can't be sent right now. Use another way to confirm.";
     case "country_not_allowed":
       return "Codes can only be texted to a Canadian or US number.";
+    case "email_off":
+    case "email_no_way":
+      return "Email codes are off. Use another way to confirm.";
+    case "email_changed":
+      return "Your login email changed, so codes aren't emailed. Use another way to confirm.";
+    case "email_reset":
+      return "A password reset was just sent to your email, so codes aren't emailed for 3 days. Use another way to confirm.";
+    case "email_email_change":
+      return "Your login email is being changed, so codes aren't emailed for now. Use another way to confirm.";
+    case "email_suppressed":
+      return "Emails to your address are blocked. Use another way to confirm.";
+    case "email_failed":
+      return "The email didn't go. Try again in a minute, or use another way.";
     default:
       return "The text didn't go. Check the number, try again in a minute, or use another way.";
   }
