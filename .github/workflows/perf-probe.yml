@@ -1,0 +1,34 @@
+name: Perf probe (scratch branch only)
+on:
+  push:
+    branches: [perf/probe]
+permissions:
+  contents: write
+concurrency: perf-probe
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Tools
+        run: |
+          npm i -g lighthouse@12.8.2
+          npm i --prefix /tmp/tools sharp@0.34.4
+      - name: Live headers
+        run: bash .perf/headers.sh
+      - name: Images
+        if: ${{ !contains(github.event.head_commit.message, '[lh-only]') }}
+        run: node .perf/convert.mjs
+      - name: Lighthouse
+        run: LABEL="$(cat .perf/label 2>/dev/null || echo run)" bash .perf/lighthouse.sh
+      - name: Save results to the branch
+        run: |
+          git config user.name "perf-probe"
+          git config user.email "perf-probe@users.noreply.github.com"
+          git add .perf/out
+          git commit -m "perf probe results [skip ci]" || exit 0
+          git push
