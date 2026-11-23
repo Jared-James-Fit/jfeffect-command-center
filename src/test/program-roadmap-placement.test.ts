@@ -23,7 +23,7 @@ describe("Workouts page: program roadmap under the calendar", () => {
     expect(card).toContain("data-roadmap-toggle");
     expect(card).toContain("<span>Full plan</span>");
     expect(card).toContain("function ProgramPlanSheet(");
-    expect(card).toContain("See its workouts");
+    expect(card).toContain("See the workouts");
     expect(card).toContain("<ProgramBar blocks={blocks} />");
     expect(card).not.toContain("WeekPills");
   });
