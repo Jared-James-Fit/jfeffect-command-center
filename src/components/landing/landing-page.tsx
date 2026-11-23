@@ -11,13 +11,16 @@
  * seeing the product rather than reading about it.
  *
  * Anchors are honest: the app is "the same app my coaching clients train in"
- * (true), and the recommended package says how much more it is than the next
- * package on the site (both listed prices, anchorLine). The coaching price is
- * revealed the way the iPad's was (PriceRevealSection, price-reveal.ts): the
- * coaching shown first, then Coaching Plus at its own price, then "Don't need
- * the private calls?" and Complete Online Coaching's price as the moment. Two
- * different products at their listed prices, the calls the only difference:
- * never a crossed-out price, a "worth" number or a fake discount. Prices are read from
+ * (true), its price is a moment of its own ($0, FreeReveal), and the
+ * recommended package says how much more it is than the next package on the
+ * site (both listed prices, anchorLine). The coaching price is revealed the
+ * way the iPad's was (PriceRevealSection, price-reveal.ts): the coaching shown
+ * first, then what a personal trainer costs as a worked example from a
+ * published public rate with its sources (trainer-cost.ts) and how online
+ * coaching differs from a trainer in the room, then Coaching Plus at its own
+ * price, then "Don't need the private calls?" and Complete Online Coaching's
+ * price as the moment. Different services at their real prices: never a
+ * crossed-out price, a "worth" number or a fake discount. Prices are read from
  * coaching_packages (the one source of truth, edited in Sales → Coaching
  * packages, drawn by CoachingPackagesGrid), never typed here, and only what's
  * listed shows: a draft package never reaches this page.
@@ -57,11 +60,13 @@ import { HOME_CTA_ZONES } from "@/lib/public-nav";
 import { CoachingPackagesGrid } from "@/components/sales/coaching-packages";
 import { PriceRevealSection } from "@/components/landing/price-reveal";
 import { priceReveal } from "@/lib/coaching-packages/price-reveal";
+import { PRICE_SETTLE, motion, useSeen, useStage } from "@/components/landing/stage-motion";
 import {
   costAnswer,
   decisionRows,
   listedPackages,
   paidPackages,
+  priceLabel,
   type DecisionRow,
   type PublicPackage,
 } from "@/lib/coaching-packages/packages";
@@ -171,6 +176,8 @@ const FREE: Array<{ icon: typeof Dumbbell; text: string }> = [
 /** The reveal: everything above, said in one line, then the price. */
 const REVEAL = {
   lead: "Programs. Logging. Progress. Nutrition. The Crew.",
+  /** The app's price, from the same formatter as every package price. */
+  price: priceLabel(0),
   title: "The JF Effect app is free.",
   body: "No card, and nothing turns into a charge later. It's the same app my coaching clients train in.",
 };
@@ -218,6 +225,10 @@ const FAQ: Array<{ q: string; a: string }> = [
   {
     q: "How does online coaching work?",
     a: "Everything runs through the app: your program, your nutrition, weekly check-ins, video feedback and our chat. It works wherever you train, at home or in a gym.",
+  },
+  {
+    q: "Is it the same as a personal trainer?",
+    a: "No. A personal trainer is beside you for the sessions you book. I'm not in the room: I write every session, read your check-ins, review the sets you film and change your plan as you go. You get a coach for your whole week rather than an hour at a time.",
   },
   {
     q: COST_QUESTION,
@@ -318,6 +329,54 @@ function HeroDevices() {
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * The free app's reveal: everything shown above it said in one line, then
+ * its price as the moment ($0, the same settle the coaching price makes),
+ * then the sentence and the way in. On the page from the first paint;
+ * stage-motion.ts eases it in only when it's still below the screen.
+ */
+function FreeReveal() {
+  const [ref, phase] = useStage(0.3);
+  useSeen(ref, "free_reveal_view", "home", 0.5);
+  return (
+    <section className="px-3 pb-6 sm:px-5" data-landing-reveal>
+      <div
+        ref={ref}
+        className="mx-auto max-w-5xl rounded-[28px] bg-muted/50 px-6 py-14 text-center ring-1 ring-border/60 md:py-20"
+        data-reveal-stage={phase}
+      >
+        <p
+          className="mx-auto max-w-xl text-balance text-[15px] font-medium text-muted-foreground md:text-[17px]"
+          style={motion(phase)}
+        >
+          {REVEAL.lead}
+        </p>
+        <p
+          className="mt-6 font-semibold leading-[0.9] tracking-[-0.055em]"
+          style={motion(phase, PRICE_SETTLE)}
+          data-free-price
+        >
+          <span className="text-[120px] tabular-nums sm:text-[160px] md:text-[200px]">{REVEAL.price}</span>
+        </p>
+        <h2
+          className="mx-auto mt-5 max-w-[16ch] text-balance text-[32px] font-semibold leading-[1.06] tracking-[-0.03em] md:text-[48px]"
+          style={motion(phase, { delay: 650, y: 8 })}
+        >
+          {REVEAL.title}
+        </h2>
+        <div style={motion(phase, { delay: 780, y: 12 })}>
+          <p className="mx-auto mt-4 max-w-lg text-[17px] leading-relaxed text-muted-foreground">{REVEAL.body}</p>
+          <div className="mt-8 flex justify-center" data-inline-cta>
+            <PrimaryCta to={JOIN_TO} className="w-full sm:w-auto sm:min-w-[260px]" onClick={() => trackSite("cta_free", "reveal")}>
+              {JOIN_CTA}
+            </PrimaryCta>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -503,25 +562,8 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
         </Block>
       </Reveal>
 
-      {/* B, the reveal */}
-      <Reveal>
-        <section className="px-3 pb-6 sm:px-5" data-landing-reveal>
-          <div className="mx-auto max-w-5xl rounded-[28px] bg-muted/50 px-6 py-14 text-center ring-1 ring-border/60 md:py-20">
-            <p className="mx-auto max-w-xl text-balance text-[15px] font-medium text-muted-foreground md:text-[17px]">
-              {REVEAL.lead}
-            </p>
-            <h2 className="mx-auto mt-4 max-w-[16ch] text-balance text-[40px] font-semibold leading-[1.04] tracking-[-0.035em] md:text-[64px]">
-              {REVEAL.title}
-            </h2>
-            <p className="mx-auto mt-4 max-w-lg text-[17px] leading-relaxed text-muted-foreground">{REVEAL.body}</p>
-            <div className="mt-8 flex justify-center" data-inline-cta>
-              <PrimaryCta to={JOIN_TO} className="w-full sm:w-auto sm:min-w-[260px]" onClick={() => trackSite("cta_free", "reveal")}>
-                {JOIN_CTA}
-              </PrimaryCta>
-            </div>
-          </div>
-        </section>
-      </Reveal>
+      {/* B, the reveal: the app's price, $0, as its own moment */}
+      <FreeReveal />
 
       {/* C. What a coach adds, then the prices, then what it's done for people */}
       <div data-cta-zone="coaching">

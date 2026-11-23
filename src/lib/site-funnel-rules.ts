@@ -13,6 +13,7 @@
 export const SITE_EVENTS = [
   "coaching_view",
   "pricing_view",
+  "free_reveal_view",
   "price_reveal_view",
   "cta_free",
   "cta_coaching",
@@ -47,7 +48,9 @@ export type CoachingFunnel = {
   landingVisitors: number;
   coachingVisitors: number;
   pricingViews: number;
-  /** Saw the home page's price reveal (Coaching Plus, then Complete Online Coaching). */
+  /** Saw the home page's $0 reveal of the free app. */
+  freeRevealViews: number;
+  /** Saw the end of the home page's price story (the trainer example, Coaching Plus, then Complete Online Coaching). */
   revealViews: number;
   ctaFree: number;
   ctaCoaching: number;
@@ -74,6 +77,7 @@ export function readCoachingFunnel(raw: unknown): CoachingFunnel {
     landingVisitors: num(r.landing_visitors),
     coachingVisitors: num(r.coaching_visitors),
     pricingViews: num(r.pricing_views),
+    freeRevealViews: num(r.free_reveal_views),
     revealViews: num(r.reveal_views),
     ctaFree: num(r.cta_free),
     ctaCoaching: num(r.cta_coaching),
