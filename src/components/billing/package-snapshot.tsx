@@ -14,18 +14,19 @@
  * (package-view.ts), so the Summary, Sessions and Billing tabs never differ.
  * Nothing here changes anything.
  */
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useClientPayments } from "@/components/billing/use-client-payments";
 import { PaymentStatusText, SegmentBar, StatusText } from "@/components/billing/package-visuals";
 import { formatMoney } from "@/lib/payment-display";
 import { shortDay } from "@/lib/session-credit";
 import { fmtWallClock } from "@/lib/schedule-time";
-import { dueWords, packageGlance } from "@/lib/package-view";
+import { awayWords, dueWords, finalSession, packageGlance, type FinalSession, type FinalSessionSource } from "@/lib/package-view";
+import { ptSessionsQuery } from "@/components/sessions/session-queries";
 import type { ClientPayments } from "@/lib/payment-schedule";
 import { termDate, termRange, timeLeftWords, type CoachingPlan } from "@/lib/coaching-plan";
+import { billingDay } from "@/lib/date-range";
 import { cn } from "@/lib/utils";
 
 export type NextSession = { session_date: string; start_time: string } | null;
@@ -56,22 +57,9 @@ export function ClientPackageSnapshot({ clientId, nextSession, onOpenSessions, o
   className?: string;
 }) {
   const { payments, today } = useClientPayments(clientId);
-  const { data: fetchedNext } = useQuery({
-    queryKey: ["pt-sessions", clientId, "next", today],
-    enabled: nextSession === undefined,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("pt_sessions")
-        .select("session_date, start_time")
-        .eq("client_id", clientId)
-        .eq("status", "Scheduled")
-        .gte("session_date", today)
-        .order("session_date", { ascending: true })
-        .order("start_time", { ascending: true })
-        .limit(1);
-      return ((data ?? [])[0] ?? null) as NextSession;
-    },
-  });
+  // The Sessions tab's own read (one cache entry): the next session and the final one come from it.
+  const { data: sessions } = useQuery(ptSessionsQuery(clientId));
+  const fetchedNext = useMemo(() => (sessions ? nextBooked(sessions, today) : null), [sessions, today]);
   if (!payments) {
     return hideWhenEmpty ? null : <div className={cn("h-40 animate-pulse rounded-2xl bg-muted", className)} aria-busy="true" />;
   }
@@ -81,6 +69,7 @@ export function ClientPackageSnapshot({ clientId, nextSession, onOpenSessions, o
       p={payments}
       today={today}
       nextSession={nextSession === undefined ? fetchedNext ?? null : nextSession}
+      sessions={sessions ?? null}
       onOpenSessions={onOpenSessions}
       onOpenBilling={onOpenBilling}
       showMoney={money}
@@ -91,12 +80,14 @@ export function ClientPackageSnapshot({ clientId, nextSession, onOpenSessions, o
 }
 
 /** The view itself: pure over the payments model, checked with fixture data. */
-export function PackageSnapshot({ p, today, nextSession, onOpenSessions, onOpenBilling, showMoney = true, showCoaching = true, className }: {
+export function PackageSnapshot({ p, today, nextSession, sessions = null, onOpenSessions, onOpenBilling, showMoney = true, showCoaching = true, className }: {
   p: ClientPayments;
   showMoney?: boolean;
   showCoaching?: boolean;
   today: string;
   nextSession: NextSession;
+  /** Every session of theirs (any status): when their sessions run out is read from it. Null: not loaded yet. */
+  sessions?: FinalSessionSource[] | null;
   onOpenSessions?: () => void;
   onOpenBilling?: () => void;
   className?: string;
@@ -104,6 +95,7 @@ export function PackageSnapshot({ p, today, nextSession, onOpenSessions, onOpenB
   const money = (c: number) => formatMoney(c / 100, p.currency);
   const g = packageGlance(p);
   const t = g.training;
+  const final = sessions ? finalSession(p, sessions, today) : null;
   const pay = g.paying;
   const plans = showCoaching ? p.coaching : [];
   // On online coaching alone, the Training / Paying off rows have nothing to say.
@@ -138,8 +130,9 @@ export function PackageSnapshot({ p, today, nextSession, onOpenSessions, onOpenB
             <Sub>
               {nextSession
                 ? <>Next session <span className="text-foreground">{sessionWhen(nextSession, today)}</span></>
-                : t.now ? "Nothing booked" : "Every session on it is done"}
+                : t.now ? "Nothing booked" : final?.kind === "done" ? <>Last session <span className="text-foreground">{shortDay(final.date)}</span></> : "Every session on it is done"}
             </Sub>
+            {final && final.kind !== "done" && <FinalSessionLine final={final} today={today} />}
           </>
         ) : t.kind === "past" ? (
           <>
@@ -210,6 +203,36 @@ export function PackageSnapshot({ p, today, nextSession, onOpenSessions, onOpenB
         </dl>
       )}
     </section>
+  );
+}
+
+/** Their next booked session (today's included), from a list of their sessions. */
+function nextBooked(sessions: Array<{ session_date: string; start_time: string; status: string }>, today: string): NextSession {
+  let best: NextSession = null;
+  for (const s of sessions) {
+    if (s.status !== "Scheduled" || String(s.session_date).slice(0, 10) < today) continue;
+    if (!best || `${s.session_date}${s.start_time}` < `${best.session_date}${best.start_time}`) best = { session_date: s.session_date, start_time: s.start_time };
+  }
+  return best;
+}
+
+/**
+ * When their sessions run out: "Final session Mon Jan 25 at 12:00 PM · in 9
+ * weeks", or, with sessions still to book, where the last one lands on their
+ * usual days. Said after the package it lands on when that package's dates
+ * end sooner.
+ */
+function FinalSessionLine({ final, today }: { final: Exclude<FinalSession, { kind: "done" }>; today: string }) {
+  const away = awayWords(final.daysAway);
+  return (
+    <Sub data-final-session={final.kind} data-final-date={final.date}>
+      {final.kind === "booked" ? (
+        <>Final session <span className="text-foreground">{sessionWhen({ session_date: final.date, start_time: final.start }, today)}</span>{final.daysAway > 1 ? ` · ${away}` : ""}</>
+      ) : (
+        <>Final session about <span className="text-foreground">{shortDay(final.date)}</span> ({away}) if the {final.left} left {final.left === 1 ? "goes" : "go"} on {final.days}</>
+      )}
+      {final.pastEnd && <> · after {final.pastEnd.label}'s {billingDay(final.pastEnd.to, { thisYear: Number(today.slice(0, 4)) })} end date</>}
+    </Sub>
   );
 }
 
@@ -311,7 +334,9 @@ function Counts({ parts }: { parts: Array<[number, string]> }) {
   );
 }
 
-const Sub = ({ children }: { children: ReactNode }) => <div className="text-[13px] leading-snug text-muted-foreground">{children}</div>;
+const Sub = ({ children, ...rest }: { children: ReactNode } & Record<`data-${string}`, unknown>) => (
+  <div className="text-[13px] leading-snug text-muted-foreground" {...rest}>{children}</div>
+);
 
 function MoneyCell({ label, value, tone, dot, onClick, ...rest }: {
   label: string;
