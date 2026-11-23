@@ -1,6 +1,6 @@
 \set ON_ERROR_STOP 1
 set client_min_messages = notice;
--- 20270510090000_coaching_automation_categories.sql, after scenario.sql: the owner
+-- 20270510100000_coaching_automation_categories.sql, after scenario.sql: the owner
 -- (every level), Ana (an active coach with only the approval queue left: her
 -- auto-send was revoked and her follow-ups ran out), Marc / Devin (the owner's
 -- clients), Nico (Ana's), Mia (a JF member), Old (the owner's, archived).

@@ -7,7 +7,7 @@ PSQL=${PSQL:-psql}
 DB=${DB:-recovery_auto}
 T=supabase/tests/recovery-automation
 M=supabase/migrations/20270509100000_cleo_capabilities_recovery_automation.sql
-M2=supabase/migrations/20270510090000_coaching_automation_categories.sql
+M2=supabase/migrations/20270510100000_coaching_automation_categories.sql
 
 $PSQL -q -c "drop database if exists $DB" -c "create database $DB"
 run() {

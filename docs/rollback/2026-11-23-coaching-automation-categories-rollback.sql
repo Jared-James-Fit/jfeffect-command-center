@@ -1,4 +1,4 @@
--- Rollback for 20270510090000_coaching_automation_categories.sql.
+-- Rollback for 20270510100000_coaching_automation_categories.sql.
 -- Back to recovery automation only. Queue items of the three new kinds are
 -- deleted (sent ones included: their messages stay in the chats, but "Take it
 -- back" goes with them), with the client rules for them, so the old

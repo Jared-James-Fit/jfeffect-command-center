@@ -289,7 +289,7 @@ automation acts only on clients assigned to the owner's own coach record; it
 never reaches another coach's clients. Database tests:
 `supabase/tests/recovery-automation/` (105 checks, real Postgres).
 
-Since Nov 23 2026 (`20270510090000_coaching_automation_categories.sql`) the
+Since Nov 23 2026 (`20270510100000_coaching_automation_categories.sql`) the
 same queue covers workout reviews, weekly check-ins and missed sessions besides
 pain, every kind on the same levels and safeguards; a missed session is
 outreach the client didn't start, so it needs follow-ups like a follow-up. The

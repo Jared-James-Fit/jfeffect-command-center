@@ -4,7 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
  * Coaching automation's worker: pg_cron calls it every minute while an item
  * is due (`coach-automation-tick`, 20270509100000_cleo_capabilities_recovery_automation.sql),
  * and once a day with `{ "scan": "missed" }` to look for missed sessions first
- * (`coach-automation-missed-scan`, 20270510090000_coaching_automation_categories.sql).
+ * (`coach-automation-missed-scan`, 20270510100000_coaching_automation_categories.sql).
  * Claims and works items for up to ~50 s. See runAutomationTick and
  * scanMissedSessions in src/lib/recovery-automation/run.server.ts.
  */

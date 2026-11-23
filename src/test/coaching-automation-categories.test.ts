@@ -60,7 +60,7 @@ describe("every kind follows the same safeguards", () => {
   const kinds = CATEGORIES.map((c) => c.key);
   it("lists all five kinds, each mirrored in the migration", () => {
     expect(kinds).toEqual(["recovery_reply", "recovery_follow_up", "checkin_reply", "workout_reply", "missed_session"]);
-    const sql = readFileSync("supabase/migrations/20270510090000_coaching_automation_categories.sql", "utf8");
+    const sql = readFileSync("supabase/migrations/20270510100000_coaching_automation_categories.sql", "utf8");
     for (const k of kinds) expect(sql).toContain(`'${k}'`);
   });
   it("only routine ever goes out by itself, whatever the kind", () => {
