@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { UserAvatar } from "@/components/user-avatar";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { MoreHorizontal, CheckCircle2, Plus, Bell, Loader2, AlertTriangle, ListChecks, Dumbbell } from "lucide-react";
+import { MoreHorizontal, CheckCircle2, Plus, Bell, Loader2, AlertTriangle, ListChecks, Dumbbell, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { blockEnd } from "./clients-status";
 import { rowMetaLine, rowStatusSummary, type RowAction, type RowStatus } from "./row-status";
@@ -14,6 +14,7 @@ import { adminRemindAgreement } from "@/lib/coaching-agreement.functions";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { ClientMoreMenu } from "./quick-actions";
+import { ChangePlanSheet } from "@/components/admin/intel/change-plan-sheet";
 import { ClientQuickSheet, type QuickPanelKind } from "./client-quick-sheet";
 import { AssignProgramDialog } from "./assign-program-dialog";
 import { useAuth } from "@/lib/auth";
@@ -151,8 +152,8 @@ function nextBlockWhen(iso: string | null) {
 /**
  * One client in the Clients list: photo and name, one plain line of facts, at most one status chip
  * (the most important thing waiting on the coach, "+N" for the rest), the program's dates and
- * progress, then View Profile, Workout (client view on today's workout, to log or move it in a
- * session) and ⋯ (which holds every other action, View as client included).
+ * progress, then Open client, Client view (their app as they see it), Workout (client view on
+ * today's workout, to log or move it in a session) and ⋯ (every other action, grouped).
  */
 export function ClientRow({ r, onArchive, showCoach = false }: { r: DirectoryRow; onArchive?: (r: DirectoryRow) => void; showCoach?: boolean }) {
   const { primary, more } = rowStatusSummary(r);
@@ -167,6 +168,7 @@ export function ClientRow({ r, onArchive, showCoach = false }: { r: DirectoryRow
   const openWorkout = () => pov.enter(r.id, { to: clientWorkoutHref(), fallbackName: r.full_name });
   const [sheet, setSheet] = useState<QuickPanelKind | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   const openAssign = () => setAssignOpen(true);
 
   return (
@@ -203,33 +205,48 @@ export function ClientRow({ r, onArchive, showCoach = false }: { r: DirectoryRow
       {/* Program: what's running, its dates and how far through */}
       <ProgramSummary r={r} onSchedule={() => setSheet("program-view")} onAssign={openAssign} />
 
-      {/* View Profile is the way in, Workout the way into today's session; everything else is in ⋯ */}
-      <div className="flex items-center justify-end gap-1.5 max-xl:w-full">
-        <Button asChild variant="secondary" size="sm" className="h-10 min-w-[7rem] flex-1 font-semibold xl:flex-none">
-          <ClientNameLink clientId={r.id}>View Profile</ClientNameLink>
+      {/* Open client is the way in; Client view shows their app as they see it (Workout: straight
+          onto today's session); everything else is in ⋯ */}
+      <div className="flex items-center justify-end gap-1.5 max-xl:w-full" data-row-actions>
+        <Button asChild variant="secondary" size="sm" className="h-10 min-w-0 flex-1 px-2.5 font-semibold sm:min-w-[7rem] xl:flex-none">
+          <ClientNameLink clientId={r.id}>Open client</ClientNameLink>
         </Button>
+        {pov.canPov && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-10 min-w-0 flex-1 px-2.5 font-semibold sm:min-w-[7rem] xl:flex-none"
+            disabled={pov.busy}
+            onClick={enterPov}
+            aria-label={`See ${r.full_name ?? "the client"}'s app as they see it`}
+            data-client-view
+          >
+            {pov.busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+            Client view
+          </Button>
+        )}
         {canOpenWorkout && (
           <Button
-            variant="secondary"
+            variant="outline"
             size="sm"
-            className="h-10 min-w-[7rem] flex-1 font-semibold xl:flex-none"
+            className="h-10 w-10 shrink-0 px-0 xl:w-auto xl:px-3"
             disabled={pov.busy}
             onClick={openWorkout}
             aria-label={`Open ${r.full_name ?? "the client"}'s workout for today, as they see it`}
+            title="Today's workout, as they see it"
           >
-            {pov.busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Dumbbell className="h-4 w-4" aria-hidden />}
-            Workout
+            <Dumbbell className="h-4 w-4" aria-hidden />
+            <span className="hidden xl:inline">Workout</span>
           </Button>
         )}
         <ClientMoreMenu
           r={r}
           onArchive={onArchive}
-          onViewAsClient={pov.canPov ? enterPov : undefined}
-          viewAsBusy={pov.busy}
           onAssignProgram={openAssign}
           onOpenPanel={setSheet}
+          onChangePlan={isAdmin ? () => setPlanOpen(true) : undefined}
           trigger={
-            <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="More client actions">
+            <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0" aria-label="More client actions">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           }
@@ -238,6 +255,7 @@ export function ClientRow({ r, onArchive, showCoach = false }: { r: DirectoryRow
 
       <ClientQuickSheet kind={sheet} clientId={r.id} clientName={r.full_name} onClose={() => setSheet(null)} />
       <AssignProgramDialog open={assignOpen} onOpenChange={setAssignOpen} clientId={r.id} clientName={r.full_name} />
+      {isAdmin && planOpen && <ChangePlanSheet clientId={r.id} open={planOpen} onOpenChange={setPlanOpen} />}
     </li>
   );
 }

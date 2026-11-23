@@ -242,7 +242,7 @@ export function MembersDirectory({ returnTo = MEMBERS_HREF, showTest = true }: {
             onClick={() => { setFilter(f.key); setLimit(PAGE); }}
             className={cn(
               "shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
-              filter === f.key ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground",
+              filter === f.key ? "border-foreground bg-foreground text-background" : "bg-card text-muted-foreground hover:text-foreground",
               f.key === "billing" && filter !== f.key && "border-rose-500/40 text-rose-600 dark:text-rose-400",
             )}
           >

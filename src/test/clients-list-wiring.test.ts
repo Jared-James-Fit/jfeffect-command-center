@@ -56,7 +56,12 @@ describe("statuses explain themselves on a tap", () => {
     expect(menu).toContain('"Assign Cardio"');
     expect(menu).toContain("Assign Program");
     expect(menu).toContain("Assign Next Block");
+    // Client view is the row's own labelled button, so the menu only offers it where a caller has none
     expect(menu).toContain("View as client");
+    expect(row).toContain("Client view");
+    // nothing the row already does is repeated in ⋯
+    expect(menu).not.toContain("View Profile");
+    expect(menu).not.toContain("View Schedule");
   });
 
   it("keeps the desktop row's four areas", () => {
