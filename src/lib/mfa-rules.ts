@@ -4,7 +4,7 @@
 // The rule, one way for the app, the server and the database: a login that
 // has a way to confirm uses it. Its session counts only once it's confirmed
 // (Supabase's "aal2" after an authenticator code, or a session the server
-// marked after a text, a passkey, a trusted device or a recovery code); a
+// marked after a text, a passkey or a trusted device); a
 // password alone (a stolen one included) gets no staff rights anywhere: the
 // app shows the confirm screen, every server function refuses (src/start.ts →
 // mfa-guard.server.ts) and the database's role checks say no (caller_mfa_ok,
@@ -27,12 +27,11 @@ export function roleRequiresMfa(role: string | null | undefined): boolean {
 /**
  * Server functions a session may call before it's confirmed: the ones that
  * confirm it (two-step.functions.ts: the status, a texted code, a passkey, a
- * trusted device) and using a recovery code (lost phone). Each is limited in
+ * trusted device). Each is limited in
  * the database and does nothing else for an unconfirmed session. Their names
  * are unique in the app (two-step tests check), since the guard goes by name.
  */
 export const MFA_EXEMPT_FNS: ReadonlySet<string> = new Set([
-  "redeemRecoveryCode",
   "getTwoStepStatus",
   "sendTwoStepCode",
   "verifyTwoStepCode",

@@ -46,7 +46,6 @@ import {
   type TrustedDeviceRow,
 } from "@/lib/two-step.functions";
 import { clearTrust, deviceNameHere, readTrust, saveTrust } from "@/lib/two-step-client";
-import { RecoveryCodesPanel } from "@/components/two-step/recovery-codes";
 import {
   AddWay,
   KIND_ICON,
@@ -64,8 +63,7 @@ function day(iso: string | null | undefined): string {
 /**
  * A login's ways to confirm it's them (two-step.ts): Face ID / Touch ID, text
  * messages, authenticator apps. Which is asked first, add one, remove one
- * (never the last while the login needs two-step). Used on Account and on the
- * gate's "You're back in" after a recovery code.
+ * (never the last while the login needs two-step). Used on Account.
  */
 export function TwoStepMethodList({
   status,
@@ -384,10 +382,7 @@ function TrustedDevices({ uid }: { uid: string }) {
 
 /** Account → Two-step sign-in. */
 export function TwoStepCard() {
-  const { user } = useAuth();
-  const qc = useQueryClient();
   const status = useTwoStepStatus();
-  const [makingCodes, setMakingCodes] = useState(false);
   const data = status.data;
   const has = (data?.methods.length ?? 0) > 0;
 
@@ -398,8 +393,8 @@ export function TwoStepCard() {
         <h3 className="text-base font-semibold">Two-step sign-in</h3>
       </div>
       <p className="text-sm text-muted-foreground">
-        After your password you confirm it's you with one of these. Add two, so a lost phone never
-        locks you out.
+        After your password you confirm it's you with one of these. Add two (Face ID and a text is
+        easiest), so a lost phone never locks you out.
       </p>
 
       {status.isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
@@ -417,61 +412,6 @@ export function TwoStepCard() {
       )}
 
       {has && status.uid && <TrustedDevices uid={status.uid} />}
-
-      {has && data && (
-        <div className="space-y-3 rounded-xl border p-3" data-recovery-codes-row>
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-sm font-medium">Recovery codes</div>
-              <div
-                className={
-                  data.recoveryLeft === 0 ? "text-xs text-warning" : "text-xs text-muted-foreground"
-                }
-              >
-                {data.recoveryLeft === 0
-                  ? "None left. Make some so a lost phone never locks you out."
-                  : `${data.recoveryLeft} left · each works once`}
-              </div>
-            </div>
-            {!makingCodes && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-10"
-                onClick={() => setMakingCodes(true)}
-              >
-                {data.recoveryLeft ? "Make new codes" : "Make codes"}
-              </Button>
-            )}
-          </div>
-          {makingCodes && (
-            <>
-              {!!data.recoveryLeft && (
-                <p className="text-xs text-muted-foreground">
-                  Your old codes stop working as soon as these are made.
-                </p>
-              )}
-              <RecoveryCodesPanel
-                email={user?.email}
-                onDone={() => {
-                  setMakingCodes(false);
-                  void qc.invalidateQueries({ queryKey: [TWO_STEP_STATUS_KEY] });
-                }}
-              />
-              <Button
-                variant="ghost"
-                className="w-full"
-                onClick={() => {
-                  setMakingCodes(false);
-                  void qc.invalidateQueries({ queryKey: [TWO_STEP_STATUS_KEY] });
-                }}
-              >
-                Close
-              </Button>
-            </>
-          )}
-        </div>
-      )}
     </Card>
   );
 }

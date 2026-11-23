@@ -36,12 +36,12 @@ const teamPreviewGuard = createMiddleware({ type: "function" })
   });
 
 /**
- * Two-step sign-in (src/lib/mfa-rules.ts): a session from a login that has an
- * authenticator, without its code yet, is refused before any server function
+ * Two-step sign-in (src/lib/mfa-rules.ts): a session from a login that has a
+ * way to confirm, not confirmed yet, is refused before any server function
  * runs (many check admin rights themselves and then act as the server).
  */
 const staffMfaGuard = createMiddleware({ type: "function" }).server(async ({ next, serverFnMeta }) => {
-  // Using a recovery code (lost phone) is the one call made before the code.
+  // Only the calls that confirm a session are made before it's confirmed.
   if (!mfaExemptFn(serverFnMeta?.name)) {
     const { getRequest } = await import("@tanstack/react-start/server");
     const { checkStaffMfa } = await import("@/lib/mfa-guard.server");

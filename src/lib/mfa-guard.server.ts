@@ -6,7 +6,7 @@
 // without touching each one.
 //
 // "Confirmed" is the token's aal2 (an authenticator code) or a session the
-// server marked after a text, a passkey, a trusted device or a recovery code
+// server marked after a text, a passkey or a trusted device
 // (two_step_session_live: the mark and a session that still exists).
 //
 // Costs nothing per call for anyone without two-step: the list of logins that

@@ -205,4 +205,17 @@ do $$ begin
 exception when insufficient_privilege then raise notice 'ok: nobody signed out can read who is enforced';
 end $$;
 reset role;
+-- No recovery codes (20270513100000_no_recovery_codes.sql): none kept, nothing makes or takes one.
+do $$ begin
+  if exists (select 1 from staff_mfa_recovery_codes) then
+    raise exception 'ASSERT FAILED: recovery codes are still stored';
+  end if;
+  if exists (select 1 from pg_proc where proname in ('staff_mfa_recovery_replace', 'staff_mfa_recovery_use', 'staff_mfa_recovery_left')) then
+    raise exception 'ASSERT FAILED: a recovery-code function is still there';
+  end if;
+  if not exists (select 1 from pg_proc where proname = 'staff_mfa_reset_record') then
+    raise exception 'ASSERT FAILED: the owner''s reset went with them';
+  end if;
+  raise notice 'ok: no recovery codes, and the owner''s reset is kept';
+end $$;
 select 'two-step: all assertions passed';

@@ -6,7 +6,7 @@ cd "$(dirname "$0")/../../.."
 PSQL=${PSQL:-psql}
 DB=${DB:-two_step}
 T=supabase/tests/two-step
-MIGRATIONS="supabase/migrations/20270424091500_staff_mfa.sql supabase/migrations/20270424093000_staff_mfa_recovery.sql supabase/migrations/20270512090000_two_step_sms_passkeys.sql"
+MIGRATIONS="supabase/migrations/20270424091500_staff_mfa.sql supabase/migrations/20270424093000_staff_mfa_recovery.sql supabase/migrations/20270512090000_two_step_sms_passkeys.sql supabase/migrations/20270513100000_no_recovery_codes.sql"
 
 $PSQL -q -c "drop database if exists $DB" -c "create database $DB"
 run() {

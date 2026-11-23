@@ -241,7 +241,7 @@ function MemberCard({ m, onChanged }: { m: TeamMember; onChanged: () => void }) 
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const isCoachOnly = m.roles.includes("coach") && !m.roles.includes("admin");
-  // A teammate who lost their phone (and their recovery codes): the owner turns
+  // A teammate who lost their phone and has no other way left: the owner turns
   // their two-step off and they set it up again at their next sign-in.
   const { user } = useAuth();
   const resetTwoStep = useServerFn(resetTeammateTwoStep);
@@ -287,8 +287,8 @@ function MemberCard({ m, onChanged }: { m: TeamMember; onChanged: () => void }) 
           <AlertDialogHeader>
             <AlertDialogTitle>Reset {m.name || "this person"}'s two-step sign-in?</AlertDialogTitle>
             <AlertDialogDescription>
-              For a lost phone. Their authenticator and recovery codes stop working and they're signed out
-              everywhere. They sign in with their password and set up two-step on their new phone. Only do this
+              For a lost phone. Every way they confirm with (texts, Face ID, an authenticator, trusted
+              devices) stops working and they're signed out everywhere. They sign in with their password and set up two-step on their new phone. Only do this
               once you've confirmed it's really them.
             </AlertDialogDescription>
           </AlertDialogHeader>
