@@ -81,9 +81,10 @@ describe("rows that aren't a coach's %", () => {
 });
 
 describe("the workout card (source)", () => {
-  const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+  const wdv = ["src/components/workout-day/WorkoutDayView.tsx", "src/lib/workouts/card-suggestion.ts", "src/lib/workouts/card-suggestion-reads.ts"].map((p) => readFileSync(p, "utf8")).join("\n") /* the logger and the card helpers it shares with the coach's quick view */;
   it("a back-off follows only a LOGGED top set, never a weight filled in from Suggested", () => {
-    expect(wdv).toContain(".filter((x) => x.completed_at && x.actual_load != null && Number.isFinite(Number(x.actual_load)) && Number(x.actual_load) > 0)");
+    // topSetBasisFor (card-suggestion.ts): only a completed set with a weight
+    expect(wdv).toMatch(/x\.completed_at &&\s+x\.actual_load != null &&\s+Number\.isFinite\(Number\(x\.actual_load\)\) &&\s+Number\(x\.actual_load\) > 0/);
   });
   it("its weight boxes stay empty until a tap on the planned weight fills them", () => {
     expect(wdv).not.toContain("autoFillSuggestedWeight");
@@ -186,8 +187,8 @@ describe("a % back-off moves with how the top set went (topSetAdjustment)", () =
   });
 
   it("the card uses it for top-set back-offs only and says it once under the sets", () => {
-    const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
-    expect(wdv).toContain("const adj = topSetAdjustment({ reps: topSetBasis.reps, rpe: topSetBasis.rpe, target: topSetBasis.target });");
+    const wdv = ["src/components/workout-day/WorkoutDayView.tsx", "src/lib/workouts/card-suggestion.ts", "src/lib/workouts/card-suggestion-reads.ts"].map((p) => readFileSync(p, "utf8")).join("\n") /* the logger and the card helpers it shares with the coach's quick view */;
+    expect(wdv).toMatch(/const adj = topSetAdjustment\(\{\s+reps: topSetBasis\.reps,\s+rpe: topSetBasis\.rpe,\s+target: topSetBasis\.target,?\s+\}\);/);
     expect(wdv).toContain("? Math.min(plain, Math.floor(moved / step) * step)");
     expect(wdv).toContain("data-backoff-adjust={backoffPlan.adjust.dir}");
     expect(wdv).toContain("{!capHeld && backoffPlan?.adjust && openSetCount > 0 && !readonly && (");
