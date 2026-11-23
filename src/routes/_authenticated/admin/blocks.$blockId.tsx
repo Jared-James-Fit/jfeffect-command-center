@@ -952,7 +952,7 @@ function BlockEditor() {
                   <Link
                     to="/admin/client-programs/$clientId/analytics"
                     params={{ clientId }}
-                    search={{ filter: "exact_block", blockId, view: "volume" } as any}
+                    search={{ filter: "exact_block", blockId, view: "training" } as any}
                     data-block-analytics
                   >
                     <BarChart3 className="mr-2 h-4 w-4" /> Training analytics

@@ -48,6 +48,8 @@ import {
   type DefaultReason, type PeekDay, type PeekEntry,
 } from "@/lib/workout-peek";
 import { peekClientQuery, peekDayQuery, peekProfileQuery, peekScheduleQuery, type PeekClientRecord, type PeekProfile } from "./data";
+import { usePeekLoadGuides } from "./load-guides";
+import type { CardGuide } from "@/lib/workouts/card-suggestion";
 
 export type QuickViewClient = { id: string; full_name: string | null; profile_picture_url: string | null };
 export type QuickViewTab = "workout" | "profile";
@@ -414,6 +416,8 @@ function WorkoutTab({
     () => (dayQ.data && entry ? buildPeekDay(dayQ.data, { instanceId: entry.instanceId, weekIndex: entry.weekIndex }) : null),
     [dayQ.data, entry],
   );
+  // What to lift on each exercise, exactly as their logger's Suggested reads it (load-guides.ts).
+  const { guides } = usePeekLoadGuides({ clientId, entry, day, record, today, live });
 
   if (loading) return <WorkoutSkeleton />;
   if (error) {
@@ -480,7 +484,7 @@ function WorkoutTab({
 
       <div key={entry.key} className="animate-in fade-in-0 duration-150">
         <WorkoutSummary entry={entry} day={day} name={name} loading={dayQ.isLoading} error={dayQ.isError} onRetry={() => void dayQ.refetch()} today={today} />
-        {day && <ExerciseList day={day} name={name} entry={entry} today={today} />}
+        {day && <ExerciseList day={day} name={name} entry={entry} today={today} guides={guides} />}
         {dayQ.isLoading && <ExercisesSkeleton />}
       </div>
 
@@ -750,7 +754,7 @@ function NoteLine({ label, text, icon }: { label: string; text: string; icon?: b
   );
 }
 
-function ExerciseList({ day, name, entry, today }: { day: PeekDay; name: string; entry: PeekEntry; today: string }) {
+function ExerciseList({ day, name, entry, today, guides }: { day: PeekDay; name: string; entry: PeekEntry; today: string; guides: Map<string, CardGuide> }) {
   if (!day.exercises.length) {
     return <p className="mx-4 mt-3 text-sm text-muted-foreground">No exercises written for this workout.</p>;
   }
@@ -761,13 +765,13 @@ function ExerciseList({ day, name, entry, today }: { day: PeekDay; name: string;
   return (
     <ol className="mt-3 space-y-2 px-4" data-quick-view-exercises>
       {day.exercises.map((ex, i) => (
-        <ExerciseItem key={ex.id} ex={ex} n={i + 1} name={name} flagShort={flagShort} />
+        <ExerciseItem key={ex.id} ex={ex} n={i + 1} name={name} flagShort={flagShort} guide={guides.get(ex.id) ?? null} />
       ))}
     </ol>
   );
 }
 
-function ExerciseItem({ ex, n, name, flagShort }: { ex: PeekDay["exercises"][number]; n: number; name: string; flagShort: boolean }) {
+function ExerciseItem({ ex, n, name, flagShort, guide }: { ex: PeekDay["exercises"][number]; n: number; name: string; flagShort: boolean; guide: CardGuide | null }) {
   const [open, setOpen] = useState(false);
   const hasDetails = !!(ex.details.muscle || ex.details.equipment || ex.details.cues || ex.details.demo);
   const complete = ex.setsPlanned ? ex.setsLogged >= ex.setsPlanned : ex.setsLogged > 0;
@@ -796,9 +800,10 @@ function ExerciseItem({ ex, n, name, flagShort }: { ex: PeekDay["exercises"][num
             )}
           </div>
 
-          <dl className="mt-1.5 grid grid-cols-[3.75rem_minmax(0,1fr)] gap-x-2 gap-y-1 text-sm">
+          <dl className="mt-1.5 grid grid-cols-[4.25rem_minmax(0,1fr)] gap-x-2 gap-y-1 text-sm">
             <dt className="text-xs leading-5 text-muted-foreground">Plan</dt>
             <dd className="leading-5 text-muted-foreground" data-plan>{ex.plan || "–"}</dd>
+            {guide && <GuideRow guide={guide} name={name} />}
             <dt className="text-xs leading-5 text-muted-foreground">Logged</dt>
             <dd className="leading-5" data-logged>
               {ex.logged.length ? (
@@ -862,6 +867,52 @@ function ExerciseItem({ ex, n, name, flagShort }: { ex: PeekDay["exercises"][num
         </div>
       </div>
     </li>
+  );
+}
+
+/**
+ * The weight line under the plan: the number the athlete's Suggested shows (a
+ * range to pick within on the first heavy set of a main lift), the weight a
+ * coach's % comes to today, or, once every set is in, where next time starts.
+ */
+function GuideRow({ guide, name }: { guide: CardGuide; name: string }) {
+  const label = guide.kind === "planned" ? "Load" : guide.kind === "next" ? "Next time" : "Suggested";
+  return (
+    <>
+      <dt className="text-xs leading-5 text-muted-foreground">{label}</dt>
+      <dd className="leading-5" data-load-guide={guide.kind}>
+        {guide.kind === "suggested" ? (
+          <span>
+            <span className="font-semibold tabular-nums">{guide.shown} {guide.unit}</span>
+            {guide.plan && (
+              // "× 11 @ 8" reads on from the weight; a progression's change ("+5 lb", "same weight · build to 12") is its own phrase
+              <span className="tabular-nums text-muted-foreground">{guide.plan.startsWith("×") ? " " : " · "}{guide.plan}</span>
+            )}
+            {guide.note && (
+              <span className={cn("text-xs", guide.live ? "text-success" : "text-muted-foreground")}> · {guide.note}</span>
+            )}
+          </span>
+        ) : guide.kind === "pending" ? (
+          <span className="text-muted-foreground" title={`No recent logs of this lift with an RPE: ${firstName(name)}'s first set sets it`}>
+            {guide.note}
+          </span>
+        ) : guide.kind === "planned" ? (
+          <span>
+            {guide.value ? (
+              <span className="font-semibold tabular-nums">{guide.value}</span>
+            ) : (
+              <span className="text-muted-foreground">{guide.waiting ?? "–"}</span>
+            )}
+            <span className="text-xs text-muted-foreground"> · {guide.label}{guide.capped ? " · capped" : ""}</span>
+          </span>
+        ) : (
+          <span>
+            <span className="font-semibold tabular-nums">{guide.shown} {guide.unit}</span>
+            {guide.note && <span className="text-xs text-muted-foreground"> · {guide.note}</span>}
+          </span>
+        )}
+      </dd>
+    </>
   );
 }
 

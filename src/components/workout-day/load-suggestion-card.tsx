@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { audibleStep, BACKOFF_FATIGUE, loadStep, roundToStep, type LoadModel, type LoadSuggestion, type RepProgression } from "@/lib/load-suggestion";
 import type { PlannedLoadView } from "@/lib/workouts/planned-load";
 import { WARMUP_TOO_EASY } from "@/lib/final-warmup";
+import { progressionChange, suggestionBadge } from "@/lib/workouts/card-suggestion";
 import { HapticTap } from "@/components/haptic-tap";
 
 function fmtNum(n: number): string {
@@ -154,12 +155,8 @@ export function LoadSuggestionCard({
   );
 }
 
-/** A double-progression suggestion's change from last time, in a few words ("+5 lb", "same weight · build to 12", "−5 lb"). */
-export function progressionChange(p: RepProgression, unit: string): string {
-  const d = Math.round((p.load - p.from) * 100) / 100;
-  if (Math.abs(d) < 0.01) return `same weight · build to ${p.range.hi}`;
-  return `${d > 0 ? "+" : "−"}${fmtNum(Math.abs(d))} ${unit}`;
-}
+/** A double-progression suggestion's change from last time (card-suggestion.ts, shared with the coach's quick view). */
+export { progressionChange };
 
 /** Why a double-progression suggestion is what it is, in a coach's words. */
 export function progressionWhy(p: RepProgression, unit: string): string {
@@ -385,18 +382,8 @@ function suggestionParts({ hint, model, fromName, picks }: {
         : model.source === "blend"
           ? "the sets you've logged today, checked against your recent sessions"
           : "the sets you've logged today";
-  // Says when the number is live: moved by what's been logged today.
-  const badge: { text: string; live: boolean } | null =
-    hint.progression ? { text: hint.progression.action === "add" ? "Earned the next step" : hint.progression.action === "drop" ? "Down a step" : "Build reps", live: false }
-    : model.source === "warmup" ? { text: "From warm-up", live: false }
-      : model.source === "history_warmup"
-        ? hint.warmup === "too_easy" ? { text: `${WARMUP_TOO_EASY} · from your history`, live: false }
-          : hint.warmup === "light" ? { text: "Warm-up too light to tune · from your history", live: false }
-          : { text: "Warm-up tuned", live: false }
-      : model.source === "today" || model.source === "blend" ? { text: "Live", live: true }
-      : model.early ? { text: "Early estimate", live: false }
-      : dayPct !== 0 ? { text: `Live ${daySigned}`, live: true }
-      : null;
+  // Says when the number is live: moved by what's been logged today (one reading for the logger and the coach's quick view).
+  const badge = suggestionBadge(hint, model);
   const audible = audibleStep(hint.target, hint.unit);
   const shown = picks ? `${fmtNum(picks.low)}–${fmtNum(picks.high)}` : fmtNum(hint.target);
   return { range, badge, audible, why, shown };

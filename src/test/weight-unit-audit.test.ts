@@ -78,11 +78,13 @@ describe("a % of a max is one physical load, rounded once in the unit shown", ()
   });
 
   it("the workout card asks for the load in its own unit and never rounds it twice", () => {
-    const view = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+    const view = ["src/components/workout-day/WorkoutDayView.tsx", "src/lib/workouts/card-suggestion.ts", "src/lib/workouts/card-suggestion-reads.ts"].map((p) => readFileSync(p, "utf8")).join("\n") /* the logger and the card helpers it shares with the coach's quick view */;
     const block = view.slice(view.indexOf("const computed = useMemo(() => {\n    if (!row.percentage"), view.indexOf("// The coach planned this load as a %"));
     expect(block).toContain("unit: activeUnit,");
     expect(block).not.toContain('unit: "kg",');
-    expect(view).toContain("if (computed.unit === activeUnit) return computed.load;");
+    // prescribedWeightFor (card-suggestion.ts), called with the card's unit
+    expect(view).toContain("if (computed.unit === unit) return computed.load;");
+    expect(view).toContain("prescribedWeightFor(row, activeUnit, percentageBackoffWeight, computed as any)");
   });
 });
 
