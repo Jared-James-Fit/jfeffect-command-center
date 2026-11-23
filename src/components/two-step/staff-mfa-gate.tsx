@@ -10,10 +10,12 @@ import { useAuth } from "@/lib/auth";
 import { roleRequiresMfa, verifiedFactorCount } from "@/lib/mfa-rules";
 import { normalizeRecoveryCode } from "@/lib/mfa-recovery";
 import { redeemRecoveryCode } from "@/lib/mfa-recovery.functions";
-import { confirmWithTrustedDevice } from "@/lib/two-step.functions";
+import { confirmWithTrustedDevice, setTwoStepPreferred } from "@/lib/two-step.functions";
 import {
   isTeamRole,
+  KIND_TITLE,
   kindsInOrder,
+  needsFasterWay,
   orderMethods,
   twoStepGateStep,
   type TwoStepKind,
@@ -21,12 +23,14 @@ import {
 } from "@/lib/two-step";
 import {
   clearTrust,
+  fasterOfferSnoozed,
   forgetConfirmed,
   passkeysPossibleHere,
   passkeyTitleHere,
   readTrust,
   rememberConfirmed,
   saveTrust,
+  snoozeFasterOffer,
   trustByDefault,
   wasConfirmedHere,
 } from "@/lib/two-step-client";
@@ -56,7 +60,9 @@ import { useTwoStepStatus } from "@/components/two-step/use-two-step-status";
  * first (Face ID, a texted code or the authenticator app), "Other ways" for
  * the rest and a recovery code. A login that needs two-step and has none
  * sets one up, then saves its recovery codes. A recovery code confirms the
- * session and asks them to remove what was on the lost phone.
+ * session and asks them to remove what was on the lost phone. Confirming with
+ * only the authenticator app offers Face ID or a text right then ("Skip the
+ * code next time"), so nobody has to find it in Account.
  *
  * Nothing behind it renders until then; the server and the database would
  * refuse it anyway, whatever this screen shows.
@@ -78,6 +84,8 @@ export function StaffMfaGate({ children }: { children: ReactNode }) {
   const [recoveredFor, setRecoveredFor] = useState<string | null>(null);
   // Setup couldn't start at all: let them in this once (nothing is enforced until a way exists).
   const [deferredFor, setDeferredFor] = useState<string | null>(null);
+  // Confirmed with only the authenticator app: offer a faster way before the app.
+  const [offerFor, setOfferFor] = useState<string | null>(null);
 
   const remembered = wasConfirmedHere(sid);
   const step = twoStepGateStep({
@@ -124,6 +132,19 @@ export function StaffMfaGate({ children }: { children: ReactNode }) {
       />
     );
   }
+  if (offerFor === uid && status.data) {
+    return (
+      <FasterWayScreen
+        uid={uid}
+        status={status.data}
+        email={user?.email}
+        onDone={async () => {
+          setOfferFor(null);
+          await status.refetch();
+        }}
+      />
+    );
+  }
   if (step === "pass" || deferredFor === uid) return <>{children}</>;
   if (step === "check") {
     return status.isError ? (
@@ -158,7 +179,13 @@ export function StaffMfaGate({ children }: { children: ReactNode }) {
       uid={uid}
       status={status.data!}
       email={user?.email}
-      onConfirmed={onConfirmed}
+      onConfirmed={async (c) => {
+        const methods = status.data?.methods ?? [];
+        if (needsFasterWay(methods, passkeysPossibleHere()) && !fasterOfferSnoozed(uid)) {
+          setOfferFor(uid);
+        }
+        await onConfirmed(c);
+      }}
       onRecovered={async () => {
         rememberConfirmed(sid);
         setConfirmedSid(sid);
@@ -306,10 +333,17 @@ function ConfirmScreen({
               />
             )}
             {kind === "totp" && <TotpConfirm trust={trust} onConfirmed={onConfirmed} />}
+            {kind === "totp" && needsFasterWay(status.methods, passkeyHere) && (
+              <p className="text-xs text-muted-foreground" data-two-step-faster-hint>
+                After this you can switch to{" "}
+                {passkeyHere ? `${passkeyTitleHere()} or a text message` : "a text message"}, so you
+                won't need the app.
+              </p>
+            )}
             {!kind && (
               <p className="text-sm text-muted-foreground">
-                Face ID works on jfeffect.com in Safari, not in the app. Open the site there, or use a recovery code
-                below.
+                Face ID works on jfeffect.com in Safari, not in the app. Open the site there, or use
+                a recovery code below.
               </p>
             )}
 
@@ -541,6 +575,84 @@ function RecoveredScreen({
         >
           Done
         </Button>
+      </GateCard>
+    </div>
+  );
+}
+
+// ── Skip the code next time ─────────────────────────────────────────────────
+/**
+ * Right after confirming with only the authenticator app: add Face ID (where
+ * this device has it) or a text, made the way asked first, then into the app.
+ * "Not now" keeps it away on this device for 14 days.
+ */
+function FasterWayScreen({
+  uid,
+  status,
+  email,
+  onDone,
+}: {
+  uid: string;
+  status: TwoStepStatus;
+  email?: string | null;
+  onDone: () => Promise<void>;
+}) {
+  const prefer = useServerFn(setTwoStepPreferred);
+  const { kinds, ready } = useAddableKinds();
+  const offer = kinds.filter((k) => k !== "totp");
+  const [adding, setAdding] = useState<TwoStepKind | null>(null);
+  const passkeyHere = offer.includes("passkey");
+
+  return (
+    <div data-two-step-gate="faster">
+      <GateCard title="Skip the code next time" email={email}>
+        {adding ? (
+          <div className="space-y-3">
+            <AddWay
+              kind={adding}
+              suggestedPhone={status.suggestedPhone}
+              trust={false}
+              onAdded={async () => {
+                await prefer({ data: { kind: adding } }).catch(() => undefined);
+                toast.success(`${KIND_TITLE[adding]} is on. We'll ask for it next time.`);
+                await onDone();
+              }}
+            />
+            <Button variant="ghost" className="h-10 w-full" onClick={() => setAdding(null)}>
+              Back
+            </Button>
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">
+              {passkeyHere
+                ? `Add ${passkeyTitleHere()} or a text message. Next time you sign in it's one tap or a texted code, no authenticator app.`
+                : "Add a text message. Next time you sign in we text you a code, no authenticator app."}
+            </p>
+            {ready ? (
+              <WayChoices
+                kinds={offer}
+                have={status.methods.map((m) => m.kind)}
+                onPick={setAdding}
+              />
+            ) : (
+              <div className="grid h-20 place-items-center" aria-busy="true">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              className="h-11 w-full text-muted-foreground"
+              data-two-step-not-now
+              onClick={() => {
+                snoozeFasterOffer(uid);
+                void onDone();
+              }}
+            >
+              Not now
+            </Button>
+          </>
+        )}
       </GateCard>
     </div>
   );

@@ -9,7 +9,9 @@ import {
   codeFromRandom,
   deviceName,
   kindsInOrder,
+  leavesOnlyPasskeys,
   maskPhone,
+  needsFasterWay,
   newSmsCode,
   normalizeSmsCode,
   orderMethods,
@@ -237,5 +239,45 @@ describe("wired in", () => {
     expect(readFileSync("src/routes/_authenticated/admin/account.tsx", "utf8")).toContain(
       "<TwoStepCard />",
     );
+  });
+});
+
+describe("the faster-way offer", () => {
+  const m = (kind: TwoStepMethod["kind"], id = kind): TwoStepMethod => ({
+    id,
+    kind,
+    label: kind,
+    createdAt: null,
+    lastUsedAt: null,
+  });
+
+  it("offers Face ID or a text to a login with only the authenticator app", () => {
+    expect(needsFasterWay([m("totp")], true)).toBe(true);
+    expect(needsFasterWay([m("totp")], false)).toBe(true);
+  });
+
+  it("never asks a login that already has a faster way here, or none at all", () => {
+    expect(needsFasterWay([m("totp"), m("sms")], true)).toBe(false);
+    expect(needsFasterWay([m("totp"), m("passkey")], true)).toBe(false);
+    expect(needsFasterWay([], true)).toBe(false);
+  });
+
+  it("offers a text where this device can't use the passkey they have (the app)", () => {
+    expect(needsFasterWay([m("passkey")], false)).toBe(true);
+  });
+
+  it("warns before removing the last way the iPhone and Android apps can use", () => {
+    const all = [m("passkey"), m("totp")];
+    expect(leavesOnlyPasskeys(all, all[1])).toBe(true);
+    expect(leavesOnlyPasskeys(all, all[0])).toBe(false);
+    expect(leavesOnlyPasskeys([m("passkey"), m("sms"), m("totp")], m("totp"))).toBe(false);
+    expect(leavesOnlyPasskeys([m("totp")], m("totp"))).toBe(false);
+  });
+
+  it("the gate offers it right after confirming, and Not now is remembered", () => {
+    const gate = readFileSync("src/components/two-step/staff-mfa-gate.tsx", "utf8");
+    expect(gate).toContain("needsFasterWay(methods, passkeysPossibleHere())");
+    expect(gate).toContain("<FasterWayScreen");
+    expect(gate).toContain("snoozeFasterOffer(uid)");
   });
 });

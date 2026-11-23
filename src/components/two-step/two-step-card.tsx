@@ -32,6 +32,7 @@ import { useAuth } from "@/lib/auth";
 import { billingDay } from "@/lib/date-range";
 import {
   KIND_TITLE,
+  leavesOnlyPasskeys,
   type TwoStepKind,
   type TwoStepMethod,
   type TwoStepStatus,
@@ -234,6 +235,12 @@ export function TwoStepMethodList({
               {methods.length > 1
                 ? "Your other ways still work."
                 : "You won't be asked to confirm any more."}
+              {removing && leavesOnlyPasskeys(methods, removing) && (
+                <span className="mt-2 block" data-two-step-passkey-only-warning>
+                  Only Face ID or Touch ID would be left, and the iPhone and Android apps can't use
+                  it. Keep a text message so you can sign in there.
+                </span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
