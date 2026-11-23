@@ -271,7 +271,7 @@ function Body({ v }: { v: AppIntelView }) {
           sub="Cash in before tax, by month, from the books."
           action={
             <Button asChild size="sm" variant="outline" className="h-9">
-              <Link to="/admin/sales">Sales</Link>
+              <Link to="/admin/sales" search={{ tab: "overview" } as any}>Sales</Link>
             </Button>
           }
         >

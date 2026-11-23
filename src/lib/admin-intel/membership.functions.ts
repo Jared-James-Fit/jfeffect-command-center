@@ -153,8 +153,8 @@ export const changePlanFn = createServerFn({ method: "POST" })
     if (data.to === "coaching") {
       const coachId = data.coachId ?? review.assignedCoachId;
       if (!coachId) throw new Error("Pick the coach they'll work with.");
-      const { data: coach } = await db.from("coaches").select("id").eq("id", coachId).eq("archived", false).maybeSingle();
-      if (!coach) throw new Error("Pick an active coach.");
+      const { data: coach } = await db.from("coaches").select("id, status").eq("id", coachId).eq("archived", false).maybeSingle();
+      if (!coach || String(coach.status ?? "Active") !== "Active") throw new Error("Pick an active coach.");
       const { error } = await db
         .from("clients")
         .update({ service_tier: "coaching", status: "New Client", assigned_coach_id: coachId })
