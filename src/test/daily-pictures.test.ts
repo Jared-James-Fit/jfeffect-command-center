@@ -912,7 +912,7 @@ describe("the maker: OpenAI, never Lovable AI unless the coach allows it", () =>
     expect((makerFor(false, { OPENAI_API_KEY: "k", LOVABLE_API_KEY: "l" }) as any).provider).toBe("openai");
     expect(makerFor(false, { LOVABLE_API_KEY: "l" })).toEqual({ blocked: "No OpenAI key (OPENAI_API_KEY) is set up, and Lovable AI is off for daily pictures." });
     expect((makerFor(true, { LOVABLE_API_KEY: "l" }) as any).provider).toBe("lovable");
-    expect(server).toContain("picture: (p, refs) => (refs?.length ? generatePictureWithRefs(p, refs) : generatePicture(p, { lovable: false })),");
+    expect(server).toContain('picture: (p, refs) => (refs?.length ? generatePictureWithRefs(p, refs, "daily_visual") : generatePicture(p, { lovable: false, tag: "daily_visual" })),');
     expect(sql).toContain("ADD COLUMN IF NOT EXISTS daily_visuals_lovable boolean NOT NULL DEFAULT false;");
   });
 

@@ -37,6 +37,7 @@ import {
 import { CATEGORIES, MODES, STATUS_WORDS, modeAllowed, riskReasonWords, type AutomationCategory, type AutomationMode } from "@/lib/recovery-automation/rules";
 import { needsEyes, queueOrder } from "@/lib/recovery-automation/categories";
 import { regionOf } from "@/lib/pain/regions";
+import { getAiPausedFn } from "@/lib/ai/ai-usage.functions";
 
 export const RECOVERY_QUEUE_KEY = ["recovery-queue"] as const;
 
@@ -44,6 +45,16 @@ const TODO = new Set(["awaiting_approval", "draft", "failed"]);
 const COMING = new Set(["queued", "working", "sending"]);
 
 const isPain = (c: AutomationCategory) => c === "recovery_reply" || c === "recovery_follow_up";
+
+/**
+ * To do in bands, most important first (queueOrder inside each): what could be serious, what
+ * needs his judgment or his eyes, routine replies, then any that couldn't be written.
+ */
+export function queueBand(i: Pick<RecoveryItem, "status" | "risk" | "category">): number {
+  return i.status === "failed" ? 3 : i.risk === "urgent" ? 0 : i.risk === "review" || needsEyes(i.category) ? 1 : 2;
+}
+const band = queueBand;
+const BAND_WORDS = ["Needs you now", "Needs your judgment", "Routine", "Couldn't be written"];
 
 function whenWords(iso: string | null): string {
   if (!iso) return "";
@@ -111,6 +122,21 @@ function previewOf(i: RecoveryItem): string {
   return `${i.risk === "urgent" ? "Needs you: " : ""}${what}`;
 }
 
+/** Whether AI drafts are paused right now (OpenAI's credits, key or an outage), for the queue's banner. */
+export function useAiPaused(enabled = true) {
+  const get = useServerFn(getAiPausedFn);
+  return useQuery({ queryKey: ["ai-paused"], queryFn: () => get(), enabled, staleTime: 60_000, refetchInterval: 5 * 60_000, retry: false });
+}
+
+const PAUSED_WORDS: Record<string, string> = {
+  credits: "OpenAI credits ran out",
+  auth: "the OpenAI key was refused",
+  outage: "OpenAI isn't answering",
+};
+
+/** Parked while AI is down (the worker's "Waiting for AI: …"), not just due later. */
+const waitingForAi = (i: Pick<RecoveryItem, "status" | "error">) => i.status === "queued" && String(i.error ?? "").startsWith("Waiting for AI");
+
 export function useRecoveryQueue(enabled = true) {
   const get = useServerFn(getRecoveryQueueFn);
   return useQuery({ queryKey: RECOVERY_QUEUE_KEY, queryFn: () => get(), enabled, staleTime: 30_000, refetchInterval: 60_000, retry: false });
@@ -119,6 +145,7 @@ export function useRecoveryQueue(enabled = true) {
 /** The row pinned in Messages (admin), shown while something is waiting or happened in the last two weeks. */
 export function RecoveryInboxRow() {
   const { data } = useRecoveryQueue();
+  const paused = useAiPaused(!!data?.enabled).data;
   const search = useSearch({ strict: false }) as { recovery?: string };
   const [open, setOpen] = useState(false);
   const [focusId, setFocusId] = useState<string | null>(null);
@@ -145,7 +172,7 @@ export function RecoveryInboxRow() {
           </span>
         }
         name="Coaching queue"
-        preview={data.settings.paused ? `Paused · ${preview}` : preview}
+        preview={data.settings.paused ? `Paused · ${preview}` : paused?.paused ? `AI paused · ${preview}` : preview}
         at={lead?.updated_at ?? null}
         unread={todo.length > 0}
         unreadLabel={`${todo.length} waiting`}
@@ -174,7 +201,7 @@ export function RecoveryQueueSheet({ open, onOpenChange, queue, focusId, initial
   }, [open, focusId, initialTab, queue?.enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const items = useMemo(() => (queue?.enabled ? queue.items : []), [queue]);
-  const todo = useMemo(() => items.filter((i) => TODO.has(i.status)).sort(queueOrder), [items]);
+  const todo = useMemo(() => items.filter((i) => TODO.has(i.status)).sort((a, b) => band(a) - band(b) || queueOrder(a, b)), [items]);
   const coming = useMemo(() => items.filter((i) => COMING.has(i.status)).sort((a, b) => a.due_at.localeCompare(b.due_at)), [items]);
   const done = useMemo(() => items.filter((i) => !TODO.has(i.status) && !COMING.has(i.status)), [items]);
   const tabs: { key: Tab; label: string; count?: number }[] = [
@@ -193,6 +220,8 @@ export function RecoveryQueueSheet({ open, onOpenChange, queue, focusId, initial
   };
   const rules = queue?.enabled ? queue.rules : [];
   const list = tab === "todo" ? todo : tab === "coming" ? coming : done;
+  const ai = useAiPaused(open && !!queue?.enabled).data;
+  const parked = coming.filter(waitingForAi).length;
 
   return (
     <>
@@ -225,6 +254,16 @@ export function RecoveryQueueSheet({ open, onOpenChange, queue, focusId, initial
             </div>
           </SheetHeader>
           <div className="flex-1 space-y-3 overflow-y-auto px-5 pb-6 pt-4" data-sheet-scroll>
+            {queue?.enabled && ai?.paused && (
+              <div className="flex items-start gap-2 rounded-xl border border-warning/50 bg-warning/5 p-3 text-[13px]" data-recovery-ai-paused>
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+                <span>
+                  <span className="font-semibold">AI drafts are paused: {PAUSED_WORDS[ai.reason] ?? "OpenAI isn't answering"}.</span>{" "}
+                  {parked ? `${parked} ${parked === 1 ? "reply is" : "replies are"} waiting and ` : "Anything new "}
+                  will be written once it's back. Nothing is sent in the meantime, and nothing is written from a template.
+                </span>
+              </div>
+            )}
             {!queue?.enabled ? (
               <p className="text-sm text-muted-foreground">Automation isn't part of your plan.</p>
             ) : tab === "settings" ? (
@@ -234,9 +273,14 @@ export function RecoveryQueueSheet({ open, onOpenChange, queue, focusId, initial
                 {tab === "todo" ? "Nothing waiting on you." : tab === "coming" ? "Nothing being written or planned." : "Nothing sent in the last two weeks."}
               </p>
             ) : (
-              list.map((i) => (
+              list.map((i, n) => (
+                <div key={i.id} className="space-y-3">
+                  {tab === "todo" && (n === 0 || band(list[n - 1]) !== band(i)) && (
+                    <p className={cn("pt-1 text-[12px] font-semibold uppercase tracking-wide", band(i) === 0 ? "text-warning" : "text-muted-foreground")} data-recovery-band={band(i)}>
+                      {BAND_WORDS[band(i)]} · {list.filter((x) => band(x) === band(i)).length}
+                    </p>
+                  )}
                 <ItemCard
-                  key={i.id}
                   item={i}
                   queue={queue}
                   rule={(rules.find((r) => r.client_id === i.client_id && r.category === i.category)?.mode as AutomationMode | undefined) ?? null}
@@ -245,6 +289,7 @@ export function RecoveryQueueSheet({ open, onOpenChange, queue, focusId, initial
                   onOpenReport={() => setPainFor(i.client_id)}
                   onOpenProgress={() => openProgress(i.client_id)}
                 />
+                </div>
               ))
             )}
           </div>
@@ -281,9 +326,16 @@ function ItemCard({
   const [text, setText] = useState(item.draft ?? "");
   useEffect(() => setText(item.draft ?? ""), [item.draft]);
   const refresh = () => qc.invalidateQueries({ queryKey: RECOVERY_QUEUE_KEY });
+  // the next item moves up at once (the server's answer follows): reviewing on a phone is one
+  // item after another, never a wait between them
+  const settle = (status: string) =>
+    qc.setQueryData(RECOVERY_QUEUE_KEY, (prev: any) =>
+      prev?.enabled ? { ...prev, items: prev.items.map((x: RecoveryItem) => (x.id === item.id ? { ...x, status, sent_at: status === "sent" ? new Date().toISOString() : x.sent_at, decided_by: "you", updated_at: new Date().toISOString() } : x)) } : prev,
+    );
   const send = useMutation({
     mutationFn: () => approveFn({ data: { id: item.id, text: text.trim() } }),
     onSuccess: () => {
+      settle("sent");
       toast.success(`Sent to ${item.first_name}`);
       refresh();
     },
@@ -291,7 +343,10 @@ function ItemCard({
   });
   const dismiss = useMutation({
     mutationFn: () => dismissFn({ data: { id: item.id } }),
-    onSuccess: refresh,
+    onSuccess: () => {
+      settle("dismissed");
+      refresh();
+    },
     onError: (e: any) => toast.error(e?.message ?? "Couldn't dismiss it"),
   });
   const retry = useMutation({
@@ -335,7 +390,7 @@ function ItemCard({
           <p className="text-[12px] text-muted-foreground">{itemTitle(item)}</p>
         </div>
         <span className={cn("shrink-0 text-right text-[12px] font-semibold", item.status === "failed" ? "text-destructive" : waiting ? "text-warning" : "text-muted-foreground")}>
-          {item.status === "sent" ? `${autoSent ? "Sent automatically" : "Sent"} ${whenWords(item.sent_at)}` : COMING.has(item.status) ? `${STATUS_WORDS[item.status]} · ${whenWords(item.due_at)}` : STATUS_WORDS[item.status] ?? item.status}
+          {item.status === "sent" ? `${autoSent ? "Sent automatically" : "Sent"} ${whenWords(item.sent_at)}` : waitingForAi(item) ? "Waiting for AI" : COMING.has(item.status) ? `${STATUS_WORDS[item.status]} · ${whenWords(item.due_at)}` : STATUS_WORDS[item.status] ?? item.status}
         </span>
       </div>
 
@@ -361,10 +416,22 @@ function ItemCard({
       )}
       {item.why && <p className="text-[12px] text-muted-foreground">{item.why}</p>}
       {item.status === "failed" && item.error && <p className="text-[12px] text-destructive">Couldn't write it: {item.error}</p>}
+      {waitingForAi(item) && <p className="text-[12px] text-muted-foreground" data-recovery-waiting-ai>{item.error}. It's written as soon as AI answers again, from their records as they are then.</p>}
 
       {waiting ? (
         <>
-          <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} className="resize-none text-base" aria-label={`Message to ${item.first_name}`} />
+          <Textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={4}
+            className="resize-none text-base"
+            aria-label={`Message to ${item.first_name}`}
+            // on a phone the keyboard covers the bottom half: keep the words and Send in view
+            onFocus={(e) => {
+              const el = e.currentTarget;
+              window.setTimeout(() => el.scrollIntoView({ block: "center", behavior: "smooth" }), 250);
+            }}
+          />
           <p className="text-[11px] text-muted-foreground" data-recovery-hint>
             {item.category === "video_reply"
               ? `Written from the sets' numbers only. Watch the videos in their chat and add what you see. Nothing goes to ${item.first_name} until you send it.`
@@ -373,25 +440,25 @@ function ItemCard({
                 : `Written for you from what they sent and their records. Nothing goes to ${item.first_name} until you send it.`}
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => send.mutate()} disabled={send.isPending || !text.trim()} data-recovery-send>
+            <Button className="h-11 w-full sm:w-auto" onClick={() => send.mutate()} disabled={send.isPending || !text.trim()} data-recovery-send>
               {send.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Check className="mr-1.5 h-4 w-4" />} Send to {item.first_name}
             </Button>
             {isPain(item.category) && (
-              <Button size="sm" variant="outline" onClick={onOpenReport}>
+              <Button size="sm" variant="outline" className="h-10" onClick={onOpenReport}>
                 Open report
               </Button>
             )}
             {item.category === "video_reply" && (
-              <Button size="sm" variant="outline" onClick={onOpenChat} data-recovery-watch>
+              <Button size="sm" variant="outline" className="h-10" onClick={onOpenChat} data-recovery-watch>
                 Watch the videos
               </Button>
             )}
             {item.category === "progress_reply" && (
-              <Button size="sm" variant="outline" onClick={onOpenProgress} data-recovery-open-progress>
+              <Button size="sm" variant="outline" className="h-10" onClick={onOpenProgress} data-recovery-open-progress>
                 Open check-in
               </Button>
             )}
-            <Button size="sm" variant="ghost" onClick={() => dismiss.mutate()} disabled={dismiss.isPending}>
+            <Button size="sm" variant="ghost" className="h-10" onClick={() => dismiss.mutate()} disabled={dismiss.isPending}>
               Dismiss
             </Button>
           </div>

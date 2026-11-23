@@ -13,6 +13,8 @@
  * and speed can be measured per stage. Server only.
  */
 
+import { AI_PRICES, callCost, priceKeyOf } from "./ai-usage";
+
 /**
  * "minimal": GPT-5's quickest setting, for a short answer someone is waiting on (exercise
  * search's "describe it"). Only GPT-5 / -mini / -nano take it; any other model gets "low"
@@ -25,7 +27,8 @@ export function effortFor(id: string, effort: Effort | undefined): Exclude<Effor
   if (effort !== "minimal") return effort;
   return /(^|\/)gpt-5(-mini|-nano)?$/.test(id) ? "minimal" : "low";
 }
-export type ModelUsage = { input: number | null; output: number | null; reasoning: number | null };
+/** `cached`: input tokens read from the prompt cache (charged at the cached rate, ai-usage.ts). */
+export type ModelUsage = { input: number | null; output: number | null; reasoning: number | null; cached?: number | null };
 export type ModelReply = { text: string; model: string; usage: ModelUsage; ms: number };
 /** A file a model reads alongside the prompt (OpenAI direct only): a PDF, or a picture of a page. */
 export type ModelFile = { kind: "pdf" | "image"; name: string; mime: string; base64: string };
@@ -41,6 +44,13 @@ export type ModelRequest = {
   /** Sync calls only: give up after this long. */
   timeoutMs?: number;
   temperature?: number;
+  /**
+   * What the call is for, kept on its ai_call_log row (the route's task, or a finer feature like
+   * "recovery_write:workout_reply"), so usage and cost can be read per feature.
+   */
+  tag?: string;
+  /** The ai-health probe only: goes around the circuit breaker (ai-health.server.ts). */
+  skipBreaker?: boolean;
 };
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1";
@@ -142,7 +152,7 @@ async function gatewayChat(id: string, r: ModelRequest): Promise<Omit<ModelReply
     text = String(whole?.choices?.[0]?.message?.content ?? "");
     usage = whole?.usage ?? null;
   }
-  return { text, usage: { input: usage?.prompt_tokens ?? null, output: usage?.completion_tokens ?? null, reasoning: usage?.completion_tokens_details?.reasoning_tokens ?? null } };
+  return { text, usage: { input: usage?.prompt_tokens ?? null, output: usage?.completion_tokens ?? null, reasoning: usage?.completion_tokens_details?.reasoning_tokens ?? null, cached: usage?.prompt_tokens_details?.cached_tokens ?? null } };
 }
 
 /**
@@ -189,7 +199,7 @@ function responseText(j: any): string {
     .join("");
 }
 function responseUsage(j: any): ModelUsage {
-  return { input: j?.usage?.input_tokens ?? null, output: j?.usage?.output_tokens ?? null, reasoning: j?.usage?.output_tokens_details?.reasoning_tokens ?? null };
+  return { input: j?.usage?.input_tokens ?? null, output: j?.usage?.output_tokens ?? null, reasoning: j?.usage?.output_tokens_details?.reasoning_tokens ?? null, cached: j?.usage?.input_tokens_details?.cached_tokens ?? null };
 }
 /** The Responses API's input: the prompt, or the prompt and its files as one user turn. */
 function openaiInput(r: ModelRequest): unknown {
@@ -224,6 +234,7 @@ function openaiBody(id: string, r: ModelRequest, background: boolean): Record<st
 export async function submitBackground(ref: string, r: ModelRequest): Promise<{ id: string }> {
   const m = parseModelRef(ref);
   if (m.via !== "openai") throw new Error(`${ref} can't run in background mode.`);
+  if (!r.skipBreaker) await breaker(ref);
   const j = await post(`${OPENAI}/responses`, openaiHeaders(), openaiBody(m.id, r, true), 30_000);
   if (!j?.id) throw new Error("OpenAI didn't return a response id.");
   return { id: String(j.id) };
@@ -232,8 +243,17 @@ export async function submitBackground(ref: string, r: ModelRequest): Promise<{ 
 export type BackgroundState = { status: "running" } | { status: "done"; reply: Omit<ModelReply, "model" | "ms"> } | { status: "failed"; error: string };
 
 export async function pollBackground(id: string): Promise<BackgroundState> {
-  const res = await fetch(`${OPENAI}/responses/${encodeURIComponent(id)}`, { headers: openaiHeaders(), signal: AbortSignal.timeout(30_000) });
+  let res: Response;
+  try {
+    res = await fetch(`${OPENAI}/responses/${encodeURIComponent(id)}`, { headers: openaiHeaders(), signal: AbortSignal.timeout(30_000) });
+  } catch {
+    // a dropped poll says nothing about the response, which keeps running on OpenAI's side:
+    // asking again is free, submitting a second model would pay twice
+    return { status: "running" };
+  }
   const text = await res.text();
+  // same for a moment's overload or rate limit on the poll itself (never a quota or a refused key)
+  if (!res.ok && (res.status >= 500 || (res.status === 429 && !/insufficient_quota|no credits/i.test(text)))) return { status: "running" };
   if (!res.ok) return { status: "failed", error: `${res.status} ${text.slice(0, 300)}` };
   const j = JSON.parse(text);
   if (j.status === "completed") return { status: "done", reply: { text: responseText(j), usage: responseUsage(j) } };
@@ -241,13 +261,53 @@ export async function pollBackground(id: string): Promise<BackgroundState> {
   return { status: "running" };
 }
 
+/** The circuit breaker (ai-health.server.ts): refuses a call while its provider is known to be down. */
+async function breaker(ref: string): Promise<void> {
+  const { assertProviderUp, providerOf } = await import("./ai-health.server");
+  await assertProviderUp(providerOf(ref));
+}
+
+/** Keeps the call on record (ai_call_log) and moves its provider's health; never throws. */
+async function record(ref: string, r: ModelRequest, t0: number, out: { ok: true; usage: ModelUsage } | { ok: false; error: unknown }): Promise<void> {
+  try {
+    const { recordAiCall } = await import("./ai-health.server");
+    await recordAiCall({ model: ref, task: r.tag ?? null, ok: out.ok, error: out.ok ? undefined : out.error, usage: out.ok ? out.usage : null, ms: Date.now() - t0, probe: r.tag === "probe" });
+  } catch {
+    // a lost log row never fails the call
+  }
+}
+
+/**
+ * Stops a background response nobody will read any more (a caller gave up on it): a response
+ * left running finishes and is billed for nothing. Never throws.
+ */
+export async function cancelBackground(id: string): Promise<void> {
+  try {
+    await fetch(`${OPENAI}/responses/${encodeURIComponent(id)}/cancel`, { method: "POST", headers: openaiHeaders(), signal: AbortSignal.timeout(10_000) });
+  } catch {
+    // best effort
+  }
+}
+
 /** One synchronous call (OpenAI direct runs in background mode and is polled here, up to timeoutMs). */
 export async function callModel(ref: string, r: ModelRequest): Promise<ModelReply> {
   const t0 = Date.now();
+  if (!r.skipBreaker) await breaker(ref);
+  try {
+    const reply = await callModelOnce(ref, r, t0);
+    await record(ref, r, t0, { ok: true, usage: reply.usage });
+    return reply;
+  } catch (e) {
+    await record(ref, r, t0, { ok: false, error: e });
+    throw e;
+  }
+}
+
+async function callModelOnce(ref: string, r: ModelRequest, t0: number): Promise<ModelReply> {
   const m = parseModelRef(ref);
   let out: Omit<ModelReply, "model" | "ms">;
   if (m.via === "openai") {
-    const { id } = await submitBackground(ref, r);
+    const { id } = await submitBackground(ref, { ...r, skipBreaker: true });
     const limit = r.timeoutMs ?? 170_000;
     for (;;) {
       await new Promise((res) => setTimeout(res, 3000));
@@ -257,7 +317,11 @@ export async function callModel(ref: string, r: ModelRequest): Promise<ModelRepl
         break;
       }
       if (st.status === "failed") throw new Error(`${ref}: ${st.error}`);
-      if (Date.now() - t0 > limit) throw new Error(`${ref}: no answer within ${Math.round(limit / 1000)}s`);
+      if (Date.now() - t0 > limit) {
+        // given up on: stop it on OpenAI's side too, or it keeps running and is billed
+        await cancelBackground(id);
+        throw new Error(`${ref}: no answer within ${Math.round(limit / 1000)}s`);
+      }
     }
   } else if (r.files?.length) throw new Error(`${ref} can't read files; it needs an openai: model.`);
   else if (m.family === "anthropic") out = await gatewayMessages(m.id, r);
@@ -272,6 +336,18 @@ export async function callModel(ref: string, r: ModelRequest): Promise<ModelRepl
  */
 export async function callModelNow(ref: string, r: ModelRequest): Promise<ModelReply> {
   const t0 = Date.now();
+  if (!r.skipBreaker) await breaker(ref);
+  try {
+    const reply = await callModelNowOnce(ref, r, t0);
+    await record(ref, r, t0, { ok: true, usage: reply.usage });
+    return reply;
+  } catch (e) {
+    await record(ref, r, t0, { ok: false, error: e });
+    throw e;
+  }
+}
+
+async function callModelNowOnce(ref: string, r: ModelRequest, t0: number): Promise<ModelReply> {
   const m = parseModelRef(ref);
   const timeoutMs = r.timeoutMs ?? 30_000;
   let out: Omit<ModelReply, "model" | "ms">;
@@ -287,28 +363,19 @@ export async function callModelNow(ref: string, r: ModelRequest): Promise<ModelR
 }
 
 /**
- * Published list prices, US$ per million tokens (input, output), for the admin
- * panel's cost estimate: only rates with a source (Nov 2026: GPT-6 Astra from
- * OpenAI's rate card as reported, GPT-5 mini from OpenAI's price list, Claude Opus 5.5 from
- * Anthropic's model docs).
- * Any other model shows its tokens without a price rather than a guess. Gateway
- * calls bill in Lovable credits.
+ * Published list prices, US$ per million tokens (input, output): one table for every estimate,
+ * `AI_PRICES` in ai-usage.ts, with its sources. Any other model shows its tokens without a price
+ * rather than a guess. Gateway calls bill in Lovable credits.
  */
-export const PRICE_PER_MTOK: Record<string, { input: number; output: number }> = {
-  "gpt-6-astra": { input: 10, output: 50 },
-  // OpenAI's price list for GPT-5 mini (Aug 2025): the AI credits' cost per use is measured with it.
-  "gpt-5-mini": { input: 0.25, output: 2 },
-  "claude-opus-5-5": { input: 4, output: 20 },
-  "claude-sonnet-5": { input: 2, output: 10 },
-};
+
+export const PRICE_PER_MTOK: Record<string, { input: number; output: number }> = AI_PRICES;
 
 export function priceKey(model: string): string {
-  return model.replace(/^(openai|gateway):/, "").replace(/^(openai|anthropic|google)\//, "");
+  return priceKeyOf(model);
 }
 
 /** Estimated US$ for one call's tokens, or null when the model has no price on file. */
 export function estimateCost(model: string, inputTokens: number | null, outputTokens: number | null): number | null {
-  const p = PRICE_PER_MTOK[priceKey(model)];
-  if (!p || inputTokens == null || outputTokens == null) return null;
-  return Math.round(((inputTokens * p.input + outputTokens * p.output) / 1_000_000) * 1000) / 1000;
+  const c = callCost(model, { input: inputTokens, output: outputTokens });
+  return c == null ? null : Math.round(c * 1000) / 1000;
 }

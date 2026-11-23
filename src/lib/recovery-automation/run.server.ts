@@ -37,6 +37,8 @@ type Item = {
   risk: Risk | null;
   risk_reasons: string[];
   attempts: number;
+  /** Why it failed, or "Waiting for AI: …" while it's parked for the provider's fault. */
+  error?: string | null;
   context: any;
   draft: string | null;
   message_id: string | null;
@@ -1012,6 +1014,9 @@ async function processItem(admin: any, item: Item): Promise<TickResult> {
   }
 }
 
+/** How long an item waits before it's tried again while AI is down (the breaker makes each try free). */
+export const AI_WAIT_MS = 15 * 60_000;
+
 /**
  * New items are claimed only in a run's first 15 s: one item can take about a
  * minute and a half (two model calls), and the database's call gives up at 120 s.
@@ -1029,9 +1034,26 @@ export async function runAutomationTick(admin: any, opts: { itemId?: string | nu
       processed.push(await processItem(admin, item));
     } catch (e: any) {
       const message = String(e?.message ?? e).slice(0, 500);
+      const now = new Date().toISOString();
+      const { classifyAiError, isProviderFailure, aiFailureWords } = await import("@/lib/ai/ai-errors");
+      const kind = classifyAiError(e);
+      if (isProviderFailure(kind)) {
+        // AI is down (credits, the key, an outage): the item waits without using an attempt and
+        // is written once AI answers again; never a stand-in, never failed for the provider's fault
+        const waiting = `Waiting for AI: ${aiFailureWords(kind)}`;
+        const { data: parked } = await admin
+          .from("coach_automation_items")
+          .update({ status: "queued", error: waiting, locked_at: null, attempts: Math.max(0, item.attempts - 1), due_at: new Date(Date.now() + AI_WAIT_MS).toISOString(), updated_at: now })
+          .eq("id", item.id)
+          .in("status", ["working", "sending"])
+          .select("id");
+        // one record per wait, not one every check while it waits
+        if (parked?.length && !String(item.error ?? "").startsWith("Waiting for AI")) await event(admin, item, "queued", { waiting_for_ai: kind, why: waiting });
+        processed.push({ id: item.id, outcome: `waiting for AI (${kind})` });
+        continue;
+      }
       console.error("[recovery-automation] item failed", item.id, message);
       // only while this run still holds it (in either state it can hold it in)
-      const now = new Date().toISOString();
       await admin.from("coach_automation_items").update({ status: "failed", error: message, locked_at: null, updated_at: now }).eq("id", item.id).in("status", ["working", "sending"]);
       await event(admin, item, "failed", { error: message, attempt: item.attempts });
       processed.push({ id: item.id, outcome: `failed: ${message}` });

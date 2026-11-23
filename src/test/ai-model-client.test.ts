@@ -43,7 +43,7 @@ describe("model client", () => {
     replies.push(() => ({ choices: [{ message: { content: "hi" } }], usage: { prompt_tokens: 10, completion_tokens: 5, completion_tokens_details: { reasoning_tokens: 2 } } }));
     const a = await callModel("gateway:openai/gpt-5.5", { system: "s", prompt: "p", effort: "high", maxOutputTokens: 1000 });
     expect(a.text).toBe("hi");
-    expect(a.usage).toEqual({ input: 10, output: 5, reasoning: 2 });
+    expect(a.usage).toEqual({ input: 10, output: 5, reasoning: 2, cached: null });
     expect(seen[0].url).toMatch(/\/chat\/completions$/);
     expect(seen[0].body).toMatchObject({ model: "openai/gpt-5.5", reasoning_effort: "high", max_completion_tokens: 1000 });
 
@@ -117,7 +117,7 @@ describe("model client", () => {
     const r = await callModel("gateway:openai/gpt-5.5", { system: "s", prompt: "p", effort: "medium" });
     expect(seen[0].body).toMatchObject({ stream: true, stream_options: { include_usage: true } });
     expect(r.text).toBe("hello");
-    expect(r.usage).toEqual({ input: 5, output: 2, reasoning: null });
+    expect(r.usage).toEqual({ input: 5, output: 2, reasoning: null, cached: null });
   });
 
   it("a streamed refusal or error event is a failed call", async () => {
@@ -136,6 +136,7 @@ describe("model client", () => {
   it("estimates cost only from published prices", () => {
     expect(estimateCost("openai:gpt-6-astra", 100_000, 10_000)).toBe(1.5);
     expect(estimateCost("gateway:anthropic/claude-opus-5-5", 100_000, 10_000)).toBe(0.6);
-    expect(estimateCost("gateway:openai/gpt-5.5", 100_000, 10_000)).toBeNull();
+    expect(estimateCost("gateway:openai/gpt-5.5", 100_000, 10_000)).toBe(0.8);
+    expect(estimateCost("openai:gpt-image-9", 100_000, 10_000)).toBeNull();
   });
 });

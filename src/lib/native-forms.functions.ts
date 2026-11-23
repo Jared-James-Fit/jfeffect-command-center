@@ -396,6 +396,7 @@ export const draftFormWithAiFn = createServerFn({ method: "POST" })
           effort: route.effort,
           maxOutputTokens: route.maxOutputTokens,
           timeoutMs: 45_000,
+          tag: "form_draft",
         });
         draft = parseFormDraft(reply.text);
         if (draft) break;

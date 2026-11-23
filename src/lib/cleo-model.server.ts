@@ -36,6 +36,9 @@ export async function cleoModel(ref: string, opts: { effort: Effort; userId: str
   if (via === "openai") {
     const key = process.env.OPENAI_API_KEY;
     if (!key) throw new Error("AI is not configured (OPENAI_API_KEY missing).");
+    // while OpenAI is known to be down (credits, the key), Cleo says so at once instead of waiting
+    const { assertProviderUp } = await import("@/lib/ai/ai-health.server");
+    await assertProviderUp("openai");
     const { createOpenAI } = await import("@ai-sdk/openai");
     const openai = createOpenAI({ apiKey: key });
     const reasoning = /^(gpt-5|gpt-6|o\d)/.test(id);

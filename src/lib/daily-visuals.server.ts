@@ -219,9 +219,13 @@ function userContent(prompt: string, images?: string[]) {
 
 async function openAiJson(key: string, system: string, prompt: string, o: { images?: string[]; effort?: "low" | "medium" } = {}) {
   const models = process.env.OPENAI_TEXT_MODEL ? [process.env.OPENAI_TEXT_MODEL] : openAiTextModel ? [openAiTextModel] : OPENAI_TEXT_MODELS;
+  const { assertProviderUp, recordAiCall, usageOf } = await import("@/lib/ai/ai-health.server");
+  // while OpenAI is down nothing is sent (the day waits, ai-errors' provider failure)
+  await assertProviderUp("openai");
   let last = "OpenAI didn't answer";
   for (const model of models) {
     const reasoning = /^(gpt-5|o\d)/.test(model);
+    const t0 = Date.now();
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
@@ -238,11 +242,14 @@ async function openAiJson(key: string, system: string, prompt: string, o: { imag
     });
     if (!res.ok) {
       last = await errorText(res, `OpenAI ${model}`);
+      await recordAiCall({ model: `openai:${model}`, task: "daily_visual", ok: false, error: `${res.status} ${last}`, ms: Date.now() - t0 });
       // a model this key doesn't have (or doesn't take these options) is worth trying the next
       if (res.status === 404 || (res.status === 400 && /model|reasoning|temperature|does not exist|unsupported/i.test(last))) continue;
       throw new Error(last);
     }
-    const text = (await res.json())?.choices?.[0]?.message?.content;
+    const j = await res.json();
+    await recordAiCall({ model: `openai:${model}`, task: "daily_visual", ok: true, usage: usageOf(j), ms: Date.now() - t0 });
+    const text = j?.choices?.[0]?.message?.content;
     if (typeof text === "string" && text.trim()) {
       openAiTextModel = model;
       return { text, model: `openai:${model}` };
@@ -280,7 +287,7 @@ export function makerFor(allowLovable: boolean, env: Record<string, string | und
     return {
       provider: "openai",
       json: (s, p, o) => openAiJson(openai, s, p, o),
-      picture: (p, refs) => (refs?.length ? generatePictureWithRefs(p, refs) : generatePicture(p, { lovable: false })),
+      picture: (p, refs) => (refs?.length ? generatePictureWithRefs(p, refs, "daily_visual") : generatePicture(p, { lovable: false, tag: "daily_visual" })),
     };
   const lovable = allowLovable ? env.LOVABLE_API_KEY : undefined;
   if (lovable)
@@ -354,6 +361,16 @@ async function giveUp(admin: Admin, r: DailyRow, reason: string): Promise<string
 }
 
 async function fail(admin: Admin, r: DailyRow, error: string): Promise<string> {
+  const { isProviderFailureText } = await import("@/lib/ai/ai-errors");
+  if (isProviderFailureText(error)) {
+    // OpenAI is down (credits, the key, an outage): the day waits without using a try, and is
+    // made once it answers again; never given up on, never its best try for the provider's fault
+    await admin
+      .from("community_daily_visuals")
+      .update({ attempts: Math.max(0, r.attempts - 1), error: `Waiting for AI: ${error}`.slice(0, 500), updated_at: new Date().toISOString() })
+      .eq("id", r.id);
+    return "waiting for AI";
+  }
   if (r.attempts >= MAX_ERRORS) return giveUp(admin, r, error);
   await admin
     .from("community_daily_visuals")

@@ -587,6 +587,12 @@ function answerText(taskType: MessengerCheckinTaskType, answers: Record<string, 
 /** The stand-in recap's summary (older stand-ins carry only this, no `fallback` flag). */
 export const FALLBACK_RECAP_SUMMARY = "Client check-in received. Review the answers below before replying.";
 
+/** The stand-in kept while there's no AI recap (flagged, or an older one by its summary). */
+export function isStandInRecap(a: any): boolean {
+  if (!a || typeof a !== "object") return false;
+  return a.fallback === true || String(a.summary ?? "").startsWith(FALLBACK_RECAP_SUMMARY);
+}
+
 function fallbackAnalysis(
   taskType: MessengerCheckinTaskType,
   answers: Record<string, any>,
@@ -632,10 +638,49 @@ function fallbackAnalysis(
     goals: goals.slice(0, 3),
     red_flags: redFlags,
     coach_notes: [],
-    suggested_response: goal
-      ? `good update. main focus this week is ${String(goal)}. keep me posted if anything changes and we’ll adjust fast.`
-      : "good update. keep the basics tight this week and let me know early if anything needs adjusted.",
+    // never a reply: a templated "good update…" read as the AI's and could be sent as it is
+    suggested_response: "",
     urgency: redFlags.length ? "high" : "normal",
+  };
+}
+
+/** Why a recap couldn't be written, in the coach's words (never the raw API body). */
+export type RecapFailure = { kind: string; words: string };
+
+/**
+ * A model's recap, or why there isn't one. Every field the card leads with must be the model's
+ * own: an answer missing its summary or its reply is a failed recap, never one filled in from
+ * the stand-in (a part-template reply once passed for an AI one). Pure.
+ */
+export function readRecapAnswer(text: string): { analysis: Omit<MessengerCheckinAnalysis, "fallback"> } | { failure: "answer" } {
+  const stripped = (text ?? "")
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+  let parsed: any = null;
+  try {
+    parsed = JSON.parse(stripped);
+  } catch {
+    const match = stripped.match(/\{[\s\S]*\}/);
+    if (match) {
+      try { parsed = JSON.parse(match[0]); } catch {}
+    }
+  }
+  const summary = typeof parsed?.summary === "string" ? parsed.summary.trim() : "";
+  const reply = typeof parsed?.suggested_response === "string" ? parsed.suggested_response.trim() : "";
+  if (!parsed || typeof parsed !== "object" || !summary || !reply) return { failure: "answer" };
+  const list = (v: unknown) => (Array.isArray(v) ? v.map(String).filter((x) => x.trim()).slice(0, 5) : []);
+  return {
+    analysis: {
+      summary,
+      wins: list(parsed.wins),
+      focus: list(parsed.focus),
+      goals: list(parsed.goals),
+      red_flags: list(parsed.red_flags),
+      coach_notes: list(parsed.coach_notes),
+      suggested_response: casualize(reply),
+      urgency: ["low", "normal", "high", "urgent"].includes(parsed.urgency) ? parsed.urgency : "normal",
+    },
   };
 }
 
@@ -648,8 +693,9 @@ async function generateAnalysis(
   programText = "",
   weightText = "",
   painText = "",
-): Promise<MessengerCheckinAnalysis> {
+): Promise<{ analysis: MessengerCheckinAnalysis; failure: RecapFailure | null; model: string | null }> {
   const fallback = fallbackAnalysis(taskType, answers as any);
+  const { classifyAiError, aiFailureWords } = await import("@/lib/ai/ai-errors");
   try {
     const [{ data: globalCfg }, voice] = await Promise.all([
       sb.from("global_ai_config").select("*").limit(1).maybeSingle(),
@@ -703,35 +749,13 @@ async function generateAnalysis(
     ].join("\n");
 
     // the coach_write route (routing.ts): GPT-5 mini, then GPT-5.5, on the OpenAI key
-    const result = await askRoute("coach_write", { system, prompt, timeoutMs: 45_000 }, { sb });
-    const stripped = (result.text ?? "")
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/```\s*$/i, "")
-      .trim();
-    let parsed: any = null;
-    try {
-      parsed = JSON.parse(stripped);
-    } catch {
-      const match = stripped.match(/\{[\s\S]*\}/);
-      if (match) {
-        try { parsed = JSON.parse(match[0]); } catch {}
-      }
-    }
-    if (!parsed || typeof parsed !== "object") return fallback;
-    return {
-      summary: String(parsed.summary ?? "Client check-in received."),
-      wins: Array.isArray(parsed.wins) ? parsed.wins.map(String).slice(0, 5) : fallback.wins,
-      focus: Array.isArray(parsed.focus) ? parsed.focus.map(String).slice(0, 5) : fallback.focus,
-      goals: Array.isArray(parsed.goals) ? parsed.goals.map(String).slice(0, 5) : fallback.goals,
-      red_flags: Array.isArray(parsed.red_flags) ? parsed.red_flags.map(String).slice(0, 5) : fallback.red_flags,
-      coach_notes: Array.isArray(parsed.coach_notes) ? parsed.coach_notes.map(String).slice(0, 5) : [],
-      suggested_response: casualize(String(parsed.suggested_response ?? fallback.suggested_response)),
-      urgency: ["low", "normal", "high", "urgent"].includes(parsed.urgency)
-        ? parsed.urgency
-        : fallback.urgency,
-    };
-  } catch {
-    return fallback;
+    const result = await askRoute("coach_write", { system, prompt, timeoutMs: 45_000, tag: "checkin_recap" }, { sb });
+    const read = readRecapAnswer(result.text ?? "");
+    if ("failure" in read) return { analysis: fallback, failure: { kind: "answer", words: aiFailureWords("answer") }, model: result.model };
+    return { analysis: read.analysis, failure: null, model: result.model };
+  } catch (e) {
+    const kind = classifyAiError(e);
+    return { analysis: fallback, failure: { kind, words: aiFailureWords(kind) }, model: null };
   }
 }
 
@@ -924,80 +948,100 @@ export const analyzeMessengerCheckin = createServerFn({ method: "POST" })
     const redo = !!data.force && (actor === "admin" || actor === "coach");
     if (row.status !== "completed" || (row.ai_status === "ready" && !redo)) return { status: row.ai_status };
 
-    const taskType = row.task_type as MessengerCheckinTaskType;
-    const { data: occurrence } = row.occurrence_id
-      ? await sb.from("client_task_occurrences").select("due_local_date, client_tz").eq("id", row.occurrence_id).maybeSingle()
-      : { data: null };
-    const contextSnapshot = await buildContextSnapshot(sb, row.client_id, {
-      dueLocalDate: occurrence?.due_local_date ?? null,
-      clientTz: occurrence?.client_tz ?? null,
-    });
-    // Where they are in the program: the week this check-in covers (middle
-    // of its period) and the week coming up.
-    const { loadProgramContext } = await import("@/lib/program-context.server");
-    const periodStart = (contextSnapshot as any).checkin_period_start as string | undefined;
-    const program = await loadProgramContext(sb, row.client_id, periodStart ? isoDateAdd(periodStart, 3) : null);
-    const snapshot = { ...contextSnapshot, program: publicProgramContext(program) };
-    // Weight management: the deterministic read of their trajectory, cardio, water and
-    // digestion, recorded once for the coach (weight_management_reviews, pushed only
-    // when it needs them) and handed to the recap so it never contradicts the numbers.
-    let weightText = "";
-    if (taskType === "weekly_checkin") {
-      const { recordCheckinReview } = await import("@/lib/weight-management/reviews.server");
-      const { assessmentText } = await import("@/lib/weight-management/assessment");
-      const loaded = await recordCheckinReview(sb, row.client_id, row.id);
-      if (loaded) weightText = assessmentText(loaded.assessment);
-      // the nutrition roadmap reads the new check-in too (a reforecast or adjustment for the coach to approve)
-      try {
-        const { evaluateRoadmap } = await import("@/lib/nutrition-roadmap/evaluate.server");
-        const { roadmapText } = await import("@/lib/nutrition-roadmap/text");
-        const e = await evaluateRoadmap(sb, row.client_id, { trigger: "checkin" });
-        if (e.loaded.active) weightText = [weightText, roadmapText(e.read, { approved: true })].filter(Boolean).join("\n\n");
-      } catch (err: any) {
-        console.error("[checkin] nutrition roadmap unavailable", err?.message);
-      }
-    }
-    // Pain over time (src/lib/pain/): what they reported after workouts and in
-    // check-ins, what's changing and what lines up with it, with the recovery
-    // options their history earns (never one the coach already used recently).
-    let painText = "";
-    if (taskType === "weekly_checkin") {
-      try {
-        const { loadPainEntries, loadPainSessions, loadGivenSuggestions, todayIn } = await import("@/lib/pain/load");
-        const { buildPainHistory } = await import("@/lib/pain/history");
-        const { recoverySuggestions } = await import("@/lib/pain/recovery");
-        const { painHistoryForAi } = await import("@/lib/pain/ai");
-        const { data: c } = await sb.from("clients").select("timezone").eq("id", row.client_id).maybeSingle();
-        const tz = c?.timezone ?? null;
-        const [byClient, sessions, given] = await Promise.all([
-          loadPainEntries(sb, [row.client_id], { tz: new Map([[row.client_id, tz]]) }),
-          loadPainSessions(sb, row.client_id, tz).catch(() => []),
-          loadGivenSuggestions(sb, row.client_id),
-        ]);
-        const history = buildPainHistory(byClient.get(row.client_id) ?? [], todayIn(tz));
-        painText = painHistoryForAi(history, { sessions, suggestions: recoverySuggestions(history, sessions, given.given) }) ?? "";
-      } catch (e: any) {
-        console.error("[checkin] pain history unavailable", e?.message);
-      }
-    }
-    const analysis = await generateAnalysis(sb, taskType, row.answers ?? {}, snapshot, row.client_id, programContextText(program), weightText, painText);
-    await sb
-      .from("messenger_checkins")
-      .update({
-        context_snapshot: snapshot,
-        ai_analysis: analysis,
-        ai_status: "ready",
-        ai_error: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", row.id);
-    if (analysis.urgency === "urgent" || analysis.urgency === "high") {
-      await sb
-        .from("conversation_state")
-        .upsert({ client_id: row.client_id, priority: "Important" }, { onConflict: "client_id" });
-    }
-    return { status: "ready" as const };
+    const out = await recapCheckin(sb, row);
+    // "Redo" that couldn't write anything new says so (the recap they had is kept)
+    if (out.failure && redo) throw new Error(`Couldn't write a new recap: ${out.failure.words}. Try again in a minute.`);
+    return { status: out.status };
   });
+
+/**
+ * Writes a submitted check-in's recap (the AI summary and suggested reply) and keeps it on the
+ * check-in. When no model answers: a recap they already had is kept as it is (only `ai_error`
+ * says the redo failed); a check-in with none gets `ai_status = 'failed'` with why, and the
+ * stand-in (their own answers, sorted; never a reply) so the card can say the recap is missing
+ * and offer Try again. The ai-health tick redoes failed recaps once AI answers again. Server only.
+ */
+export async function recapCheckin(sb: any, row: any): Promise<{ status: "ready" | "failed"; failure: RecapFailure | null }> {
+  const taskType = row.task_type as MessengerCheckinTaskType;
+  const { data: occurrence } = row.occurrence_id
+    ? await sb.from("client_task_occurrences").select("due_local_date, client_tz").eq("id", row.occurrence_id).maybeSingle()
+    : { data: null };
+  const contextSnapshot = await buildContextSnapshot(sb, row.client_id, {
+    dueLocalDate: occurrence?.due_local_date ?? null,
+    clientTz: occurrence?.client_tz ?? null,
+  });
+  // Where they are in the program: the week this check-in covers (middle
+  // of its period) and the week coming up.
+  const { loadProgramContext } = await import("@/lib/program-context.server");
+  const periodStart = (contextSnapshot as any).checkin_period_start as string | undefined;
+  const program = await loadProgramContext(sb, row.client_id, periodStart ? isoDateAdd(periodStart, 3) : null);
+  const snapshot = { ...contextSnapshot, program: publicProgramContext(program) };
+  // Weight management: the deterministic read of their trajectory, cardio, water and
+  // digestion, recorded once for the coach (weight_management_reviews, pushed only
+  // when it needs them) and handed to the recap so it never contradicts the numbers.
+  let weightText = "";
+  if (taskType === "weekly_checkin") {
+    const { recordCheckinReview } = await import("@/lib/weight-management/reviews.server");
+    const { assessmentText } = await import("@/lib/weight-management/assessment");
+    const loaded = await recordCheckinReview(sb, row.client_id, row.id);
+    if (loaded) weightText = assessmentText(loaded.assessment);
+    // the nutrition roadmap reads the new check-in too (a reforecast or adjustment for the coach to approve)
+    try {
+      const { evaluateRoadmap } = await import("@/lib/nutrition-roadmap/evaluate.server");
+      const { roadmapText } = await import("@/lib/nutrition-roadmap/text");
+      const e = await evaluateRoadmap(sb, row.client_id, { trigger: "checkin" });
+      if (e.loaded.active) weightText = [weightText, roadmapText(e.read, { approved: true })].filter(Boolean).join("\n\n");
+    } catch (err: any) {
+      console.error("[checkin] nutrition roadmap unavailable", err?.message);
+    }
+  }
+  // Pain over time (src/lib/pain/): what they reported after workouts and in
+  // check-ins, what's changing and what lines up with it, with the recovery
+  // options their history earns (never one the coach already used recently).
+  let painText = "";
+  if (taskType === "weekly_checkin") {
+    try {
+      const { loadPainEntries, loadPainSessions, loadGivenSuggestions, todayIn } = await import("@/lib/pain/load");
+      const { buildPainHistory } = await import("@/lib/pain/history");
+      const { recoverySuggestions } = await import("@/lib/pain/recovery");
+      const { painHistoryForAi } = await import("@/lib/pain/ai");
+      const { data: c } = await sb.from("clients").select("timezone").eq("id", row.client_id).maybeSingle();
+      const tz = c?.timezone ?? null;
+      const [byClient, sessions, given] = await Promise.all([
+        loadPainEntries(sb, [row.client_id], { tz: new Map([[row.client_id, tz]]) }),
+        loadPainSessions(sb, row.client_id, tz).catch(() => []),
+        loadGivenSuggestions(sb, row.client_id),
+      ]);
+      const history = buildPainHistory(byClient.get(row.client_id) ?? [], todayIn(tz));
+      painText = painHistoryForAi(history, { sessions, suggestions: recoverySuggestions(history, sessions, given.given) }) ?? "";
+    } catch (e: any) {
+      console.error("[checkin] pain history unavailable", e?.message);
+    }
+  }
+  const { analysis, failure } = await generateAnalysis(sb, taskType, row.answers ?? {}, snapshot, row.client_id, programContextText(program), weightText, painText);
+  const had = row.ai_analysis && !isStandInRecap(row.ai_analysis) ? row.ai_analysis : null;
+  if (failure && had) {
+    // a Redo that failed never replaces a real recap with the stand-in
+    await sb.from("messenger_checkins").update({ ai_error: failure.words, updated_at: new Date().toISOString() }).eq("id", row.id);
+    return { status: "ready", failure };
+  }
+  await sb
+    .from("messenger_checkins")
+    .update({
+      context_snapshot: snapshot,
+      ai_analysis: analysis,
+      ai_status: failure ? "failed" : "ready",
+      ai_error: failure ? failure.words : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", row.id);
+  if (analysis.urgency === "urgent" || analysis.urgency === "high") {
+    await sb
+      .from("conversation_state")
+      .upsert({ client_id: row.client_id, priority: "Important" }, { onConflict: "client_id" });
+  }
+  return failure ? { status: "failed", failure } : { status: "ready", failure: null };
+}
 
 
 /**

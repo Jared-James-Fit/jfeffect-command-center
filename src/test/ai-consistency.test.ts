@@ -48,7 +48,7 @@ describe("routing", () => {
     }
     // the picture jobs never fall back to Lovable credits by themselves
     expect(readFileSync("src/lib/post-pictures.server.ts", "utf8").match(/generatePicture\([^)]*\), \{ lovable: false \}\)/g)).toHaveLength(2);
-    expect(readFileSync("src/lib/lesson-art.functions.ts", "utf8")).toContain("{ lovable: false }");
+    expect(readFileSync("src/lib/lesson-art.functions.ts", "utf8")).toContain("{ lovable: false, tag: \"lesson_art\" }");
   });
 });
 

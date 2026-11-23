@@ -14,6 +14,7 @@ import { CleoAvatar, CLEO_ROLE_LINE } from "@/components/summer/cleo-avatar";
 import { aiCheckNowFn, aiStatusFn } from "@/lib/ai/ai-status.functions";
 import { AiCreditsAdminCard } from "@/components/ai-credits/ai-credits-admin";
 import { CapabilityLevelsCard } from "@/components/recovery/capability-levels-card";
+import { AiHealthCard, AiUsageCard } from "@/components/ai-health/ai-health-cards";
 
 export const Route = createFileRoute("/_authenticated/admin/settings_/ai")({ component: AiSettingsPage });
 
@@ -149,6 +150,8 @@ function AiSettingsBody() {
     <div className="mx-auto max-w-3xl space-y-4 p-4">
       <PageHeader title="AI & Cleo" />
       <p className="text-[13px] text-muted-foreground">Who has Cleo, where AI runs in the app and which models answer, and the credits members and clients use. Every default runs on the OpenAI key, never Lovable credits. Coaching decisions only ever go to the top tier; if none answers, the run stops and says so. Nothing here changes a program.</p>
+      <AiHealthCard />
+      <AiUsageCard />
       <CleoAccessCard />
       <CapabilityLevelsCard />
       <AiCreditsAdminCard />
@@ -162,7 +165,7 @@ function AiSettingsBody() {
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-base font-semibold">Where AI runs, and who answers</h2>
               <Button size="sm" variant="outline" className="h-9" onClick={run} disabled={checking}>
-                {checking ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />} Check now
+                {checking ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />} Check models
               </Button>
             </div>
             <p className="text-[11px] text-muted-foreground">Last checked: {d?.check?.at ? new Date(d.check.at).toLocaleString() : "never"}</p>
@@ -179,46 +182,6 @@ function AiSettingsBody() {
               ))}
             </ul>
           </Card>
-          <Card className="space-y-2 p-4">
-            <h2 className="text-base font-semibold">Last 30 days</h2>
-            {(d?.stats ?? []).length === 0 ? (
-              <p className="text-[13px] text-muted-foreground">No calls yet.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-[12px]">
-                  <thead className="text-left text-muted-foreground">
-                    <tr><th className="py-1 pr-2">Model</th><th className="pr-2">Task</th><th className="pr-2">Calls</th><th className="pr-2">Failed</th><th className="pr-2">Avg / max s</th><th className="pr-2">Tokens in / out</th><th>Est. $</th></tr>
-                  </thead>
-                  <tbody>
-                    {d.stats.map((s: any) => (
-                      <tr key={`${s.source}${s.model}${s.task}`} className="border-t border-border/50">
-                        <td className="py-1 pr-2">{s.model}</td>
-                        <td className="pr-2">{s.source === "edit" ? "edit" : s.task}</td>
-                        <td className="pr-2 tabular-nums">{s.calls}</td>
-                        <td className="pr-2 tabular-nums">{s.failed}</td>
-                        <td className="pr-2 tabular-nums">{s.avgSeconds ?? "—"} / {s.maxSeconds ?? "—"}</td>
-                        <td className="pr-2 tabular-nums">{Math.round(s.inputTokens / 1000)}k / {Math.round(s.outputTokens / 1000)}k</td>
-                        <td className="tabular-nums">{s.estCost != null ? s.estCost.toFixed(2) : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <p className="text-[11px] text-muted-foreground">Cost is estimated only where the model has a published price on file; gateway calls bill in Lovable credits.</p>
-          </Card>
-          {(d?.errors ?? []).length > 0 && (
-            <Card className="space-y-2 p-4">
-              <h2 className="text-base font-semibold">Recent errors</h2>
-              <ul className="space-y-1 text-[12px]">
-                {d.errors.map((e: any, i: number) => (
-                  <li key={i}>
-                    <span className="text-muted-foreground">{new Date(e.at).toLocaleString()} · {e.source} · {e.task} · {e.model}:</span> {e.error}
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
         </>
       )}
     </div>

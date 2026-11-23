@@ -30,6 +30,7 @@ import {
 } from "@/lib/nutrition-targets/plan-edit";
 import {
   STALE_RUN_MS,
+  MAX_CUTOFFS,
   loadFoodContext,
   loadQAs,
   loadTrainingPattern,
@@ -261,9 +262,21 @@ export async function runQueuedPlanEdit(sb: any, editId?: string | null) {
     id = data?.[0]?.id ?? null;
   }
   if (!id) return { status: "idle" as const };
+  // a change cut off mid-request is taken over, never forever (runQueuedPlan's rule)
+  const { data: before } = await sb.from("nutrition_plan_edits").select("status, progress").eq("id", id).maybeSingle();
+  const cutoffs = before?.status === "generating" ? Number((before.progress as any)?.cutoffs ?? 0) + 1 : Number((before?.progress as any)?.cutoffs ?? 0);
+  if (cutoffs > MAX_CUTOFFS) {
+    await sb
+      .from("nutrition_plan_edits")
+      .update({ status: "error", error: `The writer was cut off ${MAX_CUTOFFS} times, so it stopped. Ask again to start over.`, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("status", "generating")
+      .lt("updated_at", stale);
+    return { status: "error" as const, editId: id };
+  }
   const { data: claimed } = await sb
     .from("nutrition_plan_edits")
-    .update({ status: "generating", error: null, updated_at: new Date().toISOString() })
+    .update({ status: "generating", error: null, updated_at: new Date().toISOString(), ...(before?.status === "generating" ? { progress: { ...((before.progress as any) ?? {}), cutoffs } } : {}) })
     .eq("id", id)
     .or(`status.eq.pending,and(status.eq.generating,updated_at.lt."${stale}")`)
     .select("id")

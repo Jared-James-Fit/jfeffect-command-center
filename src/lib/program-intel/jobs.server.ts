@@ -36,7 +36,7 @@ async function askModel(admin: Db, system: string, prompt: string, timeoutMs: nu
   const errors: string[] = [];
   for (const model of route.models) {
     try {
-      const r = await callModel(model, { system, prompt, effort: route.effort, maxOutputTokens: route.maxOutputTokens, timeoutMs, temperature: 0.3 });
+      const r = await callModel(model, { system, prompt, effort: route.effort, maxOutputTokens: route.maxOutputTokens, timeoutMs, temperature: 0.3, tag: "interpret" });
       return { text: r.text, model };
     } catch (e: any) {
       if (e instanceof ModelHttpError && e.status === 402) throw new Error("The writing service is out of credits. Ask an admin to top it up.");
