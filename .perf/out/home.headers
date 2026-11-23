@@ -1,0 +1,15 @@
+HTTP/2 200 
+date: Mon, 23 Nov 2026 14:31:31 GMT
+content-type: text/html; charset=utf-8
+cache-control: no-cache, must-revalidate, max-age=0
+strict-transport-security: max-age=31536000; includeSubDomains
+content-security-policy: frame-ancestors 'self'
+permissions-policy: geolocation=(), usb=(), serial=(), hid=(), bluetooth=(), midi=()
+referrer-policy: strict-origin-when-cross-origin
+x-content-type-options: nosniff
+x-deployment-id: psr2.d523ccc6-3340-4afb-b8c9-1e951427ed34.1796049088.bYFL-mD34LFp_H9KpjxhPi8W6uLcz9y03W9aWEgPjks
+set-cookie: __cf_bm=c55x3cmPYt0fxLmunP6Fz9iz_a3kSMhWbyOQqK7HtwY-1795444288.618125-1.0.1.1-El_CgaxkY7KMqxtVKsOJib.H_FZw8dUA1L9jnA6cuI4rvKSo1TY3eJyiq8KG4blOYwd8O52RMPrjSAHyTdpIrTjqDdTRGxeYTHd6QE0h4KlO9ELHL0eDAQTCFdYLKYay; HttpOnly; SameSite=None; Partitioned; Secure; Path=/; Domain=jfeffect.com; Expires=Mon, 23 Nov 2026 15:01:31 GMT
+content-encoding: gzip
+server: cloudflare
+cf-ray: a5f0e0b3d9405476-SJC
+

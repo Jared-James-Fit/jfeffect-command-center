@@ -1,0 +1,3227 @@
+{
+  "before-about-mobile": {
+    "runs": [
+      {
+        "score": 0.86,
+        "fcp": 1492.016,
+        "lcp": 4117.016,
+        "tbt": 37.5,
+        "cls": 0,
+        "si": 1492.016,
+        "ttfb": 59.544,
+        "bytes": 963453
+      },
+      {
+        "score": 0.73,
+        "fcp": 3064.35,
+        "lcp": 5764.35,
+        "tbt": 47.5,
+        "cls": 0,
+        "si": 3064.35,
+        "ttfb": 261.465,
+        "bytes": 963385
+      },
+      {
+        "score": 0.74,
+        "fcp": 2878.527,
+        "lcp": 5578.527,
+        "tbt": 86,
+        "cls": 0,
+        "si": 2878.527,
+        "ttfb": 130.38500000000002,
+        "bytes": 963312
+      }
+    ],
+    "median": {
+      "score": 0.74,
+      "fcp": 2878.527,
+      "lcp": 5578.527,
+      "tbt": 86,
+      "cls": 0,
+      "si": 2878.527,
+      "tti": 5578.527,
+      "ttfb": 130.38500000000002,
+      "bytes": 963312,
+      "lcpElement": [
+        {
+          "type": "table",
+          "headings": [
+            {
+              "key": "node",
+              "valueType": "node",
+              "label": "Element"
+            }
+          ],
+          "items": [
+            {
+              "node": {
+                "type": "node",
+                "lhId": "page-0-IMG",
+                "path": "1,HTML,1,BODY,4,DIV,1,MAIN,0,SECTION,0,DIV,1,DIV,0,IMG",
+                "selector": "section > div.mx-auto > div.relative > img.aspect-[4/5]",
+                "boundingRect": {
+                  "top": 708,
+                  "bottom": 1173,
+                  "left": 20,
+                  "right": 392,
+                  "width": 372,
+                  "height": 465
+                },
+                "snippet": "<img src=\"/__l5e/assets-v1/f2726744-57aa-448a-9841-21e667811013/jared-napf-2026.jpg\" alt=\"Jared McIntyre representing Canada in international powerlifting competiti…\" class=\"aspect-[4/5] w-full rounded-[28px] object-cover object-center ring-1 ring-…\" loading=\"eager\" decoding=\"async\" fetchpriority=\"high\" draggable=\"false\">",
+                "nodeLabel": "Jared McIntyre representing Canada in international powerlifting competition"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "headings": [
+            {
+              "key": "phase",
+              "valueType": "text",
+              "label": "Phase"
+            },
+            {
+              "key": "percent",
+              "valueType": "text",
+              "label": "% of LCP"
+            },
+            {
+              "key": "timing",
+              "valueType": "ms",
+              "label": "Timing"
+            }
+          ],
+          "items": [
+            {
+              "phase": "TTFB",
+              "timing": 628.527,
+              "percent": "11%"
+            },
+            {
+              "phase": "Load Delay",
+              "timing": 1323.977640728939,
+              "percent": "24%"
+            },
+            {
+              "phase": "Load Time",
+              "timing": 3052.6056667132316,
+              "percent": "55%"
+            },
+            {
+              "phase": "Render Delay",
+              "timing": 573.4166925578293,
+              "percent": "10%"
+            }
+          ]
+        }
+      ],
+      "lcpBreakdown": {
+        "type": "list",
+        "items": [
+          {
+            "type": "table",
+            "headings": [
+              {
+                "key": "label",
+                "valueType": "text",
+                "label": "Subpart"
+              },
+              {
+                "key": "duration",
+                "valueType": "ms",
+                "label": "Duration"
+              }
+            ],
+            "items": [
+              {
+                "subpart": "timeToFirstByte",
+                "label": "Time to first byte",
+                "duration": 143.814
+              },
+              {
+                "subpart": "resourceLoadDelay",
+                "label": "Resource load delay",
+                "duration": 13.328
+              },
+              {
+                "subpart": "resourceLoadDuration",
+                "label": "Resource load duration",
+                "duration": 251.879
+              },
+              {
+                "subpart": "elementRenderDelay",
+                "label": "Element render delay",
+                "duration": 46.86
+              }
+            ]
+          },
+          {
+            "type": "node",
+            "lhId": "page-0-IMG",
+            "path": "1,HTML,1,BODY,4,DIV,1,MAIN,0,SECTION,0,DIV,1,DIV,0,IMG",
+            "selector": "section > div.mx-auto > div.relative > img.aspect-[4/5]",
+            "boundingRect": {
+              "top": 708,
+              "bottom": 1173,
+              "left": 20,
+              "right": 392,
+              "width": 372,
+              "height": 465
+            },
+            "snippet": "<img src=\"/__l5e/assets-v1/f2726744-57aa-448a-9841-21e667811013/jared-napf-2026.jpg\" alt=\"Jared McIntyre representing Canada in international powerlifting competiti…\" class=\"aspect-[4/5] w-full rounded-[28px] object-cover object-center ring-1 ring-…\" loading=\"eager\" decoding=\"async\" fetchpriority=\"high\" draggable=\"false\">",
+            "nodeLabel": "Jared McIntyre representing Canada in international powerlifting competition"
+          }
+        ]
+      },
+      "renderBlocking": [
+        {
+          "url": "https://jfeffect.com/assets/styles-DKuqngKD.css",
+          "ms": 450,
+          "bytes": 65354
+        }
+      ],
+      "unusedJs": [
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "total": 310627,
+          "wasted": 186419
+        }
+      ],
+      "network": [
+        {
+          "url": "https://jfeffect.com/__l5e/assets-v1/f2726744-57aa-448a-9841-21e667811013/jared-napf-2026.jpg",
+          "type": "Image",
+          "bytes": 510115,
+          "start": 159,
+          "end": 408,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "type": "Script",
+          "bytes": 310702,
+          "start": 166,
+          "end": 260,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/styles-DKuqngKD.css",
+          "type": "Stylesheet",
+          "bytes": 65354,
+          "start": 165,
+          "end": 215,
+          "prio": "VeryHigh"
+        },
+        {
+          "url": "https://jfeffect.com/about",
+          "type": "Document",
+          "bytes": 16820,
+          "start": 1,
+          "end": 147,
+          "prio": "VeryHigh"
+        },
+        {
+          "url": "https://jfeffect.com/logo.png",
+          "type": "Image",
+          "bytes": 16345,
+          "start": 157,
+          "end": 184,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/__l5e/events.b979ee024b15adfd.js",
+          "type": "Script",
+          "bytes": 11764,
+          "start": 225,
+          "end": 244,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/assets/about-B5Esfl3P.js",
+          "type": "Script",
+          "bytes": 9598,
+          "start": 166,
+          "end": 197,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/icon-192.png",
+          "type": "Other",
+          "bytes": 6221,
+          "start": 435,
+          "end": 464,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/sales-page-shell-BIzOvlzz.js",
+          "type": "Script",
+          "bytes": 4260,
+          "start": 166,
+          "end": 247,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/workbox-window.prod.es5-BBnX5xw4.js",
+          "type": "Script",
+          "bytes": 2414,
+          "start": 434,
+          "end": 461,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/favicon.ico",
+          "type": "Other",
+          "bytes": 2302,
+          "start": 435,
+          "end": 463,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/DragDropTouch-EqbqgA_6.js",
+          "type": "Script",
+          "bytes": 2276,
+          "start": 348,
+          "end": 384,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/reveal-BaovrDa8.js",
+          "type": "Script",
+          "bytes": 1492,
+          "start": 166,
+          "end": 200,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/manifest.json",
+          "type": "Manifest",
+          "bytes": 886,
+          "start": 169,
+          "end": 201,
+          "prio": "Medium"
+        },
+        {
+          "url": "https://jfeffect.com/assets/virtual_pwa-register-7DvkfGeq.js",
+          "type": "Script",
+          "bytes": 517,
+          "start": 394,
+          "end": 423,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/shield-check-C0ta09Xh.js",
+          "type": "Script",
+          "bytes": 305,
+          "start": 167,
+          "end": 204,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/instagram-BM1Kufb1.js",
+          "type": "Script",
+          "bytes": 290,
+          "start": 168,
+          "end": 198,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/users-Baghyt5I.js",
+          "type": "Script",
+          "bytes": 276,
+          "start": 168,
+          "end": 204,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/youtube-B2tpEAo2.js",
+          "type": "Script",
+          "bytes": 275,
+          "start": 168,
+          "end": 203,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/badge-check-CGiXxtwe.js",
+          "type": "Script",
+          "bytes": 267,
+          "start": 167,
+          "end": 200,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/menu-DZ5_Pt8r.js",
+          "type": "Script",
+          "bytes": 212,
+          "start": 169,
+          "end": 233,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/chevron-right-Di3DPUvZ.js",
+          "type": "Script",
+          "bytes": 197,
+          "start": 168,
+          "end": 205,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/jared-napf-2026.jpg.asset-D9OeLVvA.js",
+          "type": "Script",
+          "bytes": 177,
+          "start": 167,
+          "end": 230,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/perf-timing-CDdBEsnJ.js",
+          "type": "Script",
+          "bytes": 159,
+          "start": 394,
+          "end": 425,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/__l5e/trackevents",
+          "type": "Fetch",
+          "bytes": 88,
+          "start": 525,
+          "end": 543,
+          "prio": "High"
+        }
+      ],
+      "requests": 25,
+      "bootup": [
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "total": 367.62400000000025,
+          "scripting": 338.34000000000026
+        },
+        {
+          "url": "https://jfeffect.com/about",
+          "total": 332.776,
+          "scripting": 11.795999999999996
+        },
+        {
+          "url": "Unattributable",
+          "total": 251.26400000000103,
+          "scripting": 17.32
+        }
+      ],
+      "mainthread": [
+        {
+          "group": "other",
+          "ms": 419.872
+        },
+        {
+          "group": "scriptEvaluation",
+          "ms": 395.2800000000001
+        },
+        {
+          "group": "styleLayout",
+          "ms": 142.156
+        },
+        {
+          "group": "parseHTML",
+          "ms": 46.05599999999999
+        },
+        {
+          "group": "paintCompositeRender",
+          "ms": 26.976
+        },
+        {
+          "group": "scriptParseCompile",
+          "ms": 15.079999999999997
+        }
+      ],
+      "layoutShifts": [],
+      "cacheTtl": [
+        {
+          "url": "https://jfeffect.com/logo.png",
+          "ttl": 0,
+          "bytes": 16345
+        }
+      ],
+      "imageIssues": {
+        "uses-responsive-images": {
+          "savingsMs": 2100,
+          "items": [
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/f2726744-57aa-448a-9841-21e667811013/jared-napf-2026.jpg",
+              "wasted": 417879
+            },
+            {
+              "url": "https://jfeffect.com/logo.png",
+              "wasted": 16114
+            }
+          ]
+        },
+        "modern-image-formats": {
+          "savingsMs": 1650,
+          "items": [
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/f2726744-57aa-448a-9841-21e667811013/jared-napf-2026.jpg",
+              "wasted": 324248.25
+            },
+            {
+              "url": "https://jfeffect.com/logo.png",
+              "wasted": 11889.9
+            }
+          ]
+        },
+        "offscreen-images": {
+          "savingsMs": 0,
+          "items": []
+        },
+        "uses-optimized-images": {
+          "savingsMs": 450,
+          "items": [
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/f2726744-57aa-448a-9841-21e667811013/jared-napf-2026.jpg",
+              "wasted": 85592
+            }
+          ]
+        },
+        "prioritize-lcp-image": {
+          "savingsMs": 0,
+          "items": []
+        },
+        "unsized-images": {
+          "savingsMs": null,
+          "items": []
+        }
+      },
+      "domSize": 1060,
+      "jsBytes": 345181,
+      "resourceSummary": [
+        {
+          "t": "total",
+          "n": 24,
+          "bytes": 961010
+        },
+        {
+          "t": "image",
+          "n": 2,
+          "bytes": 526460
+        },
+        {
+          "t": "script",
+          "n": 17,
+          "bytes": 345181
+        },
+        {
+          "t": "stylesheet",
+          "n": 1,
+          "bytes": 65354
+        },
+        {
+          "t": "document",
+          "n": 1,
+          "bytes": 16820
+        },
+        {
+          "t": "other",
+          "n": 3,
+          "bytes": 7195
+        },
+        {
+          "t": "media",
+          "n": 0,
+          "bytes": 0
+        },
+        {
+          "t": "font",
+          "n": 0,
+          "bytes": 0
+        },
+        {
+          "t": "third-party",
+          "n": 0,
+          "bytes": 0
+        }
+      ]
+    }
+  },
+  "before-auth-mobile": {
+    "runs": [
+      {
+        "score": 0.9,
+        "fcp": 2861.053,
+        "lcp": 2963.053,
+        "tbt": 24.5,
+        "cls": 0,
+        "si": 2861.053,
+        "ttfb": 42.324000000000005,
+        "bytes": 428801
+      },
+      {
+        "score": 0.91,
+        "fcp": 2771,
+        "lcp": 2877.5,
+        "tbt": 6,
+        "cls": 0,
+        "si": 2771,
+        "ttfb": 39.069,
+        "bytes": 429004
+      },
+      {
+        "score": 0.89,
+        "fcp": 2909.235,
+        "lcp": 3017.735,
+        "tbt": 5.5,
+        "cls": 0,
+        "si": 2909.235,
+        "ttfb": 38.870999999999995,
+        "bytes": 429060
+      }
+    ],
+    "median": {
+      "score": 0.9,
+      "fcp": 2861.053,
+      "lcp": 2963.053,
+      "tbt": 24.5,
+      "cls": 0,
+      "si": 2861.053,
+      "tti": 2989.453,
+      "ttfb": 42.324000000000005,
+      "bytes": 428801,
+      "lcpElement": [
+        {
+          "type": "table",
+          "headings": [
+            {
+              "key": "node",
+              "valueType": "node",
+              "label": "Element"
+            }
+          ],
+          "items": [
+            {
+              "node": {
+                "type": "node",
+                "lhId": "page-0-P",
+                "path": "1,HTML,1,BODY,6,MAIN,1,DIV,0,P",
+                "selector": "body > main.relative > div.relative > p.text-[13px]",
+                "boundingRect": {
+                  "top": 784,
+                  "bottom": 803,
+                  "left": 24,
+                  "right": 388,
+                  "width": 364,
+                  "height": 20
+                },
+                "snippet": "<p class=\"text-[13px] text-muted-foreground\">",
+                "nodeLabel": "New here? Apply to join free"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "headings": [
+            {
+              "key": "phase",
+              "valueType": "text",
+              "label": "Phase"
+            },
+            {
+              "key": "percent",
+              "valueType": "text",
+              "label": "% of LCP"
+            },
+            {
+              "key": "timing",
+              "valueType": "ms",
+              "label": "Timing"
+            }
+          ],
+          "items": [
+            {
+              "phase": "TTFB",
+              "timing": 713.053,
+              "percent": "24%"
+            },
+            {
+              "phase": "Load Delay",
+              "timing": 0,
+              "percent": "0%"
+            },
+            {
+              "phase": "Load Time",
+              "timing": 0,
+              "percent": "0%"
+            },
+            {
+              "phase": "Render Delay",
+              "timing": 2250,
+              "percent": "76%"
+            }
+          ]
+        }
+      ],
+      "lcpBreakdown": {
+        "type": "list",
+        "items": [
+          {
+            "type": "table",
+            "headings": [
+              {
+                "key": "label",
+                "valueType": "text",
+                "label": "Subpart"
+              },
+              {
+                "key": "duration",
+                "valueType": "ms",
+                "label": "Duration"
+              }
+            ],
+            "items": [
+              {
+                "subpart": "timeToFirstByte",
+                "label": "Time to first byte",
+                "duration": 55.996
+              },
+              {
+                "subpart": "elementRenderDelay",
+                "label": "Element render delay",
+                "duration": 385.785
+              }
+            ]
+          },
+          {
+            "type": "node",
+            "lhId": "page-0-P",
+            "path": "1,HTML,1,BODY,6,MAIN,1,DIV,0,P",
+            "selector": "body > main.relative > div.relative > p.text-[13px]",
+            "boundingRect": {
+              "top": 784,
+              "bottom": 803,
+              "left": 24,
+              "right": 388,
+              "width": 364,
+              "height": 20
+            },
+            "snippet": "<p class=\"text-[13px] text-muted-foreground\">",
+            "nodeLabel": "New here? Apply to join free"
+          }
+        ]
+      },
+      "renderBlocking": [
+        {
+          "url": "https://jfeffect.com/assets/styles-DKuqngKD.css",
+          "ms": 450,
+          "bytes": 65345
+        }
+      ],
+      "unusedJs": [
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "total": 310467,
+          "wasted": 187419
+        }
+      ],
+      "network": [
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "type": "Script",
+          "bytes": 310592,
+          "start": 95,
+          "end": 187,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/styles-DKuqngKD.css",
+          "type": "Stylesheet",
+          "bytes": 65345,
+          "start": 94,
+          "end": 272,
+          "prio": "VeryHigh"
+        },
+        {
+          "url": "https://jfeffect.com/logo.png",
+          "type": "Image",
+          "bytes": 16345,
+          "start": 88,
+          "end": 204,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/__l5e/events.b979ee024b15adfd.js",
+          "type": "Script",
+          "bytes": 11764,
+          "start": 283,
+          "end": 315,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/icon-192.png",
+          "type": "Other",
+          "bytes": 6221,
+          "start": 390,
+          "end": 413,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/auth",
+          "type": "Document",
+          "bytes": 4967,
+          "start": 1,
+          "end": 56,
+          "prio": "VeryHigh"
+        },
+        {
+          "url": "https://jfeffect.com/assets/auth-CdpVQyrc.js",
+          "type": "Script",
+          "bytes": 2608,
+          "start": 95,
+          "end": 243,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/workbox-window.prod.es5-BBnX5xw4.js",
+          "type": "Script",
+          "bytes": 2414,
+          "start": 434,
+          "end": 463,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/favicon.ico",
+          "type": "Other",
+          "bytes": 2302,
+          "start": 376,
+          "end": 401,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/DragDropTouch-EqbqgA_6.js",
+          "type": "Script",
+          "bytes": 2276,
+          "start": 332,
+          "end": 360,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/manifest.json",
+          "type": "Manifest",
+          "bytes": 884,
+          "start": 98,
+          "end": 334,
+          "prio": "Medium"
+        },
+        {
+          "url": "https://jfeffect.com/assets/auth-shell-BHb-tGGZ.js",
+          "type": "Script",
+          "bytes": 551,
+          "start": 96,
+          "end": 250,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/virtual_pwa-register-7DvkfGeq.js",
+          "type": "Script",
+          "bytes": 517,
+          "start": 407,
+          "end": 432,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/view-mode-BcgndUvc.js",
+          "type": "Script",
+          "bytes": 474,
+          "start": 97,
+          "end": 279,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/launch-home-C9quqAQQ.js",
+          "type": "Script",
+          "bytes": 379,
+          "start": 95,
+          "end": 235,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/eye-off-gVmLiJFa.js",
+          "type": "Script",
+          "bytes": 327,
+          "start": 96,
+          "end": 258,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/eye-DnyjGDnt.js",
+          "type": "Script",
+          "bytes": 256,
+          "start": 97,
+          "end": 227,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/circle-alert-3-DLfF7O.js",
+          "type": "Script",
+          "bytes": 241,
+          "start": 97,
+          "end": 352,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/perf-timing-CDdBEsnJ.js",
+          "type": "Script",
+          "bytes": 159,
+          "start": 406,
+          "end": 491,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/client-home-BHAKXJd-.js",
+          "type": "Script",
+          "bytes": 103,
+          "start": 98,
+          "end": 252,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/__l5e/trackevents",
+          "type": "Fetch",
+          "bytes": 76,
+          "start": 608,
+          "end": 623,
+          "prio": "High"
+        }
+      ],
+      "requests": 21,
+      "bootup": [
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "total": 381.1200000000007,
+          "scripting": 287.4560000000006
+        },
+        {
+          "url": "Unattributable",
+          "total": 312.02800000000093,
+          "scripting": 16.312
+        },
+        {
+          "url": "https://jfeffect.com/auth",
+          "total": 109.05599999999998,
+          "scripting": 11.147999999999993
+        }
+      ],
+      "mainthread": [
+        {
+          "group": "other",
+          "ms": 431.2040000000011
+        },
+        {
+          "group": "scriptEvaluation",
+          "ms": 338.0800000000002
+        },
+        {
+          "group": "styleLayout",
+          "ms": 55.431999999999995
+        },
+        {
+          "group": "parseHTML",
+          "ms": 33.88
+        },
+        {
+          "group": "scriptParseCompile",
+          "ms": 13.931999999999997
+        },
+        {
+          "group": "paintCompositeRender",
+          "ms": 7.679999999999998
+        }
+      ],
+      "layoutShifts": [],
+      "cacheTtl": [
+        {
+          "url": "https://jfeffect.com/logo.png",
+          "ttl": 0,
+          "bytes": 16345
+        }
+      ],
+      "imageIssues": {
+        "uses-responsive-images": {
+          "savingsMs": 0,
+          "items": [
+            {
+              "url": "https://jfeffect.com/logo.png",
+              "wasted": 15166
+            }
+          ]
+        },
+        "modern-image-formats": {
+          "savingsMs": 0,
+          "items": [
+            {
+              "url": "https://jfeffect.com/logo.png",
+              "wasted": 11889.9
+            }
+          ]
+        },
+        "offscreen-images": {
+          "savingsMs": 0,
+          "items": []
+        },
+        "uses-optimized-images": {
+          "savingsMs": 0,
+          "items": []
+        },
+        "prioritize-lcp-image": {
+          "savingsMs": null,
+          "items": []
+        },
+        "unsized-images": {
+          "savingsMs": null,
+          "items": []
+        }
+      },
+      "domSize": 31,
+      "jsBytes": 332661,
+      "resourceSummary": [
+        {
+          "t": "total",
+          "n": 20,
+          "bytes": 426499
+        },
+        {
+          "t": "script",
+          "n": 14,
+          "bytes": 332661
+        },
+        {
+          "t": "stylesheet",
+          "n": 1,
+          "bytes": 65345
+        },
+        {
+          "t": "image",
+          "n": 1,
+          "bytes": 16345
+        },
+        {
+          "t": "other",
+          "n": 3,
+          "bytes": 7181
+        },
+        {
+          "t": "document",
+          "n": 1,
+          "bytes": 4967
+        },
+        {
+          "t": "media",
+          "n": 0,
+          "bytes": 0
+        },
+        {
+          "t": "font",
+          "n": 0,
+          "bytes": 0
+        },
+        {
+          "t": "third-party",
+          "n": 0,
+          "bytes": 0
+        }
+      ]
+    }
+  },
+  "before-coaching-mobile": {
+    "runs": [
+      {
+        "score": 0.95,
+        "fcp": 1675.778,
+        "lcp": 1900.778,
+        "tbt": 103,
+        "cls": 0,
+        "si": 4456.842742685666,
+        "ttfb": 1943.624,
+        "bytes": 8141453
+      },
+      {
+        "score": 0.84,
+        "fcp": 3080.6530000000002,
+        "lcp": 3230.6530000000002,
+        "tbt": 108.5,
+        "cls": 0,
+        "si": 4591.658024000011,
+        "ttfb": 1995.556,
+        "bytes": 8141664
+      },
+      {
+        "score": 0.87,
+        "fcp": 2877.41,
+        "lcp": 3102.41,
+        "tbt": 126,
+        "cls": 0,
+        "si": 2877.41,
+        "ttfb": 186.858,
+        "bytes": 8141370
+      }
+    ],
+    "median": {
+      "score": 0.87,
+      "fcp": 2877.41,
+      "lcp": 3102.41,
+      "tbt": 126,
+      "cls": 0,
+      "si": 2877.41,
+      "tti": 3191.91,
+      "ttfb": 186.858,
+      "bytes": 8141370,
+      "lcpElement": [
+        {
+          "type": "table",
+          "headings": [
+            {
+              "key": "node",
+              "valueType": "node",
+              "label": "Element"
+            }
+          ],
+          "items": [
+            {
+              "node": {
+                "type": "node",
+                "lhId": "page-10-IMG",
+                "path": "1,HTML,1,BODY,4,DIV,1,MAIN,0,SECTION,1,DIV,0,IMG",
+                "selector": "main > section.mx-auto > div.relative > img.h-full",
+                "boundingRect": {
+                  "top": 550,
+                  "bottom": 1079,
+                  "left": 87,
+                  "right": 325,
+                  "width": 238,
+                  "height": 529
+                },
+                "snippet": "<img src=\"/assets/app-overview-CohcPae2.webp\" alt=\"Training analytics in the JF Effect app: squat, bench and deadlift estimat…\" width=\"390\" height=\"844\" loading=\"eager\" decoding=\"async\" fetchpriority=\"high\" class=\"h-full w-full rounded-[2.05rem] object-cover\">",
+                "nodeLabel": "Training analytics in the JF Effect app: squat, bench and deadlift estimated ma…"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "headings": [
+            {
+              "key": "phase",
+              "valueType": "text",
+              "label": "Phase"
+            },
+            {
+              "key": "percent",
+              "valueType": "text",
+              "label": "% of LCP"
+            },
+            {
+              "key": "timing",
+              "valueType": "ms",
+              "label": "Timing"
+            }
+          ],
+          "items": [
+            {
+              "phase": "TTFB",
+              "timing": 627.41,
+              "percent": "20%"
+            },
+            {
+              "phase": "Load Delay",
+              "timing": 1176.8064621024782,
+              "percent": "38%"
+            },
+            {
+              "phase": "Load Time",
+              "timing": 312.4601207049784,
+              "percent": "10%"
+            },
+            {
+              "phase": "Render Delay",
+              "timing": 985.7334171925431,
+              "percent": "32%"
+            }
+          ]
+        }
+      ],
+      "lcpBreakdown": {
+        "type": "list",
+        "items": [
+          {
+            "type": "table",
+            "headings": [
+              {
+                "key": "label",
+                "valueType": "text",
+                "label": "Subpart"
+              },
+              {
+                "key": "duration",
+                "valueType": "ms",
+                "label": "Duration"
+              }
+            ],
+            "items": [
+              {
+                "subpart": "timeToFirstByte",
+                "label": "Time to first byte",
+                "duration": 198.418
+              },
+              {
+                "subpart": "resourceLoadDelay",
+                "label": "Resource load delay",
+                "duration": 28.282
+              },
+              {
+                "subpart": "resourceLoadDuration",
+                "label": "Resource load duration",
+                "duration": 40.374
+              },
+              {
+                "subpart": "elementRenderDelay",
+                "label": "Element render delay",
+                "duration": 124.376
+              }
+            ]
+          },
+          {
+            "type": "node",
+            "lhId": "page-10-IMG",
+            "path": "1,HTML,1,BODY,4,DIV,1,MAIN,0,SECTION,1,DIV,0,IMG",
+            "selector": "main > section.mx-auto > div.relative > img.h-full",
+            "boundingRect": {
+              "top": 550,
+              "bottom": 1079,
+              "left": 87,
+              "right": 325,
+              "width": 238,
+              "height": 529
+            },
+            "snippet": "<img src=\"/assets/app-overview-CohcPae2.webp\" alt=\"Training analytics in the JF Effect app: squat, bench and deadlift estimat…\" width=\"390\" height=\"844\" loading=\"eager\" decoding=\"async\" fetchpriority=\"high\" class=\"h-full w-full rounded-[2.05rem] object-cover\">",
+            "nodeLabel": "Training analytics in the JF Effect app: squat, bench and deadlift estimated ma…"
+          }
+        ]
+      },
+      "renderBlocking": [
+        {
+          "url": "https://jfeffect.com/assets/styles-DKuqngKD.css",
+          "ms": 450,
+          "bytes": 65334
+        }
+      ],
+      "unusedJs": [
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "total": 310627,
+          "wasted": 181002
+        }
+      ],
+      "network": [
+        {
+          "url": "https://jfeffect.com/__l5e/assets-v1/880af8e5-58d4-4447-b212-88fb88ea5702/transformation-1.png",
+          "type": "Image",
+          "bytes": 1227740,
+          "start": 377,
+          "end": 619,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/__l5e/assets-v1/ce30da4d-8387-4771-b52c-cb8a3c38bdb0/transformation-2.png",
+          "type": "Image",
+          "bytes": 1226633,
+          "start": 378,
+          "end": 633,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/__l5e/assets-v1/c9e3fd98-61f1-4be8-9348-41bed48da7cf/transformation-15.png",
+          "type": "Image",
+          "bytes": 1155614,
+          "start": 378,
+          "end": 591,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/__l5e/assets-v1/225c67ec-50cf-4f42-be94-1654a27b6943/transformation-22.png",
+          "type": "Image",
+          "bytes": 1037188,
+          "start": 379,
+          "end": 631,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/__l5e/assets-v1/1947a7fa-a771-4d40-819a-5094b4123ff5/16.png",
+          "type": "Image",
+          "bytes": 949667,
+          "start": 378,
+          "end": 606,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/__l5e/assets-v1/1578f1b0-6317-4b0c-95c4-61994b927175/transformation-18.png",
+          "type": "Image",
+          "bytes": 947275,
+          "start": 378,
+          "end": 634,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/__l5e/assets-v1/e3ebc8b6-a65d-4df7-9947-79528e45fb64/21.png",
+          "type": "Image",
+          "bytes": 937661,
+          "start": 378,
+          "end": 627,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "type": "Script",
+          "bytes": 310702,
+          "start": 234,
+          "end": 326,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-coach-chat-BYOLXlec.webp",
+          "type": "Image",
+          "bytes": 67397,
+          "start": 379,
+          "end": 446,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/assets/styles-DKuqngKD.css",
+          "type": "Stylesheet",
+          "bytes": 65334,
+          "start": 234,
+          "end": 332,
+          "prio": "VeryHigh"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-nutrition-DMKX3_hs.webp",
+          "type": "Image",
+          "bytes": 45846,
+          "start": 379,
+          "end": 407,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-program-B9OklYF7.webp",
+          "type": "Image",
+          "bytes": 42990,
+          "start": 379,
+          "end": 410,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-overview-CohcPae2.webp",
+          "type": "Image",
+          "bytes": 42519,
+          "start": 227,
+          "end": 266,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/logo.png",
+          "type": "Image",
+          "bytes": 16349,
+          "start": 226,
+          "end": 264,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/coaching",
+          "type": "Document",
+          "bytes": 14288,
+          "start": 1,
+          "end": 201,
+          "prio": "VeryHigh"
+        },
+        {
+          "url": "https://jfeffect.com/__l5e/events.b979ee024b15adfd.js",
+          "type": "Script",
+          "bytes": 11764,
+          "start": 342,
+          "end": 361,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/icon-192.png",
+          "type": "Other",
+          "bytes": 6221,
+          "start": 471,
+          "end": 501,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/coaching.index-RvnPw0it.js",
+          "type": "Script",
+          "bytes": 5679,
+          "start": 234,
+          "end": 270,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/sales-page-shell-BIzOvlzz.js",
+          "type": "Script",
+          "bytes": 4283,
+          "start": 234,
+          "end": 265,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-nutrition-FswEuy6R.js",
+          "type": "Script",
+          "bytes": 3653,
+          "start": 235,
+          "end": 269,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/workbox-window.prod.es5-BBnX5xw4.js",
+          "type": "Script",
+          "bytes": 2414,
+          "start": 645,
+          "end": 677,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/favicon.ico",
+          "type": "Other",
+          "bytes": 2302,
+          "start": 471,
+          "end": 498,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/DragDropTouch-EqbqgA_6.js",
+          "type": "Script",
+          "bytes": 2276,
+          "start": 452,
+          "end": 483,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/accordion-B74alzwc.js",
+          "type": "Script",
+          "bytes": 1897,
+          "start": 236,
+          "end": 273,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/coaching-packages-D2BQbODc.js",
+          "type": "Script",
+          "bytes": 1768,
+          "start": 237,
+          "end": 268,
+          "prio": "High"
+        }
+      ],
+      "requests": 47,
+      "bootup": [
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "total": 507.00000000000006,
+          "scripting": 449.2640000000001
+        },
+        {
+          "url": "Unattributable",
+          "total": 412.6400000000007,
+          "scripting": 20.188
+        },
+        {
+          "url": "https://jfeffect.com/coaching",
+          "total": 296.3399999999999,
+          "scripting": 34.96399999999999
+        }
+      ],
+      "mainthread": [
+        {
+          "group": "other",
+          "ms": 563.4359999999957
+        },
+        {
+          "group": "scriptEvaluation",
+          "ms": 535.232
+        },
+        {
+          "group": "styleLayout",
+          "ms": 143.784
+        },
+        {
+          "group": "parseHTML",
+          "ms": 45.088
+        },
+        {
+          "group": "paintCompositeRender",
+          "ms": 19.167999999999996
+        },
+        {
+          "group": "scriptParseCompile",
+          "ms": 18.152
+        }
+      ],
+      "layoutShifts": [],
+      "cacheTtl": [
+        {
+          "url": "https://jfeffect.com/logo.png",
+          "ttl": 0,
+          "bytes": 16349
+        }
+      ],
+      "imageIssues": {
+        "uses-responsive-images": {
+          "savingsMs": 150,
+          "items": [
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/880af8e5-58d4-4447-b212-88fb88ea5702/transformation-1.png",
+              "wasted": 973877
+            },
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/ce30da4d-8387-4771-b52c-cb8a3c38bdb0/transformation-2.png",
+              "wasted": 972969
+            },
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/c9e3fd98-61f1-4be8-9348-41bed48da7cf/transformation-15.png",
+              "wasted": 916592
+            },
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/225c67ec-50cf-4f42-be94-1654a27b6943/transformation-22.png",
+              "wasted": 822686
+            },
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/1947a7fa-a771-4d40-819a-5094b4123ff5/16.png",
+              "wasted": 753213
+            },
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/1578f1b0-6317-4b0c-95c4-61994b927175/transformation-18.png",
+              "wasted": 751367
+            },
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/e3ebc8b6-a65d-4df7-9947-79528e45fb64/21.png",
+              "wasted": 743735
+            },
+            {
+              "url": "https://jfeffect.com/assets/app-coach-chat-BYOLXlec.webp",
+              "wasted": 50688
+            },
+            {
+              "url": "https://jfeffect.com/assets/app-nutrition-DMKX3_hs.webp",
+              "wasted": 34468
+            },
+            {
+              "url": "https://jfeffect.com/assets/app-program-B9OklYF7.webp",
+              "wasted": 32316
+            }
+          ]
+        },
+        "modern-image-formats": {
+          "savingsMs": 0,
+          "items": [
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/880af8e5-58d4-4447-b212-88fb88ea5702/transformation-1.png",
+              "wasted": 1158736.15
+            },
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/ce30da4d-8387-4771-b52c-cb8a3c38bdb0/transformation-2.png",
+              "wasted": 1146565.7
+            },
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/c9e3fd98-61f1-4be8-9348-41bed48da7cf/transformation-15.png",
+              "wasted": 1079819
+            },
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/225c67ec-50cf-4f42-be94-1654a27b6943/transformation-22.png",
+              "wasted": 968077.3
+            },
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/1578f1b0-6317-4b0c-95c4-61994b927175/transformation-18.png",
+              "wasted": 885581.85
+            },
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/1947a7fa-a771-4d40-819a-5094b4123ff5/16.png",
+              "wasted": 880623.7
+            },
+            {
+              "url": "https://jfeffect.com/__l5e/assets-v1/e3ebc8b6-a65d-4df7-9947-79528e45fb64/21.png",
+              "wasted": 876803.7
+            },
+            {
+              "url": "https://jfeffect.com/logo.png",
+              "wasted": 11889.9
+            }
+          ]
+        },
+        "offscreen-images": {
+          "savingsMs": 0,
+          "items": []
+        },
+        "uses-optimized-images": {
+          "savingsMs": 0,
+          "items": []
+        },
+        "prioritize-lcp-image": {
+          "savingsMs": 0,
+          "items": []
+        },
+        "unsized-images": {
+          "savingsMs": null,
+          "items": []
+        }
+      },
+      "domSize": 462,
+      "jsBytes": 355189,
+      "resourceSummary": [
+        {
+          "t": "total",
+          "n": 46,
+          "bytes": 8139068
+        },
+        {
+          "t": "image",
+          "n": 12,
+          "bytes": 7696879
+        },
+        {
+          "t": "script",
+          "n": 28,
+          "bytes": 355189
+        },
+        {
+          "t": "stylesheet",
+          "n": 1,
+          "bytes": 65334
+        },
+        {
+          "t": "document",
+          "n": 1,
+          "bytes": 14288
+        },
+        {
+          "t": "other",
+          "n": 4,
+          "bytes": 7378
+        },
+        {
+          "t": "media",
+          "n": 0,
+          "bytes": 0
+        },
+        {
+          "t": "font",
+          "n": 0,
+          "bytes": 0
+        },
+        {
+          "t": "third-party",
+          "n": 0,
+          "bytes": 0
+        }
+      ]
+    }
+  },
+  "before-home-desktop": {
+    "runs": [
+      {
+        "score": 0.98,
+        "fcp": 518.447,
+        "lcp": 578.447,
+        "tbt": 7,
+        "cls": 0,
+        "si": 1691.1402645833198,
+        "ttfb": 2280.677,
+        "bytes": 729214
+      }
+    ],
+    "median": {
+      "score": 0.98,
+      "fcp": 518.447,
+      "lcp": 578.447,
+      "tbt": 7,
+      "cls": 0,
+      "si": 1691.1402645833198,
+      "tti": 884.4470000000001,
+      "ttfb": 2280.677,
+      "bytes": 729214,
+      "lcpElement": [
+        {
+          "type": "table",
+          "headings": [
+            {
+              "key": "node",
+              "valueType": "node",
+              "label": "Element"
+            }
+          ],
+          "items": [
+            {
+              "node": {
+                "type": "node",
+                "lhId": "page-0-IMG",
+                "path": "1,HTML,1,BODY,4,DIV,0,DIV,1,MAIN,0,SECTION,1,DIV,1,DIV,0,DIV,0,IMG",
+                "selector": "div.relative > div.relative > div.relative > img.h-full",
+                "boundingRect": {
+                  "top": 118,
+                  "bottom": 688,
+                  "left": 896,
+                  "right": 1153,
+                  "width": 257,
+                  "height": 570
+                },
+                "snippet": "<img src=\"/assets/app-focus-CQybu712.webp\" alt=\"A workout in Focus mode: Romanian deadlift, 3 × 8 at RPE 7, the first set …\" width=\"390\" height=\"844\" loading=\"eager\" decoding=\"async\" fetchpriority=\"high\" class=\"h-full w-full rounded-[2.05rem] object-cover\">",
+                "nodeLabel": "A workout in Focus mode: Romanian deadlift, 3 × 8 at RPE 7, the first set logge…"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "headings": [
+            {
+              "key": "phase",
+              "valueType": "text",
+              "label": "Phase"
+            },
+            {
+              "key": "percent",
+              "valueType": "text",
+              "label": "% of LCP"
+            },
+            {
+              "key": "timing",
+              "valueType": "ms",
+              "label": "Timing"
+            }
+          ],
+          "items": [
+            {
+              "phase": "TTFB",
+              "timing": 2293.571,
+              "percent": "397%"
+            },
+            {
+              "phase": "Load Delay",
+              "timing": 0,
+              "percent": "0%"
+            },
+            {
+              "phase": "Load Time",
+              "timing": 0,
+              "percent": "0%"
+            },
+            {
+              "phase": "Render Delay",
+              "timing": -1715.1239999999998,
+              "percent": "-297%"
+            }
+          ]
+        }
+      ],
+      "lcpBreakdown": {
+        "type": "list",
+        "items": [
+          {
+            "type": "table",
+            "headings": [
+              {
+                "key": "label",
+                "valueType": "text",
+                "label": "Subpart"
+              },
+              {
+                "key": "duration",
+                "valueType": "ms",
+                "label": "Duration"
+              }
+            ],
+            "items": [
+              {
+                "subpart": "timeToFirstByte",
+                "label": "Time to first byte",
+                "duration": 2293.571
+              },
+              {
+                "subpart": "resourceLoadDelay",
+                "label": "Resource load delay",
+                "duration": 28.74
+              },
+              {
+                "subpart": "resourceLoadDuration",
+                "label": "Resource load duration",
+                "duration": 183.68
+              },
+              {
+                "subpart": "elementRenderDelay",
+                "label": "Element render delay",
+                "duration": 38.037
+              }
+            ]
+          },
+          {
+            "type": "node",
+            "lhId": "page-0-IMG",
+            "path": "1,HTML,1,BODY,4,DIV,0,DIV,1,MAIN,0,SECTION,1,DIV,1,DIV,0,DIV,0,IMG",
+            "selector": "div.relative > div.relative > div.relative > img.h-full",
+            "boundingRect": {
+              "top": 118,
+              "bottom": 688,
+              "left": 896,
+              "right": 1153,
+              "width": 257,
+              "height": 570
+            },
+            "snippet": "<img src=\"/assets/app-focus-CQybu712.webp\" alt=\"A workout in Focus mode: Romanian deadlift, 3 × 8 at RPE 7, the first set …\" width=\"390\" height=\"844\" loading=\"eager\" decoding=\"async\" fetchpriority=\"high\" class=\"h-full w-full rounded-[2.05rem] object-cover\">",
+            "nodeLabel": "A workout in Focus mode: Romanian deadlift, 3 × 8 at RPE 7, the first set logge…"
+          }
+        ]
+      },
+      "renderBlocking": [
+        {
+          "url": "https://jfeffect.com/assets/styles-DKuqngKD.css",
+          "ms": 80,
+          "bytes": 65372
+        }
+      ],
+      "unusedJs": [
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "total": 310627,
+          "wasted": 179090
+        }
+      ],
+      "network": [
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "type": "Script",
+          "bytes": 310702,
+          "start": 2330,
+          "end": 2662,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/styles-DKuqngKD.css",
+          "type": "Stylesheet",
+          "bytes": 65372,
+          "start": 2329,
+          "end": 2386,
+          "prio": "VeryHigh"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-food-CmoLqZ7O.webp",
+          "type": "Image",
+          "bytes": 48530,
+          "start": 2430,
+          "end": 2589,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-week-BYBloKSC.webp",
+          "type": "Image",
+          "bytes": 48296,
+          "start": 2429,
+          "end": 2569,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-log-C4eTzXtG.webp",
+          "type": "Image",
+          "bytes": 44702,
+          "start": 2429,
+          "end": 2608,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-home-CkzNiZ8K.webp",
+          "type": "Image",
+          "bytes": 42289,
+          "start": 2429,
+          "end": 2559,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-insights-yTBxWq5v.webp",
+          "type": "Image",
+          "bytes": 40550,
+          "start": 2429,
+          "end": 2834,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-focus-CQybu712.webp",
+          "type": "Image",
+          "bytes": 39764,
+          "start": 2322,
+          "end": 2505,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/logo.png",
+          "type": "Image",
+          "bytes": 16429,
+          "start": 2322,
+          "end": 2377,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/",
+          "type": "Document",
+          "bytes": 16189,
+          "start": 2,
+          "end": 2471,
+          "prio": "VeryHigh"
+        },
+        {
+          "url": "https://jfeffect.com/__l5e/events.b979ee024b15adfd.js",
+          "type": "Script",
+          "bytes": 11764,
+          "start": 2396,
+          "end": 2415,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/assets/index-qPtUPYng.js",
+          "type": "Script",
+          "bytes": 8159,
+          "start": 2330,
+          "end": 2476,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/icon-192.png",
+          "type": "Other",
+          "bytes": 6221,
+          "start": 2779,
+          "end": 2816,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/sales-page-shell-BIzOvlzz.js",
+          "type": "Script",
+          "bytes": 4307,
+          "start": 2332,
+          "end": 2468,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-nutrition-FswEuy6R.js",
+          "type": "Script",
+          "bytes": 3653,
+          "start": 2332,
+          "end": 2808,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/workbox-window.prod.es5-BBnX5xw4.js",
+          "type": "Script",
+          "bytes": 2414,
+          "start": 3102,
+          "end": 3137,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/favicon.ico",
+          "type": "Other",
+          "bytes": 2360,
+          "start": 2778,
+          "end": 2803,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/DragDropTouch-EqbqgA_6.js",
+          "type": "Script",
+          "bytes": 2276,
+          "start": 2756,
+          "end": 2782,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/accordion-B74alzwc.js",
+          "type": "Script",
+          "bytes": 1897,
+          "start": 2333,
+          "end": 2823,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/coaching-packages-D2BQbODc.js",
+          "type": "Script",
+          "bytes": 1768,
+          "start": 2334,
+          "end": 2784,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/reveal-BaovrDa8.js",
+          "type": "Script",
+          "bytes": 1492,
+          "start": 2333,
+          "end": 2548,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/index-QIhs200S.js",
+          "type": "Script",
+          "bytes": 1245,
+          "start": 2337,
+          "end": 2682,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/join-funnel-COCT2Sd5.js",
+          "type": "Script",
+          "bytes": 1153,
+          "start": 2333,
+          "end": 2494,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/index-Dlpe5gXH.js",
+          "type": "Script",
+          "bytes": 1031,
+          "start": 2337,
+          "end": 2799,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/manifest.json",
+          "type": "Manifest",
+          "bytes": 884,
+          "start": 2338,
+          "end": 2658,
+          "prio": "Medium"
+        }
+      ],
+      "requests": 44,
+      "bootup": [
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "total": 135.33099999999973,
+          "scripting": 123.43999999999976
+        },
+        {
+          "url": "Unattributable",
+          "total": 90.08500000000015,
+          "scripting": 4.0280000000000005
+        },
+        {
+          "url": "https://jfeffect.com/",
+          "total": 82.15100000000004,
+          "scripting": 4.816999999999996
+        }
+      ],
+      "mainthread": [
+        {
+          "group": "scriptEvaluation",
+          "ms": 138.3780000000005
+        },
+        {
+          "group": "other",
+          "ms": 135.1439999999997
+        },
+        {
+          "group": "styleLayout",
+          "ms": 39.981
+        },
+        {
+          "group": "parseHTML",
+          "ms": 11.040000000000001
+        },
+        {
+          "group": "scriptParseCompile",
+          "ms": 4.8629999999999995
+        },
+        {
+          "group": "paintCompositeRender",
+          "ms": 4.637999999999996
+        }
+      ],
+      "layoutShifts": [],
+      "cacheTtl": [
+        {
+          "url": "https://jfeffect.com/logo.png",
+          "ttl": 0,
+          "bytes": 16429
+        }
+      ],
+      "imageIssues": {
+        "uses-responsive-images": {
+          "savingsMs": 30,
+          "items": [
+            {
+              "url": "https://jfeffect.com/assets/app-food-CmoLqZ7O.webp",
+              "wasted": 42569
+            },
+            {
+              "url": "https://jfeffect.com/assets/app-week-BYBloKSC.webp",
+              "wasted": 42363
+            },
+            {
+              "url": "https://jfeffect.com/assets/app-log-C4eTzXtG.webp",
+              "wasted": 39204
+            },
+            {
+              "url": "https://jfeffect.com/assets/app-home-CkzNiZ8K.webp",
+              "wasted": 38624
+            },
+            {
+              "url": "https://jfeffect.com/assets/app-insights-yTBxWq5v.webp",
+              "wasted": 35554
+            },
+            {
+              "url": "https://jfeffect.com/assets/app-focus-CQybu712.webp",
+              "wasted": 35246
+            }
+          ]
+        },
+        "modern-image-formats": {
+          "savingsMs": 0,
+          "items": [
+            {
+              "url": "https://jfeffect.com/logo.png",
+              "wasted": 11889.9
+            }
+          ]
+        },
+        "offscreen-images": {
+          "savingsMs": 0,
+          "items": []
+        },
+        "uses-optimized-images": {
+          "savingsMs": 0,
+          "items": []
+        },
+        "prioritize-lcp-image": {
+          "savingsMs": 0,
+          "items": []
+        },
+        "unsized-images": {
+          "savingsMs": null,
+          "items": []
+        }
+      },
+      "domSize": 425,
+      "jsBytes": 357255,
+      "resourceSummary": [
+        {
+          "t": "total",
+          "n": 43,
+          "bytes": 726854
+        },
+        {
+          "t": "script",
+          "n": 30,
+          "bytes": 357255
+        },
+        {
+          "t": "image",
+          "n": 7,
+          "bytes": 280560
+        },
+        {
+          "t": "stylesheet",
+          "n": 1,
+          "bytes": 65372
+        },
+        {
+          "t": "document",
+          "n": 1,
+          "bytes": 16189
+        },
+        {
+          "t": "other",
+          "n": 4,
+          "bytes": 7478
+        },
+        {
+          "t": "media",
+          "n": 0,
+          "bytes": 0
+        },
+        {
+          "t": "font",
+          "n": 0,
+          "bytes": 0
+        },
+        {
+          "t": "third-party",
+          "n": 0,
+          "bytes": 0
+        }
+      ]
+    }
+  },
+  "before-home-mobile": {
+    "runs": [
+      {
+        "score": 0.61,
+        "fcp": 3330.971,
+        "lcp": 3555.971,
+        "tbt": 1021.9999999999995,
+        "cls": 0,
+        "si": 3330.971,
+        "ttfb": 466.18800000000005,
+        "bytes": 680608
+      },
+      {
+        "score": 0.85,
+        "fcp": 3217.452,
+        "lcp": 3367.452,
+        "tbt": 121,
+        "cls": 0,
+        "si": 3217.452,
+        "ttfb": 275.635,
+        "bytes": 680397
+      },
+      {
+        "score": 0.86,
+        "fcp": 3034.782,
+        "lcp": 3259.782,
+        "tbt": 136.5,
+        "cls": 0,
+        "si": 3034.782,
+        "ttfb": 111.50699999999999,
+        "bytes": 680433
+      }
+    ],
+    "median": {
+      "score": 0.85,
+      "fcp": 3217.452,
+      "lcp": 3367.452,
+      "tbt": 121,
+      "cls": 0,
+      "si": 3217.452,
+      "tti": 3648.4520000000007,
+      "ttfb": 275.635,
+      "bytes": 680397,
+      "lcpElement": [
+        {
+          "type": "table",
+          "headings": [
+            {
+              "key": "node",
+              "valueType": "node",
+              "label": "Element"
+            }
+          ],
+          "items": [
+            {
+              "node": {
+                "type": "node",
+                "lhId": "page-3-IMG",
+                "path": "1,HTML,1,BODY,4,DIV,0,DIV,1,MAIN,0,SECTION,1,DIV,1,DIV,0,DIV,0,IMG",
+                "selector": "div.relative > div.relative > div.relative > img.h-full",
+                "boundingRect": {
+                  "top": 590,
+                  "bottom": 1019,
+                  "left": 178,
+                  "right": 370,
+                  "width": 192,
+                  "height": 429
+                },
+                "snippet": "<img src=\"/assets/app-focus-CQybu712.webp\" alt=\"A workout in Focus mode: Romanian deadlift, 3 × 8 at RPE 7, the first set …\" width=\"390\" height=\"844\" loading=\"eager\" decoding=\"async\" fetchpriority=\"high\" class=\"h-full w-full rounded-[2.05rem] object-cover\">",
+                "nodeLabel": "A workout in Focus mode: Romanian deadlift, 3 × 8 at RPE 7, the first set logge…"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "headings": [
+            {
+              "key": "phase",
+              "valueType": "text",
+              "label": "Phase"
+            },
+            {
+              "key": "percent",
+              "valueType": "text",
+              "label": "% of LCP"
+            },
+            {
+              "key": "timing",
+              "valueType": "ms",
+              "label": "Timing"
+            }
+          ],
+          "items": [
+            {
+              "phase": "TTFB",
+              "timing": 817.452,
+              "percent": "24%"
+            },
+            {
+              "phase": "Load Delay",
+              "timing": 859.3974414073266,
+              "percent": "26%"
+            },
+            {
+              "phase": "Load Time",
+              "timing": 216.16782507073208,
+              "percent": "6%"
+            },
+            {
+              "phase": "Render Delay",
+              "timing": 1474.4347335219416,
+              "percent": "44%"
+            }
+          ]
+        }
+      ],
+      "lcpBreakdown": {
+        "type": "list",
+        "items": [
+          {
+            "type": "table",
+            "headings": [
+              {
+                "key": "label",
+                "valueType": "text",
+                "label": "Subpart"
+              },
+              {
+                "key": "duration",
+                "valueType": "ms",
+                "label": "Duration"
+              }
+            ],
+            "items": [
+              {
+                "subpart": "timeToFirstByte",
+                "label": "Time to first byte",
+                "duration": 287.363
+              },
+              {
+                "subpart": "resourceLoadDelay",
+                "label": "Resource load delay",
+                "duration": 44.928
+              },
+              {
+                "subpart": "resourceLoadDuration",
+                "label": "Resource load duration",
+                "duration": 44.162
+              },
+              {
+                "subpart": "elementRenderDelay",
+                "label": "Element render delay",
+                "duration": 293.212
+              }
+            ]
+          },
+          {
+            "type": "node",
+            "lhId": "page-3-IMG",
+            "path": "1,HTML,1,BODY,4,DIV,0,DIV,1,MAIN,0,SECTION,1,DIV,1,DIV,0,DIV,0,IMG",
+            "selector": "div.relative > div.relative > div.relative > img.h-full",
+            "boundingRect": {
+              "top": 590,
+              "bottom": 1019,
+              "left": 178,
+              "right": 370,
+              "width": 192,
+              "height": 429
+            },
+            "snippet": "<img src=\"/assets/app-focus-CQybu712.webp\" alt=\"A workout in Focus mode: Romanian deadlift, 3 × 8 at RPE 7, the first set …\" width=\"390\" height=\"844\" loading=\"eager\" decoding=\"async\" fetchpriority=\"high\" class=\"h-full w-full rounded-[2.05rem] object-cover\">",
+            "nodeLabel": "A workout in Focus mode: Romanian deadlift, 3 × 8 at RPE 7, the first set logge…"
+          }
+        ]
+      },
+      "renderBlocking": [
+        {
+          "url": "https://jfeffect.com/assets/styles-DKuqngKD.css",
+          "ms": 450,
+          "bytes": 65354
+        }
+      ],
+      "unusedJs": [
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "total": 310467,
+          "wasted": 178662
+        }
+      ],
+      "network": [
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "type": "Script",
+          "bytes": 310542,
+          "start": 341,
+          "end": 623,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/styles-DKuqngKD.css",
+          "type": "Stylesheet",
+          "bytes": 65354,
+          "start": 340,
+          "end": 589,
+          "prio": "VeryHigh"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-week-BYBloKSC.webp",
+          "type": "Image",
+          "bytes": 48296,
+          "start": 647,
+          "end": 675,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-log-C4eTzXtG.webp",
+          "type": "Image",
+          "bytes": 44702,
+          "start": 648,
+          "end": 676,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-home-CkzNiZ8K.webp",
+          "type": "Image",
+          "bytes": 42288,
+          "start": 647,
+          "end": 672,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-insights-yTBxWq5v.webp",
+          "type": "Image",
+          "bytes": 40550,
+          "start": 648,
+          "end": 678,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-focus-CQybu712.webp",
+          "type": "Image",
+          "bytes": 39796,
+          "start": 332,
+          "end": 375,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/logo.png",
+          "type": "Image",
+          "bytes": 16414,
+          "start": 332,
+          "end": 681,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/",
+          "type": "Document",
+          "bytes": 16166,
+          "start": 1,
+          "end": 387,
+          "prio": "VeryHigh"
+        },
+        {
+          "url": "https://jfeffect.com/__l5e/events.b979ee024b15adfd.js",
+          "type": "Script",
+          "bytes": 11764,
+          "start": 603,
+          "end": 624,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/assets/index-qPtUPYng.js",
+          "type": "Script",
+          "bytes": 8182,
+          "start": 342,
+          "end": 376,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/icon-192.png",
+          "type": "Other",
+          "bytes": 6222,
+          "start": 766,
+          "end": 984,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/sales-page-shell-BIzOvlzz.js",
+          "type": "Script",
+          "bytes": 4260,
+          "start": 342,
+          "end": 575,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/app-nutrition-FswEuy6R.js",
+          "type": "Script",
+          "bytes": 3653,
+          "start": 343,
+          "end": 567,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/workbox-window.prod.es5-BBnX5xw4.js",
+          "type": "Script",
+          "bytes": 2414,
+          "start": 865,
+          "end": 909,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/favicon.ico",
+          "type": "Other",
+          "bytes": 2360,
+          "start": 756,
+          "end": 783,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/DragDropTouch-EqbqgA_6.js",
+          "type": "Script",
+          "bytes": 2303,
+          "start": 738,
+          "end": 762,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/accordion-B74alzwc.js",
+          "type": "Script",
+          "bytes": 1897,
+          "start": 343,
+          "end": 604,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/coaching-packages-D2BQbODc.js",
+          "type": "Script",
+          "bytes": 1768,
+          "start": 344,
+          "end": 559,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/reveal-BaovrDa8.js",
+          "type": "Script",
+          "bytes": 1492,
+          "start": 343,
+          "end": 595,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/index-QIhs200S.js",
+          "type": "Script",
+          "bytes": 1245,
+          "start": 347,
+          "end": 600,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/join-funnel-COCT2Sd5.js",
+          "type": "Script",
+          "bytes": 1153,
+          "start": 344,
+          "end": 576,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/index-Dlpe5gXH.js",
+          "type": "Script",
+          "bytes": 1054,
+          "start": 347,
+          "end": 553,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/manifest.json",
+          "type": "Manifest",
+          "bytes": 884,
+          "start": 348,
+          "end": 592,
+          "prio": "Medium"
+        },
+        {
+          "url": "https://jfeffect.com/assets/membership-applications.functions-CnpspUuR.js",
+          "type": "Script",
+          "bytes": 859,
+          "start": 347,
+          "end": 617,
+          "prio": "High"
+        }
+      ],
+      "requests": 43,
+      "bootup": [
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "total": 517.3200000000003,
+          "scripting": 482.9400000000002
+        },
+        {
+          "url": "Unattributable",
+          "total": 426.1880000000005,
+          "scripting": 20.835999999999995
+        },
+        {
+          "url": "https://jfeffect.com/",
+          "total": 339.51199999999994,
+          "scripting": 20.531999999999965
+        }
+      ],
+      "mainthread": [
+        {
+          "group": "other",
+          "ms": 579.9279999999985
+        },
+        {
+          "group": "scriptEvaluation",
+          "ms": 550.5920000000017
+        },
+        {
+          "group": "styleLayout",
+          "ms": 169.24399999999997
+        },
+        {
+          "group": "parseHTML",
+          "ms": 47.168
+        },
+        {
+          "group": "scriptParseCompile",
+          "ms": 19.351999999999993
+        },
+        {
+          "group": "paintCompositeRender",
+          "ms": 16.33199999999999
+        },
+        {
+          "group": "garbageCollection",
+          "ms": 10.743999999999998
+        }
+      ],
+      "layoutShifts": [],
+      "cacheTtl": [
+        {
+          "url": "https://jfeffect.com/logo.png",
+          "ttl": 0,
+          "bytes": 16414
+        }
+      ],
+      "imageIssues": {
+        "uses-responsive-images": {
+          "savingsMs": 150,
+          "items": [
+            {
+              "url": "https://jfeffect.com/assets/app-home-CkzNiZ8K.webp",
+              "wasted": 36112
+            },
+            {
+              "url": "https://jfeffect.com/assets/app-week-BYBloKSC.webp",
+              "wasted": 34078
+            },
+            {
+              "url": "https://jfeffect.com/assets/app-focus-CQybu712.webp",
+              "wasted": 32060
+            },
+            {
+              "url": "https://jfeffect.com/assets/app-log-C4eTzXtG.webp",
+              "wasted": 31536
+            },
+            {
+              "url": "https://jfeffect.com/assets/app-insights-yTBxWq5v.webp",
+              "wasted": 28600
+            }
+          ]
+        },
+        "modern-image-formats": {
+          "savingsMs": 0,
+          "items": [
+            {
+              "url": "https://jfeffect.com/logo.png",
+              "wasted": 11889.9
+            }
+          ]
+        },
+        "offscreen-images": {
+          "savingsMs": 0,
+          "items": []
+        },
+        "uses-optimized-images": {
+          "savingsMs": 0,
+          "items": []
+        },
+        "prioritize-lcp-image": {
+          "savingsMs": 0,
+          "items": []
+        },
+        "unsized-images": {
+          "savingsMs": null,
+          "items": []
+        }
+      },
+      "domSize": 425,
+      "jsBytes": 357079,
+      "resourceSummary": [
+        {
+          "t": "total",
+          "n": 42,
+          "bytes": 678037
+        },
+        {
+          "t": "script",
+          "n": 30,
+          "bytes": 357079
+        },
+        {
+          "t": "image",
+          "n": 6,
+          "bytes": 232046
+        },
+        {
+          "t": "stylesheet",
+          "n": 1,
+          "bytes": 65354
+        },
+        {
+          "t": "document",
+          "n": 1,
+          "bytes": 16166
+        },
+        {
+          "t": "other",
+          "n": 4,
+          "bytes": 7392
+        },
+        {
+          "t": "media",
+          "n": 0,
+          "bytes": 0
+        },
+        {
+          "t": "font",
+          "n": 0,
+          "bytes": 0
+        },
+        {
+          "t": "third-party",
+          "n": 0,
+          "bytes": 0
+        }
+      ]
+    }
+  },
+  "before-join-mobile": {
+    "runs": [
+      {
+        "score": 0.9,
+        "fcp": 2761.09,
+        "lcp": 2986.09,
+        "tbt": 23,
+        "cls": 0,
+        "si": 2761.09,
+        "ttfb": 102.909,
+        "bytes": 444169
+      },
+      {
+        "score": 0.95,
+        "fcp": 1225.8815,
+        "lcp": 2875.8815,
+        "tbt": 12.5,
+        "cls": 0,
+        "si": 1235.3295599999897,
+        "ttfb": 292.562,
+        "bytes": 444211
+      },
+      {
+        "score": 0.95,
+        "fcp": 1230.342,
+        "lcp": 2955.342,
+        "tbt": 16.5,
+        "cls": 0,
+        "si": 1230.342,
+        "ttfb": 42.24,
+        "bytes": 444067
+      }
+    ],
+    "median": {
+      "score": 0.95,
+      "fcp": 1230.342,
+      "lcp": 2955.342,
+      "tbt": 16.5,
+      "cls": 0,
+      "si": 1230.342,
+      "tti": 2962.842,
+      "ttfb": 42.24,
+      "bytes": 444067,
+      "lcpElement": [
+        {
+          "type": "table",
+          "headings": [
+            {
+              "key": "node",
+              "valueType": "node",
+              "label": "Element"
+            }
+          ],
+          "items": [
+            {
+              "node": {
+                "type": "node",
+                "lhId": "page-0-H1",
+                "path": "1,HTML,1,BODY,4,DIV,1,MAIN,0,SECTION,0,DIV,0,DIV,3,FORM,0,H1",
+                "selector": "div.mx-auto > div.mx-auto > form.animate-in > h1#join-q-goal",
+                "boundingRect": {
+                  "top": 242,
+                  "bottom": 307,
+                  "left": 20,
+                  "right": 392,
+                  "width": 372,
+                  "height": 65
+                },
+                "snippet": "<h1 id=\"join-q-goal\" class=\"text-[26px] font-semibold leading-tight tracking-[-0.02em] md:text-[30px]\">",
+                "nodeLabel": "What do you want from your training?"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "headings": [
+            {
+              "key": "phase",
+              "valueType": "text",
+              "label": "Phase"
+            },
+            {
+              "key": "percent",
+              "valueType": "text",
+              "label": "% of LCP"
+            },
+            {
+              "key": "timing",
+              "valueType": "ms",
+              "label": "Timing"
+            }
+          ],
+          "items": [
+            {
+              "phase": "TTFB",
+              "timing": 630.342,
+              "percent": "21%"
+            },
+            {
+              "phase": "Load Delay",
+              "timing": 0,
+              "percent": "0%"
+            },
+            {
+              "phase": "Load Time",
+              "timing": 0,
+              "percent": "0%"
+            },
+            {
+              "phase": "Render Delay",
+              "timing": 2325,
+              "percent": "79%"
+            }
+          ]
+        }
+      ],
+      "lcpBreakdown": {
+        "type": "list",
+        "items": [
+          {
+            "type": "table",
+            "headings": [
+              {
+                "key": "label",
+                "valueType": "text",
+                "label": "Subpart"
+              },
+              {
+                "key": "duration",
+                "valueType": "ms",
+                "label": "Duration"
+              }
+            ],
+            "items": [
+              {
+                "subpart": "timeToFirstByte",
+                "label": "Time to first byte",
+                "duration": 50.419
+              },
+              {
+                "subpart": "elementRenderDelay",
+                "label": "Element render delay",
+                "duration": 418.154
+              }
+            ]
+          },
+          {
+            "type": "node",
+            "lhId": "page-0-H1",
+            "path": "1,HTML,1,BODY,4,DIV,1,MAIN,0,SECTION,0,DIV,0,DIV,3,FORM,0,H1",
+            "selector": "div.mx-auto > div.mx-auto > form.animate-in > h1#join-q-goal",
+            "boundingRect": {
+              "top": 242,
+              "bottom": 307,
+              "left": 20,
+              "right": 392,
+              "width": 372,
+              "height": 65
+            },
+            "snippet": "<h1 id=\"join-q-goal\" class=\"text-[26px] font-semibold leading-tight tracking-[-0.02em] md:text-[30px]\">",
+            "nodeLabel": "What do you want from your training?"
+          }
+        ]
+      },
+      "renderBlocking": [
+        {
+          "url": "https://jfeffect.com/assets/styles-DKuqngKD.css",
+          "ms": 450,
+          "bytes": 65345
+        }
+      ],
+      "unusedJs": [
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "total": 310636,
+          "wasted": 188843
+        }
+      ],
+      "network": [
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "type": "Script",
+          "bytes": 310711,
+          "start": 71,
+          "end": 181,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/styles-DKuqngKD.css",
+          "type": "Stylesheet",
+          "bytes": 65345,
+          "start": 71,
+          "end": 124,
+          "prio": "VeryHigh"
+        },
+        {
+          "url": "https://jfeffect.com/logo.png",
+          "type": "Image",
+          "bytes": 16345,
+          "start": 64,
+          "end": 92,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/__l5e/events.b979ee024b15adfd.js",
+          "type": "Script",
+          "bytes": 11764,
+          "start": 135,
+          "end": 152,
+          "prio": "Low"
+        },
+        {
+          "url": "https://jfeffect.com/join",
+          "type": "Document",
+          "bytes": 6610,
+          "start": 1,
+          "end": 51,
+          "prio": "VeryHigh"
+        },
+        {
+          "url": "https://jfeffect.com/icon-192.png",
+          "type": "Other",
+          "bytes": 6221,
+          "start": 281,
+          "end": 308,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/join-lKd8Rg-u.js",
+          "type": "Script",
+          "bytes": 5314,
+          "start": 72,
+          "end": 107,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/sales-page-shell-BIzOvlzz.js",
+          "type": "Script",
+          "bytes": 4260,
+          "start": 73,
+          "end": 114,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/membership-apply-Cunl8ZUh.js",
+          "type": "Script",
+          "bytes": 2691,
+          "start": 74,
+          "end": 114,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/workbox-window.prod.es5-BBnX5xw4.js",
+          "type": "Script",
+          "bytes": 2414,
+          "start": 337,
+          "end": 361,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/favicon.ico",
+          "type": "Other",
+          "bytes": 2302,
+          "start": 273,
+          "end": 302,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/DragDropTouch-EqbqgA_6.js",
+          "type": "Script",
+          "bytes": 2276,
+          "start": 257,
+          "end": 288,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/apply-form-Cu1Xg5n0.js",
+          "type": "Script",
+          "bytes": 1286,
+          "start": 73,
+          "end": 111,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/join-funnel-COCT2Sd5.js",
+          "type": "Script",
+          "bytes": 1153,
+          "start": 74,
+          "end": 114,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/manifest.json",
+          "type": "Manifest",
+          "bytes": 886,
+          "start": 77,
+          "end": 128,
+          "prio": "Medium"
+        },
+        {
+          "url": "https://jfeffect.com/assets/membership-applications.functions-CnpspUuR.js",
+          "type": "Script",
+          "bytes": 859,
+          "start": 74,
+          "end": 119,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/virtual_pwa-register-7DvkfGeq.js",
+          "type": "Script",
+          "bytes": 517,
+          "start": 307,
+          "end": 335,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/input-E-UPD1NN.js",
+          "type": "Script",
+          "bytes": 402,
+          "start": 73,
+          "end": 108,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/useServerFn-BvORICPg.js",
+          "type": "Script",
+          "bytes": 294,
+          "start": 72,
+          "end": 108,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/instagram-BM1Kufb1.js",
+          "type": "Script",
+          "bytes": 290,
+          "start": 76,
+          "end": 115,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/youtube-B2tpEAo2.js",
+          "type": "Script",
+          "bytes": 275,
+          "start": 76,
+          "end": 115,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/video-C3esbxeA.js",
+          "type": "Script",
+          "bytes": 271,
+          "start": 75,
+          "end": 111,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/message-square-Ck2NYDRf.js",
+          "type": "Script",
+          "bytes": 256,
+          "start": 75,
+          "end": 116,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/mail-CAoLjWuI.js",
+          "type": "Script",
+          "bytes": 254,
+          "start": 75,
+          "end": 113,
+          "prio": "High"
+        },
+        {
+          "url": "https://jfeffect.com/assets/arrow-left-CY5S6xnO.js",
+          "type": "Script",
+          "bytes": 219,
+          "start": 74,
+          "end": 110,
+          "prio": "High"
+        }
+      ],
+      "requests": 30,
+      "bootup": [
+        {
+          "url": "https://jfeffect.com/assets/index-B72W0Vs8.js",
+          "total": 307.76000000000033,
+          "scripting": 291.56000000000034
+        },
+        {
+          "url": "Unattributable",
+          "total": 247.2400000000003,
+          "scripting": 15.612
+        },
+        {
+          "url": "https://jfeffect.com/join",
+          "total": 124.59599999999998,
+          "scripting": 11.671999999999992
+        }
+      ],
+      "mainthread": [
+        {
+          "group": "scriptEvaluation",
+          "ms": 341.2080000000005
+        },
+        {
+          "group": "other",
+          "ms": 315.37600000000094
+        },
+        {
+          "group": "styleLayout",
+          "ms": 55.236000000000004
+        },
+        {
+          "group": "parseHTML",
+          "ms": 36.84
+        },
+        {
+          "group": "scriptParseCompile",
+          "ms": 14.971999999999996
+        },
+        {
+          "group": "paintCompositeRender",
+          "ms": 11.003999999999989
+        }
+      ],
+      "layoutShifts": [],
+      "cacheTtl": [
+        {
+          "url": "https://jfeffect.com/logo.png",
+          "ttl": 0,
+          "bytes": 16345
+        }
+      ],
+      "imageIssues": {
+        "uses-responsive-images": {
+          "savingsMs": 0,
+          "items": [
+            {
+              "url": "https://jfeffect.com/logo.png",
+              "wasted": 16114
+            }
+          ]
+        },
+        "modern-image-formats": {
+          "savingsMs": 0,
+          "items": [
+            {
+              "url": "https://jfeffect.com/logo.png",
+              "wasted": 11889.9
+            }
+          ]
+        },
+        "offscreen-images": {
+          "savingsMs": 0,
+          "items": []
+        },
+        "uses-optimized-images": {
+          "savingsMs": 0,
+          "items": []
+        },
+        "prioritize-lcp-image": {
+          "savingsMs": null,
+          "items": []
+        },
+        "unsized-images": {
+          "savingsMs": null,
+          "items": []
+        }
+      },
+      "domSize": 65,
+      "jsBytes": 346270,
+      "resourceSummary": [
+        {
+          "t": "total",
+          "n": 29,
+          "bytes": 441765
+        },
+        {
+          "t": "script",
+          "n": 23,
+          "bytes": 346270
+        },
+        {
+          "t": "stylesheet",
+          "n": 1,
+          "bytes": 65345
+        },
+        {
+          "t": "image",
+          "n": 1,
+          "bytes": 16345
+        },
+        {
+          "t": "other",
+          "n": 3,
+          "bytes": 7195
+        },
+        {
+          "t": "document",
+          "n": 1,
+          "bytes": 6610
+        },
+        {
+          "t": "media",
+          "n": 0,
+          "bytes": 0
+        },
+        {
+          "t": "font",
+          "n": 0,
+          "bytes": 0
+        },
+        {
+          "t": "third-party",
+          "n": 0,
+          "bytes": 0
+        }
+      ]
+    }
+  }
+}

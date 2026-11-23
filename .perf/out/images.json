@@ -1,0 +1,1036 @@
+[
+  {
+    "file": "src/assets/app-preview-1rm-chart.png.asset.json",
+    "url": "/__l5e/assets-v1/057a3800-3aec-489c-b75c-fbb8db87554c/app-preview-1rm-chart.png",
+    "status": 200,
+    "bytes": 612514,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 16296
+      },
+      {
+        "w": 600,
+        "bytes": 27144
+      },
+      {
+        "w": 800,
+        "bytes": 36966
+      },
+      {
+        "w": 885,
+        "full": true,
+        "bytes": 43696
+      }
+    ],
+    "width": 885,
+    "height": 1920,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/app-preview-analytics-overview.png.asset.json",
+    "url": "/__l5e/assets-v1/70babea3-5840-422a-b749-7322afde9e2e/app-preview-analytics-overview.png",
+    "status": 200,
+    "bytes": 150981,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 16232
+      },
+      {
+        "w": 600,
+        "bytes": 25380
+      },
+      {
+        "w": 800,
+        "bytes": 34218
+      },
+      {
+        "w": 885,
+        "full": true,
+        "bytes": 39246
+      }
+    ],
+    "width": 885,
+    "height": 1920,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/app-preview-recent-prs.png.asset.json",
+    "url": "/__l5e/assets-v1/94e1f110-197d-4487-969d-ede2e7d4c520/app-preview-recent-prs.png",
+    "status": 200,
+    "bytes": 148274,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 16236
+      },
+      {
+        "w": 600,
+        "bytes": 25794
+      },
+      {
+        "w": 800,
+        "bytes": 34538
+      },
+      {
+        "w": 885,
+        "full": true,
+        "bytes": 40104
+      }
+    ],
+    "width": 885,
+    "height": 1920,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/app-preview-recipes.jpg.asset.json",
+    "url": "/__l5e/assets-v1/9556729a-d137-4568-a6a0-736260ddc2df/app-preview-recipes.jpg",
+    "status": 200,
+    "bytes": 96148,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/jpeg",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 11384
+      },
+      {
+        "w": 600,
+        "bytes": 19006
+      },
+      {
+        "w": 800,
+        "bytes": 26604
+      },
+      {
+        "w": 885,
+        "full": true,
+        "bytes": 32202
+      }
+    ],
+    "width": 885,
+    "height": 1106,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/athletes/dwayne.png.asset.json",
+    "url": "/__l5e/assets-v1/dddaf697-dc63-4a44-bbef-4fb6bb2c0dc1/dwayne.png",
+    "status": 200,
+    "bytes": 2221516,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 32938
+      },
+      {
+        "w": 600,
+        "bytes": 66598
+      },
+      {
+        "w": 800,
+        "bytes": 108246
+      },
+      {
+        "w": 1000,
+        "bytes": 157132
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 201926
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/athletes/elisa.png.asset.json",
+    "url": "/__l5e/assets-v1/7cbae6e3-1d4b-4676-89b8-15c212d706cb/elisa.png",
+    "status": 200,
+    "bytes": 915986,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 20288
+      },
+      {
+        "w": 600,
+        "bytes": 34814
+      },
+      {
+        "w": 800,
+        "bytes": 49582
+      },
+      {
+        "w": 1000,
+        "bytes": 66018
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 78410
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/athletes/frederick.png.asset.json",
+    "url": "/__l5e/assets-v1/f2de8d55-4264-4d98-b624-dfa38729472f/frederick.png",
+    "status": 200,
+    "bytes": 1219151,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 20238
+      },
+      {
+        "w": 600,
+        "bytes": 35392
+      },
+      {
+        "w": 800,
+        "bytes": 53302
+      },
+      {
+        "w": 1000,
+        "bytes": 72078
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 89022
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/athletes/jared-napf-2026.jpg.asset.json",
+    "url": "/__l5e/assets-v1/f2726744-57aa-448a-9841-21e667811013/jared-napf-2026.jpg",
+    "status": 200,
+    "bytes": 509379,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/jpeg",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 20582
+      },
+      {
+        "w": 600,
+        "bytes": 36558
+      },
+      {
+        "w": 800,
+        "bytes": 52544
+      },
+      {
+        "w": 1000,
+        "bytes": 71594
+      },
+      {
+        "w": 1200,
+        "bytes": 91104
+      },
+      {
+        "w": 1536,
+        "full": true,
+        "bytes": 145506
+      }
+    ],
+    "width": 1536,
+    "height": 1920,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/athletes/phillip.png.asset.json",
+    "url": "/__l5e/assets-v1/a96e78ef-63d1-49c2-a3c4-56f34730eb3a/phillip.png",
+    "status": 200,
+    "bytes": 862187,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 22938
+      },
+      {
+        "w": 600,
+        "bytes": 37590
+      },
+      {
+        "w": 800,
+        "bytes": 51580
+      },
+      {
+        "w": 1000,
+        "bytes": 67042
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 77602
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/coach-timeline.png.asset.json",
+    "url": "/__l5e/assets-v1/4c5caf3a-fc47-44f7-9829-3e581faf9641/coach-timeline.png",
+    "status": 200,
+    "bytes": 2092151,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 17042
+      },
+      {
+        "w": 600,
+        "bytes": 31138
+      },
+      {
+        "w": 800,
+        "bytes": 46364
+      },
+      {
+        "w": 1000,
+        "bytes": 63354
+      },
+      {
+        "w": 1200,
+        "bytes": 81292
+      },
+      {
+        "w": 1600,
+        "bytes": 122210
+      },
+      {
+        "w": 1920,
+        "full": true,
+        "bytes": 172842
+      }
+    ],
+    "width": 1920,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/1.png.asset.json",
+    "url": "/__l5e/assets-v1/880af8e5-58d4-4447-b212-88fb88ea5702/transformation-1.png",
+    "status": 200,
+    "bytes": 1226309,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 10752
+      },
+      {
+        "w": 600,
+        "bytes": 18634
+      },
+      {
+        "w": 800,
+        "bytes": 27184
+      },
+      {
+        "w": 1000,
+        "bytes": 36334
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 44612
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/102.png.asset.json",
+    "url": "/__l5e/assets-v1/a8a79b31-6857-4ee3-b98a-714b4838af5f/transformation-102.png",
+    "status": 200,
+    "bytes": 923358,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 13612
+      },
+      {
+        "w": 600,
+        "bytes": 22840
+      },
+      {
+        "w": 800,
+        "bytes": 32002
+      },
+      {
+        "w": 1000,
+        "bytes": 41368
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 49418
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/108.png.asset.json",
+    "url": "/__l5e/assets-v1/7d936049-b25c-40dd-a415-46cf62931fc3/108.png",
+    "status": 200,
+    "bytes": 923444,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 14878
+      },
+      {
+        "w": 600,
+        "bytes": 23514
+      },
+      {
+        "w": 800,
+        "bytes": 32382
+      },
+      {
+        "w": 1000,
+        "bytes": 42506
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 50460
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/15.png.asset.json",
+    "url": "/__l5e/assets-v1/c9e3fd98-61f1-4be8-9348-41bed48da7cf/transformation-15.png",
+    "status": 200,
+    "bytes": 1154176,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 13474
+      },
+      {
+        "w": 600,
+        "bytes": 22822
+      },
+      {
+        "w": 800,
+        "bytes": 32608
+      },
+      {
+        "w": 1000,
+        "bytes": 42914
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 51144
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/16.png.asset.json",
+    "url": "/__l5e/assets-v1/1947a7fa-a771-4d40-819a-5094b4123ff5/16.png",
+    "status": 200,
+    "bytes": 948448,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 11490
+      },
+      {
+        "w": 600,
+        "bytes": 19098
+      },
+      {
+        "w": 800,
+        "bytes": 27136
+      },
+      {
+        "w": 1000,
+        "bytes": 36966
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 45018
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/18.png.asset.json",
+    "url": "/__l5e/assets-v1/1578f1b0-6317-4b0c-95c4-61994b927175/transformation-18.png",
+    "status": 200,
+    "bytes": 946124,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 11006
+      },
+      {
+        "w": 600,
+        "bytes": 18532
+      },
+      {
+        "w": 800,
+        "bytes": 25816
+      },
+      {
+        "w": 1000,
+        "bytes": 34736
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 41880
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/2.png.asset.json",
+    "url": "/__l5e/assets-v1/ce30da4d-8387-4771-b52c-cb8a3c38bdb0/transformation-2.png",
+    "status": 200,
+    "bytes": 1225166,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 13994
+      },
+      {
+        "w": 600,
+        "bytes": 23236
+      },
+      {
+        "w": 800,
+        "bytes": 32984
+      },
+      {
+        "w": 1000,
+        "bytes": 43554
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 52904
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/21.png.asset.json",
+    "url": "/__l5e/assets-v1/e3ebc8b6-a65d-4df7-9947-79528e45fb64/21.png",
+    "status": 200,
+    "bytes": 936513,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 11232
+      },
+      {
+        "w": 600,
+        "bytes": 18508
+      },
+      {
+        "w": 800,
+        "bytes": 26538
+      },
+      {
+        "w": 1000,
+        "bytes": 35346
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 42160
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/22.png.asset.json",
+    "url": "/__l5e/assets-v1/225c67ec-50cf-4f42-be94-1654a27b6943/transformation-22.png",
+    "status": 200,
+    "bytes": 1035929,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 12356
+      },
+      {
+        "w": 600,
+        "bytes": 20514
+      },
+      {
+        "w": 800,
+        "bytes": 28864
+      },
+      {
+        "w": 1000,
+        "bytes": 38072
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 45278
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/23.png.asset.json",
+    "url": "/__l5e/assets-v1/67692186-417c-42d5-b691-d0ccd7cf3215/transformation-23.png",
+    "status": 200,
+    "bytes": 893986,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 13396
+      },
+      {
+        "w": 600,
+        "bytes": 22276
+      },
+      {
+        "w": 800,
+        "bytes": 30738
+      },
+      {
+        "w": 1000,
+        "bytes": 40898
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 47892
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/26.png.asset.json",
+    "url": "/__l5e/assets-v1/4ad41e1d-7e76-4cc4-a74c-f64526f6b908/26.png",
+    "status": 200,
+    "bytes": 1253553,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 15664
+      },
+      {
+        "w": 600,
+        "bytes": 28748
+      },
+      {
+        "w": 800,
+        "bytes": 41450
+      },
+      {
+        "w": 1000,
+        "bytes": 56204
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 67962
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/31.png.asset.json",
+    "url": "/__l5e/assets-v1/0973e6e4-b541-4aef-bec4-b4daccd75bf5/transformation-31.png",
+    "status": 200,
+    "bytes": 1213212,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 17638
+      },
+      {
+        "w": 600,
+        "bytes": 30720
+      },
+      {
+        "w": 800,
+        "bytes": 43228
+      },
+      {
+        "w": 1000,
+        "bytes": 56950
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 68518
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/35.png.asset.json",
+    "url": "/__l5e/assets-v1/06ffade5-dea0-4c89-bfc1-6d25d92cd21f/transformation-35.png",
+    "status": 200,
+    "bytes": 994319,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 10576
+      },
+      {
+        "w": 600,
+        "bytes": 16914
+      },
+      {
+        "w": 800,
+        "bytes": 23320
+      },
+      {
+        "w": 1000,
+        "bytes": 30658
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 36432
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/38.png.asset.json",
+    "url": "/__l5e/assets-v1/c8869206-3eb0-43fc-b64d-a2d48b871b67/transformation-38.png",
+    "status": 200,
+    "bytes": 856849,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 10298
+      },
+      {
+        "w": 600,
+        "bytes": 17118
+      },
+      {
+        "w": 800,
+        "bytes": 23842
+      },
+      {
+        "w": 1000,
+        "bytes": 31110
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 37272
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/42.png.asset.json",
+    "url": "/__l5e/assets-v1/672bbed0-395e-4c9a-a972-63482fd4f7b1/42.png",
+    "status": 200,
+    "bytes": 1140936,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 18110
+      },
+      {
+        "w": 600,
+        "bytes": 32102
+      },
+      {
+        "w": 800,
+        "bytes": 44440
+      },
+      {
+        "w": 1000,
+        "bytes": 58140
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 68128
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/44.png.asset.json",
+    "url": "/__l5e/assets-v1/068fac69-a8e4-4851-b622-f49008eb1311/44.png",
+    "status": 200,
+    "bytes": 918448,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 9368
+      },
+      {
+        "w": 600,
+        "bytes": 15626
+      },
+      {
+        "w": 800,
+        "bytes": 22236
+      },
+      {
+        "w": 1000,
+        "bytes": 29104
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 35170
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/48.png.asset.json",
+    "url": "/__l5e/assets-v1/5d785081-2d1e-4210-a982-3fe545fa988f/48.png",
+    "status": 200,
+    "bytes": 1569482,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 16670
+      },
+      {
+        "w": 600,
+        "bytes": 28032
+      },
+      {
+        "w": 800,
+        "bytes": 40512
+      },
+      {
+        "w": 1000,
+        "bytes": 55260
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 67078
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/53.png.asset.json",
+    "url": "/__l5e/assets-v1/71319cc4-e529-4728-8887-d5e41e403f18/53.png",
+    "status": 200,
+    "bytes": 1239859,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 17994
+      },
+      {
+        "w": 600,
+        "bytes": 30498
+      },
+      {
+        "w": 800,
+        "bytes": 42624
+      },
+      {
+        "w": 1000,
+        "bytes": 56008
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 67076
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/71.png.asset.json",
+    "url": "/__l5e/assets-v1/cb3ee118-7d33-412a-802b-e78fd26be8c9/71.png",
+    "status": 200,
+    "bytes": 912983,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 14140
+      },
+      {
+        "w": 600,
+        "bytes": 23790
+      },
+      {
+        "w": 800,
+        "bytes": 33430
+      },
+      {
+        "w": 1000,
+        "bytes": 44170
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 52552
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "file": "src/assets/transformations/98.png.asset.json",
+    "url": "/__l5e/assets-v1/9691ebd7-b2c3-4ac0-94dc-b40a00bc249b/98.png",
+    "status": 200,
+    "bytes": 744966,
+    "cacheControl": "public, max-age=31536000, immutable",
+    "contentType": "image/png",
+    "outputs": [
+      {
+        "w": 400,
+        "bytes": 11528
+      },
+      {
+        "w": 600,
+        "bytes": 18486
+      },
+      {
+        "w": 800,
+        "bytes": 25626
+      },
+      {
+        "w": 1000,
+        "bytes": 34162
+      },
+      {
+        "w": 1080,
+        "full": true,
+        "bytes": 40724
+      }
+    ],
+    "width": 1080,
+    "height": 1080,
+    "hasAlpha": false
+  },
+  {
+    "probe": "/cdn-cgi/image/width=400,format=webp/__l5e/assets-v1/057a3800-3aec-489c-b75c-fbb8db87554c/app-preview-1rm-chart.png",
+    "status": 404,
+    "bytes": 151,
+    "contentType": "text/html; charset=UTF-8"
+  },
+  {
+    "probe": "/__l5e/assets-v1/057a3800-3aec-489c-b75c-fbb8db87554c/app-preview-1rm-chart.png?width=400",
+    "status": 200,
+    "bytes": 612514,
+    "contentType": "image/png"
+  },
+  {
+    "probe": "/__l5e/assets-v1/057a3800-3aec-489c-b75c-fbb8db87554c/app-preview-1rm-chart.png?w=400&format=webp",
+    "status": 200,
+    "bytes": 30549,
+    "contentType": "image/jpeg"
+  }
+]
