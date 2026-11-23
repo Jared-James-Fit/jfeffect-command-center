@@ -1,6 +1,6 @@
 /**
  * Server-only helpers for two-step sign-in (two-step.ts, two-step.functions.ts,
- * mfa-recovery.functions.ts). Everything here reads and writes as the server:
+ * mfa-recovery.functions.ts: the owner's reset). Everything here reads and writes as the server:
  * the tables are the server's only (20270512090000_two_step_sms_passkeys.sql),
  * and every caller passes the signed-in login it already checked.
  *
@@ -170,15 +170,6 @@ export async function preferIfNone(db: Db, userId: string, kind: TwoStepKind): P
   if (!(await preferredOf(db, userId))) await setPreferred(db, userId, kind);
 }
 
-export async function recoveryLeft(db: Db, userId: string): Promise<number> {
-  const { count } = await db
-    .from("staff_mfa_recovery_codes")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .is("used_at", null);
-  return count ?? 0;
-}
-
 /** Their own phone on file, to offer when they add text messages. */
 async function phoneOnFile(db: Db, userId: string): Promise<string | null> {
   try {
@@ -200,14 +191,12 @@ export async function statusFor(db: Db, userId: string, claims: Claims): Promise
       verified: true,
       methods,
       preferred: null,
-      recoveryLeft: 0,
       suggestedPhone: null,
     };
   }
-  const [verified, preferred, left] = await Promise.all([
+  const [verified, preferred] = await Promise.all([
     sessionConfirmed(db, userId, claims),
     preferredOf(db, userId),
-    methods.length ? recoveryLeft(db, userId) : Promise.resolve(0),
   ]);
   const hasSms = methods.some((m) => m.kind === "sms");
   return {
@@ -219,7 +208,6 @@ export async function statusFor(db: Db, userId: string, claims: Claims): Promise
       preferred && methods.some((m) => m.kind === preferred)
         ? preferred
         : (methods[0]?.kind ?? null),
-    recoveryLeft: left,
     suggestedPhone: team && !hasSms ? await phoneOnFile(db, userId) : null,
   };
 }

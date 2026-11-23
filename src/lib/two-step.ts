@@ -195,7 +195,6 @@ export type TwoStepStatus = {
   verified: boolean;
   methods: TwoStepMethod[];
   preferred: TwoStepKind | null;
-  recoveryLeft: number;
   /** Their phone on file, offered when they add text messages (never anyone else's). */
   suggestedPhone: string | null;
 };
@@ -250,14 +249,14 @@ export function sendRefusalText(reason: SendRefusal | string, waitS?: number | n
       return `That's the most codes for an hour. Try again in ${waitWords(waitS ?? 3600)}, or use another way.`;
     case "daily":
     case "security_daily_cap":
-      return "That's the most codes for today. Use another way to confirm, or a recovery code.";
+      return "That's the most codes for today. Use another way to confirm.";
     case "locked":
       return `Too many wrong codes. Try again in ${waitWords(waitS ?? 3600)}, or use another way.`;
     case "security_texts_off":
     case "sms_disabled":
     case "not_configured":
     case "no_from_phone":
-      return "Texts can't be sent right now. Use another way to confirm, or a recovery code.";
+      return "Texts can't be sent right now. Use another way to confirm.";
     case "country_not_allowed":
       return "Codes can only be texted to a Canadian or US number.";
     default:

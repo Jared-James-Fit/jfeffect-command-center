@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ChevronDown, KeyRound, Loader2, ShieldCheck } from "lucide-react";
+import { ChevronDown, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
 import { roleRequiresMfa, verifiedFactorCount } from "@/lib/mfa-rules";
-import { normalizeRecoveryCode } from "@/lib/mfa-recovery";
-import { redeemRecoveryCode } from "@/lib/mfa-recovery.functions";
 import { confirmWithTrustedDevice, setTwoStepPreferred } from "@/lib/two-step.functions";
 import {
   isTeamRole,
@@ -34,7 +31,6 @@ import {
   trustByDefault,
   wasConfirmedHere,
 } from "@/lib/two-step-client";
-import { RecoveryCodesPanel } from "@/components/two-step/recovery-codes";
 import {
   AddWay,
   KIND_ICON,
@@ -46,7 +42,6 @@ import {
   WayChoices,
   type Confirmed,
 } from "@/components/two-step/two-step-flows";
-import { TwoStepMethodList } from "@/components/two-step/two-step-card";
 import { useTwoStepStatus } from "@/components/two-step/use-two-step-status";
 
 /**
@@ -57,10 +52,11 @@ import { useTwoStepStatus } from "@/components/two-step/use-two-step-status";
  * already confirmed it (the app opens at once and the server is asked in the
  * background). An unconfirmed session first tries this device's trusted token
  * ("Don't ask again", 30 days), then shows one screen: the way they chose
- * first (Face ID, a texted code or the authenticator app), "Other ways" for
- * the rest and a recovery code. A login that needs two-step and has none
- * sets one up, then saves its recovery codes. A recovery code confirms the
- * session and asks them to remove what was on the lost phone. Confirming with
+ * first (Face ID, a texted code or the authenticator app) and "Other ways"
+ * for the rest. A login that needs two-step and has none sets one up and goes
+ * straight in. There are no recovery codes: a lost phone is another way on
+ * another device, the same number on a new phone, or the owner's reset on
+ * Team. Confirming with
  * only the authenticator app offers Face ID or a text right then ("Skip the
  * code next time"), so nobody has to find it in Account.
  *
@@ -78,10 +74,6 @@ export function StaffMfaGate({ children }: { children: ReactNode }) {
 
   // Confirmed in this tab a moment ago (before the status catches up).
   const [confirmedSid, setConfirmedSid] = useState<string | null>(null);
-  // Just set up: the recovery codes come next, before the app.
-  const [codesFor, setCodesFor] = useState<string | null>(null);
-  // Used a recovery code: check what was on the lost phone first.
-  const [recoveredFor, setRecoveredFor] = useState<string | null>(null);
   // Setup couldn't start at all: let them in this once (nothing is enforced until a way exists).
   const [deferredFor, setDeferredFor] = useState<string | null>(null);
   // Confirmed with only the authenticator app: offer a faster way before the app.
@@ -111,27 +103,6 @@ export function StaffMfaGate({ children }: { children: ReactNode }) {
   }
 
   if (!session || !uid) return <>{children}</>;
-  if (codesFor === uid) {
-    return (
-      <GateCard title="Save your recovery codes" email={user?.email}>
-        <RecoveryCodesPanel
-          email={user?.email}
-          onDone={() => setCodesFor(null)}
-          onSkip={() => setCodesFor(null)}
-        />
-      </GateCard>
-    );
-  }
-  if (recoveredFor === uid && status.data) {
-    return (
-      <RecoveredScreen
-        status={status.data}
-        email={user?.email}
-        onDone={() => setRecoveredFor(null)}
-        onChanged={() => void status.refetch()}
-      />
-    );
-  }
   if (offerFor === uid && status.data) {
     return (
       <FasterWayScreen
@@ -167,7 +138,6 @@ export function StaffMfaGate({ children }: { children: ReactNode }) {
         onAdded={async (c) => {
           await onConfirmed(c);
           await status.refetch();
-          setCodesFor(uid);
         }}
         onCantSetUp={() => setDeferredFor(uid)}
       />
@@ -185,14 +155,6 @@ export function StaffMfaGate({ children }: { children: ReactNode }) {
           setOfferFor(uid);
         }
         await onConfirmed(c);
-      }}
-      onRecovered={async () => {
-        rememberConfirmed(sid);
-        setConfirmedSid(sid);
-        setRecoveredFor(uid);
-        clearTrust(uid);
-        await qc.invalidateQueries();
-        await status.refetch();
       }}
     />
   );
@@ -261,13 +223,11 @@ function ConfirmScreen({
   status,
   email,
   onConfirmed,
-  onRecovered,
 }: {
   uid: string;
   status: TwoStepStatus;
   email?: string | null;
   onConfirmed: (c: Confirmed) => Promise<void>;
-  onRecovered: () => Promise<void>;
 }) {
   const confirmDevice = useServerFn(confirmWithTrustedDevice);
   const passkeyHere = passkeysPossibleHere();
@@ -276,7 +236,7 @@ function ConfirmScreen({
     [status, passkeyHere],
   );
   const kinds = useMemo(() => kindsInOrder(ordered), [ordered]);
-  const [kind, setKind] = useState<TwoStepKind | "recover" | null>(kinds[0] ?? null);
+  const [kind, setKind] = useState<TwoStepKind | null>(kinds[0] ?? null);
   const [others, setOthers] = useState(false);
   const [trust, setTrust] = useState(() => trustByDefault());
   // This device was trusted: try it before showing anything.
@@ -315,182 +275,75 @@ function ConfirmScreen({
   const rest = kinds.filter((k) => k !== kind);
 
   return (
-    <div data-two-step-gate={kind === "recover" ? "recover" : "verify"}>
+    <div data-two-step-gate="verify">
       <GateCard title="Confirm it's you" email={email}>
-        {kind === "recover" ? (
-          <RecoverForm onRecovered={onRecovered} onBack={() => setKind(kinds[0] ?? null)} />
-        ) : (
-          <>
-            {kind === "passkey" && <PasskeyConfirm trust={trust} onConfirmed={onConfirmed} />}
-            {kind === "sms" && sms && (
-              <SmsCodeStep
-                key={sms.id}
-                purpose="sign_in"
-                methodId={sms.id}
-                to={sms.label.replace(/^Text to /, "")}
-                trust={trust}
-                onConfirmed={onConfirmed}
+        {kind === "passkey" && <PasskeyConfirm trust={trust} onConfirmed={onConfirmed} />}
+        {kind === "sms" && sms && (
+          <SmsCodeStep
+            key={sms.id}
+            purpose="sign_in"
+            methodId={sms.id}
+            to={sms.label.replace(/^Text to /, "")}
+            trust={trust}
+            onConfirmed={onConfirmed}
+          />
+        )}
+        {kind === "totp" && <TotpConfirm trust={trust} onConfirmed={onConfirmed} />}
+        {kind === "totp" && needsFasterWay(status.methods, passkeyHere) && (
+          <p className="text-xs text-muted-foreground" data-two-step-faster-hint>
+            After this you can switch to{" "}
+            {passkeyHere ? `${passkeyTitleHere()} or a text message` : "a text message"}, so you
+            won't need the app.
+          </p>
+        )}
+        {!kind && (
+          <p className="text-sm text-muted-foreground">
+            Face ID works on jfeffect.com in Safari, not in the app. Open the site there to sign in.
+          </p>
+        )}
+
+        {kind && <TrustToggle checked={trust} onChange={setTrust} />}
+
+        {rest.length > 0 && (
+          <div className="border-t pt-3">
+            <button
+              type="button"
+              className="flex h-11 w-full items-center justify-between text-sm font-medium"
+              onClick={() => setOthers((v) => !v)}
+              aria-expanded={others}
+              data-two-step-other-ways
+            >
+              Other ways to confirm
+              <ChevronDown
+                className={`h-4 w-4 transition ${others ? "rotate-180" : ""}`}
+                aria-hidden
               />
+            </button>
+            {others && (
+              <div className="mt-1 space-y-1">
+                {rest.map((k) => {
+                  const Icon = KIND_ICON[k];
+                  return (
+                    <Button
+                      key={k}
+                      variant="ghost"
+                      className="h-11 w-full justify-start"
+                      onClick={() => {
+                        setKind(k);
+                        setOthers(false);
+                      }}
+                    >
+                      <Icon className="mr-2.5 h-4 w-4" /> {KIND_NAME(k)}
+                    </Button>
+                  );
+                })}
+              </div>
             )}
-            {kind === "totp" && <TotpConfirm trust={trust} onConfirmed={onConfirmed} />}
-            {kind === "totp" && needsFasterWay(status.methods, passkeyHere) && (
-              <p className="text-xs text-muted-foreground" data-two-step-faster-hint>
-                After this you can switch to{" "}
-                {passkeyHere ? `${passkeyTitleHere()} or a text message` : "a text message"}, so you
-                won't need the app.
-              </p>
-            )}
-            {!kind && (
-              <p className="text-sm text-muted-foreground">
-                Face ID works on jfeffect.com in Safari, not in the app. Open the site there, or use
-                a recovery code below.
-              </p>
-            )}
-
-            <TrustToggle checked={trust} onChange={setTrust} />
-
-            <div className="border-t pt-3">
-              <button
-                type="button"
-                className="flex h-11 w-full items-center justify-between text-sm font-medium"
-                onClick={() => setOthers((v) => !v)}
-                aria-expanded={others}
-                data-two-step-other-ways
-              >
-                Other ways to confirm
-                <ChevronDown
-                  className={`h-4 w-4 transition ${others ? "rotate-180" : ""}`}
-                  aria-hidden
-                />
-              </button>
-              {others && (
-                <div className="mt-1 space-y-1">
-                  {rest.map((k) => {
-                    const Icon = KIND_ICON[k];
-                    return (
-                      <Button
-                        key={k}
-                        variant="ghost"
-                        className="h-11 w-full justify-start"
-                        onClick={() => {
-                          setKind(k);
-                          setOthers(false);
-                        }}
-                      >
-                        <Icon className="mr-2.5 h-4 w-4" /> {KIND_NAME(k)}
-                      </Button>
-                    );
-                  })}
-                  <Button
-                    variant="ghost"
-                    className="h-11 w-full justify-start"
-                    onClick={() => {
-                      setKind("recover");
-                      setOthers(false);
-                    }}
-                  >
-                    <KeyRound className="mr-2.5 h-4 w-4" /> Use a recovery code
-                  </Button>
-                </div>
-              )}
-            </div>
-          </>
+          </div>
         )}
         <SignOutButton />
       </GateCard>
     </div>
-  );
-}
-
-function RecoverForm({
-  onRecovered,
-  onBack,
-}: {
-  onRecovered: () => Promise<void>;
-  onBack: () => void;
-}) {
-  const { accountRole } = useAuth();
-  const redeem = useServerFn(redeemRecoveryCode);
-  const [value, setValue] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit() {
-    if (busy) return;
-    if (!normalizeRecoveryCode(value)) {
-      setError("A recovery code is 10 letters and numbers, like k7m2p-q9tx4.");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const r = await redeem({ data: { code: value } });
-      if (r.ok) {
-        await onRecovered();
-        return;
-      }
-      setError(
-        r.reason === "wait"
-          ? "Too many tries. Wait an hour and try again."
-          : r.reason === "format"
-            ? "A recovery code is 10 letters and numbers, like k7m2p-q9tx4."
-            : "That code didn't work. Check it, or try another one.",
-      );
-    } catch (e: any) {
-      setError(e?.message ?? "Couldn't check the code. Try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <>
-      <p className="text-sm text-muted-foreground">
-        Lost your phone? Type one of the recovery codes you saved. It signs every other device out,
-        then you remove what was on the lost phone and add your new one.
-      </p>
-      <form
-        className="space-y-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void submit();
-        }}
-      >
-        <Input
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="k7m2p-q9tx4"
-          autoComplete="off"
-          autoCapitalize="none"
-          spellCheck={false}
-          autoFocus
-          className="h-12 text-center font-mono text-lg tracking-wider"
-          aria-label="Recovery code"
-        />
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
-        <Button type="submit" className="h-12 w-full text-base" disabled={busy || !value.trim()}>
-          {busy ? (
-            <>
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Checking…
-            </>
-          ) : (
-            "Use this code"
-          )}
-        </Button>
-      </form>
-      <p className="text-xs text-muted-foreground">
-        {accountRole === "admin"
-          ? "No codes either? Your two-step can be reset from the app's database in Lovable."
-          : "No codes either? Ask Jared to reset your two-step sign-in from Team."}
-      </p>
-      <Button variant="ghost" className="h-10 w-full" onClick={onBack}>
-        Back
-      </Button>
-    </>
   );
 }
 
@@ -543,38 +396,6 @@ function EnrollScreen({
           </>
         )}
         <SignOutButton />
-      </GateCard>
-    </div>
-  );
-}
-
-// ── After a recovery code ───────────────────────────────────────────────────
-function RecoveredScreen({
-  status,
-  email,
-  onDone,
-  onChanged,
-}: {
-  status: TwoStepStatus;
-  email?: string | null;
-  onDone: () => void;
-  onChanged: () => void;
-}) {
-  return (
-    <div data-two-step-gate="recovered">
-      <GateCard title="You're back in" email={email} wide>
-        <p className="text-sm text-muted-foreground">
-          Every other device was signed out and no device is trusted any more. Remove anything that
-          was on the lost phone, then add your new one.
-        </p>
-        <TwoStepMethodList status={status} onChanged={onChanged} />
-        <Button
-          className="h-12 w-full text-base"
-          onClick={onDone}
-          disabled={status.required && status.methods.length === 0}
-        >
-          Done
-        </Button>
       </GateCard>
     </div>
   );
