@@ -1,6 +1,7 @@
 /**
  * The coach's side of coaching automation (pain reports and follow-ups,
- * weekly check-ins, workout reviews, missed sessions): the queue, approving and sending,
+ * weekly check-ins, workout reviews, missed sessions, set videos, progress
+ * check-ins): the queue, approving and sending,
  * dismissing, retrying, taking back an automatic message, the settings and
  * a client's own rule. Every function asks the database what the caller may
  * do (`cleo_feature`, with their two-step sign-in) and reads their items with
@@ -13,7 +14,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { MyCapabilities } from "@/lib/cleo-capabilities";
 import type { AutomationCategory } from "@/lib/recovery-automation/rules";
 
-const CATEGORY_KEYS = ["recovery_reply", "recovery_follow_up", "workout_reply", "checkin_reply", "missed_session"] as const;
+const CATEGORY_KEYS = ["recovery_reply", "recovery_follow_up", "workout_reply", "checkin_reply", "missed_session", "video_reply", "progress_reply"] as const;
 
 /** Still open (not sent, dismissed or cancelled). `sending` is open but can't be dismissed: it's going. */
 const OPEN = ["queued", "working", "sending", "draft", "awaiting_approval", "failed"];
@@ -42,6 +43,11 @@ export type RecoveryItem = {
     facts?: string[];
     workout?: { title: string | null; date: string } | null;
     missed_in_two_weeks?: number;
+    /** The day's set videos (video_reply). */
+    day?: string;
+    video_ids?: string[];
+    /** A progress check-in's photos or video (progress_reply). */
+    submission_type?: "photo" | "video";
   } | null;
   why: string | null;
   error: string | null;
@@ -261,6 +267,8 @@ export const saveRecoverySettingsFn = createServerFn({ method: "POST" })
             workout_reply: modeSchema.optional(),
             checkin_reply: modeSchema.optional(),
             missed_session: modeSchema.optional(),
+            video_reply: modeSchema.optional(),
+            progress_reply: modeSchema.optional(),
           })
           .strict() }).parse(d),
   )

@@ -2,7 +2,8 @@
  * Coaching automation's worker (server only, service role; the
  * `coach-automation-tick` hook runs it every minute while something is due,
  * and once a day looks for missed sessions). Pain reports and their
- * follow-ups, workout reviews, weekly check-ins and missed sessions.
+ * follow-ups, workout reviews, weekly check-ins, missed sessions, the day's
+ * set videos and progress check-ins (the last two only ever wait for him).
  * Each item is claimed once (`coach_automation_claim`), checked again against
  * the coach's capabilities and settings (never trusting what was true when it
  * was queued), drafted, then routed by its mode and risk:
@@ -18,7 +19,7 @@
  * leaves the athlete's report exactly as it was.
  */
 import { classifyRecovery, followUpStillRelevant, localToInstant, planFollowUp, routeItem, type AutomationCategory, type Risk, type UpcomingSession } from "@/lib/recovery-automation/rules";
-import { checkinReplyRead, messageTypeFor, missedSessionRead, pushesCoach, workoutReplyRead } from "@/lib/recovery-automation/categories";
+import { checkinReplyRead, messageTypeFor, missedSessionRead, progressReplyRead, pushesCoach, videoReplyRead, workoutReplyRead } from "@/lib/recovery-automation/categories";
 import { userHasFeature } from "@/lib/cleo-capabilities.server";
 
 type Item = {
@@ -198,6 +199,15 @@ export async function deliver(admin: any, item: Item, opts: { approvedBy: string
     const { data: latest } = await admin.from("pain_reports").select("reported_at").eq("client_id", item.client_id).order("reported_at", { ascending: false }).limit(1).maybeSingle();
     await admin.from("pain_coach_reviews").insert({ client_id: item.client_id, kind: "used", through_at: latest?.reported_at ?? now, regions: item.regions, suggestion_keys: [], created_by: item.coach_user_id });
   }
+  // an approved reply to a progress check-in is his review of it (the card says so before he sends)
+  if (item.category === "progress_reply" && opts.approvedBy && item.source_id) {
+    const { error: revErr } = await admin
+      .from("progress_submissions")
+      .update({ review_status: "reviewed", reviewed_at: now, reviewer_id: opts.approvedBy })
+      .eq("id", item.source_id)
+      .is("reviewed_at", null);
+    if (revErr) console.error("[recovery-automation] progress check-in not marked reviewed", revErr.message);
+  }
   try {
     const { pushNewMessage } = await import("@/lib/push/message-push.server");
     await pushNewMessage(admin, msg);
@@ -276,6 +286,8 @@ const PUSH_TITLE: Record<AutomationCategory, (first: string) => string> = {
   workout_reply: (f) => `Reply to ${f}'s workout ready to approve`,
   checkin_reply: (f) => `Reply to ${f}'s check-in ready to approve`,
   missed_session: (f) => `Check-in for ${f} to approve`,
+  video_reply: (f) => `Reply to ${f}'s set videos ready to approve`,
+  progress_reply: (f) => `Reply to ${f}'s progress check-in ready to approve`,
 };
 
 async function tellCoach(admin: any, item: Item, risk: Risk, firstName: string) {
@@ -506,6 +518,17 @@ export async function stillGoes(admin: any, item: Pick<Item, "category" | "clien
     if (await trainedSince(admin, item.client_id, since)) return { cancel: "They've trained since" };
     if (await coachWroteSince(admin, item.client_id, since)) return { ask: "You've written to them yourself since, so this waits for you." };
   }
+  if (item.category === "video_reply") {
+    const ids = Array.isArray(item.context?.video_ids) ? (item.context.video_ids as string[]) : [];
+    if (!ids.length) return { cancel: "No videos on file" };
+    const left = must<any[]>(await admin.from("pl_set_videos").select("id").in("id", ids).is("deleted_at", null).limit(1), "the videos");
+    if (!left.length) return { cancel: "The videos were removed" };
+  }
+  if (item.category === "progress_reply") {
+    const sub = must<any>(await admin.from("progress_submissions").select("id, review_status, reviewed_at").eq("id", item.source_id).maybeSingle(), "the check-in");
+    if (!sub?.id) return { cancel: "The check-in is gone" };
+    if (sub.reviewed_at || sub.review_status !== "awaiting_review") return { cancel: "You reviewed the check-in yourself" };
+  }
   return {};
 }
 
@@ -516,10 +539,21 @@ function loadText(kg: unknown, unit: unknown): string | null {
   return unit === "lb" ? `${round(k * 2.20462262, 0.5)} lb` : `${round(k, 0.5)} kg`;
 }
 
+type WorkoutPr = { exercise_name: string; reps: number; load_kg: number | null; unit?: string | null; scope?: string };
+
+/** The workout's stats (PRs, top lift, working sets); a read that fails fails the item. */
+async function workoutStats(admin: any, completionId: string | null): Promise<any | null> {
+  if (!completionId) return null;
+  const res = await admin.rpc("community_workout_stats_cached", { _completion_id: completionId });
+  if (res.error) throw new Error(`Couldn't check the workout's records: ${res.error.message}`);
+  return res.data ?? null;
+}
+
+const prText = (p: WorkoutPr) => [p.exercise_name, loadText(p.load_kg, p.unit), `× ${p.reps}`].filter(Boolean).join(" ");
+
 /** What the records say about a finished workout, one line each, for its reply. */
-async function workoutFacts(admin: any, fb: any): Promise<string[]> {
-  const [{ data: stats }, { data: day }, { data: completion }, { data: rows }] = await Promise.all([
-    admin.rpc("community_workout_stats_cached", { _completion_id: fb.completion_id }),
+async function workoutFacts(admin: any, fb: any, stats: any, headline: WorkoutPr | null): Promise<string[]> {
+  const [{ data: day }, { data: completion }, { data: rows }] = await Promise.all([
     admin.from("pl_days").select("title, subtitle").eq("id", fb.day_id).maybeSingle(),
     admin.from("pl_day_completions").select("scheduled_workout_id, completed_at").eq("id", fb.completion_id).maybeSingle(),
     admin.from("pl_exercise_rows").select("id, sets, reps_text, rpe, rir, measurement_type, tracking_type, exercise_name_override, cardio_target_id, exercises(name)").eq("day_id", fb.day_id).limit(80),
@@ -530,12 +564,11 @@ async function workoutFacts(admin: any, fb: any): Promise<string[]> {
   facts.push(`Their review: rated the session ${fb.overall_rating}/5, session effort ${fb.session_rpe}/10`);
   const note = String(fb.client_note ?? "").trim();
   if (note) facts.push(`What they wrote: "${note.slice(0, 600)}"`);
-  const prs = Array.isArray((stats as any)?.prs) ? ((stats as any).prs as any[]) : [];
-  const prLines = prs
-    .filter((p) => Number(p.reps) > 0 && Number(p.reps) <= 10)
-    .slice(0, 3)
-    .map((p) => [p.exercise_name, loadText(p.load_kg, p.unit), `× ${p.reps}`].filter(Boolean).join(" "));
-  if (prLines.length) facts.push(`New all-time records today: ${prLines.join("; ")}`);
+  // only all-time records are PRs; a block or program best never is
+  const prs = (Array.isArray((stats as any)?.prs) ? ((stats as any).prs as WorkoutPr[]) : []).filter((p) => p.scope === "atpr" && Number(p.reps) >= 1 && Number(p.reps) <= 10);
+  if (headline) facts.push(`Headline PR today (an all-time best for ${headline.reps} ${headline.reps === 1 ? "rep" : "reps"} on a main lift): ${prText(headline)}`);
+  const others = prs.filter((p) => !headline || p.exercise_name !== headline.exercise_name || p.reps !== headline.reps).slice(0, 2);
+  if (others.length) facts.push(`${headline ? "Other all-time records" : "All-time records"} today: ${others.map(prText).join("; ")}`);
   const top = (stats as any)?.top_lift;
   if (top?.exercise_name && loadText(top.load_kg, top.unit)) facts.push(`Heaviest set: ${top.exercise_name} ${loadText(top.load_kg, top.unit)} × ${top.reps}`);
   if ((stats as any)?.working_sets) facts.push(`Working sets: ${(stats as any).working_sets}${(stats as any)?.duration_min ? `, about ${(stats as any).duration_min} minutes` : ""}`);
@@ -576,8 +609,8 @@ async function routeDrafted(
     route = "awaiting_approval";
     why = opts.ask;
   }
-  if (route === "send" && opts.draft.warnings.length) {
-    route = "awaiting_approval";
+  if (opts.draft.warnings.length) {
+    if (route === "send") route = "awaiting_approval";
     why = `The draft needs a look before it goes (${opts.draft.warnings.join(", ")}).`;
   }
   const next: Item = { ...item, risk: opts.risk, risk_reasons: opts.reasons, context: opts.context, mode: opts.mode, draft: opts.draft.message };
@@ -626,10 +659,13 @@ async function processWorkoutReply(admin: any, item: Item, mode: string): Promis
   const pain = must<any[]>(await admin.from("pain_reports").select("id").eq("feedback_id", fb.id).limit(1), "pain reports");
   if (fb.pain || pain.length) return cancel(admin, item, "its pain report gets its own reply");
   if (await coachWroteSince(admin, item.client_id, fb.created_at)) return cancel(admin, item, "you've written to them since");
-  const read = workoutReplyRead({ note: fb.client_note, rating: fb.overall_rating });
+  const stats = await workoutStats(admin, fb.completion_id);
+  const { headlinePr } = await import("@/lib/community");
+  const headline = (headlinePr(stats as any) as WorkoutPr | null) ?? null;
+  const read = workoutReplyRead({ note: fb.client_note, rating: fb.overall_rating, headlinePr: !!headline });
   // marked, so it's looked at again if they add to the note
   if (!read.useful) return cancel(admin, item, read.why ?? "nothing that needs a reply", { context: { not_useful: true } });
-  const facts = await workoutFacts(admin, fb);
+  const facts = await workoutFacts(admin, fb, stats, headline);
   const route = routeItem(mode as any, read.risk);
   const voice = await userHasFeature(admin, item.coach_user_id, "owner.voice");
   const { writeCoachReply } = await import("@/lib/recovery-automation/reply-draft.server");
@@ -712,6 +748,148 @@ async function processMissedSession(admin: any, item: Item, mode: string): Promi
     context: { ...(item.context ?? {}), facts },
     ask: wrote ? "You've written to them yourself since, so this waits for you." : null,
   });
+}
+
+const KG_PER_LB = 0.45359237;
+const fmtKg = (kg: number, unit: "kg" | "lb") => (unit === "lb" ? `${(kg / KG_PER_LB).toFixed(1)} lb` : `${kg.toFixed(1)} kg`);
+/** A health history the coach would never want a bodyweight number about. */
+const EATING_HISTORY = /\b(eating disorder|disordered eating|anorexi\w*|bulimi\w*|binge|arfid|ed recovery|orthorexi\w*)\b/i;
+
+/**
+ * The day's set videos: one reply for all of them, from the records only (each
+ * set's numbers as the chat card says them, an accepted bar-speed read). Always
+ * waits for him: he watches them and adds what he sees.
+ */
+async function processVideoReply(admin: any, item: Item, mode: string): Promise<TickResult> {
+  const client = await loadClient(admin, item);
+  if (!client) return cancel(admin, item, "not an active coaching client of this coach any more");
+  const day = typeof item.context?.day === "string" ? (item.context.day as string) : null;
+  if (!day) return cancel(admin, item, "no day on file");
+  const tz = client.timezone || "America/Winnipeg";
+  const from = localToInstant(day, 0, tz);
+  const to = localToInstant(addDays(day, 1), 0, tz);
+  if (Date.now() - to.getTime() > 2 * 86_400_000) return cancel(admin, item, "the videos are too old to reply to now");
+  // a chat video becomes a set video later, so its row can be newer than its message
+  const rows = must<any[]>(
+    await admin
+      .from("pl_set_videos")
+      .select("id, message_id, origin, exercise_name, label, set_index, warmup_id, created_at")
+      .eq("client_id", item.client_id)
+      .is("deleted_at", null)
+      .not("message_id", "is", null)
+      .gte("created_at", from.toISOString())
+      .lt("created_at", new Date(to.getTime() + 2 * 86_400_000).toISOString())
+      .order("created_at", { ascending: true })
+      .limit(40),
+    "the set videos",
+  );
+  const msgs = rows.length
+    ? must<any[]>(
+        await admin
+          .from("messages")
+          .select("id, body, created_at, sender_role, sender_id, deleted_at")
+          .in("id", rows.map((r) => r.message_id)),
+        "the videos' messages",
+      )
+    : [];
+  const byId = new Map(msgs.map((m) => [m.id, m]));
+  const videos = rows
+    .map((r) => ({ ...r, msg: byId.get(r.message_id) }))
+    .filter((r) => r.msg && !r.msg.deleted_at && r.msg.sender_role === "client" && r.msg.sender_id === client.user_id)
+    .filter((r) => Date.parse(r.msg.created_at) >= from.getTime() && Date.parse(r.msg.created_at) < to.getTime())
+    .sort((a, b) => Date.parse(a.msg.created_at) - Date.parse(b.msg.created_at));
+  const read = videoReplyRead({ videos: videos.length });
+  if (!read.useful) return cancel(admin, item, read.why ?? "no videos");
+  const lastAt = videos[videos.length - 1].msg.created_at as string;
+  if (await coachWroteSince(admin, item.client_id, lastAt)) return cancel(admin, item, "you've replied to them since");
+  const reads = must<any[]>(
+    await admin
+      .from("pl_set_video_analyses")
+      .select("set_video_id, reps, set_mcv, velocity_accepted, velocity_loss_pct, status")
+      .in("set_video_id", videos.map((v) => v.id)),
+    "the bar-speed reads",
+  );
+  const speed = new Map(reads.filter((a) => a.status === "done" && a.velocity_accepted && Number(a.set_mcv) > 0).map((a) => [a.set_video_id, a]));
+  const facts: string[] = [`Set videos sent today: ${videos.length}`];
+  for (const v of videos.slice(0, 10)) {
+    const set = v.origin === "chat" ? [v.exercise_name, v.label].filter(Boolean).join(" · ") || "A lift video" : String(v.msg.body ?? "").trim() || [v.exercise_name, v.label].filter(Boolean).join(" · ");
+    const caption = v.origin === "chat" && String(v.msg.body ?? "").trim() ? ` (they wrote: "${String(v.msg.body).trim().slice(0, 200)}")` : "";
+    const a = speed.get(v.id);
+    const bar = a
+      ? ` · bar speed ${Number(a.set_mcv).toFixed(2)} m/s average over ${a.reps} ${a.reps === 1 ? "rep" : "reps"}${a.velocity_loss_pct != null && a.reps > 1 ? `, ${Math.abs(Number(a.velocity_loss_pct)).toFixed(0)}% slower by the last rep` : ""}`
+      : "";
+    facts.push(`${v.warmup_id || v.set_index === 0 ? "Warm-up: " : ""}${set}${bar}${caption}`);
+  }
+  const voice = await userHasFeature(admin, item.coach_user_id, "owner.voice");
+  const { writeCoachReply } = await import("@/lib/recovery-automation/reply-draft.server");
+  const draft = await writeCoachReply(admin, { clientId: item.client_id, voice, automatic: false, kind: "video", facts });
+  return routeDrafted(admin, item, { mode, risk: read.risk, reasons: read.reasons, draft, context: { day, facts, video_ids: videos.map((v) => v.id) } });
+}
+
+/**
+ * A progress check-in: a reply that thanks them and says what the records say
+ * (their bodyweight trend, their goal), never how they look. Always waits for
+ * him: he looks at it and adds what he sees. Sending it marks it reviewed.
+ */
+async function processProgressReply(admin: any, item: Item, mode: string): Promise<TickResult> {
+  const client = await loadClient(admin, item);
+  if (!client) return cancel(admin, item, "not an active coaching client of this coach any more");
+  const sub = must<any>(
+    await admin
+      .from("progress_submissions")
+      .select("id, client_id, user_id, owner_type, review_status, reviewed_at, submitted_at, submission_type, check_in_label, notes")
+      .eq("id", item.source_id)
+      .maybeSingle(),
+    "the check-in",
+  );
+  if (!sub?.id || sub.client_id !== item.client_id) return cancel(admin, item, "the check-in is gone");
+  if (sub.user_id !== client.user_id) return cancel(admin, item, "it wasn't sent by them");
+  if (sub.reviewed_at || sub.review_status !== "awaiting_review") return cancel(admin, item, "you've reviewed it already");
+  if (!sub.submitted_at || Date.now() - Date.parse(sub.submitted_at) > 3 * 86_400_000) return cancel(admin, item, "the check-in is too old to reply to now");
+  const media = must<any[]>(await admin.from("progress_media").select("angle, media_type, upload_status").eq("submission_id", sub.id).limit(20), "what they uploaded");
+  const kept = media.filter((m) => m.upload_status !== "failed");
+  const read = progressReplyRead({ media: kept.length });
+  if (!read.useful) return cancel(admin, item, read.why ?? "nothing uploaded");
+  const today = todayIn(client.timezone);
+  const [weighIns, before, health, goalRow] = await Promise.all([
+    admin.from("progress_bodyweight").select("logged_date, weight_value, weight_unit").eq("user_id", client.user_id).gte("logged_date", addDays(today, -42)).order("logged_date", { ascending: true }).limit(200),
+    admin.from("progress_submissions").select("submitted_at").eq("client_id", item.client_id).neq("id", sub.id).not("submitted_at", "is", null).lt("submitted_at", sub.submitted_at).order("submitted_at", { ascending: false }).limit(1),
+    admin.from("client_health_items").select("label, details, status").eq("client_id", item.client_id).limit(100),
+    admin.from("clients").select("bodyweight_goal_value, bodyweight_goal_unit, bodyweight_goal_date").eq("id", item.client_id).maybeSingle(),
+  ]);
+  const angles = [...new Set(kept.map((m) => String(m.angle ?? "").replace(/_/g, " ")).filter(Boolean))];
+  const facts: string[] = [
+    `They sent: ${sub.submission_type === "video" ? "a progress video" : `progress photos${angles.length ? ` (${angles.join(", ")})` : ""}`}${sub.check_in_label ? ` for "${sub.check_in_label}"` : ""}`,
+  ];
+  const note = String(sub.notes ?? "").trim();
+  if (note) facts.push(`What they wrote: "${note.slice(0, 400)}"`);
+  const last = must<any[]>(before, "earlier check-ins")[0];
+  if (last?.submitted_at) {
+    const weeks = Math.round((Date.parse(sub.submitted_at) - Date.parse(last.submitted_at)) / (7 * 86_400_000));
+    facts.push(weeks >= 1 ? `Their last progress check-in was ${weeks} ${weeks === 1 ? "week" : "weeks"} before this one` : "They sent another progress check-in earlier this week");
+  } else facts.push("This is their first progress check-in");
+  const history = must<any[]>(health, "their health profile");
+  if (history.some((h) => h.status !== "resolved" && EATING_HISTORY.test(`${h.label ?? ""} ${h.details ?? ""}`))) {
+    facts.push("Leave bodyweight and body numbers out entirely (their health history)");
+  } else {
+    const rows = must<any[]>(weighIns, "their weigh-ins");
+    const unit: "kg" | "lb" = rows.filter((r) => r.weight_unit === "kg").length > rows.length / 2 ? "kg" : "lb";
+    const kg = (r: any) => (r.weight_unit === "kg" ? Number(r.weight_value) : Number(r.weight_value) * KG_PER_LB);
+    const avg = (xs: any[]) => (xs.length ? xs.reduce((n, r) => n + kg(r), 0) / xs.length : null);
+    const recent = avg(rows.filter((r) => r.logged_date > addDays(today, -7)));
+    const earlier = avg(rows.filter((r) => r.logged_date <= addDays(today, -28) && r.logged_date > addDays(today, -35)));
+    if (recent != null) facts.push(`Bodyweight, 7-day average: ${fmtKg(recent, unit)}`);
+    if (recent != null && earlier != null) {
+      const diff = recent - earlier;
+      facts.push(`Four weeks ago (7-day average): ${fmtKg(earlier, unit)}, so ${Math.abs(diff) < 0.2 ? "about the same" : `${diff < 0 ? "down" : "up"} ${fmtKg(Math.abs(diff), unit)}`}`);
+    }
+    const g = must<any>(goalRow, "their goal");
+    if (g?.bodyweight_goal_value) facts.push(`Their bodyweight goal: ${g.bodyweight_goal_value} ${g.bodyweight_goal_unit ?? unit}${g.bodyweight_goal_date ? ` by ${g.bodyweight_goal_date}` : ""}`);
+  }
+  const voice = await userHasFeature(admin, item.coach_user_id, "owner.voice");
+  const { writeCoachReply } = await import("@/lib/recovery-automation/reply-draft.server");
+  const draft = await writeCoachReply(admin, { clientId: item.client_id, voice, automatic: false, kind: "progress", facts });
+  return routeDrafted(admin, item, { mode, risk: read.risk, reasons: read.reasons, draft, context: { facts, submission_type: sub.submission_type } });
 }
 
 /**
@@ -820,8 +998,15 @@ async function processItem(admin: any, item: Item): Promise<TickResult> {
       return processCheckinReply(admin, item, mode);
     case "missed_session":
       return processMissedSession(admin, item, mode);
-    default:
+    case "video_reply":
+      return processVideoReply(admin, item, mode);
+    case "progress_reply":
+      return processProgressReply(admin, item, mode);
+    case "recovery_reply":
       return processReply(admin, item, mode);
+    default:
+      // a kind this build doesn't know (a newer database): leave it for a build that does
+      throw new Error(`Unknown automation kind: ${String(item.category)}`);
   }
 }
 

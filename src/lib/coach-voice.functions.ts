@@ -2,6 +2,11 @@
  * Admin → My Voice: read / save the coach voice profile, per-client voice
  * settings, and a "Try it" sample. Also the server helper every generator
  * that writes as the coach uses to load the voice for a client.
+ *
+ * The voice is the owner's own (his private rules and examples): only the
+ * business owner reads, saves or tries it (RLS: "Owner reads coach voice").
+ * Any other coach sees only their own clients' settings here, and drafts for
+ * them are written in a plain coach voice.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -28,6 +33,14 @@ async function isStaff(sb: any, userId: string): Promise<boolean> {
   ]);
   return !!a || !!c;
 }
+
+/** Whether the caller is the business owner (with their two-step sign-in), asked through their own login. */
+async function isOwner(sb: any, userId: string): Promise<boolean> {
+  const { data } = await sb.rpc("is_business_owner", { _uid: userId });
+  return data === true;
+}
+
+const OWNER_ONLY = "Only the owner can change how the app sounds as them.";
 
 /** Server helper: the saved voice profile (defaults when none is saved). */
 export async function loadCoachVoice(sb: any): Promise<VoiceProfile> {
@@ -80,9 +93,10 @@ export const getCoachVoiceFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    const owner = await isOwner(context.supabase, context.userId);
     const sb = await adminClient();
     const [{ data: row }, { data: clients }] = await Promise.all([
-      sb.from("coach_voice").select("profile, updated_at").eq("id", true).maybeSingle(),
+      owner ? sb.from("coach_voice").select("profile, updated_at").eq("id", true).maybeSingle() : Promise.resolve({ data: null }),
       // The client list through the caller's own login: a coach sees their own clients, the admin everyone.
       (context.supabase as any)
         .from("clients")
@@ -92,9 +106,11 @@ export const getCoachVoiceFn = createServerFn({ method: "POST" })
         .limit(500),
     ]);
     return {
-      profile: normalizeVoiceProfile(row?.profile ?? {}),
-      defaults: DEFAULT_VOICE,
-      updatedAt: (row?.updated_at as string | null) ?? null,
+      owner,
+      // the owner's private voice never leaves the server for anyone else
+      profile: owner ? normalizeVoiceProfile(row?.profile ?? {}) : null,
+      defaults: owner ? DEFAULT_VOICE : null,
+      updatedAt: owner ? ((row?.updated_at as string | null) ?? null) : null,
       clients: (clients ?? []) as ClientVoiceRow[],
     };
   });
@@ -103,7 +119,7 @@ export const saveCoachVoiceFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ profile: profileSchema }).parse(d))
   .handler(async ({ data, context }) => {
-    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    if (!(await isOwner(context.supabase, context.userId))) throw new Error(OWNER_ONLY);
     const sb = await adminClient();
     const profile = normalizeVoiceProfile(data.profile);
     const { error } = await sb
@@ -161,7 +177,7 @@ export const tryCoachVoiceFn = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    if (!(await isOwner(context.supabase, context.userId))) throw new Error(OWNER_ONLY);
     if (data.clientId) {
       const { staffCanReachClient } = await import("@/lib/staff-client-access.server");
       if (!(await staffCanReachClient(context.supabase, context.userId, data.clientId))) throw new Error("Client not found.");

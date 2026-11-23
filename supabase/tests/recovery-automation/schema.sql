@@ -38,7 +38,7 @@ create table coaches (
 create table clients (
   id uuid primary key default gen_random_uuid(), user_id uuid, full_name text,
   service_tier text not null default 'coaching', archived boolean not null default false,
-  assigned_coach_id uuid references coaches(id));
+  assigned_coach_id uuid references coaches(id), timezone text);
 create table messages (
   id uuid primary key default gen_random_uuid(), client_id uuid, sender_id uuid, sender_role text, body text,
   attachments jsonb default '[]', is_internal_note boolean default false, is_automated boolean default false,
@@ -57,6 +57,22 @@ create table pain_reports (
   id uuid primary key default gen_random_uuid(), client_id uuid not null references clients(id),
   feedback_id uuid, checkin_id uuid, source text not null, region text not null, side text, site text, score smallint,
   reported_at timestamptz not null default now(), created_by uuid);
+
+-- for 20270511090000 (videos, progress, My Voice)
+create table pl_set_videos (
+  id uuid primary key default gen_random_uuid(), client_id uuid not null, message_id uuid, deleted_at timestamptz,
+  created_at timestamptz not null default now());
+create table progress_submissions (
+  id uuid primary key default gen_random_uuid(), client_id uuid, user_id uuid not null, owner_type text not null default 'client',
+  review_status text not null default 'draft', submitted_at timestamptz, reviewed_at timestamptz);
+create table coach_voice (id boolean primary key default true check (id), profile jsonb not null default '{}');
+alter table coach_voice enable row level security;
+create policy "Staff read coach voice" on coach_voice for select to authenticated
+  using (has_role(auth.uid(), 'admin'::app_role) or has_role(auth.uid(), 'coach'::app_role));
+insert into coach_voice values (true, '{"rules":"the owner''s private voice"}');
+create function is_business_owner(_uid uuid default auth.uid()) returns boolean language sql stable security definer as $$
+  select case when exists (select 1 from business_owners where user_id = _uid) then caller_mfa_ok(_uid) else false end $$;
+create function instant_to_local(_at timestamptz, _tz text) returns timestamp language sql immutable as $$ select _at at time zone _tz $$;
 
 -- Who wrote it, as production records it: the client's own login when they save it
 -- (pain_reports.created_by = auth.uid(); the review's review_updated_by), nobody / the
