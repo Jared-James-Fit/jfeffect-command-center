@@ -50,4 +50,6 @@ CREATE POLICY "Own stars: remove" ON public.staff_client_stars
 -- No UPDATE: a star is added or removed, never changed.
 REVOKE ALL ON public.staff_client_stars FROM PUBLIC, anon;
 GRANT SELECT, INSERT, DELETE ON public.staff_client_stars TO authenticated;
+-- the project's default privileges hand signed-in users every right on a new table: take back what a star never needs
+REVOKE UPDATE, TRUNCATE, REFERENCES, TRIGGER ON public.staff_client_stars FROM authenticated;
 GRANT ALL ON public.staff_client_stars TO service_role;
