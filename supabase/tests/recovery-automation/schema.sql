@@ -40,7 +40,12 @@ create table clients (
   service_tier text not null default 'coaching', archived boolean not null default false,
   assigned_coach_id uuid references coaches(id));
 create table messages (id uuid primary key default gen_random_uuid(), client_id uuid);
-create table pl_workout_feedback (id uuid primary key default gen_random_uuid(), client_id uuid);
+create table pl_workout_feedback (
+  id uuid primary key default gen_random_uuid(), client_id uuid, client_note text, overall_rating int not null default 4,
+  pain boolean not null default false, created_at timestamptz not null default now());
+create table messenger_checkins (
+  id uuid primary key default gen_random_uuid(), client_id uuid not null, task_type text not null default 'weekly_checkin',
+  status text not null default 'pending', ai_status text, submitted_at timestamptz, reviewed_at timestamptz, superseded_at timestamptz);
 create table pain_reports (
   id uuid primary key default gen_random_uuid(), client_id uuid not null references clients(id),
   feedback_id uuid, checkin_id uuid, source text not null, region text not null, side text, site text, score smallint,

@@ -130,7 +130,8 @@ export function PainReviewSheet({ clientId, onClose, inChat = false }: { clientI
     queryFn: () => recoveryFn({ data: { clientId: clientId! } }),
   });
   // a reply automation drafted and is waiting on the coach
-  const waiting = auto?.items.find((i: any) => (i.status === "awaiting_approval" || i.status === "draft") && i.draft) ?? null;
+  const waiting =
+    auto?.items.find((i: any) => (i.category === "recovery_reply" || i.category === "recovery_follow_up") && (i.status === "awaiting_approval" || i.status === "draft") && i.draft) ?? null;
 
   // the reply waiting for approval, else the last draft while it still covers the latest report
   useEffect(() => {
@@ -368,7 +369,7 @@ export function PainReviewSheet({ clientId, onClose, inChat = false }: { clientI
                   </label>
                 );
               })}
-              {auto.settings.paused && <p className="text-[12px] text-warning">Paused for everyone in Recovery settings.</p>}
+              {auto.settings.paused && <p className="text-[12px] text-warning">Paused for everyone in your coaching queue settings.</p>}
             </div>
           )}
         </div>
