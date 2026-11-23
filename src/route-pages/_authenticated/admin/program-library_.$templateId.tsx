@@ -32,7 +32,12 @@ import { WeekPickerSheet } from "@/components/program-editor/week-picker-sheet";
 import { ProgressAcrossWeeksSheet } from "@/components/program-editor/progress-across-weeks";
 import { rowAtSlot } from "@/lib/program-sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { GripVertical } from "lucide-react";
+import { CornerDownRight } from "lucide-react";
+import { RowGrip, SortableUnit, SortableUnits, useRowKeys, type GripHandle } from "@/components/program-editor/sortable-rows";
+import {
+  applyRowOp, backoffLabelFor, backoffLoad, laidOutTheSame, layoutOf, replayRowOp, rowOpWords, rowUnits,
+  stampRowKeys, takesBackoffs, weekNumbersWords, withoutRowKeys, type RowOp,
+} from "@/lib/program-editor-rows";
 import { cn } from "@/lib/utils";
 import { useIsMobileNow } from "@/hooks/use-mobile";
 import { BestOnComputerTip } from "@/components/best-on-computer-tip";
@@ -459,6 +464,23 @@ const BuilderPhoneContext = createContext(false);
  */
 const ProgressWeekContext = createContext<((dayIndex: number, pos: number) => void) | null>(null);
 const ProgressRowContext = createContext<((pos: number) => void) | null>(null);
+/**
+ * A move, copy, swap or removal made on a day's exercises, reported to the
+ * block (BlockPayloadEditor): it says which week changed and offers the same
+ * edit in the later weeks laid out the same (program-editor-rows.ts). Returns
+ * whether it showed anything.
+ */
+const RowOpsContext = createContext<((dayIndex: number, before: any[], op: RowOp, name: string) => boolean) | null>(null);
+/**
+ * The toast an edit's "Also weeks …" lives in: one at a time, the latest
+ * edit's (a new one replaces it). Each gets its own id: sonner closes a toast
+ * after its action runs, which would take a reply that reused the id with it.
+ */
+let rowScopeToast: string | number | null = null;
+function showRowScopeToast(message: string, opts: Parameters<typeof toast>[1] = {}) {
+  if (rowScopeToast != null) toast.dismiss(rowScopeToast);
+  rowScopeToast = toast(message, opts);
+}
 const useBuilderPhone = () => useContext(BuilderPhoneContext);
 const inRowMenu = (t: EventTarget | null) =>
   t instanceof Element && !!t.closest("[data-row-menu]");
@@ -468,6 +490,9 @@ const inRowMenu = (t: EventTarget | null) =>
 const inFloatingLayer = (t: EventTarget | null) =>
   t instanceof Element &&
   !!t.closest('[data-row-menu], [data-radix-popper-content-wrapper], [role="menu"], [role="listbox"], [role="dialog"]');
+
+/** A click or focus on an exercise's drag handle (it drags, never opens the card). */
+const onGrip = (t: EventTarget | null) => t instanceof Element && !!t.closest("[data-row-grip]");
 
 // ---- Editor preferences (compact mode, zoom, sidebar) ----
 const PREFS_KEY = "pl-tpl-editor-prefs:v1";
@@ -652,7 +677,8 @@ export function TemplateEditor() {
       est_duration_min: m.est_duration_min || null,
       training_focus: m.training_focus || null, notes: m.notes || null,
       description: (m.description ?? "").trim() || null,
-      payload: p,
+      // the editor's row keys (`_k`) are never saved
+      payload: withoutRowKeys(p),
     });
     qc.invalidateQueries({ queryKey: ["pl-template", templateId] });
     qc.invalidateQueries({ queryKey: ["pl-templates"] });
@@ -1702,6 +1728,62 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
     toast(`Copied day ${srcDay.day_index} to ${hit.size} ${hit.size === 1 ? "week" : "weeks"}`, { action: { label: "Undo", onClick: () => setWeeksData(before) }, duration: 6000 });
   };
   const copyDayToFuture = (weekIdx: number, dayIdx: number) => setCopyPick({ week: weekIdx, day: dayIdx });
+  // An edit to a day's exercises changes that week only; the toast says so and
+  // offers the same edit in the later weeks laid out the same, each keeping its
+  // own numbers (program-editor-rows.ts). A workout already trained or started
+  // is never offered.
+  const latestWeeks = useRef(weeksData);
+  latestWeeks.current = weeksData;
+  const offerRowScope = (wi: number, dayIndex: number, before: any[], op: RowOp, name: string): boolean => {
+    const weeks = latestWeeks.current;
+    const layout = layoutOf(before);
+    const trained = (d: any) => {
+      const st = d?._dbId ? dayScheduleStatus?.get(d._dbId) : undefined;
+      return st?.status === "completed" || st?.status === "in-progress";
+    };
+    const targets = laidOutTheSame(weeks, wi, dayIndex, layout, trained);
+    if (!targets.length) {
+      // an earlier edit's offer never stays up under a later edit
+      if (rowScopeToast != null) toast.dismiss(rowScopeToast);
+      rowScopeToast = null;
+      return false;
+    }
+    const weekNo = (ws: any[], j: number) => Number(ws[j]?.week_index ?? j + 1);
+    const words = rowOpWords(op, name);
+    showRowScopeToast(`${words} in week ${weekNo(weeks, wi)} only`, {
+      duration: 8000,
+      action: {
+        label: `Also ${weekNumbersWords(targets.map((j) => weekNo(weeks, j)))}`,
+        onClick: () => {
+          const beforeAll = latestWeeks.current;
+          const { weeks: next, changed } = replayRowOp(beforeAll, targets, dayIndex, layout, op);
+          if (!changed.length) {
+            showRowScopeToast("Those weeks changed since, so they were left as they are");
+            return;
+          }
+          setWeeksData(next);
+          const hit = new Set(changed);
+          showRowScopeToast(`${words} in ${weekNumbersWords(changed.map((j) => weekNo(beforeAll, j)))} too`, {
+            duration: 6000,
+            action: {
+              label: "Undo",
+              // puts back only those weeks' day, as it was before
+              onClick: () => setWeeksData(latestWeeks.current.map((w: any, j: number) => {
+                if (!hit.has(j)) return w;
+                const di = (w.days ?? []).findIndex((d: any) => Number(d?.day_index) === dayIndex);
+                const was = (beforeAll[j]?.days ?? []).find((d: any) => Number(d?.day_index) === dayIndex);
+                if (di < 0 || !was) return w;
+                const days = [...w.days];
+                days[di] = was;
+                return { ...w, days };
+              })),
+            },
+          });
+        },
+      },
+    });
+    return true;
+  };
   // Week notes / phase: opened from the week's ⋯, edited in place.
   const [weekDetailsOpen, setWeekDetailsOpen] = useState(false);
   const weekNavSlot = useContext(WeekNavSlotContext);
@@ -1914,6 +1996,10 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                   </div>
                   {weekMenu(activeIdx, { onDetails: () => setWeekDetailsOpen(true) })}
                 </div>
+                {weeksData.length > 1 && (
+                  // which week an edit changes: this one; after an edit its toast offers the later weeks
+                  <p className="text-xs text-muted-foreground" data-week-scope>Edits change week {aw.week_index} only</p>
+                )}
                 {aw.notes && !weekDetailsOpen && (
                   <button type="button" className="mt-0.5 block max-w-full truncate text-left text-[13px] italic text-muted-foreground hover:text-foreground" onClick={() => setWeekDetailsOpen(true)}>
                     {aw.notes}
@@ -1922,6 +2008,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                 {weekDetailsOpen && weekNotesEditor(activeIdx, () => setWeekDetailsOpen(false))}
               </div>
               <ProgressWeekContext.Provider value={(dayIndex, pos) => setProgressAt({ week: activeIdx, dayIndex, pos })}>
+              <RowOpsContext.Provider value={(dayIndex, before, op, name) => offerRowScope(activeIdx, dayIndex, before, op, name)}>
               <WeekEditor
                 week={aw}
                 setWeek={(w) => { const copy = [...weeksData]; copy[activeIdx] = w; setWeeksData(copy); }}
@@ -1937,6 +2024,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                 dayScheduleStatus={dayScheduleStatus}
                 onFixCalendarIssue={onFixCalendarIssue}
               />
+              </RowOpsContext.Provider>
               </ProgressWeekContext.Provider>
             </>
           );
@@ -1975,6 +2063,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                 )}
                 <div className={compact ? "px-2 pb-2" : "px-2.5 pb-3"}>
                   <ProgressWeekContext.Provider value={(dayIndex, pos) => setProgressAt({ week: wi, dayIndex, pos })}>
+                  <RowOpsContext.Provider value={(dayIndex, before, op, name) => offerRowScope(wi, dayIndex, before, op, name)}>
                   <WeekEditor
                     week={w}
                     setWeek={(nw) => { const c = [...weeksData]; c[wi] = nw; setWeeksData(c); }}
@@ -1990,6 +2079,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                     dayScheduleStatus={dayScheduleStatus}
                     onFixCalendarIssue={onFixCalendarIssue}
                   />
+                  </RowOpsContext.Provider>
                   </ProgressWeekContext.Provider>
                 </div>
               </section>
@@ -2287,10 +2377,46 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
   );
   const phone = useBuilderPhone();
   const [dragOver, setDragOver] = useState(false);
-  const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
-  const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
   const pbDragging = usePbDragging();
   const clip = useClip();
+  // The day's exercises: a row and the back-offs after it are one exercise
+  // (program-editor-rows.ts), dragged, copied, swapped and removed together.
+  const units = useMemo(() => rowUnits(rows), [rows]);
+  const { keys, newKey } = useRowKeys(rows);
+  const unitIds = useMemo(() => units.map((u) => keys[u.start]), [units, keys]);
+  const rowOps = useContext(RowOpsContext);
+  const exById = useMemo(() => new Map<string, any>((exercises as any[]).map((e) => [e.id, e])), [exercises]);
+  const nameOf = (r: any): string => (r?.exercise_id ? exById.get(r.exercise_id)?.name : null) ?? r?.exercise_name_override ?? "";
+  // a copy or a new back-off: lit for a moment where it landed, and open to edit
+  const [fresh, setFresh] = useState<{ key: string; open: boolean } | null>(null);
+  useEffect(() => {
+    if (!fresh) return;
+    const t = setTimeout(() => setFresh((f) => (f === fresh ? null : f)), 1600);
+    return () => clearTimeout(t);
+  }, [fresh]);
+  /** Makes an edit on this day's exercises, then offers it in the later weeks laid out the same. */
+  const runOp = (op: RowOp, opts?: { open?: boolean; name?: string }) => {
+    // every row carries the key it's shown under, so the cards follow the rows
+    const res = applyRowOp(stampRowKeys(rows, keys), op);
+    if (!res) return;
+    let first: string | null = null;
+    for (const i of res.added) {
+      const k = newKey();
+      res.rows[i] = { ...res.rows[i], _k: k };
+      if (first == null) first = k;
+    }
+    setDay({ ...day, rows: res.rows });
+    if (first) setFresh({ key: first, open: !!opts?.open });
+    const before = rows;
+    const name = opts?.name
+      ?? ("unit" in op ? nameOf(rows[units[op.unit]?.start ?? -1])
+        : op.kind === "move" ? nameOf(rows[units[op.from]?.start ?? -1])
+        : op.kind === "copyRow" || op.kind === "removeRow" ? nameOf(rows[op.row])
+        : "");
+    const shown = rowOps?.(Number(day.day_index ?? 0), before, op, name) ?? false;
+    // a swap changes a name that may be out of sight: always say it
+    if (!shown && op.kind === "swap") toast.success(`Swapped to ${op.name ?? "the new exercise"}`);
+  };
   const addRow = () => setDay({
     ...day,
     rows: [...rows, {
@@ -2306,7 +2432,8 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
     const next = [...rows, ...cloned];
     setDay({ ...day, rows: next.map((r: any, i: number) => ({ ...r, sort_order: i })) });
   };
-  const insertExercise = (exId: string, atIndex?: number) => {
+  /** A new exercise at exercise position `at` (between exercises, never inside one's back-offs); the end by default. */
+  const insertExercise = (exId: string, at?: number) => {
     const ex = (exercises as any[]).find((x) => x.id === exId);
     // Auto-detect tracking type from exercise.default_measurement_type.
     // Coaches can override per-row in the builder, but time-based exercises
@@ -2314,7 +2441,6 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
     const autoTrackingType: "reps_weight" | "reps" | "time" =
       ex?.default_measurement_type === "time" ? "time" : "reps_weight";
     const newRow: Record<string, any> = {
-      sort_order: 0,
       time_profile: "accessory_compound",
       percentage_basis: "none",
       exercise_id: exId,
@@ -2327,11 +2453,56 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
         ? { duration_seconds: ex.duration_seconds }
         : {}),
     };
-    const next = [...rows];
-    const idx = atIndex ?? next.length;
-    next.splice(idx, 0, newRow);
-    setDay({ ...day, rows: next.map((r: any, i: number) => ({ ...r, sort_order: i })) });
+    runOp({ kind: "add", at: Math.max(0, Math.min(at ?? units.length, units.length)), row: newRow }, { name: ex?.name ?? "" });
   };
+  // What a back-off works out to from its top set's prescribed weight ("= 365 lb"),
+  // rounded like the logger rounds it (backoffLoad). An RPE top set has no weight
+  // to read until it's lifted, so its back-offs just say their %.
+  const { clientId: maxesClientId, index: dayMaxesIndex } = useClientMaxesCtx();
+  const linkedLoads = useMemo(() => {
+    const out: (string | null)[] = rows.map(() => null);
+    const unitOfLoad = (r: any): "kg" | "lb" =>
+      r?.load_unit === "lb" || (r?.load_unit !== "kg" && r?.load_lb != null && r?.load_kg == null) ? "lb" : "kg";
+    const ownLoad = (r: any, unit: "kg" | "lb"): number | null => {
+      const fixed = Number(unit === "kg" ? r?.load_kg : r?.load_lb);
+      const hasFixed = (unit === "kg" ? r?.load_kg : r?.load_lb) != null && (unit === "kg" ? r?.load_kg : r?.load_lb) !== "" && Number.isFinite(fixed) && fixed > 0;
+      if (r?.manual_override && hasFixed) return fixed;
+      if (isMaxBasis(r?.percentage_basis)) {
+        if (!maxesClientId || !r?.percentage) return null;
+        const meta = r.exercise_id ? exById.get(r.exercise_id) : null;
+        const family = referenceFamily({ rowFamily: r.movement_family, competitionLiftType: meta?.competition_lift_type, movementFamily: meta?.movement_family });
+        const c = computeRowLoad({
+          exerciseName: nameOf(r),
+          basis: r.percentage_basis,
+          percentage: Number(r.percentage),
+          manualLoadKg: null,
+          manualLoadLb: null,
+          unit,
+          maxesIndex: dayMaxesIndex,
+          family,
+          ownCompetition: !!family && String(meta?.competition_lift_type ?? "").toLowerCase() === family,
+        });
+        return c.status === "ok" && c.load != null ? c.load : null;
+      }
+      return hasFixed && (r?.percentage_basis === "manual" || !r?.percentage_basis) ? fixed : null;
+    };
+    const fmt = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100));
+    for (const u of units) {
+      if (u.end - u.start < 2) continue;
+      const unit = unitOfLoad(rows[u.start]);
+      const top = ownLoad(rows[u.start], unit);
+      let prev = top;
+      for (let i = u.start + 1; i < u.end; i++) {
+        const r = rows[i];
+        const base = r?.percentage_basis === "top_set" ? top : r?.percentage_basis === "prev_set" ? prev : null;
+        const v = base != null && r?.percentage ? backoffLoad(base, Number(r.percentage), unit, r.load_round) : null;
+        out[i] = v != null ? `= ${fmt(v)} ${unit}` : null;
+        prev = v ?? ownLoad(r, unit);
+      }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, units, maxesClientId, dayMaxesIndex, exById]);
 
   // Day focus: track which day the coach is editing. Becomes active on any
   // click / focus inside the card. Switching to a different day automatically
@@ -2372,15 +2543,6 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [isActive, dayKey, allExpanded]);
-
-  const moveRow = (from: number, to: number) => {
-    if (from === to || from < 0 || to < 0 || from >= rows.length) return;
-    const next = [...rows];
-    const [moved] = next.splice(from, 1);
-    const insertAt = to > from ? to - 1 : to;
-    next.splice(insertAt, 0, moved);
-    setDay({ ...day, rows: next.map((r: any, i: number) => ({ ...r, sort_order: i })) });
-  };
 
   return (
     <div
@@ -2452,90 +2614,64 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
       )}
       {rows.length > 0 && (
         <ProgressRowContext.Provider value={progressRow}>
+        <SortableUnits
+          ids={unitIds}
+          onStart={() => setFresh(null)}
+          onMove={(from, to) => runOp({ kind: "move", from, to })}
+        >
         <div data-pb-day>
-          {rows.map((r: any, i: number) => (
-            <Fragment key={i}>
-              {!phone && i > 0 && (
+          {units.map((u, ui) => {
+            const head = rows[u.start];
+            const backoffs = u.end - u.start - 1;
+            return (
+            <Fragment key={unitIds[ui]}>
+              {!phone && ui > 0 && (
               <InlineAddExerciseButton
                 exercises={exercises}
-                onPick={(exId: string) => insertExercise(exId, i)}
+                onPick={(exId: string) => insertExercise(exId, ui)}
                 label="Insert exercise here"
               />
               )}
-            <div
-              draggable={!phone}
-              onDragStart={(e) => {
-                // Don't start a row-drag when the user is interacting with
-                // a form control or button inside the row.
-                const target = e.target as HTMLElement;
-                if (target.closest('input, textarea, select, button, [role="combobox"], [contenteditable="true"]')) {
-                  e.preventDefault();
-                  return;
-                }
-                e.dataTransfer.setData("application/x-pb-row-reorder", String(i));
-                e.dataTransfer.effectAllowed = "move";
-                setDragRowIdx(i);
-                beginPbDrag("row");
-              }}
-              onDragEnd={() => { setDragRowIdx(null); setDropTargetIdx(null); endPbDrag(); }}
-              onDragOver={(e) => {
-                if (dragRowIdx == null) return;
-                e.preventDefault();
-                e.stopPropagation();
-                e.dataTransfer.dropEffect = "move";
-                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                const before = e.clientY < rect.top + rect.height / 2;
-                setDropTargetIdx(before ? i : i + 1);
-              }}
-              onDrop={(e) => {
-                if (dragRowIdx == null) return;
-                e.preventDefault();
-                e.stopPropagation();
-                const target = dropTargetIdx ?? i;
-                moveRow(dragRowIdx, target);
-                setDragRowIdx(null);
-                setDropTargetIdx(null);
-                endPbDrag();
-              }}
-              className={cn(
-                "border-t border-border/70 transition-opacity",
-                !phone && "cursor-grab active:cursor-grabbing",
-                dragRowIdx === i && "opacity-40",
-                dropTargetIdx === i && "shadow-[inset_0_2px_0_0_var(--primary)]",
-                dropTargetIdx === i + 1 && "shadow-[inset_0_-2px_0_0_var(--primary)]",
-              )}
-            >
-              <RowEditor
-                row={{ ...r, index_total: rows.length }}
-                setRow={(nr) => { const copy = [...rows]; copy[i] = nr; setDay({ ...day, rows: copy }); }}
-                onDelete={() => setDay({ ...day, rows: rows.filter((_: any, j: number) => j !== i) })}
-                canMoveUp={i > 0}
-                canMoveDown={i < rows.length - 1}
-                onMoveUp={() => moveRow(i, i - 1)}
-                onMoveDown={() => moveRow(i, i + 2)}
-                onDragStartRow={(e) => {
-                  e.dataTransfer.setData("application/x-pb-row-reorder", String(i));
-                  e.dataTransfer.effectAllowed = "move";
-                  setDragRowIdx(i);
-                  beginPbDrag("row");
-                }}
-                onDragEndRow={() => { setDragRowIdx(null); setDropTargetIdx(null); endPbDrag(); }}
-                isDragging={dragRowIdx === i}
-                exercises={exercises}
-                compact={compact !== false}
-                purposeLabel={purposeLabels[i]}
-                dayKey={dayKey}
-                index={i}
-              />
-            </div>
+              <SortableUnit id={unitIds[ui]} flash={fresh?.key === unitIds[ui]} className="border-t border-border/70">
+                {(handle: GripHandle) => rows.slice(u.start, u.end).map((r: any, k: number) => {
+                  const i = u.start + k;
+                  const followOn = k > 0;
+                  const isFresh = fresh?.key === keys[i];
+                  return (
+                    <RowEditor
+                      key={keys[i]}
+                      row={{ ...r, index_total: rows.length }}
+                      setRow={(nr) => { const copy = [...rows]; copy[i] = nr; setDay({ ...day, rows: copy }); }}
+                      onDelete={() => runOp(followOn ? { kind: "removeRow", row: i } : { kind: "remove", unit: ui })}
+                      deleteLabel={!followOn && backoffs > 0 ? `Delete with its ${backoffs === 1 ? "back-off" : `${backoffs} back-offs`}` : undefined}
+                      onDuplicate={() => runOp(followOn ? { kind: "copyRow", row: i } : { kind: "duplicate", unit: ui }, { open: true })}
+                      onAddBackoff={takesBackoffs(head) ? () => runOp({ kind: "backoff", unit: ui, label: backoffLabelFor(purposeLabels[u.start]) }, { open: true }) : undefined}
+                      onSwap={(ex) => runOp({ kind: "swap", unit: ui, exerciseId: ex.id ?? null, name: ex.name ?? null })}
+                      handle={followOn ? undefined : handle}
+                      position={ui + 1}
+                      followTitle={followOn ? (backoffs > 1 ? `Back-off ${k}` : "Back-off") : undefined}
+                      linkedLoad={linkedLoads[i]}
+                      startOpen={isFresh && fresh?.open}
+                      flash={followOn && isFresh}
+                      exercises={exercises}
+                      compact={compact !== false}
+                      purposeLabel={purposeLabels[i]}
+                      dayKey={dayKey}
+                      index={i}
+                    />
+                  );
+                })}
+              </SortableUnit>
             </Fragment>
-          ))}
+            );
+          })}
         </div>
+        </SortableUnits>
         </ProgressRowContext.Provider>
       )}
       <InlineAddExerciseButton
         exercises={exercises}
-        onPick={(exId: string) => insertExercise(exId, rows.length)}
+        onPick={(exId: string) => insertExercise(exId)}
         label="Add exercise"
         prominent
       />
@@ -2904,7 +3040,29 @@ const TRACKING_LABEL: Record<"reps_weight" | "reps" | "time", string> = {
   time: "Time",
 };
 
-function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDragStartRow, onDragEndRow, isDragging, purposeLabel, dayKey, index }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; canMoveUp?: boolean; canMoveDown?: boolean; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean; purposeLabel?: string; dayKey?: string; index?: number }) {
+function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBackoff, onSwap, handle, position, followTitle, linkedLoad, startOpen, flash, exercises, compact, purposeLabel, dayKey, index }: {
+  row: any; setRow: (r: any) => void; onDelete?: () => void;
+  /** "Delete with its back-off": a top set takes its back-offs with it */
+  deleteLabel?: string;
+  /** a copy right under it (a back-off: under itself, inside its exercise) */
+  onDuplicate?: () => void;
+  /** back-off sets after this exercise (only on one lifted for reps with a weight) */
+  onAddBackoff?: () => void;
+  /** swap the exercise (and its back-offs), keeping every number */
+  onSwap?: (ex: any) => void;
+  /** the drag handle (an exercise's first row; never a back-off) */
+  handle?: GripHandle;
+  /** its number in the day, counted by exercise */
+  position?: number;
+  /** a back-off row: what it's called under its top set ("Back-off", "Back-off 2") */
+  followTitle?: string;
+  /** what a % of the top set works out to ("= 365 lb") */
+  linkedLoad?: string | null;
+  /** a copy or a new back-off: opens ready to edit, in view */
+  startOpen?: boolean;
+  flash?: boolean;
+  exercises: any[]; compact?: boolean; purposeLabel?: string; dayKey?: string; index?: number;
+}) {
   // A phone: every field is a 44px box with 16px text (no iOS zoom on focus),
   // every button a 40px tap.
   const phone = useBuilderPhone();
@@ -2960,7 +3118,16 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   })();
   const meetsMinRef = useRef(meetsMinimum);
   useEffect(() => { meetsMinRef.current = meetsMinimum; }, [meetsMinimum]);
-  const [collapsed, setCollapsed] = useState(meetsMinimum);
+  const [collapsed, setCollapsed] = useState(meetsMinimum && !startOpen);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  // a copy or a new back-off lands open and in view, ready to edit
+  useEffect(() => {
+    if (!startOpen) return;
+    setCollapsed(false);
+    const t = setTimeout(() => rootRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 60);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startOpen]);
   const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleCollapse = () => {
     // Don't auto-collapse incomplete cards — keep them expanded so the
@@ -2995,6 +3162,8 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
     : !row.percentage_basis ? (hasExistingManualLoad ? "manual" : "none")
     : "pct";
   const suggestedOn = loadMode !== "none";
+  // a % of the top set (or the set before): its weight comes from that set, rounded by `load_round`
+  const linkedBasis = loadMode === "pct" && (row.percentage_basis === "top_set" || row.percentage_basis === "prev_set");
   // A fixed load lives in one column, its unit's (like the sheet and Cleo); a row
   // copied without load_unit says its unit by which column holds the number.
   const rowUnit: "kg" | "lb" = row.load_unit === "lb" || (row.load_unit !== "kg" && row.load_lb != null && row.load_kg == null) ? "lb" : "kg";
@@ -3066,6 +3235,8 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   // Swap keeps every input (sets / reps / rpe / rir / load / rest / tempo /
   // notes…) and replaces only the exercise.
   const pickExercise = (ex: any) => {
+    // the day swaps the whole exercise (its back-offs too) and says which weeks
+    if (onSwap) return onSwap(ex);
     setRow({ ...row, exercise_id: ex.id, exercise_name_override: ex.name });
     toast.success(`Swapped to ${ex.name}`);
   };
@@ -3146,7 +3317,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       const label = computed?.status === "ok" && computed.label
         ? computed.label
         : plannedLoadLabel({ percentage: row.percentage, basis: row.percentage_basis, refLift: viaFamily && refFamily ? `Competition ${refFamily[0].toUpperCase()}${refFamily.slice(1)}` : null, viaFamily });
-      const load = computed?.status === "ok" && computed.load != null ? ` = ${computed.load} ${rowUnit}` : "";
+      const load = computed?.status === "ok" && computed.load != null ? ` = ${computed.load} ${rowUnit}` : linkedLoad ? ` ${linkedLoad}` : "";
       if (label) return `${label}${load}`;
       // "90% of Previous Week", never "90% % of Previous Week"
       const basisLabel = (PERCENTAGE_BASES.find((p) => p.value === row.percentage_basis)?.label) ?? "";
@@ -3160,28 +3331,24 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   if (loadSummary) summaryParts.push(loadSummary);
   if (row.tempo) summaryParts.push(`tempo ${row.tempo}`);
   const restSummary = `rest ${fmtRestSeconds(effectiveRest)}`;
-  const showLabel = !!purposeLabel && purposeLabel !== "Assistance";
+  const showLabel = !followTitle && !!purposeLabel && purposeLabel !== "Assistance";
 
   // Order number, derived from the row's current position in the day (never
   // stored): reorder or delete a row and every card renumbers automatically.
   // Hidden when no index is provided (standalone single-row view).
-  const RowIndexBadge = index == null ? null : (
-    <ExerciseOrderBadge position={index + 1} family={family} tone="neutral" size="sm" className="mt-0.5 h-6 min-w-6 rounded-full text-xs" />
+  // A back-off hangs off its top set instead: no number, a corner under the exercise's.
+  const RowIndexBadge = followTitle ? (
+    <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center text-muted-foreground" aria-hidden>
+      <CornerDownRight className="h-4 w-4" />
+    </span>
+  ) : index == null && position == null ? null : (
+    <ExerciseOrderBadge position={position ?? (index ?? 0) + 1} family={family} tone="neutral" size="sm" className="mt-0.5 h-6 min-w-6 rounded-full text-xs" />
   );
 
-  const grip = !phone ? (
-    <span
-      draggable={!!onDragStartRow}
-      onDragStart={onDragStartRow}
-      onDragEnd={onDragEndRow}
-      onClick={(e) => e.stopPropagation()}
-      title="Drag to reorder"
-      aria-hidden
-      className="absolute left-0.5 top-2.5 cursor-grab rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-secondary hover:text-foreground active:cursor-grabbing group-hover/row:opacity-100"
-    >
-      <GripVertical className="h-4 w-4" />
-    </span>
-  ) : null;
+  // The handle: always there (phone and computer), on the exercise's first row.
+  const grip = handle ? <RowGrip handle={handle} name={exName} phone={phone} /> : null;
+  // a back-off keeps the handle's room, so its corner sits under its top set's number
+  const gripRoom = followTitle ? <span aria-hidden className={cn("shrink-0", phone ? "-ml-2 w-8" : "-ml-1.5 w-6")} /> : null;
 
   // Everything else a row can do, in one ⋯ (phone and computer alike). It's
   // its own: opening it or picking from it never opens the card.
@@ -3207,14 +3374,14 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
               <TrendingUp className="mr-2 h-4 w-4" /> Progress across weeks…
             </DropdownMenuItem>
           )}
-          {onMoveUp && (
-            <DropdownMenuItem disabled={canMoveUp === false} onSelect={onMoveUp}>
-              <ChevronUp className="mr-2 h-4 w-4" /> Move up
+          {onDuplicate && (
+            <DropdownMenuItem onSelect={onDuplicate} data-row-duplicate>
+              <Copy className="mr-2 h-4 w-4" /> {followTitle ? "Duplicate this back-off" : "Duplicate"}
             </DropdownMenuItem>
           )}
-          {onMoveDown && (
-            <DropdownMenuItem disabled={canMoveDown === false} onSelect={onMoveDown}>
-              <ChevronDown className="mr-2 h-4 w-4" /> Move down
+          {onAddBackoff && !followTitle && (
+            <DropdownMenuItem onSelect={onAddBackoff} data-row-add-backoff>
+              <CornerDownRight className="mr-2 h-4 w-4" /> Add back-off sets
             </DropdownMenuItem>
           )}
           <DropdownMenuItem onSelect={() => { copyRows([row]); toast.success("Exercise copied"); }}>
@@ -3237,7 +3404,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive" onSelect={onDelete}>
-                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                <Trash2 className="mr-2 h-4 w-4" /> {deleteLabel ?? (followTitle ? "Delete this back-off" : "Delete")}
               </DropdownMenuItem>
             </>
           )}
@@ -3249,9 +3416,13 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   const nameBlock = (
     <div className="min-w-0 flex-1">
       <div className={cn("flex items-start gap-1.5", phone ? "text-[15px]" : "text-sm")}>
+        {followTitle ? (
+          <span className="min-w-0 font-semibold leading-snug" data-backoff-title>{followTitle}</span>
+        ) : (
         <span className="min-w-0 font-semibold leading-snug [overflow-wrap:anywhere] line-clamp-2">
           {exName || <span className="font-normal italic text-muted-foreground">No exercise yet</span>}
         </span>
+        )}
         {missingVideo && (
           <VideoOff className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" aria-label="No demo video on this exercise" />
         )}
@@ -3261,12 +3432,16 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
 
   return (
     <div
+      ref={rootRef}
       data-pb-row
+      data-pb-flash={flash ? "new" : undefined}
+      data-backoff-row={followTitle ? "" : undefined}
       // a row's ⋯ is its own: opening it or picking from it never opens the
       // card (React events bubble out of the menu's portal)
       // (and nothing in a layer it opened, like the exercise picker, opens it)
-      onClickCapture={(e) => { if (collapsed && !inFloatingLayer(e.target)) openCard(); }}
-      onFocusCapture={(e) => { if (inFloatingLayer(e.target)) return; openCard(); }}
+      // (and the drag handle only ever drags: a tap or a hold never opens the card)
+      onClickCapture={(e) => { if (collapsed && !inFloatingLayer(e.target) && !onGrip(e.target)) openCard(); }}
+      onFocusCapture={(e) => { if (inFloatingLayer(e.target) || onGrip(e.target)) return; openCard(); }}
       onBlurCapture={(e) => {
         if (inFloatingLayer(e.relatedTarget)) return;
         if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) scheduleCollapse();
@@ -3294,7 +3469,6 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       }}
       className={cn(
         "group/row @container/row relative transition-colors",
-        isDragging && "opacity-50",
         collapsed
           ? cn("cursor-pointer hover:bg-muted/40", compact ? "py-2 pl-4 pr-2" : "py-2.5 pl-4 pr-2")
           : cn("bg-muted/40", phone ? "space-y-3 py-3 pl-4 pr-2" : "space-y-2.5 py-3 pl-4 pr-2"),
@@ -3304,9 +3478,9 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       {/* The movement family: one thin stripe (squat yellow, bench blue,
           deadlift green, everything else red). */}
       <span className={cn("absolute bottom-2 left-1.5 top-2 w-[3px] rounded-full", accent)} aria-hidden />
-      {grip}
       {collapsed ? (
         <div className="flex min-w-0 items-start gap-2.5">
+          {grip ?? gripRoom}
           {RowIndexBadge}
           <div className="min-w-0 flex-1">
             {nameBlock}
@@ -3325,6 +3499,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       <>
       {/* ---- The exercise: its name, Swap, ⋯ ---- */}
       <div className="flex min-w-0 items-start gap-2.5">
+        {grip ?? gripRoom}
         {RowIndexBadge}
         <div className="min-w-0 flex-1">
           {nameBlock}
@@ -3489,7 +3664,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
               <div className="w-full @md/row:w-auto">
                 <div className="inline-flex w-full rounded-lg bg-muted p-0.5 @md/row:w-auto" role="group" aria-label="Load as">
                   <button type="button" aria-pressed={loadMode === "manual"} onClick={() => setLoadMode("manual")} className={cn("flex-1 whitespace-nowrap rounded-md px-2.5 text-xs font-medium", phone ? "h-9" : "h-7", loadMode === "manual" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")} title="Fixed weight">Weight</button>
-                  <button type="button" aria-pressed={loadMode === "pct"} onClick={() => setLoadMode("pct")} className={cn("flex-1 whitespace-nowrap rounded-md px-2.5 text-xs font-medium", phone ? "h-9" : "h-7", loadMode === "pct" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")} title="Percentage of max">% of max</button>
+                  <button type="button" aria-pressed={loadMode === "pct"} onClick={() => setLoadMode("pct")} className={cn("flex-1 whitespace-nowrap rounded-md px-2.5 text-xs font-medium", phone ? "h-9" : "h-7", loadMode === "pct" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")} title={linkedBasis ? "A percentage of another set" : "Percentage of max"}>{linkedBasis ? "%" : "% of max"}</button>
                 </div>
               </div>
               {loadMode === "pct" && (
@@ -3503,6 +3678,18 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
               {loadMode === "pct" && (
                 <RowField className="w-20 shrink-0" label="%">
                   <RowCell dataField="percentage" className={cn("text-center font-semibold tabular-nums", h, inputCls)} inputMode="decimal" placeholder="75" value={row.percentage} onCommit={(v) => setRow({ ...row, percentage: parseFloatOrNull(v) })} />
+                </RowField>
+              )}
+              {linkedBasis && (
+                // a % of the top set rounds like the logger rounds it (backoffRoundStep, `load_round`)
+                <RowField className="min-w-[132px] flex-1" label="Round to">
+                  <Select value={row.load_round === "fine" ? "fine" : "plates"} onValueChange={(v) => setRow({ ...row, load_round: v === "fine" ? "fine" : null })}>
+                    <SelectTrigger className={cn("font-medium", h, inputCls)} aria-label="Round to" data-pb-field="round"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="plates">5 lb · 2.5 kg</SelectItem>
+                      <SelectItem value="fine">2.5 lb · 1 kg</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </RowField>
               )}
               <RowField className="min-w-[150px] flex-1" label={`Weight (${rowUnit})`}>
@@ -3538,6 +3725,13 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                 </div>
               </RowField>
             </div>
+          )}
+          {linkedBasis && (
+            <p className="mt-1.5 text-xs text-muted-foreground" data-linked-load>
+              {linkedLoad
+                ? `${row.percentage ?? "—"}% of the ${row.percentage_basis === "prev_set" ? "set before" : "top set"} ${linkedLoad}. It follows the top set when that changes.`
+                : `Worked out from the weight they lift on the ${row.percentage_basis === "prev_set" ? "set before" : "top set"} that day.`}
+            </p>
           )}
         </div>
         <RowField className={cn("col-span-12", loadMode === "none" ? "@xl/row:col-span-4" : "@xl/row:col-span-3")} label="Tempo">
