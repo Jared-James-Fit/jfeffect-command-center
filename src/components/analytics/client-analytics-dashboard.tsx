@@ -391,7 +391,10 @@ export function ClientAnalyticsDashboard({
     () => liftStrengths(allResults as any[], meets, today),
     [allResults, meets, today],
   );
-  const { records } = useMemo(() => personalRecords(allResults as any[]), [allResults]);
+  const { records } = useMemo(
+    () => personalRecords(allResults as any[], meets),
+    [allResults, meets],
+  );
   const lifetime = useMemo(
     () => lifetimeTotals(allResults as any[], records),
     [allResults, records],

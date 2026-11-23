@@ -12,9 +12,10 @@ import {
   sessionEstimates,
   setEstimate,
   strengthEnvelope,
+  MAX_FALL_PER_WEEK,
   type SessionEstimate,
 } from "@/lib/analytics/strength-estimate";
-import { liftStrengths, mainLift } from "@/lib/analytics/lift-strength";
+import { isMeetLog, liftStrengths, mainLift } from "@/lib/analytics/lift-strength";
 import {
   buildCalendar,
   calendarLayout,
@@ -136,8 +137,59 @@ describe("the estimated-strength line", () => {
       sess("2026-09-01", 500),
       sess("2026-10-15", 470),
       sess("2026-10-20", 472),
+      sess("2026-11-03", 471),
+      sess("2026-11-17", 473),
     ]);
-    expect(envelopeAt(two, "2026-10-20")!.value).toBe(472);
+    // it falls, a week at a time, and settles where the hard sets keep saying
+    const at20 = envelopeAt(two, "2026-10-20")!.value;
+    expect(at20).toBeLessThan(500);
+    expect(at20).toBeGreaterThan(472);
+    expect(envelopeAt(two, "2026-11-17")!.value).toBe(473);
+  });
+
+  it("never drops a meet max 20% in a month on two volume-block sets of 5 (Jared, Oct 2026)", () => {
+    // Commonwealth squat 518 lb; then 315x5 @7 and 335x5 @8 read ~400 on the RPE chart
+    const env = strengthEnvelope([
+      sess("2026-09-18", 518),
+      sess("2026-10-06", 399),
+      sess("2026-10-26", 413),
+      sess("2026-11-02", 400),
+    ]);
+    const nov2 = envelopeAt(env, "2026-11-02")!;
+    expect(nov2.value).toBeGreaterThan(518 * (1 - MAX_FALL_PER_WEEK * 1.01));
+    expect(nov2.value).toBeLessThan(518);
+  });
+
+  it("a meet's attempts typed into the app days later are the meet, never an RPE estimate over it", () => {
+    const meets = meetsFromRows([
+      {
+        meet_date: "2026-09-18",
+        squat_kg: 235,
+        bench_kg: 150,
+        deadlift_kg: 270,
+        bodyweight_kg: 65.4,
+      },
+    ]);
+    const dl = (day: string, load: number, rpe = "8", reps = 1) =>
+      res(day, { lift: "deadlift", name: "Competition Deadlift", load, reps, rpe });
+    // Jared's Commonwealth pull, logged Sep 21 at "RPE 8": the chart reads it as 655 lb
+    const s = liftStrengths(
+      [dl("2026-09-01", 495, "8.5", 4), dl("2026-09-21", 545.6), dl("2026-09-21", 595.2)],
+      meets,
+      "2026-09-25",
+    );
+    expect(envelopeAt(s.deadlift.envelope, "2026-09-25")!.value).toBeCloseTo(595.2, 0);
+    expect(s.deadlift.sessions.some((x) => x.day === "2026-09-21")).toBe(false);
+    // a session days later at another weight, or a week and more later, is training
+    expect(isMeetLog({ day: "2026-09-21", heaviest: 560 }, { day: "2026-09-18", lb: 595.2 })).toBe(
+      false,
+    );
+    expect(
+      isMeetLog({ day: "2026-09-28", heaviest: 595.2 }, { day: "2026-09-18", lb: 595.2 }),
+    ).toBe(false);
+    expect(isMeetLog({ day: "2026-09-20", heaviest: 596 }, { day: "2026-09-18", lb: 595.2 })).toBe(
+      true,
+    );
   });
 
   it("a trend across a held stretch says 'we don't know yet', never 'down'", () => {
@@ -258,6 +310,33 @@ describe("records", () => {
     expect(records[0]).toMatchObject({ day: "2026-10-15", load: 325 });
     expect(records[0].kinds).toEqual(expect.arrayContaining(["e1rm", "weight"]));
     expect(recordsByExercise(records, [])[0].records).toHaveLength(1);
+  });
+
+  it("a competition lift's record has to beat the platform too, not just the app's own logs", () => {
+    const meets = meetsFromRows([
+      {
+        meet_date: "2025-03-01",
+        squat_kg: 265,
+        bench_kg: 172.5,
+        deadlift_kg: 270,
+        bodyweight_kg: 73.8,
+      },
+    ]);
+    const sets = [
+      res("2026-06-22", { load: 330, reps: 5, rpe: "7", id: "a" }),
+      res("2026-08-05", { load: 534.6, reps: 1, rpe: "9", id: "b" }), // best since logging began
+    ];
+    expect(personalRecords(sets).records.map((r) => r.load)).toEqual([534.6]);
+    // 534.6 lb is under the 584 lb squatted at Nationals 2025: no record
+    const withMeets = personalRecords(sets, meets);
+    expect(withMeets.records).toHaveLength(0);
+    // and a squat over it is one, measured against the meet
+    const over = personalRecords(
+      [...sets, res("2026-10-01", { load: 600, reps: 1, rpe: "9", id: "c" })],
+      meets,
+    );
+    expect(over.records).toHaveLength(1);
+    expect(over.records[0].prior.load).toBeCloseTo(584.2, 0);
   });
 
   it("lifetime totals: weight moved in both units, workouts, longest run of weeks", () => {

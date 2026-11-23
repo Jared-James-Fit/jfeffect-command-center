@@ -11,8 +11,18 @@
  * Kinds: an estimated-max record (the set's e1RM beat every earlier set's) and
  * a heaviest-weight record (the most weight ever lifted on it, any reps). A
  * set can be both; it's listed once with both named.
+ *
+ * A competition lift's established record includes the athlete's meets: the
+ * app only holds what was logged in it, and a squat that's the best since
+ * they started logging is no record when they squatted more on the platform
+ * (Jared's 534.6 lb in Aug 2026 against 584 lb at Nationals 2025).
  */
 import { localDay } from "@/lib/analytics/lift-strength";
+import {
+  compLiftOfResult,
+  type CompLift,
+  type MeetResult,
+} from "@/lib/analytics/competition-strength";
 
 export const MIN_PR_GAIN_PCT = 0.5;
 const LB_PER_KG = 2.2046226;
@@ -46,7 +56,20 @@ function exKey(r: any): string {
 const epley = (load: number, reps: number) => (reps <= 1 ? load : load * (1 + reps / 30));
 
 /** Records in the order they happened (oldest first). `results`: every logged set, getClientResults rows. */
-export function personalRecords(results: any[]): { records: PersonalRecord[]; firsts: Baseline[] } {
+export function personalRecords(
+  results: any[],
+  meets: MeetResult[] = [],
+): { records: PersonalRecord[]; firsts: Baseline[] } {
+  // the best lifted at a meet before a day, per competition lift
+  const meetsAsc = [...meets].sort((a, b) => a.date.localeCompare(b.date));
+  const meetBest = (lift: CompLift, day: string): number => {
+    let b = 0;
+    for (const m of meetsAsc) {
+      if (m.date >= day) break;
+      b = Math.max(b, m.lifts[lift] || 0);
+    }
+    return b;
+  };
   const ordered = (results ?? [])
     .filter(
       (r) =>
@@ -79,7 +102,16 @@ export function personalRecords(results: any[]): { records: PersonalRecord[]; fi
     const load = Number(r.load);
     const reps = Number(r.reps);
     const e = epley(load, Math.min(reps, 12));
-    const before = best.get(k);
+    const lift = compLiftOfResult(r);
+    const onPlatform = lift ? meetBest(lift, day) : 0;
+    const logged = best.get(k);
+    const before =
+      onPlatform > 0
+        ? {
+            e1rm: Math.max(logged?.e1rm ?? 0, onPlatform),
+            load: Math.max(logged?.load ?? 0, onPlatform),
+          }
+        : logged;
     if (!before) {
       firsts.push({ day, exercise: String(r.exercise_name ?? "Exercise"), load, reps });
       best.set(k, { e1rm: e, load });

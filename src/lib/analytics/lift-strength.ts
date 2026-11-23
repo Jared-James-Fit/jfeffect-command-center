@@ -37,6 +37,19 @@ export function localDay(iso: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Days after a meet its attempts may still be typed into the app. */
+export const MEET_LOG_DAYS = 6;
+
+/** A session that is a meet's own attempts logged in the app: its heaviest set at the meet's lift, within a few days. */
+export function isMeetLog(
+  s: Pick<SessionEstimate, "day" | "heaviest">,
+  m: { day: string; lb: number },
+): boolean {
+  const gap = (Date.parse(`${s.day}T12:00:00Z`) - Date.parse(`${m.day}T12:00:00Z`)) / 86_400_000;
+  if (gap < -1 || gap > MEET_LOG_DAYS) return false;
+  return Math.abs(s.heaviest - m.lb) <= Math.max(2.5, m.lb * 0.01);
+}
+
 export function liftStrengths(
   results: any[],
   meets: MeetResult[] = [],
@@ -62,9 +75,10 @@ export function liftStrengths(
       .filter((m) => m.lifts[lift] > 0)
       .map((m) => ({ day: m.date, lb: Math.round(m.lifts[lift] * 10) / 10, name: m.name }));
     let sessions = sessionEstimates(sets);
-    // a meet is a max lifted: it stands in for that day's estimate
-    const meetDays = new Set(ms.map((m) => m.day));
-    sessions = sessions.filter((s) => !meetDays.has(s.day));
+    // a meet is a max lifted: it stands in for that day's estimate, and for
+    // its attempts typed into the app a few days later (their RPEs, rated
+    // after the fact, read a 270 kg pull at "8" as a 297 kg max)
+    sessions = sessions.filter((s) => !ms.some((m) => isMeetLog(s, m)));
     const withMeets: SessionEstimate[] = [
       ...sessions,
       ...ms.map((m) => ({

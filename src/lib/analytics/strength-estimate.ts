@@ -58,6 +58,13 @@ export const ENVELOPE_DAYS = 42;
 export const STALE_DAYS = 56;
 export const OUTLIER_HIGH = 1.35;
 export const OUTLIER_LOW = 0.65;
+/**
+ * The most the line falls per week when hard sets say it's lower. Strength
+ * doesn't drop 20% in a month while someone keeps training: two volume-block
+ * sets of 5 rated RPE 7–8 under a meet max are the RPE chart's error, not a
+ * collapse. Real declines still show, a week at a time.
+ */
+export const MAX_FALL_PER_WEEK = 0.02;
 const OUTLIER_WINDOW_DAYS = 60;
 const DAY = 86_400_000;
 
@@ -205,6 +212,16 @@ export function strengthEnvelope(
       // one hard session under the line is a fluctuation, never a fall: it takes 2+
       if (prev && best.e1rm < prev.value && highs.length < 2) {
         cur = { day: d, value: prev.value, state: "held", basis: prev.basis };
+      } else if (prev && best.e1rm < prev.value && prev.state !== "floor") {
+        // a fall, at most MAX_FALL_PER_WEEK since the last point
+        const weeks = Math.max(0, (t - dayMs(prev.day)) / (7 * DAY));
+        const lowest: number = prev.value * Math.max(0, 1 - MAX_FALL_PER_WEEK * weeks);
+        cur = {
+          day: d,
+          value: Math.round(Math.max(best.e1rm, lowest) * 10) / 10,
+          state: "measured",
+          basis: best.day,
+        };
       } else {
         cur = { day: d, value: best.e1rm, state: "measured", basis: best.day };
       }

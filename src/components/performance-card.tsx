@@ -9,6 +9,7 @@ import { getClientResults } from "@/lib/pl-programs";
 import { buildCalendar, weekColumns, type DaySummary } from "@/lib/analytics/performance-calendar";
 import { liftStrengths, liftNow, mainLift } from "@/lib/analytics/lift-strength";
 import { COMP_LIFT_LABEL } from "@/lib/analytics/competition-strength";
+import { useCompetitionData } from "@/lib/analytics/competition-strength.queries";
 import { isHeadlineRecord, personalRecords } from "@/lib/analytics/records";
 import { levelColor } from "@/components/analytics/performance-calendar";
 import { ProgressRing, LB_PER_KG } from "@/components/analytics/viz";
@@ -43,6 +44,12 @@ export function PerformanceCard({
     staleTime: 30_000,
     queryFn: () => getClientResults(clientId),
   });
+  // meets: a competition lift's records and estimate read against the platform too
+  const competition = useCompetitionData(
+    clientId,
+    (results as Array<{ is_competition_lift?: boolean }>).some((r) => r?.is_competition_lift),
+  );
+  const meets = useMemo(() => competition.data?.meets ?? [], [competition.data]);
   const read = useMemo(() => {
     const rs = results as any[];
     if (!rs.length) return null;
@@ -62,11 +69,11 @@ export function PerformanceCard({
       firstLog,
       strength: new Map(),
     });
-    const strength = liftStrengths(rs, [], today);
+    const strength = liftStrengths(rs, meets, today);
     const sixAgo = format(new Date(Date.now() - 42 * DAY), "yyyy-MM-dd");
     const main = mainLift(strength, format(new Date(Date.now() - 84 * DAY), "yyyy-MM-dd"), today);
     const lift = main ? liftNow(strength[main], sixAgo, today) : null;
-    const { records } = personalRecords(rs);
+    const { records } = personalRecords(rs, meets);
     const monthStart = format(
       new Date(new Date().getFullYear(), new Date().getMonth(), 1),
       "yyyy-MM-dd",
@@ -87,7 +94,7 @@ export function PerformanceCard({
       ? strength[main].envelope.filter((p) => p.day >= start).map((p) => p.value)
       : [];
     return { days, main, lift, monthRecords, latest, trained, spark };
-  }, [results]);
+  }, [results, meets]);
 
   if (isLoading)
     return hideWhenEmpty ? null : (

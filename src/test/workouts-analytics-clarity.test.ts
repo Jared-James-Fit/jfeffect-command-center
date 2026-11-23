@@ -332,7 +332,7 @@ describe("the screens", () => {
     expect(dash).not.toMatch(/ATPR/);
     expect(dash).not.toContain("Top e1RM gain");
     // records are judged against the whole history, then cut to the period
-    expect(dash).toContain("personalRecords(allResults as any[])");
+    expect(dash).toContain("personalRecords(allResults as any[], meets)");
     expect(dash).toContain("records.filter((r) => r.day >= startDay && r.day <= endDay)");
   });
   it("workouts: analytics one tap from the header and the whole Performance card; no fold", () => {
