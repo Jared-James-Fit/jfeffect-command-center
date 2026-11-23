@@ -63,8 +63,8 @@ function NoOffersSection({ native }: { native: boolean }) {
               {portal.isPending ? "Opening…" : "Update Payment Method"}
             </Button>
             <Button variant="outline" className="w-full" asChild>
-              <a href="mailto:jared@jfeffect.com">
-                <Mail className="mr-2 h-4 w-4" /> Contact Coach / Support
+              <a href="mailto:billing@jfeffect.com">
+                <Mail className="mr-2 h-4 w-4" /> Email billing support
               </a>
             </Button>
           </div>
