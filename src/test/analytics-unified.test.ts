@@ -19,42 +19,39 @@ describe("one analytics experience for the coach and the athlete", () => {
     expect(read("src/routes/_authenticated/portal/workouts.analytics.tsx")).not.toMatch(/\bcoach\b\s*\n/);
   });
 
-  it("the page is four sections, one at a time, its place kept in the address", () => {
-    expect(dash).toContain('["overview", "Overview"]');
-    expect(dash).toContain('["strength", "Strength"]');
-    expect(dash).toContain('["volume", "Volume"]');
-    expect(dash).toContain('["recovery", "Recovery"]');
-    // a #recovery link still lands on Recovery
-    expect(dash).toContain('window.location.hash === "#recovery") return "recovery"');
+  it("the page is four sections, one at a time, its place kept in the address (old addresses land on Training)", () => {
+    for (const v of ['["overview", "Overview"]', '["strength", "Strength"]', '["training", "Training"]', '["records", "Records"]']) expect(dash).toContain(v);
+    const flat = dash.replace(/\s+/g, " ");
+    expect(flat).toContain('const LEGACY_VIEW: Record<string, AnalyticsView> = { volume: "training", consistency: "training", recovery: "training", };');
+    // a #recovery link still lands where recovery lives
+    expect(dash).toContain('window.location.hash === "#recovery") return "training"');
     for (const f of ["src/routes/_authenticated/portal/workouts.analytics.tsx", "src/routes/_authenticated/admin/client-programs.$clientId.analytics.tsx"]) {
       expect(read(f), f).toContain("onViewChange={(v) => navigate(");
+      expect(read(f), f).toContain("viewFromSearch(search.view)");
     }
   });
 
-  it("volume is the training-load read: insights on Overview for both, coach-only flags only for the coach", () => {
+  it("volume is the training-load read: one observation for both, coach-only flags only for the coach", () => {
     expect(dash).toContain("useTrainingLoad({");
-    expect(dash).toContain('trainingLoad.load.insights.filter((i) => coach || i.audience === "both")');
+    // the training-load insights reach the athlete through Cleo's one observation, never a list
+    expect(dash.replace(/\s+/g, " ")).toMatch(/insight: trainingLoad\.load\.insights\.find\( ?\(i\) => i\.audience === "both" && i\.actionNeeded,? ?\) \?\? null/);
     expect(dash).toContain("<TrainingLoadSection");
-    // the old, every-set muscle chart is gone
     expect(dash).not.toContain("weeklyMuscleVolume");
-    // squat · bench · deadlift sections only for someone who trains them; the
-    // programming detail (roles, weekly session grid) only for the coach
+    // squat · bench · deadlift sections only for someone who trains them; programming detail only for the coach
     expect(dash).toContain("{hasPowerlifting && (");
     expect(dash).toMatch(/\{coach && \(\s*<MoreDetail label="Programming detail">\s*<SectionErrorBoundary label="Powerlifting exposure">/);
   });
 
-  it("the Working sets tile says what it counts (it used to claim warm-ups and drop bodyweight sets)", () => {
-    // a week's average, or this week so far: never this week divided by weeks still ahead
-    expect(dash).toContain('unit={trainingLoad.load.perWeekBasis.partial ? "sets this week" : "sets a week"}');
+  it("a weekly number says what it divides by (this week so far, or a week's average)", () => {
+    expect(dash).toContain('label: trainingLoad.load.perWeekBasis.partial ? "Sets this week" : "Sets a week"');
     expect(dash).not.toContain('label="Sets in range"');
   });
 
-  it("the Workouts progress snapshot is the one way in, with a few numbers that say what they're measured against", () => {
-    const card = read("src/components/training-analytics-preview-card.tsx");
+  it("the Workouts Performance card is the one way in, drawn from the athlete's own training", () => {
+    const card = read("src/components/performance-card.tsx");
     expect(card).toContain("data-analytics-entry");
-    expect(card).toContain("data-progress-snapshot");
-    expect(card).toContain("progressSnapshot({");
-    // one way in, said once: no second "See all analytics" link under it
+    expect(card).toContain("data-performance-heatmap");
+    expect(card).toContain("buildCalendar({");
     expect(card).not.toContain("See all analytics");
   });
 

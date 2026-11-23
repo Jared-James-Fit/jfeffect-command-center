@@ -280,7 +280,7 @@ function DictationPanel({
 }
 
 export function SummerChat({
-  open, onOpenChange, year, persona, onPersonaSaved, route, isOwner = true, isFinance = false, startDictating, onDictationStarted,
+  open, onOpenChange, year, persona, onPersonaSaved, route, isOwner = true, isFinance = false, startDictating, onDictationStarted, prefill, onPrefilled,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -296,6 +296,9 @@ export function SummerChat({
   /** Start dictating as soon as the sheet opens (long-press on the button, the mic in Messages). */
   startDictating?: boolean;
   onDictationStarted?: () => void;
+  /** Words to put in the box when it opens (a screen asking about what's on it); never sent by itself. */
+  prefill?: string | null;
+  onPrefilled?: () => void;
 }) {
   const qc = useQueryClient();
   const load = useServerFn(getSummerMessages);
@@ -305,6 +308,11 @@ export function SummerChat({
   const tone = summerTone(persona.tone);
   const [customizing, setCustomizing] = useState(false);
   const [draft, setDraft] = useState("");
+  useEffect(() => {
+    if (!open || !prefill) return;
+    setDraft(prefill);
+    onPrefilled?.();
+  }, [open, prefill, onPrefilled]);
   // Photos, videos and files waiting to go with the next message (typed or spoken).
   const tray = useAttachmentTray();
   const trayRef = useRef(tray);

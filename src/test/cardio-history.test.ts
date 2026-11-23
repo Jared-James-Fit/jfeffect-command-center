@@ -193,7 +193,9 @@ describe("charts draw in the theme's colours", () => {
     for (const f of [
       "src/components/analytics/cardio-analytics-section.tsx",
       "src/components/block-progress-section.tsx",
-      "src/components/analytics/competition-strength-chart.tsx",
+      "src/components/analytics/strength-trend-chart.tsx",
+      "src/components/analytics/sbd-workload-chart.tsx",
+      "src/components/analytics/performance-calendar.tsx",
       "src/components/portal/wearables-card.tsx",
       "src/components/portal/training-recovery-panel.tsx",
     ]) {

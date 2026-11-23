@@ -8,8 +8,8 @@ describe("Workouts page: program roadmap under the calendar", () => {
     const card = src.indexOf("<ProgramRoadmapCard");
     expect(blockView).toBeGreaterThan(-1);
     expect(card).toBeGreaterThan(blockView);
-    // the program summary, then the progress snapshot
-    expect(card).toBeLessThan(src.indexOf("<TrainingAnalyticsPreviewCard"));
+    // the program summary, then the Performance card
+    expect(card).toBeLessThan(src.indexOf("<PerformanceCard"));
     // the day's cardio is the day's (useDayCardio in SelectedDayList), never a section at the bottom
     expect(src).not.toContain("<ClientCardioSection");
   });

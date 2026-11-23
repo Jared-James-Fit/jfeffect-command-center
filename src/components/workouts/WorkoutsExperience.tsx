@@ -56,11 +56,11 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-// Lazy: this card pulls recharts (~120KB). Defer it so the main Workouts
-// view can render without waiting on the chart bundle.
-const TrainingAnalyticsPreviewCard = lazyWithRetry(() =>
-  import("@/components/training-analytics-preview-card").then((m) => ({
-    default: m.TrainingAnalyticsPreviewCard,
+// Lazy: the card reads every logged set to draw itself; the Workouts view
+// paints first and the card fills in after.
+const PerformanceCard = lazyWithRetry(() =>
+  import("@/components/performance-card").then((m) => ({
+    default: m.PerformanceCard,
   })),
 );
 import { RecoveryPreviewCard } from "@/components/analytics/recovery-preview-card";
@@ -541,10 +541,10 @@ export function WorkoutsExperience({
           </div>
         )}
 
-        {/* Am I making progress? One to three numbers, one tap into analytics. */}
+        {/* Am I making progress? The last 12 weeks, the month and one headline, one tap into analytics. */}
         {mode === "self" && !noProgram && (
           <Suspense fallback={null}>
-            <TrainingAnalyticsPreviewCard
+            <PerformanceCard
               clientId={clientId}
               unit={(client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb"}
               month={monthProgress}
