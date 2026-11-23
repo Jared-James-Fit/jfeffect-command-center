@@ -171,6 +171,120 @@ select t_assert(not two_step_login_has(:fin) and not two_step_session_live(:fin,
   'the owner''s reset removes every way, every confirmed session and every trusted device');
 select t_assert((select kind from staff_mfa_events where user_id = :fin order by created_at desc limit 1) = 'reset_by_owner', 'and records it');
 
+-- ════ 5b. An emailed code, a backup (20270515090000) ═════════════════════════
+reset role; select t_service(); set role service_role;
+select t_assert((two_step_email_backup_state(:owner) ->> 'ready')::boolean
+  and two_step_email_backup_state(:owner) ->> 'email' = 'owner@example.com',
+  'the migration turned email codes on for the login that already had a way');
+select t_assert(not (two_step_email_backup_state(:coach) ->> 'on')::boolean, 'and not for a login with no way');
+select t_assert(not (two_step_email_backup_state('99999999-0000-0000-0000-000000000000') ->> 'ready')::boolean, 'a login that doesn''t exist has none');
+select two_step_email_backup_set(:coach, true, true);
+select t_assert(two_step_email_backup_state(:coach) ->> 'why' = 'no_way' and not (two_step_email_backup_state(:coach) ->> 'ready')::boolean,
+  'email on its own is never a way to confirm');
+select t_assert(not two_step_login_has(:coach), 'and never puts a login on the enforced list');
+select t_assert(two_step_code_issue(:coach, :c1, 'sign_in', null, null, :h1, 600, 'email') ->> 'reason' = 'email_no_way', 'so no code is emailed');
+
+-- An emailed code: where the backup says, only for signing in.
+delete from two_step_codes; delete from staff_mfa_events where kind like '%wrong';
+select t_assert((two_step_code_issue(:owner, :a1, 'sign_in', '+19999999999', null, :h1, 600, 'email') ->> 'email') = 'owner@example.com',
+  'an emailed code goes to the login''s own email');
+select t_assert((select channel = 'email' and phone is null and email = 'owner@example.com' and method_id is null from two_step_codes where user_id = :owner),
+  'and a phone the server passed is never kept');
+select t_assert(two_step_code_check(:owner, :a1, 'sign_in', :h2) ->> 'reason' = 'wrong', 'a wrong emailed code is wrong');
+select t_assert((select count(*) from staff_mfa_events where user_id = :owner and kind = 'email_wrong') = 1, 'and counted');
+select t_assert(two_step_code_check(:owner, :a1, 'sign_in', :h1) ->> 'channel' = 'email', 'the right one works and says it was emailed');
+select t_assert(two_step_session_mark(:owner, :a1, 'email'), 'the session is marked confirmed by email');
+reset role; select t_token(:owner, :a1, 'aal1'); set role authenticated;
+select t_assert(has_role(:owner, 'admin'), 'a session confirmed by an emailed code has the owner''s rights');
+reset role; select t_service(); set role service_role;
+do $$ begin
+  perform two_step_code_issue('00000000-0000-0000-0000-00000000000a', 'a2000000-0000-0000-0000-000000000002', 'add_phone', null, null, repeat('1', 64), 600, 'email');
+  raise exception 'ASSERT FAILED: an emailed code was made to add a phone';
+exception when invalid_parameter_value then raise notice 'ok: an emailed code is only for signing in';
+end $$;
+do $$ begin
+  insert into two_step_codes (user_id, session_id, purpose, channel, phone, email, code_hash, expires_at)
+  values ('00000000-0000-0000-0000-00000000000a', 'a2000000-0000-0000-0000-000000000002', 'sign_in', 'email', '+12045554821', 'owner@example.com', repeat('1', 64), now());
+  raise exception 'ASSERT FAILED: an emailed code with a phone was stored';
+exception when check_violation then raise notice 'ok: a code is a text or an email, never both';
+end $$;
+select t_assert(two_step_code_issue(:owner, :a2, 'sign_in', null, null, :h1, 600, 'email') ->> 'reason' = 'cooldown',
+  'emailed and texted codes share one budget (30 seconds between them)');
+update two_step_codes set created_at = created_at - interval '1 minute';
+select t_assert((two_step_code_issue(:owner, :a2, 'sign_in', '+12045554821', null, :h2) ->> 'ok')::boolean, 'a text after an emailed code works');
+select t_assert(two_step_code_check(:owner, :a2, 'sign_in', :h2) ->> 'channel' = 'sms', 'and says it was texted');
+insert into staff_mfa_events (user_id, kind, actor_id) select :owner, 'sms_wrong', :owner from generate_series(1, 9);
+update two_step_codes set created_at = created_at - interval '1 minute';
+select t_assert(two_step_code_issue(:owner, :a2, 'sign_in', null, null, :h1, 600, 'email') ->> 'reason' = 'locked',
+  'wrong texted and emailed codes add up to the same lock');
+delete from staff_mfa_events where user_id = :owner and kind like '%wrong';
+
+-- Off, and the default never turns it back on.
+select two_step_email_backup_set(:owner, false);
+select t_assert(not (two_step_email_backup_state(:owner) ->> 'on')::boolean, 'it can be turned off');
+update two_step_codes set created_at = created_at - interval '1 minute';
+select t_assert(two_step_code_issue(:owner, :a2, 'sign_in', null, null, :h1, 600, 'email') ->> 'reason' = 'email_off', 'off, no code is emailed');
+select two_step_email_backup_set(:owner, true, true);
+select t_assert(not (two_step_email_backup_state(:owner) ->> 'on')::boolean, 'the default never overrides a choice');
+select t_assert((select count(*) from staff_mfa_events where user_id = :owner and kind = 'email_backup_off') = 1, 'turning it off is recorded');
+select two_step_email_backup_set(:owner, true);
+select t_assert((two_step_email_backup_state(:owner) ->> 'ready')::boolean, 'and on again');
+
+-- Only to the email it was turned on for.
+reset role; update auth.users set email = 'Someone.Else@Example.com' where id = :owner;
+select t_service(); set role service_role;
+select t_assert(two_step_email_backup_state(:owner) ->> 'why' = 'changed' and not (two_step_email_backup_state(:owner) ->> 'ready')::boolean,
+  'a changed login email stops the codes');
+update two_step_codes set created_at = created_at - interval '1 minute';
+select t_assert(two_step_code_issue(:owner, :a2, 'sign_in', null, null, :h1, 600, 'email') ->> 'reason' = 'email_changed', 'nothing goes to the new address by itself');
+select two_step_email_backup_set(:owner, true);
+select t_assert(two_step_email_backup_state(:owner) ->> 'email' = 'someone.else@example.com' and (two_step_email_backup_state(:owner) ->> 'ready')::boolean,
+  'turned on again, it''s the new address');
+reset role; update auth.users set email = 'owner@example.com' where id = :owner;
+select t_service(); set role service_role; select two_step_email_backup_set(:owner, true);
+
+-- Nothing while the inbox has just been asked for a reset or an email change.
+reset role; update auth.users set recovery_sent_at = now() - interval '1 day' where id = :owner;
+select t_service(); set role service_role;
+select t_assert(two_step_email_backup_state(:owner) ->> 'why' = 'reset'
+  and (two_step_email_backup_state(:owner) ->> 'held_until')::timestamptz between now() + interval '47 hours' and now() + interval '49 hours',
+  'a password reset by email holds the codes for 3 days');
+update two_step_codes set created_at = created_at - interval '1 minute';
+select t_assert(two_step_code_issue(:owner, :a2, 'sign_in', null, null, :h1, 600, 'email') ->> 'reason' = 'email_reset', 'so a reset inbox can''t also confirm');
+reset role; update auth.users set recovery_sent_at = now() - interval '4 days' where id = :owner;
+select t_service(); set role service_role;
+select t_assert((two_step_email_backup_state(:owner) ->> 'ready')::boolean, 'after 3 days it works again');
+reset role; update auth.users set email_change = 'thief@example.com' where id = :owner;
+select t_service(); set role service_role;
+select t_assert(two_step_email_backup_state(:owner) ->> 'why' = 'email_change' and two_step_email_backup_state(:owner) ->> 'held_until' is null,
+  'a change of email waiting to be confirmed holds them');
+reset role; update auth.users set email_change = '', email_change_sent_at = now() - interval '1 hour' where id = :owner;
+select t_service(); set role service_role;
+select t_assert(two_step_email_backup_state(:owner) ->> 'why' = 'email_change' and (two_step_email_backup_state(:owner) ->> 'ready')::boolean = false,
+  'and so does one asked for in the last 3 days');
+reset role; update auth.users set email_change_sent_at = null, recovery_sent_at = null where id = :owner;
+select t_service(); set role service_role;
+select t_assert((two_step_email_backup_state(:owner) ->> 'ready')::boolean, 'with nothing asked of the inbox lately it works');
+
+-- The owner's reset clears it with everything else.
+insert into two_step_methods (user_id, kind, label, phone) values (:coach, 'sms', 'Text to ••• 0000', '+12045550000');
+select two_step_email_backup_set(:coach, true);
+select t_assert((two_step_email_backup_state(:coach) ->> 'ready')::boolean, 'a coach with a phone can have email codes too');
+select staff_mfa_reset_record(:coach, :owner);
+select t_assert(not (two_step_email_backup_state(:coach) ->> 'on')::boolean, 'the owner''s reset turns email codes off');
+reset role; select t_token(:coach, :c1, 'aal1'); set role authenticated;
+do $$ begin
+  perform two_step_email_backup_state('00000000-0000-0000-0000-00000000000c');
+  raise exception 'ASSERT FAILED: a signed-in user read their email backup';
+exception when insufficient_privilege then raise notice 'ok: a signed-in user can''t read the email backup';
+end $$;
+do $$ begin
+  perform two_step_email_backup_set('00000000-0000-0000-0000-00000000000c', true);
+  raise exception 'ASSERT FAILED: a signed-in user turned on their email backup';
+exception when insufficient_privilege then raise notice 'ok: a signed-in user can''t turn it on themselves';
+end $$;
+reset role;
+
 -- ════ 6. Nobody but the server touches any of it ════════════════════════════
 reset role; select t_token(:fin, :f2, 'aal1'); set role authenticated;
 do $$ begin
