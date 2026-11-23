@@ -67,6 +67,16 @@ export function activeNavKey(pathname: string, hash = ""): PublicNavKey | null {
   return null;
 }
 
+/**
+ * What the logo (and Home) does on a plain tap: on the home page, back to the
+ * top (and off any #pricing / #app, so Home lights again); anywhere else, the
+ * home page, which opens at its top.
+ */
+export function homeTapAction(pathname: string): "top" | "home" {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return path === "/" ? "top" : "home";
+}
+
 /** The header's button for a page: the app's ask, coaching's, or none (an application in progress). */
 export function headerCtaFor(pathname: string): CtaChoice | null {
   const path = pathname.replace(/\/+$/, "") || "/";
