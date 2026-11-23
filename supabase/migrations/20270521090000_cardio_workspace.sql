@@ -224,9 +224,9 @@ AS $$
                THEN 'Incline ' || trim_scale(t.incline)::text || '–' || trim_scale(t.incline_max)::text || '%'
              WHEN t.incline IS NOT NULL THEN 'Incline ' || trim_scale(t.incline)::text || '%' END,
         CASE WHEN t.speed_min_mph IS NOT NULL AND t.speed_max_mph IS NOT NULL AND t.speed_max_mph <> t.speed_min_mph
-               THEN to_char(round(t.speed_min_mph * k.f, 1), 'FM990.0') || '–' || to_char(round(t.speed_max_mph * k.f, 1), 'FM990.0') || k.u
+               THEN trim_scale(round(t.speed_min_mph * k.f, 1))::text || '–' || trim_scale(round(t.speed_max_mph * k.f, 1))::text || k.u
              WHEN coalesce(t.speed_min_mph, t.speed_max_mph) IS NOT NULL
-               THEN to_char(round(coalesce(t.speed_min_mph, t.speed_max_mph) * k.f, 1), 'FM990.0') || k.u END,
+               THEN trim_scale(round(coalesce(t.speed_min_mph, t.speed_max_mph) * k.f, 1))::text || k.u END,
         coalesce(nullif(trim(coalesce(t.heart_rate_zone, '')), ''),
           CASE WHEN t.rpe_min IS NOT NULL AND t.rpe_max IS NOT NULL AND t.rpe_max <> t.rpe_min
                  THEN 'RPE ' || trim_scale(t.rpe_min)::text || '–' || trim_scale(t.rpe_max)::text
