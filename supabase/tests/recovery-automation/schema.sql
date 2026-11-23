@@ -39,12 +39,43 @@ create table clients (
   id uuid primary key default gen_random_uuid(), user_id uuid, full_name text,
   service_tier text not null default 'coaching', archived boolean not null default false,
   assigned_coach_id uuid references coaches(id));
-create table messages (id uuid primary key default gen_random_uuid(), client_id uuid);
-create table pl_workout_feedback (id uuid primary key default gen_random_uuid(), client_id uuid);
+create table messages (
+  id uuid primary key default gen_random_uuid(), client_id uuid, sender_id uuid, sender_role text, body text,
+  attachments jsonb default '[]', is_internal_note boolean default false, is_automated boolean default false,
+  deleted_at timestamptz, scheduled_at timestamptz, created_at timestamptz not null default now());
+create table nf_submissions (
+  id uuid primary key default gen_random_uuid(), client_id uuid, status text, submitted_at timestamptz,
+  reviewed_at timestamptz, reviewed_by uuid);
+create table pl_workout_feedback (
+  id uuid primary key default gen_random_uuid(), client_id uuid, client_note text, overall_rating int not null default 4,
+  pain boolean not null default false, created_at timestamptz not null default now(), review_updated_by uuid);
+create table messenger_checkins (
+  id uuid primary key default gen_random_uuid(), client_id uuid not null, task_type text not null default 'weekly_checkin',
+  status text not null default 'pending', ai_status text, submitted_at timestamptz, reviewed_at timestamptz, superseded_at timestamptz,
+  reviewed_by uuid, reviewed_via text);
 create table pain_reports (
   id uuid primary key default gen_random_uuid(), client_id uuid not null references clients(id),
   feedback_id uuid, checkin_id uuid, source text not null, region text not null, side text, site text, score smallint,
-  reported_at timestamptz not null default now());
+  reported_at timestamptz not null default now(), created_by uuid);
+
+-- Who wrote it, as production records it: the client's own login when they save it
+-- (pain_reports.created_by = auth.uid(); the review's review_updated_by), nobody / the
+-- coach when a coach saves it in View as client (set t.coach_pov = on to act as one).
+create function t_written_by_client() returns trigger language plpgsql as $$
+begin
+  if current_setting('t.coach_pov', true) = 'on' then
+    if tg_table_name = 'pl_workout_feedback' then new.review_updated_by := '00000000-0000-0000-0000-0000000000a1'; end if;
+    return new;
+  end if;
+  if tg_table_name = 'pain_reports' then
+    if new.created_by is null then new.created_by := (select user_id from clients where id = new.client_id); end if;
+  else
+    if new.review_updated_by is null then new.review_updated_by := (select user_id from clients where id = new.client_id); end if;
+  end if;
+  return new;
+end $$;
+create trigger t_written_by_client before insert on pain_reports for each row execute function t_written_by_client();
+create trigger t_written_by_client before insert on pl_workout_feedback for each row execute function t_written_by_client();
 
 create function t_assert(_ok boolean, _msg text) returns void language plpgsql as $$
 begin if not coalesce(_ok, false) then raise exception 'ASSERT FAILED: %', _msg; end if; raise notice 'ok: %', _msg; end $$;
@@ -72,11 +103,11 @@ insert into coaches (id, user_id, full_name, status) values
   ('00000000-0000-0000-0000-00000000c0a1', '00000000-0000-0000-0000-0000000000c1', 'Ana Coach', 'Active'),
   ('00000000-0000-0000-0000-00000000c0b2', '00000000-0000-0000-0000-0000000000c2', 'Ben Coach', 'Suspended');
 insert into clients (id, user_id, full_name, assigned_coach_id, service_tier, archived) values
-  ('00000000-0000-0000-0000-0000000c1e01', null, 'Marc (owner)', '00000000-0000-0000-0000-00000000c0a0', 'coaching', false),
-  ('00000000-0000-0000-0000-0000000c1e02', null, 'Nico (Ana)', '00000000-0000-0000-0000-00000000c0a1', 'coaching', false),
+  ('00000000-0000-0000-0000-0000000c1e01', '00000000-0000-0000-0000-00000000d001', 'Marc (owner)', '00000000-0000-0000-0000-00000000c0a0', 'coaching', false),
+  ('00000000-0000-0000-0000-0000000c1e02', '00000000-0000-0000-0000-00000000d002', 'Nico (Ana)', '00000000-0000-0000-0000-00000000c0a1', 'coaching', false),
   ('00000000-0000-0000-0000-0000000c1e03', '00000000-0000-0000-0000-0000000000e1', 'Mia (member)', null, 'self_serve', false),
-  ('00000000-0000-0000-0000-0000000c1e04', null, 'Old (owner, archived)', '00000000-0000-0000-0000-00000000c0a0', 'coaching', true),
-  ('00000000-0000-0000-0000-0000000c1e05', null, 'Devin (owner)', '00000000-0000-0000-0000-00000000c0a0', 'coaching', false);
+  ('00000000-0000-0000-0000-0000000c1e04', '00000000-0000-0000-0000-00000000d004', 'Old (owner, archived)', '00000000-0000-0000-0000-00000000c0a0', 'coaching', true),
+  ('00000000-0000-0000-0000-0000000c1e05', '00000000-0000-0000-0000-00000000d005', 'Devin (owner)', '00000000-0000-0000-0000-00000000c0a0', 'coaching', false);
 grant select on all tables in schema public to authenticated, service_role;
 grant insert, update, delete on all tables in schema public to service_role;
 

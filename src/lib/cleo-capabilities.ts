@@ -46,8 +46,8 @@ export const LEVEL_COPY: Record<CapabilityLevel, { name: string; who: string; li
   },
   automation: {
     name: "Automation",
-    who: "Not offered yet",
-    line: "Replies drafted as reports come in, routine ones sent under the coach's rules, follow-ups. Planned as a paid add-on; nobody has it.",
+    who: "Not sold yet",
+    line: "Replies drafted as updates come in, routine ones sent under the coach's rules, follow-ups and missed-session check-ins. Planned as a paid add-on, not sold yet; you can give it to a coach on your team below.",
   },
   owner: {
     name: "Owner",

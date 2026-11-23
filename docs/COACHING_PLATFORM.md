@@ -287,4 +287,14 @@ again at execution, so a revoked or expired grant stops at once. Pricing and
 subscriptions stay outside this: a future plan only writes grants. Owner
 automation acts only on clients assigned to the owner's own coach record; it
 never reaches another coach's clients. Database tests:
-`supabase/tests/recovery-automation/` (68 checks, real Postgres).
+`supabase/tests/recovery-automation/` (105 checks, real Postgres).
+
+Since Nov 23 2026 (`20270510100000_coaching_automation_categories.sql`) the
+same queue covers workout reviews, weekly check-ins and missed sessions besides
+pain, every kind on the same levels and safeguards; a missed session is
+outreach the client didn't start, so it needs follow-ups like a follow-up. The
+owner gives a coach automation (a trial, a promo or one account, with an end
+date) from Settings → AI & Cleo and takes it back there; the database refuses
+any grant from anyone else and any owner capability in a grant. A grant never
+makes an outside coach possible: only coaches already on JF Effect's team can
+hold one until the platform's isolation gate passes.

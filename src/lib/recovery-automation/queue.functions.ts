@@ -1,5 +1,6 @@
 /**
- * The coach's side of recovery automation: the queue, approving and sending,
+ * The coach's side of coaching automation (pain reports and follow-ups,
+ * weekly check-ins, workout reviews, missed sessions): the queue, approving and sending,
  * dismissing, retrying, taking back an automatic message, the settings and
  * a client's own rule. Every function asks the database what the caller may
  * do (`cleo_feature`, with their two-step sign-in) and reads their items with
@@ -10,6 +11,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { MyCapabilities } from "@/lib/cleo-capabilities";
+import type { AutomationCategory } from "@/lib/recovery-automation/rules";
+
+const CATEGORY_KEYS = ["recovery_reply", "recovery_follow_up", "workout_reply", "checkin_reply", "missed_session"] as const;
 
 /** Still open (not sent, dismissed or cancelled). `sending` is open but can't be dismissed: it's going. */
 const OPEN = ["queued", "working", "sending", "draft", "awaiting_approval", "failed"];
@@ -21,7 +25,7 @@ export type RecoveryItem = {
   client_id: string;
   client_name: string;
   first_name: string;
-  category: "recovery_reply" | "recovery_follow_up";
+  category: AutomationCategory;
   status: string;
   mode: string | null;
   risk: "routine" | "review" | "urgent" | null;
@@ -29,7 +33,16 @@ export type RecoveryItem = {
   regions: string[];
   draft: string | null;
   insights: string[];
-  context: { reports?: string[]; session?: { title: string | null; date: string } | null; reason?: string; exercises?: string[] } | null;
+  context: {
+    reports?: string[];
+    session?: { title: string | null; date: string } | null;
+    reason?: string;
+    exercises?: string[];
+    /** What a reply to a workout, a check-in or a missed session was written from. */
+    facts?: string[];
+    workout?: { title: string | null; date: string } | null;
+    missed_in_two_weeks?: number;
+  } | null;
   why: string | null;
   error: string | null;
   due_at: string;
@@ -40,7 +53,7 @@ export type RecoveryItem = {
   updated_at: string;
 };
 
-export type RecoverySettings = { paused: boolean; modes: Partial<Record<"recovery_reply" | "recovery_follow_up", string>> };
+export type RecoverySettings = { paused: boolean; modes: Partial<Record<AutomationCategory, string>> };
 
 export type RecoveryQueue =
   | { enabled: false; caps: MyCapabilities }
@@ -148,6 +161,18 @@ export const approveRecoveryItemFn = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = supabaseAdmin as any;
     const userId = (context as any).userId as string;
+    // what it answers is read again first: one already answered or no longer true never goes
+    const { stillGoes } = await import("@/lib/recovery-automation/run.server");
+    const verdict = await stillGoes(admin, item);
+    if (verdict.cancel) {
+      await admin
+        .from("coach_automation_items")
+        .update({ status: "cancelled", why: verdict.cancel, locked_at: null, updated_at: new Date().toISOString() })
+        .eq("id", item.id)
+        .in("status", ["draft", "awaiting_approval", "failed"]);
+      await admin.from("coach_automation_events").insert({ item_id: item.id, coach_user_id: item.coach_user_id, client_id: item.client_id, kind: "cancelled", actor: userId, detail: { why: verdict.cancel } });
+      throw new Error(`Not sent: ${verdict.cancel.charAt(0).toLowerCase()}${verdict.cancel.slice(1)}.`);
+    }
     const now = new Date().toISOString();
     // take it with his words and his name on it, so a second tap, the worker or Dismiss can't
     // touch it, and a send that's cut off is retried with exactly these words
@@ -229,7 +254,15 @@ const modeSchema = z.enum(["off", "manual", "approval", "automatic"]);
 export const saveRecoverySettingsFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({ paused: z.boolean(), modes: z.object({ recovery_reply: modeSchema.optional(), recovery_follow_up: modeSchema.optional() }) }).parse(d),
+    z.object({ paused: z.boolean(), modes: z
+          .object({
+            recovery_reply: modeSchema.optional(),
+            recovery_follow_up: modeSchema.optional(),
+            workout_reply: modeSchema.optional(),
+            checkin_reply: modeSchema.optional(),
+            missed_session: modeSchema.optional(),
+          })
+          .strict() }).parse(d),
   )
   .handler(async ({ data, context }) => {
     const { data: saved, error } = await (context as any).supabase.rpc("coach_automation_settings_set", { _paused: data.paused, _modes: data.modes });
@@ -240,7 +273,7 @@ export const saveRecoverySettingsFn = createServerFn({ method: "POST" })
 export const setClientRecoveryModeFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({ clientId: z.string().uuid(), category: z.enum(["recovery_reply", "recovery_follow_up"]), mode: modeSchema.nullable() }).parse(d),
+    z.object({ clientId: z.string().uuid(), category: z.enum(CATEGORY_KEYS), mode: modeSchema.nullable() }).parse(d),
   )
   .handler(async ({ data, context }) => {
     const { error } = await (context as any).supabase.rpc("coach_automation_client_rule_set", { _client: data.clientId, _category: data.category, _mode: data.mode });
@@ -264,7 +297,7 @@ export const getClientRecoveryFn = createServerFn({ method: "POST" })
     return {
       caps: c,
       settings: { paused: !!settings.data?.paused, modes: (settings.data?.modes ?? {}) as RecoverySettings["modes"] },
-      rules: Object.fromEntries(((rules.data ?? []) as any[]).map((r) => [r.category, r.mode])) as Partial<Record<"recovery_reply" | "recovery_follow_up", string>>,
+      rules: Object.fromEntries(((rules.data ?? []) as any[]).map((r) => [r.category, r.mode])) as Partial<Record<AutomationCategory, string>>,
       items: (items.data ?? []) as any[],
     };
   });
@@ -279,4 +312,43 @@ export const getCapabilityOverviewFn = createServerFn({ method: "POST" })
       grants: { id: string; user_id: string; name: string; feature_key: string; source: string; expires_at: string | null; revoked_at: string | null }[];
       coaches: { user_id: string; name: string; automation: boolean }[];
     };
+  });
+
+/**
+ * The owner gives a coach a capability (a trial, a promo, one account, or a plan
+ * once one exists) or takes it back. The database decides: only the owner, with
+ * their two-step sign-in, only to a coach or admin, never an owner capability.
+ */
+export const grantCapabilityFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        userId: z.string().uuid(),
+        featureKey: z.string().regex(/^(assist|automation)\.[a-z_]{2,40}$/),
+        source: z.enum(["account", "trial", "promo", "plan"]),
+        expiresAt: z.string().datetime({ offset: true }).nullable(),
+        note: z.string().trim().max(300).nullable(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: id, error } = await (context as any).supabase.rpc("cleo_entitlement_grant", {
+      _user: data.userId,
+      _key: data.featureKey,
+      _source: data.source,
+      _expires_at: data.expiresAt,
+      _note: data.note || null,
+    });
+    if (error) throw new Error(/owner/i.test(error.message) ? "Only the owner manages capabilities." : error.message);
+    return { id: id as string };
+  });
+
+export const revokeCapabilityFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ grantId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await (context as any).supabase.rpc("cleo_entitlement_revoke", { _grant: data.grantId });
+    if (error) throw new Error(/owner/i.test(error.message) ? "Only the owner manages capabilities." : error.message);
+    return { ok: true };
   });

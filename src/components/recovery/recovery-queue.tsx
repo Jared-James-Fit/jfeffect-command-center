@@ -1,9 +1,11 @@
 /**
- * Recovery automation, the coach's side: a row pinned in Messages while
- * anything is waiting, and the sheet it opens. To do (a warning sign first,
- * then replies to approve, drafts, ones that couldn't be written), Coming up
- * (follow-ups planned before a session), Sent (what went, with Take back for
- * one that went by itself) and Settings (each category's mode, Pause).
+ * Coaching automation, the coach's side: one queue pinned in Messages while
+ * anything is waiting or happened lately, and the sheet it opens. To do is in
+ * priority order (anything that could be serious, then what needs his
+ * judgment, then routine replies: pain before check-ins before workouts before
+ * missed sessions), Coming up (what's being written or planned), Sent (what
+ * went, with Take back for one that went by itself) and Settings (each kind's
+ * mode, Pause). Every item can set its own client's rule in one tap.
  *
  * Only for someone whose level includes the approval queue (the owner today;
  * nobody else has automation). The server checks every action again.
@@ -13,7 +15,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { AlertTriangle, Check, HeartPulse, Loader2, MessageCircle, RotateCcw, Undo2 } from "lucide-react";
+import { AlertTriangle, Check, Inbox, Loader2, MessageCircle, RotateCcw, Undo2, X } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,11 +29,13 @@ import {
   getRecoveryQueueFn,
   retryRecoveryItemFn,
   saveRecoverySettingsFn,
+  setClientRecoveryModeFn,
   unsendRecoveryItemFn,
   type RecoveryItem,
   type RecoveryQueue,
 } from "@/lib/recovery-automation/queue.functions";
 import { CATEGORIES, MODES, STATUS_WORDS, modeAllowed, riskReasonWords, type AutomationCategory, type AutomationMode } from "@/lib/recovery-automation/rules";
+import { queueOrder } from "@/lib/recovery-automation/categories";
 import { regionOf } from "@/lib/pain/regions";
 
 export const RECOVERY_QUEUE_KEY = ["recovery-queue"] as const;
@@ -39,12 +43,7 @@ export const RECOVERY_QUEUE_KEY = ["recovery-queue"] as const;
 const TODO = new Set(["awaiting_approval", "draft", "failed"]);
 const COMING = new Set(["queued", "working", "sending"]);
 
-function rank(i: RecoveryItem): number {
-  if (i.risk === "urgent") return 0;
-  if (i.status === "awaiting_approval") return 1;
-  if (i.status === "draft") return 2;
-  return 3;
-}
+const isPain = (c: AutomationCategory) => c === "recovery_reply" || c === "recovery_follow_up";
 
 function whenWords(iso: string | null): string {
   if (!iso) return "";
@@ -56,6 +55,49 @@ function whenWords(iso: string | null): string {
     return h < 1 ? "in a few minutes" : `in ${h}h`;
   }
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+const sentenceCase = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+
+function shortDay(day: string): string {
+  return new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+/** What an item is, in a few words ("Reply to their weekly check-in"). */
+export function itemTitle(item: Pick<RecoveryItem, "category" | "regions" | "context">): string {
+  const areas = item.regions.map((r) => regionOf(r)?.label ?? r).join(", ");
+  switch (item.category) {
+    case "recovery_follow_up": {
+      const s = item.context?.session;
+      return [s ? `Follow-up before ${s.title ?? "their session"} (${shortDay(s.date)})` : "Follow-up", areas].filter(Boolean).join(" · ");
+    }
+    case "workout_reply":
+      return "Reply to their workout review";
+    case "checkin_reply":
+      return "Reply to their weekly check-in";
+    case "missed_session": {
+      const w = item.context?.workout;
+      return w ? `Missed ${w.title ?? "a workout"} (${shortDay(w.date)})` : "Missed a planned workout";
+    }
+    default:
+      return ["Reply to a pain report", areas].filter(Boolean).join(" · ");
+  }
+}
+
+/** The inbox row's one line for the item leading the queue. */
+function previewOf(i: RecoveryItem): string {
+  const who = i.first_name;
+  const what =
+    i.category === "recovery_follow_up"
+      ? `follow-up for ${who}`
+      : i.category === "workout_reply"
+        ? `reply to ${who}'s workout`
+        : i.category === "checkin_reply"
+          ? `reply to ${who}'s check-in`
+          : i.category === "missed_session"
+            ? `check-in for ${who} (missed session)`
+            : `reply to ${who}'s pain report`;
+  return `${i.risk === "urgent" ? "Needs you: " : ""}${what}`;
 }
 
 export function useRecoveryQueue(enabled = true) {
@@ -77,25 +119,21 @@ export function RecoveryInboxRow() {
     }
   }, [search.recovery]);
   if (!data || !data.enabled) return null;
-  const todo = data.items.filter((i) => TODO.has(i.status));
+  const todo = data.items.filter((i) => TODO.has(i.status)).sort(queueOrder);
   const urgent = todo.some((i) => i.risk === "urgent");
   if (!todo.length && !data.items.length && !open) return null;
-  const lead = [...todo].sort((a, b) => rank(a) - rank(b))[0] ?? data.items[0];
-  const preview = lead
-    ? todo.length
-      ? `${lead.risk === "urgent" ? "Needs you: " : ""}${lead.category === "recovery_follow_up" ? "follow-up for" : "reply to"} ${lead.first_name}`
-      : `${STATUS_WORDS[lead.status] ?? lead.status}: ${lead.first_name}`
-    : "Nothing waiting";
+  const lead = todo[0] ?? data.items[0];
+  const preview = lead ? (todo.length ? previewOf(lead) : `${STATUS_WORDS[lead.status] ?? lead.status}: ${lead.first_name}`) : "Nothing waiting";
   return (
     <>
       <ChatListRow
         data-recovery-row
         avatar={
           <span className={cn("flex shrink-0 items-center justify-center rounded-full", urgent ? "bg-warning/15 text-warning" : "bg-muted text-foreground")} style={{ width: CHAT_ROW_AVATAR, height: CHAT_ROW_AVATAR }}>
-            <HeartPulse className="h-6 w-6" />
+            <Inbox className="h-6 w-6" />
           </span>
         }
-        name="Recovery"
+        name="Coaching queue"
         preview={data.settings.paused ? `Paused · ${preview}` : preview}
         at={lead?.updated_at ?? null}
         unread={todo.length > 0}
@@ -125,7 +163,7 @@ export function RecoveryQueueSheet({ open, onOpenChange, queue, focusId, initial
   }, [open, focusId, initialTab, queue?.enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const items = useMemo(() => (queue?.enabled ? queue.items : []), [queue]);
-  const todo = useMemo(() => items.filter((i) => TODO.has(i.status)).sort((a, b) => rank(a) - rank(b) || a.due_at.localeCompare(b.due_at)), [items]);
+  const todo = useMemo(() => items.filter((i) => TODO.has(i.status)).sort(queueOrder), [items]);
   const coming = useMemo(() => items.filter((i) => COMING.has(i.status)).sort((a, b) => a.due_at.localeCompare(b.due_at)), [items]);
   const done = useMemo(() => items.filter((i) => !TODO.has(i.status) && !COMING.has(i.status)), [items]);
   const tabs: { key: Tab; label: string; count?: number }[] = [
@@ -138,14 +176,23 @@ export function RecoveryQueueSheet({ open, onOpenChange, queue, focusId, initial
     onOpenChange(false);
     void navigate({ to: "/admin/messages", search: { client: clientId } as any });
   };
+  const rules = queue?.enabled ? queue.rules : [];
+  const list = tab === "todo" ? todo : tab === "coming" ? coming : done;
 
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="bottom" swipeToClose className="z-[70] flex max-h-[92svh] flex-col gap-0 rounded-t-3xl p-0" data-recovery-sheet>
+        <SheetContent side="bottom" swipeToClose hideCloseButton className="z-[70] flex max-h-[92svh] flex-col gap-0 rounded-t-3xl p-0" data-recovery-sheet>
           <SheetHeader className="shrink-0 space-y-0.5 border-b border-border/60 px-5 pb-3 pt-5 text-left">
-            <SheetTitle className="text-lg font-semibold">Recovery</SheetTitle>
-            <SheetDescription className="text-xs">Replies and follow-ups to your clients' pain reports. Anything that could be an injury always waits for you.</SheetDescription>
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <SheetTitle className="text-lg font-semibold">Coaching queue</SheetTitle>
+                <SheetDescription className="text-xs">Replies to pain reports, check-ins and workout reviews, follow-ups and missed sessions, most important first. Anything that needs your judgment always waits for you.</SheetDescription>
+              </div>
+              <button type="button" onClick={() => onOpenChange(false)} className="-mr-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted" aria-label="Close">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
             <div className="-mx-1 flex gap-1 overflow-x-auto pt-2" role="tablist">
               {tabs.map((t) => (
                 <button
@@ -167,13 +214,21 @@ export function RecoveryQueueSheet({ open, onOpenChange, queue, focusId, initial
               <p className="text-sm text-muted-foreground">Automation isn't part of your plan.</p>
             ) : tab === "settings" ? (
               <RecoverySettings queue={queue} />
-            ) : (tab === "todo" ? todo : tab === "coming" ? coming : done).length === 0 ? (
+            ) : list.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">
-                {tab === "todo" ? "Nothing waiting on you." : tab === "coming" ? "No follow-ups planned." : "Nothing sent in the last two weeks."}
+                {tab === "todo" ? "Nothing waiting on you." : tab === "coming" ? "Nothing being written or planned." : "Nothing sent in the last two weeks."}
               </p>
             ) : (
-              (tab === "todo" ? todo : tab === "coming" ? coming : done).map((i) => (
-                <ItemCard key={i.id} item={i} focused={i.id === focusId} onOpenChat={() => openChat(i.client_id)} onOpenReport={() => setPainFor(i.client_id)} />
+              list.map((i) => (
+                <ItemCard
+                  key={i.id}
+                  item={i}
+                  queue={queue}
+                  rule={(rules.find((r) => r.client_id === i.client_id && r.category === i.category)?.mode as AutomationMode | undefined) ?? null}
+                  focused={i.id === focusId}
+                  onOpenChat={() => openChat(i.client_id)}
+                  onOpenReport={() => setPainFor(i.client_id)}
+                />
               ))
             )}
           </div>
@@ -184,12 +239,27 @@ export function RecoveryQueueSheet({ open, onOpenChange, queue, focusId, initial
   );
 }
 
-function ItemCard({ item, focused, onOpenChat, onOpenReport }: { item: RecoveryItem; focused: boolean; onOpenChat: () => void; onOpenReport: () => void }) {
+function ItemCard({
+  item,
+  queue,
+  rule,
+  focused,
+  onOpenChat,
+  onOpenReport,
+}: {
+  item: RecoveryItem;
+  queue: Extract<RecoveryQueue, { enabled: true }>;
+  rule: AutomationMode | null;
+  focused: boolean;
+  onOpenChat: () => void;
+  onOpenReport: () => void;
+}) {
   const qc = useQueryClient();
   const approveFn = useServerFn(approveRecoveryItemFn);
   const dismissFn = useServerFn(dismissRecoveryItemFn);
   const retryFn = useServerFn(retryRecoveryItemFn);
   const unsendFn = useServerFn(unsendRecoveryItemFn);
+  const ruleFn = useServerFn(setClientRecoveryModeFn);
   const [text, setText] = useState(item.draft ?? "");
   useEffect(() => setText(item.draft ?? ""), [item.draft]);
   const refresh = () => qc.invalidateQueries({ queryKey: RECOVERY_QUEUE_KEY });
@@ -219,26 +289,34 @@ function ItemCard({ item, focused, onOpenChat, onOpenReport }: { item: RecoveryI
     },
     onError: (e: any) => toast.error(e?.message ?? "Couldn't take it back"),
   });
+  const setRule = useMutation({
+    mutationFn: (mode: AutomationMode | null) => ruleFn({ data: { clientId: item.client_id, category: item.category, mode } }),
+    onSuccess: () => {
+      toast.success("Saved for " + item.first_name);
+      refresh();
+      qc.invalidateQueries({ queryKey: ["client-recovery", item.client_id] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't save it"),
+  });
   const ref = (el: HTMLDivElement | null) => {
     if (el && focused) el.scrollIntoView({ block: "nearest" });
   };
   const waiting = item.status === "awaiting_approval" || item.status === "draft";
-  const areas = item.regions.map((r) => regionOf(r)?.label ?? r).join(", ");
-  const followUp = item.category === "recovery_follow_up";
-  const session = item.context?.session;
   const autoSent = item.status === "sent" && !item.decided_by;
   const canTakeBack = autoSent && !!item.sent_at && Date.now() - Date.parse(item.sent_at) < 24 * 3_600_000;
+  const facts = item.context?.facts ?? [];
+  const general = (queue.settings.modes[item.category] ?? "approval") as AutomationMode;
+  const options = MODES.filter((m) => modeAllowed(queue.caps.features, item.category, m.key));
+  const kind = CATEGORIES.find((c) => c.key === item.category)?.short ?? "this";
 
   return (
-    <div ref={ref} className={cn("space-y-2.5 rounded-xl border p-3.5", item.risk === "urgent" && waiting ? "border-warning/60" : "border-border", focused && "ring-2 ring-foreground/20")} data-recovery-item={item.id} data-recovery-status={item.status}>
+    <div ref={ref} className={cn("space-y-2.5 rounded-xl border p-3.5", item.risk === "urgent" && waiting ? "border-warning/60" : "border-border", focused && "ring-2 ring-foreground/20")} data-recovery-item={item.id} data-recovery-status={item.status} data-recovery-category={item.category}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[15px] font-semibold leading-tight">{item.client_name}</p>
-          <p className="text-[12px] text-muted-foreground">
-            {[followUp ? (session ? `Follow-up before ${session.title ?? "their session"} (${session.date})` : "Follow-up") : "Reply to a pain report", areas].filter(Boolean).join(" · ")}
-          </p>
+          <p className="text-[12px] text-muted-foreground">{itemTitle(item)}</p>
         </div>
-        <span className={cn("shrink-0 text-[12px] font-semibold", item.status === "failed" ? "text-destructive" : waiting ? "text-warning" : "text-muted-foreground")}>
+        <span className={cn("shrink-0 text-right text-[12px] font-semibold", item.status === "failed" ? "text-destructive" : waiting ? "text-warning" : "text-muted-foreground")}>
           {item.status === "sent" ? `${autoSent ? "Sent automatically" : "Sent"} ${whenWords(item.sent_at)}` : COMING.has(item.status) ? `${STATUS_WORDS[item.status]} · ${whenWords(item.due_at)}` : STATUS_WORDS[item.status] ?? item.status}
         </span>
       </div>
@@ -247,26 +325,38 @@ function ItemCard({ item, focused, onOpenChat, onOpenReport }: { item: RecoveryI
         <p className="flex items-start gap-1.5 text-[13px] leading-snug" data-recovery-risk={item.risk}>
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
           <span>
-            <span className="font-semibold">{item.risk === "urgent" ? "Warning sign. " : "Needs your judgment. "}</span>
-            {item.risk_reasons.map(riskReasonWords).join(", ")}.
+            <span className="font-semibold">{item.risk === "urgent" ? (isPain(item.category) ? "Warning sign. " : "May need medical help. ") : "Needs your judgment. "}</span>
+            {sentenceCase(item.risk_reasons.filter((r) => !(r === "red_flag" && item.risk_reasons.includes("urgent"))).map(riskReasonWords).join(", "))}.
           </span>
         </p>
       )}
       {!!item.context?.reports?.length && <p className="text-[13px] text-muted-foreground">{item.context.reports.join("; ")}</p>}
+      {facts.length > 0 && (
+        <details className="text-[13px]" data-recovery-facts>
+          <summary className="cursor-pointer select-none text-muted-foreground">What it's written from</summary>
+          <ul className="mt-1.5 space-y-0.5 text-muted-foreground">
+            {facts.map((f, n) => (
+              <li key={n}>{f}</li>
+            ))}
+          </ul>
+        </details>
+      )}
       {item.why && <p className="text-[12px] text-muted-foreground">{item.why}</p>}
       {item.status === "failed" && item.error && <p className="text-[12px] text-destructive">Couldn't write it: {item.error}</p>}
 
       {waiting ? (
         <>
           <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} className="resize-none text-base" aria-label={`Message to ${item.first_name}`} />
-          <p className="text-[11px] text-muted-foreground">Written for you from their reports, training and history. Nothing goes to {item.first_name} until you send it.</p>
+          <p className="text-[11px] text-muted-foreground">Written for you from what they sent and their records. Nothing goes to {item.first_name} until you send it.</p>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => send.mutate()} disabled={send.isPending || !text.trim()} data-recovery-send>
               {send.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Check className="mr-1.5 h-4 w-4" />} Send to {item.first_name}
             </Button>
-            <Button size="sm" variant="outline" onClick={onOpenReport}>
-              Open report
-            </Button>
+            {isPain(item.category) && (
+              <Button size="sm" variant="outline" onClick={onOpenReport}>
+                Open report
+              </Button>
+            )}
             <Button size="sm" variant="ghost" onClick={() => dismiss.mutate()} disabled={dismiss.isPending}>
               Dismiss
             </Button>
@@ -276,7 +366,7 @@ function ItemCard({ item, focused, onOpenChat, onOpenReport }: { item: RecoveryI
         <p className="whitespace-pre-wrap rounded-lg bg-muted/60 px-3 py-2 text-[14px] leading-snug">{item.draft}</p>
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {item.status === "failed" && (
           <Button size="sm" variant="outline" onClick={() => retry.mutate()} disabled={retry.isPending}>
             {retry.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-1.5 h-4 w-4" />} Try again
@@ -296,6 +386,27 @@ function ItemCard({ item, focused, onOpenChat, onOpenReport }: { item: RecoveryI
           <MessageCircle className="mr-1.5 h-4 w-4" /> Chat
         </Button>
       </div>
+      <label className="flex items-center justify-between gap-3 border-t border-border/60 pt-2.5 text-[12px] text-muted-foreground">
+        <span className="min-w-0">
+          <span className="block">{`${kind} for ${item.first_name}`}</span>
+          <span className="block text-[11px]">{`Your default: ${MODES.find((m) => m.key === general)?.label ?? general}`}</span>
+        </span>
+        <select
+          value={rule ?? ""}
+          onChange={(e) => setRule.mutate((e.target.value || null) as AutomationMode | null)}
+          disabled={setRule.isPending}
+          className="h-10 w-[9.5rem] shrink-0 rounded-lg border border-border bg-background px-2 text-[13px] text-foreground"
+          aria-label={`${kind} for ${item.first_name}`}
+          data-recovery-client-rule
+        >
+          <option value="">Default</option>
+          {options.map((m) => (
+            <option key={m.key} value={m.key}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </label>
     </div>
   );
 }
@@ -320,6 +431,8 @@ function RecoverySettings({ queue }: { queue: Extract<RecoveryQueue, { enabled: 
   };
   const owner = queue.caps.features.includes("owner.controls");
   const counts = queue.rules.length;
+  // a kind his level doesn't allow at all (every mode but Off) isn't offered
+  const kinds = CATEGORIES.filter((c) => modeAllowed(queue.caps.features, c.key, "approval"));
 
   return (
     <div className="space-y-5" data-recovery-settings>
@@ -334,10 +447,17 @@ function RecoverySettings({ queue }: { queue: Extract<RecoveryQueue, { enabled: 
             setPaused(v);
             save.mutate({ paused: v, modes });
           }}
-          aria-label="Pause recovery automation"
+          aria-label="Pause coaching automation"
         />
       </div>
-      {CATEGORIES.map((c) => {
+      <div className="space-y-1 rounded-xl bg-muted/50 p-3 text-[12px] text-muted-foreground" data-recovery-modes-legend>
+        {MODES.filter((m) => kinds.some((c) => modeAllowed(queue.caps.features, c.key, m.key))).map((m) => (
+          <p key={m.key}>
+            <span className="font-semibold text-foreground">{m.label}:</span> {m.line}
+          </p>
+        ))}
+      </div>
+      {kinds.map((c) => {
         const current = (modes[c.key] ?? "approval") as AutomationMode;
         return (
           <div key={c.key} className="space-y-2">
@@ -345,7 +465,7 @@ function RecoverySettings({ queue }: { queue: Extract<RecoveryQueue, { enabled: 
               <p className="text-[15px] font-semibold">{c.label}</p>
               <p className="text-[12px] text-muted-foreground">{c.line}</p>
             </div>
-            <div className="space-y-1.5" role="radiogroup" aria-label={c.label}>
+            <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label={c.label}>
               {MODES.filter((m) => modeAllowed(queue.caps.features, c.key, m.key)).map((m) => (
                 <button
                   key={m.key}
@@ -353,14 +473,13 @@ function RecoverySettings({ queue }: { queue: Extract<RecoveryQueue, { enabled: 
                   role="radio"
                   aria-checked={current === m.key}
                   onClick={() => current !== m.key && set(c.key, m.key)}
-                  className={cn("flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left", current === m.key ? "border-foreground" : "border-border hover:bg-muted/50")}
+                  className={cn(
+                    "flex h-11 items-center justify-center rounded-lg border px-2 text-[13px] font-semibold",
+                    current === m.key ? "border-foreground bg-foreground text-background" : "border-border text-foreground hover:bg-muted/50",
+                  )}
                   data-recovery-mode={`${c.key}:${m.key}`}
                 >
-                  <span className={cn("mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2", current === m.key ? "border-foreground bg-foreground" : "border-muted-foreground/50")} aria-hidden />
-                  <span>
-                    <span className="block text-[14px] font-semibold">{m.label}</span>
-                    <span className="block text-[12px] text-muted-foreground">{m.line}</span>
-                  </span>
+                  {m.label}
                 </button>
               ))}
             </div>
@@ -368,7 +487,7 @@ function RecoverySettings({ queue }: { queue: Extract<RecoveryQueue, { enabled: 
         );
       })}
       <p className="text-[12px] text-muted-foreground">
-        {counts ? `${counts} client ${counts === 1 ? "rule" : "rules"} override this. ` : ""}Change one client's in their pain report (⋯ in the chat's recovery card). A message sent by itself says "Sent automatically" under it, and you can take it back for a day.
+        {counts ? `${counts} client ${counts === 1 ? "rule" : "rules"} override this. ` : ""}Change one client's from any of their items in the queue, or in their pain report. A message sent by itself says "Sent automatically" under it, and you can take it back for a day.
       </p>
       {owner && queue.record.length > 0 && (
         <div className="space-y-1.5" data-recovery-record>

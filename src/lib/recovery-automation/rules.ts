@@ -18,28 +18,37 @@
 import type { PainArea, PainEntry } from "@/lib/pain/history";
 import { draftProblems } from "@/lib/pain/ai";
 import type { RedFlag } from "@/lib/pain/safety";
+import { UPDATE_REASON_WORDS } from "@/lib/recovery-automation/categories";
 
-export type AutomationCategory = "recovery_reply" | "recovery_follow_up";
+export type AutomationCategory = "recovery_reply" | "recovery_follow_up" | "workout_reply" | "checkin_reply" | "missed_session";
 export type AutomationMode = "off" | "manual" | "approval" | "automatic";
 export type Risk = "routine" | "review" | "urgent";
 
-export const CATEGORIES: { key: AutomationCategory; label: string; line: string }[] = [
-  { key: "recovery_reply", label: "Replies to pain reports", line: "When a client reports pain in a workout review." },
-  { key: "recovery_follow_up", label: "Follow-ups", line: "A short check before the next session that loads the area." },
+export const CATEGORIES: { key: AutomationCategory; label: string; line: string; short: string }[] = [
+  { key: "recovery_reply", label: "Replies to pain reports", line: "When a client reports pain in a workout review.", short: "Pain replies" },
+  { key: "recovery_follow_up", label: "Recovery follow-ups", line: "A short check before the next session that loads the area.", short: "Follow-ups" },
+  { key: "checkin_reply", label: "Replies to weekly check-ins", line: "Once a check-in's recap is written, starting from its suggested reply.", short: "Check-in replies" },
+  { key: "workout_reply", label: "Replies to workout reviews", line: "When a client writes something in their review, or rates the session 1 or 2 out of 5.", short: "Workout replies" },
+  { key: "missed_session", label: "Missed sessions", line: "A short, no-guilt check-in the day after a planned workout goes by with nothing logged.", short: "Missed sessions" },
 ];
 
+export function categoryShort(key: string): string {
+  return CATEGORIES.find((c) => c.key === key)?.short ?? key;
+}
+
 export const MODES: { key: AutomationMode; label: string; line: string }[] = [
-  { key: "off", label: "Off", line: "Nothing happens until you open their pain sheet." },
-  { key: "manual", label: "Draft only", line: "A reply waits in their pain sheet. You send it yourself." },
+  { key: "off", label: "Off", line: "Nothing is drafted. You reply yourself, as always." },
+  { key: "manual", label: "Draft only", line: "A draft waits in your queue. You send it yourself." },
   { key: "approval", label: "Ask me first", line: "A reply is queued. Approve it in one tap, or edit it." },
-  { key: "automatic", label: "Send routine ones", line: "Routine reports get a reply right away. Anything that could be an injury still waits for you." },
+  { key: "automatic", label: "Send routine ones", line: "Routine ones go by themselves. Anything that could be an injury or needs your judgment still waits for you." },
 ];
 
 /** The capability each mode needs (mirrors coach_automation_mode_allowed). */
 export function modeNeeds(category: AutomationCategory, mode: AutomationMode): string[] {
   if (mode === "off") return [];
   const out = ["automation.approval_queue"];
-  if (category === "recovery_follow_up") out.push("automation.follow_ups");
+  // outreach the client didn't start: a follow-up, a missed session
+  if (category === "recovery_follow_up" || category === "missed_session") out.push("automation.follow_ups");
   if (mode === "automatic") out.push("automation.auto_send");
   return out;
 }
@@ -80,7 +89,7 @@ const REASON: Record<string, string> = {
 };
 
 export function riskReasonWords(key: string): string {
-  return REASON[key] ?? key;
+  return REASON[key] ?? UPDATE_REASON_WORDS[key] ?? key;
 }
 
 /**
