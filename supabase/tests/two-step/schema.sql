@@ -23,7 +23,8 @@ create function public.t_token(_sub uuid, _session uuid, _aal text default 'aal1
 create function public.t_service() returns void language sql as $$
   select set_config('request.jwt.claims', '{"role":"service_role"}', false) $$;
 
-create table auth.users (id uuid primary key, email text);
+create table auth.users (id uuid primary key, email text, recovery_sent_at timestamptz,
+  email_change text default '', email_change_sent_at timestamptz);
 create table auth.sessions (id uuid primary key, user_id uuid references auth.users(id) on delete cascade,
   not_after timestamptz, created_at timestamptz default now());
 create table auth.mfa_factors (id uuid primary key default gen_random_uuid(), user_id uuid references auth.users(id) on delete cascade,
@@ -38,7 +39,7 @@ grant select on user_roles, role_permissions, business_owners to authenticated;
 
 -- The team: Jared (admin, owner, an authenticator app), Fionna (finance, nothing
 -- set up yet), Ana (a coach), Kai (a client). Two sessions each.
-insert into auth.users values
+insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000a', 'owner@example.com'),
   ('00000000-0000-0000-0000-00000000000f', 'finance@example.com'),
   ('00000000-0000-0000-0000-00000000000c', 'coach@example.com'),

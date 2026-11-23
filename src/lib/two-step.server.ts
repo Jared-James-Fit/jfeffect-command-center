@@ -8,10 +8,12 @@
  */
 import { MFA_REQUIRED_ROLES } from "@/lib/mfa-rules";
 import {
+  emailBackupFrom,
   isTeamRole,
   maskPhone,
   twoStepPhone,
   TRUST_DAYS,
+  type EmailBackup,
   type TwoStepKind,
   type TwoStepMethod,
   type TwoStepStatus,
@@ -180,6 +182,35 @@ async function phoneOnFile(db: Db, userId: string): Promise<string | null> {
   }
 }
 
+/**
+ * Codes by email (20270515090000_two_step_email_backup.sql). Never fails the
+ * status: a database without it, or a read that fails, is "no email backup".
+ * `ensure` turns it on for a login that never chose (its first way is in
+ * place and this session is confirmed): on by default, then theirs.
+ */
+export async function emailBackupOf(
+  db: Db,
+  userId: string,
+  opts: { ensure?: boolean } = {},
+): Promise<EmailBackup | null> {
+  try {
+    const { data, error } = await db.rpc("two_step_email_backup_state", { _uid: userId });
+    if (error) throw error;
+    if (opts.ensure && data && data.chosen !== true) {
+      const set = await db.rpc("two_step_email_backup_set", {
+        _uid: userId,
+        _on: true,
+        _only_if_unset: true,
+      });
+      if (!set.error) return emailBackupFrom(set.data);
+    }
+    return emailBackupFrom(data);
+  } catch (e) {
+    console.warn("[two-step] email backup unreadable", (e as any)?.message ?? e);
+    return null;
+  }
+}
+
 export async function statusFor(db: Db, userId: string, claims: Claims): Promise<TwoStepStatus> {
   const roles = await rolesOf(db, userId);
   const { team, required } = teamOf(roles);
@@ -192,6 +223,7 @@ export async function statusFor(db: Db, userId: string, claims: Claims): Promise
       methods,
       preferred: null,
       suggestedPhone: null,
+      emailBackup: null,
     };
   }
   const [verified, preferred] = await Promise.all([
@@ -199,6 +231,7 @@ export async function statusFor(db: Db, userId: string, claims: Claims): Promise
     preferredOf(db, userId),
   ]);
   const hasSms = methods.some((m) => m.kind === "sms");
+  const emailBackup = methods.length ? await emailBackupOf(db, userId, { ensure: verified }) : null;
   return {
     team,
     required,
@@ -209,6 +242,7 @@ export async function statusFor(db: Db, userId: string, claims: Claims): Promise
         ? preferred
         : (methods[0]?.kind ?? null),
     suggestedPhone: team && !hasSms ? await phoneOnFile(db, userId) : null,
+    emailBackup,
   };
 }
 

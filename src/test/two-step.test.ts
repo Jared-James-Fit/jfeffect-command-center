@@ -8,8 +8,12 @@ import { describe, expect, it } from "vitest";
 import {
   codeFromRandom,
   deviceName,
+  emailBackupFrom,
+  emailBackupLine,
+  emailBackupSwitchOn,
   kindsInOrder,
   leavesOnlyPasskeys,
+  maskEmail,
   maskPhone,
   needsFasterWay,
   newSmsCode,
@@ -279,5 +283,128 @@ describe("the faster-way offer", () => {
     expect(gate).toContain("needsFasterWay(methods, passkeysPossibleHere())");
     expect(gate).toContain("<FasterWayScreen");
     expect(gate).toContain("snoozeFasterOffer(uid)");
+  });
+});
+
+describe("the email backup", () => {
+  const day = (iso: string) => iso.slice(0, 10);
+  const migration = readFileSync(
+    "supabase/migrations/20270515090000_two_step_email_backup.sql",
+    "utf8",
+  );
+  const fns = readFileSync("src/lib/two-step.functions.ts", "utf8");
+
+  it("masks the address: enough to know which inbox", () => {
+    expect(maskEmail("jaredjamesfit@gmail.com")).toBe("j•••@gmail.com");
+    expect(maskEmail("a@b.co")).toBe("a•••@b.co");
+    expect(maskEmail("nope")).toBe("your email");
+    expect(maskEmail(null)).toBe("your email");
+  });
+
+  it("reads the database's state, never showing the address in full", () => {
+    const b = emailBackupFrom({
+      on: true,
+      chosen: true,
+      email: "owner@example.com",
+      ready: true,
+      why: null,
+      held_until: null,
+    })!;
+    expect(b).toEqual({
+      on: true,
+      to: "o•••@example.com",
+      ready: true,
+      why: null,
+      heldUntil: null,
+    });
+    expect(emailBackupFrom({ on: false, email: null, ready: false, why: null })!.to).toBeNull();
+    expect(emailBackupFrom(null)).toBeNull();
+  });
+
+  it("says why it's paused, and the switch stays on unless the email it was for is gone", () => {
+    const held = emailBackupFrom({
+      on: true,
+      email: "o@x.com",
+      ready: false,
+      why: "reset",
+      held_until: "2026-11-26T10:00:00+00:00",
+    });
+    expect(emailBackupLine(held, day)).toBe(
+      "Paused until 2026-11-26: a password reset was sent to this email.",
+    );
+    expect(emailBackupSwitchOn(held)).toBe(true);
+    const changed = emailBackupFrom({ on: true, email: "o@x.com", ready: false, why: "changed" });
+    expect(emailBackupLine(changed, day)).toMatch(/changed/);
+    expect(emailBackupSwitchOn(changed)).toBe(false);
+    expect(emailBackupLine(emailBackupFrom({ on: false }), day)).toMatch(/^Off/);
+    expect(emailBackupLine(null, day)).toMatch(/^Off/);
+  });
+
+  it("refusals say to use another way", () => {
+    for (const r of [
+      "email_off",
+      "email_changed",
+      "email_reset",
+      "email_email_change",
+      "email_suppressed",
+      "email_failed",
+    ]) {
+      expect(sendRefusalText(r)).toMatch(/another way/);
+    }
+  });
+
+  it("is never a way on its own and never chooses its own address", () => {
+    // the enforced list and the login's ways are untouched
+    expect(migration).not.toMatch(/CREATE OR REPLACE FUNCTION public\.two_step_login_has/);
+    expect(migration).not.toMatch(/CREATE OR REPLACE FUNCTION public\.mfa_enforced_logins/);
+    // the address comes from the database's own state, never the request
+    expect(migration).toContain("addr := backup ->> 'email'");
+    const email = fns.slice(
+      fns.indexOf("async function emailCode"),
+      fns.indexOf("export type ConfirmResult"),
+    );
+    expect(email).toContain('_channel: "email"');
+    expect(email).toContain("to: String(issued.email)");
+    expect(email).toContain("sensitive: true");
+    expect(email).toContain('if (purpose !== "sign_in")');
+  });
+
+  it("holds after a reset or an email change, and only goes to the email it was turned on for", () => {
+    expect(migration).toContain("recovery_sent_at > now() - interval '3 days'");
+    expect(migration).toContain("email_change_sent_at > now() - interval '3 days'");
+    expect(migration).toContain("w.login_email IS DISTINCT FROM w.email_backup THEN 'changed'");
+  });
+
+  it("is turned on by default only from a confirmed session, and only for a login that never chose", () => {
+    const server = readFileSync("src/lib/two-step.server.ts", "utf8");
+    expect(server).toContain("emailBackupOf(db, userId, { ensure: verified })");
+    expect(server).toContain("_only_if_unset: true");
+    const set = fns.slice(fns.indexOf("export const setTwoStepEmailBackup"));
+    expect(set).toContain("requireConfirmed(context)");
+    expect(MFA_EXEMPT_FNS.has("setTwoStepEmailBackup")).toBe(false);
+  });
+
+  it("an emailed code marks the session as such and tells the person", () => {
+    const verify = fns.slice(
+      fns.indexOf("export const verifyTwoStepCode"),
+      fns.indexOf("export const startTwoStepPasskey"),
+    );
+    expect(verify).toContain('byEmail ? "email" : "sms"');
+    expect(verify).toContain("You signed in with an emailed code");
+  });
+
+  it("the gate offers it last, and first only when nothing else works here", () => {
+    const gate = readFileSync("src/components/two-step/staff-mfa-gate.tsx", "utf8");
+    expect(gate).toContain(
+      '[...kindsInOrder(ordered), ...(emailBackup ? (["email"] as const) : [])]',
+    );
+    expect(gate).toContain('channel="email"');
+    const card = readFileSync("src/components/two-step/two-step-card.tsx", "utf8");
+    expect(card).toContain("<EmailBackupRow");
+  });
+
+  it("the email template is registered", async () => {
+    const reg = readFileSync("src/lib/email-templates/registry.ts", "utf8");
+    expect(reg).toContain("'two-step-code': twoStepCodeTemplate");
   });
 });

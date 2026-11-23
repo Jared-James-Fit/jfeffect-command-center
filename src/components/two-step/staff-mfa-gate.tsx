@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ChevronDown, Loader2, ShieldCheck } from "lucide-react";
+import { ChevronDown, Loader2, Mail, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,10 +53,12 @@ import { useTwoStepStatus } from "@/components/two-step/use-two-step-status";
  * background). An unconfirmed session first tries this device's trusted token
  * ("Don't ask again", 30 days), then shows one screen: the way they chose
  * first (Face ID, a texted code or the authenticator app) and "Other ways"
- * for the rest. A login that needs two-step and has none sets one up and goes
- * straight in. There are no recovery codes: a lost phone is another way on
- * another device, the same number on a new phone, or the owner's reset on
- * Team. Confirming with
+ * for the rest, with "Email me a code" last while the email backup is ready
+ * (first, when nothing else works on this device). A login that needs
+ * two-step and has none sets one up and goes straight in. There are no
+ * recovery codes: a lost phone is an emailed code, another way on another
+ * device, the same number on a new phone, or the owner's reset on Team.
+ * Confirming with
  * only the authenticator app offers Face ID or a text right then ("Skip the
  * code next time"), so nobody has to find it in Account.
  *
@@ -214,8 +216,19 @@ function SignOutButton() {
   );
 }
 
-const KIND_NAME = (k: TwoStepKind) =>
-  k === "passkey" ? passkeyTitleHere() : k === "sms" ? "Text me a code" : "Authenticator app";
+/** A way on the confirm screen: one of theirs, or the emailed code (the backup). */
+type ConfirmKind = TwoStepKind | "email";
+
+const KIND_NAME = (k: ConfirmKind) =>
+  k === "passkey"
+    ? passkeyTitleHere()
+    : k === "sms"
+      ? "Text me a code"
+      : k === "email"
+        ? "Email me a code"
+        : "Authenticator app";
+
+const CONFIRM_ICON = (k: ConfirmKind) => (k === "email" ? Mail : KIND_ICON[k]);
 
 // ── Confirm it's you ────────────────────────────────────────────────────────
 function ConfirmScreen({
@@ -235,8 +248,12 @@ function ConfirmScreen({
     () => orderMethods(status.methods, status.preferred, passkeyHere),
     [status, passkeyHere],
   );
-  const kinds = useMemo(() => kindsInOrder(ordered), [ordered]);
-  const [kind, setKind] = useState<TwoStepKind | null>(kinds[0] ?? null);
+  const emailBackup = status.emailBackup?.ready ? status.emailBackup : null;
+  const kinds = useMemo<ConfirmKind[]>(
+    () => [...kindsInOrder(ordered), ...(emailBackup ? (["email"] as const) : [])],
+    [ordered, emailBackup],
+  );
+  const [kind, setKind] = useState<ConfirmKind | null>(kinds[0] ?? null);
   const [others, setOthers] = useState(false);
   const [trust, setTrust] = useState(() => trustByDefault());
   // This device was trusted: try it before showing anything.
@@ -288,6 +305,16 @@ function ConfirmScreen({
             onConfirmed={onConfirmed}
           />
         )}
+        {kind === "email" && emailBackup && (
+          <SmsCodeStep
+            key="email"
+            channel="email"
+            purpose="sign_in"
+            to={emailBackup.to}
+            trust={trust}
+            onConfirmed={onConfirmed}
+          />
+        )}
         {kind === "totp" && <TotpConfirm trust={trust} onConfirmed={onConfirmed} />}
         {kind === "totp" && needsFasterWay(status.methods, passkeyHere) && (
           <p className="text-xs text-muted-foreground" data-two-step-faster-hint>
@@ -322,7 +349,7 @@ function ConfirmScreen({
             {others && (
               <div className="mt-1 space-y-1">
                 {rest.map((k) => {
-                  const Icon = KIND_ICON[k];
+                  const Icon = CONFIRM_ICON(k);
                   return (
                     <Button
                       key={k}

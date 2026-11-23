@@ -86,7 +86,9 @@ function clock(ms: number): string {
  * Text a code and type it in. "Text me a code" first (a tap, so opening the
  * screen never spends a text) unless `autoSend`; then six boxes the phone
  * fills in itself (an iPhone suggests it above the keyboard; Android reads it
- * in), a resend after 30 seconds, and the code's 10 minutes.
+ * in), a resend after 30 seconds, and the code's 10 minutes. With `channel`
+ * "email" the code goes to the login's own email instead (the backup, sign-in
+ * only): the same steps, an iPhone offering it from Mail.
  */
 export function SmsCodeStep({
   purpose,
@@ -96,16 +98,19 @@ export function SmsCodeStep({
   autoSend,
   trust,
   onConfirmed,
+  channel = "sms",
 }: {
   purpose: "sign_in" | "add_phone";
   methodId?: string | null;
   phone?: string | null;
-  /** The masked number, before a code is sent. */
+  /** The masked number (or email), before a code is sent. */
   to?: string | null;
   autoSend?: boolean;
   trust: boolean;
   onConfirmed: (c: Confirmed) => void | Promise<void>;
+  channel?: "sms" | "email";
 }) {
+  const byEmail = channel === "email";
   const send = useServerFn(sendTwoStepCode);
   const verify = useServerFn(verifyTwoStepCode);
   const [sent, setSent] = useState<{ to: string; resendAt: number; expiresAt: number } | null>(
@@ -121,7 +126,11 @@ export function SmsCodeStep({
     setBusy("send");
     setError(null);
     try {
-      const r = await send({ data: { purpose, methodId: methodId ?? null, phone: phone ?? null } });
+      const r = await send({
+        data: byEmail
+          ? { purpose: "sign_in", channel: "email" }
+          : { purpose, methodId: methodId ?? null, phone: phone ?? null },
+      });
       if (r.ok) {
         const t = Date.now();
         setSent({ to: r.to, resendAt: t + r.resendInS * 1000, expiresAt: t + r.expiresInS * 1000 });
@@ -132,11 +141,14 @@ export function SmsCodeStep({
           setSent((s) => (s ? { ...s, resendAt: Date.now() + r.waitS! * 1000 } : s));
       }
     } catch (e: any) {
-      setError(e?.message ?? "The text didn't go. Try again.");
+      setError(
+        e?.message ??
+          (byEmail ? "The email didn't go. Try again." : "The text didn't go. Try again."),
+      );
     } finally {
       setBusy(null);
     }
-  }, [send, purpose, methodId, phone]);
+  }, [send, purpose, methodId, phone, byEmail]);
 
   useEffect(() => {
     if (autoSend && !sentOnce.current) {
@@ -181,7 +193,7 @@ export function SmsCodeStep({
 
   // Android Chrome reads the text itself (WebOTP); stop when the step goes.
   useEffect(() => {
-    if (!sent) return;
+    if (!sent || byEmail) return;
     const ac = new AbortController();
     void listenForSmsCode(ac.signal).then((c) => {
       if (c && !ac.signal.aborted) {
@@ -195,17 +207,23 @@ export function SmsCodeStep({
 
   if (!sent) {
     return (
-      <div className="space-y-3" data-two-step-sms="send">
+      <div className="space-y-3" data-two-step-sms="send" data-two-step-channel={channel}>
         <p className="text-sm text-muted-foreground">
-          We'll text a 6-digit code to{" "}
+          {byEmail ? "We'll email a 6-digit code to " : "We'll text a 6-digit code to "}
           <span className="font-medium text-foreground">
-            {to ?? (phone ? maskPhone(phone) : "your phone")}
+            {to ?? (phone ? maskPhone(phone) : byEmail ? "your email" : "your phone")}
           </span>
           .
         </p>
         <Problem text={error} />
         <Button className="h-12 w-full text-base" onClick={() => void doSend()} disabled={!!busy}>
-          {busy === "send" ? <Busy label="Sending…" /> : "Text me a code"}
+          {busy === "send" ? (
+            <Busy label="Sending…" />
+          ) : byEmail ? (
+            "Email me a code"
+          ) : (
+            "Text me a code"
+          )}
         </Button>
       </div>
     );
@@ -214,9 +232,11 @@ export function SmsCodeStep({
   const resendIn = sent.resendAt - now;
   const expired = sent.expiresAt <= now;
   return (
-    <div className="space-y-3" data-two-step-sms="code">
+    <div className="space-y-3" data-two-step-sms="code" data-two-step-channel={channel}>
       <p className="text-sm text-muted-foreground">
-        Enter the code we texted to <span className="font-medium text-foreground">{sent.to}</span>.
+        Enter the code we {byEmail ? "emailed" : "texted"} to{" "}
+        <span className="font-medium text-foreground">{sent.to}</span>.
+        {byEmail && " It can take a minute. Check spam if it isn't there."}
       </p>
       <form
         className="space-y-3"
