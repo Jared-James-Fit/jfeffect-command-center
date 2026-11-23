@@ -172,9 +172,10 @@ describe("the studio frames what's posted", () => {
     expect(cam).toContain("const boxAspect = phase === \"shoot\" ? CARD_W / CARD_H : frameAspect;");
     expect(cam).toContain("const finalPhoto = () => framedFile(frameAspect,");
     expect(cam).toContain("<PhotoFramer");
-    expect(cam).toContain("data-frame-shape={aspect}");
-    // a post's card is the feed's 4:5, painted over the photo as it's framed
-    expect(cam).toContain('const cardFormat: ShareFormat = story ? "story" : "feed";');
+    expect(cam).toContain("data-frame-shape={shownShape}");
+    // a post's card fills its screen (the "full" 9:16 card), or the feed's 4:5 picked with the shape button,
+    // painted over the photo as it's framed
+    expect(cam).toContain('const cardFormat: ShareFormat = story ? "story" : cardShape === "portrait" ? "feed" : "full";');
     expect(cam).not.toContain("remapStickers(");
   });
   it("the rule-of-thirds grid shows only while a finger is on it, with the profile grid's tile", () => {

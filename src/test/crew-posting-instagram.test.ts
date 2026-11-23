@@ -71,8 +71,9 @@ describe("New post, Instagram's way (Nov 22 2026)", () => {
     expect(composer).toContain("const extras = words ? [] : await tray.ready(shape, coverId);");
     // the plain copy of a re-drawn first photo is taken off once the post is up
     expect(composer).toContain("if (coverId) tray.remove(coverId);");
-    // a design (a card, a filter's words) is drawn at 4:5 or 9:16
-    expect(composer).toContain('if (design && aspect !== "portrait" && aspect !== "full") setAspect("portrait");');
+    // a design (a card, a filter's words) is drawn at 9:16 (the full-screen card) or 4:5
+    expect(composer).toContain('if (design && aspect !== "portrait" && aspect !== "full") setAspect("full");');
+    expect(composer).toContain('const size = aspect === "full" ? "full" : aspect === "portrait" ? "feed"');
   });
   it("which post a filter makes: lock in starts the session, a workout card or the Workout row posts the workout, else plain", () => {
     expect(picker).toContain('activeMode === "lockin" ? lockPost : workoutLinked && target ? workout.post : activeMode === "meal" ? mealPost : plainPost;');
