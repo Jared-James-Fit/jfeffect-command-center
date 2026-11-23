@@ -2,6 +2,8 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SlowLoadHint } from "@/components/slow-load-hint";
+// 256 px, hashed (cached for a year): the 512 px /logo.png went out uncached on every launch
+import logoMark from "@/assets/brand/logo-256.webp";
 
 const ROTATING_MESSAGES = [
   "Checking your account…",
@@ -56,7 +58,7 @@ export function DashboardSplash({ title = "Loading your dashboard…", onRetry }
 
       <div className="relative flex w-full max-w-sm flex-col items-center gap-6 text-center">
         <img
-          src="/logo.png"
+          src={logoMark}
           alt="JF Effect"
           className="h-20 w-20 rounded-2xl shadow-glow animate-pulse"
         />

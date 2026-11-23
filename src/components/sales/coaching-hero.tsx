@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { srcSetFor } from "./phone-shot-sources";
 
 /**
  * A real screenshot of the app in a plain phone frame. The screenshots are
@@ -11,12 +12,16 @@ export function PhoneShot({
   alt,
   priority = false,
   className,
+  sizes = "(min-width: 768px) 280px, 250px",
 }: {
   src: string;
   alt: string;
   priority?: boolean;
   className?: string;
+  /** How wide the frame shows (CSS px), so the phone picks the screenshot width it needs (srcSetFor). */
+  sizes?: string;
 }) {
+  const srcSet = srcSetFor(src);
   return (
     <div
       className={cn(
@@ -26,6 +31,8 @@ export function PhoneShot({
     >
       <img
         src={src}
+        srcSet={srcSet}
+        sizes={srcSet ? sizes : undefined}
         alt={alt}
         width={390}
         height={844}
