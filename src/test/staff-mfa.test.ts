@@ -4,11 +4,11 @@ import {
   bearerToken,
   decodeJwtClaims,
   MFA_NEEDED_MESSAGE,
-  mfaGateStep,
   roleRequiresMfa,
   serverRefusesForMfa,
   verifiedFactorCount,
 } from "@/lib/mfa-rules";
+import { twoStepGateStep } from "@/lib/two-step";
 
 const rpc = vi.hoisted(() => ({ fn: vi.fn() }));
 vi.mock("@/integrations/supabase/client.server", () => ({ supabaseAdmin: { rpc: (...a: any[]) => rpc.fn(...a) } }));
@@ -24,37 +24,43 @@ function token(claims: Record<string, unknown>): string {
 }
 
 describe("who has to set up or enter a code", () => {
-  it("is the admin and the finance login, nobody else", () => {
+  const gate = (o: Partial<Parameters<typeof twoStepGateStep>[0]>) =>
+    twoStepGateStep({ team: false, required: false, aal: "aal1", verifiedFactors: 0, rememberedVerified: false, status: null, ...o });
+  const verified = { verified: true, methods: [{ id: "1", kind: "sms" as const, label: "", createdAt: null, lastUsedAt: null }] };
+  const unverified = { ...verified, verified: false };
+
+  it("is the admin, the finance login and coaches (they see client records or the money), nobody else", () => {
     expect(roleRequiresMfa("admin")).toBe(true);
     expect(roleRequiresMfa("finance")).toBe(true);
-    for (const r of ["client", "coach", "media_manager", null, undefined, ""]) expect(roleRequiresMfa(r as any)).toBe(false);
+    expect(roleRequiresMfa("coach")).toBe(true);
+    for (const r of ["client", "member", "media_manager", null, undefined, ""]) expect(roleRequiresMfa(r as any)).toBe(false);
   });
 
-  it("asks the admin and finance logins to set one up, and lets everyone else through", () => {
-    expect(mfaGateStep({ accountRole: "admin", aal: "aal1", verifiedFactors: 0 })).toBe("enroll");
-    expect(mfaGateStep({ accountRole: "finance", aal: "aal1", verifiedFactors: 0 })).toBe("enroll");
-    expect(mfaGateStep({ accountRole: "client", aal: "aal1", verifiedFactors: 0 })).toBe("pass");
-    expect(mfaGateStep({ accountRole: null, aal: "aal1", verifiedFactors: 0 })).toBe("pass");
+  it("lets clients and members straight through with no request", () => {
+    expect(gate({ team: false })).toBe("pass");
+    expect(gate({ team: false, aal: "aal2" })).toBe("pass");
   });
 
-  it("asks anyone with an authenticator for its code once per session, whatever their role", () => {
-    expect(mfaGateStep({ accountRole: "admin", aal: "aal1", verifiedFactors: 1 })).toBe("verify");
-    expect(mfaGateStep({ accountRole: "client", aal: "aal1", verifiedFactors: 2 })).toBe("verify");
-    expect(mfaGateStep({ accountRole: null, aal: undefined, verifiedFactors: 1 })).toBe("verify");
-    expect(mfaGateStep({ accountRole: "admin", aal: "aal2", verifiedFactors: 1 })).toBe("pass");
+  it("asks the server about a team login, unless this device confirmed the session already", () => {
+    expect(gate({ team: true, required: true })).toBe("check");
+    expect(gate({ team: true, required: true, rememberedVerified: true })).toBe("pass");
+    expect(gate({ team: true, verifiedFactors: 1, aal: "aal2" })).toBe("pass");
   });
 
-  it("asks a login that needs one to set one up even when its session still reads verified from an authenticator since removed", () => {
-    // The finance login's Oct 10 session is still aal2, from the code step removed Oct 9 2026.
-    expect(mfaGateStep({ accountRole: "finance", aal: "aal2", verifiedFactors: 0 })).toBe("enroll");
-    expect(mfaGateStep({ accountRole: "admin", aal: "aal2", verifiedFactors: 0 })).toBe("enroll");
-    expect(mfaGateStep({ accountRole: "client", aal: "aal2", verifiedFactors: 0 })).toBe("pass");
+  it("asks a login that needs one and has none to set one up, and anyone else with none passes", () => {
+    expect(gate({ team: true, required: true, status: { verified: false, methods: [] } })).toBe("enroll");
+    // the finance login's old aal2 session, from an authenticator since removed, still sets one up
+    expect(gate({ team: true, required: true, aal: "aal2", status: { verified: true, methods: [] } })).toBe("enroll");
+    expect(gate({ team: true, required: false, status: { verified: false, methods: [] } })).toBe("pass");
   });
 
-  it("checks with Supabase before showing setup, so one just added in a verified session never asks twice", () => {
-    const gate = readFileSync("src/components/two-step/staff-mfa-gate.tsx", "utf8");
-    expect(gate).toContain("firstAuthenticatorId()");
-    expect(gate).toContain("if (id && sessionVerified) return onAlreadyDone();");
+  it("asks a login with any way (text, passkey, app) to confirm once per session", () => {
+    expect(gate({ team: true, required: true, status: unverified })).toBe("verify");
+    expect(gate({ team: true, required: true, status: verified })).toBe("pass");
+    // the server's answer wins over what this device remembered
+    expect(gate({ team: true, required: true, rememberedVerified: true, status: unverified })).toBe("verify");
+    // anyone with an authenticator app, whatever their role
+    expect(gate({ team: false, verifiedFactors: 1, status: unverified })).toBe("verify");
   });
 
   it("counts only verified authenticators (a half-finished setup is none)", () => {
@@ -127,6 +133,34 @@ describe("the server guard every server function runs through", () => {
     warn.mockRestore();
   });
 
+  it("lets a session the server confirmed (a text, Face ID, a trusted device) through, and remembers it a minute", async () => {
+    const SID = "a1000000-0000-0000-0000-000000000001";
+    rpc.fn.mockImplementation(async (name: string, args: any) => {
+      if (name === "mfa_enforced_logins") return { data: [ADMIN], error: null };
+      if (name === "two_step_session_live") return { data: args._session === SID && args._uid === ADMIN, error: null };
+      return { data: null, error: null };
+    });
+    await expect(checkStaffMfa(`Bearer ${token({ sub: ADMIN, aal: "aal1", session_id: SID })}`)).resolves.toBeUndefined();
+    await expect(checkStaffMfa(`Bearer ${token({ sub: ADMIN, aal: "aal1", session_id: SID })}`)).resolves.toBeUndefined();
+    expect(rpc.fn.mock.calls.filter((c) => c[0] === "two_step_session_live")).toHaveLength(1);
+    // another session of the same login, not confirmed, is refused (and asked about every time)
+    const other = "a2000000-0000-0000-0000-000000000002";
+    await expect(checkStaffMfa(`Bearer ${token({ sub: ADMIN, aal: "aal1", session_id: other })}`)).rejects.toThrow(MFA_NEEDED_MESSAGE);
+    await expect(checkStaffMfa(`Bearer ${token({ sub: ADMIN, aal: "aal1", session_id: other })}`)).rejects.toThrow(MFA_NEEDED_MESSAGE);
+    expect(rpc.fn.mock.calls.filter((c) => c[0] === "two_step_session_live")).toHaveLength(3);
+    // no session id at all: refused without asking
+    await expect(checkStaffMfa(`Bearer ${token({ sub: ADMIN, aal: "aal1" })}`)).rejects.toThrow(MFA_NEEDED_MESSAGE);
+  });
+
+  it("refuses when it can't check a session (never lets an unknown one through)", async () => {
+    rpc.fn.mockImplementation(async (name: string) =>
+      name === "mfa_enforced_logins" ? { data: [ADMIN], error: null } : { data: null, error: { message: "timeout" } },
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(checkStaffMfa(`Bearer ${token({ sub: ADMIN, aal: "aal1", session_id: "a1000000-0000-0000-0000-000000000001" })}`)).rejects.toThrow(MFA_NEEDED_MESSAGE);
+    warn.mockRestore();
+  });
+
   it("keeps the last list it read when a later read fails", async () => {
     await expect(checkStaffMfa(`Bearer ${token({ sub: ADMIN, aal: "aal1" })}`)).rejects.toThrow(MFA_NEEDED_MESSAGE);
     vi.useFakeTimers();
@@ -163,11 +197,15 @@ describe("the database half (20270424091500_staff_mfa.sql)", () => {
     return sql.slice(at, sql.indexOf("$function$;", at));
   };
 
-  it("lets a session use a login's staff rights only once it has had its code, if that login has an authenticator", () => {
-    const ok = fn("caller_mfa_ok");
+  it("lets a session use a login's staff rights only once it's confirmed, if that login has a way to confirm (20270512090000)", () => {
+    const later = readFileSync("supabase/migrations/20270512090000_two_step_sms_passkeys.sql", "utf8");
+    const at = later.indexOf("FUNCTION public.caller_mfa_ok(");
+    const ok = later.slice(at, later.indexOf("$function$;", at));
     expect(ok).toContain("_uid IS DISTINCT FROM auth.uid()");
     expect(ok).toContain("coalesce(auth.jwt() ->> 'aal', '') = 'aal2'");
-    expect(ok).toContain("f.user_id = _uid AND f.status = 'verified'");
+    expect(ok).toContain("NOT public.two_step_login_has(_uid)");
+    expect(ok).toContain("public.two_step_session_live(_uid, public.jwt_session_id())");
+    expect(later).toContain("f.user_id = _uid AND f.status = 'verified'");
   });
 
   it("checks it in all four functions, only after the role is found, and never for the client role", () => {
@@ -181,9 +219,11 @@ describe("the database half (20270424091500_staff_mfa.sql)", () => {
     expect(fn("has_role")).toContain("public.is_admin_viewer()");
   });
 
-  it("keeps the list of logins with an authenticator for the server only", () => {
-    expect(sql).toContain("REVOKE ALL ON FUNCTION public.mfa_enforced_logins() FROM PUBLIC, anon, authenticated;");
-    expect(sql).toContain("GRANT EXECUTE ON FUNCTION public.mfa_enforced_logins() TO service_role;");
+  it("keeps the list of logins with two-step for the server only", () => {
+    for (const f of [sql, readFileSync("supabase/migrations/20270512090000_two_step_sms_passkeys.sql", "utf8")]) {
+      expect(f).toContain("REVOKE ALL ON FUNCTION public.mfa_enforced_logins() FROM PUBLIC, anon, authenticated;");
+      expect(f).toContain("GRANT EXECUTE ON FUNCTION public.mfa_enforced_logins() TO service_role;");
+    }
   });
 
   it("defines is_business_owner before has_permission uses it, and gives up on a busy lock", () => {
