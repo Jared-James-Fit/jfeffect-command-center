@@ -312,3 +312,19 @@ export function editEta(stage: string | null | undefined, createdAt: string, now
   const pct = Math.round(Math.max(s.from, Math.min(s.to - 1, s.from + (s.to - s.from) * (/^thinking/i.test(stage ?? "") ? share : 0.5))));
   return { pct: Math.min(99, Math.max(1, pct)), remainingMs: slow ? null : Math.max(5_000, EDIT_TYPICAL_MS - elapsed), slow };
 }
+
+/**
+ * Why a run stopped, said once in plain words (the card's box; the step itself just says it stopped
+ * there), with the technical message kept underneath for when it's needed. A database refusal
+ * (a constraint, a missing column) is the app's problem, never the coach's: the draft is rolled
+ * back whole, so Try again is safe. Pure.
+ */
+export function stoppedWords(error: string | null | undefined): { headline: string; detail: string | null } {
+  const raw = String(error ?? "").trim();
+  if (!raw) return { headline: "The run stopped.", detail: null };
+  if (/violates|constraint|relation "|column "|duplicate key|permission denied|row-level security/i.test(raw))
+    return { headline: "The draft couldn't be saved. Nothing was left half-written.", detail: raw };
+  if (/timed? ?out|took too long|stuck|cut off|1102|502|504/i.test(raw)) return { headline: "It was cut off before it finished.", detail: raw };
+  if (/openai|insufficient_quota|credits|rate limit|429|model/i.test(raw) && raw.length > 90) return { headline: "The AI didn't answer.", detail: raw };
+  return { headline: raw.length > 200 ? `${raw.slice(0, 197)}…` : raw, detail: raw.length > 200 ? raw : null };
+}

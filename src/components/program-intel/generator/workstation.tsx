@@ -225,7 +225,7 @@ export function NextProgramWorkstation({ clientId, prefill, reportSearch }: { cl
           });
         else toast.success(j.kind === "strategy" ? "The strategy is ready to review" : "The program is ready", { duration: 8_000 });
         document.querySelector<HTMLElement>('[data-testid="gen-scorecard"], [data-testid="gen-strategy"]')?.scrollIntoView({ behavior: "smooth", block: "start" });
-      } else if (j.status === "error") toast.error("The run stopped", { description: j.error ?? undefined, duration: 10_000 });
+      } else if (j.status === "error") toast.error("The run stopped", { description: "What happened is on the card, with Try again.", duration: 8_000 });
     }
   }, [activeGenerate, activeStrategy, navigate]);
   const earlier = all.filter((j) => j.kind === "generate" && j !== activeGenerate && j.status !== "discarded");
