@@ -25,7 +25,7 @@ export function AuthShell({ children, footer }: { children: ReactNode; footer?: 
 export function AuthLogo({ size = 76 }: { size?: number }) {
   return (
     <img
-      src="/logo.png"
+      src="/logo-160.webp"
       alt="JF Effect"
       width={size}
       height={size}

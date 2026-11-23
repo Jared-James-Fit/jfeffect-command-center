@@ -10,11 +10,15 @@ export function PhoneShot({
   src,
   alt,
   priority = false,
+  eager = false,
   className,
 }: {
   src: string;
   alt: string;
+  /** The page's largest image: loaded first, at high priority. */
   priority?: boolean;
+  /** Above the fold but not the largest: loaded straight away at normal priority, never left to lazy loading. */
+  eager?: boolean;
   className?: string;
 }) {
   return (
@@ -29,7 +33,7 @@ export function PhoneShot({
         alt={alt}
         width={390}
         height={844}
-        loading={priority ? "eager" : "lazy"}
+        loading={priority || eager ? "eager" : "lazy"}
         decoding="async"
         fetchPriority={priority ? "high" : "auto"}
         className="h-full w-full rounded-[2.05rem] object-cover"

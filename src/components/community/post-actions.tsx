@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Archive, ArchiveRestore, Download, Flag, ImagePlus, Instagram, MoreHorizontal, Pencil, Sticker, Trash2, UserMinus } from "lucide-react";
@@ -16,7 +16,7 @@ import { extraScene, postSlides } from "@/lib/community";
 import { isSpiritScene } from "@/components/community/spirit-scenes";
 import { pictureKind } from "@/lib/post-pictures";
 import { PostStickerEditor } from "@/components/community/sticker-editor";
-import { InstagramShareSheet } from "@/components/community/instagram-share-sheet";
+import { InstagramShareSheet } from "@/components/community/lazy-sheets";
 import { ReportSheet } from "@/components/community/report-sheet";
 import { postArtCard, sendToInstagram } from "@/lib/instagram-export";
 import { peekPostArt, postArtKey } from "@/lib/post-art";
@@ -261,7 +261,11 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
         <EditPostSheet post={editing ? post : null} onClose={() => setEditing(false)} />
       )}
       {mine && <PostStickerEditor post={post} open={sticker} onClose={() => setSticker(false)} />}
-      {canInstagram && ig !== null && <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />}
+      {canInstagram && ig !== null && (
+        <Suspense fallback={null}>
+          <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />
+        </Suspense>
+      )}
       {canReport && reporting !== null && <ReportSheet kind="post" targetId={post.id} open={reporting} onOpenChange={setReporting} />}
     </>
   );

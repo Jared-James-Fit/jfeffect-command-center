@@ -56,7 +56,7 @@ export function DashboardSplash({ title = "Loading your dashboard…", onRetry }
 
       <div className="relative flex w-full max-w-sm flex-col items-center gap-6 text-center">
         <img
-          src="/logo.png"
+          src="/logo-160.webp"
           alt="JF Effect"
           className="h-20 w-20 rounded-2xl shadow-glow animate-pulse"
         />

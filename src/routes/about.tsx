@@ -13,6 +13,7 @@ import dwayneAsset from "@/assets/athletes/dwayne.png.asset.json";
 import frederickAsset from "@/assets/athletes/frederick.png.asset.json";
 import elisaAsset from "@/assets/athletes/elisa.png.asset.json";
 import { shareMeta } from "@/lib/share-meta";
+import { hostedImageProps } from "@/lib/hosted-image";
 
 const jaredHeroImage = jaredAsset.url;
 const phillipAthleteImage = phillipAsset.url;
@@ -311,12 +312,16 @@ function ScrollImage({
   alt,
   className,
   eager = false,
+  sizes = "(min-width: 640px) 300px, 72vw",
 }: {
   src: string;
   alt: string;
   className: string;
   eager?: boolean;
+  /** How wide it's drawn: a hosted photo is asked for at that size (hosted-image.ts), never its 1–2 MB original. */
+  sizes?: string;
 }) {
+  const hosted = hostedImageProps(src, { sizes, fallback: 640 });
   const ref = useRef<HTMLImageElement>(null);
   const [shouldLoad, setShouldLoad] = useState(eager);
 
@@ -343,7 +348,9 @@ function ScrollImage({
   return (
     <img
       ref={ref}
-      src={shouldLoad ? src : SCROLL_IMAGE_PLACEHOLDER}
+      src={shouldLoad ? hosted.src : SCROLL_IMAGE_PLACEHOLDER}
+      srcSet={shouldLoad ? hosted.srcSet : undefined}
+      sizes={shouldLoad ? hosted.sizes : undefined}
       alt={alt}
       className={`${className} bg-muted`}
       loading={eager ? "eager" : "lazy"}
@@ -461,6 +468,7 @@ function AboutJaredPage() {
               src={jaredHeroImage}
               alt="Jared McIntyre representing Canada in international powerlifting competition"
               className="aspect-[4/5] w-full rounded-[28px] object-cover object-center ring-1 ring-border/70"
+              sizes="(min-width: 424px) 384px, calc(100vw - 40px)"
               eager
             />
           </div>

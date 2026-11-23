@@ -12,19 +12,11 @@ import { inRecapWindow } from "@/lib/league-recap";
 import { RankingsSpotlight } from "@/components/community/rankings-spotlight";
 import type { SpotlightSlide, StrengthView } from "@/lib/rankings-spotlight";
 import { feedback } from "@/lib/feedback";
+import { rankingsFromHash, type RankingsBoard } from "@/lib/rankings-hash";
 import { RankingsMusicButton, useRankingsMusic } from "@/components/community/rankings-music";
 
-export type RankingsBoard = "monthly" | "strength";
-
-/**
- * Which board a link asks for: `#rankings=strength` / `#league=strength` (Home's
- * Hall of Strength tile) → Strength; `#rankings`, `#league`, `#league=standings`
- * → Monthly; anything else → null (not a Rankings link).
- */
-export function rankingsFromHash(hash = typeof window === "undefined" ? "" : window.location.hash): RankingsBoard | null {
-  if (!/#(rankings|league)/.test(hash)) return null;
-  return /(rankings|league)=strength/.test(hash) ? "strength" : "monthly";
-}
+// Which board a link asks for lives in rankings-hash.ts, so Crew reads it without loading this tab.
+export { rankingsFromHash, type RankingsBoard };
 
 /**
  * The board a sideways swipe lands on, or null: at least 60px across and

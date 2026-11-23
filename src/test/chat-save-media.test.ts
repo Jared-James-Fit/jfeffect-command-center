@@ -147,7 +147,7 @@ describe("where Save is", () => {
   });
 
   it("in the full-screen viewer for chat photos and videos only, and the viewer stays light", () => {
-    const viewer = read("src/components/media-viewer.tsx");
+    const viewer = read("src/components/media-viewer-surface.tsx");
     expect(viewer).toContain("{state.save && <ViewerSaveButton item={state.save} />}");
     expect(viewer).not.toContain("instagram-export");
     expect(read("src/lib/save-media.ts")).toContain('from "@/lib/file-share"');

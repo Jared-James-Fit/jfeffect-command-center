@@ -661,7 +661,7 @@ export function AppShell({
           "flex items-center gap-2 border-b border-sidebar-border",
           iconOnly ? "justify-center px-2 py-3" : "px-3.5 py-3",
         )}>
-          <img src="/logo.png" alt="JF Effect" className="h-8 w-8 rounded-md object-cover" />
+          <img src="/logo-160.webp" alt="JF Effect" className="h-8 w-8 rounded-md object-cover" />
           {!iconOnly && (
             <div className="leading-tight min-w-0">
               <div className="text-[13px] font-bold tracking-tight">JF EFFECT</div>
@@ -1956,7 +1956,7 @@ function ShellBrand({ title, compact }: { title: string; compact?: boolean }) {
   return (
     <div className="flex min-w-0 items-center justify-center gap-2 max-[359px]:gap-1.5" data-shell-brand>
       <img
-        src="/logo.png"
+        src="/logo-160.webp"
         alt="JF Effect"
         className="h-[26px] w-[26px] shrink-0 rounded-[7px] object-cover max-[359px]:h-[22px] max-[359px]:w-[22px] max-[359px]:rounded-[6px]"
       />
