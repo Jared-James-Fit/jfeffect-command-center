@@ -14,6 +14,13 @@ import type { DirectoryCounts } from "@/lib/clients-directory.functions";
 import type { DirectoryFilterKey } from "@/lib/clients-directory-filters";
 import { MatchToggle, countPillClass } from "./client-filter-rail";
 import { FILTER_GROUPS, STATUS_META, type FilterMatch } from "./clients-status";
+import type { StarredMode } from "@/lib/clients-directory-starred";
+
+const STARRED_OPTIONS: Array<{ v: StarredMode | null; label: string }> = [
+  { v: null, label: "Everyone" },
+  { v: "first", label: "Starred first" },
+  { v: "only", label: "Only starred" },
+];
 
 export const COACHING_TYPES = [
   "Online Coaching",
@@ -43,6 +50,9 @@ type Props = {
   onToggleFlag: (key: DirectoryFilterKey) => void;
   onChange: (patch: { coachingType?: string | undefined; coachId?: string | undefined }) => void;
   onClearAll: () => void;
+  /** The coach's stars (undefined: no stars to offer). */
+  starred?: StarredMode | null;
+  onStarred?: (m: StarredMode | null) => void;
 };
 
 /**
@@ -66,9 +76,11 @@ export function ClientFilterSheet({
   onToggleFlag,
   onChange,
   onClearAll,
+  starred,
+  onStarred,
 }: Props) {
   const isMobile = useIsMobile();
-  const anyActive = flags.length > 0 || (!!coachingType && coachingType !== "all") || !!coachId;
+  const anyActive = flags.length > 0 || (!!coachingType && coachingType !== "all") || !!coachId || !!starred;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -90,6 +102,31 @@ export function ClientFilterSheet({
         </SheetHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
+          {starred !== undefined && onStarred && (
+            <section aria-label="Starred clients" data-filter-starred>
+              <h3 className="mb-1.5 mt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Starred</h3>
+              <div role="radiogroup" aria-label="Starred clients" className="grid grid-cols-3 rounded-lg bg-muted p-0.5">
+                {STARRED_OPTIONS.map((o) => (
+                  <button
+                    key={o.label}
+                    type="button"
+                    role="radio"
+                    aria-checked={(starred ?? null) === o.v}
+                    onClick={() => onStarred(o.v)}
+                    className={cn(
+                      "h-10 cursor-pointer rounded-md px-1 text-[13px] font-semibold transition-colors",
+                      (starred ?? null) === o.v ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs leading-snug text-muted-foreground">
+                Your own list, saved on your account. Starred first keeps the sort and filters, with yours on top.
+              </p>
+            </section>
+          )}
           {FILTER_GROUPS.map((group) => (
             <section key={group.key} aria-label={group.label}>
               <h3 className="mb-1 mt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
