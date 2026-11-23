@@ -9,6 +9,7 @@ import {
   PLAY_REFUSED_EVENT,
   SOUND_BLOCKED_EVENT,
   acquireFeedVideo,
+  keepInHost,
   pauseFeedVideo,
   playFeedVideo,
   playRefused,
@@ -290,6 +291,9 @@ export function InlineVideo({
       [
         "playing",
         () => {
+          // a tap's play-and-pause of every pooled element (unlockVideoSound) fires this on one that's paused again
+          // before a frame is up: the poster stays until it really plays
+          if (v.paused) return;
           setPlaying(true);
           setShown(true);
           // a tap started the element: it takes over from the decoded copy
@@ -320,8 +324,17 @@ export function InlineVideo({
       setDecodeFailed(false);
       setSilent(false);
       setBuffering(false);
+      // a clip that failed gets another go with a fresh link, or when it comes back near the screen
+      setFailed(false);
     };
   }, [holding, url]);
+
+  // after every render: the box it sits in may have just been swapped (its fit decided again, filling the screen or
+  // shown whole, each with its own box; a post's sheet opening): the element and its decoded canvas move into the box
+  // on the page now, in the same commit, so a playing clip carries on instead of playing off the page behind black
+  useLayoutEffect(() => {
+    keepInHost(host.current, el, canvasRef.current);
+  });
 
   // its frame: whole (contain) or filled (cover, at its focus); framed in the studio, its own box is the whole clip
   const framed = !!frame;
