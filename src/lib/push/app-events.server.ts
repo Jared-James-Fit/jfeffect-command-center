@@ -141,14 +141,14 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     to: "staff", category: "workouts",
     title: (n) => `${n}'s next program is ready`,
     body: () => "The run finished. Tap to review it before anything reaches them.",
-    url: (id) => `/admin/client-programs/${id}/next-program`, rateMinutes: 1,
+    url: (id) => `/admin/client-programs/${id}/next-program`, rateMinutes: 60,
   },
   // A run stopped with a message (never for a run that's still recovering on its own).
   program_run_stopped: {
     to: "staff", category: "workouts",
     title: (n) => `${n}'s program run stopped`,
     body: () => "It says why. Try again picks up where it stopped; nothing finished is redone.",
-    url: (id) => `/admin/client-programs/${id}/next-program`, rateMinutes: 1,
+    url: (id) => `/admin/client-programs/${id}/next-program`, rateMinutes: 60,
   },
   program_gaps_due: {
     to: "staff", category: "workouts",

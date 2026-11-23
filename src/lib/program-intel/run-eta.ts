@@ -65,11 +65,11 @@ export function inQuarterRush(now: number): boolean {
   return into < QUARTER_TAIL_MS || QUARTER_MS - into < QUARTER_LEAD_MS;
 }
 
-/** How long a request may poll from `now`: at most `maxMs`, ending before the next rush (never under 3 s). */
+/** How long a request may poll from `now`: at most `maxMs`, ending before the next rush (at least 3 s, never past `maxMs`). */
 export function pollWindowMs(now: number, maxMs: number): number {
   const into = ((now % QUARTER_MS) + QUARTER_MS) % QUARTER_MS;
   const toRush = QUARTER_MS - into - QUARTER_LEAD_MS;
-  return Math.max(3_000, Math.min(maxMs, toRush));
+  return Math.min(maxMs, Math.max(3_000, toRush));
 }
 
 export type RunProgress = {

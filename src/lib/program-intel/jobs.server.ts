@@ -30,6 +30,9 @@ const STALE_MODEL_STAGE_MS = 2 * 60_000;
 const STALE_CODE_STAGE_MS = 5 * 60_000;
 const MAX_ATTEMPTS = 3;
 
+/** Switches tests turn off (they run on the wall clock, which can be in a quarter-hour rush). */
+export const workerGuards = { quarterRush: true };
+
 function staleAfter(job: any): number {
   if (!(job.kind === "strategy" || job.kind === "generate") || job.options?.bench) return STALE_RUN_MS;
   const stage = String(job.stage ?? "context");
@@ -103,7 +106,7 @@ async function claimJob(admin: Db, jobId: string | null): Promise<any | null> {
   await stopStuckRuns(admin).catch(() => undefined);
   // not into the quarter-hour rush (run-eta.ts): the run stays queued and the next minute's look takes it
   const { inQuarterRush } = await import("./run-eta");
-  if (inQuarterRush(Date.now())) return null;
+  if (workerGuards.quarterRush && inQuarterRush(Date.now())) return null;
   const since = new Date(Date.now() - 2 * 86_400_000).toISOString();
   let q = admin.from("program_intel_jobs").select("*").gt("updated_at", since).lt("attempts", MAX_ATTEMPTS).in("status", ["pending", "running"]).order("created_at").limit(5);
   if (jobId) q = admin.from("program_intel_jobs").select("*").eq("id", jobId).limit(1);
@@ -216,8 +219,12 @@ async function tellCoach(admin: Db, job: any, event: "program_run_ready" | "prog
 async function stopPending(pending: Record<string, { id?: string; hedge?: { id: string } }> | null | undefined): Promise<void> {
   const ids = Object.values(pending ?? {}).flatMap((p) => [p?.id, p?.hedge?.id]).filter((x): x is string => !!x);
   if (!ids.length) return;
-  const { cancelBackground } = await import("@/lib/ai/model-client.server");
-  await Promise.all(ids.map((id) => cancelBackground(id)));
+  try {
+    const { cancelBackground } = await import("@/lib/ai/model-client.server");
+    await Promise.all(ids.map((id) => Promise.resolve(cancelBackground(id)).catch(() => undefined)));
+  } catch {
+    // never stands in the way of stopping or failing the run
+  }
 }
 
 async function finish(admin: Db, id: string, patch: Record<string, unknown>, opts: { onlyRunning?: boolean } = {}) {

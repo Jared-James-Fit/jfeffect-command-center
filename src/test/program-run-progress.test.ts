@@ -172,7 +172,7 @@ describe("a run whose request was cut off", () => {
   it("is picked up within minutes (2 on a model stage), looked for every minute", () => {
     const jobs = readFileSync("src/lib/program-intel/jobs.server.ts", "utf8");
     expect(jobs).toContain("const STALE_MODEL_STAGE_MS = 2 * 60_000;");
-    expect(jobs).toContain("if (inQuarterRush(Date.now())) return null;");
+    expect(jobs).toContain("if (workerGuards.quarterRush && inQuarterRush(Date.now())) return null;");
     // a run cut off at its last attempt stops with Try again instead of spinning forever
     expect(jobs).toContain("await stopStuckRuns(admin)");
     // a run discarded meanwhile stays discarded
