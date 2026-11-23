@@ -1735,6 +1735,18 @@ html[data-holding] *:not(input):not(textarea):not([contenteditable="true"]) {
 :root { --split-squat: #2a78d6; --split-bench: #eb6834; --split-deadlift: #1baf7a; }
 .dark { --split-squat: #3987e5; --split-bench: #d95926; --split-deadlift: #199e70; }
 
+/* Analytics heat (the performance calendar's volume and strength, the muscle
+   map): one blue ramp, the dataviz reference's sequential steps, light to dark
+   on a light card (100 → 250 → 400 → 550) and dark to light on a dark one
+   (650 → 550 → 400 → 250), so "more" always reads as more contrast. Level 0
+   is the card's own quiet surface. PRs use the amber the design system keeps
+   for records; done uses its green. */
+:root { --heat-0: var(--muted); --heat-1: #cde2fb; --heat-2: #86b6ef; --heat-3: #3987e5; --heat-4: #1c5cab; }
+.dark { --heat-0: var(--muted); --heat-1: #104281; --heat-2: #1c5cab; --heat-3: #3987e5; --heat-4: #86b6ef; }
+@keyframes jf-lab-in { from { opacity: 0; } to { opacity: 1; } }
+.jf-lab-in { animation: jf-lab-in 220ms ease-out both; }
+@media (prefers-reduced-motion: reduce) { .jf-lab-in { animation: none; } }
+
 /* Rankings theme music: the playing bars on its button. */
 @keyframes jf-eq {
   0%, 100% { transform: scaleY(0.3); }

@@ -11,7 +11,7 @@ import {
   type AnalyticsFilter,
 } from "@/components/analytics/analytics-filter-bar";
 import { type AnalyticsBlock, normalizeAnalyticsBlock } from "@/lib/analytics/blocks";
-import { ClientAnalyticsDashboard, ANALYTICS_VIEWS, type AnalyticsView } from "@/components/analytics/client-analytics-dashboard";
+import { ClientAnalyticsDashboard, parseAnalyticsView } from "@/components/analytics/client-analytics-dashboard";
 import { isPrimaryProgramBlock } from "@/lib/at-home-backup";
 import { clientTrainingHref } from "@/lib/editor-back";
 
@@ -60,7 +60,7 @@ function AnalyticsPage() {
     if (!clientBlocks.length && !search.filter) return null;
     return filterFromSearch(search.filter, search.blockId, clientBlocks);
   }, [clientBlocks, search.filter, search.blockId]);
-  const initialView = ANALYTICS_VIEWS.some(([v]) => v === search.view) ? (search.view as AnalyticsView) : undefined;
+  const initialView = parseAnalyticsView(search.view);
 
   return (
     <>
