@@ -255,6 +255,7 @@ import { Route as AuthenticatedPortalWorkoutsPrsRouteImport } from './routes/_au
 import { Route as ApiPublicHooksAccountDeletionsPurgeRouteImport } from './routes/api/public/hooks/account-deletions-purge'
 import { Route as ApiPublicHooksActionCentreTickRouteImport } from './routes/api/public/hooks/action-centre-tick'
 import { Route as ApiPublicHooksAiBenchmarkRouteImport } from './routes/api/public/hooks/ai-benchmark'
+import { Route as ApiPublicHooksAiHealthTickRouteImport } from './routes/api/public/hooks/ai-health-tick'
 import { Route as ApiPublicHooksAiModelsCheckRouteImport } from './routes/api/public/hooks/ai-models-check'
 import { Route as ApiPublicHooksAppointmentRemindersRouteImport } from './routes/api/public/hooks/appointment-reminders'
 import { Route as ApiPublicHooksAutoPaySendRouteImport } from './routes/api/public/hooks/auto-pay-send'
@@ -1728,6 +1729,12 @@ const ApiPublicHooksAiBenchmarkRoute =
     path: '/api/public/hooks/ai-benchmark',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksAiHealthTickRoute =
+  ApiPublicHooksAiHealthTickRouteImport.update({
+    id: '/api/public/hooks/ai-health-tick',
+    path: '/api/public/hooks/ai-health-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksAiModelsCheckRoute =
   ApiPublicHooksAiModelsCheckRouteImport.update({
     id: '/api/public/hooks/ai-models-check',
@@ -2331,6 +2338,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/account-deletions-purge': typeof ApiPublicHooksAccountDeletionsPurgeRoute
   '/api/public/hooks/action-centre-tick': typeof ApiPublicHooksActionCentreTickRoute
   '/api/public/hooks/ai-benchmark': typeof ApiPublicHooksAiBenchmarkRoute
+  '/api/public/hooks/ai-health-tick': typeof ApiPublicHooksAiHealthTickRoute
   '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/auto-pay-send': typeof ApiPublicHooksAutoPaySendRoute
@@ -2637,6 +2645,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/account-deletions-purge': typeof ApiPublicHooksAccountDeletionsPurgeRoute
   '/api/public/hooks/action-centre-tick': typeof ApiPublicHooksActionCentreTickRoute
   '/api/public/hooks/ai-benchmark': typeof ApiPublicHooksAiBenchmarkRoute
+  '/api/public/hooks/ai-health-tick': typeof ApiPublicHooksAiHealthTickRoute
   '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/auto-pay-send': typeof ApiPublicHooksAutoPaySendRoute
@@ -2949,6 +2958,7 @@ export interface FileRoutesById {
   '/api/public/hooks/account-deletions-purge': typeof ApiPublicHooksAccountDeletionsPurgeRoute
   '/api/public/hooks/action-centre-tick': typeof ApiPublicHooksActionCentreTickRoute
   '/api/public/hooks/ai-benchmark': typeof ApiPublicHooksAiBenchmarkRoute
+  '/api/public/hooks/ai-health-tick': typeof ApiPublicHooksAiHealthTickRoute
   '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/auto-pay-send': typeof ApiPublicHooksAutoPaySendRoute
@@ -3261,6 +3271,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/account-deletions-purge'
     | '/api/public/hooks/action-centre-tick'
     | '/api/public/hooks/ai-benchmark'
+    | '/api/public/hooks/ai-health-tick'
     | '/api/public/hooks/ai-models-check'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/auto-pay-send'
@@ -3567,6 +3578,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/account-deletions-purge'
     | '/api/public/hooks/action-centre-tick'
     | '/api/public/hooks/ai-benchmark'
+    | '/api/public/hooks/ai-health-tick'
     | '/api/public/hooks/ai-models-check'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/auto-pay-send'
@@ -3878,6 +3890,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/account-deletions-purge'
     | '/api/public/hooks/action-centre-tick'
     | '/api/public/hooks/ai-benchmark'
+    | '/api/public/hooks/ai-health-tick'
     | '/api/public/hooks/ai-models-check'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/auto-pay-send'
@@ -4016,6 +4029,7 @@ export interface RootRouteChildren {
   ApiPublicHooksAccountDeletionsPurgeRoute: typeof ApiPublicHooksAccountDeletionsPurgeRoute
   ApiPublicHooksActionCentreTickRoute: typeof ApiPublicHooksActionCentreTickRoute
   ApiPublicHooksAiBenchmarkRoute: typeof ApiPublicHooksAiBenchmarkRoute
+  ApiPublicHooksAiHealthTickRoute: typeof ApiPublicHooksAiHealthTickRoute
   ApiPublicHooksAiModelsCheckRoute: typeof ApiPublicHooksAiModelsCheckRoute
   ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
   ApiPublicHooksAutoPaySendRoute: typeof ApiPublicHooksAutoPaySendRoute
@@ -5792,6 +5806,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksAiBenchmarkRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/ai-health-tick': {
+      id: '/api/public/hooks/ai-health-tick'
+      path: '/api/public/hooks/ai-health-tick'
+      fullPath: '/api/public/hooks/ai-health-tick'
+      preLoaderRoute: typeof ApiPublicHooksAiHealthTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/ai-models-check': {
       id: '/api/public/hooks/ai-models-check'
       path: '/api/public/hooks/ai-models-check'
@@ -6949,6 +6970,7 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksAccountDeletionsPurgeRoute,
   ApiPublicHooksActionCentreTickRoute: ApiPublicHooksActionCentreTickRoute,
   ApiPublicHooksAiBenchmarkRoute: ApiPublicHooksAiBenchmarkRoute,
+  ApiPublicHooksAiHealthTickRoute: ApiPublicHooksAiHealthTickRoute,
   ApiPublicHooksAiModelsCheckRoute: ApiPublicHooksAiModelsCheckRoute,
   ApiPublicHooksAppointmentRemindersRoute:
     ApiPublicHooksAppointmentRemindersRoute,

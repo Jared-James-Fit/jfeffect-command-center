@@ -446,6 +446,7 @@ export const parseMealFromText = createServerFn({ method: "POST" })
             effort: route.effort,
             maxOutputTokens: route.maxOutputTokens,
             timeoutMs: 25_000,
+            tag: "meal_estimate",
           });
           const value = parseMealEstimate(reply.text, data.text);
           if (!value) throw new MeteredCallError("Couldn't make sense of that, so no credit was used. Try saying it another way.", reply.model, reply.usage);

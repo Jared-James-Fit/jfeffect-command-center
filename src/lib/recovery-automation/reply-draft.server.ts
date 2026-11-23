@@ -105,11 +105,12 @@ export async function writeCoachReply(sb: any, input: ReplyInput): Promise<Reply
   const route = input.route ?? "recovery_write";
   const eyes = input.kind === "video" || input.kind === "progress";
   const check = (m: string) => [...(input.automatic ? autoMessageProblems(m) : draftProblems(m)), ...(eyes ? eyesProblems(m) : [])];
-  let reply = await askRoute(route, { system, prompt, timeoutMs: 45_000 }, { sb });
+  const tag = `${route}:${input.kind}`;
+  let reply = await askRoute(route, { system, prompt, timeoutMs: 45_000, tag }, { sb });
   let message = casualize(String(parse(reply.text ?? "")?.message ?? "").trim());
   const problems = message ? check(message) : ["empty"];
   if (problems.length) {
-    reply = await askRoute(route, { system, prompt: `${prompt}\n\nYour last draft used words it must never use (${problems.join(", ")}). Write it again without them.`, timeoutMs: 45_000 }, { sb });
+    reply = await askRoute(route, { system, prompt: `${prompt}\n\nYour last draft used words it must never use (${problems.join(", ")}). Write it again without them.`, timeoutMs: 45_000, tag }, { sb });
     message = casualize(String(parse(reply.text ?? "")?.message ?? "").trim()) || message;
   }
   if (!message) throw new Error("Couldn't write a draft. Try again.");

@@ -91,9 +91,29 @@ with a 400. `gatewayMessages` sends `thinking: { type: "adaptive" }` and the rou
 
 ## Prices on file
 
-Only published prices are used for the cost estimate (`PRICE_PER_MTOK`); anything else shows
-"—". GPT-6 Astra $10 / $50 per million tokens in / out; Claude Opus 5.5 $4 / $20; Claude
-Sonnet 5 $2 / $10 (Anthropic's model table). Gateway calls bill in Lovable credits.
+Only published prices are used for the cost estimate (`AI_PRICES`, src/lib/ai/ai-usage.ts, with
+its sources); anything else shows "—". US$ per million tokens in / cached in / out: GPT-5.5 $5 /
+$0.50 / $30; GPT-5.1 and GPT-5 $1.25 / $0.125 / $10; GPT-5 mini $0.25 / $0.025 / $2; GPT-6 Astra
+$10 / $50; Claude Opus 5.5 $4 / $20; Claude Sonnet 5 $2 / $10; gpt-image-1 $5 in / $40 out.
+Gateway calls bill in Lovable credits.
+
+## Reliability and spend (Nov 23 2026)
+
+Every model call is a row in `ai_call_log` (task, feature, model, ok or why not, tokens, seconds,
+estimated US$), and `ai_provider_health` is a circuit breaker: when OpenAI's credits run out or
+its key is refused, calls are refused before any request until a probe (every 10 minutes, one
+tiny GPT-5 mini call) says it's back, and jobs that hit it park without using an attempt. The
+`ai-health-tick` hook raises `support_alerts` (AI paused, failures, stuck jobs, unusual use,
+budget) with one push to the owner per incident, and after a recovery redoes what failed:
+check-in recaps from the client's answers, then `ai_recovery_requeue` for background work.
+Settings → AI & Cleo shows the status, spend per feature and the monthly trend. See AGENTS.md
+("AI failures are the provider's or the job's, never a stand-in").
+
+What the Nov 21–23 outage showed about cost: the Crew deck backlog (65 decks, up to eight GPT-5.5
+calls each, in 25 minutes) drained the account; library decks now go at most four a day. The
+heaviest routes per call are GPT-5.5 ones (Cleo's ~18k-token prompt, mostly cached after the
+first step; program construction; deck writing); coaching replies and recaps run on GPT-5 mini
+first or GPT-5.5 at low effort and cost cents.
 
 ## Checking and comparing models
 

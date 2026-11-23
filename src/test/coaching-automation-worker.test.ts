@@ -11,6 +11,8 @@ const calls: { system: string; prompt: string }[] = [];
 /** Runs while the model is "writing" (to change the world under the worker). */
 let duringDraft: (() => void) | null = null;
 let modelReply = "nice work today. that deadlift moved well, keep the same setup next week";
+/** When set, the model "fails" with it (an outage, credits run out). */
+let modelError: Error | null = null;
 const pushes: string[] = [];
 let modes: Record<string, string[]> = {};
 let dated: any[] = [];
@@ -28,6 +30,7 @@ const defaultStats = (scope = "block") => ({
 vi.mock("@/lib/ai/route-call.server", () => ({
   askRoute: async (_route: string, req: { system: string; prompt: string }) => {
     calls.push({ system: req.system, prompt: req.prompt });
+    if (modelError) throw modelError;
     duringDraft?.();
     return { text: JSON.stringify({ message: modelReply }), model: "test-model" };
   },
@@ -95,6 +98,7 @@ beforeEach(() => {
   dated = [];
   stats = defaultStats();
   duringDraft = null;
+  modelError = null;
   modelReply = "nice work today. that deadlift moved well, keep the same setup next week";
   tables = {
     clients: [{ id: MARC, user_id: "u-marc", full_name: "Marc Asugui", preferred_name: null, timezone: "America/Winnipeg", service_tier: "coaching", archived: false, assigned_coach_id: COACH_ROW, status: "Active" }],
@@ -560,5 +564,62 @@ describe("progress check-ins", () => {
     await tick();
     expect(c.status).toBe("cancelled");
     expect(calls).toEqual([]);
+  });
+});
+
+describe("when AI is down", () => {
+  const review = () =>
+    tables.pl_workout_feedback.push({ id: "fb1", client_id: MARC, completion_id: "comp1", day_id: "day1", overall_rating: 4, session_rpe: 8, pain: false, client_note: "felt strong today, top set flew", created_at: iso(5 * 60_000), review_updated_by: "u-marc" });
+
+  it("credits running out parks the item without using an attempt, sends nothing and writes no stand-in", async () => {
+    review();
+    modes.workout_reply = ["automatic"];
+    modelError = new Error('No model answered (openai:gpt-5-mini: 429 {"error":{"message":"You have no credits remaining. Add credits to continue using the API","type":"insufficient_quota"}})');
+    const item = queue("workout_reply", "fb1");
+    const r = await tick();
+    expect(r.processed[0].outcome).toBe("waiting for AI (credits)");
+    expect(item).toMatchObject({ status: "queued", attempts: 0, draft: null, locked_at: null });
+    expect(item.error).toBe("Waiting for AI: OpenAI credits ran out");
+    expect(Date.parse(item.due_at) - Date.now()).toBeGreaterThan(10 * 60_000);
+    expect(tables.messages).toEqual([]);
+    expect(pushes).toEqual([]);
+    expect(tables.coach_automation_events.filter((e) => e.item_id === item.id && e.kind === "queued")).toHaveLength(1);
+  });
+
+  it("checked again while it's still down: still parked, still no attempt used, one record of the wait", async () => {
+    review();
+    modelError = new Error("AI is paused: OpenAI says the account has no credits left.");
+    const item = queue("workout_reply", "fb1", { error: "Waiting for AI: OpenAI credits ran out" });
+    await tick();
+    expect(item).toMatchObject({ status: "queued", attempts: 0 });
+    expect(tables.coach_automation_events.filter((e) => e.item_id === item.id)).toHaveLength(0);
+  });
+
+  it("an outage parks it too; a bad draft is still a real failure the coach sees", async () => {
+    review();
+    modelError = new Error("openai:gpt-5.5: 503 {\"error\":\"overloaded\"}");
+    const a = queue("workout_reply", "fb1");
+    await tick();
+    expect(a.status).toBe("queued");
+
+    modelError = new Error("Couldn't write a draft. Try again.");
+    a.due_at = iso(60_000);
+    await tick();
+    expect(a.status).toBe("failed");
+    expect(a.error).toBe("Couldn't write a draft. Try again.");
+  });
+
+  it("once AI answers, the parked item is written from the records as they are and waits for his OK", async () => {
+    review();
+    modelError = new Error("no credits remaining");
+    const item = queue("workout_reply", "fb1");
+    await tick();
+    expect(item.status).toBe("queued");
+    modelError = null;
+    item.due_at = iso(60_000);
+    await tick();
+    expect(item.status).toBe("awaiting_approval");
+    expect(item.draft).toBe(modelReply);
+    expect(tables.messages).toEqual([]);
   });
 });

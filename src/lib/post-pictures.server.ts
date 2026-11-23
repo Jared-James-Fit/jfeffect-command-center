@@ -51,10 +51,14 @@ function picture(bytes: Uint8Array, provider: string): Made {
 /** OpenAI's image models, newest first: one this key can't use is skipped for the next. */
 const OPENAI_IMAGE_MODELS = ["gpt-image-1.5", "gpt-image-1"];
 
-async function viaOpenAI(key: string, prompt: string): Promise<Made> {
+async function viaOpenAI(key: string, prompt: string, tag = "post_picture"): Promise<Made> {
   const models = process.env.OPENAI_IMAGE_MODEL ? [process.env.OPENAI_IMAGE_MODEL] : OPENAI_IMAGE_MODELS;
+  const { pausedReason, recordAiCall, usageOf } = await import("@/lib/ai/ai-health.server");
+  const held = await pausedReason("openai");
+  if (held) return { ok: false, reason: held };
   let last = "OpenAI didn't answer";
   for (const model of models) {
+    const t0 = Date.now();
     const res = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
@@ -70,11 +74,14 @@ async function viaOpenAI(key: string, prompt: string): Promise<Made> {
         // keep the status
       }
       last = msg;
+      await recordAiCall({ model: `openai:${model}`, task: tag, ok: false, error: `${res.status} ${msg}`, ms: Date.now() - t0 });
       // a model this key doesn't have is worth trying the next; anything else isn't
       if (res.status === 404 || (res.status === 400 && /model/i.test(msg)) || (res.status === 403 && /model|verif/i.test(msg))) continue;
       return { ok: false, reason: msg };
     }
-    const b64: string | undefined = (await res.json())?.data?.[0]?.b64_json;
+    const j = await res.json();
+    await recordAiCall({ model: `openai:${model}`, task: tag, ok: true, usage: usageOf(j), ms: Date.now() - t0 });
+    const b64: string | undefined = j?.data?.[0]?.b64_json;
     return b64 ? picture(fromBase64(b64), `openai:${model}`) : { ok: false, reason: "OpenAI didn't send a picture back" };
   }
   return { ok: false, reason: last };
@@ -130,7 +137,7 @@ async function viaGateway(key: string, prompt: string): Promise<Made> {
  * false` keeps it on OpenAI (the daily pictures, unless the coach allows
  * Lovable AI).
  */
-export async function generatePicture(prompt: string, use: { lovable?: boolean } = {}): Promise<Made> {
+export async function generatePicture(prompt: string, use: { lovable?: boolean; tag?: string } = {}): Promise<Made> {
   const openai = process.env.OPENAI_API_KEY;
   const lovable = use.lovable === false ? undefined : process.env.LOVABLE_API_KEY;
   if (!openai && !lovable)
@@ -138,7 +145,7 @@ export async function generatePicture(prompt: string, use: { lovable?: boolean }
   let first: Made | null = null;
   if (openai) {
     try {
-      first = await viaOpenAI(openai, prompt);
+      first = await viaOpenAI(openai, prompt, use.tag);
       if (first.ok) return first;
     } catch (e: any) {
       first = { ok: false, reason: `OpenAI: ${String(e?.message ?? e).slice(0, 120)}` };
@@ -161,13 +168,17 @@ export type RefImage = { bytes: Uint8Array; mime: string };
  * with the references as its input images (gpt-image models take several).
  * Only OpenAI; the caller falls back to the prompt alone when it fails.
  */
-export async function generatePictureWithRefs(prompt: string, refs: RefImage[]): Promise<Made> {
+export async function generatePictureWithRefs(prompt: string, refs: RefImage[], tag = "daily_visual"): Promise<Made> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) return { ok: false, reason: "No OpenAI key (OPENAI_API_KEY) is set up." };
   if (!refs.length) return { ok: false, reason: "No style reference" };
   const models = process.env.OPENAI_IMAGE_MODEL ? [process.env.OPENAI_IMAGE_MODEL] : OPENAI_IMAGE_MODELS;
+  const { pausedReason, recordAiCall, usageOf } = await import("@/lib/ai/ai-health.server");
+  const held = await pausedReason("openai");
+  if (held) return { ok: false, reason: held };
   let last = "OpenAI didn't answer";
   for (const model of models) {
+    const t0 = Date.now();
     const form = new FormData();
     form.append("model", model);
     form.append("prompt", prompt);
@@ -192,10 +203,13 @@ export async function generatePictureWithRefs(prompt: string, refs: RefImage[]):
         // keep the status
       }
       last = msg;
+      await recordAiCall({ model: `openai:${model}`, task: tag, ok: false, error: `${res.status} ${msg}`, ms: Date.now() - t0 });
       if (res.status === 404 || (res.status === 400 && /model/i.test(msg)) || (res.status === 403 && /model|verif/i.test(msg))) continue;
       return { ok: false, reason: msg };
     }
-    const b64: string | undefined = (await res.json())?.data?.[0]?.b64_json;
+    const j = await res.json();
+    await recordAiCall({ model: `openai:${model}`, task: tag, ok: true, usage: usageOf(j), ms: Date.now() - t0 });
+    const b64: string | undefined = j?.data?.[0]?.b64_json;
     return b64 ? picture(fromBase64(b64), `openai:${model}+ref`) : { ok: false, reason: "OpenAI didn't send a picture back" };
   }
   return { ok: false, reason: last };

@@ -1073,6 +1073,9 @@ export async function runRevision(sb: any, submissionId: string, instructions: s
  * update, so two runs never write the same plan. Without an id it takes the
  * oldest waiting plan from the last 2 days.
  */
+/** Cut-off runs taken over in a row before a plan stops (each one resumes, never re-asks). */
+export const MAX_CUTOFFS = 5;
+
 export async function runQueuedPlan(sb: any, submissionId?: string | null) {
   let id = submissionId ?? null;
   if (!id) {
@@ -1089,9 +1092,22 @@ export async function runQueuedPlan(sb: any, submissionId?: string | null) {
   }
   if (!id) return { status: "idle" as const };
   const stale = new Date(Date.now() - STALE_RUN_MS).toISOString();
+  // a run cut off mid-request is taken over, but never forever: after MAX_CUTOFFS cut-offs it
+  // stops and says so (a WaitingForModel hand-back is `pending`, never counted)
+  const { data: before } = await sb.from("nutrition_ai_plans").select("status, progress").eq("submission_id", id).maybeSingle();
+  const cutoffs = before?.status === "generating" ? Number((before.progress as any)?.cutoffs ?? 0) + 1 : Number((before?.progress as any)?.cutoffs ?? 0);
+  if (cutoffs > MAX_CUTOFFS) {
+    await sb
+      .from("nutrition_ai_plans")
+      .update({ status: "error", error: `The writer was cut off ${MAX_CUTOFFS} times, so it stopped. Tap Regenerate to start again.`, progress: null, updated_at: new Date().toISOString() })
+      .eq("submission_id", id)
+      .eq("status", "generating")
+      .lt("updated_at", stale);
+    return { status: "error" as const, submissionId: id };
+  }
   const { data: claimed } = await sb
     .from("nutrition_ai_plans")
-    .update({ status: "generating", error: null, updated_at: new Date().toISOString() })
+    .update({ status: "generating", error: null, updated_at: new Date().toISOString(), ...(before?.status === "generating" ? { progress: { ...((before.progress as any) ?? {}), cutoffs } } : {}) })
     .eq("submission_id", id)
     .or(`status.eq.pending,and(status.eq.generating,updated_at.lt."${stale}")`)
     .select("phase, workout_meals, revise_instructions")

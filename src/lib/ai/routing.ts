@@ -23,6 +23,8 @@ export type Route = {
   maxOutputTokens?: number;
   /** Coaching decisions: every model listed is a top-tier reasoning model; nothing weaker is added. */
   strongOnly: boolean;
+  /** The task it was resolved for (resolveRoute): its calls are logged under it (ai_call_log). */
+  task?: AiTask;
 };
 
 /** The top tier: models allowed to make a coaching decision. */
@@ -157,5 +159,5 @@ export function resolveRoute(task: AiTask, override?: Partial<Record<AiTask, str
   const base = DEFAULT_ROUTES[task];
   const asked = override?.[task]?.filter((m) => typeof m === "string" && /^(openai|gateway):[\w./-]+$/.test(m)) ?? [];
   const models = base.strongOnly && !opts.anyModel ? asked.filter((m) => STRONG_MODELS.includes(m)) : asked;
-  return models.length ? { ...base, models } : base;
+  return models.length ? { ...base, models, task } : { ...base, task };
 }

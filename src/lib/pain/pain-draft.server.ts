@@ -169,14 +169,14 @@ export async function writePainDraft(sb: any, input: PainDraftInput): Promise<Pa
   const route = input.route ?? "coach_write";
   const { autoMessageProblems } = await import("@/lib/recovery-automation/rules");
   const check = (m: string) => (input.automatic ? autoMessageProblems(m) : draftProblems(m));
-  let reply = await askRoute(route, { system, prompt, timeoutMs: 45_000 }, { sb });
+  let reply = await askRoute(route, { system, prompt, timeoutMs: 45_000, tag: `${route}:pain` }, { sb });
   let parsed = parse(reply.text ?? "");
   let message = casualize(String(parsed?.message ?? "").trim());
   const problems = message ? check(message) : ["empty"];
   if (problems.length) {
     reply = await askRoute(
       route,
-      { system, prompt: `${prompt}\n\nYour last draft used words it must never use (${problems.join(", ")}). Write it again without them.`, timeoutMs: 45_000 },
+      { system, prompt: `${prompt}\n\nYour last draft used words it must never use (${problems.join(", ")}). Write it again without them.`, timeoutMs: 45_000, tag: `${route}:pain` },
       { sb },
     );
     parsed = parse(reply.text ?? "") ?? parsed;

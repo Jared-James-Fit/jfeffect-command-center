@@ -277,7 +277,7 @@ export function routeAsker(override: Parameters<typeof resolveRoute>[1]): Ask {
     let last = "no answer";
     for (const model of route.models) {
       try {
-        const reply = await callModelNow(model, { system, prompt, effort, maxOutputTokens: route.maxOutputTokens, timeoutMs: 150_000 });
+        const reply = await callModelNow(model, { system, prompt, effort, maxOutputTokens: route.maxOutputTokens, timeoutMs: 150_000, tag: "post_write" });
         if (reply.text?.trim()) return { text: reply.text, model };
         last = `${model}: empty answer`;
       } catch (e: any) {

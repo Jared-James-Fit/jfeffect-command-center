@@ -79,7 +79,7 @@ async function callModel(admin: Db, edit: any, label: string, system: string, pr
   for (const [i, model] of route.models.entries()) {
     const t0 = Date.now();
     try {
-      const r = await call(model, { system, prompt, effort: route.effort, maxOutputTokens: route.maxOutputTokens, temperature: 0.2, timeoutMs: i === 0 ? PRIMARY_TIMEOUT_MS : FALLBACK_TIMEOUT_MS });
+      const r = await call(model, { system, prompt, effort: route.effort, maxOutputTokens: route.maxOutputTokens, temperature: 0.2, timeoutMs: i === 0 ? PRIMARY_TIMEOUT_MS : FALLBACK_TIMEOUT_MS, tag: "edit" });
       await logCall(admin, edit.id, { label, model, system, prompt, response: r.text, ok: true, ms: r.ms, usage: r.usage });
       return { text: r.text, model };
     } catch (e: any) {

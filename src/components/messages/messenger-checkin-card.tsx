@@ -32,6 +32,7 @@ import { feedback } from "@/lib/feedback";
 import { weekChip } from "@/lib/program-context";
 import {
   analyzeMessengerCheckin,
+  isStandInRecap,
   getCheckinPlan,
   getMessengerCheckin,
   submitMessengerCheckin,
@@ -833,8 +834,9 @@ export function MessengerCheckinSubmissionCard({
     queryFn: () => get({ data: { submissionId } }),
     staleTime: 30_000,
     // Coach view: the AI recap fills in a few seconds after submit.
+    // only while it's being written: a recap that failed says so and waits for Try again
     refetchInterval: (q) =>
-      role === "admin" && (q.state.data as any)?.status === "completed" && (q.state.data as any)?.ai_status !== "ready"
+      role === "admin" && (q.state.data as any)?.status === "completed" && (q.state.data as any)?.ai_status === "pending"
         ? 4000
         : false,
   });
@@ -843,7 +845,7 @@ export function MessengerCheckinSubmissionCard({
   const kicked = useRef(false);
   useEffect(() => {
     if (role !== "admin" || kicked.current || !data) return;
-    if ((data as any).status !== "completed" || (data as any).ai_status === "ready") return;
+    if ((data as any).status !== "completed" || (data as any).ai_status !== "pending") return;
     kicked.current = true;
     void analyze({ data: { submissionId } })
       .then(() => qc.invalidateQueries({ queryKey: ["messenger-checkin", submissionId] }))
@@ -857,8 +859,9 @@ export function MessengerCheckinSubmissionCard({
     try {
       await analyze({ data: { submissionId, force: true } });
       await qc.invalidateQueries({ queryKey: ["messenger-checkin", submissionId] });
-    } catch {
-      toast.error("Couldn't write a new suggestion. Try again.");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't write a new suggestion. Try again.");
+      await qc.invalidateQueries({ queryKey: ["messenger-checkin", submissionId] });
     } finally {
       setRedoing(false);
     }
@@ -906,6 +909,8 @@ export function MessengerCheckinSubmissionCard({
 
   const answers = (data.answers ?? {}) as Record<string, any>;
   const analysis = data.ai_analysis as any;
+  // no AI recap (still being written, failed, or a stand-in): never a reply to send
+  const recapMissing = (data as any).ai_status !== "ready" || isStandInRecap(analysis) || !String(analysis?.suggested_response ?? "").trim();
 
   if (role === "client") {
     return (
@@ -1002,6 +1007,23 @@ export function MessengerCheckinSubmissionCard({
             </div>
           </details>
 
+          {recapMissing ? (
+            <div className="rounded-xl border border-warning/40 bg-warning/5 p-3" data-recap-missing>
+              <div className="text-xs font-semibold">
+                {(data as any).ai_status === "pending" ? "Writing the recap…" : "No AI recap for this one"}
+              </div>
+              <p className={cn("mt-1 text-xs leading-relaxed", FORM_MUTED)}>
+                {(data as any).ai_status === "pending"
+                  ? "It usually takes a few seconds. The wins and focus above are their own answers."
+                  : `${(data as any).ai_error ? `Why: ${(data as any).ai_error}. ` : ""}The wins and focus above are their own answers, not a summary. Nothing was written for you to send.`}
+              </p>
+              {role === "admin" && (data as any).ai_status !== "pending" && (
+                <Button type="button" size="sm" variant="outline" className="mt-2 w-full" onClick={() => void redoSuggestion()} disabled={redoing}>
+                  <RotateCcw className={cn("mr-1.5 h-3.5 w-3.5", redoing && "animate-spin")} /> {redoing ? "Writing…" : "Try again"}
+                </Button>
+              )}
+            </div>
+          ) : (
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-primary">
               <MessageSquareText className="h-3.5 w-3.5" /> Suggested response
@@ -1031,6 +1053,7 @@ export function MessengerCheckinSubmissionCard({
               </Button>
             )}
           </div>
+          )}
         </div>
       ) : (
         <div className="mt-3 text-xs text-muted-foreground">

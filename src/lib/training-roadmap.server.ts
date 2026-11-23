@@ -137,6 +137,7 @@ async function askCleo(admin: Admin, digest: string, weekIndexes: number[]): Pro
           maxOutputTokens: route.maxOutputTokens,
           temperature: 0.3,
           timeoutMs: 90_000,
+          tag: "roadmap",
         });
         lastText = r.text;
         const parsed = parseRoadmapReply(r.text, weekIndexes);
@@ -264,6 +265,13 @@ export async function runRoadmapTick(admin: Admin) {
     } catch (e: any) {
       const message = String(e?.message ?? e).slice(0, 500);
       results.push({ blockId: item.block_id, error: message });
+      const { classifyAiError, isProviderFailure } = await import("@/lib/ai/ai-errors");
+      if (isProviderFailure(classifyAiError(e))) {
+        // AI is down: the block waits in the queue (no try used) and is written once it's back;
+        // dropping it would leave the athlete's roadmap describing the old program
+        await admin.from("pl_roadmap_queue").update({ last_error: `Waiting for AI: ${message}`.slice(0, 500) }).eq("block_id", item.block_id).eq("queued_at", item.queued_at);
+        break;
+      }
       if ((item.attempts ?? 0) + 1 >= MAX_ATTEMPTS) {
         await admin.from("pl_roadmap_queue").delete().eq("block_id", item.block_id).eq("queued_at", item.queued_at);
       } else {

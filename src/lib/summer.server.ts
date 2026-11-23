@@ -774,12 +774,25 @@ export async function cleoAnswer(
   } catch (e: any) {
     const f = cleoFailure(e);
     console.error("[cleo] no model answered", trace.attempts);
+    try {
+      const { recordAiCall } = await import("@/lib/ai/ai-health.server");
+      await recordAiCall({ model: models[models.length - 1] ?? "openai:unknown", task: "assistant", ok: false, error: e, ms: Date.now() - tModel });
+    } catch {
+      // never instead of the answer's error
+    }
     if (f.quota) throw new Error("The OpenAI account behind Cleo is out of credit. Add credit at platform.openai.com to keep using Cleo.");
     if (f.status === 429) throw new Error("Cleo is getting too many requests. Try again in a minute.");
     if (f.status === 402) throw new Error("AI credits are used up. Add credits in Lovable to keep using Cleo.");
     throw new Error(`AI request failed${f.status ? ` (${f.status})` : ""}: ${String(e?.message ?? e).slice(0, 200)}`);
   }
   trace.ms.model = Date.now() - tModel;
+  // on record like every other call (ai_call_log): Cleo's prompt is long, so its cost is worth seeing
+  try {
+    const { recordAiCall } = await import("@/lib/ai/ai-health.server");
+    await recordAiCall({ model: trace.model ?? models[0], task: "assistant", ok: true, usage: { input: trace.usage.input, cached: trace.usage.cachedInput, output: trace.usage.output, reasoning: trace.usage.reasoning }, ms: trace.ms.model });
+  } catch {
+    // a lost log row never fails an answer
+  }
   if (!text && proposed.length) {
     const { data: cards } = await (await import("@/integrations/supabase/client.server")).supabaseAdmin
       .from("cleo_actions")

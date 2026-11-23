@@ -11,6 +11,11 @@ const ERROR_TYPE_LABELS: Record<string, string> = {
   scheduled_jobs_failing: "Scheduled jobs failing",
   google_calendar_setup: "Google Calendar setup needs fixing",
   page_error: "A page failed to load",
+  ai_unavailable: "AI is paused",
+  ai_failures: "AI calls failing",
+  ai_stuck_jobs: "AI jobs stuck",
+  ai_unusual_usage: "Unusual AI use",
+  ai_budget: "AI budget",
 };
 
 const STATUS_BREAKDOWN_LABELS: Record<string, string> = {
