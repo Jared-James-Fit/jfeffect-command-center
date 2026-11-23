@@ -42,6 +42,7 @@ export type AppEvent =
   | "checkin_reviewed"
   | "lift_reviewed"
   | "nutrition_targets_updated"
+  | "cardio_plan_updated"
   | "community_coach_recognition"
   | "session_request_answered"
   | "session_booked"
@@ -291,6 +292,13 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     title: () => "Your nutrition plan",
     body: (coach) => `${coach} sent your updated plan. Tap to see it.`,
     url: () => "/portal/nutrition-targets", rateMinutes: 360,
+  },
+  // A published cardio plan (cardio/publish.server.ts): once per version, beside its chat message.
+  cardio_plan_updated: {
+    to: "client", category: "check_ins",
+    title: () => "Your cardio plan",
+    body: (coach) => `${coach} updated your cardio plan. Tap to see it.`,
+    url: () => "/portal/cardio", rateMinutes: 360,
   },
   // The coach reacted to / commented on a workout the athlete chose to share.
   // Crew activity (everyone else's reactions, comments, replies) goes out
