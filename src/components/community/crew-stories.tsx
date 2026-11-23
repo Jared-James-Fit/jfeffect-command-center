@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, ChevronRight, Eye, Heart, Play, Plus, Send, Sticker as StickerIcon, Trophy, VolumeX, X } from "lucide-react";
+import { Aperture, Check, ChevronRight, Eye, Heart, Play, Plus, Send, Sticker as StickerIcon, Trophy, VolumeX, X } from "lucide-react";
+import { storyLookLine, useStoryLooks } from "@/lib/story-looks";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
@@ -357,6 +358,8 @@ function StoryViewer({
   const [ii, setIi] = useState(() => (groups[start] ? firstUnseen(groups[start]) : 0));
   const group = groups[gi];
   const item = group ? group.items[ii] : undefined;
+  // what each story was made with (its filter and template, the poster's choice to show): one read for the rail
+  const looks = useStoryLooks(useMemo(() => groups.flatMap((g) => g.items.map((it) => it.id)), [groups]));
   // the live copy (reactions land on it while it's showing)
   const post = item ? posts.find((p) => p.id === item.id) ?? item : null;
   const frameKey = post?.id;
@@ -773,6 +776,16 @@ function StoryViewer({
                 <X className="h-6 w-6" />
               </button>
             </div>
+            {/* the filter and template it was made with: one quiet line under the name, Instagram's */}
+            {(() => {
+              const line = storyLookLine(looks.get(post.id));
+              return line ? (
+                <div className="-mt-1 ml-10 flex items-center gap-1 text-[12px] font-medium text-white/80 [text-shadow:0_1px_2px_rgba(0,0,0,0.45)]" data-story-look>
+                  <Aperture className="h-3 w-3 shrink-0" aria-hidden />
+                  <span className="truncate">{line}</span>
+                </div>
+              ) : null;
+            })()}
           </div>
 
           {post.is_mine ? (

@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import {
-  BadgeCheck, BarChart3, Circle, Clock, Dumbbell, Flame, Image as ImageIcon, ListChecks, Lock, Pizza,
+  BadgeCheck, BarChart3, ChevronLeft, Circle, Clock, Dumbbell, Flame, Image as ImageIcon, ListChecks, Lock, Pizza,
   ReceiptText, Salad, Sticker, TrendingUp, Trophy, Wheat, Zap, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TEMPLATE_LABEL, type ShareTemplate } from "@/lib/workout-share-card";
 import { HOLD_TO_RECORD_MS } from "@/components/community/clip-recorder";
+import { slideLocks } from "@/lib/camera/camera-zoom";
 import { feedback } from "@/lib/feedback";
 
 const ICON: Record<ShareTemplate, LucideIcon> = {
@@ -80,7 +81,7 @@ export function LookCarousel({
   /** the look's name above the ring (left off where room is short: the card shows it) */
   showName?: boolean;
   /** Hold to film (Normal, no card): start / stop, and how far into the clip limit it is (null: not filming). */
-  hold?: { onStart: () => void; onEnd: () => void; progress: number | null; seconds: number };
+  hold?: Hold;
   /** Chips over the row (the filters' groups), in the row's order. */
   groups?: LookGroup[];
 }) {
@@ -90,16 +91,30 @@ export function LookCarousel({
   return <Glide key={looks!.map((l) => l.key).join("|")} looks={looks!} look={look!} onLook={onLook} onShoot={onShoot} disabled={disabled} counting={counting} showName={showName} hold={hold} groups={groups} />;
 }
 
-type Hold = { onStart: () => void; onEnd: () => void; progress: number | null; seconds: number };
+type Hold = {
+  onStart: () => void;
+  onEnd: () => void;
+  progress: number | null;
+  seconds: number;
+  /** The finger moving while it films (px from where it went down): up zooms in, down back out. */
+  onSlide?: (dx: number, dy: number) => void;
+  /** Slid left to the lock: filming carries on with the finger off, until the shutter's tapped. */
+  onLock?: () => void;
+  locked?: boolean;
+};
 
 /**
  * Holding the shutter films: a finger down for HOLD_TO_RECORD_MS starts the
  * clip, lifting it ends it, and the tap that a hold leaves behind is eaten
- * (`consume`), so it never also takes a photo.
+ * (`consume`), so it never also takes a photo. While it films the same finger
+ * slides up to zoom (`onSlide`) and left to lock it hands-free (`onLock`):
+ * the button keeps the finger (pointer capture), so nothing scrolls under it.
  */
 function useHold(hold: Hold | undefined, blocked: boolean) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = useRef(false);
+  const from = useRef<{ x: number; y: number } | null>(null);
+  const lockedHere = useRef(false);
   const filming = hold?.progress != null;
   const holdRef = useRef(hold);
   holdRef.current = hold;
@@ -115,22 +130,39 @@ function useHold(hold: Hold | undefined, blocked: boolean) {
       /* not supported: fine */
     }
     held.current = false;
+    lockedHere.current = false;
+    from.current = { x: e.clientX, y: e.clientY };
     timer.current = setTimeout(() => {
       timer.current = null;
       held.current = true;
       holdRef.current?.onStart();
     }, HOLD_TO_RECORD_MS);
   };
+  const onPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const h = holdRef.current;
+    if (!held.current || !from.current || !h || lockedHere.current) return;
+    const dx = e.clientX - from.current.x;
+    const dy = e.clientY - from.current.y;
+    if (h.onLock && !h.locked && slideLocks(dx, dy)) {
+      lockedHere.current = true;
+      feedback("toggle");
+      h.onLock();
+      return;
+    }
+    h.onSlide?.(dx, dy);
+  };
   const onPointerUp = () => {
     if (timer.current) {
       clearTimeout(timer.current);
       timer.current = null;
     }
-    if (held.current) holdRef.current?.onEnd();
+    from.current = null;
+    // locked: the finger's off, filming carries on (a tap on the shutter stops it)
+    if (held.current && !lockedHere.current) holdRef.current?.onEnd();
   };
   return {
     filming,
-    handlers: { onPointerDown, onPointerUp, onPointerCancel: onPointerUp },
+    handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp },
     /** True (once) when the click after a hold should do nothing. */
     consume: () => {
       if (!held.current) return false;
@@ -138,6 +170,35 @@ function useHold(hold: Hold | undefined, blocked: boolean) {
       return true;
     },
   };
+}
+
+/**
+ * While it films: the lock to the left of the shutter (slide there to keep
+ * filming hands-free), then, once locked, a quiet "Tap to stop".
+ */
+function LockTarget({ hold }: { hold: Hold }) {
+  if (!hold.onLock) return null;
+  return (
+    <span
+      className={cn(
+        "pointer-events-none absolute right-[calc(50%+58px)] top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-full px-2.5 py-1.5 text-[12px] font-bold transition-colors duration-200",
+        hold.locked ? "bg-white text-black" : "bg-black/45 text-white/90 backdrop-blur-md",
+      )}
+      data-record-lock={hold.locked ? "on" : "off"}
+      aria-hidden
+    >
+      {hold.locked ? (
+        <>
+          <Lock className="h-3.5 w-3.5" /> Tap to stop
+        </>
+      ) : (
+        <>
+          <ChevronLeft className="h-3.5 w-3.5" />
+          <Lock className="h-3.5 w-3.5" />
+        </>
+      )}
+    </span>
+  );
 }
 
 /** The clip's time over the shutter while it films. */
@@ -164,6 +225,7 @@ function Shutter({ onShoot, disabled, counting, hold }: { onShoot: () => void; d
   return (
     <div className="relative flex h-[88px] items-center justify-center">
       {filming && <FilmingTime seconds={hold!.seconds} />}
+      {filming && <LockTarget hold={hold!} />}
       <button
         type="button"
         disabled={disabled}
@@ -179,7 +241,7 @@ function Shutter({ onShoot, disabled, counting, hold }: { onShoot: () => void; d
           filming ? "scale-110 border-transparent transition-transform" : "border-white active:scale-95",
         )}
         style={filming ? filmRing(hold!.progress!) : undefined}
-        aria-label={filming ? "Stop filming" : counting ? "Cancel timer" : hold ? "Take photo, or hold to film" : "Take photo"}
+        aria-label={filming ? "Stop filming" : counting ? "Cancel timer" : hold ? "Take photo, or hold to film (slide up to zoom, left to lock)" : "Take photo"}
         data-shutter
         data-filming={filming ? "" : undefined}
       >
@@ -368,6 +430,7 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
             );
           })}
         </div>
+        {filming && <LockTarget hold={hold!} />}
         {/* the shutter's ring, still in the middle while the looks glide through it */}
         <span className={cn("pointer-events-none absolute left-1/2 top-1/2 h-[80px] w-[80px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[5px]", filming ? "border-transparent" : "border-white")} aria-hidden />
       </div>

@@ -153,7 +153,7 @@ export function AdminCommunityHub() {
             open={writing}
             onClose={() => setWriting(false)}
             incoming={incoming}
-            onPick={(how) => (how === "camera" ? picker.camera() : picker.library())}
+            onPick={picker.open}
             filters={{
               items: filterRow.items,
               groups: filterRow.groups,

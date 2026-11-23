@@ -14,7 +14,11 @@ import { useAuth } from "@/lib/auth";
 import { cleanGrade, type MediaGrade } from "@/lib/media-grade";
 
 export type FilterKind = "post" | "story";
-export type FilterDefaults = { post: MediaGrade | null; story: MediaGrade | null; updatedAt?: string };
+/** A look the person saved to use again ("Save preset"): a filter, its strength, adjustments and colour moves. */
+export type FilterPreset = { id: string; name: string; grade: MediaGrade };
+export type FilterDefaults = { post: MediaGrade | null; story: MediaGrade | null; presets?: FilterPreset[]; updatedAt?: string };
+/** The most presets kept (the row stays a row). */
+export const MAX_PRESETS = 8;
 
 const CACHE_KEY = "jf.media-filter-defaults.v1";
 const EMPTY: FilterDefaults = { post: null, story: null };
@@ -24,6 +28,18 @@ const db = supabase as any;
 export function sanitizeDefaults(raw: unknown): FilterDefaults {
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const out: FilterDefaults = { post: cleanGrade(r.post), story: cleanGrade(r.story) };
+  if (Array.isArray(r.presets)) {
+    const presets: FilterPreset[] = [];
+    for (const raw of r.presets) {
+      const p = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+      const grade = p ? cleanGrade(p.grade) : null;
+      if (!p || !grade || typeof p.id !== "string" || !p.id) continue;
+      const name = typeof p.name === "string" && p.name.trim() ? p.name.trim().slice(0, 24) : `Preset ${presets.length + 1}`;
+      if (!presets.some((x) => x.id === p.id)) presets.push({ id: p.id.slice(0, 40), name, grade });
+      if (presets.length >= MAX_PRESETS) break;
+    }
+    if (presets.length) out.presets = presets;
+  }
   if (typeof r.updatedAt === "string" && !Number.isNaN(Date.parse(r.updatedAt))) out.updatedAt = r.updatedAt;
   return out;
 }
@@ -81,10 +97,21 @@ async function saveToAccount(userId: string, prefs: FilterDefaults): Promise<boo
   return false;
 }
 
+/** The next name for a preset ("Look 3"), never one already in the list. */
+export function nextPresetName(presets: FilterPreset[] | undefined): string {
+  const names = new Set((presets ?? []).map((p) => p.name));
+  for (let n = (presets?.length ?? 0) + 1; ; n++) if (!names.has(`Look ${n}`)) return `Look ${n}`;
+}
+
 /** The person's saved defaults, and a way to change one. `enabled: false` (a coach previewing a client): nothing read or saved. */
 export function useFilterDefaults(enabled = true): {
   defaults: FilterDefaults;
   setDefault: (kind: FilterKind, grade: MediaGrade | null) => void;
+  /** Keep this look to use again (the newest first; the oldest goes past MAX_PRESETS). Returns the preset, or null. */
+  savePreset: (grade: MediaGrade) => FilterPreset | null;
+  deletePreset: (id: string) => void;
+  /** Puts a deleted preset back where it was (the toast's Undo). */
+  restorePreset: (p: FilterPreset, at: number) => void;
 } {
   const { user } = useAuth();
   const userId = user?.id ?? null;
@@ -115,5 +142,31 @@ export function useFilterDefaults(enabled = true): {
     writeCache(userId, next);
     if (userId) void saveToAccount(userId, next);
   };
-  return { defaults: enabled ? (data ?? EMPTY) : EMPTY, setDefault };
+  const writePresets = (fn: (list: FilterPreset[]) => FilterPreset[]) => {
+    if (!enabled) return;
+    const current = qc.getQueryData<FilterDefaults>(key) ?? data ?? readCache(userId);
+    const presets = fn(current.presets ?? []).slice(0, MAX_PRESETS);
+    const next: FilterDefaults = { ...current, presets: presets.length ? presets : undefined, updatedAt: new Date().toISOString() };
+    if (!presets.length) delete next.presets;
+    qc.setQueryData(key, next);
+    writeCache(userId, next);
+    if (userId) void saveToAccount(userId, next);
+  };
+  const savePreset = (grade: MediaGrade): FilterPreset | null => {
+    const clean = cleanGrade(grade);
+    if (!clean || (clean.filter === "original" && !clean.adjust && !clean.hsl)) return null;
+    const current = qc.getQueryData<FilterDefaults>(key) ?? data ?? readCache(userId);
+    const preset: FilterPreset = { id: `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name: nextPresetName(current.presets), grade: clean };
+    writePresets((list) => [preset, ...list]);
+    return preset;
+  };
+  const deletePreset = (id: string) => writePresets((list) => list.filter((p) => p.id !== id));
+  const restorePreset = (p: FilterPreset, at: number) =>
+    writePresets((list) => {
+      if (list.some((x) => x.id === p.id)) return list;
+      const next = list.slice();
+      next.splice(Math.max(0, Math.min(next.length, at)), 0, p);
+      return next;
+    });
+  return { defaults: enabled ? (data ?? EMPTY) : EMPTY, setDefault, savePreset, deletePreset, restorePreset };
 }

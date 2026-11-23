@@ -26,9 +26,9 @@ export function useMinute(enabled: boolean): Date {
 /** What the filters can show: the athlete's own, already-public things (see story-filters.ts). */
 export function useFilterContext(i: Omit<FilterContext, "now" | "block"> & { blockTitle: string | null | undefined; enabled: boolean }): FilterContext {
   const now = useMinute(i.enabled);
-  const key = JSON.stringify([i.firstName, i.session, i.finished, i.blockTitle, i.fuel]);
+  const key = JSON.stringify([i.firstName, i.session, i.finished, i.blockTitle, i.fuel, i.custom ?? null]);
   return useMemo(
-    () => ({ now, firstName: i.firstName, session: i.session, finished: i.finished, block: readBlockWeek(i.blockTitle), fuel: i.fuel }),
+    () => ({ now, firstName: i.firstName, session: i.session, finished: i.finished, block: readBlockWeek(i.blockTitle), fuel: i.fuel, custom: i.custom }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [now, key],
   );
@@ -40,15 +40,23 @@ export function useFilterContext(i: Omit<FilterContext, "now" | "block"> & { blo
  * a group (a lock in's, a workout's, a meal's) lead it, then that group's
  * story filters. With the chips for the groups that have something.
  */
-export function buildFilterRow(c: FilterContext, cards: Partial<Record<FilterGroup, LookItem[]>> = {}, opts: { gradesOnly?: boolean } = {}): { items: LookItem[]; groups: LookGroup[] } {
+export function buildFilterRow(
+  c: FilterContext,
+  cards: Partial<Record<FilterGroup, LookItem[]>> = {},
+  opts: { gradesOnly?: boolean; favorites?: string[] } = {},
+): { items: LookItem[]; groups: LookGroup[] } {
   const fx = filterRow(c).filter((f) => !opts.gradesOnly || isGrade(f));
   const items: LookItem[] = [{ key: NORMAL_KEY, look: "plain", label: "Normal" }];
+  // Favorites lead (the person's starred templates, in the order they starred them), each once in the row
+  const fav = new Set(opts.favorites ?? []);
+  const favs = (opts.favorites ?? []).map((k) => fx.find((f) => `${FX}${f.id}` === k)).filter((f): f is StoryFilter => !!f);
+  items.push(...favs.map((f) => ({ ...fxItem(f, c), group: "fav" })));
   const order = groupOrder(c);
   for (const g of order) {
     items.push(...(cards[g] ?? []).map((it) => ({ ...it, group: g })));
-    items.push(...fx.filter((f) => f.group === g).map((f) => fxItem(f, c)));
+    items.push(...fx.filter((f) => f.group === g && !fav.has(`${FX}${f.id}`)).map((f) => fxItem(f, c)));
   }
-  const groups = order.map((k) => FILTER_GROUPS.find((g) => g.key === k)!).filter((g) => items.some((it) => it.group === g.key));
+  const groups = (["fav", ...order] as FilterGroup[]).map((k) => FILTER_GROUPS.find((g) => g.key === k)!).filter((g) => !!g && items.some((it) => it.group === g.key));
   return { items, groups };
 }
 

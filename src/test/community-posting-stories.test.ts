@@ -38,7 +38,9 @@ describe("posting never strands people", () => {
     const studio = read("src/components/community/share-studio.tsx");
     expect(studio).toContain("loadDraft(key)");
     expect(studio).toContain("void clearDraft();");
-    expect(studio).toContain('"Picked up where you left off"');
+    // restored quietly (Nov 23 2026): the photo and words are just there again, no popup
+    expect(studio).not.toContain('"Picked up where you left off"');
+    expect(studio).toContain("// picked up quietly, no popup");
   });
   it("big canvases give their memory back (iPhone's canvas cap)", () => {
     const studio = read("src/components/community/share-studio.tsx");

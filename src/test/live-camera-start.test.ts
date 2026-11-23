@@ -18,7 +18,10 @@ describe("the live camera starts in the iPhone app too", () => {
   it("asks again with simpler settings when a camera can't do the first; a refusal is final", () => {
     // the first ask lives in camera-prime.ts, so the tap that opens the studio can ask the same
     expect(cam).toContain("{ video: studioCameraAsk(facing), audio: false },");
-    expect(read("src/lib/camera/camera-prime.ts")).toContain("return { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } };");
+    // a phone asks for a story's 9:16 (Nov 23 2026); a tablet or computer keeps 4:3
+    const prime = read("src/lib/camera/camera-prime.ts");
+    expect(prime).toContain('return videoConstraints({ quality: "1080p", fps: 30, facing }, null, s);');
+    expect(prime).toContain("({ facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } })");
     expect(cam).toContain("{ video: { facingMode: facing }, audio: false },");
     expect(cam).toContain("{ video: true, audio: false },");
     expect(cam).toContain('if (name === "NotAllowedError" || name === "SecurityError") break;');

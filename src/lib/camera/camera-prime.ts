@@ -13,7 +13,7 @@
  * (`takePrimedCamera`). Nothing held is ever left on: an answer the camera
  * doesn't take is let go after `PRIME_TTL_MS`.
  */
-import { askOrder, constraintLadder, readFilmAsk, readFilmSettings, type AskShape } from "@/lib/camera/film-settings";
+import { askOrder, constraintLadder, readFilmAsk, readFilmSettings, videoConstraints, type AskShape } from "@/lib/camera/film-settings";
 import { isPhone, phoneOnItsSide, readOrientation } from "@/lib/portrait-only";
 
 /** How long an answer waits for the camera to take it before it's let go. */
@@ -43,10 +43,24 @@ let primed: { key: string; promise: Promise<MediaStream>; timer: ReturnType<type
 /**
  * The Crew studio's first request (share-studio.tsx asks for exactly this
  * first), so the tap that opens it can ask the same (`primeCamera`).
+ *
+ * On a phone it's a story's picture (Nov 23 2026): 9:16 upright at 1080p,
+ * written the way that worked on this phone before (the set camera's
+ * `askOrder`, `readFilmAsk`), so the photo and the clip are exactly what the
+ * 9:16 viewfinder shows. It used to ask every phone for 1920 × 1440, a 3:4
+ * picture the viewfinder cropped: a clip came back 3:4 and a story showed it
+ * boxed in. `shape` is the other way round, when the first one wasn't 9:16.
+ * A tablet or a computer keeps 4:3 (a landscape webcam keeps more of its
+ * height under the 9:16 crop that way).
  */
-export function studioCameraAsk(facing: "environment" | "user"): MediaTrackConstraints {
-  return { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } };
+export function studioCameraAsk(facing: "environment" | "user", shape?: AskShape | null): MediaTrackConstraints {
+  const upright = phoneUpright();
+  if (upright == null) return LEGACY_STUDIO_ASK(facing);
+  const s = shape ?? askOrder(upright, readFilmAsk())[0];
+  return videoConstraints({ quality: "1080p", fps: 30, facing }, null, s);
 }
+/** The 4:3 ask, for a tablet or a computer. */
+const LEGACY_STUDIO_ASK = (facing: "environment" | "user"): MediaTrackConstraints => ({ facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } });
 
 /**
  * Call inside the tap that opens a camera: the film camera's first ask, or

@@ -182,6 +182,13 @@ export function useClipRecorder({
     if (rec.current && !lockedRef.current) stop();
   }, [stop]);
 
+  /** Slid to the lock while filming: the finger can lift, a tap on the shutter stops it (Instagram's hands-free). */
+  const lock = useCallback(() => {
+    if (!rec.current && !starting.current) return;
+    lockedRef.current = true;
+    setLocked(true);
+  }, []);
+
   // the clock for the ring around the shutter
   useEffect(() => {
     if (startedAt == null) return;
@@ -206,5 +213,6 @@ export function useClipRecorder({
     start,
     release,
     stop,
+    lock,
   };
 }
