@@ -78,8 +78,8 @@ describe("the camera asked for inside the tap that opens it", () => {
     await (taken as { stream: Promise<MediaStream> }).stream;
     expect(read("src/components/community/share-workout-picker.tsx")).toContain('primeCamera(studioCameraAsk("environment"));');
     const studio = read("src/components/community/share-studio.tsx");
-    expect(studio).toContain("{ video: studioCameraAsk(facing), audio: false },");
-    expect(studio).toContain("const primed = takePrimedCamera(studioCameraAsk(facing));");
+    expect(studio).toContain("{ video: studioCameraAsk(facing, null, quality), audio: false },");
+    expect(studio).toContain("const primed = takePrimedCamera(studioCameraAsk(facing, null, quality));");
     expect(studio).toContain('if (i === 0 && primed && "stream" in primed) return await primed.stream;');
   });
 });
