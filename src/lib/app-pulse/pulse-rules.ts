@@ -135,6 +135,18 @@ export function osFor(ua: string, maxTouchPoints: number): OsFamily {
   return os === "macos" && maxTouchPoints > 1 ? "ios" : os;
 }
 
+/**
+ * A visit's device class, with the OS known: the site funnel's own reading (a short side under 600
+ * is a phone, a touch screen a tablet) except that a computer OS driven by a mouse is a computer,
+ * whatever its screen. A 1366×768 or 1536×864 laptop is under 900 on its short side and read as a
+ * tablet by size alone. An iPad says macOS but has touch, so osFor already calls it iOS.
+ */
+export function visitDevice(funnelDevice: DeviceClass | null, os: OsFamily, coarsePointer: boolean): DeviceClass | null {
+  if (!funnelDevice || funnelDevice === "phone") return funnelDevice;
+  if (!coarsePointer && (os === "windows" || os === "macos" || os === "linux" || os === "chromeos")) return "desktop";
+  return funnelDevice;
+}
+
 export function platformOf(env: { native: "ios" | "android" | null; standalone: boolean }): Platform {
   if (env.native === "ios") return "ios_app";
   if (env.native === "android") return "android_app";

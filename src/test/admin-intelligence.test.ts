@@ -22,6 +22,7 @@ import {
   sessionStillGoing,
   surfaceOf,
   SESSION_IDLE_MS,
+  visitDevice,
 } from "@/lib/app-pulse/pulse-rules";
 import { prettySource, shapeAppIntel, takeaways } from "@/lib/admin-intel/app-intel-model";
 import { planChangeLines, planChangeProblems, type PlanChangeReview } from "@/lib/admin-intel/membership-model";
@@ -162,6 +163,16 @@ describe("visits: what's recorded", () => {
     expect(osFor("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", 5)).toBe("ios");
     expect(osFor("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", 0)).toBe("macos");
     expect(osFor("Mozilla/5.0 (Linux; Android 14)", 5)).toBe("android");
+  });
+  it("calls a mouse-driven laptop a computer, whatever its screen", () => {
+    // a 1536×864 Windows laptop is under 900 on its short side: the funnel's size rule says tablet
+    expect(visitDevice("tablet", "windows", false)).toBe("desktop");
+    expect(visitDevice("tablet", "macos", false)).toBe("desktop");
+    expect(visitDevice("tablet", "ios", true)).toBe("tablet");
+    expect(visitDevice("tablet", "android", true)).toBe("tablet");
+    expect(visitDevice("tablet", "windows", true)).toBe("tablet");
+    expect(visitDevice("phone", "windows", false)).toBe("phone");
+    expect(visitDevice(null, "windows", false)).toBe(null);
   });
   it("honours Global Privacy Control and Do Not Track", () => {
     expect(optedOut({ globalPrivacyControl: true })).toBe(true);

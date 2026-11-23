@@ -20,6 +20,7 @@ import {
   platformOf,
   sessionStillGoing,
   surfaceOf,
+  visitDevice,
 } from "./pulse-rules";
 
 const VISIT_KEY = "jf_visit_v1";
@@ -151,12 +152,19 @@ async function send(final: boolean): Promise<void> {
   };
   if (first) {
     const src = captureSource();
+    const os = osFor(navigator.userAgent, (navigator as any).maxTouchPoints ?? 0);
+    let coarse = false;
+    try {
+      coarse = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+    } catch {
+      /* no media queries: size alone */
+    }
     body.start = {
       surface: surfaceOf(window.location.pathname),
       entry: path,
       platform: platformOf({ native: nativePlatform(), standalone: standalone() }),
-      device: currentDevice(),
-      os: osFor(navigator.userAgent, (navigator as any).maxTouchPoints ?? 0),
+      device: visitDevice(currentDevice(), os, coarse),
+      os,
       referrer: src.referrer ?? null,
       source: src.source ?? null,
       utm_source: src.utm_source ?? null,
