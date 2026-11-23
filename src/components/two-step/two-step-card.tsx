@@ -1,9 +1,23 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, ShieldCheck, Smartphone } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { Laptop, Loader2, MoreHorizontal, Plus, ShieldCheck, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,164 +29,220 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/lib/auth";
-import { roleRequiresMfa } from "@/lib/mfa-rules";
-import { listAuthenticators, mfaErrorMessage, removeAuthenticator, type TotpFactor } from "@/lib/mfa";
 import { billingDay } from "@/lib/date-range";
-import { TotpSetup } from "@/components/two-step/totp-setup";
+import {
+  KIND_TITLE,
+  type TwoStepKind,
+  type TwoStepMethod,
+  type TwoStepStatus,
+} from "@/lib/two-step";
+import {
+  forgetTwoStepDevice,
+  listTwoStepDevices,
+  removeTwoStepMethod,
+  setTwoStepPreferred,
+  trustThisDevice,
+  type TrustedDeviceRow,
+} from "@/lib/two-step.functions";
+import { clearTrust, deviceNameHere, readTrust, saveTrust } from "@/lib/two-step-client";
 import { RecoveryCodesPanel } from "@/components/two-step/recovery-codes";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  AddWay,
+  KIND_ICON,
+  useAddableKinds,
+  WayChoices,
+} from "@/components/two-step/two-step-flows";
+import { TWO_STEP_STATUS_KEY, useTwoStepStatus } from "@/components/two-step/use-two-step-status";
 
-const KEY = ["mfa-authenticators"] as const;
-const CODES_KEY = ["mfa-recovery-left"] as const;
+const DEVICES_KEY = "two-step-devices";
 
-async function recoveryCodesLeft(): Promise<number> {
-  const { data, error } = await (supabase as any).rpc("staff_mfa_recovery_left");
-  if (error) throw error;
-  return typeof data === "number" ? data : 0;
+function day(iso: string | null | undefined): string {
+  return (iso ? billingDay(iso.slice(0, 10)) : "") ?? "";
 }
 
 /**
- * The login's authenticators (two-step sign-in, mfa-rules.ts): add a backup
- * (a second phone, or a password manager) so a lost phone never locks them
- * out, or remove one. The last one stays while the login needs it.
+ * A login's ways to confirm it's them (two-step.ts): Face ID / Touch ID, text
+ * messages, authenticator apps. Which is asked first, add one, remove one
+ * (never the last while the login needs two-step). Used on Account and on the
+ * gate's "You're back in" after a recovery code.
  */
-export function TwoStepCard() {
-  const { accountRole, user } = useAuth();
+export function TwoStepMethodList({
+  status,
+  onChanged,
+}: {
+  status: TwoStepStatus;
+  onChanged: () => void;
+}) {
   const qc = useQueryClient();
-  const required = roleRequiresMfa(accountRole);
-  const { data: factors, isLoading, error } = useQuery({ queryKey: KEY, queryFn: listAuthenticators, staleTime: 30_000 });
-  const [adding, setAdding] = useState(false);
-  const [makingCodes, setMakingCodes] = useState(false);
-  const hasAuthenticator = (factors?.length ?? 0) > 0;
-  const { data: codesLeft } = useQuery({ queryKey: CODES_KEY, queryFn: recoveryCodesLeft, enabled: hasAuthenticator, staleTime: 30_000 });
-  const [removing, setRemoving] = useState<TotpFactor | null>(null);
+  const remove = useServerFn(removeTwoStepMethod);
+  const prefer = useServerFn(setTwoStepPreferred);
+  const { kinds, ready } = useAddableKinds();
+  const [adding, setAdding] = useState<TwoStepKind | "choose" | null>(null);
+  const [removing, setRemoving] = useState<TwoStepMethod | null>(null);
   const [busy, setBusy] = useState(false);
+  const methods = status.methods;
+  const lastOne = status.required && methods.length <= 1;
 
-  const list = factors ?? [];
-  const canRemove = list.length > 1 || !required;
+  async function refresh() {
+    await qc.invalidateQueries({ queryKey: [TWO_STEP_STATUS_KEY] });
+    onChanged();
+  }
 
   async function confirmRemove() {
     if (!removing) return;
     setBusy(true);
     try {
-      await removeAuthenticator(removing.id);
-      await qc.invalidateQueries({ queryKey: KEY });
-      toast.success("Authenticator removed");
+      await remove({ data: { kind: removing.kind, id: removing.id } });
+      toast.success(`${KIND_TITLE[removing.kind]} removed`);
       setRemoving(null);
-    } catch (e) {
-      toast.error(mfaErrorMessage(e, "Couldn't remove it. Try again."));
+      await refresh();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't remove it. Try again.");
     } finally {
       setBusy(false);
     }
   }
 
+  async function askFirst(k: TwoStepKind) {
+    try {
+      await prefer({ data: { kind: k } });
+      toast.success("We'll ask for that first");
+      await refresh();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't save that.");
+    }
+  }
+
   return (
-    <Card className="space-y-4 rounded-2xl p-6" data-two-step-card>
-      <div className="flex items-center gap-2">
-        <ShieldCheck className="h-4 w-4" aria-hidden />
-        <h3 className="text-base font-semibold">Two-step sign-in</h3>
-      </div>
-      <p className="text-sm text-muted-foreground">
-        {required
-          ? "Your login needs a code from an authenticator app when you sign in on a new device. Add a backup so a lost phone never locks you out."
-          : "A code from an authenticator app when you sign in on a new device, as well as your password."}
-      </p>
-
-      {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-      {error && <p className="text-sm text-destructive">{mfaErrorMessage(error, "Couldn't load your authenticators.")}</p>}
-
-      {list.length > 0 && (
-        <ul className="divide-y rounded-lg border">
-          {list.map((f) => (
-            <li key={f.id} className="flex items-center gap-3 px-3 py-2.5">
-              <Smartphone className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm">{f.name.replace(/ · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/, "")}</div>
-                {f.createdAt && <div className="text-xs text-muted-foreground">Added {billingDay(f.createdAt.slice(0, 10))}</div>}
-              </div>
-              {canRemove && (
-                <Button variant="ghost" size="sm" onClick={() => setRemoving(f)}>
-                  Remove
-                </Button>
-              )}
-            </li>
-          ))}
+    <div className="space-y-3" data-two-step-methods>
+      {methods.length > 0 ? (
+        <ul className="divide-y rounded-xl border">
+          {methods.map((m) => {
+            const Icon = KIND_ICON[m.kind];
+            const first =
+              m.kind === status.preferred && methods.find((x) => x.kind === m.kind)?.id === m.id;
+            return (
+              <li
+                key={`${m.kind}:${m.id}`}
+                className="flex items-center gap-3 px-3 py-2.5"
+                data-two-step-method={m.kind}
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted">
+                  <Icon className="h-4 w-4" aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{m.label}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {first
+                      ? "Asked for first"
+                      : m.lastUsedAt
+                        ? `Last used ${day(m.lastUsedAt)}`
+                        : m.createdAt
+                          ? `Added ${day(m.createdAt)}`
+                          : KIND_TITLE[m.kind]}
+                  </div>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-10 w-10"
+                      aria-label={`Options for ${m.label}`}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {m.kind !== status.preferred && (
+                      <DropdownMenuItem onSelect={() => void askFirst(m.kind)}>
+                        Ask for this first
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem
+                      disabled={lastOne}
+                      onSelect={() => setRemoving(m)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      {lastOne ? "Remove (add another way first)" : "Remove"}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </li>
+            );
+          })}
         </ul>
-      )}
-      {!isLoading && list.length === 1 && required && (
-        <p className="text-xs text-muted-foreground">Only one authenticator. If you lose that phone you'll need a reset to get back in.</p>
+      ) : (
+        <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
+          No way to confirm yet. Add one.
+        </p>
       )}
 
-      {hasAuthenticator && (
-        <div className="space-y-3 rounded-lg border p-3" data-recovery-codes-row>
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-sm font-medium">Recovery codes</div>
-              <div className={codesLeft === 0 ? "text-xs text-warning" : "text-xs text-muted-foreground"}>
-                {codesLeft === undefined
-                  ? "For when you lose your phone"
-                  : codesLeft === 0
-                    ? "None left. Make some so a lost phone never locks you out."
-                    : `${codesLeft} left · each works once`}
-              </div>
-            </div>
-            {!makingCodes && (
-              <Button variant="outline" size="sm" onClick={() => setMakingCodes(true)}>
-                {codesLeft ? "Make new codes" : "Make codes"}
-              </Button>
-            )}
-          </div>
-          {makingCodes && (
-            <>
-              {!!codesLeft && <p className="text-xs text-muted-foreground">Your old codes stop working as soon as these are made.</p>}
-              <RecoveryCodesPanel
-                email={user?.email}
-                onDone={() => {
-                  setMakingCodes(false);
-                  void qc.invalidateQueries({ queryKey: CODES_KEY });
+      <Button
+        variant="outline"
+        className="h-11 w-full"
+        onClick={() => setAdding("choose")}
+        disabled={!ready}
+      >
+        <Plus className="mr-1.5 h-4 w-4" /> Add a way to confirm
+      </Button>
+
+      <Sheet open={!!adding} onOpenChange={(o) => !o && setAdding(null)}>
+        <SheetContent
+          side="bottom"
+          swipeToClose
+          hideCloseButton
+          className="max-h-[92dvh] overflow-y-auto rounded-t-[24px] p-5 pb-[max(env(safe-area-inset-bottom),1.25rem)] sm:mx-auto sm:max-w-[480px]"
+        >
+          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" aria-hidden />
+          <SheetHeader className="mb-3 text-left">
+            <SheetTitle>
+              {adding === "choose" || !adding ? "Add a way to confirm" : KIND_TITLE[adding]}
+            </SheetTitle>
+            <SheetDescription>
+              After your password, any of your ways confirms it's you.
+            </SheetDescription>
+          </SheetHeader>
+          {adding === "choose" ? (
+            <WayChoices kinds={kinds} have={methods.map((m) => m.kind)} onPick={setAdding} />
+          ) : adding ? (
+            <div className="space-y-3">
+              <AddWay
+                kind={adding}
+                suggestedPhone={status.suggestedPhone}
+                trust={false}
+                onAdded={async () => {
+                  toast.success(`${KIND_TITLE[adding]} added`);
+                  setAdding(null);
+                  await refresh();
                 }}
               />
-              <Button variant="ghost" className="w-full" onClick={() => { setMakingCodes(false); void qc.invalidateQueries({ queryKey: CODES_KEY }); }}>
-                Close
+              <Button variant="ghost" className="h-10 w-full" onClick={() => setAdding("choose")}>
+                Back
               </Button>
-            </>
-          )}
-        </div>
-      )}
-
-      {adding ? (
-        <div className="space-y-3 rounded-lg border p-4">
-          <TotpSetup
-            label={list.length ? "Backup authenticator" : "Authenticator app"}
-            submitLabel="Add it"
-            onDone={async () => {
-              await qc.invalidateQueries({ queryKey: KEY });
-              setAdding(false);
-              toast.success("Authenticator added");
-            }}
-          />
-          <Button variant="ghost" className="w-full" onClick={() => setAdding(false)}>
-            Cancel
-          </Button>
-        </div>
-      ) : (
-        <Button variant="outline" onClick={() => setAdding(true)} disabled={isLoading}>
-          {list.length ? "Add a backup authenticator" : "Set up an authenticator"}
-        </Button>
-      )}
+            </div>
+          ) : null}
+        </SheetContent>
+      </Sheet>
 
       <AlertDialog open={!!removing} onOpenChange={(o) => !o && setRemoving(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove this authenticator?</AlertDialogTitle>
+            <AlertDialogTitle>Remove {removing?.label}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Its codes stop working for JF Effect. {list.length > 1 ? "Your other one still works." : "You won't be asked for a code any more."}
+              It stops working for JF Effect.{" "}
+              {methods.length > 1
+                ? "Your other ways still work."
+                : "You won't be asked to confirm any more."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>Keep it</AlertDialogCancel>
             <AlertDialogAction
-              onClick={(e) => { e.preventDefault(); void confirmRemove(); }}
+              onClick={(e) => {
+                e.preventDefault();
+                void confirmRemove();
+              }}
               disabled={busy}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
@@ -181,6 +251,220 @@ export function TwoStepCard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+/** Devices that skip the second step for 30 days. */
+function TrustedDevices({ uid }: { uid: string }) {
+  const qc = useQueryClient();
+  const list = useServerFn(listTwoStepDevices);
+  const forget = useServerFn(forgetTwoStepDevice);
+  const trust = useServerFn(trustThisDevice);
+  const { data: devices, isLoading } = useQuery({
+    queryKey: [DEVICES_KEY, uid],
+    queryFn: () => list({}),
+    staleTime: 30_000,
+  });
+  const [busy, setBusy] = useState<string | null>(null);
+  const mine = readTrust(uid);
+  const here = devices?.find((d) => d.id === mine?.id);
+
+  async function run(key: string, fn: () => Promise<void>) {
+    setBusy(key);
+    try {
+      await fn();
+      await qc.invalidateQueries({ queryKey: [DEVICES_KEY, uid] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "That didn't work. Try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const row = (d: TrustedDeviceRow) => (
+    <li key={d.id} className="flex items-center gap-3 px-3 py-2.5" data-two-step-device>
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted">
+        {/phone|iPad|tablet/i.test(d.label) ? (
+          <Smartphone className="h-4 w-4" aria-hidden />
+        ) : (
+          <Laptop className="h-4 w-4" aria-hidden />
+        )}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">
+          {d.label}
+          {d.id === mine?.id && (
+            <span className="ml-1.5 text-xs font-normal text-muted-foreground">· This device</span>
+          )}
+        </div>
+        <div className="text-xs text-muted-foreground">Trusted until {day(d.expiresAt)}</div>
+      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-10"
+        disabled={!!busy}
+        onClick={() =>
+          void run(d.id, async () => {
+            await forget({ data: { id: d.id } });
+            if (d.id === mine?.id) clearTrust(uid);
+            toast.success("Device forgotten");
+          })
+        }
+      >
+        {busy === d.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Forget"}
+      </Button>
+    </li>
+  );
+
+  return (
+    <div className="space-y-3 rounded-xl border p-3" data-two-step-devices>
+      <div>
+        <div className="text-sm font-medium">Trusted devices</div>
+        <div className="text-xs text-muted-foreground">
+          These skip the second step for 30 days. Your password is still asked.
+        </div>
+      </div>
+      {isLoading ? (
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      ) : devices && devices.length ? (
+        <ul className="divide-y rounded-lg border">{devices.map(row)}</ul>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          None. Tick "Don't ask again on this device" when you sign in.
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {!here && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-10"
+            disabled={!!busy}
+            onClick={() =>
+              void run("trust", async () => {
+                const t = await trust({ data: { label: deviceNameHere() } });
+                saveTrust(uid, t);
+                toast.success("This device is trusted for 30 days");
+              })
+            }
+          >
+            Trust this device
+          </Button>
+        )}
+        {!!devices?.length && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-10"
+            disabled={!!busy}
+            onClick={() =>
+              void run("all", async () => {
+                await forget({ data: { id: null } });
+                clearTrust(uid);
+                toast.success("Every device forgotten");
+              })
+            }
+          >
+            Forget all
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Account → Two-step sign-in. */
+export function TwoStepCard() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const status = useTwoStepStatus();
+  const [makingCodes, setMakingCodes] = useState(false);
+  const data = status.data;
+  const has = (data?.methods.length ?? 0) > 0;
+
+  return (
+    <Card className="space-y-4 rounded-2xl p-5 sm:p-6" data-two-step-card>
+      <div className="flex items-center gap-2">
+        <ShieldCheck className="h-4 w-4" aria-hidden />
+        <h3 className="text-base font-semibold">Two-step sign-in</h3>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        After your password you confirm it's you with one of these. Add two, so a lost phone never
+        locks you out.
+      </p>
+
+      {status.isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+      {status.error && (
+        <p className="text-sm text-destructive">
+          {(status.error as any)?.message ?? "Couldn't load two-step sign-in."}
+        </p>
+      )}
+
+      {data && <TwoStepMethodList status={data} onChanged={() => void status.refetch()} />}
+      {data && data.methods.length > 0 && data.methods.every((m) => m.kind === "passkey") && (
+        <p className="text-xs text-muted-foreground" data-two-step-passkey-only>
+          Add a text message too: Face ID works on jfeffect.com, not in the iPhone or Android app.
+        </p>
+      )}
+
+      {has && status.uid && <TrustedDevices uid={status.uid} />}
+
+      {has && data && (
+        <div className="space-y-3 rounded-xl border p-3" data-recovery-codes-row>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-medium">Recovery codes</div>
+              <div
+                className={
+                  data.recoveryLeft === 0 ? "text-xs text-warning" : "text-xs text-muted-foreground"
+                }
+              >
+                {data.recoveryLeft === 0
+                  ? "None left. Make some so a lost phone never locks you out."
+                  : `${data.recoveryLeft} left · each works once`}
+              </div>
+            </div>
+            {!makingCodes && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10"
+                onClick={() => setMakingCodes(true)}
+              >
+                {data.recoveryLeft ? "Make new codes" : "Make codes"}
+              </Button>
+            )}
+          </div>
+          {makingCodes && (
+            <>
+              {!!data.recoveryLeft && (
+                <p className="text-xs text-muted-foreground">
+                  Your old codes stop working as soon as these are made.
+                </p>
+              )}
+              <RecoveryCodesPanel
+                email={user?.email}
+                onDone={() => {
+                  setMakingCodes(false);
+                  void qc.invalidateQueries({ queryKey: [TWO_STEP_STATUS_KEY] });
+                }}
+              />
+              <Button
+                variant="ghost"
+                className="w-full"
+                onClick={() => {
+                  setMakingCodes(false);
+                  void qc.invalidateQueries({ queryKey: [TWO_STEP_STATUS_KEY] });
+                }}
+              >
+                Close
+              </Button>
+            </>
+          )}
+        </div>
+      )}
     </Card>
   );
 }

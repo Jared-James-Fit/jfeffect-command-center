@@ -1,9 +1,10 @@
-// Recovery codes for two-step sign-in (mfa-rules.ts): the way back in when
-// the phone with the authenticator is lost. Ten one-time codes, made when
-// two-step is turned on and shown once; the database keeps only their hashes
-// (20270424093000_staff_mfa_recovery.sql). Using one with the password turns
-// the old authenticator off, signs the login out everywhere and asks for the
-// new phone to be set up.
+// Recovery codes for two-step sign-in (mfa-rules.ts, two-step.ts): the way
+// back in when the phone is lost. Ten one-time codes, made when two-step is
+// turned on and shown once; the database keeps only their hashes
+// (20270424093000_staff_mfa_recovery.sql). Using one with the password
+// confirms that sign-in, signs every other device out, stops trusting every
+// device, and asks them to remove what was on the lost phone and add the new
+// one.
 //
 // Pure: the code format, reading what someone types, and the saved file.
 
@@ -47,10 +48,10 @@ export function recoveryCodesFile(codes: string[], email: string | null | undefi
     email ? `For: ${email}` : null,
     `Made: ${day}`,
     "",
-    "Lost the phone with your authenticator? Sign in with your password, tap",
-    "\"Use a recovery code\" and type one of these. Each works once. Using one",
-    "turns your old authenticator off and signs you out everywhere, then you",
-    "set up your new phone. Making new codes stops these from working.",
+    "Lost your phone? Sign in with your password, tap \"Use a recovery code\"",
+    "and type one of these. Each works once. Using one signs every other device",
+    "out, then you remove what was on the lost phone and add your new one.",
+    "Making new codes stops these from working.",
     "",
     ...codes,
     "",

@@ -55,30 +55,37 @@ describe("recovery codes", () => {
   });
 });
 
-describe("the one server call made before the code", () => {
-  it("is using a recovery code, and nothing else", () => {
-    expect([...MFA_EXEMPT_FNS]).toEqual(["redeemRecoveryCode"]);
+describe("the server calls made before a session is confirmed", () => {
+  it("are the ones that confirm it and using a recovery code, nothing else", () => {
+    expect([...MFA_EXEMPT_FNS].sort()).toEqual(
+      ["confirmWithTrustedDevice", "finishTwoStepPasskey", "getTwoStepStatus", "redeemRecoveryCode", "sendTwoStepCode", "startTwoStepPasskey", "verifyTwoStepCode"].sort(),
+    );
     expect(mfaExemptFn("redeemRecoveryCode")).toBe(true);
-    for (const n of ["makeRecoveryCodes", "resetTeammateTwoStep", "listTeam", "", null, undefined]) {
+    for (const n of ["makeRecoveryCodes", "resetTeammateTwoStep", "removeTwoStepMethod", "trustThisDevice", "listTeam", "", null, undefined]) {
       expect(mfaExemptFn(n as any)).toBe(false);
     }
     const start = readFileSync("src/start.ts", "utf8");
     expect(start).toContain("if (!mfaExemptFn(serverFnMeta?.name))");
   });
 
-  it("makes codes only for a session that has had its code, and resets a teammate only as the owner", () => {
+  it("makes codes only for a confirmed session, and resets a teammate only as the owner", () => {
     const fns = readFileSync("src/lib/mfa-recovery.functions.ts", "utf8");
     const make = fns.slice(fns.indexOf("export const makeRecoveryCodes"), fns.indexOf("export type RedeemResult"));
-    expect(make).toContain("if (!hadItsCode(context))");
-    expect(make).toContain('f.status === "verified"');
+    expect(make).toContain("if (!(await s.sessionConfirmed(db, context.userId, context.claims as any)))");
+    expect(make).toContain("methodsFor(db, context.userId)");
     const reset = fns.slice(fns.indexOf("export const resetTeammateTwoStep"));
     expect(reset).toContain('.eq("role", "admin")');
-    expect(reset).toContain("if (!hadItsCode(context))");
+    expect(reset).toContain("sessionConfirmed(db, context.userId");
     expect(reset).toContain("data.userId === context.userId");
     expect(reset).toContain('r.role !== "client"');
-    // Using a code turns the old authenticator off only after the database says it's right.
+    // A recovery code confirms the session, signs the rest out and forgets every
+    // trusted device, only after the database says it's right.
     const redeem = fns.slice(fns.indexOf("export const redeemRecoveryCode"), fns.indexOf("export const resetTeammateTwoStep"));
-    expect(redeem.indexOf('verdict !== "ok"')).toBeLessThan(redeem.indexOf("removeAuthenticators(db, context.userId)"));
+    const ok = redeem.indexOf('verdict !== "ok"');
+    expect(ok).toBeGreaterThan(-1);
+    for (const step of ['markSession(db, context.userId, sid, "recovery_code")', '"two_step_trust_forget"', 'signOut(jwt, "others")']) {
+      expect(redeem.indexOf(step), step).toBeGreaterThan(ok);
+    }
   });
 });
 
