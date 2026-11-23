@@ -10,6 +10,8 @@ import { PROGRAM_CONTEXT_RULES, programContextText, publicProgramContext } from 
 export type MessengerCheckinTaskType = "weekly_checkin";
 
 export type MessengerCheckinAnalysis = {
+  /** Set on the stand-in written when the recap model didn't answer (`fallbackAnalysis`). */
+  fallback?: boolean;
   summary: string;
   wins: string[];
   focus: string[];
@@ -582,6 +584,9 @@ function answerText(taskType: MessengerCheckinTaskType, answers: Record<string, 
     .join("\n");
 }
 
+/** The stand-in recap's summary (older stand-ins carry only this, no `fallback` flag). */
+export const FALLBACK_RECAP_SUMMARY = "Client check-in received. Review the answers below before replying.";
+
 function fallbackAnalysis(
   taskType: MessengerCheckinTaskType,
   answers: Record<string, any>,
@@ -619,7 +624,9 @@ function fallbackAnalysis(
   if (help) focus.push(String(help));
 
   return {
-    summary: "Client check-in received. Review the answers below before replying.",
+    // the recap model didn't answer: a stand-in built from their answers (never a reply to send as it is)
+    fallback: true,
+    summary: FALLBACK_RECAP_SUMMARY,
     wins: wins.slice(0, 3),
     focus: Array.from(new Set(focus)).slice(0, 4),
     goals: goals.slice(0, 3),
@@ -712,7 +719,7 @@ async function generateAnalysis(
     }
     if (!parsed || typeof parsed !== "object") return fallback;
     return {
-      summary: String(parsed.summary ?? fallback.summary),
+      summary: String(parsed.summary ?? "Client check-in received."),
       wins: Array.isArray(parsed.wins) ? parsed.wins.map(String).slice(0, 5) : fallback.wins,
       focus: Array.isArray(parsed.focus) ? parsed.focus.map(String).slice(0, 5) : fallback.focus,
       goals: Array.isArray(parsed.goals) ? parsed.goals.map(String).slice(0, 5) : fallback.goals,

@@ -282,6 +282,25 @@ describe("weekly check-ins", () => {
     expect(calls).toEqual([]);
   });
 
+  it("a stand-in recap (the recap model didn't answer) is never his draft: a real one is written from their answers", async () => {
+    // as Fionna's on Nov 23 2026: the template with her goal pasted into it
+    checkin({
+      summary: "Client check-in received. Review the answers below before replying.",
+      wins: [],
+      focus: ["Low energy"],
+      goals: ["I hope to just get what I need to get done next week"],
+      suggested_response: "good update. main focus this week is I hope to just get what I need to get done next week. keep me posted if anything changes and we\u2019ll adjust fast.",
+    });
+    modelReply = "sounds like a heavy week. lets keep it simple: get the sessions in and we'll go from there";
+    const item = queue("checkin_reply", "ci1");
+    await tick();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].prompt).not.toContain("START FROM");
+    expect(calls[0].prompt).not.toContain("Client check-in received");
+    expect(calls[0].prompt).toContain("Goals for the week: I hope to just get what I need to get done next week");
+    expect(item).toMatchObject({ status: "awaiting_approval", draft: modelReply });
+  });
+
   it("going by itself, a reply that claims he looked at something is rewritten first", async () => {
     checkin({ suggested_response: "just saw your check-in, 4 for 4. keep the steps up." });
     modes.checkin_reply = ["automatic"];
