@@ -13,7 +13,7 @@
  */
 import { isNative } from "@/platform";
 import { phoneLayoutNow } from "@/lib/portrait-only";
-import { passkeyLabel, passkeyWord, deviceName } from "@/lib/two-step";
+import { deviceName, FASTER_OFFER_SNOOZE_DAYS, passkeyLabel, passkeyWord } from "@/lib/two-step";
 
 const TRUST_KEY = "jf-2step-device:";
 const CONFIRMED_KEY = "jf-2step-confirmed";
@@ -103,6 +103,28 @@ export function forgetConfirmed(sessionId: string | null | undefined): void {
     ls()?.setItem(CONFIRMED_KEY, JSON.stringify(confirmedList().filter((x) => x !== sessionId)));
   } catch {
     /* nothing to do */
+  }
+}
+
+// ── "Not now" on the faster-way offer ───────────────────────────────────────
+const OFFER_KEY = "jf-2step-offer-snooze:";
+
+export function fasterOfferSnoozed(userId: string | null | undefined): boolean {
+  if (!userId) return true;
+  try {
+    const until = Number(ls()?.getItem(OFFER_KEY + userId) ?? 0);
+    return Number.isFinite(until) && until > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+export function snoozeFasterOffer(userId: string | null | undefined): void {
+  if (!userId) return;
+  try {
+    ls()?.setItem(OFFER_KEY + userId, String(Date.now() + FASTER_OFFER_SNOOZE_DAYS * 86_400_000));
+  } catch {
+    /* they'll be offered it again next time */
   }
 }
 

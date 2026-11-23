@@ -166,6 +166,27 @@ export function kindsInOrder(methods: TwoStepMethod[]): TwoStepKind[] {
   return out;
 }
 
+// ── A faster way ────────────────────────────────────────────────────────────
+/** Days "Not now" keeps the faster-way offer away on a device. */
+export const FASTER_OFFER_SNOOZE_DAYS = 14;
+
+/**
+ * Offer Face ID or a text right after confirming, when the login can only
+ * confirm here with the authenticator app: no phone, and no passkey this
+ * device can use. A login that already has a faster way is never asked.
+ */
+export function needsFasterWay(methods: TwoStepMethod[], passkeyHere: boolean): boolean {
+  if (methods.length === 0) return false;
+  if (methods.some((m) => m.kind === "sms")) return false;
+  return !(passkeyHere && methods.some((m) => m.kind === "passkey"));
+}
+
+/** Removing this one would leave only passkeys, which the iPhone and Android apps can't use. */
+export function leavesOnlyPasskeys(methods: TwoStepMethod[], removing: TwoStepMethod): boolean {
+  const rest = methods.filter((m) => !(m.kind === removing.kind && m.id === removing.id));
+  return rest.length > 0 && rest.every((m) => m.kind === "passkey");
+}
+
 // ── The gate ────────────────────────────────────────────────────────────────
 export type TwoStepStatus = {
   team: boolean;
