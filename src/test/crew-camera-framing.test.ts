@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LOCK_SLIDE_PX, ZOOM_DEAD_PX, slideLocks, zoomFromPinch, zoomFromSlide, zoomLabel, zoomRange, type ZoomRange } from "@/lib/camera/camera-zoom";
+import { DIGITAL_ZOOM_MAX, LOCK_SLIDE_PX, ZOOM_DEAD_PX, ZOOM_SLIDE_PX, digitalZoomRange, easeZoom, lockReach, slideLocks, zoomCrop, zoomDetent, zoomFromPinch, zoomFromSlide, zoomLabel, zoomRange, type ZoomRange } from "@/lib/camera/camera-zoom";
 import { studioCameraAsk } from "@/lib/camera/camera-prime";
 
 /**
@@ -51,7 +51,7 @@ describe("the story camera asks for a 9:16 picture", () => {
   });
 });
 
-describe("zoom: the camera's own, never a fake crop", () => {
+describe("zoom: the camera's own, else a digital zoom that's filmed too", () => {
   const r: ZoomRange = { min: 1, max: 8, now: 1 };
   it("is offered only when the track has a zoom range", () => {
     const track = (caps: unknown, zoom?: number) => ({ getCapabilities: () => caps, getSettings: () => ({ zoom }) }) as unknown as MediaStreamTrack;
@@ -68,6 +68,70 @@ describe("zoom: the camera's own, never a fake crop", () => {
     expect(zoomFromSlide(4, 2000, r)).toBe(1);
     expect(zoomFromSlide(up, 0, r)).toBe(up);
   });
+  it("the slide is continuous (never steps), up and down again lands where it started, and the room below reaches the widest", () => {
+    // every pixel moves it: no tenth-of-a-zoom steps
+    const a = zoomFromSlide(1, -100, r);
+    const b = zoomFromSlide(1, -101, r);
+    expect(b).toBeGreaterThan(a);
+    expect(b - a).toBeLessThan(0.05);
+    // zoomed in from 4×, the thumb only has ~90px below the shutter: that's enough to come all the way out
+    expect(zoomFromSlide(4, 90, r, 100)).toBe(1);
+    expect(zoomFromSlide(4, 50, r, 100)).toBeGreaterThan(1);
+    expect(zoomFromSlide(4, 50, r, 100)).toBeLessThan(4);
+    // repeated up and down from the same start: the same finger height, the same zoom
+    expect(zoomFromSlide(2, -150, r, 100)).toBe(zoomFromSlide(2, -150, r, 100));
+    expect(zoomFromSlide(2, -(ZOOM_SLIDE_PX + ZOOM_DEAD_PX), r)).toBeCloseTo(Math.min(8, 2 * 8), 1);
+  });
+  it("the zoom glides to where the finger is: frame-rate independent, landing exactly", () => {
+    // a 120 Hz phone's two frames cover what a 60 Hz phone's one does
+    const at60 = easeZoom(1, 3, 16);
+    const at120 = easeZoom(easeZoom(1, 3, 8), 3, 8);
+    expect(at120).toBeCloseTo(at60, 6);
+    let z = 1;
+    for (let i = 0; i < 60; i++) z = easeZoom(z, 3, 16);
+    expect(z).toBe(3);
+    // never overshoots, never jumps past a long pause
+    expect(easeZoom(1, 3, 10_000)).toBeLessThan(3);
+  });
+  it("a light tick at each whole step and at either end, never in between", () => {
+    expect(zoomDetent(1.9, 2.05, r)).toBe(true);
+    expect(zoomDetent(2.1, 2.4, r)).toBe(false);
+    expect(zoomDetent(7.9, 8, r)).toBe(true);
+    expect(zoomDetent(1.2, 1, r)).toBe(true);
+    expect(zoomDetent(2, 2, r)).toBe(false);
+  });
+  it("without the camera's own zoom: a digital zoom to 3×, cropped from the middle exactly as the preview scales it", () => {
+    expect(digitalZoomRange()).toEqual({ min: 1, max: DIGITAL_ZOOM_MAX, now: 1, digital: true });
+    // the whole picture at 1×; the middle half each way at 2×
+    expect(zoomCrop(1080, 1920, 1080, 1920, 1)).toEqual({ sx: 0, sy: 0, sw: 1080, sh: 1920 });
+    expect(zoomCrop(1080, 1920, 1080, 1920, 2)).toEqual({ sx: 270, sy: 480, sw: 540, sh: 960 });
+    // a 4:3 camera into a 9:16 output: cut to the output's shape first, then zoomed from its middle
+    const c = zoomCrop(1440, 1080, 1080, 1920, 1);
+    expect(c.sw / c.sh).toBeCloseTo(1080 / 1920, 5);
+    expect(c.sx + c.sw / 2).toBeCloseTo(720, 5);
+    expect(zoomCrop(1080, 1920, 1080, 1920, 0)).toEqual({ sx: 0, sy: 0, sw: 1080, sh: 1920 });
+  });
+  it("a digital zoom is filmed: the clip records a canvas cropped the same way, never only the preview zoomed", () => {
+    const rec = read("src/components/community/clip-recorder.ts");
+    expect(rec).toContain("const comp = dz ? startZoomCompositor(dz.video, dz.zoom, Math.round(fps) || 30) : null;");
+    expect(rec).toContain("const mixed = new MediaStream([...(comp ? [comp.track] : stream.getVideoTracks()), ...(audio?.getAudioTracks() ?? [])]);");
+    const comp = read("src/lib/camera/zoom-compositor.ts");
+    expect(comp).toContain("const c = zoomCrop(w, h, canvas.width, canvas.height, zoom());");
+    expect(comp).toContain("ctx.drawImage(video, c.sx, c.sy, c.sw, c.sh, 0, 0, canvas.width, canvas.height);");
+    expect(studio).toContain("digital: () => (zoomCapsRef.current?.digital && videoRef.current ? { video: videoRef.current, zoom: () => zoomNow.current } : null),");
+    expect(studio).toContain("resetZoom(zoomRange(stream.getVideoTracks()[0]) ?? (canRecordCanvas() ? digitalZoomRange() : null));");
+    // the preview scales from its middle; a photo takes the same part at full size
+    expect(studio).toContain("v.style.transform = zoomCapsRef.current?.digital && z > 1.0005 ? `scale(${z})` : \"\";");
+    expect(studio).toContain("const cr = zoomCrop(video.videoWidth, video.videoHeight, c.width, c.height, zoomCaps?.digital ? zoomNow.current : 1);");
+  });
+  it("the camera's own zoom: one request at a time, the newest value once the last lands (a fast slide never queues up)", () => {
+    expect(studio).toContain("if (nativeBusy.current || nativeSent.current === z) return;");
+    expect(studio).toContain("if (nativeSent.current !== zoomNow.current) runZoom();");
+    // Chrome on Android shows it only when asked, and it's asked only when that adds no question
+    const prime = read("src/lib/camera/camera-prime.ts");
+    expect(prime).toContain('ptzAsk = ptz.state === "granted" || cam.state === "prompt";');
+    expect(prime).toContain("return ptzAsk ? ({ ...ask, zoom: true } as MediaTrackConstraints) : ask;");
+  });
   it("a pinch follows the fingers, held to the range", () => {
     expect(zoomFromPinch(1, 100, 200, r)).toBe(2);
     expect(zoomFromPinch(2, 200, 100, r)).toBe(1);
@@ -81,22 +145,74 @@ describe("zoom: the camera's own, never a fake crop", () => {
 });
 
 describe("hold to film, slide left to lock", () => {
-  it("locks only on a clear slide to the left", () => {
+  it("locks only on a clear slide to the left, the lock glowing as the finger nears it", () => {
     expect(slideLocks(-LOCK_SLIDE_PX - 1, 4)).toBe(true);
     expect(slideLocks(-30, 0)).toBe(false);
     expect(slideLocks(-LOCK_SLIDE_PX - 10, -200)).toBe(false); // mostly up: that's a zoom
     expect(slideLocks(LOCK_SLIDE_PX + 10, 0)).toBe(false);
+    expect(lockReach(-LOCK_SLIDE_PX / 2, 0)).toBeCloseTo(0.5, 5);
+    expect(lockReach(-30, -200)).toBe(0); // a zoom never lights the lock
+    expect(lockReach(40, 0)).toBe(0);
   });
-  it("the shutter keeps the finger while it films: zoom and lock from the same hold; locked, a lift keeps filming", () => {
+  it("the finger is followed anywhere on the screen by its id: zoom from where filming started, lock, a lift ends it", () => {
     const carousel = read("src/components/community/look-carousel.tsx");
-    expect(carousel).toContain("if (held.current && !lockedHere.current) holdRef.current?.onEnd();");
-    expect(carousel).toContain("handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp },");
-    expect(studio).toContain("onSlide: zoomCaps ? (_dx, dy) => applyZoom(zoomFromSlide(slideFrom.current, dy, zoomCaps)) : undefined,");
+    // the window follows the finger (the shutter keeps it too), so it can leave the button
+    expect(carousel).toContain('window.addEventListener("pointermove", move, true);');
+    expect(carousel).toContain("if (!f || ev.pointerId !== id) return;");
+    // measured from where the thumb was when filming started, never where it first touched
+    expect(carousel).toContain("f.ax = f.x;");
+    expect(carousel).toContain("hh?.onSlide?.(dx, dy, f.below);");
+    // nothing scrolls or selects under it
+    expect(carousel).toContain('window.addEventListener("touchmove", still, { capture: true, passive: false });');
+    // the hold lives above the row, so a row that changes mid-clip never drops the finger
+    expect(carousel).toContain("const h = useHold(onShoot ? hold : undefined, disabled || counting);");
+    expect(studio).toContain("onSlide: zoomCaps ? (_dx, dy, below) => zoomTo(zoomFromSlide(slideFrom.current, dy, zoomCaps, below)) : undefined,");
     expect(studio).toContain("onLock: recorder.lock,");
     expect(read("src/components/community/clip-recorder.ts")).toContain("const lock = useCallback(() => {");
+  });
+  it("hands-free, a touch on the shutter stops it at once; a gesture the browser cancels keeps the clip (locked)", () => {
+    const carousel = read("src/components/community/look-carousel.tsx");
+    expect(carousel).toContain("if (h.recording) {");
+    expect(carousel).toContain("h.onStop();");
+    expect(carousel).toContain("if (cancelled && hh?.onLock) {");
+    // the click a hold or a stop leaves behind never takes a photo
+    expect(carousel).toContain("if (h.eatClick()) return;");
   });
   it("the camera takes every finger: a pinch zooms, never a look swipe or a flip", () => {
     expect(studio).toContain('phase === "shoot" ? "touch-none" : "touch-pan-y"');
     expect(studio).toContain("if (!st || pinched.current) return;");
   });
 });
+
+describe("the recording button: Instagram's surface, minimal while it films, nothing moves", () => {
+  const carousel = read("src/components/community/look-carousel.tsx");
+  const rec = read("src/components/community/clip-recorder.ts");
+  it("grows into a translucent circle with a white rounded-square stop and a thin gradient ring filled by CSS", () => {
+    expect(carousel).toContain("data-record-surface={state}");
+    expect(carousel).toContain('className="absolute inset-0 rounded-full bg-white/20');
+    expect(carousel).toContain("style={{ width: on ? 30 : 60, height: on ? 30 : 60, borderRadius: on ? 9 : 30, opacity: on ? 1 : 0 }}");
+    expect(carousel).toContain('<animateTransform attributeName="gradientTransform" type="rotate"');
+    expect(read("src/styles.css")).toContain("@keyframes jf-rec-ring { from { stroke-dashoffset: 377; } to { stroke-dashoffset: 0; } }");
+    // the ring and the clock read when it started: the recorder never re-renders the camera every frame
+    expect(rec).not.toContain("setElapsed");
+    expect(rec).toContain("startedAt,");
+  });
+  it("haptics where the phone has them, never a sound while it films (the mic would hear it)", () => {
+    expect(carousel).toContain('feedback("press");');
+    expect(carousel).toContain('feedback("detent");');
+    expect(studio).toContain('if (zoomDetent(prev, next, caps)) feedback("detent");');
+    expect(carousel).not.toContain('feedback("toggle")');
+  });
+  it("while it films: the clock up top, the close, flash and library step away keeping their places, the zoom just over the button", () => {
+    expect(studio).toContain("<RecordingClock startedAt={recorder.startedAt} locked={recorder.locked} />");
+    expect(studio).toContain('recorder.recording && "pointer-events-none opacity-0"');
+    expect(studio).toContain('recorder.recording && "pointer-events-none invisible opacity-0"');
+    expect(studio).toContain('{recordable && hints.data && !hints.data.includes("hold_to_film") && (');
+    expect(carousel).toContain('active && "pointer-events-none invisible opacity-0"');
+    expect(studio).toContain("zoom={zoomCaps && recorder.recording ? <ZoomPill");
+  });
+  it("the app going to the background mid-clip ends it there, kept", () => {
+    expect(studio).toContain('if (document.visibilityState === "hidden") recorder.stop();');
+  });
+});
+

@@ -20,7 +20,7 @@ describe("the live camera starts in the iPhone app too", () => {
     expect(cam).toContain("{ video: studioCameraAsk(facing), audio: false },");
     // a phone asks for a story's 9:16 (Nov 23 2026); a tablet or computer keeps 4:3
     const prime = read("src/lib/camera/camera-prime.ts");
-    expect(prime).toContain('return videoConstraints({ quality: "1080p", fps: 30, facing }, null, s);');
+    expect(prime).toContain('const ask = videoConstraints({ quality: "1080p", fps: 30, facing }, null, s);');
     expect(prime).toContain("({ facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } })");
     expect(cam).toContain("{ video: { facingMode: facing }, audio: false },");
     expect(cam).toContain("{ video: true, audio: false },");

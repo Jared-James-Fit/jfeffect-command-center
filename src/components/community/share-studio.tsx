@@ -24,12 +24,13 @@ import { context2d, releaseCanvas } from "@/lib/canvas-memory";
 import { clearDraft, draftWorthKeeping, loadDraft, saveDraft } from "@/lib/post-draft";
 import { getPlatform, iosAppTooOldForCamera, isNative, openAppSettings, openTestFlight } from "@/platform";
 import { reportCameraTrouble } from "@/lib/camera-report";
-import { LookCarousel, lookItems, type LookGroup, type LookItem } from "@/components/community/look-carousel";
-import { canRecordClips, useClipRecorder } from "@/components/community/clip-recorder";
+import { LookCarousel, RecordingClock, lookItems, type LookGroup, type LookItem } from "@/components/community/look-carousel";
+import { MAX_RECORD_MS, canRecordClips, useClipRecorder } from "@/components/community/clip-recorder";
 import { askOrder, pictureFits, pictureMiss, readFilmAsk, readFilmSettings, saveFilmAsk, type AskShape } from "@/lib/camera/film-settings";
-import { phoneUpright, studioCameraAsk, takePrimedCamera } from "@/lib/camera/camera-prime";
+import { phoneUpright, refreshPtzAsk, studioCameraAsk, takePrimedCamera } from "@/lib/camera/camera-prime";
 import { PICTURE_WAIT_MS, pictureSize } from "@/lib/camera/picture-size";
-import { zoomFromPinch, zoomFromSlide, zoomLabel, zoomRange, type ZoomRange } from "@/lib/camera/camera-zoom";
+import { digitalZoomRange, easeZoom, zoomCrop, zoomDetent, zoomFromPinch, zoomFromSlide, zoomLabel, zoomRange, type ZoomRange } from "@/lib/camera/camera-zoom";
+import { canRecordCanvas } from "@/lib/camera/zoom-compositor";
 import { createCommunityPost, useHintsSeen, useMarkHintSeen } from "@/lib/community.queries";
 import { useAuth } from "@/lib/auth";
 import {
@@ -318,9 +319,15 @@ export function ShareStudio({
   const [shot, setShot] = useState<Shot | null>(null);
   const [video, setVideo] = useState<HTMLVideoElement | null>(null);
   const [facing, setFacing] = useState<"environment" | "user">("environment");
-  // the camera's own zoom (pinch, or slide up while filming): only where the camera has one (camera-zoom.ts)
+  // the zoom (pinch, or slide up and down while filming): the camera's own where it has one, else a digital zoom
+  // that's filmed too (camera-zoom.ts); where it's going and where it is live in refs, so a slide never re-renders this
   const [zoomCaps, setZoomCaps] = useState<ZoomRange | null>(null);
-  const [zoom, setZoom] = useState<number | null>(null);
+  const zoomCapsRef = useRef<ZoomRange | null>(null);
+  zoomCapsRef.current = zoomCaps;
+  const zoomTarget = useRef(1);
+  const zoomNow = useRef(1);
+  // the zoom pills' own setters (ZoomPill): only they re-render as the number changes
+  const zoomShown = useRef(new Set<(z: number) => void>());
   // the last frame, blurred, while the camera flips or restarts (never a black flash)
   const [still, setStill] = useState<string | null>(null);
   const [status, setStatus] = useState<"starting" | "live" | "fallback">("starting");
@@ -636,6 +643,7 @@ export function ShareStudio({
   const restarts = useRef(0);
   useEffect(() => {
     if (!open) return;
+    refreshPtzAsk();
     restarts.current = 0;
     let gone = false;
     void iosAppTooOldForCamera().then((old) => !gone && setOldApp(old));
@@ -667,8 +675,7 @@ export function ShareStudio({
       return;
     }
     setStatus("starting");
-    setZoomCaps(null);
-    setZoom(null);
+    resetZoom(null);
     let step = "asking";
     // still nothing after a while (a stuck camera): the phone's own camera instead; a late start still goes live
     const slow = setTimeout(() => {
@@ -770,9 +777,8 @@ export function ShareStudio({
         step = "showing";
         streamRef.current = stream;
         setTorchOk(torchSupported(stream.getVideoTracks()[0]));
-        const zr = zoomRange(stream.getVideoTracks()[0]);
-        setZoomCaps(zr);
-        setZoom(zr?.now ?? null);
+        // the camera's own zoom where it has one, else a digital zoom (only where a clip can be filmed with it)
+        resetZoom(zoomRange(stream.getVideoTracks()[0]) ?? (canRecordCanvas() ? digitalZoomRange() : null));
         // iOS plays a camera inline only when the element is muted + playsinline as attributes
         video.muted = true;
         video.setAttribute("muted", "");
@@ -880,14 +886,18 @@ export function ShareStudio({
       if (!c) return;
       let media: ShareCardData["media"] = null;
       if (status === "live" && video && video.videoWidth) {
-        if (facing === "user") {
+        // a selfie as it looks (mirrored), and a digital zoom's part of the picture, as the photo will be
+        const dz = zoomCapsRef.current?.digital ? zoomNow.current : 1;
+        if (facing === "user" || dz > 1.001) {
           const w = Math.min(960, video.videoWidth);
           const h = Math.round((w * video.videoHeight) / video.videoWidth);
           if (mirror.width !== w) mirror.width = w;
           if (mirror.height !== h) mirror.height = h;
           const m = mirror.getContext("2d")!;
-          m.setTransform(-1, 0, 0, 1, w, 0);
-          m.drawImage(video, 0, 0, w, h);
+          if (facing === "user") m.setTransform(-1, 0, 0, 1, w, 0);
+          else m.setTransform(1, 0, 0, 1, 0, 0);
+          const cr = zoomCrop(video.videoWidth, video.videoHeight, video.videoWidth, video.videoHeight, dz);
+          m.drawImage(video, cr.sx, cr.sy, cr.sw, cr.sh, 0, 0, w, h);
           media = mirror;
         } else media = video;
       }
@@ -1063,7 +1073,9 @@ export function ShareStudio({
       ctx.translate(c.width, 0);
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(video, 0, 0, c.width, c.height);
+    // a digital zoom: the part of the picture the viewfinder shows, at the camera's full size
+    const cr = zoomCrop(video.videoWidth, video.videoHeight, c.width, c.height, zoomCaps?.digital ? zoomNow.current : 1);
+    ctx.drawImage(video, cr.sx, cr.sy, cr.sw, cr.sh, 0, 0, c.width, c.height);
     setFlash(true);
     setTimeout(() => setFlash(false), 140);
     if (adding) {
@@ -1118,12 +1130,16 @@ export function ShareStudio({
   const markHint = useMarkHintSeen();
   // what the viewfinder showed when filming started: the clip is framed exactly like that (never re-decided from its shape)
   const recView = useRef<{ w: number; h: number; view: { w: number; h: number }; guide: { w: number; h: number } } | null>(null);
-  // where the zoom was when the finger started sliding (up zooms in, down back out)
+  // where the zoom was when filming started (sliding up zooms in from there, down back out)
   const slideFrom = useRef(1);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  videoRef.current = video;
   const recorder = useClipRecorder({
     getStream: () => streamRef.current,
     // sound only when it's switched on in the camera's settings (off on a phone), so their music keeps playing
     withSound: () => readFilmSettings().sound,
+    // a digital zoom is filmed through the canvas, so the clip zooms as the viewfinder does
+    digital: () => (zoomCapsRef.current?.digital && videoRef.current ? { video: videoRef.current, zoom: () => zoomNow.current } : null),
     onClip: (file) => {
       markHint("hold_to_film");
       const v = recView.current;
@@ -1142,6 +1158,20 @@ export function ShareStudio({
   // the light goes off with the clip
   useEffect(() => {
     if (!recorder.recording && torchOn.current) void torch(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recorder.recording]);
+  // the app going to the background mid-clip ends it there, kept (iOS stops the camera, and a canvas stops drawing)
+  useEffect(() => {
+    if (!recorder.recording) return;
+    const away = () => {
+      if (document.visibilityState === "hidden") recorder.stop();
+    };
+    document.addEventListener("visibilitychange", away);
+    window.addEventListener("pagehide", away);
+    return () => {
+      document.removeEventListener("visibilitychange", away);
+      window.removeEventListener("pagehide", away);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recorder.recording]);
   // off the camera, or onto a mode with a card, mid-clip: it's thrown away
@@ -1270,23 +1300,76 @@ export function ShareStudio({
     feedback("tap");
     setFacing((f) => (f === "user" ? "environment" : "user"));
   };
-  // the camera's own zoom, at most once a frame (applyConstraints is async and a pinch fires fast)
-  const pendingZoom = useRef<number | null>(null);
-  const zoomFrame = useRef(0);
-  const applyZoom = (z: number) => {
-    if (!zoomCaps) return;
-    pendingZoom.current = z;
-    setZoom(z);
-    if (zoomFrame.current) return;
-    zoomFrame.current = requestAnimationFrame(() => {
-      zoomFrame.current = 0;
-      const value = pendingZoom.current;
-      const t = streamRef.current?.getVideoTracks()[0];
-      if (value == null || !t) return;
-      void t.applyConstraints({ advanced: [{ zoom: value } as MediaTrackConstraintSet] }).catch(() => undefined);
-    });
+  /*
+   * The zoom's glide: the finger (a slide while filming, a pinch) sets where it's going (`zoomTo`) and every
+   * frame the zoom eases there (easeZoom), so a slide up and down reads as one smooth move, never steps.
+   * The camera's own zoom gets one applyConstraints at a time (the newest value once the last lands, so a
+   * fast slide never queues up behind itself); a digital zoom scales the viewfinder from its middle, and the
+   * clip's canvas reads the same value each frame. Passing 2×, 3× or an end is a light tick.
+   */
+  const zoomLoop = useRef(0);
+  const zoomAt = useRef(0);
+  const nativeBusy = useRef(false);
+  const nativeSent = useRef<number | null>(null);
+  const paintZoom = (z: number) => {
+    const v = videoRef.current;
+    if (!v) return;
+    // the preview's scale (the selfie's mirror is its class, `scale`, which this composes with)
+    v.style.transform = zoomCapsRef.current?.digital && z > 1.0005 ? `scale(${z})` : "";
   };
-  useEffect(() => () => cancelAnimationFrame(zoomFrame.current), []);
+  const sendZoom = (z: number) => {
+    if (nativeBusy.current || nativeSent.current === z) return;
+    const t = streamRef.current?.getVideoTracks()[0];
+    if (!t) return;
+    nativeBusy.current = true;
+    nativeSent.current = z;
+    void t
+      .applyConstraints({ advanced: [{ zoom: z } as MediaTrackConstraintSet] })
+      .catch(() => undefined)
+      .finally(() => {
+        nativeBusy.current = false;
+        // the glide moved on while it landed: keep going
+        if (nativeSent.current !== zoomNow.current) runZoom();
+      });
+  };
+  const runZoom = () => {
+    if (zoomLoop.current) return;
+    zoomAt.current = performance.now();
+    const step = (t: number) => {
+      zoomLoop.current = 0;
+      const caps = zoomCapsRef.current;
+      if (!caps) return;
+      const prev = zoomNow.current;
+      const next = easeZoom(prev, zoomTarget.current, t - zoomAt.current);
+      zoomAt.current = t;
+      zoomNow.current = next;
+      if (caps.digital) paintZoom(next);
+      else sendZoom(next);
+      if (zoomDetent(prev, next, caps)) feedback("detent");
+      zoomShown.current.forEach((f) => f(next));
+      if (next !== zoomTarget.current) zoomLoop.current = requestAnimationFrame(step);
+    };
+    zoomLoop.current = requestAnimationFrame(step);
+  };
+  const zoomTo = (z: number) => {
+    const caps = zoomCapsRef.current;
+    if (!caps) return;
+    zoomTarget.current = Math.min(caps.max, Math.max(caps.min, z));
+    runZoom();
+  };
+  /** A new camera (or none): its range, at its widest, the viewfinder unscaled. */
+  function resetZoom(r: ZoomRange | null) {
+    cancelAnimationFrame(zoomLoop.current);
+    zoomLoop.current = 0;
+    zoomCapsRef.current = r;
+    setZoomCaps(r);
+    zoomTarget.current = zoomNow.current = r?.now ?? 1;
+    nativeSent.current = r && !r.digital ? r.now : null;
+    nativeBusy.current = false;
+    paintZoom(1);
+    zoomShown.current.forEach((f) => f(zoomNow.current));
+  }
+  useEffect(() => () => cancelAnimationFrame(zoomLoop.current), []);
   // two fingers on the viewfinder zoom (never a look swipe or a flip)
   const pinch = useRef<{ d: number; z: number } | null>(null);
   const pinched = useRef(false);
@@ -1295,12 +1378,12 @@ export function ShareStudio({
     if (phase !== "shoot" || e.touches.length !== 2) return;
     pinched.current = true;
     swipe.current = null;
-    if (zoomCaps) pinch.current = { d: touchDist(e), z: zoom ?? zoomCaps.min };
+    if (zoomCaps) pinch.current = { d: touchDist(e), z: zoomTarget.current };
   };
   const onPinchMove = (e: React.TouchEvent) => {
     const p = pinch.current;
     if (!p || e.touches.length !== 2 || !zoomCaps) return;
-    applyZoom(zoomFromPinch(p.z, p.d, touchDist(e), zoomCaps));
+    zoomTo(zoomFromPinch(p.z, p.d, touchDist(e), zoomCaps));
   };
   const onPinchEnd = (e: React.TouchEvent) => {
     if (e.touches.length < 2) pinch.current = null;
@@ -1983,17 +2066,23 @@ export function ShareStudio({
               <div className="absolute inset-x-0 top-0 flex items-center gap-2 p-2.5">
                 {phase === "shoot" ? (
                   <>
+                    {/* while it films only the clip's time shows up here (Instagram's: the rest steps away, keeping its place) */}
+                    {recorder.recording && recorder.startedAt != null && (
+                      <span className="pointer-events-none absolute left-1/2 top-2.5 z-10 -translate-x-1/2 animate-in fade-in" data-recording-clock>
+                        <RecordingClock startedAt={recorder.startedAt} locked={recorder.locked} />
+                      </span>
+                    )}
                     {adding ? (
-                      <button type="button" onClick={backToPost} className={pill} aria-label="Back to your post">
+                      <button type="button" onClick={backToPost} className={cn(pill, "transition-opacity duration-200", recorder.recording && "pointer-events-none opacity-0")} aria-label="Back to your post">
                         <ChevronLeft className="h-6 w-6" />
                       </button>
                     ) : (
-                      <button type="button" onClick={requestLeave} className={pill} aria-label="Close" data-studio-close>
+                      <button type="button" onClick={requestLeave} className={cn(pill, "transition-opacity duration-200", recorder.recording && "pointer-events-none opacity-0")} aria-label="Close" data-studio-close>
                         <X className="h-6 w-6" />
                       </button>
                     )}
                     {/* the flash, in the middle (Instagram's): the back camera's light where it has one, the screen for a selfie */}
-                    {status === "live" && (facing === "user" || torchOk) && (
+                    {status === "live" && (facing === "user" || torchOk) && !recorder.recording && (
                       <button
                         type="button"
                         onClick={() => {
@@ -2158,7 +2247,7 @@ export function ShareStudio({
 
         {/* Bottom: shoot controls over the camera's foot (Instagram's), or caption + post */}
         <div
-          className={phase !== "shoot" ? "shrink-0 px-4 pt-2.5" : fullScreen ? "pointer-events-none absolute inset-x-0 bottom-0 z-10" : "shrink-0 pt-2"}
+          className={phase !== "shoot" ? "shrink-0 px-4 pt-2.5" : fullScreen ? "pointer-events-none absolute inset-x-0 bottom-0 z-10" : "relative shrink-0 pt-2"}
           style={phase === "shoot" ? undefined : { paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}
           data-camera-controls={phase === "shoot" ? (fullScreen ? "over" : "under") : undefined}
         >
@@ -2179,24 +2268,14 @@ export function ShareStudio({
           )}
           {phase === "shoot" ? (
             <>
+              {/* the zoom over the controls; while it films, just over the recording button instead (LookCarousel `zoom`) */}
+              {zoomCaps && !recorder.recording && <ZoomPill caps={zoomCaps} bus={zoomShown} now={zoomNow} onReset={() => zoomTo(zoomCaps.min)} />}
               <div className="pointer-events-auto">
                 {/* first time on a plain post's camera: how to film, until the first clip */}
-                {recordable && !recorder.recording && hints.data && !hints.data.includes("hold_to_film") && (
-                  <div className="pointer-events-none mb-1 text-center text-[12px] font-bold text-white/80 [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]" data-hold-hint>
+                {/* (while it films the hint keeps its room, unseen: nothing over the shutter moves when filming starts) */}
+                {recordable && hints.data && !hints.data.includes("hold_to_film") && (
+                  <div className={cn("pointer-events-none mb-1 text-center text-[12px] font-bold text-white/80 [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]", recorder.recording && "invisible")} data-hold-hint>
                     Tap for a photo, hold for video
-                  </div>
-                )}
-                {zoomCaps && zoom != null && zoomLabel(zoom, zoomCaps) && (
-                  <div className="mb-1 flex justify-center">
-                    <button
-                      type="button"
-                      onClick={() => applyZoom(zoomCaps.min)}
-                      className="h-8 rounded-full bg-black/45 px-3 text-[13px] font-bold tabular-nums text-white backdrop-blur-md active:scale-95"
-                      aria-label={`Zoom ${zoomLabel(zoom, zoomCaps)}. Tap to zoom back out`}
-                      data-camera-zoom
-                    >
-                      {zoomLabel(zoom, zoomCaps)}
-                    </button>
                   </div>
                 )}
                 <LookCarousel
@@ -2209,6 +2288,7 @@ export function ShareStudio({
                   disabled={!canShoot}
                   counting={count != null}
                   showName={fullScreen}
+                  zoom={zoomCaps && recorder.recording ? <ZoomPill caps={zoomCaps} bus={zoomShown} now={zoomNow} onReset={() => zoomTo(zoomCaps.min)} inline /> : null}
                   hold={
                     recordable || recorder.recording
                       ? {
@@ -2216,13 +2296,16 @@ export function ShareStudio({
                             // the flash on a clip: the light stays on while it films (a selfie keeps the screen for the picture)
                             if (flashOn && facing === "environment" && torchOk) void torch(true);
                             recView.current = video?.videoWidth ? { w: video.videoWidth, h: video.videoHeight, view: { w: box.w, h: box.h }, guide: { w: band.w, h: band.h } } : null;
-                            slideFrom.current = zoom ?? zoomCaps?.min ?? 1;
+                            slideFrom.current = zoomTarget.current;
                             void recorder.start();
                           },
                           onEnd: recorder.release,
-                          progress: recorder.recording ? recorder.progress : null,
-                          seconds: recorder.seconds,
-                          onSlide: zoomCaps ? (_dx, dy) => applyZoom(zoomFromSlide(slideFrom.current, dy, zoomCaps)) : undefined,
+                          onStop: () => recorder.stop(),
+                          recording: recorder.recording,
+                          startedAt: recorder.startedAt,
+                          limitMs: MAX_RECORD_MS,
+                          // up zooms in, down back out (reaching the widest by the screen's foot), as often as they like
+                          onSlide: zoomCaps ? (_dx, dy, below) => zoomTo(zoomFromSlide(slideFrom.current, dy, zoomCaps, below)) : undefined,
                           onLock: recorder.lock,
                           locked: recorder.locked,
                         }
@@ -2232,7 +2315,7 @@ export function ShareStudio({
               </div>
               {/* under the camera: the library, then everything you can share, all in view */}
               <div ref={setBarEl} className="pointer-events-auto mt-2 flex items-center gap-2 bg-black px-4 pt-2" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.6rem)" }} data-camera-bar>
-                <button type="button" disabled={!canShoot} onClick={() => libRef.current?.click()} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 border-white/85 bg-white/10 active:scale-95 disabled:opacity-30" aria-label="Choose from your library">
+                <button type="button" disabled={!canShoot} onClick={() => libRef.current?.click()} className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 border-white/85 bg-white/10 transition-opacity duration-200 active:scale-95 disabled:opacity-30", recorder.recording && "pointer-events-none invisible opacity-0")} aria-label="Choose from your library">
                   <Images className="h-5 w-5" />
                 </button>
                 <div className="flex min-w-0 flex-1 justify-center">
@@ -2669,6 +2752,43 @@ function StoryClipStage({
       {it.preview && <img src={it.preview} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-45 blur-2xl" />}
       {it.video && <TrimmedVideo key={it.video} src={it.video} trim={it.trim} poster={it.preview ?? undefined} sound={sound} videoRef={setEl} style={at} className={cn("max-w-none object-fill", grade && "opacity-0")} />}
       {grade && <GradedLayer source={el} grade={grade} style={at} />}
+    </div>
+  );
+}
+
+/**
+ * The zoom while it's past the widest ("2.4×"), over the shutter's controls, never in their flow (so it never
+ * moves the viewfinder or the shutter); a tap goes back out. It has its own state, fed by the zoom's glide a
+ * tenth at a time, so the camera never re-renders while the zoom moves.
+ */
+function ZoomPill({ caps, bus, now, onReset, inline = false }: { caps: ZoomRange; bus: React.MutableRefObject<Set<(z: number) => void>>; now: React.MutableRefObject<number>; onReset: () => void; inline?: boolean }) {
+  const [z, setZ] = useState(() => Math.round(now.current * 10) / 10);
+  useEffect(() => {
+    const set = (v: number) => setZ(Math.round(v * 10) / 10);
+    const all = bus.current;
+    all.add(set);
+    set(now.current);
+    return () => {
+      all.delete(set);
+    };
+  }, [bus, now]);
+  const label = zoomLabel(z, caps);
+  return (
+    <div className={cn("pointer-events-none flex justify-center", !inline && "absolute inset-x-0 bottom-full z-20 mb-2")} data-camera-zoom-slot>
+      <button
+        type="button"
+        onClick={onReset}
+        tabIndex={label ? 0 : -1}
+        className={cn(
+          "h-8 min-w-12 rounded-full bg-black/45 px-3 text-[13px] font-bold tabular-nums text-white backdrop-blur-md transition-opacity duration-200 active:scale-95",
+          label ? "pointer-events-auto opacity-100" : "opacity-0",
+        )}
+        aria-label={label ? `Zoom ${label}. Tap to zoom back out` : "Zoom"}
+        aria-hidden={!label}
+        data-camera-zoom={label ?? undefined}
+      >
+        {label ?? "1.0×"}
+      </button>
     </div>
   );
 }

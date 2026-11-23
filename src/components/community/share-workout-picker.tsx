@@ -22,7 +22,7 @@ import { opensLibraryOnTap, useComposerPicker } from "@/components/community/com
 import { FX, NORMAL_KEY, buildFilterRow, fxCard, isFxKey, useFilterContext } from "@/components/community/crew-filters";
 import { TemplateChip, TemplateTextSheet, useTemplateFavorites, useTemplateText } from "@/components/community/template-tools";
 import { storyFilter } from "@/lib/story-filters";
-import { primeCamera, studioCameraAsk } from "@/lib/camera/camera-prime";
+import { primeCamera, refreshPtzAsk, studioCameraAsk } from "@/lib/camera/camera-prime";
 
 type Mode = "post" | "meal" | "lockin" | "workout" | "fx";
 /** A plain post (any photo or video, no workout on it): one per person at a time while it's being made. */
@@ -219,6 +219,8 @@ export function ShareWorkoutButton({
     setCapturing(true);
   };
   const begin = () => (story ? beginStory() : beginPost());
+  // the camera's own zoom on Android is asked for only when it adds no question (camera-prime.ts): read before the tap
+  useEffect(() => refreshPtzAsk(), []);
   // Crew's swipe to create: the story camera, from the touch that ends the swipe
   useEffect(() => {
     if (!cameraRef) return;

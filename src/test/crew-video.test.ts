@@ -69,7 +69,8 @@ describe("Crew video: pick it or film it, it's up while you write the caption", 
     expect(studio).toContain("data-studio-clip");
     const shutter = read("src/components/community/look-carousel.tsx");
     expect(shutter).toContain("holdRef.current?.onStart();");
-    expect(shutter).toContain("conic-gradient(rgb(239 68 68)");
+    // the shutter grows into the recording surface, its ring filling over the clip limit (CSS, from when it started)
+    expect(shutter).toContain("animation: `jf-rec-ring ${hold!.limitMs}ms linear ${-elapsed}ms forwards`");
     // Normal in the ring of filters films too: the same element keeps the finger (no swap mid-hold)
     expect(shutter).toContain("{...(on && !pick ? h.handlers : {})}");
   });

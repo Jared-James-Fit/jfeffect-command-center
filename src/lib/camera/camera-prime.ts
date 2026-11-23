@@ -57,7 +57,36 @@ export function studioCameraAsk(facing: "environment" | "user", shape?: AskShape
   const upright = phoneUpright();
   if (upright == null) return LEGACY_STUDIO_ASK(facing);
   const s = shape ?? askOrder(upright, readFilmAsk())[0];
-  return videoConstraints({ quality: "1080p", fps: 30, facing }, null, s);
+  const ask = videoConstraints({ quality: "1080p", fps: 30, facing }, null, s);
+  return ptzAsk ? ({ ...ask, zoom: true } as MediaTrackConstraints) : ask;
+}
+
+/**
+ * The camera's own zoom on Android (Nov 23 2026). Chrome shows a track's
+ * `zoom` only to a page that asked for it (`zoom: true`, its pan-tilt-zoom
+ * permission); without it the Crew camera zooms digitally. Asking adds that
+ * permission to the camera's question, so it's asked only when it can't add
+ * a question: the camera was never allowed here (one question either way), or
+ * the zoom already was. Someone who allowed the camera before keeps the
+ * digital zoom rather than being asked again. Read once the studio's about to
+ * open (`refreshPtzAsk`); never on an iPhone (WebKit has no such permission).
+ */
+let ptzAsk = false;
+export function refreshPtzAsk(): void {
+  if (typeof navigator === "undefined" || !/Android/i.test(navigator.userAgent || "")) return;
+  const q = navigator.permissions?.query?.bind(navigator.permissions);
+  if (!q) return;
+  void Promise.all([q({ name: "camera" as PermissionName }), q({ name: "camera", panTiltZoom: true } as unknown as PermissionDescriptor)])
+    .then(([cam, ptz]) => {
+      ptzAsk = ptz.state === "granted" || cam.state === "prompt";
+    })
+    .catch(() => {
+      ptzAsk = false;
+    });
+}
+/** For tests. */
+export function setPtzAskForTests(on: boolean): void {
+  ptzAsk = on;
 }
 /** The 4:3 ask, for a tablet or a computer. */
 const LEGACY_STUDIO_ASK = (facing: "environment" | "user"): MediaTrackConstraints => ({ facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } });
