@@ -1010,7 +1010,7 @@ export function MessengerCheckinSubmissionCard({
           {recapMissing ? (
             <div className="rounded-xl border border-warning/40 bg-warning/5 p-3" data-recap-missing>
               <div className="text-xs font-semibold">
-                {(data as any).ai_status === "pending" ? "Writing the recap…" : "No AI recap for this one"}
+                {(data as any).ai_status === "pending" ? "Writing the recap…" : "No recap for this one"}
               </div>
               <p className={cn("mt-1 text-xs leading-relaxed", FORM_MUTED)}>
                 {(data as any).ai_status === "pending"

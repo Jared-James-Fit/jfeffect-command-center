@@ -80,6 +80,19 @@ describe("AI is the engine, not the product", () => {
     expect(label).not.toMatch(/violet|purple/);
   });
 
+  it("coach screens say what's happening, never which AI is behind it (the admin alone sees why)", () => {
+    const queue = FILES.find((f) => f.path === "components/recovery/recovery-queue.tsx")!.text;
+    expect(queue).not.toContain("`AI paused · ");
+    // The worker's own "Waiting for AI: …" error is read in code, never shown to a coach.
+    expect(queue).not.toContain('waitingForAi(item) ? "Waiting for AI"');
+    expect(queue).toContain('waitingForAi(item) ? "Waiting to be written"');
+    expect(queue).not.toContain('font-semibold">AI drafts are paused');
+    expect(queue).toContain("Drafts are paused{isAdmin ?");
+    expect(queue).toContain('{isAdmin ? `${item.error}. ` : ""}');
+    const card = FILES.find((f) => f.path === "components/messages/messenger-checkin-card.tsx")!.text;
+    expect(card).not.toContain("No AI recap");
+  });
+
   it("Cleo is the one AI identity, and says so where people talk to it", () => {
     const avatar = FILES.find((f) => f.path === "components/summer/cleo-avatar.tsx")!.text;
     expect(avatar).toContain('CLEO_ROLE_LINE = "AI assistant"');
