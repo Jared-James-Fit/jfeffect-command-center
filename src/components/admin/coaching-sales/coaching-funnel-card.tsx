@@ -115,6 +115,7 @@ export function CoachingFunnelCard() {
               <Row label="Sent a free app application" value={f.freeSent} of={visitors} />
               <Row label="Tapped a coaching button" value={f.ctaCoaching} of={visitors} />
               <Row label="Saw the coaching prices" value={f.pricingViews} of={visitors} hint="The pricing section on the home page or the coaching page" />
+              <Row label="Saw the price reveal" value={f.revealViews} of={visitors} hint="Coaching Plus, then Complete Online Coaching, on the home page" />
             </div>
           </Card>
           <Card className="p-5">

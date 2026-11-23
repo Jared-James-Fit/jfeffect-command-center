@@ -12,8 +12,12 @@
  *
  * Anchors are honest: the app is "the same app my coaching clients train in"
  * (true), and the recommended package says how much more it is than the next
- * package on the site (both listed prices, anchorLine). Never a crossed-out
- * price, a "worth" number or a fake discount. Prices are read from
+ * package on the site (both listed prices, anchorLine). The coaching price is
+ * revealed the way the iPad's was (PriceRevealSection, price-reveal.ts): the
+ * coaching shown first, then Coaching Plus at its own price, then "Don't need
+ * the private calls?" and Complete Online Coaching's price as the moment. Two
+ * different products at their listed prices, the calls the only difference:
+ * never a crossed-out price, a "worth" number or a fake discount. Prices are read from
  * coaching_packages (the one source of truth, edited in Sales → Coaching
  * packages, drawn by CoachingPackagesGrid), never typed here, and only what's
  * listed shows: a draft package never reaches this page.
@@ -51,6 +55,8 @@ import { trackSite } from "@/lib/site-funnel";
 import { currentLaunchMode } from "@/lib/landing-launch";
 import { HOME_CTA_ZONES } from "@/lib/public-nav";
 import { CoachingPackagesGrid } from "@/components/sales/coaching-packages";
+import { PriceRevealSection } from "@/components/landing/price-reveal";
+import { priceReveal } from "@/lib/coaching-packages/price-reveal";
 import {
   costAnswer,
   decisionRows,
@@ -630,6 +636,17 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
             </div>
           </section>
         </Reveal>
+
+        {/* C, the price: Coaching Plus at its price, "Don't need the private
+            calls?", then Complete Online Coaching's price as the moment
+            (price-reveal.ts: only while both are listed and Plus says it's
+            Complete plus calls; otherwise the page goes straight on). */}
+        <WithPackages packages={packages}>
+          {(list) => {
+            const reveal = priceReveal(list);
+            return reveal ? <PriceRevealSection reveal={reveal} /> : null;
+          }}
+        </WithPackages>
 
         {/* Proof at the moment it matters: someone who had the tools, then a coach */}
         <Reveal>
