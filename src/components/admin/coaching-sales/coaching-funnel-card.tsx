@@ -111,11 +111,12 @@ export function CoachingFunnelCard() {
             <h3 className="text-[16px] font-semibold">The home page</h3>
             <div className="mt-2 divide-y divide-border/70">
               <Row label="Visitors" value={visitors} />
+              <Row label="Saw the free app's $0" value={f.freeRevealViews} of={visitors} hint="The free app's price, after the app's screens" />
               <Row label="Tapped Get the free app" value={f.ctaFree} of={visitors} />
               <Row label="Sent a free app application" value={f.freeSent} of={visitors} />
               <Row label="Tapped a coaching button" value={f.ctaCoaching} of={visitors} />
               <Row label="Saw the coaching prices" value={f.pricingViews} of={visitors} hint="The pricing section on the home page or the coaching page" />
-              <Row label="Saw the price reveal" value={f.revealViews} of={visitors} hint="Coaching Plus, then Complete Online Coaching, on the home page" />
+              <Row label="Saw the price reveal" value={f.revealViews} of={visitors} hint="A trainer's cost, Coaching Plus, then Complete Online Coaching, on the home page" />
             </div>
           </Card>
           <Card className="p-5">
