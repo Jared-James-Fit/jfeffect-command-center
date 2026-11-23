@@ -99,3 +99,33 @@ export function periodAnchor(e: {
 export function canGiveBack(startsAtISO: string, nowISO: string, cancelHours: number): boolean {
   return new Date(startsAtISO).getTime() - new Date(nowISO).getTime() >= cancelHours * 3_600_000;
 }
+
+/** "31 hours", "1 hour", "3 days": how far ahead someone asked. */
+function aheadWords(ms: number): string {
+  const hours = Math.floor(ms / 3_600_000);
+  if (hours >= 48) return `${Math.floor(hours / 24)} days`;
+  if (hours >= 1) return `${hours} hour${hours === 1 ? "" : "s"}`;
+  const mins = Math.max(1, Math.floor(ms / 60_000));
+  return `${mins} minute${mins === 1 ? "" : "s"}`;
+}
+
+/**
+ * A client's "can't make it" on an included call, read the way the policy they
+ * were shown reads it: by when they asked, never by when the coach answers (an
+ * answer the next morning mustn't turn a timely cancel into a late one). Timely
+ * gives the call back (bank it), later or after it started counts it (count it).
+ * The coach still decides; this only says what the rule says.
+ */
+export function cancelRuling(
+  startsAtISO: string,
+  askedAtISO: string,
+  cancelHours: number,
+  first: string,
+): { timely: boolean; line: string } {
+  const ahead = new Date(startsAtISO).getTime() - new Date(askedAtISO).getTime();
+  const timely = canGiveBack(startsAtISO, askedAtISO, cancelHours);
+  if (ahead <= 0) return { timely: false, line: `${first} asked after the call started, so under your ${cancelHours}-hour rule it counts.` };
+  return timely
+    ? { timely, line: `${first} asked ${aheadWords(ahead)} before the call, so under your ${cancelHours}-hour rule it goes back to them.` }
+    : { timely, line: `${first} asked ${aheadWords(ahead)} before the call, inside your ${cancelHours}-hour rule, so it counts.` };
+}

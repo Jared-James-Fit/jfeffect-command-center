@@ -28,6 +28,7 @@ import { todayLocalISO } from "@/lib/today";
 import { COACH_NOTES_KEY, saveCoachNote, useCoachNote } from "@/lib/session-coach-notes";
 import { cn } from "@/lib/utils";
 import { SessionPaymentLine } from "@/components/schedule/session-payment-line";
+import { IncludedCallRulingLine, useIncludedCallRuling } from "@/components/schedule/included-call-rule";
 import { isTrainingSessionType } from "@/lib/booking-types";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 
@@ -194,6 +195,8 @@ export function SessionActionsSheet({
     const now = new Date();
     return (!!newStart && isLastMinute(newStart, now)) || (!!oldStart && isLastMinute(oldStart, now));
   }, [newStart?.getTime(), oldStart?.getTime()]); // eslint-disable-line react-hooks/exhaustive-deps
+  // An included call (Coaching Plus): what the 24-hour rule says about their "can't make it".
+  const ruling = useIncludedCallRuling(session, request, first);
 
   if (!session) return null;
 
@@ -552,10 +555,11 @@ export function SessionActionsSheet({
                 )
               ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  <Button className="h-11 bg-primary font-semibold" onClick={() => pick("bank")}>
-                    <PiggyBank className="mr-2 h-4 w-4" /> Bank it
+                  {ruling && <div className="col-span-2"><IncludedCallRulingLine ruling={ruling} /></div>}
+                  <Button className="h-11 font-semibold" variant={ruling?.suggest === "use" ? "outline" : "default"} onClick={() => pick("bank")}>
+                    <PiggyBank className="mr-2 h-4 w-4" /> {ruling ? "Give it back" : "Bank it"}
                   </Button>
-                  <Button variant="outline" className="h-11" onClick={() => pick("use")}>
+                  <Button variant={ruling?.suggest === "use" ? "default" : "outline"} className="h-11" onClick={() => pick("use")}>
                     <Ban className="mr-2 h-4 w-4" /> Count it
                   </Button>
                   <Button variant="ghost" className="col-span-2 h-10" onClick={() => setMode("decline")}>Decline · keep it booked</Button>

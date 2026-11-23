@@ -25,7 +25,7 @@ import {
   type CoachingPackage,
   type PublicPackage,
 } from "@/lib/coaching-packages/packages";
-import { callPeriod, callUsage, canGiveBack, lastDay, periodAnchor } from "@/lib/coaching-packages/call-period";
+import { callPeriod, callUsage, canGiveBack, cancelRuling, lastDay, periodAnchor } from "@/lib/coaching-packages/call-period";
 import { actionItemsMessage, bookingWords, buildCallPrep, type PrepInput } from "@/lib/coaching-packages/call-prep";
 import { cardFeatures, cardFileName } from "@/lib/coaching-packages/pricing-card";
 
@@ -216,6 +216,27 @@ describe("included calls: the billing period, never the calendar month", () => {
   it("gives a call back only when it's cancelled far enough ahead", () => {
     expect(canGiveBack("2026-11-23T18:00:00Z", "2026-11-22T17:00:00Z", 24)).toBe(true);
     expect(canGiveBack("2026-11-23T16:00:00Z", "2026-11-22T17:00:00Z", 24)).toBe(false);
+  });
+
+  it("reads a can't-make-it by when it was asked, never by when the coach answers", () => {
+    // asked 31 hours ahead: back to them, even if the coach only answers the morning of the call
+    const timely = cancelRuling("2026-11-24T18:00:00Z", "2026-11-23T11:00:00Z", 24, "Marc");
+    expect(timely).toEqual({ timely: true, line: "Marc asked 31 hours before the call, so under your 24-hour rule it goes back to them." });
+    const late = cancelRuling("2026-11-24T18:00:00Z", "2026-11-24T09:00:00Z", 24, "They");
+    expect(late).toEqual({ timely: false, line: "They asked 9 hours before the call, inside your 24-hour rule, so it counts." });
+    expect(cancelRuling("2026-11-24T18:00:00Z", "2026-11-24T18:20:00Z", 24, "Marc").line).toBe("Marc asked after the call started, so under your 24-hour rule it counts.");
+    expect(cancelRuling("2026-11-27T18:00:00Z", "2026-11-24T09:00:00Z", 24, "Marc").line).toContain("asked 3 days before");
+    expect(cancelRuling("2026-11-24T18:00:00Z", "2026-11-24T17:15:00Z", 24, "Marc").line).toContain("asked 45 minutes before");
+    // exactly at the window still gives it back, as the client was told
+    expect(cancelRuling("2026-11-24T18:00:00Z", "2026-11-23T18:00:00Z", 24, "Marc").timely).toBe(true);
+  });
+
+  it("the coach sees that rule where they answer an included call's can't-make-it", () => {
+    const sheet = readFileSync("src/components/schedule/session-actions-sheet.tsx", "utf8");
+    expect(sheet).toContain("useIncludedCallRuling(session, request, first)");
+    expect(sheet).toContain("<IncludedCallRulingLine ruling={ruling} />");
+    const card = readFileSync("src/components/schedule/session-change-card.tsx", "utf8");
+    expect(card).toContain("<IncludedCallRulingLine ruling={ruling} />");
   });
 
   it("the database's period is the same rule (and its usage counts the same statuses)", () => {

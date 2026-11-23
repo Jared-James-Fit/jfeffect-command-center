@@ -13,6 +13,7 @@ import { invalidatePtSessionCaches } from "@/lib/pt-session-manage";
 import { DEFAULT_TZ, minutesBetweenHM } from "@/lib/schedule-time";
 import { useConflictCheck } from "@/components/schedule/use-conflict-check";
 import { SessionActionsSheet, kickGoogleSync, type ActionSession } from "@/components/schedule/session-actions-sheet";
+import { IncludedCallRulingLine, useIncludedCallRuling } from "@/components/schedule/included-call-rule";
 import { cn } from "@/lib/utils";
 
 const db = supabase as any;
@@ -29,6 +30,7 @@ type ChangeRequestRow = {
   note: string | null;
   status: "pending" | "done" | "declined" | "withdrawn";
   resolution: string | null;
+  created_at: string;
 };
 
 /** "Tue, Nov 3 · 11:00 AM". */
@@ -72,6 +74,8 @@ export function SessionChangeCard({ requestId, staff, clientId }: { requestId: s
 
   const pending = req?.status === "pending";
   const answering = staff && pending;
+  // An included call (Coaching Plus): what the 24-hour rule says, read from when they asked.
+  const ruling = useIncludedCallRuling(answering ? session : null, answering ? req : null, "They");
   const proposed = req?.kind === "move" && req.proposed_date && req.proposed_start
     ? { date: req.proposed_date, start: req.proposed_start.slice(0, 5) }
     : null;
@@ -234,8 +238,9 @@ export function SessionChangeCard({ requestId, staff, clientId }: { requestId: s
             </>
           ) : (
             <div className="grid grid-cols-2 gap-2">
+              {ruling && <div className="col-span-2"><IncludedCallRulingLine ruling={ruling} /></div>}
               <Button size="sm" className="h-9 bg-primary font-semibold" disabled={!session} onClick={() => setSheet("menu")}>
-                Bank or count
+                {ruling ? (ruling.suggest === "bank" ? "Give it back" : "Count it") : "Bank or count"}
               </Button>
               <Button size="sm" variant="outline" className="h-9" disabled={busy} onClick={() => setDeclining(true)}>
                 Keep booked
