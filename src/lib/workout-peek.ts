@@ -344,6 +344,9 @@ export type PeekDay = {
   minutes: number | null;
   /** Against the plan (the recap's own read), once anything is logged. */
   vsPlan: PlanCheck | null;
+  /** The rows in the coach's order and this session's sets of them (what the load guidance reads). */
+  rows: PeekRow[];
+  sessionResults: PeekResult[];
 };
 
 const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -438,6 +441,8 @@ export function buildPeekDay(src: PeekDaySource, opts: { instanceId: string | nu
     setsLogged,
     minutes: sessionMinutes(completion),
     vsPlan: anyLogged ? planCheck(rows as any, sessionResults as any) : null,
+    rows,
+    sessionResults,
   };
 }
 

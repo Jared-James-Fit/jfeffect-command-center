@@ -251,7 +251,7 @@ describe("last time on a timed card (cardio, holds)", () => {
     expect(m.get("r")?.reps).toBe(5);
   });
   it("the logger asks for time and calories, and marks walks as cardio", () => {
-    const src = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+    const src = ["src/components/workout-day/WorkoutDayView.tsx", "src/lib/workouts/card-suggestion.ts", "src/lib/workouts/card-suggestion-reads.ts"].map((p) => readFileSync(p, "utf8")).join("\n") /* the logger and the card helpers it shares with the coach's quick view */;
     expect(src).toContain("is_bodyweight, load_type, completed_duration_seconds, actual_calories,");
     expect(src).toContain('timed: isTimedCardio(name) ? "cardio" : timedRow ? "hold" : null');
     // a timed card's Last time reads its session's time (lastTimeText), in the same history button
