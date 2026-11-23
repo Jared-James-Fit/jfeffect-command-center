@@ -35,6 +35,11 @@ const DO_NOT_PERSIST_PREFIXES = [
   "exercise-identify",
   // A program being imported: its file's text can be large and its status moves on the server.
   "program-import",
+  // Two-step sign-in: whether this session is confirmed, its ways and trusted
+  // devices are the server's answer every launch (a saved "confirmed" from
+  // before the owner reset someone, or a device forgotten elsewhere, must
+  // never be painted).
+  "two-step-",
   // Tasks are edited from several devices at once. A 24h-old disk snapshot
   // made the phone show an outdated (or empty) list after a desktop edit.
   "tasks",

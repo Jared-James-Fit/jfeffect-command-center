@@ -1,61 +1,52 @@
-// Two-step sign-in (an authenticator app's 6-digit code after the password)
-// for the logins that can see everything: the admin and the finance login.
+// Two-step sign-in for team logins: after the password, Face ID / Touch ID (a
+// passkey), a texted code or an authenticator app's code (two-step.ts).
 //
 // The rule, one way for the app, the server and the database: a login that
-// has a verified authenticator uses it. Its session counts only once the code
-// is in (Supabase's "aal2"); a password alone (a stolen one included) gets no
-// staff rights anywhere: the app shows the code screen, every server function
-// refuses (src/start.ts → mfa-guard.server.ts) and the database's role checks
-// say no (caller_mfa_ok, 20270424090000_staff_mfa.sql). The admin and finance
+// has a way to confirm uses it. Its session counts only once it's confirmed
+// (Supabase's "aal2" after an authenticator code, or a session the server
+// marked after a text, a passkey, a trusted device or a recovery code); a
+// password alone (a stolen one included) gets no staff rights anywhere: the
+// app shows the confirm screen, every server function refuses (src/start.ts →
+// mfa-guard.server.ts) and the database's role checks say no (caller_mfa_ok,
+// 20270512090000_two_step_sms_passkeys.sql). The admin, finance and coach
 // logins are asked to set one up the first time they open the app; nothing
 // changes for anyone else.
 //
 // Pure: no Supabase, no React, so the rules are tested on their own.
 
-/** Account roles that must have an authenticator before the app opens. */
-export const MFA_REQUIRED_ROLES: ReadonlySet<string> = new Set(["admin", "finance"]);
+/**
+ * Account roles that must have a way to confirm before the app opens: the
+ * ones that see client records or the business's money.
+ */
+export const MFA_REQUIRED_ROLES: ReadonlySet<string> = new Set(["admin", "finance", "coach"]);
 
 export function roleRequiresMfa(role: string | null | undefined): boolean {
   return !!role && MFA_REQUIRED_ROLES.has(role);
 }
 
 /**
- * Server functions a session may call before its code: only using a recovery
- * code (lost phone), which needs the password-only session by design and is
- * limited to 5 wrong tries an hour in the database.
+ * Server functions a session may call before it's confirmed: the ones that
+ * confirm it (two-step.functions.ts: the status, a texted code, a passkey, a
+ * trusted device) and using a recovery code (lost phone). Each is limited in
+ * the database and does nothing else for an unconfirmed session. Their names
+ * are unique in the app (two-step tests check), since the guard goes by name.
  */
-export const MFA_EXEMPT_FNS: ReadonlySet<string> = new Set(["redeemRecoveryCode"]);
+export const MFA_EXEMPT_FNS: ReadonlySet<string> = new Set([
+  "redeemRecoveryCode",
+  "getTwoStepStatus",
+  "sendTwoStepCode",
+  "verifyTwoStepCode",
+  "startTwoStepPasskey",
+  "finishTwoStepPasskey",
+  "confirmWithTrustedDevice",
+]);
 
 export function mfaExemptFn(name: string | null | undefined): boolean {
   return !!name && MFA_EXEMPT_FNS.has(name);
 }
 
 /** What a server function says to a session that still needs its code. */
-export const MFA_NEEDED_MESSAGE = "Enter the code from your authenticator app to continue.";
-
-export type MfaGateStep = "pass" | "verify" | "enroll";
-
-/**
- * What the app shows a signed-in person:
- *   verify: they have an authenticator and this session hasn't had its code;
- *   enroll: their role needs one and they have none yet;
- *   pass:   everything else (every client, every member).
- */
-export function mfaGateStep(input: {
-  accountRole: string | null | undefined;
-  /** The session's assurance level ("aal1" after a password, "aal2" after a code). */
-  aal: string | null | undefined;
-  /** How many verified authenticators the login has. */
-  verifiedFactors: number;
-}): MfaGateStep {
-  if (input.verifiedFactors > 0) return input.aal === "aal2" ? "pass" : "verify";
-  // A login that needs one and has none sets one up, whatever the session's
-  // level: a session verified with an authenticator since removed (the
-  // finance login's, from before Oct 9 2026) still reads aal2. The gate asks
-  // Supabase before showing the setup, so a user object that hasn't caught up
-  // with one just added never asks twice.
-  return roleRequiresMfa(input.accountRole) ? "enroll" : "pass";
-}
+export const MFA_NEEDED_MESSAGE = "Confirm it's you to continue: Face ID, a texted code or your authenticator app.";
 
 /**
  * The claims inside a Supabase access token, read without checking its
@@ -90,10 +81,11 @@ export function bearerToken(header: string | null | undefined): string | null {
 }
 
 /**
- * Whether a server call must be refused: the token belongs to a login with a
- * verified authenticator (`enrolled`, the server's cached list) and its
- * session hasn't had the code. A call with no token, or an unreadable one, is
- * left to the function's own auth check.
+ * Whether a server call needs its session checked: the token belongs to a
+ * login with a way to confirm (`enrolled`, the server's cached list) and
+ * isn't aal2. The guard then asks whether the server marked the session
+ * confirmed. A call with no token, or an unreadable one, is left to the
+ * function's own auth check.
  */
 export function serverRefusesForMfa(claims: Record<string, any> | null, enrolled: ReadonlySet<string> | null): boolean {
   if (!claims || typeof claims.sub !== "string" || !claims.sub) return false;
