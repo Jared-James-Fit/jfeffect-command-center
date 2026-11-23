@@ -31,7 +31,7 @@
  */
 import { Suspense, useEffect, useRef, type ReactNode } from "react";
 import { Await, Link } from "@tanstack/react-router";
-import { ArrowRight, Dumbbell, Gauge, History, Quote, Users } from "lucide-react";
+import { ArrowRight, ChevronDown, Dumbbell, Gauge, History, Quote, Users } from "lucide-react";
 import { SalesPageShell } from "@/components/sales/sales-page-shell";
 import { PhoneShot } from "@/components/sales/coaching-hero";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
@@ -79,6 +79,17 @@ export const COACHING_TO = "/coaching" as const;
 export const JOIN_CTA = "Get the free app";
 export const COACHING_CTA = "Apply for coaching";
 export const EXPLORE_CTA = "Explore coaching";
+/** The hero's way down to the options, without saying a price before the app's been shown. */
+export const PLANS_JUMP = "See plans and prices";
+
+/** The options section's words; the cards themselves come from the packages. */
+const PRICING = {
+  eyebrow: "Plans and prices",
+  title: "Start free. Add a coach when you want one.",
+  sub: "Every coaching package includes the full app. Prices in Canadian dollars, plus applicable tax.",
+  note: "Applying doesn't charge you. We talk on a short call first, and you only pay once we've agreed to start.",
+  more: "How coaching works",
+};
 
 const HERO = {
   title: "Train like you have a coach.",
@@ -347,11 +358,14 @@ function DecisionList({ rows }: { rows: DecisionRow[] }) {
               <p className="text-[17px] font-semibold leading-snug">{r.line || r.name}</p>
               <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-muted-foreground">
                 <span className="font-medium text-foreground">{r.name}</span>
-                <span aria-hidden>·</span>
-                <span className="tabular-nums">{r.price}</span>
-                {r.recommended && (
-                  <span className="rounded-full bg-foreground px-2 py-0.5 text-[11px] font-semibold text-background">Recommended</span>
-                )}
+                {/* the price never wraps away from its dot, and the badge stays beside it */}
+                <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                  <span aria-hidden>·</span>
+                  <span className="tabular-nums">{r.price}</span>
+                  {r.recommended && (
+                    <span className="rounded-full bg-foreground px-2 py-0.5 text-[11px] font-semibold text-background">Recommended</span>
+                  )}
+                </span>
               </p>
             </div>
             <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground motion-reduce:transition-none" aria-hidden />
@@ -406,6 +420,15 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
           <p className="mt-3 text-[13px] text-muted-foreground">
             Free, by application. About a minute to apply. No card.
           </p>
+          <a
+            href="#pricing"
+            onClick={() => trackSite("cta_coaching", "hero-plans")}
+            className="mt-4 inline-flex items-center gap-1 text-[15px] font-medium text-foreground underline-offset-4 hover:underline"
+            data-landing-jump
+          >
+            {PLANS_JUMP}
+            <ChevronDown className="h-4 w-4" aria-hidden />
+          </a>
         </div>
         <HeroDevices />
       </section>
@@ -621,21 +644,24 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
           </figure>
         </Reveal>
 
-        {/* D. The prices: read from the packages on the site, never typed here */}
-        <div ref={pricingRef}>
+        {/* D. Every way in, side by side: the free app and each coaching package,
+            read from the packages on the site, never typed here. The hero's
+            "See plans and prices" and the nav's Pricing land here. */}
+        <div ref={pricingRef} id="pricing" className="scroll-mt-20" data-landing-pricing>
           <WithPackages packages={packages}>
             {(list) =>
               paidPackages(listedPackages(list)).length ? (
                 <Reveal>
-                  <Block id="pricing" className="!pt-6">
-                    <Heading
-                      eyebrow="Coaching packages"
-                      title="What coaching costs."
-                      sub="Every package includes the full app. In Canadian dollars, plus applicable tax. Applying is free and doesn't commit you to anything."
-                    />
-                    <CoachingPackagesGrid packages={list} from="home" calls={false} />
+                  <Block className="!pt-6 xl:max-w-6xl">
+                    <Heading eyebrow={PRICING.eyebrow} title={PRICING.title} sub={PRICING.sub} />
+                    <div data-inline-cta>
+                      <CoachingPackagesGrid packages={list} from="home" calls={false} free />
+                    </div>
                     <p className="mx-auto mt-8 max-w-md text-center text-[13px] leading-relaxed text-muted-foreground">
-                      Applying doesn't charge you. We talk on a short call first, and you only pay once we've agreed to start.
+                      {PRICING.note}{" "}
+                      <Link to={COACHING_TO} className="font-medium text-foreground underline-offset-4 hover:underline">
+                        {PRICING.more}
+                      </Link>
                     </p>
                   </Block>
                 </Reveal>
@@ -760,4 +786,4 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
 }
 
 /** For the tests: what the page promises, kept with the page. */
-export const LANDING_COPY = { HERO, FREE, COACHING, FAQ, PROOF, CHAPTERS, OWN, REVEAL } as const;
+export const LANDING_COPY = { HERO, FREE, COACHING, FAQ, PROOF, CHAPTERS, OWN, REVEAL, PRICING } as const;

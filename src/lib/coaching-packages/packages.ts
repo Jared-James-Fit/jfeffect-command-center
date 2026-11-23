@@ -180,6 +180,21 @@ export function anchorLine<T extends PublicPackage>(pkg: T, listed: readonly T[]
 }
 
 /** One row of the closing "which one is you?" section. */
+/**
+ * The cards a pricing section shows, in order: the monthly packages by price,
+ * and with `free` the free app first, so every way in sits side by side. Only
+ * listed packages, and the free card only beside at least one paid one (a page
+ * of one free card isn't a comparison).
+ */
+export function optionCards<T extends PublicPackage>(rows: readonly T[], opts: { free?: boolean } = {}): T[] {
+  const listed = listedPackages(rows);
+  const paid = listed
+    .filter((p) => p.kind === "subscription")
+    .sort((a, b) => (a.priceCents ?? 0) - (b.priceCents ?? 0) || a.sortOrder - b.sortOrder);
+  const free = opts.free && paid.length ? listed.find((p) => p.kind === "free") : undefined;
+  return free ? [free, ...paid] : paid;
+}
+
 export type DecisionRow = {
   slug: string;
   kind: PackageKind;
