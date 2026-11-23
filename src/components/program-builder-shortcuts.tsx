@@ -85,6 +85,11 @@ function buildShortcuts(mac: boolean): ShortcutGroup[] {
     {
       heading: "Workout Builder",
       items: [
+        { label: "Focus mode on / off", combos: [["F"]] },
+        { label: "Leave focus mode", combos: [["Esc"]] },
+        { label: "Previous / next workout (Day view)", combos: [["["], ["]"]] },
+        { label: "Previous / next week", combos: [["Shift", "["], ["Shift", "]"]] },
+        { label: "Day · Week · Block · Program · Sheet", combos: [["1"], ["2"], ["3"], ["4"], ["5"]] },
         { label: "Move between prescription fields", combos: [["←"], ["→"]] },
         { label: "Same field, previous / next exercise", combos: [["↑"], ["↓"]] },
         { label: "Next field", combos: [["Enter"]] },
@@ -114,7 +119,7 @@ function buildShortcuts(mac: boolean): ShortcutGroup[] {
  *   - pb:clear-search   → clear query
  *   - pb:close-search   → blur input
  */
-export function ProgramBuilderShortcutsButton({ className }: { className?: string }) {
+export function ProgramBuilderShortcutsButton({ className, trigger = true }: { className?: string; /** false: the keys and the legend (`?`), no icon in the toolbar. */ trigger?: boolean }) {
   const qc = useQueryClient();
   const [mac, setMac] = useState(true);
   const [enabled, setEnabled] = useState(true);
@@ -232,7 +237,7 @@ export function ProgramBuilderShortcutsButton({ className }: { className?: strin
 
   return (
     <>
-      <Popover>
+      {trigger ? <Popover>
         <PopoverTrigger asChild>
           <Button
             ref={buttonRef}
@@ -288,7 +293,7 @@ export function ProgramBuilderShortcutsButton({ className }: { className?: strin
             View all shortcuts
           </Button>
         </PopoverContent>
-      </Popover>
+      </Popover> : null}
 
       <Dialog open={legendOpen} onOpenChange={setLegendOpen}>
         <DialogContent className="max-w-lg">

@@ -1434,6 +1434,14 @@ html[data-keyboard-open="true"] [data-builder-viewbar] { visibility: hidden; }
 html:has(.shell-bar[data-hidden]) .builder-header-fixed,
 html[data-keyboard-open="true"] .builder-header-fixed { top: calc(var(--app-chrome-top) + var(--app-safe-top)); }
 @media (prefers-reduced-motion: reduce) { .builder-header-fixed { transition: none; } }
+/* Focus mode (builder-focus.tsx): the program editor alone on screen. Only the
+   shell's chrome steps aside, never the editor, so nothing in it remounts. */
+html[data-builder-focus] [data-shell-root] > aside,
+html[data-builder-focus] [data-shell-bar],
+html[data-builder-focus] [data-shell-bar-room],
+html[data-builder-focus] [data-mobile-bottom-nav],
+html[data-builder-focus] [data-focus-hide] { display: none !important; }
+html[data-builder-focus] .builder-header-fixed { top: calc(var(--app-chrome-top) + var(--app-safe-top)); }
 .shell-bar[data-hidden] { transform: translateY(calc(-100% - var(--app-chrome-top))); }
 html[data-keyboard-open="true"] .shell-bar { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) {
