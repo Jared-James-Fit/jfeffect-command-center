@@ -19,7 +19,7 @@
  * leaves the athlete's report exactly as it was.
  */
 import { classifyRecovery, followUpStillRelevant, localToInstant, planFollowUp, routeItem, type AutomationCategory, type Risk, type UpcomingSession } from "@/lib/recovery-automation/rules";
-import { checkinReplyRead, messageTypeFor, missedSessionRead, progressReplyRead, pushesCoach, videoReplyRead, workoutReplyRead } from "@/lib/recovery-automation/categories";
+import { checkinReplyRead, isFallbackRecap, messageTypeFor, missedSessionRead, progressReplyRead, pushesCoach, videoReplyRead, workoutReplyRead } from "@/lib/recovery-automation/categories";
 import { userHasFeature } from "@/lib/cleo-capabilities.server";
 
 type Item = {
@@ -695,10 +695,12 @@ async function processCheckinReply(admin: any, item: Item, mode: string): Promis
   const route = routeItem(mode as any, read.risk);
   const automatic = route === "send";
   const voice = await userHasFeature(admin, item.coach_user_id, "owner.voice");
-  const suggested = String(analysis?.suggested_response ?? "").trim();
+  // a stand-in recap (the recap model didn't answer) has a template reply: write a real one from their answers
+  const standIn = isFallbackRecap(analysis);
+  const suggested = standIn ? "" : String(analysis?.suggested_response ?? "").trim();
   const { autoMessageProblems } = await import("@/lib/recovery-automation/rules");
   const facts = [
-    analysis?.summary ? `Recap: ${String(analysis.summary)}` : "",
+    analysis?.summary && !standIn ? `Recap: ${String(analysis.summary)}` : "",
     Array.isArray(analysis?.wins) && analysis.wins.length ? `Wins: ${analysis.wins.join("; ")}` : "",
     Array.isArray(analysis?.focus) && analysis.focus.length ? `Focus: ${analysis.focus.join("; ")}` : "",
     Array.isArray(analysis?.goals) && analysis.goals.length ? `Goals for the week: ${analysis.goals.join("; ")}` : "",
@@ -708,11 +710,11 @@ async function processCheckinReply(admin: any, item: Item, mode: string): Promis
   const first = (client.preferred_name || client.full_name || "").trim().split(/\s+/)[0] || "them";
   // The recap's reply was written in the owner's voice: his, as it is (it's on his check-in card
   // already), unless it would go by itself and says something an automatic message can't.
-  if (voice && (!automatic || autoMessageProblems(suggested).length === 0)) {
+  if (voice && suggested && (!automatic || autoMessageProblems(suggested).length === 0)) {
     draft = { message: suggested.slice(0, 2000), model: "check-in recap", warnings: automatic ? autoMessageProblems(suggested) : [], firstName: first };
   } else {
     const { writeCoachReply } = await import("@/lib/recovery-automation/reply-draft.server");
-    draft = await writeCoachReply(admin, { clientId: item.client_id, voice, automatic, kind: "checkin", facts, startFrom: voice ? suggested : null });
+    draft = await writeCoachReply(admin, { clientId: item.client_id, voice, automatic, kind: "checkin", facts, startFrom: voice && suggested ? suggested : null });
   }
   return routeDrafted(admin, item, { mode, risk: read.risk, reasons: read.reasons, draft, context: { facts } });
 }

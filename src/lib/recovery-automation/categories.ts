@@ -97,7 +97,17 @@ export function workoutReplyRead(input: { note: string | null; rating: number | 
   return { useful: true, why: null, risk, reasons };
 }
 
-export type CheckinAnalysisLike = { urgency?: string | null; red_flags?: unknown[] | null; suggested_response?: string | null };
+export type CheckinAnalysisLike = { urgency?: string | null; red_flags?: unknown[] | null; suggested_response?: string | null; summary?: string | null; fallback?: boolean | null };
+
+/**
+ * The stand-in recap written when the recap model didn't answer (messenger-checkins
+ * `fallbackAnalysis`): its "suggested reply" is a template with their goal pasted in,
+ * never something to send as the coach's words.
+ */
+export function isFallbackRecap(a: CheckinAnalysisLike | null | undefined): boolean {
+  if (!a) return false;
+  return a.fallback === true || String(a.summary ?? "").startsWith("Client check-in received. Review the answers below");
+}
 
 export function checkinReplyRead(input: { analysis: CheckinAnalysisLike | null; answers: Record<string, unknown> | null }): UpdateRead {
   const a = input.analysis ?? {};
