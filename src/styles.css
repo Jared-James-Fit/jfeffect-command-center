@@ -1747,6 +1747,11 @@ html[data-holding] *:not(input):not(textarea):not([contenteditable="true"]) {
   border-radius: 0.75rem;
   transition: background-color 0.5s ease;
 }
+/* The coach's editor: a new back-off row, lit for a moment where it landed (DayEditor's fresh). */
+[data-pb-row][data-pb-flash="new"] {
+  background-color: color-mix(in oklch, var(--foreground) 7%, transparent);
+  transition: background-color 0.5s ease;
+}
 /* The builder: an exercise a review flag pointed at, lit for a moment (program-workbench goTo). */
 [data-pb-row][data-pb-flash]:not([data-pb-flash="new"]) {
   background-color: color-mix(in oklch, var(--warning) 16%, transparent);

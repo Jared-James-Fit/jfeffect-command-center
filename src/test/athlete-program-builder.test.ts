@@ -214,7 +214,8 @@ describe("coach builder: the phone layout", () => {
   });
 
   it("a row's ⋯ never opens the card under it", () => {
-    expect(editor).toContain("if (collapsed && !inFloatingLayer(e.target)) openCard();");
+    // (nor does its drag handle: onGrip)
+    expect(editor).toContain("if (collapsed && !inFloatingLayer(e.target) && !onGrip(e.target)) openCard();");
     expect(editor).toContain("if (inFloatingLayer(e.relatedTarget)) return;");
     expect(editor).toContain('<DropdownMenuContent align="end" className="w-56" data-row-menu>');
   });
