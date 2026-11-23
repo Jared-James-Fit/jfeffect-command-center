@@ -70,17 +70,23 @@ export function PlanAiChange({
   clientId,
   plan,
   firstName,
+  seed,
 }: {
   clientId: string;
   plan: PlanEditPlan & { id: string; status?: string | null; visible_to_client?: boolean | null };
   firstName: string | null;
+  /** Words to start the box with (Cleo's dock opened from a recommendation or Optimize). */
+  seed?: { text: string; nonce: number } | null;
 }) {
   const qc = useQueryClient();
   const ask = useServerFn(askPlanEditFn);
   const apply = useServerFn(applyPlanEditFn);
   const undo = useServerFn(undoPlanEditFn);
   const discard = useServerFn(discardPlanEditFn);
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => (seed?.text ?? "").slice(0, REVISE_MAX_CHARS));
+  useEffect(() => {
+    if (seed?.text) setText(seed.text.slice(0, REVISE_MAX_CHARS));
+  }, [seed?.nonce, seed?.text]);
   const key = ["nutrition-plan-edit", plan.id];
   const boxRef = useRef<HTMLDivElement | null>(null);
 

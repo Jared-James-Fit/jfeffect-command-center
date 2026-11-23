@@ -25,7 +25,7 @@
  * Branded Cleo for whoever has Cleo (useCleoAccess); anyone else who may adjust
  * the program sees the same dock as "Adjust program": nobody loses it.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { ChevronDown, ChevronUp, Maximize2, Minimize2, SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobileNow } from "@/hooks/use-mobile";
@@ -146,30 +146,32 @@ export function CleoLauncher({ dock, compact }: { dock: CleoDockHandle; compact?
   );
 }
 
-export function CleoDock({
+/**
+ * The panel itself, shared by every Cleo specialty (Training here, Nutrition and Cardio in the
+ * client's tabs, Nov 23 2026): one identity, one interaction pattern. On a computer a right-hand
+ * panel the page makes room for (`[data-builder-page]` gives up its width), docked and resizable or
+ * expanded; on a phone a bottom sheet (peek or full, a swipe down puts it away) that sits on the
+ * visible part of the screen while typing. Closing only folds it away: what's inside stays mounted.
+ */
+export function CleoDockFrame({
   dock,
-  target,
-  title,
-  onApplied,
-  beforeSend,
+  name,
+  subtitle,
+  branded,
+  header,
+  children,
 }: {
   dock: CleoDockHandle;
-  target: ProgramAiTarget;
-  /** "Marc Asugui · Block 2", or the template's name. */
-  title: string;
-  onApplied?: () => void | Promise<void>;
-  /** Save what's on screen (run before every message). */
-  beforeSend?: () => Promise<void> | void;
+  /** "Cleo" (or the unbranded name for someone without Cleo). */
+  name: string;
+  subtitle: string;
+  /** Cleo's mark on the avatar (else the plain sliders). */
+  branded: boolean;
+  /** What goes under the title row (scope, tabs, a specialty line). */
+  header?: ReactNode;
+  children: ReactNode;
 }) {
   const phone = useIsMobileNow();
-  const cleo = useCleoAccess();
-  const here = useBuilderHere();
-  const [tab, setTab] = useState<Tab>("chat");
-  // the scope follows the view until the coach picks one
-  const [picked, setPicked] = useState<CleoScope | null>(null);
-  const scope = picked ?? scopeForView(here?.view);
-  const context = scopeWords(scope, here);
-  const quick = useMemo(() => quickActionsFor(scope, target.kind), [scope, target.kind]);
 
   // mounted on first open and kept (hidden) after, so the conversation and the draft survive closing
   const [mounted, setMounted] = useState(false);
@@ -274,7 +276,6 @@ export function CleoDock({
   }, [dock]);
 
   if (!mounted) return null;
-  const name = cleo ? "Cleo" : "Adjust program";
   const keyboardUp = phone && !!box?.keyboard;
   const phoneStyle = phone
     ? keyboardUp && box
@@ -330,15 +331,15 @@ export function CleoDock({
         </div>
       )}
 
-      {/* who and what: Cleo, the program, the scope it's working in */}
+      {/* who and what: Cleo, what it's working on */}
       <div className={cn("shrink-0 border-b border-border px-3 pb-2.5", phone ? "pt-0" : "pt-[calc(env(safe-area-inset-top)+0.6rem)]")}>
         <div className="flex min-h-10 items-center gap-2">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-foreground text-background">
-            {cleo ? <CleoMark size={18} /> : <SlidersHorizontal className="h-4 w-4" aria-hidden />}
+            {branded ? <CleoMark size={18} /> : <SlidersHorizontal className="h-4 w-4" aria-hidden />}
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold leading-tight tracking-[-0.01em]">{name}</p>
-            <p className="truncate text-[11px] text-muted-foreground">{target.kind === "template" ? `Template · ${title}` : title}</p>
+            <p className="truncate text-[11px] text-muted-foreground">{subtitle}</p>
           </div>
           {phone ? (
             <button type="button" onClick={() => setFull((v) => !v)} aria-label={full ? "Smaller" : "Full screen"} className="grid h-10 w-10 cursor-pointer place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
@@ -348,8 +349,8 @@ export function CleoDock({
             <button
               type="button"
               onClick={() => setDeskMode(mode === "expanded" ? "docked" : "expanded")}
-              aria-label={mode === "expanded" ? "Dock beside the program" : "Expand"}
-              title={mode === "expanded" ? "Dock beside the program" : "Expand for a long review"}
+              aria-label={mode === "expanded" ? "Dock beside the page" : "Expand"}
+              title={mode === "expanded" ? "Dock beside the page" : "Expand for a long review"}
               className="grid h-9 w-9 cursor-pointer place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
               data-cleo-expand
             >
@@ -367,55 +368,92 @@ export function CleoDock({
             <X className="h-4 w-4" />
           </button>
         </div>
-
-        <div className="mt-2 flex items-center gap-2">
-          <div role="radiogroup" aria-label="What it's about" className="grid flex-1 grid-cols-4 rounded-lg bg-muted p-0.5" data-cleo-scope>
-            {(["day", "week", "block", "program"] as CleoScope[]).map((s) => (
-              <button
-                key={s}
-                type="button"
-                role="radio"
-                aria-checked={scope === s}
-                onClick={() => setPicked(s)}
-                className={cn(
-                  "h-8 cursor-pointer rounded-md text-xs font-semibold transition-colors",
-                  scope === s ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {SCOPE_LABEL[s]}
-              </button>
-            ))}
-          </div>
-          <div role="tablist" aria-label={name} className="flex shrink-0 items-center gap-0.5">
-            {(["chat", "rules", "history"] as Tab[]).map((t) => (
-              <button
-                key={t}
-                type="button"
-                role="tab"
-                aria-selected={tab === t}
-                onClick={() => setTab(t)}
-                className={cn(
-                  "h-8 cursor-pointer rounded-md px-2 text-xs font-semibold transition-colors",
-                  tab === t ? "text-foreground underline decoration-2 underline-offset-[6px]" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {t === "chat" ? "Ask" : t === "rules" ? "Rules" : "History"}
-              </button>
-            ))}
-          </div>
-        </div>
-        {picked && picked !== scopeForView(here?.view) && (
-          <button type="button" onClick={() => setPicked(null)} className="mt-1.5 cursor-pointer text-[11px] font-medium text-muted-foreground underline-offset-2 hover:underline">
-            Follow what's on screen
-          </button>
-        )}
+        {header}
       </div>
 
+      {children}
+    </aside>
+  );
+}
+
+export function CleoDock({
+  dock,
+  target,
+  title,
+  onApplied,
+  beforeSend,
+}: {
+  dock: CleoDockHandle;
+  target: ProgramAiTarget;
+  /** "Marc Asugui · Block 2", or the template's name. */
+  title: string;
+  onApplied?: () => void | Promise<void>;
+  /** Save what's on screen (run before every message). */
+  beforeSend?: () => Promise<void> | void;
+}) {
+  const cleo = useCleoAccess();
+  const here = useBuilderHere();
+  const [tab, setTab] = useState<Tab>("chat");
+  // the scope follows the view until the coach picks one
+  const [picked, setPicked] = useState<CleoScope | null>(null);
+  const scope = picked ?? scopeForView(here?.view);
+  const context = scopeWords(scope, here);
+  const quick = useMemo(() => quickActionsFor(scope, target.kind), [scope, target.kind]);
+  const name = cleo ? "Cleo" : "Adjust program";
+
+  const header = (
+    <>
+      <div className="mt-2 flex items-center gap-2">
+        <div role="radiogroup" aria-label="What it's about" className="grid flex-1 grid-cols-4 rounded-lg bg-muted p-0.5" data-cleo-scope>
+          {(["day", "week", "block", "program"] as CleoScope[]).map((s) => (
+            <button
+              key={s}
+              type="button"
+              role="radio"
+              aria-checked={scope === s}
+              onClick={() => setPicked(s)}
+              className={cn(
+                "h-8 cursor-pointer rounded-md text-xs font-semibold transition-colors",
+                scope === s ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {SCOPE_LABEL[s]}
+            </button>
+          ))}
+        </div>
+        <div role="tablist" aria-label={name} className="flex shrink-0 items-center gap-0.5">
+          {(["chat", "rules", "history"] as Tab[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => setTab(t)}
+              className={cn(
+                "h-8 cursor-pointer rounded-md px-2 text-xs font-semibold transition-colors",
+                tab === t ? "text-foreground underline decoration-2 underline-offset-[6px]" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t === "chat" ? "Ask" : t === "rules" ? "Rules" : "History"}
+            </button>
+          ))}
+        </div>
+      </div>
+      {picked && picked !== scopeForView(here?.view) && (
+        <button type="button" onClick={() => setPicked(null)} className="mt-1.5 cursor-pointer text-[11px] font-medium text-muted-foreground underline-offset-2 hover:underline">
+          Follow what's on screen
+        </button>
+      )}
+    </>
+  );
+
+  return (
+    <CleoDockFrame dock={dock} name={name} subtitle={target.kind === "template" ? `Template · ${title}` : `Training · ${title}`} branded={cleo} header={header}>
       <div className="flex min-h-0 flex-1 flex-col" hidden={tab !== "chat"}>
         <ChatPanel target={target} onApplied={onApplied} context={context} beforeSend={beforeSend} quickActions={quick} seed={dock.seed} />
       </div>
       {tab === "rules" && <RulesPanel clientId={target.kind === "client" ? target.clientId : null} />}
       {tab === "history" && <HistoryPanel target={target} onChanged={onApplied} />}
-    </aside>
+    </CleoDockFrame>
   );
 }

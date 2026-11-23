@@ -1763,6 +1763,13 @@ html[data-holding] *:not(input):not(textarea):not([contenteditable="true"]) {
 :root { --money-in: #2a78d6; --money-out: #eb6834; --money-profit: #1baf7a; }
 .dark { --money-in: #3987e5; --money-out: #d95926; --money-profit: #199e70; }
 
+/* Cardio planned vs done (Cardio tab, Nov 23 2026): one measure, so one blue
+   hue as an ordinal pair, validated (--ordinal: monotone, ΔL ≥ 0.06, the light
+   end ≥ 2:1 on the card): what was planned recedes, what was done stands out.
+   On dark the steps swap so "done" is still the strong one. */
+:root { --chart-planned: #86b6ef; --chart-done: #1c5cab; }
+.dark { --chart-planned: #1c5cab; --chart-done: #86b6ef; }
+
 /* Hall of Strength splits (strength-split.ts): squat, bench, deadlift, always
    these three, in this order. The same validated slots as the money charts
    (light and dark); the bars always carry their own labels (aqua is under

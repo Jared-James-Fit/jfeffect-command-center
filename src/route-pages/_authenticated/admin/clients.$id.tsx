@@ -83,7 +83,9 @@ const FoodNotesCard = lazyDefault(() => import("@/components/nutrition/FoodNotes
 const NutritionProgressCard = lazyDefault(() => import("@/components/nutrition/NutritionProgressCard"), "NutritionProgressCard");
 const WeightManagementCard = lazyDefault(() => import("@/components/weight-management/WeightManagementCard"), "WeightManagementCard");
 const RoadmapCoachCard = lazyDefault(() => import("@/components/nutrition-roadmap/roadmap-coach"), "RoadmapCoachCard");
-const CardioTargetsPanel = lazyDefault(() => import("@/components/cardio-targets-panel"), "CardioTargetsPanel");
+const CardioWorkspace = lazyDefault(() => import("@/components/cardio/cardio-workspace"), "CardioWorkspace");
+const NutritionCleoDock = lazyDefault(() => import("@/components/nutrition/nutrition-cleo-dock"), "NutritionCleoDock");
+const NutritionQualityCard = lazyDefault(() => import("@/components/nutrition/NutritionQualityCard"), "NutritionQualityCard");
 const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-metrics-panel"), "ProgressMetricsPanel");
 const ClientAnalyticsDashboard = lazyDefault(() => import("@/components/analytics/client-analytics-dashboard"), "ClientAnalyticsDashboard");
 const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), "BasicInfoForm");
@@ -809,18 +811,32 @@ export function ClientProfileWorkspace({
 
         {/*
           Nutrition: the AI update (one line unless it needs the coach), then what to
-          keep in mind (Food & diet: allergies, diet, notes) beside the plan (targets,
-          then meals), how it's going (bodyweight, check-ins, water) and cardio.
+          keep in mind (Food & diet: allergies, diet, notes) and the plan's quality beside
+          the plan (targets, then meals), how it's going (bodyweight, check-ins, water).
+          Cleo docks beside it (the page gives up its width). Cardio has its own tab.
         */}
-        <TabsContent value="nutrition" className={WORKSPACE_GRID_CLASS}>
+        <TabsContent value="nutrition" className={WORKSPACE_GRID_CLASS} data-builder-page>
           <Suspense fallback={<TabFallback />}>
             <NutritionRequestPanel clientId={id} />
-            <FoodNotesCard clientId={id} className="md:col-span-1 md:self-start" />
+            <div className="min-w-0 space-y-4 md:col-span-1 md:self-start">
+              <FoodNotesCard clientId={id} />
+              <NutritionQualityCard clientId={id} />
+            </div>
             <NutritionTargetsPanel clientId={id} className="md:col-span-2" />
             <RoadmapCoachCard clientId={id} className="md:col-span-3" />
             <WeightManagementCard clientId={id} className="md:col-span-3" />
             <NutritionProgressCard clientId={id} className="md:col-span-3" />
-            <CardioTargetsPanel clientId={id} />
+            <NutritionCleoDock clientId={id} />
+          </Suspense>
+        </TabsContent>
+
+        {/*
+          Cardio (Nov 23 2026): its own plan, builder, history and Cleo, read with the same
+          client picture as nutrition and training.
+        */}
+        <TabsContent value="cardio" className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
+          <Suspense fallback={<TabFallback />}>
+            <CardioWorkspace clientId={id} />
           </Suspense>
         </TabsContent>
 
