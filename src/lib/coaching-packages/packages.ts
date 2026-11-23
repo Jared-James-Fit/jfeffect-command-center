@@ -10,7 +10,8 @@
  * on a package keeps their contracted price (coaching_package_enrollments).
  */
 
-export type PackageKind = "free" | "subscription" | "one_time";
+/** free: the app; membership: a paid self-serve plan (bought in the app, Manage plan); subscription: monthly coaching; one_time: a call. */
+export type PackageKind = "free" | "membership" | "subscription" | "one_time";
 export type PackageStatus = "draft" | "active" | "archived";
 export type BillingInterval = "month" | "once";
 
@@ -91,7 +92,7 @@ export function listedPackages<T extends { listed: boolean; sortOrder: number; n
 
 /** The paid ones a coaching section shows (the free app is the rest of the page). */
 export function paidPackages<T extends { kind: PackageKind }>(rows: readonly T[]): T[] {
-  return rows.filter((p) => p.kind !== "free");
+  return rows.filter((p) => p.kind !== "free" && p.kind !== "membership");
 }
 
 /** The one the page leads with: the recommended package, else the first paid one. */
@@ -124,7 +125,8 @@ export function priceText(p: { kind: PackageKind; priceCents: number | null; int
 
 /** Where a package's button goes: the free app's sign-up, or the coaching application with the package picked. */
 export function ctaHref(p: { kind: PackageKind; slug: string }, from?: string | null): string {
-  if (p.kind === "free") return FREE_JOIN_PATH;
+  // a membership is bought inside the app, after joining free (Account → Your plan)
+  if (p.kind === "free" || p.kind === "membership") return FREE_JOIN_PATH;
   const q = new URLSearchParams({ package: p.slug });
   if (from) q.set("from", from);
   return `${APPLY_PATH}?${q.toString()}`;
@@ -138,7 +140,7 @@ export function shareLink(p: { kind: PackageKind; slug: string }, from = "share"
 export function ctaText(p: { kind: PackageKind; ctaLabel?: string | null }): string {
   const own = (p.ctaLabel ?? "").trim();
   if (own) return own;
-  return p.kind === "free" ? "Get the free app" : "Apply for coaching";
+  return p.kind === "free" ? "Get the free app" : p.kind === "membership" ? "Join free, then upgrade" : "Apply for coaching";
 }
 
 const COUNT_WORDS = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"];
@@ -249,7 +251,7 @@ export function toPublic(p: CoachingPackage): PublicPackage {
 
 /** A row from coaching_packages_public() → PublicPackage. */
 export function fromPublicRow(r: Record<string, unknown>): PublicPackage {
-  const kind = (["free", "subscription", "one_time"].includes(String(r.kind)) ? r.kind : "subscription") as PackageKind;
+  const kind = (["free", "membership", "subscription", "one_time"].includes(String(r.kind)) ? r.kind : "subscription") as PackageKind;
   return {
     slug: String(r.slug ?? ""),
     kind,
