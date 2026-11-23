@@ -7,10 +7,11 @@
 //   node scripts/coaching-screenshots/landing.cjs        (in another)
 //
 // app-home     Home: today, the week, progress (the hero)
-// app-focus    a workout in Focus mode, one exercise a screen (the hero)
+// app-focus    today's back squat in Focus mode, one exercise a screen (the hero)
 // app-week     Workouts: the week's calendar and today's workout
-// app-log      the logger, with bar speed logged on each set
-// app-insights Training analytics, Strength: the squat's estimated max over 12 weeks
+// app-log      the logger: a set logged, the next two waiting with their reps and
+//              RPE already filled in, last time on the card
+// app-insights Training analytics, Overview: estimated maxes, PRs, volume, consistency
 // app-food     Nutrition: their own meal plan and macros
 // app-build    the program builder
 // app-import   an imported spreadsheet being checked before it's saved
@@ -128,7 +129,8 @@ const exercise_info = Object.fromEntries(
 );
 const detail = {
   id: PROG_ID,
-  title: "Upper / Lower Strength",
+  // short enough for the builder's header on a phone, never cut off
+  title: "Upper / Lower",
   description: null,
   goal: "strength",
   level: "intermediate",
@@ -273,9 +275,16 @@ const SHOTS = [
   // the hero: their Home (today's workout, the week, progress) and a workout in Focus mode
   { name: "app-home", path: "/portal", fixtures: { progress_bodyweight: WEIGH_INS }, afterLoad: async (p) => { await closeToasts(p); await blur(p); } },
   {
+    // the hero's front phone: today's back squat in Focus mode, three sets in
+    // (bar speed beside each), the last one waiting with its reps and RPE filled in
     name: "app-focus",
     path: `/portal/workouts/${F.todayDayId}`,
     fixtures: {
+      pl_row_results: (u) =>
+        results(u).filter((x) => {
+          const at = String(x.completed_at ?? "");
+          return !(at.startsWith("2026-11-06T17:22") || at.startsWith("2026-11-06T17:30"));
+        }),
       workout_view_prefs: [
         { user_id: F.USER_ID, view: "story", tried_at: "2026-10-01T00:00:00Z", focus_tips_at: "2026-11-06T00:00:00Z", logging_tips_at: "2026-10-01T00:00:00Z", set_video_tip_count: 9, set_video_tip_last_at: "2026-11-06T00:00:00Z" },
       ],
@@ -283,11 +292,19 @@ const SHOTS = [
     afterLoad: async (p) => { await closeToasts(p); await blur(p); },
   },
   { name: "app-week", path: "/portal/workouts", afterLoad: blur },
-  { name: "app-log", path: `/portal/workouts/${F.todayDayId}`, afterLoad: blur },
   {
-    // Training analytics, Strength: each main lift's estimated max over the last 12 weeks
+    // what the Logging section says: reps and RPE come filled in, type the weight
+    // and it's logged, last time on the same card. The squat's done; the Romanian
+    // deadlift has its first set in and two waiting, the whole card on screen.
+    name: "app-log",
+    path: `/portal/workouts/${F.todayDayId}`,
+    afterLoad: scrollToText("Romanian Deadlift", 40),
+  },
+  {
+    // Training analytics, Overview: what the Progress section lists (estimated
+    // maxes, PRs, volume and consistency) over the last 12 weeks
     name: "app-insights",
-    path: "/portal/workouts/analytics?view=strength&filter=last_12w",
+    path: "/portal/workouts/analytics?view=overview&filter=last_12w",
     afterLoad: async (p) => {
       await p.waitForTimeout(2500);
       await blur(p);
