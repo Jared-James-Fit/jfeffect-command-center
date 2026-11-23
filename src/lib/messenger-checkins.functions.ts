@@ -985,6 +985,14 @@ export async function recapCheckin(sb: any, row: any): Promise<{ status: "ready"
     const { assessmentText } = await import("@/lib/weight-management/assessment");
     const loaded = await recordCheckinReview(sb, row.client_id, row.id);
     if (loaded) weightText = assessmentText(loaded.assessment);
+    // one coordinated recommendation for the coach (weight management + cardio's recovery read),
+    // private to them on this check-in's card; never sent or applied by itself
+    try {
+      const { recordCheckinRecommendation } = await import("@/lib/coaching-recommendation/record.server");
+      await recordCheckinRecommendation(sb, row.client_id, row.id, loaded);
+    } catch (err: any) {
+      console.error("[checkin] coaching recommendation unavailable", err?.message);
+    }
     // the nutrition roadmap reads the new check-in too (a reforecast or adjustment for the coach to approve)
     try {
       const { evaluateRoadmap } = await import("@/lib/nutrition-roadmap/evaluate.server");

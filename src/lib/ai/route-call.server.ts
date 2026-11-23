@@ -29,10 +29,10 @@ const keyOf = (model: string) => (model.startsWith("gateway:") ? "gateway" : "op
 export async function askRoute(
   task: AiTask,
   req: { system: string; prompt: string; timeoutMs?: number; /** ai_call_log feature (default: the task) */ tag?: string },
-  opts: { sb?: Db; override?: Partial<Record<AiTask, string[]>> | null } = {},
+  opts: { sb?: Db; override?: Partial<Record<AiTask, string[]>> | null; /** never a `gateway:` model (no Lovable credits) */ openaiOnly?: boolean } = {},
 ): Promise<ModelReply> {
   const override = opts.override !== undefined ? opts.override : opts.sb ? await readRouteOverride(opts.sb) : null;
-  const route = resolveRoute(task, override);
+  const route = resolveRoute(task, override, { openaiOnly: opts.openaiOnly });
   let last = "no answer";
   // a key whose credits ran out (or was refused, or is paused) answers for none of its models:
   // the next model on the same key is never asked, so a dead account costs one call, not two

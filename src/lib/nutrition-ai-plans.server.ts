@@ -548,7 +548,8 @@ export async function nutritionCall(
   } catch {
     override = null;
   }
-  const route = resolveRoute(task, override);
+  // OpenAI key only: an override naming a `gateway:` model never spends Lovable credits
+  const route = resolveRoute(task, override, { openaiOnly: true });
   try {
     return await stagedCall({
       state,

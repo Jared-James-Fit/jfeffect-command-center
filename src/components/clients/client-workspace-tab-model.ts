@@ -1,4 +1,5 @@
 import {
+  Activity,
   Apple,
   CalendarCheck,
   DollarSign,
@@ -12,6 +13,7 @@ export type WorkspaceTab =
   | "summary"
   | "training"
   | "nutrition"
+  | "cardio"
   | "metrics"
   | "documents"
   | "sessions"
@@ -25,6 +27,8 @@ export type WorkspaceTab =
 
 /**
  * Primary bar = the work you do with a client, in the order you do it.
+ * Cardio is its own tab beside Nutrition (Nov 23 2026): its own plan, builder,
+ * history and Cleo, connected to nutrition and training through one client read.
  * Training also holds program setup; Progress holds metrics, lift
  * analytics and lift videos; Forms holds agreements; Billing holds sales
  * and billing. Profile/setup pages live under More.
@@ -33,6 +37,7 @@ export const CLIENT_WORKSPACE_PRIMARY_TABS = [
   { value: "summary", label: "Summary", icon: LayoutDashboard },
   { value: "training", label: "Training", icon: Dumbbell },
   { value: "nutrition", label: "Nutrition", icon: Apple },
+  { value: "cardio", label: "Cardio", icon: Activity },
   { value: "metrics", label: "Progress", icon: TrendingUp },
   { value: "documents", label: "Forms", icon: FileText },
   { value: "sessions", label: "Sessions", icon: CalendarCheck },
@@ -59,6 +64,5 @@ export const LEGACY_WORKSPACE_TABS: Record<string, WorkspaceTab> = {
   "check-ins": "documents",
   billing: "purchases",
   profile: "info",
-  cardio: "nutrition",
   messages: "summary",
 };

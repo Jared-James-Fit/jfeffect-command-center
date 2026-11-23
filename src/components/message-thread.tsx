@@ -34,6 +34,8 @@ import { UserAvatar } from "@/components/user-avatar";
 import { PaymentRequestCard } from "@/components/payment-request-card";
 import { AutoPaySetupCard } from "@/components/billing/auto-pay-setup-card";
 import { NutritionPlanChatCard } from "@/components/messages/nutrition-plan-chat-card";
+import { CardioPlanChatCard } from "@/components/messages/cardio-plan-chat-card";
+import type { CardioMessageAttachment } from "@/lib/cardio/plan-message";
 import type { PlanMessageAttachment } from "@/lib/nutrition-targets/plan-message";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
@@ -621,6 +623,9 @@ function AttachmentView({
         Sent automatically
       </p>
     );
+  }
+  if ((att as any).kind === "cardio_plan") {
+    return <CardioPlanChatCard att={att as unknown as CardioMessageAttachment} staff={role !== "client"} clientId={clientId} />;
   }
   if (att.kind === "nutrition_plan") {
     return <NutritionPlanChatCard att={att as unknown as PlanMessageAttachment} staff={role !== "client"} clientId={clientId} />;
