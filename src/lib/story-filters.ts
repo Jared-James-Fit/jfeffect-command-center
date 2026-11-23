@@ -61,7 +61,14 @@ export type FilterContext = {
 };
 
 /** The drawing area: the card's size and the band the story's own bars leave clear. */
-export type Area = { W: number; H: number; top: number; bottom: number; PAD: number; story: boolean };
+/**
+ * Where a filter draws: `W` × `H` the canvas (full-bleed fills and the picture
+ * use it), `SW` the width its design is laid out across (W, except a
+ * full-screen post's, which keeps the design clear of the feed's buttons down
+ * the right), `top` / `bottom` / `PAD` the room its words stay inside,
+ * `story` the tall 9:16 canvas.
+ */
+export type Area = { W: number; H: number; SW: number; top: number; bottom: number; PAD: number; story: boolean };
 
 export type StoryFilter = {
   id: string;
@@ -303,7 +310,7 @@ function dayWord(word: string, sub: string) {
   return (ctx: Ctx, A: Area) => {
     scrimBottom(ctx, A, 0.5);
     const x = A.PAD;
-    const maxW = A.W - A.PAD * 2;
+    const maxW = A.SW - A.PAD * 2;
     let y = A.bottom - 10;
     say(ctx, sub.toUpperCase(), x, y, maxW, 30, 800, MUTED, "left", 4);
     y -= 56;
@@ -325,8 +332,8 @@ function liftDay(word: string) {
     const top = A.bottom - bandH;
     ctx.fillStyle = RED;
     ctx.fillRect(0, top, A.W, bandH + (A.H - A.bottom));
-    say(ctx, "TODAY IS", A.PAD, top + 66, A.W - A.PAD * 2, 32, 900, "rgba(255,255,255,0.85)", "left", 6);
-    big(ctx, `${word} DAY`, A.PAD - 4, top + bandH - 50, A.W - A.PAD * 2, 230, INK, "left", 90);
+    say(ctx, "TODAY IS", A.PAD, top + 66, A.SW - A.PAD * 2, 32, 900, "rgba(255,255,255,0.85)", "left", 6);
+    big(ctx, `${word} DAY`, A.PAD - 4, top + bandH - 50, A.SW - A.PAD * 2, 230, INK, "left", 90);
   };
 }
 
@@ -342,7 +349,7 @@ const FILTERS: StoryFilter[] = [
     over: (ctx, A, c) => {
       const f = c.finished!;
       scrimBottom(ctx, A, 0.42);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       let y = A.bottom - 10;
       const parts = [f.duration, f.sets ? `${f.sets} sets` : null, f.volume].filter(Boolean) as string[];
       if (parts.length) {
@@ -355,7 +362,7 @@ const FILTERS: StoryFilter[] = [
       // the check, in green, tucked after the word
       ctx.font = display(s);
       const w = ctx.measureText("DONE.").width;
-      if (A.PAD + w + s * 0.55 < A.W - A.PAD) check(ctx, A.PAD + w + s * 0.3, y - s * 0.36, s * 0.42, GREEN);
+      if (A.PAD + w + s * 0.55 < A.SW - A.PAD) check(ctx, A.PAD + w + s * 0.3, y - s * 0.36, s * 0.42, GREEN);
     },
   },
   {
@@ -368,7 +375,7 @@ const FILTERS: StoryFilter[] = [
     over: (ctx, A, c) => {
       const l = c.finished!.lift!;
       scrimBottom(ctx, A, 0.4);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       let y = A.bottom - 10;
       if (l.alt) {
         say(ctx, l.alt, A.PAD, y, maxW, 38, 700, MUTED);
@@ -390,7 +397,7 @@ const FILTERS: StoryFilter[] = [
     over: (ctx, A, c) => {
       const n = c.finished!.workoutNumber!;
       scrimBottom(ctx, A, 0.5);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       say(ctx, `WORKOUT THIS MONTH · ${MONTH[c.now.getMonth()].toUpperCase()}`, A.PAD, A.bottom - 10, maxW, 32, 800, MUTED, "left", 3);
       big(ctx, ordinal(n).toUpperCase(), A.PAD - 6, A.bottom - 70, maxW, A.story ? 380 : 300, INK);
     },
@@ -404,7 +411,7 @@ const FILTERS: StoryFilter[] = [
     over: (ctx, A, c) => {
       const n = c.finished!.streakWeeks!;
       scrimBottom(ctx, A, 0.45);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       say(ctx, "WEEKS IN A ROW", A.PAD, A.bottom - 10, maxW, 40, 900, INK, "left", 4);
       const s = big(ctx, String(n), A.PAD - 8, A.bottom - 76, maxW * 0.7, A.story ? 420 : 320, "#f59e0b");
       // a row of weeks under the number's top, one block each (the last eight at most)
@@ -428,7 +435,7 @@ const FILTERS: StoryFilter[] = [
     when: (c) => !c.session,
     over: (ctx, A, c) => {
       scrimBottom(ctx, A, 0.45);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       const { time, ampm } = clockLabel(c.now);
       let y = A.bottom - 10;
       say(ctx, `${time} ${ampm}`, A.PAD, y, maxW, 40, 800, MUTED, "left", 2);
@@ -444,8 +451,8 @@ const FILTERS: StoryFilter[] = [
     group: "lockin",
     emoji: "🌙",
     over: (ctx, A, c) => {
-      const w = A.W - A.PAD * 1.4;
-      const x = (A.W - w) / 2;
+      const w = A.SW - A.PAD * 1.4;
+      const x = (A.SW - w) / 2;
       const y = A.top + (A.story ? 30 : 10);
       const h = 168;
       ctx.fillStyle = "rgba(28,28,32,0.82)";
@@ -466,8 +473,8 @@ const FILTERS: StoryFilter[] = [
     group: "lockin",
     emoji: "🎧",
     over: (ctx, A, c, logo) => {
-      const w = A.W - A.PAD * 1.4;
-      const x = (A.W - w) / 2;
+      const w = A.SW - A.PAD * 1.4;
+      const x = (A.SW - w) / 2;
       const h = 300;
       const y = A.bottom - h;
       ctx.fillStyle = "rgba(24,24,28,0.84)";
@@ -524,7 +531,7 @@ const FILTERS: StoryFilter[] = [
     emoji: "🎶",
     over: (ctx, A) => {
       scrimBottom(ctx, A, 0.5);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       big(ctx, "WORLD OUT.", A.PAD - 4, A.bottom - 10, maxW, A.story ? 200 : 160, RED, "left", 80);
       big(ctx, "HEADPHONES IN.", A.PAD - 4, A.bottom - (A.story ? 200 : 165), maxW, A.story ? 200 : 160, INK, "left", 80);
     },
@@ -537,9 +544,9 @@ const FILTERS: StoryFilter[] = [
     over: (ctx, A) => {
       dim(ctx, A, 0.12);
       ctx.save();
-      ctx.translate(A.W / 2, A.top + (A.bottom - A.top) * 0.72);
+      ctx.translate(A.SW / 2, A.top + (A.bottom - A.top) * 0.72);
       ctx.rotate(-0.09);
-      const w = A.W * 0.78;
+      const w = A.SW * 0.78;
       const h = A.story ? 240 : 200;
       ctx.lineWidth = 14;
       ctx.strokeStyle = RED;
@@ -585,11 +592,11 @@ const FILTERS: StoryFilter[] = [
       ctx.fillRect(0, A.bottom - band * 0.9, A.W, A.H - A.bottom + band * 0.9);
       rule(ctx, 0, A.top + band * 0.55, A.W, 12);
       rule(ctx, 0, A.bottom - band * 0.9 - 12, A.W, 12);
-      say(ctx, "TONIGHT ONLY", A.W / 2, A.top + band * 0.55 - 40, A.W - A.PAD * 2, 38, 900, YELLOW, "center", 10);
-      const maxW = A.W - A.PAD * 2;
-      const s = big(ctx, who(c), A.W / 2, A.bottom - band * 0.9 + (A.story ? 160 : 120), maxW, A.story ? 150 : 120, INK, "center", 60);
-      say(ctx, "VS. THE BAR", A.W / 2, A.bottom - band * 0.9 + (A.story ? 160 : 120) + Math.min(70, s * 0.5), maxW, 44, 900, RED, "center", 6);
-      say(ctx, "HEAVY DAY · NO REFUNDS", A.W / 2, A.bottom - 10, maxW, 26, 800, MUTED, "center", 6);
+      say(ctx, "TONIGHT ONLY", A.SW / 2, A.top + band * 0.55 - 40, A.SW - A.PAD * 2, 38, 900, YELLOW, "center", 10);
+      const maxW = A.SW - A.PAD * 2;
+      const s = big(ctx, who(c), A.SW / 2, A.bottom - band * 0.9 + (A.story ? 160 : 120), maxW, A.story ? 150 : 120, INK, "center", 60);
+      say(ctx, "VS. THE BAR", A.SW / 2, A.bottom - band * 0.9 + (A.story ? 160 : 120) + Math.min(70, s * 0.5), maxW, 44, 900, RED, "center", 6);
+      say(ctx, "HEAVY DAY · NO REFUNDS", A.SW / 2, A.bottom - 10, maxW, 26, 800, MUTED, "center", 6);
     },
   },
   {
@@ -599,7 +606,7 @@ const FILTERS: StoryFilter[] = [
     emoji: "🎯",
     over: (ctx, A) => {
       scrimBottom(ctx, A, 0.45);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       const r = 58;
       const cy = A.bottom - (A.story ? 300 : 250);
       ["3", "2", "1"].forEach((n, i) => {
@@ -649,7 +656,7 @@ const FILTERS: StoryFilter[] = [
       say(ctx, `${hh}:${mm}:00`, A.W - inset - 40, t + 90, 300, 40, 800, INK, "right", 3);
       say(ctx, "1080p · 30", inset + 40, b - 50, 400, 30, 800, INK, "left", 3);
       const date = `${MONTH[c.now.getMonth()].slice(0, 3).toUpperCase()} ${c.now.getDate()} ${c.now.getFullYear()}`;
-      say(ctx, date, A.W - inset - 40, b - 50, 400, 30, 800, INK, "right", 3);
+      say(ctx, date, A.SW - inset - 40, b - 50, 400, 30, 800, INK, "right", 3);
       // the battery, top right under the clock
       const bx = A.W - inset - 120;
       const by = t + 116;
@@ -667,15 +674,15 @@ const FILTERS: StoryFilter[] = [
     emoji: "📸",
     under: (ctx, A, media) => {
       plainBackdrop(ctx, A.W, A.H);
-      const w = A.W * (A.story ? 0.8 : 0.72);
+      const w = A.SW * (A.story ? 0.8 : 0.72);
       const ph = w * 1.08;
       const frameH = ph + w * 0.06 + (A.story ? 230 : 180);
-      const x = (A.W - w) / 2;
+      const x = (A.SW - w) / 2;
       const y = A.top + (A.bottom - A.top - frameH) / 2;
       ctx.save();
-      ctx.translate(A.W / 2, y + frameH / 2);
+      ctx.translate(A.SW / 2, y + frameH / 2);
       ctx.rotate(-0.035);
-      ctx.translate(-A.W / 2, -(y + frameH / 2));
+      ctx.translate(-A.SW / 2, -(y + frameH / 2));
       ctx.fillStyle = PAPER;
       ctx.fillRect(x - w * 0.06, y - w * 0.06, w + w * 0.12, frameH);
       ctx.save();
@@ -692,12 +699,12 @@ const FILTERS: StoryFilter[] = [
       ctx.restore();
     },
     over: (ctx, A, c) => {
-      const w = A.W * (A.story ? 0.8 : 0.72);
+      const w = A.SW * (A.story ? 0.8 : 0.72);
       const ph = w * 1.08;
       const frameH = ph + w * 0.06 + (A.story ? 230 : 180);
       const y = A.top + (A.bottom - A.top - frameH) / 2;
       ctx.save();
-      ctx.translate(A.W / 2, y + frameH / 2);
+      ctx.translate(A.SW / 2, y + frameH / 2);
       ctx.rotate(-0.035);
       const capY = -frameH / 2 + ph + (A.story ? 130 : 105);
       ctx.font = `italic 600 ${A.story ? 58 : 48}px "Marker Felt", "Bradley Hand", "Segoe Print", "Comic Sans MS", cursive`;
@@ -726,14 +733,14 @@ const FILTERS: StoryFilter[] = [
         [0, 0], [0.28, 0], [0.33, -0.25], [0.38, 0.12], [0.44, -1], [0.5, 0.5], [0.55, 0], [0.62, 0], [0.66, -0.18], [0.7, 0], [1, 0],
       ];
       pts.forEach(([px, py], i) => {
-        const X = A.PAD * 0.5 + px * (A.W - A.PAD);
+        const X = A.PAD * 0.5 + px * (A.SW - A.PAD);
         const Y = y + py * 110;
         if (i === 0) ctx.moveTo(X, Y);
         else ctx.lineTo(X, Y);
       });
       ctx.stroke();
-      dot(ctx, A.PAD * 0.5 + 0.44 * (A.W - A.PAD), y - 110, 16, RED);
-      big(ctx, "CARDIO", A.PAD - 4, A.bottom - 10, A.W - A.PAD * 2, A.story ? 230 : 190, INK, "left", 90);
+      dot(ctx, A.PAD * 0.5 + 0.44 * (A.SW - A.PAD), y - 110, 16, RED);
+      big(ctx, "CARDIO", A.PAD - 4, A.bottom - 10, A.SW - A.PAD * 2, A.story ? 230 : 190, INK, "left", 90);
     },
   },
   {
@@ -743,14 +750,14 @@ const FILTERS: StoryFilter[] = [
     emoji: "😴",
     over: (ctx, A) => {
       scrimBottom(ctx, A, 0.5);
-      moon(ctx, A.W - A.PAD - 70, A.top + 110, 64, INK);
+      moon(ctx, A.SW - A.PAD - 70, A.top + 110, 64, INK);
       ctx.font = font(800, 44);
       ctx.fillStyle = INK;
       ctx.textAlign = "left";
-      ctx.fillText("z", A.W - A.PAD - 220, A.top + 120);
+      ctx.fillText("z", A.SW - A.PAD - 220, A.top + 120);
       ctx.font = font(800, 60);
-      ctx.fillText("z", A.W - A.PAD - 190, A.top + 70);
-      const maxW = A.W - A.PAD * 2;
+      ctx.fillText("z", A.SW - A.PAD - 190, A.top + 70);
+      const maxW = A.SW - A.PAD * 2;
       say(ctx, "RECOVERY IS PART OF IT", A.PAD, A.bottom - 10, maxW, 34, 800, MUTED, "left", 4);
       big(ctx, "REST DAY", A.PAD - 4, A.bottom - 70, maxW, A.story ? 240 : 200, INK, "left", 100);
     },
@@ -768,7 +775,7 @@ const FILTERS: StoryFilter[] = [
       const b = c.block!;
       scrimBottom(ctx, A, 0.42);
       const cols = [b.block != null ? { k: "BLOCK", v: String(b.block) } : null, b.week != null ? { k: "WEEK", v: String(b.week) } : null].filter(Boolean) as { k: string; v: string }[];
-      const colW = (A.W - A.PAD * 2) / cols.length;
+      const colW = (A.SW - A.PAD * 2) / cols.length;
       const size = A.story ? 400 : 320;
       cols.forEach((col, i) => {
         const x = A.PAD + i * colW + (i ? 40 : 0);
@@ -787,7 +794,7 @@ const FILTERS: StoryFilter[] = [
     over: (ctx, A, c) => {
       const n = Math.min(16, c.block!.week!);
       scrimBottom(ctx, A, 0.5);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       // a box for every week done so far and one for the next
       const boxes = n + 1;
       const gap = 14;
@@ -819,7 +826,7 @@ const FILTERS: StoryFilter[] = [
       scrimBottom(ctx, A, 0.55);
       // a road sign
       const s = A.story ? 300 : 240;
-      const cx = A.W / 2;
+      const cx = A.SW / 2;
       const cy = A.top + (A.bottom - A.top) * (A.story ? 0.56 : 0.5);
       ctx.save();
       ctx.translate(cx, cy);
@@ -840,7 +847,7 @@ const FILTERS: StoryFilter[] = [
       ctx.fillText("DELOAD", cx, cy - s * 0.06);
       ctx.font = font(900, Math.round(s * 0.09));
       ctx.fillText("AHEAD", cx, cy + s * 0.16);
-      say(ctx, "BACK OFF NOW, COME BACK STRONGER", A.W / 2, A.bottom - 10, A.W - A.PAD * 2, 32, 800, INK, "center", 3);
+      say(ctx, "BACK OFF NOW, COME BACK STRONGER", A.SW / 2, A.bottom - 10, A.SW - A.PAD * 2, 32, 800, INK, "center", 3);
     },
   },
   {
@@ -856,7 +863,7 @@ const FILTERS: StoryFilter[] = [
       ctx.lineJoin = "round";
       ctx.beginPath();
       const L = A.PAD * 0.5;
-      const R = A.W - A.PAD * 0.5;
+      const R = A.SW - A.PAD * 0.5;
       const w = R - L;
       ctx.moveTo(L, base);
       ctx.lineTo(L + w * 0.22, base - 110);
@@ -880,7 +887,7 @@ const FILTERS: StoryFilter[] = [
       ctx.lineTo(fx, base - 296);
       ctx.closePath();
       ctx.fill();
-      big(ctx, "PEAK WEEK", A.PAD - 4, A.bottom - 10, A.W - A.PAD * 2, A.story ? 230 : 190, INK, "left", 100);
+      big(ctx, "PEAK WEEK", A.PAD - 4, A.bottom - 10, A.SW - A.PAD * 2, A.story ? 230 : 190, INK, "left", 100);
     },
   },
   {
@@ -891,17 +898,17 @@ const FILTERS: StoryFilter[] = [
     over: (ctx, A, c) => {
       dim(ctx, A, 0.18);
       // an athlete's pass on a lanyard
-      const w = A.W * (A.story ? 0.62 : 0.5);
+      const w = A.SW * (A.story ? 0.62 : 0.5);
       const h = w * 1.36;
-      const x = (A.W - w) / 2;
+      const x = (A.SW - w) / 2;
       const y = A.bottom - h - (A.story ? 30 : 0);
       ctx.strokeStyle = RED;
       ctx.lineWidth = 22;
       ctx.beginPath();
       ctx.moveTo(x + w * 0.3, y + 10);
-      ctx.lineTo(A.W / 2 - 120, 0);
+      ctx.lineTo(A.SW / 2 - 120, 0);
       ctx.moveTo(x + w * 0.7, y + 10);
-      ctx.lineTo(A.W / 2 + 120, 0);
+      ctx.lineTo(A.SW / 2 + 120, 0);
       ctx.stroke();
       ctx.fillStyle = PAPER;
       roundRect(ctx, x, y, w, h, 30);
@@ -909,24 +916,24 @@ const FILTERS: StoryFilter[] = [
       ctx.fillStyle = RED;
       ctx.fillRect(x, y + h * 0.16, w, h * 0.17);
       ctx.fillStyle = "#cfcac0";
-      roundRect(ctx, A.W / 2 - 50, y + 26, 100, 22, 11);
+      roundRect(ctx, A.SW / 2 - 50, y + 26, 100, 22, 11);
       ctx.fill();
       ctx.fillStyle = INK;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.font = display(Math.round(h * 0.1));
-      ctx.fillText("ATHLETE", A.W / 2, y + h * 0.247);
+      ctx.fillText("ATHLETE", A.SW / 2, y + h * 0.247);
       ctx.fillStyle = INKDARK;
       ctx.font = display(Math.round(h * 0.14));
       fitDisplay(ctx, who(c), w - 80, Math.round(h * 0.14), 40);
-      ctx.fillText(who(c), A.W / 2, y + h * 0.48);
+      ctx.fillText(who(c), A.SW / 2, y + h * 0.48);
       ctx.font = font(900, Math.round(h * 0.05));
       setSpacing(ctx, 6);
-      ctx.fillText("MEET DAY", A.W / 2, y + h * 0.6);
+      ctx.fillText("MEET DAY", A.SW / 2, y + h * 0.6);
       setSpacing(ctx, 0);
       ctx.font = font(700, Math.round(h * 0.04));
       ctx.fillStyle = "#55555c";
-      ctx.fillText(`${MONTH[c.now.getMonth()]} ${c.now.getDate()}, ${c.now.getFullYear()}`, A.W / 2, y + h * 0.68);
+      ctx.fillText(`${MONTH[c.now.getMonth()]} ${c.now.getDate()}, ${c.now.getFullYear()}`, A.SW / 2, y + h * 0.68);
       // a barcode
       let bx = x + w * 0.16;
       const end = x + w * 0.84;
@@ -947,7 +954,7 @@ const FILTERS: StoryFilter[] = [
     emoji: "🆕",
     over: (ctx, A, c) => {
       scrimBottom(ctx, A, 0.45);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       const label = c.block?.block != null ? `BLOCK ${c.block.block}` : "NEW BLOCK";
       say(ctx, label, A.PAD, A.bottom - 10, maxW, 40, 900, RED, "left", 8);
       big(ctx, "DAY 1", A.PAD - 6, A.bottom - 76, maxW, A.story ? 380 : 300, INK, "left", 120);
@@ -962,9 +969,9 @@ const FILTERS: StoryFilter[] = [
     emoji: "🍕",
     over: (ctx, A) => {
       ctx.save();
-      ctx.translate(A.W / 2, A.top + (A.bottom - A.top) * 0.62);
+      ctx.translate(A.SW / 2, A.top + (A.bottom - A.top) * 0.62);
       ctx.rotate(-0.16);
-      const w = A.W * 0.72;
+      const w = A.SW * 0.72;
       const h = A.story ? 250 : 210;
       ctx.globalAlpha = 0.92;
       ctx.lineWidth = 16;
@@ -993,7 +1000,7 @@ const FILTERS: StoryFilter[] = [
     emoji: "🥩",
     over: (ctx, A) => {
       const rows = ["Protein", "Carbs", "Veggies", "Water"];
-      const w = A.W * 0.62;
+      const w = A.SW * 0.62;
       const rowH = A.story ? 96 : 82;
       const h = rowH * rows.length + 90;
       const x = A.PAD;
@@ -1017,7 +1024,7 @@ const FILTERS: StoryFilter[] = [
     emoji: "🍱",
     over: (ctx, A) => {
       scrimBottom(ctx, A, 0.5);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       const days = ["M", "T", "W", "T", "F", "S", "S"];
       const gap = 14;
       const bw = (maxW - gap * 6) / 7;
@@ -1044,10 +1051,10 @@ const FILTERS: StoryFilter[] = [
     emoji: "🛒",
     over: (ctx, A) => {
       const items = ["Chicken", "Rice", "Eggs", "Oats", "Greek yogurt", "Bananas"];
-      const w = A.W * 0.6;
+      const w = A.SW * 0.6;
       const lh = A.story ? 62 : 52;
       const h = 150 + items.length * lh + 120;
-      const x = A.W - A.PAD - w;
+      const x = A.SW - A.PAD - w;
       const y = A.bottom - h;
       ctx.save();
       ctx.translate(x + w / 2, y + h / 2);
@@ -1099,7 +1106,7 @@ const FILTERS: StoryFilter[] = [
     emoji: "🍝",
     over: (ctx, A) => {
       scrimBottom(ctx, A, 0.5);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       say(ctx, "CARBS ARE BACK ON THE MENU", A.PAD, A.bottom - 10, maxW, 34, 800, MUTED, "left", 3);
       big(ctx, "REFEED DAY", A.PAD - 4, A.bottom - 70, maxW, A.story ? 230 : 190, YELLOW, "left", 90);
     },
@@ -1111,7 +1118,7 @@ const FILTERS: StoryFilter[] = [
     emoji: "☕",
     over: (ctx, A) => {
       scrimBottom(ctx, A, 0.5);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       const s = A.story ? 190 : 150;
       big(ctx, "LIFT SECOND.", A.PAD - 4, A.bottom - 10, maxW, s, RED, "left", 70);
       big(ctx, "COFFEE FIRST.", A.PAD - 4, A.bottom - 10 - s * 0.98, maxW, s, INK, "left", 70);
@@ -1127,7 +1134,7 @@ const FILTERS: StoryFilter[] = [
       // a water bottle, mostly full
       const bw = 150;
       const bh = A.story ? 360 : 300;
-      const bx = A.W - A.PAD - bw;
+      const bx = A.SW - A.PAD - bw;
       const by = A.bottom - bh;
       ctx.strokeStyle = INK;
       ctx.lineWidth = 8;
@@ -1142,7 +1149,7 @@ const FILTERS: StoryFilter[] = [
       ctx.fillRect(bx, by + bh * 0.28, bw, bh);
       ctx.restore();
       for (let i = 1; i <= 3; i++) rule(ctx, bx + bw * 0.62, by + (bh * i) / 4, bw * 0.22, 5, "rgba(255,255,255,0.8)");
-      big(ctx, "HYDRATED", A.PAD - 4, A.bottom - 10, A.W - A.PAD * 2 - bw - 30, A.story ? 210 : 170, INK, "left", 80);
+      big(ctx, "HYDRATED", A.PAD - 4, A.bottom - 10, A.SW - A.PAD * 2 - bw - 30, A.story ? 210 : 170, INK, "left", 80);
     },
   },
 
@@ -1157,14 +1164,14 @@ const FILTERS: StoryFilter[] = [
       scrimTop(ctx, A, A.top + 520, 0.5);
       const { time } = clockLabel(c.now);
       const date = `${WEEKDAY[c.now.getDay()]}, ${MONTH[c.now.getMonth()]} ${c.now.getDate()}`;
-      say(ctx, date, A.W / 2, A.top + 70, A.W - A.PAD * 2, 44, 700, "rgba(255,255,255,0.88)", "center");
+      say(ctx, date, A.SW / 2, A.top + 70, A.SW - A.PAD * 2, 44, 700, "rgba(255,255,255,0.88)", "center");
       ctx.font = font(300, A.story ? 300 : 240);
       // the lock screen's thin, huge numbers (system face)
-      const size = fitFont(ctx, time, A.W - A.PAD * 2, 300, A.story ? 300 : 240, 120);
+      const size = fitFont(ctx, time, A.SW - A.PAD * 2, 300, A.story ? 300 : 240, 120);
       ctx.fillStyle = INK;
       ctx.textAlign = "center";
       ctx.textBaseline = "alphabetic";
-      ctx.fillText(time, A.W / 2, A.top + 80 + size * 0.95);
+      ctx.fillText(time, A.SW / 2, A.top + 80 + size * 0.95);
     },
   },
   {
@@ -1177,7 +1184,7 @@ const FILTERS: StoryFilter[] = [
     over: (ctx, A, c) => {
       scrimBottom(ctx, A, 0.45);
       const h = earlyHour(c) ?? 5;
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       const { time, ampm } = clockLabel(c.now);
       say(ctx, `UP AT ${time} ${ampm}`, A.PAD, A.bottom - 10, maxW, 36, 800, MUTED, "left", 4);
       const s = big(ctx, `${h} AM`, A.PAD - 6, A.bottom - 70, maxW, A.story ? 330 : 270, INK, "left", 120);
@@ -1192,7 +1199,7 @@ const FILTERS: StoryFilter[] = [
     fit: (c) => (hourOf(c) >= 5 && hourOf(c) < 11 ? 4 : 0),
     over: (ctx, A) => {
       scrimBottom(ctx, A, 0.5);
-      const cx = A.W - A.PAD - 130;
+      const cx = A.SW - A.PAD - 130;
       const cy = A.top + 180;
       ctx.strokeStyle = YELLOW;
       ctx.lineWidth = 9;
@@ -1211,7 +1218,7 @@ const FILTERS: StoryFilter[] = [
       ctx.moveTo(cx - 140, cy);
       ctx.lineTo(cx + 140, cy);
       ctx.stroke();
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       const s = A.story ? 210 : 170;
       big(ctx, "SESSION", A.PAD - 4, A.bottom - 10, maxW, s, INK, "left", 80);
       big(ctx, "MORNING", A.PAD - 4, A.bottom - 10 - s * 0.95, maxW, s, YELLOW, "left", 80);
@@ -1225,7 +1232,7 @@ const FILTERS: StoryFilter[] = [
     fit: (c) => (hourOf(c) >= 11 && hourOf(c) < 14 ? 4 : 0),
     over: (ctx, A, c) => {
       scrimBottom(ctx, A, 0.5);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       const { time, ampm } = clockLabel(c.now);
       say(ctx, `ON MY LUNCH BREAK · ${time} ${ampm}`, A.PAD, A.bottom - 10, maxW, 34, 800, MUTED, "left", 3);
       big(ctx, "LUNCH LIFT", A.PAD - 4, A.bottom - 70, maxW, A.story ? 240 : 200, INK, "left", 100);
@@ -1239,7 +1246,7 @@ const FILTERS: StoryFilter[] = [
     fit: (c) => (hourOf(c) >= 15 && hourOf(c) < 20 ? 4 : 0),
     over: (ctx, A) => {
       scrimBottom(ctx, A, 0.5);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       const s = A.story ? 170 : 140;
       const y2 = A.bottom - 10;
       const y1 = y2 - s * 1.0;
@@ -1261,8 +1268,8 @@ const FILTERS: StoryFilter[] = [
       scrimBottom(ctx, A, 0.45);
       scrimTop(ctx, A, A.top + 300, 0.45);
       moon(ctx, A.PAD + 70, A.top + 110, 60, INK);
-      [[0.62, 0.06], [0.8, 0.12], [0.7, 0.2], [0.9, 0.03]].forEach(([fx, fy]) => dot(ctx, A.W * fx, A.top + (A.bottom - A.top) * fy, 6, INK));
-      const maxW = A.W - A.PAD * 2;
+      [[0.62, 0.06], [0.8, 0.12], [0.7, 0.2], [0.9, 0.03]].forEach(([fx, fy]) => dot(ctx, A.SW * fx, A.top + (A.bottom - A.top) * fy, 6, INK));
+      const maxW = A.SW - A.PAD * 2;
       const { time, ampm } = clockLabel(c.now);
       say(ctx, `${time} ${ampm} · STILL HERE`, A.PAD, A.bottom - 10, maxW, 34, 800, MUTED, "left", 4);
       big(ctx, "LATE NIGHT LIFT", A.PAD - 4, A.bottom - 70, maxW, A.story ? 200 : 160, INK, "left", 80);
@@ -1275,7 +1282,7 @@ const FILTERS: StoryFilter[] = [
     emoji: "📆",
     over: (ctx, A, c) => {
       scrimBottom(ctx, A, 0.5);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       say(ctx, WEEKDAY_LINE[c.now.getDay()].toUpperCase(), A.PAD, A.bottom - 10, maxW, 40, 900, RED, "left", 8);
       big(ctx, WEEKDAY[c.now.getDay()].toUpperCase(), A.PAD - 4, A.bottom - 76, maxW, A.story ? 260 : 210, INK, "left", 100);
     },
@@ -1297,7 +1304,7 @@ const FILTERS: StoryFilter[] = [
       ctx.fillStyle = "#ff8a1f";
       ctx.textAlign = "right";
       ctx.textBaseline = "alphabetic";
-      ctx.fillText(`'${yy} ${mm} ${dd}`, A.W - A.PAD, A.bottom - 10);
+      ctx.fillText(`'${yy} ${mm} ${dd}`, A.SW - A.PAD, A.bottom - 10);
     },
   },
 
@@ -1309,7 +1316,7 @@ const FILTERS: StoryFilter[] = [
     emoji: "🙋",
     over: (ctx, A) => {
       scrimBottom(ctx, A, 0.5);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       say(ctx, "ESPECIALLY ON THE DAYS YOU DON'T WANT TO", A.PAD, A.bottom - 10, maxW, 30, 800, MUTED, "left", 3);
       big(ctx, "SHOW UP.", A.PAD - 6, A.bottom - 66, maxW, A.story ? 300 : 240, INK, "left", 120);
     },
@@ -1321,7 +1328,7 @@ const FILTERS: StoryFilter[] = [
     emoji: "0️⃣",
     over: (ctx, A) => {
       scrimBottom(ctx, A, 0.5);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       const s = A.story ? 200 : 165;
       big(ctx, "ZERO DAYS", A.PAD - 4, A.bottom - 10, maxW, s, INK, "left", 80);
       big(ctx, "NO", A.PAD - 4, A.bottom - 10 - s * 0.95, maxW, s, RED, "left", 80);
@@ -1333,7 +1340,7 @@ const FILTERS: StoryFilter[] = [
     group: "mindset",
     emoji: "📖",
     over: (ctx, A) => {
-      const w = A.W - A.PAD * 2;
+      const w = A.SW - A.PAD * 2;
       const h = A.story ? 400 : 340;
       const x = A.PAD;
       const y = A.bottom - h;
@@ -1364,7 +1371,7 @@ const FILTERS: StoryFilter[] = [
     emoji: "➕",
     over: (ctx, A) => {
       scrimBottom(ctx, A, 0.5);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       const s = big(ctx, "ONE MORE REP.", A.PAD - 4, A.bottom - 10, maxW, A.story ? 190 : 160, INK, "left", 70);
       tag(ctx, "+1", A.PAD, A.bottom - 10 - s - 70, { bg: RED, ink: INK, size: 44, h: 84 });
     },
@@ -1376,7 +1383,7 @@ const FILTERS: StoryFilter[] = [
     emoji: "🧩",
     over: (ctx, A) => {
       scrimBottom(ctx, A, 0.5);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       const s = A.story ? 190 : 160;
       big(ctx, "THE PROCESS", A.PAD - 4, A.bottom - 10, maxW, s, INK, "left", 70);
       say(ctx, "TRUST", A.PAD, A.bottom - 10 - s * 0.95, maxW, 60, 900, RED, "left", 14);
@@ -1389,7 +1396,7 @@ const FILTERS: StoryFilter[] = [
     emoji: "🏅",
     over: (ctx, A) => {
       scrimBottom(ctx, A, 0.5);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       const s = A.story ? 210 : 175;
       big(ctx, "NOT GIVEN.", A.PAD - 4, A.bottom - 10, maxW, s, "rgba(255,255,255,0.55)", "left", 80);
       big(ctx, "EARNED.", A.PAD - 4, A.bottom - 10 - s * 0.95, maxW, s, INK, "left", 80);
@@ -1402,7 +1409,7 @@ const FILTERS: StoryFilter[] = [
     emoji: "🤫",
     over: (ctx, A) => {
       scrimBottom(ctx, A, 0.62, 0.7);
-      say(ctx, "work in silence.", A.W / 2, A.bottom - 30, A.W - A.PAD * 2, A.story ? 64 : 56, 500, INK, "center");
+      say(ctx, "work in silence.", A.SW / 2, A.bottom - 30, A.SW - A.PAD * 2, A.story ? 64 : 56, 500, INK, "center");
     },
   },
   {
@@ -1412,12 +1419,12 @@ const FILTERS: StoryFilter[] = [
     emoji: "🪞",
     over: (ctx, A) => {
       scrimBottom(ctx, A, 0.38);
-      const maxW = A.W - A.PAD * 2;
+      const maxW = A.SW - A.PAD * 2;
       const s = A.story ? 220 : 180;
       const y3 = A.bottom - 10;
-      big(ctx, "YOU", A.W / 2, y3, maxW, s, INK, "center", 90);
-      big(ctx, "VS.", A.W / 2, y3 - s * 0.92, maxW, s * 0.6, RED, "center", 60);
-      big(ctx, "YOU", A.W / 2, y3 - s * 0.92 - s * 0.6, maxW, s, INK, "center", 90);
+      big(ctx, "YOU", A.SW / 2, y3, maxW, s, INK, "center", 90);
+      big(ctx, "VS.", A.SW / 2, y3 - s * 0.92, maxW, s * 0.6, RED, "center", 60);
+      big(ctx, "YOU", A.SW / 2, y3 - s * 0.92 - s * 0.6, maxW, s, INK, "center", 90);
     },
   },
 
@@ -1534,16 +1541,17 @@ export function filterRow(c: FilterContext): StoryFilter[] {
 /*  Painting                                                           */
 /* ------------------------------------------------------------------ */
 
-/** Where a filter draws: a story (1080×1920), a feed card (1080×1350), or any other size a post takes (grades only). */
+/** Where a filter draws: a story or a full-screen post (1080×1920), a feed card (1080×1350), or any other size a post takes (grades only). */
 export type FilterSize = ShareFormat | { w: number; h: number };
 export function filterArea(size: FilterSize): Area {
   if (typeof size === "string") {
     const s = SHARE_SIZES[size];
-    return { W: s.w, H: s.h, top: s.safeTop, bottom: s.h - s.safeBottom, PAD: size === "story" ? 80 : 72, story: size === "story" };
+    const PAD = size === "feed" ? 72 : 80;
+    return { W: s.w, H: s.h, SW: s.w - (s.safeRight ? s.safeRight - PAD : 0), top: s.safeTop, bottom: s.h - s.safeBottom, PAD, story: size !== "feed" };
   }
   const story = Math.abs(size.w / size.h - 9 / 16) < 0.02;
   if (story) return filterArea("story");
-  return { W: size.w, H: size.h, top: 60, bottom: size.h - 60, PAD: 72, story: false };
+  return { W: size.w, H: size.h, SW: size.w, top: 60, bottom: size.h - 60, PAD: 72, story: false };
 }
 /** A grade only changes the picture (no words or shapes), so it suits any shape a post takes. */
 export function isGrade(f: StoryFilter): boolean {

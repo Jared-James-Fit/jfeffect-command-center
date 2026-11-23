@@ -38,7 +38,7 @@ import {
   storyCanFit,
   storyStartsWhole,
   wholeRect,
-  closestAspect,
+  startAspect,
   framingFromGuide,
   slideAspect,
   guideBand,
@@ -71,8 +71,8 @@ import { paintCard } from "@/components/community/card-paint";
 
 /**
  * What you're making, along the bottom like Instagram's POST / STORY: a post
- * (the feed and your profile grid, framed 4:5 / 1:1 / 16:9) or a story (24h
- * in the story rail, 9:16). The filters (Normal, a meal's looks, a lock in's,
+ * (the feed and your profile grid, 9:16 to fill its screen in the Crew feed,
+ * or 4:5 / 1:1 / 16:9) or a story (24h in the story rail, 9:16). The filters (Normal, a meal's looks, a lock in's,
  * a workout's) are the circles around the shutter.
  */
 export type ShareKind = "post" | "story";
@@ -84,7 +84,7 @@ const ENTER_MS = 320;
 const RAIL_LABELS_MS = 2600;
 const SLIDE_EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
 
-/** A card in a post is the feed's 4:5. */
+/** A card in a post fills its screen (9:16, the "full" card), or the feed's 4:5 when picked. */
 const FEED_CARD_ASPECT = 4 / 5;
 
 /** The card painted on the viewfinder; swipe sideways to change the look. */
@@ -181,8 +181,9 @@ const timeLabel = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric"
  * the library. Each extra starts uploading the moment it's added.
  *
  * POST or STORY (the row under the camera, Instagram's): a post is framed
- * at the feed's shape (the camera shows the 4:5 part; then drag and pinch,
- * with a rule-of-thirds grid while your finger's on it, and 4:5 / 1:1 / 16:9)
+ * at its shape (9:16 to start, filling its screen in the Crew feed: the
+ * camera shows all of it; then drag and pinch, with a rule-of-thirds grid
+ * while your finger's on it, and 4:5 / 1:1 / 16:9 a tap away)
  * and baked into the photo, so the feed, the post and the 3:4 profile grid
  * show exactly that. A clip keeps its whole picture: drag it to choose what
  * the feed and grid show, and pick its cover frame. A story is 9:16 and goes
@@ -280,7 +281,7 @@ export function ShareStudio({
     if (open) onKindRef.current?.(kind);
   }, [open, kind]);
   // a post's photo: its shape and how it sits in it (baked in when it's posted)
-  const [aspect, setAspect] = useState<PostAspect>("portrait");
+  const [aspect, setAspect] = useState<PostAspect>("full");
   // the shape was picked by hand: the first photo or clip no longer sets it
   const aspectPicked = useRef(false);
   // the slide being framed in the editor (a photo or clip in the strip); null: slide 1
@@ -410,7 +411,7 @@ export function ShareStudio({
     setRailLabels(true);
     setFlashOn(false);
     setScreenFlash(false);
-    setAspect("portrait");
+    setAspect("full");
     aspectPicked.current = false;
     setSel(null);
     setFraming(CENTRED);
@@ -558,21 +559,25 @@ export function ShareStudio({
     return () => ro.disconnect();
   }, [barEl]);
   const fullScreen = phase === "shoot" && screenSize.w > 0 && barH > 0 && screenSize.h - screenSize.top - (screenSize.w * CARD_H) / CARD_W >= barH - 2;
-  // The editor's frame is what's posted: a story's 9:16; a post's card, the
-  // feed's 4:5; any other post, the one shape every slide takes (9:16 / 4:5 /
-  // 1:1 / 16:9, Instagram's carousel rule), set from its first photo or clip
-  // until it's picked by hand. The camera is 9:16.
+  // The editor's frame is what's posted: a story's 9:16; a post's card, 9:16
+  // filling its screen in the Crew feed (or the feed's 4:5, picked with the
+  // shape button: a card is drawn at those two only); any other post, the one
+  // shape every slide takes (9:16 / 4:5 / 1:1 / 16:9, Instagram's carousel
+  // rule), 9:16 to start and set from its first photo or clip until it's
+  // picked by hand (startAspect). The camera is 9:16.
   const clip0 = phase === "edit" && !card && !shot ? tray.items[0] ?? null : null;
   // a story's clip: whole over a blur of itself when it's much wider or taller than the story, else filling it (Fill / Fit switches)
   const clipWhole = !!clip0 && (clip0.whole ?? storyStartsWhole({ w: clip0.w ?? 9, h: clip0.h ?? 16 }));
-  const frameAspect = story ? STORY_ASPECT : card && !cardFailed ? FEED_CARD_ASPECT : POST_ASPECTS[aspect];
+  const cardPost = !!card && !cardFailed;
+  const cardShape: "full" | "portrait" = aspect === "portrait" ? "portrait" : "full";
+  const frameAspect = story ? STORY_ASPECT : cardPost ? (cardShape === "portrait" ? FEED_CARD_ASPECT : STORY_ASPECT) : POST_ASPECTS[aspect];
   // a post with nothing up front (no card, no photo): its first photo or clip sets the shape (one already on
   // the post, being edited: the shape it shows at, so what's added matches it)
   const first = !card && !shot ? tray.items[0] : undefined;
   const firstShape = first ? (first.existing && first.slide ? slideAspect(first.slide) : first.w && first.h ? first.w / first.h : null) : null;
   useEffect(() => {
     if (aspectPicked.current || !firstShape) return;
-    setAspect(closestAspect(firstShape, 1));
+    setAspect(startAspect(firstShape, 1));
   }, [firstShape]);
   // The slide being framed: the one picked in the strip, else (no card or photo up front) the first.
   // Only a photo or clip picked now can be framed (one already on the post stays as it is).
@@ -580,8 +585,10 @@ export function ShareStudio({
     !!it && !it.existing && it.status !== "error" && !!it.w && !!it.h && (it.kind === "image" ? !!it.preview : !!it.video);
   const selItem =
     phase === "edit" && !story ? ((sel ? tray.items.find((x) => x.id === sel && framable(x)) : null) ?? (!card && !shot ? (tray.items.find(framable) ?? null) : null)) : null;
-  // the shape's button: a post's photo or slide being framed (a card is always the feed's 4:5)
-  const shapeable = phase === "edit" && !story && !(card && !cardFailed && !adding) && (!!shot || !!selItem);
+  // the shape's button: a post's photo or slide being framed (a card goes 9:16 ↔ 4:5, the two it's drawn at)
+  const shapeable = phase === "edit" && !story && (!!shot || !!selItem) && !(cardPost && (adding || !!selItem));
+  const shapeOf = (a: PostAspect): PostAspect => (cardPost && !selItem ? (a === "portrait" ? "full" : "portrait") : nextAspect(a));
+  const shownShape: PostAspect = cardPost && !selItem ? cardShape : aspect;
   const coverClip = selItem?.kind === "video" ? selItem : null;
   // the clip goes as just its lift: cut with the chip (held to the post's limit, so maybe a moment shorter), or in the trimmer
   const liftOn =
@@ -594,9 +601,12 @@ export function ShareStudio({
     const w = fullScreen ? areaSize.w : Math.min(areaSize.w, areaSize.h * boxAspect);
     return { w: Math.floor(w), h: Math.floor(w / boxAspect) };
   }, [areaSize, fullScreen, boxAspect]);
-  // a post on the camera: the 4:5 part of it (the rest is dimmed), what the photo starts framed as
-  const band = useMemo(() => (story ? { x: 0, y: 0, w: box.w, h: box.h } : guideBand(box, FEED_CARD_ASPECT)), [story, box]);
-  const cardFormat: ShareFormat = story ? "story" : "feed";
+  // a post on the camera: the part of it the post's shape keeps (the rest is dimmed), what the photo starts framed as;
+  // at 9:16 (where a post starts) that's the whole camera
+  const guideAspect = story ? STORY_ASPECT : cardPost ? (cardShape === "portrait" ? FEED_CARD_ASPECT : STORY_ASPECT) : POST_ASPECTS[aspect];
+  const band = useMemo(() => (story ? { x: 0, y: 0, w: box.w, h: box.h } : guideBand(box, guideAspect)), [story, box, guideAspect]);
+  // a story's card; a post's full-screen card (its words clear of the feed's bars and buttons), or the feed's 4:5
+  const cardFormat: ShareFormat = story ? "story" : cardShape === "portrait" ? "feed" : "full";
 
   /* ---- camera ------------------------------------------------------- */
   const cancelCount = () => {
@@ -809,7 +819,7 @@ export function ShareStudio({
       }
       const lockedIn = c.data.lockedIn?.live ? { time: timeLabel(new Date()), live: true } : c.data.lockedIn;
       try {
-        // a post's card is the feed's 4:5 (in the middle of the camera), a story's the full 9:16
+        // a post's card is 9:16 like a story's (its words clear of the feed's bars and buttons), or 4:5 in the middle of the camera
         paintCard(cardEl, c, media, cardFormat, lockedIn, logo, LIVE_SCALE);
       } catch {
         alive = false;
@@ -962,10 +972,13 @@ export function ShareStudio({
     const d = defaultsRef.current[story ? "story" : "post"];
     setShotGrade(d && !reply && !share ? { ...d, stats: statsFor(s.src as Drawable) } : null);
     setShotWhole(story && !reply && !share && storyStartsWhole(drawableSize(s.src as Drawable)));
-    // the camera's shot was framed by its 4:5 guide; a photo from the library starts at the shape closest to its own
+    // the camera's shot was framed by its guide (the post's shape: 9:16 to start); a photo from the library starts at 9:16
+    // when it's upright, else the shape closest to its own (startAspect)
     const own = drawableSize(s.src as Drawable);
-    setAspect(s.live ? "portrait" : closestAspect(own.w, own.h));
-    aspectPicked.current = false;
+    if (!s.live) {
+      setAspect(startAspect(own.w, own.h));
+      aspectPicked.current = false;
+    }
     setSel(null);
     setPhase("edit");
   };
@@ -996,7 +1009,7 @@ export function ShareStudio({
       backToPost();
       return;
     }
-    // framed the way the camera showed it: a post's 4:5 part (with a card on it, the card's own framing: centred)
+    // framed the way the camera showed it: the post's part of it (with a card on it, the card's own framing: centred)
     const view = { w: box.w, h: box.h };
     freeze({ src: c, file: null, live: true, at: new Date() }, card ? CENTRED : framingFromGuide({ w: c.width, h: c.height }, view, { w: band.w, h: band.h }));
   };
@@ -1219,7 +1232,7 @@ export function ShareStudio({
     }
   };
   const finalPhoto = () => framedFile(frameAspect, shot?.live ? "jf-live.jpg" : "jf-photo.jpg");
-  /** The card as it's shown (a post's 4:5 or a story's 9:16), over the photo as it's framed, stickers on top. */
+  /** The card as it's shown (a post's 9:16 or 4:5, a story's 9:16), over the photo as it's framed, stickers on top. */
   const cardImage = async (fmt: ShareFormat): Promise<Blob | null> => {
     if (!card) return null;
     const c = document.createElement("canvas");
@@ -1235,7 +1248,7 @@ export function ShareStudio({
   };
   const cardBlob = () => cardImage(cardFormat);
 
-  // What gets posted is what you see: the look you're on, as the 4:5 feed card.
+  // What gets posted is what you see: the look you're on, as the post's card (9:16 filling its screen, or 4:5).
   // "No filter" posts the photo itself; so does Hide weights, so a card never
   // shows your numbers. With no photo, a carousel opens on the card itself
   // (what you see as slide 1).
@@ -1378,7 +1391,7 @@ export function ShareStudio({
   // Image" puts it in Photos); elsewhere it downloads.
   // Share outside the app / Save: the card (or photo) as it's shown, at the shape where it's going
   const [sharingOut, setSharingOut] = useState(false);
-  const makeShareFile = async (format: ShareFormat): Promise<File | null> => {
+  const makeShareFile = async (format: "feed" | "story"): Promise<File | null> => {
     if (card) {
       const b = await cardImage(format);
       return b ? new File([b], shareFileName(format, card.look), { type: "image/jpeg" }) : null;
@@ -1504,11 +1517,11 @@ export function ShareStudio({
                   playsInline
                   muted
                   autoPlay
-                  // a post's card sits in the middle 4:5: the camera shows (dimmed) around it
+                  // a post's 4:5 card sits in the middle: the camera shows (dimmed) around it
                   className={cn("absolute inset-0 h-full w-full object-cover", status === "live" && (!showCard || !story) ? "opacity-100" : "opacity-0", facing === "user" && "-scale-x-100")}
                 />
               )}
-              {/* a post on the camera: what's outside the post's 4:5 is dimmed (Instagram's post camera) */}
+              {/* a post on the camera: what's outside the post's shape is dimmed (none at 9:16, where a post starts) */}
               {phase === "shoot" && !story && status === "live" && !adding && band.y > 1 && (
                 <>
                   <div className="pointer-events-none absolute inset-x-0 top-0 bg-black/60" style={{ height: band.y }} aria-hidden data-post-band="top" />
@@ -1581,23 +1594,24 @@ export function ShareStudio({
                       type="button"
                       onClick={() => {
                         aspectPicked.current = true;
-                        setAspect(nextAspect(aspect));
+                        setAspect(shapeOf(shownShape));
                         setShapeFlash((n) => n + 1);
+                        feedback("tap");
                       }}
                       className="inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
-                      aria-label={`Shape ${POST_ASPECT_LABEL[aspect]}. Tap for ${POST_ASPECT_LABEL[nextAspect(aspect)]}`}
-                      data-frame-shape={aspect}
+                      aria-label={`Shape ${POST_ASPECT_LABEL[shownShape]}. Tap for ${POST_ASPECT_LABEL[shapeOf(shownShape)]}`}
+                      data-frame-shape={shownShape}
                     >
-                      {aspect === "full" ? (
+                      {shownShape === "full" ? (
                         <Smartphone className="h-4 w-4" />
-                      ) : aspect === "portrait" ? (
+                      ) : shownShape === "portrait" ? (
                         <RectangleVertical className="h-4 w-4" />
-                      ) : aspect === "square" ? (
+                      ) : shownShape === "square" ? (
                         <Square className="h-4 w-4" />
                       ) : (
                         <RectangleHorizontal className="h-4 w-4" />
                       )}
-                      {POST_ASPECT_LABEL[aspect]}
+                      {POST_ASPECT_LABEL[shownShape]}
                     </button>
                   )}
                   {/* a clip on a post: its cover (what shows before it plays, and on your profile grid) */}

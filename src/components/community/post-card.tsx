@@ -38,6 +38,7 @@ import {
   type WorkoutWin,
 } from "@/lib/community";
 import { useFullMediaUrl, usePrefetchPostReactors, useSlideThumbUrls } from "@/lib/community.queries";
+import { AMBIENT_SIZE, paintAmbient } from "@/lib/ambient-fill";
 import { FEED_MAX_ASPECT, FEED_VIDEO_MAX_HEIGHT, VIDEO_MIN_ASPECT, cleanFocus, clipFrame, feedAspect, focusPosition, photoZoomBox, screenFit, slideAspect, videoAspect, type MediaFocus } from "@/lib/photo-frame";
 import { LikedBy, ReactorsSheet } from "@/components/community/reactors-sheet";
 import { ReactionsRise, useEngagementPop } from "@/components/community/engagement-pop";
@@ -1550,17 +1551,24 @@ function SlideMedia({
           {src ? <FadeImg src={src} position={position} /> : <div className="h-full w-full animate-pulse bg-muted" />}
         </div>
       ) : page && !shrunk && zoom ? (
-        // between Crew's bar and the words: the full width, a slightly taller photo zoomed a little (photoZoomBox), never stretched
-        <div data-pinch-zoom className="absolute inset-0 overflow-hidden" style={{ ...BETWEEN_BARS, containerType: "size" }} data-photo-fit="zoom">
-          <div className="absolute" style={zoom}>
-            {src ? <FadeImg src={src} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+        // between Crew's bar and the words: the full width, a slightly taller photo zoomed a little (photoZoomBox), never stretched;
+        // the rest of the screen is the photo itself, soft and dark (AmbientFill), never black bands
+        <>
+          <AmbientFill src={thumbUrl ?? src} />
+          <div data-pinch-zoom className="absolute inset-0 overflow-hidden" style={{ ...BETWEEN_BARS, containerType: "size" }} data-photo-fit="zoom">
+            <div className="absolute" style={zoom}>
+              {src ? <FadeImg src={src} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+            </div>
           </div>
-        </div>
+        </>
       ) : (
-        // on a post's screen a photo shows whole, between Crew's bar and the tab bar
-        <div data-pinch-zoom className="absolute inset-0" style={page ? BETWEEN_BARS : undefined}>
-          {src ? <FadeImg src={src} position={position} whole={page} /> : <div className="h-full w-full animate-pulse bg-muted" />}
-        </div>
+        // on a post's screen a photo shows whole, between Crew's bar and the tab bar, over a soft, dark copy of itself
+        <>
+          {page && !shrunk && <AmbientFill src={thumbUrl ?? src} />}
+          <div data-pinch-zoom className="absolute inset-0" style={page ? BETWEEN_BARS : undefined}>
+            {src ? <FadeImg src={src} position={position} whole={page} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+          </div>
+        </>
       )}
       {/* on a post's own screen its set is said in the words at the bottom (PostCard's data-page-set), never over the clip */}
       {slide.caption && !shrunk && !page && <SlideCaption caption={slide.caption} withDots={withDots} />}
@@ -1614,6 +1622,36 @@ function SetDetail({ detail, other, className, otherClassName }: { detail: strin
  * popped in as it scrolled on): the feed is only the posts already read, and
  * a feed photo is its small thumbnail.
  */
+/**
+ * Behind a picture that doesn't fill its post's screen (an older 4:5 post, a
+ * square or sideways photo): the picture itself, soft and dark, over the whole
+ * screen (ambient-fill.ts). A tiny canvas the screen stretches, no CSS filter;
+ * it stays black until the picture is there.
+ */
+function AmbientFill({ src }: { src: string | null }) {
+  const ref = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    if (!src || typeof Image === "undefined") return;
+    let alive = true;
+    const img = new Image();
+    img.decoding = "async";
+    img.onload = () => {
+      if (!alive || !ref.current) return;
+      try {
+        paintAmbient(ref.current, img);
+      } catch {
+        /* a picture that can't be drawn leaves the screen black, as before */
+      }
+    };
+    img.src = src;
+    return () => {
+      alive = false;
+      img.onload = null;
+    };
+  }, [src]);
+  return <canvas ref={ref} width={AMBIENT_SIZE.w} height={AMBIENT_SIZE.h} aria-hidden data-ambient-fill className="pointer-events-none absolute inset-0 h-full w-full" />;
+}
+
 function FadeImg({ src, position, whole = false }: { src: string; position?: string; whole?: boolean }) {
   const [loaded, setLoaded] = useState(false);
   const ref = useRef<HTMLImageElement | null>(null);

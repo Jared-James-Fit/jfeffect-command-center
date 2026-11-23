@@ -6,6 +6,7 @@ import {
   cleanFocus,
   clipFrame,
   closestAspect,
+  startAspect,
   focusPosition,
   frameFocus,
   framedMediaStyle,
@@ -25,17 +26,34 @@ describe("a post's shape, Instagram's way, with the Crew feed's full screen (Nov
     expect(nextAspect("landscape")).toBe("full");
   });
 
-  it("a post starts at the shape closest to its first photo or clip, so nothing is cut that needn't be", () => {
+  it("the closest of the four to a picture's own shape", () => {
     expect(closestAspect(1080, 1920)).toBe("full"); // a phone's clip or screenshot
     expect(closestAspect(3024, 4032)).toBe("portrait"); // an iPhone photo's 3:4
     expect(closestAspect(1080, 1080)).toBe("square");
     expect(closestAspect(1920, 1080)).toBe("landscape");
     expect(closestAspect(null, null)).toBe("portrait");
-    // the studio: a library photo or the first clip sets it until the shape is picked by hand; the camera's shot is its 4:5 guide
+  });
+
+  it("a post starts at 9:16 to fill its screen when its first picture is upright (Nov 23 2026); square and sideways keep their own", () => {
+    expect(startAspect(1080, 1920)).toBe("full"); // a phone's clip or screenshot
+    expect(startAspect(3024, 4032)).toBe("full"); // an iPhone photo's 3:4: framed into the screen
+    expect(startAspect(1080, 1350)).toBe("full"); // a 4:5 picture
+    expect(startAspect(1080, 1080)).toBe("square"); // filling the screen would cut away nearly half
+    expect(startAspect(1920, 1080)).toBe("landscape");
+    expect(startAspect(null, null)).toBe("full");
+    // the studio and the New post screen: 9:16 to start, a library photo or the first clip sets it until the shape is
+    // picked by hand; the camera's shot is framed by its guide, which at 9:16 is the whole camera
     const studio = read("src/components/community/share-studio.tsx");
-    expect(studio).toContain('setAspect(s.live ? "portrait" : closestAspect(own.w, own.h));');
+    expect(studio).toContain('const [aspect, setAspect] = useState<PostAspect>("full");');
+    expect(studio).toContain("setAspect(startAspect(own.w, own.h));");
+    expect(studio).toContain("setAspect(startAspect(firstShape, 1));");
+    expect(studio).toContain("guideBand(box, guideAspect)");
     expect(studio).toContain("if (aspectPicked.current || !firstShape) return;");
     expect(studio).toContain("aspectPicked.current = true;");
+    const composer = read("src/components/community/post-composer.tsx");
+    expect(composer).toContain('const [aspect, setAspect] = useState<PostAspect>("full");');
+    expect(composer).toContain("setAspect(startAspect(first.w, first.h));");
+    expect(composer).not.toContain("closestAspect");
   });
 });
 

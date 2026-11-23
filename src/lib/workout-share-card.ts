@@ -33,17 +33,36 @@
 import { ellipsize, fitFont as fitSystemFont, font, loadImage, roundRect } from "@/lib/workout-story-card";
 import { withOther } from "@/lib/dual-weight";
 import type { CardStat, ShareCardExtras } from "@/lib/community";
+import { SCREEN_ZONES } from "@/lib/photo-frame";
 
-export type ShareFormat = "feed" | "story";
+/**
+ * Where a card is posted: "feed" the 4:5 post Instagram takes, "story" the
+ * 9:16 story, "full" a 9:16 post filling a post's screen in the Crew feed
+ * (Nov 23 2026), drawn clear of what covers that screen (SCREEN_ZONES:
+ * Crew's bar over its top, the name and caption over its foot, the buttons
+ * down the right from halfway).
+ */
+export type ShareFormat = "feed" | "story" | "full";
 export type ShareTemplate =
   | "pr" | "photo" | "stats" | "sticker" | "volume" | "receipt" | "streak" | "progress"
   | "lockin" | "lockclock" | "lockplan"
   | "mealprep" | "onplan" | "fuel" | "highday" | "cheat"
   | "plain";
 
-export const SHARE_SIZES: Record<ShareFormat, { w: number; h: number; safeTop: number; safeBottom: number }> = {
+/** A full-screen post's card: what the feed covers, and a little room past it. */
+const FULL_W = 1080;
+const FULL_H = 1920;
+export const FULL_SAFE = {
+  top: Math.round(FULL_H * SCREEN_ZONES.top) + 44,
+  bottom: Math.round(FULL_H * SCREEN_ZONES.bottom) + 94,
+  right: Math.round(FULL_W * SCREEN_ZONES.right) + 40,
+} as const;
+
+/** Each format's size and the room its words stay inside (`safeRight`: kept clear on the right, else the left's padding). */
+export const SHARE_SIZES: Record<ShareFormat, { w: number; h: number; safeTop: number; safeBottom: number; safeRight?: number }> = {
   feed: { w: 1080, h: 1350, safeTop: 80, safeBottom: 80 },
   story: { w: 1080, h: 1920, safeTop: 250, safeBottom: 280 },
+  full: { w: FULL_W, h: FULL_H, safeTop: FULL_SAFE.top, safeBottom: FULL_SAFE.bottom, safeRight: FULL_SAFE.right },
 };
 
 export const TEMPLATE_LABEL: Record<ShareTemplate, string> = {
@@ -208,6 +227,30 @@ export function wrapLines(ctx: Ctx, text: string, maxWidth: number, maxLines: nu
   return lines;
 }
 
+/**
+ * A title on two lines split where the longer line is shortest ("BLOCK 3" /
+ * "WEEK 3", never "BLOCK 3 · WEEK" over a lone "3"); a separator at the split
+ * ("·", "|", "-") goes. One line when it's a single word or already fits.
+ */
+export function balancedLines(ctx: Ctx, text: string, maxWidth: number): string[] {
+  const words = text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  if (words.length < 2 || ctx.measureText(words.join(" ")).width <= maxWidth) return [words.join(" ")];
+  const SEP = /^[·|•\-–—/]$/;
+  let best: string[] = [words.join(" ")];
+  let bestW = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const a = words.slice(0, i).filter((w, j, arr) => !(j === arr.length - 1 && SEP.test(w)));
+    const b = words.slice(i).filter((w, j) => !(j === 0 && SEP.test(w)));
+    if (!a.length || !b.length) continue;
+    const w = Math.max(ctx.measureText(a.join(" ")).width, ctx.measureText(b.join(" ")).width);
+    if (w < bestW) {
+      bestW = w;
+      best = [a.join(" "), b.join(" ")];
+    }
+  }
+  return best;
+}
+
 function intrinsic(src: ShareCardMedia): { w: number; h: number } {
   const any = src as unknown as { naturalWidth?: number; naturalHeight?: number; videoWidth?: number; videoHeight?: number; width?: number; height?: number };
   return {
@@ -350,7 +393,7 @@ export function paintShareCard(canvas: HTMLCanvasElement, d: ShareCardData, logo
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, cw, ch);
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
-  const L: Layout = { W: size.w, H: size.h, PAD: 80, innerW: size.w - 160, top: size.safeTop, bottom: size.h - size.safeBottom, story: d.format === "story" };
+  const L = cardLayout(d.format);
   if (d.template === "pr") drawPr(ctx, d, logo, L);
   else if (d.template === "photo") drawPhoto(ctx, d, logo, L);
   else if (d.template === "stats") drawStats(ctx, d, logo, L);
@@ -384,7 +427,19 @@ function backdrop(ctx: Ctx, d: ShareCardData, L: Layout, dim: number, tint: "red
   } else plainBackdrop(ctx, L.W, L.H);
 }
 
-type Layout = { W: number; H: number; PAD: number; innerW: number; top: number; bottom: number; story: boolean };
+/**
+ * `PAD` the left edge of the words and `R` the right (the left's padding in,
+ * or clear of a full-screen post's buttons), `innerW` between them, `CX` their
+ * middle (a centred design); `story` the tall 9:16 canvas (a story or a
+ * full-screen post).
+ */
+type Layout = { W: number; H: number; PAD: number; R: number; CX: number; innerW: number; top: number; bottom: number; story: boolean };
+export function cardLayout(format: ShareFormat): Layout {
+  const size = SHARE_SIZES[format];
+  const PAD = 80;
+  const R = size.w - (size.safeRight ?? PAD);
+  return { W: size.w, H: size.h, PAD, R, CX: (PAD + R) / 2, innerW: R - PAD, top: size.safeTop, bottom: size.h - size.safeBottom, story: format !== "feed" };
+}
 
 /* ------------------------------------------------------------------ */
 /*  PR                                                                 */
@@ -521,7 +576,7 @@ function drawPhoto(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L:
     ctx.font = font(700, 24);
     ctx.fillStyle = MUTED;
     ctx.textAlign = "right";
-    ctx.fillText(d.sessionLine, W - PAD, L.bottom + 40);
+    ctx.fillText(d.sessionLine, L.R, L.bottom + 40);
     ctx.textAlign = "left";
   }
 }
@@ -798,13 +853,13 @@ function drawMealSticker(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | nu
 
   const text = kind === "high" ? "HIGH DAY" : "CHEAT MEAL";
   const tag = kind === "high" ? "Planned. Not a cheat." : "Back on it tomorrow.";
-  const cx = W / 2;
+  const cx = L.CX;
   const cy = L.bottom - (L.story ? 330 : 270);
   // the slab
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate((-6 * Math.PI) / 180);
-  const size = fitDisplay(ctx, text, W - PAD * 2 - 120, L.story ? 200 : 170, 100);
+  const size = fitDisplay(ctx, text, L.innerW - 120, L.story ? 200 : 170, 100);
   const tw = ctx.measureText(text).width;
   const sw = tw + 110;
   const sh = size * 0.9 + 70;
@@ -890,13 +945,13 @@ function drawLockPlan(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null,
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(PAD, y);
-    ctx.lineTo(W - PAD, y);
+    ctx.lineTo(L.R, y);
     ctx.stroke();
     ctx.font = display(48);
     ctx.textAlign = "right";
     ctx.fillStyle = INK;
     const dw = r.detail ? ctx.measureText(r.detail).width : 0;
-    if (r.detail) ctx.fillText(r.detail, W - PAD, y + 62);
+    if (r.detail) ctx.fillText(r.detail, L.R, y + 62);
     ctx.textAlign = "left";
     ctx.font = font(800, 36);
     ctx.fillStyle = "rgba(255,255,255,0.92)";
@@ -932,13 +987,21 @@ function drawStats(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L:
   }
   const title = d.workoutTitle.toUpperCase();
   ctx.fillStyle = INK;
-  ctx.font = display(L.story ? 140 : 120);
   let ts = L.story ? 140 : 120;
-  let lines = wrapLines(ctx, title, innerW, 2);
-  while (ts > 76 && lines.length === 2 && ctx.measureText(lines[1]).width > innerW * 0.98) {
-    ts -= 6;
+  // one line when it fits a little smaller; else two balanced lines (never a word left alone under the rest)
+  const one = fitDisplay(ctx, title, innerW, ts, 40);
+  let lines: string[];
+  if (one >= ts * 0.74 || !title.includes(" ")) {
+    ts = one;
+    lines = [title];
+  } else {
     ctx.font = display(ts);
-    lines = wrapLines(ctx, title, innerW, 2);
+    lines = balancedLines(ctx, title, innerW);
+    while (ts > 76 && lines.some((ln) => ctx.measureText(ln).width > innerW * 0.98)) {
+      ts -= 6;
+      ctx.font = display(ts);
+      lines = balancedLines(ctx, title, innerW);
+    }
   }
   lines.forEach((ln, i) => ctx.fillText(ln, PAD - 3, y + ts * 0.92 + i * (ts + 2)));
   y += ts * 0.92 + (lines.length - 1) * (ts + 2) + 70;
@@ -976,11 +1039,11 @@ function drawStats(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L:
       ctx.textAlign = "right";
       ctx.fillStyle = r.pr ? GOLD_TO : INK;
       ctx.font = display(56);
-      ctx.fillText(detail, W - PAD, ry + 66);
+      ctx.fillText(detail, L.R, ry + 66);
       if (r.alt) {
         ctx.font = font(600, 28);
         ctx.fillStyle = MUTED;
-        ctx.fillText(r.alt, W - PAD, ry + 104);
+        ctx.fillText(r.alt, L.R, ry + 104);
       }
       ctx.textAlign = "left";
       ctx.font = font(700, 36);
@@ -1080,8 +1143,8 @@ function drawReceipt(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, 
   const { W } = L;
   backdrop(ctx, d, L, 0.42);
   const x = d.extras;
-  const PW = L.story ? 820 : 740;
-  const px = (W - PW) / 2;
+  const PW = Math.min(L.story ? 820 : 740, L.innerW);
+  const px = L.CX - PW / 2;
   const IN = 56; // paper padding
   const iw = PW - IN * 2;
   const lh = L.story ? 54 : 48;
@@ -1101,9 +1164,9 @@ function drawReceipt(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, 
 
   ctx.save();
   // A slight tilt so it reads as a real slip of paper.
-  ctx.translate(W / 2, py + PH / 2);
+  ctx.translate(L.CX, py + PH / 2);
   ctx.rotate(-0.018);
-  ctx.translate(-W / 2, -(py + PH / 2));
+  ctx.translate(-L.CX, -(py + PH / 2));
   ctx.shadowColor = "rgba(0,0,0,0.45)";
   ctx.shadowBlur = 40;
   ctx.shadowOffsetY = 18;
@@ -1121,7 +1184,7 @@ function drawReceipt(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, 
   ctx.fill();
   ctx.shadowColor = "transparent";
 
-  const cx = W / 2;
+  const cx = L.CX;
   const L0 = px + IN;
   const R0 = px + PW - IN;
   let y = py + 70;
@@ -1369,11 +1432,11 @@ function drawProgress(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null,
     ctx.fillText(b.label.toUpperCase(), PAD, y + 32);
     ctx.textAlign = "right";
     ctx.font = display(48);
-    ctx.fillText(b.value.toUpperCase(), W - PAD, y + 40);
+    ctx.fillText(b.value.toUpperCase(), L.R, y + 40);
     if (barOther) {
       ctx.font = font(700, 26);
       ctx.fillStyle = MUTED;
-      ctx.fillText(b.other, W - PAD, y + 40 + 32);
+      ctx.fillText(b.other, L.R, y + 40 + 32);
     }
     y += 44 + 16 + barOther;
     roundRect(ctx, PAD, y, innerW, barH, barH / 2);
