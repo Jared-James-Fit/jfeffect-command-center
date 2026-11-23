@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+// 256 px, hashed (cached for a year): the 512 px /logo.png went out uncached on every launch
+import logoMark from "@/assets/brand/logo-256.webp";
 
 /**
  * Shared frame for the sign-in screens: plain background (no glow), centred column,
@@ -25,7 +27,7 @@ export function AuthShell({ children, footer }: { children: ReactNode; footer?: 
 export function AuthLogo({ size = 76 }: { size?: number }) {
   return (
     <img
-      src="/logo.png"
+      src={logoMark}
       alt="JF Effect"
       width={size}
       height={size}

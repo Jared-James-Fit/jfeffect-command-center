@@ -313,7 +313,7 @@ function HeroDevices() {
         <PhoneShot
           src={shotFocus}
           priority
-          sizes="(min-width: 1024px) 276px, (min-width: 640px) 252px, 204px"
+          sizes="(min-width: 1024px) 276px, (min-width: 640px) 252px, 50vw"
           alt="A workout in Focus mode: Romanian deadlift, 3 × 8 at RPE 7, the first set logged at 235 lb"
           className="shadow-[0_40px_80px_-36px_rgba(0,0,0,0.6)]"
         />
