@@ -69,7 +69,7 @@ export type AuditResult = {
    * low dose is read from); `direct` is only sets aimed at it (the exercise's own target muscle: what "too much" is
    * read from), so a bench set is chest work, never a full triceps set.
    */
-  weekly: Array<{ block: number; week: number; sets: number; lifts: Record<Lift, { sets: number; days: number }>; muscles: Record<string, { sets: number; days: number }>; direct?: Record<string, { sets: number; days: number }> }>;
+  weekly: Array<{ block: number; week: number; sets: number; lifts: Record<Lift, { sets: number; days: number }>; muscles: Record<string, { sets: number; days: number }>; direct?: Record<string, { sets: number; days: number }>; patterns?: Record<string, { sets: number; days: number }> }>;
   /** Things worth a coach's judgment in context that aren't findings by themselves (e.g. a heavy squat the day after a heavy deadlift); the coaching review weighs them. */
   facts?: string[];
 };
@@ -157,6 +157,28 @@ export function unsupportedTokens(text: string, brief: string): string[] {
   return [...new Set(out)];
 }
 
+/** A % read against a max (1RM or an estimated one; none named reads as e1RM): the only % the reps check reads. */
+export function pctOfMax(of: string | null | undefined): boolean {
+  return of == null || of === "1rm" || of === "e1rm" || of === "est_1rm";
+}
+
+/**
+ * Movement patterns a strategy can name as a target that no muscle group holds ("Direct single-leg
+ * work"): the target's words, and the exercises (name or "per leg" reps) that count toward it.
+ */
+export const TARGET_PATTERNS: Array<{ key: string; target: RegExp; exercise: RegExp }> = [
+  {
+    key: "single_leg",
+    target: /single[- ]?leg|unilateral|one[- ]?leg|lunge|split[- ]?squat|step[- ]?up/i,
+    exercise: /lunge|split[- ]?squat|bulgarian|step[- ]?up|single[- ]?leg|one[- ]?leg|pistol|unilateral|skater|per leg|each leg/i,
+  },
+];
+
+/** The pattern a target names, if any. */
+export function targetPattern(target: string): string | null {
+  return TARGET_PATTERNS.find((p) => p.target.test(target))?.key ?? null;
+}
+
 /** Most reps possible at a % of 1RM (Epley inverted). */
 export function maxRepsAt(pct: number): number {
   return pct >= 100 ? 1 : 30 * (100 / pct - 1);
@@ -201,11 +223,13 @@ export function auditProgram(x: AuditInput): AuditResult {
       const lifts = Object.fromEntries(LIFTS.map((l) => [l, { sets: 0, days: 0 }])) as Record<Lift, { sets: number; days: number }>;
       const muscles: Record<string, { sets: number; days: number }> = {};
       const direct: Record<string, { sets: number; days: number }> = {};
+      const patterns: Record<string, { sets: number; days: number }> = Object.fromEntries(TARGET_PATTERNS.map((p) => [p.key, { sets: 0, days: 0 }]));
       let total = 0;
       b.days.forEach((d, di) => {
         const dayLift = new Set<Lift>();
         const dayMuscle = new Map<string, number>();
         const dayDirect = new Map<string, number>();
+        const dayPattern = new Map<string, number>();
         const timed: TimedExercise[] = [];
         for (const e of d.exercises) {
           const rx = rxForWeek(e, w);
@@ -220,6 +244,7 @@ export function auditProgram(x: AuditInput): AuditResult {
           if (hard) for (const mu of musclesOf(m)) dayMuscle.set(mu.group, (dayMuscle.get(mu.group) ?? 0) + mu.weight * rx.sets);
           const aimed = hard ? directGroupOf(m) : null;
           if (aimed) dayDirect.set(aimed, (dayDirect.get(aimed) ?? 0) + (Number(m?.volume_multiplier) || 1) * rx.sets);
+          for (const p of TARGET_PATTERNS) if (p.exercise.test(`${e.exercise_name} ${rx.reps ?? ""}`)) dayPattern.set(p.key, (dayPattern.get(p.key) ?? 0) + rx.sets);
           timed.push({ name: e.exercise_name, equipment: m?.equipment ?? null, sets: rx.sets, reps: rx.reps, restSeconds: e.rest_seconds ?? null, superset: e.superset ?? null });
         }
         for (const l of dayLift) lifts[l].days++;
@@ -233,29 +258,49 @@ export function auditProgram(x: AuditInput): AuditResult {
           direct[mu].sets = Math.round((direct[mu].sets + n) * 10) / 10;
           if (n >= 2) direct[mu].days++;
         }
+        // a pattern is named work: any set of it is a day of it
+        for (const [k, n] of dayPattern) {
+          patterns[k].sets += n;
+          if (n >= 1) patterns[k].days++;
+        }
         const est = estimateDay(timed, { adjustableDumbbells: adjustable, calibration });
         sessions.push({ block: bi, week: w, day: di, title: d.title, minutes: est.minutes, stationChanges: est.stationChanges });
       });
-      weekly.push({ block: bi, week: w, sets: total, lifts, muscles, direct });
+      weekly.push({ block: bi, week: w, sets: total, lifts, muscles, direct, patterns });
     }
   });
   const w1 = weekly[0];
+  /**
+   * What a target counts in a week: a named pattern ("Direct single-leg work"), a lift, else a muscle
+   * group by its words ("Rear delts: direct isolation" is shoulder work, "Trunk" is core). A target
+   * none of those can read is null: it can't be counted, so it's never "0×" or a failure (`uncountable`).
+   */
   const targetIn = (wk: AuditResult["weekly"][number] | undefined, target: string): { sets: number; days: number } | null => {
     const t = norm(target);
+    const pat = targetPattern(target);
+    if (pat) return wk?.patterns?.[pat] ?? (wk ? { sets: 0, days: 0 } : null);
     for (const l of LIFTS) if (t.includes(l)) return wk ? wk.lifts[l] : null;
     if (!wk) return null;
     const key = Object.keys(wk.muscles).find((m) => norm(m) === t || norm(m).includes(t) || t.includes(norm(m)));
-    return key ? wk.muscles[key] : { sets: 0, days: 0 };
+    if (key) return wk.muscles[key];
+    const group = normalizeMuscle(target) ?? (/\btrunk\b/i.test(target) ? "Core" : null);
+    if (!group) return null;
+    const gk = Object.keys(wk.muscles).find((m) => normalizeMuscle(m) === group);
+    return gk ? wk.muscles[gk] : { sets: 0, days: 0 };
   };
+  const uncountable = new Set<string>();
   const findTarget = (target: string) => targetIn(w1, target);
   const isLiftTarget = (target: string) => LIFTS.some((l) => norm(target).includes(l));
   /** Sets and days aimed at a target (a lift's own sets for squat / bench / deadlift). */
   const directIn = (wk: AuditResult["weekly"][number] | undefined, target: string): { sets: number; days: number } | null => {
     if (!wk) return null;
-    if (isLiftTarget(target)) return targetIn(wk, target);
+    if (isLiftTarget(target) || targetPattern(target)) return targetIn(wk, target);
     const t = norm(target);
     const key = Object.keys(wk.direct ?? {}).find((m) => norm(m) === t || norm(m).includes(t) || t.includes(norm(m)));
-    return key ? wk.direct![key] : { sets: 0, days: 0 };
+    if (key) return wk.direct![key];
+    const group = normalizeMuscle(target) ?? (/\btrunk\b/i.test(target) ? "Core" : null);
+    const gk = group ? Object.keys(wk.direct ?? {}).find((m) => normalizeMuscle(m) === group) : null;
+    return gk ? wk.direct![gk] : { sets: 0, days: 0 };
   };
 
   // 2. Goal alignment: priorities get at least the dose they had (or the strategy's target).
@@ -298,6 +343,7 @@ export function auditProgram(x: AuditInput): AuditResult {
     const wk = weekly.find((w) => w.block === bi && w.week === 1);
     for (const t of strategy.frequency_targets) {
       const got = targetIn(wk, t.target);
+      if (wk && !got) uncountable.add(t.target);
       if (!got || t.per_week > setup.daysPerWeek) continue;
       const aimed = directIn(wk, t.target) ?? got;
       if (t.per_week - got.days >= 1) add("frequency", "failed", `${t.target}: ${got.days}×/week in block ${bi + 1}; the strategy targets ${t.per_week}×.`, bi, true);
@@ -305,6 +351,7 @@ export function auditProgram(x: AuditInput): AuditResult {
     }
   });
   for (const t of setup.frequency.filter((q) => q.perWeek > setup.daysPerWeek)) add("frequency", "review", `${t.target} target ${t.perWeek}× is more than the ${setup.daysPerWeek} training days.`);
+  if (uncountable.size) add("frequency", "skipped", `Can't be counted automatically: ${[...uncountable].join(", ")}. Check ${uncountable.size === 1 ? "it" : "them"} in the draft.`);
 
   // 6. Volume and intensity: targets, jumps, and % vs reps.
   // Like with like: a target is sets for that muscle, so "too much" counts only sets aimed at it (a bench set is
@@ -329,7 +376,9 @@ export function auditProgram(x: AuditInput): AuditResult {
   for (const { e, bi, d } of allEx) {
     for (const w of Array.from({ length: program.blocks[bi].weeks }, (_, i) => i + 1)) {
       const rx = rxForWeek(e, w);
-      if (rx.percentage == null) continue;
+      // only a % of a max says how many reps are possible: a back-off at 90% of today's top set
+      // (6 × 6 after a top set of 6) or a % of a training max (lighter than the max) can't be read so
+      if (rx.percentage == null || !pctOfMax(rx.percentage_of)) continue;
       const rr = repRange(rx.reps);
       if (!rr) continue;
       const cap = maxRepsAt(rx.percentage);

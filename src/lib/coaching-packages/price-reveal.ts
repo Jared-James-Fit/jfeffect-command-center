@@ -30,6 +30,7 @@ import {
   TAX_NOTE,
   type PublicPackage,
 } from "./packages";
+import { yearLine } from "./cost-anchors";
 
 const COUNT_WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight"];
 
@@ -42,6 +43,9 @@ export type PriceReveal = {
   flagshipPrice: string;
   /** "/month". */
   per: string;
+  /** "$2,988 a year" / "$1,560 a year": each price as a year, beside the yearly examples the story opens with. */
+  anchorYear: string | null;
+  flagshipYear: string | null;
   taxNote: string;
   /** How many calls the anchor adds, and how long each is. */
   calls: number;
@@ -95,6 +99,8 @@ export function priceReveal(rows: readonly PublicPackage[], from = "reveal"): Pr
     anchorPrice: priceLabel(anchor.priceCents),
     flagshipPrice: priceLabel(flagship.priceCents),
     per: intervalLabel(flagship),
+    anchorYear: yearLine(anchor.priceCents),
+    flagshipYear: yearLine(flagship.priceCents),
     taxNote: TAX_NOTE,
     calls: anchor.includedCalls,
     callMinutes: anchor.callMinutes,

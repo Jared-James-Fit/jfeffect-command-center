@@ -2,9 +2,9 @@ import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import {
-  Dumbbell, Plus, BookOpen, CalendarDays, Apple, HeartPulse,
-  MessageSquare, ClipboardCheck, CreditCard, User, Star, Archive,
-  Download, Loader2, ShoppingCart, Eye,
+  Dumbbell, Plus, CalendarDays, Apple, HeartPulse,
+  MessageSquare, ClipboardCheck, CreditCard, User, Archive,
+  Download, Loader2, ShoppingCart, Eye, ArrowRightLeft,
 } from "lucide-react";
 import { QuickSellSheet } from "./quick-sell-sheet";
 import { ScheduleWorkoutSheet } from "@/components/schedule/ScheduleWorkoutSheet";
@@ -17,54 +17,18 @@ import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import { AssignProgramDialog } from "./assign-program-dialog";
 import { blockEnd } from "./clients-status";
 import type { QuickPanelKind } from "./client-quick-sheet";
-import { WorkoutArchiveDialog } from "./workout-archive-dialog";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { markClientReviewsReviewed, refreshReviewQueries } from "@/lib/checkin-review";
-import { getClientMealPlanForCoach } from "@/lib/nutrition-targets/admin-meal-plan.functions";
-import { useServerFn } from "@tanstack/react-start";
 import { TrainingReportSheet } from "@/components/workouts/training-report-sheet";
-import { makeAndDeliverPdf } from "@/lib/pdf/deliver";
-
-function useClientPdfDownloads(r: DirectoryRow) {
-  const [mealPending, setMealPending] = useState(false);
-  const fetchMealPlan = useServerFn(getClientMealPlanForCoach);
-
-  const downloadMealPlan = async () => {
-    setMealPending(true);
-    try {
-      await makeAndDeliverPdf("Nutrition plan", async () => {
-        const plan = await fetchMealPlan({ data: { clientId: r.id } });
-        if (!plan) throw new Error(`PDF: ${r.full_name ?? "This client"} has no plan they can see yet.`);
-        const { mealPlanPdfFile } = await import("@/lib/nutrition-targets/meal-plan-pdf");
-        return mealPlanPdfFile({
-          client_name: plan.client_name ?? r.full_name ?? null,
-          coach_name: plan.coach_name ?? null,
-          updated_at: plan.updated_at ?? null,
-          start_date: plan.start_date ?? null,
-          end_date: (plan as any).end_date ?? null,
-          phase: plan.phase ?? null,
-          goal: plan.goal ?? null,
-          structure: plan.structure ?? null,
-          water: plan.water ?? null,
-          client_notes: plan.client_notes ?? null,
-          food_weighing_rules: (plan as any).food_weighing_rules ?? null,
-          supplements: (plan as any).supplements ?? null,
-          days: (plan.days ?? []) as any[],
-        });
-      });
-    } finally {
-      setMealPending(false);
-    }
-  };
-
-  return { mealPending, downloadMealPlan };
-}
 
 /**
- * The Clients list row's ⋯: every action for the client. The row itself shows only View Profile,
- * so assigning a program, nutrition or cardio and View as client all live here.
+ * The Clients list row's ⋯ (Nov 23 2026): what the row's own buttons don't already do, grouped
+ * by what the coach is doing. Open client and Client view are the row's buttons, so they aren't
+ * repeated here; everything that was here is still reachable (the profile's tabs hold program
+ * history, the workout archive, agreements and the nutrition PDF). Rarely used but important
+ * actions (payment exemption, change plan, archive) stay, under Billing and Account.
  */
 export function ClientMoreMenu({
   r,
@@ -75,19 +39,22 @@ export function ClientMoreMenu({
   viewAsBusy,
   onAssignProgram,
   onOpenPanel,
+  onChangePlan,
 }: {
   r: DirectoryRow;
   trigger: React.ReactNode;
   onArchive?: (r: DirectoryRow) => void;
   /** Optional hover hint for the trigger (needs a surrounding TooltipProvider). */
   tip?: string;
-  /** View as client, for logins allowed to (left out otherwise). */
+  /** View as client, only where the caller has no Client view button of its own. */
   onViewAsClient?: () => void;
   viewAsBusy?: boolean;
   /** Opens the row's own Assign program (else the menu opens its own). */
   onAssignProgram?: () => void;
   /** Opens nutrition or cardio in place, over the list (else the profile's Nutrition tab). */
   onOpenPanel?: (kind: QuickPanelKind) => void;
+  /** Move between coaching and the free membership (admins). */
+  onChangePlan?: () => void;
 }) {
   const qc = useQueryClient();
   const isExempt = r.payment_state === "exempt";
@@ -110,11 +77,9 @@ export function ClientMoreMenu({
     qc.invalidateQueries({ queryKey: ["clients-directory"] });
   };
   const [assignOpen, setAssignOpen] = useState(false);
-  const [archiveOpen, setArchiveOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
-  const pdfs = useClientPdfDownloads(r);
   const assignProgram = () => (onAssignProgram ? onAssignProgram() : setAssignOpen(true));
   // A block that's ended or ending with nothing queued after it.
   const needsNextBlock = !!r.block_id && !!blockEnd(r.block_end, r.next_block_id)?.needsNext;
@@ -132,40 +97,24 @@ export function ClientMoreMenu({
         <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       )}
       <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel className="text-xs">{r.full_name}</DropdownMenuLabel>
-        <DropdownMenuItem asChild>
-          <ClientNameLink clientId={r.id} className="flex items-center gap-2">
-            <Star className="h-4 w-4" /> View Profile
-          </ClientNameLink>
-        </DropdownMenuItem>
-        {onViewAsClient && (
-          <DropdownMenuItem disabled={viewAsBusy} onSelect={() => onViewAsClient()}>
-            {viewAsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />} View as client
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem asChild>
-          <ClientNameLink clientId={r.id} tab="training" className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4" /> View Schedule
-          </ClientNameLink>
-        </DropdownMenuItem>
+        <DropdownMenuLabel className="truncate text-xs">{r.full_name}</DropdownMenuLabel>
         {r.f_needs_review && (
           <DropdownMenuItem onSelect={() => void markReviewed()}>
             <ClipboardCheck className="h-4 w-4" /> Mark check-in reviewed
           </DropdownMenuItem>
         )}
-
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-xs">Training</DropdownMenuLabel>
-        {r.block_id && (
-          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setScheduleOpen(true); }}>
-            <Plus className="h-4 w-4" /> Schedule Workout
+        {onViewAsClient && (
+          <DropdownMenuItem disabled={viewAsBusy} onSelect={() => onViewAsClient()}>
+            {viewAsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />} View as client
           </DropdownMenuItem>
         )}
+
+        <DropdownMenuLabel className="pt-2 text-xs text-muted-foreground">Training</DropdownMenuLabel>
         {r.block_id ? (
           <DropdownMenuItem asChild>
-            <Link to="/admin/client-programs/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
-              <Dumbbell className="h-4 w-4" /> Open Program
-            </Link>
+            <ClientNameLink clientId={r.id} tab="training" className="flex items-center gap-2">
+              <Dumbbell className="h-4 w-4" /> Program & schedule
+            </ClientNameLink>
           </DropdownMenuItem>
         ) : (
           <DropdownMenuItem onSelect={(e) => { e.preventDefault(); assignProgram(); }}>
@@ -178,26 +127,15 @@ export function ClientMoreMenu({
           </DropdownMenuItem>
         )}
         {r.block_id && (
-          <DropdownMenuItem asChild>
-            <Link to="/admin/blocks/$blockId" params={{ blockId: r.block_id }} className="flex items-center gap-2">
-              <BookOpen className="h-4 w-4" /> Edit Current Program
-            </Link>
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setScheduleOpen(true); }}>
+            <CalendarDays className="h-4 w-4" /> Schedule a workout
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem asChild>
-          <Link to="/admin/client-programs/$clientId/history" params={{ clientId: r.id }} className="flex items-center gap-2">
-            <BookOpen className="h-4 w-4" /> Program History
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setArchiveOpen(true); }}>
-          <Archive className="h-4 w-4" /> Workout Archive
-        </DropdownMenuItem>
         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setReportOpen(true); }}>
           <Download className="h-4 w-4" /> Training PDF
         </DropdownMenuItem>
 
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-xs">Coaching</DropdownMenuLabel>
+        <DropdownMenuLabel className="pt-2 text-xs text-muted-foreground">Coaching</DropdownMenuLabel>
         {onOpenPanel ? (
           <>
             <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onOpenPanel("nutrition"); }}>
@@ -208,54 +146,30 @@ export function ClientMoreMenu({
             </DropdownMenuItem>
           </>
         ) : (
-          <>
-            <DropdownMenuItem asChild>
-              <ClientNameLink clientId={r.id} tab="nutrition" className="flex items-center gap-2">
-                <Apple className="h-4 w-4" /> {!r.f_missing_nutrition ? "Update Nutrition" : "Add Nutrition"}
-              </ClientNameLink>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <ClientNameLink clientId={r.id} tab="nutrition" className="flex items-center gap-2">
-                <HeartPulse className="h-4 w-4" /> {!r.f_missing_cardio ? "Update Cardio" : "Add Cardio"}
-              </ClientNameLink>
-            </DropdownMenuItem>
-          </>
+          <DropdownMenuItem asChild>
+            <ClientNameLink clientId={r.id} tab="nutrition" className="flex items-center gap-2">
+              <Apple className="h-4 w-4" /> Nutrition & cardio
+            </ClientNameLink>
+          </DropdownMenuItem>
         )}
-        <DropdownMenuItem
-          disabled={pdfs.mealPending}
-          onSelect={(e) => { e.preventDefault(); pdfs.downloadMealPlan(); }}
-        >
-          {pdfs.mealPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Download className="h-4 w-4" />
-          )}
-          Nutrition plan PDF
-        </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <ClientNameLink clientId={r.id} tab="messages" className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" /> Send Message
-          </ClientNameLink>
+          <Link to="/admin/messages" search={{ client: r.id } as any} className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" /> Message
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <ClientNameLink clientId={r.id} tab="sessions" className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4" /> Book Session
+            <CalendarDays className="h-4 w-4" /> Book a session
           </ClientNameLink>
         </DropdownMenuItem>
 
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-xs">Billing</DropdownMenuLabel>
+        <DropdownMenuLabel className="pt-2 text-xs text-muted-foreground">Billing</DropdownMenuLabel>
         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setSellOpen(true); }}>
-          <ShoppingCart className="h-4 w-4" /> Quick Sell / Send Payment Link
+          <ShoppingCart className="h-4 w-4" /> Sell or send a payment link
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <ClientNameLink clientId={r.id} tab="billing" className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4" /> View Payments
-          </ClientNameLink>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <ClientNameLink clientId={r.id} tab="purchases" className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4" /> Manage Package
+            <CreditCard className="h-4 w-4" /> Billing & packages
           </ClientNameLink>
         </DropdownMenuItem>
         {(r.payment_state === "not_set_up" || r.payment_state === "pending" || isExempt) && (
@@ -265,24 +179,17 @@ export function ClientMoreMenu({
           </DropdownMenuItem>
         )}
 
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-xs">Account</DropdownMenuLabel>
-        <DropdownMenuItem asChild>
-          <ClientNameLink clientId={r.id} tab="info" className="flex items-center gap-2">
-            <User className="h-4 w-4" /> Edit Client
-          </ClientNameLink>
-        </DropdownMenuItem>
+        <DropdownMenuLabel className="pt-2 text-xs text-muted-foreground">Account</DropdownMenuLabel>
         <DropdownMenuItem asChild>
           <ClientNameLink clientId={r.id} tab="account" className="flex items-center gap-2">
-            <User className="h-4 w-4" /> Manage Access
+            <User className="h-4 w-4" /> Account, access & agreement
           </ClientNameLink>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <ClientNameLink clientId={r.id} tab="agreements" className="flex items-center gap-2">
-            <BookOpen className="h-4 w-4" /> View Agreements
-          </ClientNameLink>
-        </DropdownMenuItem>
-
+        {onChangePlan && (
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onChangePlan(); }}>
+            <ArrowRightLeft className="h-4 w-4" /> Change plan
+          </DropdownMenuItem>
+        )}
         {onArchive && (
           <>
             <DropdownMenuSeparator />
@@ -290,7 +197,7 @@ export function ClientMoreMenu({
               onClick={() => onArchive(r)}
               className="text-destructive focus:text-destructive"
             >
-              Archive Client
+              <Archive className="h-4 w-4" /> Archive Client
             </DropdownMenuItem>
           </>
         )}
@@ -299,12 +206,6 @@ export function ClientMoreMenu({
     <AssignProgramDialog
       open={assignOpen}
       onOpenChange={setAssignOpen}
-      clientId={r.id}
-      clientName={r.full_name}
-    />
-    <WorkoutArchiveDialog
-      open={archiveOpen}
-      onOpenChange={setArchiveOpen}
       clientId={r.id}
       clientName={r.full_name}
     />

@@ -6,7 +6,7 @@ import { FUNNEL_EVENTS } from "@/lib/membership-apply";
 const read = (p: string) => readFileSync(p, "utf8");
 const MIGRATION = read("supabase/migrations/20270513090000_coaching_site_launch.sql");
 /** The newest word on which steps the database takes (the price reveal added one). */
-const STEPS_MIGRATION = read("supabase/migrations/20270515100000_price_reveal_funnel.sql");
+const STEPS_MIGRATION = read("supabase/migrations/20270519090000_cost_anchor_funnel.sql");
 
 describe("the site's steps are counted anonymously (Nov 23 2026)", () => {
   it("keeps a step's detail short and plain", () => {

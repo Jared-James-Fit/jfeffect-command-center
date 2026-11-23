@@ -11,6 +11,7 @@ import {
 } from "@/lib/query-persister";
 import { Toaster } from "sonner";
 import { PortraitLock } from "@/components/portrait-only";
+import { AppPulse } from "@/components/app-pulse";
 import { PHONE_BOOT_SCRIPT } from "@/lib/portrait-only";
 import { LAUNCH_BOOT_SCRIPT } from "@/lib/landing-launch";
 import { AuthProvider, useAuth } from "@/lib/auth";
@@ -380,6 +381,7 @@ function RootComponent() {
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <Outlet />
             <RouteTracker />
+            <AppPulse />
             <Toaster position="top-right" theme="dark" richColors offset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)", right: "16px" }} mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)", right: "16px", left: "16px" }} />
             <ProgressDrawer />
             <GlobalHighlight />

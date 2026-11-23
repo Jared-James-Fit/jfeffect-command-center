@@ -204,7 +204,7 @@ describe("working sets a week never divide by weeks that haven't happened", () =
       range: { start: "2026-11-15", end: "2026-12-12" },
     });
     expect(load.totals.setsPerWeek).toBe(37);
-    expect(load.perWeekBasis).toEqual({ weeks: 0, partial: true });
+    expect(load.perWeekBasis).toMatchObject({ weeks: 0, partial: true, keys: ["2026-11-16"] });
     expect(perWeekWords(load).label).toBe("this week so far");
     expect(load.weeks.filter((w) => w.future).length).toBe(3);
   });
@@ -216,7 +216,7 @@ describe("working sets a week never divide by weeks that haven't happened", () =
     ];
     const load = buildTrainingLoad({ sets, today: "2026-11-25" });
     // weeks of Nov 2, Nov 9 (nothing), Nov 16 are over: 20 / 3
-    expect(load.perWeekBasis).toEqual({ weeks: 3, partial: false });
+    expect(load.perWeekBasis).toMatchObject({ weeks: 3, partial: false, keys: ["2026-11-02", "2026-11-09", "2026-11-16"] });
     expect(load.totals.setsPerWeek).toBeCloseTo(6.7, 1);
   });
 

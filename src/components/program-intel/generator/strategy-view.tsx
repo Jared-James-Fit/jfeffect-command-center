@@ -129,12 +129,16 @@ export function StrategyReview({
   onApprove,
   onRegenerate,
   onDiscard,
+  staleInstructions = false,
 }: {
   strategy: Strategy;
   busy: boolean;
   onApprove: (s: Strategy) => void;
+  /** A new strategy from the setup and instructions as they are now. */
   onRegenerate: () => void;
   onDiscard: () => void;
+  /** The coach's instructions changed after this was written: approving builds it without them. */
+  staleInstructions?: boolean;
 }) {
   const [keep, setKeep] = useState(strategy.keep);
   const [change, setChange] = useState(strategy.change);
@@ -177,13 +181,32 @@ export function StrategyReview({
         </div>
       )}
       <div className="flex flex-col gap-1.5 border-t border-border/60 pt-3">
-        <Button className="h-11" disabled={busy || kept === 0} onClick={() => onApprove(edited)} data-testid="gen-approve-strategy">
-          {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus2 className="mr-2 h-4 w-4" />} Approve and build the program
-        </Button>
-        <div className="flex gap-1.5">
-          <Button variant="outline" className="h-10 flex-1" disabled={busy} onClick={onRegenerate}><RotateCcw className="mr-1.5 h-4 w-4" /> New strategy</Button>
-          <Button variant="ghost" className="h-10 text-destructive" disabled={busy} onClick={onDiscard}><Trash2 className="mr-1.5 h-4 w-4" /> Discard</Button>
-        </div>
+        {staleInstructions ? (
+          <>
+            <p className="rounded-lg bg-muted px-3 py-2 text-[12px]" data-strategy-stale>
+              You changed your instructions after this was written. Approving builds it as written, without the new ones.
+            </p>
+            <Button className="h-11" disabled={busy} onClick={onRegenerate} data-testid="gen-rewrite-strategy">
+              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />} Rewrite it with your instructions
+            </Button>
+            <div className="flex gap-1.5">
+              <Button variant="outline" className="h-10 flex-1" disabled={busy || kept === 0} onClick={() => onApprove(edited)} data-testid="gen-approve-strategy">
+                <FilePlus2 className="mr-1.5 h-4 w-4" /> Build it as written
+              </Button>
+              <Button variant="ghost" className="h-10 text-destructive" disabled={busy} onClick={onDiscard}><Trash2 className="mr-1.5 h-4 w-4" /> Discard</Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <Button className="h-11" disabled={busy || kept === 0} onClick={() => onApprove(edited)} data-testid="gen-approve-strategy">
+              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus2 className="mr-2 h-4 w-4" />} Approve and build the program
+            </Button>
+            <div className="flex gap-1.5">
+              <Button variant="outline" className="h-10 flex-1" disabled={busy} onClick={onRegenerate}><RotateCcw className="mr-1.5 h-4 w-4" /> New strategy</Button>
+              <Button variant="ghost" className="h-10 text-destructive" disabled={busy} onClick={onDiscard}><Trash2 className="mr-1.5 h-4 w-4" /> Discard</Button>
+            </div>
+          </>
+        )}
       </div>
     </Card>
   );

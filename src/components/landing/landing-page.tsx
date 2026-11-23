@@ -3,35 +3,48 @@
  * coaching brand with its own app: the app is free to use (by application, no
  * card) and 1:1 online coaching with Jared is a paid service (by application).
  *
- * The page is told the way a product is launched (Nov 23 2026): the promise,
- * then the app shown screen by screen until it's clearly worth paying for,
- * then the reveal that it's free; then what a coach adds on top of the tools,
- * then the prices, then the proof, then one plain question: which one is you?
- * The app's own screens carry the page from top to bottom, so a visitor keeps
- * seeing the product rather than reading about it.
+ * The page is told the way a product is launched (Nov 23 2026): the promise
+ * and the proof; then what help usually costs (CostAnchorsSection: a year of a
+ * personal trainer and of higher-priced online coaching, worked examples with
+ * their sources collapsed, then "Three different things": a trainer, an
+ * online coach and an app, and "So what should the tools cost?"); then the app
+ * shown screen by screen until it's clearly worth paying for; then the
+ * reveal that it's free ($0, the page's biggest number, with what's in the
+ * free app and what isn't); then what a coach adds on top of the tools, the
+ * coaching prices, the proof, every plan in one selection, and one plain
+ * question: which one is you? The app's own screens carry the page from top
+ * to bottom, so a visitor keeps seeing the product rather than reading about
+ * it.
  *
- * Anchors are honest: the app is "the same app my coaching clients train in"
- * (true), and the recommended package says how much more it is than the next
- * package on the site (both listed prices, anchorLine). The coaching price is
- * revealed the way the iPad's was (PriceRevealSection, price-reveal.ts): the
- * coaching shown first, then Coaching Plus at its own price, then "Don't need
- * the private calls?" and Complete Online Coaching's price as the moment. Two
- * different products at their listed prices, the calls the only difference:
- * never a crossed-out price, a "worth" number or a fake discount. Prices are read from
- * coaching_packages (the one source of truth, edited in Sales → Coaching
- * packages, drawn by CoachingPackagesGrid), never typed here, and only what's
- * listed shows: a draft package never reaches this page.
+ * Anchors are honest: the trainer and online coaching numbers are examples
+ * from published Canadian prices (trainer-cost.ts, online-coaching-cost.ts),
+ * labelled as examples, never an average, with no competing business named
+ * on the page, and each shows only while it costs more than the coaching on
+ * the site (cost-anchors.ts). The app is "the same app my coaching clients
+ * train in" (true), and the recommended package says how much more it is than
+ * the next package on the site (both listed prices, anchorLine). The coaching
+ * price is revealed the way the iPad's was (PriceRevealSection,
+ * price-reveal.ts): the coaching shown first, then Coaching Plus at its own
+ * price, then "Don't need the private calls?" and Complete Online Coaching's
+ * price, each said as a year too. Different services at their listed prices:
+ * never a crossed-out price, a "worth" number or a fake discount. Prices are
+ * read from coaching_packages (the one source of truth, edited in Sales →
+ * Coaching packages, drawn by CoachingPackagesGrid), never typed here, and
+ * only what's listed shows: a draft package never reaches this page. A plan
+ * added there (a paid membership, say) joins the plans by its price.
  *
  * Words are Jared's: plain, short, first person, no fitness-marketing lines
  * (landing-free-vs-coaching.test.ts keeps them out). Coaching is online only.
- * Every claim is checked against the product and the database: 15 live JF
- * Effect programs (4 for beginners, 3 for home), 2,000+ exercises with a
+ * Every claim is checked against the product and the database: the live JF
+ * Effect programs counted from the members' library (proofTiles,
+ * public_program_count(), never typed), 2,000+ exercises with a
  * how-to video for almost all of them, Jared's record as the About page
  * states it; client words and photos from the Coaching page. App screens are
  * a made-up athlete, never a client (scripts/coaching-screenshots).
  *
- * Measured anonymously (site-funnel.ts): the landing view, the pricing
- * section coming into view, which button was tapped and which package.
+ * Measured anonymously (site-funnel.ts): the landing view, the cost examples,
+ * the free app's $0 and the price reveal coming into view, the pricing
+ * section, which button was tapped and which package.
  */
 import { Suspense, useEffect, useRef, type ReactNode } from "react";
 import { Await, Link } from "@tanstack/react-router";
@@ -56,12 +69,16 @@ import { currentLaunchMode } from "@/lib/landing-launch";
 import { HOME_CTA_ZONES } from "@/lib/public-nav";
 import { CoachingPackagesGrid } from "@/components/sales/coaching-packages";
 import { PriceRevealSection } from "@/components/landing/price-reveal";
+import { CostAnchorsSection } from "@/components/landing/cost-anchors";
 import { priceReveal } from "@/lib/coaching-packages/price-reveal";
+import { costAnchors } from "@/lib/coaching-packages/cost-anchors";
+import { FREE_SETTLE, motion, useSeen, useStage } from "@/components/landing/stage-motion";
 import {
   costAnswer,
   decisionRows,
   listedPackages,
   paidPackages,
+  priceLabel,
   type DecisionRow,
   type PublicPackage,
 } from "@/lib/coaching-packages/packages";
@@ -102,20 +119,38 @@ const HERO = {
   body: "Follow my programs, build your own, or upload a plan you already have. Log every set in seconds and see what's working. It's the same app my coaching clients train in.",
 };
 
-/** Who's behind it, in numbers that are true and easy to check. */
+/** Who's behind it, in numbers that are true and easy to check. The fourth tile is the app's live program count (proofTiles). */
 const PROOF: Array<[string, string, string]> = [
   ["8", "International medals", "Team Canada, 7 of them gold"],
   ["2×", "International champion", "NAPF and Commonwealth, 2026"],
   ["100+", "People coached", "Beginners to IPF Worlds"],
-  ["15", "Programs in the app", "Strength, muscle, running, home"],
 ];
+
+/** When the program count can't be read: another true number, so the strip still has four. */
+const EXERCISES_TILE: [string, string, string] = ["2,000+", "Exercises", "Almost all with a how-to video"];
+
+/**
+ * The proof strip: the three numbers above, then how many JF Effect programs
+ * are live in the members' app, read from the library (public_program_count()),
+ * never typed, so a program added there shows here.
+ */
+export function proofTiles(programs: number | null | undefined): Array<[string, string, string]> {
+  const tile: [string, string, string] =
+    programs && programs > 0
+      ? [String(programs), programs === 1 ? "Program in the app" : "Programs in the app", "Strength, muscle, running, home"]
+      : EXERCISES_TILE;
+  return [...PROOF, tile];
+}
+
+/** The live program count, whether it came with the page or is still on its way. */
+type ProgramsIn = Promise<number | null> | number | null | undefined;
 
 /** The app, one capability at a time, each on its own screen. */
 const CHAPTERS: Array<{ eyebrow: string; title: string; body: string; src: string; alt: string }> = [
   {
     eyebrow: "Programs",
     title: "Your program, on the days you train.",
-    body: "Follow one of my 15 programs or build your own. The workouts land on your training days, and when your week changes, you move them.",
+    body: "Follow one of my programs or build your own. The workouts land on your training days, and when your week changes, you move them.",
     src: shotWeek,
     alt: "The Workouts screen: this week's calendar, today's lower body workout in progress, the program at week 7 of 13 and this month's progress",
   },
@@ -124,14 +159,14 @@ const CHAPTERS: Array<{ eyebrow: string; title: string; body: string; src: strin
     title: "Log a set in seconds.",
     body: "Reps and RPE come filled in from the program. Type the weight and it's logged, with last time on the same card.",
     src: shotLog,
-    alt: "The workout logger: back squat, 4 × 5 at RPE 7, last time 290 lb × 5, three sets logged at 295 lb",
+    alt: "The workout logger: Romanian deadlift, 3 × 8 at RPE 7, last time 230 lb × 8, the first set logged at 235 lb and the next two with their reps and RPE already filled in",
   },
   {
     eyebrow: "Progress",
     title: "See what's working.",
     body: "Estimated maxes, PRs, volume and consistency, worked out from every set you log.",
     src: shotInsights,
-    alt: "Training analytics: the back squat's estimated max climbing to 374 lb over 12 weeks, up 44 lb",
+    alt: "Training analytics over 12 weeks: estimated maxes up on the squat, bench and deadlift, every planned workout done, and sets a week",
   },
   {
     eyebrow: "Nutrition",
@@ -171,8 +206,12 @@ const FREE: Array<{ icon: typeof Dumbbell; text: string }> = [
 /** The reveal: everything above, said in one line, then the price. */
 const REVEAL = {
   lead: "Programs. Logging. Progress. Nutrition. The Crew.",
+  /** The app's price, from the same formatter as every package price. */
+  price: priceLabel(0),
   title: "The JF Effect app is free.",
   body: "No card, and nothing turns into a charge later. It's the same app my coaching clients train in.",
+  /** Said plainly, so nobody reads free as free coaching. */
+  without: "Not in it: a coach. Nobody writes a program around you or reads your check-ins. That's coaching, and it's next.",
 };
 
 /** What Jared does as an online coach. Each line is something a coaching client gets today. */
@@ -220,12 +259,16 @@ const FAQ: Array<{ q: string; a: string }> = [
     a: "Everything runs through the app: your program, your nutrition, weekly check-ins, video feedback and our chat. It works wherever you train, at home or in a gym.",
   },
   {
+    q: "Is it the same as a personal trainer?",
+    a: "No. A personal trainer is beside you for the sessions you book. I'm not in the room: I write every session, read your check-ins, review the sets you film and change your plan as you go. You get a coach for your whole week rather than an hour at a time.",
+  },
+  {
     q: COST_QUESTION,
     a: "Applying is free. We talk on a short call before you commit to anything.",
   },
   {
     q: "I'm new to lifting. Is this for me?",
-    a: "Yes. Four of my programs are written for beginners, and the app shows you what to do each day. Three are for training at home.",
+    a: "Yes. Some of my programs are written for beginners, and the app shows you what to do each day. Some are for training at home.",
   },
   {
     q: "Can I start with the app and get coaching later?",
@@ -298,6 +341,27 @@ function usePricingSeen() {
   return ref;
 }
 
+/** The proof strip, with the program count once it's read (it never holds the page up). */
+function ProofStrip({ programs }: { programs?: ProgramsIn }) {
+  const strip = (n: number | null) => (
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border/70 ring-1 ring-border/70 md:grid-cols-4" data-landing-proof>
+      {proofTiles(n).map(([value, label, detail]) => (
+        <div key={label} className="bg-card px-4 py-5 text-center">
+          <div className="text-[24px] font-semibold leading-none tracking-[-0.02em] md:text-[30px]">{value}</div>
+          <div className="mt-2 text-[13px] font-semibold">{label}</div>
+          <div className="mt-1 text-[12px] leading-snug text-muted-foreground">{detail}</div>
+        </div>
+      ))}
+    </div>
+  );
+  if (programs == null || typeof programs === "number") return strip(programs ?? null);
+  return (
+    <Suspense fallback={strip(null)}>
+      <Await promise={programs}>{(n) => strip(n)}</Await>
+    </Suspense>
+  );
+}
+
 /**
  * Two of the app's screens, one in front of the other: the hero's product
  * shot. The back phone hides on the smallest phones, where one screen reads
@@ -314,11 +378,65 @@ function HeroDevices() {
           src={shotFocus}
           priority
           sizes="(min-width: 1024px) 276px, (min-width: 640px) 252px, 50vw"
-          alt="A workout in Focus mode: Romanian deadlift, 3 × 8 at RPE 7, the first set logged at 235 lb"
+          alt="A workout in Focus mode: back squat, 4 × 5 at RPE 7, three sets logged at 295 lb with the bar speed of each"
           className="shadow-[0_40px_80px_-36px_rgba(0,0,0,0.6)]"
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * The free app's reveal, the page's biggest number: everything shown above it
+ * (each of those screens is in the free app) said in one line, then its price
+ * as the moment ($0), then the sentence and what it doesn't include (a coach,
+ * said plainly so free never reads as free coaching), then the way in. The
+ * free plan's own list is its card in the plans below, from coaching_packages,
+ * so it isn't said twice here. On the page from the first paint;
+ * stage-motion.ts eases it in only when it's still below the screen.
+ */
+function FreeReveal() {
+  const [ref, phase] = useStage(0.3);
+  useSeen(ref, "free_reveal_view", "home", 0.5);
+  return (
+    <section className="px-3 pb-6 sm:px-5" data-landing-reveal>
+      <div
+        ref={ref}
+        className="mx-auto max-w-5xl rounded-[28px] bg-muted/50 px-6 py-14 text-center ring-1 ring-border/60 md:py-20"
+        data-reveal-stage={phase}
+      >
+        <p
+          className="mx-auto max-w-xl text-balance text-[15px] font-medium text-muted-foreground md:text-[17px]"
+          style={motion(phase)}
+        >
+          {REVEAL.lead}
+        </p>
+        <p
+          className="mt-6 font-semibold leading-[0.9] tracking-[-0.06em]"
+          style={motion(phase, FREE_SETTLE)}
+          data-free-price
+        >
+          <span className="text-[132px] tabular-nums sm:text-[184px] md:text-[240px]">{REVEAL.price}</span>
+        </p>
+        <h2
+          className="mx-auto mt-5 max-w-[16ch] text-balance text-[32px] font-semibold leading-[1.06] tracking-[-0.03em] md:text-[48px]"
+          style={motion(phase, { delay: 750, y: 8 })}
+        >
+          {REVEAL.title}
+        </h2>
+        <div style={motion(phase, { delay: 880, y: 12 })}>
+          <p className="mx-auto mt-4 max-w-lg text-[17px] leading-relaxed text-muted-foreground">{REVEAL.body}</p>
+          <p className="mx-auto mt-5 max-w-md text-balance text-[15px] leading-relaxed text-muted-foreground" data-free-without>
+            {REVEAL.without}
+          </p>
+          <div className="mt-8 flex justify-center" data-inline-cta>
+            <PrimaryCta to={JOIN_TO} className="w-full sm:w-auto sm:min-w-[260px]" onClick={() => trackSite("cta_free", "reveal")}>
+              {JOIN_CTA}
+            </PrimaryCta>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -389,7 +507,7 @@ const FALLBACK_DECISION: DecisionRow[] = [
   { slug: "coaching", kind: "subscription", name: "Online coaching", line: "You want me to run your training and your nutrition.", price: "By application", recommended: false, cta: COACHING_CTA },
 ];
 
-export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
+export function LandingPage({ packages, programs }: { packages?: PackagesIn; programs?: ProgramsIn } = {}) {
   useEffect(() => {
     // a signed-in launch renders this hidden for a moment: only real visitors count
     if (currentLaunchMode() === "landing") trackJoin("landing_view");
@@ -442,21 +560,20 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
 
       {/* Why listen */}
       <div className="mx-auto max-w-5xl px-5">
-        <div
-          className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border/70 ring-1 ring-border/70 md:grid-cols-4"
-          data-landing-proof
-        >
-          {PROOF.map(([value, label, detail]) => (
-            <div key={label} className="bg-card px-4 py-5 text-center">
-              <div className="text-[24px] font-semibold leading-none tracking-[-0.02em] md:text-[30px]">
-                {value}
-              </div>
-              <div className="mt-2 text-[13px] font-semibold">{label}</div>
-              <div className="mt-1 text-[12px] leading-snug text-muted-foreground">{detail}</div>
-            </div>
-          ))}
-        </div>
+        <ProofStrip programs={programs} />
       </div>
+
+      {/* The story's first numbers: what a personal trainer and higher-priced
+          online coaching cost a year (cost-anchors.ts: worked examples with
+          their sources collapsed, shown only while they cost more than the
+          coaching on the site), then three different things, then the
+          question the app answers. */}
+      <WithPackages packages={packages}>
+        {(list) => {
+          const anchors = costAnchors(list);
+          return anchors ? <CostAnchorsSection anchors={anchors} /> : null;
+        }}
+      </WithPackages>
 
       {/* B. The app, shown before it's priced */}
       <section id="app" className="scroll-mt-20" data-landing-app>
@@ -504,25 +621,8 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
         </Block>
       </Reveal>
 
-      {/* B, the reveal */}
-      <Reveal>
-        <section className="px-3 pb-6 sm:px-5" data-landing-reveal>
-          <div className="mx-auto max-w-5xl rounded-[28px] bg-muted/50 px-6 py-14 text-center ring-1 ring-border/60 md:py-20">
-            <p className="mx-auto max-w-xl text-balance text-[15px] font-medium text-muted-foreground md:text-[17px]">
-              {REVEAL.lead}
-            </p>
-            <h2 className="mx-auto mt-4 max-w-[16ch] text-balance text-[40px] font-semibold leading-[1.04] tracking-[-0.035em] md:text-[64px]">
-              {REVEAL.title}
-            </h2>
-            <p className="mx-auto mt-4 max-w-lg text-[17px] leading-relaxed text-muted-foreground">{REVEAL.body}</p>
-            <div className="mt-8 flex justify-center" data-inline-cta>
-              <PrimaryCta to={JOIN_TO} className="w-full sm:w-auto sm:min-w-[260px]" onClick={() => trackSite("cta_free", "reveal")}>
-                {JOIN_CTA}
-              </PrimaryCta>
-            </div>
-          </div>
-        </section>
-      </Reveal>
+      {/* B, the reveal: the app's price, $0, as its own moment */}
+      <FreeReveal />
 
       {/* C. What a coach adds, then the prices, then what it's done for people */}
       <div data-cta-zone="coaching">
@@ -675,7 +775,7 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
                   <Block className="!pt-6 xl:max-w-6xl">
                     <Heading eyebrow={PRICING.eyebrow} title={PRICING.title} sub={PRICING.sub} />
                     <div data-inline-cta>
-                      <CoachingPackagesGrid packages={list} from="home" calls={false} free />
+                      <CoachingPackagesGrid packages={list} from="home" calls={false} free chooser />
                     </div>
                     <p className="mx-auto mt-8 max-w-md text-center text-[13px] leading-relaxed text-muted-foreground">
                       {PRICING.note}{" "}

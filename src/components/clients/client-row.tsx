@@ -1,11 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type ReactElement } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { UserAvatar } from "@/components/user-avatar";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { MoreHorizontal, CheckCircle2, Plus, Bell, Loader2, AlertTriangle, ListChecks, Dumbbell } from "lucide-react";
+import { MoreHorizontal, CheckCircle2, Plus, Bell, Loader2, AlertTriangle, ListChecks, Dumbbell, Eye, Star } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { blockEnd } from "./clients-status";
 import { rowMetaLine, rowStatusSummary, type RowAction, type RowStatus } from "./row-status";
@@ -14,6 +15,7 @@ import { adminRemindAgreement } from "@/lib/coaching-agreement.functions";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { ClientMoreMenu } from "./quick-actions";
+import { ChangePlanSheet } from "@/components/admin/intel/change-plan-sheet";
 import { ClientQuickSheet, type QuickPanelKind } from "./client-quick-sheet";
 import { AssignProgramDialog } from "./assign-program-dialog";
 import { useAuth } from "@/lib/auth";
@@ -148,25 +150,54 @@ function nextBlockWhen(iso: string | null) {
   } catch { return null; }
 }
 
+/** A neutral hint on hover / focus (the design system's tooltip is the brand red, kept for the screen's one action). */
+function IconTip({ label, children }: { label: string; children: ReactElement }) {
+  return (
+    <TooltipProvider delayDuration={350}>
+      <Tooltip>
+        <TooltipTrigger asChild>{children}</TooltipTrigger>
+        <TooltipContent className="bg-foreground text-background">{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 /**
- * One client in the Clients list: photo and name, one plain line of facts, at most one status chip
- * (the most important thing waiting on the coach, "+N" for the rest), the program's dates and
- * progress, then View Profile, Workout (client view on today's workout, to log or move it in a
- * session) and ⋯ (which holds every other action, View as client included).
+ * One client in the Clients list: photo and name with the coach's star, one plain line of facts,
+ * at most one status chip (the most important thing waiting on the coach, "+N" for the rest), the
+ * program's dates and progress, then Open client, Client view (their app as they see it), the
+ * dumbbell (the workout quick view, a drawer over the list: their workout and a profile summary,
+ * read-only, never leaving the page) and ⋯ (every other action, grouped).
  */
-export function ClientRow({ r, onArchive, showCoach = false }: { r: DirectoryRow; onArchive?: (r: DirectoryRow) => void; showCoach?: boolean }) {
+export function ClientRow({
+  r, onArchive, showCoach = false, onQuickView, onQuickViewIntent, starred = false, onToggleStar,
+}: {
+  r: DirectoryRow;
+  onArchive?: (r: DirectoryRow) => void;
+  showCoach?: boolean;
+  /** Opens the workout quick view on this client; without it the dumbbell opens client view on today's workout. */
+  onQuickView?: (r: DirectoryRow) => void;
+  /** A pointer or focus on the dumbbell: load the drawer's code ahead of the tap. */
+  onQuickViewIntent?: () => void;
+  /** On the coach's own starred list. */
+  starred?: boolean;
+  /** Star / unstar (absent: this login can't star). */
+  onToggleStar?: () => void;
+}) {
   const { primary, more } = rowStatusSummary(r);
   const meta = rowMetaLine(r, { showCoach, primary });
   const { role } = useAuth();
   const isAdmin = role === "admin";
   const pov = useEnterClientPov();
   const enterPov = () => pov.enter(r.id, { fallbackName: r.full_name });
-  // Mid-session: straight into today's workout as the client sees it (the same
-  // way in as a session's "Open …'s workout"). Only with a program to open.
+  // The workout quick view (a drawer over the list), or without one client view straight onto
+  // today's workout as the client sees it. Only with a program to open.
   const canOpenWorkout = pov.canPov && !!(r.block_id || r.next_block_id);
-  const openWorkout = () => pov.enter(r.id, { to: clientWorkoutHref(), fallbackName: r.full_name });
+  const openWorkout = () => (onQuickView ? onQuickView(r) : pov.enter(r.id, { to: clientWorkoutHref(), fallbackName: r.full_name }));
+  const who = r.full_name ?? "the client";
   const [sheet, setSheet] = useState<QuickPanelKind | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   const openAssign = () => setAssignOpen(true);
 
   return (
@@ -179,15 +210,33 @@ export function ClientRow({ r, onArchive, showCoach = false }: { r: DirectoryRow
         "xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.3fr)_auto] xl:items-center",
       )}
     >
-      {/* Identity: photo, name, one plain line of facts */}
+      {/* Identity: photo, name, one plain line of facts, and the coach's own star */}
       <div className="flex min-w-0 items-center gap-3">
         <UserAvatar src={r.profile_picture_url} name={r.full_name ?? "Client"} size={40} className="shrink-0" />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <ClientNameLink clientId={r.id} className="block truncate text-[15px] font-semibold leading-snug hover:underline">
             {r.full_name || "(no name)"}
           </ClientNameLink>
           {meta && <div className="truncate text-xs text-muted-foreground" data-row-meta>{meta}</div>}
         </div>
+        {onToggleStar ? (
+          <button
+            type="button"
+            onClick={onToggleStar}
+            aria-pressed={starred}
+            aria-label={starred ? `Unstar ${who}` : `Star ${who}`}
+            title={starred ? "Starred" : "Star"}
+            data-row-star
+            className={cn(
+              "-my-1 -mr-1.5 grid h-10 w-10 shrink-0 cursor-pointer touch-manipulation place-items-center rounded-full transition-colors hover:bg-muted",
+              starred ? "text-foreground" : "text-muted-foreground/50 hover:text-foreground",
+            )}
+          >
+            <Star className={cn("h-[18px] w-[18px]", starred && "fill-foreground")} aria-hidden />
+          </button>
+        ) : starred ? (
+          <Star className="h-4 w-4 shrink-0 fill-foreground text-foreground" aria-label="Starred" />
+        ) : null}
       </div>
 
       {/* The one status that needs the coach most, then "+N" for the rest */}
@@ -203,33 +252,52 @@ export function ClientRow({ r, onArchive, showCoach = false }: { r: DirectoryRow
       {/* Program: what's running, its dates and how far through */}
       <ProgramSummary r={r} onSchedule={() => setSheet("program-view")} onAssign={openAssign} />
 
-      {/* View Profile is the way in, Workout the way into today's session; everything else is in ⋯ */}
-      <div className="flex items-center justify-end gap-1.5 max-xl:w-full">
-        <Button asChild variant="secondary" size="sm" className="h-10 min-w-[7rem] flex-1 font-semibold xl:flex-none">
-          <ClientNameLink clientId={r.id}>View Profile</ClientNameLink>
+      {/* Open client is the way in; Client view shows their app as they see it; the dumbbell is the
+          workout quick view (today's session, a drawer over the list); everything else is in ⋯ */}
+      <div className="flex items-center justify-end gap-1.5 max-xl:w-full" data-row-actions>
+        <Button asChild variant="secondary" size="sm" className="h-10 min-w-0 flex-1 px-2.5 font-semibold sm:min-w-[7rem] xl:flex-none">
+          <ClientNameLink clientId={r.id}>Open client</ClientNameLink>
         </Button>
-        {canOpenWorkout && (
+        {pov.canPov && (
           <Button
-            variant="secondary"
+            variant="outline"
             size="sm"
-            className="h-10 min-w-[7rem] flex-1 font-semibold xl:flex-none"
+            className="h-10 min-w-0 flex-1 px-2.5 font-semibold sm:min-w-[7rem] xl:flex-none"
             disabled={pov.busy}
-            onClick={openWorkout}
-            aria-label={`Open ${r.full_name ?? "the client"}'s workout for today, as they see it`}
+            onClick={enterPov}
+            aria-label={`See ${r.full_name ?? "the client"}'s app as they see it`}
+            data-client-view
           >
-            {pov.busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Dumbbell className="h-4 w-4" aria-hidden />}
-            Workout
+            {pov.busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+            Client view
           </Button>
+        )}
+        {canOpenWorkout && (
+          <IconTip label={onQuickView ? "Workout quick view" : "Today's workout, as they see it"}>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 shrink-0"
+              disabled={!onQuickView && pov.busy}
+              onClick={openWorkout}
+              onPointerEnter={onQuickViewIntent}
+              onFocus={onQuickViewIntent}
+              aria-label={onQuickView ? `Quick view: ${who}'s workout` : `Open ${who}'s workout for today, as they see it`}
+              aria-haspopup={onQuickView ? "dialog" : undefined}
+              data-row-workout
+            >
+              <Dumbbell className="h-4 w-4" aria-hidden />
+            </Button>
+          </IconTip>
         )}
         <ClientMoreMenu
           r={r}
           onArchive={onArchive}
-          onViewAsClient={pov.canPov ? enterPov : undefined}
-          viewAsBusy={pov.busy}
           onAssignProgram={openAssign}
           onOpenPanel={setSheet}
+          onChangePlan={isAdmin ? () => setPlanOpen(true) : undefined}
           trigger={
-            <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="More client actions">
+            <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0" aria-label="More client actions">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           }
@@ -238,6 +306,7 @@ export function ClientRow({ r, onArchive, showCoach = false }: { r: DirectoryRow
 
       <ClientQuickSheet kind={sheet} clientId={r.id} clientName={r.full_name} onClose={() => setSheet(null)} />
       <AssignProgramDialog open={assignOpen} onOpenChange={setAssignOpen} clientId={r.id} clientName={r.full_name} />
+      {isAdmin && planOpen && <ChangePlanSheet clientId={r.id} open={planOpen} onOpenChange={setPlanOpen} />}
     </li>
   );
 }

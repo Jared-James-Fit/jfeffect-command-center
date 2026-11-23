@@ -18,6 +18,7 @@ import {
   type SnapshotMetric,
 } from "@/lib/analytics/analytics-areas";
 import { parseLocalDate } from "@/lib/today";
+import { useAnalyticsUnit } from "@/lib/analytics/use-analytics-unit";
 
 type Unit = "lb" | "kg";
 const LB_PER_KG = 2.2046226;
@@ -33,7 +34,7 @@ const DAY = 86_400_000;
  */
 export function TrainingAnalyticsPreviewCard({
   clientId,
-  unit = "lb",
+  unit: accountUnit = "lb",
   month,
   hideWhenEmpty = false,
 }: {
@@ -47,6 +48,8 @@ export function TrainingAnalyticsPreviewCard({
   bare?: boolean;
   part?: string;
 }) {
+  // the unit analytics is shown in (picked on the analytics page, else the athlete's own)
+  const [unit] = useAnalyticsUnit(accountUnit);
   const { data: results = [], isLoading } = useQuery({
     queryKey: ["pl-results", clientId, null],
     enabled: !!clientId,

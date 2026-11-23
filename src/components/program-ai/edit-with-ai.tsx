@@ -36,6 +36,17 @@ import {
 import { dayNames } from "@/lib/program-ai/engine";
 import type { DayDiff, ResolvedChange } from "@/lib/program-ai/types";
 import { durationWords, editEta } from "@/lib/program-intel/run-eta";
+import { useCoachVoice, VoiceButton, VoiceStatus } from "./coach-voice";
+
+/** What the coach was looking at, sent ahead of their words ("this day" means it). */
+const CONTEXT_PREFIX = /^\[Looking at: ([^\]\n]{1,200})\]\n/;
+export function withContext(text: string, context: string | null | undefined): string {
+  return context ? `[Looking at: ${context}]\n${text}` : text;
+}
+export function splitContext(instruction: string): { context: string | null; text: string } {
+  const m = CONTEXT_PREFIX.exec(instruction ?? "");
+  return m ? { context: m[1], text: instruction.slice(m[0].length) } : { context: null, text: instruction ?? "" };
+}
 
 type Tab = "chat" | "rules" | "history";
 
@@ -51,7 +62,7 @@ const RULE_LABEL: Record<string, string> = {
 const CLIENT_STARTERS = ["Review the program and fix anything you'd improve", "Make every workout fit in 60 minutes", "Which lift is progressing the slowest?", "Is their weekly volume recoverable?"];
 const TEMPLATE_STARTERS = ["Make a 3-day version of this", "Adapt it for a home gym with dumbbells and a rack", "Turn it into a powerbuilding program", "Simplify the accessories"];
 
-export function EditWithAiButton({ target, title, onApplied, beforeOpen, className, size = "default", variant = "outline", label = "Adjust program" }: {
+export function EditWithAiButton({ target, title, onApplied, beforeOpen, className, size = "default", variant = "outline", label = "Adjust program", context, requestOpen }: {
   target: ProgramAiTarget;
   title: string;
   onApplied?: () => void | Promise<void>;
@@ -61,9 +72,32 @@ export function EditWithAiButton({ target, title, onApplied, beforeOpen, classNa
   size?: "default" | "sm";
   variant?: "outline" | "default" | "secondary" | "ghost";
   label?: string;
+  /** What the coach is looking at when it opens (the builder's workout on screen). */
+  context?: () => string | null;
+  /** Open it from elsewhere (Program Check's "Ask Cleo"), with words in the box: a new nonce opens it again. */
+  requestOpen?: { text: string; nonce: number } | null;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [initial, setInitial] = useState<string | undefined>(undefined);
+  const [ctx, setCtx] = useState<string | null>(null);
+  const openNow = async (text?: string) => {
+    setBusy(true);
+    try {
+      await beforeOpen?.();
+      setInitial(text);
+      setCtx(context?.() ?? null);
+      setOpen(true);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't save your changes first.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  useEffect(() => {
+    if (requestOpen) void openNow(requestOpen.text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestOpen?.nonce]);
   return (
     <>
       <Button
@@ -73,28 +107,20 @@ export function EditWithAiButton({ target, title, onApplied, beforeOpen, classNa
         className={className}
         disabled={busy}
         data-testid="edit-with-ai"
-        onClick={async () => {
-          setBusy(true);
-          try {
-            await beforeOpen?.();
-            setOpen(true);
-          } catch (e: any) {
-            toast.error(e?.message ?? "Couldn't save your changes first.");
-          } finally {
-            setBusy(false);
-          }
-        }}
+        onClick={() => void openNow()}
       >
         {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SlidersHorizontal className="mr-2 h-4 w-4" />}
         {label}
       </Button>
-      {open && <EditWithAiSheet open={open} onOpenChange={setOpen} target={target} title={title} onApplied={onApplied} />}
+      {open && <EditWithAiSheet key={`${requestOpen?.nonce ?? 0}`} open={open} onOpenChange={setOpen} target={target} title={title} onApplied={onApplied} initialText={initial} context={ctx} />}
     </>
   );
 }
 
 /** `initialText`: what the box starts with (Missing program data's "Fill in"); the coach still sends it and reviews the changes. */
-export function EditWithAiSheet({ open, onOpenChange, target, title, onApplied, initialText }: { open: boolean; onOpenChange: (v: boolean) => void; target: ProgramAiTarget; title: string; onApplied?: () => void | Promise<void>; initialText?: string }) {
+export function EditWithAiSheet({ open, onOpenChange, target, title, onApplied, initialText, context }: { open: boolean; onOpenChange: (v: boolean) => void; target: ProgramAiTarget; title: string; onApplied?: () => void | Promise<void>; initialText?: string;
+  /** What the coach is looking at in the builder ("Week 3 · Day 2 “Lower A”"), told to Cleo with their words. */
+  context?: string | null }) {
   const [tab, setTab] = useState<Tab>("chat");
   const clientId = target.kind === "client" ? target.clientId : null;
   return (
@@ -124,7 +150,7 @@ export function EditWithAiSheet({ open, onOpenChange, target, title, onApplied, 
             ))}
           </div>
         </div>
-        {tab === "chat" && <ChatPanel target={target} onApplied={onApplied} initialText={initialText} />}
+        {tab === "chat" && <ChatPanel target={target} onApplied={onApplied} initialText={initialText} context={context} />}
         {tab === "rules" && <RulesPanel clientId={clientId} />}
         {tab === "history" && <HistoryPanel target={target} onChanged={onApplied} />}
       </SheetContent>
@@ -164,7 +190,19 @@ function AthleteGaps({ clientId }: { clientId: string }) {
 // ---------------------------------------------------------------------------
 // The conversation
 
-function ChatPanel({ target, onApplied, initialText }: { target: ProgramAiTarget; onApplied?: () => void | Promise<void>; initialText?: string }) {
+export function ChatPanel({ target, onApplied, initialText, context, beforeSend, quickActions, seed }: {
+  target: ProgramAiTarget;
+  onApplied?: () => void | Promise<void>;
+  initialText?: string;
+  context?: string | null;
+  /** Run before every send (the builder saves what's on screen: the AI reads what's saved). */
+  beforeSend?: () => Promise<void> | void;
+  /** One-tap asks for where the coach is (Cleo's dock): they fill the box, never send by themselves. */
+  quickActions?: string[];
+  /** Words put in the box from elsewhere (Program Check's "Ask Cleo"): a new nonce puts them in again. */
+  seed?: { text: string; nonce: number } | null;
+
+}) {
   const qc = useQueryClient();
   const ask = useServerFn(askProgramAiFn);
   const getThread = useServerFn(programAiThreadFn);
@@ -176,6 +214,19 @@ function ChatPanel({ target, onApplied, initialText }: { target: ProgramAiTarget
   const [threadId, setThreadId] = useState<string | null>(null);
   const [resumed, setResumed] = useState(false);
   const [text, setText] = useState(initialText ?? "");
+  const [withCtx, setWithCtx] = useState(!!context);
+  // a live context (the dock follows the coach around the builder) is on whenever there is one
+  const hadCtx = useRef(!!context);
+  useEffect(() => {
+    if (!!context && !hadCtx.current) setWithCtx(true);
+    hadCtx.current = !!context;
+  }, [context]);
+  useEffect(() => {
+    if (seed?.text) setText(seed.text.slice(0, 4000));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed?.nonce]);
+  // spoken words land in the box (after anything typed) to read and change before sending
+  const voice = useCoachVoice((words) => setText((t) => (t.trim() ? `${t.trim()} ${words}` : words).slice(0, 4000)));
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [asNew, setAsNew] = useState(false);
   const [newName, setNewName] = useState("");
@@ -225,8 +276,9 @@ function ChatPanel({ target, onApplied, initialText }: { target: ProgramAiTarget
 
   const send = useMutation({
     mutationFn: async (instruction: string) => {
+      await beforeSend?.();
       const rejected = last?.status === "ready" ? proposal.filter((c) => !picked.has(c.id)).map((c) => c.id) : [];
-      return ask({ data: { target, instruction, threadId: last && last.status !== "applied" ? threadId : null, rejected } });
+      return ask({ data: { target, instruction: withContext(instruction, withCtx ? context : null).slice(0, 4000), threadId: last && last.status !== "applied" ? threadId : null, rejected } });
     },
     onSuccess: (r) => {
       setText("");
@@ -281,7 +333,7 @@ function ChatPanel({ target, onApplied, initialText }: { target: ProgramAiTarget
   };
 
   const okCount = proposal.filter((c) => c.ok && picked.has(c.id)).length;
-  const starters = target.kind === "client" ? CLIENT_STARTERS : TEMPLATE_STARTERS;
+  const starters = quickActions?.length ? quickActions : target.kind === "client" ? CLIENT_STARTERS : TEMPLATE_STARTERS;
   const submit = () => {
     const v = text.trim();
     if (!v || send.isPending || working) return;
@@ -358,6 +410,28 @@ function ChatPanel({ target, onApplied, initialText }: { target: ProgramAiTarget
             </div>
           </div>
         )}
+        {quickActions?.length && turns.length > 0 && !text.trim() && !working && last?.status !== "ready" ? (
+          <div className="-mx-4 mb-2 flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-quick-actions>
+            {quickActions.map((q) => (
+              <button key={q} type="button" onClick={() => setText(q)} className="inline-flex h-8 shrink-0 items-center rounded-full border border-border px-3 text-xs font-medium hover:bg-secondary">
+                {q}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {context && (
+          <div className="mb-2 flex items-center gap-1.5 text-xs" data-edit-context>
+            <button
+              type="button"
+              onClick={() => setWithCtx((v) => !v)}
+              className={cn("inline-flex h-8 max-w-full items-center gap-1.5 rounded-full px-3 transition-colors", withCtx ? "bg-secondary text-foreground" : "bg-muted text-muted-foreground line-through")}
+              aria-pressed={withCtx}
+              title={withCtx ? "Cleo reads your words as being about this workout. Tap to leave it out." : "Tap to tell Cleo which workout you mean"}
+            >
+              <span className="truncate">About {context}</span>
+            </button>
+          </div>
+        )}
         <div className="flex items-end gap-2">
           <AutoGrowTextarea
             value={text}
@@ -375,10 +449,12 @@ function ChatPanel({ target, onApplied, initialText }: { target: ProgramAiTarget
             aria-label="Message"
             data-testid="edit-with-ai-input"
           />
-          <Button type="button" size="icon" className="h-11 w-11 shrink-0" disabled={!text.trim() || send.isPending || working} onClick={submit} aria-label="Send">
+          <VoiceButton voice={voice} disabled={send.isPending} />
+          <Button type="button" size="icon" className="h-11 w-11 shrink-0" disabled={!text.trim() || send.isPending || working || voice.recording} onClick={submit} aria-label="Send">
             {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
           </Button>
         </div>
+        <VoiceStatus voice={voice} className="mt-2" />
         {last?.status === "ready" && proposal.some((c) => !picked.has(c.id)) && <p className="mt-2 text-xs text-muted-foreground">Unticked changes are left out when you apply, and dropped if you refine.</p>}
       </div>
     </>
@@ -405,7 +481,8 @@ export function TurnView({ turn, latest, picked, onToggle, appliedResult, onUndo
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-secondary px-3.5 py-2 text-[15px] text-foreground">{turn.instruction}</div>
+        {splitContext(turn.instruction).context && <div className="mb-1 max-w-[85%] truncate text-right text-[11px] text-muted-foreground">About {splitContext(turn.instruction).context}</div>}
+        <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-secondary px-3.5 py-2 text-[15px] text-foreground">{splitContext(turn.instruction).text}</div>
       </div>
       {(turn.status === "pending" || turn.status === "running") && <TurnProgress stage={turn.stage} createdAt={turn.created_at} />}
       {turn.status === "error" && (
@@ -656,7 +733,7 @@ export function ChangeCard({ change, checked, disabled, onChange, faded, default
 // ---------------------------------------------------------------------------
 // Rules the AI follows
 
-function RulesPanel({ clientId }: { clientId: string | null }) {
+export function RulesPanel({ clientId }: { clientId: string | null }) {
   const qc = useQueryClient();
   const list = useServerFn(listProgramRulesFn);
   const save = useServerFn(saveProgramRuleFn);
@@ -787,7 +864,7 @@ function RulesPanel({ clientId }: { clientId: string | null }) {
 // ---------------------------------------------------------------------------
 // History: every change to this program (Edit with AI and Cleo), with Undo
 
-function HistoryPanel({ target, onChanged }: { target: ProgramAiTarget; onChanged?: () => void | Promise<void> }) {
+export function HistoryPanel({ target, onChanged }: { target: ProgramAiTarget; onChanged?: () => void | Promise<void> }) {
   const qc = useQueryClient();
   const history = useServerFn(programHistoryFn);
   const undo = useServerFn(undoProgramAiFn);

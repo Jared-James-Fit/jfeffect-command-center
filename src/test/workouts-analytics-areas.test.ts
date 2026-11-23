@@ -418,8 +418,8 @@ describe("the screens", () => {
     expect(chart).toContain("▲ Tested max");
     expect(chart).toContain("◆ Meet (lifted)");
   });
-  it("analytics is Overview · Strength · Volume · Consistency · Recovery; recorded and estimated recovery are apart", () => {
-    expect(dash).toContain('["consistency", "Consistency"]');
+  it("analytics is Overview · Strength · Training · Calendar · Lifetime · Recovery; recorded and estimated recovery are apart", () => {
+    expect(dash).toContain('["calendar", "Calendar"]');
     expect(dash).toContain('title="What you logged"');
     expect(dash).toContain('title="Readiness (estimate)"');
   });
