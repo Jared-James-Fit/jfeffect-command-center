@@ -6,7 +6,7 @@ cd "$(dirname "$0")/../../.."
 PSQL=${PSQL:-psql}
 DB=${DB:-ai_reliability}
 T=supabase/tests/ai-reliability
-M=supabase/migrations/20270512090000_ai_reliability.sql
+M=supabase/migrations/20270512100000_ai_reliability.sql
 
 $PSQL -q -c "drop database if exists $DB" -c "create database $DB"
 run() {

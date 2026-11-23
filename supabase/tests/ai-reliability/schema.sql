@@ -1,4 +1,4 @@
--- The tables and platform pieces 20270512090000_ai_reliability.sql touches, as stubs.
+-- The tables and platform pieces 20270512100000_ai_reliability.sql touches, as stubs.
 \set ON_ERROR_STOP 1
 do $$ begin
   if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon; end if;

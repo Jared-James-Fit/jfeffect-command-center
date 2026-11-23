@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 /**
- * The AI health tick: pg_cron `ai-health-tick` every 5 minutes (20270512090000_ai_reliability.sql).
+ * The AI health tick: pg_cron `ai-health-tick` every 5 minutes (20270512100000_ai_reliability.sql).
  * Probes a provider that's down, raises and closes the AI alerts, counts stuck jobs, watches
  * spend, and redoes what failed once AI answers again. See runAiHealthTick in
  * src/lib/ai/ai-monitor.server.ts.

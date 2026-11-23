@@ -1,4 +1,4 @@
--- Rollback for 20270512090000_ai_reliability.sql (Nov 23 2026), section by section.
+-- Rollback for 20270512100000_ai_reliability.sql (Nov 23 2026), section by section.
 -- The app keeps working without these: the call log and health reads fail soft (nothing is
 -- logged, nothing is paused), and the health tick has nothing to run.
 SET lock_timeout = '5s';
