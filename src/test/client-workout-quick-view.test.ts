@@ -172,8 +172,12 @@ describe("one workout: the plan beside what was logged", () => {
     expect(day.exercises.map((e) => e.name)).toEqual(["Competition Squat", "Leg Press", "Treadmill Walk"]);
     const squat = day.exercises[0];
     expect(squat.role).toBe("Top set");
-    // the rest the coach overrode is the rest shown
-    expect(squat.plan).toBe("1 × 3 · RPE 8 · rest 5 min");
+    // the rest is its own line (Rest), the one the coach overrode
+    expect(squat.plan).toBe("1 × 3 · RPE 8");
+    expect(squat.rest).toEqual({ seconds: 300, usual: false });
+    expect(day.exercises[1].rest).toEqual({ seconds: 120, usual: false });
+    // the day's cardio has no rest line
+    expect(day.exercises[2].rest).toBeNull();
     expect(squat.logged).toEqual(["Set 1: 405 lb × 3 · RPE 8"]);
     expect(day.exercises[1].logged).toEqual(["Sets 1–2: 300 lb × 12 · RPE 8"]);
     expect(day.exercises[1].setsLogged).toBe(2);

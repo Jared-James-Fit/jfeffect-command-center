@@ -50,6 +50,9 @@ import {
 import { peekClientQuery, peekDayQuery, peekProfileQuery, peekScheduleQuery, type PeekClientRecord, type PeekProfile } from "./data";
 import { usePeekLoadGuides } from "./load-guides";
 import type { CardGuide } from "@/lib/workouts/card-suggestion";
+import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
+import { cardSetupView, type EquipmentData } from "@/lib/equipment/equipment";
+import { restWords } from "@/lib/rest-timer-store";
 
 export type QuickViewClient = { id: string; full_name: string | null; profile_picture_url: string | null };
 export type QuickViewTab = "workout" | "profile";
@@ -418,6 +421,8 @@ function WorkoutTab({
   );
   // What to lift on each exercise, exactly as their logger's Suggested reads it (load-guides.ts).
   const { guides } = usePeekLoadGuides({ clientId, entry, day, record, today, live });
+  // Their saved setups (rack height, J-hooks, seat…): the line their card shows above its sets.
+  const equipment = useAthleteEquipment(entry ? clientId : null);
 
   if (loading) return <WorkoutSkeleton />;
   if (error) {
@@ -484,7 +489,7 @@ function WorkoutTab({
 
       <div key={entry.key} className="animate-in fade-in-0 duration-150">
         <WorkoutSummary entry={entry} day={day} name={name} loading={dayQ.isLoading} error={dayQ.isError} onRetry={() => void dayQ.refetch()} today={today} />
-        {day && <ExerciseList day={day} name={name} entry={entry} today={today} guides={guides} />}
+        {day && <ExerciseList day={day} name={name} entry={entry} today={today} guides={guides} equipment={equipment.data} />}
         {dayQ.isLoading && <ExercisesSkeleton />}
       </div>
 
@@ -754,7 +759,7 @@ function NoteLine({ label, text, icon }: { label: string; text: string; icon?: b
   );
 }
 
-function ExerciseList({ day, name, entry, today, guides }: { day: PeekDay; name: string; entry: PeekEntry; today: string; guides: Map<string, CardGuide> }) {
+function ExerciseList({ day, name, entry, today, guides, equipment }: { day: PeekDay; name: string; entry: PeekEntry; today: string; guides: Map<string, CardGuide>; equipment: EquipmentData }) {
   if (!day.exercises.length) {
     return <p className="mx-4 mt-3 text-sm text-muted-foreground">No exercises written for this workout.</p>;
   }
@@ -765,13 +770,29 @@ function ExerciseList({ day, name, entry, today, guides }: { day: PeekDay; name:
   return (
     <ol className="mt-3 space-y-2 px-4" data-quick-view-exercises>
       {day.exercises.map((ex, i) => (
-        <ExerciseItem key={ex.id} ex={ex} n={i + 1} name={name} flagShort={flagShort} guide={guides.get(ex.id) ?? null} />
+        <ExerciseItem
+          key={ex.id}
+          ex={ex}
+          n={i + 1}
+          name={name}
+          flagShort={flagShort}
+          guide={guides.get(ex.id) ?? null}
+          // what their card is on, and how it's set up (cardSetupView: the logged sets', else today's pick)
+          setup={ex.exerciseId && !ex.cardio ? cardSetupView(equipment, ex.exerciseId, ex.sets) : null}
+        />
       ))}
     </ol>
   );
 }
 
-function ExerciseItem({ ex, n, name, flagShort, guide }: { ex: PeekDay["exercises"][number]; n: number; name: string; flagShort: boolean; guide: CardGuide | null }) {
+function ExerciseItem({ ex, n, name, flagShort, guide, setup }: {
+  ex: PeekDay["exercises"][number];
+  n: number;
+  name: string;
+  flagShort: boolean;
+  guide: CardGuide | null;
+  setup: ReturnType<typeof cardSetupView> | null;
+}) {
   const [open, setOpen] = useState(false);
   const hasDetails = !!(ex.details.muscle || ex.details.equipment || ex.details.cues || ex.details.demo);
   const complete = ex.setsPlanned ? ex.setsLogged >= ex.setsPlanned : ex.setsLogged > 0;
@@ -801,9 +822,33 @@ function ExerciseItem({ ex, n, name, flagShort, guide }: { ex: PeekDay["exercise
           </div>
 
           <dl className="mt-1.5 grid grid-cols-[4.25rem_minmax(0,1fr)] gap-x-2 gap-y-1 text-sm">
+            {setup?.summary && (
+              <>
+                <dt className="text-xs leading-5 text-muted-foreground">Setup</dt>
+                <dd className="leading-5" data-setup>
+                  {/* the parts never break mid-phrase: "J-hooks 9" stays together */}
+                  {setup.summary.split(" · ").map((part, i) => (
+                    <span key={i}>
+                      {i > 0 && <span className="text-muted-foreground"> · </span>}
+                      <span className="whitespace-nowrap font-medium">{part}</span>
+                    </span>
+                  ))}
+                  {setup.equipment?.archived_at && <span className="text-xs text-muted-foreground"> · retired</span>}
+                </dd>
+              </>
+            )}
             <dt className="text-xs leading-5 text-muted-foreground">Plan</dt>
             <dd className="leading-5 text-muted-foreground" data-plan>{ex.plan || "–"}</dd>
             {guide && <GuideRow guide={guide} name={name} />}
+            {ex.rest && (
+              <>
+                <dt className="text-xs leading-5 text-muted-foreground">Rest</dt>
+                <dd className="leading-5" data-rest={ex.rest.usual ? "usual" : "program"}>
+                  <span className="font-medium tabular-nums">{(restWords(ex.rest.seconds) ?? "").replace(/^Rest /, "")}</span>
+                  {ex.rest.usual && <span className="text-xs text-muted-foreground"> · the usual for this lift</span>}
+                </dd>
+              </>
+            )}
             <dt className="text-xs leading-5 text-muted-foreground">Logged</dt>
             <dd className="leading-5" data-logged>
               {ex.logged.length ? (

@@ -232,3 +232,12 @@ export function formatAgo(ms: number): string {
   if (s < 60) return `${s}s ago`;
   return `${formatClock(s)} ago`;
 }
+
+/** "Rest 3 min", "Rest 90 s", "Rest 2:30": a card's rest in words (the logger's rest line, the coach's quick view). */
+export function restWords(seconds: number | null | undefined): string | null {
+  if (!seconds || seconds <= 0) return null;
+  const s = Math.round(seconds);
+  if (s < 60) return `Rest ${s} s`;
+  if (s % 60 === 0) return `Rest ${s / 60} min`;
+  return `Rest ${formatClock(s)}`;
+}

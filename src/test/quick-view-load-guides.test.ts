@@ -164,3 +164,48 @@ describe("quick view: one path with the logger", () => {
     expect(qv).toContain("data-load-guide={guide.kind}");
   });
 });
+
+describe("quick view: the setup and rest their card shows", () => {
+  it("a card with no programmed rest shows the usual one for the kind of exercise, said to be the usual", async () => {
+    const { buildPeekDay } = await import("@/lib/workout-peek");
+    const { cardRest } = await import("@/lib/exercise-metadata");
+    const row = { id: "x", sort_order: 0, exercise_id: squatEx.id, exercises: squatEx, sets: 3, reps_text: "5", rpe: "7" };
+    const day = buildPeekDay({ day: null, rows: [row], results: [], completions: [], notes: [], feedback: null } as any, { instanceId: null, weekIndex: 1 });
+    const rest = cardRest(row as any);
+    expect(rest.usual).toBe(true);
+    expect(rest.seconds).toBeGreaterThan(0);
+    expect(day.exercises[0].rest).toEqual({ seconds: rest.seconds, usual: true });
+  });
+
+  it("the setup line is their card's: what the sets were logged on, else today's pick, never a retired setup for an old workout", async () => {
+    const { cardSetupView } = await import("@/lib/equipment/equipment");
+    const now = Date.parse("2026-11-23T18:00:00Z");
+    const data = {
+      gyms: [],
+      equipment: [
+        { id: "rack-1", name: "Rogue rack", kind: "rack", archived_at: null } as any,
+        { id: "rack-2", name: "Garage rack", kind: "rack", archived_at: null } as any,
+      ],
+      setups: [
+        { exercise_id: squatEx.id, equipment_id: "rack-1", settings: [{ label: "J-hooks", value: "9" }, { label: "Safeties", value: "4" }], last_used_at: "2026-11-20T00:00:00Z" } as any,
+        { exercise_id: squatEx.id, equipment_id: "rack-2", settings: [{ label: "J-hooks", value: "11" }], last_used_at: "2026-10-01T00:00:00Z" } as any,
+      ],
+    };
+    // nothing logged yet: today's pick (the newest used)
+    expect(cardSetupView(data as any, squatEx.id, [], now).summary).toBe("Rogue rack · J-hooks 9 · Safeties 4");
+    // logged on the garage rack: that's what it says
+    expect(cardSetupView(data as any, squatEx.id, [{ completed_at: "2026-11-23T17:00:00Z", equipment_id: "rack-2" }], now).summary).toBe("Garage rack · J-hooks 11");
+    // an old workout with nothing stamped: never today's pick
+    expect(cardSetupView(data as any, squatEx.id, [{ completed_at: "2026-09-01T17:00:00Z", equipment_id: null }], now).summary).toBe("");
+  });
+
+  it("the logger reads both the same way, and the drawer shows them", () => {
+    const wdv = read("src/components/workout-day/WorkoutDayView.tsx");
+    expect(wdv).toContain("cardSetupView(equipmentData, exerciseId, existingResults as any[])");
+    expect(wdv).toContain("cardRest(row)");
+    const qv = read("src/components/clients/workout-quick-view/quick-view.tsx");
+    expect(qv).toContain("data-setup");
+    expect(qv).toContain('data-rest={ex.rest.usual ? "usual" : "program"}');
+    expect(qv).toContain("cardSetupView(equipment, ex.exerciseId, ex.sets)");
+  });
+});
