@@ -68,6 +68,16 @@ describe("a block's weeks are its own, even when the model counted on from the p
   });
 });
 
+describe("a draft block is named once", () => {
+  it("a name the model already numbered isn't numbered twice", async () => {
+    const { draftBlockName } = await import("@/lib/program-intel/pipeline.server");
+    expect(draftBlockName("Block 1 — Foundation / Re-Specificity Accumulation", 0, 2)).toBe("Block 1 — Foundation / Re-Specificity Accumulation");
+    expect(draftBlockName("Strength Intensification", 1, 2)).toBe("Block 2 — Strength Intensification");
+    expect(draftBlockName("Block 2: Peak", 1, 2)).toBe("Block 2 — Peak");
+    expect(draftBlockName("Hypertrophy", 0, 1)).toBe("Hypertrophy");
+  });
+});
+
 describe("the save never fails on a column one row leaves out", () => {
   it("draft rows and Cleo's rows are inserted with each missing column taking its default, never null", () => {
     // a back-off at a % carries manual_override: false, the top set beside it doesn't; a NOT NULL column
