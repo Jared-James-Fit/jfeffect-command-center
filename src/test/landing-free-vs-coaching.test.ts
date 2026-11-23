@@ -21,6 +21,7 @@ const visible = visibleOf(page);
 const PUBLIC_PAGES = [
   "src/components/landing/landing-page.tsx",
   "src/components/landing/price-reveal.tsx",
+  "src/lib/coaching-packages/trainer-cost.ts",
   "src/components/join/activate-page.tsx",
   "src/components/member/membership-pending-gate.tsx",
   "src/lib/free-signup.ts",
@@ -54,7 +55,7 @@ describe("the landing page sells the free app first and online coaching as its o
 
   it("shows the app before it prices it, then reveals that it's free (Nov 23 2026)", () => {
     // value first: every capability on its own screen, then the reveal, then coaching, then prices
-    const order = ["data-landing-hero", "data-landing-app", "data-landing-own", "data-landing-reveal", "data-landing-coaching", 'id="pricing"', "Which one is you?"];
+    const order = ["data-landing-hero", "data-landing-app", "data-landing-own", "<FreeReveal />", "data-landing-coaching", 'id="pricing"', "Which one is you?"];
     const at = order.map((m) => visible.indexOf(m));
     expect(at.every((i) => i > -1)).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
