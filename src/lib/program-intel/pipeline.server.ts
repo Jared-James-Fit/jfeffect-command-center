@@ -321,7 +321,8 @@ function setStage(stages: StageState[], key: string, status: StageState["status"
   return stages.map((s) => {
     if (s.key !== key) return s;
     // a stage resumed by the next request keeps its start; a retried or new one starts now
-    const timing = status === "running" ? (s.status === "running" && s.startedAt ? {} : { startedAt: now, doneAt: undefined }) : status === "pending" ? {} : { doneAt: now };
+    // (a retried stage drops the error it stopped with)
+    const timing = status === "running" ? (s.status === "running" && s.startedAt ? {} : { startedAt: now, doneAt: undefined, ...(s.status === "error" ? { detail: undefined } : {}) }) : status === "pending" ? {} : { doneAt: now };
     return { ...s, status, ...timing, ...(detail !== undefined ? { detail } : {}) };
   });
 }
