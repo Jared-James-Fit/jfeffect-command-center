@@ -7,14 +7,10 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+
+/** Anything can open the list (the command palette's "Keyboard shortcuts"). */
+export const OPEN_SHORTCUTS_EVENT = "open-keyboard-shortcuts";
 
 type Shortcut = { keys: string[]; label: string };
 type Group = { heading: string; items: Shortcut[] };
@@ -29,8 +25,6 @@ const SHORTCUT_GROUPS: Group[] = [
       { keys: ["?"], label: "Show keyboard shortcuts" },
       { keys: ["⌘", "K"], label: "Open command palette / quick search" },
       { keys: ["⌘", "⇧", "S"], label: CLEO_SHORTCUT },
-      { keys: ["⌘", "B"], label: "Toggle sidebar" },
-      { keys: ["⌘", "⇧", "M"], label: "Toggle client preview (POV)" },
       { keys: ["⌘", "⇧", "E"], label: "Open / close all sidebar sections" },
       { keys: ["Esc"], label: "Close dialogs & popovers" },
     ],
@@ -60,7 +54,13 @@ function Kbd({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function KeyboardShortcutsButton() {
+/**
+ * The keyboard shortcuts list, with no button of its own (Nov 23 2026: the
+ * desktop header's keyboard icon is gone): "?" anywhere toggles it, and the
+ * command palette opens it (OPEN_SHORTCUTS_EVENT). Mounted once for staff
+ * pages (AdminTopBar).
+ */
+export function KeyboardShortcutsHost() {
   const [open, setOpen] = useState(false);
   const cleo = useCleoAccess();
   const groups = cleo
@@ -82,39 +82,24 @@ export function KeyboardShortcutsButton() {
         setOpen((o) => !o);
       }
     };
+    const onOpen = () => setOpen(true);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener(OPEN_SHORTCUTS_EVENT, onOpen);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(OPEN_SHORTCUTS_EVENT, onOpen);
+    };
   }, []);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <TooltipProvider delayDuration={200}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DialogTrigger asChild>
-              <button
-                type="button"
-                aria-label="Keyboard shortcuts"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <Keyboard className="h-4 w-4" />
-              </button>
-            </DialogTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            Keyboard shortcuts{" "}
-            <span className="ml-1 rounded bg-muted px-1 text-[10px] font-semibold">?</span>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Keyboard className="h-4 w-4" /> Keyboard shortcuts
           </DialogTitle>
           <DialogDescription>
-            Press <Kbd>?</Kbd> anywhere to toggle this panel.
+            Press <Kbd>?</Kbd> anywhere to toggle this list. It's also in the command palette (<Kbd>⌘</Kbd> <Kbd>K</Kbd>).
           </DialogDescription>
         </DialogHeader>
 

@@ -8,9 +8,22 @@ import {
 import { DialogTitle } from "@/components/ui/dialog";
 import {
   Users, UserCog, IdCard, BookOpen, Dumbbell, Library, ChefHat,
-  Megaphone, ShoppingBag, Clock, History, X, ArrowRight,
+  Megaphone, ShoppingBag, Clock, History, X, ArrowRight, Eye, Keyboard,
   type LucideIcon,
 } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { OPEN_SHORTCUTS_EVENT } from "@/components/keyboard-shortcuts";
+
+/**
+ * Things the palette does rather than pages it opens (Nov 23 2026): the
+ * desktop header's "View as client" and keyboard icon live here now, so they
+ * take no row on every page and are still one ⌘K away.
+ */
+type PaletteCommand = { id: string; label: string; hint: string; keywords: string[]; icon: LucideIcon; event: string; clientPov?: boolean };
+const PALETTE_COMMANDS: PaletteCommand[] = [
+  { id: "client-pov", label: "View as client…", hint: "Their app as they see it", keywords: ["view as client", "client view", "pov", "preview", "impersonate"], icon: Eye, event: "open-client-pov-picker", clientPov: true },
+  { id: "shortcuts", label: "Keyboard shortcuts", hint: "Or press ?", keywords: ["keyboard", "shortcuts", "keys", "hotkeys", "help"], icon: Keyboard, event: OPEN_SHORTCUTS_EVENT },
+];
 import { globalSearchFn, type GlobalSearchHit } from "@/lib/global-search.functions";
 import {
   ADMIN_ROUTE_REGISTRY, getRegistryForRole,
@@ -62,6 +75,36 @@ export function CommandPalette({
   }, [open]);
 
   const registry = useMemo(() => getRegistryForRole(role), [role]);
+  const { viewOnly } = useAuth();
+  const canClientPov = (role === "admin" || role === "coach") && !viewOnly;
+  const commands = useMemo(() => {
+    const allowed = PALETTE_COMMANDS.filter((c) => !c.clientPov || canClientPov);
+    if (!debounced) return allowed;
+    return allowed.filter((c) => [c.label, ...c.keywords].some((h) => fuzzyMatch(h, debounced).score > 0));
+  }, [canClientPov, debounced]);
+  const runCommand = (c: PaletteCommand) => {
+    onOpenChange(false);
+    // after the palette has closed, so the next dialog takes focus cleanly
+    window.setTimeout(() => {
+      try { window.dispatchEvent(new CustomEvent(c.event)); } catch { /* nothing to open */ }
+    }, 0);
+  };
+  const commandsGroup = commands.length ? (
+    <CommandGroup heading="Commands">
+      {commands.map((c) => {
+        const Icon = c.icon;
+        return (
+          <CommandItem key={`cmd-${c.id}`} value={`cmd-${c.id}-${c.label} ${c.keywords.join(" ")}`} onSelect={() => runCommand(c)}>
+            <Icon className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold">{c.label}</div>
+              <div className="truncate text-[11px] text-muted-foreground">{c.hint}</div>
+            </div>
+          </CommandItem>
+        );
+      })}
+    </CommandGroup>
+  ) : null;
 
   // Local fuzzy filter against route registry
   type ScoredEntry = AdminRouteEntry & {
@@ -161,7 +204,7 @@ export function CommandPalette({
   }, [serverHits]);
 
   const hasAnyResults =
-    filteredRegistry.length > 0 || serverHits.length > 0;
+    filteredRegistry.length > 0 || serverHits.length > 0 || commands.length > 0;
 
   return (
     // its own Cancel beside the field, not the dialogs' floating Back (which sat on top of the field)
@@ -236,6 +279,7 @@ export function CommandPalette({
                 ))}
               </CommandGroup>
             )}
+            {commandsGroup}
             {/* Quick actions always shown when empty */}
             <QuickActionsGroup
               role={role}
@@ -274,6 +318,7 @@ export function CommandPalette({
         {debounced && serverLoading && !hasAnyResults && (
           <CommandEmpty>Searching…</CommandEmpty>
         )}
+        {debounced && commandsGroup}
 
         {/* Server entity hits — render FIRST so people/records appear up top */}
         {debounced && (Array.from(groupedServer.entries())).map(([kind, rows]) => {
