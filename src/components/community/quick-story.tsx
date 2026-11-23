@@ -192,7 +192,7 @@ export function QuickStoryThumb({ story, className }: { story: QuickStory; class
   return (
     <span className={cn("relative block aspect-[9/16] overflow-hidden rounded-lg bg-muted", className)} data-quick-story-thumb>
       <canvas ref={ref} className={cn("h-full w-full", !story.ready && "invisible")} aria-hidden />
-      {!story.ready && <span className="absolute inset-0 animate-pulse bg-muted" />}
+      {!story.ready && <span className="absolute inset-0 jf-skeleton bg-muted" />}
     </span>
   );
 }

@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { ErrorState, ListSkeleton, OfflineState, SlowNote, useQueryView } from "@/components/loading";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState, useRef, Suspense } from "react";
@@ -312,10 +313,14 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
     }
   };
 
-  const { data, isLoading } = useQuery({
+  const productsQ = useQuery({
     queryKey: ["coaching-products"],
     queryFn: () => listFn(),
   });
+  const { data } = productsQ;
+  // Loading, offline and failed each said: a failed read is never "No products yet. Create your first product."
+  const productsState = useQueryView(productsQ).kind;
+  const isLoading = productsState === "loading";
 
   const [editing, setEditing] = useState<{ open: boolean; product: Product | null }>({ open: false, product: null });
   const [assigning, setAssigning] = useState<any | null>(null);
@@ -561,7 +566,14 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
           </div>
         </div>
         {isLoading ? (
-          <Card className="border-border bg-card p-8 text-center text-muted-foreground"><Loader2 className="inline h-4 w-4 animate-spin mr-2" />Loading…</Card>
+          <Card className="border-border bg-card p-4">
+            <ListSkeleton rows={5} avatar={false} label="Loading products" />
+            <SlowNote active onRetry={() => productsQ.refetch()} what="your products" />
+          </Card>
+        ) : productsState === "offline" ? (
+          <OfflineState what="your products" />
+        ) : productsState === "error" ? (
+          <ErrorState error={productsQ.error} what="your products" onRetry={() => productsQ.refetch()} retrying={productsQ.isFetching} />
         ) : visible.length === 0 ? (
           <Card className="border-border bg-card p-10 text-center text-sm text-muted-foreground">
             {hasFilters ? "No products match your filters. Try clearing some filters." : "No products yet. Create your first product."}

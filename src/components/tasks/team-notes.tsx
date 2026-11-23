@@ -262,7 +262,7 @@ export function TeamNotesSection({
               Couldn&apos;t load team notes. Tap to try again.
             </button>
           ) : (
-            <div className="mt-1 h-[52px] animate-pulse rounded-xl bg-card ring-1 ring-border" aria-label="Loading team notes" />
+            <div className="mt-1 h-[52px] jf-skeleton rounded-xl bg-card ring-1 ring-border" aria-label="Loading team notes" />
           )
         ) : groups.length === 0 ? (
           <div className="mt-1 rounded-xl border border-dashed border-border px-3 py-3">

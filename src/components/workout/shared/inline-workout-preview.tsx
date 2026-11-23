@@ -183,11 +183,11 @@ export function InlineWorkoutPreview({
   if (!rowsQuery.data && rowsQuery.isPending) {
     return (
       <div className="space-y-2 rounded-lg border border-border/60 bg-background/60 p-2.5">
-        <div className="h-8 w-40 animate-pulse rounded bg-muted" />
+        <div className="h-8 w-40 jf-skeleton rounded bg-muted" />
         {[0, 1, 2].map((i) => (
           <div key={i} className="space-y-1.5 px-1.5 py-1.5">
-            <div className="h-3.5 w-2/3 animate-pulse rounded bg-muted" />
-            <div className="h-3 w-1/3 animate-pulse rounded bg-muted/70" />
+            <div className="h-3.5 w-2/3 jf-skeleton rounded bg-muted" />
+            <div className="h-3 w-1/3 jf-skeleton rounded bg-muted/70" />
           </div>
         ))}
         <span className="sr-only">Loading exercises…</span>

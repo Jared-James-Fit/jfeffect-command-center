@@ -1,4 +1,6 @@
 import { flushSync } from "react-dom";
+import { ErrorState, OfflineState } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { guardNativeHold } from "@/lib/hold-guard";
 import { MessageEditRow, type MessageEditRowHandle } from "@/components/message-edit-row";
 import React, { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -1037,7 +1039,11 @@ export function MessageThread({
       .catch(() => {});
   }, [role, clientId, ensureCheckinsFn, qc, povClient]);
 
-  const { data: messages = [], isPending: messagesPending } = useQuery(threadMessagesQuery(clientId, role));
+  const messagesQ = useQuery(threadMessagesQuery(clientId, role));
+  const messages = useMemo(() => messagesQ.data ?? [], [messagesQ.data]);
+  // The history's state: a failed or offline first read is said as such, never "No messages yet"
+  const messagesState = queryView(messagesQ as any).kind;
+  const messagesPending = messagesState === "loading";
 
   const [olderMessages, setOlderMessages] = useState<Message[]>([]);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -2031,6 +2037,7 @@ export function MessageThread({
     }
   };
 
+  const composerSendingRef = useRef(false);
   const doSend = async (opts?: {
     body?: string;
     extraAttachments?: MessageAttachment[];
@@ -2052,10 +2059,29 @@ export function MessageThread({
     const sendType = (opts?.messageType ?? messageType) as typeof messageType;
     const asNote = role === "admin" && !standalone ? internalNote : false;
     if (!text && atts.length === 0 && !(opts?.withDrafts && uploads.drafts.length)) return null;
+    // One composer send at a time until the composer has cleared: an Enter that
+    // repeats or a double tap before the re-render would read the same words and
+    // send them twice. Cards from the + menu (standalone) never touch the composer.
+    if (!standalone) {
+      if (composerSendingRef.current) return null;
+      composerSendingRef.current = true;
+    }
+    const releaseComposer = () => {
+      if (!standalone) composerSendingRef.current = false;
+    };
     // View-as-client: ask first. Declining leaves the composer exactly as it was.
     if (!opts?.povConfirmed) {
       const mediaCount = atts.length + (opts?.withDrafts ? uploads.drafts.length : 0);
-      if (!(await povGuard.confirm(text || (mediaCount ? `${mediaCount} attachment${mediaCount === 1 ? "" : "s"}` : "")))) return null;
+      let ok = false;
+      try {
+        ok = await povGuard.confirm(text || (mediaCount ? `${mediaCount} attachment${mediaCount === 1 ? "" : "s"}` : ""));
+      } catch {
+        ok = false;
+      }
+      if (!ok) {
+        releaseComposer();
+        return null;
+      }
     }
     // Media still uploading goes out with this message: the bubble shows
     // local previews + progress now, the insert happens once uploads land.
@@ -2120,6 +2146,8 @@ export function MessageThread({
       setAttachments([]);
       setReply(null);
       setInternalNote(false);
+      // the composer is clear once this has rendered (a frame on): the next send reads fresh words
+      window.requestAnimationFrame(() => window.setTimeout(releaseComposer, 0));
     }
     broadcastTyping(true);
     const releaseDrafts = () => {
@@ -2284,9 +2312,17 @@ export function MessageThread({
           <div className="flex h-full flex-col justify-end gap-3" aria-busy="true" aria-label="Loading messages">
             {[["w-2/3", "start"], ["w-1/2", "end"], ["w-3/5", "start"], ["w-2/5", "end"]].map(([w, side], i) => (
               <div key={i} className={cn("flex", side === "end" ? "justify-end" : "justify-start")}>
-                <div className={cn("h-10 animate-pulse rounded-2xl", w, side === "end" ? "bg-primary/20" : "bg-secondary")} />
+                <div className={cn("h-10 jf-skeleton rounded-2xl", w, side === "end" ? "bg-primary/20" : "bg-secondary")} />
               </div>
             ))}
+          </div>
+        ) : visibleMessages.length === 0 && (messagesState === "error" || messagesState === "offline") ? (
+          <div className="grid h-full place-items-center px-4">
+            {messagesState === "offline" ? (
+              <OfflineState what="your messages" />
+            ) : (
+              <ErrorState error={messagesQ.error} what="your messages" onRetry={() => messagesQ.refetch()} retrying={messagesQ.isFetching} />
+            )}
           </div>
         ) : visibleMessages.length === 0 ? (
           <div className="grid h-full place-items-center text-sm text-muted-foreground">

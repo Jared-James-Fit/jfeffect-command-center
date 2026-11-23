@@ -561,10 +561,10 @@ function CommentSkeleton() {
     <div className="space-y-4 py-2" aria-label="Loading comments">
       {[0, 1, 2].map((i) => (
         <div key={i} className="flex items-start gap-2.5">
-          <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" />
+          <div className="h-8 w-8 shrink-0 jf-skeleton rounded-full bg-muted" />
           <div className="flex-1 space-y-1.5 pt-0.5">
-            <div className="h-3 w-24 animate-pulse rounded bg-muted" />
-            <div className={cn("h-3 animate-pulse rounded bg-muted", i === 1 ? "w-1/2" : "w-4/5")} />
+            <div className="h-3 w-24 jf-skeleton rounded bg-muted" />
+            <div className={cn("h-3 jf-skeleton rounded bg-muted", i === 1 ? "w-1/2" : "w-4/5")} />
           </div>
         </div>
       ))}

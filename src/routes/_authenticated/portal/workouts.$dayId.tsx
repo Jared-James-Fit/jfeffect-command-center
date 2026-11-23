@@ -92,8 +92,12 @@ function RouteComponent() {
       return listed?.id && portalUserId ? { id: listed.id, user_id: portalUserId } : undefined;
     },
     initialDataUpdatedAt: () => qc.getQueryState(["portal-workouts-client", portalUserId])?.dataUpdatedAt,
-    queryFn: async () =>
-      (await supabase.from("clients").select("id, user_id").eq("user_id", portalUserId!).maybeSingle()).data,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("clients").select("id, user_id").eq("user_id", portalUserId!).maybeSingle();
+      // thrown, it's retried; never read as "no client" (which used to send the logger down its fallback path)
+      if (error) throw error;
+      return data;
+    },
   });
   const clientId = povClient?.id ?? ownClient?.id ?? null;
   const clientUserId = povClient?.user_id ?? portalUserId ?? null;
@@ -113,13 +117,15 @@ function RouteComponent() {
     queryKey: ["portal-workout-instance-candidates", clientId, dayId],
     enabled: shouldResolveLegacy,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("pl_scheduled_workouts")
         .select("id, scheduled_date, scheduled_time, order_index")
         .eq("client_id", clientId!)
         .eq("source_day_id", dayId)
         .order("scheduled_date", { ascending: true })
         .order("order_index", { ascending: true });
+      // a failed read is never "no scheduled copies" (that would open the unscheduled sets)
+      if (error) throw error;
       const rows = (data ?? []) as any[];
       if (!rows.length) return { rows, completedById: {} as Record<string, boolean> };
       const ids = rows.map((r) => r.id);

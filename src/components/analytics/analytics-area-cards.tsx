@@ -509,7 +509,7 @@ export function ConsistencySummary({
   planLoading?: boolean;
   planError?: boolean;
 }) {
-  if (planLoading) return <Card className="h-[220px] animate-pulse bg-muted/30" aria-hidden />;
+  if (planLoading) return <Card className="h-[220px] jf-skeleton bg-muted/30" aria-hidden />;
   if (c.planned == null || c.planned === 0) {
     return (
       <Card className="p-4" data-consistency-empty>

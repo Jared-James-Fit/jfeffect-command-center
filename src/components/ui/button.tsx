@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
+import { Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -34,13 +35,51 @@ const buttonVariants = cva(
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  /**
+   * The button's work is running (a mutation's `isPending`, a save in flight):
+   * it's disabled at once (no second submit), says so to screen readers, and its
+   * icon gives way to a spinner that only fades in after a beat (`.btn-spinner`),
+   * so an instant answer never flashes one. The label stays, so nothing jumps.
+   */
+  loading?: boolean;
+  /** What the label says while `loading` ("Saving…"); defaults to the label itself. */
+  loadingText?: React.ReactNode;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
+  ({ className, variant, size, asChild = false, loading = false, loadingText, disabled, children, ...props }, ref) => {
+    const classes = cn(buttonVariants({ variant, size, className }));
+    if (asChild) {
+      return (
+        <Slot
+          className={classes}
+          ref={ref}
+          aria-busy={loading || undefined}
+          data-loading={loading ? "" : undefined}
+          {...({ disabled: disabled || loading || undefined, ...props } as React.HTMLAttributes<HTMLElement>)}
+        >
+          {children}
+        </Slot>
+      );
+    }
     return (
-      <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
+      <button
+        className={cn(classes, loading && "[&>svg:not([data-btn-spinner])]:hidden")}
+        ref={ref}
+        disabled={disabled || loading}
+        aria-busy={loading || undefined}
+        data-loading={loading ? "" : undefined}
+        {...props}
+      >
+        {loading ? (
+          <>
+            <Loader2 data-btn-spinner aria-hidden className="btn-spinner" />
+            {size === "icon" ? <span className="sr-only">Working…</span> : loadingText ?? children}
+          </>
+        ) : (
+          children
+        )}
+      </button>
     );
   },
 );

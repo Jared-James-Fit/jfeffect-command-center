@@ -7,6 +7,7 @@
  * totals line is always the sum of the rows on screen.
  */
 import { useEffect, useMemo, useState } from "react";
+import { useSingleFlight } from "@/hooks/use-load-phase";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -170,19 +171,20 @@ function ConfirmAll({ rows }: { rows: LedgerEntry[] }) {
   const m = useMoney();
   const markFn = useServerFn(markExpensesReviewed);
   const ready = rows.filter((r) => r.expense && r.flags.includes("needs_review") && r.expense.category !== "uncategorized" && Number(r.expense.amount_minor) > 0);
+  const confirming = useSingleFlight(async () => {
+    try {
+      await markFn({ data: { ids: ready.map((r) => r.expense!.id) } });
+      toast.success("Confirmed");
+      m.refresh();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't confirm them");
+    }
+  });
   if (ready.length < 2) return null;
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 px-3 py-2 text-[13px]">
       <span>{ready.length} read receipts look complete.</span>
-      <Button size="sm" variant="outline" className="h-9" onClick={async () => {
-        try {
-          await markFn({ data: { ids: ready.map((r) => r.expense!.id) } });
-          toast.success("Confirmed");
-          m.refresh();
-        } catch (e: any) {
-          toast.error(e?.message ?? "Couldn't confirm them");
-        }
-      }}>Confirm all</Button>
+      <Button size="sm" variant="outline" className="h-9" loading={confirming.pending} onClick={() => void confirming.run()}>Confirm all</Button>
     </div>
   );
 }

@@ -15,10 +15,12 @@ import { clientWorkoutsQuery, PAGE_CACHE_MS, PAGE_FRESH_MS } from "@/lib/client-
 export function portalWorkoutsClientQuery(portalUserId: string) {
   return queryOptions({
     queryKey: ["portal-workouts-client", portalUserId] as const,
-    queryFn: async () =>
-      ((await supabase.from("clients").select("id, full_name").eq("user_id", portalUserId).maybeSingle()).data ?? null) as
-        | { id: string; full_name: string | null }
-        | null,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("clients").select("id, full_name").eq("user_id", portalUserId).maybeSingle();
+      // thrown, it's retried and the page says it couldn't load (it used to read as "no client": a skeleton forever)
+      if (error) throw error;
+      return (data ?? null) as { id: string; full_name: string | null } | null;
+    },
     staleTime: PAGE_FRESH_MS,
     gcTime: PAGE_CACHE_MS,
   });

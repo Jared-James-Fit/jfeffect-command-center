@@ -76,7 +76,7 @@ export function BodyweightTrendCard({ clientId, displayUnit, rangeStart, rangeEn
       <section aria-label="Bodyweight">
         {header}
         <Card className="border-border/80 bg-card p-4">
-          <div className="h-16 animate-pulse rounded-lg bg-muted/40" />
+          <div className="h-16 jf-skeleton rounded-lg bg-muted/40" />
         </Card>
       </section>
     );

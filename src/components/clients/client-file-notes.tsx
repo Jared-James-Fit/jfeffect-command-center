@@ -172,7 +172,7 @@ export function ClientFileNotes({
       )}
 
       {isLoading ? (
-        <div className="h-14 animate-pulse rounded-lg bg-secondary/40" />
+        <div className="h-14 jf-skeleton rounded-lg bg-secondary/40" />
       ) : matching.length === 0 ? (
         !composing && (
           <p className="rounded-lg bg-secondary/30 px-3 py-3 text-xs text-muted-foreground">

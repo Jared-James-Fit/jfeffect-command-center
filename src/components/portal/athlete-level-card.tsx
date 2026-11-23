@@ -112,8 +112,8 @@ export function AthleteLevelCard({ clientId, openPrevious = false }: {
 
           {isPending ? (
             <div className="space-y-2 px-3 py-3">
-              <div className="h-[60px] animate-pulse rounded-xl bg-muted/50" />
-              {[0, 1, 2, 3].map((i) => <div key={i} className="h-10 animate-pulse rounded-lg bg-muted/40" />)}
+              <div className="h-[60px] jf-skeleton rounded-xl bg-muted/50" />
+              {[0, 1, 2, 3].map((i) => <div key={i} className="h-10 jf-skeleton rounded-lg bg-muted/40" />)}
             </div>
           ) : (
             <>

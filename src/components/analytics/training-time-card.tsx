@@ -78,7 +78,8 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
   const { data: results = [] } = useQuery({
     queryKey: ["pl-results", clientId, null],
     enabled: !!clientId,
-    staleTime: 30_000,
+    // the dashboard's own freshness: a shorter one here re-read the whole history on every mount
+    staleTime: 5 * 60_000,
     queryFn: () => getClientResults(clientId, {}),
   });
 

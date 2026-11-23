@@ -754,7 +754,7 @@ export function ExerciseHistorySheet({
           {isLoading && (
             <div className="space-y-2 pt-1">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-20 animate-pulse rounded-xl bg-muted" />
+                <div key={i} className="h-20 jf-skeleton rounded-xl bg-muted" />
               ))}
             </div>
           )}

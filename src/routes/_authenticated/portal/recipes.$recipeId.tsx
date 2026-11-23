@@ -34,9 +34,9 @@ function PortalRecipeDetail() {
       <div className="mx-auto max-w-2xl px-4 pb-28 pt-4 md:px-6">
         {isLoading ? (
           <div className="space-y-3" aria-label="Loading">
-            <div className="h-7 w-2/3 animate-pulse rounded bg-muted" />
-            <div className="h-16 animate-pulse rounded-xl bg-muted" />
-            <div className="h-40 animate-pulse rounded-xl bg-muted" />
+            <div className="h-7 w-2/3 jf-skeleton rounded bg-muted" />
+            <div className="h-16 jf-skeleton rounded-xl bg-muted" />
+            <div className="h-40 jf-skeleton rounded-xl bg-muted" />
           </div>
         ) : !recipe ? (
           <p className="py-10 text-center text-sm text-muted-foreground">

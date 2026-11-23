@@ -95,7 +95,7 @@ export function TrainingAnalyticsPreviewCard({
 
   if (isLoading)
     return hideWhenEmpty ? null : (
-      <Card className="h-[104px] animate-pulse bg-muted/30" aria-hidden />
+      <Card className="h-[104px] jf-skeleton bg-muted/30" aria-hidden />
     );
   if (!metrics.length) {
     if (hideWhenEmpty) return null;

@@ -48,7 +48,7 @@ export function ClientFilterRail({
     return (
       <div aria-hidden className="flex h-9 gap-1.5 overflow-hidden" data-testid="filter-rail-loading">
         {[112, 136, 96, 120].map((w) => (
-          <span key={w} className="h-9 shrink-0 animate-pulse rounded-full bg-muted" style={{ width: w }} />
+          <span key={w} className="h-9 shrink-0 jf-skeleton rounded-full bg-muted" style={{ width: w }} />
         ))}
       </div>
     );

@@ -1,4 +1,6 @@
 import { Link } from "@tanstack/react-router";
+import { ChartSkeleton, ErrorState, OfflineState, SlowNote, StatTilesSkeleton } from "@/components/loading";
+import { queryView } from "@/lib/loading/load-state";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -220,12 +222,18 @@ export function ClientAnalyticsDashboard({
   // and a strength trend are judged against the whole history, never against
   // the first set logged inside the period (that read a block's second Rear
   // Delt Cable Fly as a "PR").
-  const { data: allResults = [], isLoading } = useQuery({
+  const resultsQ = useQuery({
     queryKey: ["pl-results", clientId, null],
     enabled: !!clientId,
-    staleTime: 30_000,
+    // The whole history (up to tens of thousands of sets): read once a visit, not on every
+    // remount, while a set logged since is still picked up on the next open.
+    staleTime: 5 * 60_000,
     queryFn: () => getClientResults(clientId),
   });
+  const allResults = useMemo(() => resultsQ.data ?? [], [resultsQ.data]);
+  // A failed or offline read is said, never the new-athlete preview over years of training
+  const resultsState = queryView(resultsQ as any).kind;
+  const isLoading = resultsState === "loading";
   // A block is its own workouts (never another program's sets on the same dates).
   const { data: blockDayIds } = useQuery({
     queryKey: ["analytics-block-days", activeBlockId],
@@ -523,9 +531,15 @@ export function ClientAnalyticsDashboard({
         )}
 
         {scopeLoading ? (
-          <Card className="p-8 text-center text-sm text-muted-foreground" role="status">
-            Loading training data…
-          </Card>
+          <div className="space-y-3">
+            <StatTilesSkeleton count={4} label="Loading training data" />
+            <ChartSkeleton height={160} />
+            <SlowNote active onRetry={() => resultsQ.refetch()} what="training data" />
+          </div>
+        ) : resultsState === "offline" ? (
+          <OfflineState what="training data" />
+        ) : resultsState === "error" ? (
+          <ErrorState error={resultsQ.error} what="training data" onRetry={() => resultsQ.refetch()} retrying={resultsQ.isFetching} />
         ) : (allResults as any[]).length === 0 ? (
           <AnalyticsEmptyPreview />
         ) : (

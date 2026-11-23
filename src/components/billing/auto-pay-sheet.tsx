@@ -56,13 +56,15 @@ export function usePendingAutoPay(clientId: string | undefined) {
     enabled: !!clientId,
     staleTime: 30_000,
     queryFn: async () => {
-      const { data } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("auto_pay_changes")
         .select("id, sale_id, each_cents, every, first_charge_date, token, created_at, replaces_subscription_id")
         .eq("client_id", clientId)
         .eq("status", "pending")
         .order("created_at", { ascending: false })
         .limit(1);
+      // A failed read is not "no setup link out": the coach would be offered a second one.
+      if (error) throw error;
       return ((data ?? [])[0] ?? null) as PendingChange | null;
     },
   });
@@ -208,7 +210,7 @@ export function AutoPaySheet({ clientId, p, sales, open, onOpenChange, preferSal
               </div>
               <div className="mt-1 flex items-center gap-1.5 text-[13px] text-muted-foreground">
                 <CreditCard className="h-3.5 w-3.5" />
-                {card.isLoading ? "Reading the card…" : card.data?.card ? `${card.data.card.brand[0].toUpperCase()}${card.data.card.brand.slice(1)} ••${card.data.card.last4}${card.data.card.exp ? ` · expires ${card.data.card.exp}` : ""}` : "No card on file in Stripe"}
+                {card.isLoading ? "Reading the card…" : card.isError ? "Couldn't read the card from Stripe" : card.data?.card ? `${card.data.card.brand[0].toUpperCase()}${card.data.card.brand.slice(1)} ••${card.data.card.last4}${card.data.card.exp ? ` · expires ${card.data.card.exp}` : ""}` : "No card on file in Stripe"}
                 {current.next ? <span> · next {billingDay(current.next)}</span> : null}
               </div>
             </div>

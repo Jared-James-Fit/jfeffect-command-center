@@ -116,9 +116,9 @@ export function ClientBriefSheet({
             </div>
             {ai.isLoading ? (
               <div className="space-y-2 py-1" aria-label="Reading the chat">
-                <div className="h-3 w-[92%] animate-pulse rounded bg-muted" />
-                <div className="h-3 w-[78%] animate-pulse rounded bg-muted" />
-                <div className="h-3 w-[60%] animate-pulse rounded bg-muted" />
+                <div className="h-3 w-[92%] jf-skeleton rounded bg-muted" />
+                <div className="h-3 w-[78%] jf-skeleton rounded bg-muted" />
+                <div className="h-3 w-[60%] jf-skeleton rounded bg-muted" />
               </div>
             ) : ai.isError ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">

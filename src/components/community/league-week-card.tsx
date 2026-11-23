@@ -89,7 +89,7 @@ export function LeagueWeekCard({ week, play = true, onRankings, onDismiss, dismi
 
       {/* the one reason to come back this week, read off the live board */}
       <div {...reveal(0)} className={cn("mt-3 min-h-[44px] rounded-2xl bg-muted/70 px-3 py-2.5 text-[14px] leading-snug", reveal(0).className)} data-league-week-chase>
-        {chase ?? <span className="block h-4 w-3/4 animate-pulse rounded bg-muted" aria-hidden />}
+        {chase ?? <span className="block h-4 w-3/4 jf-skeleton rounded bg-muted" aria-hidden />}
       </div>
 
       {(facts.length > 0 || prs) && (
