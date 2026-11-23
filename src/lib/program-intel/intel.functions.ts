@@ -58,15 +58,18 @@ export const queueIntelJobFn = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => queueSchema.parse(d))
   .handler(async ({ data, context }) => {
     await assertCoach(context, data.clientId);
-    // one run of a kind at a time per client
+    // one run at a time per client: a second tap, a second device or a strategy beside a build
+    // gets the run already going (the worker keeps any run of the last 2 days alive or stops it
+    // with Try again, jobs.server.ts), never a second generation writing alongside it
     const sb = context.supabase as any;
+    const live = data.kind === "interpret" ? ["interpret"] : ["strategy", "generate"];
     const { data: busy } = await sb
       .from("program_intel_jobs")
       .select("id, status, updated_at")
       .eq("client_id", data.clientId)
-      .eq("kind", data.kind)
+      .in("kind", live)
       .in("status", ["pending", "running"])
-      .gt("updated_at", new Date(Date.now() - 10 * 60_000).toISOString())
+      .gt("updated_at", new Date(Date.now() - 2 * 86_400_000).toISOString())
       .limit(1);
     if (busy?.length) return { jobId: busy[0].id as string, alreadyRunning: true };
     const { data: job, error } = await sb
