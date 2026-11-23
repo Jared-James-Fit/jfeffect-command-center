@@ -15,7 +15,7 @@ import type { BuiltBlock, Strategy } from "./generator-schemas";
 import type { CatalogExercise } from "./next-program";
 import type { GenerationSetup } from "./recommend";
 
-export const PIPELINE_PROMPT_VERSION = 11;
+export const PIPELINE_PROMPT_VERSION = 12;
 
 const EVIDENCE_RULES = `Evidence rules:
 - Facts about the past come only from the brief. Copy numbers exactly as they appear there (week labels like "B1·W2", exercises, loads, reps, RPE, percentages). Never compute, estimate or invent a past result.
@@ -163,6 +163,15 @@ export function accessoryStationsLine(minutes: number | null): string {
   return `aim for at most ${n} accessory station${n === 1 ? "" : "s"} besides the main lift's${minutes ? ` (a ${minutes}-min session)` : ""}, more only when the work truly needs it or a clearly better exercise is at another station (quality beats the count).`;
 }
 
+/** A strategy block's phases in its own weeks: a strategy that numbered block 2 as weeks 7–12 reads as 1–6. */
+export function blockPhases(strategy: Pick<Strategy, "structure">, blockIndex: number): Array<{ week: number; phase: string }> {
+  const b = strategy.structure.blocks[blockIndex];
+  const offset = strategy.structure.blocks.slice(0, blockIndex).reduce((n, x) => n + x.weeks, 0);
+  const phases = b?.phases ?? [];
+  const global = offset > 0 && phases.length > 0 && phases.every((p) => p.week > offset && p.week <= offset + b.weeks) && phases.some((p) => p.week > b.weeks);
+  return global ? phases.map((p) => ({ ...p, week: p.week - offset })) : phases;
+}
+
 export function constructUserPrompt(x: {
   brief: string;
   setup: GenerationSetup;
@@ -183,7 +192,8 @@ export function constructUserPrompt(x: {
   return [
     `## Build block ${x.blockIndex + 1} of ${x.strategy.structure.blocks.length}: "${b.name}", ${b.weeks} weeks`,
     `Objective: ${b.objective}`,
-    b.phases.length ? `Phases: ${b.phases.map((p) => `W${p.week} ${p.phase}`).join(", ")}` : "",
+    b.phases.length ? `Phases (in this block's own weeks): ${blockPhases(x.strategy, x.blockIndex).map((p) => `W${p.week} ${p.phase}`).join(", ")}` : "",
+    `Weeks: this block's own, W1 to W${b.weeks}, in "week_phases" and every exercise's "weeks"; never counted on from earlier blocks.`,
     `Training days: ${x.setup.daysPerWeek} a week${x.setup.trainingDays.length ? ` (${x.setup.trainingDays.join(", ")})` : ""} · target session ${x.setup.sessionMinutes ?? "—"} min, maximum ${x.setup.maxSessionMinutes ?? "—"} min`,
     `Session flow: ${accessoryStationsLine(x.setup.sessionMinutes ?? x.setup.maxSessionMinutes ?? null)}`,
     x.setup.cardio?.trainingDay

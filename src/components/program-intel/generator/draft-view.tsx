@@ -22,6 +22,7 @@ import type { IntelJob } from "../use-program-intel";
 import { SectionTitle, StatusIcon } from "./overview";
 import { DecisionCard, StrategySummary } from "./strategy-view";
 import { RunProgressBar, stepLine, useRunEta } from "./run-progress";
+import { stoppedWords } from "@/lib/program-intel/run-eta";
 
 export function PipelineProgress({ job, onRetry, onDiscard, busy }: { job: IntelJob; onRetry: () => void; onDiscard: () => void; busy: boolean }) {
   const stages = job.progress?.stages ?? [];
@@ -35,7 +36,9 @@ export function PipelineProgress({ job, onRetry, onDiscard, busy }: { job: Intel
       <ol className="space-y-1.5">
         {(stages.length ? stages : [{ key: "context", label: "Starting…", status: "running" as const }]).map((s) => {
           const running = s.status === "running" && !failed;
-          const detail = running && live ? live : s.detail;
+          // the reason is said once, in the box below; the step only says it stopped here
+          const stoppedHere = failed && s.status === "error" && !!job.error && job.error.slice(0, 200) === s.detail;
+          const detail = running && live ? live : stoppedHere ? "Stopped here" : s.detail;
           return (
             <li key={s.key} className="flex items-start gap-2 text-[12px]">
               {running ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" /> : <StatusIcon status={s.status === "skipped" ? "skipped" : s.status} />}
@@ -47,16 +50,25 @@ export function PipelineProgress({ job, onRetry, onDiscard, busy }: { job: Intel
           );
         })}
       </ol>
-      {failed && (
-        <div className="space-y-2 rounded-xl bg-destructive/10 p-2.5 text-[12px]">
-          <div className="font-semibold text-destructive">{job.error}</div>
-          <div className="text-[11px] text-muted-foreground">Try again picks up at the stage that stopped; nothing finished is redone.</div>
+      {failed && (() => {
+        const why = stoppedWords(job.error);
+        return (
+        <div className="space-y-2 rounded-xl bg-destructive/10 p-2.5 text-[12px]" data-testid="gen-stopped">
+          <div className="font-semibold text-destructive">{why.headline}</div>
+          <div className="text-[12px] text-muted-foreground">Try again picks up at the step that stopped; nothing finished is redone.</div>
+          {why.detail ? (
+            <details className="text-[11px] text-muted-foreground">
+              <summary className="cursor-pointer select-none">Details</summary>
+              <div className="mt-1 break-words font-mono">{why.detail}</div>
+            </details>
+          ) : null}
           <div className="flex gap-1.5">
             <Button size="sm" variant="outline" disabled={busy} onClick={onRetry}><RotateCcw className="mr-1.5 h-4 w-4" /> Try again</Button>
             <Button size="sm" variant="ghost" className="text-destructive" disabled={busy} onClick={onDiscard}><Trash2 className="mr-1.5 h-4 w-4" /> Discard</Button>
           </div>
         </div>
-      )}
+        );
+      })()}
     </Card>
   );
 }
@@ -78,7 +90,7 @@ export function Scorecard({ audit }: { audit: any }) {
   return (
     <div className="space-y-1.5" data-testid="gen-scorecard">
       <div className="flex flex-wrap items-center gap-2">
-        <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider", cls)} data-testid="gen-overall">{label}</span>
+        <span className={cn("rounded-full px-2.5 py-1 text-[12px] font-semibold", cls)} data-testid="gen-overall">{label}</span>
         <span className="text-[11px] text-muted-foreground">{counts("passed")} passed · {counts("review")} to review · {counts("failed")} failed · {counts("skipped")} not checked</span>
       </div>
       <ul className="divide-y divide-border/50 rounded-xl border border-border/60">
@@ -216,7 +228,7 @@ export function DraftView({
     <Card className="space-y-3 p-3.5" data-testid="gen-draft" data-status={job.status}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{job.status === "assigned" ? "Assigned" : job.status === "discarded" ? "Discarded draft" : "Draft · hidden from the client"}</div>
+          <div className="text-[12px] font-medium text-muted-foreground">{job.status === "assigned" ? "Assigned" : job.status === "discarded" ? "Discarded draft" : "Draft · hidden from the client"}</div>
           <div className="text-base font-bold leading-tight">{program.program_name}</div>
           <div className="text-[11px] text-muted-foreground">{BRAIN_LABEL[job.brain]} · {job.created_at.slice(0, 10)}{onInspect && job.model ? ` · ${job.model}` : ""}{job.result?.strategySource === "coach" ? " · from your approved strategy" : " · recommended strategy auto-accepted"}</div>
         </div>
