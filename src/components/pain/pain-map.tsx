@@ -598,6 +598,22 @@ function PlaceSearch({ onPick }: { onPick: (place: { region: string; side: PainS
 
 // ── describe it ─────────────────────────────────────────────────────────
 
+/** Five bars that move with their voice, so they can see it's hearing them. */
+function VoiceLevel({ level }: { level: number }) {
+  const shape = [0.55, 0.85, 1, 0.85, 0.55];
+  return (
+    <span className="flex h-6 shrink-0 items-center gap-[3px]" aria-hidden data-pain-voice-level>
+      {shape.map((k, i) => (
+        <span
+          key={i}
+          className="w-[3px] rounded-full bg-foreground transition-[height] duration-100"
+          style={{ height: `${Math.round(4 + Math.min(1, level * 1.4) * k * 20)}px` }}
+        />
+      ))}
+    </span>
+  );
+}
+
 /**
  * Type or say what hurts. The app's own reader goes first (instant, free);
  * only when it can't place anything does the server read it. Every place comes
@@ -605,6 +621,9 @@ function PlaceSearch({ onPick }: { onPick: (place: { region: string; side: PainS
  */
 function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: (places: DescribedPlace[]) => void }) {
   const [text, setText] = useState("");
+  // what's in the box now, for a recording that finishes after they typed more
+  const textRef = useRef("");
+  textRef.current = text;
   const [result, setResult] = useState<DescribeResult | null>(null);
   const [choices, setChoices] = useState<Record<string, SideChoice>>({});
   // rows they took off the confirm list
@@ -613,6 +632,8 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
   const [recording, setRecording] = useState(false);
   const [hearing, setHearing] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  // a take that couldn't be turned into words: kept so "Try again" never asks them to say it twice
+  const [voiceFail, setVoiceFail] = useState<{ message: string; take: { blob: Blob; mime: string } | null } | null>(null);
   const readFn = useServerFn(readPainDescriptionFn);
   const hearFn = useServerFn(transcribePainVoiceFn);
   const mic = useSummerMic({ dictate: true, maxMs: 60_000 });
@@ -645,29 +666,48 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
     }
   };
 
+  const hear = async (take: { blob: Blob; mime: string }) => {
+    setVoiceFail(null);
+    setHearing(true);
+    try {
+      const r = await hearFn({ data: { audio: await blobToBase64(take.blob), mime: take.mime } });
+      if (r.ok && r.text) {
+        feedback("tap");
+        const typed = textRef.current.trim();
+        const next = (typed ? `${typed} ${r.text}` : r.text).slice(0, 600);
+        setText(next);
+        await read(next);
+      } else if (r.ok) setVoiceFail({ message: "Didn't catch any words. Try again a little closer to the phone, or type it.", take: null });
+      else setVoiceFail({ message: r.reason, take });
+    } catch {
+      setVoiceFail({ message: "Couldn't send that. Check your connection and try again.", take });
+    } finally {
+      setHearing(false);
+    }
+  };
+
   const record = async () => {
     if (recording) {
       mic.stop();
       return;
     }
     feedback("tap");
+    setVoiceFail(null);
     setRecording(true);
+    const began = Date.now();
     try {
       const take = await mic.start();
       setRecording(false);
-      if (!take) return;
-      setHearing(true);
-      const r = await hearFn({ data: { audio: await blobToBase64(take.blob), mime: take.mime } });
-      if (r.ok && r.text) {
-        const next = text.trim() ? `${text.trim()} ${r.text}` : r.text;
-        setText(next);
-        await read(next);
-      } else toast.error(r.ok ? "Didn't catch that. Try again, or type it." : r.reason);
+      if (!take) {
+        if (Date.now() - began < 1500) setVoiceFail({ message: "That was too short. Tap the mic, say it, then tap the square.", take: null });
+        return;
+      }
+      await hear(take);
     } catch (e: any) {
-      toast.error(e?.message ?? "Couldn't use the microphone.");
+      const denied = e?.name === "NotAllowedError" || e?.name === "SecurityError";
+      setVoiceFail({ message: denied ? "The microphone is off for JF Effect. Turn it on in your phone's settings, or type it." : (e?.message ?? "Couldn't use the microphone. Type it instead."), take: null });
     } finally {
       setRecording(false);
-      setHearing(false);
     }
   };
 
@@ -722,9 +762,35 @@ function DescribePanel({ ctx, onApply }: { ctx: PainMapContext | null; onApply: 
               </button>
             )}
           </div>
-          <p className="text-[12px] text-muted-foreground">
-            {recording ? `Listening… tap the square when you're done (${Math.round(mic.elapsedMs / 1000)}s)` : "Say where, which side, how bad out of 10 and what it hurt on. Recordings are turned into words and never kept."}
-          </p>
+          {recording ? (
+            <div className="flex items-center gap-3" aria-live="polite" data-pain-describe-listening>
+              <VoiceLevel level={mic.level} />
+              <p className="min-w-0 flex-1 text-[13px] text-foreground">
+                Listening <span className="tabular-nums text-muted-foreground">{Math.round(mic.elapsedMs / 1000)}s</span>
+                <span className="text-muted-foreground"> · tap the square when you're done</span>
+              </p>
+            </div>
+          ) : hearing ? (
+            <p className="flex items-center gap-2 text-[13px] text-foreground" aria-live="polite" data-pain-describe-hearing>
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Turning what you said into words…
+            </p>
+          ) : voiceFail ? (
+            <div className="space-y-2 rounded-lg bg-white/[0.06] p-3" role="alert" data-pain-describe-voice-error>
+              <p className="text-[13px] text-foreground">{voiceFail.message}</p>
+              {voiceFail.take && (
+                <button
+                  type="button"
+                  onClick={() => voiceFail.take && hear(voiceFail.take)}
+                  className="inline-flex h-10 items-center rounded-lg bg-white/[0.12] px-4 text-[14px] font-semibold"
+                  data-pain-describe-voice-retry
+                >
+                  Try again
+                </button>
+              )}
+            </div>
+          ) : (
+            <p className="text-[12px] text-muted-foreground">Say where, which side, how bad out of 10 and what it hurt on. Recordings are turned into words and never kept.</p>
+          )}
           {!result && (
             <button
               type="button"

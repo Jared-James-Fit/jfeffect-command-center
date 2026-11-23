@@ -1,9 +1,10 @@
 /**
  * "Describe it" in a pain report, the server's two parts: reading a
  * description the app's own reader couldn't place (readPainDescriptionFn) and
- * turning a spoken one into words (transcribePainVoiceFn). Signed in only:
- * the athlete, or their coach previewing them. On the OpenAI key, never
- * Lovable credits.
+ * turning a spoken one into words (transcribePainVoiceFn: OpenAI's
+ * transcriber, then Whisper, then the gateway's Gemini). Signed in only:
+ * the athlete, or their coach previewing them. Reading is on the OpenAI key;
+ * voice reaches the gateway only when both OpenAI transcribers refuse.
  *
  * Never metered with AI credits on purpose: reporting pain must never cost
  * anything or stop because credits ran out. Held to 20 a login per 10
@@ -77,10 +78,12 @@ export const transcribePainVoiceFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<{ ok: true; text: string } | { ok: false; reason: string }> => {
     const { userId } = context as { userId: string };
     if (!(await mayReport((context as any).supabase, userId))) return { ok: false, reason: "Voice is for reporting pain from your account." };
-    if (await limited(userId, "pain_voice")) return { ok: false, reason: "Too many recordings right now. Try again in a few minutes." };
+    if (await limited(userId, "pain_voice")) return { ok: false, reason: "That's a lot of recordings in a few minutes. Type it for now, or try again shortly." };
     try {
       const { transcribePainAudio } = await import("@/lib/pain/describe.server");
-      return { ok: true, text: await transcribePainAudio(data.audio, data.mime) };
+      const r = await transcribePainAudio(data.audio, data.mime);
+      console.log("[pain-voice]", { via: r.via, words: r.text ? r.text.split(/\s+/).length : 0 });
+      return { ok: true, text: r.text };
     } catch (e: any) {
       console.error("[pain-voice] failed", { message: e?.message });
       return { ok: false, reason: e?.message ?? "Couldn't hear that." };
