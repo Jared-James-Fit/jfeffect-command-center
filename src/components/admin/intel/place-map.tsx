@@ -5,7 +5,7 @@
  * OpenStreetMap data (credited on the map); if they can't load, the bubbles still show on a plain
  * grid.
  *
- * Places are the host's IP geolocation kept to a city and ~11 km (pulse-rules.ts coarsePlace);
+ * Places are the host's IP country, placed at the device's time zone's main city (pulse.server.ts);
  * nothing here can show a person's location, and no bubble names anyone.
  */
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
