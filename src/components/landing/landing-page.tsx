@@ -129,14 +129,14 @@ const CHAPTERS: Array<{ eyebrow: string; title: string; body: string; src: strin
     title: "Log a set in seconds.",
     body: "Reps and RPE come filled in from the program. Type the weight and it's logged, with last time on the same card.",
     src: shotLog,
-    alt: "The workout logger: back squat, 4 × 5 at RPE 7, last time 290 lb × 5, three sets logged at 295 lb",
+    alt: "The workout logger: Romanian deadlift, 3 × 8 at RPE 7, last time 230 lb × 8, the first set logged at 235 lb and the next two with their reps and RPE already filled in",
   },
   {
     eyebrow: "Progress",
     title: "See what's working.",
     body: "Estimated maxes, PRs, volume and consistency, worked out from every set you log.",
     src: shotInsights,
-    alt: "Training analytics: the back squat's estimated max climbing to 374 lb over 12 weeks, up 44 lb",
+    alt: "Training analytics over 12 weeks: estimated maxes up on the squat, bench and deadlift, every planned workout done, and sets a week",
   },
   {
     eyebrow: "Nutrition",
@@ -325,7 +325,7 @@ function HeroDevices() {
           src={shotFocus}
           priority
           sizes="(min-width: 1024px) 276px, (min-width: 640px) 252px, 50vw"
-          alt="A workout in Focus mode: Romanian deadlift, 3 × 8 at RPE 7, the first set logged at 235 lb"
+          alt="A workout in Focus mode: back squat, 4 × 5 at RPE 7, three sets logged at 295 lb with the bar speed of each"
           className="shadow-[0_40px_80px_-36px_rgba(0,0,0,0.6)]"
         />
       </div>
