@@ -6,9 +6,12 @@
 //   npx vite dev --port 5173 --host 127.0.0.1           (in one terminal)
 //   node scripts/coaching-screenshots/landing.cjs        (in another)
 //
+// app-home     Home: today, the week, progress (the hero)
+// app-focus    a workout in Focus mode, one exercise a screen (the hero)
 // app-week     Workouts: the week's calendar and today's workout
 // app-log      the logger, with bar speed logged on each set
-// app-insights Training analytics: what stands out
+// app-insights Training analytics, Strength: the squat's estimated max over 12 weeks
+// app-food     Nutrition: their own meal plan and macros
 // app-build    the program builder
 // app-import   an imported spreadsheet being checked before it's saved
 const { chromium } = require("playwright");
@@ -185,6 +188,68 @@ const importRow = {
   updated_at: "2026-11-06T16:00:05Z",
 };
 
+/* ---------- the free nutrition tools: targets and today's food log ---------- */
+const MEMBER_ROW_ID = "d3333333-2222-4333-8444-555555555555";
+const at = (hm) => `2026-11-06T${hm}:00-06:00`;
+const meal = (i, name, hm, calories, protein_g, carbs_g, fat_g) => ({
+  id: `a${i}333333-2222-4333-8444-555555555555`, member_id: MEMBER_ROW_ID, user_id: F.USER_ID, name, logged_at: at(hm),
+  calories, protein_g, carbs_g, fat_g, preset_id: null, raw_text: null, source: "manual", created_at: at(hm), updated_at: at(hm),
+});
+const MEALS = [
+  meal(1, "Oats, whey and a banana", "07:30", 520, 42, 74, 8),
+  meal(2, "Chicken, rice and greens", "12:15", 640, 52, 78, 12),
+  meal(3, "Greek yogurt and berries", "15:40", 260, 26, 28, 5),
+];
+
+// their own meal plan, made in the Nutrition Studio (a member writes it; no coach)
+const MEAL_DAY = `Breakfast
+80 g oats (dry weight)
+1 scoop whey protein
+1 banana
+Approx: 42P / 74C / 8F
+
+Lunch
+170 g chicken breast (raw)
+250 g white rice (cooked)
+100 g broccoli
+Approx: 52P / 78C / 12F
+
+Snack
+200 g Greek yogurt (0%)
+100 g berries
+Approx: 26P / 28C / 5F
+
+Dinner
+180 g lean ground beef (raw)
+300 g potatoes
+100 g green beans
+Approx: 40P / 55C / 22F`;
+const OWN_PLAN = {
+  id: "f3333333-2222-4333-8444-555555555555", client_name: "Alex Demo", coach_name: null, updated_at: "2026-11-05T14:00:00Z", phase: "Build strength", goal: null, structure: null,
+  status: "Active", start_date: "2026-11-02", end_date: null, water: "3.5 L", client_notes: null, food_weighing_rules: null, pdf_name: null, pdf_signed_url: null, source: "member",
+  days: [
+    { id: "f1", day_label: "Training Day", calories: 1980, protein: 160, carbs: 235, fats: 47, fibre: null, steps: 9000, notes: MEAL_DAY, use_on: "training", weekdays: [] },
+  ],
+};
+const dashboard = {
+  member: { id: MEMBER_ROW_ID, user_id: F.USER_ID },
+  target: { id: "e3333333-2222-4333-8444-555555555555", member_id: MEMBER_ROW_ID, active: true, pending_review: false, calories: 2550, protein_g: 190, carbs_g: 290, fat_g: 70, water_ml: 3500, goal: "Build strength", source: "calculator", notes: null, coach_note: null, created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z", approved_at: null, approved_by: null, coach_ack_at: null, input_snapshot: null },
+  pendingTarget: null,
+  meals: MEALS,
+  presets: [],
+  supplements: [],
+  supplementLogs: [],
+  weekMeals: MEALS,
+};
+
+/* ---------- weigh-ins (Home's bodyweight card, and no "add your bodyweight" prompt) ---------- */
+const WEIGH_INS = Array.from({ length: 28 }, (_, i) => {
+  const d = new Date(Date.UTC(2026, 9, 10 + i));
+  const day = d.toISOString().slice(0, 10);
+  const w = 184.6 - i * 0.1 + 0.35 * Math.sin(i * 1.7) + 0.2 * Math.sin(i * 0.9 + 1);
+  return { id: `b${String(i).padStart(7, "0")}-2222-4333-8444-555555555555`, user_id: F.USER_ID, logged_date: day, weight_value: Math.round(w * 10) / 10, weight_unit: "lb", note: null, created_at: `${day}T13:00:00Z`, updated_at: `${day}T13:00:00Z` };
+});
+
 /* ---------- moving around ---------- */
 const blur = async (p) => {
   await p.evaluate(() => document.activeElement && document.activeElement.blur && document.activeElement.blur());
@@ -205,15 +270,38 @@ const closeToasts = async (p) => {
 };
 
 const SHOTS = [
+  // the hero: their Home (today's workout, the week, progress) and a workout in Focus mode
+  { name: "app-home", path: "/portal", fixtures: { progress_bodyweight: WEIGH_INS }, afterLoad: async (p) => { await closeToasts(p); await blur(p); } },
+  {
+    name: "app-focus",
+    path: `/portal/workouts/${F.todayDayId}`,
+    fixtures: {
+      workout_view_prefs: [
+        { user_id: F.USER_ID, view: "story", tried_at: "2026-10-01T00:00:00Z", focus_tips_at: "2026-11-06T00:00:00Z", logging_tips_at: "2026-10-01T00:00:00Z", set_video_tip_count: 9, set_video_tip_last_at: "2026-11-06T00:00:00Z" },
+      ],
+    },
+    afterLoad: async (p) => { await closeToasts(p); await blur(p); },
+  },
   { name: "app-week", path: "/portal/workouts", afterLoad: blur },
   { name: "app-log", path: `/portal/workouts/${F.todayDayId}`, afterLoad: blur },
   {
+    // Training analytics, Strength: each main lift's estimated max over the last 12 weeks
     name: "app-insights",
-    path: "/portal/workouts/analytics",
+    path: "/portal/workouts/analytics?view=strength&filter=last_12w",
     afterLoad: async (p) => {
-      await p.getByRole("button", { name: "Last 12W", exact: true }).click();
       await p.waitForTimeout(2500);
-      await scrollToText("What stands out", 24)(p);
+      await blur(p);
+    },
+  },
+  {
+    // the free nutrition tools: today's targets and food log
+    name: "app-food",
+    path: "/portal/nutrition-targets",
+    fixtures: { member_nutrition_targets: [dashboard.target], member_meal_logs: MEALS },
+    serverFnMocks: { getNutritionDashboard: dashboard, getActiveMemberTargets: dashboard.target, getCoachAssignedMealPlan: OWN_PLAN },
+    afterLoad: async (p) => {
+      await closeToasts(p);
+      await blur(p);
     },
   },
   {

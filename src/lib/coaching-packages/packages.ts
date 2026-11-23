@@ -138,14 +138,76 @@ export function shareLink(p: { kind: PackageKind; slug: string }, from = "share"
 export function ctaText(p: { kind: PackageKind; ctaLabel?: string | null }): string {
   const own = (p.ctaLabel ?? "").trim();
   if (own) return own;
-  return p.kind === "free" ? "Join free" : "Apply for coaching";
+  return p.kind === "free" ? "Get the free app" : "Apply for coaching";
 }
 
-/** "Two 30-minute video calls a month" from what the package includes. */
+const COUNT_WORDS = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"];
+
+/**
+ * "Two private 30-minute video calls each billing month" from what the package
+ * includes. Calls run on the subscription's own billing month (call-period.ts),
+ * never the calendar month, and the words say so.
+ */
 export function callsLine(p: { includedCalls: number; callMinutes: number }): string | null {
   if (!p.includedCalls) return null;
-  const n = p.includedCalls === 1 ? "One" : p.includedCalls === 2 ? "Two" : p.includedCalls === 3 ? "Three" : String(p.includedCalls);
-  return `${n} ${p.callMinutes}-minute video call${p.includedCalls === 1 ? "" : "s"} a month`;
+  const n = COUNT_WORDS[p.includedCalls] ?? String(p.includedCalls);
+  return `${n} private ${p.callMinutes}-minute video call${p.includedCalls === 1 ? "" : "s"} each billing month`;
+}
+
+/**
+ * How included calls work, in one answer (the coaching page's questions): the
+ * allowance, the 24-hour rule and no rollover, from the package itself.
+ */
+export function callsPolicy(p: { name: string; includedCalls: number; callMinutes: number }, cancelHours = 24): string | null {
+  const line = callsLine(p);
+  if (!line) return null;
+  return `${p.name} includes ${line.charAt(0).toLowerCase()}${line.slice(1)}, booked in the app at a time that suits you. Cancel at least ${cancelHours} hours ahead and the call goes back to you. A later cancel or a no-show uses it. If I have to move or cancel a call, it never counts against you. Unused calls don't carry over to the next month.`;
+}
+
+/**
+ * The honest anchor for a recommended monthly package: how much more it is
+ * than the next cheaper monthly package on the site ("$31 more than Nutrition
+ * Coaching"). Both prices are listed ones, never a made-up "worth" or a
+ * crossed-out price; null when there's nothing cheaper to compare with.
+ */
+export function anchorLine<T extends PublicPackage>(pkg: T, listed: readonly T[]): string | null {
+  if (!pkg.recommended || pkg.kind !== "subscription" || !pkg.priceCents) return null;
+  const cheaper = listed
+    .filter((p) => p.slug !== pkg.slug && p.kind === "subscription" && p.interval === pkg.interval && p.priceCents && p.priceCents < pkg.priceCents!)
+    .sort((a, b) => (b.priceCents ?? 0) - (a.priceCents ?? 0))[0];
+  if (!cheaper) return null;
+  return `${priceLabel(pkg.priceCents - (cheaper.priceCents ?? 0))} more than ${cheaper.name}`;
+}
+
+/** One row of the closing "which one is you?" section. */
+export type DecisionRow = {
+  slug: string;
+  kind: PackageKind;
+  name: string;
+  /** Who it's for, in their words (the package's "Best for"). */
+  line: string;
+  price: string;
+  recommended: boolean;
+  cta: string;
+};
+
+/**
+ * The closing decision, one row per way in: the free app first, then each
+ * monthly package on the site in price order. Read from the packages (their
+ * "Best for"), so a package taken off the site leaves the list with it.
+ */
+export function decisionRows(rows: readonly PublicPackage[]): DecisionRow[] {
+  const listed = listedPackages(rows).filter((p) => p.kind === "free" || (p.kind === "subscription" && p.priceCents));
+  const ordered = [...listed].sort((a, b) => (a.kind === "free" ? -1 : b.kind === "free" ? 1 : (a.priceCents ?? 0) - (b.priceCents ?? 0)));
+  return ordered.map((p) => ({
+    slug: p.slug,
+    kind: p.kind,
+    name: p.name,
+    line: (p.bestFor ?? p.tagline ?? "").trim(),
+    price: p.kind === "free" ? "Free" : `${priceText(p)}`,
+    recommended: p.recommended && p.kind !== "free",
+    cta: ctaText(p),
+  }));
 }
 
 /** The admin row → what the public sees. */

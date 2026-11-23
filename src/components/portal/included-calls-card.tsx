@@ -27,15 +27,42 @@ function when(c: MyCall): string {
  * package has no calls. In a coach's preview it reads, and books or saves
  * nothing.
  */
-export function IncludedCallsCard() {
+/** The signed-in client's included calls (or the previewed client's), shared by Home's card and the session sheet. */
+export function useMyCoachingCalls(enabled = true) {
   const pov = usePovArgs();
-  const previewing = !!pov.viewAsClientId;
   const fetchCalls = usePovFn(useServerFn(getMyCoachingCalls));
-  const q = useQuery({
+  return useQuery({
     queryKey: ["my-coaching-calls", pov.viewAsClientId ?? null],
     queryFn: () => fetchCalls({ data: {} }),
     staleTime: 60_000,
+    enabled,
   });
+}
+
+/**
+ * The cancellation rule for one included call, said when they ask to cancel
+ * it: 24+ hours ahead gives the call back, later (or a no-show) uses it.
+ * Null when the session isn't one of their included calls.
+ */
+export function IncludedCallCancelNote({ sessionId, startsAt }: { sessionId: string; startsAt: Date | null }) {
+  const q = useMyCoachingCalls();
+  const c = q.data;
+  if (!c || !c.calls.some((x) => x.id === sessionId)) return null;
+  const hoursOut = startsAt ? (startsAt.getTime() - Date.now()) / 3_600_000 : null;
+  const timely = hoursOut !== null && hoursOut >= c.cancelHours;
+  return (
+    <p className="rounded-xl bg-muted/60 p-3 text-[13px] leading-relaxed text-muted-foreground" data-call-cancel-note={timely ? "timely" : "late"}>
+      {timely
+        ? `This is one of your included calls. You're more than ${c.cancelHours} hours out, so cancelling gives it back to you.`
+        : `This is one of your included calls. It's within ${c.cancelHours} hours, so cancelling now uses it, the same as a no-show.`}
+    </p>
+  );
+}
+
+export function IncludedCallsCard() {
+  const pov = usePovArgs();
+  const previewing = !!pov.viewAsClientId;
+  const q = useMyCoachingCalls();
   const c = q.data;
   if (!c) return null;
   const now = Date.now();
@@ -81,9 +108,9 @@ export function IncludedCallsCard() {
         </div>
       ))}
 
-      <p className="text-[12px] text-muted-foreground">
-        {c.callMinutes} minutes each. Cancel at least {c.cancelHours} hours ahead and the call goes back to you. Unused calls
-        don't carry over.
+      <p className="text-[12px] leading-relaxed text-muted-foreground" data-calls-policy>
+        {c.callMinutes} minutes each. Cancel at least {c.cancelHours} hours ahead and the call goes back to you. A later cancel
+        or a no-show uses it. If I move or cancel a call, it never counts. Unused calls don't carry over.
       </p>
     </Card>
   );

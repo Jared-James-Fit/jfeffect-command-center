@@ -20,6 +20,7 @@ import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { addMinutesHM, DEFAULT_TZ, fmtWallClock, minutesBetweenHM, wallTimeToUtc } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
+import { IncludedCallCancelNote } from "@/components/portal/included-calls-card";
 
 /** A booked session as the client sees it (any of the client calendar's session rows). */
 export type ClientSession = {
@@ -371,7 +372,12 @@ export function ClientSessionSheet({
               </>
             )}
 
-            {mode === "cancel" && <WhyField reasons={reasons} onToggle={toggleReason} why={why} onWhy={setWhy} />}
+            {mode === "cancel" && (
+              <>
+                <IncludedCallCancelNote sessionId={session.id} startsAt={startsAt} />
+                <WhyField reasons={reasons} onToggle={toggleReason} why={why} onWhy={setWhy} />
+              </>
+            )}
           </div>
         </div>
 

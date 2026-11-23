@@ -1,10 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { Check, Video } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { trackSite } from "@/lib/site-funnel";
 import {
   APPLY_PATH,
   FREE_JOIN_PATH,
   TAX_NOTE,
+  anchorLine,
   callsLine,
   ctaText,
   intervalLabel,
@@ -19,17 +21,23 @@ import {
  * preview draw the same component, so what the coach previews is what goes
  * live. The recommended package is the one card in the brand's inverted look;
  * the rest are plain. Prices always say CAD plus applicable tax (the public
- * can't ask whether tax applies, and the wording holds either way).
+ * can't ask whether tax applies, and the wording holds either way). The
+ * recommended card can carry one honest anchor (`anchor`: how much more it is
+ * than the next package on the site, both listed prices), never a crossed-out
+ * price or a "worth" number.
  */
 export function PackageCard({
   pkg,
   from,
+  anchor,
   preview = false,
   className,
 }: {
   pkg: PublicPackage;
   /** Where the click came from (the application's attribution). */
   from?: string;
+  /** "$31 more than Nutrition Coaching" (anchorLine), on the recommended card only. */
+  anchor?: string | null;
   /** In the admin preview the button goes nowhere. */
   preview?: boolean;
   className?: string;
@@ -54,14 +62,12 @@ export function PackageCard({
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="text-[22px] font-semibold leading-tight tracking-[-0.02em]">{pkg.name}</h3>
-        {featured && (
-          <span className="shrink-0 rounded-full bg-background/15 px-2.5 py-1 text-[12px] font-semibold" data-package-recommended>
-            Recommended
-          </span>
-        )}
-      </div>
+      {featured && (
+        <span className="mb-3 inline-flex w-fit rounded-full bg-background/15 px-2.5 py-1 text-[12px] font-semibold" data-package-recommended>
+          Recommended
+        </span>
+      )}
+      <h3 className="text-[22px] font-semibold leading-tight tracking-[-0.02em]">{pkg.name}</h3>
       {pkg.tagline && <p className={cn("mt-2 text-[15px] leading-relaxed", muted)}>{pkg.tagline}</p>}
 
       <div className="mt-6 flex items-baseline gap-1" data-package-price>
@@ -71,6 +77,17 @@ export function PackageCard({
       <p className={cn("mt-2 text-[13px]", muted)} data-package-tax>
         {pkg.kind === "free" ? "No card, nothing to cancel" : TAX_NOTE}
       </p>
+      {anchor && (
+        <p
+          className={cn(
+            "mt-4 inline-flex w-fit rounded-full px-3 py-1.5 text-[13px] font-semibold",
+            featured ? "bg-background/15 text-background" : "bg-secondary text-foreground",
+          )}
+          data-package-anchor
+        >
+          {anchor}
+        </p>
+      )}
 
       {(pkg.features.length > 0 || showCalls) && (
         <ul className="mt-6 space-y-3 text-[15px] leading-snug">
@@ -88,7 +105,6 @@ export function PackageCard({
           )}
         </ul>
       )}
-      {pkg.bestFor && <p className={cn("mt-6 text-[13px] leading-relaxed", muted)}>Best for: {pkg.bestFor}</p>}
 
       <div className="mt-auto pt-8">
         {preview ? (
@@ -96,7 +112,7 @@ export function PackageCard({
             {cta}
           </span>
         ) : pkg.kind === "free" ? (
-          <Link to={FREE_JOIN_PATH} className={btn} data-package-cta>
+          <Link to={FREE_JOIN_PATH} className={btn} data-package-cta onClick={() => trackSite("cta_free", from ? `package:${from}` : "package")}>
             {cta}
           </Link>
         ) : (
@@ -105,6 +121,7 @@ export function PackageCard({
             search={{ package: pkg.slug, ...(from ? { from } : {}) } as never}
             className={btn}
             data-package-cta
+            onClick={() => trackSite("package_select", pkg.slug)}
           >
             {cta}
           </Link>
@@ -130,6 +147,7 @@ function CallRow({ pkg, from }: { pkg: PublicPackage; from?: string }) {
         to={APPLY_PATH}
         search={{ package: pkg.slug, ...(from ? { from } : {}) } as never}
         className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-secondary px-5 text-[15px] font-semibold"
+        onClick={() => trackSite("package_select", pkg.slug)}
       >
         {ctaText(pkg)}
       </Link>
@@ -138,22 +156,28 @@ function CallRow({ pkg, from }: { pkg: PublicPackage; from?: string }) {
 }
 
 /**
- * The paid packages on the site, as cards (one-time calls as rows under them).
- * Nothing renders when none are listed or they couldn't be read: the page
- * around it still makes sense.
+ * The paid packages on the site, as cards in price order (one-time calls as
+ * rows under them, unless `calls` is off: the landing page keeps them off so
+ * nothing pulls attention from the monthly packages). Nothing renders when
+ * none are listed or they couldn't be read: the page around it still makes
+ * sense.
  */
 export function CoachingPackagesGrid({
   packages,
   from,
+  calls: showCalls = true,
   className,
 }: {
   packages: readonly PublicPackage[];
   from?: string;
+  calls?: boolean;
   className?: string;
 }) {
   const listed = listedPackages(packages);
-  const plans = paidPackages(listed).filter((p) => p.kind === "subscription");
-  const calls = listed.filter((p) => p.kind === "one_time");
+  const plans = paidPackages(listed)
+    .filter((p) => p.kind === "subscription")
+    .sort((a, b) => (a.priceCents ?? 0) - (b.priceCents ?? 0) || a.sortOrder - b.sortOrder);
+  const calls = showCalls ? listed.filter((p) => p.kind === "one_time") : [];
   if (!plans.length && !calls.length) return null;
   return (
     <div className={className} data-coaching-packages>
@@ -163,11 +187,17 @@ export function CoachingPackagesGrid({
             "mx-auto grid gap-4",
             plans.length === 1 && "max-w-md",
             plans.length === 2 && "max-w-3xl md:grid-cols-2",
-            plans.length >= 3 && "max-w-5xl md:grid-cols-2 lg:grid-cols-3",
+            plans.length >= 3 && "max-w-md lg:max-w-5xl lg:grid-cols-3",
           )}
         >
           {plans.map((p) => (
-            <PackageCard key={p.slug} pkg={p} from={from} className={p.recommended ? "order-first md:order-none" : undefined} />
+            <PackageCard
+              key={p.slug}
+              pkg={p}
+              from={from}
+              anchor={anchorLine(p, plans)}
+              className={p.recommended && plans.length >= 3 ? "lg:-my-4 lg:py-10" : undefined}
+            />
           ))}
         </div>
       )}

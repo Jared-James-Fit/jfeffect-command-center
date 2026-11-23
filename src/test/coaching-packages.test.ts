@@ -1,8 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  anchorLine,
   callsLine,
+  callsPolicy,
   centerpiece,
+  decisionRows,
   changeWords,
   costAnswer,
   ctaHref,
@@ -61,7 +64,7 @@ function pkg(over: Partial<CoachingPackage> = {}): CoachingPackage {
 
 const complete = toPublic(pkg());
 const plusDraft = toPublic(pkg({ slug: "plus", name: "Coaching Plus", price_cents: 24900, recommended: false, status: "draft", is_public: false, included_calls: 2, sort_order: 40 }));
-const free = toPublic(pkg({ slug: "free", kind: "free", name: "Free app", price_cents: 0, recommended: false, sort_order: 10, cta_label: "Join free" }));
+const free = toPublic(pkg({ slug: "free", kind: "free", name: "Free app", price_cents: 0, recommended: false, sort_order: 10, cta_label: "Join free", best_for: "You want to train on your own." }));
 
 describe("coaching packages: prices and where the buttons go", () => {
   it("says prices the way people read them", () => {
@@ -78,7 +81,7 @@ describe("coaching packages: prices and where the buttons go", () => {
     expect(ctaHref(free)).toBe("/join");
     expect(shareLink(complete)).toBe("https://jfeffect.com/coaching/apply?package=complete&from=share");
     expect(ctaText({ kind: "subscription", ctaLabel: null })).toBe("Apply for coaching");
-    expect(ctaText({ kind: "free", ctaLabel: "" })).toBe("Join free");
+    expect(ctaText({ kind: "free", ctaLabel: "" })).toBe("Get the free app");
   });
 
   it("lists only active packages on the site, in order, and a draft never", () => {
@@ -134,11 +137,41 @@ describe("coaching packages: prices and where the buttons go", () => {
   });
 
   it("says included calls once", () => {
-    expect(callsLine({ includedCalls: 2, callMinutes: 30 })).toBe("Two 30-minute video calls a month");
+    expect(callsLine({ includedCalls: 2, callMinutes: 30 })).toBe("Two private 30-minute video calls each billing month");
     expect(callsLine({ includedCalls: 0, callMinutes: 30 })).toBeNull();
-    expect(cardFeatures({ ...plusDraft, features: ["Everything in Complete"] })).toContain("Two 30-minute video calls a month");
+    expect(cardFeatures({ ...plusDraft, features: ["Everything in Complete"] })).toContain("Two private 30-minute video calls each billing month");
     expect(cardFeatures({ ...plusDraft, features: ["Two calls with me"] })).toEqual(["Two calls with me"]);
     expect(cardFileName([complete], "single", "post", "png")).toBe("jf-effect-complete-post.png");
+  });
+
+  it("says the calls' rules in one answer: the allowance, 24 hours, coach cancels, no rollover", () => {
+    const a = callsPolicy(plusDraft)!;
+    expect(a).toContain("two private 30-minute video calls each billing month");
+    expect(a).toContain("Cancel at least 24 hours ahead and the call goes back to you.");
+    expect(a).toContain("A later cancel or a no-show uses it.");
+    expect(a).toContain("it never counts against you");
+    expect(a).toContain("Unused calls don't carry over");
+    expect(callsPolicy(complete)).toBeNull();
+  });
+
+  it("anchors the recommended package on the next listed package's price, never a made-up one", () => {
+    const nutrition = toPublic(pkg({ slug: "nutrition", name: "Nutrition Coaching", price_cents: 9900, recommended: false, sort_order: 20 }));
+    const plusLive = { ...plusDraft, listed: true };
+    expect(anchorLine(complete, [nutrition, complete, plusLive])).toBe("$31 more than Nutrition Coaching");
+    // nothing cheaper listed: no anchor at all (never a crossed-out or "worth" price)
+    expect(anchorLine(complete, [complete, plusLive])).toBeNull();
+    // only the recommended one carries it
+    expect(anchorLine(plusLive, [nutrition, complete, plusLive])).toBeNull();
+  });
+
+  it("asks 'which one is you?' from the packages on the site: free first, then by price", () => {
+    const nutrition = toPublic(pkg({ slug: "nutrition", name: "Nutrition Coaching", price_cents: 9900, recommended: false, sort_order: 20, best_for: "You run your own training and want your nutrition handled." }));
+    const rows = decisionRows([complete, nutrition, free, plusDraft]);
+    expect(rows.map((r) => r.slug)).toEqual(["free", "nutrition", "complete"]);
+    expect(rows[0]).toMatchObject({ line: "You want to train on your own.", price: "Free", recommended: false });
+    expect(rows[2]).toMatchObject({ price: "$130/month", recommended: true });
+    // a draft never shows
+    expect(rows.find((r) => r.slug === "plus")).toBeUndefined();
   });
 
   it("reads action items stored either way", () => {
@@ -255,7 +288,7 @@ describe("only the approved offers are public", () => {
 describe("the public pages read the packages, never type them", () => {
   it("the landing page and the coaching page draw the packages from data", () => {
     const landing = read("src/components/landing/landing-page.tsx");
-    expect(landing).toContain("<CoachingPackagesGrid packages={list} from=\"home\" />");
+    expect(landing).toContain("<CoachingPackagesGrid packages={list} from=\"home\" calls={false} />");
     expect(landing).not.toMatch(/\$130|\$99|\$249/);
     const coaching = read("src/routes/coaching.index.tsx");
     expect(coaching).toContain("<CoachingPackagesGrid packages={packages} from=\"coaching\" />");
@@ -275,6 +308,7 @@ describe("the public pages read the packages, never type them", () => {
     expect(apply).toContain('params.get("package")');
     expect(apply).toContain("package: pkg?.slug ??");
     expect(apply).toContain("applying\n                doesn't sign you up or charge you anything");
+    expect(apply).toContain("Nothing has been charged. You only pay once we've talked and agreed to start.");
     const server = read("src/lib/coaching-applications.functions.ts");
     expect(server).toContain('rpc("coaching_package_public", { _slug: data.package })');
     expect(server).toContain("coaching_interest: pkg?.name ?? null,");

@@ -7,6 +7,7 @@
 import { trackJoinFunnel } from "@/lib/membership-applications.functions";
 import type { FunnelEvent, MemberStepKey } from "@/lib/membership-apply";
 import { EMPTY_SOURCE as EMPTY, sourceFrom, type JoinSource } from "@/lib/join-source";
+import { deviceClass, type Device } from "@/lib/site-funnel-rules";
 
 const VISITOR_KEY = "jf_visitor_v1";
 const SOURCE_KEY = "jf_join_source_v1";
@@ -56,6 +57,18 @@ export function captureSource(): JoinSource {
   }
 }
 
+/** Phone, tablet or desktop (site-funnel-rules.ts), never anything finer. */
+export function currentDevice(): Device | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const short = Math.min(window.screen?.width || window.innerWidth, window.screen?.height || window.innerHeight);
+    const coarse = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+    return deviceClass(short, coarse);
+  } catch {
+    return null;
+  }
+}
+
 /** Report one step; never waits, never throws. */
 export function trackJoin(event: FunnelEvent, step?: MemberStepKey): void {
   const id = visitorId();
@@ -68,6 +81,7 @@ export function trackJoin(event: FunnelEvent, step?: MemberStepKey): void {
           visitorId: id,
           event,
           step: step ?? null,
+          device: currentDevice(),
           source: s.source,
           referrer: s.referrer,
           utm_source: s.utm_source,

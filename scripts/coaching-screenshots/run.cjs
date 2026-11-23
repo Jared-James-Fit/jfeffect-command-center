@@ -21,8 +21,26 @@ process.env.WAIT = process.env.WAIT || "10000";
 
 const COACH_ID = "a1111111-2222-4333-8444-555555555555";
 const SUB_ID = "s1111111-2222-4333-8444-555555555555";
+// the fixtures' day: Friday Nov 6 2026, 11:20 AM in Winnipeg (the clock runs on from there)
+const FIXED_CLOCK = `(() => {
+  const off = Date.parse("2026-11-06T17:20:00Z") - Date.now();
+  const D = Date;
+  class FakeDate extends D {
+    constructor(...a) { if (a.length === 0) super(D.now() + off); else super(...a); }
+    static now() { return D.now() + off; }
+  }
+  FakeDate.parse = D.parse;
+  FakeDate.UTC = D.UTC;
+  globalThis.Date = FakeDate;
+})();`;
+// the logger's tips and Focus intro already seen (they'd cover the screen)
+F.fixtures.workout_view_prefs = [
+  { user_id: F.USER_ID, view: "list", tried_at: "2026-10-01T00:00:00Z", focus_tips_at: "2026-11-06T00:00:00Z", logging_tips_at: "2026-10-01T00:00:00Z", set_video_tip_count: 9, set_video_tip_last_at: "2026-11-06T00:00:00Z" },
+];
+
 const common = {
-  rpc: { ensure_my_member_client: F.CLIENT_ID },
+  initScript: FIXED_CLOCK,
+  rpc: { ensure_my_member_client: F.CLIENT_ID, community_activity: { enabled: true, unseen: 0, seen_at: "2026-11-06T16:00:00Z" } },
   // Dark app; the coach's plan already opened (no "new" dot on Nutrition).
   before: { "jf-theme": "dark", "jf-theme-updated-at": "2026-11-01T00:00:00Z", [`jf-nav-seen:${F.USER_ID}:/portal/nutrition-targets`]: String(Date.parse("2026-11-06T00:00:00Z")) },
   scale: 2,
@@ -105,9 +123,10 @@ const analyticsAt = (heading, lift) => async (p) => {
 };
 
 const SHOTS = [
-  // The squat's estimated max climbing week by week, from what was logged.
-  { name: "app-analytics-progress", path: "/portal/workouts/analytics", afterLoad: analyticsAt("Lift Progress", "Back Squat") },
-  { name: "app-analytics-prs", path: "/portal/workouts/analytics", afterLoad: analyticsAt("Recent ATPRs") },
+  // A coaching client's workout: the coach's program, with the coach's note on the card.
+  { name: "app-program", path: `/portal/workouts/${F.todayDayId}`, afterLoad: blur },
+  // Training analytics, Overview: what they've done and how it's going, over 12 weeks.
+  { name: "app-overview", path: "/portal/workouts/analytics?view=overview&filter=last_12w", afterLoad: async (p) => { await p.waitForTimeout(2500); await blur(p); } },
   { name: "app-coach-chat", path: "/portal/messages", fixtures: { messages: MESSAGES }, serverFnMocks: { getMessengerCheckin: { id: SUB_ID, status: "completed", answers: {}, ai_analysis: null, reviewed_at: "2026-11-02T14:12:00Z" }, ensureDueMessengerCheckins: { ok: true } }, afterLoad: blur },
   { name: "app-nutrition", path: "/portal/nutrition-targets", serverFnMocks: { getCoachAssignedMealPlan: PLAN, getMyRecentAdherenceFn: null } },
 ];
@@ -117,9 +136,12 @@ const { composeWebp } = require("./frame.cjs");
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch();
+  const ONLY = process.argv.slice(2);
   for (const s of SHOTS) {
+    if (ONLY.length && !ONLY.includes(s.name)) continue;
     const raw = path.join(TMP, `${s.name}.png`);
     await run({ ...common, path: s.path, out: raw, fixtures: { ...F.fixtures, ...(s.fixtures ?? {}) }, serverFnMocks: s.serverFnMocks ?? {}, afterLoad: s.afterLoad });
+    if (process.env.RAW) fs.copyFileSync(raw, path.join(process.env.RAW, `${s.name}.png`));
     const out = path.join(OUT, `${s.name}.webp`);
     await composeWebp(browser, raw, out);
     console.log(`${s.name}.webp  ${Math.round(fs.statSync(out).size / 1024)} KB`);
