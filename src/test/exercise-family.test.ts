@@ -14,11 +14,11 @@ import { ExerciseOrderBadge } from "@/components/exercise-order-badge";
 import { displayExerciseName } from "@/lib/exercise-display-name";
 
 describe("movement family colour", () => {
-  it("maps the four families to yellow / blue / green / red", () => {
+  it("maps the four families to yellow / blue / green / neutral grey", () => {
     expect(movementFamilyStyle("squat").stripe).toBe("bg-yellow-500");
     expect(movementFamilyStyle("bench").stripe).toBe("bg-blue-500");
     expect(movementFamilyStyle("deadlift").stripe).toBe("bg-green-500");
-    expect(movementFamilyStyle("accessory").stripe).toBe("bg-red-500");
+    expect(movementFamilyStyle("accessory").stripe).toBe("bg-muted-foreground/35");
     expect(MOVEMENT_FAMILIES).toHaveLength(4);
   });
 
@@ -31,7 +31,7 @@ describe("movement family colour", () => {
   it("colours by MOVEMENT, not by the lift a muscle group helps: Leg Curl stays accessory", () => {
     // A hamstring accessory must never turn green just because it helps the deadlift.
     expect(resolveMovementFamily({ movement_family: "accessory", competition_lift_type: null })).toBe("accessory");
-    expect(familyStripeClass({ movement_family: "accessory" })).toBe("bg-red-500");
+    expect(familyStripeClass({ movement_family: "accessory" })).toBe("bg-muted-foreground/35");
   });
 
   it("falls back safely for older cached payloads and unlinked rows", () => {

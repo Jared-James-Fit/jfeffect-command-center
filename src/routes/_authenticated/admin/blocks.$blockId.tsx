@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, ArrowLeft, BarChart3, CalendarRange, Flame, Info, Loader2, MessageSquare, Milestone, MoreHorizontal, Save, SlidersHorizontal, User as UserIcon } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BarChart3, CalendarRange, Flame, Info, Layers3, Loader2, MessageSquare, Milestone, MoreHorizontal, Save, SlidersHorizontal, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { BuilderHeader, BuilderNotice, BuilderSection, BuilderTitleInput } from "@/components/program-editor/builder-chrome";
@@ -942,6 +942,9 @@ function BlockEditor() {
                 <DropdownMenuItem asChild>
                   <ClientNameLink clientId={clientId} tab="messages"><MessageSquare className="mr-2 h-4 w-4" /> Messages</ClientNameLink>
                 </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setTypeOpen(true)} data-block-type-menu>
+                  <Layers3 className="mr-2 h-4 w-4" /> Block type{resolvedType?.type ? `: ${resolvedType.type.name}` : ""}
+                </DropdownMenuItem>
                 {/* how this block is landing: volume against what's written, by week, muscle and day */}
                 <DropdownMenuItem asChild>
                   <Link
@@ -989,25 +992,6 @@ function BlockEditor() {
         </div>
       )}
 
-      <BlockSwitcher
-        clientId={clientId}
-        currentBlockId={blockId}
-        statusMap={blockStatusMap}
-        hasUnsavedChanges={dirty}
-        currentBlockName={blockLabel}
-        onBeforeNavigate={save}
-        onDiscardUnsaved={() => {
-          // Rehydrate from the last-loaded server snapshot so unsaved
-          // local edits are dropped without touching the database. The
-          // hydration effect will re-run for the new blockId on navigate.
-          if (originalTreeRef.current) {
-            setPayload(treeToPayload(originalTreeRef.current));
-            setName(originalTreeRef.current.block?.name ?? "");
-          }
-          setDirty(false);
-        }}
-      />
-
       <StructureCanvas
         type="block"
         payload={payload}
@@ -1035,6 +1019,27 @@ function BlockEditor() {
         onFixGap={fixGap}
         programOverview={overview}
         statusLeading={<BlockTypeChip resolved={resolvedType} onClick={() => setTypeOpen(true)} />}
+        navLeading={
+          <BlockSwitcher
+            variant="menu"
+            clientId={clientId}
+            currentBlockId={blockId}
+            statusMap={blockStatusMap}
+            hasUnsavedChanges={dirty}
+            currentBlockName={blockLabel}
+            onBeforeNavigate={save}
+            onDiscardUnsaved={() => {
+              // Rehydrate from the last-loaded server snapshot so unsaved
+              // local edits are dropped without touching the database. The
+              // hydration effect will re-run for the new blockId on navigate.
+              if (originalTreeRef.current) {
+                setPayload(treeToPayload(originalTreeRef.current));
+                setName(originalTreeRef.current.block?.name ?? "");
+              }
+              setDirty(false);
+            }}
+          />
+        }
       />
       {typeOpen && (
         <BlockTypeSheet
@@ -1073,7 +1078,7 @@ function BlockEditor() {
       )}
 
       {/* What a coach opens now and then, folded until they do. */}
-      <div className="space-y-2 pt-2">
+      <div className="space-y-2 pt-2" data-focus-hide>
         <BuilderSection icon={<CalendarRange className="h-4 w-4" />} title="Schedule" hint="Training days and dates">
           <AutoSchedulePanel blockId={blockId} bare />
         </BuilderSection>

@@ -58,10 +58,13 @@ export function ProgramStatusStrip({
   onAskCleo,
   onGo,
   onFix,
+  compact = false,
 }: {
   input: CheckInput;
   /** The block type chip, beside the score. */
   leading?: React.ReactNode;
+  /** In the editor's toolbar row (a computer): the ring and Check, no row of its own. */
+  compact?: boolean;
   /** Apply the picked safe changes (the editor keeps Undo). */
   onApply: (patches: Patch[], words: string) => void;
   /** Hand an instruction to Adjust program (Cleo), never applied without the coach. */
@@ -73,16 +76,24 @@ export function ProgramStatusStrip({
   const [openScore, setOpenScore] = useState(false);
   const [openCheck, setOpenCheck] = useState(false);
   return (
-    <div className="flex flex-wrap items-center gap-2 px-1" data-program-status>
-      {leading}
-      <button type="button" onClick={() => setOpenScore(true)} className="inline-flex h-9 items-center gap-2 rounded-full pl-1 pr-3 text-xs font-medium hover:bg-muted" data-completeness={completeness.score} aria-label={`Program ${completeness.score}% complete: see what's missing`}>
-        <ScoreRing score={completeness.score} />
+    <div className={cn("flex items-center", compact ? "shrink-0 gap-0.5" : "flex-wrap gap-2 px-1")} data-program-status={compact ? "compact" : ""}>
+      {/* in a narrow toolbar the block type steps aside (it's on the Program view and the block's ⋯) */}
+      {compact ? <span className="contents @max-[56rem]/tb:hidden">{leading}</span> : leading}
+      <button
+        type="button"
+        onClick={() => setOpenScore(true)}
+        className={cn("inline-flex items-center gap-1.5 rounded-full text-xs font-medium hover:bg-muted", compact ? "h-8 pl-0.5 pr-2" : "h-9 gap-2 pl-1 pr-3")}
+        data-completeness={completeness.score}
+        title={`${completeness.score}% complete: ${completenessWord(completeness.score).toLowerCase()}`}
+        aria-label={`Program ${completeness.score}% complete: see what's missing`}
+      >
+        <ScoreRing score={completeness.score} size={compact ? 18 : undefined} />
         <span className="tabular-nums">{completeness.score}%</span>
-        <span className="text-muted-foreground max-sm:hidden">{completenessWord(completeness.score)}</span>
+        {compact ? null : <span className="text-muted-foreground max-sm:hidden">{completenessWord(completeness.score)}</span>}
       </button>
-      <span className="flex-1" />
-      <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={() => setOpenCheck(true)} data-program-check-open>
-        <ClipboardCheck className="h-4 w-4" /> Check program
+      {compact ? null : <span className="flex-1" />}
+      <Button size="sm" variant={compact ? "ghost" : "outline"} className={cn("gap-1.5", compact ? "h-8 px-2 text-xs" : "h-9")} onClick={() => setOpenCheck(true)} data-program-check-open title="Check program: tidy what's safe, ask about the rest">
+        <ClipboardCheck className="h-4 w-4" /> {compact ? <span className="@max-[56rem]/tb:sr-only">Check</span> : "Check program"}
       </Button>
       {openScore && <CompletenessSheet open={openScore} onOpenChange={setOpenScore} completeness={completeness} input={input} onGo={(at) => { setOpenScore(false); onGo(at); }} onFix={(g) => { setOpenScore(false); onFix(g); }} />}
       {openCheck && <ProgramCheckSheet open={openCheck} onOpenChange={setOpenCheck} input={input} onApply={onApply} onAskCleo={onAskCleo ? (t) => { setOpenCheck(false); onAskCleo(t); } : undefined} onGo={(at) => { setOpenCheck(false); onGo(at); }} />}
