@@ -6,6 +6,7 @@
  * Server-only. `db` is the caller's session (RLS) or, in the background
  * worker, the service role after the coach's access was checked.
  */
+import { blockTypeLibrary, blockTypeLine, resolveBlockType } from "@/lib/block-types";
 import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
 import { todayInTimeZone } from "@/lib/committed-schedule-realign";
 import { defaultRestSeconds } from "@/lib/exercise-metadata";
@@ -89,6 +90,35 @@ function rowSnap(r: any, ref: string, name: string): RowSnap {
   };
 }
 
+/**
+ * Each block's type and metadata (pl_blocks.block_type / block_meta) and the
+ * team's own types, best effort: a database without them yet reads every
+ * block's type from its name and focus.
+ */
+async function blockTypesFor(db: Db, ids: string[]): Promise<{ rows: Map<string, { block_type?: string | null; block_meta?: any; training_focus?: string | null }>; library: ReturnType<typeof blockTypeLibrary> }> {
+  const rows = new Map<string, { block_type?: string | null; block_meta?: any; training_focus?: string | null }>();
+  let library = blockTypeLibrary([]);
+  if (ids.length) try {
+    const { data, error } = await db.from("pl_blocks").select("id, block_type, block_meta, training_focus").in("id", ids);
+    if (error) throw error;
+    for (const r of data ?? []) rows.set(r.id, r);
+  } catch {
+    try {
+      const { data } = await db.from("pl_blocks").select("id, training_focus").in("id", ids);
+      for (const r of data ?? []) rows.set(r.id, r);
+    } catch {
+      // names only
+    }
+  }
+  try {
+    const { data, error } = await db.from("program_block_types").select("id, builtin_key, name, color, purpose, emphasis, progression, intensity, volume, based_on, archived, sort_order");
+    if (!error) library = blockTypeLibrary(data ?? []);
+  } catch {
+    // built-in types only
+  }
+  return { rows, library };
+}
+
 /** A client's current and upcoming primary blocks, every workout with its lock. */
 export async function loadClientSnapshot(db: Db, clientId: string, opts: { focusBlockId?: string | null } = {}): Promise<{ snap: ProgramSnapshot; meta: Map<string, ExerciseMetaRow>; client: any }> {
   const { data: client, error: ce } = await db
@@ -139,6 +169,7 @@ export async function loadClientSnapshot(db: Db, clientId: string, opts: { focus
     if (!prev || i.scheduled_date < prev) dateOf.set(i.source_day_id, i.scheduled_date);
   }
 
+  const typed = await blockTypesFor(db, blocks.map((b: any) => b.id));
   const out: BlockSnap[] = [];
   let totalRows = 0;
   blocks.forEach((b: any, bi: number) => {
@@ -180,6 +211,7 @@ export async function loadClientSnapshot(db: Db, clientId: string, opts: { focus
       end: b.end_date ?? null,
       current: !!b.start_date && b.start_date <= today,
       weeks: weekSnaps,
+      typeLine: blockTypeLine(resolveBlockType({ ...(typed.rows.get(b.id) ?? {}), name: b.name }, typed.library), { start: b.start_date, end: b.end_date }),
     });
   });
 
@@ -212,6 +244,7 @@ export async function loadTemplateSnapshot(db: Db, templateId: string): Promise<
   const ids: string[] = [];
   for (const b of active) for (const w of b.weeks ?? []) for (const d of w.days ?? []) for (const r of d.rows ?? []) if (r?.exercise_id) ids.push(r.exercise_id);
   const meta = await exerciseMeta(db, ids);
+  const typeLib = (await blockTypesFor(db, [])).library;
   const blocks: BlockSnap[] = active.map((b, bi) => {
     const bref = `B${bi + 1}`;
     const { weeks: _w, ...braw } = b as any;
@@ -225,6 +258,7 @@ export async function loadTemplateSnapshot(db: Db, templateId: string): Promise<
       end: null,
       current: bi === 0,
       raw: braw,
+      typeLine: blockTypeLine(resolveBlockType(b, typeLib)),
       weeks: (b.weeks ?? []).map((w: any, wi: number) => {
         const wid = `${b.id}:w${wi + 1}`;
         const wref = `${bref}W${wi + 1}`;

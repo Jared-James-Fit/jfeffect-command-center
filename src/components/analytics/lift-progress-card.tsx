@@ -74,6 +74,7 @@ export function LiftProgressCard({
   conv,
   onOpenSet,
   single = false,
+  compact: bare = false,
 }: {
   history: LiftHistory[];
   displayUnit: Unit;
@@ -85,6 +86,11 @@ export function LiftProgressCard({
    * no session list (the sheet lists every day right under it).
    */
   single?: boolean;
+  /**
+   * Inside the analytics page's own card: no card of its own, and no rep
+   * maxes or session list (Records and the exercise's History have those).
+   */
+  compact?: boolean;
 }) {
   const [selectedEx, setSelectedEx] = useState("");
   // null = this lift's default: the estimated max for a squat / bench / deadlift
@@ -295,7 +301,7 @@ export function LiftProgressCard({
     .slice(0, showAllSessions ? undefined : SESSIONS_SHOWN);
 
   return (
-    <Card className="space-y-4 border-border/80 bg-card p-4" data-lift-progress={single ? "single" : undefined}>
+    <Card className={bare ? "space-y-4 border-0 bg-transparent p-0 shadow-none" : "space-y-4 border-border/80 bg-card p-4"} data-lift-progress={single ? "single" : bare ? "compact" : undefined}>
       {!single && (
       <div className="space-y-2">
         <SearchableSelect
@@ -558,7 +564,7 @@ export function LiftProgressCard({
             />
           </div>
 
-          {maxes.length > 0 && (
+          {maxes.length > 0 && !bare && (
             <div>
               <div className="mb-1.5 text-[12px] font-medium text-muted-foreground">
                 Rep maxes · heaviest lifted
@@ -609,7 +615,7 @@ export function LiftProgressCard({
 
           {velocityInsight}
 
-          {!single && (
+          {!single && !bare && (
           <div>
             <div className="mb-1.5 text-[12px] font-medium text-muted-foreground">
               Sessions

@@ -99,7 +99,9 @@ describe("the filters reach the database", () => {
   it("keeps the filters in the URL, and still understands the older ?status= link", () => {
     expect(page).toMatch(/flags:\s+fallback\(z\.string\(\)/);
     expect(page).toContain("filtersFromSearch({ status: search.status, flags: search.flags })");
-    expect(page).toContain("          flags,\n          match,\n          coachingType: search.coachingType,");
+    // one set of filters for the normal page and the starred (whole-list) read
+    expect(page).toContain("  const listInput = {\n    search: search.search || \"\",\n    flags,\n    match,\n    coachingType: search.coachingType,");
+    expect(page).toContain("listFn({ data: { ...listInput, page: search.page, size: search.size } })");
   });
 
   it("starts a different tab (Active / Archived / Deactivated) with no filters", () => {

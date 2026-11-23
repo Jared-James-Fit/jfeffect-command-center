@@ -11,7 +11,7 @@ import { dayMinutes, dayName, lockReason, rxLine, type EngineCtx } from "./engin
 import type { RuleKind } from "./ops";
 import type { CatalogExercise, ProgramSnapshot } from "./types";
 
-export const EDIT_PROMPT_VERSION = 7;
+export const EDIT_PROMPT_VERSION = 8;
 
 export type RuleLine = { kind: RuleKind; rule: string; expiresOn: string | null; scope: "athlete" | "all" };
 
@@ -50,6 +50,7 @@ export function programText(snap: ProgramSnapshot, ctx: EngineCtx): string {
     const when = b.start || b.end ? ` · ${b.start ?? "?"} → ${b.end ?? "?"}` : "";
     const where = snap.kind === "client" ? ` · ${b.current ? "current" : "upcoming"} · ${b.visible ? "the client sees it" : "hidden from the client"} · ${b.status}` : "";
     out.push(`${b.ref} "${b.name}"${where}${when} · ${b.weeks.length} week${b.weeks.length === 1 ? "" : "s"}`);
+    if (b.typeLine) out.push(`  ${b.typeLine}`);
     for (const w of b.weeks) {
       out.push(`  ${w.ref} · Week ${w.weekIndex}${w.start ? ` (${w.start} → ${w.end ?? "?"})` : ""}${w.phase ? ` · ${w.phase}` : ""}`);
       for (const d of w.days) {
@@ -98,6 +99,10 @@ THE ATHLETE, NOT JUST THE NUMBERS
 ${DEVELOPMENT_RULES}
 ${TRAINING_LOAD_RULES}
 - If something that matters for this request isn't on file (it's listed under "Not on file"), say so in the analysis instead of assuming it.
+
+BLOCK TYPES AND WHAT THE COACH IS LOOKING AT
+- A block's "Block type" line (its purpose, emphasis, progression approach, typical intensity and volume) is what the block is for. Keep changes consistent with it: a deload stays light, a peak stays specific and low-volume, a hypertrophy block keeps its rep ranges, unless the coach asks otherwise or the records give a reason you state. A type marked "read from its name" is a guess: lean on what's written in the block. The coach's own types say what they're built on; read their metadata, never a colour or a name alone. Periodization is the coach's: never force a block into a textbook sequence.
+- An instruction that starts with "[Looking at: Week 3 · Day 2 “Lower A” of “Strength”]" was written while the coach looked at that workout in the builder: "this day", "this workout", "here" and "today's session" mean it. Anything else they name (Thursday, the deadlift day, week 5) still means what it says.
 
 SCOPE: DO WHAT WAS ASKED, AND ONLY THAT
 - A narrow instruction ("replace hack squats with belt squats", "bench days to percentages") changes exactly what it names, everywhere it applies in the editable program, and nothing else. "Replace X throughout" means every unlocked occurrence in every editable week and block.

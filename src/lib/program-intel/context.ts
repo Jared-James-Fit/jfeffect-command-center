@@ -5,6 +5,7 @@
  * before it. Every field says where it came from; a field nothing on file can
  * answer is null and listed as missing, never guessed. Deterministic.
  */
+import { consolidatePain, painPlaceName, type PainPlace } from "./pain-read";
 import { planBriefText } from "@/lib/competition-plan";
 import { cardioPlanFromTargets, type CardioPlan } from "./cardio";
 import { healthProfileFromRecords } from "@/lib/health/health-load";
@@ -79,7 +80,8 @@ export type AthleteContext = {
   /** Their cardio plan (the app adds its training-day session to every workout), or none. */
   cardio: CardioPlan;
   equipment: EquipmentResolution;
-  injuries: { stated: string[]; painReports: Array<{ date: string | null; area: string | null; level: number | null; note: string | null }>; areas: string[] };
+  /** painReports as stored; `pain` is the same reports read once per place (pain-read.ts), `areas` its names. */
+  injuries: { stated: string[]; painReports: Array<{ date: string | null; area: string | null; level: number | null; note: string | null }>; areas: string[]; pain?: PainPlace[] };
   /** The nutrition plan they're on now, as one line for the training AI (nutritionNowLine); null when there's none. */
   nutrition?: string | null;
   /** Their health profile as the training AI reads it (healthProfileForAi), conditions and medications, drug-tested. */
@@ -195,7 +197,8 @@ export function buildAthleteContext(x: {
   // injuries the coach or client recorded, or said on a form (Goals & Setup's are already in)
   for (const e of healthProfile?.injuries ?? []) if (e.from !== "setup") stated.push(entryLine(e, { when: false }));
   const pain = x.history.recovery.painReports.filter((p) => !p.date || !firstDate || p.date >= (x.prev?.coverage.firstDate ?? firstDate) || daysBetween(p.date, today) <= 120);
-  const areas = [...new Set(pain.map((p) => (p.area ?? "").toLowerCase().trim()).filter(Boolean))];
+  const painPlaces = consolidatePain(pain);
+  const areas = painPlaces.map((p) => painPlaceName(p).toLowerCase());
 
   const clientNotes: string[] = [];
   for (const d of (x.prev ?? x.history).days) {
@@ -280,7 +283,7 @@ export function buildAthleteContext(x: {
     },
     cardio: cardioPlanFromTargets(x.rec.cardioTargets ?? [], x.rec.cardioCompletions ?? [], x.rec.today),
     equipment: x.equipment,
-    injuries: { stated, painReports: pain, areas },
+    injuries: { stated, painReports: pain, areas, pain: painPlaces },
     nutrition: nutritionNowLine(rec.nutrition ?? null),
     health: healthProfile
       ? {

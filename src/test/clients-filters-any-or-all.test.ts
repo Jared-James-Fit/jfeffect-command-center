@@ -16,7 +16,7 @@ describe("several filters: any (default) or all", () => {
   it("the page reads it, the server sends it, and the database decides", () => {
     const page = read("src/routes/_authenticated/admin/clients.index.tsx");
     expect(page).toContain("const match = matchFromSearch(search.match);");
-    expect(page).toContain("          flags,\n          match,\n");
+    expect(page).toContain("    flags,\n    match,\n");
     const server = read("src/lib/clients-directory.functions.ts");
     expect(server).toContain('match: z.enum(["any", "all"]).optional().default("any"),');
     expect(server).toContain("p_match: data.match,");

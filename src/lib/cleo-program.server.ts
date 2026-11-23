@@ -591,7 +591,9 @@ async function insertRows(sb: Db, dayId: string, exercises: Array<Rx & { exercis
       ...rxToRow(e),
     };
   });
-  const { error } = await sb.from("pl_exercise_rows").insert(payload);
+  // a % row carries manual_override and a fixed load its unit, the rest don't: a column a row leaves
+  // out takes its default, never null (a NOT NULL column refused the whole batch)
+  const { error } = await sb.from("pl_exercise_rows").insert(payload, { defaultToNull: false });
   if (error) throw new Error(error.message);
 }
 

@@ -20,10 +20,13 @@ import { z } from "zod";
 import { cleanReports, legacyColumns, painReportsSchema } from "@/lib/pain/report";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
+  completenessPatch,
+  requiredRowsFromExerciseRows,
   summarizeCompleteness,
   type LoggedSetSpec,
   type RequiredRowSpec,
 } from "./workout-completeness";
+import { filmLabels, filmSetValues } from "./workout-film";
 import {
   computeElapsedSeconds,
   computeActiveSeconds,
@@ -751,6 +754,158 @@ export const completeWorkout = createServerFn({ method: "POST" })
       .single();
     if (error) throw error;
     return { id: row.id, summary };
+  });
+
+/* -------------------------------------------------------------------------- */
+/*  syncFinishedWorkout — a finished workout edited after Finish               */
+/* -------------------------------------------------------------------------- */
+
+const SyncInput = z.object({
+  /** The workouts whose sets changed: the open one, or the days a History edit touched. */
+  workouts: z
+    .array(
+      z.object({
+        dayId: z.string().uuid(),
+        scheduledWorkoutId: z.string().uuid().nullable().optional(),
+      }),
+    )
+    .min(1)
+    .max(20),
+  /** The fallback weight total (session_weight_total), as Finish writes it, for the open workout only. */
+  sessionWeightTotal: z.number().nonnegative().nullable().optional(),
+  sessionWeightUnit: z.enum(["kg", "lb"]).nullable().optional(),
+  /** Whose workouts: the signed-in athlete's own when left out or theirs; else their coach or an admin. */
+  clientId: z.string().uuid().nullable().optional(),
+});
+
+export type SyncFinishedResult = {
+  dayId: string;
+  status: "not_finished" | "in_step" | "updated";
+  /** The stored numbers that moved (logged sets, %, fully logged…). */
+  changed: string[];
+  /** Set videos whose captions now say the set's new numbers. */
+  relabelled: number;
+};
+
+/**
+ * A finished workout whose sets changed after Finish (an edit in the logger,
+ * or a History fix): everything that copied its numbers when it was finished
+ * is brought back in step, read from the database, never from the phone.
+ *   - the completion row's stored count, logged % and "fully logged"
+ *     (pl_day_completions, the same summarizeCompleteness Finish runs); the
+ *     database's trg_award_workout_xp then awards "fully logged" the moment
+ *     it becomes complete, so finishing the logs later still counts;
+ *   - every set video on an edited set: its coach-chat card and words, and its
+ *     caption on the workout's film (set_video_relabel).
+ * Everything else reads the sets live (records, analytics, League, Program
+ * Intelligence) or follows its own trigger (kg / lb, Crew post stats, cardio,
+ * bar speed). Never touches when it was finished, how long it took or the review.
+ */
+export const syncFinishedWorkout = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => SyncInput.parse(d))
+  .handler(async ({ data, context }): Promise<{ results: SyncFinishedResult[] }> => {
+    const { supabase, userId } = context;
+    // the athlete's own workouts, or (a coach or admin) a client's they may act for
+    const { data: own } = await supabase.from("clients").select("id").eq("user_id", userId).maybeSingle();
+    const other = data.clientId && data.clientId !== own?.id ? data.clientId : null;
+    const { clientId, usedOverride } = await resolveScopedClientId(supabase, userId, other);
+    const writer = await getWriter(usedOverride, supabase);
+    const seen = new Set<string>();
+    const results: SyncFinishedResult[] = [];
+    for (const w of data.workouts) {
+      const key = `${w.dayId}:${w.scheduledWorkoutId ?? ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      let cq = writer
+        .from("pl_day_completions")
+        .select("id, completed_at, required_sets_count, logged_sets_count, skipped_exercises_count, logging_percentage, logging_quality, completed_with_missing_logs, session_weight_total, session_weight_unit")
+        .eq("client_id", clientId)
+        .eq("day_id", w.dayId);
+      cq = w.scheduledWorkoutId ? cq.eq("scheduled_workout_id", w.scheduledWorkoutId) : cq.is("scheduled_workout_id", null);
+      const { data: comp, error: compErr } = await cq.maybeSingle();
+      if (compErr) throw compErr;
+      if (!comp?.completed_at) {
+        results.push({ dayId: w.dayId, status: "not_finished", changed: [], relabelled: 0 });
+        continue;
+      }
+
+      const { data: rows, error: rowsErr } = await writer
+        .from("pl_exercise_rows")
+        .select("id, sets, tracking_type, measurement_type, duration_seconds, reps_text, cardio_target_id, exercises(default_measurement_type)")
+        .eq("day_id", w.dayId);
+      if (rowsErr) throw rowsErr;
+      const rowIds = ((rows ?? []) as any[]).map((r) => r.id as string);
+      let setRows: any[] = [];
+      if (rowIds.length) {
+        let sq = writer
+          .from("pl_row_results")
+          .select("id, row_id, set_index, actual_reps, actual_load_lb, actual_load_kg, actual_rpe, actual_rir, completed_duration_seconds, actual_load, actual_load_unit, entered_value, entered_unit, actual_rpe_num, load_type, normalized_kg")
+          .eq("client_id", clientId)
+          .in("row_id", rowIds);
+        sq = w.scheduledWorkoutId ? sq.eq("scheduled_workout_id", w.scheduledWorkoutId) : sq.is("scheduled_workout_id", null);
+        const { data: sets, error: setsErr } = await sq;
+        if (setsErr) throw setsErr;
+        setRows = (sets ?? []) as any[];
+      }
+      const summary = summarizeCompleteness(
+        requiredRowsFromExerciseRows((rows ?? []) as any[]),
+        setRows.map((s): LoggedSetSpec => ({
+          rowId: s.row_id,
+          setIndex: s.set_index,
+          reps: s.actual_reps,
+          loadLb: s.actual_load_lb,
+          loadKg: s.actual_load_kg,
+          rpe: s.actual_rpe,
+          rir: s.actual_rir,
+          completedDurationSeconds: s.completed_duration_seconds,
+        })),
+      );
+      const patch: Record<string, unknown> = { ...completenessPatch(comp as any, summary) };
+      const only = data.workouts.length === 1;
+      if (only && data.sessionWeightTotal !== undefined) {
+        const total = data.sessionWeightTotal && data.sessionWeightTotal > 0 ? data.sessionWeightTotal : null;
+        const unit = total ? data.sessionWeightUnit ?? null : null;
+        if (Number(comp.session_weight_total ?? 0) !== Number(total ?? 0)) patch.session_weight_total = total;
+        if ((comp.session_weight_unit ?? null) !== unit) patch.session_weight_unit = unit;
+      }
+      const changed = Object.keys(patch);
+      if (changed.length) {
+        const { error: upErr } = await writer.from("pl_day_completions").update(patch).eq("id", comp.id).select("id");
+        if (upErr) throw upErr;
+      }
+
+      // Set videos on this workout's sets: their captions say the set's numbers now.
+      let relabelled = 0;
+      const { data: vids } = await writer
+        .from("pl_set_videos")
+        .select("id, result_id, set_index, label")
+        .eq("client_id", clientId)
+        .eq("day_id", w.dayId)
+        .not("result_id", "is", null)
+        .gt("set_index", 0)
+        .is("deleted_at", null);
+      const byId = new Map(setRows.map((r) => [r.id as string, r]));
+      for (const v of (vids ?? []) as any[]) {
+        const r = byId.get(v.result_id);
+        if (!r) continue;
+        const labels = filmLabels(filmSetValues(r), v.label ?? null);
+        // the caption's set name can move too (a heavier back-off), so the database checks both
+        const { data: out, error: rlErr } = await supabase.rpc("set_video_relabel" as any, {
+          _id: v.id,
+          _label: labels.label,
+          _label_no_load: labels.label_no_load,
+        });
+        if (rlErr) {
+          console.warn("[syncFinishedWorkout] relabel failed", v.id, rlErr.message);
+          continue;
+        }
+        if ((out as any)?.changed) relabelled += 1;
+      }
+
+      results.push({ dayId: w.dayId, status: changed.length || relabelled ? "updated" : "in_step", changed, relabelled });
+    }
+    return { results };
   });
 
 /* -------------------------------------------------------------------------- */
