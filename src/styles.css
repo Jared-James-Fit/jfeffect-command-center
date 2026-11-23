@@ -195,7 +195,7 @@
   color-scheme: light;
 }
 
-/* =====================================================
+/* ============================================================
    Dark theme — opt-in via .dark class on <html> or any wrapper.
    Preserves the original JF Effect dark aesthetic.
    ============================================================ */
@@ -1764,7 +1764,7 @@ html[data-holding] *:not(input):not(textarea):not([contenteditable="true"]) {
 @keyframes jf-lab-in { from { opacity: 0; } to { opacity: 1; } }
 .jf-lab-in { animation: jf-lab-in 220ms ease-out both; }
 @media (prefers-reduced-motion: reduce) { .jf-lab-in { animation: none; } }
-=======
+
 /* Admin intelligence (Usage & spend, App & website): the same validated slots,
    named by order. A chart uses at most three, in this order, always with a
    legend or direct labels; a single series is --viz-1. Magnitude (a heatmap)

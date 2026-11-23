@@ -49,6 +49,7 @@ import {
   startWorkout as startWorkoutFn,
   saveDraft as saveDraftFn,
   completeWorkout as completeWorkoutFn,
+  syncFinishedWorkout as syncFinishedWorkoutFn,
 } from "@/lib/workout-completion.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { cn } from "@/lib/utils";
@@ -205,6 +206,7 @@ import { DayCoachNotes, ScheduledDayLine, loggerMeta, loggerTitle } from "@/comp
 import { exerciseNoteForAthlete } from "@/lib/workouts/coach-notes";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
 import {
+  requiredRowsFromExerciseRows,
   summarizeCompleteness,
   type RequiredRowSpec,
   type LoggedSetSpec,
@@ -216,6 +218,7 @@ import { useWorkoutHeartbeat, readHeartbeatTimestamps, clearHeartbeatTimestamps 
 import { computeActiveSeconds } from "@/lib/workout-duration";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
 import { CompletedWorkoutActions } from "@/components/workout/shared/completed-workout-actions";
+import { useFinishedWorkoutSync } from "@/hooks/use-finished-workout-sync";
 import {
   WorkoutReviewEditor,
   type ReviewInitial,
@@ -1535,6 +1538,7 @@ function WorkoutDay({
   const startWorkoutSrv = useServerFn(startWorkoutFn);
   const saveDraftSrv = useServerFn(saveDraftFn);
   const completeWorkoutSrv = useServerFn(completeWorkoutFn);
+  const syncFinishedSrv = useServerFn(syncFinishedWorkoutFn);
   const { data: unsupportedRows = {} } = useQuery<Record<string, boolean>>({
     queryKey: ["pl-day-row-block-summaries", dayId, (rows as any[]).map((r) => r.id).sort().join(",")],
     enabled: secondaryHydrationReady && (rows as any[]).length > 0,
@@ -2212,6 +2216,29 @@ function WorkoutDay({
     return `${done.length}:${done.reduce((m, r) => (String(r.updated_at ?? r.completed_at) > m ? String(r.updated_at ?? r.completed_at) : m), "")}:${done.reduce((sum, r) => sum + (Number(r.normalized_kg) || 0) * (Number(r.actual_reps) || 0), 0).toFixed(1)}`;
   }, [results]);
   const isClientWorkout = adapter?.kind !== "member" && !!client?.id;
+  // Edit workout (the Workouts card's ⋯, the recap's pencil): the finished
+  // card says it's being edited, with Done, until they leave.
+  const [editingFinished, setEditingFinished] = useState(search.edit === 1);
+  // A finished workout edited here (Edit workout, a set fixed after Finish):
+  // once the edits settle, its stored numbers, set-video captions and every
+  // screen that reads logged sets catch up (use-finished-workout-sync.ts).
+  const finishedSync = useFinishedWorkoutSync({
+    enabled: isClientWorkout && !!completion?.completed_at && rowsLoaded && resultsLoaded && !rowsFetching && !resultsFetching,
+    dayId,
+    scheduledWorkoutId: scheduledWorkoutId ?? null,
+    clientId: client?.id ?? null,
+    rows: rows as any[],
+    results: results as any[],
+    sessionWeight: () => {
+      const unit: "kg" | "lb" = (client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb";
+      const s = computeWorkoutSummary(rows as any[], results as any[], { displayUnit: unit, hasNote: false });
+      return s.totalLifted > 0 ? { total: s.totalLifted, unit } : { total: null, unit: null };
+    },
+    syncOnLeave: editingFinished && !!completion?.completed_at,
+  });
+  useEffect(() => {
+    if (search.edit === 1) setEditingFinished(true);
+  }, [search.edit, dayId]);
   const { data: workoutRecords } = useWorkoutRecords(client?.id, scheduledWorkoutId, dayId, resultsVersion, isClientWorkout);
   // Points this workout earned — fetched fresh whenever the recap opens.
   const { data: workoutPoints } = useWorkoutPoints(client?.id, scheduledWorkoutId, dayId, isClientWorkout && summaryOpen);
@@ -2389,18 +2416,7 @@ function WorkoutDay({
       hasNote: false,
     });
     // The lifting: the day's cardio may come later that day and never counts as a missed log.
-    const requiredRows: RequiredRowSpec[] = (rows as any[]).filter((r: any) => !isPlanCardioRow(r)).map((r: any) => ({
-      rowId: String(r.id),
-      prescribedSets: Math.max(1, Number(r.sets) || 1),
-      skipped: !!r.skipped,
-      metricKind: ((
-        r?.tracking_type === "time" ||
-        r?.measurement_type === "time" ||
-        (r as any)?.exercises?.default_measurement_type === "time" ||
-        (r?.duration_seconds != null && Number(r.duration_seconds) > 0) ||
-        /\b(sec(onds?)?|min(utes?)?)\b/i.test(String(r?.reps_text ?? ""))
-      ) ? "timed" : "load_reps") as RowMetricKind,
-    }));
+    const requiredRows: RequiredRowSpec[] = requiredRowsFromExerciseRows(rows as any[]);
     const heartbeats = readHeartbeatTimestamps(completion?.id ?? null);
     const typedMin = Number.parseInt(actualMin, 10);
     // Real session time first; if the timer never ran, estimate from the
@@ -2508,6 +2524,12 @@ function WorkoutDay({
     } catch (err: any) {
       toast.error("Could not submit workout", { description: err?.message });
       return false;
+    }
+    // A set fixed after it was filmed: its video's card and film caption say
+    // the set as finished (the stored numbers were just written, so only those).
+    if (!isMember && client?.id) {
+      void syncFinishedSrv({ data: { workouts: [{ dayId, scheduledWorkoutId: scheduledWorkoutId ?? null }], clientId: client.id } })
+        .catch((err) => console.warn("[finish] set video captions", err));
     }
 
     if (draftKey) clearLocalDraft(draftKey);
@@ -3028,11 +3050,24 @@ function WorkoutDay({
             }}
             onViewScore={(rating) => {
               setLastSessionRating(rating);
-              openRecapSummary();
+              void finishedSync.flush().finally(openRecapSummary);
             }}
             autoOpenReview={autoOpenReviewAfterFinish}
             onAutoOpenReviewConsumed={() => setAutoOpenReviewAfterFinish(false)}
-            onOpenScore={openRecapSummary}
+            // the score reads the stored numbers too: anything waiting is sent first
+            onOpenScore={() => void finishedSync.flush().finally(openRecapSummary)}
+            editing={editingFinished}
+            syncState={finishedSync.state}
+            onDoneEditing={() => {
+              // a number still being typed saves as its box lets go, then the page goes
+              (document.activeElement as HTMLElement | null)?.blur?.();
+              window.setTimeout(() => {
+                void finishedSync.flush().finally(() => {
+                  setEditingFinished(false);
+                  pageBack();
+                });
+              }, 250);
+            }}
             filmCompletionId={isClientWorkout && !isImpersonating ? completion.id ?? null : null}
             completedAt={completion.completed_at ?? null}
             meta={
@@ -3472,6 +3507,13 @@ function WorkoutDay({
               navigate({ to: navigation.listPath });
             }
           }}
+          // a number to fix: the recap closes onto this workout, its sets ready to change
+          onEdit={isClientWorkout && completion?.completed_at ? () => {
+            recapFromSubmitRef.current = false;
+            setSummaryOpen(false);
+            setEditingFinished(true);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          } : undefined}
         />
       )}
     </WorkoutRecordsContext.Provider>
