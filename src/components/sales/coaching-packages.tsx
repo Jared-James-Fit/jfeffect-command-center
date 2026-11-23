@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Check, Video } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,7 @@ import {
   listedPackages,
   optionCards,
   priceLabel,
+  shortPlanName,
   type PublicPackage,
 } from "@/lib/coaching-packages/packages";
 
@@ -161,6 +163,96 @@ function CallRow({ pkg, from }: { pkg: PublicPackage; from?: string }) {
 }
 
 /**
+ * Every plan on a phone, as one selection: a switch with each plan's name and
+ * price (the comparison at a glance) over a row of the same cards, swiped or
+ * picked from the switch. Tablets and computers get the cards side by side
+ * instead (CoachingPackagesGrid hides this from md up). It opens on the first
+ * plan, the free app, so the plans read in order: free, then each step up.
+ */
+function PlanChooser({ plans, from }: { plans: PublicPackage[]; from?: string }) {
+  const railRef = useRef<HTMLDivElement | null>(null);
+  const [active, setActive] = useState(0);
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail || typeof IntersectionObserver === "undefined") return;
+    const cards = Array.from(rail.querySelectorAll<HTMLElement>("[data-chooser-card]"));
+    // the plan lit is the card nearest the row's middle, whichever card last crossed a line
+    const pick = () => {
+      const r = rail.getBoundingClientRect();
+      const mid = r.left + r.width / 2;
+      let best = 0;
+      let gap = Infinity;
+      cards.forEach((c, i) => {
+        const b = c.getBoundingClientRect();
+        const d = Math.abs(b.left + b.width / 2 - mid);
+        if (d < gap) {
+          gap = d;
+          best = i;
+        }
+      });
+      setActive(best);
+    };
+    const io = new IntersectionObserver(pick, { root: rail, threshold: [0.2, 0.5, 0.8] });
+    cards.forEach((c) => io.observe(c));
+    return () => io.disconnect();
+  }, [plans.length]);
+
+  const go = (i: number) => {
+    const rail = railRef.current;
+    const card = rail?.querySelectorAll<HTMLElement>("[data-chooser-card]")[i];
+    if (!rail || !card) return;
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    rail.scrollTo({ left: card.offsetLeft - (rail.clientWidth - card.clientWidth) / 2, behavior: still ? "auto" : "smooth" });
+    setActive(i);
+  };
+
+  return (
+    <div className="md:hidden" data-plan-chooser>
+      <div
+        role="group"
+        aria-label="Plans"
+        className="mx-auto grid max-w-md gap-1 rounded-2xl bg-muted/70 p-1"
+        style={{ gridTemplateColumns: `repeat(${plans.length}, minmax(0, 1fr))` }}
+      >
+        {plans.map((p, i) => (
+          <button
+            key={p.slug}
+            type="button"
+            aria-pressed={active === i}
+            aria-controls={`plan-card-${p.slug}`}
+            aria-label={`${p.name}, ${p.kind === "free" ? "free" : `${priceLabel(p.priceCents)}${intervalLabel(p)}`}`}
+            onClick={() => go(i)}
+            className={cn(
+              "flex min-h-[58px] flex-col items-center justify-center rounded-xl px-1 py-2 text-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+              active === i ? "bg-background text-foreground ring-1 ring-border" : "text-muted-foreground",
+            )}
+            data-chooser-tab={p.slug}
+          >
+            <span className="text-[12px] font-medium leading-tight">{shortPlanName(p.name)}</span>
+            <span className="mt-0.5 text-[17px] font-semibold leading-none tabular-nums text-foreground">
+              {p.kind === "free" ? "$0" : priceLabel(p.priceCents)}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div
+        ref={railRef}
+        role="region"
+        aria-label="Plan details"
+        tabIndex={0}
+        className="relative -mx-5 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] focus-visible:outline-none [&::-webkit-scrollbar]:hidden"
+      >
+        {plans.map((p) => (
+          <div key={p.slug} id={`plan-card-${p.slug}`} className="flex w-[86%] max-w-[360px] shrink-0 snap-center" data-chooser-card>
+            <PackageCard pkg={p} from={from} compact anchor={anchorLine(p, plans)} className="w-full" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * The packages on the site, as cards in price order: the monthly packages, and
  * with `free` the free app first, so every way in sits side by side (the
  * landing page's four: Free · Nutrition · Complete · Plus). One-time calls are
@@ -176,6 +268,7 @@ export function CoachingPackagesGrid({
   from,
   calls: showCalls = true,
   free: showFree = false,
+  chooser = false,
   className,
 }: {
   packages: readonly PublicPackage[];
@@ -183,6 +276,8 @@ export function CoachingPackagesGrid({
   calls?: boolean;
   /** Put the free app first, as one of the options. */
   free?: boolean;
+  /** On a phone, every plan as one selection (a switch over a row of cards) instead of a stack of cards. */
+  chooser?: boolean;
   className?: string;
 }) {
   const listed = listedPackages(packages);
@@ -190,8 +285,10 @@ export function CoachingPackagesGrid({
   const calls = showCalls ? listed.filter((p) => p.kind === "one_time") : [];
   if (!plans.length && !calls.length) return null;
   const four = plans.length >= 4;
+  const choose = chooser && plans.length > 1;
   return (
     <div className={className} data-coaching-packages>
+      {choose && <PlanChooser plans={plans} from={from} />}
       {plans.length > 0 && (
         <div
           className={cn(
@@ -200,6 +297,7 @@ export function CoachingPackagesGrid({
             plans.length === 2 && "max-w-3xl md:grid-cols-2",
             plans.length === 3 && "max-w-md lg:max-w-5xl lg:grid-cols-3",
             four && "max-w-md md:max-w-3xl md:grid-cols-2 xl:max-w-6xl xl:grid-cols-4",
+            choose && "hidden md:grid",
           )}
           data-package-count={plans.length}
         >

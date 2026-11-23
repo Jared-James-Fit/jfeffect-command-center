@@ -22,6 +22,8 @@ const PUBLIC_PAGES = [
   "src/components/landing/landing-page.tsx",
   "src/components/landing/price-reveal.tsx",
   "src/lib/coaching-packages/trainer-cost.ts",
+  "src/lib/coaching-packages/online-coaching-cost.ts",
+  "src/components/landing/cost-anchors.tsx",
   "src/components/join/activate-page.tsx",
   "src/components/member/membership-pending-gate.tsx",
   "src/lib/free-signup.ts",
@@ -55,12 +57,14 @@ describe("the landing page sells the free app first and online coaching as its o
 
   it("shows the app before it prices it, then reveals that it's free (Nov 23 2026)", () => {
     // value first: every capability on its own screen, then the reveal, then coaching, then prices
-    const order = ["data-landing-hero", "data-landing-app", "data-landing-own", "<FreeReveal />", "data-landing-coaching", 'id="pricing"', "Which one is you?"];
+    const order = ["data-landing-hero", "<CostAnchorsSection", "data-landing-app", "data-landing-own", "<FreeReveal />", "data-landing-coaching", 'id="pricing"', "Which one is you?"];
     const at = order.map((m) => visible.indexOf(m));
     expect(at.every((i) => i > -1)).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
     expect(LANDING_COPY.CHAPTERS.map((c) => c.eyebrow)).toEqual(["Programs", "Logging", "Progress", "Nutrition"]);
     expect(LANDING_COPY.REVEAL.title).toBe("The JF Effect app is free.");
+    // free never reads as free coaching
+    expect(LANDING_COPY.REVEAL.without).toMatch(/^Not in it: a coach\./);
     // the anchor is true: it's the app coaching clients use, never a "worth" or crossed-out price
     expect(LANDING_COPY.REVEAL.body).toContain("It's the same app my coaching clients train in.");
     expect(visible).not.toMatch(/worth \$|value of \$|<s>|line-through|regularly \$/i);
@@ -100,7 +104,7 @@ describe("the landing page sells the free app first and online coaching as its o
     expect(visible).toContain("The app gives you the tools.");
     // the price is the coaching packages' (coaching_packages, edited in Sales → Coaching packages), never typed here
     expect(visible).toContain("Applying doesn't charge you.");
-    expect(visible).toContain('<CoachingPackagesGrid packages={list} from="home" calls={false} free />');
+    expect(visible).toContain('<CoachingPackagesGrid packages={list} from="home" calls={false} free chooser />');
     expect(visible).not.toMatch(/\$[0-9]{2,3}\b/);
     // replies are what the app's own coach chat promises, never "unlimited"
     expect(LANDING_COPY.COACHING.map((c) => c.body).join(" ")).toContain(

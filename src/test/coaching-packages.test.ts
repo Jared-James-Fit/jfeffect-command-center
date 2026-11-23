@@ -310,7 +310,7 @@ describe("only the approved offers are public", () => {
 describe("the public pages read the packages, never type them", () => {
   it("the landing page and the coaching page draw the packages from data", () => {
     const landing = read("src/components/landing/landing-page.tsx");
-    expect(landing).toContain("<CoachingPackagesGrid packages={list} from=\"home\" calls={false} free />");
+    expect(landing).toContain("<CoachingPackagesGrid packages={list} from=\"home\" calls={false} free chooser />");
     expect(landing).not.toMatch(/\$130|\$99|\$249/);
     const coaching = read("src/routes/coaching.index.tsx");
     expect(coaching).toContain("<CoachingPackagesGrid packages={packages} from=\"coaching\" />");
