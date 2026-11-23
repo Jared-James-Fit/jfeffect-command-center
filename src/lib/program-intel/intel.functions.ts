@@ -11,6 +11,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { setupSchema, strategySchema } from "./generator-schemas";
 import { draftBlockDates } from "./next-program";
+import { cleanProgramName, isGeneratedLabel, programIntelNote } from "./program-name";
 import { BRAINS } from "./types";
 
 const scopeSchema = z.discriminatedUnion("kind", [
@@ -118,7 +119,7 @@ export const assignIntelDraftFn = createServerFn({ method: "POST" })
     if (job.status !== "ready") throw new Error(job.status === "assigned" ? "This draft is already assigned." : "This draft isn't ready to assign.");
     if (job.result?.audit?.overall === "failed" && !data.acknowledgeAudit) throw new Error("This draft failed validation. Review the scorecard (or fix it in the editor) and confirm to assign it anyway.");
     const blockIds: string[] = (job.result?.blockIds ?? []).filter(Boolean);
-    const { data: blocks } = await sb.from("pl_blocks").select("id, weeks, client_id, client_visible").in("id", blockIds);
+    const { data: blocks } = await sb.from("pl_blocks").select("id, weeks, client_id, client_visible, prep_id, coach_notes").in("id", blockIds);
     const ordered = blockIds.map((id) => (blocks ?? []).find((b: any) => b.id === id)).filter(Boolean) as any[];
     if (!ordered.length) throw new Error("The draft's blocks were deleted. Generate a new program.");
     if (ordered.some((b) => b.client_id !== job.client_id)) throw new Error("That draft belongs to another client.");
@@ -143,8 +144,9 @@ export const assignIntelDraftFn = createServerFn({ method: "POST" })
         throw new Error(`It starts ${data.startDate}, but "${clash[0].name}" runs until ${last}: both programs would have workouts on the same days. Start after it, or confirm the overlap.`);
       }
     }
+    const name: string | null = job.result?.program?.program_name ?? null;
     for (const [i, b] of ordered.entries()) {
-      const { error } = await sb.from("pl_blocks").update({ start_date: dates[i].start, end_date: dates[i].end, weeks: counts[i], client_visible: true, status: "Active" }).eq("id", b.id);
+      const { error } = await sb.from("pl_blocks").update({ start_date: dates[i].start, end_date: dates[i].end, weeks: counts[i], client_visible: true, status: "Active", coach_notes: programIntelNote(b.coach_notes, name, false) }).eq("id", b.id);
       if (error) throw new Error(error.message);
       for (const [wi, w] of ((weekRows[i] as any).data ?? []).entries()) {
         const d = dates[i].weeks[wi];
@@ -153,6 +155,10 @@ export const assignIntelDraftFn = createServerFn({ method: "POST" })
         if (we) throw new Error(we.message);
       }
     }
+    // The program's name on every screen ("Westerns Prep" on their Workouts card, the coach's Training tab):
+    // one program record for its blocks, like a library program's. Only for a real name, never the
+    // generator's own label, and never over a program record the coach already put them in.
+    const prepId = await nameAssignedProgram(sb, { clientId: job.client_id, userId: context.userId, name, blocks: ordered, start: dates[0].start, end: dates[dates.length - 1].end, weeks: counts.reduce((n, c) => n + c, 0) });
     // Place the workouts on the client's committed training days (as when any program is assigned).
     let placed = false;
     try {
@@ -194,7 +200,85 @@ export const assignIntelDraftFn = createServerFn({ method: "POST" })
     }
     const { error: je } = await sb.from("program_intel_jobs").update({ status: "assigned" }).eq("id", job.id);
     if (je) throw new Error(je.message);
-    return { ok: true, blockIds, start: dates[0].start, end: dates[dates.length - 1].end, placedOnTrainingDays: placed, cardio };
+    return { ok: true, blockIds, prepId, start: dates[0].start, end: dates[dates.length - 1].end, placedOnTrainingDays: placed, cardio };
+  });
+
+/**
+ * The program record an assigned draft's blocks go under, titled with its name. Best effort: the
+ * assign stands without it (the blocks are then read as a program of their own, as before).
+ */
+async function nameAssignedProgram(
+  sb: any,
+  x: { clientId: string; userId: string; name: string | null; blocks: Array<{ id: string; prep_id?: string | null }>; start: string; end: string; weeks: number },
+): Promise<string | null> {
+  const title = cleanProgramName(x.name);
+  if (!title || isGeneratedLabel(title)) return null;
+  if (x.blocks.some((b) => b.prep_id)) return null;
+  try {
+    const { data: prep, error } = await sb
+      .from("pl_preps")
+      .insert({ client_id: x.clientId, title, goal_type: "Custom", status: "Active", client_visible: true, start_date: x.start, end_date: x.end, total_weeks: x.weeks, created_by: x.userId })
+      .select("id")
+      .single();
+    if (error || !prep) throw new Error(error?.message ?? "no program record");
+    const { error: be } = await sb.from("pl_blocks").update({ prep_id: prep.id }).in("id", x.blocks.map((b) => b.id));
+    if (be) {
+      await sb.from("pl_preps").delete().eq("id", prep.id);
+      throw new Error(be.message);
+    }
+    return prep.id as string;
+  } catch (e) {
+    console.warn("[program-intel] naming the assigned program failed", e);
+    return null;
+  }
+}
+
+/**
+ * Rename a generated program: the name on the draft, and once it's assigned the program record
+ * its blocks share (one made for it on assign, or one titled with its old name), so the athlete
+ * reads the new name too.
+ */
+export const renameIntelProgramFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ jobId: z.string().uuid(), name: z.string().trim().min(1).max(120) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const sb = context.supabase as any;
+    const { data: job } = await sb.from("program_intel_jobs").select("id, client_id, kind, status, result").eq("id", data.jobId).maybeSingle();
+    if (!job || job.kind !== "generate" || !job.result?.program) throw new Error("That program wasn't found.");
+    await assertCoach(context, job.client_id);
+    if (job.status !== "ready" && job.status !== "assigned") throw new Error("Only a finished program can be renamed.");
+    const name = cleanProgramName(data.name);
+    if (!name) throw new Error("Give it a name, like Westerns Prep or Off-Season Strength.");
+    const old: string = job.result.program.program_name ?? "";
+    if (old === name) return { ok: true, name, prepId: null };
+    const result = { ...job.result, program: { ...job.result.program, program_name: name } };
+    const { error } = await sb.from("program_intel_jobs").update({ result }).eq("id", job.id);
+    if (error) throw new Error(error.message);
+    const blockIds: string[] = (job.result.blockIds ?? []).filter(Boolean);
+    if (!blockIds.length) return { ok: true, name, prepId: null };
+    const { data: blocks } = await sb.from("pl_blocks").select("id, prep_id, coach_notes").in("id", blockIds);
+    for (const b of (blocks ?? []) as Array<{ id: string; coach_notes: string | null }>) {
+      const note = programIntelNote(b.coach_notes, name, job.status !== "assigned");
+      if (note !== b.coach_notes) await sb.from("pl_blocks").update({ coach_notes: note }).eq("id", b.id);
+    }
+    if (job.status !== "assigned") return { ok: true, name, prepId: null };
+    const preps = [...new Set(((blocks ?? []) as Array<{ prep_id: string | null }>).map((b) => b.prep_id))];
+    let prepId: string | null = null;
+    if (preps.length === 1 && preps[0]) {
+      const { data: prep } = await sb.from("pl_preps").select("id, title").eq("id", preps[0]).maybeSingle();
+      if (prep && (prep.title === old || isGeneratedLabel(prep.title))) {
+        const { error: pe } = await sb.from("pl_preps").update({ title: name }).eq("id", prep.id);
+        if (pe) throw new Error(pe.message);
+        prepId = prep.id;
+      }
+    } else if (preps.length === 1 && !preps[0]) {
+      const { data: dated } = await sb.from("pl_blocks").select("id, prep_id, start_date, end_date, weeks").in("id", blockIds).order("start_date");
+      const list = (dated ?? []) as Array<{ id: string; prep_id: string | null; start_date: string | null; end_date: string | null; weeks: number | null }>;
+      const start = list.find((b) => b.start_date)?.start_date;
+      const end = [...list].reverse().find((b) => b.end_date)?.end_date;
+      if (start && end) prepId = await nameAssignedProgram(sb, { clientId: job.client_id, userId: context.userId, name, blocks: list, start, end, weeks: list.reduce((n, b) => n + (b.weeks ?? 0), 0) });
+    }
+    return { ok: true, name, prepId };
   });
 
 export const discardIntelDraftFn = createServerFn({ method: "POST" })

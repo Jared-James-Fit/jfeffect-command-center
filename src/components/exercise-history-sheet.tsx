@@ -11,6 +11,9 @@ import { cn } from "@/lib/utils";
 import { matchingHistoryExerciseIds } from "@/lib/workout-previous-lift";
 import { listenChannel } from "@/lib/realtime-channel";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
+import { syncFinishedWorkout } from "@/lib/workout-completion.functions";
+import { refreshWorkoutData } from "@/lib/workout-data-refresh";
 import {
   HISTORY_EDIT_QUERY_KEYS,
   cardioDraftIssue,
@@ -158,6 +161,7 @@ export function ExerciseHistorySheet({
   const [machine, setMachine] = useState<string>("all");
   const { data: equipmentData } = useAthleteEquipment(open ? clientId : null);
   const queryClient = useQueryClient();
+  const syncFinished = useServerFn(syncFinishedWorkout);
   // Each exercise starts at its newest sessions, folded.
   useEffect(() => {
     setOpenDays(new Set());
@@ -539,6 +543,24 @@ export function ExerciseHistorySheet({
       // Everything this history feeds refreshes now: "Last time", records,
       // suggestions and, when it's today's, the open workout's own sets.
       await Promise.all(HISTORY_EDIT_QUERY_KEYS.map((queryKey) => queryClient.invalidateQueries({ queryKey: [...queryKey] })));
+      // The finished workouts these sets belong to catch up (their stored logged %,
+      // set video captions) and every screen reading logged sets reads them fresh.
+      const edited = sets.filter((set) => writes.some((w) => w.id === set.id));
+      const workouts = [
+        ...new Map(
+          edited
+            .map((set) => ({ dayId: set.pl_exercise_rows?.pl_days?.id as string | undefined, scheduledWorkoutId: (set.scheduled_workout_id ?? null) as string | null }))
+            .filter((w): w is { dayId: string; scheduledWorkoutId: string | null } => !!w.dayId)
+            .map((w) => [`${w.dayId}:${w.scheduledWorkoutId ?? ""}`, w] as const),
+        ).values(),
+      ].slice(0, 20);
+      if (workouts.length && clientId) {
+        void syncFinished({ data: { workouts, clientId } })
+          .then(() => refreshWorkoutData(queryClient))
+          .catch((err) => console.warn("[history] finished workout sync failed", err));
+      } else {
+        void refreshWorkoutData(queryClient);
+      }
       toast.success(writes.length === 1 ? "Set updated" : `${writes.length} sets updated`);
       cancelEdit();
     } catch (e: any) {

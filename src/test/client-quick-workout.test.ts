@@ -11,15 +11,16 @@ describe("a coach gets into a client's workout in one tap", () => {
     expect(clientWorkoutHref("2026-11-06")).toBe("/portal/workouts?open=2026-11-06");
   });
 
-  it("the Clients list card has Workout beside Open client and Client view, only with client view allowed and a program", () => {
+  it("the Clients list card has the dumbbell beside Open client and Client view, only with client view allowed and a program", () => {
     const row = read("src/components/clients/client-row.tsx");
     expect(row).toContain("const canOpenWorkout = pov.canPov && !!(r.block_id || r.next_block_id);");
-    expect(row).toContain("pov.enter(r.id, { to: clientWorkoutHref(), fallbackName: r.full_name })");
+    // the workout quick view (a drawer over the list); a card without one still goes to client view on today's workout
+    expect(row).toContain("onQuickView ? onQuickView(r) : pov.enter(r.id, { to: clientWorkoutHref(), fallbackName: r.full_name })");
     expect(row).toContain("{canOpenWorkout && (");
     // It sits between Open client / Client view and ⋯.
     const actions = row.slice(row.indexOf(">Open client</ClientNameLink>"), row.indexOf("<ClientMoreMenu"));
     expect(actions).toContain("Client view");
-    expect(actions).toContain("Workout");
+    expect(actions).toContain("<Dumbbell");
   });
 
   it("the client profile shows View as client on a phone and Today's workout in ⋯", () => {

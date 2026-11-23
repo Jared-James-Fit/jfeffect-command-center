@@ -8,7 +8,7 @@ import {
 import { DialogTitle } from "@/components/ui/dialog";
 import {
   Users, UserCog, IdCard, BookOpen, Dumbbell, Library, ChefHat,
-  Megaphone, ShoppingBag, Clock, History, X, ArrowRight,
+  Megaphone, ShoppingBag, Clock, History, X, ArrowRight, Keyboard, Eye,
   type LucideIcon,
 } from "lucide-react";
 import { globalSearchFn, type GlobalSearchHit } from "@/lib/global-search.functions";
@@ -17,6 +17,7 @@ import {
   type AdminRouteEntry, type AdminRole,
 } from "@/lib/admin-route-registry";
 import { fuzzyMatch, highlightSegments } from "@/lib/fuzzy-match";
+import { openKeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import {
   getRecentPicks, pushRecentPick, getFrequentPicks,
   getRecentQueries, pushRecentQuery, clearRecentQueries,
@@ -242,6 +243,7 @@ export function CommandPalette({
               limit={5}
               onPick={pickRoute}
             />
+            <HelpGroup role={role} onDone={() => onOpenChange(false)} />
             {recents.length === 0 && recentQueries.length === 0 && (
               <div className="px-4 py-6 text-center text-xs text-muted-foreground">
                 Start typing to find clients, programs, pages, settings — anything in the admin.
@@ -304,6 +306,8 @@ export function CommandPalette({
             </CommandGroup>
           );
         })}
+
+        {debounced && HELP_MATCH.test(debounced) && <HelpGroup role={role} onDone={() => onOpenChange(false)} />}
 
         {/* Local registry hits — pages, tools, settings, quick actions */}
         {debounced && groupedRegistry.map(([category, rows]) => (
@@ -372,6 +376,34 @@ function RecentItem({ r, onPick }: { r: RecentPick; onPick: (r: RecentPick) => v
       </div>
       <ArrowRight className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
     </CommandItem>
+  );
+}
+
+/** Words that bring the Help rows up while searching. */
+const HELP_MATCH = /^(sh|ke|he|vi|pr|cl|po)|short|keyboard|help|view as|preview|pov/i;
+
+/**
+ * What used to sit in the strip above every admin page: the keyboard
+ * shortcuts and "View as client". Both stay a keystroke away (`?`, ⌘⇧M) and
+ * here, without taking a row of every page.
+ */
+function HelpGroup({ role, onDone }: { role: AdminRole | null; onDone: () => void }) {
+  const canPov = role === "admin" || role === "coach";
+  return (
+    <CommandGroup heading="Help">
+      <CommandItem value="help-keyboard-shortcuts" onSelect={() => { onDone(); window.setTimeout(openKeyboardShortcuts, 0); }} data-palette-shortcuts>
+        <Keyboard className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="flex-1 text-sm">Keyboard shortcuts</span>
+        <kbd className="rounded border border-border bg-muted px-1.5 text-[11px] font-semibold text-muted-foreground">?</kbd>
+      </CommandItem>
+      {canPov && (
+        <CommandItem value="help-view-as-client" onSelect={() => { onDone(); window.setTimeout(() => { try { window.dispatchEvent(new CustomEvent("open-client-pov-picker")); } catch { /* no window */ } }, 0); }} data-palette-pov>
+          <Eye className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="flex-1 text-sm">View as a client…</span>
+          <kbd className="rounded border border-border bg-muted px-1.5 text-[11px] font-semibold text-muted-foreground">⌘⇧M</kbd>
+        </CommandItem>
+      )}
+    </CommandGroup>
   );
 }
 

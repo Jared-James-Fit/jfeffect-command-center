@@ -204,7 +204,7 @@ describe("working sets a week never divide by weeks that haven't happened", () =
       range: { start: "2026-11-15", end: "2026-12-12" },
     });
     expect(load.totals.setsPerWeek).toBe(37);
-    expect(load.perWeekBasis).toEqual({ weeks: 0, partial: true });
+    expect(load.perWeekBasis).toMatchObject({ weeks: 0, partial: true, keys: ["2026-11-16"] });
     expect(perWeekWords(load).label).toBe("this week so far");
     expect(load.weeks.filter((w) => w.future).length).toBe(3);
   });
@@ -216,7 +216,7 @@ describe("working sets a week never divide by weeks that haven't happened", () =
     ];
     const load = buildTrainingLoad({ sets, today: "2026-11-25" });
     // weeks of Nov 2, Nov 9 (nothing), Nov 16 are over: 20 / 3
-    expect(load.perWeekBasis).toEqual({ weeks: 3, partial: false });
+    expect(load.perWeekBasis).toMatchObject({ weeks: 3, partial: false, keys: ["2026-11-02", "2026-11-09", "2026-11-16"] });
     expect(load.totals.setsPerWeek).toBeCloseTo(6.7, 1);
   });
 
@@ -331,16 +331,18 @@ describe("the screens", () => {
     expect(dash).not.toContain("meta={filter.label}");
     expect(dash).not.toMatch(/ATPR/);
     expect(dash).not.toContain("Top e1RM gain");
-    // all-time PRs are judged against the whole history, then cut to the period
-    expect(dash).toContain("recentPRs(allResults as any[], 365000)");
+    // records are judged against the whole history, then cut to the period
+    expect(dash).toContain("personalRecords(allResults as any[], meets)");
+    expect(dash).toContain("records.filter((r) => r.day >= startDay && r.day <= endDay)");
   });
-  it("workouts: analytics one tap from the header and first in the progress card; no fold", () => {
+  it("workouts: analytics one tap from the header and the whole Performance card; no fold", () => {
     const wo = read("src/components/workouts/WorkoutsExperience.tsx");
     expect(wo).toContain("data-header-analytics");
-    expect(wo.indexOf('part="entry"')).toBeLessThan(wo.indexOf("<RecoveryPreviewCard"));
-    const preview = read("src/components/training-analytics-preview-card.tsx");
-    expect(preview).not.toContain("Collapsible");
-    expect(preview).not.toContain("More about");
+    expect(wo).toContain("<PerformanceCard");
+    const card = read("src/components/performance-card.tsx");
+    expect(card).toContain('to="/portal/workouts/analytics"');
+    expect(card).not.toContain("Collapsible");
+    expect(card).not.toContain("More about");
   });
   it("the program card is a compact summary; its phases are the full plan's, never a Plan details fold", () => {
     const card = read("src/components/workouts/program-roadmap.tsx");

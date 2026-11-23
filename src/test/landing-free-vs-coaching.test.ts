@@ -7,6 +7,7 @@ import {
   JOIN_CTA,
   JOIN_TO,
   LANDING_COPY,
+  proofTiles,
 } from "@/components/landing/landing-page";
 
 const read = (path: string) => readFileSync(path, "utf8");
@@ -22,6 +23,8 @@ const PUBLIC_PAGES = [
   "src/components/landing/landing-page.tsx",
   "src/components/landing/price-reveal.tsx",
   "src/lib/coaching-packages/trainer-cost.ts",
+  "src/lib/coaching-packages/online-coaching-cost.ts",
+  "src/components/landing/cost-anchors.tsx",
   "src/components/join/activate-page.tsx",
   "src/components/member/membership-pending-gate.tsx",
   "src/lib/free-signup.ts",
@@ -39,7 +42,7 @@ describe("the landing page sells the free app first and online coaching as its o
   it("leads with the promise, the product and both ways in: Get the free app, then Explore coaching", () => {
     const hero = visible.slice(
       visible.indexOf("data-landing-hero"),
-      visible.indexOf("data-landing-proof"),
+      visible.indexOf("<ProofStrip"),
     );
     expect(LANDING_COPY.HERO.title).toBe("Train like you have a coach.");
     expect(hero).toContain("{COACH_NAME} · Team Canada powerlifter");
@@ -55,12 +58,14 @@ describe("the landing page sells the free app first and online coaching as its o
 
   it("shows the app before it prices it, then reveals that it's free (Nov 23 2026)", () => {
     // value first: every capability on its own screen, then the reveal, then coaching, then prices
-    const order = ["data-landing-hero", "data-landing-app", "data-landing-own", "<FreeReveal />", "data-landing-coaching", 'id="pricing"', "Which one is you?"];
+    const order = ["data-landing-hero", "<CostAnchorsSection", "data-landing-app", "data-landing-own", "<FreeReveal />", "data-landing-coaching", 'id="pricing"', "Which one is you?"];
     const at = order.map((m) => visible.indexOf(m));
     expect(at.every((i) => i > -1)).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
     expect(LANDING_COPY.CHAPTERS.map((c) => c.eyebrow)).toEqual(["Programs", "Logging", "Progress", "Nutrition"]);
     expect(LANDING_COPY.REVEAL.title).toBe("The JF Effect app is free.");
+    // free never reads as free coaching
+    expect(LANDING_COPY.REVEAL.without).toMatch(/^Not in it: a coach\./);
     // the anchor is true: it's the app coaching clients use, never a "worth" or crossed-out price
     expect(LANDING_COPY.REVEAL.body).toContain("It's the same app my coaching clients train in.");
     expect(visible).not.toMatch(/worth \$|value of \$|<s>|line-through|regularly \$/i);
@@ -100,7 +105,7 @@ describe("the landing page sells the free app first and online coaching as its o
     expect(visible).toContain("The app gives you the tools.");
     // the price is the coaching packages' (coaching_packages, edited in Sales → Coaching packages), never typed here
     expect(visible).toContain("Applying doesn't charge you.");
-    expect(visible).toContain('<CoachingPackagesGrid packages={list} from="home" calls={false} free />');
+    expect(visible).toContain('<CoachingPackagesGrid packages={list} from="home" calls={false} free chooser />');
     expect(visible).not.toMatch(/\$[0-9]{2,3}\b/);
     // replies are what the app's own coach chat promises, never "unlimited"
     expect(LANDING_COPY.COACHING.map((c) => c.body).join(" ")).toContain(
@@ -158,11 +163,21 @@ describe("the landing page sells the free app first and online coaching as its o
   });
 
   it("claims only what's checked (Nov 20 2026)", () => {
-    // 15 live programs (4 beginner, 3 home), 1,969 of 2,050 exercises with a video
-    expect(LANDING_COPY.PROOF.map((p) => p[0])).toEqual(["8", "2×", "100+", "15"]);
+    // the program count is the members' library's own (public_program_count()), never typed, so it never goes stale
+    expect(LANDING_COPY.PROOF.map((p) => p[0])).toEqual(["8", "2×", "100+"]);
+    expect(proofTiles(15).map((p) => p[0])).toEqual(["8", "2×", "100+", "15"]);
+    expect(proofTiles(16)[3]).toEqual(["16", "Programs in the app", "Strength, muscle, running, home"]);
+    // can't read it: another true number, never a guess (1,969 of 2,050 exercises have a video)
+    expect(proofTiles(null)[3][0]).toBe("2,000+");
+    expect(proofTiles(0)[3][0]).toBe("2,000+");
+    expect(visible).not.toMatch(/my \d+ programs|\b(Four|Three|Fifteen) of my programs|"15"/);
+    expect(read("src/routes/index.tsx")).toContain("programs: getPublicProgramCount()");
+    const sql = read("supabase/migrations/20270519100000_public_program_count.sql");
+    expect(sql).toContain("WHERE status = 'Published' AND membership_status = 'live'");
+    expect(sql).toContain("GRANT EXECUTE ON FUNCTION public.public_program_count() TO anon, authenticated, service_role;");
     expect(LANDING_COPY.FREE[0].text).toBe("2,000+ exercises, almost all with a how-to video");
     expect(LANDING_COPY.FAQ.find((f) => f.q.startsWith("I'm new"))?.a).toContain(
-      "Four of my programs",
+      "Some of my programs are written for beginners",
     );
   });
 });

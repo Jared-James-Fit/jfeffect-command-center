@@ -192,7 +192,19 @@ function AthleteGaps({ clientId }: { clientId: string }) {
 // ---------------------------------------------------------------------------
 // The conversation
 
-function ChatPanel({ target, onApplied, initialText, context }: { target: ProgramAiTarget; onApplied?: () => void | Promise<void>; initialText?: string; context?: string | null }) {
+export function ChatPanel({ target, onApplied, initialText, context, beforeSend, quickActions, seed }: {
+  target: ProgramAiTarget;
+  onApplied?: () => void | Promise<void>;
+  initialText?: string;
+  context?: string | null;
+  /** Run before every send (the builder saves what's on screen: the AI reads what's saved). */
+  beforeSend?: () => Promise<void> | void;
+  /** One-tap asks for where the coach is (Cleo's dock): they fill the box, never send by themselves. */
+  quickActions?: string[];
+  /** Words put in the box from elsewhere (Program Check's "Ask Cleo"): a new nonce puts them in again. */
+  seed?: { text: string; nonce: number } | null;
+
+}) {
   const qc = useQueryClient();
   const ask = useServerFn(askProgramAiFn);
   const getThread = useServerFn(programAiThreadFn);
@@ -205,6 +217,16 @@ function ChatPanel({ target, onApplied, initialText, context }: { target: Progra
   const [resumed, setResumed] = useState(false);
   const [text, setText] = useState(initialText ?? "");
   const [withCtx, setWithCtx] = useState(!!context);
+  // a live context (the dock follows the coach around the builder) is on whenever there is one
+  const hadCtx = useRef(!!context);
+  useEffect(() => {
+    if (!!context && !hadCtx.current) setWithCtx(true);
+    hadCtx.current = !!context;
+  }, [context]);
+  useEffect(() => {
+    if (seed?.text) setText(seed.text.slice(0, 4000));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed?.nonce]);
   // spoken words land in the box (after anything typed) to read and change before sending
   const voice = useCoachVoice((words) => setText((t) => (t.trim() ? `${t.trim()} ${words}` : words).slice(0, 4000)));
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -256,6 +278,7 @@ function ChatPanel({ target, onApplied, initialText, context }: { target: Progra
 
   const send = useMutation({
     mutationFn: async (instruction: string) => {
+      await beforeSend?.();
       const rejected = last?.status === "ready" ? proposal.filter((c) => !picked.has(c.id)).map((c) => c.id) : [];
       return ask({ data: { target, instruction: withContext(instruction, withCtx ? context : null).slice(0, 4000), threadId: last && last.status !== "applied" ? threadId : null, rejected } });
     },
@@ -312,7 +335,7 @@ function ChatPanel({ target, onApplied, initialText, context }: { target: Progra
   };
 
   const okCount = proposal.filter((c) => c.ok && picked.has(c.id)).length;
-  const starters = target.kind === "client" ? CLIENT_STARTERS : TEMPLATE_STARTERS;
+  const starters = quickActions?.length ? quickActions : target.kind === "client" ? CLIENT_STARTERS : TEMPLATE_STARTERS;
   const submit = () => {
     const v = text.trim();
     if (!v || send.isPending || working) return;
@@ -390,6 +413,15 @@ function ChatPanel({ target, onApplied, initialText, context }: { target: Progra
             </div>
           </div>
         )}
+        {quickActions?.length && turns.length > 0 && !text.trim() && !working && last?.status !== "ready" ? (
+          <div className="-mx-4 mb-2 flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-quick-actions>
+            {quickActions.map((q) => (
+              <button key={q} type="button" onClick={() => setText(q)} className="inline-flex h-8 shrink-0 items-center rounded-full border border-border px-3 text-xs font-medium hover:bg-secondary">
+                {q}
+              </button>
+            ))}
+          </div>
+        ) : null}
         {context && (
           <div className="mb-2 flex items-center gap-1.5 text-xs" data-edit-context>
             <button
@@ -706,7 +738,7 @@ export function ChangeCard({ change, checked, disabled, onChange, faded, default
 // ---------------------------------------------------------------------------
 // Rules the AI follows
 
-function RulesPanel({ clientId }: { clientId: string | null }) {
+export function RulesPanel({ clientId }: { clientId: string | null }) {
   const qc = useQueryClient();
   const list = useServerFn(listProgramRulesFn);
   const save = useServerFn(saveProgramRuleFn);
@@ -846,7 +878,7 @@ function RulesPanel({ clientId }: { clientId: string | null }) {
 // ---------------------------------------------------------------------------
 // History: every change to this program (Edit with AI and Cleo), with Undo
 
-function HistoryPanel({ target, onChanged }: { target: ProgramAiTarget; onChanged?: () => void | Promise<void> }) {
+export function HistoryPanel({ target, onChanged }: { target: ProgramAiTarget; onChanged?: () => void | Promise<void> }) {
   const qc = useQueryClient();
   const history = useServerFn(programHistoryFn);
   const undo = useServerFn(undoProgramAiFn);

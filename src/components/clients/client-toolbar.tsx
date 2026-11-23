@@ -3,13 +3,14 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, X, ArrowUpDown, SlidersHorizontal, ChevronRight } from "lucide-react";
+import { Search, X, ArrowUpDown, SlidersHorizontal, ChevronRight, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DirectoryCounts } from "@/lib/clients-directory.functions";
 import { serializeFilterKeys, toggleFilterKey, type DirectoryFilterKey } from "@/lib/clients-directory-filters";
 import { ClientFilterRail, ActiveFilterSummary } from "./client-filter-rail";
 import { ClientFilterSheet } from "./client-filter-sheet";
 import type { FilterMatch } from "./clients-status";
+import type { StarredMode } from "@/lib/clients-directory-starred";
 
 export type Lifecycle = "active" | "archived" | "deactivated";
 const LIFECYCLES: { v: Lifecycle; label: string }[] = [
@@ -46,10 +47,15 @@ type Props = {
   /** How many clients the current filters show. */
   total: number;
   loading: boolean;
+  /** The coach's own stars: only them, them first, or off (`?starred=`). */
+  starred?: StarredMode | null;
+  /** How many clients they've starred; null hides the Starred chip (someone who can't star and has none). */
+  starredCount?: number | null;
 };
 
 export function ClientToolbar({
   search, coachingType, coachId, coaches, sort, isAdmin, resultLabel, flags, match, lifecycle, counts, total, loading,
+  starred = null, starredCount = null,
 }: Props) {
   const navigate = useNavigate({ from: "/admin/clients/" });
   const [local, setLocal] = useState(search);
@@ -94,7 +100,28 @@ export function ClientToolbar({
     !!search || (coachingType && coachingType !== "all") || !!coachId || sort !== "name";
 
   const activeCount =
-    flags.length + (coachingType && coachingType !== "all" ? 1 : 0) + (coachId ? 1 : 0);
+    flags.length + (coachingType && coachingType !== "all" ? 1 : 0) + (coachId ? 1 : 0) + (starred ? 1 : 0);
+  const setStarred = (m: StarredMode | null) => set({ starred: m ?? undefined });
+  const starChip =
+    starredCount != null ? (
+      <button
+        type="button"
+        aria-pressed={starred === "only"}
+        title="Only the clients you've starred"
+        onClick={() => setStarred(starred === "only" ? null : "only")}
+        data-starred-chip
+        className={cn(
+          "inline-flex h-9 shrink-0 cursor-pointer touch-manipulation items-center gap-2 rounded-full border px-3 text-[13px] font-medium transition-colors",
+          starred === "only"
+            ? "border-foreground/40 bg-secondary text-foreground"
+            : "border-border bg-card hover:border-foreground/25 hover:bg-accent/40",
+        )}
+      >
+        <Star className={cn("h-3.5 w-3.5", starred === "only" && "fill-foreground")} aria-hidden />
+        Starred
+        <span className="tabular-nums text-muted-foreground">{starredCount}</span>
+      </button>
+    ) : null;
 
   return (
     <>
@@ -184,7 +211,7 @@ export function ClientToolbar({
       </div>
     </div>
 
-    <ClientFilterRail flags={flags} counts={counts} onToggle={toggleFlag} />
+    <ClientFilterRail flags={flags} counts={counts} onToggle={toggleFlag} leading={starChip} />
     <ActiveFilterSummary
       flags={flags}
       match={match}
@@ -221,7 +248,9 @@ export function ClientToolbar({
       isAdmin={isAdmin}
       onToggleFlag={toggleFlag}
       onChange={set}
-      onClearAll={() => set({ flags: undefined, status: undefined, match: undefined, coachingType: undefined, coachId: undefined })}
+      starred={starredCount != null ? starred : undefined}
+      onStarred={setStarred}
+      onClearAll={() => set({ flags: undefined, status: undefined, match: undefined, coachingType: undefined, coachId: undefined, starred: undefined })}
     />
     </>
   );

@@ -39,10 +39,13 @@ export function ClientFilterRail({
   flags,
   counts,
   onToggle,
+  leading,
 }: {
   flags: DirectoryFilterKey[];
   counts: DirectoryCounts | undefined;
   onToggle: (key: DirectoryFilterKey) => void;
+  /** A chip of its own before the filters (the coach's Starred). */
+  leading?: ReactNode;
 }) {
   if (!counts) {
     return (
@@ -55,11 +58,19 @@ export function ClientFilterRail({
   }
   const groups = quickFilterKeys(counts, flags);
   if (!groups.length) {
-    return (
+    const clear = (
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid="filter-rail-clear">
         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" aria-hidden />
         Nothing needs your attention right now.
       </p>
+    );
+    return leading ? (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {leading}
+        {clear}
+      </div>
+    ) : (
+      clear
     );
   }
   return (
@@ -70,9 +81,10 @@ export function ClientFilterRail({
       className="-mx-3 overflow-x-auto px-3 [scrollbar-width:none] sm:mx-0 sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden"
     >
       <div className="flex w-max items-center gap-1.5 sm:w-auto sm:flex-wrap">
+        {leading}
         {groups.map((group, i) => (
           <Fragment key={group.key}>
-            {i > 0 && <span aria-hidden className="mx-0.5 h-5 w-px shrink-0 bg-border" />}
+            {(i > 0 || leading) && <span aria-hidden className="mx-0.5 h-5 w-px shrink-0 bg-border" />}
             {group.keys.map((key) => {
               const meta = STATUS_META[key];
               const selected = flags.includes(key);

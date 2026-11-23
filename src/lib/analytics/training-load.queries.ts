@@ -15,6 +15,7 @@ import { buildTrainingLoad, type LoadSet, type PlanRow } from "@/lib/analytics/t
 
 const LB_PER_KG = 2.2046226;
 const sb: any = supabase;
+const EMPTY_PLAN: PlanRow[] = [];
 
 /** getClientResults rows (load in lb, ISO time) as training-load sets (kg, the athlete's own day). */
 export function resultsToLoadSets(results: any[]): LoadSet[] {
@@ -162,5 +163,5 @@ export function useTrainingLoad(opts: { clientId: string; results: any[]; start:
       range: { start: format(new Date(sMs), "yyyy-MM-dd"), end: format(new Date(eMs), "yyyy-MM-dd") },
     });
   }, [results, sMs, eMs, plan.data, today]);
-  return { load, planLoading: plan.isLoading, planError: plan.isError };
+  return { load, plan: plan.data ?? EMPTY_PLAN, planLoading: plan.isLoading, planError: plan.isError };
 }

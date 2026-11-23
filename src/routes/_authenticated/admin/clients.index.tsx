@@ -1,9 +1,9 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -19,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronRight, Plus, Users } from "lucide-react";
+import { ChevronRight, Plus, Star, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { listClientsDirectoryFn } from "@/lib/clients-directory.functions";
 import { archiveClient } from "@/lib/clients.functions";
@@ -36,6 +36,13 @@ import { listTeam } from "@/lib/staff-invites.functions";
 import { MembersDirectory, MEMBERS_KEY, NewMemberButton, TestAccountCard, realMemberCount } from "@/components/members/members-directory";
 import { StaffPage } from "@/route-pages/_authenticated/admin/staff";
 import { AccountsSwitcher, KINDS, useSwipeBetween, type AccountKind } from "@/components/accounts/accounts-switcher";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
+import { useClientStars } from "@/lib/client-stars";
+import { arrangeStarred, pageOf, readWholeDirectory, starredModeFromSearch, type StarredMode } from "@/lib/clients-directory-starred";
+import type { QuickViewClient } from "@/components/clients/workout-quick-view/quick-view";
+
+// The workout quick view loads on first use (and quietly once the list is idle), never with the list.
+const WorkoutQuickView = lazyWithRetry(() => import("@/components/clients/workout-quick-view/quick-view"));
 
 const searchSchema = z.object({
   search:        fallback(z.string(),                                                       "").default(""),
@@ -53,6 +60,8 @@ const searchSchema = z.object({
   lifecycle:     fallback(z.enum(["active","archived","deactivated"]),                      "active").default("active"),
   // Which accounts the page lists (admins): coaching clients, app members, or the team.
   kind:          fallback(z.enum(["clients","members","team"]),                            "clients").default("clients"),
+  // The coach's own stars: only them, or them first (clients-directory-starred.ts).
+  starred:       fallback(z.enum(["only","first"]).optional(),                             undefined as any),
 });
 
 export const Route = createFileRoute("/_authenticated/admin/clients/")({
@@ -82,7 +91,10 @@ function ClientsDirectoryPage() {
   const isAdmin = role === "admin";
   // Admins switch between every kind of account here; coaches see their clients.
   const kind: AccountKind = isAdmin ? search.kind ?? "clients" : "clients";
-  const { kind: _kind, ...clientSearch } = search;
+  // The directory's own key: the account kind and the starred view aren't its filters.
+  const { kind: _kind, starred: _starred, ...clientSearch } = search;
+  const starredMode: StarredMode | null = kind === "clients" ? starredModeFromSearch(search.starred) : null;
+  const stars = useClientStars();
   const membersFn = useServerFn(listMembers);
   const teamFn = useServerFn(listTeam);
   const { data: membersData } = useQuery({
@@ -113,25 +125,105 @@ function ClientsDirectoryPage() {
   );
   const match = matchFromSearch(search.match);
 
-  const { data, isFetching, isError, refetch } = useQuery({
+  const listInput = {
+    search: search.search || "",
+    flags,
+    match,
+    coachingType: search.coachingType,
+    coachId: search.coachId ?? null,
+    sort: search.sort,
+    lifecycle,
+  };
+  const paged = useQuery({
     queryKey: ["clients-directory", clientSearch],
-    queryFn: () =>
-      listFn({
-        data: {
-          search: search.search || "",
-          flags,
-          match,
-          coachingType: search.coachingType,
-          coachId: search.coachId ?? null,
-          sort: search.sort,
-          page: search.page,
-          size: search.size,
-          lifecycle,
-        },
-      }),
+    enabled: !starredMode,
+    queryFn: () => listFn({ data: { ...listInput, page: search.page, size: search.size } }),
     placeholderData: (prev) => prev,
     staleTime: 10_000,
   });
+  // Starred: the whole list for these filters (one call for a coaching business), then only or first, paged here.
+  const { page: _page, size: _size, ...wholeKey } = clientSearch;
+  const whole = useQuery({
+    queryKey: ["clients-directory", "whole", wholeKey],
+    enabled: !!starredMode,
+    queryFn: () => readWholeDirectory((page, size) => listFn({ data: { ...listInput, page, size } })),
+    placeholderData: (prev) => prev,
+    staleTime: 10_000,
+  });
+  const data = useMemo(() => {
+    if (!starredMode) return paged.data;
+    if (!whole.data) return undefined;
+    const arranged = arrangeStarred(whole.data.rows, stars.ids, starredMode);
+    return { rows: pageOf(arranged, search.page, search.size), total: arranged.length, counts: whole.data.counts };
+  }, [starredMode, paged.data, whole.data, stars.ids, search.page, search.size]);
+  const active = starredMode ? whole : paged;
+  const { isFetching, isError, refetch } = active;
+
+  // The workout quick view: who's open is the address's (?peek=), so Back and Esc close it and the
+  // list underneath (search, filters, page, scroll) never reloads.
+  const router = useRouter();
+  const rawSearch = useRouterState({ select: (st) => st.location.search as Record<string, unknown> });
+  const peekId = kind === "clients" && typeof rawSearch?.peek === "string" ? (rawSearch.peek as string) : null;
+  const pushedPeek = useRef(false);
+  const goPeek = useCallback(
+    (id: string | null, how: "push" | "replace") =>
+      navigate({
+        to: ".",
+        search: (prev: Record<string, unknown>) => ({ ...prev, peek: id ?? undefined }),
+        replace: how === "replace",
+        resetScroll: false,
+      } as any),
+    [navigate],
+  );
+  const openPeek = useCallback(
+    (r: DirectoryRow) => {
+      pushedPeek.current = true;
+      void goPeek(r.id, "push");
+    },
+    [goPeek],
+  );
+  const closePeek = useCallback(() => {
+    if (pushedPeek.current && router.history.canGoBack()) {
+      pushedPeek.current = false;
+      router.history.back();
+    } else {
+      void goPeek(null, "replace");
+    }
+  }, [goPeek, router]);
+  // Their full profile (the page's overlay) in the drawer's place: Back from it lands on the list.
+  const openProfileFromPeek = useCallback(
+    (id: string, tab?: string) => {
+      pushedPeek.current = false;
+      void navigate({
+        to: ".",
+        search: (prev: Record<string, unknown>) => ({ ...prev, peek: undefined, clientId: id, clientTab: tab }),
+        replace: true,
+        resetScroll: false,
+      } as any);
+    },
+    [navigate],
+  );
+  const peekClient = useMemo((): QuickViewClient | null => {
+    if (!peekId) return null;
+    const row = data?.rows.find((r) => r.id === peekId);
+    const star = stars.list.find((s) => s.id === peekId);
+    return {
+      id: peekId,
+      full_name: row?.full_name ?? star?.full_name ?? null,
+      profile_picture_url: row?.profile_picture_url ?? star?.profile_picture_url ?? null,
+    };
+  }, [peekId, data?.rows, stars.list]);
+  // Loaded once it's wanted, and kept mounted after, so closing slides out and reopening is instant.
+  const [quickViewMounted, setQuickViewMounted] = useState(false);
+  useEffect(() => {
+    if (peekId) setQuickViewMounted(true);
+  }, [peekId]);
+  // the chunk, once the list is idle, so the first tap opens at once
+  useEffect(() => {
+    if (kind !== "clients" || role === "client") return;
+    const t = window.setTimeout(() => void WorkoutQuickView.preload().catch(() => {}), 2500);
+    return () => window.clearTimeout(t);
+  }, [kind, role]);
 
   const { data: coaches = [] } = useQuery({
     queryKey: ["admin-coaches-mini"],
@@ -147,12 +239,13 @@ function ClientsDirectoryPage() {
 
   // Only surface a count next to the controls when the result set is
   // narrowed — the page heading already shows the active-client total.
-  const hasActiveFilters = !!(
+  const hasOtherFilters = !!(
     search.search ||
     flags.length > 0 ||
     search.coachingType !== "all" ||
     search.coachId
   );
+  const hasActiveFilters = hasOtherFilters || starredMode === "only";
   // With chips picked, the line under them says how many show.
   const resultLabel = !hasActiveFilters || flags.length > 0
     ? null
@@ -223,6 +316,8 @@ function ClientsDirectoryPage() {
             fast lookups. Rendered BEFORE the analytics overview so the
             client list stays the primary focus on every viewport. */}
         <ClientToolbar
+          starred={starredMode}
+          starredCount={stars.canStar || stars.list.length ? stars.list.length : null}
           search={search.search}
           coachingType={search.coachingType}
           coachId={(search.coachId as string | undefined) ?? null}
@@ -249,7 +344,8 @@ function ClientsDirectoryPage() {
           </ul>
         ) : rows.length === 0 ? (
           <EmptyState
-            hasFilters={hasActiveFilters}
+            starred={starredMode === "only"}
+            hasFilters={starredMode === "only" ? hasOtherFilters : hasActiveFilters}
             flags={flags}
             match={match}
             lifecycle={lifecycle}
@@ -259,7 +355,16 @@ function ClientsDirectoryPage() {
         ) : (
           <ul className="space-y-2">
             {rows.map((r) => (
-              <ClientRow key={r.id} r={r} showCoach={showCoach} onArchive={isAdmin && isActiveLifecycle ? setArchiveTarget : undefined} />
+              <ClientRow
+                key={r.id}
+                r={r}
+                showCoach={showCoach}
+                onArchive={isAdmin && isActiveLifecycle ? setArchiveTarget : undefined}
+                onQuickView={openPeek}
+                onQuickViewIntent={() => void WorkoutQuickView.preload().catch(() => {})}
+                starred={stars.isStarred(r.id)}
+                onToggleStar={stars.canStar ? () => stars.toggle({ id: r.id, full_name: r.full_name, profile_picture_url: r.profile_picture_url }) : undefined}
+              />
             ))}
           </ul>
         )}
@@ -270,6 +375,17 @@ function ClientsDirectoryPage() {
       </div>
       )}
       </div>
+
+      {quickViewMounted && (
+        <Suspense fallback={null}>
+          <WorkoutQuickView
+            client={peekClient}
+            onClose={closePeek}
+            onSwitch={(c) => void goPeek(c.id, "replace")}
+            onOpenProfile={openProfileFromPeek}
+          />
+        </Suspense>
+      )}
 
       <AddClientDialog
         open={addOpen}
@@ -312,12 +428,14 @@ function ClientsDirectoryPage() {
 }
 
 function EmptyState({
+  starred,
   hasFilters,
   flags,
   match,
   lifecycle,
   onClear,
 }: {
+  starred?: boolean;
   hasFilters: boolean;
   flags: DirectoryFilterKey[];
   match: "any" | "all";
@@ -331,6 +449,22 @@ function EmptyState({
       : lifecycle === "deactivated"
         ? "No deactivated clients"
         : "No clients yet";
+  if (starred) {
+    return (
+      <Card className="flex flex-col items-center justify-center gap-3 p-8 text-center" data-starred-empty>
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <Star className="h-6 w-6" />
+        </div>
+        <div>
+          <div className="text-base font-semibold">{hasFilters ? "No starred clients match these filters" : "No starred clients yet"}</div>
+          <div className="mt-1 text-sm text-muted-foreground">
+            Tap the star on a client to keep them here, one tap from their workout.
+          </div>
+        </div>
+        <Button variant="outline" size="sm" onClick={onClear}>Show everyone</Button>
+      </Card>
+    );
+  }
   return (
     <Card className="flex flex-col items-center justify-center gap-3 p-8 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">

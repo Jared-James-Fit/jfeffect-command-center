@@ -86,7 +86,7 @@ describe("same lift twice in a workout: each card keeps its own role", () => {
   });
 
   it("only the first card of a lift asks for the last warm-up", () => {
-    const view = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+    const view = ["src/components/workout-day/WorkoutDayView.tsx", "src/lib/workouts/card-suggestion.ts", "src/lib/workouts/card-suggestion-reads.ts"].map((p) => readFileSync(p, "utf8")).join("\n") /* the logger and the card helpers it shares with the coach's quick view */;
     expect(view).toContain("if (seen.has(key)) later.add(r.id);");
     expect(view).toContain("const rampsUp = useMemo(() => !warmedUp && offersLastWarmup(family, name)");
   });
@@ -108,9 +108,9 @@ describe("Last time is the latest session by the day it was trained", () => {
   });
 
   it("the card's query reads each set's calendar day, the same one History shows", () => {
-    const view = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+    const view = ["src/components/workout-day/WorkoutDayView.tsx", "src/lib/workouts/card-suggestion.ts", "src/lib/workouts/card-suggestion-reads.ts"].map((p) => readFileSync(p, "utf8")).join("\n") /* the logger and the card helpers it shares with the coach's quick view */;
     expect(view).toContain("exercises(name), pl_days(scheduled_date))");
-    expect(view).toContain("const instDates = await instanceDates(uniqueLogs.map((log: any) => log.scheduled_workout_id))");
+    expect(view).toMatch(/const instDates = await instanceDates\(\s*uniqueLogs\.map\(\(log: any\) => log\.scheduled_workout_id\),?\s*\)/);
     expect(view).toContain("const when = data && text ? lastTimeWhen(data) : \"\";");
     const sheet = readFileSync("src/components/exercise-history-sheet.tsx", "utf8");
     expect(sheet).toContain("const day = trainedOn({ instanceDate: g.instanceId ? instDates.get(g.instanceId) ?? null : null, dayDate: g.day?.scheduled_date ?? null, loggedAt: logged });");
