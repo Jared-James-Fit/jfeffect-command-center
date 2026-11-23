@@ -394,3 +394,12 @@ describe("Edit with AI's progress", () => {
     expect(editEta("Checking the changes", c, T0 + 80_000).pct).toBeGreaterThanOrEqual(93);
   });
 });
+
+describe("one run at a time per client", () => {
+  it("a second start (another tap, another device, a strategy beside a build) gets the run already going", () => {
+    const fns = readFileSync("src/lib/program-intel/intel.functions.ts", "utf8");
+    expect(fns).toContain('const live = data.kind === "interpret" ? ["interpret"] : ["strategy", "generate"];');
+    expect(fns).toContain('.in("kind", live)');
+    expect(fns).toContain("2 * 86_400_000");
+  });
+});
