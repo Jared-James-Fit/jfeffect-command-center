@@ -180,8 +180,10 @@ export async function stagedCall(opts: {
   /** What OpenAI said about a call still running, kept on it (true when that changed). */
   const notePhase = (call: LiveCall, st: { status: string; phase?: LiveCall["phase"] } | undefined): boolean => {
     if (!st || st.status !== "running" || !st.phase || st.phase === call.phase) return false;
+    // first seen thinking a while after it was sent (a call from before this was recorded): it's
+    // been at it since it was sent as far as anyone can tell, never "just started"
+    if (st.phase === "in_progress" && !call.startedAt) call.startedAt = !call.phase && Date.now() - call.at > 120_000 ? call.at : Date.now();
     call.phase = st.phase;
-    if (st.phase === "in_progress" && !call.startedAt) call.startedAt = Date.now();
     return true;
   };
   if (pending?.id && pending.model) {

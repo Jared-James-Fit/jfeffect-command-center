@@ -394,3 +394,53 @@ describe("Edit with AI's progress", () => {
     expect(editEta("Checking the changes", c, T0 + 80_000).pct).toBeGreaterThanOrEqual(93);
   });
 });
+
+describe("one run at a time per client", () => {
+  it("a second start (another tap, another device, a strategy beside a build) gets the run already going", () => {
+    const fns = readFileSync("src/lib/program-intel/intel.functions.ts", "utf8");
+    expect(fns).toContain('const live = data.kind === "interpret" ? ["interpret"] : ["strategy", "generate"];');
+    expect(fns).toContain('.in("kind", live)');
+    expect(fns).toContain("2 * 86_400_000");
+  });
+});
+
+describe("when a call started thinking", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.doMock("@/lib/ai/model-client.server", () => ({
+      ModelHttpError: class extends Error {},
+      parseModelRef: (m: string) => ({ via: m.split(":")[0], id: m.split(":")[1] }),
+      submitBackground: async () => ({ id: "x" }),
+      pollBackground: async () => ({ status: "running", phase: "in_progress" }),
+      cancelBackground: async () => undefined,
+      callModel: async () => {
+        throw new Error("not used");
+      },
+    }));
+    vi.doMock("@/lib/ai/ai-health.server", () => ({ recordAiCall: async () => undefined }));
+  });
+  const opts = (state: any) => ({
+    state,
+    key: "strategy",
+    route: { models: ["openai:gpt-5.5"], effort: "high", strongOnly: true, task: "strategy" } as any,
+    req: { system: "s", prompt: "p", effort: "high" as const },
+    save: async () => undefined,
+    poll: { ms: 5, every: 1 },
+    backgroundLimitMs: 25 * min,
+    syncTimeoutMs: 1_000,
+  });
+  it("a call first seen long after it was sent is dated from when it was sent, never 'just started'", async () => {
+    const { stagedCall, WaitingForModel } = await import("@/lib/ai/staged-call.server");
+    const at = Date.now() - 20 * min;
+    const state: any = { pending: { strategy: { id: "r", model: "openai:gpt-5.5", at, failed: [] } } };
+    await expect(stagedCall(opts(state))).rejects.toBeInstanceOf(WaitingForModel);
+    expect(state.pending.strategy.startedAt).toBe(at);
+  });
+  it("a call just sent starts its clock when OpenAI starts it", async () => {
+    const { stagedCall, WaitingForModel } = await import("@/lib/ai/staged-call.server");
+    const at = Date.now() - 30_000;
+    const state: any = { pending: { strategy: { id: "r", model: "openai:gpt-5.5", at, failed: [] } } };
+    await expect(stagedCall(opts(state))).rejects.toBeInstanceOf(WaitingForModel);
+    expect(state.pending.strategy.startedAt).toBeGreaterThan(at + 25_000);
+  });
+});

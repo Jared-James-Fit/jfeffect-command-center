@@ -75,7 +75,7 @@ export function PublicHeader({
           <Link
             to="/auth"
             className={cn(
-              "h-10 items-center rounded-full px-3 text-[15px] font-medium text-muted-foreground transition-colors hover:text-foreground",
+              "h-10 items-center whitespace-nowrap rounded-full px-3 text-[15px] font-medium text-muted-foreground transition-colors hover:text-foreground",
               focused ? "inline-flex" : "hidden lg:inline-flex",
             )}
           >
@@ -143,7 +143,8 @@ function NavLink({ item, active }: { item: PublicNavItem; active: boolean }) {
       activeProps={{}}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "inline-flex h-10 items-center rounded-full px-3.5 text-[15px] font-medium transition-colors",
+        // one line whatever font loads: a wider fallback font once wrapped words onto two lines
+        "inline-flex h-10 items-center whitespace-nowrap rounded-full px-3 text-[15px] font-medium transition-colors xl:px-3.5",
         active ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
       data-nav-link={item.key}
@@ -169,7 +170,7 @@ function CtaLink({
   [key: `data-${string}`]: string;
 }) {
   const cls = cn(
-    "items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground transition active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+    "items-center justify-center whitespace-nowrap rounded-full bg-primary font-semibold text-primary-foreground transition active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
     className,
   );
   return (
