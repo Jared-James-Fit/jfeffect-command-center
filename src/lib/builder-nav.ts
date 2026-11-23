@@ -13,8 +13,13 @@ export type BuilderHere = { blockIndex: number; blockName: string | null; week: 
 
 type Sub = (t: BuilderTarget) => void;
 const subs = new Set<Sub>();
+const hereSubs = new Set<() => void>();
 let pending: BuilderTarget | null = null;
 let here: BuilderHere | null = null;
+
+const sameHere = (a: BuilderHere | null, b: BuilderHere | null) =>
+  a === b ||
+  (!!a && !!b && a.blockIndex === b.blockIndex && a.blockName === b.blockName && a.week === b.week && a.day === b.day && a.dayName === b.dayName && a.view === b.view);
 
 export const builderNav = {
   go(t: BuilderTarget) {
@@ -33,10 +38,17 @@ export const builderNav = {
     return t;
   },
   setHere(h: BuilderHere | null) {
+    if (sameHere(here, h)) return;
     here = h;
+    hereSubs.forEach((fn) => fn());
   },
   here(): BuilderHere | null {
     return here;
+  },
+  /** Told whenever the coach moves (another day, week, block or view): Cleo's dock keeps its context live. */
+  onHere(fn: () => void): () => void {
+    hereSubs.add(fn);
+    return () => void hereSubs.delete(fn);
   },
 };
 

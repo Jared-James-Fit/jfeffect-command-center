@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
+import { CleoDock, CleoLauncher, useCleoDock } from "@/components/program-ai/cleo-dock";
 import { AlertTriangle, ArrowLeft, Check, Dumbbell, X, MoreHorizontal, Smartphone, Search, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight, Video, VideoOff } from "lucide-react";
 import { useEditorBack } from "@/lib/editor-back";
 import { ProgramSheet } from "@/components/program-editor/program-sheet";
@@ -36,7 +36,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { classifyExercise } from "@/lib/exercise-classifier";
 import { orderAccessories } from "@/lib/program-intel/accessory-flow";
 import { overLimit, type SessionLimit } from "@/lib/program-intel/session-limit";
-import { builderNav, flashBuilderRow, hereWords, type BuilderTarget, type BuilderView } from "@/lib/builder-nav";
+import { useBuilderFocus, useBuilderFocusOnPage } from "@/lib/builder-focus";
+import { builderNav, flashBuilderRow, type BuilderTarget, type BuilderView } from "@/lib/builder-nav";
 import { templateStyle } from "@/lib/builder-athlete";
 import { ProgramOverview, ProgramOverviewContext, useProgramOverview, type OverviewBlock, type ProgramOverviewValue } from "@/components/program-editor/program-overview";
 import { BuilderAthleteContext } from "@/components/program-editor/builder-athlete-context";
@@ -72,7 +73,7 @@ import { SaveStatus } from "@/components/save-status";
 import { useConflictWatch } from "@/hooks/use-conflict-watch";
 import { usePersistentUndoStack } from "@/lib/persistent-undo";
 import { useScrollRestoration } from "@/lib/scroll-restore";
-import { BuilderHeader, BuilderTitleInput } from "@/components/program-editor/builder-chrome";
+import { BuilderHeader, BuilderTitleInput, FocusModeButton } from "@/components/program-editor/builder-chrome";
 import { ActionButton } from "@/components/action-button";
 import { copyRows, useClip } from "@/lib/program-builder-clipboard";
 import { formatDuration } from "@/lib/duration";
@@ -602,7 +603,8 @@ export function TemplateEditor() {
   const isAdminViewer = role === "admin";
   const [membershipOpen, setMembershipOpen] = useState(false);
   // Program Check's "Ask Cleo": opens Adjust program with the words in the box
-  const [cleoAsk, setCleoAsk] = useState<{ text: string; nonce: number } | null>(null);
+  // Cleo docked beside the program (cleo-dock.tsx), Adjust program's engine
+  const cleoDock = useCleoDock();
 
   const { data: tpl, isLoading } = useQuery({
     queryKey: ["pl-template", templateId],
@@ -805,30 +807,7 @@ export function TemplateEditor() {
         if (dirty || autosave.hasPending()) await save();
         setMembershipOpen(true);
       } : undefined}
-      aiTool={["block", "full_prep", "program"].includes(type) ? (
-        <EditWithAiButton
-          target={{ kind: "template", templateId }}
-          title={meta.name || tpl.name}
-          size="sm"
-          variant="ghost"
-          className="h-9 px-2.5"
-          label={phoneNow ? "Adjust" : "Adjust program"}
-          // the AI reads what's saved: save what's on screen first
-          beforeOpen={async () => { if (dirty || autosave.hasPending()) await save(); }}
-          context={() => hereWords(builderNav.here())}
-          requestOpen={cleoAsk}
-          onApplied={async () => {
-            // re-read the template as it is now (the hydration effect runs again)
-            hydratedRef.current = false;
-            setMeta(null);
-            setPayload(null);
-            setDirty(false);
-            await qc.invalidateQueries({ queryKey: ["pl-template", templateId] });
-            qc.invalidateQueries({ queryKey: ["pl-templates"] });
-            setReloadTick((t) => t + 1);
-          }}
-        />
-      ) : null}
+      aiTool={["block", "full_prep", "program"].includes(type) ? <CleoLauncher dock={cleoDock} compact={phoneNow} /> : null}
     >
       {conflictWatch.conflict && (
           <Card className="flex flex-wrap items-start gap-3 border-amber-500/60 bg-amber-500/5 p-3 text-sm">
@@ -916,8 +895,27 @@ export function TemplateEditor() {
             templateId={templateId}
             toolbarTarget={toolbarEl}
             programStyle={templateStyle(meta.training_style ?? tpl.training_style)}
-            onAskCleo={["block", "full_prep", "program"].includes(type) ? (text) => setCleoAsk({ text, nonce: Date.now() }) : undefined}
+            onAskCleo={["block", "full_prep", "program"].includes(type) ? (text) => cleoDock.ask(text) : undefined}
           />
+      )}
+      {["block", "full_prep", "program"].includes(type) && (
+        <CleoDock
+          dock={cleoDock}
+          target={{ kind: "template", templateId }}
+          title={meta.name || tpl.name}
+          // the AI reads what's saved: save what's on screen before every message
+          beforeSend={async () => { if (dirty || autosave.hasPending()) await save(); }}
+          onApplied={async () => {
+            // re-read the template as it is now (the hydration effect runs again)
+            hydratedRef.current = false;
+            setMeta(null);
+            setPayload(null);
+            setDirty(false);
+            await qc.invalidateQueries({ queryKey: ["pl-template", templateId] });
+            qc.invalidateQueries({ queryKey: ["pl-templates"] });
+            setReloadTick((t) => t + 1);
+          }}
+        />
       )}
       {isAdminViewer && (
         <MembershipListingSheet
@@ -964,7 +962,7 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusT
     },
   });
   return (
-    <div className="space-y-3 px-2 pb-8 md:px-3">
+    <div className="space-y-3 px-2 pb-8 md:px-3" data-builder-page>
       <BuilderHeader
         onToolbarEl={onToolbarEl}
         back={
@@ -1006,6 +1004,7 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusT
               </ActionButton>
             )}
             {aiTool}
+            {!phone && <FocusModeButton />}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="icon" variant="ghost" className="h-10 w-10" aria-label="Template options">
@@ -1097,7 +1096,9 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
   const phone = useIsMobileNow();
   const zoom = phone ? 1 : zoomPref;
   const compact = phone ? false : compactPref;
-  const [fullscreen, setFullscreen] = useState(false);
+  // Focus Mode: the builder as its own workspace (builder-focus.ts), remembered on this device
+  const [focus, setFocus] = useBuilderFocus();
+  useBuilderFocusOnPage();
   const [weekSlot, setWeekSlot] = useState<HTMLDivElement | null>(null);
   const [maxesOpen, setMaxesOpen] = useState(false);
   const setZoom = (z: number) => setPrefs({ zoom: Math.max(0.5, Math.min(1.3, +z.toFixed(2))) });
@@ -1113,13 +1114,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const meta = e.metaKey || e.ctrlKey;
-      if (!meta) {
-        if (e.key === "Escape" && fullscreen) {
-          e.preventDefault();
-          setFullscreen(false);
-        }
-        return;
-      }
+      if (!meta) return;
       const k = e.key.toLowerCase();
       // Never hijack Cmd/Ctrl+Z while the coach is typing in a field — the
       // browser's native text undo must win, otherwise a single keypress
@@ -1137,19 +1132,11 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
       if (inEditable && !cleanSheetCell) return;
       if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
-      else if (k === "." && e.shiftKey) { e.preventDefault(); setFullscreen((v) => !v); }
+      // ⌘⇧. (Focus Mode) and Esc are useBuilderFocusOnPage's
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, redo, fullscreen]);
-
-  // Lock body scroll while fullscreen.
-  useEffect(() => {
-    if (!fullscreen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
-  }, [fullscreen]);
+  }, [undo, redo]);
 
   const maxesQuery = useQuery({
     queryKey: ["pl-client-maxes", clientId, blockId ?? null],
@@ -1264,10 +1251,10 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
               <DropdownMenuCheckboxItem checked={compact} onCheckedChange={(v) => setPrefs({ compact: !!v })}>
                 Compact cards
               </DropdownMenuCheckboxItem>
-              <DropdownMenuItem onSelect={() => setFullscreen((v) => !v)}>
-                {fullscreen ? <Minimize2 className="mr-2 h-4 w-4" /> : <Expand className="mr-2 h-4 w-4" />}
-                {fullscreen ? "Exit full screen" : "Full screen"}
-                <DropdownMenuShortcut>⇧.</DropdownMenuShortcut>
+              <DropdownMenuItem onSelect={() => setFocus((v) => !v)}>
+                {focus ? <Minimize2 className="mr-2 h-4 w-4" /> : <Expand className="mr-2 h-4 w-4" />}
+                {focus ? "Leave Focus Mode" : "Focus Mode"}
+                <DropdownMenuShortcut>⌘⇧.</DropdownMenuShortcut>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <div className="flex items-center gap-1 px-2 py-1.5 text-sm">
@@ -1294,7 +1281,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
       </DropdownMenu>
     </div>
   );
-  const portalToolbar = !!toolbarTarget && !fullscreen;
+  const portalToolbar = !!toolbarTarget;
 
   return (
     <MaxesContext.Provider value={maxesCtx}>
@@ -1318,14 +1305,9 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
     {maxesOpen && clientId && blockId && (
       <BlockMaxesDialog clientId={clientId} blockId={blockId} onClose={() => setMaxesOpen(false)} />
     )}
-    <div
-      className={cn(
-        !phone && "workout-card-surface overflow-hidden",
-        fullscreen && "fixed inset-0 z-[60] rounded-none border-0 bg-background shadow-none",
-      )}
-    >
+    <div className={cn(!phone && "workout-card-surface overflow-hidden")}>
       {!portalToolbar && (
-        <div className={cn("z-20 border-b border-border bg-background", fullscreen ? "sticky top-0" : "sticky top-0")}>
+        <div className="sticky top-0 z-20 border-b border-border bg-background">
           {toolbar}
         </div>
       )}
@@ -1341,7 +1323,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
       <div
         className={cn(
           !phone && "flex gap-0 overflow-hidden",
-          !phone && (fullscreen ? "h-[calc(100vh-46px)]" : "h-[calc(100vh-150px)]"),
+          !phone && "h-[calc(100dvh-150px)]",
         )}
       >
         {!phone && (
@@ -2499,7 +2481,8 @@ function DayFocus({ weeksData, weekIdx, dayIdx, onGo, setWeek, exercises, compac
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> About {minutes - (limit.minutes ?? 0)} min over {limit.phrase}. Trim accessory sets first.
         </p>
       )}
-      <div data-builder-focus-day className={cn(phone ? "" : "mx-auto max-w-3xl")}>
+      {/* wide enough for a prescription on one line on a big screen, never a ribbon across it */}
+      <div data-builder-focus-day className={cn(phone ? "" : "mx-auto max-w-5xl")}>
         <WeekEditor
           week={week}
           setWeek={(w) => setWeek(weekIdx, w)}
@@ -3502,7 +3485,10 @@ function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBacko
   const missingVideo = !!row.exercise_id && !!exMeta && !rowHasVideo;
   // Colour is the exercise's movement family everywhere (shared module).
   const family = resolveMovementFamily(exMeta, row.movement_family);
-  const accent = exerciseAccent(exMeta, null, row.movement_family);
+  // Colour only where it says something: the squat, bench and deadlift families keep their quiet
+  // stripe; accessories (most of a program) are a neutral row, never the red bar on every exercise.
+  const mainLift = family !== "accessory";
+  const accent = mainLift ? exerciseAccent(exMeta, null, row.movement_family) : null;
   const restCat = resolveCategory(exMeta);
   const restDefault = defaultRestSeconds(exMeta);
   const effectiveRest = effectiveRestSeconds(row, exMeta);
@@ -3897,7 +3883,7 @@ function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBacko
     >
       {/* The movement family: one thin stripe (squat yellow, bench blue,
           deadlift green, everything else red). */}
-      <span className={cn("absolute bottom-2 left-1.5 top-2 w-[3px] rounded-full", accent)} aria-hidden />
+      {accent && <span className={cn("absolute bottom-2 left-1.5 top-2 w-[3px] rounded-full opacity-70", accent)} aria-hidden data-row-family-stripe />}
       {collapsed ? (
         <div className="flex min-w-0 items-start gap-2.5">
           {grip ?? gripRoom}

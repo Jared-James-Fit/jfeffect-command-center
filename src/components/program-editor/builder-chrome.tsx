@@ -6,9 +6,42 @@
  * one bar of controls instead of four stacked ones.
  */
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Maximize2, Minimize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobileNow } from "@/hooks/use-mobile";
+import { useBuilderFocus } from "@/lib/builder-focus";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+/**
+ * Focus Mode in one tap (builder-focus.ts): the builder as its own workspace,
+ * the admin's sidebar and bars out of the way. Also ⌘⇧. and the toolbar's ⋯;
+ * Esc leaves it.
+ */
+export function FocusModeButton() {
+  const [focus, setFocus] = useBuilderFocus();
+  const label = focus ? "Leave Focus Mode" : "Focus Mode";
+  return (
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={() => setFocus(!focus)}
+            aria-pressed={focus}
+            aria-label={label}
+            data-builder-focus-toggle
+            className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            {focus ? <Minimize2 className="h-[18px] w-[18px]" aria-hidden /> : <Maximize2 className="h-[18px] w-[18px]" aria-hidden />}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent className="bg-foreground text-background">
+          {label} <span className="ml-1 opacity-70">⌘⇧.{focus ? " · Esc" : ""}</span>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 export function BuilderHeader({
   back,

@@ -60,11 +60,14 @@ const STYLES: Record<MovementFamily, FamilyStyle> = {
     soft: "border-green-500/50 bg-green-500/10 text-green-700 dark:text-green-300",
     dot: "bg-green-500",
   },
+  // Accessories are most of every program, so they stay neutral (Nov 23 2026):
+  // red is the screen's one main action and errors, never "an accessory" on
+  // every other row. Only the three competition lifts carry a colour.
   accessory: {
-    stripe: "bg-red-500",
-    badge: "bg-red-600 text-white border-red-700/70",
-    soft: "border-red-500/50 bg-red-500/10 text-red-700 dark:text-red-300",
-    dot: "bg-red-500",
+    stripe: "bg-muted-foreground/35",
+    badge: "bg-muted text-muted-foreground border-border",
+    soft: "border-border bg-muted text-muted-foreground",
+    dot: "bg-muted-foreground/40",
   },
 };
 
