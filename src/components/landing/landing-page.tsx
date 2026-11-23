@@ -35,8 +35,9 @@
  *
  * Words are Jared's: plain, short, first person, no fitness-marketing lines
  * (landing-free-vs-coaching.test.ts keeps them out). Coaching is online only.
- * Every claim is checked against the product and the database: 15 live JF
- * Effect programs (4 for beginners, 3 for home), 2,000+ exercises with a
+ * Every claim is checked against the product and the database: the live JF
+ * Effect programs counted from the members' library (proofTiles,
+ * public_program_count(), never typed), 2,000+ exercises with a
  * how-to video for almost all of them, Jared's record as the About page
  * states it; client words and photos from the Coaching page. App screens are
  * a made-up athlete, never a client (scripts/coaching-screenshots).
@@ -118,20 +119,38 @@ const HERO = {
   body: "Follow my programs, build your own, or upload a plan you already have. Log every set in seconds and see what's working. It's the same app my coaching clients train in.",
 };
 
-/** Who's behind it, in numbers that are true and easy to check. */
+/** Who's behind it, in numbers that are true and easy to check. The fourth tile is the app's live program count (proofTiles). */
 const PROOF: Array<[string, string, string]> = [
   ["8", "International medals", "Team Canada, 7 of them gold"],
   ["2×", "International champion", "NAPF and Commonwealth, 2026"],
   ["100+", "People coached", "Beginners to IPF Worlds"],
-  ["15", "Programs in the app", "Strength, muscle, running, home"],
 ];
+
+/** When the program count can't be read: another true number, so the strip still has four. */
+const EXERCISES_TILE: [string, string, string] = ["2,000+", "Exercises", "Almost all with a how-to video"];
+
+/**
+ * The proof strip: the three numbers above, then how many JF Effect programs
+ * are live in the members' app, read from the library (public_program_count()),
+ * never typed, so a program added there shows here.
+ */
+export function proofTiles(programs: number | null | undefined): Array<[string, string, string]> {
+  const tile: [string, string, string] =
+    programs && programs > 0
+      ? [String(programs), programs === 1 ? "Program in the app" : "Programs in the app", "Strength, muscle, running, home"]
+      : EXERCISES_TILE;
+  return [...PROOF, tile];
+}
+
+/** The live program count, whether it came with the page or is still on its way. */
+type ProgramsIn = Promise<number | null> | number | null | undefined;
 
 /** The app, one capability at a time, each on its own screen. */
 const CHAPTERS: Array<{ eyebrow: string; title: string; body: string; src: string; alt: string }> = [
   {
     eyebrow: "Programs",
     title: "Your program, on the days you train.",
-    body: "Follow one of my 15 programs or build your own. The workouts land on your training days, and when your week changes, you move them.",
+    body: "Follow one of my programs or build your own. The workouts land on your training days, and when your week changes, you move them.",
     src: shotWeek,
     alt: "The Workouts screen: this week's calendar, today's lower body workout in progress, the program at week 7 of 13 and this month's progress",
   },
@@ -249,7 +268,7 @@ const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: "I'm new to lifting. Is this for me?",
-    a: "Yes. Four of my programs are written for beginners, and the app shows you what to do each day. Three are for training at home.",
+    a: "Yes. Some of my programs are written for beginners, and the app shows you what to do each day. Some are for training at home.",
   },
   {
     q: "Can I start with the app and get coaching later?",
@@ -320,6 +339,27 @@ function usePricingSeen() {
     return () => io.disconnect();
   }, []);
   return ref;
+}
+
+/** The proof strip, with the program count once it's read (it never holds the page up). */
+function ProofStrip({ programs }: { programs?: ProgramsIn }) {
+  const strip = (n: number | null) => (
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border/70 ring-1 ring-border/70 md:grid-cols-4" data-landing-proof>
+      {proofTiles(n).map(([value, label, detail]) => (
+        <div key={label} className="bg-card px-4 py-5 text-center">
+          <div className="text-[24px] font-semibold leading-none tracking-[-0.02em] md:text-[30px]">{value}</div>
+          <div className="mt-2 text-[13px] font-semibold">{label}</div>
+          <div className="mt-1 text-[12px] leading-snug text-muted-foreground">{detail}</div>
+        </div>
+      ))}
+    </div>
+  );
+  if (programs == null || typeof programs === "number") return strip(programs ?? null);
+  return (
+    <Suspense fallback={strip(null)}>
+      <Await promise={programs}>{(n) => strip(n)}</Await>
+    </Suspense>
+  );
 }
 
 /**
@@ -467,7 +507,7 @@ const FALLBACK_DECISION: DecisionRow[] = [
   { slug: "coaching", kind: "subscription", name: "Online coaching", line: "You want me to run your training and your nutrition.", price: "By application", recommended: false, cta: COACHING_CTA },
 ];
 
-export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
+export function LandingPage({ packages, programs }: { packages?: PackagesIn; programs?: ProgramsIn } = {}) {
   useEffect(() => {
     // a signed-in launch renders this hidden for a moment: only real visitors count
     if (currentLaunchMode() === "landing") trackJoin("landing_view");
@@ -520,20 +560,7 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
 
       {/* Why listen */}
       <div className="mx-auto max-w-5xl px-5">
-        <div
-          className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border/70 ring-1 ring-border/70 md:grid-cols-4"
-          data-landing-proof
-        >
-          {PROOF.map(([value, label, detail]) => (
-            <div key={label} className="bg-card px-4 py-5 text-center">
-              <div className="text-[24px] font-semibold leading-none tracking-[-0.02em] md:text-[30px]">
-                {value}
-              </div>
-              <div className="mt-2 text-[13px] font-semibold">{label}</div>
-              <div className="mt-1 text-[12px] leading-snug text-muted-foreground">{detail}</div>
-            </div>
-          ))}
-        </div>
+        <ProofStrip programs={programs} />
       </div>
 
       {/* The story's first numbers: what a personal trainer and higher-priced

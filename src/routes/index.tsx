@@ -10,7 +10,7 @@ import { hasPersistedAuthSession } from "@/lib/session-hint";
 import { shareMeta } from "@/lib/share-meta";
 import { LandingPage } from "@/components/landing/landing-page";
 import { currentLaunchMode, installedApp } from "@/lib/landing-launch";
-import { getPublicPackages } from "@/lib/coaching-packages/packages.functions";
+import { getPublicPackages, getPublicProgramCount } from "@/lib/coaching-packages/packages.functions";
 
 const DESCRIPTION =
   "The training app built by Team Canada powerlifter Jared McIntyre: his programs, a log that keeps every set and PR, nutrition and a crew to train with, free to use. 1:1 online coaching with Jared is a paid service, by application.";
@@ -25,9 +25,9 @@ export const Route = createFileRoute("/")({
       throw redirect({ to: "/auth", replace: true });
     }
   },
-  // The coaching packages, never awaited: the launch splash and the page don't wait on them
-  // (they stream in under the coaching section, and the section is simply left out if they fail).
-  loader: () => ({ packages: getPublicPackages() }),
+  // The coaching packages and the live program count, never awaited: the launch splash and
+  // the page don't wait on them (they stream in, and the page reads as it should if they fail).
+  loader: () => ({ packages: getPublicPackages(), programs: getPublicProgramCount() }),
   staleTime: 5 * 60_000,
   head: () => ({
     meta: [
@@ -46,7 +46,7 @@ export const Route = createFileRoute("/")({
  * before the first paint, so this only starts the launch for the app.
  */
 function IndexPage() {
-  const { packages } = Route.useLoaderData();
+  const { packages, programs } = Route.useLoaderData();
   const [mode, setMode] = useState<"unknown" | "app" | "landing">("unknown");
   useEffect(() => {
     const m = currentLaunchMode();
@@ -59,7 +59,7 @@ function IndexPage() {
     <>
       {mode !== "app" && (
         <div data-landing>
-          <LandingPage packages={packages} />
+          <LandingPage packages={packages} programs={programs} />
         </div>
       )}
       <div data-launch-splash>{mode === "app" ? <IndexRedirect /> : <DashboardSplash />}</div>

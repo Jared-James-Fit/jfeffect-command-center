@@ -315,7 +315,7 @@ describe("the public pages read the packages, never type them", () => {
     const coaching = read("src/routes/coaching.index.tsx");
     expect(coaching).toContain("<CoachingPackagesGrid packages={packages} from=\"coaching\" />");
     expect(coaching).not.toMatch(/\$130|\$99|\$249/);
-    expect(read("src/routes/index.tsx")).toContain("loader: () => ({ packages: getPublicPackages() }),");
+    expect(read("src/routes/index.tsx")).toContain("loader: () => ({ packages: getPublicPackages(), programs: getPublicProgramCount() }),");
   });
 
   it("every price says CAD plus applicable tax and the recommended one says so", () => {
