@@ -11,13 +11,17 @@ import {
 import { stickyCtaChoice, stickyCtaState } from "@/lib/sticky-cta";
 
 describe("the public navigation", () => {
-  it("is Home, Free app, Online coaching, About, in that order", () => {
+  it("is Home, Free app, Online coaching, Pricing, About, in that order", () => {
     expect(PUBLIC_NAV.map((n) => n.label)).toEqual([
       "Home",
       "Free app",
       "Online coaching",
+      "Pricing",
       "About",
     ]);
+    // every option side by side on the home page, never a trip through /coaching
+    const pricing = PUBLIC_NAV.find((n) => n.key === "pricing")!;
+    expect([pricing.to, pricing.hash]).toEqual(["/", "pricing"]);
     const app = PUBLIC_NAV.find((n) => n.key === "app")!;
     expect([app.to, app.hash]).toEqual(["/", "app"]);
     expect(PUBLIC_NAV.find((n) => n.key === "coaching")!.to).toBe("/coaching");
@@ -32,6 +36,7 @@ describe("the public navigation", () => {
     expect(activeNavKey("/")).toBe("home");
     expect(activeNavKey("/", "#app")).toBe("app");
     expect(activeNavKey("/", "app")).toBe("app");
+    expect(activeNavKey("/", "#pricing")).toBe("pricing");
     expect(activeNavKey("/join")).toBe("app");
     expect(activeNavKey("/coaching")).toBe("coaching");
     expect(activeNavKey("/coaching/")).toBe("coaching");

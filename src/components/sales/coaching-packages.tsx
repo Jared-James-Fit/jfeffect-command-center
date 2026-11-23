@@ -11,7 +11,7 @@ import {
   ctaText,
   intervalLabel,
   listedPackages,
-  paidPackages,
+  optionCards,
   priceLabel,
   type PublicPackage,
 } from "@/lib/coaching-packages/packages";
@@ -31,6 +31,7 @@ export function PackageCard({
   from,
   anchor,
   preview = false,
+  compact = false,
   className,
 }: {
   pkg: PublicPackage;
@@ -40,6 +41,8 @@ export function PackageCard({
   anchor?: string | null;
   /** In the admin preview the button goes nowhere. */
   preview?: boolean;
+  /** Four side by side: a little tighter, so a whole card fits a phone's screen. */
+  compact?: boolean;
   className?: string;
 }) {
   const featured = pkg.recommended && pkg.kind !== "free";
@@ -49,7 +52,8 @@ export function PackageCard({
   const price = pkg.kind === "free" ? "$0" : pkg.priceCents ? priceLabel(pkg.priceCents) : "No price yet";
   const cta = ctaText(pkg);
   const btn = cn(
-    "inline-flex h-[52px] w-full items-center justify-center rounded-2xl px-6 text-[16px] font-semibold transition active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    "inline-flex w-full items-center justify-center rounded-2xl px-6 text-[16px] font-semibold transition active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    compact ? "h-12" : "h-[52px]",
     featured ? "bg-background text-foreground" : "bg-secondary text-foreground hover:bg-secondary/80",
   );
   return (
@@ -57,7 +61,8 @@ export function PackageCard({
       data-package={pkg.slug}
       data-recommended={featured || undefined}
       className={cn(
-        "relative flex flex-col rounded-[28px] p-7 text-left sm:p-8",
+        "relative flex flex-col rounded-[28px] text-left",
+        compact ? "p-6 sm:p-7" : "p-7 sm:p-8",
         featured ? "bg-foreground text-background" : "bg-card text-foreground ring-1 ring-border",
         className,
       )}
@@ -67,11 +72,11 @@ export function PackageCard({
           Recommended
         </span>
       )}
-      <h3 className="text-[22px] font-semibold leading-tight tracking-[-0.02em]">{pkg.name}</h3>
+      <h3 className={cn("font-semibold leading-tight tracking-[-0.02em]", compact ? "text-[20px]" : "text-[22px]")}>{pkg.name}</h3>
       {pkg.tagline && <p className={cn("mt-2 text-[15px] leading-relaxed", muted)}>{pkg.tagline}</p>}
 
-      <div className="mt-6 flex items-baseline gap-1" data-package-price>
-        <span className="text-[48px] font-semibold leading-none tracking-[-0.035em] tabular-nums">{price}</span>
+      <div className={cn("flex items-baseline gap-1", compact ? "mt-5" : "mt-6")} data-package-price>
+        <span className={cn("font-semibold leading-none tracking-[-0.035em] tabular-nums", compact ? "text-[44px]" : "text-[48px]")}>{price}</span>
         {intervalLabel(pkg) && <span className={cn("text-[17px] font-medium", muted)}>{intervalLabel(pkg)}</span>}
       </div>
       <p className={cn("mt-2 text-[13px]", muted)} data-package-tax>
@@ -90,7 +95,7 @@ export function PackageCard({
       )}
 
       {(pkg.features.length > 0 || showCalls) && (
-        <ul className="mt-6 space-y-3 text-[15px] leading-snug">
+        <ul className={cn("text-[15px] leading-snug", compact ? "mt-5 space-y-2.5" : "mt-6 space-y-3")}>
           {pkg.features.map((f) => (
             <li key={f} className="flex items-start gap-3">
               <Check className={cn("mt-0.5 h-[18px] w-[18px] shrink-0", featured ? "text-background" : "text-success")} aria-hidden />
@@ -106,7 +111,7 @@ export function PackageCard({
         </ul>
       )}
 
-      <div className="mt-auto pt-8">
+      <div className={cn("mt-auto", compact ? "pt-7" : "pt-8")}>
         {preview ? (
           <span className={btn} aria-hidden>
             {cta}
@@ -156,29 +161,35 @@ function CallRow({ pkg, from }: { pkg: PublicPackage; from?: string }) {
 }
 
 /**
- * The paid packages on the site, as cards in price order (one-time calls as
- * rows under them, unless `calls` is off: the landing page keeps them off so
- * nothing pulls attention from the monthly packages). Nothing renders when
- * none are listed or they couldn't be read: the page around it still makes
- * sense.
+ * The packages on the site, as cards in price order: the monthly packages, and
+ * with `free` the free app first, so every way in sits side by side (the
+ * landing page's four: Free · Nutrition · Complete · Plus). One-time calls are
+ * rows under them unless `calls` is off (the landing page keeps them off so
+ * nothing pulls attention from the monthly packages). Four cards are four
+ * across on a wide screen, two by two on a tablet and one under another on a
+ * phone, a little tighter (`compact`); the recommended one is the inverted
+ * card, raised where they sit in one row. Nothing renders when no paid package
+ * is listed or they couldn't be read: the page around it still makes sense.
  */
 export function CoachingPackagesGrid({
   packages,
   from,
   calls: showCalls = true,
+  free: showFree = false,
   className,
 }: {
   packages: readonly PublicPackage[];
   from?: string;
   calls?: boolean;
+  /** Put the free app first, as one of the options. */
+  free?: boolean;
   className?: string;
 }) {
   const listed = listedPackages(packages);
-  const plans = paidPackages(listed)
-    .filter((p) => p.kind === "subscription")
-    .sort((a, b) => (a.priceCents ?? 0) - (b.priceCents ?? 0) || a.sortOrder - b.sortOrder);
+  const plans = optionCards(packages, { free: showFree });
   const calls = showCalls ? listed.filter((p) => p.kind === "one_time") : [];
   if (!plans.length && !calls.length) return null;
+  const four = plans.length >= 4;
   return (
     <div className={className} data-coaching-packages>
       {plans.length > 0 && (
@@ -187,16 +198,27 @@ export function CoachingPackagesGrid({
             "mx-auto grid gap-4",
             plans.length === 1 && "max-w-md",
             plans.length === 2 && "max-w-3xl md:grid-cols-2",
-            plans.length >= 3 && "max-w-md lg:max-w-5xl lg:grid-cols-3",
+            plans.length === 3 && "max-w-md lg:max-w-5xl lg:grid-cols-3",
+            four && "max-w-md md:max-w-3xl md:grid-cols-2 xl:max-w-6xl xl:grid-cols-4",
           )}
+          data-package-count={plans.length}
         >
           {plans.map((p) => (
             <PackageCard
               key={p.slug}
               pkg={p}
               from={from}
+              compact={four}
               anchor={anchorLine(p, plans)}
-              className={p.recommended && plans.length >= 3 ? "lg:-my-4 lg:py-10" : undefined}
+              className={
+                p.recommended && p.kind !== "free"
+                  ? four
+                    ? "xl:-my-4 xl:py-10"
+                    : plans.length === 3
+                      ? "lg:-my-4 lg:py-10"
+                      : undefined
+                  : undefined
+              }
             />
           ))}
         </div>

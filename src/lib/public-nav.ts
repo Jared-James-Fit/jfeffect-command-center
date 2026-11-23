@@ -4,8 +4,9 @@
  *
  * The site sells two things and the nav says so: the Free app (the home
  * page's app section, then /join) and Online coaching (/coaching, then
- * /coaching/apply). Home is the logo and the first row of the phone menu;
- * About sits last. The header's one button is the page's own ask: Get the free app
+ * /coaching/apply), and Pricing puts every option side by side (the home
+ * page's #pricing, so nobody has to go through /coaching to compare). Home is
+ * the logo and the first row of the phone menu; About sits last. The header's one button is the page's own ask: Get the free app
  * where the app is the point, Apply for coaching where coaching is, and on
  * the home page it follows what's on screen (the coaching section asks for
  * the application, never the free app beside it). The application flows
@@ -13,7 +14,7 @@
  */
 import type { CtaChoice } from "@/lib/sticky-cta";
 
-export type PublicNavKey = "home" | "app" | "coaching" | "about";
+export type PublicNavKey = "home" | "app" | "coaching" | "pricing" | "about";
 
 export type PublicNavItem = {
   key: PublicNavKey;
@@ -40,6 +41,13 @@ export const PUBLIC_NAV: PublicNavItem[] = [
     to: "/coaching",
     hint: "1:1 coaching with me. Paid, by application.",
   },
+  {
+    key: "pricing",
+    label: "Pricing",
+    to: "/",
+    hash: "pricing",
+    hint: "The free app and every coaching package, side by side.",
+  },
   { key: "about", label: "About", to: "/about", hint: "Who I am and what I've done." },
 ];
 
@@ -49,7 +57,10 @@ export const APPLY_CHOICE: CtaChoice = { label: "Apply for coaching", href: "/co
 /** Which row is lit: the page you're on (the app's application lights Free app). */
 export function activeNavKey(pathname: string, hash = ""): PublicNavKey | null {
   const path = pathname.replace(/\/+$/, "") || "/";
-  if (path === "/") return hash.replace(/^#/, "") === "app" ? "app" : "home";
+  if (path === "/") {
+    const h = hash.replace(/^#/, "");
+    return h === "app" ? "app" : h === "pricing" ? "pricing" : "home";
+  }
   if (path === "/join" || path.startsWith("/join/")) return "app";
   if (path === "/coaching" || path.startsWith("/coaching/")) return "coaching";
   if (path === "/about" || path.startsWith("/about/")) return "about";

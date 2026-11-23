@@ -97,8 +97,8 @@ describe("the landing page sells the free app first and online coaching as its o
     expect(visible).toContain("I'll run your training.");
     expect(visible).toContain("The app gives you the tools.");
     // the price is the coaching packages' (coaching_packages, edited in Sales → Coaching packages), never typed here
-    expect(visible).toContain("Applying is free and doesn't commit you to anything.");
-    expect(visible).toContain('<CoachingPackagesGrid packages={list} from="home" calls={false} />');
+    expect(visible).toContain("Applying doesn't charge you.");
+    expect(visible).toContain('<CoachingPackagesGrid packages={list} from="home" calls={false} free />');
     expect(visible).not.toMatch(/\$[0-9]{2,3}\b/);
     // replies are what the app's own coach chat promises, never "unlimited"
     expect(LANDING_COPY.COACHING.map((c) => c.body).join(" ")).toContain(
