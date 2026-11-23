@@ -200,6 +200,7 @@ export function PhotoFramer({
   onFraming,
   oneFinger,
   showImage = true,
+  keepImage = false,
   gridPreview = false,
   flash = 0,
   onActive,
@@ -216,6 +217,11 @@ export function PhotoFramer({
   onFraming: (f: Framing) => void;
   oneFinger: boolean;
   showImage?: boolean;
+  /**
+   * A photo hidden under a card stays on the page, loaded and graded, so taking
+   * the card off shows it at once (never a blank frame while it decodes).
+   */
+  keepImage?: boolean;
   gridPreview?: boolean;
   /** Bump to show the grid for a moment (the shape just changed). */
   flash?: number;
@@ -283,7 +289,9 @@ export function PhotoFramer({
   const f = clampFraming(framing, size, frame);
   const p = placement(f, size, frame);
   const at: React.CSSProperties = { width: p.w, height: p.h, transform: `translate3d(${p.x}px, ${p.y}px, 0)` };
-  const graded = !!grade && showImage;
+  // (a clip is never kept playing out of sight)
+  const kept = showImage || (keepImage && !video);
+  const graded = !!grade && kept;
   return (
     <div className="absolute inset-0 touch-none select-none overflow-hidden" {...g} data-photo-framer>
       {showImage && video ? (
@@ -299,20 +307,20 @@ export function PhotoFramer({
           data-framed-clip
         />
       ) : (
-        showImage &&
+        kept &&
         src && (
           <img
             ref={setMediaEl}
             src={src}
             alt=""
             draggable={false}
-            className={cn("pointer-events-none absolute left-0 top-0 max-w-none select-none", graded && "opacity-0")}
+            className={cn("pointer-events-none absolute left-0 top-0 max-w-none select-none", graded && "opacity-0", !showImage && "invisible")}
             style={at}
             data-framed-photo
           />
         )
       )}
-      {graded && grade && <GradedLayer source={mediaEl} grade={grade} className="absolute left-0 top-0 max-w-none" style={at} />}
+      {graded && grade && <GradedLayer source={mediaEl} grade={grade} className={cn("absolute left-0 top-0 max-w-none", !showImage && "invisible")} style={at} />}
       <FrameGuides active={active || flashing} snapV={snap.v} snapH={snap.h} aspect={frame.w / (frame.h || 1)} gridPreview={gridPreview} />
     </div>
   );

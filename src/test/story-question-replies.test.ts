@@ -106,7 +106,7 @@ describe("answering question responses on your story (Instagram's Share response
     expect(studio).toContain("freeze({ src: paintReplyBackdrop(0), file: null, live: false, at: new Date() });\n      setItems([responseCardItem(reply.question, reply.answer)]);\n      setRequest({ kind: \"text\", n: Date.now() });");
     expect(studio).toContain("await reply.onPosted(id);");
     // a reply never reopens on an old draft (its card would be lost)
-    expect(studio).toContain("if (!open || !post || reply || share || restoredFor.current === post.key) return;");
+    expect(studio).toContain("if (!open || !post || reply || share || draftKey.current) return;");
     expect(read("src/components/community/story-reply-host.tsx")).toContain("await markStickerAnswered(qc, { postId: reply.postId, userId: reply.userId, replyPostId: id });");
     // the card: the question and what was sent, never who sent it
     const layer = read("src/components/community/sticker-layer.tsx");

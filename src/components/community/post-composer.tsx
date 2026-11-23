@@ -207,11 +207,10 @@ export function PostComposer({
     setBusy(false);
     setPosted(false);
     setCoverLive(false);
-    // a caption written before (the app closed, a post that didn't go) comes back
+    // a caption written before (the app closed, a post that didn't go) comes back, quietly (never over one being typed)
     void loadDraft(draftKey).then((d) => {
       if (!d?.caption) return;
-      setCaption(d.caption);
-      toast.message("Your caption is back", { action: { label: "Clear", onClick: () => setCaption("") } });
+      setCaption((c) => (c.trim() ? c : d.caption));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
