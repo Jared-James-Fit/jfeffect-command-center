@@ -1,7 +1,7 @@
 /**
  * Test doubles for plan switching (plan-lifecycle.test.ts): an in-memory
  * database with the rules the migration puts on the tables
- * (20270516090000_plan_switching.sql: one change in flight per client, one
+ * (20270521090000_plan_switching.sql: one change in flight per client, one
  * active enrollment, the touch trigger, plan_apply_tier), and a fake Stripe
  * that prorates, charges or declines a card, keeps idempotency keys, runs
  * checkouts and rolls billing periods. Nothing here reaches a network.

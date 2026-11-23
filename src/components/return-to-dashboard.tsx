@@ -96,6 +96,7 @@ export function ReturnToDashboardPill() {
         threadOpen && "max-md:hidden",
       )}
       data-viewport-pinned
+      data-return-pill
     >
       <ChevronLeft className="h-4 w-4 text-primary" />
       Today

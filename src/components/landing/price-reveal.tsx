@@ -1,25 +1,27 @@
 /**
- * The home page's coaching price reveal (price-reveal.ts has the rule for when
- * it's honest to show): Coaching Plus at its price first, then "Don't need the
- * private calls?", then Complete Online Coaching's price as the moment the
- * section builds to. Two real products, two real prices, the calls the one
- * difference, and nothing crossed out or called a saving.
+ * The home page's coaching price (price-reveal.ts has the rule for when it's
+ * honest to show). It comes after the coaching itself, and long after the page
+ * opened with what a trainer and online coaching usually cost
+ * (cost-anchors.tsx), so each price says what it is as a year too:
  *
- * Motion is a reveal, not a gate. Everything is on the page from the first
- * paint (server-rendered, readable with no script); after the page is
- * interactive, a stage that's still below the screen is held back and eases
- * in the first time it's scrolled to. Nothing stops scrolling, nothing waits
- * on a timer, a stage already on screen (a jump to #pricing, a reload half
- * way down) is never hidden, and with reduced motion there's no motion at all.
+ *   1. Coaching Plus at its price, the calls shown.
+ *   2. "Don't need the private calls?"
+ *   3. Complete Online Coaching's price, the coaching moment (the free app's
+ *      $0 above it is the page's biggest number).
+ *
+ * Listed prices only: both come from the packages, the calls are the one
+ * difference between them, and nothing is crossed out or called a saving.
+ * Motion is stage-motion.ts's: on the page from the first paint, easing in
+ * only what's still below the screen, none at all with reduced motion.
  */
-import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { Link } from "@tanstack/react-router";
 import { Video } from "lucide-react";
 import { trackSite } from "@/lib/site-funnel";
 import { APPLY_PATH } from "@/lib/coaching-packages/packages";
 import type { PriceReveal } from "@/lib/coaching-packages/price-reveal";
+import { PRICE_SETTLE, motion, useSeen, useStage } from "@/components/landing/stage-motion";
 
-/** The few words the reveal says; the names and prices come from the packages. */
+/** The few words the story says; the names and prices come from the packages. */
 export const REVEAL_WORDS = {
   anchorTitle: "Everything I do as your coach, plus time with me on video.",
   question: "Don't need the private calls?",
@@ -29,90 +31,22 @@ export const REVEAL_WORDS = {
   compare: "Compare every option",
 } as const;
 
-type Phase = "static" | "armed" | "shown";
-
-/**
- * A stage that eases in the first time it's scrolled to: "static" (shown as
- * is: the server's render, reduced motion, or already on screen when the page
- * woke), "armed" (below the screen, held back) or "shown" (scrolled to).
- */
-function useStage(threshold: number) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [phase, setPhase] = useState<Phase>("static");
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof window === "undefined" || typeof IntersectionObserver === "undefined") return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    // already on screen, or above it: leave it exactly as it is
-    if (el.getBoundingClientRect().top < window.innerHeight * 0.92) return;
-    setPhase("armed");
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setPhase("shown");
-          io.disconnect();
-        }
-      },
-      { threshold, rootMargin: "0px 0px -6% 0px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [threshold]);
-  return [ref, phase] as const;
-}
-
-const EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
-
-/** One element's part in a stage: where it starts while held back, and when it moves. */
-function motion(
-  phase: Phase,
-  { delay = 0, y = 18, scale = 1, duration = 700, blur = 0 }: { delay?: number; y?: number; scale?: number; duration?: number; blur?: number } = {},
-): CSSProperties | undefined {
-  if (phase === "static") return undefined;
-  const held = phase === "armed";
-  return {
-    opacity: held ? 0 : 1,
-    transform: held ? `translate3d(0, ${y}px, 0) scale(${scale})` : "none",
-    filter: blur ? (held ? `blur(${blur}px)` : "blur(0)") : undefined,
-    transition: `opacity ${duration}ms ${EASE} ${delay}ms, transform ${duration}ms ${EASE} ${delay}ms${blur ? `, filter ${duration}ms ${EASE} ${delay}ms` : ""}`,
-  };
-}
-
-/** The flagship's moment, counted once when half of it is on screen (with or without motion). */
-function useRevealSeen(ref: RefObject<HTMLElement | null>) {
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          trackSite("price_reveal_view", "home");
-          io.disconnect();
-        }
-      },
-      { threshold: 0.45 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [ref]);
-}
-
 export function PriceRevealSection({ reveal }: { reveal: PriceReveal }) {
   const { anchor, flagship } = reveal;
   const [anchorRef, anchorPhase] = useStage(0.3);
   const [bridgeRef, bridgePhase] = useStage(0.6);
   const [flagRef, flagPhase] = useStage(0.35);
-  useRevealSeen(flagRef);
+  useSeen(flagRef, "price_reveal_view", "home");
   const callChips = Math.min(reveal.calls, 4);
 
   return (
     <section
       id="coaching-price"
-      aria-label={`${anchor.name} and ${flagship.name} prices`}
+      aria-label={`What coaching costs: ${anchor.name} and ${flagship.name}`}
       className="scroll-mt-20 px-3 pb-4 pt-6 sm:px-5 md:pt-10"
       data-landing-price-reveal
     >
-      {/* 1. The anchor: what Plus is, and its price, said plainly */}
+      {/* 1. Coaching Plus: what it is, and its price, said plainly */}
       <div
         ref={anchorRef}
         className="mx-auto max-w-5xl rounded-[28px] bg-muted/50 px-6 py-14 text-center ring-1 ring-border/60 md:py-20"
@@ -154,7 +88,10 @@ export function PriceRevealSection({ reveal }: { reveal: PriceReveal }) {
             <span className="text-[72px] tabular-nums md:text-[112px]">{reveal.anchorPrice}</span>
             <span className="text-[22px] font-medium tracking-normal text-muted-foreground md:text-[28px]">{reveal.per}</span>
           </p>
-          <p className="mt-3 text-[13px] text-muted-foreground">{reveal.taxNote}</p>
+          <p className="mt-3 text-[13px] text-muted-foreground" data-reveal-anchor-year>
+            {reveal.anchorYear ? `${reveal.anchorYear}. ` : ""}
+            {reveal.taxNote}
+          </p>
         </div>
       </div>
 
@@ -179,7 +116,7 @@ export function PriceRevealSection({ reveal }: { reveal: PriceReveal }) {
         </p>
       </div>
 
-      {/* 3. The moment: the flagship's price, the largest thing on the page */}
+      {/* 3. The coaching moment: the flagship's price (the free app's $0 is the only bigger number) */}
       <div
         ref={flagRef}
         className="mx-auto max-w-5xl overflow-hidden rounded-[28px] bg-foreground px-6 py-16 text-center text-background md:py-24"
@@ -197,13 +134,14 @@ export function PriceRevealSection({ reveal }: { reveal: PriceReveal }) {
         </p>
         <p
           className="mt-5 flex flex-wrap items-baseline justify-center gap-x-2 font-semibold leading-[0.9] tracking-[-0.055em]"
-          style={motion(flagPhase, { delay: 220, y: 34, scale: 0.94, duration: 1000, blur: 8 })}
+          style={motion(flagPhase, PRICE_SETTLE)}
           data-reveal-flagship-price
         >
-          <span className="text-[104px] tabular-nums sm:text-[140px] md:text-[200px]">{reveal.flagshipPrice}</span>
+          <span className="text-[96px] tabular-nums sm:text-[128px] md:text-[176px]">{reveal.flagshipPrice}</span>
           <span className="text-[24px] font-medium tracking-normal text-background/60 md:text-[34px]">{reveal.per}</span>
         </p>
-        <p className="mt-4 text-[13px] text-background/60" style={motion(flagPhase, { delay: 650, y: 8 })}>
+        <p className="mt-4 text-[13px] text-background/60" style={motion(flagPhase, { delay: 650, y: 8 })} data-reveal-flagship-year>
+          {reveal.flagshipYear ? `${reveal.flagshipYear}. ` : ""}
           {reveal.taxNote}
         </p>
         <div style={motion(flagPhase, { delay: 780, y: 12 })}>

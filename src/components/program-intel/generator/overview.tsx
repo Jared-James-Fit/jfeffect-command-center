@@ -17,8 +17,8 @@ import { KindChip } from "../sections";
 export function SectionTitle({ children, hint }: { children: React.ReactNode; hint?: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-2">
-      <h2 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{children}</h2>
-      {hint ? <span className="text-[11px] text-muted-foreground">{hint}</span> : null}
+      <h2 className="text-[15px] font-semibold leading-tight text-foreground">{children}</h2>
+      {hint ? <span className="text-[12px] text-muted-foreground">{hint}</span> : null}
     </div>
   );
 }

@@ -492,7 +492,7 @@ async function usageAlerts(db: Db, report: TickReport): Promise<void> {
       {
         title: "AI use is unusual today",
         body: `${u.why}. Tap to see what's using it.`,
-        url: "/admin/settings/ai",
+        url: "/admin/usage",
         tag: "ai-usage",
       },
       `ai_usage:${today}`,
@@ -545,7 +545,7 @@ async function usageAlerts(db: Db, report: TickReport): Promise<void> {
               ? "AI budget reached this month"
               : "AI spend at 80% of this month's budget",
           body: `About $${spent.toFixed(2)} of $${budget.toFixed(0)} so far. Tap to see what's using it.`,
-          url: "/admin/settings/ai",
+          url: "/admin/usage",
           tag: "ai-budget",
         },
         `ai_budget:${month}:${level}`,
@@ -704,8 +704,15 @@ export async function runAiHealthTick(
       );
   }
 
-  // 7. usage and budget (hourly is plenty)
-  if (new Date().getUTCMinutes() < 5 || opts.forceProbe) await usageAlerts(db, report);
+  // 7. usage and budget (hourly is plenty), and the background-AI hold that follows the budget
+  if (new Date().getUTCMinutes() < 5 || opts.forceProbe) {
+    await usageAlerts(db, report);
+    try {
+      await refreshSpendHold(db);
+    } catch (e: any) {
+      console.error("[ai-health] spend hold not refreshed", e?.message);
+    }
+  }
 
   // 8. keep about 13 months of calls (the monthly trend)
   if (new Date().getUTCHours() === 9 && new Date().getUTCMinutes() < 5) {
@@ -715,4 +722,80 @@ export async function runAiHealthTick(
       .lt("at", new Date(Date.now() - 400 * 86_400_000).toISOString());
   }
   return report;
+}
+
+/** What the background-AI hold decides from the budget setting and the month's spend. Pure. */
+export function spendHoldFor(
+  setting: { monthly_usd?: number | string | null; hold_background?: boolean | null } | null | undefined,
+  spent: number,
+): { held: boolean; budget: number; hold: boolean } {
+  const budget = Number(setting?.monthly_usd ?? 0) || 0;
+  const hold = setting?.hold_background !== false;
+  return { held: hold && budget > 0 && spent >= budget, budget, hold };
+}
+
+/**
+ * The background-AI hold (Usage & spend → Budgets & limits): while the month's estimated AI spend
+ * is at or past the budget and the owner left "hold background AI" on, app_settings
+ * 'ai_spend_hold' says held, and the Crew deck backlog's kick (community_post_decks_kick, via
+ * ai_background_held()) starts no background deck. Coaching, client features, Cleo and anything
+ * the coach starts never wait on it. The first hold of a month pushes the owner once.
+ */
+export async function refreshSpendHold(
+  db: Db,
+): Promise<{ held: boolean; spent: number; budget: number }> {
+  const { data: b } = await db
+    .from("app_settings")
+    .select("value")
+    .eq("key", "ai_budget")
+    .maybeSingle();
+  let setting: any = {};
+  try {
+    setting = JSON.parse(b?.value ?? "{}") ?? {};
+  } catch {
+    setting = {};
+  }
+  const month = dayOf(new Date().toISOString()).slice(0, 7);
+  let spent = 0;
+  const { data: months } = await db.rpc("ai_usage_by_month", { _months: 1 });
+  for (const m of (months ?? []) as any[]) if (m.month === month) spent = Number(m.cost ?? 0);
+  const { held, budget } = spendHoldFor(setting, spent);
+  const { data: row } = await db
+    .from("app_settings")
+    .select("id, value")
+    .eq("key", "ai_spend_hold")
+    .maybeSingle();
+  let was: { held?: boolean; month?: string; since?: string | null } = {};
+  try {
+    was = JSON.parse(row?.value ?? "{}") ?? {};
+  } catch {
+    was = {};
+  }
+  const stillHeld = !!was.held && was.month === month;
+  const value = JSON.stringify({
+    held,
+    month,
+    spent: Math.round(spent * 100) / 100,
+    budget,
+    since: held ? (stillHeld ? (was.since ?? new Date().toISOString()) : new Date().toISOString()) : null,
+    at: new Date().toISOString(),
+  });
+  if (row?.id)
+    await db
+      .from("app_settings")
+      .update({ value, updated_at: new Date().toISOString() })
+      .eq("id", row.id);
+  else await db.from("app_settings").insert({ key: "ai_spend_hold", value });
+  if (held && !stillHeld)
+    await pushOwners(
+      db,
+      {
+        title: "Background AI is on hold",
+        body: `This month's AI is about $${spent.toFixed(2)} of your $${budget.toFixed(0)} budget, so the Crew post backlog waits. Coaching and client features keep running.`,
+        url: "/admin/usage",
+        tag: "ai-hold",
+      },
+      `ai_hold:${month}`,
+    );
+  return { held, spent, budget };
 }

@@ -153,11 +153,13 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
 
 /**
  * A route with an override (an admin setting, or a benchmark run's models). A coaching task stays
- * strong-only unless it's a benchmark comparing models on purpose (`anyModel`).
+ * strong-only unless it's a benchmark comparing models on purpose (`anyModel`). `openaiOnly` drops
+ * any `gateway:` model an override names (Generate Next Program and its reads never spend Lovable
+ * credits, Nov 23 2026); with nothing left the defaults stand, which are all on the OpenAI key.
  */
-export function resolveRoute(task: AiTask, override?: Partial<Record<AiTask, string[]>> | null, opts: { anyModel?: boolean } = {}): Route {
+export function resolveRoute(task: AiTask, override?: Partial<Record<AiTask, string[]>> | null, opts: { anyModel?: boolean; openaiOnly?: boolean } = {}): Route {
   const base = DEFAULT_ROUTES[task];
-  const asked = override?.[task]?.filter((m) => typeof m === "string" && /^(openai|gateway):[\w./-]+$/.test(m)) ?? [];
+  const asked = override?.[task]?.filter((m) => typeof m === "string" && /^(openai|gateway):[\w./-]+$/.test(m) && !(opts.openaiOnly && m.startsWith("gateway:"))) ?? [];
   const models = base.strongOnly && !opts.anyModel ? asked.filter((m) => STRONG_MODELS.includes(m)) : asked;
   return models.length ? { ...base, models, task } : { ...base, task };
 }

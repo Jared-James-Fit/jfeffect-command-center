@@ -46,7 +46,7 @@ describe("messages client POV shortcuts", () => {
   it("lets the coach switch clients in POV without losing the coach return path", () => {
     expect(banner).toContain("open-client-pov-picker");
     expect(banner).toContain("<span>Switch</span>");
-    expect(banner).toContain("<span>Coach</span>");
+    expect(banner).toContain("<span>Back to admin</span>");
     expect(picker).toContain("impersonation.isImpersonating && impersonation.returnTo");
   });
 });

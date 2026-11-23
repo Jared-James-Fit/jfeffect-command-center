@@ -331,7 +331,7 @@ function CoachingPage() {
           <div className="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
             {OFFER.map((o) => (
               <div key={o.title} className="w-[78vw] max-w-[320px] shrink-0 snap-start md:w-auto md:max-w-none">
-                <PhoneShot src={o.src} alt={o.alt} className="max-w-[230px]" />
+                <PhoneShot src={o.src} alt={o.alt} className="max-w-[230px]" sizes="230px" />
                 <h3 className="mt-5 text-[19px] font-semibold leading-snug tracking-[-0.01em]">{o.title}</h3>
                 <p className="mt-1.5 text-[15px] leading-relaxed text-muted-foreground">{o.body}</p>
               </div>

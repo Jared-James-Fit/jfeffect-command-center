@@ -56,7 +56,12 @@ describe("statuses explain themselves on a tap", () => {
     expect(menu).toContain('"Assign Cardio"');
     expect(menu).toContain("Assign Program");
     expect(menu).toContain("Assign Next Block");
+    // Client view is the row's own labelled button, so the menu only offers it where a caller has none
     expect(menu).toContain("View as client");
+    expect(row).toContain("Client view");
+    // nothing the row already does is repeated in ⋯
+    expect(menu).not.toContain("View Profile");
+    expect(menu).not.toContain("View Schedule");
   });
 
   it("keeps the desktop row's four areas", () => {
@@ -94,7 +99,9 @@ describe("the filters reach the database", () => {
   it("keeps the filters in the URL, and still understands the older ?status= link", () => {
     expect(page).toMatch(/flags:\s+fallback\(z\.string\(\)/);
     expect(page).toContain("filtersFromSearch({ status: search.status, flags: search.flags })");
-    expect(page).toContain("          flags,\n          match,\n          coachingType: search.coachingType,");
+    // one set of filters for the normal page and the starred (whole-list) read
+    expect(page).toContain("  const listInput = {\n    search: search.search || \"\",\n    flags,\n    match,\n    coachingType: search.coachingType,");
+    expect(page).toContain("listFn({ data: { ...listInput, page: search.page, size: search.size } })");
   });
 
   it("starts a different tab (Active / Archived / Deactivated) with no filters", () => {

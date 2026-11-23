@@ -63,6 +63,22 @@ export const getPublicPackages = createServerFn({ method: "GET" }).handler(async
   }
 });
 
+/**
+ * How many JF Effect programs are live in the members' app (public_program_count():
+ * Published and listed, the library's own rule), for the home page's proof
+ * strip. Null when it can't be read: the page shows another true number.
+ */
+export const getPublicProgramCount = createServerFn({ method: "GET" }).handler(async (): Promise<number | null> => {
+  try {
+    const db = await publicDb();
+    const { data, error } = await db.rpc("public_program_count");
+    const n = Number(data);
+    return error || !Number.isFinite(n) || n <= 0 ? null : n;
+  } catch {
+    return null;
+  }
+});
+
 /** One active package by its link (listed or not). Null for a draft, an archived one or no such link. */
 export const getPublicPackage = createServerFn({ method: "GET" })
   .inputValidator((d: unknown) => z.object({ slug: z.string().trim().max(60) }).parse(d))

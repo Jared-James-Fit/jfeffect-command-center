@@ -16,7 +16,8 @@ import { summerSpeaker } from "@/lib/summer-speaker";
 import { SummerChat } from "@/components/admin/books/summer-chat";
 
 /** `dictate`: open straight into listening (the mic on Cleo's row in Messages). */
-export type SummerOpenDetail = { year?: number; dictate?: boolean };
+/** `prompt`: words put in the box (never sent) so a screen can ask about what's on it. */
+export type SummerOpenDetail = { year?: number; dictate?: boolean; prompt?: string };
 
 export function openSummer(detail: SummerOpenDetail = {}) {
   // Called from a tap: unlock audio now so the first spoken reply can autoplay.
@@ -36,6 +37,7 @@ export function SummerAssistant() {
   const [open, setOpen] = useState(false);
   const [year, setYear] = useState<number | undefined>(undefined);
   const [startDictating, setStartDictating] = useState(false);
+  const [prefill, setPrefill] = useState<string | null>(null);
 
   const { data: persona } = useQuery({
     queryKey: ["summer-profile"],
@@ -46,6 +48,7 @@ export function SummerAssistant() {
   const show = useCallback((detail: SummerOpenDetail = {}) => {
     if (detail.year) setYear(detail.year);
     if (detail.dictate) setStartDictating(true);
+    if (detail.prompt) setPrefill(detail.prompt);
     setOpen(true);
   }, []);
 
@@ -113,6 +116,8 @@ export function SummerAssistant() {
         isFinance={persona?.isFinance ?? false}
         startDictating={startDictating}
         onDictationStarted={() => setStartDictating(false)}
+        prefill={prefill}
+        onPrefilled={() => setPrefill(null)}
       />
     </>
   );

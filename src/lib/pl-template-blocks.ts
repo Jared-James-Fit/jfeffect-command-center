@@ -70,6 +70,9 @@ export interface TemplateBlockV2 {
   training_focus?: string | null;
   goal?: string | null;
   source_template_block_id?: string | null;
+  /** Block type key (src/lib/block-types.ts) and the coach's words for it. */
+  block_type?: string | null;
+  block_meta?: { purpose?: string | null; emphasis?: string | null; progression?: string | null } | null;
   // anything else carried through unchanged:
   [extra: string]: any;
 }
@@ -118,6 +121,8 @@ function makeBlock(
     training_focus: partial.training_focus ?? null,
     goal: partial.goal ?? null,
     source_template_block_id: partial.source_template_block_id ?? null,
+    block_type: partial.block_type ?? null,
+    block_meta: partial.block_meta ?? null,
   };
 }
 
@@ -199,6 +204,8 @@ export function normalizeTemplatePayload(
               weeks: Array.isArray(b.weeks_data) ? b.weeks_data : [],
               training_focus: b.training_focus ?? null,
               goal: b.goal ?? null,
+              block_type: b.block_type ?? null,
+              block_meta: b.block_meta ?? null,
             },
             i,
             legacyBlockId(templateId, i, "blocks_data"),
@@ -292,6 +299,8 @@ export function serializeTemplatePayload(v2: TemplatePayloadV2): Record<string, 
       notes: b.notes,
       training_focus: b.training_focus,
       goal: b.goal,
+      block_type: b.block_type ?? null,
+      block_meta: b.block_meta ?? null,
       weeks_data: b.weeks,
     })),
   };

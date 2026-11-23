@@ -136,10 +136,11 @@ describe("program sheet: in the editor", () => {
   const editor = require("node:fs").readFileSync("src/route-pages/_authenticated/admin/program-library_.$templateId.tsx", "utf8") as string;
   const sheet = require("node:fs").readFileSync("src/components/program-editor/program-sheet.tsx", "utf8") as string;
 
-  it("is a third view on a computer only, remembered like the others", () => {
-    expect(editor).toContain('[["week", "Week"], ["block", "Whole block"], ["sheet", "Sheet"]]');
-    expect(editor).toContain('const view: EditorView = phone ? "week" : viewPref;');
-    expect(editor).toContain('p.view === "sheet" ? "sheet"');
+  it("is one of the editor's views, on a computer only, remembered like the others", () => {
+    expect(editor).toContain('{ v: "sheet", label: "Sheet"');
+    expect(editor).toContain('const view: EditorView = phone && viewPref === "sheet" ? "week" : viewPref;');
+    expect(editor).toContain("view: EDITOR_VIEWS.some((x) => x.v === p.view) ? p.view");
+    expect(editor).toContain('EDITOR_VIEWS.filter((x) => x.v !== "sheet")');
     expect(editor).toContain("<ProgramSheet");
   });
 

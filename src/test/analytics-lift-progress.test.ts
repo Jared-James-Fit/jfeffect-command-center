@@ -36,20 +36,24 @@ describe("lift progress: touch to inspect, open on purpose", () => {
 });
 
 describe("analytics page order and headers", () => {
-  it("puts training (lift progress, PRs, muscle volume) before recovery and lifestyle", () => {
-    // Strength reads: the lifts, where you stand, records, then any exercise as the deep dive
-    const lift = dash.indexOf('aria-label="Lift Progress"');
-    expect(lift).toBeGreaterThan(-1);
-    expect(dash.indexOf('aria-label="All-time PRs"')).toBeLessThan(lift);
-    const volume = dash.indexOf("<TrainingLoadSection");
-    expect(volume).toBeGreaterThan(-1);
-    expect(volume).toBeLessThan(dash.indexOf('id="recovery"'));
-    // Recovery opens on what was logged at check-out (sleep, recovered, pain), never a model score
+  it("Strength reads the competition lifts, then other exercises, then blocks; Training puts workload and muscles before recovery", () => {
+    const comp = dash.indexOf("data-strength-section");
+    const other = dash.indexOf("<LiftProgressCard");
+    expect(comp).toBeGreaterThan(-1);
+    expect(other).toBeGreaterThan(comp);
+    expect(dash.indexOf("<BlockComparisonCard")).toBeGreaterThan(other);
+    const workload = dash.indexOf("<SbdWorkloadChart");
+    expect(workload).toBeGreaterThan(-1);
+    expect(workload).toBeLessThan(dash.indexOf("<MuscleMap"));
+    expect(dash.indexOf("<MuscleMap")).toBeLessThan(dash.indexOf("<RecoveryPatternList"));
+    // what was logged at check-out (sleep, recovered, pain) is its own section, never a model score
     expect(dash.indexOf('id="recovery"')).toBeLessThan(dash.indexOf("<RecoveryTrendsCard"));
   });
 
   it("section titles sit on their own row, so a long block name can't hide them", () => {
-    expect(dash).toContain("function SectionHeading(");
+    expect(dash).toContain("<SectionTitle");
+    const viz = readFileSync("src/components/analytics/viz.tsx", "utf8");
+    expect(viz).toContain("export function SectionTitle(");
     expect(dash).not.toMatch(/grid-cols-\[minmax\(0,1fr\)_auto\][^"]*">\s*<h2/);
   });
 });

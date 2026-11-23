@@ -5,7 +5,7 @@ import { createFileRoute } from "@tanstack/react-router";
  * moves to free on the day the paid month ends, settles upgrades waiting on
  * their charge, expires checkouts nobody finished. pg_cron 'plan-changes-tick'
  * calls it every 10 minutes, only while something waits
- * (20270516090000_plan_switching.sql), with the vault's cron_hook_secret.
+ * (20270521090000_plan_switching.sql), with the vault's cron_hook_secret.
  */
 export const Route = createFileRoute("/api/public/hooks/plan-changes-tick")({
   server: {

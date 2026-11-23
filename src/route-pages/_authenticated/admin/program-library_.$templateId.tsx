@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -9,11 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
+import { CleoDock, CleoLauncher, useCleoDock } from "@/components/program-ai/cleo-dock";
 import { AlertTriangle, ArrowLeft, Check, Dumbbell, X, MoreHorizontal, Smartphone, Search, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight, Video, VideoOff } from "lucide-react";
 import { useEditorBack } from "@/lib/editor-back";
 import { ProgramSheet } from "@/components/program-editor/program-sheet";
-import { Table2, TrendingUp } from "lucide-react";
+import { Keyboard, Link2, StickyNote, Table2, TrendingUp, Unlink } from "lucide-react";
+import { isTimedCardio } from "@/lib/timed-cardio";
+import { supersetPartner, withSuperset, withoutSuperset } from "@/lib/program-editor-superset";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
@@ -27,8 +29,23 @@ import { resolveMovementFamily } from "@/lib/exercise-family";
 import { ExerciseOrderBadge } from "@/components/exercise-order-badge";
 import { derivePurposeLabels, deriveWeeklyPurposeLabelByRowId, defaultRestSeconds, effectiveRestSeconds, PURPOSE_LABEL_OPTIONS, resolveCategory, purposeLabelBadgeClass, purposeLabelText } from "@/lib/exercise-metadata";
 import { validateDay } from "@/lib/pl-template-validation";
-import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shortcuts";
+import { ProgramBuilderShortcutsButton, pbShortcutsEnabled } from "@/components/program-builder-shortcuts";
 import { WeekPickerSheet } from "@/components/program-editor/week-picker-sheet";
+import { BlockTypeChip, BlockTypeSheet } from "@/components/program-editor/block-type-picker";
+import { colorClass, inferBlockType, resolveBlockType } from "@/lib/block-types";
+import { useBlockTypeLibrary } from "@/lib/block-types-queries";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { classifyExercise } from "@/lib/exercise-classifier";
+import { orderAccessories } from "@/lib/program-intel/accessory-flow";
+import { overLimit, type SessionLimit } from "@/lib/program-intel/session-limit";
+import { builderNav, flashBuilderRow, type BuilderTarget, type BuilderView } from "@/lib/builder-nav";
+import { templateStyle } from "@/lib/builder-athlete";
+import { ProgramOverview, ProgramOverviewContext, useProgramOverview, type OverviewBlock, type ProgramOverviewValue } from "@/components/program-editor/program-overview";
+import { BuilderAthleteContext } from "@/components/program-editor/builder-athlete-context";
+import { ProgramStatusStrip } from "@/components/program-editor/program-check-panel";
+import { applyPatches, type CheckInput, type CompletenessGap, type Patch, type ProgramStyle } from "@/lib/program-check";
+import type { BuilderAthlete } from "@/lib/builder-athlete";
+import { feedback } from "@/lib/feedback";
 import { ProgressAcrossWeeksSheet } from "@/components/program-editor/progress-across-weeks";
 import { rowAtSlot } from "@/lib/program-sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -40,7 +57,8 @@ import {
 } from "@/lib/program-editor-rows";
 import { cn } from "@/lib/utils";
 import { useIsMobileNow } from "@/hooks/use-mobile";
-import { BestOnComputerTip } from "@/components/best-on-computer-tip";
+import { builderKeyFree, toggleBuilderFocus, useBuilderFocus } from "@/components/program-editor/builder-focus";
+import { openKeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
@@ -243,12 +261,67 @@ function RowCell({
           doCommit(local);
           fillDownFromCell(inputRef.current, local);
         }}
-        className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-10 hidden group-hover/cell:flex items-center justify-center h-4 w-4 rounded-sm bg-primary text-primary-foreground shadow ring-1 ring-background hover:bg-primary/90"
+        className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-10 hidden group-hover/cell:flex items-center justify-center h-4 w-4 rounded-sm bg-foreground text-background shadow ring-1 ring-background hover:opacity-90"
       >
         <ChevronDown className="h-3 w-3" />
       </button>
     ) : null}
     </span>
+  );
+}
+
+/** The note the athlete reads under an exercise: a box that grows with it, saved as they pause or leave it. */
+function RowNote({ value, onCommit, placeholder, className }: { value: string; onCommit: (v: string | null) => void; placeholder?: string; className?: string }) {
+  const [local, setLocal] = useState(value);
+  const focused = useRef(false);
+  const last = useRef(value);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    if (focused.current || value === local) return;
+    setLocal(value);
+    last.current = value;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
+  }, [local]);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const commit = (v: string) => {
+    const t = v.trim();
+    if (t === last.current.trim()) return;
+    last.current = v;
+    onCommit(t === "" ? null : t);
+  };
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={local}
+      placeholder={placeholder}
+      maxLength={900}
+      aria-label="Note for the athlete"
+      data-pb-note
+      onChange={(e) => {
+        const v = e.target.value;
+        setLocal(v);
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => commit(v), 600);
+      }}
+      onFocus={() => { focused.current = true; }}
+      onBlur={() => {
+        focused.current = false;
+        if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+        commit(local);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") { setLocal(last.current); (e.target as HTMLTextAreaElement).blur(); }
+      }}
+      className={cn("block min-h-9 w-full resize-none px-2.5 py-2 leading-snug outline-none", className)}
+    />
   );
 }
 
@@ -586,6 +659,9 @@ export function TemplateEditor() {
   const { role } = useAuth();
   const isAdminViewer = role === "admin";
   const [membershipOpen, setMembershipOpen] = useState(false);
+  // Program Check's "Ask Cleo": opens Adjust program with the words in the box
+  // Cleo docked beside the program (cleo-dock.tsx), Adjust program's engine
+  const cleoDock = useCleoDock();
 
   const { data: tpl, isLoading } = useQuery({
     queryKey: ["pl-template", templateId],
@@ -788,28 +864,7 @@ export function TemplateEditor() {
         if (dirty || autosave.hasPending()) await save();
         setMembershipOpen(true);
       } : undefined}
-      aiTool={["block", "full_prep", "program"].includes(type) ? (
-        <EditWithAiButton
-          target={{ kind: "template", templateId }}
-          title={meta.name || tpl.name}
-          size="sm"
-          variant="ghost"
-          className="h-9 px-2.5"
-          label={phoneNow ? "Adjust" : "Adjust program"}
-          // the AI reads what's saved: save what's on screen first
-          beforeOpen={async () => { if (dirty || autosave.hasPending()) await save(); }}
-          onApplied={async () => {
-            // re-read the template as it is now (the hydration effect runs again)
-            hydratedRef.current = false;
-            setMeta(null);
-            setPayload(null);
-            setDirty(false);
-            await qc.invalidateQueries({ queryKey: ["pl-template", templateId] });
-            qc.invalidateQueries({ queryKey: ["pl-templates"] });
-            setReloadTick((t) => t + 1);
-          }}
-        />
-      ) : null}
+      aiTool={["block", "full_prep", "program"].includes(type) ? <CleoLauncher dock={cleoDock} compact={phoneNow} /> : null}
     >
       {conflictWatch.conflict && (
           <Card className="flex flex-wrap items-start gap-3 border-amber-500/60 bg-amber-500/5 p-3 text-sm">
@@ -896,7 +951,28 @@ export function TemplateEditor() {
             canRedo={canRedo}
             templateId={templateId}
             toolbarTarget={toolbarEl}
+            programStyle={templateStyle(meta.training_style ?? tpl.training_style)}
+            onAskCleo={["block", "full_prep", "program"].includes(type) ? (text) => cleoDock.ask(text) : undefined}
           />
+      )}
+      {["block", "full_prep", "program"].includes(type) && (
+        <CleoDock
+          dock={cleoDock}
+          target={{ kind: "template", templateId }}
+          title={meta.name || tpl.name}
+          // the AI reads what's saved: save what's on screen before every message
+          beforeSend={async () => { if (dirty || autosave.hasPending()) await save(); }}
+          onApplied={async () => {
+            // re-read the template as it is now (the hydration effect runs again)
+            hydratedRef.current = false;
+            setMeta(null);
+            setPayload(null);
+            setDirty(false);
+            await qc.invalidateQueries({ queryKey: ["pl-template", templateId] });
+            qc.invalidateQueries({ queryKey: ["pl-templates"] });
+            setReloadTick((t) => t + 1);
+          }}
+        />
       )}
       {isAdminViewer && (
         <MembershipListingSheet
@@ -943,7 +1019,7 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusT
     },
   });
   return (
-    <div className="space-y-3 px-2 pb-8 md:px-3">
+    <div className="space-y-3 px-2 pb-8 md:px-3" data-builder-page>
       <BuilderHeader
         onToolbarEl={onToolbarEl}
         back={
@@ -1020,7 +1096,25 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusT
 // share one row with undo / redo instead of stacking a bar of their own.
 const WeekNavSlotContext = createContext<HTMLElement | null>(null);
 
-export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId, blockId, toolbarExtras, templateId, dayScheduleStatus, onFixCalendarIssue, toolbarTarget, singleBlock }: {
+export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId, blockId, toolbarExtras, templateId, dayScheduleStatus, onFixCalendarIssue, toolbarTarget, singleBlock, programStyle = null, athlete = null, blockTypeOverride, needsDates = false, onAskCleo, onFixGap, programOverview, statusLeading, navLeading }: {
+  /** First in the navigator row, before the views and weeks (a client's block picker). */
+  navLeading?: React.ReactNode;
+  /** What the program is for (completeness asks only what its type needs). */
+  programStyle?: ProgramStyle;
+  /** A client's block: their session limit, equipment and pain (builder-athlete.ts). */
+  athlete?: BuilderAthlete | null;
+  /** A client's block keeps its type on pl_blocks, not in the payload. */
+  blockTypeOverride?: { type: string | null; meta: any } | null;
+  /** A live client block: its workouts need dates. */
+  needsDates?: boolean;
+  /** Hand an instruction to Adjust program (it previews; the coach applies). */
+  onAskCleo?: (text: string) => void;
+  /** A completeness gap fixed outside the canvas (Goals & Setup, maxes, the block type). */
+  onFixGap?: (gap: CompletenessGap) => void;
+  /** A client's whole program for the Program view (their blocks in order). */
+  programOverview?: ProgramOverviewValue | null;
+  /** Shown first on the status strip (a client's block type). */
+  statusLeading?: React.ReactNode;
   type: string; payload: any; setP: (p: any, opts?: { skipHistory?: boolean }) => void; exercises: any[];
   appendRowToFirstDay: (payload: any, type: string, row: any) => void;
   undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
@@ -1060,7 +1154,6 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
   const phone = useIsMobileNow();
   const zoom = phone ? 1 : zoomPref;
   const compact = phone ? false : compactPref;
-  const [fullscreen, setFullscreen] = useState(false);
   const [weekSlot, setWeekSlot] = useState<HTMLDivElement | null>(null);
   const [maxesOpen, setMaxesOpen] = useState(false);
   const setZoom = (z: number) => setPrefs({ zoom: Math.max(0.5, Math.min(1.3, +z.toFixed(2))) });
@@ -1076,13 +1169,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const meta = e.metaKey || e.ctrlKey;
-      if (!meta) {
-        if (e.key === "Escape" && fullscreen) {
-          e.preventDefault();
-          setFullscreen(false);
-        }
-        return;
-      }
+      if (!meta) return;
       const k = e.key.toLowerCase();
       // Never hijack Cmd/Ctrl+Z while the coach is typing in a field — the
       // browser's native text undo must win, otherwise a single keypress
@@ -1100,19 +1187,25 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
       if (inEditable && !cleanSheetCell) return;
       if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
-      else if (k === "." && e.shiftKey) { e.preventDefault(); setFullscreen((v) => !v); }
+      else if (k === "." && e.shiftKey) { e.preventDefault(); toggleBuilderFocus(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, redo, fullscreen]);
-
-  // Lock body scroll while fullscreen.
-  useEffect(() => {
-    if (!fullscreen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
-  }, [fullscreen]);
+  }, [undo, redo]);
+  const focusMode = useBuilderFocus();
+  // On a computer the canvas scrolls inside itself, filling the screen under
+  // the editor's sticky header (whatever that header holds today).
+  const [canvasH, setCanvasH] = useState("calc(100vh - 150px)");
+  useLayoutEffect(() => {
+    if (phone || typeof document === "undefined") return;
+    const header = document.querySelector<HTMLElement>("[data-builder-header]");
+    if (!header) return;
+    const measure = () => setCanvasH(`calc(100dvh - ${header.offsetHeight + 8}px)`);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(header);
+    return () => ro.disconnect();
+  }, [phone, toolbarTarget]);
 
   const maxesQuery = useQuery({
     queryKey: ["pl-client-maxes", clientId, blockId ?? null],
@@ -1129,10 +1222,84 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
 
   const canSetMaxes = !!clientId && !!blockId;
   const tap = phone ? "h-10 w-10" : "h-8 w-8";
-  // One row of controls: undo / redo, the weeks (BlockPayloadEditor fills the
-  // slot), and one ⋯ for everything a coach reaches for now and then.
+
+  // ── Completeness and Program Check: read from what's on screen ──
+  const { library: blockTypeLib } = useBlockTypeLibrary();
+  const multi = type === "block" || type === "full_prep";
+  const checkV2 = useMemo(() => (multi ? normalizeTemplatePayload(payload, { templateType: type, templateId }) : null), [multi, payload, type, templateId]);
+  const checkBlocks = useMemo(() => (checkV2 ? getActiveTemplateBlocks(checkV2) : []), [checkV2]);
+  const exMap = useMemo(() => new Map<string, any>((exercises as any[]).map((e) => [e.id, e])), [exercises]);
+  const checkInput = useMemo<CheckInput | null>(() => {
+    if (!checkV2 || isPayloadInRecovery(checkV2)) return null;
+    const lockedIds = new Set<string>();
+    dayScheduleStatus?.forEach((st, id) => { if (st.status === "completed" || st.status === "in-progress") lockedIds.add(id); });
+    return {
+      kind: clientId ? "client" : "template",
+      style: programStyle,
+      blocks: checkBlocks.map((b, i) => ({
+        id: b.id,
+        name: b.name,
+        weeks: b.weeks,
+        blockType: i === 0 && blockTypeOverride ? blockTypeOverride.type : b.block_type ?? null,
+        blockMeta: i === 0 && blockTypeOverride ? blockTypeOverride.meta : b.block_meta ?? null,
+        phase: b.phase,
+        trainingFocus: b.training_focus ?? null,
+      })),
+      exercises: exMap,
+      blockTypes: blockTypeLib,
+      athlete: clientId
+        ? {
+            sessionLimit: athlete?.sessionLimit ?? null,
+            equipment: athlete?.equipment ?? null,
+            pain: athlete?.pain ?? [],
+            needsDates,
+            hasMax: (name, family, basis) => {
+              const out = computeRowLoad({ exerciseName: name, basis: basis as any, percentage: 100, manualLoadKg: null, manualLoadLb: null, unit: "kg", maxesIndex: maxesCtx.index, family: family as any, ownCompetition: !!family && /competition/i.test(name) });
+              return out.status !== "no-max";
+            },
+          }
+        : null,
+      locked: (at) => {
+        const d = checkBlocks[at.block]?.weeks?.[at.week]?.days?.[at.day];
+        return !!d?._dbId && lockedIds.has(d._dbId);
+      },
+    };
+  }, [checkV2, checkBlocks, clientId, programStyle, blockTypeOverride, exMap, blockTypeLib, athlete, needsDates, maxesCtx.index, dayScheduleStatus]);
+  const applyCheck = (patches: Patch[], words: string) => {
+    if (!checkV2) return;
+    const before = payload;
+    const next = applyPatches(checkBlocks.map((b) => b.weeks), patches);
+    let v = checkV2;
+    checkBlocks.forEach((b, i) => { if (next[i] !== b.weeks) v = replaceBlock(v, b.id, { weeks: next[i] }); });
+    try {
+      setP(serializeTemplatePayload(v));
+    } catch {
+      toast.error("This program can't be changed until it's repaired.");
+      return;
+    }
+    toast.success("Applied", { description: words.length > 90 ? `${words.slice(0, 90)}…` : words, action: { label: "Undo", onClick: () => setP(before) }, duration: 8000 });
+  };
+  const fixGap = (gap: CompletenessGap) => {
+    if (gap.fix === "maxes" && canSetMaxes) { setMaxesOpen(true); return; }
+    if (gap.fix && onFixGap) { onFixGap(gap); return; }
+    if (gap.at) builderNav.go({ blockIndex: gap.at.block, week: gap.at.week, day: gap.at.day, row: gap.at.row, view: "day" });
+  };
+  const status = checkInput ? (
+    <ProgramStatusStrip
+      input={checkInput}
+      leading={statusLeading}
+      compact
+      onApply={applyCheck}
+      onAskCleo={onAskCleo}
+      onGo={(at) => builderNav.go({ blockIndex: at.block, week: at.week, day: at.day, row: at.row, view: "day" })}
+      onFix={fixGap}
+    />
+  ) : null;
+  // One row of controls: undo / redo, the block (a client's), the views and
+  // weeks (BlockPayloadEditor fills the slot), the program's status on a
+  // computer, and one ⋯ for everything a coach reaches for now and then.
   const toolbar = (
-    <div className="flex items-center gap-0.5 px-1.5 py-1 md:px-2" data-builder-toolbar>
+    <div className="@container/tb flex items-center gap-0.5 px-1.5 py-1 md:px-2" data-builder-toolbar>
       <Button size="icon" variant="ghost" className={cn(tap, "shrink-0")} disabled={!canUndo} aria-label="Undo" title="Undo (Cmd/Ctrl+Z)" onClick={undo}>
         <Undo2 className="h-4 w-4" />
       </Button>
@@ -1140,9 +1307,11 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
         <Redo2 className="h-4 w-4" />
       </Button>
       <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />
+      {navLeading}
       <div ref={setWeekSlot} className="flex min-w-0 flex-1 items-center" />
       {toolbarExtras}
-      {!phone && <ProgramBuilderShortcutsButton />}
+      {!phone && status ? <><span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />{status}</> : null}
+      {!phone && <ProgramBuilderShortcutsButton trigger={false} />}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button size="icon" variant="ghost" className={cn(tap, "shrink-0")} aria-label="Editor options">
@@ -1165,10 +1334,14 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
               <DropdownMenuCheckboxItem checked={compact} onCheckedChange={(v) => setPrefs({ compact: !!v })}>
                 Compact cards
               </DropdownMenuCheckboxItem>
-              <DropdownMenuItem onSelect={() => setFullscreen((v) => !v)}>
-                {fullscreen ? <Minimize2 className="mr-2 h-4 w-4" /> : <Expand className="mr-2 h-4 w-4" />}
-                {fullscreen ? "Exit full screen" : "Full screen"}
-                <DropdownMenuShortcut>⇧.</DropdownMenuShortcut>
+              <DropdownMenuItem onSelect={() => toggleBuilderFocus()}>
+                {focusMode ? <Minimize2 className="mr-2 h-4 w-4" /> : <Expand className="mr-2 h-4 w-4" />}
+                {focusMode ? "Exit focus mode" : "Focus mode"}
+                <DropdownMenuShortcut>F</DropdownMenuShortcut>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => openKeyboardShortcuts()}>
+                <Keyboard className="mr-2 h-4 w-4" /> Keyboard shortcuts
+                <DropdownMenuShortcut>?</DropdownMenuShortcut>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <div className="flex items-center gap-1 px-2 py-1.5 text-sm">
@@ -1188,48 +1361,42 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
               </DropdownMenuItem>
             </>
           )}
-          {phone && !canSetMaxes && (
-            <DropdownMenuItem disabled>Library, drag and drop and zoom are on a computer</DropdownMenuItem>
+          {phone && (
+            <>
+              {canSetMaxes && <DropdownMenuSeparator />}
+              <DropdownMenuItem onSelect={() => toggleBuilderFocus()} data-builder-focus-toggle>
+                {focusMode ? <Minimize2 className="mr-2 h-4 w-4" /> : <Expand className="mr-2 h-4 w-4" />}
+                {focusMode ? "Exit focus mode" : "Focus mode"}
+              </DropdownMenuItem>
+            </>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
   );
-  const portalToolbar = !!toolbarTarget && !fullscreen;
+  const portalToolbar = !!toolbarTarget;
 
   return (
     <MaxesContext.Provider value={maxesCtx}>
     <BuilderPhoneContext.Provider value={phone}>
     <WeekNavSlotContext.Provider value={weekSlot}>
+    <BuilderAthleteContext.Provider value={athlete}>
+    <ProgramOverviewContext.Provider value={programOverview ?? null}>
     {portalToolbar && createPortal(toolbar, toolbarTarget!)}
+    {phone && status ? <div className="flex items-center pb-1 pt-1" data-builder-status>{status}</div> : null}
     {maxesOpen && clientId && blockId && (
       <BlockMaxesDialog clientId={clientId} blockId={blockId} onClose={() => setMaxesOpen(false)} />
     )}
-    <div
-      className={cn(
-        !phone && "workout-card-surface overflow-hidden",
-        fullscreen && "fixed inset-0 z-[60] rounded-none border-0 bg-background shadow-none",
-      )}
-    >
+    <div className={cn(!phone && "workout-card-surface overflow-hidden")} data-builder-canvas>
       {!portalToolbar && (
-        <div className={cn("z-20 border-b border-border bg-background", fullscreen ? "sticky top-0" : "sticky top-0")}>
+        <div className="sticky top-0 z-20 border-b border-border bg-background">
           {toolbar}
-        </div>
-      )}
-      {phone && (
-        <div className="pb-1 pt-2" data-builder-phone>
-          <BestOnComputerTip storageKey="jf.coach-builder.desktop-tip">
-            The exercise library, drag and drop and side by side weeks are on a computer. Days,
-            exercises, sets and reps all edit here.
-          </BestOnComputerTip>
         </div>
       )}
 
       <div
-        className={cn(
-          !phone && "flex gap-0 overflow-hidden",
-          !phone && (fullscreen ? "h-[calc(100vh-46px)]" : "h-[calc(100vh-150px)]"),
-        )}
+        className={cn(!phone && "flex gap-0 overflow-hidden")}
+        style={phone ? undefined : { height: canvasH }}
       >
         {!phone && (
         <ExerciseLibraryPanel
@@ -1269,6 +1436,8 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
         </div>
       </div>
     </div>
+    </ProgramOverviewContext.Provider>
+    </BuilderAthleteContext.Provider>
     </WeekNavSlotContext.Provider>
     </BuilderPhoneContext.Provider>
     </MaxesContext.Provider>
@@ -1332,6 +1501,13 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
   const setActive = (id: string) => {
     navigate({ search: (prev: any) => ({ ...prev, block: id }), replace: true } as any);
   };
+  // a finding or the Program view asked for another block: switch to it (its week editor takes the rest)
+  useEffect(() => builderNav.on((t) => {
+    const b = active[t.blockIndex];
+    if (b && b.id !== activeBlockId) setActive(b.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [active, activeBlockId]);
+  const outerOverview = useProgramOverview();
   const commit = (nextV2: TemplatePayloadV2) => {
     if (inRecovery) {
       // eslint-disable-next-line no-console
@@ -1405,6 +1581,10 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
     [next[idx], next[swap]] = [next[swap], next[idx]];
     commit(reorderActiveBlocks(v2, next));
   };
+  // block type: the sheet is opened from a block's settings, outside its popover
+  const [typeFor, setTypeFor] = useState<string | null>(null);
+  const { library: blockTypes } = useBlockTypeLibrary();
+  const typeBlock = typeFor ? v2.blocks.find((b) => b.id === typeFor) ?? null : null;
   const handleUpdatePhase = (id: string, phase: string | null) => {
     commit(replaceBlock(v2, id, { phase }));
   };
@@ -1475,8 +1655,12 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
                   isActive ? "bg-secondary font-semibold text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <button type="button" role="tab" aria-selected={isActive} className="max-w-[200px] truncate pr-1" onClick={() => setActive(b.id)} title={`${b.weeks.length} weeks`}>
-                  {b.name}
+                <button type="button" role="tab" aria-selected={isActive} className="inline-flex max-w-[220px] items-center gap-1.5 truncate pr-1" onClick={() => setActive(b.id)} title={`${b.weeks.length} weeks`}>
+                  {(() => {
+                    const rt = resolveBlockType(b, blockTypes);
+                    return <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", rt.type ? colorClass(rt.type).dot : "border border-dashed border-muted-foreground/60")} data-block-tab-type={rt.type?.key ?? ""} />;
+                  })()}
+                  <span className="truncate">{b.name}</span>
                   <span className="ml-1.5 text-xs font-normal text-muted-foreground">{b.phase || b.training_focus ? `${b.phase || b.training_focus} · ` : ""}{b.weeks.length}w</span>
                 </button>
                 {isActive && (
@@ -1491,6 +1675,12 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
                           <Button size="sm" variant="ghost" className="h-8 justify-start text-xs" onClick={() => handleDuplicate(b.id)}><Copy className="mr-1.5 h-3.5 w-3.5" />Duplicate</Button>
                           <Button size="sm" variant="ghost" className="h-8 justify-start text-xs" onClick={() => handleMove(b.id, -1)}>← Move left</Button>
                           <Button size="sm" variant="ghost" className="h-8 justify-start text-xs" onClick={() => handleMove(b.id, 1)}>Move right →</Button>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Block type</Label>
+                          <div className="mt-1">
+                            <BlockTypeChip resolved={resolveBlockType(b, blockTypes)} onClick={() => setTypeFor(b.id)} />
+                          </div>
                         </div>
                         <div>
                           <Label className="text-xs text-muted-foreground">Phase</Label>
@@ -1535,6 +1725,16 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
         </div>
       )}
 
+      {typeBlock && (
+        <BlockTypeSheet
+          open={!!typeBlock}
+          onOpenChange={(o) => !o && setTypeFor(null)}
+          title={`${typeBlock.name}: block type`}
+          value={{ type: typeBlock.block_type ?? null, meta: typeBlock.block_meta ?? null }}
+          inferredKey={inferBlockType(typeBlock)}
+          onSave={(type, meta) => commit(replaceBlock(v2, typeBlock.id, { block_type: type, block_meta: meta }))}
+        />
+      )}
       {!singleBlock && (archived.length > 0 || trashed.length > 0) && (
         <details className="rounded-lg px-1 text-xs text-muted-foreground">
           <summary className="cursor-pointer py-1">Archived and trash ({archived.length + trashed.length})</summary>
@@ -1561,6 +1761,24 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
 
       {/* Active block weeks editor */}
       {activeBlock ? (
+        <ProgramOverviewContext.Provider
+          value={outerOverview ?? {
+            title: (v2 as any).__legacy?.prep?.event_name ?? null,
+            blocks: active.map((b, i): OverviewBlock => ({
+              id: b.id,
+              name: b.name,
+              weeks: b.weeks.length,
+              weekPhases: b.weeks.map((w: any) => w?.phase ?? null),
+              resolved: resolveBlockType(b, blockTypes),
+              current: b.id === activeBlockId,
+              onOpen: (w) => {
+                if (b.id !== activeBlockId) setActive(b.id);
+                builderNav.go({ blockIndex: i, week: w ?? 0, view: "week" });
+              },
+              onType: () => setTypeFor(b.id),
+            })),
+          }}
+        >
         <BlockPayloadEditor
           key={activeBlock.id}
           weeksData={activeBlock.weeks}
@@ -1569,7 +1787,10 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
           compact={compact}
           dayScheduleStatus={dayScheduleStatus}
           onFixCalendarIssue={onFixCalendarIssue}
+          blockIndex={Math.max(0, active.findIndex((b) => b.id === activeBlock.id))}
+          blockName={activeBlock.name}
         />
+        </ProgramOverviewContext.Provider>
       ) : (
         <Card className="p-8 text-center text-sm text-muted-foreground">
           Add a block to start building this program.
@@ -1579,37 +1800,121 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
   );
 }
 
-type EditorView = "block" | "week" | "sheet";
+type EditorView = BuilderView;
+const EDITOR_VIEWS: Array<{ v: EditorView; label: string; icon: React.ReactNode; title: string }> = [
+  { v: "day", label: "Day", icon: <Rows3 className="h-3.5 w-3.5" />, title: "One workout at a time" },
+  { v: "week", label: "Week", icon: <CalendarRange className="h-3.5 w-3.5" />, title: "Every workout of one week" },
+  { v: "block", label: "Block", icon: <LayoutGrid className="h-3.5 w-3.5" />, title: "Every week of this block side by side" },
+  { v: "program", label: "Program", icon: <Layers className="h-3.5 w-3.5" />, title: "Every block on one timeline" },
+  { v: "sheet", label: "Sheet", icon: <Table2 className="h-3.5 w-3.5" />, title: "Edit like a spreadsheet: every exercise as a row of cells" },
+];
 
-export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact, dayScheduleStatus, onFixCalendarIssue }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void }) {
-  // Persist the coach's editing position (active week + view mode) across
+export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact, dayScheduleStatus, onFixCalendarIssue, blockIndex = 0, blockName = null }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void; blockIndex?: number; blockName?: string | null }) {
+  // Persist the coach's editing position (active week, day + view) across
   // refreshes via localStorage so they return to exactly where they left off.
   const POS_KEY = "pb.block-editor.pos:v1";
-  const readPos = (): { view: EditorView; activeIdx: number } => {
-    if (typeof window === "undefined") return { view: "block", activeIdx: 0 };
+  const readPos = (): { view: EditorView; activeIdx: number; dayIdx: number } => {
+    // Day is where programming happens: a coach who has never picked a view starts there
+    if (typeof window === "undefined") return { view: "day", activeIdx: 0, dayIdx: 0 };
     try {
       const raw = window.localStorage.getItem(POS_KEY);
-      if (!raw) return { view: "block", activeIdx: 0 };
+      if (!raw) return { view: "day", activeIdx: 0, dayIdx: 0 };
       const p = JSON.parse(raw);
       return {
-        view: p.view === "week" ? "week" : p.view === "sheet" ? "sheet" : "block",
+        view: EDITOR_VIEWS.some((x) => x.v === p.view) ? p.view : "day",
         activeIdx: Number.isFinite(p.activeIdx) ? p.activeIdx : 0,
+        dayIdx: Number.isFinite(p.dayIdx) ? p.dayIdx : 0,
       };
-    } catch { return { view: "block", activeIdx: 0 }; }
+    } catch { return { view: "day", activeIdx: 0, dayIdx: 0 }; }
   };
   const initialPos = readPos();
   const [activeIdx, _setActiveIdx] = useState(initialPos.activeIdx);
+  const [dayIdx, _setDayIdx] = useState(initialPos.dayIdx);
   const [viewPref, _setView] = useState<EditorView>(initialPos.view);
-  // A phone shows one week at a time (side by side weeks and a sheet don't
-  // fit); the desktop choice is kept as it was.
+  // A phone has every view but the sheet (cells to type in need a keyboard
+  // and a wide screen); the coach's choice is kept for the computer.
   const phone = useBuilderPhone();
-  const view: EditorView = phone ? "week" : viewPref;
-  const writePos = (next: { view: EditorView; activeIdx: number }) => {
+  const view: EditorView = phone && viewPref === "sheet" ? "week" : viewPref;
+  const writePos = (next: { view: EditorView; activeIdx: number; dayIdx: number }) => {
     if (typeof window === "undefined") return;
     try { window.localStorage.setItem(POS_KEY, JSON.stringify(next)); } catch {}
   };
-  const setActiveIdx = (idx: number) => { _setActiveIdx(idx); writePos({ view: viewPref, activeIdx: idx }); };
-  const setView = (v: EditorView) => { _setView(v); writePos({ view: v, activeIdx }); };
+  const setActiveIdx = (idx: number) => { _setActiveIdx(idx); writePos({ view: viewPref, activeIdx: idx, dayIdx }); };
+  const setDayIdx = (idx: number) => { _setDayIdx(idx); writePos({ view: viewPref, activeIdx, dayIdx: idx }); };
+  const setView = (v: EditorView) => { _setView(v); writePos({ view: v, activeIdx, dayIdx }); };
+  // A finding, a gap or the Program view asked for a workout: open it in the Day view.
+  const goTo = useCallback((t: BuilderTarget) => {
+    if (t.blockIndex !== blockIndex) return;
+    const w = Math.max(0, Math.min(t.week, Math.max(0, weeksData.length - 1)));
+    _setActiveIdx(w);
+    if (t.day != null) _setDayIdx(t.day);
+    const v = t.view ?? (t.day != null ? "day" : "week");
+    _setView(v);
+    writePos({ view: v, activeIdx: w, dayIdx: t.day ?? dayIdx });
+    if (v === "day") window.setTimeout(() => flashBuilderRow(t.row), 60);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockIndex, weeksData.length, dayIdx]);
+  useEffect(() => {
+    const waiting = builderNav.take(blockIndex);
+    if (waiting) goTo(waiting);
+    return builderNav.on((t) => { if (t.blockIndex === blockIndex) { builderNav.take(blockIndex); goTo(t); } });
+  }, [blockIndex, goTo]);
+  // Tell Cleo which workout "this" means.
+  useEffect(() => {
+    const w = weeksData[activeIdx];
+    const d = w?.days?.[dayIdx];
+    builderNav.setHere({ blockIndex, blockName, week: w ? Number(w.week_index ?? activeIdx + 1) : null, day: d ? Number(d.day_index ?? dayIdx + 1) : null, dayName: d ? (formatDaySubtitle(d) ?? null) : null, view });
+  }, [blockIndex, blockName, weeksData, activeIdx, dayIdx, view]);
+  useEffect(() => () => builderNav.setHere(null), []);
+  // Keys (the editor's list, `?`): 1–5 the views, [ ] the workouts in order
+  // (Day view; a week anywhere else), ⇧[ ⇧] the weeks.
+  const keyState = useRef({ view, activeIdx, dayIdx, weeksData });
+  keyState.current = { view, activeIdx, dayIdx, weeksData };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || !pbShortcutsEnabled() || !builderKeyFree(e)) return;
+      const st = keyState.current;
+      const views: EditorView[] = ["day", "week", "block", "program", "sheet"];
+      if (!e.shiftKey && /^[1-5]$/.test(e.key)) {
+        const v = views[Number(e.key) - 1];
+        if (v === "sheet" && phone) return;
+        e.preventDefault();
+        setView(v);
+        return;
+      }
+      const dir = e.code === "BracketLeft" ? -1 : e.code === "BracketRight" ? 1 : 0;
+      if (!dir) return;
+      e.preventDefault();
+      if (e.shiftKey || st.view !== "day") {
+        const w = Math.max(0, Math.min(st.activeIdx + dir, st.weeksData.length - 1));
+        if (w === st.activeIdx) return;
+        _setActiveIdx(w);
+        writePos({ view: viewPref, activeIdx: w, dayIdx: st.dayIdx });
+        if (st.view === "block") document.getElementById(`tpl-week-${w}`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+        return;
+      }
+      const flat = st.weeksData.flatMap((w: any, wi: number) => (w?.days ?? []).map((_: any, dj: number) => [wi, dj] as const));
+      const days = st.weeksData[st.activeIdx]?.days ?? [];
+      const at = flat.findIndex(([a, b]) => a === st.activeIdx && b === Math.max(0, Math.min(st.dayIdx, days.length - 1)));
+      const t = flat[at + dir];
+      if (!t) return;
+      _setActiveIdx(t[0]);
+      _setDayIdx(t[1]);
+      writePos({ view: "day", activeIdx: t[0], dayIdx: t[1] });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phone, viewPref]);
+  // a phone: the view bar is where the tab bar was (the app's tab bar steps aside here)
+  useEffect(() => {
+    if (!phone || typeof document === "undefined") return;
+    const html = document.documentElement;
+    html.setAttribute("data-coach-builder", "");
+    return () => html.removeAttribute("data-coach-builder");
+  }, [phone]);
+  const overview = useProgramOverview();
+  const athlete = useContext(BuilderAthleteContext);
   // Clamp activeIdx if weeks were removed since last visit.
   useEffect(() => {
     if (weeksData.length === 0) return;
@@ -1855,8 +2160,28 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
   const weekNav = (
     <div className="flex min-w-0 flex-1 items-center gap-1">
       {!phone && (
-        <div role="tablist" aria-label="Layout" className="mr-1 inline-flex shrink-0 rounded-lg bg-muted p-0.5">
-          {([["week", "Week"], ["block", "Whole block"], ["sheet", "Sheet"]] as const).map(([v, label]) => (
+        // a narrow toolbar (a tablet, the library open): the views fold into one menu
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className="mr-1 hidden h-8 shrink-0 items-center gap-1 rounded-lg bg-muted px-2.5 text-xs font-medium @max-[56rem]/tb:inline-flex" aria-label={`View: ${EDITOR_VIEWS.find((x) => x.v === view)?.label ?? ""}`} data-editor-view-menu>
+              {EDITOR_VIEWS.find((x) => x.v === view)?.label} <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            <DropdownMenuRadioGroup value={view} onValueChange={(v) => setView(v as EditorView)}>
+              {EDITOR_VIEWS.map(({ v, label, title }, k) => (
+                <DropdownMenuRadioItem key={v} value={v}>
+                  <span className="flex-1">{label}<span className="block text-xs text-muted-foreground">{title}</span></span>
+                  <DropdownMenuShortcut>{k + 1}</DropdownMenuShortcut>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+      {!phone && (
+        <div role="tablist" aria-label="View" className="mr-1 inline-flex shrink-0 rounded-lg bg-muted p-0.5 @max-[56rem]/tb:hidden">
+          {EDITOR_VIEWS.map(({ v, label, title }, k) => (
             <button
               key={v}
               type="button"
@@ -1864,13 +2189,13 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
               aria-selected={view === v}
               onClick={() => setView(v)}
               className={cn(
-                "inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition-colors",
+                "inline-flex h-7 items-center rounded-md px-2 text-xs font-medium transition-colors",
                 view === v ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
               )}
-              title={v === "sheet" ? "Edit like a spreadsheet: every exercise as a row of cells" : undefined}
+              title={`${title} (${k + 1})`}
               data-editor-view={v}
             >
-              {v === "week" ? <CalendarRange className="h-3.5 w-3.5" /> : v === "block" ? <LayoutGrid className="h-3.5 w-3.5" /> : <Table2 className="h-3.5 w-3.5" />} {label}
+              {label}
             </button>
           ))}
         </div>
@@ -1880,7 +2205,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
         aria-label="Weeks"
         className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        <span className="shrink-0 px-1 text-xs text-muted-foreground">Week</span>
+        <span className="shrink-0 px-1 text-xs text-muted-foreground max-md:hidden @max-[56rem]/tb:hidden">Week</span>
         {weeksData.map((w: any, i: number) => (
           <button
             key={i}
@@ -1963,7 +2288,44 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
         </div>
       )}
 
-      {view === "sheet" ? (
+      {view === "program" ? (
+        <ProgramOverview
+          value={overview ?? {
+            title: blockName,
+            blocks: [{
+              id: "this",
+              name: blockName ?? "This block",
+              weeks: weeksData.length,
+              weekPhases: weeksData.map((w: any) => w?.phase ?? null),
+              resolved: resolveBlockType({ name: blockName }),
+              current: true,
+              onOpen: (w) => { if (w != null) setActiveIdx(w); setView("week"); },
+            }],
+          }}
+        />
+      ) : view === "day" ? (
+        weeksData[activeIdx] ? (
+          <ProgressWeekContext.Provider value={(di, pos) => setProgressAt({ week: activeIdx, dayIndex: di, pos })}>
+          <RowOpsContext.Provider value={(di, before, op, name) => offerRowScope(activeIdx, di, before, op, name)}>
+            <DayFocus
+              weeksData={weeksData}
+              weekIdx={activeIdx}
+              dayIdx={dayIdx}
+              onGo={(wi, di) => { _setActiveIdx(wi); _setDayIdx(di); writePos({ view: "day", activeIdx: wi, dayIdx: di }); }}
+              setWeek={(wi, nw) => { const c = [...weeksData]; c[wi] = nw; setWeeksData(c); }}
+              exercises={exercises}
+              compact={compact}
+              blockId={ctxBlockId}
+              dayScheduleStatus={dayScheduleStatus}
+              onFixCalendarIssue={onFixCalendarIssue}
+              onCopyDayToFuture={(di) => copyDayToFuture(activeIdx, di)}
+              limit={athlete?.sessionLimit ?? null}
+              equipmentItems={athlete?.equipment?.items}
+            />
+          </RowOpsContext.Provider>
+          </ProgressWeekContext.Provider>
+        ) : null
+      ) : view === "sheet" ? (
         <ProgramSheet
           weeksData={weeksData}
           setWeeksData={setWeeksData}
@@ -2101,11 +2463,198 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
           </div>
         </div>
       )}
+      {phone && (
+        <>
+          <div aria-hidden className="h-[calc(64px+env(safe-area-inset-bottom))]" />
+          <nav className="phone-column fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background px-2 pb-[env(safe-area-inset-bottom)]" aria-label="View" data-builder-viewbar>
+            <div role="tablist" className="grid h-[56px] grid-cols-4">
+              {EDITOR_VIEWS.filter((x) => x.v !== "sheet").map(({ v, label, icon }) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === v}
+                  onClick={() => { feedback("tap"); setView(v); }}
+                  className={cn("flex flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-medium transition-colors active:bg-muted", view === v ? "text-foreground" : "text-muted-foreground")}
+                  data-editor-view={v}
+                >
+                  <span className={cn("flex h-7 w-11 items-center justify-center rounded-full transition-colors [&_svg]:h-[18px] [&_svg]:w-[18px]", view === v && "bg-secondary")}>{icon}</span>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </nav>
+        </>
+      )}
     </div>
   );
 }
 
-function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSummary, compact, dayKeyPrefix, blockId, blockStartDate, blockEndDate, onExtraDayAdded, dayScheduleStatus, onFixCalendarIssue, layout = "stack" }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; hideVolumeSummary?: boolean; compact?: boolean; dayKeyPrefix?: string; blockId?: string | null; blockStartDate?: string | null; blockEndDate?: string | null; onExtraDayAdded?: () => void; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void; layout?: "stack" | "grid" }) {
+/**
+ * The Day view: one workout, whole, with nothing else around it. ‹ › step
+ * through every workout of the block in order (across weeks), the week's days
+ * are one tap each, and a line under the name says what the session asks:
+ * about how long against their limit, how many sets, where the work goes and
+ * how often it changes station (with the accessories grouped by station in one
+ * tap, Undo after).
+ */
+function DayFocus({ weeksData, weekIdx, dayIdx, onGo, setWeek, exercises, compact, blockId, dayScheduleStatus, onFixCalendarIssue, onCopyDayToFuture, limit, equipmentItems }: {
+  weeksData: any[];
+  weekIdx: number;
+  dayIdx: number;
+  onGo: (weekIdx: number, dayIdx: number) => void;
+  setWeek: (weekIdx: number, w: any) => void;
+  exercises: any[];
+  compact?: boolean;
+  blockId?: string | null;
+  dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>;
+  onFixCalendarIssue?: (dayId: string) => void;
+  onCopyDayToFuture?: (dayIdx: number) => void;
+  limit: SessionLimit | null;
+  equipmentItems?: string[];
+}) {
+  const phone = useBuilderPhone();
+  const week = weeksData[weekIdx];
+  const days: any[] = week?.days ?? [];
+  const di = Math.max(0, Math.min(dayIdx, days.length - 1));
+  const day = days[di];
+  const flat = useMemo(() => weeksData.flatMap((w: any, wi: number) => (w?.days ?? []).map((_: any, dj: number) => [wi, dj] as const)), [weeksData]);
+  const pos = flat.findIndex(([a, b]) => a === weekIdx && b === di);
+  const step = (k: number) => {
+    const t = flat[pos + k];
+    if (!t) return;
+    feedback("tap");
+    onGo(t[0], t[1]);
+  };
+  const exById = useMemo(() => new Map<string, any>((exercises as any[]).map((e) => [e.id, e])), [exercises]);
+  const rows: any[] = day?.rows ?? [];
+  const nameOf = (r: any): string => (r?.exercise_id ? exById.get(r.exercise_id)?.name : null) ?? r?.exercise_name_override ?? "Exercise";
+  const minutes = rows.length ? estimateDayMinutes(rows) : 0;
+  const sets = rows.filter((r) => r?.measurement_type !== "time").reduce((n, r) => n + (Number(r?.sets) || 0), 0);
+  const muscles = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) {
+      if (r?.measurement_type === "time") continue;
+      const c = classifyExercise(nameOf(r), r?.exercise_id ? exById.get(r.exercise_id)?.exercise_category : null);
+      for (const k of c.primary) if (k !== ("other" as any)) m.set(k, (m.get(k) ?? 0) + (Number(r?.sets) || 0));
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, exById]);
+  const flow = useMemo(() => {
+    if (rows.length < 3) return null;
+    const list = rows.map((r: any, i: number) => ({ exercise_name: nameOf(r), role: r?.purpose_label ?? (r?.percentage_basis === "top_set" || r?.percentage_basis === "prev_set" ? "Back-off" : null), superset: r?.superset_group ?? null, idx: i, equipment: r?.exercise_id ? exById.get(r.exercise_id)?.equipment ?? null : null }));
+    const res = orderAccessories(list, (e) => e.equipment, { items: equipmentItems as any });
+    return res.exercises === list || res.after >= res.before ? { changes: res.before, better: null } : { changes: res.before, better: res };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, exById, equipmentItems]);
+  const over = limit?.minutes != null && overLimit(minutes, limit.minutes);
+  if (!week) return null;
+  const weekNum = Number(week.week_index ?? weekIdx + 1);
+  const groupStations = () => {
+    if (!flow?.better) return;
+    const before = week;
+    const next = { ...week, days: days.map((d: any, j: number) => (j === di ? { ...d, rows: flow.better!.exercises.map((e: any) => rows[e.idx]) } : d)) };
+    setWeek(weekIdx, next);
+    toast(`Grouped by station: ${flow.better!.before} → ${flow.better!.after} moves`, { action: { label: "Undo", onClick: () => setWeek(weekIdx, before) }, duration: 6000 });
+  };
+  const dayName = (d: any, j: number) => formatDaySubtitle(d) || `Day ${d?.day_index ?? j + 1}`;
+  return (
+    // One line to move between workouts, then the workout; on a wide canvas
+    // what the session asks sits beside it instead of above it.
+    <div className="@container" data-day-focus>
+      <div className="grid gap-x-4 gap-y-2 @[1100px]:grid-cols-[minmax(0,1fr)_260px] @[1100px]:grid-rows-[auto_1fr]">
+        <div className="flex min-w-0 items-center gap-1 @[1100px]:col-start-1" data-day-nav>
+          <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0 max-md:h-10 max-md:w-10" disabled={pos <= 0} onClick={() => step(-1)} aria-label="Previous workout" title="Previous workout ([)" data-day-prev>
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <div role="tablist" aria-label={`Week ${weekNum} workouts`} className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <span className="shrink-0 px-1 text-xs tabular-nums text-muted-foreground" data-day-where>W{weekNum}</span>
+            {days.length === 0 ? (
+              <span className="truncate text-sm text-muted-foreground">No workouts this week</span>
+            ) : days.map((d: any, j: number) => (
+              <button
+                key={j}
+                type="button"
+                role="tab"
+                aria-selected={j === di}
+                title={dayName(d, j)}
+                onClick={() => onGo(weekIdx, j)}
+                className={cn(
+                  "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors max-md:h-9",
+                  j === di ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+                data-day-tab
+              >
+                <span className="tabular-nums">D{d.day_index ?? j + 1}</span>
+                {formatDaySubtitle(d) ? <span className={cn("truncate", j === di ? "max-w-[200px]" : "max-w-[110px]")}>{formatDaySubtitle(d)}</span> : null}
+              </button>
+            ))}
+          </div>
+          <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0 max-md:h-10 max-md:w-10" disabled={pos < 0 || pos >= flat.length - 1} onClick={() => step(1)} aria-label="Next workout" title="Next workout (])" data-day-next>
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        </div>
+        {day && rows.length > 0 && (
+          <aside
+            className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs text-muted-foreground @[1100px]:col-start-2 @[1100px]:row-span-2 @[1100px]:row-start-1 @[1100px]:flex-col @[1100px]:flex-nowrap @[1100px]:items-stretch @[1100px]:gap-3 @[1100px]:self-start @[1100px]:rounded-2xl @[1100px]:border @[1100px]:border-border @[1100px]:p-3 @[1100px]:text-[13px]"
+            data-day-summary
+            aria-label="This workout"
+          >
+            <span className="hidden text-sm font-semibold text-foreground @[1100px]:block">This workout</span>
+            <span className={cn("inline-flex items-center gap-1 tabular-nums", over ? "font-medium text-warning" : "text-foreground")} data-day-minutes title={limit?.minutes != null ? `Their limit: ${limit.short}` : "No session limit on file"}>
+              <Clock className="h-3.5 w-3.5" /> ~{minutes} min{limit?.minutes != null ? ` of ${limit.minutes}` : ""}
+            </span>
+            <span className="tabular-nums">{rows.length} exercise{rows.length === 1 ? "" : "s"} · {sets} sets</span>
+            {muscles.length > 0 && (
+              <span className="min-w-0 @[1100px]:space-y-1" data-day-muscles>
+                <span className="hidden text-xs text-muted-foreground @[1100px]:block">Sets by muscle</span>
+                {muscles.map(([m, n], k) => (
+                  <span key={m} className="capitalize @[1100px]:flex @[1100px]:items-center @[1100px]:justify-between">
+                    <span>{m.replace(/_/g, " ")}</span>
+                    <span className="tabular-nums @[1100px]:text-foreground"> {n}</span>
+                    {k < muscles.length - 1 ? <span className="@[1100px]:hidden">, </span> : null}
+                  </span>
+                ))}
+              </span>
+            )}
+            {over && limit && (
+              <span className="flex items-start gap-1.5 text-[13px] text-warning" data-day-over-limit>
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> About {minutes - (limit.minutes ?? 0)} min over {limit.phrase}. Trim accessory sets first.
+              </span>
+            )}
+            {flow?.better && (
+              <Button size="sm" variant="outline" className="h-7 rounded-full px-2.5 text-xs @[1100px]:h-8 @[1100px]:w-full" data-day-group-stations onClick={groupStations}>
+                Group by station ({flow.better.before} → {flow.better.after} moves)
+              </Button>
+            )}
+          </aside>
+        )}
+        <div data-builder-focus-day className="min-w-0 @[1100px]:col-start-1">
+          <WeekEditor
+            week={week}
+            setWeek={(w) => setWeek(weekIdx, w)}
+            exercises={exercises}
+            compact={compact}
+            dayKeyPrefix={`wk${week.week_index ?? weekIdx}`}
+            blockId={blockId}
+            dayScheduleStatus={dayScheduleStatus}
+            onFixCalendarIssue={onFixCalendarIssue}
+            onCopyDayToFuture={onCopyDayToFuture}
+            onlyDay={di}
+          />
+          {days.length === 0 && (
+            <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">No workouts in this week yet. Add one in the Week view.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSummary, compact, dayKeyPrefix, blockId, blockStartDate, blockEndDate, onExtraDayAdded, dayScheduleStatus, onFixCalendarIssue, layout = "stack", onlyDay }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; hideVolumeSummary?: boolean; compact?: boolean; dayKeyPrefix?: string; blockId?: string | null; blockStartDate?: string | null; blockEndDate?: string | null; onExtraDayAdded?: () => void; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void; layout?: "stack" | "grid";
+  /** The Day view: only this day of the week, with nothing of the week around it. */
+  onlyDay?: number }) {
   const days = week.days || [];
   const purposeLabelsByDay = useMemo(() => weekPurposeLabelsByDay(days, exercises), [days, exercises]);
   const phone = useBuilderPhone();
@@ -2166,15 +2715,16 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSum
   };
   return (
     <div className={cn("space-y-3", layout === "grid" && "@container")}>
-      {!hideVolumeSummary && <WeeklyVolumeSummary week={week} exercises={exercises as any} weekIndex={week?.week_index} />}
-      <WeekPriorityWarnings week={week} exercises={exercises as any} />
-      {days.length === 0 && (
+      {!hideVolumeSummary && onlyDay == null && <WeeklyVolumeSummary week={week} exercises={exercises as any} weekIndex={week?.week_index} />}
+      {onlyDay == null && <WeekPriorityWarnings week={week} exercises={exercises as any} />}
+      {days.length === 0 && onlyDay == null && (
         <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
           No days in this week yet.
         </p>
       )}
       <div className={cn("grid gap-3", layout === "grid" && "@4xl:grid-cols-2 @[96rem]:grid-cols-3", compact && "gap-2")}>
       {days.map((d: any, i: number) => {
+        if (onlyDay != null && i !== onlyDay) return null;
         const dayMinutes = estimateDayMinutes(d.rows || []);
         const dKey = `${dayKeyPrefix ?? `wk${week.week_index ?? 0}`}:d${d.day_index ?? i}`;
         const positional = i + 1;
@@ -2324,6 +2874,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSum
         </section>
       )})}
       </div>
+      {onlyDay == null && (
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" className="h-11 flex-1 border-dashed text-muted-foreground md:h-10" onClick={addDay}>
           <Plus className="mr-1.5 h-4 w-4" /> Add day
@@ -2340,6 +2891,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSum
           />
         )}
       </div>
+      )}
     </div>
   );
 }
@@ -2544,6 +3096,43 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
     return () => document.removeEventListener("keydown", handler);
   }, [isActive, dayKey, allExpanded]);
 
+  // A superset is written into both exercises' notes, where the athlete reads it
+  // (program-editor-superset.ts): "Superset with X: one set of each, then rest."
+  const rowName = (i: number) => {
+    const r = rows[i];
+    return ((exercises as any[]).find((e) => e.id === r?.exercise_id)?.name ?? r?.exercise_name_override ?? "").trim();
+  };
+  const pairUnits = (ui: number) => {
+    const a = units[ui]?.start;
+    const b = units[ui + 1]?.start;
+    if (a == null || b == null) return;
+    const an = rowName(a);
+    const bn = rowName(b);
+    if (!an || !bn) { toast.error("Pick both exercises first"); return; }
+    const before = day;
+    const copy = [...rows];
+    copy[a] = { ...copy[a], notes: withSuperset(copy[a].notes, bn) };
+    copy[b] = { ...copy[b], notes: withSuperset(copy[b].notes, an) };
+    setDay({ ...day, rows: copy });
+    toast.success(`${an} and ${bn} are a superset`, { action: { label: "Undo", onClick: () => setDay(before) }, duration: 6000 });
+  };
+  const unpairUnit = (ui: number) => {
+    const a = units[ui]?.start;
+    if (a == null) return;
+    const name = rowName(a);
+    const partnerName = supersetPartner(rows[a]?.notes);
+    const before = day;
+    const copy = [...rows];
+    copy[a] = { ...copy[a], notes: withoutSuperset(copy[a].notes) };
+    // the exercise it was paired with (next to it) lets go too
+    for (const n of [units[ui - 1]?.start, units[ui + 1]?.start]) {
+      if (n == null) continue;
+      if (supersetPartner(copy[n]?.notes) === name || (partnerName && rowName(n) === partnerName)) copy[n] = { ...copy[n], notes: withoutSuperset(copy[n].notes) };
+    }
+    setDay({ ...day, rows: copy });
+    toast.success("Unpaired", { action: { label: "Undo", onClick: () => setDay(before) }, duration: 6000 });
+  };
+
   return (
     <div
       ref={containerRef}
@@ -2658,6 +3247,8 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: wee
                       purposeLabel={purposeLabels[i]}
                       dayKey={dayKey}
                       index={i}
+                      onPairNext={!followOn && ui < units.length - 1 ? () => pairUnits(ui) : undefined}
+                      onUnpair={!followOn ? () => unpairUnit(ui) : undefined}
                     />
                   );
                 })}
@@ -3040,8 +3631,12 @@ const TRACKING_LABEL: Record<"reps_weight" | "reps" | "time", string> = {
   time: "Time",
 };
 
-function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBackoff, onSwap, handle, position, followTitle, linkedLoad, startOpen, flash, exercises, compact, purposeLabel, dayKey, index }: {
+function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBackoff, onSwap, handle, position, followTitle, linkedLoad, startOpen, flash, exercises, compact, purposeLabel, dayKey, index, onPairNext, onUnpair }: {
   row: any; setRow: (r: any) => void; onDelete?: () => void;
+  /** pair this exercise with the next one as a superset (written into both notes) */
+  onPairNext?: () => void;
+  /** take this exercise and its partner out of their superset */
+  onUnpair?: () => void;
   /** "Delete with its back-off": a top set takes its back-offs with it */
   deleteLabel?: string;
   /** a copy right under it (a back-off: under itself, inside its exercise) */
@@ -3100,22 +3695,36 @@ function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBacko
   // load — either a % of a basis or a manual kg/lb load). Until all of
   // these are present we keep the card expanded so coaches see the empty
   // inputs they still owe.
-  const meetsMinimum = (() => {
+  // What kind of exercise this is decides which fields it asks for (Nov 23 2026):
+  // strength gets the full prescription, a hold or cardio its time and effort,
+  // warm-up / mobility just sets and reps or time. A field that already holds a
+  // value always shows, so nothing written is ever hidden.
+  const rowIsTime = (row as any).tracking_type === "time" || (row as any).measurement_type === "time";
+  const kind: "strength" | "time" | "cardio" | "mobility" =
+    row.time_profile === "warmup_mobility" ? "mobility"
+    : rowIsTime && (isTimedCardio(exName) || row.time_profile === "conditioning") ? "cardio"
+    : rowIsTime ? "time"
+    : "strength";
+  const needsEffort = kind === "strength";
+  const missing: string[] = (() => {
+    const out: string[] = [];
     const hasEx = !!((row as any).exercise_id || (row as any).exercise_name_override);
-    const hasSets = row.sets != null && row.sets !== "";
-    const isTime = (row as any).measurement_type === "time";
-    const hasReps = isTime
+    if (!hasEx) out.push("an exercise");
+    if (row.sets == null || row.sets === "") out.push("sets");
+    const hasReps = rowIsTime
       ? ((row as any).duration_seconds != null && Number((row as any).duration_seconds) > 0)
       : !!row.reps_text;
+    if (!hasReps) out.push(rowIsTime ? "a time" : "reps");
     const hasRpe = (row as any).rpe != null && (row as any).rpe !== "";
     const hasRir = (row as any).rir != null && (row as any).rir !== "";
     const hasPct = (row as any).percentage != null && (row as any).percentage !== "" &&
       (row as any).percentage_basis && (row as any).percentage_basis !== "none";
     const hasManualLoad = ((row as any).load_kg != null && (row as any).load_kg !== "") ||
       ((row as any).load_lb != null && (row as any).load_lb !== "");
-    const hasIntensity = hasRpe || hasRir || hasPct || hasManualLoad;
-    return hasEx && hasSets && hasReps && hasIntensity;
+    if (needsEffort && !(hasRpe || hasRir || hasPct || hasManualLoad)) out.push("an effort or load");
+    return out;
   })();
+  const meetsMinimum = missing.length === 0;
   const meetsMinRef = useRef(meetsMinimum);
   useEffect(() => { meetsMinRef.current = meetsMinimum; }, [meetsMinimum]);
   const [collapsed, setCollapsed] = useState(meetsMinimum && !startOpen);
@@ -3332,6 +3941,15 @@ function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBacko
   if (row.tempo) summaryParts.push(`tempo ${row.tempo}`);
   const restSummary = `rest ${fmtRestSeconds(effectiveRest)}`;
   const showLabel = !followTitle && !!purposeLabel && purposeLabel !== "Assistance";
+  // The same prescription as columns, for a card wide enough to line them up
+  // (the Day view): sets × reps · load · effort · rest, each in its place.
+  const setsText = hasSets && amount ? `${row.sets} × ${amount}` : hasSets ? `${row.sets} set${Number(row.sets) === 1 ? "" : "s"}` : amount ? (isTime ? amount : `${amount} reps`) : null;
+  const effortText = [
+    row.rpe !== "" && row.rpe != null ? (hasRpeCap(row) ? `RPE cap ${row.rpe}` : `RPE ${row.rpe}`) : null,
+    row.rir !== "" && row.rir != null ? `RIR ${row.rir}` : null,
+  ].filter(Boolean).join(" · ") || null;
+  const partner = supersetPartner(row.notes);
+  const noteText = withoutSuperset(row.notes);
 
   // Order number, derived from the row's current position in the day (never
   // stored): reorder or delete a row and every card renumbers automatically.
@@ -3384,6 +4002,15 @@ function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBacko
               <CornerDownRight className="mr-2 h-4 w-4" /> Add back-off sets
             </DropdownMenuItem>
           )}
+          {!followTitle && (partner && onUnpair ? (
+            <DropdownMenuItem onSelect={onUnpair} data-row-unpair>
+              <Unlink className="mr-2 h-4 w-4" /> Unpair superset
+            </DropdownMenuItem>
+          ) : onPairNext ? (
+            <DropdownMenuItem onSelect={onPairNext} data-row-pair>
+              <Link2 className="mr-2 h-4 w-4" /> Superset with the next exercise
+            </DropdownMenuItem>
+          ) : null)}
           <DropdownMenuItem onSelect={() => { copyRows([row]); toast.success("Exercise copied"); }}>
             <ClipboardCopy className="mr-2 h-4 w-4" /> Copy
           </DropdownMenuItem>
@@ -3463,6 +4090,8 @@ function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBacko
           resetCard();
         }
         if (e.key === "Escape" && !collapsed) {
+          // the card takes this Escape: Focus mode stays on (builder-focus.tsx skips a handled key)
+          e.preventDefault();
           (document.activeElement as HTMLElement | null)?.blur?.();
           setCollapsed(true);
         }
@@ -3470,28 +4099,53 @@ function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBacko
       className={cn(
         "group/row @container/row relative transition-colors",
         collapsed
-          ? cn("cursor-pointer hover:bg-muted/40", compact ? "py-2 pl-4 pr-2" : "py-2.5 pl-4 pr-2")
-          : cn("bg-muted/40", phone ? "space-y-3 py-3 pl-4 pr-2" : "space-y-2.5 py-3 pl-4 pr-2"),
+          ? cn("cursor-pointer hover:bg-muted/40", compact ? "py-2 pl-2 pr-2" : "py-2.5 pl-2 pr-2")
+          : cn("bg-muted/40", phone ? "space-y-3 py-3 pl-2 pr-2" : "space-y-2.5 py-3 pl-2 pr-2"),
       )}
       title={collapsed ? "Click to edit" : undefined}
     >
-      {/* The movement family: one thin stripe (squat yellow, bench blue,
-          deadlift green, everything else red). */}
-      <span className={cn("absolute bottom-2 left-1.5 top-2 w-[3px] rounded-full", accent)} aria-hidden />
       {collapsed ? (
         <div className="flex min-w-0 items-start gap-2.5">
           {grip ?? gripRoom}
           {RowIndexBadge}
-          <div className="min-w-0 flex-1">
-            {nameBlock}
-            <div className={cn("mt-0.5 leading-snug text-muted-foreground", phone ? "text-[13px]" : "text-xs")}>
-              {summaryParts.length > 0 ? summaryParts.join(" · ") : <span className="italic">No sets or reps yet</span>}
-              <span className="opacity-60"> · </span>
-              <span className="whitespace-nowrap">{restSummary}</span>
+          <div className="min-w-0 flex-1 @2xl/row:flex @2xl/row:items-start @2xl/row:gap-4">
+            <div className="min-w-0 flex-1">
+              {nameBlock}
+              {/* a narrow card: the prescription in one line */}
+              <div className={cn("mt-0.5 leading-snug text-muted-foreground @2xl/row:hidden", phone ? "text-[13px]" : "text-xs")} data-row-summary>
+                {summaryParts.length > 0 ? summaryParts.join(" · ") : <span className="italic">No sets or reps yet</span>}
+                <span className="opacity-60"> · </span>
+                <span className="whitespace-nowrap">{restSummary}</span>
+              </div>
+              {(showLabel || partner || noteText) && (
+                <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                  {showLabel && <span data-purpose-label>{purposeLabelText(purposeLabel)}</span>}
+                  {partner && (
+                    <span className="inline-flex items-center gap-1 font-medium text-foreground" data-row-superset title={`Superset with ${partner}: one set of each, then rest`}>
+                      <Link2 className="h-3.5 w-3.5" /> Superset with {partner}
+                    </span>
+                  )}
+                  {noteText && (
+                    <span className="inline-flex min-w-0 max-w-full items-center gap-1" data-row-note title={noteText}>
+                      <StickyNote className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{noteText}</span>
+                    </span>
+                  )}
+                </div>
+              )}
+              {missing.length > 0 && (row.exercise_id || row.exercise_name_override) && (
+                <div className="mt-0.5 text-xs font-medium text-warning" data-row-missing>Needs {missing.join(", ")}</div>
+              )}
             </div>
-            {showLabel && (
-              <div className="mt-0.5 text-xs text-muted-foreground" data-purpose-label>{purposeLabelText(purposeLabel)}</div>
-            )}
+            {/* a wide card: the same prescription lined up in columns */}
+            <div className="hidden shrink-0 grid-cols-[6rem_minmax(0,12rem)_6.5rem_4.5rem] items-baseline gap-3 pt-px text-sm tabular-nums @2xl/row:grid" data-row-columns>
+              <span className={cn("font-semibold", setsText ? "text-foreground" : "text-warning")}>{setsText ?? "Sets?"}</span>
+              <span className={cn("truncate", loadSummary ? "text-foreground" : "text-muted-foreground/60")} title={loadSummary ?? undefined}>{loadSummary ?? "—"}</span>
+              <span className="min-w-0">
+                <span className={cn("block", effortText ? "text-foreground" : needsEffort && !loadSummary ? "text-warning" : "text-muted-foreground/60")}>{effortText ?? "—"}</span>
+                {row.tempo ? <span className="block text-xs text-muted-foreground">tempo {row.tempo}</span> : null}
+              </span>
+              <span className="text-muted-foreground">{fmtRestSeconds(effectiveRest)}</span>
+            </div>
           </div>
           {rowMenu}
         </div>
@@ -3560,12 +4214,12 @@ function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBacko
             )}
           </div>
         </RowField>
-        <RowField className="col-span-2" label="RPE">
+        {(kind !== "mobility" || (row.rpe != null && row.rpe !== "")) && <RowField className="col-span-2" label={kind === "cardio" ? "Effort (RPE)" : "RPE"}>
           <RowCell dataField="rpe" className={cn("text-center font-semibold tabular-nums", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rpe} onCommit={(v) => setRow({ ...row, rpe: v ?? "" })} />
-        </RowField>
-        <RowField className="col-span-2" label="RIR">
+        </RowField>}
+        {(kind === "strength" || (row.rir != null && row.rir !== "")) && <RowField className="col-span-2" label="RIR">
           <RowCell dataField="rir" className={cn("text-center font-semibold tabular-nums", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
-        </RowField>
+        </RowField>}
         <RowField className="col-span-2 @xl/row:col-span-3" label={`Rest${restIsOverride ? " (set)" : ""}`}>
           {(() => {
             const REST_PRESETS: { v: number; label: string }[] = [
@@ -3643,10 +4297,10 @@ function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBacko
           {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />} Load and tempo
         </button>
       )}
-      {expanded && (
+      {expanded && (tracking === "reps_weight" || suggestedOn || (!isTime && kind !== "mobility") || !!row.tempo) && (
       <div className="grid grid-cols-12 items-start gap-2">
-        {/* ---- Suggested load: one group ---- */}
-        <div className={cn("col-span-12 rounded-lg border border-border bg-background/60 p-2.5", loadMode === "none" ? "@xl/row:col-span-8" : "@xl/row:col-span-9")}>
+        {/* ---- Suggested load: one group (only for an exercise lifted with a weight, or one that has a load) ---- */}
+        {(tracking === "reps_weight" || suggestedOn) && <div className={cn("col-span-12 rounded-lg border border-border bg-background/60 p-2.5", loadMode === "none" ? "@xl/row:col-span-8" : "@xl/row:col-span-9")}>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[13px] font-medium">Suggested load</div>
@@ -3733,13 +4387,13 @@ function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBacko
                 : `Worked out from the weight they lift on the ${row.percentage_basis === "prev_set" ? "set before" : "top set"} that day.`}
             </p>
           )}
-        </div>
-        <RowField className={cn("col-span-12", loadMode === "none" ? "@xl/row:col-span-4" : "@xl/row:col-span-3")} label="Tempo">
+        </div>}
+        {((!isTime && kind !== "mobility") || !!row.tempo) && <RowField className={cn("col-span-12", tracking !== "reps_weight" && !suggestedOn ? "@xl/row:col-span-4" : loadMode === "none" ? "@xl/row:col-span-4" : "@xl/row:col-span-3")} label="Tempo">
           <RowCell dataField="tempo" className={cn("text-center font-semibold tabular-nums", h, inputCls)} placeholder="3-1-1" value={row.tempo} onCommit={(v) => setRow({ ...row, tempo: v ?? "" })} />
           <span className="px-0.5 text-[11px] leading-tight text-muted-foreground" title="Tempo: eccentric–pause–concentric (seconds). 3-1-1 = 3s down, 1s pause, 1s up.">
             Down, pause, up in seconds
           </span>
-        </RowField>
+        </RowField>}
       </div>
       )}
       {expanded && row.manual_override && (
@@ -3791,6 +4445,25 @@ function RowEditor({ row, setRow, onDelete, deleteLabel, onDuplicate, onAddBacko
             <span className="text-muted-foreground">Linked-row basis: set it on the row this references</span>
           )}
         </div>
+      )}
+      {/* ---- What the athlete reads under it: the coach's note (and a superset, said first) ---- */}
+      {partner && (
+        <div className="flex flex-wrap items-center gap-2 text-xs" data-row-superset>
+          <span className="inline-flex items-center gap-1 font-medium text-foreground"><Link2 className="h-3.5 w-3.5" /> Superset with {partner}</span>
+          <span className="text-muted-foreground">One set of each, then rest.</span>
+          {onUnpair && <button type="button" className="min-h-8 px-1 text-xs text-muted-foreground underline hover:text-foreground" onClick={onUnpair}>Unpair</button>}
+        </div>
+      )}
+      <RowField label="Note for the athlete">
+        <RowNote
+          value={noteText}
+          placeholder={kind === "cardio" ? "Speed, incline, heart-rate zone…" : kind === "mobility" ? "What to feel, how far to go…" : "A cue, a setup, a swap if needed (optional)"}
+          className={cn(inputCls, phone ? "text-base" : "text-sm")}
+          onCommit={(v) => setRow({ ...row, notes: partner ? withSuperset(v, partner) : (v ?? "") })}
+        />
+      </RowField>
+      {missing.length > 0 && (row.exercise_id || row.exercise_name_override) && (
+        <p className="text-xs font-medium text-warning" data-row-missing>Still needs {missing.join(", ")}.</p>
       )}
       {/* ---- More: label, movement family, exercise type ---- */}
       <div>

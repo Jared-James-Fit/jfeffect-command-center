@@ -124,7 +124,7 @@ describe("a fresh launch opens Crew; mid-workout it goes back to the workout", (
       "src/components/pov-quick-toggle.tsx",
       "src/components/members/members-directory.tsx",
       "src/route-pages/_authenticated/admin/members.$memberId.tsx",
-      "src/routes/_authenticated/admin/membership.index.tsx",
+      "src/components/admin/intel/membership-home.tsx",
     ];
     for (const f of entries) {
       const src = read(f);
