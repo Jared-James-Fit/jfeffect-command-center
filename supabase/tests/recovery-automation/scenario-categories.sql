@@ -136,4 +136,46 @@ exception when insufficient_privilege then raise notice 'ok: only the server wri
 end $$;
 reset role;
 
+-- ════ 6. Only the client's own words, and an approval closes only what it answers ═══
+reset role; select t_as(:owner); set role authenticated;
+select coach_automation_settings_set(false, '{"recovery_reply":"approval","workout_reply":"approval","checkin_reply":"approval"}');
+reset role;
+reset role; select t_as_service(); set role service_role;
+set t.coach_pov = 'on';
+insert into pl_workout_feedback (client_id, client_note) values (:devin, 'logged from his paper sheet, felt heavy');
+select t_assert((select count(*) = 0 from coach_automation_items where category = 'workout_reply' and client_id = :devin), 'a review a coach wrote in View as client queues nothing');
+insert into pain_reports (client_id, feedback_id, source, region) values (:devin, '00000000-0000-0000-0000-00000000fb21', 'review', 'knee');
+select t_assert((select count(*) = 0 from coach_automation_items where dedupe_key like '%fb21'), 'nor does a pain report a coach saved for them');
+reset t.coach_pov;
+insert into pl_workout_feedback (id, client_id, client_note) values ('00000000-0000-0000-0000-00000000aa21', :devin, 'ok');
+select t_assert((select count(*) = 1 from coach_automation_items where source_id = '00000000-0000-0000-0000-00000000aa21'), 'their own short note is queued for the worker to judge');
+update coach_automation_items set status = 'cancelled', context = '{"not_useful": true}' where source_id = '00000000-0000-0000-0000-00000000aa21';
+update pl_workout_feedback set client_note = 'ok but should I keep the same weight next week?' where id = '00000000-0000-0000-0000-00000000aa21';
+select t_assert((select status = 'queued' and context is null from coach_automation_items where source_id = '00000000-0000-0000-0000-00000000aa21'), 'one with nothing to reply to is looked at again when they add to it');
+update coach_automation_items set status = 'cancelled', context = null, why = 'you''ve written to them since' where source_id = '00000000-0000-0000-0000-00000000aa21';
+update pl_workout_feedback set client_note = 'ok but should I keep the same weight next week? also legs cooked' where id = '00000000-0000-0000-0000-00000000aa21';
+select t_assert((select status = 'cancelled' from coach_automation_items where source_id = '00000000-0000-0000-0000-00000000aa21'), 'one cancelled for any other reason stays cancelled');
+
+insert into messenger_checkins (client_id, task_type, status, ai_status, submitted_at) values (:marc, 'nutrition_review', 'completed', 'pending', now());
+update messenger_checkins set ai_status = 'ready' where task_type = 'nutrition_review';
+select t_assert((select count(*) = 0 from coach_automation_items where category = 'checkin_reply' and client_id = :marc and source_id <> '00000000-0000-0000-0000-00000000cc11'), 'only weekly check-ins get a reply');
+
+update messenger_checkins set reviewed_at = now() where id = '00000000-0000-0000-0000-00000000cc11';
+select t_assert((select status = 'cancelled' from coach_automation_items where dedupe_key = 'checkin_reply:00000000-0000-0000-0000-00000000cc11'), 'replying to a check-in himself cancels its waiting reply');
+
+reset role;
+create trigger staff_reply_closes_reviews after insert on messages for each row execute function tg_staff_reply_closes_reviews();
+set role service_role;
+insert into messenger_checkins (id, client_id, status, ai_status, submitted_at) values ('00000000-0000-0000-0000-00000000cc31', :marc, 'completed', 'pending', now() - interval '1 hour');
+insert into messages (client_id, sender_id, sender_role, body, attachments)
+values (:marc, :owner, 'admin', 'nice pull today', '[{"kind": "recovery_auto", "category": "workout_reply", "automatic": false}]');
+select t_assert((select reviewed_at is null from messenger_checkins where id = '00000000-0000-0000-0000-00000000cc31'), 'approving a workout reply leaves his check-in waiting');
+insert into messages (client_id, sender_id, sender_role, body, attachments)
+values (:marc, :owner, 'admin', 'good week', '[{"kind": "recovery_auto", "category": "checkin_reply", "automatic": false}]');
+select t_assert((select reviewed_at is not null and reviewed_via = 'reply' from messenger_checkins where id = '00000000-0000-0000-0000-00000000cc31'), 'approving the check-in''s reply closes it');
+insert into messenger_checkins (id, client_id, status, ai_status, submitted_at) values ('00000000-0000-0000-0000-00000000cc32', :marc, 'completed', 'pending', now() - interval '1 hour');
+insert into messages (client_id, sender_id, sender_role, body) values (:marc, :owner, 'admin', 'typed by hand');
+select t_assert((select reviewed_at is not null from messenger_checkins where id = '00000000-0000-0000-0000-00000000cc32'), 'a reply he types himself still closes it, as before');
+reset role;
+
 select 'coaching-automation-categories: all assertions passed';

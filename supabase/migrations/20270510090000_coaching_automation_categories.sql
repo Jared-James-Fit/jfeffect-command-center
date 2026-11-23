@@ -125,9 +125,12 @@ REVOKE ALL ON FUNCTION public.coach_automation_coach_of(uuid) FROM PUBLIC, anon,
 GRANT EXECUTE ON FUNCTION public.coach_automation_coach_of(uuid) TO service_role;
 
 -- ── 2. A workout review that says something queues its reply ───────────────
--- A note, or a session rated 1 or 2 out of 5. Three minutes of quiet first (they
--- may still be editing it, or adding pain, which makes it recovery's), one reply
--- per review, only a review from the last day.
+-- A note, or a session rated 1 or 2 out of 5, in the client's own words (never a
+-- review a coach wrote for them in View as client: review_updated_by is whoever
+-- saved it). Three minutes of quiet first (they may still be editing it, or adding
+-- pain, which makes it recovery's), one reply per review, only a review from the
+-- last day. One the worker found had nothing to reply to is looked at again when
+-- they change the note.
 CREATE OR REPLACE FUNCTION public.tg_workout_feedback_queue_reply()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -147,6 +150,10 @@ BEGIN
      AND NEW.overall_rating IS NOT DISTINCT FROM OLD.overall_rating THEN
     RETURN NEW;
   END IF;
+  IF NEW.review_updated_by IS NULL
+     OR NEW.review_updated_by IS DISTINCT FROM (SELECT c.user_id FROM public.clients c WHERE c.id = NEW.client_id) THEN
+    RETURN NEW;
+  END IF;
   v_coach := public.coach_automation_coach_of(NEW.client_id);
   IF v_coach IS NULL THEN RETURN NEW; END IF;
   v_mode := public.coach_automation_mode_for(v_coach, NEW.client_id, 'workout_reply');
@@ -154,8 +161,10 @@ BEGIN
   INSERT INTO public.coach_automation_items (coach_user_id, client_id, category, dedupe_key, source_kind, source_id, status, due_at)
   VALUES (v_coach, NEW.client_id, 'workout_reply', 'workout_reply:review:' || NEW.id, 'workout', NEW.id, 'queued', now() + interval '3 minutes')
   ON CONFLICT (dedupe_key) DO UPDATE
-    SET due_at = greatest(coach_automation_items.due_at, now() + interval '3 minutes'), updated_at = now()
-    WHERE coach_automation_items.status = 'queued';
+    SET status = 'queued', due_at = greatest(coach_automation_items.due_at, now() + interval '3 minutes'),
+        attempts = 0, why = NULL, context = NULL, updated_at = now()
+    WHERE coach_automation_items.status = 'queued'
+       OR (coach_automation_items.status = 'cancelled' AND coalesce((coach_automation_items.context ->> 'not_useful')::boolean, false));
   RETURN NEW;
 EXCEPTION WHEN others THEN
   -- never fail the athlete's review because of automation
@@ -181,6 +190,7 @@ DECLARE
   v_mode text;
 BEGIN
   IF NEW.ai_status IS DISTINCT FROM 'ready' OR OLD.ai_status IS NOT DISTINCT FROM 'ready' THEN RETURN NEW; END IF;
+  IF NEW.task_type IS DISTINCT FROM 'weekly_checkin' THEN RETURN NEW; END IF;
   IF NEW.status <> 'completed' OR NEW.submitted_at IS NULL OR NEW.submitted_at < now() - interval '2 days' THEN RETURN NEW; END IF;
   IF NEW.reviewed_at IS NOT NULL OR NEW.superseded_at IS NOT NULL THEN RETURN NEW; END IF;
   v_coach := public.coach_automation_coach_of(NEW.client_id);
@@ -199,6 +209,121 @@ REVOKE ALL ON FUNCTION public.tg_messenger_checkin_queue_reply() FROM PUBLIC, an
 DROP TRIGGER IF EXISTS messenger_checkin_queue_reply ON public.messenger_checkins;
 CREATE TRIGGER messenger_checkin_queue_reply AFTER UPDATE OF ai_status ON public.messenger_checkins
   FOR EACH ROW EXECUTE FUNCTION public.tg_messenger_checkin_queue_reply();
+
+-- Once he's replied to a check-in (or marked it reviewed), its waiting reply is no
+-- longer needed. A run writing it loses its hold (held()), so nothing of it lands.
+CREATE OR REPLACE FUNCTION public.tg_messenger_checkin_reviewed_cancels_reply()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  IF NEW.reviewed_at IS NULL OR OLD.reviewed_at IS NOT NULL THEN RETURN NEW; END IF;
+  WITH gone AS (
+    UPDATE public.coach_automation_items i
+       SET status = 'cancelled', why = 'You replied to the check-in yourself', locked_at = NULL, updated_at = now()
+     WHERE i.dedupe_key = 'checkin_reply:' || NEW.id
+       AND i.status IN ('queued', 'working', 'draft', 'awaiting_approval', 'failed')
+    RETURNING i.id, i.coach_user_id, i.client_id
+  )
+  INSERT INTO public.coach_automation_events (item_id, coach_user_id, client_id, kind, detail)
+  SELECT id, coach_user_id, client_id, 'cancelled', jsonb_build_object('why', 'replied to the check-in') FROM gone;
+  RETURN NEW;
+EXCEPTION WHEN others THEN
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.tg_messenger_checkin_reviewed_cancels_reply() FROM PUBLIC, anon, authenticated;
+DROP TRIGGER IF EXISTS messenger_checkin_reviewed_cancels_reply ON public.messenger_checkins;
+CREATE TRIGGER messenger_checkin_reviewed_cancels_reply AFTER UPDATE OF reviewed_at ON public.messenger_checkins
+  FOR EACH ROW EXECUTE FUNCTION public.tg_messenger_checkin_reviewed_cancels_reply();
+
+-- ── 3b. Pain replies: the client's own report only ─────────────────────────
+-- pain_reports.created_by is whoever saved it (auth.uid(), empty when the server
+-- saves for a coach in View as client), so a coach's report for a client never
+-- queues a reply to them. Otherwise as 20270509100000.
+CREATE OR REPLACE FUNCTION public.tg_pain_reports_queue_reply()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_coach uuid;
+  v_mode text;
+BEGIN
+  IF NEW.source <> 'review' OR NEW.feedback_id IS NULL THEN RETURN NEW; END IF;
+  IF NEW.reported_at < now() - interval '1 day' THEN RETURN NEW; END IF;
+  IF NEW.created_by IS NULL
+     OR NEW.created_by IS DISTINCT FROM (SELECT c.user_id FROM public.clients c WHERE c.id = NEW.client_id) THEN
+    RETURN NEW;
+  END IF;
+  SELECT co.user_id INTO v_coach
+    FROM public.clients c JOIN public.coaches co ON co.id = c.assigned_coach_id
+   WHERE c.id = NEW.client_id AND c.service_tier = 'coaching' AND NOT coalesce(c.archived, false)
+     AND co.status = 'Active' AND NOT coalesce(co.archived, false);
+  IF v_coach IS NULL THEN RETURN NEW; END IF;
+  v_mode := public.coach_automation_mode_for(v_coach, NEW.client_id, 'recovery_reply');
+  IF v_mode = 'off' THEN RETURN NEW; END IF;
+  INSERT INTO public.coach_automation_items (coach_user_id, client_id, category, dedupe_key, source_kind, source_id, regions, status, due_at)
+  VALUES (v_coach, NEW.client_id, 'recovery_reply', 'recovery_reply:review:' || NEW.feedback_id, 'review', NEW.feedback_id,
+          ARRAY[NEW.region], 'queued', now() + interval '2 minutes')
+  ON CONFLICT (dedupe_key) DO UPDATE
+    SET due_at = greatest(coach_automation_items.due_at, now() + interval '2 minutes'),
+        regions = (SELECT array_agg(DISTINCT r) FROM unnest(coach_automation_items.regions || EXCLUDED.regions) r),
+        updated_at = now()
+    WHERE coach_automation_items.status = 'queued';
+  RETURN NEW;
+EXCEPTION WHEN others THEN
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.tg_pain_reports_queue_reply() FROM PUBLIC, anon, authenticated;
+
+-- ── 3c. An approved reply closes only what it answers ──────────────────────
+-- A message the coach approves from the queue is his own reply (not automated),
+-- so it used to mark every unreviewed check-in and form reviewed. Only a reply to
+-- a check-in does that now; a reply about pain, a workout or a missed session
+-- leaves them waiting. Otherwise as 20261007100000_checkin_reviewed_state.sql.
+CREATE OR REPLACE FUNCTION public.tg_staff_reply_closes_reviews()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+begin
+  if new.sender_role = 'client'
+     or coalesce(new.is_internal_note, false)
+     or coalesce(new.is_automated, false)
+     or new.deleted_at is not null
+     or new.scheduled_at is not null
+     or coalesce(new.attachments::text, '') ilike '%form_request%' then
+    return new;
+  end if;
+  if jsonb_typeof(new.attachments) = 'array' and exists (
+    select 1 from jsonb_array_elements(new.attachments) a
+     where a ->> 'kind' = 'recovery_auto' and coalesce(a ->> 'category', '') <> 'checkin_reply'
+  ) then
+    return new;
+  end if;
+
+  update public.messenger_checkins
+     set reviewed_at = now(), reviewed_by = new.sender_id, reviewed_via = 'reply'
+   where client_id = new.client_id
+     and status = 'completed' and superseded_at is null and reviewed_at is null
+     and submitted_at <= new.created_at;
+
+  update public.nf_submissions
+     set status = 'reviewed', reviewed_at = now(), reviewed_by = new.sender_id
+   where client_id = new.client_id
+     and submitted_at is not null and reviewed_at is null
+     and status in ('submitted','pending_review')
+     and submitted_at <= new.created_at;
+
+  return new;
+end
+$function$;
 
 -- ── 4. Once a day, the worker looks for missed sessions ────────────────────
 -- 15:17 UTC is 10:17 in Manitoba: late enough that yesterday is over in every

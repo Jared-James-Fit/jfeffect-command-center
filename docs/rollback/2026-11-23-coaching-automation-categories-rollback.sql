@@ -1,8 +1,10 @@
 -- Rollback for 20270510090000_coaching_automation_categories.sql.
--- Back to recovery automation only. Messages already sent stay in the chats;
--- queue items of the three new kinds that haven't gone are cancelled first,
--- then removed with the client rules for them so the old constraints hold
--- (the append-only record keeps what happened). Run as the database owner.
+-- Back to recovery automation only. Queue items of the three new kinds are
+-- deleted (sent ones included: their messages stay in the chats, but "Take it
+-- back" goes with them), with the client rules for them, so the old
+-- constraints hold; the append-only record keeps what happened. The pain
+-- trigger and the staff-reply trigger go back to their earlier versions. Run
+-- as the database owner.
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 
@@ -14,8 +16,70 @@ END $$;
 
 DROP TRIGGER IF EXISTS workout_feedback_queue_reply ON public.pl_workout_feedback;
 DROP TRIGGER IF EXISTS messenger_checkin_queue_reply ON public.messenger_checkins;
+DROP TRIGGER IF EXISTS messenger_checkin_reviewed_cancels_reply ON public.messenger_checkins;
 DROP FUNCTION IF EXISTS public.tg_workout_feedback_queue_reply();
 DROP FUNCTION IF EXISTS public.tg_messenger_checkin_queue_reply();
+DROP FUNCTION IF EXISTS public.tg_messenger_checkin_reviewed_cancels_reply();
+
+-- the pain trigger as 20270509100000 had it
+CREATE OR REPLACE FUNCTION public.tg_pain_reports_queue_reply()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+DECLARE
+  v_coach uuid;
+  v_mode text;
+BEGIN
+  IF NEW.source <> 'review' OR NEW.feedback_id IS NULL THEN RETURN NEW; END IF;
+  IF NEW.reported_at < now() - interval '1 day' THEN RETURN NEW; END IF;
+  SELECT co.user_id INTO v_coach
+    FROM public.clients c JOIN public.coaches co ON co.id = c.assigned_coach_id
+   WHERE c.id = NEW.client_id AND c.service_tier = 'coaching' AND NOT coalesce(c.archived, false)
+     AND co.status = 'Active' AND NOT coalesce(co.archived, false);
+  IF v_coach IS NULL THEN RETURN NEW; END IF;
+  v_mode := public.coach_automation_mode_for(v_coach, NEW.client_id, 'recovery_reply');
+  IF v_mode = 'off' THEN RETURN NEW; END IF;
+  INSERT INTO public.coach_automation_items (coach_user_id, client_id, category, dedupe_key, source_kind, source_id, regions, status, due_at)
+  VALUES (v_coach, NEW.client_id, 'recovery_reply', 'recovery_reply:review:' || NEW.feedback_id, 'review', NEW.feedback_id,
+          ARRAY[NEW.region], 'queued', now() + interval '2 minutes')
+  ON CONFLICT (dedupe_key) DO UPDATE
+    SET due_at = greatest(coach_automation_items.due_at, now() + interval '2 minutes'),
+        regions = (SELECT array_agg(DISTINCT r) FROM unnest(coach_automation_items.regions || EXCLUDED.regions) r),
+        updated_at = now()
+    WHERE coach_automation_items.status = 'queued';
+  RETURN NEW;
+EXCEPTION WHEN others THEN
+  RETURN NEW;
+END;
+$$;
+
+-- the staff-reply trigger as 20261007100000 had it
+CREATE OR REPLACE FUNCTION public.tg_staff_reply_closes_reviews()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $function$
+begin
+  if new.sender_role = 'client'
+     or coalesce(new.is_internal_note, false)
+     or coalesce(new.is_automated, false)
+     or new.deleted_at is not null
+     or new.scheduled_at is not null
+     or coalesce(new.attachments::text, '') ilike '%form_request%' then
+    return new;
+  end if;
+
+  update public.messenger_checkins
+     set reviewed_at = now(), reviewed_by = new.sender_id, reviewed_via = 'reply'
+   where client_id = new.client_id
+     and status = 'completed' and superseded_at is null and reviewed_at is null
+     and submitted_at <= new.created_at;
+
+  update public.nf_submissions
+     set status = 'reviewed', reviewed_at = now(), reviewed_by = new.sender_id
+   where client_id = new.client_id
+     and submitted_at is not null and reviewed_at is null
+     and status in ('submitted','pending_review')
+     and submitted_at <= new.created_at;
+
+  return new;
+end
+$function$;
 
 DELETE FROM public.coach_automation_items WHERE category IN ('workout_reply', 'checkin_reply', 'missed_session');
 DELETE FROM public.coach_automation_client_rules WHERE category IN ('workout_reply', 'checkin_reply', 'missed_session');

@@ -25,8 +25,8 @@ const words = (s: string) => s.trim().split(/\s+/).filter(Boolean);
 /** Words in a note that may need medical help (never a diagnosis: the coach reads it). */
 const WARNING = /\b(chest (pain|tight\w*|pressure)|dizz\w*|faint\w*|black(ed)? out|pass(ed)? out|numb\w*|tingl\w*|short(ness)? of breath|couldn'?t breathe|heart (racing|pounding)|vomit\w*|threw up|concussion|hit my head)\b/i;
 /** Pain said in words without ticking "Anything hurt?". */
-const HURTS = /\b(hurt\w*|pain\w*|sore(ness)?|tweak\w*|strain\w*|pull(ed)? (a|my)|injur\w*|ache?s?|aching|sharp|pinch\w*|twing\w*|pop(ped)?|swollen|swelling|flare\w*)\b/i;
-const ILL = /\b(sick|ill|flu|covid|fever|migraine|food poisoning|sore throat|stomach bug)\b/i;
+const HURTS = /\b(hurt\w*|pain\w*|sore(ness)?|tweak\w*|strain\w*|pull(ed)? (a|my)|injur\w*|ache?s?|aching|achy|sharp|pinch\w*|twing\w*|pop(ped)?|swollen|swelling|flare\w*|killing me|stiff\w*|tendon\w*|tendin\w*|irritat\w*|aggravat\w*|bother(ing|ed|s)?|throb\w*|cramp\w*|spasm\w*|bruis\w*)\b/i;
+const ILL = /\b(sick|ill|flu|covid|fever|migraine|headache|nause\w*|food poisoning|sore throat|stomach bug|under the weather|coming down with|run down|rundown)\b/i;
 /** Asking to change their training (a coach's decision, never an automatic one). */
 const PROGRAM = /\b(move|swap|switch (to|days?|it)|change (it|the|my|this)|skip|replace|drop (it|the|this|that)|deload|reschedule|travel\w*|vacation|holiday|out of town|can'?t make|cannot make|miss(ing)? (next|tomorrow|this))\b/i;
 const QUESTION = /\?|^\s*(should|can|could|do|does|is|are|how|what|when|why|would|will)\b/i;

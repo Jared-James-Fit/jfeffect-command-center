@@ -11,4 +11,7 @@ do $$ begin
   raise exception 'ASSERT FAILED: a new kind still fits after the rollback';
 exception when check_violation then raise notice 'ok: the old categories hold again';
 end $$;
+select t_assert(position('created_by' in pg_get_functiondef('tg_pain_reports_queue_reply'::regproc)) = 0, 'the pain trigger is back to its earlier version');
+select t_assert(position('recovery_auto' in pg_get_functiondef('tg_staff_reply_closes_reviews'::regproc)) = 0, 'so is the staff-reply trigger');
+select t_assert(to_regproc('tg_messenger_checkin_reviewed_cancels_reply') is null, 'and nothing of the new triggers is left');
 select 'coaching-automation-categories: rolled back cleanly';

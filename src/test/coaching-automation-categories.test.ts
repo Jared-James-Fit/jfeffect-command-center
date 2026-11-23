@@ -22,6 +22,10 @@ describe("workout reviews", () => {
     expect(workoutReplyRead({ note: "been sick all week, felt weak", rating: 3 }).reasons).toContain("ill");
     expect(workoutReplyRead({ note: null, rating: 2 })).toMatchObject({ useful: true, risk: "review", reasons: ["low_rating"] });
   });
+  it("pain and feeling unwell said the way people say it", () => {
+    for (const note of ["knee is killing me", "my tendonitis flared again", "back's stiff after deadlifts", "shoulder was bothering me on bench"]) expect(workoutReplyRead({ note, rating: 4 }).reasons).toContain("mentions_pain");
+    for (const note of ["think I'm coming down with something", "felt run down all session", "bit under the weather"]) expect(workoutReplyRead({ note, rating: 4 }).reasons).toContain("ill");
+  });
   it("words that may need medical help are urgent", () => {
     expect(workoutReplyRead({ note: "got really dizzy after the squats and almost passed out", rating: 3 }).risk).toBe("urgent");
     expect(workoutReplyRead({ note: "some chest tightness on the last set", rating: 3 }).risk).toBe("urgent");

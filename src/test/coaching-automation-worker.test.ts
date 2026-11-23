@@ -8,6 +8,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { memorySb } from "../../scripts/replay/memory-sb";
 
 const calls: { system: string; prompt: string }[] = [];
+/** Runs while the model is "writing" (to change the world under the worker). */
+let duringDraft: (() => void) | null = null;
 let modelReply = "nice work today. that deadlift moved well, keep the same setup next week";
 const pushes: string[] = [];
 let modes: Record<string, string[]> = {};
@@ -16,6 +18,7 @@ let dated: any[] = [];
 vi.mock("@/lib/ai/route-call.server", () => ({
   askRoute: async (_route: string, req: { system: string; prompt: string }) => {
     calls.push({ system: req.system, prompt: req.prompt });
+    duringDraft?.();
     return { text: JSON.stringify({ message: modelReply }), model: "test-model" };
   },
 }));
@@ -92,6 +95,7 @@ beforeEach(() => {
   pushes.length = 0;
   modes = {};
   dated = [];
+  duringDraft = null;
   modelReply = "nice work today. that deadlift moved well, keep the same setup next week";
   tables = {
     clients: [{ id: MARC, user_id: "u-marc", full_name: "Marc Asugui", preferred_name: null, timezone: "America/Winnipeg", service_tier: "coaching", archived: false, assigned_coach_id: COACH_ROW, status: "Active" }],
@@ -117,7 +121,7 @@ async function tick() {
 
 describe("workout reviews", () => {
   const review = (note: string | null, rating = 4) =>
-    tables.pl_workout_feedback.push({ id: "fb1", client_id: MARC, completion_id: "comp1", day_id: "day1", overall_rating: rating, session_rpe: 8, pain: false, client_note: note, created_at: iso(5 * 60_000) });
+    tables.pl_workout_feedback.push({ id: "fb1", client_id: MARC, completion_id: "comp1", day_id: "day1", overall_rating: rating, session_rpe: 8, pain: false, client_note: note, created_at: iso(5 * 60_000), review_updated_by: "u-marc" });
 
   it("a routine one goes by itself when he chose that, from what the records say", async () => {
     review("felt strong today, top set flew");
@@ -180,6 +184,49 @@ describe("workout reviews", () => {
     expect(calls).toEqual([]);
   });
 
+  it("a review a coach wrote for them in View as client is never answered", async () => {
+    review("logged from his paper sheet");
+    tables.pl_workout_feedback[0].review_updated_by = OWNER;
+    modes.workout_reply = ["automatic"];
+    const item = queue("workout_reply", "fb1");
+    await tick();
+    expect(item.status).toBe("cancelled");
+    expect(calls).toEqual([]);
+  });
+
+  it("a note with nothing to answer is marked, so the database can look again if they add to it", async () => {
+    review("good");
+    const item = queue("workout_reply", "fb1");
+    await tick();
+    expect(item).toMatchObject({ status: "cancelled", context: { not_useful: true } });
+  });
+
+  it("read again at the last moment: if he writes to them while it's being written, it waits for him", async () => {
+    review("felt strong today, top set flew");
+    modes.workout_reply = ["automatic"];
+    duringDraft = () => tables.messages.push({ id: "m9", client_id: MARC, sender_role: "admin", is_automated: false, is_internal_note: false, deleted_at: null, created_at: new Date().toISOString() });
+    const item = queue("workout_reply", "fb1");
+    await tick();
+    expect(item.status).toBe("awaiting_approval");
+    expect(item.why).toMatch(/written to them yourself/);
+    expect(tables.messages.filter((m) => m.sender_id === OWNER)).toEqual([]);
+  });
+
+  it("a failed read fails the item (tried again later), never reads as nothing there", async () => {
+    review("felt strong today, top set flew");
+    modes.workout_reply = ["automatic"];
+    const realFrom = db.from;
+    db.from = (t: string) => {
+      const q = realFrom(t);
+      if (t !== "pain_reports") return q;
+      return { select: () => ({ eq: () => ({ limit: async () => ({ data: null, error: { message: "timeout" } }) }) }) };
+    };
+    const item = queue("workout_reply", "fb1");
+    await tick();
+    expect(item.status).toBe("failed");
+    expect(tables.messages).toEqual([]);
+  });
+
   it("switched off while it was being written: nothing goes", async () => {
     review("felt strong today, top set flew");
     modes.workout_reply = ["automatic", "off"];
@@ -224,6 +271,33 @@ describe("weekly check-ins", () => {
     expect(item.risk_reasons).toContain("help");
   });
 
+  it("replied to by hand while the reply was being written: nothing goes", async () => {
+    checkin({ suggested_response: "just saw your check-in, 4 for 4. keep the steps up." });
+    modes.checkin_reply = ["automatic"];
+    duringDraft = () => (tables.messenger_checkins[0].reviewed_at = new Date().toISOString());
+    const item = queue("checkin_reply", "ci1");
+    await tick();
+    expect(item.status).toBe("cancelled");
+    expect(tables.messages).toEqual([]);
+  });
+
+  it("an approval is read again too: one he already answered never goes", async () => {
+    checkin({});
+    const item = queue("checkin_reply", "ci1");
+    await tick();
+    expect(item.status).toBe("awaiting_approval");
+    tables.messenger_checkins[0].reviewed_at = new Date().toISOString();
+    const { stillGoes } = await import("@/lib/recovery-automation/run.server");
+    expect(await stillGoes(db, item as any)).toEqual({ cancel: "You replied to the check-in yourself" });
+  });
+
+  it("a check-in more than three days old gets none", async () => {
+    checkin({}, { submitted_at: iso(4 * 86_400_000) });
+    const item = queue("checkin_reply", "ci1");
+    await tick();
+    expect(item.status).toBe("cancelled");
+  });
+
   it("one he already replied to, or a newer check-in replaced, gets none", async () => {
     checkin({}, { reviewed_at: iso(1000) });
     const item = queue("checkin_reply", "ci1");
@@ -233,6 +307,11 @@ describe("weekly check-ins", () => {
 });
 
 describe("missed sessions", () => {
+  // nothing trained or logged since yesterday unless a test says so
+  beforeEach(() => {
+    tables.pl_row_results = [];
+    tables.pl_day_completions = [];
+  });
   const yesterday = () => dayIn("America/Winnipeg", -1);
   const missedWorkout = (overrides: Record<string, unknown> = {}) => ({ clientId: MARC, dayId: "day9", entryId: null, date: yesterday(), time: null, title: "Upper A", focus: null, optional: false, visible: true, done: false, rating: null, ...overrides });
 
@@ -265,6 +344,27 @@ describe("missed sessions", () => {
     tables.pl_day_completions = [];
     tables.clients[0].status = "Paused";
     expect((await scanMissedSessions(db)).queued).toBe(0);
+  });
+
+  it("sets logged without a completion row (cardio on its own, a coach logging for them) aren't a miss", async () => {
+    dated = [missedWorkout()];
+    tables.pl_day_completions = [];
+    tables.pl_exercise_rows.push({ id: "row9", day_id: "day9" });
+    tables.pl_row_results.push({ row_id: "row9", client_id: MARC, set_index: 1, completed_at: iso(30 * 3_600_000) });
+    const { scanMissedSessions } = await import("@/lib/recovery-automation/run.server");
+    expect((await scanMissedSessions(db)).queued).toBe(0);
+  });
+
+  it("logged later, before he approves: not sent", async () => {
+    dated = [missedWorkout()];
+    tables.pl_day_completions = [];
+    const { scanMissedSessions, stillGoes } = await import("@/lib/recovery-automation/run.server");
+    await scanMissedSessions(db);
+    const item = tables.coach_automation_items[0];
+    await tick();
+    expect(item.status).toBe("awaiting_approval");
+    tables.pl_row_results.push({ row_id: "row1", client_id: MARC, set_index: 9, completed_at: new Date().toISOString() });
+    expect(await stillGoes(db, item as any)).toEqual({ cancel: "They've trained since" });
   });
 
   it("a second miss in two weeks is a pattern: it waits for him even when routine ones send themselves", async () => {

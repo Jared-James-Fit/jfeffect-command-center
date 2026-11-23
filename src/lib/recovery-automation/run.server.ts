@@ -72,8 +72,8 @@ async function finish(admin: any, item: Item, status: string, patch: Record<stri
   return !!data;
 }
 
-async function cancel(admin: any, item: Item, why: string): Promise<TickResult> {
-  if (!(await finish(admin, item, "cancelled", {}, why))) return { id: item.id, outcome: "taken away" };
+async function cancel(admin: any, item: Item, why: string, patch: Record<string, unknown> = {}): Promise<TickResult> {
+  if (!(await finish(admin, item, "cancelled", patch, why))) return { id: item.id, outcome: "taken away" };
   await event(admin, item, "cancelled", { why });
   return { id: item.id, outcome: `cancelled: ${why}` };
 }
@@ -223,6 +223,15 @@ async function sendAutomatically(admin: any, item: Item, text: string): Promise<
     await event(admin, item, status === "cancelled" ? "cancelled" : "awaiting_approval", { mode });
     return { id: item.id, outcome: status };
   }
+  // what made it worth sending is read again at the last moment (the model call took a while)
+  const verdict = await stillGoes(admin, taken);
+  if (verdict.cancel || verdict.ask) {
+    const status = verdict.cancel ? "cancelled" : "awaiting_approval";
+    const why = verdict.cancel ?? verdict.ask!;
+    await held(admin.from("coach_automation_items").update({ status, locked_at: null, updated_at: new Date().toISOString(), why: why.slice(0, 400) }), taken);
+    await event(admin, item, status === "cancelled" ? "cancelled" : "awaiting_approval", { why });
+    return { id: item.id, outcome: `${status}: ${why}` };
+  }
   await deliver(admin, taken, { approvedBy: null, edited: false });
   return { id: item.id, outcome: "sent" };
 }
@@ -295,8 +304,10 @@ async function tellCoach(admin: any, item: Item, risk: Risk, firstName: string) 
 async function processReply(admin: any, item: Item, mode: string): Promise<TickResult> {
   const client = await loadClient(admin, item);
   if (!client) return cancel(admin, item, "not an active coaching client of this coach any more");
-  const { data: rows } = await admin.from("pain_reports").select("*").eq("feedback_id", item.source_id).order("created_at");
-  if (!rows?.length) return cancel(admin, item, "the pain came off their review");
+  const onReview = must<any[]>(await admin.from("pain_reports").select("*").eq("feedback_id", item.source_id).order("created_at"), "pain reports");
+  // only what they reported themselves (a coach saving for them in View as client leaves created_by empty)
+  const rows = onReview.filter((r) => r.created_by && r.created_by === client.user_id);
+  if (!rows.length) return cancel(admin, item, onReview.length ? "the report wasn't written by them" : "the pain came off their review");
   // a reply is about something they just said: never about a report two days old
   const newest = Math.max(...(rows as any[]).map((r) => Date.parse(r.reported_at ?? r.created_at)));
   if (Date.now() - newest > 2 * 86_400_000) return cancel(admin, item, "the report is too old to reply to now");
@@ -422,9 +433,15 @@ async function processFollowUp(admin: any, item: Item, mode: string): Promise<Ti
 
 // ── workout reviews, weekly check-ins, missed sessions ─────────────────────
 
+/** A read a safety check rests on: a failure fails the item (tried again later), never reads as "nothing there". */
+function must<T>(res: { data: T | null; error: { message: string } | null }, what: string): T {
+  if (res.error) throw new Error(`Couldn't check ${what}: ${res.error.message}`);
+  return (res.data ?? ([] as unknown)) as T;
+}
+
 /** Whether the coach has written to them himself (not automation, not a note to himself) since then. */
 async function coachWroteSince(admin: any, clientId: string, since: string): Promise<boolean> {
-  const { data } = await admin
+  const res = await admin
     .from("messages")
     .select("id")
     .eq("client_id", clientId)
@@ -434,7 +451,62 @@ async function coachWroteSince(admin: any, clientId: string, since: string): Pro
     .is("deleted_at", null)
     .gt("created_at", since)
     .limit(1);
-  return (data ?? []).length > 0;
+  return must<any[]>(res, "the chat").length > 0;
+}
+
+/** Any set they logged on these workouts (a completion row isn't always there: cardio on its own, a coach logging for them). */
+async function setsLoggedOn(admin: any, clientId: string, dayIds: string[]): Promise<boolean> {
+  if (!dayIds.length) return false;
+  const rows = must<any[]>(await admin.from("pl_exercise_rows").select("id").in("day_id", dayIds).limit(500), "the workout");
+  if (!rows.length) return false;
+  const logged = must<any[]>(
+    await admin.from("pl_row_results").select("row_id").eq("client_id", clientId).in("row_id", rows.map((r) => r.id)).not("completed_at", "is", null).limit(1),
+    "logged sets",
+  );
+  return logged.length > 0;
+}
+
+/** Whether they've trained since (a finished workout, or any set logged). */
+async function trainedSince(admin: any, clientId: string, since: string): Promise<boolean> {
+  const [done, sets] = await Promise.all([
+    admin.from("pl_day_completions").select("id").eq("client_id", clientId).gte("completed_at", since).limit(1),
+    admin.from("pl_row_results").select("row_id").eq("client_id", clientId).gte("completed_at", since).limit(1),
+  ]);
+  return must<any[]>(done, "finished workouts").length > 0 || must<any[]>(sets, "logged sets").length > 0;
+}
+
+/**
+ * Read again right before a message goes, by itself or by the coach's approval:
+ * cancel when what it answers is gone or answered (pain added to a review, the
+ * check-in replied to or replaced, the missed workout logged or trained past),
+ * ask him first when he's written to them himself since (only for one going by itself).
+ */
+export async function stillGoes(admin: any, item: Pick<Item, "category" | "client_id" | "source_id" | "context">): Promise<{ cancel?: string; ask?: string }> {
+  if (item.category === "workout_reply") {
+    const fb = must<any>(await admin.from("pl_workout_feedback").select("id, pain, created_at").eq("id", item.source_id).maybeSingle(), "the review");
+    if (!fb?.id) return { cancel: "The review is gone" };
+    const pain = must<any[]>(await admin.from("pain_reports").select("id").eq("feedback_id", fb.id).limit(1), "pain reports");
+    if (fb.pain || pain.length) return { cancel: "Pain was added to the review; it gets its own reply" };
+    if (await coachWroteSince(admin, item.client_id, fb.created_at)) return { ask: "You've written to them yourself since, so this waits for you." };
+  }
+  if (item.category === "checkin_reply") {
+    const ci = must<any>(await admin.from("messenger_checkins").select("id, submitted_at, reviewed_at, superseded_at").eq("id", item.source_id).maybeSingle(), "the check-in");
+    if (!ci?.id) return { cancel: "The check-in is gone" };
+    if (ci.reviewed_at) return { cancel: "You replied to the check-in yourself" };
+    if (ci.superseded_at) return { cancel: "A newer check-in replaced it" };
+    if (ci.submitted_at && (await coachWroteSince(admin, item.client_id, ci.submitted_at))) return { ask: "You've written to them yourself since, so this waits for you." };
+  }
+  if (item.category === "missed_session") {
+    const w = (item.context?.workout ?? null) as { date: string } | null;
+    if (!w?.date || !item.source_id) return { cancel: "No missed workout on file" };
+    const client = must<any>(await admin.from("clients").select("timezone").eq("id", item.client_id).maybeSingle(), "the client");
+    const since = localToInstant(w.date, 0, client?.timezone || "America/Winnipeg").toISOString();
+    const started = must<any[]>(await admin.from("pl_day_completions").select("id").eq("day_id", item.source_id).limit(1), "the workout");
+    if (started.length || (await setsLoggedOn(admin, item.client_id, [item.source_id]))) return { cancel: "They've logged that workout since" };
+    if (await trainedSince(admin, item.client_id, since)) return { cancel: "They've trained since" };
+    if (await coachWroteSince(admin, item.client_id, since)) return { ask: "You've written to them yourself since, so this waits for you." };
+  }
+  return {};
 }
 
 const round = (n: number, step: number) => Math.round(n / step) * step;
@@ -540,18 +612,23 @@ async function routeDrafted(
 async function processWorkoutReply(admin: any, item: Item, mode: string): Promise<TickResult> {
   const client = await loadClient(admin, item);
   if (!client) return cancel(admin, item, "not an active coaching client of this coach any more");
-  const { data: fb } = await admin
-    .from("pl_workout_feedback")
-    .select("id, client_id, completion_id, day_id, overall_rating, session_rpe, pain, client_note, created_at")
-    .eq("id", item.source_id)
-    .maybeSingle();
-  if (!fb || fb.client_id !== item.client_id) return cancel(admin, item, "the review is gone");
+  const fb = must<any>(
+    await admin
+      .from("pl_workout_feedback")
+      .select("id, client_id, completion_id, day_id, overall_rating, session_rpe, pain, client_note, created_at, review_updated_by")
+      .eq("id", item.source_id)
+      .maybeSingle(),
+    "the review",
+  );
+  if (!fb?.id || fb.client_id !== item.client_id) return cancel(admin, item, "the review is gone");
+  if (fb.review_updated_by !== client.user_id) return cancel(admin, item, "the review wasn't written by them");
   if (Date.now() - Date.parse(fb.created_at) > 2 * 86_400_000) return cancel(admin, item, "the review is too old to reply to now");
-  const { data: pain } = await admin.from("pain_reports").select("id").eq("feedback_id", fb.id).limit(1);
-  if (fb.pain || (pain ?? []).length) return cancel(admin, item, "its pain report gets its own reply");
+  const pain = must<any[]>(await admin.from("pain_reports").select("id").eq("feedback_id", fb.id).limit(1), "pain reports");
+  if (fb.pain || pain.length) return cancel(admin, item, "its pain report gets its own reply");
   if (await coachWroteSince(admin, item.client_id, fb.created_at)) return cancel(admin, item, "you've written to them since");
   const read = workoutReplyRead({ note: fb.client_note, rating: fb.overall_rating });
-  if (!read.useful) return cancel(admin, item, read.why ?? "nothing that needs a reply");
+  // marked, so it's looked at again if they add to the note
+  if (!read.useful) return cancel(admin, item, read.why ?? "nothing that needs a reply", { context: { not_useful: true } });
   const facts = await workoutFacts(admin, fb);
   const route = routeItem(mode as any, read.risk);
   const voice = await userHasFeature(admin, item.coach_user_id, "owner.voice");
@@ -563,12 +640,16 @@ async function processWorkoutReply(admin: any, item: Item, mode: string): Promis
 async function processCheckinReply(admin: any, item: Item, mode: string): Promise<TickResult> {
   const client = await loadClient(admin, item);
   if (!client) return cancel(admin, item, "not an active coaching client of this coach any more");
-  const { data: ci } = await admin
-    .from("messenger_checkins")
-    .select("id, client_id, status, ai_status, ai_analysis, answers, submitted_at, reviewed_at, superseded_at")
-    .eq("id", item.source_id)
-    .maybeSingle();
-  if (!ci || ci.client_id !== item.client_id || ci.status !== "completed" || !ci.submitted_at) return cancel(admin, item, "the check-in is gone");
+  const ci = must<any>(
+    await admin
+      .from("messenger_checkins")
+      .select("id, client_id, status, ai_status, ai_analysis, answers, submitted_at, reviewed_at, superseded_at")
+      .eq("id", item.source_id)
+      .maybeSingle(),
+    "the check-in",
+  );
+  if (!ci?.id || ci.client_id !== item.client_id || ci.status !== "completed" || !ci.submitted_at) return cancel(admin, item, "the check-in is gone");
+  if (Date.now() - Date.parse(ci.submitted_at) > 3 * 86_400_000) return cancel(admin, item, "the check-in is too old to reply to now");
   if (ci.superseded_at) return cancel(admin, item, "a newer check-in replaced it");
   if (ci.reviewed_at) return cancel(admin, item, "you've already replied or marked it reviewed");
   if (await coachWroteSince(admin, item.client_id, ci.submitted_at)) return cancel(admin, item, "you've written to them since");
@@ -607,12 +688,9 @@ async function processMissedSession(admin: any, item: Item, mode: string): Promi
   if (!missed?.date || !item.source_id) return cancel(admin, item, "no missed workout on file");
   const tz = client.timezone || "America/Winnipeg";
   const since = localToInstant(missed.date, 0, tz).toISOString();
-  const [{ data: started }, { data: trained }] = await Promise.all([
-    admin.from("pl_day_completions").select("id").eq("day_id", item.source_id).limit(1),
-    admin.from("pl_day_completions").select("id").eq("client_id", item.client_id).gte("completed_at", since).limit(1),
-  ]);
-  if ((started ?? []).length) return cancel(admin, item, "they've logged that workout since");
-  if ((trained ?? []).length) return cancel(admin, item, "they've trained since");
+  const started = must<any[]>(await admin.from("pl_day_completions").select("id").eq("day_id", item.source_id).limit(1), "the workout");
+  if (started.length || (await setsLoggedOn(admin, item.client_id, [item.source_id]))) return cancel(admin, item, "they've logged that workout since");
+  if (await trainedSince(admin, item.client_id, since)) return cancel(admin, item, "they've trained since");
   const today = todayIn(client.timezone);
   if (missed.date < addDays(today, -3)) return cancel(admin, item, "it's too long ago to ask about now");
   const read = missedSessionRead({ missedInTwoWeeks: Number(item.context?.missed_in_two_weeks ?? 1) });
@@ -666,43 +744,50 @@ export async function scanMissedSessions(admin: any): Promise<{ looked: number; 
   const workouts = await loadDatedWorkouts(admin, { clientIds: active.map((c) => c.id), from: addDays(days[0], -13), to: days[days.length - 1] });
   let queued = 0;
   for (const c of active) {
-    const y = yesterday.get(c.id)!;
-    const mine = workouts.filter((w) => w.clientId === c.id && w.visible && !w.optional);
-    const missed = mine.filter((w) => w.date === y && !w.done);
-    if (!missed.length) continue;
-    const coachUserId = coachOf.get(c.assigned_coach_id)!;
-    const { data: mode } = await admin.rpc("coach_automation_mode_for", { _uid: coachUserId, _client: c.id, _category: "missed_session" });
-    if (!mode || mode === "off") continue;
-    const since = localToInstant(y, 0, c.timezone || "America/Winnipeg").toISOString();
-    const [{ data: started }, { data: trained }, { data: recent }] = await Promise.all([
-      admin.from("pl_day_completions").select("day_id").in("day_id", missed.map((w) => w.dayId)).limit(10),
-      admin.from("pl_day_completions").select("id").eq("client_id", c.id).gte("completed_at", since).limit(1),
-      admin.from("coach_automation_items").select("id").eq("client_id", c.id).eq("category", "missed_session").gte("created_at", new Date(Date.now() - 6 * 86_400_000).toISOString()).limit(1),
-    ]);
-    const startedDays = new Set(((started ?? []) as any[]).map((r) => r.day_id));
-    const untouched = missed.filter((w) => !startedDays.has(w.dayId));
-    if (!untouched.length || (trained ?? []).length || (recent ?? []).length) continue;
-    const missedInTwoWeeks = mine.filter((w) => w.date <= y && !w.done).length;
-    const w = untouched[0];
-    const { data: row, error } = await admin
-      .from("coach_automation_items")
-      .insert({
-        coach_user_id: coachUserId,
-        client_id: c.id,
-        category: "missed_session",
-        dedupe_key: `missed_session:${c.id}:${y}`,
-        source_kind: "missed",
-        source_id: w.dayId,
-        status: "queued",
-        due_at: new Date().toISOString(),
-        context: { workout: { title: w.title, date: w.date }, missed_in_two_weeks: missedInTwoWeeks },
-      })
-      .select("id")
-      .maybeSingle();
-    if (error && !/duplicate key/i.test(error.message)) throw error;
-    if (row) {
-      queued += 1;
-      await event(admin, { id: row.id, coach_user_id: coachUserId, client_id: c.id }, "queued", { missed: w.date });
+    try {
+      const y = yesterday.get(c.id)!;
+      const mine = workouts.filter((w) => w.clientId === c.id && w.visible && !w.optional);
+      const missed = mine.filter((w) => w.date === y && !w.done);
+      if (!missed.length) continue;
+      const coachUserId = coachOf.get(c.assigned_coach_id)!;
+      const { data: mode, error: modeError } = await admin.rpc("coach_automation_mode_for", { _uid: coachUserId, _client: c.id, _category: "missed_session" });
+      if (modeError) throw new Error(modeError.message);
+      if (!mode || mode === "off") continue;
+      const since = localToInstant(y, 0, c.timezone || "America/Winnipeg").toISOString();
+      const [startedRes, recentRes] = await Promise.all([
+        admin.from("pl_day_completions").select("day_id").in("day_id", missed.map((w) => w.dayId)).limit(10),
+        admin.from("coach_automation_items").select("id").eq("client_id", c.id).eq("category", "missed_session").gte("created_at", new Date(Date.now() - 6 * 86_400_000).toISOString()).limit(1),
+      ]);
+      const startedDays = new Set(must<any[]>(startedRes, "the workout").map((r) => r.day_id));
+      if (must<any[]>(recentRes, "the queue").length) continue;
+      const untouched: typeof missed = [];
+      for (const w of missed) if (!startedDays.has(w.dayId) && !(await setsLoggedOn(admin, c.id, [w.dayId]))) untouched.push(w);
+      if (!untouched.length || (await trainedSince(admin, c.id, since))) continue;
+      const missedInTwoWeeks = mine.filter((w) => w.date <= y && !w.done).length;
+      const w = untouched[0];
+      const { data: row, error } = await admin
+        .from("coach_automation_items")
+        .insert({
+          coach_user_id: coachUserId,
+          client_id: c.id,
+          category: "missed_session",
+          dedupe_key: `missed_session:${c.id}:${y}`,
+          source_kind: "missed",
+          source_id: w.dayId,
+          status: "queued",
+          due_at: new Date().toISOString(),
+          context: { workout: { title: w.title, date: w.date }, missed_in_two_weeks: missedInTwoWeeks },
+        })
+        .select("id")
+        .maybeSingle();
+      if (error && !/duplicate key/i.test(error.message)) throw new Error(error.message);
+      if (row) {
+        queued += 1;
+        await event(admin, { id: row.id, coach_user_id: coachUserId, client_id: c.id }, "queued", { missed: w.date });
+      }
+    } catch (e: any) {
+      // one client's trouble never stops the others
+      console.error("[coach-automation] missed-session scan skipped a client", c.id, e?.message);
     }
   }
   return { looked: active.length, queued };

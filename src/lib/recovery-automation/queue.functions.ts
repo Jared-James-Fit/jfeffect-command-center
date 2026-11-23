@@ -161,6 +161,18 @@ export const approveRecoveryItemFn = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = supabaseAdmin as any;
     const userId = (context as any).userId as string;
+    // what it answers is read again first: one already answered or no longer true never goes
+    const { stillGoes } = await import("@/lib/recovery-automation/run.server");
+    const verdict = await stillGoes(admin, item);
+    if (verdict.cancel) {
+      await admin
+        .from("coach_automation_items")
+        .update({ status: "cancelled", why: verdict.cancel, locked_at: null, updated_at: new Date().toISOString() })
+        .eq("id", item.id)
+        .in("status", ["draft", "awaiting_approval", "failed"]);
+      await admin.from("coach_automation_events").insert({ item_id: item.id, coach_user_id: item.coach_user_id, client_id: item.client_id, kind: "cancelled", actor: userId, detail: { why: verdict.cancel } });
+      throw new Error(`Not sent: ${verdict.cancel.charAt(0).toLowerCase()}${verdict.cancel.slice(1)}.`);
+    }
     const now = new Date().toISOString();
     // take it with his words and his name on it, so a second tap, the worker or Dismiss can't
     // touch it, and a send that's cut off is retried with exactly these words
