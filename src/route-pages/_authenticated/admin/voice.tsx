@@ -97,11 +97,30 @@ export function CoachVoicePage() {
     }
   };
 
+  // My Voice is the owner's own; another coach only sets their clients' details here
+  if (data && !data.owner) {
+    return (
+      <>
+        <PageHeader title="My Voice" subtitle="How replies are worded for your clients." />
+        <SettingsTabs />
+        <div className="mx-auto max-w-3xl space-y-4 p-4 pb-28 md:p-6" data-voice-coach-view>
+          <Card className="space-y-1 p-4">
+            <div className="text-sm font-semibold">Replies for your clients use a plain coach voice</div>
+            <div className="text-xs text-muted-foreground">
+              The voice rules and examples here are the owner's own, so only the owner sees or changes them. You can still set how each of your clients is addressed.
+            </div>
+          </Card>
+          <ClientVoiceCard clients={data.clients ?? []} />
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <PageHeader
         title="My Voice"
-        subtitle="How the app sounds when it writes as you: posts and messages Summer drafts, suggested check-in and form replies, and the Wednesday Wins post. Changes save on their own."
+        subtitle="How the app sounds when it writes as you: messages Cleo drafts, suggested check-in and form replies, and the Wednesday Wins post. Only you can see or change it. Changes save on their own."
       />
       <SettingsTabs />
       <div className="mx-auto max-w-3xl space-y-4 p-4 pb-28 md:p-6">

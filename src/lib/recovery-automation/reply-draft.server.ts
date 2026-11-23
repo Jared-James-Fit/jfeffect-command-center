@@ -1,6 +1,6 @@
 /**
- * A short message from the coach about a workout review, a weekly check-in or
- * a missed session (server only): coaching automation's writer for everything
+ * A short message from the coach about a workout review, a weekly check-in, a
+ * missed session, the day's set videos or a progress check-in (server only): coaching automation's writer for everything
  * that isn't pain (pain is pain-draft.server.ts). Written from the facts the
  * worker read from the records, never anything else.
  *
@@ -8,11 +8,13 @@
  * for a coach with `owner.voice`; anyone else gets a plain, direct coach
  * voice. An automatic message (sent before the coach reads it) is told it is
  * one and checked in code before it can go (autoMessageProblems): it never
- * says he saw or reviewed anything and never claims a program change.
+ * says he saw or reviewed anything and never claims a program change. A reply
+ * about a video or progress photos is only ever a draft he sends himself, and
+ * never says how anything looked (`eyesProblems`): that part is his.
  */
 import type { AiTask } from "@/lib/ai/routing";
 
-export type ReplyKind = "workout" | "checkin" | "missed";
+export type ReplyKind = "workout" | "checkin" | "missed" | "video" | "progress";
 
 export type ReplyInput = {
   clientId: string;
@@ -34,8 +36,18 @@ const PLAIN_VOICE =
 const TASK: Record<ReplyKind, (first: string) => string[]> = {
   workout: (first) => [
     `You draft a short reply from a strength coach to his client ${first} about the workout they just finished and the review they sent.`,
-    "1 to 3 short sentences, under 50 words. React to what they actually wrote first. Be specific to the session: name a lift, a number or a PR only if it's in FACTS.",
+    "1 to 3 short sentences, under 50 words. React to what they actually wrote first; when they wrote nothing, it's about the headline PR in FACTS. Be specific to the session: name a lift, a number or a PR only if it's in FACTS, and call a record a PR only when FACTS calls it one.",
     "If they asked something, answer only what FACTS can answer; otherwise say you'll look at it and get back to them. If they rated it low, be straight and supportive without a lecture.",
+  ],
+  video: (first) => [
+    `You draft the start of a strength coach's reply to ${first} about the set videos they sent today. The coach watches the videos and adds his own technique notes before he sends it.`,
+    "1 to 3 short sentences, under 45 words: acknowledge the sets by name with their numbers from FACTS, and the bar speed only where FACTS gives one (say it plainly, e.g. 0.42 m/s, and that it held or dropped across the reps only if FACTS says so).",
+    "Never say how anything looked or moved (technique, depth, bar path, lockout, bracing, speed off the floor, 'looked good', 'looked clean'): nobody has watched it but the coach. No placeholder, no brackets, no question about technique.",
+  ],
+  progress: (first) => [
+    `You draft the start of a strength coach's reply to ${first} about the progress check-in (photos or a video) they just sent. The coach looks at it and adds his own notes before he sends it.`,
+    "1 to 3 short sentences, under 45 words: thank them for sending it, and say what FACTS says about their bodyweight trend or their goal in plain numbers, only if FACTS gives them.",
+    "Never comment on how they look, their body, their shape or any change you could only see (leaner, bigger, definition, 'looking good'): nobody has looked at the photos but the coach. Never praise or criticise a bodyweight number; say it plainly. No placeholder, no brackets.",
   ],
   checkin: (first) => [
     `You write the coach's reply to ${first}'s weekly check-in.`,
@@ -65,12 +77,13 @@ export async function writeCoachReply(sb: any, input: ReplyInput): Promise<Reply
   const { data: client } = await sb.from("clients").select("id, full_name, preferred_name").eq("id", input.clientId).maybeSingle();
   if (!client) throw new Error("Client not found.");
   const first = (client.preferred_name || client.full_name || "").trim().split(/\s+/)[0] || "them";
-  const [{ voicePromptForClient }, { casualize }, { askRoute }, { autoMessageProblems }, { draftProblems }] = await Promise.all([
+  const [{ voicePromptForClient }, { casualize }, { askRoute }, { autoMessageProblems }, { draftProblems }, { eyesProblems }] = await Promise.all([
     import("@/lib/coach-voice.functions"),
     import("@/lib/coach-voice"),
     import("@/lib/ai/route-call.server"),
     import("@/lib/recovery-automation/rules"),
     import("@/lib/pain/ai"),
+    import("@/lib/recovery-automation/categories"),
   ]);
   const voice = input.voice ? await voicePromptForClient(sb, client.id).catch(() => PLAIN_VOICE) : PLAIN_VOICE;
   const automaticRules = input.automatic
@@ -90,7 +103,8 @@ export async function writeCoachReply(sb: any, input: ReplyInput): Promise<Reply
   const prompt = [`CLIENT: ${first}`, "FACTS:", ...input.facts.map((f) => `- ${f}`), input.startFrom ? `\nSTART FROM:\n${input.startFrom}` : "", "\nWrite the message."].join("\n");
 
   const route = input.route ?? "recovery_write";
-  const check = (m: string) => (input.automatic ? autoMessageProblems(m) : draftProblems(m));
+  const eyes = input.kind === "video" || input.kind === "progress";
+  const check = (m: string) => [...(input.automatic ? autoMessageProblems(m) : draftProblems(m)), ...(eyes ? eyesProblems(m) : [])];
   let reply = await askRoute(route, { system, prompt, timeoutMs: 45_000 }, { sb });
   let message = casualize(String(parse(reply.text ?? "")?.message ?? "").trim());
   const problems = message ? check(message) : ["empty"];

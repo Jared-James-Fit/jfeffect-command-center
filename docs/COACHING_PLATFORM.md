@@ -287,7 +287,7 @@ again at execution, so a revoked or expired grant stops at once. Pricing and
 subscriptions stay outside this: a future plan only writes grants. Owner
 automation acts only on clients assigned to the owner's own coach record; it
 never reaches another coach's clients. Database tests:
-`supabase/tests/recovery-automation/` (105 checks, real Postgres).
+`supabase/tests/recovery-automation/` (157 checks, real Postgres).
 
 Since Nov 23 2026 (`20270510100000_coaching_automation_categories.sql`) the
 same queue covers workout reviews, weekly check-ins and missed sessions besides
@@ -298,3 +298,10 @@ date) from Settings → AI & Cleo and takes it back there; the database refuses
 any grant from anyone else and any owner capability in a grant. A grant never
 makes an outside coach possible: only coaches already on JF Effect's team can
 hold one until the platform's isolation gate passes.
+
+Also since Nov 23 2026 (`20270511090000_coaching_automation_videos_progress.sql`)
+the queue drafts replies to the day's set videos and to progress check-ins.
+Both need the coach's own eyes, so neither can be set to send by itself at any
+level (the database refuses it, whatever a grant says), and the owner's My Voice
+profile is readable and editable only by the owner: another coach's drafts use
+the plain coach voice.

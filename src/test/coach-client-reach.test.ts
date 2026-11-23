@@ -50,7 +50,7 @@ import {
 import { resolveLifecycle } from "@/lib/lifecycle.server";
 import { getAccountReview } from "@/lib/lifecycle.functions";
 import { undoScheduleChange } from "@/lib/schedule-manager.functions";
-import { getCoachVoiceFn, saveClientVoiceFn, tryCoachVoiceFn } from "@/lib/coach-voice.functions";
+import { getCoachVoiceFn, saveClientVoiceFn, saveCoachVoiceFn, tryCoachVoiceFn } from "@/lib/coach-voice.functions";
 import { DEFAULT_VOICE } from "@/lib/coach-voice";
 import { checkSessionConflicts } from "@/lib/schedule.functions";
 import { assignGoogleEventToClient } from "@/lib/google-cal.functions";
@@ -156,6 +156,8 @@ function db(w: World, uid: string | null) {
     if (fn === "has_role") {
       return { data: (w.user_roles ?? []).some((r) => r.user_id === args._user_id && r.role === args._role), error: null };
     }
+    // the business owner is the "owner" login (with its two-step sign-in)
+    if (fn === "is_business_owner") return { data: args._uid === "owner", error: null };
     return { data: null, error: null };
   };
   return { from, rpc };
@@ -423,10 +425,22 @@ describe("My Voice's client settings are the client's coach's or the admin's", (
   it("another coach can't change or read a client's voice settings", async () => {
     await expect(call(saveClientVoiceFn, { clientId: MARC, nickname: "Big M" }, "bo")).rejects.toThrow("Client not found.");
     expect(w.clients.find((c) => c.id === MARC)!.voice_nickname).toBeUndefined();
+  });
+
+  it("the voice itself is the owner's: no other coach reads, saves or tries it", async () => {
     const profile = DEFAULT_VOICE as any;
-    await expect(call(tryCoachVoiceFn, { profile, scenario: "great_week", clientId: MARC }, "bo")).rejects.toThrow(
-      "Client not found.",
-    );
+    w.coach_voice = [{ id: true, profile: { rules: "the owner's private rules" }, updated_at: "2026-11-20T00:00:00Z" }];
+    for (const uid of ["ana", "bo"]) {
+      const got: any = await call(getCoachVoiceFn, undefined, uid);
+      expect(got.owner).toBe(false);
+      expect(got.profile).toBeNull();
+      expect(JSON.stringify(got)).not.toContain("private rules");
+      await expect(call(saveCoachVoiceFn, { profile }, uid)).rejects.toThrow("Only the owner");
+      await expect(call(tryCoachVoiceFn, { profile, scenario: "great_week", clientId: MARC }, uid)).rejects.toThrow("Only the owner");
+    }
+    const mine: any = await call(getCoachVoiceFn, undefined, "owner");
+    expect(mine.owner).toBe(true);
+    expect(mine.profile.rules).toBe("the owner's private rules");
   });
 
   it("the assigned coach and the admin can", async () => {

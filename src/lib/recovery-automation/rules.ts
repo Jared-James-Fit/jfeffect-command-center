@@ -18,9 +18,16 @@
 import type { PainArea, PainEntry } from "@/lib/pain/history";
 import { draftProblems } from "@/lib/pain/ai";
 import type { RedFlag } from "@/lib/pain/safety";
-import { UPDATE_REASON_WORDS } from "@/lib/recovery-automation/categories";
+import { UPDATE_REASON_WORDS, needsEyes } from "@/lib/recovery-automation/categories";
 
-export type AutomationCategory = "recovery_reply" | "recovery_follow_up" | "workout_reply" | "checkin_reply" | "missed_session";
+export type AutomationCategory =
+  | "recovery_reply"
+  | "recovery_follow_up"
+  | "workout_reply"
+  | "checkin_reply"
+  | "missed_session"
+  | "video_reply"
+  | "progress_reply";
 export type AutomationMode = "off" | "manual" | "approval" | "automatic";
 export type Risk = "routine" | "review" | "urgent";
 
@@ -28,7 +35,9 @@ export const CATEGORIES: { key: AutomationCategory; label: string; line: string;
   { key: "recovery_reply", label: "Replies to pain reports", line: "When a client reports pain in a workout review.", short: "Pain replies" },
   { key: "recovery_follow_up", label: "Recovery follow-ups", line: "A short check before the next session that loads the area.", short: "Follow-ups" },
   { key: "checkin_reply", label: "Replies to weekly check-ins", line: "Once a check-in's recap is written, starting from its suggested reply.", short: "Check-in replies" },
-  { key: "workout_reply", label: "Replies to workout reviews", line: "When a client writes something in their review, or rates the session 1 or 2 out of 5.", short: "Workout replies" },
+  { key: "workout_reply", label: "Replies to workout reviews", line: "When a client writes something in their review, rates the session 1 or 2 out of 5, or hits a PR on a main lift.", short: "Workout replies" },
+  { key: "video_reply", label: "Replies to set videos", line: "One reply for the day's videos, with each set's numbers and bar speed. Always waits for you: only you can judge a video.", short: "Video replies" },
+  { key: "progress_reply", label: "Replies to progress check-ins", line: "When a client sends photos or a video for review, with their bodyweight trend. Always waits for you: only you can judge the photos.", short: "Progress replies" },
   { key: "missed_session", label: "Missed sessions", line: "A short, no-guilt check-in the day after a planned workout goes by with nothing logged.", short: "Missed sessions" },
 ];
 
@@ -54,6 +63,8 @@ export function modeNeeds(category: AutomationCategory, mode: AutomationMode): s
 }
 
 export function modeAllowed(features: readonly string[], category: AutomationCategory, mode: AutomationMode): boolean {
+  // a video or progress photos need his eyes: never sent by itself, at any level
+  if (mode === "automatic" && needsEyes(category)) return false;
   return modeNeeds(category, mode).every((f) => features.includes(f));
 }
 

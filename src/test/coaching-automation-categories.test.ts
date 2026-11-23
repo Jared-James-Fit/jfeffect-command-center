@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { checkinReplyRead, messageTypeFor, missedSessionRead, pushesCoach, queueOrder, workoutReplyRead } from "@/lib/recovery-automation/categories";
+import { checkinReplyRead, eyesProblems, messageTypeFor, missedSessionRead, progressReplyRead, pushesCoach, queueOrder, videoReplyRead, workoutReplyRead } from "@/lib/recovery-automation/categories";
 import { CATEGORIES, effectiveMode, modeAllowed, modeNeeds, riskReasonWords, routeItem, type AutomationCategory } from "@/lib/recovery-automation/rules";
 
 const OWNER = ["automation.approval_queue", "automation.auto_send", "automation.follow_ups", "owner.voice", "owner.training_aware", "owner.controls"];
@@ -25,6 +25,13 @@ describe("workout reviews", () => {
   it("pain and feeling unwell said the way people say it", () => {
     for (const note of ["knee is killing me", "my tendonitis flared again", "back's stiff after deadlifts", "shoulder was bothering me on bench"]) expect(workoutReplyRead({ note, rating: 4 }).reasons).toContain("mentions_pain");
     for (const note of ["think I'm coming down with something", "felt run down all session", "bit under the weather"]) expect(workoutReplyRead({ note, rating: 4 }).reasons).toContain("ill");
+  });
+  it("a headline PR is worth a reply even when they wrote nothing", () => {
+    expect(workoutReplyRead({ note: null, rating: 5, headlinePr: true })).toEqual({ useful: true, why: null, risk: "routine", reasons: [] });
+    expect(workoutReplyRead({ note: "yes", rating: 5, headlinePr: true }).useful).toBe(true);
+    expect(workoutReplyRead({ note: null, rating: 5, headlinePr: false }).useful).toBe(false);
+    // a PR never hides a question or a low rating
+    expect(workoutReplyRead({ note: "should I go up again?", rating: 4, headlinePr: true }).risk).toBe("review");
   });
   it("words that may need medical help are urgent", () => {
     expect(workoutReplyRead({ note: "got really dizzy after the squats and almost passed out", rating: 3 }).risk).toBe("urgent");
@@ -56,11 +63,48 @@ describe("missed sessions", () => {
   });
 });
 
+describe("set videos and progress check-ins need his eyes", () => {
+  it("always waits for him, never routine", () => {
+    expect(videoReplyRead({ videos: 3 })).toEqual({ useful: true, why: null, risk: "review", reasons: ["needs_eyes_video"] });
+    expect(videoReplyRead({ videos: 0 }).useful).toBe(false);
+    expect(progressReplyRead({ media: 4 })).toMatchObject({ risk: "review", reasons: ["needs_eyes_progress"] });
+    expect(progressReplyRead({ media: 0 }).useful).toBe(false);
+  });
+  it("can never be set to send by itself, at any level", () => {
+    for (const k of ["video_reply", "progress_reply"] as const) {
+      expect(modeAllowed(OWNER, k, "automatic")).toBe(false);
+      expect(modeAllowed(OWNER, k, "approval")).toBe(true);
+      expect(modeAllowed(OWNER, k, "manual")).toBe(true);
+      // a stored automatic steps down to asking him
+      expect(effectiveMode({ features: OWNER, category: k, paused: false, setting: "automatic", clientRule: null })).toBe("approval");
+    }
+    expect(modeAllowed(QUEUE_ONLY, "video_reply", "approval")).toBe(true);
+  });
+  it("the draft never says how anything looked", () => {
+    for (const bad of ["squats looked clean today", "depth was perfect on the top set", "you look leaner already", "bar path looked smooth", "your physique is coming along", "form looked solid"]) {
+      expect(eyesProblems(bad)).not.toEqual([]);
+    }
+    for (const ok of ["got the videos, top set 140 kg x 3 @ 7 at 0.41 m/s", "thanks for sending these. 7-day average is down 0.8 kg from four weeks ago", "bench 100 x 5, speed held across the reps per the read"]) {
+      expect(eyesProblems(ok)).toEqual([]);
+    }
+  });
+  it("never pushes him again (the upload already did) and files where his own would go", () => {
+    expect(pushesCoach("video_reply", "review")).toBe(false);
+    expect(pushesCoach("progress_reply", "review")).toBe(false);
+    expect(messageTypeFor("video_reply")).toBe("Training");
+    expect(messageTypeFor("progress_reply")).toBe("General");
+  });
+  it("mirrors the database: never automatic for these two", () => {
+    const sql = readFileSync("supabase/migrations/20270511090000_coaching_automation_videos_progress.sql", "utf8");
+    expect(sql).toContain("WHEN _mode = 'automatic' AND _category IN ('video_reply', 'progress_reply') THEN false");
+  });
+});
+
 describe("every kind follows the same safeguards", () => {
   const kinds = CATEGORIES.map((c) => c.key);
-  it("lists all five kinds, each mirrored in the migration", () => {
-    expect(kinds).toEqual(["recovery_reply", "recovery_follow_up", "checkin_reply", "workout_reply", "missed_session"]);
-    const sql = readFileSync("supabase/migrations/20270510100000_coaching_automation_categories.sql", "utf8");
+  it("lists all seven kinds, each mirrored in the latest migration", () => {
+    expect(kinds).toEqual(["recovery_reply", "recovery_follow_up", "checkin_reply", "workout_reply", "video_reply", "progress_reply", "missed_session"]);
+    const sql = readFileSync("supabase/migrations/20270511090000_coaching_automation_videos_progress.sql", "utf8");
     for (const k of kinds) expect(sql).toContain(`'${k}'`);
   });
   it("only routine ever goes out by itself, whatever the kind", () => {
@@ -72,7 +116,7 @@ describe("every kind follows the same safeguards", () => {
     expect(modeNeeds("workout_reply", "approval")).toEqual(["automation.approval_queue"]);
     expect(modeAllowed(QUEUE_ONLY, "missed_session", "approval")).toBe(false);
     expect(modeAllowed(QUEUE_ONLY, "checkin_reply", "automatic")).toBe(false);
-    for (const k of kinds) expect(modeAllowed(OWNER, k as AutomationCategory, "automatic")).toBe(true);
+    for (const k of kinds) expect(modeAllowed(OWNER, k as AutomationCategory, "automatic")).toBe(k !== "video_reply" && k !== "progress_reply");
   });
   it("defaults to asking first, never to sending", () => {
     for (const k of kinds) expect(effectiveMode({ features: OWNER, category: k as AutomationCategory, paused: false, setting: null, clientRule: null })).toBe("approval");
@@ -90,7 +134,7 @@ describe("every kind follows the same safeguards", () => {
     expect(messageTypeFor("workout_reply")).toBe("Training");
   });
   it("every reason is said in words", () => {
-    for (const r of ["question", "program_request", "mentions_pain", "low_rating", "help", "checkin_flags", "missed_repeat", "warning_words"]) expect(riskReasonWords(r)).not.toBe(r);
+    for (const r of ["question", "program_request", "mentions_pain", "low_rating", "help", "checkin_flags", "missed_repeat", "warning_words", "needs_eyes_video", "needs_eyes_progress"]) expect(riskReasonWords(r)).not.toBe(r);
   });
 });
 
@@ -105,10 +149,14 @@ describe("the queue's order", () => {
       item("recovery_reply", "routine"),
       item("checkin_reply", "routine", "draft"),
       item("checkin_reply", "routine"),
+      item("video_reply", "review"),
+      item("progress_reply", "review"),
     ].sort(queueOrder);
     expect(list.map((i) => `${i.risk}:${i.category}:${i.status}`)).toEqual([
       "urgent:workout_reply:awaiting_approval",
       "review:checkin_reply:awaiting_approval",
+      "review:video_reply:awaiting_approval",
+      "review:progress_reply:awaiting_approval",
       "routine:recovery_reply:awaiting_approval",
       "routine:checkin_reply:awaiting_approval",
       "routine:workout_reply:awaiting_approval",

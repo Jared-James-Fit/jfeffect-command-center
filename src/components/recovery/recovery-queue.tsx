@@ -35,7 +35,7 @@ import {
   type RecoveryQueue,
 } from "@/lib/recovery-automation/queue.functions";
 import { CATEGORIES, MODES, STATUS_WORDS, modeAllowed, riskReasonWords, type AutomationCategory, type AutomationMode } from "@/lib/recovery-automation/rules";
-import { queueOrder } from "@/lib/recovery-automation/categories";
+import { needsEyes, queueOrder } from "@/lib/recovery-automation/categories";
 import { regionOf } from "@/lib/pain/regions";
 
 export const RECOVERY_QUEUE_KEY = ["recovery-queue"] as const;
@@ -79,6 +79,13 @@ export function itemTitle(item: Pick<RecoveryItem, "category" | "regions" | "con
       const w = item.context?.workout;
       return w ? `Missed ${w.title ?? "a workout"} (${shortDay(w.date)})` : "Missed a planned workout";
     }
+    case "video_reply": {
+      const n = item.context?.video_ids?.length ?? 0;
+      const day = item.context?.day ? ` (${shortDay(item.context.day)})` : "";
+      return `Reply to their set videos${n ? ` · ${n} ${n === 1 ? "video" : "videos"}` : ""}${day}`;
+    }
+    case "progress_reply":
+      return item.context?.submission_type === "video" ? "Reply to their progress video" : "Reply to their progress photos";
     default:
       return ["Reply to a pain report", areas].filter(Boolean).join(" · ");
   }
@@ -96,7 +103,11 @@ function previewOf(i: RecoveryItem): string {
           ? `reply to ${who}'s check-in`
           : i.category === "missed_session"
             ? `check-in for ${who} (missed session)`
-            : `reply to ${who}'s pain report`;
+            : i.category === "video_reply"
+              ? `reply to ${who}'s set videos`
+              : i.category === "progress_reply"
+                ? `reply to ${who}'s progress check-in`
+                : `reply to ${who}'s pain report`;
   return `${i.risk === "urgent" ? "Needs you: " : ""}${what}`;
 }
 
@@ -172,6 +183,10 @@ export function RecoveryQueueSheet({ open, onOpenChange, queue, focusId, initial
     { key: "sent", label: "Sent" },
     { key: "settings", label: "Settings" },
   ];
+  const openProgress = (clientId: string) => {
+    onOpenChange(false);
+    void navigate({ to: "/admin/clients/$id", params: { id: clientId }, search: { tab: "metrics" } as any });
+  };
   const openChat = (clientId: string) => {
     onOpenChange(false);
     void navigate({ to: "/admin/messages", search: { client: clientId } as any });
@@ -187,7 +202,7 @@ export function RecoveryQueueSheet({ open, onOpenChange, queue, focusId, initial
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1 space-y-0.5">
                 <SheetTitle className="text-lg font-semibold">Coaching queue</SheetTitle>
-                <SheetDescription className="text-xs">Replies to pain reports, check-ins and workout reviews, follow-ups and missed sessions, most important first. Anything that needs your judgment always waits for you.</SheetDescription>
+                <SheetDescription className="text-xs">Replies drafted for you, most important first. Anything that needs your judgment or your eyes always waits for you.</SheetDescription>
               </div>
               <button type="button" onClick={() => onOpenChange(false)} className="-mr-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted" aria-label="Close">
                 <X className="h-5 w-5" />
@@ -228,6 +243,7 @@ export function RecoveryQueueSheet({ open, onOpenChange, queue, focusId, initial
                   focused={i.id === focusId}
                   onOpenChat={() => openChat(i.client_id)}
                   onOpenReport={() => setPainFor(i.client_id)}
+                  onOpenProgress={() => openProgress(i.client_id)}
                 />
               ))
             )}
@@ -246,6 +262,7 @@ function ItemCard({
   focused,
   onOpenChat,
   onOpenReport,
+  onOpenProgress,
 }: {
   item: RecoveryItem;
   queue: Extract<RecoveryQueue, { enabled: true }>;
@@ -253,6 +270,7 @@ function ItemCard({
   focused: boolean;
   onOpenChat: () => void;
   onOpenReport: () => void;
+  onOpenProgress: () => void;
 }) {
   const qc = useQueryClient();
   const approveFn = useServerFn(approveRecoveryItemFn);
@@ -325,7 +343,7 @@ function ItemCard({
         <p className="flex items-start gap-1.5 text-[13px] leading-snug" data-recovery-risk={item.risk}>
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
           <span>
-            <span className="font-semibold">{item.risk === "urgent" ? (isPain(item.category) ? "Warning sign. " : "May need medical help. ") : "Needs your judgment. "}</span>
+            <span className="font-semibold">{item.risk === "urgent" ? (isPain(item.category) ? "Warning sign. " : "May need medical help. ") : needsEyes(item.category) ? "Needs your eyes. " : "Needs your judgment. "}</span>
             {sentenceCase(item.risk_reasons.filter((r) => !(r === "red_flag" && item.risk_reasons.includes("urgent"))).map(riskReasonWords).join(", "))}.
           </span>
         </p>
@@ -347,7 +365,13 @@ function ItemCard({
       {waiting ? (
         <>
           <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} className="resize-none text-base" aria-label={`Message to ${item.first_name}`} />
-          <p className="text-[11px] text-muted-foreground">Written for you from what they sent and their records. Nothing goes to {item.first_name} until you send it.</p>
+          <p className="text-[11px] text-muted-foreground" data-recovery-hint>
+            {item.category === "video_reply"
+              ? `Written from the sets' numbers only. Watch the videos in their chat and add what you see. Nothing goes to ${item.first_name} until you send it.`
+              : item.category === "progress_reply"
+                ? `Written from their records only. Look at the check-in and add what you see. Sending it marks the check-in reviewed.`
+                : `Written for you from what they sent and their records. Nothing goes to ${item.first_name} until you send it.`}
+          </p>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => send.mutate()} disabled={send.isPending || !text.trim()} data-recovery-send>
               {send.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Check className="mr-1.5 h-4 w-4" />} Send to {item.first_name}
@@ -355,6 +379,16 @@ function ItemCard({
             {isPain(item.category) && (
               <Button size="sm" variant="outline" onClick={onOpenReport}>
                 Open report
+              </Button>
+            )}
+            {item.category === "video_reply" && (
+              <Button size="sm" variant="outline" onClick={onOpenChat} data-recovery-watch>
+                Watch the videos
+              </Button>
+            )}
+            {item.category === "progress_reply" && (
+              <Button size="sm" variant="outline" onClick={onOpenProgress} data-recovery-open-progress>
+                Open check-in
               </Button>
             )}
             <Button size="sm" variant="ghost" onClick={() => dismiss.mutate()} disabled={dismiss.isPending}>
