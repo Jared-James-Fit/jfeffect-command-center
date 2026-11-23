@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CheckCircle2, ChevronRight, MessageSquare, Quote, XCircle } from "lucide-react";
 import { SalesPageShell } from "@/components/sales/sales-page-shell";
@@ -11,14 +12,15 @@ import { CLIENT_QUOTES } from "@/components/sales/client-quotes";
 import { COACH_NAME, INQUIRY_DM_URL } from "@/lib/social-links";
 import { APPLY_GOALS } from "@/lib/apply-form";
 import jaredAsset from "@/assets/athletes/jared-napf-2026.jpg.asset.json";
-import shotProgress from "@/assets/coaching/app-analytics-progress.webp";
-import shotPrs from "@/assets/coaching/app-analytics-prs.webp";
+import shotOverview from "@/assets/coaching/app-overview.webp";
+import shotProgram from "@/assets/coaching/app-program.webp";
 import shotChat from "@/assets/coaching/app-coach-chat.webp";
 import shotNutrition from "@/assets/coaching/app-nutrition.webp";
+import { trackSite } from "@/lib/site-funnel";
 import { shareMeta } from "@/lib/share-meta";
 import { CoachingPackagesGrid } from "@/components/sales/coaching-packages";
 import { getPublicPackages } from "@/lib/coaching-packages/packages.functions";
-import { costAnswer, listedPackages, paidPackages, type PublicPackage } from "@/lib/coaching-packages/packages";
+import { callsPolicy, costAnswer, listedPackages, paidPackages, type PublicPackage } from "@/lib/coaching-packages/packages";
 
 /** The packages on the site, waited on for at most 2 s (the page never hangs on them). */
 async function packagesForPage(): Promise<PublicPackage[]> {
@@ -112,9 +114,9 @@ const CTA = "Apply for coaching";
 const OFFER: Array<{ title: string; body: string; src: string; alt: string }> = [
   {
     title: "A program written for you",
-    body: "Built around your goal, your schedule and the equipment you have. Every set you log feeds your PRs and estimated maxes, so we both see what's working.",
-    src: shotPrs,
-    alt: "Recent PRs in the app's training analytics: each lift's new estimated max and the best it beat",
+    body: "Built around your goal, your schedule and the equipment you have, with my notes on the exercises that need them. Every set you log feeds your PRs and estimated maxes, so we both see what's working.",
+    src: shotProgram,
+    alt: "A coach-written workout in the app: back squat, 4 × 5 at RPE 7, the coach's note to keep the same weight for all four sets, three sets logged at 295 lb",
   },
   {
     title: "Weekly check-ins",
@@ -206,10 +208,38 @@ function CheckList({ items }: { items: string[] }) {
   );
 }
 
+/** Counts the page view once, and the pricing section the first time it's on screen. */
+function useCoachingSeen() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    trackSite("coaching_view");
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          trackSite("pricing_view", "coaching");
+          io.disconnect();
+        }
+      },
+      { threshold: 0.35 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return ref;
+}
+
 function CoachingPage() {
   const { packages } = Route.useLoaderData();
+  const pricingRef = useCoachingSeen();
   const pricing = paidPackages(listedPackages(packages)).length > 0;
   const cost = costAnswer(packages);
+  // a package with calls on the site gets its own answer: the allowance, the 24-hour rule, no rollover
+  const callsAnswers = listedPackages(packages)
+    .map((p) => ({ q: `How do the ${p.name} calls work?`, a: callsPolicy(p) }))
+    .filter((x): x is { q: string; a: string } => !!x.a);
+  const faq = [...FAQ.slice(0, 6), ...callsAnswers, ...FAQ.slice(6)];
   return (
     <SalesPageShell pageId="coaching">
       {/* 1. What it is, and the one button */}
@@ -219,11 +249,11 @@ function CoachingPage() {
         sub="I write your training and nutrition, read your check-in every week, and change the plan when it needs changing. It all runs through the JF Effect app."
         primary={
           <div data-inline-cta className="flex flex-col items-stretch sm:items-center lg:items-start">
-            <PrimaryCta to={APPLY_TO}>{CTA}</PrimaryCta>
+            <PrimaryCta to={APPLY_TO} onClick={() => trackSite("cta_coaching", "coaching_hero")}>{CTA}</PrimaryCta>
           </div>
         }
         note="Free to apply. Seven questions, then pick a time for a call."
-        image={{ src: shotProgress, alt: "Training analytics in the JF Effect app: an athlete's back squat estimated max climbing week by week over 12 weeks" }}
+        image={{ src: shotOverview, alt: "Training analytics in the JF Effect app: squat, bench and deadlift estimated maxes up 44, 25 and 49 lb, 27 of 27 planned workouts done, 55 sets a week" }}
       />
 
       {/* 2. Why listen */}
@@ -323,20 +353,25 @@ function CoachingPage() {
       </Reveal>
 
       {/* 5b. What it costs: the packages on the site (coaching_packages), never typed here */}
+      <div ref={pricingRef}>
       {pricing && (
         <Reveal>
           <Block id="pricing" className="!pt-0">
             <Heading
               eyebrow="What it costs"
               title="What coaching costs."
-              sub="In Canadian dollars, plus applicable tax. Applying is free and doesn't commit you to anything."
+              sub="Every package includes the full app. In Canadian dollars, plus applicable tax. Applying is free and doesn't commit you to anything."
             />
             <div data-inline-cta>
               <CoachingPackagesGrid packages={packages} from="coaching" />
             </div>
+            <p className="mx-auto mt-8 max-w-md text-center text-[13px] leading-relaxed text-muted-foreground">
+              Applying doesn't charge you. We talk on a short call first, and you only pay once we've agreed to start.
+            </p>
           </Block>
         </Reveal>
       )}
+      </div>
 
       {/* 6. How it starts */}
       <Reveal>
@@ -432,7 +467,7 @@ function CoachingPage() {
           <Heading eyebrow="Questions" title="What people ask before they apply." />
           <Group>
             <Accordion type="single" collapsible>
-              {FAQ.map((it, i) => (
+              {faq.map((it, i) => (
                 <AccordionItem key={it.q} value={`faq-${i}`} className="border-0 px-5 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border/70">
                   <AccordionTrigger className="py-4 text-left text-[17px] font-medium hover:no-underline">{it.q}</AccordionTrigger>
                   <AccordionContent className="text-[15px] leading-relaxed text-muted-foreground">

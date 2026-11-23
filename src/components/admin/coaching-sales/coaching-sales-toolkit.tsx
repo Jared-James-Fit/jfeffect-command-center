@@ -28,18 +28,20 @@ import { PackageEditorSheet } from "./package-editor-sheet";
 import { PackageHistorySheet } from "./package-history-sheet";
 import { EnrollmentsSheet } from "./enrollments-sheet";
 import { ShareCards } from "./share-cards";
+import { CoachingFunnelCard } from "./coaching-funnel-card";
 
 export const PACKAGES_KEY = ["coaching-packages-admin"] as const;
 
 /**
  * Sales → Coaching packages: the one place a package's words, price and what's
- * included are changed, and what the site and every pricing card read. Two
+ * included are changed, and what the site and every pricing card read. Three
  * tabs: Packages (edit, put on or take off the site, order, history, who's on
- * each) and Share cards (images and PDFs to send). Changing a package never
- * changes what a client pays: their sale and Stripe stay as they are.
+ * each), Share cards (images and PDFs to send) and How people find it (the
+ * site's anonymous funnel, interest apart from customers). Changing a package
+ * never changes what a client pays: their sale and Stripe stay as they are.
  */
 export default function CoachingSalesToolkit() {
-  const [tab, setTab] = useState<"packages" | "cards">("packages");
+  const [tab, setTab] = useState<"packages" | "cards" | "funnel">("packages");
   const [cardSlugs, setCardSlugs] = useState<string[] | null>(null);
   return (
     <div className="mx-auto max-w-4xl p-4 md:p-6" data-coaching-toolkit>
@@ -52,6 +54,7 @@ export default function CoachingSalesToolkit() {
             [
               ["packages", "Packages"],
               ["cards", "Share cards"],
+              ["funnel", "How people find it"],
             ] as const
           ).map(([k, l]) => (
             <button
@@ -77,8 +80,10 @@ export default function CoachingSalesToolkit() {
             setTab("cards");
           }}
         />
-      ) : (
+      ) : tab === "cards" ? (
         <ShareCards initialSlugs={cardSlugs} />
+      ) : (
+        <CoachingFunnelCard />
       )}
     </div>
   );

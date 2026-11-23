@@ -2,27 +2,36 @@
  * jfeffect.com's front door (signed-out visitors on "/"). JF Effect is a
  * coaching brand with its own app: the app is free to use (by application, no
  * card) and 1:1 online coaching with Jared is a paid service (by application).
- * The page sells the free app first and coaching as its own premium offer,
- * with its packages and prices read from coaching_packages (the one source of
- * truth: the admin's Coaching packages edits them, CoachingPackagesGrid draws
- * them), never typed here.
  *
- * Order: who built it and both ways in; why listen; the app on its real
- * screens; your own program (built in the app or uploaded); online coaching (what Jared does for you, shown in the chat where
- * it happens) and client results; questions; one last way in.
+ * The page is told the way a product is launched (Nov 23 2026): the promise,
+ * then the app shown screen by screen until it's clearly worth paying for,
+ * then the reveal that it's free; then what a coach adds on top of the tools,
+ * then the prices, then the proof, then one plain question: which one is you?
+ * The app's own screens carry the page from top to bottom, so a visitor keeps
+ * seeing the product rather than reading about it.
+ *
+ * Anchors are honest: the app is "the same app my coaching clients train in"
+ * (true), and the recommended package says how much more it is than the next
+ * package on the site (both listed prices, anchorLine). Never a crossed-out
+ * price, a "worth" number or a fake discount. Prices are read from
+ * coaching_packages (the one source of truth, edited in Sales → Coaching
+ * packages, drawn by CoachingPackagesGrid), never typed here, and only what's
+ * listed shows: a draft package never reaches this page.
  *
  * Words are Jared's: plain, short, first person, no fitness-marketing lines
- * (landing-free-vs-coaching.test.ts keeps them out). Coaching is online only
- * on every public page. Every claim is checked against the product and the
- * database (Nov 20 2026): 15 live JF Effect programs (4 for beginners, 3 for
- * home), 2,000+ exercises with a how-to video for almost all of them, Jared's
- * record as the About page states it; client words and photos from the
- * Coaching page. App screens are a made-up athlete, never a client
- * (scripts/coaching-screenshots).
+ * (landing-free-vs-coaching.test.ts keeps them out). Coaching is online only.
+ * Every claim is checked against the product and the database: 15 live JF
+ * Effect programs (4 for beginners, 3 for home), 2,000+ exercises with a
+ * how-to video for almost all of them, Jared's record as the About page
+ * states it; client words and photos from the Coaching page. App screens are
+ * a made-up athlete, never a client (scripts/coaching-screenshots).
+ *
+ * Measured anonymously (site-funnel.ts): the landing view, the pricing
+ * section coming into view, which button was tapped and which package.
  */
-import { Suspense, useEffect, type ReactNode } from "react";
+import { Suspense, useEffect, useRef, type ReactNode } from "react";
 import { Await, Link } from "@tanstack/react-router";
-import { Apple, Dumbbell, Gauge, Quote, Users } from "lucide-react";
+import { ArrowRight, Dumbbell, Gauge, History, Quote, Users } from "lucide-react";
 import { SalesPageShell } from "@/components/sales/sales-page-shell";
 import { PhoneShot } from "@/components/sales/coaching-hero";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
@@ -38,30 +47,42 @@ import {
 } from "@/components/ui/accordion";
 import { COACH_NAME } from "@/lib/social-links";
 import { trackJoin } from "@/lib/join-funnel";
+import { trackSite } from "@/lib/site-funnel";
 import { currentLaunchMode } from "@/lib/landing-launch";
 import { HOME_CTA_ZONES } from "@/lib/public-nav";
 import { CoachingPackagesGrid } from "@/components/sales/coaching-packages";
-import { costAnswer, listedPackages, paidPackages, type PublicPackage } from "@/lib/coaching-packages/packages";
+import {
+  costAnswer,
+  decisionRows,
+  listedPackages,
+  paidPackages,
+  type DecisionRow,
+  type PublicPackage,
+} from "@/lib/coaching-packages/packages";
 import { cn } from "@/lib/utils";
-import jaredAsset from "@/assets/athletes/jared-napf-2026.jpg.asset.json";
 import shotLog from "@/assets/landing/app-log.webp";
+import shotHome from "@/assets/landing/app-home.webp";
+import shotFocus from "@/assets/landing/app-focus.webp";
 import shotWeek from "@/assets/landing/app-week.webp";
 import shotInsights from "@/assets/landing/app-insights.webp";
+import shotFood from "@/assets/landing/app-food.webp";
 import shotBuild from "@/assets/landing/app-build.webp";
 import shotImport from "@/assets/landing/app-import.webp";
 import shotChat from "@/assets/coaching/app-coach-chat.webp";
+import shotPlan from "@/assets/coaching/app-nutrition.webp";
 
 export const JOIN_TO = "/join" as const;
 /** Straight into the coaching application (seven questions, then a call). */
 export const COACHING_APPLY_TO = "/coaching/apply" as const;
 /** The full coaching page, for anyone who wants to read before applying. */
 export const COACHING_TO = "/coaching" as const;
-export const JOIN_CTA = "Join free";
+export const JOIN_CTA = "Get the free app";
 export const COACHING_CTA = "Apply for coaching";
+export const EXPLORE_CTA = "Explore coaching";
 
 const HERO = {
-  title: "Train in the same app my clients use.",
-  body: "Follow my programs, build your own, or upload a plan you already have. Track every workout, PR and progression in one place. Use it free, or hire me to coach you online.",
+  title: "Train like you have a coach.",
+  body: "Follow my programs, build your own, or upload a plan you already have. Log every set in seconds and see what's working. It's the same app my coaching clients train in.",
 };
 
 /** Who's behind it, in numbers that are true and easy to check. */
@@ -72,25 +93,35 @@ const PROOF: Array<[string, string, string]> = [
   ["15", "Programs in the app", "Strength, muscle, running, home"],
 ];
 
-/** The free app on its real screens. */
-const SCREENS: Array<{ title: string; body: string; src: string; alt: string }> = [
+/** The app, one capability at a time, each on its own screen. */
+const CHAPTERS: Array<{ eyebrow: string; title: string; body: string; src: string; alt: string }> = [
   {
-    title: "Follow my programs",
-    body: "Pick one and the workouts land on the days you train. If your week changes, move them.",
+    eyebrow: "Programs",
+    title: "Your program, on the days you train.",
+    body: "Follow one of my 15 programs or build your own. The workouts land on your training days, and when your week changes, you move them.",
     src: shotWeek,
-    alt: "The Workouts screen: this week's calendar, today's lower body workout in progress, and the program at week 7 of 13",
+    alt: "The Workouts screen: this week's calendar, today's lower body workout in progress, the program at week 7 of 13 and this month's progress",
   },
   {
-    title: "Log a set in seconds",
+    eyebrow: "Logging",
+    title: "Log a set in seconds.",
     body: "Reps and RPE come filled in from the program. Type the weight and it's logged, with last time on the same card.",
     src: shotLog,
     alt: "The workout logger: back squat, 4 × 5 at RPE 7, last time 290 lb × 5, three sets logged at 295 lb",
   },
   {
-    title: "See what's working",
-    body: "PRs, estimated maxes and weekly volume, worked out from what you log.",
+    eyebrow: "Progress",
+    title: "See what's working.",
+    body: "Estimated maxes, PRs, volume and consistency, worked out from every set you log.",
     src: shotInsights,
-    alt: "Training analytics: squat, bench and deadlift estimated maxes up 10 to 14 percent over 12 weeks",
+    alt: "Training analytics: the back squat's estimated max climbing to 374 lb over 12 weeks, up 44 lb",
+  },
+  {
+    eyebrow: "Nutrition",
+    title: "Eat for your goal.",
+    body: "Get your calories and macros, build a meal plan from foods you like, and log what you eat.",
+    src: shotFood,
+    alt: "The Nutrition screen: a 1,980 calorie meal plan with protein, carbs and fat, and breakfast's foods and amounts",
   },
 ];
 
@@ -116,9 +147,16 @@ const OWN: Array<{ title: string; body: string; note: string; src: string; alt: 
 const FREE: Array<{ icon: typeof Dumbbell; text: string }> = [
   { icon: Dumbbell, text: "2,000+ exercises, almost all with a how-to video" },
   { icon: Gauge, text: "Bar speed on any set, if you train with a velocity tracker" },
-  { icon: Apple, text: "Nutrition targets and a food log" },
+  { icon: History, text: "Pause or switch programs and pick up where you left off" },
   { icon: Users, text: "The Crew, and a League that resets every month" },
 ];
+
+/** The reveal: everything above, said in one line, then the price. */
+const REVEAL = {
+  lead: "Programs. Logging. Progress. Nutrition. The Crew.",
+  title: "The JF Effect app is free.",
+  body: "No card, and nothing turns into a charge later. It's the same app my coaching clients train in.",
+};
 
 /** What Jared does as an online coach. Each line is something a coaching client gets today. */
 const COACHING: Array<{ title: string; body: string }> = [
@@ -150,22 +188,22 @@ const COST_QUESTION = "What does coaching cost?";
 const FAQ: Array<{ q: string; a: string }> = [
   {
     q: "What's free?",
-    a: "The app: my programs, building or uploading your own, the training log, your PRs and progress, nutrition targets, the food log and the Crew. No card, and nothing turns into a charge later.",
-  },
-  {
-    q: "Can I bring a program I already follow?",
-    a: "Yes. Upload the spreadsheet, Word doc, PDF or photos, or paste it in. You check it before it's saved and it stays private to you. Reading a PDF or photos uses some of your free monthly credits. Only upload programs you wrote or have permission to use.",
+    a: "The app: my programs, building or uploading your own, the training log, your PRs and progress, calories and macros, a meal plan you build, the food log and the Crew. No card, and nothing turns into a charge later.",
   },
   {
     q: "Why do I have to apply for a free app?",
     a: "I read every application myself. It keeps the Crew to people who train, and I can point you to the right program on day one. Most people are in within a day.",
   },
   {
+    q: "Can I bring a program I already follow?",
+    a: "Yes. Upload the spreadsheet, Word doc, PDF or photos, or paste it in. You check it before it's saved and it stays private to you. Reading a PDF or photos uses some of your free monthly credits. Only upload programs you wrote or have permission to use.",
+  },
+  {
     q: "How does online coaching work?",
     a: "Everything runs through the app: your program, your nutrition, weekly check-ins, video feedback and our chat. It works wherever you train, at home or in a gym.",
   },
   {
-    q: "What does coaching cost?",
+    q: COST_QUESTION,
     a: "Applying is free. We talk on a short call before you commit to anything.",
   },
   {
@@ -178,26 +216,34 @@ const FAQ: Array<{ q: string; a: string }> = [
   },
 ];
 
+/** A client's words as they wrote them, starting with a capital (as quoted in print). */
+function sentenceStart(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /** The quiet second way in: same size as the primary, never red. */
 function SecondaryCta({
-  to,
+  href,
   children,
   className,
+  onClick,
 }: {
-  to: string;
-  children: React.ReactNode;
+  href: string;
+  children: ReactNode;
   className?: string;
+  onClick?: () => void;
 }) {
   return (
-    <Link
-      to={to as any}
+    <a
+      href={href}
+      onClick={onClick}
       className={cn(
         "inline-flex h-[54px] items-center justify-center gap-1.5 rounded-2xl px-7 text-[17px] font-semibold text-foreground ring-1 ring-inset ring-foreground/20 transition hover:bg-secondary active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className,
       )}
     >
       {children}
-    </Link>
+    </a>
   );
 }
 
@@ -214,24 +260,133 @@ function WithPackages({ packages, fallback = null, children }: { packages: Packa
   );
 }
 
+/** Counts the pricing section once, the first time it's half on screen. */
+function usePricingSeen() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          trackSite("pricing_view", "home");
+          io.disconnect();
+        }
+      },
+      { threshold: 0.35 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return ref;
+}
+
+/**
+ * Two of the app's screens, one in front of the other: the hero's product
+ * shot. The back phone hides on the smallest phones, where one screen reads
+ * better than two half-screens.
+ */
+function HeroDevices() {
+  return (
+    <div className="relative mx-auto w-full max-w-[340px] pb-6 sm:max-w-[420px] lg:max-w-[460px]">
+      <div className="absolute left-0 top-[9%] hidden w-[52%] -rotate-[5deg] min-[380px]:block">
+        <PhoneShot src={shotHome} alt="Home in the JF Effect app: today's workout on the calendar and a bodyweight trend" />
+      </div>
+      <div className="relative ml-auto w-[64%] min-[380px]:w-[60%]">
+        <PhoneShot
+          src={shotFocus}
+          priority
+          alt="A workout in Focus mode: Romanian deadlift, 3 × 8 at RPE 7, the first set logged at 235 lb"
+          className="shadow-[0_40px_80px_-36px_rgba(0,0,0,0.6)]"
+        />
+      </div>
+    </div>
+  );
+}
+
+/** One capability: the words on one side, its screen on the other (alternating on wide screens). */
+function Chapter({ c, flip }: { c: (typeof CHAPTERS)[number]; flip: boolean }) {
+  return (
+    <Reveal>
+      <div className="grid items-center gap-8 md:grid-cols-2 md:gap-14" data-landing-chapter>
+        <div className={cn("text-center md:text-left", flip && "md:order-2")}>
+          <p className="text-[13px] font-semibold text-muted-foreground">{c.eyebrow}</p>
+          <h3 className="mt-2 text-balance text-[30px] font-semibold leading-[1.08] tracking-[-0.025em] md:text-[40px]">
+            {c.title}
+          </h3>
+          <p className="mx-auto mt-3 max-w-md text-[17px] leading-relaxed text-muted-foreground md:mx-0">{c.body}</p>
+        </div>
+        <div className={cn(flip && "md:order-1")}>
+          <PhoneShot src={c.src} alt={c.alt} className="max-w-[250px] md:max-w-[280px]" />
+        </div>
+      </div>
+    </Reveal>
+  );
+}
+
+/** "Which one is you?": each way in as one row, the recommended one marked. */
+function DecisionList({ rows }: { rows: DecisionRow[] }) {
+  return (
+    <div className="overflow-hidden rounded-[24px] bg-card ring-1 ring-border/70" data-landing-decide>
+      {rows.map((r, i) => {
+        const to = r.kind === "free" ? JOIN_TO : COACHING_APPLY_TO;
+        const search = r.kind === "free" ? undefined : r.slug === "coaching" ? { from: "decide" } : { package: r.slug, from: "decide" };
+        return (
+          <Link
+            key={r.slug}
+            to={to}
+            search={search as never}
+            onClick={() => (r.kind === "free" ? trackSite("cta_free", "decide") : trackSite("package_select", r.slug))}
+            className={cn(
+              "group flex items-center gap-4 px-5 py-5 transition hover:bg-secondary/60 sm:px-6",
+              i > 0 && "border-t border-border/70",
+            )}
+            data-decide-row={r.slug}
+          >
+            <div className="min-w-0 flex-1">
+              <p className="text-[17px] font-semibold leading-snug">{r.line || r.name}</p>
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-muted-foreground">
+                <span className="font-medium text-foreground">{r.name}</span>
+                <span aria-hidden>·</span>
+                <span className="tabular-nums">{r.price}</span>
+                {r.recommended && (
+                  <span className="rounded-full bg-foreground px-2 py-0.5 text-[11px] font-semibold text-background">Recommended</span>
+                )}
+              </p>
+            </div>
+            <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground motion-reduce:transition-none" aria-hidden />
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Before the packages have loaded (or if they can't be read): the two ways in. */
+const FALLBACK_DECISION: DecisionRow[] = [
+  { slug: "free", kind: "free", name: "Free app", line: "You want to train on your own.", price: "Free", recommended: false, cta: JOIN_CTA },
+  { slug: "coaching", kind: "subscription", name: "Online coaching", line: "You want me to run your training and your nutrition.", price: "By application", recommended: false, cta: COACHING_CTA },
+];
+
 export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
   useEffect(() => {
     // a signed-in launch renders this hidden for a moment: only real visitors count
     if (currentLaunchMode() === "landing") trackJoin("landing_view");
   }, []);
+  const pricingRef = usePricingSeen();
 
   return (
     <SalesPageShell pageId="landing" ctaZones={HOME_CTA_ZONES}>
-      {/* 1. Who built it, and both ways in */}
+      {/* A. The promise, the product, and both ways in */}
       <section
-        className="mx-auto grid max-w-5xl gap-12 px-5 pb-14 pt-6 md:pt-14 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:gap-10 lg:pb-20"
+        className="mx-auto grid max-w-5xl gap-10 px-5 pb-14 pt-6 md:pt-14 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:gap-10 lg:pb-20"
         data-landing-hero
       >
         <div className="jf-auth-rise text-center lg:text-left">
           <p className="text-[13px] font-semibold text-muted-foreground">
             {COACH_NAME} · Team Canada powerlifter
           </p>
-          <h1 className="mx-auto mt-3 max-w-[16ch] text-balance text-[40px] font-semibold leading-[1.04] tracking-[-0.035em] md:text-[58px] lg:mx-0">
+          <h1 className="mx-auto mt-3 max-w-[14ch] text-balance text-[42px] font-semibold leading-[1.03] tracking-[-0.035em] md:text-[62px] lg:mx-0">
             {HERO.title}
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-[18px] leading-relaxed text-muted-foreground md:text-[19px] lg:mx-0">
@@ -241,36 +396,21 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
             className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start"
             data-inline-cta
           >
-            <PrimaryCta to={JOIN_TO} className="sm:min-w-[200px]">
+            <PrimaryCta to={JOIN_TO} className="sm:min-w-[210px]" onClick={() => trackSite("cta_free", "hero")}>
               {JOIN_CTA}
             </PrimaryCta>
-            <SecondaryCta to={COACHING_TO} className="sm:min-w-[200px]">
-              Online coaching
+            <SecondaryCta href="#coaching" className="sm:min-w-[210px]" onClick={() => trackSite("cta_coaching", "hero")}>
+              {EXPLORE_CTA}
             </SecondaryCta>
           </div>
           <p className="mt-3 text-[13px] text-muted-foreground">
-            About a minute to apply. No card.
+            Free, by application. About a minute to apply. No card.
           </p>
         </div>
-
-        {/* The athlete, and the app he built */}
-        <div className="relative mx-auto w-full max-w-[380px] pb-10 lg:max-w-[440px] lg:pb-12">
-          <img
-            src={jaredAsset.url}
-            alt={`${COACH_NAME} deadlifting for Team Canada at an IPF competition`}
-            width={1536}
-            height={1536}
-            decoding="async"
-            fetchPriority="high"
-            className="aspect-[4/5] w-[86%] rounded-3xl object-cover object-[center_28%] ring-1 ring-border/70"
-          />
-          <div className="absolute bottom-0 right-0 w-[42%]">
-            <PhoneShot src={shotWeek} alt="" />
-          </div>
-        </div>
+        <HeroDevices />
       </section>
 
-      {/* 2. Why listen */}
+      {/* Why listen */}
       <div className="mx-auto max-w-5xl px-5">
         <div
           className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border/70 ring-1 ring-border/70 md:grid-cols-4"
@@ -288,46 +428,19 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
         </div>
       </div>
 
-      {/* 3. The app: free, on its real screens */}
-      <Reveal>
-        <Block id="app" tint>
-          <Heading eyebrow="The app" title="Here's what you get, free." />
-          <div className="-mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:gap-8 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
-            {SCREENS.map((s) => (
-              <div
-                key={s.title}
-                className="w-[70vw] max-w-[280px] shrink-0 snap-start md:w-auto md:max-w-none"
-              >
-                <PhoneShot src={s.src} alt={s.alt} className="max-w-[230px]" />
-                <h3 className="mt-5 text-[18px] font-semibold leading-snug tracking-[-0.01em]">
-                  {s.title}
-                </h3>
-                <p className="mt-1.5 text-[15px] leading-relaxed text-muted-foreground">{s.body}</p>
-              </div>
+      {/* B. The app, shown before it's priced */}
+      <section id="app" className="scroll-mt-20" data-landing-app>
+        <div className="mx-auto max-w-5xl px-5 pb-6 pt-16 md:pt-24">
+          <Heading eyebrow="The JF Effect app" title="Everything your training needs, in one app." />
+          <div className="mt-4 space-y-20 md:space-y-28">
+            {CHAPTERS.map((c, i) => (
+              <Chapter key={c.title} c={c} flip={i % 2 === 1} />
             ))}
           </div>
-          <ul
-            className="mx-auto mt-10 grid max-w-3xl gap-x-8 gap-y-3.5 text-[15px] sm:grid-cols-2"
-            data-landing-free
-          >
-            {FREE.map(({ icon: Icon, text }) => (
-              <li key={text} className="flex items-center gap-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-background ring-1 ring-border/70">
-                  <Icon className="h-[18px] w-[18px]" aria-hidden />
-                </span>
-                <span>{text}</span>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-10 flex flex-col items-center" data-inline-cta>
-            <PrimaryCta to={JOIN_TO} className="w-full sm:w-auto sm:min-w-[260px]">
-              {JOIN_CTA}
-            </PrimaryCta>
-          </div>
-        </Block>
-      </Reveal>
+        </div>
+      </section>
 
-      {/* 3b. Your own program: built in the app, or uploaded */}
+      {/* B, continued: your own program */}
       <Reveal>
         <Block id="own">
           <Heading
@@ -345,13 +458,57 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
               </div>
             ))}
           </div>
+          <ul
+            className="mx-auto mt-14 grid max-w-3xl gap-x-8 gap-y-3.5 text-[15px] sm:grid-cols-2"
+            data-landing-free
+          >
+            {FREE.map(({ icon: Icon, text }) => (
+              <li key={text} className="flex items-center gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-muted">
+                  <Icon className="h-[18px] w-[18px]" aria-hidden />
+                </span>
+                <span>{text}</span>
+              </li>
+            ))}
+          </ul>
         </Block>
       </Reveal>
 
-      {/* 4. Online coaching: what I do for you, then what it's done for people */}
+      {/* B, the reveal */}
+      <Reveal>
+        <section className="px-3 pb-6 sm:px-5" data-landing-reveal>
+          <div className="mx-auto max-w-5xl rounded-[28px] bg-muted/50 px-6 py-14 text-center ring-1 ring-border/60 md:py-20">
+            <p className="mx-auto max-w-xl text-balance text-[15px] font-medium text-muted-foreground md:text-[17px]">
+              {REVEAL.lead}
+            </p>
+            <h2 className="mx-auto mt-4 max-w-[16ch] text-balance text-[40px] font-semibold leading-[1.04] tracking-[-0.035em] md:text-[64px]">
+              {REVEAL.title}
+            </h2>
+            <p className="mx-auto mt-4 max-w-lg text-[17px] leading-relaxed text-muted-foreground">{REVEAL.body}</p>
+            <div className="mt-8 flex justify-center" data-inline-cta>
+              <PrimaryCta to={JOIN_TO} className="w-full sm:w-auto sm:min-w-[260px]" onClick={() => trackSite("cta_free", "reveal")}>
+                {JOIN_CTA}
+              </PrimaryCta>
+            </div>
+          </div>
+        </section>
+      </Reveal>
+
+      {/* C. What a coach adds, then the prices, then what it's done for people */}
       <div data-cta-zone="coaching">
         <Reveal>
-          <section id="coaching" className="scroll-mt-20 px-3 py-14 sm:px-5 md:py-20">
+          <div className="mx-auto max-w-2xl px-5 pb-2 pt-16 text-center md:pt-24" data-landing-contrast>
+            <p className="text-balance text-[28px] font-semibold leading-[1.15] tracking-[-0.02em] md:text-[40px]">
+              The app gives you the tools.
+            </p>
+            <p className="text-balance text-[28px] font-semibold leading-[1.15] tracking-[-0.02em] text-muted-foreground md:text-[40px]">
+              Coaching gives you a coach.
+            </p>
+          </div>
+        </Reveal>
+
+        <Reveal>
+          <section id="coaching" className="scroll-mt-20 px-3 py-10 sm:px-5 md:py-14">
             <div
               className="mx-auto max-w-5xl overflow-hidden rounded-[28px] bg-foreground text-background"
               data-landing-coaching
@@ -382,16 +539,39 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
                     ))}
                   </dl>
 
-                  <div
-                    className="mt-8 flex flex-col items-stretch gap-4 sm:flex-row sm:items-center"
-                    data-inline-cta
-                  >
-                    <Link
-                      to={COACHING_APPLY_TO}
-                      className="inline-flex h-[54px] items-center justify-center rounded-2xl bg-background px-8 text-[17px] font-semibold text-foreground transition active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  <div className="mt-8 flex flex-col items-stretch gap-4 sm:flex-row sm:items-center" data-inline-cta>
+                    <WithPackages
+                      packages={packages}
+                      fallback={
+                        <Link
+                          to={COACHING_APPLY_TO}
+                          onClick={() => trackSite("cta_coaching", "coaching")}
+                          className="inline-flex h-[54px] items-center justify-center rounded-2xl bg-background px-8 text-[17px] font-semibold text-foreground transition active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {COACHING_CTA}
+                        </Link>
+                      }
                     >
-                      {COACHING_CTA}
-                    </Link>
+                      {(list) =>
+                        paidPackages(listedPackages(list)).length ? (
+                          <a
+                            href="#pricing"
+                            onClick={() => trackSite("cta_coaching", "see_packages")}
+                            className="inline-flex h-[54px] items-center justify-center rounded-2xl bg-background px-8 text-[17px] font-semibold text-foreground transition active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            See the packages
+                          </a>
+                        ) : (
+                          <Link
+                            to={COACHING_APPLY_TO}
+                            onClick={() => trackSite("cta_coaching", "coaching")}
+                            className="inline-flex h-[54px] items-center justify-center rounded-2xl bg-background px-8 text-[17px] font-semibold text-foreground transition active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {COACHING_CTA}
+                          </Link>
+                        )
+                      }
+                    </WithPackages>
                     <Link
                       to={COACHING_TO}
                       className="text-center text-[15px] font-medium text-background/80 underline-offset-4 hover:text-background hover:underline"
@@ -399,20 +579,28 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
                       How coaching works
                     </Link>
                   </div>
-                  <p className="mt-4 text-[13px] leading-relaxed text-background/60">
-                    It's by application, and applying doesn't commit you to anything. I keep my
-                    client list small so every check-in gets my full attention.
-                  </p>
                 </div>
 
-                <div className="mx-auto w-full max-w-[230px] lg:max-w-[280px]">
-                  <PhoneShot
-                    src={shotChat}
-                    alt="A weekly check-in in the JF Effect app and the coach's reply: calories stay the same, the squat moves up to 295, and a request for a video of the first set"
-                    className="ring-white/15"
-                  />
-                  <p className="mt-4 text-center text-[13px] leading-snug text-background/60">
-                    A week of coaching: check-in, adjustments, a set to film.
+                {/* Coaching, on the screens it happens on: the check-in and the plan I write */}
+                <div className="mx-auto w-full max-w-[300px] lg:max-w-[340px]">
+                  <div className="relative pb-[18%]">
+                  <div className="w-[76%]">
+                    <PhoneShot
+                      src={shotChat}
+                      alt="A weekly check-in in the JF Effect app and the coach's reply: calories stay the same, the squat moves up to 295, and a request for a video of the first set"
+                      className="ring-white/15"
+                    />
+                  </div>
+                  <div className="absolute bottom-0 right-0 w-[52%] rotate-[4deg]">
+                    <PhoneShot
+                      src={shotPlan}
+                      alt="A coach-written meal plan: training and rest days, five meals with each meal's foods and macros"
+                      className="ring-white/15"
+                    />
+                  </div>
+                  </div>
+                  <p className="mt-6 text-center text-[13px] leading-snug text-background/60 lg:text-left">
+                    A week of coaching: the check-in, my reply, and the plan I write.
                   </p>
                 </div>
               </div>
@@ -420,25 +608,45 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
           </section>
         </Reveal>
 
-        <WithPackages packages={packages}>
-          {(list) =>
-            paidPackages(listedPackages(list)).length ? (
-              <Reveal>
-                <Block id="pricing" className="!pt-0">
-                  <Heading
-                    eyebrow="Coaching packages"
-                    title="What coaching costs."
-                    sub="In Canadian dollars, plus applicable tax. Applying is free and doesn't commit you to anything."
-                  />
-                  <CoachingPackagesGrid packages={list} from="home" />
-                </Block>
-              </Reveal>
-            ) : null
-          }
-        </WithPackages>
-
+        {/* Proof at the moment it matters: someone who had the tools, then a coach */}
         <Reveal>
-          <Block className="!pt-0">
+          <figure className="mx-auto max-w-3xl px-5 py-8 text-center md:py-12" data-landing-pullquote>
+            <Quote className="mx-auto h-6 w-6 text-muted-foreground" aria-hidden />
+            <blockquote className="mt-4 text-balance text-[22px] font-medium leading-snug tracking-[-0.01em] md:text-[28px]">
+              “{sentenceStart(CLIENT_QUOTES[1].quote)}”
+            </blockquote>
+            <figcaption className="mt-4 text-[14px] text-muted-foreground">
+              {CLIENT_QUOTES[1].name} · {CLIENT_QUOTES[1].role} · coaching client
+            </figcaption>
+          </figure>
+        </Reveal>
+
+        {/* D. The prices: read from the packages on the site, never typed here */}
+        <div ref={pricingRef}>
+          <WithPackages packages={packages}>
+            {(list) =>
+              paidPackages(listedPackages(list)).length ? (
+                <Reveal>
+                  <Block id="pricing" className="!pt-6">
+                    <Heading
+                      eyebrow="Coaching packages"
+                      title="What coaching costs."
+                      sub="Every package includes the full app. In Canadian dollars, plus applicable tax. Applying is free and doesn't commit you to anything."
+                    />
+                    <CoachingPackagesGrid packages={list} from="home" calls={false} />
+                    <p className="mx-auto mt-8 max-w-md text-center text-[13px] leading-relaxed text-muted-foreground">
+                      Applying doesn't charge you. We talk on a short call first, and you only pay once we've agreed to start.
+                    </p>
+                  </Block>
+                </Reveal>
+              ) : null
+            }
+          </WithPackages>
+        </div>
+
+        {/* E. What it's done for people */}
+        <Reveal>
+          <Block className="!pt-6">
             <Heading
               eyebrow="Coaching clients"
               title="Some of the people I've coached."
@@ -462,8 +670,8 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
                 </div>
               ))}
             </Rail>
-            <div className="-mx-5 mt-6 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
-              {CLIENT_QUOTES.map((c) => (
+            <div className="-mx-5 mt-6 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-2 md:gap-4 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
+              {CLIENT_QUOTES.filter((_, i) => i !== 1).map((c) => (
                 <Surface
                   key={c.name}
                   className="flex w-[80vw] max-w-[330px] shrink-0 snap-start flex-col p-5 md:w-auto md:max-w-none"
@@ -486,7 +694,7 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
         </Reveal>
       </div>
 
-      {/* 5. Questions */}
+      {/* Questions */}
       <Reveal>
         <Block narrow tint>
           <Heading title="Questions" />
@@ -517,37 +725,31 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
         </Block>
       </Reveal>
 
-      {/* 6. One last way in */}
+      {/* F. The decision, made plain */}
       <Reveal>
         <Block narrow>
           <div className="text-center">
-            <h2 className="text-balance text-[30px] font-semibold leading-[1.1] tracking-[-0.02em] md:text-[40px]">
-              Start with the app.
+            <h2 className="text-balance text-[32px] font-semibold leading-[1.1] tracking-[-0.025em] md:text-[44px]">
+              Which one is you?
             </h2>
             <p className="mx-auto mt-3 max-w-md text-[17px] leading-relaxed text-muted-foreground">
-              It's free, and applying takes about a minute. I read every one.
-            </p>
-            <div className="mx-auto mt-7 flex max-w-md flex-col items-center gap-4" data-inline-cta>
-              <PrimaryCta to={JOIN_TO} className="w-full sm:w-auto sm:min-w-[260px]">
-                {JOIN_CTA}
-              </PrimaryCta>
-              <Link
-                to={COACHING_APPLY_TO}
-                className="text-[15px] font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-              >
-                Looking for coaching? Apply here
-              </Link>
-            </div>
-            <p className="mt-6 text-[14px] text-muted-foreground">
-              Already a member?{" "}
-              <Link
-                to="/auth"
-                className="font-medium text-foreground underline-offset-4 hover:underline"
-              >
-                Sign in
-              </Link>
+              Start free with the app, or let me coach you. Applying takes about a minute and I read every one.
             </p>
           </div>
+          <div className="mx-auto mt-8 max-w-xl" data-inline-cta>
+            <WithPackages packages={packages} fallback={<DecisionList rows={FALLBACK_DECISION} />}>
+              {(list) => {
+                const rows = decisionRows(list);
+                return <DecisionList rows={rows.length > 1 ? rows : FALLBACK_DECISION} />;
+              }}
+            </WithPackages>
+          </div>
+          <p className="mt-8 text-center text-[14px] text-muted-foreground">
+            Already a member?{" "}
+            <Link to="/auth" className="font-medium text-foreground underline-offset-4 hover:underline">
+              Sign in
+            </Link>
+          </p>
         </Block>
       </Reveal>
 
@@ -558,4 +760,4 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
 }
 
 /** For the tests: what the page promises, kept with the page. */
-export const LANDING_COPY = { HERO, FREE, COACHING, FAQ, PROOF, SCREENS, OWN } as const;
+export const LANDING_COPY = { HERO, FREE, COACHING, FAQ, PROOF, CHAPTERS, OWN, REVEAL } as const;

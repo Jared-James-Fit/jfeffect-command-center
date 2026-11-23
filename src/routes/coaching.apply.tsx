@@ -19,6 +19,7 @@ import {
 } from "@/lib/apply-form";
 import { bookOnline, getBookingPage, getBookingSlots } from "@/lib/booking.functions";
 import { getPublicPackage } from "@/lib/coaching-packages/packages.functions";
+import { trackSite } from "@/lib/site-funnel";
 import { TAX_NOTE, intervalLabel, priceLabel, type PublicPackage } from "@/lib/coaching-packages/packages";
 import { toast } from "sonner";
 import { shareMeta } from "@/lib/share-meta";
@@ -126,8 +127,15 @@ function QuestionFlow() {
     sourcePage.current = clip(params.get("from") || "coaching_apply", 80);
     const linkedPackage = (params.get("package") || "").trim().toLowerCase();
     if (/^[a-z0-9]+(-[a-z0-9]+)*$/.test(linkedPackage) && linkedPackage.length <= 48) setPackageSlug(linkedPackage);
+    trackSite("coaching_apply_start", linkedPackage || "none");
     ready.current = true;
   }, [total]);
+
+  // Each question reached counts once a day (anonymous): where people stop is where the form needs work.
+  useEffect(() => {
+    if (!ready.current || result) return;
+    trackSite("coaching_apply_step", APPLY_STEPS[step]?.key ?? "");
+  }, [step, result]);
 
   useEffect(() => {
     if (!ready.current || result) return;
@@ -181,6 +189,7 @@ function QuestionFlow() {
       }),
     onSuccess: (next) => {
       clearStoredApply();
+      trackSite("coaching_apply_submit", pkg?.slug ?? "none");
       setResult(next);
       window.scrollTo({ top: 0, behavior: "smooth" });
     },
@@ -195,7 +204,7 @@ function QuestionFlow() {
     },
   });
 
-  if (result) return <PostSubmit result={result} />;
+  if (result) return <PostSubmit result={result} pkg={pkg} />;
 
   const fail = (message: string) => {
     setError(message);
@@ -276,12 +285,12 @@ function QuestionFlow() {
 
           {pkg && (
             <div
-              className="mt-5 flex items-center justify-between gap-3 rounded-2xl bg-muted/60 px-4 py-3 ring-1 ring-border/70"
+              className="mt-5 flex items-start justify-between gap-3 rounded-2xl bg-muted/60 px-4 py-3 ring-1 ring-border/70"
               data-apply-package={pkg.slug}
             >
               <div className="min-w-0">
                 <p className="text-[12px] font-medium text-muted-foreground">Applying for</p>
-                <p className="truncate text-[15px] font-semibold">{pkg.name}</p>
+                <p className="text-[15px] font-semibold leading-snug">{pkg.name}</p>
                 {pkg.priceCents ? (
                   <p className="text-[13px] text-muted-foreground">
                     {priceLabel(pkg.priceCents)}
@@ -292,7 +301,7 @@ function QuestionFlow() {
               <button
                 type="button"
                 onClick={() => setPackageSlug("")}
-                className="h-10 shrink-0 rounded-full px-3 text-[14px] font-medium text-muted-foreground hover:text-foreground"
+                className="-mr-2 -mt-1 h-10 shrink-0 rounded-full px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
               >
                 Not sure yet
               </button>
@@ -438,7 +447,24 @@ function QuestionFlow() {
 
 /* ────────────────── post-submit success + booking ────────────────── */
 
-function PostSubmit({ result }: {
+/** What they applied for, and that applying charged nothing: the first thing the confirmation says. */
+function AppliedFor({ pkg }: { pkg: PublicPackage | null }) {
+  return (
+    <div className="mx-auto mt-5 max-w-sm rounded-2xl bg-muted/60 px-4 py-3 text-left ring-1 ring-border/70" data-applied-package={pkg?.slug ?? "none"}>
+      <p className="text-[12px] font-medium text-muted-foreground">You applied for</p>
+      <p className="text-[15px] font-semibold">{pkg ? pkg.name : "Online coaching"}</p>
+      {pkg?.priceCents ? (
+        <p className="text-[13px] text-muted-foreground">
+          {priceLabel(pkg.priceCents)}
+          {intervalLabel(pkg)} · {TAX_NOTE}
+        </p>
+      ) : null}
+      <p className="mt-2 text-[13px] text-muted-foreground">Nothing has been charged. You only pay once we've talked and agreed to start.</p>
+    </div>
+  );
+}
+
+function PostSubmit({ result, pkg }: {
   result: {
     booking_slug?: string | null;
     first_name?: string;
@@ -446,6 +472,7 @@ function PostSubmit({ result }: {
     phone?: string;
     id?: string;
   };
+  pkg: PublicPackage | null;
 }) {
   const nav = useNavigate();
   const [view, setView] = useState<"intro" | "picker" | "confirmed">("intro");
@@ -461,9 +488,10 @@ function PostSubmit({ result }: {
             <Card className="rounded-2xl p-7 text-center shadow-none ring-1 ring-border/70 md:p-9">
               <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" aria-hidden />
               <h1 className="mt-4 text-[28px] font-semibold tracking-[-0.02em] md:text-[34px]">Application received.</h1>
-              <p className="mt-3 text-sm text-muted-foreground">
+              <p className="mt-3 text-[16px] leading-relaxed text-muted-foreground">
                 Got it. I read every application myself and I'll be in touch soon.
               </p>
+              <AppliedFor pkg={pkg} />
             </Card>
           </div>
         </Block>
@@ -472,7 +500,7 @@ function PostSubmit({ result }: {
   }
 
   if (view === "confirmed" && booked) {
-    return <BookedScreen booked={booked} firstName={result.first_name} />;
+    return <BookedScreen booked={booked} firstName={result.first_name} pkg={pkg} />;
   }
 
   return (
@@ -488,6 +516,7 @@ function PostSubmit({ result }: {
               <p className="mt-2 text-[16px] leading-relaxed text-muted-foreground">
                 I read every one myself. One step left: pick a time for a short call so we can talk about your goal.
               </p>
+              <AppliedFor pkg={pkg} />
               <ol className="mx-auto mt-6 max-w-xs space-y-2.5 text-left text-[15px]">
                 {[
                   ["Applied", true],
@@ -696,10 +725,11 @@ function SlotPicker({
 }
 
 function BookedScreen({
-  booked, firstName,
+  booked, firstName, pkg,
 }: {
   booked: { starts_at: string; tz: string; duration: number; meet_link?: string | null };
   firstName?: string;
+  pkg: PublicPackage | null;
 }) {
   const start = new Date(booked.starts_at);
   const dateLabel = start.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
@@ -718,7 +748,8 @@ function BookedScreen({
           <Card className="rounded-2xl p-7 text-center shadow-none ring-1 ring-border/70 md:p-9">
             <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" aria-hidden />
             <h1 className="mt-4 text-[28px] font-semibold tracking-[-0.02em] md:text-[34px]">Your call is booked.</h1>
-            {firstName && <p className="mt-1 text-sm text-muted-foreground">Thanks, {firstName} — see you then.</p>}
+            {firstName && <p className="mt-1 text-sm text-muted-foreground">Thanks, {firstName}. See you then.</p>}
+            <AppliedFor pkg={pkg} />
 
             <div className="mt-6 space-y-2 text-left text-sm">
               <Row label="Date" value={dateLabel} />
@@ -748,8 +779,8 @@ function BookedScreen({
 
 function Row({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2">
-      <span className="text-xs uppercase tracking-widest text-muted-foreground">{label}</span>
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 px-3 py-2.5">
+      <span className="text-[13px] text-muted-foreground">{label}</span>
       <span className="inline-flex items-center gap-1 truncate font-semibold">{icon}{value}</span>
     </div>
   );

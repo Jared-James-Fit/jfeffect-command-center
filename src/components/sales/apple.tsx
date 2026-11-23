@@ -55,7 +55,7 @@ export function Heading({
 const PRIMARY =
   "inline-flex h-[54px] items-center justify-center gap-2 rounded-2xl bg-primary px-7 text-[17px] font-semibold text-primary-foreground transition active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
-/** The one button per screen. Pass `to` for a route or `onClick` for an action. */
+/** The one button per screen. Pass `to` for a route or `onClick` for an action (with `to`, it runs as the link is followed). */
 export function PrimaryCta({
   children,
   to,
@@ -72,7 +72,7 @@ export function PrimaryCta({
   const cls = cn(PRIMARY, full && "w-full", className);
   if (to) {
     return (
-      <Link to={to as any} className={cls}>
+      <Link to={to as any} className={cls} onClick={onClick}>
         {children}
       </Link>
     );

@@ -34,19 +34,46 @@ const PUBLIC_PAGES = [
 ];
 
 describe("the landing page sells the free app first and online coaching as its own offer", () => {
-  it("leads with the app, Join free first and online coaching beside it", () => {
+  it("leads with the promise, the product and both ways in: Get the free app, then Explore coaching", () => {
     const hero = visible.slice(
       visible.indexOf("data-landing-hero"),
       visible.indexOf("data-landing-proof"),
     );
-    expect(LANDING_COPY.HERO.title).toBe("Train in the same app my clients use.");
+    expect(LANDING_COPY.HERO.title).toBe("Train like you have a coach.");
     expect(hero).toContain("{COACH_NAME} · Team Canada powerlifter");
-    expect(LANDING_COPY.HERO.body).toContain("Use it free, or hire me to coach you online.");
+    expect(LANDING_COPY.HERO.body).toContain("It's the same app my coaching clients train in.");
     expect(hero.indexOf("<PrimaryCta to={JOIN_TO}")).toBeGreaterThan(-1);
-    expect(hero.indexOf("<SecondaryCta to={COACHING_TO}")).toBeGreaterThan(
+    expect(hero.indexOf('<SecondaryCta href="#coaching"')).toBeGreaterThan(
       hero.indexOf("<PrimaryCta to={JOIN_TO}"),
     );
-    expect(hero).toContain("Online coaching");
+    expect(hero).toContain("{EXPLORE_CTA}");
+    // the hero's product shot is the app itself
+    expect(hero).toContain("<HeroDevices />");
+  });
+
+  it("shows the app before it prices it, then reveals that it's free (Nov 23 2026)", () => {
+    // value first: every capability on its own screen, then the reveal, then coaching, then prices
+    const order = ["data-landing-hero", "data-landing-app", "data-landing-own", "data-landing-reveal", "data-landing-coaching", 'id="pricing"', "Which one is you?"];
+    const at = order.map((m) => visible.indexOf(m));
+    expect(at.every((i) => i > -1)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(LANDING_COPY.CHAPTERS.map((c) => c.eyebrow)).toEqual(["Programs", "Logging", "Progress", "Nutrition"]);
+    expect(LANDING_COPY.REVEAL.title).toBe("The JF Effect app is free.");
+    // the anchor is true: it's the app coaching clients use, never a "worth" or crossed-out price
+    expect(LANDING_COPY.REVEAL.body).toContain("It's the same app my coaching clients train in.");
+    expect(visible).not.toMatch(/worth \$|value of \$|<s>|line-through|regularly \$/i);
+  });
+
+  it("keeps the app on screen all the way down: a screen in every part of the page", () => {
+    for (const shot of ["shotHome", "shotFocus", "shotWeek", "shotLog", "shotInsights", "shotFood", "shotBuild", "shotImport", "shotChat", "shotPlan"]) {
+      expect(page, shot).toMatch(new RegExp(`src(=\\{|: )${shot}\\b`));
+    }
+    // no screen twice on the page
+    for (const shot of ["shotHome", "shotFocus", "shotWeek", "shotLog", "shotInsights", "shotFood"]) {
+      const imported = page.match(new RegExp(`import ${shot} from`, "g"))?.length ?? 0;
+      expect(imported, shot).toBe(1);
+    }
+    expect(page.match(/src=\{shotLog\}|src: shotLog/g)?.length).toBe(1);
   });
 
   it("never sells the whole thing as free, and never prices coaching in a table", () => {
@@ -68,10 +95,11 @@ describe("the landing page sells the free app first and online coaching as its o
       "Meet prep",
     ]);
     expect(visible).toContain("I'll run your training.");
+    expect(visible).toContain("The app gives you the tools.");
     // the price is the coaching packages' (coaching_packages, edited in Sales → Coaching packages), never typed here
-    expect(visible).toContain("applying doesn't commit you to anything");
-    expect(visible).toContain('<CoachingPackagesGrid packages={list} from="home" />');
-    expect(visible).not.toMatch(/\$1[0-9]{2}\b/);
+    expect(visible).toContain("Applying is free and doesn't commit you to anything.");
+    expect(visible).toContain('<CoachingPackagesGrid packages={list} from="home" calls={false} />');
+    expect(visible).not.toMatch(/\$[0-9]{2,3}\b/);
     // replies are what the app's own coach chat promises, never "unlimited"
     expect(LANDING_COPY.COACHING.map((c) => c.body).join(" ")).toContain(
       "I usually reply within a day.",
@@ -86,6 +114,14 @@ describe("the landing page sells the free app first and online coaching as its o
     );
   });
 
+  it("closes with one plain decision, read from the packages on the site", () => {
+    expect(visible).toContain("Which one is you?");
+    expect(visible).toContain("decisionRows(list)");
+    expect(visible).toContain("FALLBACK_DECISION");
+    // no "Most Popular", only the package marked recommended
+    expect(visible).not.toMatch(/most popular/i);
+  });
+
   it("says what the app does: follow, build, upload, track, and bar speed (Nov 21 2026)", () => {
     expect(LANDING_COPY.HERO.body).toContain("Follow my programs, build your own, or upload a plan you already have.");
     expect(LANDING_COPY.OWN.map((o) => o.title)).toEqual(["Build your own", "Upload one you already have"]);
@@ -98,6 +134,8 @@ describe("the landing page sells the free app first and online coaching as its o
     expect(LANDING_COPY.FREE.map((f) => f.text)).toContain("Bar speed on any set, if you train with a velocity tracker");
     expect(LANDING_COPY.COACHING.find((c) => c.title === "Technique and questions")?.body).toMatch(/bar path and speed/);
     expect(LANDING_COPY.FAQ.find((f) => f.q === "Can I bring a program I already follow?")?.a).toMatch(/permission/);
+    // set videos are coaching's (lift_review), never listed as free
+    expect(LANDING_COPY.FREE.map((f) => f.text).join(" ")).not.toMatch(/film/i);
   });
 
   it("asks for the coaching application while coaching is on screen", () => {
@@ -106,12 +144,15 @@ describe("the landing page sells the free app first and online coaching as its o
     expect(visible).toContain("ctaZones={HOME_CTA_ZONES}");
   });
 
-  it("each way in goes where it says", () => {
+  it("each way in goes where it says, and is counted anonymously", () => {
     expect(JOIN_TO).toBe("/join");
     expect(COACHING_APPLY_TO).toBe("/coaching/apply");
     expect(COACHING_TO).toBe("/coaching");
-    expect(JOIN_CTA).toBe("Join free");
+    expect(JOIN_CTA).toBe("Get the free app");
     expect(COACHING_CTA).toBe("Apply for coaching");
+    expect(page).toContain('trackSite("cta_free", "hero")');
+    expect(page).toContain('trackSite("cta_coaching", "hero")');
+    expect(page).toContain('trackSite("pricing_view", "home")');
   });
 
   it("claims only what's checked (Nov 20 2026)", () => {

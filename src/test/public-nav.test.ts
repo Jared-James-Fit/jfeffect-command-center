@@ -48,7 +48,7 @@ describe("the public navigation", () => {
     expect(headerCtaFor("/about")).toEqual(APPLY_CHOICE);
     expect(headerCtaFor("/join")).toBeNull();
     expect(headerCtaFor("/coaching/apply")).toBeNull();
-    expect(JOIN_CHOICE).toEqual({ label: "Join free", href: "/join" });
+    expect(JOIN_CHOICE).toEqual({ label: "Get the free app", href: "/join" });
     expect(APPLY_CHOICE).toEqual({ label: "Apply for coaching", href: "/coaching/apply" });
   });
 

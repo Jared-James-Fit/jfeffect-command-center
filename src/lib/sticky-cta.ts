@@ -7,7 +7,7 @@
  *   screen, so two buttons that do the same thing never sit together.
  * - Inside a section marked `data-cta-zone="<name>"` (its box covering the
  *   middle of the screen), the button is that zone's: on the landing page the
- *   coaching section's is "Apply for coaching", everywhere else "Join free".
+ *   coaching section's is "Apply for coaching", everywhere else "Get the free app".
  */
 export type CtaChoice = { label: string; href: string };
 

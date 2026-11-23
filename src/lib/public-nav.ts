@@ -5,10 +5,10 @@
  * The site sells two things and the nav says so: the Free app (the home
  * page's app section, then /join) and Online coaching (/coaching, then
  * /coaching/apply). Home is the logo and the first row of the phone menu;
- * About sits last. The header's one button is the page's own ask: Join free
+ * About sits last. The header's one button is the page's own ask: Get the free app
  * where the app is the point, Apply for coaching where coaching is, and on
  * the home page it follows what's on screen (the coaching section asks for
- * the application, never Join free beside it). The application flows
+ * the application, never the free app beside it). The application flows
  * themselves get a quiet header: the logo and Sign in, nothing else to tap.
  */
 import type { CtaChoice } from "@/lib/sticky-cta";
@@ -43,7 +43,7 @@ export const PUBLIC_NAV: PublicNavItem[] = [
   { key: "about", label: "About", to: "/about", hint: "Who I am and what I've done." },
 ];
 
-export const JOIN_CHOICE: CtaChoice = { label: "Join free", href: "/join" };
+export const JOIN_CHOICE: CtaChoice = { label: "Get the free app", href: "/join" };
 export const APPLY_CHOICE: CtaChoice = { label: "Apply for coaching", href: "/coaching/apply" };
 
 /** Which row is lit: the page you're on (the app's application lights Free app). */
