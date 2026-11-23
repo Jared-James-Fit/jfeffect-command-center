@@ -56,7 +56,7 @@ const VOICE_HINT =
   "An athlete describing pain after a workout: body parts (knee, shoulder, low back, hip flexor, patellar tendon, biceps, rotator cuff), left or right, a number out of 10, and lifts (squat, bench, deadlift, RDL, overhead press).";
 
 /** One way to turn speech into words ("" when nothing was said). */
-type Transcriber = { name: string; run: (bytes: Buffer, mime: string, signal: AbortSignal) => Promise<string> };
+export type Transcriber = { name: string; run: (bytes: Buffer, mime: string, signal: AbortSignal) => Promise<string> };
 
 class TranscribeError extends Error {
   constructor(
@@ -76,16 +76,17 @@ export function audioExt(mime: string): { ext: string; format: string } {
   return { ext: "webm", format: "webm" };
 }
 
-function openAiTranscriber(key: string, model: string): Transcriber {
+/** One of OpenAI's transcribers; `hint` names the words it should expect (the pain report's by default). */
+export function openAiTranscriber(key: string, model: string, hint: string = VOICE_HINT): Transcriber {
   return {
     name: `openai:${model}`,
     run: async (bytes, mime, signal) => {
       const form = new FormData();
-      form.append("file", new Blob([new Uint8Array(bytes)], { type: mime.split(";")[0] || "audio/webm" }), `pain.${audioExt(mime).ext}`);
+      form.append("file", new Blob([new Uint8Array(bytes)], { type: mime.split(";")[0] || "audio/webm" }), `voice.${audioExt(mime).ext}`);
       form.append("model", model);
       form.append("language", "en");
       form.append("response_format", "json");
-      form.append("prompt", VOICE_HINT);
+      form.append("prompt", hint);
       const res = await fetch("https://api.openai.com/v1/audio/transcriptions", { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: form, signal });
       if (!res.ok) {
         // OpenAI's own reason (rate limit, quota, model access); never the audio.

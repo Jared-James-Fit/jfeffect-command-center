@@ -14,7 +14,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { CheckCircle2, MessageSquare, Pencil, Trophy } from "lucide-react";
+import { Check, CheckCircle2, Loader2, MessageSquare, Pencil, Trophy } from "lucide-react";
+import type { FinishedSyncState } from "@/hooks/use-finished-workout-sync";
 import {
   WorkoutReviewEditor,
   type ReviewInitial,
@@ -56,7 +57,30 @@ type Props = {
   filmCompletionId?: string | null;
   /** When it finished: a film whose review never came posts by itself after FILM_REVIEW_WAIT_MS. */
   completedAt?: string | null;
+  /**
+   * Edit workout (the Workouts card's ⋯, the recap's pencil): the card says
+   * it's being edited and Done leaves (after anything waiting is sent).
+   */
+  editing?: boolean;
+  onDoneEditing?: () => void;
+  /** Where the re-sync of an edited finished workout is (use-finished-workout-sync.ts). */
+  syncState?: FinishedSyncState;
 };
+
+/** What the card says while a finished workout is edited, in plain words. */
+export function finishedEditLine(state: FinishedSyncState | undefined, editing: boolean): string | null {
+  switch (state) {
+    case "pending":
+    case "syncing":
+      return "Saving your changes…";
+    case "synced":
+      return editing ? "Saved. Records, analytics and points are up to date." : "Changes saved. Records and analytics are up to date.";
+    case "error":
+      return "Couldn't update everything yet. It tries again when you're done.";
+    default:
+      return editing ? "Change any set, add one or take one out. It saves as you go." : null;
+  }
+}
 
 /** How long a film waits for its review (where the athlete's switch is) before it posts by itself. */
 const FILM_REVIEW_WAIT_MS = 15 * 60_000;
@@ -77,6 +101,9 @@ export function CompletedWorkoutActions({
   children,
   filmCompletionId,
   completedAt,
+  editing = false,
+  onDoneEditing,
+  syncState = "idle",
 }: Props) {
   const [reviewOpen, setReviewOpen] = useState(false);
   const hasReview = !!initialReview?.submittedAt;
@@ -103,7 +130,27 @@ export function CompletedWorkoutActions({
 
   return (
     <>
-      <Card className="space-y-2 px-3 pb-3 pt-2" data-testid="completed-workout-card">
+      <Card className="space-y-2 px-3 pb-3 pt-2" data-testid="completed-workout-card" data-editing={editing || undefined}>
+        {editing && (
+          <div className="flex items-center gap-3 border-b border-border/70 pb-2.5 pt-1" data-finished-editing>
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted" aria-hidden>
+              <Pencil className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[15px] font-semibold leading-tight">Editing this workout</div>
+              <div className="mt-0.5 flex items-start gap-1.5 text-[13px] leading-snug text-muted-foreground" aria-live="polite" data-finished-sync={syncState}>
+                {(syncState === "pending" || syncState === "syncing") && <Loader2 className="mt-[2px] h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />}
+                {syncState === "synced" && <Check className="mt-[2px] h-3.5 w-3.5 shrink-0 text-success" aria-hidden />}
+                <span>{finishedEditLine(syncState, true)}</span>
+              </div>
+            </div>
+            {onDoneEditing && (
+              <Button type="button" className="h-10 shrink-0 px-5" onClick={onDoneEditing} data-testid="finished-edit-done">
+                Done
+              </Button>
+            )}
+          </div>
+        )}
         {status ? status(label) : <div className="flex min-h-10 items-center">{label}</div>}
         <div className={hasReview && onOpenScore ? "grid grid-cols-2 gap-2" : "grid grid-cols-1"}>
           {hasReview && onOpenScore && (
@@ -113,7 +160,7 @@ export function CompletedWorkoutActions({
             </Button>
           )}
           <Button
-            variant={hasReview ? "outline" : "default"}
+            variant={hasReview || editing ? "outline" : "default"}
             onClick={() => setReviewOpen(true)}
             className="h-10"
             data-testid="completed-review"
@@ -131,6 +178,13 @@ export function CompletedWorkoutActions({
             )}
           </Button>
         </div>
+        {!editing && finishedEditLine(syncState, false) && (
+          <div className="flex items-start gap-1.5 text-[13px] leading-snug text-muted-foreground" aria-live="polite" data-finished-sync={syncState}>
+            {(syncState === "pending" || syncState === "syncing") && <Loader2 className="mt-[2px] h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />}
+            {syncState === "synced" && <Check className="mt-[2px] h-3.5 w-3.5 shrink-0 text-success" aria-hidden />}
+            <span>{finishedEditLine(syncState, false)}</span>
+          </div>
+        )}
         {children}
         {filmCompletionId && ctx.kind === "client" && (
           <WorkoutFilmRow

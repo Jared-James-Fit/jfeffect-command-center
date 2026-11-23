@@ -15,6 +15,8 @@
 import {
   digestBlock,
   parseRoadmapReply,
+  plainReply,
+  replyProblems,
   ROADMAP_SYSTEM_PROMPT,
   type DigestContext,
   type RoadmapReply,
@@ -98,6 +100,7 @@ async function loadBlock(admin: Admin, blockId: string) {
   return {
     block,
     weeks,
+    meet: !!meet,
     digest: digestBlock({
       block,
       weeks,
@@ -111,10 +114,12 @@ async function loadBlock(admin: Admin, blockId: string) {
 /**
  * Cleo's words for a block, from the router (src/lib/ai/routing.ts "roadmap": GPT-5-mini on the
  * OpenAI key, GPT-5.5 behind it; an admin override in app_settings.ai_routes wins). A reply that
- * doesn't parse is asked for once more from the same model; a model that fails hands over to the
- * next.
+ * doesn't parse, or whose words aren't plain (a number, a coaching term, too long:
+ * `replyProblems`), is asked for once more from the same model with what was wrong; a model that
+ * fails hands over to the next. Whatever still isn't plain is swapped for plain words
+ * (`plainReply`), so the athlete never reads "RPE 6, 7 at 90% top_set".
  */
-async function askCleo(admin: Admin, digest: string, weekIndexes: number[]): Promise<RoadmapReply> {
+async function askCleo(admin: Admin, digest: ReturnType<typeof digestBlock>, meet: boolean): Promise<RoadmapReply> {
   const { callModel } = await import("@/lib/ai/model-client.server");
   const { resolveRoute } = await import("@/lib/ai/routing");
   const { data: cfg } = await admin.from("app_settings").select("value").eq("key", "ai_routes").maybeSingle();
@@ -125,14 +130,17 @@ async function askCleo(admin: Admin, digest: string, weekIndexes: number[]): Pro
     override = null;
   }
   const route = resolveRoute("roadmap", override);
+  const ask = `${digest.text}\n\nWeeks to describe: ${digest.weekIndexes.join(", ")}.`;
   let lastText = "";
+  let best: { reply: RoadmapReply; problems: number } | null = null;
   const errors: string[] = [];
   for (const model of route.models) {
+    let feedback = "";
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const r = await callModel(model, {
           system: ROADMAP_SYSTEM_PROMPT,
-          prompt: `${digest}\n\nWeeks to describe: ${weekIndexes.join(", ")}.`,
+          prompt: feedback ? `${ask}\n\n${feedback}` : ask,
           effort: route.effort,
           maxOutputTokens: route.maxOutputTokens,
           temperature: 0.3,
@@ -140,14 +148,20 @@ async function askCleo(admin: Admin, digest: string, weekIndexes: number[]): Pro
           tag: "roadmap",
         });
         lastText = r.text;
-        const parsed = parseRoadmapReply(r.text, weekIndexes);
-        if (parsed) return parsed;
+        const parsed = parseRoadmapReply(r.text, digest.weekIndexes);
+        if (!parsed) continue;
+        const problems = replyProblems(parsed);
+        if (!best || problems.length < best.problems) best = { reply: parsed, problems: problems.length };
+        if (!problems.length) return parsed;
+        feedback = `Your last reply broke the plain-words rules. Write it again, fixing these:\n- ${problems.slice(0, 12).join("\n- ")}`;
       } catch (e: any) {
         errors.push(`${model}: ${String(e?.message ?? e).slice(0, 120)}`);
         break;
       }
     }
+    if (best) break;
   }
+  if (best) return plainReply(best.reply, digest, meet);
   throw new Error(lastText ? `Cleo's reply wasn't usable: ${lastText.slice(0, 160)}` : `No model answered (${errors.join("; ")})`);
 }
 
@@ -238,9 +252,9 @@ export async function refreshBlockRoadmap(admin: Admin, blockId: string, opts: {
   }
 
   const twin = opts.force ? null : await reuse(admin, digest.hash, blockId, digest.weekIndexes);
-  const reply = twin ?? (await askCleo(admin, digest.text, digest.weekIndexes));
+  const reply = twin ?? (await askCleo(admin, digest, loaded.meet));
 
-  await writeNote(admin, key(null), { ai_label: reply.label, ai_summary: reply.purpose, ai_style: reply.style }, digest.hash);
+  await writeNote(admin, key(null), { ai_label: reply.label || null, ai_summary: reply.purpose || null, ai_style: reply.style }, digest.hash);
   const byIndex = new Map(reply.weeks.map((w) => [w.week, w]));
   for (const w of weeks) {
     const r = byIndex.get(w.week_index);

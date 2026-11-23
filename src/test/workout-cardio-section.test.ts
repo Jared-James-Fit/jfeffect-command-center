@@ -112,7 +112,9 @@ describe("cardio is done when it suits them: before, during, after or later that
     expect(day).toContain("Your cardio plan · now or later today");
     expect(day).toContain("setsDone: liftLogged.setsDone,");
     expect(day).toContain(".filter((r: any) => !r?.skipped && !isPlanCardioRow(r))");
-    expect(day).toContain("(rows as any[]).filter((r: any) => !isPlanCardioRow(r)).map((r: any) => ({");
+    // Finish's required sets leave the plan's cardio out (the shared reading the re-sync uses too)
+    expect(day).toContain("requiredRowsFromExerciseRows(rows as any[])");
+    expect(readFileSync("src/lib/workout-completeness.ts", "utf8")).toContain(".filter((r) => !r?.cardio_target_id)");
   });
 
   it("the recap and Vs the plan never call cardio not done yet 'missed'; logged, it counts", async () => {

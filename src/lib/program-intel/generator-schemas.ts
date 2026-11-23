@@ -112,6 +112,8 @@ export const decisionSchema = z.object({
 export type StrategyDecision = z.infer<typeof decisionSchema>;
 
 export const strategySchema = z.object({
+  /** What the coach would call the program ("Westerns Prep"); read by program-name.ts, never trusted as is. */
+  program_name: clip(120).optional(),
   athlete_read: clipReq(4000),
   previous_program: z.object({ intent: clip(1500), outcome: clip(2500) }),
   keep: list(item, 20),
@@ -240,7 +242,9 @@ export const builtBlockSchema = z.object({
   name: clipReq(80),
   objective: z.preprocess((v) => (v == null ? null : asText(v)), z.string().nullable()).transform((v) => (v == null ? null : v.trim().slice(0, 1200) || null)).optional(),
   weeks: z.coerce.number().int().min(1).max(MAX_BLOCK_WEEKS),
-  week_phases: list(z.object({ week: z.coerce.number().int().min(1).max(MAX_BLOCK_WEEKS), phase: clip(80) }), MAX_BLOCK_WEEKS),
+  // numbered from the block's own first week; a model that counts on from the program's first (block 2 as weeks 7–12)
+  // is read back to the block's own weeks in code (`withLocalWeeks`), so a phase past week 12 is kept, not dropped
+  week_phases: list(z.object({ week: z.coerce.number().int().min(1).max(MAX_PROGRAM_WEEKS), phase: clip(80) }), MAX_PROGRAM_WEEKS),
   deload_rule: z.preprocess((v) => (v == null ? null : asText(v)), z.string().nullable()).transform((v) => (v == null ? null : v.trim().slice(0, 800) || null)).optional(),
   progression_rules: list(clip(600), 12),
   days: z.array(builtDaySchema).min(1).max(7),

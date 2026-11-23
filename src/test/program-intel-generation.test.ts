@@ -223,8 +223,10 @@ describe("Program Intelligence is for the client's coaches and admins only", () 
     expect(worker).not.toContain("client_visible: true");
     expect(worker).not.toContain("realignClientToCommittedDays");
     const fns = readFileSync("src/lib/program-intel/intel.functions.ts", "utf8");
-    // only the coach's Assign makes it visible
-    expect(fns.match(/client_visible: true/g)).toHaveLength(1);
+    // only the coach's Assign makes a block visible (the other is the program record it's named under, made on assign)
+    expect(fns.match(/weeks: counts\[i\], client_visible: true/g)).toHaveLength(1);
+    expect(fns.match(/client_visible: true/g)).toHaveLength(2);
+    expect(fns).toContain('if (job.status !== "assigned") return { ok: true, name, prepId: null };');
     expect(fns).toContain('if (job.status !== "ready") throw new Error');
   });
   it("the page is gated to coaches (view-only logins see a note) and reads with the coach's own session", () => {

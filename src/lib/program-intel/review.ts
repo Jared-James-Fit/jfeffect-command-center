@@ -10,6 +10,8 @@
 import { fmtLoad, fmtSet, mean, round, sum } from "./core";
 import type { AthleteContext } from "./context";
 import type { DataQuality } from "./quality";
+import { consolidatePain, painPlaceLine, painPlaceName } from "./pain-read";
+import { sessionLimit } from "./session-limit";
 import type { ExerciseReport, IntelReport } from "./types";
 
 export type ReviewItem = { kind: "fact" | "hypothesis" | "missing"; title: string; detail: string; evidence: string[]; subject?: string };
@@ -121,8 +123,9 @@ export function reviewPreviousProgram(prev: IntelReport, ctx: AthleteContext, qu
     for (const m of prev.muscles.filter((x) => !x.target && x.avgHardSetsPerWeek != null && x.avgHardSetsPerWeek > 22))
       r.workload.push({ kind: "hypothesis", title: `${m.muscle}: ${m.avgHardSetsPerWeek} hard sets/week may be more than needed`, detail: "Above what most lifters need to progress; worth checking how its main exercises responded before keeping it.", evidence: [] });
   }
-  if (ctx.session.observedMedian != null && ctx.session.goalsMinutes != null && ctx.session.observedP80 != null && ctx.session.observedP80 > ctx.session.goalsMinutes + 5)
-    r.workload.push({ kind: "fact", title: `Sessions often ran past their ${ctx.session.goalsMinutes}-minute limit`, detail: `Median ${ctx.session.observedMedian} min, 1 in 5 over ${ctx.session.observedP80} min.`, evidence: [] });
+  const lim = sessionLimit(ctx.session);
+  if (lim.minutes != null && ctx.session.observedMedian != null && ctx.session.observedP80 != null && ctx.session.observedP80 > lim.minutes + 5)
+    r.workload.push({ kind: "fact", title: `Sessions often ran past ${lim.phrase}`, detail: `Median ${ctx.session.observedMedian} min, 1 in 5 over ${ctx.session.observedP80} min (${ctx.session.entries} sessions with a duration).`, evidence: [] });
 
   // Recovery and consistency.
   const c = prev.coverage;
@@ -131,9 +134,9 @@ export function reviewPreviousProgram(prev: IntelReport, ctx: AthleteContext, qu
     r.recovery.push({ kind: "fact", title: `Trained ${c.completedDays + c.partialDays} of ${c.dueDays} due workouts (${pctTrained}%) and completed ${c.completedSets} of ${c.prescribedSetsDue} prescribed sets`, detail: `${c.completedDays} finished, ${c.partialDays} logged but not marked finished, ${c.missedDays} missed.`, evidence: prev.weeks.filter((w) => w.missedDays).map((w) => `${w.label}: ${w.missedDays} missed`) });
     if (pctTrained < 80) r.recovery.push({ kind: "hypothesis", title: "Consistency was the main limiter", detail: "With this many missed sessions, the program's design can't be judged fully; fitting the plan to the days they can train may matter more than any variable.", evidence: [] });
   }
-  for (const area of ctx.injuries.areas) {
-    const n = ctx.injuries.painReports.filter((p) => (p.area ?? "").toLowerCase().trim() === area).length;
-    r.recovery.push({ kind: "fact", title: `${n} pain report${n === 1 ? "" : "s"}: ${area}`, detail: "From post-workout check-outs. An interpretation of cause would be a hypothesis, not a diagnosis.", evidence: ctx.injuries.painReports.filter((p) => (p.area ?? "").toLowerCase().trim() === area).slice(0, 4).map((p) => `${p.date ?? "?"}: level ${p.level ?? "?"}${p.note ? ` "${p.note}"` : ""}`) });
+  // one line per place (pain-read.ts): the same reports the findings read, never counted twice
+  for (const p of ctx.injuries.pain ?? consolidatePain(ctx.injuries.painReports)) {
+    r.recovery.push({ kind: "fact", subject: `pain:${p.key}`, title: `Pain reported: ${painPlaceName(p)} (${painPlaceLine(p)})`, detail: "From post-workout check-outs. An interpretation of cause would be a hypothesis, not a diagnosis.", evidence: p.evidence.slice(0, 4) });
   }
   const fatigue = Object.entries(prev.recovery.fatigue);
   if (fatigue.length) r.recovery.push({ kind: "fact", title: `Fatigue in check-outs: ${fatigue.map(([k, v]) => `${k} ×${v}`).join(", ")}`, detail: `Session RPE ${prev.recovery.sessionRpeAvg ?? "—"}.`, evidence: [] });

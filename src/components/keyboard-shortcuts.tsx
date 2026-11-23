@@ -44,6 +44,17 @@ const SHORTCUT_GROUPS: Group[] = [
     ],
   },
   {
+    heading: "Program builder",
+    items: [
+      { keys: ["F"], label: "Focus mode on / off" },
+      { keys: ["Esc"], label: "Leave focus mode" },
+      { keys: ["[", "]"], label: "Previous / next workout (Day view)" },
+      { keys: ["⇧", "[", "]"], label: "Previous / next week" },
+      { keys: ["1", "–", "5"], label: "Day · Week · Block · Program · Sheet" },
+      { keys: ["⌘", "Z"], label: "Undo (⇧ to redo)" },
+    ],
+  },
+  {
     heading: "Editing",
     items: [
       { keys: ["⌘", "Enter"], label: "Send comment / submit form" },
@@ -60,7 +71,28 @@ function Kbd({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** The event the command palette (and anything else) sends to open the list. */
+export const OPEN_SHORTCUTS_EVENT = "open-keyboard-shortcuts";
+
+/** Open the keyboard-shortcuts list from anywhere (the ⌘K palette's Help row). */
+export function openKeyboardShortcuts() {
+  try { window.dispatchEvent(new CustomEvent(OPEN_SHORTCUTS_EVENT)); } catch { /* no window */ }
+}
+
+/**
+ * The shortcuts list with no button of its own: `?` anywhere (outside a text
+ * box) or the palette's "Keyboard shortcuts" opens it. The admin header no
+ * longer carries a keyboard icon for something used once in a while.
+ */
+export function KeyboardShortcutsHost() {
+  return <KeyboardShortcutsDialog trigger={false} />;
+}
+
 export function KeyboardShortcutsButton() {
+  return <KeyboardShortcutsDialog trigger />;
+}
+
+function KeyboardShortcutsDialog({ trigger }: { trigger: boolean }) {
   const [open, setOpen] = useState(false);
   const cleo = useCleoAccess();
   const groups = cleo
@@ -77,17 +109,25 @@ export function KeyboardShortcutsButton() {
         tag === "SELECT" ||
         (t && (t as HTMLElement).isContentEditable);
       if (isTyping) return;
+      // the program editor has its own list of keys (program-builder-shortcuts.tsx)
+      if (document.querySelector("[data-builder-header]")) return;
       if (e.key === "?" || (e.shiftKey && e.key === "/")) {
         e.preventDefault();
         setOpen((o) => !o);
       }
     };
+    const onOpen = () => setOpen(true);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener(OPEN_SHORTCUTS_EVENT, onOpen);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(OPEN_SHORTCUTS_EVENT, onOpen);
+    };
   }, []);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
+      {trigger && (
       <TooltipProvider delayDuration={200}>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -107,6 +147,7 @@ export function KeyboardShortcutsButton() {
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
+      )}
 
       <DialogContent className="max-w-lg">
         <DialogHeader>

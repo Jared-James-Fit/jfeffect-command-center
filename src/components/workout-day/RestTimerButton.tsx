@@ -8,6 +8,7 @@ import {
   clearRestTimer,
   formatAgo,
   formatClock,
+  restWords,
   pauseRestTimer,
   readRestAutoStart,
   readRestTimer,
@@ -37,13 +38,7 @@ import { feedback } from "@/lib/feedback";
  */
 
 /** "Rest 5 min", "Rest 2:30", "Rest 45 s": the prescribed rest in words, before it starts. */
-export function restWords(seconds: number | null | undefined): string | null {
-  if (!seconds || seconds <= 0) return null;
-  const s = Math.round(seconds);
-  if (s < 60) return `Rest ${s} s`;
-  if (s % 60 === 0) return `Rest ${s / 60} min`;
-  return `Rest ${formatClock(s)}`;
-}
+export { restWords };
 
 /** The workout's rest as it is now (null when none), kept in step with every card and tab. */
 export function useRestState(scopeKey: string): RestTimerState | null {

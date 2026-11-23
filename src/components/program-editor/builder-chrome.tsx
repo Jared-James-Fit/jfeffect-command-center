@@ -3,12 +3,14 @@
  * block editor: one sticky header (what you're editing on the left, save /
  * AI / ⋯ on the right) whose second row is the canvas's own toolbar (undo,
  * redo, the weeks), portalled in by StructureCanvas, so the coach always has
- * one bar of controls instead of four stacked ones.
+ * one bar of controls instead of four stacked ones. Its Focus button puts the
+ * editor alone on the screen (builder-focus.tsx).
  */
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobileNow } from "@/hooks/use-mobile";
+import { BuilderFocusButton, BuilderFocusHost, useBuilderFocus } from "./builder-focus";
 
 export function BuilderHeader({
   back,
@@ -33,6 +35,7 @@ export function BuilderHeader({
   // under the app's bar instead (and follows it up when it slides away,
   // .builder-header-fixed in styles.css), with its room kept in the page.
   const phone = useIsMobileNow();
+  const focus = useBuilderFocus();
   const ref = useRef<HTMLDivElement | null>(null);
   const [room, setRoom] = useState(0);
   useLayoutEffect(() => {
@@ -46,9 +49,11 @@ export function BuilderHeader({
   }, [phone]);
   return (
     <>
+    <BuilderFocusHost />
     <div
       ref={ref}
       data-builder-header
+      data-focus={focus ? "" : undefined}
       className={cn(
         "z-30 border-b border-border bg-background",
         phone ? "builder-header-fixed phone-column fixed inset-x-0" : "sticky top-0 -mx-2 md:-mx-3",
@@ -60,7 +65,12 @@ export function BuilderHeader({
           {title}
           {meta ? <div className="truncate px-1.5 text-xs text-muted-foreground">{meta}</div> : null}
         </div>
-        {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
+        <div className="flex shrink-0 items-center gap-1">
+          {/* a phone keeps its header for the name: Focus is in the toolbar's ⋯ there, and
+              while it's on the way out is right here */}
+          {phone && !focus ? null : <BuilderFocusButton phone={phone} />}
+          {actions}
+        </div>
       </div>
       {onToolbarEl ? <div ref={onToolbarEl} data-builder-toolbar-slot className="empty:hidden border-t border-border/70" /> : null}
     </div>

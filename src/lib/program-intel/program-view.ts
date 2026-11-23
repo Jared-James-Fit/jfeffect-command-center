@@ -25,6 +25,43 @@ export function rxForWeek(ex: BuiltExercise, week: number): WeekRx {
   };
 }
 
+/**
+ * A block's week references in its own weeks (1 … weeks). A model building block 2 of a 6 + 6 program
+ * sometimes counts on from the program's first week (its phases and changes as weeks 7–12), which the
+ * draft would then drop (no week 7 in a 6-week block), leaving every week the base prescription. When
+ * every reference past the block sits inside the block's place in the program (offset + 1 … offset +
+ * weeks) and none is in its own range, they're moved back by the offset; anything else is left as written
+ * for the audit to name. Returns the block (a copy when moved) and how far it moved.
+ */
+export function withLocalWeeks<B extends Pick<BuiltBlock, "weeks" | "week_phases" | "days">>(block: B, offset: number): { block: B; shifted: number } {
+  const refs = [...(block.week_phases ?? []).map((p) => p.week), ...block.days.flatMap((d) => d.exercises.flatMap((e) => (e.weeks ?? []).map((w) => w.week)))];
+  const own = (w: number) => w >= 1 && w <= block.weeks;
+  if (!offset || !refs.length || refs.every(own)) return { block, shifted: 0 };
+  if (!refs.every((w) => w > offset && w <= offset + block.weeks)) return { block, shifted: 0 };
+  const shift = <T extends { week: number }>(xs: T[] | undefined | null) => (xs ?? []).map((x) => ({ ...x, week: x.week - offset }));
+  return {
+    block: {
+      ...block,
+      week_phases: shift(block.week_phases),
+      days: block.days.map((d) => ({ ...d, exercises: d.exercises.map((e) => (e.weeks?.length ? { ...e, weeks: shift(e.weeks) } : e)) })),
+    } as B,
+    shifted: offset,
+  };
+}
+
+/** Every block of a program in its own weeks (`withLocalWeeks`, each block's offset the weeks before it). */
+export function programInLocalWeeks<P extends { blocks: Array<Pick<BuiltBlock, "weeks" | "week_phases" | "days">> }>(program: P): { program: P; moved: number[] } {
+  let offset = 0;
+  const moved: number[] = [];
+  const blocks = program.blocks.map((b, i) => {
+    const r = withLocalWeeks(b, offset);
+    offset += b.weeks;
+    if (r.shifted) moved.push(i);
+    return r.block;
+  });
+  return { program: moved.length ? { ...program, blocks } : program, moved };
+}
+
 /** "Superset with …" for an exercise paired with others in its day (same letter: "A1" with "A2"), else null. */
 export function supersetNote(ex: BuiltExercise, day: readonly BuiltExercise[] | null | undefined): string | null {
   const g = supersetGroup(ex.superset);

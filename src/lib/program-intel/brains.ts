@@ -6,6 +6,7 @@
  * response) or MISSING (what the records can't tell us).
  */
 import { fmtLoad, fmtSet, mean, round, sum } from "./core";
+import { consolidatePain, painNeedsLook, painPlaceLine, painPlaceName } from "./pain-read";
 import {
   HYPERTROPHY_BRAINS,
   LIFTS,
@@ -110,23 +111,22 @@ export function commonFindings(b: BrainInput): Finding[] {
       }),
     );
   }
-  const pain = b.recovery.painReports;
-  if (pain.length) {
-    const byArea = new Map<string, number>();
-    for (const p of pain) byArea.set((p.area || "unspecified").toLowerCase(), (byArea.get((p.area || "unspecified").toLowerCase()) ?? 0) + 1);
-    for (const [area, n] of byArea) {
-      out.push(
-        f({
-          id: `recovery:pain:${area}`,
-          area: n >= 2 ? "change" : "next",
-          kind: "fact",
-          subject: "recovery",
-          title: `${n} pain report${n === 1 ? "" : "s"} (${area}) in post-workout check-outs`,
-          detail: n >= 2 ? "Repeated reports in one area: worth reviewing the exercises and loads that load it before the next cycle (an interpretation, not a diagnosis)." : "One report: keep an eye on it.",
-          evidence: pain.filter((p) => (p.area || "unspecified").toLowerCase() === area).map((p) => `${p.date ?? "?"}: level ${p.level ?? "?"}${p.note ? ` · "${p.note}"` : ""}`),
-        }),
-      );
-    }
+  // one line per place, however its reports named it ("Shoulder (L)", "left shoulder, low back")
+  for (const p of consolidatePain(b.recovery.painReports)) {
+    const look = painNeedsLook(p);
+    out.push(
+      f({
+        id: `recovery:pain:${p.key}`,
+        area: look ? "change" : "next",
+        kind: "fact",
+        subject: "recovery",
+        title: `Pain reported: ${painPlaceName(p)} (${painPlaceLine(p)})`,
+        detail: look
+          ? "Reported on more than one day, worsening or a high level: worth reviewing the exercises and loads that load it before the next cycle (an interpretation, not a diagnosis)."
+          : "One report: keep an eye on it.",
+        evidence: p.evidence,
+      }),
+    );
   }
   if (b.bodyweight.entries >= 2 && b.bodyweight.changeKg != null) {
     out.push(
@@ -166,11 +166,30 @@ export function powerliftingFindings(b: BrainInput): Finding[] {
   const out: Finding[] = [];
   const { unit } = b;
   const kg = (n: number | null) => (n == null ? "?" : fmtLoad(n, unit));
+  // A competition lift the program never asked for isn't missing data: there was nothing to log
+  // (a bodybuilding-focused block has no competition squat). Said once, as context, never per lift.
+  const notProgrammed = b.lifts.filter((L) => !liftProgrammed(b, L.lift) && !L.exposures.some((e) => e.competition));
+  if (notProgrammed.length) {
+    const names = notProgrammed.map((L) => LIFT_NAME[L.lift].toLowerCase());
+    const variations = notProgrammed.flatMap((L) => L.variations.filter((v) => v.exposures >= 2).map((v) => v.exercise)).slice(0, 4);
+    const maxes = notProgrammed.filter((L) => L.maxOnFileKg != null).map((L) => `${LIFT_NAME[L.lift]} ${kg(L.maxOnFileKg)}`);
+    out.push(
+      f({
+        id: "pl:comp-not-programmed",
+        area: "next",
+        kind: "fact",
+        subject: "strength",
+        title: `The competition ${listWords(names)} ${notProgrammed.length === 1 ? "wasn't" : "weren't"} in this period's program`,
+        detail: `Nothing to log, so nothing is missing. ${variations.length ? `The closest work trained: ${variations.join(", ")}. ` : ""}${maxes.length ? `Maxes on file: ${maxes.join(", ")}. ` : ""}A powerlifting plan built from here starts ${notProgrammed.length === 1 ? "that lift" : "these lifts"} from conservative loads (RPE) until they're logged.`,
+      }),
+    );
+  }
   for (const L of b.lifts) {
     const name = L.competitionExercise ?? `Competition ${LIFT_NAME[L.lift]}`;
     const comp = L.exposures.filter((e) => e.competition && e.e1rm != null);
     if (comp.length < 2) {
-      out.push(f({ id: `pl:${L.lift}:few`, area: "missing", kind: "missing", subject: L.lift, title: `${comp.length} logged ${name.toLowerCase()} exposure${comp.length === 1 ? "" : "s"} with a load and reps`, detail: "Not enough to read a trend for this lift." }));
+      if (notProgrammed.includes(L)) continue;
+      out.push(f({ id: `pl:${L.lift}:few`, area: "missing", kind: "missing", subject: L.lift, title: `${comp.length} logged ${name.toLowerCase()} exposure${comp.length === 1 ? "" : "s"} with a load and reps`, detail: "It was programmed, but too few sets were logged with a load and reps to read a trend." }));
     } else {
       const t = L.compTrend;
       const ev = [comp[0], comp[comp.length - 1]].map((e) => `${e.exercise} · ${e.date ?? "?"} · top ${fmtSet(e.topSet, unit)} → e1RM ${kg(e.e1rm)}`);
@@ -232,6 +251,16 @@ export function powerliftingFindings(b: BrainInput): Finding[] {
   const lines = b.lifts.filter((l) => l.compTrend.last != null).map((l) => `${LIFT_NAME[l.lift]}: e1RM ${kg(l.compTrend.last)} (peak ${kg(l.compTrend.peak)})${l.maxOnFileKg ? ` · max on file ${kg(l.maxOnFileKg)}` : ""}${l.bestMeetKg ? ` · best meet ${kg(l.bestMeetKg)}` : ""}`);
   if (lines.length) out.push(f({ id: "pl:current-strength", area: "next", kind: "fact", subject: "strength", title: "Estimated strength at the end of this period", detail: "Latest competition-lift e1RM (best of the last two exposures), from logged load × reps @ RPE.", evidence: lines }));
   return out;
+}
+
+/** Was the competition lift prescribed on a workout that was due in this period? */
+export function liftProgrammed(b: Pick<BrainInput, "exercises">, lift: Lift): boolean {
+  return b.exercises.some((e) => e.lift === lift && e.competition && e.setsPrescribedDue > 0);
+}
+
+function listWords(xs: string[]): string {
+  if (xs.length <= 1) return xs[0] ?? "";
+  return `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
 }
 
 export function bodybuildingFindings(b: BrainInput): Finding[] {

@@ -1,7 +1,7 @@
 /**
- * The home page's reveals move one way (the free app's $0, the trainer
- * example, Coaching Plus, then Complete Online Coaching): a reveal, never a
- * gate.
+ * The home page's reveals move one way (what a trainer and online coaching
+ * cost, the free app's $0, Coaching Plus, then Complete Online Coaching): a
+ * reveal, never a gate.
  *
  * Everything is on the page from the first paint (server-rendered, readable
  * with no script). Once the page is interactive, a stage that's still below
@@ -65,6 +65,9 @@ export function motion(
 
 /** The settle a price makes as it's revealed: from a little smaller and soft focus, slowly. */
 export const PRICE_SETTLE = { delay: 220, y: 34, scale: 0.94, duration: 1000, blur: 8 } as const;
+
+/** The free app's $0, the page's biggest moment: the same settle, from further and softer, a beat longer. */
+export const FREE_SETTLE = { delay: 260, y: 44, scale: 0.88, duration: 1200, blur: 14 } as const;
 
 /** Counts a moment once, when enough of it is on screen (with or without motion). */
 export function useSeen(ref: RefObject<HTMLElement | null>, event: SiteEvent, step: string, threshold = 0.45) {

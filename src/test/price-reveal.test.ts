@@ -12,6 +12,9 @@ import {
   trainerAnchor,
   trainerCost,
 } from "@/lib/coaching-packages/trainer-cost";
+import { EXAMPLES, LOWER_TIERS, onlineAnchor } from "@/lib/coaching-packages/online-coaching-cost";
+import { costAnchors, highestMonthlyCents, yearLine } from "@/lib/coaching-packages/cost-anchors";
+import { shortPlanName } from "@/lib/coaching-packages/packages";
 
 const read = (p: string) => readFileSync(p, "utf8");
 const visibleOf = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -148,7 +151,7 @@ describe("the reveal reads as two products, never a discount", () => {
     expect(src).not.toMatch(/function useStage|useState</);
   });
 
-  it("sits between the coaching demo and the four options, with no dashes and in Jared's words", () => {
+  it("sits between the coaching demo and the plans, with no dashes and in Jared's words", () => {
     const page = read("src/components/landing/landing-page.tsx");
     const at = page.indexOf("<PriceRevealSection");
     expect(at).toBeGreaterThan(page.indexOf("data-landing-coaching"));
@@ -169,54 +172,164 @@ describe("the reveal reads as two products, never a discount", () => {
 });
 
 describe("what a personal trainer costs: a worked example from published rates, never a guess (Nov 23 2026)", () => {
-  const reveal = priceReveal(LIVE)!;
+  const top = highestMonthlyCents(LIVE);
 
-  it("works the example out in the open: $56.23 × 2 a week × 52 weeks", () => {
-    expect(EXAMPLE_RATE_CENTS).toBe(5623);
-    expect(EXAMPLE_PER_WEEK).toBe(2);
-    expect(trainerCost(5623, 2)).toEqual({ yearCents: 584792, monthCents: 48733 });
-    const t = trainerAnchor(reveal)!;
-    expect(t.rate).toBe("$56.23");
-    expect(t.month).toBe("$487");
-    expect(t.year).toBe("$5,848");
-    expect(t.maths).toBe("$56.23 × 2 sessions × 52 weeks = $5,848 a year, or $487 a month.");
-    // once and three times a week are said too, so twice is visibly an example
-    expect(t.otherFrequencies).toBe("Once a week is about $244 a month. Three times is about $731.");
+  it("measures against the highest monthly coaching price on the site ($249)", () => {
+    expect(top).toBe(24900);
+    expect(highestMonthlyCents(LIVE.filter((p) => p.kind === "free"))).toBeNull();
+    // an unlisted package never counts
+    expect(highestMonthlyCents(LIVE.map((p) => (p.slug === "plus" ? { ...p, listed: false } : p)))).toBe(13000);
   });
 
-  it("names where every rate comes from, with a link and the day it was checked", () => {
-    const t = trainerAnchor(reveal)!;
-    expect(t.sourceLine).toContain("City of Mississauga's 2026 rate");
-    expect(EXAMPLE_SOURCE.detail).toContain("$56.23 for 8 or more, plus HST");
+  it("works the example out in the open: $76.50 × 2 a week × 52 weeks", () => {
+    expect(EXAMPLE_RATE_CENTS).toBe(7650);
+    expect(EXAMPLE_PER_WEEK).toBe(2);
+    expect(trainerCost(7650, 2)).toEqual({ yearCents: 795600, monthCents: 66300 });
+    const t = trainerAnchor(top)!;
+    expect(t.rate).toBe("$76.50");
+    expect(t.year).toBe("$7,956");
+    expect(t.month).toBe("$663");
+    expect(t.maths).toBe("$76.50 × 2 sessions × 52 weeks = $7,956 a year, about $663 a month.");
+    // once and three times a week are said too, so twice is visibly an example
+    expect(t.otherFrequencies).toBe("Once a week is about $3,978 a year. Three times is about $11,934.");
+    // the line a visitor reads names nobody
+    expect(t.sessions).toBe("Two private sessions a week at $76.50 each, a city rec centre's published rate.");
+  });
+
+  it("names where every rate comes from in the collapsed sources, with a link and the day it was checked", () => {
+    expect(EXAMPLE_SOURCE.provider).toBe("City of Edmonton");
+    expect(EXAMPLE_SOURCE.detail).toContain("$76.50 a session for non-members");
     expect(CHECKED_ON).toBe("Nov 23, 2026");
     for (const s of [EXAMPLE_SOURCE, ...OTHER_SOURCES]) {
       expect(s.url).toMatch(/^https:\/\//);
       expect(s.detail).toMatch(/\$\d+(\.\d\d)? a session/);
+      // public providers only: cities and a university, never a private gym
+      expect(s.provider).toMatch(/^(City of|University of)/);
     }
-    // the example's rate is the published one, never higher than any single-session rate checked
-    const singles = [6615, 5825, 5900, 6120];
-    expect(singles.every((c) => c >= EXAMPLE_RATE_CENTS)).toBe(true);
+    // a public rec centre's single-session rate, and never the highest rate checked (Calgary's 5-pack is $83)
+    expect(OTHER_SOURCES.some((s) => /\$83 a session/.test(s.detail))).toBe(true);
   });
 
-  it("only leads the story while a month of it costs more than the coaching shown after it", () => {
+  it("only shows while a month of it costs more than the coaching on the site", () => {
     expect(trainerAnchor(null)).toBeNull();
-    // twice a week at $56.23 is $487; if Plus were ever $500, the example would read the wrong way round
-    const pricier = priceReveal(LIVE.map((p) => (p.slug === "plus" ? { ...p, priceCents: 50000 } : p)))!;
-    expect(trainerAnchor(pricier)).toBeNull();
-    // once a week ($244) is under Plus ($249): never used to lead
-    expect(trainerAnchor(reveal, 5623, 1)).toBeNull();
+    // if a monthly package ever cost more than $663, the example would read the wrong way round
+    expect(trainerAnchor(70000)).toBeNull();
+    // once a week ($332 a month) still leads Plus ($249); a rate under it wouldn't
+    expect(trainerAnchor(top, 7650, 1)).not.toBeNull();
+    expect(trainerAnchor(top, 2000, 1)).toBeNull();
+  });
+});
+
+describe("what higher-priced online coaching costs: examples, never an average, no business named (Nov 23 2026)", () => {
+  const top = highestMonthlyCents(LIVE);
+
+  it("works the range out from the packages checked: $289.99 to $400 a month", () => {
+    const o = onlineAnchor(top)!;
+    expect(o.yearLow).toBe("$3,480");
+    expect(o.yearHigh).toBe("$4,800");
+    expect(o.monthRange).toBe("$289.99 to $400 a month");
+    expect(o.maths).toBe("$289.99 × 12 = $3,480. $400 × 12 = $4,800.");
+    expect(o.examples.map((e) => e.price)).toEqual(["$289.99 a month", "$389.99 a month", "from $400 a month"]);
+    // the lower tiers checked are said beside it, so the range never reads as what every coach charges
+    expect(o.lowerTiers).toBe("Lower tiers from the same check ran $189.99 to $249 a month.");
+    expect(LOWER_TIERS.every((c) => c < Math.min(...EXAMPLES.map((e) => e.monthCents)))).toBe(true);
+    expect(o.checkedOn).toBe("Nov 23, 2026");
   });
 
-  it("says a trainer and online coaching are different things, and never calls coaching a discount", () => {
-    const src = visibleOf(read("src/components/landing/price-reveal.tsx"));
-    const trainer = src.slice(src.indexOf("function TrainerStage"), src.indexOf("export function PriceRevealSection"));
-    expect(trainer).toContain("REVEAL_WORDS.trainerCardBody");
-    expect(trainer).toContain("REVEAL_WORDS.onlineCardBody");
-    expect(src).toContain("I'm not in the room.");
+  it("describes each package and never names the business on the page", () => {
+    const visible = visibleOf(read("src/lib/coaching-packages/online-coaching-cost.ts")) + visibleOf(read("src/components/landing/cost-anchors.tsx"));
+    expect(visible).not.toMatch(/Calgary Barbell|Paris Demers|Strengthcity|Trainerize/i);
+    for (const e of EXAMPLES) expect(e.who).toMatch(/^(A |The same)/);
+    // the sources are recorded where they can be checked
+    const doc = read("docs/pricing-anchors.md");
+    expect(doc).toContain("calgarybarbell.com/coaching");
+    expect(doc).toContain("parisdemers.com/pages/online-fitness-coaching");
+  });
+
+  it("only shows while every coaching package on the site is below its cheapest example", () => {
+    expect(onlineAnchor(null)).toBeNull();
+    // a $299 package would make "higher-priced" untrue
+    expect(onlineAnchor(29900)).toBeNull();
+    expect(onlineAnchor(28999)).toBeNull();
+    expect(onlineAnchor(28998)).not.toBeNull();
+  });
+
+  it("opens the story only when there's coaching on the site to compare with", () => {
+    const both = costAnchors(LIVE)!;
+    expect(both.trainer?.year).toBe("$7,956");
+    expect(both.online?.yearLow).toBe("$3,480");
+    expect(costAnchors(LIVE.filter((p) => p.kind === "free"))).toBeNull();
+    // a pricier package drops the online example first, then the trainer one
+    const pricey = (cents: number) => [...LIVE, pkg({ slug: "vip", name: "VIP", priceCents: cents })];
+    expect(costAnchors(pricey(35000))).toEqual({ trainer: expect.anything(), online: null });
+    expect(costAnchors(pricey(80000))).toBeNull();
+  });
+
+  it("says the three are different things, and never calls coaching or the app a discount on them", () => {
+    const src = visibleOf(read("src/components/landing/cost-anchors.tsx"));
+    for (const card of ["A personal trainer", "An online coach", "An app"]) expect(src).toContain(card);
     // fair to trainers: what they do between sessions isn't assumed
     expect(src).toContain("What happens between sessions depends on the trainer.");
+    expect(src).toContain("Not in the room with you.");
+    expect(src).toContain("No coach comes with it.");
+    expect(src).toContain("these are examples, not an average");
     expect(src).toContain("before tax");
-    expect(src).not.toMatch(/same as a (personal )?trainer|like having a trainer|instead of a trainer|for a fraction|cheaper than/i);
+    expect(src).not.toMatch(/same as a (personal )?trainer|like having a trainer|instead of a trainer|for a fraction|cheaper than|average (price|cost)|industry/i);
+    expect(src).not.toMatch(/\b(save|saving|savings|discount|was \$|only \$|deal|limited|hurry)\b/i);
+    expect(src).not.toContain("—");
+    expect(src).not.toMatch(/\breal(ly)?\b|\bactually\b/i);
+    // the methodology is collapsed by default: native disclosures, never open
+    expect(src).toContain("<details");
+    expect(src).not.toMatch(/<details[^>]*\bopen\b/);
+    // counted once it's seen
+    expect(SITE_EVENTS).toContain("cost_anchor_view");
+    expect(src).toContain('useSeen(ref, "cost_anchor_view", "home", 0.5)');
+    expect(readCoachingFunnel({ anchor_views: "7" }).anchorViews).toBe(7);
+    const sql = read("supabase/migrations/20270519090000_cost_anchor_funnel.sql");
+    expect(sql).toContain("'anchor_views', (SELECT count(DISTINCT visitor_id) FROM ev WHERE event = 'cost_anchor_view')");
+    expect(sql).toContain("'free_reveal_views', (SELECT count(DISTINCT visitor_id) FROM ev WHERE event = 'free_reveal_view')");
+  });
+
+  it("opens the page's price story, before the app, the $0 and the coaching prices", () => {
+    const page = read("src/components/landing/landing-page.tsx");
+    const order = ["data-landing-proof", "<CostAnchorsSection", "data-landing-app", "<FreeReveal />", "<PriceRevealSection", 'id="pricing"'];
+    const at = order.map((m) => page.indexOf(m));
+    expect(at.every((i) => i > -1)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+  });
+});
+
+describe("each coaching price as a year, beside the yearly examples", () => {
+  it("says $2,988 for Plus and $1,560 for Complete, from the packages", () => {
+    const r = priceReveal(LIVE)!;
+    expect(r.anchorYear).toBe("$2,988 a year");
+    expect(r.flagshipYear).toBe("$1,560 a year");
+    expect(yearLine(0)).toBeNull();
+    const src = visibleOf(read("src/components/landing/price-reveal.tsx"));
+    const flagship = src.slice(src.indexOf("data-reveal-flagship\n"), src.lastIndexOf("</section>"));
+    expect(flagship).toContain("reveal.flagshipYear");
+    expect(flagship).not.toContain("anchorYear");
+  });
+});
+
+describe("every plan in one selection", () => {
+  it("names each plan in one word on a phone's switch", () => {
+    expect(["Free app", "Nutrition Coaching", "Complete Online Coaching", "Coaching Plus"].map(shortPlanName)).toEqual([
+      "Free",
+      "Nutrition",
+      "Complete",
+      "Plus",
+    ]);
+    expect(shortPlanName("Membership")).toBe("Membership");
+    expect(shortPlanName("Online Coaching")).toBe("Online Coaching");
+  });
+
+  it("is the same cards on every screen: a switch over a row on a phone, side by side from a tablet up", () => {
+    const grid = read("src/components/sales/coaching-packages.tsx");
+    expect(grid).toContain('choose && "hidden md:grid"');
+    expect(grid).toContain('<div className="md:hidden" data-plan-chooser>');
+    expect(grid).toContain("<PackageCard pkg={p} from={from} compact anchor={anchorLine(p, plans)}");
+    expect(read("src/components/landing/landing-page.tsx")).toContain('<CoachingPackagesGrid packages={list} from="home" calls={false} free chooser />');
   });
 });
 
@@ -225,7 +338,12 @@ describe("the free app's $0", () => {
   it("is its own moment, from the same formatter as every price, on the page from the first paint", () => {
     const free = page.slice(page.indexOf("function FreeReveal"), page.indexOf("function Chapter"));
     expect(free).toContain("{REVEAL.price}");
-    expect(free).toContain("motion(phase, PRICE_SETTLE)");
+    expect(free).toContain("motion(phase, FREE_SETTLE)");
+    // the page's biggest number: bigger than the coaching price's moment
+    expect(free).toContain("md:text-[240px]");
+    expect(read("src/components/landing/price-reveal.tsx")).toContain("md:text-[176px]");
+    // it says plainly that a coach isn't in it
+    expect(free).toContain("{REVEAL.without}");
     expect(free).toContain('useSeen(ref, "free_reveal_view", "home"');
     expect(free).toContain("data-landing-reveal");
     expect(page).toContain("price: priceLabel(0)");
