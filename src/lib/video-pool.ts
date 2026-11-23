@@ -103,6 +103,42 @@ export function releaseFeedVideo(v: HTMLVideoElement) {
   } else known.delete(v);
 }
 
+/** What `keepInHost` needs of the box a clip sits in, and of the element and canvas it moves. */
+type HostBox = {
+  firstChild: unknown;
+  insertBefore(node: never, child: never): unknown;
+  appendChild(node: never): unknown;
+};
+type HostChild = { parentNode: unknown };
+
+/**
+ * Keep a feed clip's element (and the canvas it plays on while decoded) in the
+ * box it's shown in now. That box can be swapped under it (InlineVideo decides
+ * its fit again, filling the screen or shown whole, and each way has its own
+ * box; a post's sheet opening does it too), and an element left in a box
+ * that's gone keeps playing off the page: black where the clip should be, its
+ * poster already faded (Jarrett's deadlift, Nov 23 2026). Moves only what's
+ * elsewhere, in the same commit, so a playing clip carries on: the element
+ * first, its decoded canvas over it. True when it moved anything.
+ */
+export function keepInHost(
+  host: HostBox | null | undefined,
+  el: HostChild | null | undefined,
+  canvas?: HostChild | null,
+): boolean {
+  if (!host || !el) return false;
+  let moved = false;
+  if (el.parentNode !== host) {
+    host.insertBefore(el as never, host.firstChild as never);
+    moved = true;
+  }
+  if (canvas && canvas.parentNode !== host) {
+    host.appendChild(canvas as never);
+    moved = true;
+  }
+  return moved;
+}
+
 export const SOUND_BLOCKED_EVENT = "jf-sound-blocked";
 /** Dispatched on a feed clip when the phone refuses (or then allows) it to start by itself. */
 export const PLAY_REFUSED_EVENT = "jf-play-refused";
