@@ -3,10 +3,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, ArrowLeft, BarChart3, CalendarRange, Flame, Info, Layers3, Loader2, MessageSquare, Milestone, MoreHorizontal, Save, SlidersHorizontal, User as UserIcon } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BarChart3, CalendarRange, Flame, Info, Layers3, MessageSquare, Milestone, MoreHorizontal, Save, Settings2, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { BuilderHeader, BuilderNotice, BuilderSection, BuilderTitleInput } from "@/components/program-editor/builder-chrome";
+import { BuilderHeader, BuilderNotice, BuilderTitleInput } from "@/components/program-editor/builder-chrome";
+import { BlockSettingsSheet, type BlockSettingsTab } from "@/components/program-editor/block-settings-sheet";
 import { useIsMobileNow } from "@/hooks/use-mobile";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
@@ -33,18 +34,15 @@ import {
   StructureCanvas,
   appendRowToFirstDay,
 } from "@/route-pages/_authenticated/admin/program-library_.$templateId";
-import { BlockWarmupPanel } from "@/components/block-warmup-panel";
-import { AutoSchedulePanel } from "@/components/auto-schedule-panel";
-import { BlockRoadmapPanel } from "@/components/programs/block-roadmap-panel";
 import { usePersistentUndoStack } from "@/lib/persistent-undo";
 import { useScrollRestoration } from "@/lib/scroll-restore";
 import { BlockSwitcher } from "@/components/block-switcher";
-import { EditWithAiSheet } from "@/components/program-ai/edit-with-ai";
+import { CleoDock, CleoLauncher, useCleoDock } from "@/components/program-ai/cleo-dock";
 import { BlockTypeChip, BlockTypeSheet } from "@/components/program-editor/block-type-picker";
 import { inferBlockType, resolveBlockType, type BlockMeta } from "@/lib/block-types";
 import { setClientBlockType, useBlockTypeLibrary } from "@/lib/block-types-queries";
 import { useBuilderAthlete } from "@/lib/builder-athlete";
-import { builderNav, hereWords } from "@/lib/builder-nav";
+import { builderNav } from "@/lib/builder-nav";
 import type { CompletenessGap } from "@/lib/program-check";
 import type { ProgramOverviewValue } from "@/components/program-editor/program-overview";
 import { clientTrainingHref, useEditorBack } from "@/lib/editor-back";
@@ -478,14 +476,17 @@ function BlockEditor() {
   const [typeLocal, setTypeLocal] = useState<{ type: string | null; meta: BlockMeta | null } | null>(null);
   useEffect(() => setTypeLocal(null), [blockId]);
   // Adjust program (Cleo), opened with words and with the workout on screen as context
-  const [cleo, setCleo] = useState<{ text: string; context: string | null } | null>(null);
-  const [cleoBusy, setCleoBusy] = useState(false);
+  // Cleo docked beside the program (cleo-dock.tsx), Adjust program's engine
+  const cleoDock = useCleoDock();
   const [name, setName] = useState<string>("");
   // The header's second row: the canvas puts undo / redo / the weeks there.
   const [toolbarEl, setToolbarEl] = useState<HTMLDivElement | null>(null);
   const phone = useIsMobileNow();
   // "Edit" on the athlete's roadmap card lands here (#roadmap): open it.
   const [openRoadmap] = useState(() => typeof window !== "undefined" && window.location.hash === "#roadmap");
+  // Schedule · Athlete roadmap · Warm-ups, in one sheet off the workout editor (#roadmap opens it there)
+  const [settingsTab, setSettingsTab] = useState<BlockSettingsTab>(openRoadmap ? "roadmap" : "schedule");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [payload, setPayload] = useState<any>(null);
   const [dirty, setDirty] = useState(false);
   const originalTreeRef = useRef<any>(null);
@@ -752,7 +753,7 @@ function BlockEditor() {
   });
   useEffect(() => {
     if (!openRoadmap || !tree || !payload) return;
-    const t = setTimeout(() => document.getElementById("roadmap")?.scrollIntoView({ block: "start" }), 300);
+    const t = setTimeout(() => setSettingsOpen(true), 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openRoadmap, !!tree, !!payload]);
@@ -821,17 +822,9 @@ function BlockEditor() {
   const blockLabel = name || tree.block.name || "Block";
   const blockType = typeLocal ?? { type: ((tree.block as any).block_type as string | null) ?? null, meta: ((tree.block as any).block_meta as BlockMeta | null) ?? null };
   const resolvedType = resolveBlockType({ block_type: blockType.type, block_meta: blockType.meta, name: blockLabel, training_focus: tree.block.training_focus }, blockTypes);
-  const openCleo = async (text = "") => {
-    setCleoBusy(true);
-    try {
-      // the AI reads what's saved: save what's on screen first
-      if (dirty) await save();
-      setCleo({ text, context: hereWords(builderNav.here()) });
-    } catch (e: any) {
-      toast.error(e?.message ?? "Couldn't save your changes first.");
-    } finally {
-      setCleoBusy(false);
-    }
+  const openSettings = (t: BlockSettingsTab) => {
+    setSettingsTab(t);
+    setSettingsOpen(true);
   };
   const fixGap = (gap: CompletenessGap) => {
     if (gap.fix === "block_type") setTypeOpen(true);
@@ -865,7 +858,7 @@ function BlockEditor() {
   const calendarIssues = scheduleSummary.issueCount;
 
   return (
-    <div className="space-y-3 px-2 pb-8 md:px-3">
+    <div className="space-y-3 px-2 pb-8 md:px-3" data-builder-page>
       <BuilderHeader
         onToolbarEl={setToolbarEl}
         back={
@@ -915,20 +908,19 @@ function BlockEditor() {
                 Save
               </ActionButton>
             )}
-            {clientId && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-9 px-2.5"
-                disabled={cleoBusy}
-                onClick={() => void openCleo()}
-                data-testid="edit-with-ai"
-              >
-                {cleoBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SlidersHorizontal className="mr-2 h-4 w-4" />}
-                {phone ? "Adjust" : "Adjust program"}
-              </Button>
-            )}
+            {clientId && <CleoLauncher dock={cleoDock} compact={phone} />}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Block settings: schedule, athlete roadmap, warm-ups"
+              title="Block settings"
+              data-block-settings-open
+            >
+              <Settings2 className="h-[18px] w-[18px]" />
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="icon" variant="ghost" className="h-10 w-10" aria-label="Block options">
@@ -936,6 +928,16 @@ function BlockEditor() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onSelect={() => openSettings("schedule")}>
+                  <CalendarRange className="mr-2 h-4 w-4" /> Schedule
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openSettings("roadmap")}>
+                  <Milestone className="mr-2 h-4 w-4" /> Athlete roadmap
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openSettings("warmups")}>
+                  <Flame className="mr-2 h-4 w-4" /> Warm-ups
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <ClientNameLink clientId={clientId}><UserIcon className="mr-2 h-4 w-4" /> {clientName}'s profile</ClientNameLink>
                 </DropdownMenuItem>
@@ -1015,7 +1017,7 @@ function BlockEditor() {
         athlete={athleteQ.data ?? null}
         blockTypeOverride={blockType}
         needsDates={tree.block.client_visible !== false && !!tree.block.start_date}
-        onAskCleo={(text) => void openCleo(text)}
+        onAskCleo={(text) => cleoDock.ask(text)}
         onFixGap={fixGap}
         programOverview={overview}
         statusLeading={<BlockTypeChip resolved={resolvedType} onClick={() => setTypeOpen(true)} />}
@@ -1057,14 +1059,13 @@ function BlockEditor() {
           }}
         />
       )}
-      {cleo && clientId && (
-        <EditWithAiSheet
-          open={!!cleo}
-          onOpenChange={(o) => { if (!o) setCleo(null); }}
+      {clientId && (
+        <CleoDock
+          dock={cleoDock}
           target={{ kind: "client", clientId, focusBlockId: blockId }}
           title={`${clientName} · ${blockLabel}`}
-          initialText={cleo.text}
-          context={cleo.context}
+          // the AI reads what's saved: save what's on screen before every message
+          beforeSend={async () => { if (dirty) await save(); }}
           onApplied={async () => {
             // rehydrate the builder from the program as it is now
             hydratedBlockIdRef.current = null;
@@ -1077,18 +1078,16 @@ function BlockEditor() {
         />
       )}
 
-      {/* What a coach opens now and then, folded until they do. */}
-      <div className="space-y-2 pt-2" data-focus-hide>
-        <BuilderSection icon={<CalendarRange className="h-4 w-4" />} title="Schedule" hint="Training days and dates">
-          <AutoSchedulePanel blockId={blockId} bare />
-        </BuilderSection>
-        <BuilderSection id="roadmap" icon={<Milestone className="h-4 w-4" />} title="Athlete roadmap" hint="What they read about this block" defaultOpen={openRoadmap}>
-          <BlockRoadmapPanel blockId={blockId} bare />
-        </BuilderSection>
-        <BuilderSection icon={<Flame className="h-4 w-4" />} title="Warm-ups">
-          <BlockWarmupPanel blockId={blockId} bare />
-        </BuilderSection>
-      </div>
+      {/* The block's settings (Schedule · Athlete roadmap · Warm-ups) live in one sheet off the
+          workout editor, opened from the header (block-settings-sheet.tsx). */}
+      <BlockSettingsSheet
+        blockId={blockId}
+        blockName={blockLabel}
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        tab={settingsTab}
+        onTab={setSettingsTab}
+      />
     </div>
   );
 }

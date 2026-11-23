@@ -37,7 +37,8 @@ describe("focus mode is one attribute, never a second editor", () => {
     expect(focus).toContain('return () => html.removeAttribute("data-builder-focus")');
     // the old canvas-only full screen is gone
     expect(editor).not.toContain("setFullscreen");
-    expect(blockPage).toContain('data-focus-hide');
+    // a client's block's schedule, roadmap and warm-ups live in a sheet, so nothing on the page needs hiding
+    expect(blockPage).toContain("<BlockSettingsSheet");
   });
 });
 

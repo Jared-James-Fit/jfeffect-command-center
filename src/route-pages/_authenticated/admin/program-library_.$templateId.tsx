@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
+import { CleoDock, CleoLauncher, useCleoDock } from "@/components/program-ai/cleo-dock";
 import { AlertTriangle, ArrowLeft, Check, Dumbbell, X, MoreHorizontal, Smartphone, Search, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight, Video, VideoOff } from "lucide-react";
 import { useEditorBack } from "@/lib/editor-back";
 import { ProgramSheet } from "@/components/program-editor/program-sheet";
@@ -38,7 +38,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { classifyExercise } from "@/lib/exercise-classifier";
 import { orderAccessories } from "@/lib/program-intel/accessory-flow";
 import { overLimit, type SessionLimit } from "@/lib/program-intel/session-limit";
-import { builderNav, flashBuilderRow, hereWords, type BuilderTarget, type BuilderView } from "@/lib/builder-nav";
+import { builderNav, flashBuilderRow, type BuilderTarget, type BuilderView } from "@/lib/builder-nav";
 import { templateStyle } from "@/lib/builder-athlete";
 import { ProgramOverview, ProgramOverviewContext, useProgramOverview, type OverviewBlock, type ProgramOverviewValue } from "@/components/program-editor/program-overview";
 import { BuilderAthleteContext } from "@/components/program-editor/builder-athlete-context";
@@ -660,7 +660,8 @@ export function TemplateEditor() {
   const isAdminViewer = role === "admin";
   const [membershipOpen, setMembershipOpen] = useState(false);
   // Program Check's "Ask Cleo": opens Adjust program with the words in the box
-  const [cleoAsk, setCleoAsk] = useState<{ text: string; nonce: number } | null>(null);
+  // Cleo docked beside the program (cleo-dock.tsx), Adjust program's engine
+  const cleoDock = useCleoDock();
 
   const { data: tpl, isLoading } = useQuery({
     queryKey: ["pl-template", templateId],
@@ -863,30 +864,7 @@ export function TemplateEditor() {
         if (dirty || autosave.hasPending()) await save();
         setMembershipOpen(true);
       } : undefined}
-      aiTool={["block", "full_prep", "program"].includes(type) ? (
-        <EditWithAiButton
-          target={{ kind: "template", templateId }}
-          title={meta.name || tpl.name}
-          size="sm"
-          variant="ghost"
-          className="h-9 px-2.5"
-          label={phoneNow ? "Adjust" : "Adjust program"}
-          // the AI reads what's saved: save what's on screen first
-          beforeOpen={async () => { if (dirty || autosave.hasPending()) await save(); }}
-          context={() => hereWords(builderNav.here())}
-          requestOpen={cleoAsk}
-          onApplied={async () => {
-            // re-read the template as it is now (the hydration effect runs again)
-            hydratedRef.current = false;
-            setMeta(null);
-            setPayload(null);
-            setDirty(false);
-            await qc.invalidateQueries({ queryKey: ["pl-template", templateId] });
-            qc.invalidateQueries({ queryKey: ["pl-templates"] });
-            setReloadTick((t) => t + 1);
-          }}
-        />
-      ) : null}
+      aiTool={["block", "full_prep", "program"].includes(type) ? <CleoLauncher dock={cleoDock} compact={phoneNow} /> : null}
     >
       {conflictWatch.conflict && (
           <Card className="flex flex-wrap items-start gap-3 border-amber-500/60 bg-amber-500/5 p-3 text-sm">
@@ -974,8 +952,27 @@ export function TemplateEditor() {
             templateId={templateId}
             toolbarTarget={toolbarEl}
             programStyle={templateStyle(meta.training_style ?? tpl.training_style)}
-            onAskCleo={["block", "full_prep", "program"].includes(type) ? (text) => setCleoAsk({ text, nonce: Date.now() }) : undefined}
+            onAskCleo={["block", "full_prep", "program"].includes(type) ? (text) => cleoDock.ask(text) : undefined}
           />
+      )}
+      {["block", "full_prep", "program"].includes(type) && (
+        <CleoDock
+          dock={cleoDock}
+          target={{ kind: "template", templateId }}
+          title={meta.name || tpl.name}
+          // the AI reads what's saved: save what's on screen before every message
+          beforeSend={async () => { if (dirty || autosave.hasPending()) await save(); }}
+          onApplied={async () => {
+            // re-read the template as it is now (the hydration effect runs again)
+            hydratedRef.current = false;
+            setMeta(null);
+            setPayload(null);
+            setDirty(false);
+            await qc.invalidateQueries({ queryKey: ["pl-template", templateId] });
+            qc.invalidateQueries({ queryKey: ["pl-templates"] });
+            setReloadTick((t) => t + 1);
+          }}
+        />
       )}
       {isAdminViewer && (
         <MembershipListingSheet
@@ -1022,7 +1019,7 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusT
     },
   });
   return (
-    <div className="space-y-3 px-2 pb-8 md:px-3">
+    <div className="space-y-3 px-2 pb-8 md:px-3" data-builder-page>
       <BuilderHeader
         onToolbarEl={onToolbarEl}
         back={

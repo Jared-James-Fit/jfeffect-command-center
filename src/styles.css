@@ -1426,6 +1426,11 @@ html[data-program-builder] [data-mobile-bottom-nav] { @variant max-md { display:
 /* The coach's program editor on a phone: its view bar (Day · Week · Block · Program) is
    where the tab bar was, and steps aside while typing like every bar at the bottom. */
 html[data-coach-builder] [data-mobile-bottom-nav] { @variant max-md { display: none !important; } }
+/* Cleo docked beside the builder (cleo-dock.tsx): the builder gives up the panel's width
+   instead of sitting under it. Set only off a phone (phoneLayoutNow); a phone gets a sheet. */
+html[data-cleo-dock] [data-builder-page] { padding-right: var(--cleo-dock-w, 0px); transition: padding-right 160ms ease; }
+@media (prefers-reduced-motion: reduce) { html[data-cleo-dock] [data-builder-page] { transition: none; } }
+
 html[data-keyboard-open="true"] [data-builder-viewbar] { visibility: hidden; }
 /* The program editor's header on a phone: fixed under the app's bar (sticky can't
    hold while <main> clips sideways), moving up to the notch when the bar slides
@@ -1440,6 +1445,7 @@ html[data-builder-focus] [data-shell-root] > aside,
 html[data-builder-focus] [data-shell-bar],
 html[data-builder-focus] [data-shell-bar-room],
 html[data-builder-focus] [data-mobile-bottom-nav],
+html[data-builder-focus] [data-return-pill],
 html[data-builder-focus] [data-focus-hide] { display: none !important; }
 html[data-builder-focus] .builder-header-fixed { top: calc(var(--app-chrome-top) + var(--app-safe-top)); }
 .shell-bar[data-hidden] { transform: translateY(calc(-100% - var(--app-chrome-top))); }
