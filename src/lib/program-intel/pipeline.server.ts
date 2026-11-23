@@ -693,6 +693,12 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
   throw new Error(`Unknown stage ${stage}`);
 }
 
+/** A draft block's name: "Block 2 — Strength" in a program of several, never "Block 2 — Block 2 — Strength" when the model numbered it already. */
+export function draftBlockName(name: string, index: number, count: number): string {
+  const own = name.replace(/^\s*block\s*\d+\s*[—–:.\-]\s*/i, "").trim() || name.trim();
+  return `${count > 1 ? `Block ${index + 1} — ` : ""}${own}`.slice(0, 120);
+}
+
 /**
  * The program as draft blocks: hidden from the client (client_visible false),
  * with no dates (so schedule re-alignment never places it), every week's rows
@@ -715,7 +721,7 @@ export async function insertDraftProgram(admin: Db, x: { clientId: string; creat
         .from("pl_blocks")
         .insert({
           client_id: x.clientId,
-          name: `${x.program.blocks.length > 1 ? `Block ${bi + 1} — ` : ""}${b.name}`.slice(0, 120),
+          name: draftBlockName(b.name, bi, x.program.blocks.length),
           weeks: b.weeks,
           status: "Draft",
           client_visible: false,
