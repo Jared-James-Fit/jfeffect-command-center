@@ -41,6 +41,7 @@ import { LiftsMovingCard, MoreDetail } from "@/components/analytics/analytics-ar
 import { consistencyOf, liftsTrending } from "@/lib/analytics/analytics-areas";
 import { comparableE1rm } from "@/lib/analytics/strength-read";
 import { useCheckouts } from "@/lib/analytics/recovery-trends.queries";
+import { useAnalyticsUnit } from "@/lib/analytics/use-analytics-unit";
 import {
   COMP_LIFTS,
   COMP_LIFT_LABEL,
@@ -130,6 +131,8 @@ const LEGACY_VIEW: Record<string, AnalyticsView> = {
   volume: "training",
   consistency: "training",
   recovery: "training",
+  calendar: "overview",
+  lifetime: "records",
 };
 export function viewFromSearch(v: string | null | undefined): AnalyticsView | undefined {
   if (!v) return undefined;
@@ -322,14 +325,8 @@ export function ClientAnalyticsDashboard({
   });
   const coached = athlete?.service_tier !== "self_serve";
 
-  const [displayUnit, setDisplayUnit] = useState<Unit>(preferredUnit);
-  const [unitSynced, setUnitSynced] = useState(false);
-  useEffect(() => {
-    if (!unitSynced) {
-      setDisplayUnit(preferredUnit);
-      setUnitSynced(true);
-    }
-  }, [preferredUnit, unitSynced]);
+  // one choice for every analytics screen, remembered on this phone (use-analytics-unit.ts)
+  const [displayUnit, setDisplayUnit] = useAnalyticsUnit(preferredUnit);
   const conv = useCallback(
     (lb: number) => (displayUnit === "kg" ? (Number(lb) || 0) / LB_PER_KG : Number(lb) || 0),
     [displayUnit],

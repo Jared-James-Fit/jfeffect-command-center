@@ -33,6 +33,7 @@ export function TrainingLoadSection({
   planError,
   header,
   hideInsights = false,
+  hideMuscles = false,
   blockRows,
 }: {
   load: TrainingLoad;
@@ -47,19 +48,21 @@ export function TrainingLoadSection({
   hideInsights?: boolean;
   /** each block's weekly sets (By block); left out with under two */
   blockRows?: BlockVolumeRow[];
+  /** the muscles are shown elsewhere on the page (the muscle map) */
+  hideMuscles?: boolean;
 }) {
   const insights = hideInsights ? [] : load.insights.filter((i) => coach || i.audience === "both");
   const hasLifts = load.lifts.length > 0;
   const hasDays = !!load.distribution;
   const views: Array<[View, string]> = [
-    ["muscles", "Muscles"],
+    ...(hideMuscles ? [] : ([["muscles", "Muscles"]] as Array<[View, string]>)),
     ["patterns", "Movements"],
     ...(hasLifts ? ([["lifts", "Lifts"]] as Array<[View, string]>) : []),
     ...(hasDays ? ([["days", "By session"]] as Array<[View, string]>) : []),
     ...((blockRows?.length ?? 0) >= 2 ? ([["blocks", "By block"]] as Array<[View, string]>) : []),
   ];
-  const [view, setView] = useState<View>("muscles");
-  const shown = views.some(([v]) => v === view) ? view : "muscles";
+  const [view, setView] = useState<View>(hideMuscles ? "patterns" : "muscles");
+  const shown = views.some(([v]) => v === view) ? view : views[0][0];
 
   if (!load.totals.sets && !load.weeks.some((w) => (w.prescribed ?? 0) > 0)) {
     return (

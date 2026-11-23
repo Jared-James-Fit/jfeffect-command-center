@@ -22,7 +22,7 @@ describe("one analytics experience for the coach and the athlete", () => {
   it("the page is four sections, one at a time, its place kept in the address (old addresses land on Training)", () => {
     for (const v of ['["overview", "Overview"]', '["strength", "Strength"]', '["training", "Training"]', '["records", "Records"]']) expect(dash).toContain(v);
     const flat = dash.replace(/\s+/g, " ");
-    expect(flat).toContain('const LEGACY_VIEW: Record<string, AnalyticsView> = { volume: "training", consistency: "training", recovery: "training", };');
+    expect(flat).toContain('const LEGACY_VIEW: Record<string, AnalyticsView> = { volume: "training", consistency: "training", recovery: "training", calendar: "overview", lifetime: "records", };');
     // a #recovery link still lands where recovery lives
     expect(dash).toContain('window.location.hash === "#recovery") return "training"');
     for (const f of ["src/routes/_authenticated/portal/workouts.analytics.tsx", "src/routes/_authenticated/admin/client-programs.$clientId.analytics.tsx"]) {
@@ -56,6 +56,6 @@ describe("one analytics experience for the coach and the athlete", () => {
   });
 
   it("the block editor links straight to how the block is landing", () => {
-    expect(read("src/routes/_authenticated/admin/blocks.$blockId.tsx")).toContain('search={{ filter: "exact_block", blockId, view: "volume" } as any}');
+    expect(read("src/routes/_authenticated/admin/blocks.$blockId.tsx")).toContain('search={{ filter: "exact_block", blockId, view: "training" } as any}');
   });
 });

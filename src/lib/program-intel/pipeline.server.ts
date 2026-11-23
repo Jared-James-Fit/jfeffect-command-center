@@ -36,6 +36,7 @@ import { loadIntelRecords } from "./load";
 import { loadingRefsFrom, loadingRefsText, withLoadingGuard, type LoadingRefs } from "./loading";
 import { isLiftFamily, type LiftFamily } from "@/lib/workouts/load-reference";
 import { athleteCatalog, catalogText, equipmentFit, exerciseRow, parseJsonReply, resolveProgramExercises, withoutCardioRows, type CatalogExercise } from "./next-program";
+import { programInLocalWeeks, withLocalWeeks } from "./program-view";
 import { generatedProgramOutcomes, outcomeLines } from "./outcomes";
 import { benchRecords } from "./bench";
 import { findConflicts, horizonFor, redistribution, type GenerationSetup, type SetupField } from "./recommend";
@@ -515,8 +516,10 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       (v) => blockIssues(v, { weeks: sb.weeks, days: setup.daysPerWeek }),
     );
     if (issues.length) throw new Error(`Block ${i + 1} didn't match the strategy: ${issues.join(" ")}`);
+    // its weeks are its own (1 … weeks), even when the model counted on from the program's first week
+    const local = withLocalWeeks(value, strategy.structure.blocks.slice(0, i).reduce((n, b) => n + b.weeks, 0)).block;
     // cardio is the client's cardio plan (added to every workout by the app), never a second copy here
-    const lean = withoutCardioRows(withStandardSubstitutions(value));
+    const lean = withoutCardioRows(withStandardSubstitutions(local));
     if (lean.removed.length) result.cardioRemoved = [...new Set([...(result.cardioRemoved ?? []), ...lean.removed])];
     const loaded = guardLoading(lean.block, ctxRow.loading_refs, [...athlete, ...library]);
     if (loaded.changed.length) result.loadingAdjusted = [...(result.loadingAdjusted ?? []), ...loaded.changed];
@@ -539,7 +542,8 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       if (bi != null) {
         const issues: string[] = result.audit?.repairs?.[bi] ?? [];
         const { value } = await askChecked<BuiltBlock>(admin, job, result, "repair", `repair:block ${bi + 1}:${result.repairRound ?? 1}`, constructSystemPrompt(brain, { first: !!ctxRow.first_program }), repairUserPrompt({ block: result.blocks[bi], blockIndex: bi, issues, setup, athleteCatalog: athlete, libraryCatalog: library, catalogText, equipmentRules: ai.equipment_rules ?? [] }), builtBlockSchema, (v) => blockIssues(v, { weeks: result.blocks[bi].weeks, days: setup.daysPerWeek }));
-        const lean = withoutCardioRows(withStandardSubstitutions(value));
+        const local = withLocalWeeks(value, (result.blocks as BuiltBlock[]).slice(0, bi).reduce((n, b) => n + b.weeks, 0)).block;
+        const lean = withoutCardioRows(withStandardSubstitutions(local));
         if (lean.removed.length) result.cardioRemoved = [...new Set([...(result.cardioRemoved ?? []), ...lean.removed])];
         const loaded = guardLoading(lean.block, ctxRow.loading_refs, [...athlete, ...all]);
         if (loaded.changed.length) result.loadingAdjusted = [...(result.loadingAdjusted ?? []), ...loaded.changed];
@@ -555,7 +559,8 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     const program: BuiltProgram = {
       program_name: `${BRAIN_LABEL[brain]} · ${setup.weeks} weeks · ${setup.daysPerWeek} days`,
       summary: [strategy.previous_program.outcome, strategy.progression.model].filter(Boolean).join(" "),
-      blocks: result.blocks,
+      // a run built before blocks were read in their own weeks is put right here, before it's judged
+      blocks: programInLocalWeeks({ blocks: result.blocks as BuiltBlock[] }).program.blocks,
       progression: strategy.progression.model,
       recovery: strategy.progression.fatigue,
       changes: strategy.decisions.map((d) => ({ change: d.change, why: [d.observation, d.benefit && `Expected: ${d.benefit}`].filter(Boolean).join(" "), evidence: d.evidence, basis: d.basis })),
@@ -628,7 +633,10 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     const fixes = reviewRepairs(value, program.blocks.length);
     const blocks = Object.keys(fixes).map(Number).sort((a, b) => a - b);
     const round = result.repairRound ?? 0;
-    const repairing = blocks.length > 0 && round < MAX_REPAIR_ROUNDS;
+    // the review runs once, and its genuine problems always get their one targeted repair, even when the
+    // audit's own rounds are used up (they once were, by checks that read the program wrong, and the
+    // strongest model's must-fixes went unfixed)
+    const repairing = blocks.length > 0;
     result.review = { ...value, model, at: new Date().toISOString(), repaired: repairing ? blocks : [] } satisfies CoachingReview;
     clearCalls(result);
     const mustFix = value.issues.filter((i) => i.severity === "must_fix").length;
@@ -649,7 +657,8 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
   }
 
   if (stage === "save") {
-    const program: BuiltProgram = result.program;
+    // in each block's own weeks, so no week's changes are lost on the way in (a run stopped before this was read so)
+    const program: BuiltProgram = programInLocalWeeks(result.program as BuiltProgram).program;
     // a benchmark run keeps its result for comparison and writes nothing to the client's training
     if (job.options?.bench) {
       stages = setStage(stages, "save", "skipped", "Benchmark: no draft written");
@@ -684,6 +693,12 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
   throw new Error(`Unknown stage ${stage}`);
 }
 
+/** A draft block's name: "Block 2 — Strength" in a program of several, never "Block 2 — Block 2 — Strength" when the model numbered it already. */
+export function draftBlockName(name: string, index: number, count: number): string {
+  const own = name.replace(/^\s*block\s*\d+\s*[—–:.\-]\s*/i, "").trim() || name.trim();
+  return `${count > 1 ? `Block ${index + 1} — ` : ""}${own}`.slice(0, 120);
+}
+
 /**
  * The program as draft blocks: hidden from the client (client_visible false),
  * with no dates (so schedule re-alignment never places it), every week's rows
@@ -706,7 +721,7 @@ export async function insertDraftProgram(admin: Db, x: { clientId: string; creat
         .from("pl_blocks")
         .insert({
           client_id: x.clientId,
-          name: `${x.program.blocks.length > 1 ? `Block ${bi + 1} — ` : ""}${b.name}`.slice(0, 120),
+          name: draftBlockName(b.name, bi, x.program.blocks.length),
           weeks: b.weeks,
           status: "Draft",
           client_visible: false,
@@ -744,7 +759,9 @@ export async function insertDraftProgram(admin: Db, x: { clientId: string; creat
               ...row,
             };
           });
-          const { error: re } = await admin.from("pl_exercise_rows").insert(rows);
+          // rows say different things (a back-off's % and its flags, a timed row's measurement), so a column
+          // one row leaves out takes the column's default, never null: a null manual_override stopped the save
+          const { error: re } = await admin.from("pl_exercise_rows").insert(rows, { defaultToNull: false });
           if (re) throw new Error(re.message);
         }
       }

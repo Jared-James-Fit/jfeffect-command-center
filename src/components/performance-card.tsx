@@ -13,6 +13,7 @@ import { useCompetitionData } from "@/lib/analytics/competition-strength.queries
 import { isHeadlineRecord, personalRecords } from "@/lib/analytics/records";
 import { levelColor } from "@/components/analytics/performance-calendar";
 import { ProgressRing, LB_PER_KG } from "@/components/analytics/viz";
+import { useAnalyticsUnit } from "@/lib/analytics/use-analytics-unit";
 
 type Unit = "lb" | "kg";
 const DAY = 86_400_000;
@@ -28,7 +29,7 @@ const WEEKS = 12;
  */
 export function PerformanceCard({
   clientId,
-  unit = "lb",
+  unit: accountUnit = "lb",
   month,
   hideWhenEmpty = false,
 }: {
@@ -38,6 +39,8 @@ export function PerformanceCard({
   month?: { label: string; planned: number; done: number } | null;
   hideWhenEmpty?: boolean;
 }) {
+  // the same lb / kg the analytics page shows, remembered on this phone
+  const [unit] = useAnalyticsUnit(accountUnit);
   const { data: results = [], isLoading } = useQuery({
     queryKey: ["pl-results", clientId, null],
     enabled: !!clientId,

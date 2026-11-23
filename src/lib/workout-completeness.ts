@@ -142,6 +142,72 @@ export function summarizeCompleteness(
   };
 }
 
+/** An exercise row as the completeness check reads it (pl_exercise_rows + its exercise). */
+export type CompletenessExerciseRow = {
+  id: string;
+  sets?: number | string | null;
+  tracking_type?: string | null;
+  measurement_type?: string | null;
+  duration_seconds?: number | string | null;
+  reps_text?: string | null;
+  /** The plan's cardio row (workout-cardio.ts isPlanCardioRow): done any time that day, never a missed log. */
+  cardio_target_id?: string | null;
+  skipped?: boolean | null;
+  exercises?: { default_measurement_type?: string | null } | null;
+};
+
+/**
+ * The sets a workout asks for, one entry per exercise row: Finish and the
+ * re-sync after a finished workout is edited (syncFinishedWorkout) read a
+ * workout the same way, so its stored logged % never depends on which one ran.
+ */
+export function requiredRowsFromExerciseRows(rows: readonly CompletenessExerciseRow[]): RequiredRowSpec[] {
+  return rows
+    .filter((r) => !r?.cardio_target_id)
+    .map((r) => ({
+      rowId: String(r.id),
+      prescribedSets: Math.max(1, Number(r.sets) || 1),
+      skipped: !!r.skipped,
+      metricKind: (
+        r?.tracking_type === "time" ||
+        r?.measurement_type === "time" ||
+        r?.exercises?.default_measurement_type === "time" ||
+        (r?.duration_seconds != null && Number(r.duration_seconds) > 0) ||
+        /\b(sec(onds?)?|min(utes?)?)\b/i.test(String(r?.reps_text ?? ""))
+      ) ? "timed" : "load_reps",
+    }));
+}
+
+/** The completion row's stored numbers, as summarizeCompleteness writes them. */
+export type StoredCompleteness = {
+  required_sets_count?: number | null;
+  logged_sets_count?: number | null;
+  skipped_exercises_count?: number | null;
+  logging_percentage?: number | string | null;
+  logging_quality?: string | null;
+  completed_with_missing_logs?: boolean | null;
+};
+
+/** The completion row's fields that differ from a fresh summary (empty when it's in step). */
+export function completenessPatch(stored: StoredCompleteness | null | undefined, s: CompletenessSummary): Partial<{
+  required_sets_count: number;
+  logged_sets_count: number;
+  skipped_exercises_count: number;
+  logging_percentage: number;
+  logging_quality: LoggingQuality;
+  completed_with_missing_logs: boolean;
+}> {
+  const out: Record<string, unknown> = {};
+  const num = (v: unknown) => (v == null || v === "" ? null : Number(v));
+  if (num(stored?.required_sets_count) !== s.requiredSets) out.required_sets_count = s.requiredSets;
+  if (num(stored?.logged_sets_count) !== s.loggedSets) out.logged_sets_count = s.loggedSets;
+  if (num(stored?.skipped_exercises_count) !== s.skippedExercises) out.skipped_exercises_count = s.skippedExercises;
+  if (num(stored?.logging_percentage) !== s.loggingPercentage) out.logging_percentage = s.loggingPercentage;
+  if ((stored?.logging_quality ?? null) !== s.loggingQuality) out.logging_quality = s.loggingQuality;
+  if ((stored?.completed_with_missing_logs ?? null) !== s.completedWithMissingLogs) out.completed_with_missing_logs = s.completedWithMissingLogs;
+  return out as any;
+}
+
 /**
  * Estimated workout duration in minutes, derived from prescribed sets +
  * per-row rest. Used by the workout-open screen's time pill so the

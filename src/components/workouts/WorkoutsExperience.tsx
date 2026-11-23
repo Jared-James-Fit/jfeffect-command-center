@@ -12,7 +12,7 @@ import {
 import {
   Calendar as CalendarIcon, CalendarCheck, ChevronLeft, ChevronRight, ClipboardList, Clock,
   History, Loader2, Move, MoreVertical, Play, Pencil, Activity, Download,
-  RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot, Check, Archive, BarChart3,
+  RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot, Check, Archive, BarChart3, ListChecks,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -1166,6 +1166,8 @@ function SelectedDayCard({
   // Edit live in its ⋯ with the rest, once each.
   const canReschedule = !readonly;
   const canEditHere = canEditWorkout && !!item?.day?.id;
+  // what was logged, on a finished workout: the athlete, or a coach viewing as them
+  const canEditLogged = isCompleted && !readonly && canChangeWorkoutStatus && !!item?.day?.id;
   const hasMenuActions = canReschedule || canEditHere || canChangeWorkoutStatus || isCompleted
     || (canManageBackupLifecycle && (backupState?.lifecycle === "in_progress" || backupState?.lifecycle === "empty"));
 
@@ -1312,6 +1314,24 @@ function SelectedDayCard({
                     <RotateCcw className="mr-2 h-4 w-4" /> Cancel Backup
                   </CardMenuItem>
                 )}
+                {/* A finished workout: change what was logged (sets, an exercise added
+                    or taken out). The logger opens in edit mode, and everything tied
+                    to the workout (its numbers, records, analytics, points, set
+                    video captions) catches up as it saves. */}
+                {canEditLogged && (
+                  <CardMenuItem
+                    onSelect={() =>
+                      navigate({
+                        to: "/portal/workouts/$dayId",
+                        params: { dayId: item.day.id },
+                        search: { edit: 1, ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any,
+                      })
+                    }
+                    data-testid="day-card-edit-logged"
+                  >
+                    <Pencil className="mr-2 h-4 w-4" /> Edit workout
+                  </CardMenuItem>
+                )}
                 {canReschedule && (
                   <CardMenuItem onSelect={() => setMoveOpen(true)}>
                     <Move className="mr-2 h-4 w-4" /> Reschedule
@@ -1324,7 +1344,10 @@ function SelectedDayCard({
                 )}
                 {canEditHere && (
                   <CardMenuItem onSelect={() => setEditOpen(true)}>
-                    <Pencil className="mr-2 h-4 w-4" /> Edit workout
+                    {/* the program's own workout (exercises, sets, targets); once it's
+                        finished "Edit workout" is what was logged, above */}
+                    {isCompleted ? <ListChecks className="mr-2 h-4 w-4" /> : <Pencil className="mr-2 h-4 w-4" />}
+                    {isCompleted ? "Edit in program" : "Edit workout"}
                   </CardMenuItem>
                 )}
                 {isCompleted && !readonly && (
