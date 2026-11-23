@@ -19,11 +19,15 @@ describe("one analytics experience for the coach and the athlete", () => {
     expect(read("src/routes/_authenticated/portal/workouts.analytics.tsx")).not.toMatch(/\bcoach\b\s*\n/);
   });
 
-  it("the page is four sections, one at a time, its place kept in the address", () => {
+  it("the page is its areas, one at a time, its place kept in the address (older ?view= links still land)", () => {
     expect(dash).toContain('["overview", "Overview"]');
     expect(dash).toContain('["strength", "Strength"]');
-    expect(dash).toContain('["volume", "Volume"]');
+    expect(dash).toContain('["training", "Training"]');
+    expect(dash).toContain('["calendar", "Calendar"]');
+    expect(dash).toContain('["lifetime", "Lifetime"]');
     expect(dash).toContain('["recovery", "Recovery"]');
+    expect(dash).toContain('if (v === "volume") return "training";');
+    expect(dash).toContain('if (v === "consistency") return "calendar";');
     // a #recovery link still lands on Recovery
     expect(dash).toContain('window.location.hash === "#recovery") return "recovery"');
     for (const f of ["src/routes/_authenticated/portal/workouts.analytics.tsx", "src/routes/_authenticated/admin/client-programs.$clientId.analytics.tsx"]) {
@@ -45,7 +49,8 @@ describe("one analytics experience for the coach and the athlete", () => {
 
   it("the Working sets tile says what it counts (it used to claim warm-ups and drop bodyweight sets)", () => {
     // a week's average, or this week so far: never this week divided by weeks still ahead
-    expect(dash).toContain('unit={trainingLoad.load.perWeekBasis.partial ? "sets this week" : "sets a week"}');
+    const section = read("src/components/analytics/training-load-section.tsx");
+    expect(section).toContain('label={load.perWeekBasis.partial ? "Working sets this week" : "Working sets a week"}');
     expect(dash).not.toContain('label="Sets in range"');
   });
 
@@ -59,6 +64,6 @@ describe("one analytics experience for the coach and the athlete", () => {
   });
 
   it("the block editor links straight to how the block is landing", () => {
-    expect(read("src/routes/_authenticated/admin/blocks.$blockId.tsx")).toContain('search={{ filter: "exact_block", blockId, view: "volume" } as any}');
+    expect(read("src/routes/_authenticated/admin/blocks.$blockId.tsx")).toContain('search={{ filter: "exact_block", blockId, view: "training" } as any}');
   });
 });

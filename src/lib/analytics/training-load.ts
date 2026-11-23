@@ -392,7 +392,7 @@ export type TrainingLoad = {
    * as zero), never a week that hasn't happened. With none over yet it's this
    * week so far (`partial`), said as such, never an average.
    */
-  perWeekBasis: { weeks: number; partial: boolean };
+  perWeekBasis: { weeks: number; partial: boolean; /** the Monday of every week averaged over (this week when partial) */ keys?: string[] };
   totals: {
     sets: number;
     hardSets: number;
@@ -751,7 +751,7 @@ export function buildTrainingLoad(input: {
   const load: TrainingLoad = {
     weeks,
     completeWeeks: done.length,
-    perWeekBasis: { weeks: partial ? 0 : basis.length, partial },
+    perWeekBasis: { weeks: partial ? 0 : basis.length, partial, keys: basis.map((w) => w.key) },
     totals,
     muscles,
     patterns,

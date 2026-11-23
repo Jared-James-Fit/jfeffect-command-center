@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Medal, Share2, Download, Info } from "lucide-react";
+import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Medal, Share2, Download, Info, Pencil } from "lucide-react";
 import { StudioShell } from "@/components/community/studio-chunks";
 import { explainWorkoutScore, type WorkoutSummary } from "@/lib/workout-summary";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -76,9 +76,11 @@ type Props = {
   /** The workout (its set videos are its film). */
   dayId?: string | null;
   onClose?: () => void;
+  /** Edit workout: closes the recap onto the workout, its sets ready to change (finished workouts). */
+  onEdit?: () => void;
 };
 
-export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", setUnit, cardio, completionId, dayId, onClose }: Props) {
+export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", setUnit, cardio, completionId, dayId, onClose, onEdit }: Props) {
   // Client workouts use the scope-aware server records; the legacy session PR
   // list only remains for surfaces without them (memberships).
   const usesRecords = records !== undefined;
@@ -310,10 +312,12 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                 <span className="absolute left-full ml-1 whitespace-nowrap text-xs font-bold text-muted-foreground">/100</span>
               </div>
             </div>
-            {/* what the number and the stars mean, one tap away (the formula is unchanged) */}
+            {/* what the number and the stars mean, one tap away (the formula is unchanged);
+                beside it, a number to fix is one tap from the workout */}
+            <div className="mt-1 flex flex-wrap items-center justify-center gap-1">
             <Popover>
               <PopoverTrigger asChild>
-                <button type="button" className="mt-1 inline-flex min-h-8 items-center gap-1 rounded-full px-2 text-[12px] font-medium text-muted-foreground active:bg-muted" data-score-help>
+                <button type="button" className="inline-flex min-h-8 items-center gap-1 rounded-full px-2 text-[12px] font-medium text-muted-foreground active:bg-muted" data-score-help>
                   Workout score
                   {ratingStars > 0 && revealStage >= 2 && (
                     <span className="ml-1 inline-flex items-center gap-0.5 animate-in fade-in zoom-in-95 duration-500" aria-label={`${ratingStars} of 5 stars`}>
@@ -332,6 +336,18 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                 ))}
               </PopoverContent>
             </Popover>
+            {onEdit && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="inline-flex min-h-8 items-center gap-1 rounded-full px-2 text-[12px] font-medium text-muted-foreground active:bg-muted"
+                data-recap-edit
+              >
+                <Pencil className="h-3.5 w-3.5" aria-hidden />
+                Edit workout
+              </button>
+            )}
+            </div>
           </div>
         </header>
 

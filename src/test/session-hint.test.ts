@@ -39,6 +39,6 @@ describe("session hint (fast path for first-time visitors)", () => {
     expect(route).toContain("beforeLoad");
     expect(route).toContain("!hasPersistedAuthSession() && installedApp()");
     expect(route).toContain('redirect({ to: "/auth", replace: true })');
-    expect(route).toContain("<LandingPage packages={packages} />");
+    expect(route).toContain("<LandingPage packages={packages} programs={programs} />");
   });
 });
