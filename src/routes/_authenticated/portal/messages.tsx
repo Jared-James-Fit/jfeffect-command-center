@@ -228,7 +228,7 @@ function ClientMessages() {
             </Card>
           </div>
         ) : (
-          <MessageThread clientId={client.id} role="client" fullBleed />
+          <MessageThread clientId={client.id} role="client" fullBleed peerAvatarPath={coach?.profile_picture_url ?? null} />
         )}
       </>
     ),

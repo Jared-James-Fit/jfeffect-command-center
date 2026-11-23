@@ -2321,11 +2321,9 @@ export function MessageThread({
             : role === "admin"
             ? peerName ?? "Client"
             : peerName ?? "Coach Jared";
-          const otherAvatar = mine || m.is_internal_note
-            ? null
-            : role === "admin"
-            ? peerAvatarPath ?? null
-            : null;
+          // the other side's photo beside their messages: the client's for the
+          // coach, the coach's for the client (the same face as the chat's header)
+          const otherAvatar = mine || m.is_internal_note ? null : peerAvatarPath ?? null;
           return (
             <Fragment key={m.id}>
               {initialUnreadFirstIdRef.current === m.id && (
