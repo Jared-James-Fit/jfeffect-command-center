@@ -240,7 +240,11 @@ export async function submitBackground(ref: string, r: ModelRequest): Promise<{ 
   return { id: String(j.id) };
 }
 
-export type BackgroundState = { status: "running" } | { status: "done"; reply: Omit<ModelReply, "model" | "ms"> } | { status: "failed"; error: string };
+export type BackgroundState =
+  /** `phase`: OpenAI's own word for it, "queued" (not started yet) or "in_progress" (thinking); unknown when the poll itself failed. */
+  | { status: "running"; phase?: "queued" | "in_progress" }
+  | { status: "done"; reply: Omit<ModelReply, "model" | "ms"> }
+  | { status: "failed"; error: string };
 
 export async function pollBackground(id: string): Promise<BackgroundState> {
   let res: Response;
@@ -258,7 +262,7 @@ export async function pollBackground(id: string): Promise<BackgroundState> {
   const j = JSON.parse(text);
   if (j.status === "completed") return { status: "done", reply: { text: responseText(j), usage: responseUsage(j) } };
   if (j.status === "failed" || j.status === "cancelled" || j.status === "incomplete") return { status: "failed", error: `${j.status}: ${String(j.error?.message ?? j.incomplete_details?.reason ?? "").slice(0, 300)}` };
-  return { status: "running" };
+  return j.status === "queued" || j.status === "in_progress" ? { status: "running", phase: j.status } : { status: "running" };
 }
 
 /** The circuit breaker (ai-health.server.ts): refuses a call while its provider is known to be down. */

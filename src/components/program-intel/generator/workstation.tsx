@@ -13,6 +13,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { FilePlus2, ListChecks, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -44,6 +45,7 @@ export function NextProgramWorkstation({ clientId, prefill }: { clientId: string
   // The run's inspector (models, prompts, calls) is AI infrastructure: the admin's, never a coach's.
   const canInspect = role === "admin";
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const records = useIntelRecords(clientId, HISTORY);
   const brain = useBrainOverride(clientId);
   const intel = useGeneratorIntel(records.data, brain.override);
@@ -147,6 +149,27 @@ export function NextProgramWorkstation({ clientId, prefill }: { clientId: string
   const consumed = new Set(all.filter((j) => j.kind === "generate" && j.strategy_job_id).map((j) => j.strategy_job_id as string));
   const activeGenerate = all.find((j) => j.kind === "generate" && ["pending", "running", "error", "ready"].includes(j.status)) ?? null;
   const activeStrategy = activeGenerate ? null : all.find((j) => j.kind === "strategy" && ["pending", "running", "error", "ready"].includes(j.status) && !consumed.has(j.id)) ?? null;
+  // a run that finishes (or stops) while the coach is watching says so, with a way straight to it
+  const seen = useRef(new Map<string, string>());
+  useEffect(() => {
+    for (const j of [activeGenerate, activeStrategy]) {
+      if (!j) continue;
+      const before = seen.current.get(j.id);
+      seen.current.set(j.id, j.status);
+      if (before !== "pending" && before !== "running") continue;
+      if (j.status === "ready") {
+        const blockId: string | undefined = j.result?.blockIds?.[0];
+        if (j.kind === "generate" && blockId)
+          toast.success("The program is ready", {
+            description: "Hidden from the client until you assign it.",
+            action: { label: "Open it", onClick: () => void navigate({ to: "/admin/blocks/$blockId", params: { blockId } }) },
+            duration: 12_000,
+          });
+        else toast.success(j.kind === "strategy" ? "The strategy is ready to review" : "The program is ready", { duration: 8_000 });
+        document.querySelector<HTMLElement>('[data-testid="gen-scorecard"], [data-testid="gen-strategy"]')?.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else if (j.status === "error") toast.error("The run stopped", { description: j.error ?? undefined, duration: 10_000 });
+    }
+  }, [activeGenerate, activeStrategy, navigate]);
   const earlier = all.filter((j) => j.kind === "generate" && j !== activeGenerate && j.status !== "discarded");
   const strategyCtx = useJobContext(activeStrategy?.status === "ready" ? activeStrategy.id : null);
   const assigned = all.filter((j) => j.kind === "generate" && j.status === "assigned");

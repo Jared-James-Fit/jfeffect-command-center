@@ -21,23 +21,31 @@ import { addDays, assignChecks, mondayOnOrAfter, weekOf } from "@/lib/program-in
 import type { IntelJob } from "../use-program-intel";
 import { SectionTitle, StatusIcon } from "./overview";
 import { DecisionCard, StrategySummary } from "./strategy-view";
+import { RunProgressBar, stepLine, useRunEta } from "./run-progress";
 
 export function PipelineProgress({ job, onRetry, onDiscard, busy }: { job: IntelJob; onRetry: () => void; onDiscard: () => void; busy: boolean }) {
   const stages = job.progress?.stages ?? [];
   const failed = job.status === "error";
+  const eta = useRunEta(job);
+  const live = eta ? stepLine(eta) : null;
   return (
-    <Card className="space-y-2 p-3.5" data-testid="gen-progress" data-status={job.status}>
+    <Card className="space-y-2.5 p-3.5" data-testid="gen-progress" data-status={job.status}>
       <SectionTitle hint={failed ? "stopped" : "keeps going if you leave"}>{job.kind === "strategy" ? "Writing the strategy" : "Building the program"}</SectionTitle>
+      {eta ? <RunProgressBar eta={eta} /> : null}
       <ol className="space-y-1.5">
-        {(stages.length ? stages : [{ key: "context", label: "Starting…", status: "running" as const }]).map((s) => (
-          <li key={s.key} className="flex items-start gap-2 text-[12px]">
-            {s.status === "running" && !failed ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" /> : <StatusIcon status={s.status === "skipped" ? "skipped" : s.status} />}
-            <span className="min-w-0">
-              <span className={cn("font-semibold", s.status === "pending" && "text-muted-foreground")}>{s.label}</span>
-              {s.detail ? <span className="block text-[11px] text-muted-foreground">{s.detail}</span> : null}
-            </span>
-          </li>
-        ))}
+        {(stages.length ? stages : [{ key: "context", label: "Starting…", status: "running" as const }]).map((s) => {
+          const running = s.status === "running" && !failed;
+          const detail = running && live ? live : s.detail;
+          return (
+            <li key={s.key} className="flex items-start gap-2 text-[12px]">
+              {running ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" /> : <StatusIcon status={s.status === "skipped" ? "skipped" : s.status} />}
+              <span className="min-w-0">
+                <span className={cn("font-semibold", s.status === "pending" && "text-muted-foreground")}>{s.label}</span>
+                {detail ? <span className={cn("block text-[11px] text-muted-foreground", running && eta?.slow && "text-amber-700 dark:text-amber-300")} data-testid={running ? "gen-step-live" : undefined}>{detail}</span> : null}
+              </span>
+            </li>
+          );
+        })}
       </ol>
       {failed && (
         <div className="space-y-2 rounded-xl bg-destructive/10 p-2.5 text-[12px]">
