@@ -1423,6 +1423,10 @@ html[data-program-builder] .shell-bar,
 html[data-program-builder] [data-shell-bar-room],
 html[data-program-builder] [data-mobile-bottom-nav] { @variant max-md { display: none !important; } }
 .pb-header { top: var(--app-chrome-top); padding-top: var(--app-safe-top); }
+/* The coach's program editor on a phone: its view bar (Day · Week · Block · Program) is
+   where the tab bar was, and steps aside while typing like every bar at the bottom. */
+html[data-coach-builder] [data-mobile-bottom-nav] { @variant max-md { display: none !important; } }
+html[data-keyboard-open="true"] [data-builder-viewbar] { visibility: hidden; }
 /* The program editor's header on a phone: fixed under the app's bar (sticky can't
    hold while <main> clips sideways), moving up to the notch when the bar slides
    away or the keyboard is up. */

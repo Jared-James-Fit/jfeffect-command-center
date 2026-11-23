@@ -29,6 +29,21 @@ import { derivePurposeLabels, deriveWeeklyPurposeLabelByRowId, defaultRestSecond
 import { validateDay } from "@/lib/pl-template-validation";
 import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shortcuts";
 import { WeekPickerSheet } from "@/components/program-editor/week-picker-sheet";
+import { BlockTypeChip, BlockTypeSheet } from "@/components/program-editor/block-type-picker";
+import { colorClass, inferBlockType, resolveBlockType } from "@/lib/block-types";
+import { useBlockTypeLibrary } from "@/lib/block-types-queries";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { classifyExercise } from "@/lib/exercise-classifier";
+import { orderAccessories } from "@/lib/program-intel/accessory-flow";
+import { overLimit, type SessionLimit } from "@/lib/program-intel/session-limit";
+import { builderNav, flashBuilderRow, hereWords, type BuilderTarget, type BuilderView } from "@/lib/builder-nav";
+import { templateStyle } from "@/lib/builder-athlete";
+import { ProgramOverview, ProgramOverviewContext, useProgramOverview, type OverviewBlock, type ProgramOverviewValue } from "@/components/program-editor/program-overview";
+import { BuilderAthleteContext } from "@/components/program-editor/builder-athlete-context";
+import { ProgramStatusStrip } from "@/components/program-editor/program-check-panel";
+import { applyPatches, type CheckInput, type CompletenessGap, type Patch, type ProgramStyle } from "@/lib/program-check";
+import type { BuilderAthlete } from "@/lib/builder-athlete";
+import { feedback } from "@/lib/feedback";
 import { ProgressAcrossWeeksSheet } from "@/components/program-editor/progress-across-weeks";
 import { rowAtSlot } from "@/lib/program-sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -586,6 +601,8 @@ export function TemplateEditor() {
   const { role } = useAuth();
   const isAdminViewer = role === "admin";
   const [membershipOpen, setMembershipOpen] = useState(false);
+  // Program Check's "Ask Cleo": opens Adjust program with the words in the box
+  const [cleoAsk, setCleoAsk] = useState<{ text: string; nonce: number } | null>(null);
 
   const { data: tpl, isLoading } = useQuery({
     queryKey: ["pl-template", templateId],
@@ -798,6 +815,8 @@ export function TemplateEditor() {
           label={phoneNow ? "Adjust" : "Adjust program"}
           // the AI reads what's saved: save what's on screen first
           beforeOpen={async () => { if (dirty || autosave.hasPending()) await save(); }}
+          context={() => hereWords(builderNav.here())}
+          requestOpen={cleoAsk}
           onApplied={async () => {
             // re-read the template as it is now (the hydration effect runs again)
             hydratedRef.current = false;
@@ -896,6 +915,8 @@ export function TemplateEditor() {
             canRedo={canRedo}
             templateId={templateId}
             toolbarTarget={toolbarEl}
+            programStyle={templateStyle(meta.training_style ?? tpl.training_style)}
+            onAskCleo={["block", "full_prep", "program"].includes(type) ? (text) => setCleoAsk({ text, nonce: Date.now() }) : undefined}
           />
       )}
       {isAdminViewer && (
@@ -1020,7 +1041,23 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusT
 // share one row with undo / redo instead of stacking a bar of their own.
 const WeekNavSlotContext = createContext<HTMLElement | null>(null);
 
-export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId, blockId, toolbarExtras, templateId, dayScheduleStatus, onFixCalendarIssue, toolbarTarget, singleBlock }: {
+export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId, blockId, toolbarExtras, templateId, dayScheduleStatus, onFixCalendarIssue, toolbarTarget, singleBlock, programStyle = null, athlete = null, blockTypeOverride, needsDates = false, onAskCleo, onFixGap, programOverview, statusLeading }: {
+  /** What the program is for (completeness asks only what its type needs). */
+  programStyle?: ProgramStyle;
+  /** A client's block: their session limit, equipment and pain (builder-athlete.ts). */
+  athlete?: BuilderAthlete | null;
+  /** A client's block keeps its type on pl_blocks, not in the payload. */
+  blockTypeOverride?: { type: string | null; meta: any } | null;
+  /** A live client block: its workouts need dates. */
+  needsDates?: boolean;
+  /** Hand an instruction to Adjust program (it previews; the coach applies). */
+  onAskCleo?: (text: string) => void;
+  /** A completeness gap fixed outside the canvas (Goals & Setup, maxes, the block type). */
+  onFixGap?: (gap: CompletenessGap) => void;
+  /** A client's whole program for the Program view (their blocks in order). */
+  programOverview?: ProgramOverviewValue | null;
+  /** Shown first on the status strip (a client's block type). */
+  statusLeading?: React.ReactNode;
   type: string; payload: any; setP: (p: any, opts?: { skipHistory?: boolean }) => void; exercises: any[];
   appendRowToFirstDay: (payload: any, type: string, row: any) => void;
   undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
@@ -1129,6 +1166,68 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
 
   const canSetMaxes = !!clientId && !!blockId;
   const tap = phone ? "h-10 w-10" : "h-8 w-8";
+
+  // ── Completeness and Program Check: read from what's on screen ──
+  const { library: blockTypeLib } = useBlockTypeLibrary();
+  const multi = type === "block" || type === "full_prep";
+  const checkV2 = useMemo(() => (multi ? normalizeTemplatePayload(payload, { templateType: type, templateId }) : null), [multi, payload, type, templateId]);
+  const checkBlocks = useMemo(() => (checkV2 ? getActiveTemplateBlocks(checkV2) : []), [checkV2]);
+  const exMap = useMemo(() => new Map<string, any>((exercises as any[]).map((e) => [e.id, e])), [exercises]);
+  const checkInput = useMemo<CheckInput | null>(() => {
+    if (!checkV2 || isPayloadInRecovery(checkV2)) return null;
+    const lockedIds = new Set<string>();
+    dayScheduleStatus?.forEach((st, id) => { if (st.status === "completed" || st.status === "in-progress") lockedIds.add(id); });
+    return {
+      kind: clientId ? "client" : "template",
+      style: programStyle,
+      blocks: checkBlocks.map((b, i) => ({
+        id: b.id,
+        name: b.name,
+        weeks: b.weeks,
+        blockType: i === 0 && blockTypeOverride ? blockTypeOverride.type : b.block_type ?? null,
+        blockMeta: i === 0 && blockTypeOverride ? blockTypeOverride.meta : b.block_meta ?? null,
+        phase: b.phase,
+        trainingFocus: b.training_focus ?? null,
+      })),
+      exercises: exMap,
+      blockTypes: blockTypeLib,
+      athlete: clientId
+        ? {
+            sessionLimit: athlete?.sessionLimit ?? null,
+            equipment: athlete?.equipment ?? null,
+            pain: athlete?.pain ?? [],
+            needsDates,
+            hasMax: (name, family, basis) => {
+              const out = computeRowLoad({ exerciseName: name, basis: basis as any, percentage: 100, manualLoadKg: null, manualLoadLb: null, unit: "kg", maxesIndex: maxesCtx.index, family: family as any, ownCompetition: !!family && /competition/i.test(name) });
+              return out.status !== "no-max";
+            },
+          }
+        : null,
+      locked: (at) => {
+        const d = checkBlocks[at.block]?.weeks?.[at.week]?.days?.[at.day];
+        return !!d?._dbId && lockedIds.has(d._dbId);
+      },
+    };
+  }, [checkV2, checkBlocks, clientId, programStyle, blockTypeOverride, exMap, blockTypeLib, athlete, needsDates, maxesCtx.index, dayScheduleStatus]);
+  const applyCheck = (patches: Patch[], words: string) => {
+    if (!checkV2) return;
+    const before = payload;
+    const next = applyPatches(checkBlocks.map((b) => b.weeks), patches);
+    let v = checkV2;
+    checkBlocks.forEach((b, i) => { if (next[i] !== b.weeks) v = replaceBlock(v, b.id, { weeks: next[i] }); });
+    try {
+      setP(serializeTemplatePayload(v));
+    } catch {
+      toast.error("This program can't be changed until it's repaired.");
+      return;
+    }
+    toast.success("Applied", { description: words.length > 90 ? `${words.slice(0, 90)}…` : words, action: { label: "Undo", onClick: () => setP(before) }, duration: 8000 });
+  };
+  const fixGap = (gap: CompletenessGap) => {
+    if (gap.fix === "maxes" && canSetMaxes) { setMaxesOpen(true); return; }
+    if (gap.fix && onFixGap) { onFixGap(gap); return; }
+    if (gap.at) builderNav.go({ blockIndex: gap.at.block, week: gap.at.week, day: gap.at.day, row: gap.at.row, view: "day" });
+  };
   // One row of controls: undo / redo, the weeks (BlockPayloadEditor fills the
   // slot), and one ⋯ for everything a coach reaches for now and then.
   const toolbar = (
@@ -1201,7 +1300,21 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
     <MaxesContext.Provider value={maxesCtx}>
     <BuilderPhoneContext.Provider value={phone}>
     <WeekNavSlotContext.Provider value={weekSlot}>
+    <BuilderAthleteContext.Provider value={athlete}>
+    <ProgramOverviewContext.Provider value={programOverview ?? null}>
     {portalToolbar && createPortal(toolbar, toolbarTarget!)}
+    {checkInput && (
+      <div className="pb-1 pt-1" data-builder-status>
+        <ProgramStatusStrip
+          input={checkInput}
+          leading={statusLeading}
+          onApply={applyCheck}
+          onAskCleo={onAskCleo}
+          onGo={(at) => builderNav.go({ blockIndex: at.block, week: at.week, day: at.day, row: at.row, view: "day" })}
+          onFix={fixGap}
+        />
+      </div>
+    )}
     {maxesOpen && clientId && blockId && (
       <BlockMaxesDialog clientId={clientId} blockId={blockId} onClose={() => setMaxesOpen(false)} />
     )}
@@ -1269,6 +1382,8 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
         </div>
       </div>
     </div>
+    </ProgramOverviewContext.Provider>
+    </BuilderAthleteContext.Provider>
     </WeekNavSlotContext.Provider>
     </BuilderPhoneContext.Provider>
     </MaxesContext.Provider>
@@ -1332,6 +1447,13 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
   const setActive = (id: string) => {
     navigate({ search: (prev: any) => ({ ...prev, block: id }), replace: true } as any);
   };
+  // a finding or the Program view asked for another block: switch to it (its week editor takes the rest)
+  useEffect(() => builderNav.on((t) => {
+    const b = active[t.blockIndex];
+    if (b && b.id !== activeBlockId) setActive(b.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [active, activeBlockId]);
+  const outerOverview = useProgramOverview();
   const commit = (nextV2: TemplatePayloadV2) => {
     if (inRecovery) {
       // eslint-disable-next-line no-console
@@ -1405,6 +1527,10 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
     [next[idx], next[swap]] = [next[swap], next[idx]];
     commit(reorderActiveBlocks(v2, next));
   };
+  // block type: the sheet is opened from a block's settings, outside its popover
+  const [typeFor, setTypeFor] = useState<string | null>(null);
+  const { library: blockTypes } = useBlockTypeLibrary();
+  const typeBlock = typeFor ? v2.blocks.find((b) => b.id === typeFor) ?? null : null;
   const handleUpdatePhase = (id: string, phase: string | null) => {
     commit(replaceBlock(v2, id, { phase }));
   };
@@ -1475,8 +1601,12 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
                   isActive ? "bg-secondary font-semibold text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <button type="button" role="tab" aria-selected={isActive} className="max-w-[200px] truncate pr-1" onClick={() => setActive(b.id)} title={`${b.weeks.length} weeks`}>
-                  {b.name}
+                <button type="button" role="tab" aria-selected={isActive} className="inline-flex max-w-[220px] items-center gap-1.5 truncate pr-1" onClick={() => setActive(b.id)} title={`${b.weeks.length} weeks`}>
+                  {(() => {
+                    const rt = resolveBlockType(b, blockTypes);
+                    return <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", rt.type ? colorClass(rt.type).dot : "border border-dashed border-muted-foreground/60")} data-block-tab-type={rt.type?.key ?? ""} />;
+                  })()}
+                  <span className="truncate">{b.name}</span>
                   <span className="ml-1.5 text-xs font-normal text-muted-foreground">{b.phase || b.training_focus ? `${b.phase || b.training_focus} · ` : ""}{b.weeks.length}w</span>
                 </button>
                 {isActive && (
@@ -1491,6 +1621,12 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
                           <Button size="sm" variant="ghost" className="h-8 justify-start text-xs" onClick={() => handleDuplicate(b.id)}><Copy className="mr-1.5 h-3.5 w-3.5" />Duplicate</Button>
                           <Button size="sm" variant="ghost" className="h-8 justify-start text-xs" onClick={() => handleMove(b.id, -1)}>← Move left</Button>
                           <Button size="sm" variant="ghost" className="h-8 justify-start text-xs" onClick={() => handleMove(b.id, 1)}>Move right →</Button>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Block type</Label>
+                          <div className="mt-1">
+                            <BlockTypeChip resolved={resolveBlockType(b, blockTypes)} onClick={() => setTypeFor(b.id)} />
+                          </div>
                         </div>
                         <div>
                           <Label className="text-xs text-muted-foreground">Phase</Label>
@@ -1535,6 +1671,16 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
         </div>
       )}
 
+      {typeBlock && (
+        <BlockTypeSheet
+          open={!!typeBlock}
+          onOpenChange={(o) => !o && setTypeFor(null)}
+          title={`${typeBlock.name}: block type`}
+          value={{ type: typeBlock.block_type ?? null, meta: typeBlock.block_meta ?? null }}
+          inferredKey={inferBlockType(typeBlock)}
+          onSave={(type, meta) => commit(replaceBlock(v2, typeBlock.id, { block_type: type, block_meta: meta }))}
+        />
+      )}
       {!singleBlock && (archived.length > 0 || trashed.length > 0) && (
         <details className="rounded-lg px-1 text-xs text-muted-foreground">
           <summary className="cursor-pointer py-1">Archived and trash ({archived.length + trashed.length})</summary>
@@ -1561,6 +1707,24 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
 
       {/* Active block weeks editor */}
       {activeBlock ? (
+        <ProgramOverviewContext.Provider
+          value={outerOverview ?? {
+            title: (v2 as any).__legacy?.prep?.event_name ?? null,
+            blocks: active.map((b, i): OverviewBlock => ({
+              id: b.id,
+              name: b.name,
+              weeks: b.weeks.length,
+              weekPhases: b.weeks.map((w: any) => w?.phase ?? null),
+              resolved: resolveBlockType(b, blockTypes),
+              current: b.id === activeBlockId,
+              onOpen: (w) => {
+                if (b.id !== activeBlockId) setActive(b.id);
+                builderNav.go({ blockIndex: i, week: w ?? 0, view: "week" });
+              },
+              onType: () => setTypeFor(b.id),
+            })),
+          }}
+        >
         <BlockPayloadEditor
           key={activeBlock.id}
           weeksData={activeBlock.weeks}
@@ -1569,7 +1733,10 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
           compact={compact}
           dayScheduleStatus={dayScheduleStatus}
           onFixCalendarIssue={onFixCalendarIssue}
+          blockIndex={Math.max(0, active.findIndex((b) => b.id === activeBlock.id))}
+          blockName={activeBlock.name}
         />
+        </ProgramOverviewContext.Provider>
       ) : (
         <Card className="p-8 text-center text-sm text-muted-foreground">
           Add a block to start building this program.
@@ -1579,37 +1746,80 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
   );
 }
 
-type EditorView = "block" | "week" | "sheet";
+type EditorView = BuilderView;
+const EDITOR_VIEWS: Array<{ v: EditorView; label: string; icon: React.ReactNode; title: string }> = [
+  { v: "day", label: "Day", icon: <Rows3 className="h-3.5 w-3.5" />, title: "One workout at a time" },
+  { v: "week", label: "Week", icon: <CalendarRange className="h-3.5 w-3.5" />, title: "Every workout of one week" },
+  { v: "block", label: "Block", icon: <LayoutGrid className="h-3.5 w-3.5" />, title: "Every week of this block side by side" },
+  { v: "program", label: "Program", icon: <Layers className="h-3.5 w-3.5" />, title: "Every block on one timeline" },
+  { v: "sheet", label: "Sheet", icon: <Table2 className="h-3.5 w-3.5" />, title: "Edit like a spreadsheet: every exercise as a row of cells" },
+];
 
-export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact, dayScheduleStatus, onFixCalendarIssue }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void }) {
-  // Persist the coach's editing position (active week + view mode) across
+export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact, dayScheduleStatus, onFixCalendarIssue, blockIndex = 0, blockName = null }: { weeksData: any[]; setWeeksData: (wd: any[]) => void; exercises: any[]; compact?: boolean; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void; blockIndex?: number; blockName?: string | null }) {
+  // Persist the coach's editing position (active week, day + view) across
   // refreshes via localStorage so they return to exactly where they left off.
   const POS_KEY = "pb.block-editor.pos:v1";
-  const readPos = (): { view: EditorView; activeIdx: number } => {
-    if (typeof window === "undefined") return { view: "block", activeIdx: 0 };
+  const readPos = (): { view: EditorView; activeIdx: number; dayIdx: number } => {
+    if (typeof window === "undefined") return { view: "week", activeIdx: 0, dayIdx: 0 };
     try {
       const raw = window.localStorage.getItem(POS_KEY);
-      if (!raw) return { view: "block", activeIdx: 0 };
+      if (!raw) return { view: "week", activeIdx: 0, dayIdx: 0 };
       const p = JSON.parse(raw);
       return {
-        view: p.view === "week" ? "week" : p.view === "sheet" ? "sheet" : "block",
+        view: EDITOR_VIEWS.some((x) => x.v === p.view) ? p.view : "block",
         activeIdx: Number.isFinite(p.activeIdx) ? p.activeIdx : 0,
+        dayIdx: Number.isFinite(p.dayIdx) ? p.dayIdx : 0,
       };
-    } catch { return { view: "block", activeIdx: 0 }; }
+    } catch { return { view: "week", activeIdx: 0, dayIdx: 0 }; }
   };
   const initialPos = readPos();
   const [activeIdx, _setActiveIdx] = useState(initialPos.activeIdx);
+  const [dayIdx, _setDayIdx] = useState(initialPos.dayIdx);
   const [viewPref, _setView] = useState<EditorView>(initialPos.view);
-  // A phone shows one week at a time (side by side weeks and a sheet don't
-  // fit); the desktop choice is kept as it was.
+  // A phone has every view but the sheet (cells to type in need a keyboard
+  // and a wide screen); the coach's choice is kept for the computer.
   const phone = useBuilderPhone();
-  const view: EditorView = phone ? "week" : viewPref;
-  const writePos = (next: { view: EditorView; activeIdx: number }) => {
+  const view: EditorView = phone && viewPref === "sheet" ? "week" : viewPref;
+  const writePos = (next: { view: EditorView; activeIdx: number; dayIdx: number }) => {
     if (typeof window === "undefined") return;
     try { window.localStorage.setItem(POS_KEY, JSON.stringify(next)); } catch {}
   };
-  const setActiveIdx = (idx: number) => { _setActiveIdx(idx); writePos({ view: viewPref, activeIdx: idx }); };
-  const setView = (v: EditorView) => { _setView(v); writePos({ view: v, activeIdx }); };
+  const setActiveIdx = (idx: number) => { _setActiveIdx(idx); writePos({ view: viewPref, activeIdx: idx, dayIdx }); };
+  const setDayIdx = (idx: number) => { _setDayIdx(idx); writePos({ view: viewPref, activeIdx, dayIdx: idx }); };
+  const setView = (v: EditorView) => { _setView(v); writePos({ view: v, activeIdx, dayIdx }); };
+  // A finding, a gap or the Program view asked for a workout: open it in the Day view.
+  const goTo = useCallback((t: BuilderTarget) => {
+    if (t.blockIndex !== blockIndex) return;
+    const w = Math.max(0, Math.min(t.week, Math.max(0, weeksData.length - 1)));
+    _setActiveIdx(w);
+    if (t.day != null) _setDayIdx(t.day);
+    const v = t.view ?? (t.day != null ? "day" : "week");
+    _setView(v);
+    writePos({ view: v, activeIdx: w, dayIdx: t.day ?? dayIdx });
+    if (v === "day") window.setTimeout(() => flashBuilderRow(t.row), 60);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockIndex, weeksData.length, dayIdx]);
+  useEffect(() => {
+    const waiting = builderNav.take(blockIndex);
+    if (waiting) goTo(waiting);
+    return builderNav.on((t) => { if (t.blockIndex === blockIndex) { builderNav.take(blockIndex); goTo(t); } });
+  }, [blockIndex, goTo]);
+  // Tell Cleo which workout "this" means.
+  useEffect(() => {
+    const w = weeksData[activeIdx];
+    const d = w?.days?.[dayIdx];
+    builderNav.setHere({ blockIndex, blockName, week: w ? Number(w.week_index ?? activeIdx + 1) : null, day: d ? Number(d.day_index ?? dayIdx + 1) : null, dayName: d ? (formatDaySubtitle(d) ?? null) : null, view });
+  }, [blockIndex, blockName, weeksData, activeIdx, dayIdx, view]);
+  useEffect(() => () => builderNav.setHere(null), []);
+  // a phone: the view bar is where the tab bar was (the app's tab bar steps aside here)
+  useEffect(() => {
+    if (!phone || typeof document === "undefined") return;
+    const html = document.documentElement;
+    html.setAttribute("data-coach-builder", "");
+    return () => html.removeAttribute("data-coach-builder");
+  }, [phone]);
+  const overview = useProgramOverview();
+  const athlete = useContext(BuilderAthleteContext);
   // Clamp activeIdx if weeks were removed since last visit.
   useEffect(() => {
     if (weeksData.length === 0) return;
@@ -1855,8 +2065,8 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
   const weekNav = (
     <div className="flex min-w-0 flex-1 items-center gap-1">
       {!phone && (
-        <div role="tablist" aria-label="Layout" className="mr-1 inline-flex shrink-0 rounded-lg bg-muted p-0.5">
-          {([["week", "Week"], ["block", "Whole block"], ["sheet", "Sheet"]] as const).map(([v, label]) => (
+        <div role="tablist" aria-label="View" className="mr-1 inline-flex shrink-0 rounded-lg bg-muted p-0.5">
+          {EDITOR_VIEWS.map(({ v, label, icon, title }) => (
             <button
               key={v}
               type="button"
@@ -1867,10 +2077,10 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                 "inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition-colors",
                 view === v ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
               )}
-              title={v === "sheet" ? "Edit like a spreadsheet: every exercise as a row of cells" : undefined}
+              title={title}
               data-editor-view={v}
             >
-              {v === "week" ? <CalendarRange className="h-3.5 w-3.5" /> : v === "block" ? <LayoutGrid className="h-3.5 w-3.5" /> : <Table2 className="h-3.5 w-3.5" />} {label}
+              {icon} {label}
             </button>
           ))}
         </div>
@@ -1963,7 +2173,44 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
         </div>
       )}
 
-      {view === "sheet" ? (
+      {view === "program" ? (
+        <ProgramOverview
+          value={overview ?? {
+            title: blockName,
+            blocks: [{
+              id: "this",
+              name: blockName ?? "This block",
+              weeks: weeksData.length,
+              weekPhases: weeksData.map((w: any) => w?.phase ?? null),
+              resolved: resolveBlockType({ name: blockName }),
+              current: true,
+              onOpen: (w) => { if (w != null) setActiveIdx(w); setView("week"); },
+            }],
+          }}
+        />
+      ) : view === "day" ? (
+        weeksData[activeIdx] ? (
+          <ProgressWeekContext.Provider value={(di, pos) => setProgressAt({ week: activeIdx, dayIndex: di, pos })}>
+          <RowOpsContext.Provider value={(di, before, op, name) => offerRowScope(activeIdx, di, before, op, name)}>
+            <DayFocus
+              weeksData={weeksData}
+              weekIdx={activeIdx}
+              dayIdx={dayIdx}
+              onGo={(wi, di) => { _setActiveIdx(wi); _setDayIdx(di); writePos({ view: "day", activeIdx: wi, dayIdx: di }); }}
+              setWeek={(wi, nw) => { const c = [...weeksData]; c[wi] = nw; setWeeksData(c); }}
+              exercises={exercises}
+              compact={compact}
+              blockId={ctxBlockId}
+              dayScheduleStatus={dayScheduleStatus}
+              onFixCalendarIssue={onFixCalendarIssue}
+              onCopyDayToFuture={(di) => copyDayToFuture(activeIdx, di)}
+              limit={athlete?.sessionLimit ?? null}
+              equipmentItems={athlete?.equipment?.items}
+            />
+          </RowOpsContext.Provider>
+          </ProgressWeekContext.Provider>
+        ) : null
+      ) : view === "sheet" ? (
         <ProgramSheet
           weeksData={weeksData}
           setWeeksData={setWeeksData}
@@ -2101,11 +2348,181 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
           </div>
         </div>
       )}
+      {phone && (
+        <>
+          <div aria-hidden className="h-[calc(64px+env(safe-area-inset-bottom))]" />
+          <nav className="phone-column fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background px-2 pb-[env(safe-area-inset-bottom)]" aria-label="View" data-builder-viewbar>
+            <div role="tablist" className="grid h-[56px] grid-cols-4">
+              {EDITOR_VIEWS.filter((x) => x.v !== "sheet").map(({ v, label, icon }) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === v}
+                  onClick={() => { feedback("tap"); setView(v); }}
+                  className={cn("flex flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-medium transition-colors active:bg-muted", view === v ? "text-foreground" : "text-muted-foreground")}
+                  data-editor-view={v}
+                >
+                  <span className={cn("flex h-7 w-11 items-center justify-center rounded-full transition-colors [&_svg]:h-[18px] [&_svg]:w-[18px]", view === v && "bg-secondary")}>{icon}</span>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </nav>
+        </>
+      )}
     </div>
   );
 }
 
-function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSummary, compact, dayKeyPrefix, blockId, blockStartDate, blockEndDate, onExtraDayAdded, dayScheduleStatus, onFixCalendarIssue, layout = "stack" }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; hideVolumeSummary?: boolean; compact?: boolean; dayKeyPrefix?: string; blockId?: string | null; blockStartDate?: string | null; blockEndDate?: string | null; onExtraDayAdded?: () => void; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void; layout?: "stack" | "grid" }) {
+/**
+ * The Day view: one workout, whole, with nothing else around it. ‹ › step
+ * through every workout of the block in order (across weeks), the week's days
+ * are one tap each, and a line under the name says what the session asks:
+ * about how long against their limit, how many sets, where the work goes and
+ * how often it changes station (with the accessories grouped by station in one
+ * tap, Undo after).
+ */
+function DayFocus({ weeksData, weekIdx, dayIdx, onGo, setWeek, exercises, compact, blockId, dayScheduleStatus, onFixCalendarIssue, onCopyDayToFuture, limit, equipmentItems }: {
+  weeksData: any[];
+  weekIdx: number;
+  dayIdx: number;
+  onGo: (weekIdx: number, dayIdx: number) => void;
+  setWeek: (weekIdx: number, w: any) => void;
+  exercises: any[];
+  compact?: boolean;
+  blockId?: string | null;
+  dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>;
+  onFixCalendarIssue?: (dayId: string) => void;
+  onCopyDayToFuture?: (dayIdx: number) => void;
+  limit: SessionLimit | null;
+  equipmentItems?: string[];
+}) {
+  const phone = useBuilderPhone();
+  const week = weeksData[weekIdx];
+  const days: any[] = week?.days ?? [];
+  const di = Math.max(0, Math.min(dayIdx, days.length - 1));
+  const day = days[di];
+  const flat = useMemo(() => weeksData.flatMap((w: any, wi: number) => (w?.days ?? []).map((_: any, dj: number) => [wi, dj] as const)), [weeksData]);
+  const pos = flat.findIndex(([a, b]) => a === weekIdx && b === di);
+  const step = (k: number) => {
+    const t = flat[pos + k];
+    if (!t) return;
+    feedback("tap");
+    onGo(t[0], t[1]);
+  };
+  const exById = useMemo(() => new Map<string, any>((exercises as any[]).map((e) => [e.id, e])), [exercises]);
+  const rows: any[] = day?.rows ?? [];
+  const nameOf = (r: any): string => (r?.exercise_id ? exById.get(r.exercise_id)?.name : null) ?? r?.exercise_name_override ?? "Exercise";
+  const minutes = rows.length ? estimateDayMinutes(rows) : 0;
+  const sets = rows.filter((r) => r?.measurement_type !== "time").reduce((n, r) => n + (Number(r?.sets) || 0), 0);
+  const muscles = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) {
+      if (r?.measurement_type === "time") continue;
+      const c = classifyExercise(nameOf(r), r?.exercise_id ? exById.get(r.exercise_id)?.exercise_category : null);
+      for (const k of c.primary) if (k !== ("other" as any)) m.set(k, (m.get(k) ?? 0) + (Number(r?.sets) || 0));
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, exById]);
+  const flow = useMemo(() => {
+    if (rows.length < 3) return null;
+    const list = rows.map((r: any, i: number) => ({ exercise_name: nameOf(r), role: r?.purpose_label ?? (r?.percentage_basis === "top_set" || r?.percentage_basis === "prev_set" ? "Back-off" : null), superset: r?.superset_group ?? null, idx: i, equipment: r?.exercise_id ? exById.get(r.exercise_id)?.equipment ?? null : null }));
+    const res = orderAccessories(list, (e) => e.equipment, { items: equipmentItems as any });
+    return res.exercises === list || res.after >= res.before ? { changes: res.before, better: null } : { changes: res.before, better: res };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, exById, equipmentItems]);
+  const over = limit?.minutes != null && overLimit(minutes, limit.minutes);
+  if (!week) return null;
+  const weekNum = Number(week.week_index ?? weekIdx + 1);
+  return (
+    <div className="space-y-3" data-day-focus>
+      <div className="flex items-center gap-1">
+        <Button size="icon" variant="ghost" className="h-10 w-10 shrink-0" disabled={pos <= 0} onClick={() => step(-1)} aria-label="Previous workout" data-day-prev>
+          <ChevronLeft className="h-5 w-5" />
+        </Button>
+        <div className="min-w-0 flex-1 text-center">
+          <div className="text-xs tabular-nums text-muted-foreground">Week {weekNum} · Day {day?.day_index ?? di + 1} of {days.length || 1}</div>
+          <div className="truncate text-base font-semibold">{day ? formatDaySubtitle(day) || `Day ${day.day_index ?? di + 1}` : "No workouts this week"}</div>
+        </div>
+        <Button size="icon" variant="ghost" className="h-10 w-10 shrink-0" disabled={pos < 0 || pos >= flat.length - 1} onClick={() => step(1)} aria-label="Next workout" data-day-next>
+          <ChevronRight className="h-5 w-5" />
+        </Button>
+      </div>
+      {days.length > 1 && (
+        <div role="tablist" aria-label={`Week ${weekNum} workouts`} className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {days.map((d: any, j: number) => (
+            <button
+              key={j}
+              type="button"
+              role="tab"
+              aria-selected={j === di}
+              onClick={() => onGo(weekIdx, j)}
+              className={cn("inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors", j === di ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:text-foreground")}
+            >
+              <span className="tabular-nums">D{d.day_index ?? j + 1}</span>
+              {formatDaySubtitle(d) ? <span className="max-w-[120px] truncate">{formatDaySubtitle(d)}</span> : null}
+            </button>
+          ))}
+        </div>
+      )}
+      {day && rows.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 px-1 text-xs" data-day-summary>
+          <span className={cn("inline-flex h-7 items-center gap-1 rounded-full px-2.5 font-medium tabular-nums", over ? "bg-warning/15 text-warning" : "bg-muted text-foreground")} data-day-minutes title={limit?.minutes != null ? `Their limit: ${limit.short}` : "No session limit on file"}>
+            <Clock className="h-3.5 w-3.5" /> ~{minutes} min{limit?.minutes != null ? ` / ${limit.minutes}` : ""}
+          </span>
+          <span className="inline-flex h-7 items-center rounded-full bg-muted px-2.5 tabular-nums">{rows.length} exercise{rows.length === 1 ? "" : "s"} · {sets} sets</span>
+          {muscles.map(([m, n]) => (
+            <span key={m} className="inline-flex h-7 items-center rounded-full border border-border px-2.5 capitalize text-muted-foreground">{m.replace(/_/g, " ")} {n}</span>
+          ))}
+          {flow?.better && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 rounded-full px-2.5 text-xs"
+              data-day-group-stations
+              onClick={() => {
+                const before = week;
+                const next = { ...week, days: days.map((d: any, j: number) => (j === di ? { ...d, rows: flow.better!.exercises.map((e: any) => rows[e.idx]) } : d)) };
+                setWeek(weekIdx, next);
+                toast(`Grouped by station: ${flow.better!.before} → ${flow.better!.after} moves`, { action: { label: "Undo", onClick: () => setWeek(weekIdx, before) }, duration: 6000 });
+              }}
+            >
+              Group by station ({flow.better.before} → {flow.better.after} moves)
+            </Button>
+          )}
+        </div>
+      )}
+      {over && limit && (
+        <p className="flex items-start gap-1.5 px-1 text-[13px] text-warning" data-day-over-limit>
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> About {minutes - (limit.minutes ?? 0)} min over {limit.phrase}. Trim accessory sets first.
+        </p>
+      )}
+      <div data-builder-focus-day className={cn(phone ? "" : "mx-auto max-w-3xl")}>
+        <WeekEditor
+          week={week}
+          setWeek={(w) => setWeek(weekIdx, w)}
+          exercises={exercises}
+          compact={compact}
+          dayKeyPrefix={`wk${week.week_index ?? weekIdx}`}
+          blockId={blockId}
+          dayScheduleStatus={dayScheduleStatus}
+          onFixCalendarIssue={onFixCalendarIssue}
+          onCopyDayToFuture={onCopyDayToFuture}
+          onlyDay={di}
+        />
+      </div>
+      {days.length === 0 && (
+        <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">No workouts in this week yet. Add one in the Week view.</p>
+      )}
+    </div>
+  );
+}
+
+function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSummary, compact, dayKeyPrefix, blockId, blockStartDate, blockEndDate, onExtraDayAdded, dayScheduleStatus, onFixCalendarIssue, layout = "stack", onlyDay }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; hideVolumeSummary?: boolean; compact?: boolean; dayKeyPrefix?: string; blockId?: string | null; blockStartDate?: string | null; blockEndDate?: string | null; onExtraDayAdded?: () => void; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void; layout?: "stack" | "grid";
+  /** The Day view: only this day of the week, with nothing of the week around it. */
+  onlyDay?: number }) {
   const days = week.days || [];
   const purposeLabelsByDay = useMemo(() => weekPurposeLabelsByDay(days, exercises), [days, exercises]);
   const phone = useBuilderPhone();
@@ -2166,15 +2583,16 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSum
   };
   return (
     <div className={cn("space-y-3", layout === "grid" && "@container")}>
-      {!hideVolumeSummary && <WeeklyVolumeSummary week={week} exercises={exercises as any} weekIndex={week?.week_index} />}
-      <WeekPriorityWarnings week={week} exercises={exercises as any} />
-      {days.length === 0 && (
+      {!hideVolumeSummary && onlyDay == null && <WeeklyVolumeSummary week={week} exercises={exercises as any} weekIndex={week?.week_index} />}
+      {onlyDay == null && <WeekPriorityWarnings week={week} exercises={exercises as any} />}
+      {days.length === 0 && onlyDay == null && (
         <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
           No days in this week yet.
         </p>
       )}
       <div className={cn("grid gap-3", layout === "grid" && "@4xl:grid-cols-2 @[96rem]:grid-cols-3", compact && "gap-2")}>
       {days.map((d: any, i: number) => {
+        if (onlyDay != null && i !== onlyDay) return null;
         const dayMinutes = estimateDayMinutes(d.rows || []);
         const dKey = `${dayKeyPrefix ?? `wk${week.week_index ?? 0}`}:d${d.day_index ?? i}`;
         const positional = i + 1;
@@ -2324,6 +2742,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSum
         </section>
       )})}
       </div>
+      {onlyDay == null && (
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" className="h-11 flex-1 border-dashed text-muted-foreground md:h-10" onClick={addDay}>
           <Plus className="mr-1.5 h-4 w-4" /> Add day
@@ -2340,6 +2759,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSum
           />
         )}
       </div>
+      )}
     </div>
   );
 }

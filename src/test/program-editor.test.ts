@@ -53,7 +53,7 @@ describe("the editor's layout", () => {
     expect(editor).toContain("{weekNavSlot ? createPortal(weekNav, weekNavSlot) : (");
   });
   it("a client's block is one block: no program / Add block strip that never saved", () => {
-    expect(blockPage).toMatch(/<StructureCanvas[\s\S]*?singleBlock\s*\n\s*\/>/);
+    expect(blockPage).toMatch(/<StructureCanvas[\s\S]*?\n\s*singleBlock\s*\n/);
     expect(editor).toContain("{!singleBlock && (");
   });
   it("a day's name is what the athlete reads (subtitle, else the title), written to both", () => {

@@ -200,9 +200,10 @@ describe("coach builder: the phone layout", () => {
     expect(editor).toContain("<BuilderPhoneContext.Provider value={phone}>");
   });
 
-  it("one week at a time on a phone, without changing the desktop choice", () => {
-    expect(editor).toContain('const view: EditorView = phone ? "week" : viewPref;');
-    expect(editor).toContain("writePos({ view: viewPref, activeIdx: idx })");
+  it("every view but the sheet on a phone, without changing the desktop choice", () => {
+    expect(editor).toContain('const view: EditorView = phone && viewPref === "sheet" ? "week" : viewPref;');
+    expect(editor).toContain("data-builder-viewbar");
+    expect(editor).toContain("writePos({ view: viewPref, activeIdx: idx, dayIdx })");
   });
 
   it("exercises are added and swapped from a searchable sheet, never the long dropdown", () => {

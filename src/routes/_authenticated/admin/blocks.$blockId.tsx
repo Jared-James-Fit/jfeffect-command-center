@@ -1,9 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, ArrowLeft, BarChart3, CalendarRange, Flame, Info, MessageSquare, Milestone, MoreHorizontal, Save, User as UserIcon } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BarChart3, CalendarRange, Flame, Info, Loader2, MessageSquare, Milestone, MoreHorizontal, Save, SlidersHorizontal, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { BuilderHeader, BuilderNotice, BuilderSection, BuilderTitleInput } from "@/components/program-editor/builder-chrome";
@@ -39,7 +39,14 @@ import { BlockRoadmapPanel } from "@/components/programs/block-roadmap-panel";
 import { usePersistentUndoStack } from "@/lib/persistent-undo";
 import { useScrollRestoration } from "@/lib/scroll-restore";
 import { BlockSwitcher } from "@/components/block-switcher";
-import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
+import { EditWithAiSheet } from "@/components/program-ai/edit-with-ai";
+import { BlockTypeChip, BlockTypeSheet } from "@/components/program-editor/block-type-picker";
+import { inferBlockType, resolveBlockType, type BlockMeta } from "@/lib/block-types";
+import { setClientBlockType, useBlockTypeLibrary } from "@/lib/block-types-queries";
+import { useBuilderAthlete } from "@/lib/builder-athlete";
+import { builderNav, hereWords } from "@/lib/builder-nav";
+import type { CompletenessGap } from "@/lib/program-check";
+import type { ProgramOverviewValue } from "@/components/program-editor/program-overview";
 import { clientTrainingHref, useEditorBack } from "@/lib/editor-back";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({
@@ -463,6 +470,16 @@ function BlockEditor() {
     [siblingBlocks, blockStatusMap],
   );
 
+  const navigate = useNavigate();
+  const athleteQ = useBuilderAthlete(clientIdFromTree);
+  const { library: blockTypes } = useBlockTypeLibrary();
+  const [typeOpen, setTypeOpen] = useState(false);
+  // what the coach just picked, shown at once while the block re-reads
+  const [typeLocal, setTypeLocal] = useState<{ type: string | null; meta: BlockMeta | null } | null>(null);
+  useEffect(() => setTypeLocal(null), [blockId]);
+  // Adjust program (Cleo), opened with words and with the workout on screen as context
+  const [cleo, setCleo] = useState<{ text: string; context: string | null } | null>(null);
+  const [cleoBusy, setCleoBusy] = useState(false);
   const [name, setName] = useState<string>("");
   // The header's second row: the canvas puts undo / redo / the weeks there.
   const [toolbarEl, setToolbarEl] = useState<HTMLDivElement | null>(null);
@@ -802,6 +819,48 @@ function BlockEditor() {
     !!canonicalActiveBlock && canonicalActiveBlock.id !== blockId && !!editingStatus;
 
   const blockLabel = name || tree.block.name || "Block";
+  const blockType = typeLocal ?? { type: ((tree.block as any).block_type as string | null) ?? null, meta: ((tree.block as any).block_meta as BlockMeta | null) ?? null };
+  const resolvedType = resolveBlockType({ block_type: blockType.type, block_meta: blockType.meta, name: blockLabel, training_focus: tree.block.training_focus }, blockTypes);
+  const openCleo = async (text = "") => {
+    setCleoBusy(true);
+    try {
+      // the AI reads what's saved: save what's on screen first
+      if (dirty) await save();
+      setCleo({ text, context: hereWords(builderNav.here()) });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't save your changes first.");
+    } finally {
+      setCleoBusy(false);
+    }
+  };
+  const fixGap = (gap: CompletenessGap) => {
+    if (gap.fix === "block_type") setTypeOpen(true);
+    else if (gap.fix === "goals") void navigate({ to: "/admin/clients/$id", params: { id: clientId }, search: { tab: "goals-setup" } as any });
+    else if (gap.fix === "athlete_setup") void navigate({ to: "/admin/clients/$id", params: { id: clientId }, search: { tab: "training" } as any, hash: "athlete-setup" });
+    else if (gap.at) builderNav.go({ blockIndex: 0, week: gap.at.week, day: gap.at.day, row: gap.at.row, view: "day" });
+  };
+  const overview: ProgramOverviewValue = {
+    title: programName,
+    blocks: (siblingBlocks as any[]).map((b) => {
+      const mine = b.id === blockId;
+      const status = blockStatusMap.get(b.id) ?? null;
+      return {
+        id: b.id,
+        name: mine ? blockLabel : b.name,
+        weeks: Number(b.weeks) || 1,
+        start: b.start_date ?? null,
+        end: b.end_date ?? null,
+        status: b.client_visible === false && status !== "Completed" && status !== "Archived" ? `${status ?? "Draft"} · Hidden from client` : status,
+        resolved: mine ? resolvedType : resolveBlockType(b, blockTypes),
+        current: mine,
+        onOpen: (w?: number) => {
+          if (mine) builderNav.go({ blockIndex: 0, week: w ?? 0, view: "week" });
+          else void (async () => { if (dirty) await save(); void navigate({ to: "/admin/blocks/$blockId", params: { blockId: b.id } }); })();
+        },
+        onType: mine ? () => setTypeOpen(true) : undefined,
+      };
+    }),
+  };
   const missingDates = scheduleSummary.missingCount;
   const calendarIssues = scheduleSummary.issueCount;
 
@@ -857,27 +916,18 @@ function BlockEditor() {
               </ActionButton>
             )}
             {clientId && (
-              <EditWithAiButton
-                target={{ kind: "client", clientId, focusBlockId: blockId }}
-                title={`${clientName} · ${blockLabel}`}
-                size="sm"
+              <Button
+                type="button"
                 variant="ghost"
+                size="sm"
                 className="h-9 px-2.5"
-                label={phone ? "Adjust" : "Adjust program"}
-                // the AI reads what's saved: save what's on screen first
-                beforeOpen={async () => {
-                  if (dirty) await save();
-                }}
-                onApplied={async () => {
-                  // rehydrate the builder from the program as it is now
-                  hydratedBlockIdRef.current = null;
-                  await refetchTree();
-                  qc.invalidateQueries({ queryKey: ["pl-block-summary", blockId] });
-                  qc.invalidateQueries({ queryKey: ["client-assigned-programs"] });
-                  qc.invalidateQueries({ queryKey: ["block-schedule-instances", blockId] });
-                  invalidateScheduleQueries(qc, { clientId: clientIdFromTree, blockId });
-                }}
-              />
+                disabled={cleoBusy}
+                onClick={() => void openCleo()}
+                data-testid="edit-with-ai"
+              >
+                {cleoBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SlidersHorizontal className="mr-2 h-4 w-4" />}
+                {phone ? "Adjust" : "Adjust program"}
+              </Button>
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -977,7 +1027,50 @@ function BlockEditor() {
         onFixCalendarIssue={fixCalendarIssue}
         toolbarTarget={toolbarEl}
         singleBlock
+        programStyle={athleteQ.data?.style ?? null}
+        athlete={athleteQ.data ?? null}
+        blockTypeOverride={blockType}
+        needsDates={tree.block.client_visible !== false && !!tree.block.start_date}
+        onAskCleo={(text) => void openCleo(text)}
+        onFixGap={fixGap}
+        programOverview={overview}
+        statusLeading={<BlockTypeChip resolved={resolvedType} onClick={() => setTypeOpen(true)} />}
       />
+      {typeOpen && (
+        <BlockTypeSheet
+          open={typeOpen}
+          onOpenChange={setTypeOpen}
+          title={`${blockLabel}: block type`}
+          value={blockType}
+          inferredKey={inferBlockType({ name: blockLabel, training_focus: tree.block.training_focus })}
+          onSave={async (type, meta) => {
+            await setClientBlockType(blockId, type, meta);
+            setTypeLocal({ type, meta });
+            qc.invalidateQueries({ queryKey: ["pl-blocks", clientIdFromTree] });
+            qc.invalidateQueries({ queryKey: ["pl-block-tree", blockId] });
+            toast.success(type ? "Block type saved" : "Block type cleared");
+          }}
+        />
+      )}
+      {cleo && clientId && (
+        <EditWithAiSheet
+          open={!!cleo}
+          onOpenChange={(o) => { if (!o) setCleo(null); }}
+          target={{ kind: "client", clientId, focusBlockId: blockId }}
+          title={`${clientName} · ${blockLabel}`}
+          initialText={cleo.text}
+          context={cleo.context}
+          onApplied={async () => {
+            // rehydrate the builder from the program as it is now
+            hydratedBlockIdRef.current = null;
+            await refetchTree();
+            qc.invalidateQueries({ queryKey: ["pl-block-summary", blockId] });
+            qc.invalidateQueries({ queryKey: ["client-assigned-programs"] });
+            qc.invalidateQueries({ queryKey: ["block-schedule-instances", blockId] });
+            invalidateScheduleQueries(qc, { clientId: clientIdFromTree, blockId });
+          }}
+        />
+      )}
 
       {/* What a coach opens now and then, folded until they do. */}
       <div className="space-y-2 pt-2">
