@@ -1,40 +1,28 @@
 /**
- * The home page's coaching price story (price-reveal.ts has the rule for when
- * it's honest to show, trainer-cost.ts the trainer example and its sources):
+ * The home page's coaching price (price-reveal.ts has the rule for when it's
+ * honest to show). It comes after the coaching itself, and long after the page
+ * opened with what a trainer and online coaching usually cost
+ * (cost-anchors.tsx), so each price says what it is as a year too:
  *
- *   1. What a personal trainer costs: a worked example from a published
- *      public rate, before tax, with the maths and every source a tap away.
- *   2. The honest difference: a trainer coaches the hours you book, in the
- *      room; I coach the whole week, online, and I'm not in the room.
- *   3. Coaching Plus at its price, the calls shown.
- *   4. "Don't need the private calls?"
- *   5. Complete Online Coaching's price, the moment the section builds to.
+ *   1. Coaching Plus at its price, the calls shown.
+ *   2. "Don't need the private calls?"
+ *   3. Complete Online Coaching's price, the coaching moment (the free app's
+ *      $0 above it is the page's biggest number).
  *
- * Real prices only: the trainer example is labelled as one, the two coaching
- * prices come from the packages, the calls are the one difference between
- * them, and nothing is crossed out or called a saving. Motion is
- * stage-motion.ts's: on the page from the first paint, easing in only what's
- * still below the screen, none at all with reduced motion.
+ * Listed prices only: both come from the packages, the calls are the one
+ * difference between them, and nothing is crossed out or called a saving.
+ * Motion is stage-motion.ts's: on the page from the first paint, easing in
+ * only what's still below the screen, none at all with reduced motion.
  */
 import { Link } from "@tanstack/react-router";
-import { ChevronDown, Video } from "lucide-react";
+import { Video } from "lucide-react";
 import { trackSite } from "@/lib/site-funnel";
 import { APPLY_PATH } from "@/lib/coaching-packages/packages";
 import type { PriceReveal } from "@/lib/coaching-packages/price-reveal";
-import { trainerAnchor, type TrainerAnchor } from "@/lib/coaching-packages/trainer-cost";
 import { PRICE_SETTLE, motion, useSeen, useStage } from "@/components/landing/stage-motion";
 
-/** The few words the story says; the names and prices come from the packages and the trainer example. */
+/** The few words the story says; the names and prices come from the packages. */
 export const REVEAL_WORDS = {
-  trainerTitle: "What does a personal trainer cost?",
-  trainerSources: "Where these numbers come from",
-  trainerGyms: "Private gyms and independent trainers set their own prices.",
-  differenceMuted: "A trainer is with you for the hours you book.",
-  differenceStrong: "I coach your whole week.",
-  trainerCardTitle: "A personal trainer",
-  trainerCardBody: "Beside you for every rep of the sessions you book. What happens between sessions depends on the trainer.",
-  onlineCardTitle: "Online coaching with me",
-  onlineCardBody: "I'm not in the room. I write every session, read your check-ins and review the sets you film.",
   anchorTitle: "Everything I do as your coach, plus time with me on video.",
   question: "Don't need the private calls?",
   answer: "Get the same coaching without them.",
@@ -43,113 +31,8 @@ export const REVEAL_WORDS = {
   compare: "Compare every option",
 } as const;
 
-const COUNT = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven"];
-
-/** 1. What an hour with a trainer costs, as a worked example with its sources. */
-function TrainerStage({ trainer }: { trainer: TrainerAnchor }) {
-  const [ref, phase] = useStage(0.3);
-  const hours = `${COUNT[trainer.perWeek] ?? trainer.perWeek} ${trainer.perWeek === 1 ? "hour" : "hours"} a week, at ${trainer.rate} an hour.`;
-  return (
-    <div
-      ref={ref}
-      className="mx-auto max-w-3xl px-3 pb-6 text-center"
-      data-reveal-trainer
-      data-reveal-stage={phase}
-    >
-      <h2
-        className="mx-auto max-w-[18ch] text-balance text-[30px] font-semibold leading-[1.08] tracking-[-0.03em] md:text-[44px]"
-        style={motion(phase)}
-      >
-        {REVEAL_WORDS.trainerTitle}
-      </h2>
-      <p className="mt-3 text-[16px] text-muted-foreground md:text-[18px]" style={motion(phase, { delay: 120 })}>
-        {hours}
-      </p>
-      <div className="mt-8" style={motion(phase, { delay: 260, y: 24 })}>
-        <p
-          className="flex flex-wrap items-baseline justify-center gap-x-1.5 font-semibold leading-none tracking-[-0.045em]"
-          data-trainer-month
-        >
-          <span className="text-[64px] tabular-nums md:text-[96px]">{trainer.month}</span>
-          <span className="text-[20px] font-medium tracking-normal text-muted-foreground md:text-[26px]">/month</span>
-        </p>
-        <p className="mt-3 text-[15px] text-muted-foreground" data-trainer-year>
-          {trainer.year} a year, before tax.
-        </p>
-      </div>
-      <div style={motion(phase, { delay: 420, y: 10 })}>
-        <p className="mx-auto mt-5 max-w-md text-[13px] leading-relaxed text-muted-foreground">
-          {trainer.sourceLine}
-        </p>
-        <details className="group mx-auto mt-3 max-w-xl text-left" data-trainer-sources>
-          <summary className="mx-auto flex min-h-11 w-fit cursor-pointer list-none items-center gap-1 rounded-lg px-2 text-[14px] font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-            {REVEAL_WORDS.trainerSources}
-            <ChevronDown className="h-4 w-4 transition group-open:rotate-180 motion-reduce:transition-none" aria-hidden />
-          </summary>
-          <div className="mt-3 space-y-3 rounded-2xl bg-muted/50 p-5 text-[14px] leading-relaxed text-muted-foreground ring-1 ring-border/60">
-            <p className="font-medium text-foreground">{trainer.maths}</p>
-            <p>{trainer.otherFrequencies}</p>
-            <ul className="space-y-2.5">
-              {[trainer.source, ...trainer.others].map((s) => (
-                <li key={s.provider}>
-                  <span className="font-medium text-foreground">{s.provider}.</span> {s.detail}{" "}
-                  <a
-                    href={s.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="whitespace-nowrap font-medium text-foreground underline underline-offset-4"
-                  >
-                    See their rates
-                  </a>
-                </li>
-              ))}
-            </ul>
-            <p>
-              Checked {trainer.checkedOn}. {REVEAL_WORDS.trainerGyms}
-            </p>
-          </div>
-        </details>
-      </div>
-    </div>
-  );
-}
-
-/** 2. The honest difference: what each gives you and what it doesn't. */
-function DifferenceStage() {
-  const [ref, phase] = useStage(0.4);
-  return (
-    <div ref={ref} className="mx-auto max-w-3xl px-3 pb-14 pt-12 md:pb-20 md:pt-16" data-reveal-honest data-reveal-stage={phase}>
-      <div className="text-center">
-        <p
-          className="text-balance text-[26px] font-semibold leading-[1.15] tracking-[-0.02em] text-muted-foreground md:text-[40px]"
-          style={motion(phase)}
-        >
-          {REVEAL_WORDS.differenceMuted}
-        </p>
-        <p
-          className="text-balance text-[26px] font-semibold leading-[1.15] tracking-[-0.02em] md:text-[40px]"
-          style={motion(phase, { delay: 300 })}
-        >
-          {REVEAL_WORDS.differenceStrong}
-        </p>
-      </div>
-      <div className="mt-8 grid gap-3 sm:grid-cols-2" style={motion(phase, { delay: 520, y: 14 })}>
-        <div className="rounded-[22px] bg-card p-5 ring-1 ring-border/70">
-          <p className="text-[13px] font-semibold text-muted-foreground">{REVEAL_WORDS.trainerCardTitle}</p>
-          <p className="mt-1.5 text-[15px] leading-relaxed">{REVEAL_WORDS.trainerCardBody}</p>
-        </div>
-        <div className="rounded-[22px] bg-card p-5 ring-1 ring-border/70">
-          <p className="text-[13px] font-semibold text-muted-foreground">{REVEAL_WORDS.onlineCardTitle}</p>
-          <p className="mt-1.5 text-[15px] leading-relaxed">{REVEAL_WORDS.onlineCardBody}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function PriceRevealSection({ reveal }: { reveal: PriceReveal }) {
   const { anchor, flagship } = reveal;
-  const trainer = trainerAnchor(reveal);
   const [anchorRef, anchorPhase] = useStage(0.3);
   const [bridgeRef, bridgePhase] = useStage(0.6);
   const [flagRef, flagPhase] = useStage(0.35);
@@ -160,17 +43,10 @@ export function PriceRevealSection({ reveal }: { reveal: PriceReveal }) {
     <section
       id="coaching-price"
       aria-label={`What coaching costs: ${anchor.name} and ${flagship.name}`}
-      className="scroll-mt-20 px-3 pb-4 pt-10 sm:px-5 md:pt-16"
+      className="scroll-mt-20 px-3 pb-4 pt-6 sm:px-5 md:pt-10"
       data-landing-price-reveal
     >
-      {trainer && (
-        <>
-          <TrainerStage trainer={trainer} />
-          <DifferenceStage />
-        </>
-      )}
-
-      {/* 3. Coaching Plus: what it is, and its price, said plainly */}
+      {/* 1. Coaching Plus: what it is, and its price, said plainly */}
       <div
         ref={anchorRef}
         className="mx-auto max-w-5xl rounded-[28px] bg-muted/50 px-6 py-14 text-center ring-1 ring-border/60 md:py-20"
@@ -212,11 +88,14 @@ export function PriceRevealSection({ reveal }: { reveal: PriceReveal }) {
             <span className="text-[72px] tabular-nums md:text-[112px]">{reveal.anchorPrice}</span>
             <span className="text-[22px] font-medium tracking-normal text-muted-foreground md:text-[28px]">{reveal.per}</span>
           </p>
-          <p className="mt-3 text-[13px] text-muted-foreground">{reveal.taxNote}</p>
+          <p className="mt-3 text-[13px] text-muted-foreground" data-reveal-anchor-year>
+            {reveal.anchorYear ? `${reveal.anchorYear}. ` : ""}
+            {reveal.taxNote}
+          </p>
         </div>
       </div>
 
-      {/* 4. The turn */}
+      {/* 2. The turn */}
       <div
         ref={bridgeRef}
         className="mx-auto max-w-3xl px-3 py-16 text-center md:py-24"
@@ -237,7 +116,7 @@ export function PriceRevealSection({ reveal }: { reveal: PriceReveal }) {
         </p>
       </div>
 
-      {/* 5. The moment: the flagship's price, the largest thing on the page */}
+      {/* 3. The coaching moment: the flagship's price (the free app's $0 is the only bigger number) */}
       <div
         ref={flagRef}
         className="mx-auto max-w-5xl overflow-hidden rounded-[28px] bg-foreground px-6 py-16 text-center text-background md:py-24"
@@ -258,10 +137,11 @@ export function PriceRevealSection({ reveal }: { reveal: PriceReveal }) {
           style={motion(flagPhase, PRICE_SETTLE)}
           data-reveal-flagship-price
         >
-          <span className="text-[104px] tabular-nums sm:text-[140px] md:text-[200px]">{reveal.flagshipPrice}</span>
+          <span className="text-[96px] tabular-nums sm:text-[128px] md:text-[176px]">{reveal.flagshipPrice}</span>
           <span className="text-[24px] font-medium tracking-normal text-background/60 md:text-[34px]">{reveal.per}</span>
         </p>
-        <p className="mt-4 text-[13px] text-background/60" style={motion(flagPhase, { delay: 650, y: 8 })}>
+        <p className="mt-4 text-[13px] text-background/60" style={motion(flagPhase, { delay: 650, y: 8 })} data-reveal-flagship-year>
+          {reveal.flagshipYear ? `${reveal.flagshipYear}. ` : ""}
           {reveal.taxNote}
         </p>
         <div style={motion(flagPhase, { delay: 780, y: 12 })}>

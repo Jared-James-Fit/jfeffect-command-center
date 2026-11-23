@@ -3,27 +3,35 @@
  * coaching brand with its own app: the app is free to use (by application, no
  * card) and 1:1 online coaching with Jared is a paid service (by application).
  *
- * The page is told the way a product is launched (Nov 23 2026): the promise,
- * then the app shown screen by screen until it's clearly worth paying for,
- * then the reveal that it's free; then what a coach adds on top of the tools,
- * then the prices, then the proof, then one plain question: which one is you?
- * The app's own screens carry the page from top to bottom, so a visitor keeps
- * seeing the product rather than reading about it.
+ * The page is told the way a product is launched (Nov 23 2026): the promise
+ * and the proof; then what help usually costs (CostAnchorsSection: a year of a
+ * personal trainer and of higher-priced online coaching, worked examples with
+ * their sources collapsed, then "Three different things": a trainer, an
+ * online coach and an app, and "So what should the tools cost?"); then the app
+ * shown screen by screen until it's clearly worth paying for; then the
+ * reveal that it's free ($0, the page's biggest number, with what's in the
+ * free app and what isn't); then what a coach adds on top of the tools, the
+ * coaching prices, the proof, every plan in one selection, and one plain
+ * question: which one is you? The app's own screens carry the page from top
+ * to bottom, so a visitor keeps seeing the product rather than reading about
+ * it.
  *
- * Anchors are honest: the app is "the same app my coaching clients train in"
- * (true), its price is a moment of its own ($0, FreeReveal), and the
- * recommended package says how much more it is than the next package on the
- * site (both listed prices, anchorLine). The coaching price is revealed the
- * way the iPad's was (PriceRevealSection, price-reveal.ts): the coaching shown
- * first, then what a personal trainer costs as a worked example from a
- * published public rate with its sources (trainer-cost.ts) and how online
- * coaching differs from a trainer in the room, then Coaching Plus at its own
+ * Anchors are honest: the trainer and online coaching numbers are examples
+ * from published Canadian prices (trainer-cost.ts, online-coaching-cost.ts),
+ * labelled as examples, never an average, with no competing business named
+ * on the page, and each shows only while it costs more than the coaching on
+ * the site (cost-anchors.ts). The app is "the same app my coaching clients
+ * train in" (true), and the recommended package says how much more it is than
+ * the next package on the site (both listed prices, anchorLine). The coaching
+ * price is revealed the way the iPad's was (PriceRevealSection,
+ * price-reveal.ts): the coaching shown first, then Coaching Plus at its own
  * price, then "Don't need the private calls?" and Complete Online Coaching's
- * price as the moment. Different services at their real prices: never a
- * crossed-out price, a "worth" number or a fake discount. Prices are read from
- * coaching_packages (the one source of truth, edited in Sales → Coaching
- * packages, drawn by CoachingPackagesGrid), never typed here, and only what's
- * listed shows: a draft package never reaches this page.
+ * price, each said as a year too. Different services at their listed prices:
+ * never a crossed-out price, a "worth" number or a fake discount. Prices are
+ * read from coaching_packages (the one source of truth, edited in Sales →
+ * Coaching packages, drawn by CoachingPackagesGrid), never typed here, and
+ * only what's listed shows: a draft package never reaches this page. A plan
+ * added there (a paid membership, say) joins the plans by its price.
  *
  * Words are Jared's: plain, short, first person, no fitness-marketing lines
  * (landing-free-vs-coaching.test.ts keeps them out). Coaching is online only.
@@ -33,8 +41,9 @@
  * states it; client words and photos from the Coaching page. App screens are
  * a made-up athlete, never a client (scripts/coaching-screenshots).
  *
- * Measured anonymously (site-funnel.ts): the landing view, the pricing
- * section coming into view, which button was tapped and which package.
+ * Measured anonymously (site-funnel.ts): the landing view, the cost examples,
+ * the free app's $0 and the price reveal coming into view, the pricing
+ * section, which button was tapped and which package.
  */
 import { Suspense, useEffect, useRef, type ReactNode } from "react";
 import { Await, Link } from "@tanstack/react-router";
@@ -59,8 +68,10 @@ import { currentLaunchMode } from "@/lib/landing-launch";
 import { HOME_CTA_ZONES } from "@/lib/public-nav";
 import { CoachingPackagesGrid } from "@/components/sales/coaching-packages";
 import { PriceRevealSection } from "@/components/landing/price-reveal";
+import { CostAnchorsSection } from "@/components/landing/cost-anchors";
 import { priceReveal } from "@/lib/coaching-packages/price-reveal";
-import { PRICE_SETTLE, motion, useSeen, useStage } from "@/components/landing/stage-motion";
+import { costAnchors } from "@/lib/coaching-packages/cost-anchors";
+import { FREE_SETTLE, motion, useSeen, useStage } from "@/components/landing/stage-motion";
 import {
   costAnswer,
   decisionRows,
@@ -180,6 +191,8 @@ const REVEAL = {
   price: priceLabel(0),
   title: "The JF Effect app is free.",
   body: "No card, and nothing turns into a charge later. It's the same app my coaching clients train in.",
+  /** Said plainly, so nobody reads free as free coaching. */
+  without: "Not in it: a coach. Nobody writes a program around you or reads your check-ins. That's coaching, and it's next.",
 };
 
 /** What Jared does as an online coach. Each line is something a coaching client gets today. */
@@ -334,9 +347,12 @@ function HeroDevices() {
 }
 
 /**
- * The free app's reveal: everything shown above it said in one line, then
- * its price as the moment ($0, the same settle the coaching price makes),
- * then the sentence and the way in. On the page from the first paint;
+ * The free app's reveal, the page's biggest number: everything shown above it
+ * (each of those screens is in the free app) said in one line, then its price
+ * as the moment ($0), then the sentence and what it doesn't include (a coach,
+ * said plainly so free never reads as free coaching), then the way in. The
+ * free plan's own list is its card in the plans below, from coaching_packages,
+ * so it isn't said twice here. On the page from the first paint;
  * stage-motion.ts eases it in only when it's still below the screen.
  */
 function FreeReveal() {
@@ -356,20 +372,23 @@ function FreeReveal() {
           {REVEAL.lead}
         </p>
         <p
-          className="mt-6 font-semibold leading-[0.9] tracking-[-0.055em]"
-          style={motion(phase, PRICE_SETTLE)}
+          className="mt-6 font-semibold leading-[0.9] tracking-[-0.06em]"
+          style={motion(phase, FREE_SETTLE)}
           data-free-price
         >
-          <span className="text-[120px] tabular-nums sm:text-[160px] md:text-[200px]">{REVEAL.price}</span>
+          <span className="text-[132px] tabular-nums sm:text-[184px] md:text-[240px]">{REVEAL.price}</span>
         </p>
         <h2
           className="mx-auto mt-5 max-w-[16ch] text-balance text-[32px] font-semibold leading-[1.06] tracking-[-0.03em] md:text-[48px]"
-          style={motion(phase, { delay: 650, y: 8 })}
+          style={motion(phase, { delay: 750, y: 8 })}
         >
           {REVEAL.title}
         </h2>
-        <div style={motion(phase, { delay: 780, y: 12 })}>
+        <div style={motion(phase, { delay: 880, y: 12 })}>
           <p className="mx-auto mt-4 max-w-lg text-[17px] leading-relaxed text-muted-foreground">{REVEAL.body}</p>
+          <p className="mx-auto mt-5 max-w-md text-balance text-[15px] leading-relaxed text-muted-foreground" data-free-without>
+            {REVEAL.without}
+          </p>
           <div className="mt-8 flex justify-center" data-inline-cta>
             <PrimaryCta to={JOIN_TO} className="w-full sm:w-auto sm:min-w-[260px]" onClick={() => trackSite("cta_free", "reveal")}>
               {JOIN_CTA}
@@ -516,6 +535,18 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
           ))}
         </div>
       </div>
+
+      {/* The story's first numbers: what a personal trainer and higher-priced
+          online coaching cost a year (cost-anchors.ts: worked examples with
+          their sources collapsed, shown only while they cost more than the
+          coaching on the site), then three different things, then the
+          question the app answers. */}
+      <WithPackages packages={packages}>
+        {(list) => {
+          const anchors = costAnchors(list);
+          return anchors ? <CostAnchorsSection anchors={anchors} /> : null;
+        }}
+      </WithPackages>
 
       {/* B. The app, shown before it's priced */}
       <section id="app" className="scroll-mt-20" data-landing-app>
@@ -717,7 +748,7 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
                   <Block className="!pt-6 xl:max-w-6xl">
                     <Heading eyebrow={PRICING.eyebrow} title={PRICING.title} sub={PRICING.sub} />
                     <div data-inline-cta>
-                      <CoachingPackagesGrid packages={list} from="home" calls={false} free />
+                      <CoachingPackagesGrid packages={list} from="home" calls={false} free chooser />
                     </div>
                     <p className="mx-auto mt-8 max-w-md text-center text-[13px] leading-relaxed text-muted-foreground">
                       {PRICING.note}{" "}
