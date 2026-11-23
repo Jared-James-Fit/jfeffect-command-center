@@ -126,8 +126,10 @@ describe("the public site's app screens are current (Nov 23 2026)", () => {
   it("each screen is made by the capture scripts, from the app itself", () => {
     const scripts = read("scripts/coaching-screenshots/landing.cjs") + read("scripts/coaching-screenshots/run.cjs");
     for (const dir of ["landing", "coaching"]) {
-      for (const f of readdirSync(`src/assets/${dir}`).filter((x) => x.startsWith("app-") && x.endsWith(".webp"))) {
+      // the 390 / 585 px widths are made from each capture (scripts/landing/resize-shots.py), never captured
+      for (const f of readdirSync(`src/assets/${dir}`).filter((x) => x.startsWith("app-") && x.endsWith(".webp") && !/-(390|585)\.webp$/.test(x))) {
         expect(scripts, f).toContain(`name: "${f.replace(".webp", "")}"`);
+        for (const w of [390, 585]) expect(existsSync(`src/assets/${dir}/${f.replace(".webp", `-${w}.webp`)}`), `${f} at ${w} px: run scripts/landing/resize-shots.py`).toBe(true);
       }
     }
   });

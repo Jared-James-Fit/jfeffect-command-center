@@ -6,11 +6,13 @@ import { Link } from "@tanstack/react-router";
 import { ChevronRight, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import type { IntelJob } from "./use-program-intel";
+import { etaLine, useRunEta } from "./generator/run-progress";
 
 const OVERALL: Record<string, string> = { passed: "passed its audit", partly: "partly checked", review: "needs review", failed: "failed validation" };
 
 export function NextProgramLink({ job, clientId }: { job: IntelJob; clientId: string }) {
   const working = job.status === "pending" || job.status === "running";
+  const eta = useRunEta(job.kind === "interpret" ? null : job);
   const rows = (job.result?.audit?.scorecard ?? []) as Array<{ status: string }>;
   const partly = job.result?.audit?.overall === "review" && !rows.some((r) => r.status === "review" || r.status === "failed");
   const audit = partly ? "partly" : (job.result?.audit?.overall as string | undefined);
@@ -30,6 +32,7 @@ export function NextProgramLink({ job, clientId }: { job: IntelJob; clientId: st
         <div className="min-w-0 flex-1">
           <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Next program</div>
           <div className="truncate text-[13px] font-bold">{text}</div>
+          {eta ? <div className="text-[11px] tabular-nums text-muted-foreground" data-testid="intel-next-program-eta">{etaLine(eta)}</div> : null}
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
       </Link>

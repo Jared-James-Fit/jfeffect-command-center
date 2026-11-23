@@ -17,8 +17,25 @@ import { buildIntelReport } from "./report";
 import type { Brain, IntelScopeRequest } from "./types";
 
 type Db = any;
+/**
+ * A run marked running that hasn't been touched for this long lost its request (the host can cut
+ * a worker off mid-poll: Dwayne's Nov 23 2026 strategy lost three requests, each leaving it idle
+ * 10–15 min) and is picked up again. A Generate Next Program request on a model stage hands back
+ * within about a minute (a submission of at most 30 s and a poll of at most 45 s), so 2 min there;
+ * the code-only stages (reading the history, the audit, saving) get 5. An interpret run and a
+ * benchmark (which may wait on a gateway call for 240 s) keep 10. None runs past the host's 300 s.
+ */
 const STALE_RUN_MS = 10 * 60_000;
+const STALE_MODEL_STAGE_MS = 2 * 60_000;
+const STALE_CODE_STAGE_MS = 5 * 60_000;
 const MAX_ATTEMPTS = 3;
+
+function staleAfter(job: any): number {
+  if (!(job.kind === "strategy" || job.kind === "generate") || job.options?.bench) return STALE_RUN_MS;
+  const stage = String(job.stage ?? "context");
+  return /^(strategy|construct|review|repair)/.test(stage) ? STALE_MODEL_STAGE_MS : STALE_CODE_STAGE_MS;
+}
+const isStale = (job: any) => job.status === "running" && Date.now() - Date.parse(job.updated_at) > staleAfter(job);
 const INTERPRET_PROMPT_VERSION = 1;
 
 /** Reading an athlete's training is a coaching task: the coaching brain answers (routing.ts "interpret"), never a weaker model. */
@@ -32,7 +49,8 @@ async function askModel(admin: Db, system: string, prompt: string, timeoutMs: nu
   } catch {
     override = null;
   }
-  const route = resolveRoute("interpret", override);
+  // the OpenAI key only, never Lovable credits (an override naming a gateway model is left out)
+  const route = resolveRoute("interpret", override, { openaiOnly: true });
   const errors: string[] = [];
   for (const model of route.models) {
     try {
@@ -57,12 +75,40 @@ async function askJson<T>(admin: Db, system: string, prompt: string, schema: any
   throw new Error(`The reply wasn't in the required shape: ${p2.error}`);
 }
 
+/**
+ * A run whose request was cut off every time it was picked up (MAX_ATTEMPTS in a row, never
+ * reaching a hand-back) stops with a message and Try again, never spinning forever: nothing
+ * picks a run at its last attempt up again.
+ */
+async function stopStuckRuns(admin: Db): Promise<void> {
+  const since = new Date(Date.now() - 2 * 86_400_000).toISOString();
+  const { data } = await admin.from("program_intel_jobs").select("id, client_id, kind, status, options, updated_at, attempts, progress, stage, result").gt("updated_at", since).gte("attempts", MAX_ATTEMPTS).eq("status", "running").limit(10);
+  for (const job of data ?? []) {
+    if (!isStale(job)) continue;
+    const message = "The run kept getting cut off before it could finish. Try again picks up at the stage that stopped; nothing finished is redone.";
+    const stages = ((job.progress as any)?.stages ?? []).map((s: any) => (s.status === "running" ? { ...s, status: "error", detail: message.slice(0, 200), doneAt: Date.now() } : s));
+    const result = job.result ? { ...(job.result as any), calls: {}, pending: {} } : job.result;
+    await stopPending((job.result as any)?.pending);
+    await admin
+      .from("program_intel_jobs")
+      .update({ status: "error", error: message, progress: { ...((job.progress as any) ?? {}), stages, current: job.stage ?? null }, ...(result ? { result } : {}), finished_at: new Date().toISOString() })
+      .eq("id", job.id)
+      .eq("status", "running")
+      .eq("attempts", job.attempts);
+    await tellCoach(admin, job, "program_run_stopped");
+  }
+}
+
 async function claimJob(admin: Db, jobId: string | null): Promise<any | null> {
+  await stopStuckRuns(admin).catch(() => undefined);
+  // not into the quarter-hour rush (run-eta.ts): the run stays queued and the next minute's look takes it
+  const { inQuarterRush } = await import("./run-eta");
+  if (inQuarterRush(Date.now())) return null;
   const since = new Date(Date.now() - 2 * 86_400_000).toISOString();
   let q = admin.from("program_intel_jobs").select("*").gt("updated_at", since).lt("attempts", MAX_ATTEMPTS).in("status", ["pending", "running"]).order("created_at").limit(5);
   if (jobId) q = admin.from("program_intel_jobs").select("*").eq("id", jobId).limit(1);
   const { data } = await q;
-  const job = (data ?? []).find((j: any) => j.status === "pending" || (j.status === "running" && Date.now() - Date.parse(j.updated_at) > STALE_RUN_MS));
+  const job = (data ?? []).find((j: any) => j.status === "pending" || isStale(j));
   if (!job || job.attempts >= MAX_ATTEMPTS) return null;
   // Claim it: only one worker gets the row.
   const { data: claimed } = await admin
@@ -84,20 +130,25 @@ export async function runIntelJob(admin: Db, jobId: string | null): Promise<{ st
     const { runPipelineStage, WaitingForModel } = await import("./pipeline.server");
     try {
       const r = await runPipelineStage(admin, job);
-      if (r === "next") await admin.from("program_intel_jobs").update({ status: "pending", attempts: 0 }).eq("id", job.id);
+      // only while it's still running: a run discarded meanwhile stays discarded
+      if (r === "next") await admin.from("program_intel_jobs").update({ status: "pending", attempts: 0 }).eq("id", job.id).eq("status", "running");
+      else await tellCoach(admin, job, "program_run_ready");
       return { status: r === "next" ? "pending" : "ready", jobId: job.id };
     } catch (e: any) {
       // the model is still thinking (background mode): the next request keeps polling where this one stopped
       if (e instanceof WaitingForModel) {
-        await admin.from("program_intel_jobs").update({ status: "pending", attempts: 0 }).eq("id", job.id);
+        await admin.from("program_intel_jobs").update({ status: "pending", attempts: 0 }).eq("id", job.id).eq("status", "running");
         return { status: "pending", jobId: job.id };
       }
       const message = String(e?.message ?? e).slice(0, 500);
       const { data: cur } = await admin.from("program_intel_jobs").select("progress, stage, result").eq("id", job.id).maybeSingle();
-      const stages = ((cur?.progress as any)?.stages ?? []).map((s: any) => (s.status === "running" ? { ...s, status: "error", detail: message.slice(0, 200) } : s));
+      const stages = ((cur?.progress as any)?.stages ?? []).map((s: any) => (s.status === "running" ? { ...s, status: "error", detail: message.slice(0, 200), doneAt: Date.now() } : s));
       // the answers kept for the failed stage go too, so Try again asks again instead of replaying them
+      // (a background call nobody will read is stopped first, so it isn't billed for nothing)
       const result = cur?.result ? { ...(cur.result as any), calls: {}, pending: {} } : cur?.result;
-      await finish(admin, job.id, { status: "error", error: message, progress: { stages, current: cur?.stage ?? null }, ...(result ? { result } : {}) });
+      await stopPending((cur?.result as any)?.pending);
+      await finish(admin, job.id, { status: "error", error: message, progress: { ...((cur?.progress as any) ?? {}), stages, current: cur?.stage ?? null }, ...(result ? { result } : {}) }, { onlyRunning: true });
+      await tellCoach(admin, job, "program_run_stopped");
       return { status: "error", jobId: job.id, error: message, stage: cur?.stage ?? undefined };
     }
   }
@@ -147,8 +198,32 @@ export async function runIntelJob(admin: Db, jobId: string | null): Promise<{ st
   }
 }
 
-async function finish(admin: Db, id: string, patch: Record<string, unknown>) {
-  await admin.from("program_intel_jobs").update({ ...patch, finished_at: new Date().toISOString() }).eq("id", id);
+/**
+ * The coach hears the run is done (or stopped) even when they've left the screen: one push with a
+ * link to it. Never for a benchmark run; never fails the run.
+ */
+async function tellCoach(admin: Db, job: any, event: "program_run_ready" | "program_run_stopped"): Promise<void> {
+  if (job.options?.bench) return;
+  try {
+    const { notifyAppEvent } = await import("@/lib/push/app-events.server");
+    await notifyAppEvent(admin, event, { clientId: job.client_id, sourceId: job.id });
+  } catch {
+    // a push that can't go never stops the run
+  }
+}
+
+/** Stop the background calls a run was waiting on (best effort). */
+async function stopPending(pending: Record<string, { id?: string; hedge?: { id: string } }> | null | undefined): Promise<void> {
+  const ids = Object.values(pending ?? {}).flatMap((p) => [p?.id, p?.hedge?.id]).filter((x): x is string => !!x);
+  if (!ids.length) return;
+  const { cancelBackground } = await import("@/lib/ai/model-client.server");
+  await Promise.all(ids.map((id) => cancelBackground(id)));
+}
+
+async function finish(admin: Db, id: string, patch: Record<string, unknown>, opts: { onlyRunning?: boolean } = {}) {
+  let q = admin.from("program_intel_jobs").update({ ...patch, finished_at: new Date().toISOString() }).eq("id", id);
+  if (opts.onlyRunning) q = q.eq("status", "running");
+  await q;
 }
 
 export async function assertCanCoach(sb: Db, userId: string, clientId: string): Promise<void> {

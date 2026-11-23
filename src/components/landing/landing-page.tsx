@@ -307,12 +307,13 @@ function HeroDevices() {
   return (
     <div className="relative mx-auto w-full max-w-[340px] pb-6 sm:max-w-[420px] lg:max-w-[460px]">
       <div className="absolute left-0 top-[9%] hidden w-[52%] -rotate-[5deg] min-[380px]:block">
-        <PhoneShot src={shotHome} alt="Home in the JF Effect app: today's workout on the calendar and a bodyweight trend" />
+        <PhoneShot src={shotHome} sizes="(min-width: 1024px) 240px, (min-width: 640px) 220px, 180px" alt="Home in the JF Effect app: today's workout on the calendar and a bodyweight trend" />
       </div>
       <div className="relative ml-auto w-[64%] min-[380px]:w-[60%]">
         <PhoneShot
           src={shotFocus}
           priority
+          sizes="(min-width: 1024px) 276px, (min-width: 640px) 252px, 204px"
           alt="A workout in Focus mode: Romanian deadlift, 3 × 8 at RPE 7, the first set logged at 235 lb"
           className="shadow-[0_40px_80px_-36px_rgba(0,0,0,0.6)]"
         />
@@ -480,7 +481,7 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
           <div className="mx-auto grid max-w-4xl gap-12 md:grid-cols-2 md:gap-10" data-landing-own>
             {OWN.map((o) => (
               <div key={o.title} className="flex flex-col items-center text-center md:items-start md:text-left">
-                <PhoneShot src={o.src} alt={o.alt} className="max-w-[230px]" />
+                <PhoneShot src={o.src} alt={o.alt} className="max-w-[230px]" sizes="230px" />
                 <h3 className="mt-5 text-[20px] font-semibold leading-snug tracking-[-0.01em]">{o.title}</h3>
                 <p className="mt-1.5 max-w-md text-[15px] leading-relaxed text-muted-foreground">{o.body}</p>
                 <p className="mt-2 max-w-md text-[13px] leading-relaxed text-muted-foreground">{o.note}</p>
@@ -616,6 +617,7 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
                   <div className="w-[76%]">
                     <PhoneShot
                       src={shotChat}
+                      sizes="(min-width: 1024px) 260px, 230px"
                       alt="A weekly check-in in the JF Effect app and the coach's reply: calories stay the same, the squat moves up to 295, and a request for a video of the first set"
                       className="ring-white/15"
                     />
@@ -623,6 +625,7 @@ export function LandingPage({ packages }: { packages?: PackagesIn } = {}) {
                   <div className="absolute bottom-0 right-0 w-[52%] rotate-[4deg]">
                     <PhoneShot
                       src={shotPlan}
+                      sizes="(min-width: 1024px) 180px, 160px"
                       alt="A coach-written meal plan: training and rest days, five meals with each meal's foods and macros"
                       className="ring-white/15"
                     />

@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import { PUBLIC_NAV, activeNavKey, headerCtaFor, type PublicNavItem } from "@/lib/public-nav";
 import type { CtaChoice } from "@/lib/sticky-cta";
 import { useCtaZone } from "@/components/sales/use-cta-zone";
+// 96 px, hashed (cached for a year): the 512 px /logo.png went out uncached for a 26–32 px mark
+import logoSmall from "@/assets/brand/logo-96.webp";
 
 /**
  * The public site's one header (public-nav.ts): the JF Effect logo is Home,
@@ -110,7 +112,7 @@ function BrandLink({ current }: { current: boolean }) {
       data-brand-home
     >
       <img
-        src="/logo.png"
+        src={logoSmall}
         alt=""
         width={28}
         height={28}

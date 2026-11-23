@@ -35,6 +35,7 @@ import {
 } from "@/lib/program-ai/program-ai.functions";
 import { dayNames } from "@/lib/program-ai/engine";
 import type { DayDiff, ResolvedChange } from "@/lib/program-ai/types";
+import { durationWords, editEta } from "@/lib/program-intel/run-eta";
 
 type Tab = "chat" | "rules" | "history";
 
@@ -406,12 +407,7 @@ export function TurnView({ turn, latest, picked, onToggle, appliedResult, onUndo
       <div className="flex justify-end">
         <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-secondary px-3.5 py-2 text-[15px] text-foreground">{turn.instruction}</div>
       </div>
-      {(turn.status === "pending" || turn.status === "running") && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground" aria-live="polite">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span>{turn.stage ?? "Starting"}…</span>
-        </div>
-      )}
+      {(turn.status === "pending" || turn.status === "running") && <TurnProgress stage={turn.stage} createdAt={turn.created_at} />}
       {turn.status === "error" && (
         <div className="space-y-2 rounded-lg border border-destructive/40 p-3 text-sm">
           <p className="text-destructive">{turn.error ?? "Something went wrong."}</p>
@@ -832,6 +828,29 @@ function HistoryPanel({ target, onChanged }: { target: ProgramAiTarget; onChange
           </div>
         );
       })}
+    </div>
+  );
+}
+
+
+/** A turn being written: its stage, a bar from the real stages and the usual time, and what's left (run-eta.ts editEta). */
+function TurnProgress({ stage, createdAt }: { stage: string | null; createdAt: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const eta = editEta(stage, createdAt, now);
+  return (
+    <div className="space-y-1.5" aria-live="polite" data-testid="edit-progress">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span>{stage ?? "Starting"}…</span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label="Progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={eta.pct}>
+        <div className="h-full rounded-full bg-foreground transition-[width] duration-1000 ease-linear" style={{ width: `${eta.pct}%` }} />
+      </div>
+      <div className="text-xs tabular-nums text-muted-foreground">{eta.pct}% · {eta.remainingMs == null ? "taking longer than usual" : `${durationWords(eta.remainingMs)} left`}</div>
     </div>
   );
 }

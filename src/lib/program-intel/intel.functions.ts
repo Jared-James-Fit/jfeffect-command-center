@@ -214,5 +214,11 @@ export const discardIntelDraftFn = createServerFn({ method: "POST" })
     await sb.from("program_intel_observations").update({ status: "rejected", reviewed_by: context.userId, reviewed_at: new Date().toISOString() }).eq("job_id", job.id).eq("status", "proposed");
     const { error } = await sb.from("program_intel_jobs").update({ status: "discarded" }).eq("id", job.id);
     if (error) throw new Error(error.message);
+    // a model still thinking for a discarded run is stopped, so it isn't billed for nothing (best effort)
+    const live = Object.values((job.result?.pending ?? {}) as Record<string, { id?: string; hedge?: { id: string } }>).flatMap((p) => [p?.id, p?.hedge?.id]).filter((x): x is string => !!x);
+    if (live.length) {
+      const { cancelBackground } = await import("@/lib/ai/model-client.server");
+      await Promise.all(live.map((id) => cancelBackground(id)));
+    }
     return { ok: true };
   });

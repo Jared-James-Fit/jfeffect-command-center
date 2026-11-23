@@ -37,9 +37,21 @@ export class ModelsExhausted extends Error {
   }
 }
 
+/**
+ * A background call in flight on OpenAI's side. `phase` is OpenAI's own status at the last poll
+ * ("queued": not started; "in_progress": thinking), and `startedAt` when it was first seen thinking,
+ * so a run says honestly whether it's waiting in OpenAI's queue or the model is at work.
+ */
+export type LiveCall = { id: string; model: string; at: number; phase?: "queued" | "in_progress"; startedAt?: number };
+
 export type CallState = {
   calls?: Record<string, { text: string; model: string }>;
-  pending?: Record<string, { id?: string; model?: string; at?: number; failed?: string[] }>;
+  /**
+   * The call in flight (`id`, `model`, `at`), the models already given up on (`failed`), and a
+   * backup started because the first was far slower than usual (`hedge`): whichever answers first
+   * is used and the other is stopped.
+   */
+  pending?: Record<string, { id?: string; model?: string; at?: number; phase?: LiveCall["phase"]; startedAt?: number; failed?: string[]; hedge?: LiveCall }>;
 };
 
 export type CallLog = {
@@ -71,6 +83,20 @@ export async function stagedCall(opts: {
   log?: (x: CallLog) => Promise<void>;
   poll: { ms: number; every: number };
   backgroundLimitMs: number;
+  /**
+   * A background call still running after this long gets a backup: the route's next OpenAI model
+   * is started beside it and whichever answers first is used (the other is stopped). For a slow
+   * tail (a strong model that normally answers in ~9 min still thinking at 30), so the run never
+   * waits out the whole `backgroundLimitMs` and then starts from scratch. Off when not given.
+   */
+  hedgeAfterMs?: number;
+  /**
+   * How long the route's last model (no other left to take over, no backup running) is waited on.
+   * Cutting it off at `backgroundLimitMs` only guarantees a failed run (Dwayne's Nov 23 2026
+   * strategy: GPT-5.5 took over after Astra's 25 min and would have been cut off with nothing
+   * after it). A hard cap all the same, so nothing runs forever. Defaults to `backgroundLimitMs`.
+   */
+  finalLimitMs?: number;
   /** A gateway (synchronous) call's limit. */
   syncTimeoutMs: number;
 }): Promise<{ text: string; model: string }> {
@@ -116,7 +142,8 @@ export async function stagedCall(opts: {
     await save();
     return { text, model };
   };
-  const failed = async (model: string, ms: number, error: string, background = true) => {
+  /** A model failed: on record, and (unless it was the provider's fault) never asked again this call. */
+  const noteFailure = async (model: string, ms: number, error: string, background = true) => {
     const kind = classifyAiError(error);
     lastErrors.push(error);
     if (background) await recordAiCall({ model, task: tag, feature: key, ok: false, error, ms });
@@ -125,33 +152,97 @@ export async function stagedCall(opts: {
       // the provider's failure, not this model's: nothing kept, so a run after AI is back
       // tries it again; the key's other models aren't asked this run
       if (isAccountFailure(kind) || kind === "paused") deadKeys.add(keyOf(model));
-      state.pending![key] = { failed: tried };
-      await save();
       return;
     }
     tried.push(model);
+  };
+  const failed = async (model: string, ms: number, error: string, background = true) => {
+    await noteFailure(model, ms, error, background);
     state.pending![key] = { failed: tried };
     // kept at once: if this request is cut off trying the next model, the next one skips this
     await save();
   };
+  /** The one that lost the race: stopped (so it isn't billed for nothing) and noted on the job's log. */
+  const letGo = async (call: LiveCall, winner: string) => {
+    await cancelBackground(call.id);
+    await log({ model: call.model, ok: false, ms: Date.now() - call.at, response: null, error: `stopped: ${winner} answered first` });
+  };
+  /** Poll the call in flight (and its backup) until one of them settles or this request's turn is up. */
+  const pollBoth = async (a: LiveCall, b?: LiveCall) => {
+    const t0 = Date.now();
+    for (;;) {
+      const p = await pollBackground(a.id);
+      const h = b ? await pollBackground(b.id) : undefined;
+      if (p.status !== "running" || (h && h.status !== "running") || Date.now() - t0 >= poll.ms) return { p, h };
+      await new Promise((r) => setTimeout(r, poll.every));
+    }
+  };
+  /** What OpenAI said about a call still running, kept on it (true when that changed). */
+  const notePhase = (call: LiveCall, st: { status: string; phase?: LiveCall["phase"] } | undefined): boolean => {
+    if (!st || st.status !== "running" || !st.phase || st.phase === call.phase) return false;
+    call.phase = st.phase;
+    if (st.phase === "in_progress" && !call.startedAt) call.startedAt = Date.now();
+    return true;
+  };
   if (pending?.id && pending.model) {
-    const st = await pollFor(pending.id);
-    if (st.status === "running" && Date.now() - (pending.at ?? 0) < opts.backgroundLimitMs)
+    const live: LiveCall = { id: pending.id, model: pending.model, at: pending.at ?? Date.now(), phase: pending.phase, startedAt: pending.startedAt };
+    let backup: LiveCall | undefined = pending.hedge ? { ...pending.hedge } : undefined;
+    const hadBackup = !!backup;
+    const { p, h } = await pollBoth(live, backup);
+    const livePhase = notePhase(live, p);
+    const backupPhase = backup ? notePhase(backup, h) : false;
+    const phaseChanged = livePhase || backupPhase;
+    if (p.status === "done") {
+      if (backup) await letGo(backup, live.model);
+      return done(p.reply.text, live.model, p.reply.usage, Date.now() - live.at);
+    }
+    if (h?.status === "done" && backup) {
+      await letGo(live, backup.model);
+      return done(h.reply.text, backup.model, h.reply.usage, Date.now() - backup.at);
+    }
+    if (h?.status === "failed" && backup) {
+      await noteFailure(backup.model, Date.now() - backup.at, h.error);
+      backup = undefined;
+    }
+    // stopped from outside (the run was discarded or ended): nothing is asked in its place
+    if (p.status === "failed" && /^cancelled\b/i.test(p.error)) {
+      if (backup) await cancelBackground(backup.id);
+      throw new Error("The model call was stopped.");
+    }
+    // the limit is there to hand over to the next model: the last one is waited on longer
+    const canHandOver = !!backup || route.models.some((m) => m !== live.model && !tried.includes(m) && !deadKeys.has(keyOf(m)));
+    const overLimit = Date.now() - live.at >= (canHandOver ? opts.backgroundLimitMs : opts.finalLimitMs ?? opts.backgroundLimitMs);
+    if (p.status === "running" && !overLimit) {
+      // far slower than usual: start the next model beside it (whichever answers first is used)
+      if (!backup && opts.hedgeAfterMs != null && Date.now() - live.at >= opts.hedgeAfterMs) {
+        const next = route.models.find((m) => m !== live.model && !tried.includes(m) && parseModelRef(m).via === "openai" && !deadKeys.has(keyOf(m)));
+        if (next) {
+          try {
+            const files = typeof req.files === "function" ? await req.files() : req.files;
+            const { id } = await submitBackground(next, { ...req, files, tag });
+            backup = { id, model: next, at: Date.now() };
+          } catch (e: any) {
+            await noteFailure(next, 0, String(e?.message ?? e));
+          }
+        }
+      }
+      if (phaseChanged || !!backup !== hadBackup || backup?.id !== pending.hedge?.id) {
+        state.pending[key] = { ...live, failed: tried, ...(backup ? { hedge: backup } : {}) };
+        await save();
+      }
       throw new WaitingForModel();
+    }
     // given up on: stop it on OpenAI's side too, or it finishes and is billed for nothing
-    if (st.status === "running") await cancelBackground(pending.id);
-    if (st.status === "done")
-      return done(
-        st.reply.text,
-        pending.model,
-        st.reply.usage,
-        Date.now() - (pending.at ?? Date.now()),
-      );
-    await failed(
-      pending.model,
-      Date.now() - (pending.at ?? Date.now()),
-      st.status === "failed" ? st.error : "no answer in time",
-    );
+    if (p.status === "running") await cancelBackground(live.id);
+    await noteFailure(live.model, Date.now() - live.at, p.status === "failed" ? p.error : "no answer in time");
+    if (backup) {
+      // the backup carries on as the call in flight, on its own clock
+      state.pending[key] = { ...backup, failed: tried };
+      await save();
+      throw new WaitingForModel();
+    }
+    state.pending[key] = { failed: tried };
+    await save();
   }
   for (const model of route.models.filter((m) => !tried.includes(m))) {
     if (deadKeys.has(keyOf(model))) continue;
@@ -163,7 +254,14 @@ export async function stagedCall(opts: {
         state.pending[key] = { id, model, at: t0, failed: tried };
         await save();
         const st = await pollFor(id);
-        if (st.status === "running") throw new WaitingForModel();
+        if (st.status === "running") {
+          const call: LiveCall = { id, model, at: t0 };
+          if (notePhase(call, st)) {
+            state.pending[key] = { ...call, failed: tried };
+            await save();
+          }
+          throw new WaitingForModel();
+        }
         if (st.status === "done")
           return done(st.reply.text, model, st.reply.usage, Date.now() - t0);
         throw new Error(st.error);

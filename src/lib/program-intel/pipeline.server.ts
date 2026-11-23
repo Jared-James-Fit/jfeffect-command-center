@@ -40,6 +40,7 @@ import { generatedProgramOutcomes, outcomeLines } from "./outcomes";
 import { benchRecords } from "./bench";
 import { findConflicts, horizonFor, redistribution, type GenerationSetup, type SetupField } from "./recommend";
 import { BRAIN_LABEL, type Brain, type IntelRecords, type RawExercise } from "./types";
+import { briefScale, HEDGE_AFTER_MS, measuredTypical, pollWindowMs, stepOf, type RunProgress } from "./run-eta";
 
 type Db = any;
 /**
@@ -60,11 +61,21 @@ export const pollConfig = { ms: 45_000, every: 4000 };
 const SYNC_TIMEOUT_MS = 240_000;
 /** A background call that hasn't finished by now is given up on (and the next model tried). */
 const BACKGROUND_LIMIT_MS = 25 * 60_000;
+/** The route's last model, with nothing left to hand over to: waited on this long before the run stops. */
+const FINAL_LIMIT_MS = 45 * 60_000;
 
 /** The model hasn't answered yet; the job is re-queued and the next request keeps polling (staged-call.server.ts). */
 export { WaitingForModel };
 
-export type StageState = { key: string; label: string; status: "pending" | "running" | "done" | "skipped" | "error"; detail?: string };
+export type StageState = {
+  key: string;
+  label: string;
+  status: "pending" | "running" | "done" | "skipped" | "error";
+  detail?: string;
+  /** When the stage (last) started and finished (ms), for the run's progress bar (run-eta.ts). */
+  startedAt?: number;
+  doneAt?: number;
+};
 
 function stagesFor(kind: "strategy" | "generate", blocks: number | null, approved: boolean): StageState[] {
   const s: StageState[] = [
@@ -97,7 +108,8 @@ async function routeOverride(admin: Db, job: any): Promise<Partial<Record<AiTask
  */
 async function ask(admin: Db, job: any, result: any, task: AiTask, key: string, system: string, prompt: string): Promise<{ text: string; model: string }> {
   if (result.calls?.[key]) return result.calls[key];
-  const route = resolveRoute(task, await routeOverride(admin, job), { anyModel: !!job.options?.bench });
+  // never the Lovable gateway (no Lovable credits) unless a benchmark compares models on purpose
+  const route = resolveRoute(task, await routeOverride(admin, job), { anyModel: !!job.options?.bench, openaiOnly: !job.options?.bench });
   // a benchmark run may compare a model at another effort (e.g. Claude at its own default, medium)
   const benchEffort = job.options?.bench ? (job.options?.effort?.[task] as Effort | undefined) : undefined;
   const req = { system, prompt, effort: benchEffort && ["low", "medium", "high"].includes(benchEffort) ? benchEffort : route.effort, maxOutputTokens: route.maxOutputTokens, temperature: 0.3 };
@@ -109,8 +121,12 @@ async function ask(admin: Db, job: any, result: any, task: AiTask, key: string, 
       req,
       save: () => save(admin, job.id, { result }),
       log: (x) => logCall(admin, job, { stage: key, model: x.model, system, prompt, response: x.response, ok: x.ok, ms: x.ms, error: x.error, usage: x.usage }),
-      poll: pollConfig,
+      // ends before the next quarter-hour rush, so the request is never in flight through it
+      poll: { ...pollConfig, ms: pollWindowMs(Date.now(), pollConfig.ms) },
       backgroundLimitMs: BACKGROUND_LIMIT_MS,
+      finalLimitMs: FINAL_LIMIT_MS,
+      // a benchmark times one model on purpose: no backup racing it
+      hedgeAfterMs: job.options?.bench ? undefined : HEDGE_AFTER_MS[stepOf(key)],
       syncTimeoutMs: SYNC_TIMEOUT_MS,
     });
   } catch (e) {
@@ -248,7 +264,21 @@ function guardLoading(block: BuiltBlock, refs: LoadingRefs | null | undefined, c
   return withLoadingGuard(block, refs, (id, name) => (id && fam.has(id) ? fam.get(id) ?? null : byName.get(name.toLowerCase()) ?? null));
 }
 
+/**
+ * The library catalog is read on every request of a build or repair stage (each 45 s poll while a
+ * model thinks): ~11k program rows paged in. Kept for a few minutes per worker, so a poll is a poll.
+ */
+let catalogCache: { at: number; data: CatalogExercise[] } | null = null;
+const CATALOG_TTL_MS = 5 * 60_000;
+
 async function libraryCatalog(admin: Db): Promise<Array<CatalogExercise & { archived?: boolean }>> {
+  if (catalogCache && Date.now() - catalogCache.at < CATALOG_TTL_MS) return catalogCache.data;
+  const data = await readLibraryCatalog(admin);
+  catalogCache = { at: Date.now(), data };
+  return data;
+}
+
+async function readLibraryCatalog(admin: Db): Promise<Array<CatalogExercise & { archived?: boolean }>> {
   const used = new Set<string>();
   for (let from = 0; ; from += 1000) {
     const { data, error } = await admin.from("pl_exercise_rows").select("exercise_id").not("exercise_id", "is", null).range(from, from + 999);
@@ -280,13 +310,34 @@ async function exerciseMeta(admin: Db, ids: string[]): Promise<Map<string, RawEx
   return meta;
 }
 
+/** Writes the run while this request holds it (a run discarded meanwhile is left as it is). */
 async function save(admin: Db, id: string, patch: Record<string, unknown>) {
-  const { error } = await admin.from("program_intel_jobs").update(patch).eq("id", id);
+  const { error } = await admin.from("program_intel_jobs").update(patch).eq("id", id).eq("status", "running");
   if (error) throw new Error(error.message);
 }
 
 function setStage(stages: StageState[], key: string, status: StageState["status"], detail?: string): StageState[] {
-  return stages.map((s) => (s.key === key ? { ...s, status, ...(detail !== undefined ? { detail } : {}) } : s));
+  const now = Date.now();
+  return stages.map((s) => {
+    if (s.key !== key) return s;
+    // a stage resumed by the next request keeps its start; a retried or new one starts now
+    const timing = status === "running" ? (s.status === "running" && s.startedAt ? {} : { startedAt: now, doneAt: undefined }) : status === "pending" ? {} : { doneAt: now };
+    return { ...s, status, ...timing, ...(detail !== undefined ? { detail } : {}) };
+  });
+}
+
+/**
+ * How long each model usually takes per step, from the calls logged in the last 90 days
+ * (run-eta.ts `measuredTypical`); best effort, the defaults stand when it can't be read.
+ */
+async function typicalCallTimes(admin: Db): Promise<RunProgress["typical"]> {
+  try {
+    const since = new Date(Date.now() - 90 * 86_400_000).toISOString();
+    const { data } = await admin.from("program_intel_job_calls").select("stage, model, ok, duration_ms").eq("ok", true).gt("created_at", since).order("created_at", { ascending: false }).limit(1000);
+    return measuredTypical((data ?? []) as any);
+  } catch {
+    return undefined;
+  }
 }
 
 /** Rebuild the intelligence for a job (records read fresh with the service role). */
@@ -315,9 +366,11 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
   const approved = !!job.options?.strategy;
   const result = { ...(job.result ?? {}) } as any;
   let stages: StageState[] = job.progress?.stages ?? stagesFor(kind, null, approved);
+  // the estimates the progress bar reads, carried on every save (written at the context stage)
+  let meta: Omit<RunProgress, "stages" | "current"> = { typical: job.progress?.typical, models: job.progress?.models, scale: job.progress?.scale };
   const stage: string = job.stage ?? "context";
   stages = setStage(stages, stage.startsWith("repair") ? "audit" : stage, "running");
-  await save(admin, job.id, { progress: { stages, current: stage } });
+  await save(admin, job.id, { progress: { ...meta, stages, current: stage } });
 
   if (stage === "context") {
     const { data: allowed, error: pe } = await admin.rpc("program_intel_can_coach", { _user: job.created_by, _client: job.client_id });
@@ -335,6 +388,13 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     const brief = buildBrief(intel, { setup, edited, conflicts, redistribution: red, outcomes: outcomeLines(outcomes), previousRoadmap });
     const compact = buildBrief(intel, { setup, edited, conflicts, redistribution: red, outcomes: outcomeLines(outcomes), exclude: CONSTRUCT_EXCLUDE, previousRoadmap });
     const override = await routeOverride(admin, job);
+    const routes = Object.fromEntries((["strategy", "construct", "repair", "review"] as AiTask[]).map((t) => [t, resolveRoute(t, override, { anyModel: !!job.options?.bench, openaiOnly: !job.options?.bench })])) as Record<"strategy" | "construct" | "repair" | "review", ReturnType<typeof resolveRoute>>;
+    // what the run's progress bar reads: each step's first model and how long it usually takes (run-eta.ts)
+    meta = {
+      typical: await typicalCallTimes(admin),
+      models: { strategy: routes.strategy.models[0], construct: routes.construct.models[0], repair: routes.repair.models[0], review: routes.review.models[0] },
+      scale: briefScale(brief.chars),
+    };
     const context = {
       version: 2,
       prompt_version: PIPELINE_PROMPT_VERSION,
@@ -364,7 +424,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
         unreadable: intel.history.coverage.unreadable,
       },
       quality_summary: intel.quality?.summary ?? null,
-      model: { routes: Object.fromEntries((["strategy", "construct", "repair", "review"] as AiTask[]).map((t) => [t, resolveRoute(t, override, { anyModel: !!job.options?.bench })])), background_poll_ms: pollConfig.ms, sync_timeout_ms: SYNC_TIMEOUT_MS },
+      model: { routes, background_poll_ms: pollConfig.ms, sync_timeout_ms: SYNC_TIMEOUT_MS },
       previous_adherence_pct: intel.ctx.previous?.sessionAdherencePct ?? null,
       // what the later stages build and audit from (the same data the brief came from)
       // a first program has no previous one: maxes entered at setup are its only load references
@@ -394,8 +454,8 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     stages = setStage(stages, "context", "done", `${intel.history.coverage.loggedSets} set records, ${Math.round(brief.chars / 1000)}k characters${brief.warnings.length ? ` · ${brief.warnings.length} note${brief.warnings.length === 1 ? "" : "s"}` : ""}`);
     if (approved && kind === "generate") {
       stages = stagesFor(kind, result.strategy.structure.blocks.length, true).map((s) => stages.find((x) => x.key === s.key) ?? s);
-      await save(admin, job.id, { context, result, data_hash: intel.dataHash, stage: "construct:0", progress: { stages, current: "construct:0" } });
-    } else await save(admin, job.id, { context, result, data_hash: intel.dataHash, stage: "strategy", progress: { stages, current: "strategy" } });
+      await save(admin, job.id, { context, result, data_hash: intel.dataHash, stage: "construct:0", progress: { ...meta, stages, current: "construct:0" } });
+    } else await save(admin, job.id, { context, result, data_hash: intel.dataHash, stage: "strategy", progress: { ...meta, stages, current: "strategy" } });
     return "next";
   }
 
@@ -418,11 +478,11 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     clearCalls(result);
     stages = setStage(stages, "strategy", "done", `${value.decisions.length} decisions · ${model}`);
     if (kind === "strategy") {
-      await save(admin, job.id, { result, model, prompt_version: PIPELINE_PROMPT_VERSION, stage: "done", status: "ready", finished_at: new Date().toISOString(), progress: { stages, current: "done" } });
+      await save(admin, job.id, { result, model, prompt_version: PIPELINE_PROMPT_VERSION, stage: "done", status: "ready", finished_at: new Date().toISOString(), progress: { ...meta, stages, current: "done" } });
       return "done";
     }
     stages = stagesFor(kind, value.structure.blocks.length, false).map((s) => stages.find((x) => x.key === s.key) ?? s);
-    await save(admin, job.id, { result, model, stage: "construct:0", progress: { stages, current: "construct:0" } });
+    await save(admin, job.id, { result, model, stage: "construct:0", progress: { ...meta, stages, current: "construct:0" } });
     return "next";
   }
 
@@ -464,7 +524,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     clearCalls(result);
     stages = setStage(stages, stage, "done", `${value.days.length} days · ${value.days.reduce((n, d) => n + d.exercises.length, 0)} exercises · ${model}`);
     const next = i + 1 < strategy.structure.blocks.length ? `construct:${i + 1}` : "audit";
-    await save(admin, job.id, { result, model, stage: next, progress: { stages, current: next } });
+    await save(admin, job.id, { result, model, stage: next, progress: { ...meta, stages, current: next } });
     return "next";
   }
 
@@ -488,7 +548,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       }
       result.repairQueue = queue.slice(1);
       const next = result.repairQueue.length ? "repair" : "audit";
-      await save(admin, job.id, { result, stage: next, progress: { stages: setStage(stages, "audit", "running", `Repairing block ${(bi ?? 0) + 1}`), current: next } });
+      await save(admin, job.id, { result, stage: next, progress: { ...meta, stages: setStage(stages, "audit", "running", `Repairing block ${(bi ?? 0) + 1}`), current: next } });
       return "next";
     }
     const program: BuiltProgram = {
@@ -505,11 +565,11 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       return (typeof data === "string" && data) || null;
     });
     const ids = resolved.program.blocks.flatMap((b) => b.days.flatMap((d) => d.exercises.map((e) => e.exercise_id))).filter(Boolean) as string[];
-    const meta = await exerciseMeta(admin, ids);
+    const exMeta = await exerciseMeta(admin, ids);
     // accessories grouped by station after the main lifts, never at the cost of training order (accessory-flow.ts)
     const flowOpts = { priorities: [...setup.priorities, ...strategy.prioritize.map((p) => p.item)], items: setup.equipment.items as any, home: !!ai.home };
     resolved.program.blocks = resolved.program.blocks.map((b, bi) => {
-      const flowed = withAccessoryFlow(b, (e) => (e.exercise_id ? meta.get(e.exercise_id)?.equipment ?? null : null), flowOpts);
+      const flowed = withAccessoryFlow(b, (e) => (e.exercise_id ? exMeta.get(e.exercise_id)?.equipment ?? null : null), flowOpts);
       const prefix = resolved.program.blocks.length > 1 ? `Block ${bi + 1}, ` : "";
       if (flowed.notes.length) result.flowAdjusted = [...new Set([...(result.flowAdjusted ?? []), ...flowed.notes.map((n) => prefix + n)])];
       return flowed.block;
@@ -522,7 +582,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       equipment: { items: setup.equipment.items as any, confidence: setup.equipment.confidence, home: !!ai.home, cableStations: setup.equipment.cableStations },
       ctx: ai.ctx,
       quality: ai.quality,
-      meta,
+      meta: exMeta,
       unmatched: resolved.unmatched,
       athleteExerciseIds: new Set((ai.athlete_exercise_ids ?? []) as string[]),
       brief,
@@ -540,14 +600,14 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     if (flagged.length && round < MAX_REPAIR_ROUNDS) {
       result.repairRound = round + 1;
       result.repairQueue = flagged;
-      await save(admin, job.id, { result, stage: "repair", progress: { stages: setStage(stages, "audit", "running", `Repair round ${round + 1}: ${flagged.length} block${flagged.length === 1 ? "" : "s"}`), current: "repair" } });
+      await save(admin, job.id, { result, stage: "repair", progress: { ...meta, stages: setStage(stages, "audit", "running", `Repair round ${round + 1}: ${flagged.length} block${flagged.length === 1 ? "" : "s"}`), current: "repair" } });
       return "next";
     }
     const label = scored.overall === "passed" ? "Passed" : scored.overall === "review" ? "Needs review" : "Failed validation";
     stages = setStage(stages, "audit", scored.overall === "failed" ? "error" : "done", `${label}${round ? ` after ${round} repair round${round === 1 ? "" : "s"}` : ""}`);
     // the automatic checks are done: the coaching brain reads the program once before it's saved
     const next = !result.review && !job.options?.skipReview ? "review" : "save";
-    await save(admin, job.id, { result, stage: next, progress: { stages, current: next } });
+    await save(admin, job.id, { result, stage: next, progress: { ...meta, stages, current: next } });
     return "next";
   }
 
@@ -577,13 +637,13 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       result.repairRound = round + 1;
       result.repairQueue = blocks;
       result.audit = { ...result.audit, repairs: fixes };
-      await save(admin, job.id, { result, stage: "repair", progress: { stages, current: "repair" } });
+      await save(admin, job.id, { result, stage: "repair", progress: { ...meta, stages, current: "repair" } });
       return "next";
     }
     // nothing to repair: put the review on the scorecard and save
     const scored = withReview({ ...result.audit, repairs: result.audit.repairs ?? {} } as AuditResult, result.review);
     result.audit = { ...result.audit, scorecard: scored.scorecard, overall: scored.overall, findings: scored.findings };
-    await save(admin, job.id, { result, stage: "save", progress: { stages, current: "save" } });
+    await save(admin, job.id, { result, stage: "save", progress: { ...meta, stages, current: "save" } });
     return "next";
   }
 
@@ -592,7 +652,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     // a benchmark run keeps its result for comparison and writes nothing to the client's training
     if (job.options?.bench) {
       stages = setStage(stages, "save", "skipped", "Benchmark: no draft written");
-      await save(admin, job.id, { result, stage: "done", status: "ready", finished_at: new Date().toISOString(), prompt_version: PIPELINE_PROMPT_VERSION, progress: { stages, current: "done" } });
+      await save(admin, job.id, { result, stage: "done", status: "ready", finished_at: new Date().toISOString(), prompt_version: PIPELINE_PROMPT_VERSION, progress: { ...meta, stages, current: "done" } });
       return "done";
     }
     const blockIds = await insertDraftProgram(admin, { clientId: job.client_id, createdBy: job.created_by, program, jobId: job.id });
@@ -617,7 +677,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     }
     result.blockIds = blockIds;
     stages = setStage(stages, "save", "done", `${blockIds.length} hidden block${blockIds.length === 1 ? "" : "s"}`);
-    await save(admin, job.id, { result, block_id: blockIds[0], prompt_version: PIPELINE_PROMPT_VERSION, stage: "done", status: "ready", finished_at: new Date().toISOString(), progress: { stages, current: "done" } });
+    await save(admin, job.id, { result, block_id: blockIds[0], prompt_version: PIPELINE_PROMPT_VERSION, stage: "done", status: "ready", finished_at: new Date().toISOString(), progress: { ...meta, stages, current: "done" } });
     return "done";
   }
   throw new Error(`Unknown stage ${stage}`);
