@@ -4,7 +4,7 @@
  * One menu row per page. The rows, in order:
  *
  *   Dashboard · Tasks
- *   Messages · Clients · Crew · Calendar · Coaching · Sales · Membership · Team
+ *   Messages · Clients · Crew · Calendar · Coaching · Sales · Insights · Membership · Team
  *   Settings
  *
  * A row with several pages opens a flyout (desktop) or a submenu (phone More).
@@ -29,7 +29,7 @@ import {
   Layers, Briefcase, Archive, UserPlus, UserCog, Settings, AlertCircle,
   FileSignature, ShoppingBag, Tags, Library, KeyRound, BarChart3, RefreshCw,
   Link as LinkIcon, Trophy, ShieldCheck, UsersRound, Contact,
-  ListChecks, FileText, PowerOff, Landmark, Wallet, BadgeCheck, Image as ImageIcon, Swords,
+  ListChecks, FileText, PowerOff, Landmark, Wallet, BadgeCheck, Image as ImageIcon, Swords, Gauge,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -59,13 +59,14 @@ export type WorkspaceKey =
   | "Calendar"
   | "Coaching"
   | "Sales"
+  | "Insights"
   | "Membership"
   | "Team"
   | "Settings";
 
 export const WORKSPACE_ORDER: WorkspaceKey[] = [
   "Overview", "Messages", "Clients", "Crew", "Calendar", "Coaching", "Sales",
-  "Membership", "Team", "Settings",
+  "Insights", "Membership", "Team", "Settings",
 ];
 
 type Entry = NavItem & { visibleTo: StaffRoleTag[] };
@@ -205,6 +206,16 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin"],
     keywords: ["settings", "stripe", "business", "taxes", "branding", "notifications", "advanced", "developer", "webhooks", "billing events"] },
 
+  // ── INSIGHTS ─────────────────────────────────────────────────────────
+  // How the business is doing beyond the books (Nov 23 2026): who uses the app and the site, and
+  // what AI and texts cost. Admin only; the server checks again.
+  { to: "/admin/insights", label: "App & website", icon: BarChart3, group: "Insights",
+    visibleTo: ["admin"],
+    keywords: ["analytics", "insights", "active users", "dau", "wau", "mau", "live users", "sessions", "retention", "churn", "feature adoption", "devices", "map", "locations", "website", "landing page", "funnel", "sources", "traffic", "conversions", "onboarding"] },
+  { to: "/admin/usage", label: "Usage & spend", icon: Gauge, group: "Insights",
+    visibleTo: ["admin"],
+    keywords: ["ai cost", "ai spend", "openai", "sms cost", "texts", "twilio", "budget", "spending", "credits", "models", "failures", "provider health", "usage"] },
+
   // ── MEMBERSHIP ───────────────────────────────────────────────────────
   // The JF Membership business, in the same menu as everything else: there
   // is no separate membership mode to switch into (or get stuck in).
@@ -213,30 +224,31 @@ const REGISTRY: Entry[] = [
   { to: "/admin/members", label: "Members", icon: Users, group: "Membership",
     visibleTo: ["admin"],
     keywords: ["members", "app members", "trialing", "past due", "paused", "cancelled", "complimentary", "access overrides", "test member"] },
-  { to: "/admin/membership/action-needed", label: "Action Needed", icon: AlertCircle, group: "Membership",
+  // What needs doing leads the Membership home (Nov 23 2026); these pages stay one tap from it.
+  { to: "/admin/membership/action-needed", label: "Action Needed", icon: AlertCircle, group: "Membership", searchOnly: true,
     visibleTo: ["admin"],
     keywords: ["failed payments", "expired trials", "expired access", "incomplete setup", "missing profile", "membership alerts"] },
-  { to: "/admin/membership/billing", label: "Subscriptions", icon: CreditCard, group: "Membership",
+  { to: "/admin/membership/billing", label: "Subscriptions", icon: CreditCard, group: "Membership", searchOnly: true,
     visibleTo: ["admin"], keywords: ["subscriptions", "billing", "renewals", "membership payments"] },
   // Members' programs are the one program library (Coaching → Programs) with
   // its Membership app chip picked; this address lands there.
   { to: "/admin/member-plans", label: "Membership Programs", icon: BookOpen, group: "Membership", searchOnly: true,
     visibleTo: ["admin"], keywords: ["plan library", "membership library", "member plans", "membership content"] },
-  { to: "/admin/membership/sms-email", label: "SMS & Email", icon: MessageCircle, group: "Membership",
-    visibleTo: ["admin"] },
+  { to: "/admin/membership/sms-email", label: "SMS & Email", icon: MessageCircle, group: "Membership", searchOnly: true,
+    visibleTo: ["admin"], keywords: ["setup links", "reset links", "welcome", "member texts"] },
   // Members' Support chats are rows in Messages → 1:1 Chats; this lands there.
   { to: "/admin/membership/support", label: "Member Support", icon: MessagesSquare, group: "Membership", searchOnly: true,
     visibleTo: ["admin"], keywords: ["support inbox", "member messages", "help", "tickets"] },
   // Pages that only say "coming soon" (Content Ideas, Testimonials, Challenges,
   // Welcome Messages, Promo Tools) are in no menu or search: a dead end isn't
   // worth finding. Their addresses still open.
-  { to: "/admin/membership/sales-page", label: "Sales Page", icon: LayoutTemplate, group: "Membership",
+  { to: "/admin/membership/sales-page", label: "Sales Page", icon: LayoutTemplate, group: "Membership", searchOnly: true,
     visibleTo: ["admin"], section: "Sales", keywords: ["sales page", "join page", "landing"] },
   { to: "/admin/membership/signup-link", label: "Signup Link", icon: LinkIcon, group: "Membership", searchOnly: true,
     visibleTo: ["admin"], section: "Sales" },
-  { to: "/admin/membership/signup-stats", label: "Signup Stats", icon: BarChart3, group: "Membership",
+  { to: "/admin/membership/signup-stats", label: "Signup Stats", icon: BarChart3, group: "Membership", searchOnly: true,
     visibleTo: ["admin"], section: "Sales", keywords: ["membership analytics", "signups", "conversion"] },
-  { to: "/admin/membership/checkout-settings", label: "Checkout Kill-Switch", icon: PowerOff, group: "Membership",
+  { to: "/admin/membership/checkout-settings", label: "Checkout Kill-Switch", icon: PowerOff, group: "Membership", searchOnly: true,
     visibleTo: ["admin"], section: "Sales", keywords: ["kill switch", "pause", "checkout", "disable signups", "join page", "trial settings"] },
   { to: "/admin/membership/billing-events", label: "Billing Events", icon: Activity, group: "Membership", searchOnly: true,
     visibleTo: ["admin"], section: "Setup" },
@@ -307,7 +319,7 @@ const REGISTRY: Entry[] = [
   { to: "/admin/onboarding", label: "Onboarding", icon: ClipboardCheck, group: "Settings", searchOnly: true,
     visibleTo: ["admin"], section: "Advanced" },
   { to: "/admin/settings/ai", label: "AI & Cleo", icon: ShieldCheck, group: "Settings", searchOnly: true,
-    visibleTo: ["admin"], section: "Advanced", keywords: ["ai", "cleo", "assistant", "who has cleo", "cleo access", "credits", "ai credits", "usage limits", "credit packs", "models", "gpt", "claude", "gemini", "program generator", "generation cost", "errors"] },
+    visibleTo: ["admin"], section: "Advanced", keywords: ["ai", "cleo", "assistant", "who has cleo", "cleo access", "credits", "ai credits", "usage limits", "credit packs", "models", "gpt", "claude", "gemini", "program generator", "errors"] },
   { to: "/admin/feature-flags", label: "Feature Flags", icon: ShieldCheck, group: "Settings", searchOnly: true,
     visibleTo: ["admin"], section: "Advanced" },
   { to: "/admin/archives", label: "Archive Manager", icon: Archive, group: "Settings", searchOnly: true,
@@ -391,6 +403,7 @@ const WORKSPACE_ROWS: Partial<Record<WorkspaceKey, { label: string; icon?: NavIt
   Calendar: { label: "Calendar" },
   Coaching: { label: "Coaching" },
   Sales: { label: "Sales" },
+  Insights: { label: "Insights", icon: BarChart3 },
   Membership: { label: "Membership" },
   Team: { label: "Team" },
   // opens on Account (the tab row's first), drawn as Settings

@@ -24,6 +24,8 @@ export type AppEvent =
   | "session_requested"
   | "lead_ready"
   | "program_gaps_due"
+  | "program_run_ready"
+  | "program_run_stopped"
   | "health_updated"
   | "weight_review_ready"
   | "roadmap_review_ready"
@@ -133,6 +135,21 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
   // A workout in the next few days is missing what the client needs to follow
   // it (program-gaps.ts: no RPE / RIR / weight, a max a % reads): the morning
   // program-gaps-tick, at most once a client a day. Opens Missing program data.
+  // Generate Next Program finished in the background (program-intel/jobs.server.ts): the strategy
+  // to review or the hidden draft, one tap away. Content-free; once per run.
+  program_run_ready: {
+    to: "staff", category: "workouts",
+    title: (n) => `${n}'s next program is ready`,
+    body: () => "The run finished. Tap to review it before anything reaches them.",
+    url: (id) => `/admin/client-programs/${id}/next-program`, rateMinutes: 60,
+  },
+  // A run stopped with a message (never for a run that's still recovering on its own).
+  program_run_stopped: {
+    to: "staff", category: "workouts",
+    title: (n) => `${n}'s program run stopped`,
+    body: () => "It says why. Try again picks up where it stopped; nothing finished is redone.",
+    url: (id) => `/admin/client-programs/${id}/next-program`, rateMinutes: 60,
+  },
   program_gaps_due: {
     to: "staff", category: "workouts",
     title: (n) => `${n}'s program is missing something`,

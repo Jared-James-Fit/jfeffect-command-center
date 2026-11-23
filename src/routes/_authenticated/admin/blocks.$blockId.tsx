@@ -1,12 +1,13 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, ArrowLeft, BarChart3, CalendarRange, Flame, Info, MessageSquare, Milestone, MoreHorizontal, Save, User as UserIcon } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BarChart3, CalendarRange, Flame, Info, Layers3, MessageSquare, Milestone, MoreHorizontal, Save, Settings2, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { BuilderHeader, BuilderNotice, BuilderSection, BuilderTitleInput } from "@/components/program-editor/builder-chrome";
+import { BuilderHeader, BuilderNotice, BuilderTitleInput } from "@/components/program-editor/builder-chrome";
+import { BlockSettingsSheet, type BlockSettingsTab } from "@/components/program-editor/block-settings-sheet";
 import { useIsMobileNow } from "@/hooks/use-mobile";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
@@ -33,13 +34,17 @@ import {
   StructureCanvas,
   appendRowToFirstDay,
 } from "@/route-pages/_authenticated/admin/program-library_.$templateId";
-import { BlockWarmupPanel } from "@/components/block-warmup-panel";
-import { AutoSchedulePanel } from "@/components/auto-schedule-panel";
-import { BlockRoadmapPanel } from "@/components/programs/block-roadmap-panel";
 import { usePersistentUndoStack } from "@/lib/persistent-undo";
 import { useScrollRestoration } from "@/lib/scroll-restore";
 import { BlockSwitcher } from "@/components/block-switcher";
-import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
+import { CleoDock, CleoLauncher, useCleoDock } from "@/components/program-ai/cleo-dock";
+import { BlockTypeChip, BlockTypeSheet } from "@/components/program-editor/block-type-picker";
+import { inferBlockType, resolveBlockType, type BlockMeta } from "@/lib/block-types";
+import { setClientBlockType, useBlockTypeLibrary } from "@/lib/block-types-queries";
+import { useBuilderAthlete } from "@/lib/builder-athlete";
+import { builderNav } from "@/lib/builder-nav";
+import type { CompletenessGap } from "@/lib/program-check";
+import type { ProgramOverviewValue } from "@/components/program-editor/program-overview";
 import { clientTrainingHref, useEditorBack } from "@/lib/editor-back";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({
@@ -463,12 +468,25 @@ function BlockEditor() {
     [siblingBlocks, blockStatusMap],
   );
 
+  const navigate = useNavigate();
+  const athleteQ = useBuilderAthlete(clientIdFromTree);
+  const { library: blockTypes } = useBlockTypeLibrary();
+  const [typeOpen, setTypeOpen] = useState(false);
+  // what the coach just picked, shown at once while the block re-reads
+  const [typeLocal, setTypeLocal] = useState<{ type: string | null; meta: BlockMeta | null } | null>(null);
+  useEffect(() => setTypeLocal(null), [blockId]);
+  // Adjust program (Cleo), opened with words and with the workout on screen as context
+  // Cleo docked beside the program (cleo-dock.tsx), Adjust program's engine
+  const cleoDock = useCleoDock();
   const [name, setName] = useState<string>("");
   // The header's second row: the canvas puts undo / redo / the weeks there.
   const [toolbarEl, setToolbarEl] = useState<HTMLDivElement | null>(null);
   const phone = useIsMobileNow();
   // "Edit" on the athlete's roadmap card lands here (#roadmap): open it.
   const [openRoadmap] = useState(() => typeof window !== "undefined" && window.location.hash === "#roadmap");
+  // Schedule · Athlete roadmap · Warm-ups, in one sheet off the workout editor (#roadmap opens it there)
+  const [settingsTab, setSettingsTab] = useState<BlockSettingsTab>(openRoadmap ? "roadmap" : "schedule");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [payload, setPayload] = useState<any>(null);
   const [dirty, setDirty] = useState(false);
   const originalTreeRef = useRef<any>(null);
@@ -735,7 +753,7 @@ function BlockEditor() {
   });
   useEffect(() => {
     if (!openRoadmap || !tree || !payload) return;
-    const t = setTimeout(() => document.getElementById("roadmap")?.scrollIntoView({ block: "start" }), 300);
+    const t = setTimeout(() => setSettingsOpen(true), 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openRoadmap, !!tree, !!payload]);
@@ -802,11 +820,45 @@ function BlockEditor() {
     !!canonicalActiveBlock && canonicalActiveBlock.id !== blockId && !!editingStatus;
 
   const blockLabel = name || tree.block.name || "Block";
+  const blockType = typeLocal ?? { type: ((tree.block as any).block_type as string | null) ?? null, meta: ((tree.block as any).block_meta as BlockMeta | null) ?? null };
+  const resolvedType = resolveBlockType({ block_type: blockType.type, block_meta: blockType.meta, name: blockLabel, training_focus: tree.block.training_focus }, blockTypes);
+  const openSettings = (t: BlockSettingsTab) => {
+    setSettingsTab(t);
+    setSettingsOpen(true);
+  };
+  const fixGap = (gap: CompletenessGap) => {
+    if (gap.fix === "block_type") setTypeOpen(true);
+    else if (gap.fix === "goals") void navigate({ to: "/admin/clients/$id", params: { id: clientId }, search: { tab: "goals-setup" } as any });
+    else if (gap.fix === "athlete_setup") void navigate({ to: "/admin/clients/$id", params: { id: clientId }, search: { tab: "training" } as any, hash: "athlete-setup" });
+    else if (gap.at) builderNav.go({ blockIndex: 0, week: gap.at.week, day: gap.at.day, row: gap.at.row, view: "day" });
+  };
+  const overview: ProgramOverviewValue = {
+    title: programName,
+    blocks: (siblingBlocks as any[]).map((b) => {
+      const mine = b.id === blockId;
+      const status = blockStatusMap.get(b.id) ?? null;
+      return {
+        id: b.id,
+        name: mine ? blockLabel : b.name,
+        weeks: Number(b.weeks) || 1,
+        start: b.start_date ?? null,
+        end: b.end_date ?? null,
+        status: b.client_visible === false && status !== "Completed" && status !== "Archived" ? `${status ?? "Draft"} · Hidden from client` : status,
+        resolved: mine ? resolvedType : resolveBlockType(b, blockTypes),
+        current: mine,
+        onOpen: (w?: number) => {
+          if (mine) builderNav.go({ blockIndex: 0, week: w ?? 0, view: "week" });
+          else void (async () => { if (dirty) await save(); void navigate({ to: "/admin/blocks/$blockId", params: { blockId: b.id } }); })();
+        },
+        onType: mine ? () => setTypeOpen(true) : undefined,
+      };
+    }),
+  };
   const missingDates = scheduleSummary.missingCount;
   const calendarIssues = scheduleSummary.issueCount;
 
   return (
-    <div className="space-y-3 px-2 pb-8 md:px-3">
+    <div className="space-y-3 px-2 pb-8 md:px-3" data-builder-page>
       <BuilderHeader
         onToolbarEl={setToolbarEl}
         back={
@@ -856,29 +908,19 @@ function BlockEditor() {
                 Save
               </ActionButton>
             )}
-            {clientId && (
-              <EditWithAiButton
-                target={{ kind: "client", clientId, focusBlockId: blockId }}
-                title={`${clientName} · ${blockLabel}`}
-                size="sm"
-                variant="ghost"
-                className="h-9 px-2.5"
-                label={phone ? "Adjust" : "Adjust program"}
-                // the AI reads what's saved: save what's on screen first
-                beforeOpen={async () => {
-                  if (dirty) await save();
-                }}
-                onApplied={async () => {
-                  // rehydrate the builder from the program as it is now
-                  hydratedBlockIdRef.current = null;
-                  await refetchTree();
-                  qc.invalidateQueries({ queryKey: ["pl-block-summary", blockId] });
-                  qc.invalidateQueries({ queryKey: ["client-assigned-programs"] });
-                  qc.invalidateQueries({ queryKey: ["block-schedule-instances", blockId] });
-                  invalidateScheduleQueries(qc, { clientId: clientIdFromTree, blockId });
-                }}
-              />
-            )}
+            {clientId && <CleoLauncher dock={cleoDock} compact={phone} />}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Block settings: schedule, athlete roadmap, warm-ups"
+              title="Block settings"
+              data-block-settings-open
+            >
+              <Settings2 className="h-[18px] w-[18px]" />
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="icon" variant="ghost" className="h-10 w-10" aria-label="Block options">
@@ -886,11 +928,24 @@ function BlockEditor() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onSelect={() => openSettings("schedule")}>
+                  <CalendarRange className="mr-2 h-4 w-4" /> Schedule
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openSettings("roadmap")}>
+                  <Milestone className="mr-2 h-4 w-4" /> Athlete roadmap
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openSettings("warmups")}>
+                  <Flame className="mr-2 h-4 w-4" /> Warm-ups
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <ClientNameLink clientId={clientId}><UserIcon className="mr-2 h-4 w-4" /> {clientName}'s profile</ClientNameLink>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <ClientNameLink clientId={clientId} tab="messages"><MessageSquare className="mr-2 h-4 w-4" /> Messages</ClientNameLink>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setTypeOpen(true)} data-block-type-menu>
+                  <Layers3 className="mr-2 h-4 w-4" /> Block type{resolvedType?.type ? `: ${resolvedType.type.name}` : ""}
                 </DropdownMenuItem>
                 {/* how this block is landing: volume against what's written, by week, muscle and day */}
                 <DropdownMenuItem asChild>
@@ -939,25 +994,6 @@ function BlockEditor() {
         </div>
       )}
 
-      <BlockSwitcher
-        clientId={clientId}
-        currentBlockId={blockId}
-        statusMap={blockStatusMap}
-        hasUnsavedChanges={dirty}
-        currentBlockName={blockLabel}
-        onBeforeNavigate={save}
-        onDiscardUnsaved={() => {
-          // Rehydrate from the last-loaded server snapshot so unsaved
-          // local edits are dropped without touching the database. The
-          // hydration effect will re-run for the new blockId on navigate.
-          if (originalTreeRef.current) {
-            setPayload(treeToPayload(originalTreeRef.current));
-            setName(originalTreeRef.current.block?.name ?? "");
-          }
-          setDirty(false);
-        }}
-      />
-
       <StructureCanvas
         type="block"
         payload={payload}
@@ -977,20 +1013,81 @@ function BlockEditor() {
         onFixCalendarIssue={fixCalendarIssue}
         toolbarTarget={toolbarEl}
         singleBlock
+        programStyle={athleteQ.data?.style ?? null}
+        athlete={athleteQ.data ?? null}
+        blockTypeOverride={blockType}
+        needsDates={tree.block.client_visible !== false && !!tree.block.start_date}
+        onAskCleo={(text) => cleoDock.ask(text)}
+        onFixGap={fixGap}
+        programOverview={overview}
+        statusLeading={<BlockTypeChip resolved={resolvedType} onClick={() => setTypeOpen(true)} />}
+        navLeading={
+          <BlockSwitcher
+            variant="menu"
+            clientId={clientId}
+            currentBlockId={blockId}
+            statusMap={blockStatusMap}
+            hasUnsavedChanges={dirty}
+            currentBlockName={blockLabel}
+            onBeforeNavigate={save}
+            onDiscardUnsaved={() => {
+              // Rehydrate from the last-loaded server snapshot so unsaved
+              // local edits are dropped without touching the database. The
+              // hydration effect will re-run for the new blockId on navigate.
+              if (originalTreeRef.current) {
+                setPayload(treeToPayload(originalTreeRef.current));
+                setName(originalTreeRef.current.block?.name ?? "");
+              }
+              setDirty(false);
+            }}
+          />
+        }
       />
+      {typeOpen && (
+        <BlockTypeSheet
+          open={typeOpen}
+          onOpenChange={setTypeOpen}
+          title={`${blockLabel}: block type`}
+          value={blockType}
+          inferredKey={inferBlockType({ name: blockLabel, training_focus: tree.block.training_focus })}
+          onSave={async (type, meta) => {
+            await setClientBlockType(blockId, type, meta);
+            setTypeLocal({ type, meta });
+            qc.invalidateQueries({ queryKey: ["pl-blocks", clientIdFromTree] });
+            qc.invalidateQueries({ queryKey: ["pl-block-tree", blockId] });
+            toast.success(type ? "Block type saved" : "Block type cleared");
+          }}
+        />
+      )}
+      {clientId && (
+        <CleoDock
+          dock={cleoDock}
+          target={{ kind: "client", clientId, focusBlockId: blockId }}
+          title={`${clientName} · ${blockLabel}`}
+          // the AI reads what's saved: save what's on screen before every message
+          beforeSend={async () => { if (dirty) await save(); }}
+          onApplied={async () => {
+            // rehydrate the builder from the program as it is now
+            hydratedBlockIdRef.current = null;
+            await refetchTree();
+            qc.invalidateQueries({ queryKey: ["pl-block-summary", blockId] });
+            qc.invalidateQueries({ queryKey: ["client-assigned-programs"] });
+            qc.invalidateQueries({ queryKey: ["block-schedule-instances", blockId] });
+            invalidateScheduleQueries(qc, { clientId: clientIdFromTree, blockId });
+          }}
+        />
+      )}
 
-      {/* What a coach opens now and then, folded until they do. */}
-      <div className="space-y-2 pt-2">
-        <BuilderSection icon={<CalendarRange className="h-4 w-4" />} title="Schedule" hint="Training days and dates">
-          <AutoSchedulePanel blockId={blockId} bare />
-        </BuilderSection>
-        <BuilderSection id="roadmap" icon={<Milestone className="h-4 w-4" />} title="Athlete roadmap" hint="What they read about this block" defaultOpen={openRoadmap}>
-          <BlockRoadmapPanel blockId={blockId} bare />
-        </BuilderSection>
-        <BuilderSection icon={<Flame className="h-4 w-4" />} title="Warm-ups">
-          <BlockWarmupPanel blockId={blockId} bare />
-        </BuilderSection>
-      </div>
+      {/* The block's settings (Schedule · Athlete roadmap · Warm-ups) live in one sheet off the
+          workout editor, opened from the header (block-settings-sheet.tsx). */}
+      <BlockSettingsSheet
+        blockId={blockId}
+        blockName={blockLabel}
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        tab={settingsTab}
+        onTab={setSettingsTab}
+      />
     </div>
   );
 }

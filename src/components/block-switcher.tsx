@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Layers } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Layers } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { listClientBlocks, getBlockTree } from "@/lib/pl-programs";
 import { type CanonicalBlockStatus } from "@/lib/block-status";
 import { cn } from "@/lib/utils";
@@ -34,7 +41,10 @@ export function BlockSwitcher({
   currentBlockName,
   onDiscardUnsaved,
   statusMap,
+  variant = "pills",
 }: {
+  /** "menu": one compact "Block 2 of 4 ▾" in the editor's navigator row (Nov 23 2026). */
+  variant?: "pills" | "menu";
   clientId: string;
   currentBlockId: string;
   /** Called before navigating away — use to save unsaved changes. */
@@ -73,9 +83,9 @@ export function BlockSwitcher({
     }
   };
 
-  const handleClick = async (e: React.MouseEvent, blockId: string) => {
+  const handleClick = async (e: { preventDefault: () => void } | null, blockId: string) => {
     if (blockId === currentBlockId || switching) return;
-    e.preventDefault();
+    e?.preventDefault();
     // Unsaved-change protection: prompt before navigating so the coach
     // can save, discard, or cancel. Silent auto-save was hiding the
     // decision — coaches asked to see the choice explicitly.
@@ -95,9 +105,58 @@ export function BlockSwitcher({
     });
   };
 
+  const list = blocks as any[];
+  const at = list.findIndex((b) => b.id === currentBlockId);
+  const statusOf = (b: any): string | null => statusMap?.get(b.id) ?? b.status ?? null;
+  const shortName = (n: string) => n.replace(/^block\s*\d+\s*[—–:-]\s*/i, "").trim() || n;
+  const menu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-medium text-foreground transition-colors hover:bg-muted max-md:h-10"
+          aria-label={`Block ${at + 1} of ${list.length}: switch block`}
+          title="This client's blocks"
+          data-block-switcher-menu
+        >
+          <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="tabular-nums">Block {at + 1}<span className="text-muted-foreground">/{list.length}</span></span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-72">
+        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">This client's blocks</DropdownMenuLabel>
+        {list.map((b, i) => {
+          const active = b.id === currentBlockId;
+          const status = statusOf(b);
+          const missingDates = !b.start_date && (status === "Upcoming" || status === "Draft");
+          return (
+            <DropdownMenuItem
+              key={b.id}
+              disabled={!!switching}
+              onSelect={() => { void handleClick(null, b.id); }}
+              onMouseEnter={() => handleMouseEnter(b.id)}
+              className="gap-2"
+            >
+              <span className="w-4 shrink-0 text-center text-xs tabular-nums text-muted-foreground">{i + 1}</span>
+              <span className="min-w-0 flex-1">
+                <span className={cn("block truncate", active && "font-semibold")}>{shortName(b.name)}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {status ?? "No status"}{b.start_date ? ` · ${b.start_date}` : " · no dates"}
+                </span>
+              </span>
+              {missingDates ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" aria-label="No dates scheduled" /> : null}
+              {active ? <Check className="h-4 w-4 shrink-0" /> : null}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   return (
     <>
-    <div className="-mx-1 flex w-full items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="This client's blocks">
+    {variant === "menu" ? menu : <div className="-mx-1 flex w-full items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="This client's blocks">
       <Layers className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       {(blocks as any[]).map((b) => {
         const active = b.id === currentBlockId;
@@ -151,7 +210,7 @@ export function BlockSwitcher({
           </button>
         );
       })}
-    </div>
+    </div>}
     <AlertDialog
       open={!!pendingBlockId}
       onOpenChange={(v) => { if (!v) setPendingBlockId(null); }}

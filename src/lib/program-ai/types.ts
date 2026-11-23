@@ -84,6 +84,8 @@ export type BlockSnap = {
   current: boolean;
   weeks: WeekSnap[];
   raw?: Record<string, unknown>;
+  /** "Block type: Hypertrophy; purpose: …" (block-types.ts), read from its metadata. */
+  typeLine?: string | null;
 };
 
 export type ProgramSnapshot = {

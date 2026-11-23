@@ -76,15 +76,15 @@ export function ClientPovBanner() {
         <Eye className="h-4 w-4 shrink-0 text-destructive" />
         <div className="min-w-0 flex-1">
           <div className="truncate font-semibold">Viewing as {client.full_name ?? "client"}</div>
-          <div className="text-[10px] font-bold uppercase tracking-widest text-destructive">Client POV</div>
+          <div className="text-[11px] font-medium text-destructive">Client view: what they see</div>
         </div>
         <Button size="sm" variant="outline" className="h-8 shrink-0 gap-1 px-2 text-xs" onClick={switchClient}>
           <ArrowRightLeft className="h-3.5 w-3.5" />
           <span>Switch</span>
         </Button>
-        <Button size="sm" variant="outline" className="h-8 shrink-0 gap-1 px-2 text-xs" onClick={exit}>
+        <Button size="sm" className="h-8 shrink-0 gap-1 px-2.5 text-xs" onClick={exit} aria-label="Back to admin">
           <ShieldCheck className="h-3.5 w-3.5" />
-          <span>Coach</span>
+          <span>Back to admin</span>
         </Button>
       </div>
     </div>

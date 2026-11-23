@@ -197,16 +197,20 @@ describe("the screens", () => {
     expect(setupUi).toContain("Notes & ideas for this program");
     expect(setupUi).not.toContain("Coach notes for this program");
     expect(setupUi).toContain('testId="gen-row-starting-point"');
+    // Nov 23 2026: the instructions are the page's first section (typed or spoken to Cleo), never folded away
     const ws = readFileSync("src/components/program-intel/generator/workstation.tsx", "utf8");
-    expect(ws).toContain('<ProgramNotesCard intel={intel} value={setup.coachNotes} edited={edited.has("coachNotes")} onChange={(v) => change("coachNotes", v)} />');
-    expect(ws).toContain('title={intel?.firstProgram ? "First program" : "Next program"}');
+    expect(ws).toContain('onChange={(v) => change("coachNotes", v)}');
+    expect(ws.indexOf("<CoachDirectionCard")).toBeLessThan(ws.indexOf("<SetupSummary"));
+    expect(ws).toContain('{intel.firstProgram ? "Generate their first program" : "Generate the next program"}');
+    expect(readFileSync("src/components/program-intel/workflow/coach-direction.tsx", "utf8")).toContain('data-testid="gen-notes"');
   });
 
   it("a client with no program gets 'Generate a program' on the Training tab, and the Intelligence button says first program", () => {
     const tab = readFileSync("src/components/clients/client-training-tab.tsx", "utf8");
     expect(tab).toContain('data-testid="training-write-with-ai"');
     expect(tab).toContain('title="Generate a program"');
-    expect(readFileSync("src/components/program-intel/ProgramIntelligencePage.tsx", "utf8")).toContain('c.loggedSets === 0 ? "Generate first program" : "Generate next program"');
+    // Program Intelligence is the workflow: generating is its own step on the same page
+    expect(readFileSync("src/components/program-intel/ProgramIntelligencePage.tsx", "utf8")).toContain("<NextProgramWorkstation clientId={clientId} reportSearch={search} />");
     expect(readFileSync("src/components/program-intel/generator/overview.tsx", "utf8")).toContain("Starting from their setup");
   });
 

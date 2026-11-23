@@ -58,15 +58,18 @@ export const queueIntelJobFn = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => queueSchema.parse(d))
   .handler(async ({ data, context }) => {
     await assertCoach(context, data.clientId);
-    // one run of a kind at a time per client
+    // one run at a time per client: a second tap, a second device or a strategy beside a build
+    // gets the run already going (the worker keeps any run of the last 2 days alive or stops it
+    // with Try again, jobs.server.ts), never a second generation writing alongside it
     const sb = context.supabase as any;
+    const live = data.kind === "interpret" ? ["interpret"] : ["strategy", "generate"];
     const { data: busy } = await sb
       .from("program_intel_jobs")
       .select("id, status, updated_at")
       .eq("client_id", data.clientId)
-      .eq("kind", data.kind)
+      .in("kind", live)
       .in("status", ["pending", "running"])
-      .gt("updated_at", new Date(Date.now() - 10 * 60_000).toISOString())
+      .gt("updated_at", new Date(Date.now() - 2 * 86_400_000).toISOString())
       .limit(1);
     if (busy?.length) return { jobId: busy[0].id as string, alreadyRunning: true };
     const { data: job, error } = await sb
@@ -214,5 +217,15 @@ export const discardIntelDraftFn = createServerFn({ method: "POST" })
     await sb.from("program_intel_observations").update({ status: "rejected", reviewed_by: context.userId, reviewed_at: new Date().toISOString() }).eq("job_id", job.id).eq("status", "proposed");
     const { error } = await sb.from("program_intel_jobs").update({ status: "discarded" }).eq("id", job.id);
     if (error) throw new Error(error.message);
+    // a model still thinking for a discarded run is stopped, so it isn't billed for nothing (best effort)
+    const live = Object.values((job.result?.pending ?? {}) as Record<string, { id?: string; hedge?: { id: string } }>).flatMap((p) => [p?.id, p?.hedge?.id]).filter((x): x is string => !!x);
+    if (live.length) {
+      try {
+        const { cancelBackground } = await import("@/lib/ai/model-client.server");
+        await Promise.all(live.map((id) => Promise.resolve(cancelBackground(id)).catch(() => undefined)));
+      } catch {
+        // the discard stands either way
+      }
+    }
     return { ok: true };
   });

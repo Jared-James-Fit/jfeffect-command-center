@@ -22,7 +22,8 @@ describe("the coach's community, in one place", () => {
     // the shell's bar steps aside on Crew, like the clients' (not for the finance login)
     expect(read("src/routes/_authenticated/admin/route.tsx")).toContain('const CREW_OWN_BAR = ["/admin/community"] as const;');
     expect(read("src/routes/_authenticated/admin/route.tsx")).toContain("ownTopBarOn={viewOnly ? undefined : CREW_OWN_BAR}");
-    expect(read("src/components/admin-top-bar.tsx")).toContain("if (isChatRoute || isCrew) return null;");
+    // no strip above admin pages at all (only the `?` shortcuts host), so nothing sits over Crew
+    expect(read("src/components/admin-top-bar.tsx")).toContain("return <KeyboardShortcutsHost />;");
     // the bar: the coach's + (his composer), Manage beside it with a dot while something waits, Crew · Following · Rankings
     // in the middle (smaller, two buttons on the left), the heart and photo as everyone's
     expect(screen).toContain('<BarButton label="Write a post" onClick={coach.onWrite} data-crew-write>');

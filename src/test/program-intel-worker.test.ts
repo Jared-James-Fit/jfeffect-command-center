@@ -200,7 +200,10 @@ async function runToEnd(db: any, max = 20) {
 }
 
 describe("Generate Next Program pipeline (background, service role, one stage per request)", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    // the wall clock can be in a quarter-hour rush, when the worker doesn't pick runs up
+    const { workerGuards } = await import("@/lib/program-intel/jobs.server");
+    workerGuards.quarterRush = false;
     replies.length = 0;
     calls.length = 0;
     background.clear();
@@ -416,6 +419,54 @@ describe("Generate Next Program pipeline (background, service role, one stage pe
       expect(j.status).toBe("ready");
       expect(j.attempts).toBeLessThan(3);
       expect(j.result.strategy.decisions).toHaveLength(1);
+    } finally {
+      Object.assign(pollConfig, before);
+      bg.stillThinking = 0;
+    }
+  });
+
+  it("a request the host cut off: a model stage is picked up after 2 min, a code stage not before 5", async () => {
+    const { runIntelJob } = await import("@/lib/program-intel/jobs.server");
+    const ago = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+    const stuck = memoryDb(seed(rec, job({ kind: "strategy", status: "running", stage: "strategy", attempts: 1, updated_at: ago(2.5), progress: { stages: [], current: "strategy" }, result: {} })));
+    replies.push(strategyJson(recommended));
+    // its context was never written in this fixture: the stage reads what's there; what matters is it was claimed
+    await runIntelJob(stuck, "job-1");
+    expect(stuck.tables.program_intel_jobs[0].attempts).toBe(2);
+    const reading = memoryDb(seed(rec, job({ kind: "generate", status: "running", stage: "context", attempts: 1, updated_at: ago(2.5) })));
+    expect((await runIntelJob(reading, "job-1")).status).toBe("idle");
+    expect(reading.tables.program_intel_jobs[0].attempts).toBe(1);
+  });
+
+  it("a run cut off on every attempt stops with Try again, never spinning forever", async () => {
+    const { runIntelJob } = await import("@/lib/program-intel/jobs.server");
+    const db = memoryDb(seed(rec, job({ kind: "strategy", status: "running", stage: "strategy", attempts: 3, updated_at: new Date(Date.now() - 3 * 60_000).toISOString(), progress: { stages: [{ key: "strategy", label: "Programming strategy", status: "running" }], current: "strategy" }, result: { pending: { strategy: { id: "resp-x", model: "openai:gpt-6-astra", at: Date.now() - 5 * 60_000 } } } })));
+    expect((await runIntelJob(db, null)).status).toBe("idle");
+    const j = db.tables.program_intel_jobs[0];
+    expect(j.status).toBe("error");
+    expect(j.error).toMatch(/kept getting cut off/);
+    expect(j.progress.stages[0].status).toBe("error");
+    expect(j.result.pending).toEqual({});
+  });
+
+  it("a run discarded while a request holds it stays discarded", async () => {
+    const { pollConfig } = await import("@/lib/program-intel/pipeline.server");
+    const before = { ...pollConfig };
+    Object.assign(pollConfig, { every: 0, ms: 0 });
+    try {
+      replies.push(strategyJson(recommended));
+      bg.stillThinking = 50;
+      const db = memoryDb(seed(rec, job({ kind: "strategy" })));
+      const { runIntelJob } = await import("@/lib/program-intel/jobs.server");
+      // context, then the strategy is submitted and still thinking
+      for (let i = 0; i < 3; i++) await runIntelJob(db, "job-1");
+      const j = db.tables.program_intel_jobs[0];
+      expect(j.stage).toBe("strategy");
+      // the coach discards it, then a request that was already holding it hands back
+      j.status = "discarded";
+      const r = await runIntelJob(db, "job-1");
+      expect(r.status).toBe("idle");
+      expect(j.status).toBe("discarded");
     } finally {
       Object.assign(pollConfig, before);
       bg.stillThinking = 0;
