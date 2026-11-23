@@ -265,6 +265,12 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
     keywords: ["program gaps", "missing", "rpe", "rir", "prescription", "maxes", "incomplete program"] },
 
   // ── MEMBERSHIP ──────────────────────────────────────────────────────
+  { id: "app-insights", label: "App & website", to: "/admin/insights",
+    category: "Admin Pages", parent: "Admin → Insights", roles: ADMIN, icon: BarChart3,
+    keywords: ["analytics", "active users", "live", "sessions", "retention", "feature adoption", "devices", "map", "website traffic", "funnel"] },
+  { id: "usage-spend", label: "Usage & spend", to: "/admin/usage",
+    category: "Admin Pages", parent: "Admin → Insights", roles: ADMIN, icon: BarChart3,
+    keywords: ["ai cost", "openai", "sms cost", "twilio", "budget", "spend", "models", "credits"] },
   { id: "membership-home", label: "Membership Home", to: "/admin/membership",
     category: "Membership", parent: "Admin → Membership", roles: ADMIN, icon: CreditCard },
   { id: "membership-billing", label: "Membership Billing", to: "/admin/membership/billing",
