@@ -68,7 +68,7 @@ describe("one menu row per page", () => {
 
   it("admins and coaches get short menus: a row per page, a flyout only where a row has pages of its own", () => {
     expect(buildInternalNavCollapsed("admin").map((i) => i.label)).toEqual([
-      "Dashboard", "Tasks", "Messages", "Clients", "Crew", "Calendar", "Coaching", "Sales", "Membership", "Team", "Settings",
+      "Dashboard", "Tasks", "Messages", "Clients", "Crew", "Calendar", "Coaching", "Sales", "Insights", "Membership", "Team", "Settings",
     ]);
     expect(buildInternalNavCollapsed("coach").map((i) => i.label)).toEqual([
       "Dashboard", "Tasks", "Messages", "Clients", "Crew", "Calendar", "Coaching", "Settings",

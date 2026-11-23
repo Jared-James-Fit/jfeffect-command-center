@@ -6,6 +6,8 @@
  * `redistribution` says what that does to the workload, and `findConflicts`
  * names any requirements that can't all hold. Deterministic.
  */
+import { consolidatePain, painPlaceName } from "./pain-read";
+import { sessionLimit } from "./session-limit";
 import { mean, round, sum } from "./core";
 import type { AthleteContext } from "./context";
 import { missingEquipment, type EquipmentResolution } from "./equipment";
@@ -276,10 +278,11 @@ export function recommendSetup(x: {
 
   // Session length: as long as their sessions actually take, within their stated limit, and for a
   // client who trains in booked PT sessions within that hour (warm-up, lifting and cardio all inside it).
-  const pt = ctx.session.ptMinutes ?? null;
-  const stated = ctx.session.goalsMinutes ?? null;
-  const cap = pt != null && (stated == null || pt <= stated) ? pt : stated;
-  const capIsPt = cap != null && cap === pt;
+  const lim = sessionLimit(ctx.session);
+  const pt = lim.pt;
+  const stated = lim.stated;
+  const cap = lim.minutes;
+  const capIsPt = lim.source === "pt";
   const capName = capIsPt ? `their ${pt}-min PT session` : "Goals & Setup";
   let sessionMinutes: number | null;
   if (ctx.session.entries >= 4 && ctx.session.observedMedian != null) {
@@ -299,7 +302,7 @@ export function recommendSetup(x: {
   let maxSessionMinutes = cap ?? (ctx.session.observedP80 ? roundUp5(ctx.session.observedP80) : null);
   if (maxSessionMinutes != null) maxSessionMinutes = Math.min(300, Math.max(15, maxSessionMinutes));
   why.maxSessionMinutes = capIsPt
-    ? { source: "Booked PT sessions", reason: `They book ${cap}-min PT sessions (${ctx.session.ptBooked ?? 0} from 8 weeks back to 4 ahead): the warm-up, the lifting and the cardio after it all fit inside${stated != null && stated > cap ? `, though Goals & Setup says ${stated}` : ""}.`, confidence: "high" }
+    ? { source: "Booked PT sessions", reason: `They book ${cap}-min PT sessions (${ctx.session.ptBooked ?? 0} from 8 weeks back to 4 ahead): the warm-up, the lifting and the cardio after it all fit inside${stated != null && cap != null && stated > cap ? `, though Goals & Setup says ${stated}` : ""}.`, confidence: "high" }
     : cap ? { source: "Goals & Setup", reason: "Their stated maximum session length.", confidence: "medium" } : maxSessionMinutes ? { source: "Logged sessions", reason: "The longest typical session (80th percentile).", confidence: "medium" } : { source: "Not on file", reason: "No limit on file.", confidence: "low" };
 
   // Cardio: their plan (the app adds its training-day session to every workout), or, with none on
@@ -351,7 +354,7 @@ export function recommendSetup(x: {
   }
   why.priorities = priorities.length ? { source: "Records + goals", reason: prioWhy.join("; "), confidence: "medium" } : { source: "Nothing stands out", reason: "No lift or muscle lagged in the records and none is named in their goals. Add one if you want an emphasis.", confidence: "low" };
 
-  const restrictions = [...ctx.injuries.stated, ...ctx.injuries.areas.map((a) => `Pain reported: ${a} (${ctx.injuries.painReports.filter((p) => (p.area ?? "").toLowerCase().trim() === a).length}×)`)];
+  const restrictions = [...ctx.injuries.stated, ...(ctx.injuries.pain ?? consolidatePain(ctx.injuries.painReports)).map((p) => `Pain reported: ${painPlaceName(p).toLowerCase()} (${p.reports}×${p.worst != null ? `, worst ${p.worst}/10` : ""})`)];
   why.restrictions = restrictions.length && fresh ? { source: "Goals & Setup", reason: "Injuries they told you about at setup.", confidence: "medium" } : restrictions.length ? { source: "Injuries + check-outs", reason: "Stated injuries and pain reported after workouts.", confidence: "medium" } : { source: "Nothing on file", reason: ctx.recovery.checkouts ? "No injuries or pain reports on file." : "No injuries on file and no check-outs to report pain: confirm with them.", confidence: ctx.recovery.checkouts ? "medium" : "low" };
 
   // Exercises to keep and to reconsider.

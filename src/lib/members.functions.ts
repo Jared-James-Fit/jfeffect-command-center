@@ -489,5 +489,17 @@ export const moveMemberToCoaching = createServerFn({ method: "POST" })
       .update({ service_tier: "coaching", status: "New Client", assigned_coach_id: data.coachId } as any)
       .eq("id", (client as any).id);
     if (error) throw new Error(error.message);
+    // the plan change is part of the account's history (never fails the move)
+    await (supabaseAdmin as any)
+      .from("account_lifecycle_events")
+      .insert({
+        client_id: (client as any).id,
+        user_id: member.user_id,
+        event: "moved_to_coaching",
+        actor_user_id: (context as any).userId,
+        actor_role: "admin",
+        details: {},
+      })
+      .then(() => null, () => null);
     return { clientId: (client as any).id as string };
   });

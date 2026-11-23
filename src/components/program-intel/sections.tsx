@@ -9,7 +9,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { fmtLoad, fmtSet, LB_PER_KG } from "@/lib/program-intel/core";
-import { LIFTS, type Finding, type IntelReport, type Lift } from "@/lib/program-intel/types";
+import { LIFTS, type BlockReport, type Finding, type IntelReport, type Lift } from "@/lib/program-intel/types";
+import { deriveBlockStatuses } from "@/lib/block-status";
+import { blockShortName } from "@/lib/workouts/exercise-history";
+import { colorClass, resolveBlockType } from "@/lib/block-types";
 
 const LIFT_LABEL: Record<Lift, string> = { squat: "Squat", bench: "Bench", deadlift: "Deadlift" };
 
@@ -235,19 +238,33 @@ export function WeeksSection({ report }: { report: IntelReport }) {
   );
 }
 
+/** A block's name and status as the Training tab and the editor say them: one canonical status, "Hidden from client" when it is. */
+export function blockLabelParts(b: Pick<BlockReport, "number" | "name" | "hidden">, status: string | null): { title: string; status: string | null } {
+  const short = blockShortName(b.name) ?? b.name;
+  const hidden = b.hidden && status !== "Completed" && status !== "Archived";
+  return { title: `Block ${b.number} · ${short}`, status: [status, hidden ? "Hidden from client" : null].filter(Boolean).join(" · ") || null };
+}
+
 export function BlocksSection({ report }: { report: IntelReport }) {
   const u = report.client.unit;
+  // one status per block, read the way every other screen reads it (block-status.ts)
+  const statuses = deriveBlockStatuses(report.blocks.map((b) => ({ id: b.blockId, status: b.status, start_date: b.start, end_date: b.end, archived: b.archived, sort_order: b.number })));
   return (
     <div className="space-y-2" data-testid="intel-blocks">
-      {report.blocks.map((b) => (
+      {report.blocks.map((b) => {
+        const lbl = blockLabelParts(b, statuses.get(b.blockId) ?? null);
+        const rt = resolveBlockType({ name: b.name, training_focus: b.focus });
+        return (
         <Card key={b.blockId} className="space-y-2 p-3.5">
           <div className="flex items-baseline justify-between gap-2">
             <div className="min-w-0">
-              <div className="truncate text-sm font-bold">B{b.number} · {b.name}</div>
+              <div className="flex items-center gap-1.5 truncate text-sm font-bold">
+                <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", rt.type ? colorClass(rt.type).dot : "bg-muted")} />
+                <span className="truncate">{lbl.title}</span>
+              </div>
               <div className="truncate text-[11px] text-muted-foreground">
                 {b.start ?? "?"} → {b.end ?? "?"} · {b.weeks} wk{b.focus ? ` · ${b.focus}` : ""}
-                {b.hidden ? " · hidden" : ""}
-                {b.archived ? " · archived" : ""}
+                {lbl.status ? ` · ${lbl.status}` : ""}
               </div>
             </div>
             <div className="shrink-0 text-right text-[11px] text-muted-foreground">
@@ -267,7 +284,8 @@ export function BlocksSection({ report }: { report: IntelReport }) {
           </div>
           {b.topMuscles.length > 0 && <div className="text-[11px] text-muted-foreground">Most volume: {b.topMuscles.map((m) => `${m.muscle} ${m.setsPerWeek}`).join(" · ")}</div>}
         </Card>
-      ))}
+        );
+      })}
     </div>
   );
 }

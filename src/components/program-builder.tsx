@@ -877,7 +877,7 @@ export function ExerciseLibraryPanel({
           onClick={() => setFilter(null)}
           className={cn(
             "rounded px-1.5 py-0.5 text-[10px]",
-            filter === null ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground",
+            filter === null ? "bg-foreground text-background" : "bg-secondary text-muted-foreground hover:text-foreground",
           )}
         >
           All
@@ -888,7 +888,7 @@ export function ExerciseLibraryPanel({
             onClick={() => setFilter(filter === f ? null : f)}
             className={cn(
               "rounded px-1.5 py-0.5 text-[10px]",
-              filter === f ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground",
+              filter === f ? "bg-foreground text-background" : "bg-secondary text-muted-foreground hover:text-foreground",
             )}
           >
             {f}

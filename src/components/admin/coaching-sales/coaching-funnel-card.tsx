@@ -111,6 +111,8 @@ export function CoachingFunnelCard() {
             <h3 className="text-[16px] font-semibold">The home page</h3>
             <div className="mt-2 divide-y divide-border/70">
               <Row label="Visitors" value={visitors} />
+              <Row label="Saw what a trainer and online coaching cost" value={f.anchorViews} of={visitors} hint="The yearly examples near the top, before the app is shown" />
+              <Row label="Saw the free app's $0" value={f.freeRevealViews} of={visitors} hint="The free app's price, after the app's screens" />
               <Row label="Tapped Get the free app" value={f.ctaFree} of={visitors} />
               <Row label="Sent a free app application" value={f.freeSent} of={visitors} />
               <Row label="Tapped a coaching button" value={f.ctaCoaching} of={visitors} />
