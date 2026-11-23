@@ -67,7 +67,7 @@ export function useClipRecorder({
   onClip: (file: File) => void;
   /** Read when a clip starts: record the mic (pauses their music) or film without it. */
   withSound?: () => boolean;
-  /** Read when a clip starts: the viewfinder and its digital zoom, or null when the camera zooms itself (or doesn't zoom). */
+  /** Read when a clip starts: the viewfinder and its digital zoom (1 for a 4K camera drawn down to 1080p), or null to record the camera as it is. */
   digital?: () => { video: HTMLVideoElement; zoom: () => number } | null;
 }) {
   const [startedAt, setStartedAt] = useState<number | null>(null);
@@ -107,8 +107,8 @@ export function useClipRecorder({
     if (rec.current || starting.current) return;
     const stream = getStream();
     if (!stream || !pickRecorderType()) return;
-    // Recorded as hard as the picture needs (film-settings.ts: ~10 Mbps for 1080p, a phone
-    // camera's own rate), in the H.264 level that fits it; it's shrunk for the feed later.
+    // Recorded as hard as the picture needs (film-settings.ts: ~6 Mbps for 1080p), in the
+    // H.264 level that fits it; a 1080p clip goes up to Crew as it is (plan.ts `caps.hd`).
     const vs = stream.getVideoTracks()[0]?.getSettings?.() ?? {};
     let w = vs.width ?? 1440;
     let h = vs.height ?? 1920;
@@ -138,12 +138,15 @@ export function useClipRecorder({
       restore?.();
       return;
     }
-    // a digital zoom films through the canvas, so the clip zooms as the screen does
+    // a digital zoom (or a 4K camera, drawn down to 1080p) films through the canvas, so the clip zooms as the screen does
     const dz = digitalRef.current?.() ?? null;
     const comp = dz ? startZoomCompositor(dz.video, dz.zoom, Math.round(fps) || 30) : null;
+    let recType = type;
     if (comp) {
       w = comp.width;
       h = comp.height;
+      // the H.264 level for the size actually recorded
+      recType = pickType(recorderTypes(w, h, fps), (t) => typeof MediaRecorder !== "undefined" && !!MediaRecorder.isTypeSupported?.(t)) ?? type;
     }
     const mixed = new MediaStream([...(comp ? [comp.track] : stream.getVideoTracks()), ...(audio?.getAudioTracks() ?? [])]);
     const fail = (message: string) => {
@@ -154,7 +157,7 @@ export function useClipRecorder({
     };
     let recorder: MediaRecorder;
     try {
-      recorder = new MediaRecorder(mixed, { mimeType: type, videoBitsPerSecond: recorderBitrate(w, h, fps), audioBitsPerSecond: 128_000, ...recorderKeyframes() });
+      recorder = new MediaRecorder(mixed, { mimeType: recType, videoBitsPerSecond: recorderBitrate(w, h, fps), audioBitsPerSecond: 128_000, ...recorderKeyframes() });
     } catch {
       try {
         recorder = new MediaRecorder(mixed);
@@ -164,7 +167,7 @@ export function useClipRecorder({
     }
     const chunks: Blob[] = [];
     const t0 = performance.now();
-    const entry: Rec & { keep?: boolean } = { recorder, audio, restore, startedAt: t0, type, comp };
+    const entry: Rec & { keep?: boolean } = { recorder, audio, restore, startedAt: t0, type: recType, comp };
     recorder.ondataavailable = (e) => {
       if (e.data && e.data.size > 0) chunks.push(e.data);
     };

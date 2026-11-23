@@ -15,6 +15,7 @@
  */
 import { askOrder, constraintLadder, readFilmAsk, readFilmSettings, videoConstraints, type AskShape } from "@/lib/camera/film-settings";
 import { isPhone, phoneOnItsSide, readOrientation } from "@/lib/portrait-only";
+import { readCrewQuality, type CrewQuality } from "@/lib/camera/crew-quality";
 
 /** How long an answer waits for the camera to take it before it's let go. */
 export const PRIME_TTL_MS = 8_000;
@@ -53,12 +54,28 @@ let primed: { key: string; promise: Promise<MediaStream>; timer: ReturnType<type
  * A tablet or a computer keeps 4:3 (a landscape webcam keeps more of its
  * height under the 9:16 crop that way).
  */
-export function studioCameraAsk(facing: "environment" | "user", shape?: AskShape | null): MediaTrackConstraints {
+export function studioCameraAsk(facing: "environment" | "user", shape?: AskShape | null, quality: CrewQuality = readCrewQuality()): MediaTrackConstraints {
   const upright = phoneUpright();
-  if (upright == null) return LEGACY_STUDIO_ASK(facing);
+  if (upright == null) return LEGACY_STUDIO_ASK(facing, quality);
   const s = shape ?? askOrder(upright, readFilmAsk())[0];
-  const ask = videoConstraints({ quality: "1080p", fps: 30, facing }, null, s);
+  // the quality picked in the camera (crew-quality.ts): HD, or 4K where the camera can
+  const ask = videoConstraints({ quality: quality === "4k" ? "4k" : "1080p", fps: 30, facing }, null, s);
   return ptzAsk ? ({ ...ask, zoom: true } as MediaTrackConstraints) : ask;
+}
+
+/**
+ * The studio's second ask, when the first one failed (a camera still busy a
+ * moment after another app had it): the same size without the extras, never
+ * a bare `{ facingMode }`, which an iPhone answers at 640 × 480 for the rest
+ * of the visit.
+ */
+export function studioCameraRetryAsk(facing: "environment" | "user", quality: CrewQuality = readCrewQuality()): MediaTrackConstraints {
+  const long = quality === "4k" ? 3840 : 1920;
+  const short = quality === "4k" ? 2160 : 1080;
+  const upright = phoneUpright();
+  return upright
+    ? { facingMode: facing, width: { ideal: short }, height: { ideal: long } }
+    : { facingMode: facing, width: { ideal: long }, height: { ideal: short } };
 }
 
 /**
@@ -88,8 +105,9 @@ export function refreshPtzAsk(): void {
 export function setPtzAskForTests(on: boolean): void {
   ptzAsk = on;
 }
-/** The 4:3 ask, for a tablet or a computer. */
-const LEGACY_STUDIO_ASK = (facing: "environment" | "user"): MediaTrackConstraints => ({ facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } });
+/** The 4:3 ask, for a tablet or a computer (4K's: 3840 × 2880, where the webcam goes that far). */
+const LEGACY_STUDIO_ASK = (facing: "environment" | "user", quality: CrewQuality = "hd"): MediaTrackConstraints =>
+  quality === "4k" ? { facingMode: { ideal: facing }, width: { ideal: 3840 }, height: { ideal: 2880 } } : { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } };
 
 /**
  * Call inside the tap that opens a camera: the film camera's first ask, or

@@ -27,7 +27,8 @@ import { reportCameraTrouble } from "@/lib/camera-report";
 import { LookCarousel, RecordingClock, lookItems, type LookGroup, type LookItem } from "@/components/community/look-carousel";
 import { MAX_RECORD_MS, canRecordClips, useClipRecorder } from "@/components/community/clip-recorder";
 import { askOrder, pictureFits, pictureMiss, readFilmAsk, readFilmSettings, saveFilmAsk, type AskShape } from "@/lib/camera/film-settings";
-import { phoneUpright, refreshPtzAsk, studioCameraAsk, takePrimedCamera } from "@/lib/camera/camera-prime";
+import { phoneUpright, refreshPtzAsk, studioCameraAsk, studioCameraRetryAsk, takePrimedCamera } from "@/lib/camera/camera-prime";
+import { crewQualities, needsDownscale, qualityLabel, readCrewQuality, saveCrewQuality, type CrewQuality } from "@/lib/camera/crew-quality";
 import { PICTURE_WAIT_MS, pictureSize } from "@/lib/camera/picture-size";
 import { digitalZoomRange, easeZoom, zoomCrop, zoomDetent, zoomFromPinch, zoomFromSlide, zoomLabel, zoomRange, type ZoomRange } from "@/lib/camera/camera-zoom";
 import { canRecordCanvas } from "@/lib/camera/zoom-compositor";
@@ -319,6 +320,10 @@ export function ShareStudio({
   const [shot, setShot] = useState<Shot | null>(null);
   const [video, setVideo] = useState<HTMLVideoElement | null>(null);
   const [facing, setFacing] = useState<"environment" | "user">("environment");
+  // how sharp it films (crew-quality.ts): HD or 4K, remembered on the phone; what the camera actually gives shows on the switch
+  const [quality, setQuality] = useState<CrewQuality>(() => (typeof window === "undefined" ? "hd" : readCrewQuality()));
+  const [qualityChoices, setQualityChoices] = useState<CrewQuality[]>(["hd"]);
+  const [picture, setPicture] = useState<{ w: number; h: number } | null>(null);
   // the zoom (pinch, or slide up and down while filming): the camera's own where it has one, else a digital zoom
   // that's filmed too (camera-zoom.ts); where it's going and where it is live in refs, so a slide never re-renders this
   const [zoomCaps, setZoomCaps] = useState<ZoomRange | null>(null);
@@ -686,8 +691,9 @@ export function ShareStudio({
     // The full-quality ask first; a camera that can't do it gets simpler ones
     // (a refusal is final: asking again only repeats it).
     const asks: MediaStreamConstraints[] = [
-      { video: studioCameraAsk(facing), audio: false },
-      { video: { facingMode: facing }, audio: false },
+      { video: studioCameraAsk(facing, null, quality), audio: false },
+      // the same size without the extras (never a bare facingMode: an iPhone answers that at 640 × 480)
+      { video: studioCameraRetryAsk(facing, quality), audio: false },
       { video: true, audio: false },
     ];
     let usedFirstAsk = false;
@@ -695,7 +701,7 @@ export function ShareStudio({
       let last: unknown = null;
       // The tap that opened the studio may have asked already (camera-prime.ts): on an iPhone only a
       // request from a tap reuses an "Allow" once the camera's been off a minute, so that answer is taken.
-      const primed = takePrimedCamera(studioCameraAsk(facing));
+      const primed = takePrimedCamera(studioCameraAsk(facing, null, quality));
       if (primed && "released" in primed) await primed.released;
       for (const [i, ask] of asks.entries()) {
         try {
@@ -740,7 +746,7 @@ export function ShareStudio({
       const miss = pictureMiss(pic.w, pic.h, upright);
       // one camera at a time: this one goes before the other way is asked for
       first.getTracks().forEach((t) => t.stop());
-      const reopen = (shape: AskShape) => navigator.mediaDevices.getUserMedia({ video: studioCameraAsk(facing, shape), audio: false });
+      const reopen = (shape: AskShape) => navigator.mediaDevices.getUserMedia({ video: studioCameraAsk(facing, shape, quality), audio: false });
       try {
         const other = await reopen(shapes[1]);
         if (cancelled) return other;
@@ -777,6 +783,18 @@ export function ShareStudio({
         step = "showing";
         streamRef.current = stream;
         setTorchOk(torchSupported(stream.getVideoTracks()[0]));
+        // what this camera can film at (HD, 4K) and what it's giving now, for the quality switch
+        {
+          const track = stream.getVideoTracks()[0];
+          let caps: { width?: { max?: number }; height?: { max?: number } } | null = null;
+          try {
+            caps = (track?.getCapabilities?.() as unknown as { width?: { max?: number }; height?: { max?: number } } | undefined) ?? null;
+          } catch {
+            caps = null;
+          }
+          setQualityChoices(crewQualities(caps));
+          setPicture(null);
+        }
         // the camera's own zoom where it has one, else a digital zoom (only where a clip can be filmed with it)
         resetZoom(zoomRange(stream.getVideoTracks()[0]) ?? (canRecordCanvas() ? digitalZoomRange() : null));
         // iOS plays a camera inline only when the element is muted + playsinline as attributes
@@ -797,6 +815,7 @@ export function ShareStudio({
           setCamWhy(null);
           setStill(null);
           setStatus("live");
+          if (video.videoWidth) setPicture({ w: video.videoWidth, h: video.videoHeight });
         };
         if (video.readyState >= 2) live();
         else {
@@ -822,7 +841,7 @@ export function ShareStudio({
       stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shooting, video, facing, camTry]);
+  }, [shooting, video, facing, camTry, quality]);
   // Back from another app: a camera the system ended starts again, a paused one plays on.
   useEffect(() => {
     if (!shooting) return;
@@ -1139,7 +1158,13 @@ export function ShareStudio({
     // sound only when it's switched on in the camera's settings (off on a phone), so their music keeps playing
     withSound: () => readFilmSettings().sound,
     // a digital zoom is filmed through the canvas, so the clip zooms as the viewfinder does
-    digital: () => (zoomCapsRef.current?.digital && videoRef.current ? { video: videoRef.current, zoom: () => zoomNow.current } : null),
+    // and so is a 4K camera, drawn down to a sharper 1080p (crew-quality.ts: a clip is never bigger than a post plays)
+    digital: () => {
+      const v = videoRef.current;
+      if (!v) return null;
+      if (zoomCapsRef.current?.digital) return { video: v, zoom: () => zoomNow.current };
+      return needsDownscale(v.videoWidth, v.videoHeight) ? { video: v, zoom: () => 1 } : null;
+    },
     onClip: (file) => {
       markHint("hold_to_film");
       const v = recView.current;
@@ -1300,6 +1325,27 @@ export function ShareStudio({
     feedback("tap");
     setFacing((f) => (f === "user" ? "environment" : "user"));
   };
+  /** HD ↔ 4K (the iPhone camera's switch): the camera opens again at that size, the last frame held meanwhile. */
+  const askedQuality = useRef<CrewQuality | null>(null);
+  const switchQuality = () => {
+    if (status !== "live" || recorder.recording || qualityChoices.length < 2) return;
+    const next: CrewQuality = quality === "4k" ? "hd" : "4k";
+    holdStill();
+    feedback("toggle");
+    askedQuality.current = next;
+    saveCrewQuality(next);
+    setQuality(next);
+  };
+  // 4K asked for and the camera came back smaller (it wouldn't say what it can): said once, and back to HD
+  useEffect(() => {
+    if (!picture || askedQuality.current !== "4k") return;
+    askedQuality.current = null;
+    if (qualityLabel(picture.w, picture.h) === "4K") return;
+    toast("This camera films in HD here");
+    saveCrewQuality("hd");
+    setQuality("hd");
+    setQualityChoices(["hd"]);
+  }, [picture]);
   /*
    * The zoom's glide: the finger (a slide while filming, a pinch) sets where it's going (`zoomTo`) and every
    * frame the zoom eases there (easeZoom), so a slide up and down reads as one smooth move, never steps.
@@ -2079,6 +2125,22 @@ export function ShareStudio({
                     ) : (
                       <button type="button" onClick={requestLeave} className={cn(pill, "transition-opacity duration-200", recorder.recording && "pointer-events-none opacity-0")} aria-label="Close" data-studio-close>
                         <X className="h-6 w-6" />
+                      </button>
+                    )}
+                    {/* how sharp it films (the iPhone camera's HD · 4K), top right: what the camera is giving now, a tap to switch where it can */}
+                    {status === "live" && (
+                      <button
+                        type="button"
+                        onClick={switchQuality}
+                        disabled={qualityChoices.length < 2}
+                        className={cn(
+                          "absolute right-2.5 top-2.5 flex h-11 min-w-11 items-center justify-center rounded-full bg-black/40 px-3 text-[13px] font-semibold tracking-wide text-white backdrop-blur transition-opacity duration-200 active:scale-95 disabled:active:scale-100",
+                          recorder.recording && "pointer-events-none opacity-0",
+                        )}
+                        aria-label={`Quality: ${qualityLabel(picture?.w, picture?.h) ?? (quality === "4k" ? "4K" : "HD")}${qualityChoices.length > 1 ? `. Tap for ${quality === "4k" ? "HD" : "4K"}` : ""}`}
+                        data-studio-quality={qualityLabel(picture?.w, picture?.h) ?? quality}
+                      >
+                        {qualityLabel(picture?.w, picture?.h) ?? (quality === "4k" ? "4K" : "HD")}
                       </button>
                     )}
                     {/* the flash, in the middle (Instagram's): the back camera's light where it has one, the screen for a selfie */}

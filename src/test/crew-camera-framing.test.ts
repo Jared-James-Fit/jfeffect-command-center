@@ -118,7 +118,9 @@ describe("zoom: the camera's own, else a digital zoom that's filmed too", () => 
     const comp = read("src/lib/camera/zoom-compositor.ts");
     expect(comp).toContain("const c = zoomCrop(w, h, canvas.width, canvas.height, zoom());");
     expect(comp).toContain("ctx.drawImage(video, c.sx, c.sy, c.sw, c.sh, 0, 0, canvas.width, canvas.height);");
-    expect(studio).toContain("digital: () => (zoomCapsRef.current?.digital && videoRef.current ? { video: videoRef.current, zoom: () => zoomNow.current } : null),");
+    expect(studio).toContain("if (zoomCapsRef.current?.digital) return { video: v, zoom: () => zoomNow.current };");
+    // a 4K camera films through the same canvas at zoom 1, drawn down to 1080p
+    expect(studio).toContain("return needsDownscale(v.videoWidth, v.videoHeight) ? { video: v, zoom: () => 1 } : null;");
     expect(studio).toContain("resetZoom(zoomRange(stream.getVideoTracks()[0]) ?? (canRecordCanvas() ? digitalZoomRange() : null));");
     // the preview scales from its middle; a photo takes the same part at full size
     expect(studio).toContain("v.style.transform = zoomCapsRef.current?.digital && z > 1.0005 ? `scale(${z})` : \"\";");

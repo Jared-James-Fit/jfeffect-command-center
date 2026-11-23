@@ -11,8 +11,13 @@
  * (`requestVideoFrameCallback` where the browser has it, else every
  * animation frame), at the zoom the glide is at that frame, so the clip
  * zooms as smoothly as the screen did.
+ *
+ * The canvas is never bigger than `maxLong` on its long side (1080p,
+ * crew-quality.ts): a 4K camera is drawn down to a sharper 1080p clip, and a
+ * zoom into a 4K picture keeps its detail up to 2×.
  */
 import { zoomCrop } from "@/lib/camera/camera-zoom";
+import { RECORD_LONG_MAX, recordSize } from "@/lib/camera/crew-quality";
 
 type FrameVideo = HTMLVideoElement & {
   requestVideoFrameCallback?: (cb: () => void) => number;
@@ -32,13 +37,14 @@ export type ZoomCompositor = { track: MediaStreamTrack; width: number; height: n
  * can't (no frame yet, no canvas capture), and the caller records the camera
  * as it is.
  */
-export function startZoomCompositor(video: HTMLVideoElement, zoom: () => number, fps = 30): ZoomCompositor | null {
+export function startZoomCompositor(video: HTMLVideoElement, zoom: () => number, fps = 30, maxLong = RECORD_LONG_MAX): ZoomCompositor | null {
   const vw = video.videoWidth;
   const vh = video.videoHeight;
   if (!vw || !vh || !canRecordCanvas()) return null;
   const canvas = document.createElement("canvas");
-  canvas.width = vw;
-  canvas.height = vh;
+  const out = recordSize(vw, vh, maxLong);
+  canvas.width = out.width;
+  canvas.height = out.height;
   const ctx = canvas.getContext("2d", { alpha: false });
   if (!ctx) return null;
   ctx.imageSmoothingEnabled = true;
