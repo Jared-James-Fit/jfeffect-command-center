@@ -23,6 +23,7 @@ import { SectionTitle, StatusIcon } from "./overview";
 import { DecisionCard, StrategySummary } from "./strategy-view";
 import { RunProgressBar, stepLine, useRunEta } from "./run-progress";
 import { stoppedWords } from "@/lib/program-intel/run-eta";
+import { isGeneratedLabel } from "@/lib/program-intel/program-name";
 
 export function PipelineProgress({ job, onRetry, onDiscard, busy }: { job: IntelJob; onRetry: () => void; onDiscard: () => void; busy: boolean }) {
   const stages = job.progress?.stages ?? [];
@@ -193,6 +194,7 @@ export function DraftView({
   onAssign,
   onDiscard,
   onInspect,
+  onRename,
   plan,
 }: {
   job: IntelJob;
@@ -200,6 +202,8 @@ export function DraftView({
   busy: boolean;
   onAssign: (startDate: string, acknowledge: boolean, allowOverlap: boolean) => void;
   onDiscard: () => void;
+  /** Rename the program (its draft and, once assigned, what the athlete reads); resolves true when saved. */
+  onRename?: (name: string) => Promise<boolean>;
   /** The run's inspector: the admin's only (undefined hides it and the model name). */
   onInspect?: () => void;
   /** Where the next program goes: its planned start, when the current one ends, and the deadline on file. */
@@ -217,7 +221,15 @@ export function DraftView({
   const [confirming, setConfirming] = useState(false);
   const [ack, setAck] = useState(false);
   const [overlapOk, setOverlapOk] = useState(false);
+  const [naming, setNaming] = useState<string | null>(null);
   if (!program) return null;
+  const generic = isGeneratedLabel(program.program_name);
+  const saveName = async () => {
+    if (!onRename || naming == null) return;
+    const next = naming.trim();
+    if (!next || next === program.program_name) return setNaming(null);
+    if (await onRename(next)) setNaming(null);
+  };
   const failed = audit?.overall === "failed";
   const weeks = program.blocks.reduce((n, b) => n + b.weeks, 0);
   const deadline = plan?.deadline ?? null;
@@ -229,7 +241,25 @@ export function DraftView({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-[12px] font-medium text-muted-foreground">{job.status === "assigned" ? "Assigned" : job.status === "discarded" ? "Discarded draft" : "Draft · hidden from the client"}</div>
-          <div className="text-base font-bold leading-tight">{program.program_name}</div>
+          {naming != null ? (
+            <form className="mt-1 flex items-center gap-1.5" onSubmit={(e) => { e.preventDefault(); void saveName(); }} data-testid="gen-rename">
+              <Input autoFocus value={naming} maxLength={60} onChange={(e) => setNaming(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") setNaming(null); }} aria-label="Program name" placeholder="Westerns Prep" className="h-9 min-w-0 flex-1 text-[15px]" />
+              <Button type="submit" size="sm" className="h-9" disabled={busy || !naming.trim()}>Save</Button>
+              <Button type="button" size="sm" variant="ghost" className="h-9" onClick={() => setNaming(null)}>Cancel</Button>
+            </form>
+          ) : (
+            <div className="flex min-w-0 items-center gap-1">
+              <div className={cn("min-w-0 text-base font-bold leading-tight", generic && "text-muted-foreground")} data-testid="gen-program-name">{program.program_name}</div>
+              {onRename && job.status !== "discarded" && (
+                <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0" aria-label="Rename program" onClick={() => setNaming(generic ? "" : program.program_name)} data-testid="gen-rename-open">
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+          )}
+          {generic && naming == null && onRename && job.status !== "discarded" ? (
+            <div className="text-[11px] text-muted-foreground">No name yet. Name it so {job.status === "assigned" ? "the athlete sees" : "the athlete will see"} what it's for.</div>
+          ) : null}
           <div className="text-[11px] text-muted-foreground">{BRAIN_LABEL[job.brain]} · {job.created_at.slice(0, 10)}{onInspect && job.model ? ` · ${job.model}` : ""}{job.result?.strategySource === "coach" ? " · from your approved strategy" : " · recommended strategy auto-accepted"}</div>
         </div>
         {onInspect && <Button size="sm" variant="ghost" className="h-8 shrink-0 px-2 text-[11px]" onClick={onInspect} data-testid="gen-inspect"><FileSearch className="mr-1 h-3.5 w-3.5" /> Context</Button>}

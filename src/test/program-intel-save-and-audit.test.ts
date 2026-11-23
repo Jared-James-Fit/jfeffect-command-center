@@ -10,7 +10,8 @@ import { programInLocalWeeks, rxForWeek, withLocalWeeks } from "@/lib/program-in
 import { blockPhases } from "@/lib/program-intel/generator-prompts";
 import { stoppedWords } from "@/lib/program-intel/run-eta";
 import type { BuiltBlock } from "@/lib/program-intel/generator-schemas";
-import { builtBlockSchema } from "@/lib/program-intel/generator-schemas";
+import { builtBlockSchema, strategySchema } from "@/lib/program-intel/generator-schemas";
+import { cleanProgramName, isGeneratedLabel, meetProgramName, programIntelNote, programNameFor } from "@/lib/program-intel/program-name";
 
 const read = (p: string) => readFileSync(p, "utf8");
 
@@ -121,5 +122,53 @@ describe("a stopped run says why once, in plain words", () => {
     expect(card).toContain("stoppedWords(job.error)");
     expect(read("src/components/program-intel/generator/workstation.tsx")).not.toContain("description: j.error");
     expect(read("src/components/program-intel/generator/overview.tsx")).not.toContain("uppercase tracking-widest text-muted-foreground\">{children}");
+  });
+});
+
+describe("a generated program is named like the coach names one (Dwayne: Westerns Prep)", () => {
+  const base = { brain: "powerlifting" as const, weeks: 12, days: 4 };
+  it("the strategy's name wins, cleaned of the athlete's name, quotes and stops", () => {
+    expect(programNameFor({ ...base, named: "Westerns Prep" })).toBe("Westerns Prep");
+    expect(programNameFor({ ...base, named: "Dwayne's Westerns Prep", firstName: "Dwayne" })).toBe("Westerns Prep");
+    expect(programNameFor({ ...base, named: '"Westerns Prep."', firstName: "Dwayne" })).toBe("Westerns Prep");
+    expect(cleanProgramName("Marathon Prep", "Mar")).toBe("Marathon Prep");
+    expect(cleanProgramName("Westerns Prep (Dwayne)", "Dwayne")).toBe("Westerns Prep");
+  });
+  it("a length, a block or the generator's label is no name", () => {
+    expect(cleanProgramName("Powerlifting · 12 weeks · 4 days")).toBeNull();
+    expect(cleanProgramName("Block 1")).toBeNull();
+    expect(cleanProgramName("12-Week Program")).toBeNull();
+    expect(cleanProgramName("x".repeat(70))).toBeNull();
+  });
+  it("with no name from the strategy, the meet it builds toward names it", () => {
+    expect(meetProgramName("CanPL Western Canadian Championships 2027")).toBe("Western Canadian Championships Prep");
+    expect(meetProgramName("2027 Canadian Nationals")).toBe("Canadian Nationals Prep");
+    expect(meetProgramName("OPA Championships")).toBe("Championships Prep");
+    expect(programNameFor({ ...base, named: "", goal: { kind: "meet", name: "IPF Worlds 2027", date: "2027-06-01" } })).toBe("Worlds Prep");
+    expect(programNameFor({ ...base, named: "", goal: { kind: "goal", name: "Total 600 kg", date: "2027-06-01" } })).toBe("Total 600 kg");
+  });
+  it("with nothing to go on it keeps the generator's label, which is never written onto the athlete's program", () => {
+    const name = programNameFor({ ...base, named: null, goal: null });
+    expect(name).toBe("Powerlifting · 12 weeks · 4 days");
+    expect(isGeneratedLabel(name)).toBe(true);
+    expect(isGeneratedLabel("Westerns Prep")).toBe(false);
+    expect(read("src/lib/program-intel/intel.functions.ts")).toContain("if (!title || isGeneratedLabel(title)) return null;");
+  });
+  it("the strategy is asked for a name and reads without one (an approved strategy from before)", () => {
+    expect(read("src/lib/program-intel/generator-prompts.ts")).toContain('"program_name": string');
+    expect(strategySchema.shape.program_name.safeParse(undefined).success).toBe(true);
+    expect(strategySchema.shape.program_name.safeParse({ a: 1 }).success).toBe(true);
+  });
+  it("assigning puts the blocks under one program record with that name; the draft note says it's assigned", () => {
+    const fn = read("src/lib/program-intel/intel.functions.ts");
+    expect(fn).toContain('.from("pl_preps")');
+    expect(fn).toContain("if (x.blocks.some((b) => b.prep_id)) return null;");
+    expect(fn).toContain("export const renameIntelProgramFn");
+    const draft = "Draft from Program Intelligence (Powerlifting · 12 weeks · 4 days). Not visible to the client until you assign it. Deload: Week 6.";
+    expect(programIntelNote(draft, "Westerns Prep", false)).toBe("From Program Intelligence (Westerns Prep). Deload: Week 6.");
+    expect(programIntelNote(draft, "Westerns Prep", true)).toBe("Draft from Program Intelligence (Westerns Prep). Not visible to the client until you assign it. Deload: Week 6.");
+    expect(programIntelNote("From Program Intelligence (Westerns Prep (CanPL)). Keep it.", "Westerns", false)).toBe("From Program Intelligence (Westerns). Keep it.");
+    expect(programIntelNote("My own note", "Westerns Prep", false)).toBe("My own note");
+    expect(programIntelNote(null, "Westerns Prep", false)).toBeNull();
   });
 });
