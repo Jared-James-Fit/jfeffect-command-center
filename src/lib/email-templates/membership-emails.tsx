@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { Body, Button, Container, Head, Heading, Html, Preview, Section, Text, Hr } from '@react-email/components'
+import { BrandFooter, BrandHeader } from './brand'
 import { LinkHeadsUp } from './link-heads-up'
 import type { TemplateEntry } from './registry'
 
@@ -22,6 +23,7 @@ const ReceivedEmail = (p: ReceivedProps) => (
     <Preview>Got your application. Here's what happens next.</Preview>
     <Body style={main}>
       <Container style={container}>
+        <BrandHeader />
         <Heading style={h1}>Got it, {first(p.first_name)}.</Heading>
         <Text style={text}>
           Your JF Effect application is in. I read every one myself, usually within a day.
@@ -41,13 +43,14 @@ const ReceivedEmail = (p: ReceivedProps) => (
         ) : null}
         <Hr style={hr} />
         <Text style={sign}>Jared</Text>
-        <Text style={footer}>JF Effect · jfeffect.com</Text>
+        <BrandFooter />
       </Container>
     </Body>
   </Html>
 )
 
 export const receivedTemplate = {
+  identity: 'support',
   component: ReceivedEmail,
   subject: 'Got your JF Effect application',
   displayName: 'Membership application received',
@@ -66,6 +69,7 @@ const ApprovedEmail = (p: ApprovedProps) => {
       <Preview>You're approved. Set your password and you're in.</Preview>
       <Body style={main}>
         <Container style={container}>
+          <BrandHeader />
           <Heading style={h1}>You're in, {first(p.first_name)}.</Heading>
           <Text style={text}>
             I approved your JF Effect membership. Tap below, pick a password, and you're straight into the app.
@@ -86,6 +90,7 @@ const ApprovedEmail = (p: ApprovedProps) => {
           <Hr style={hr} />
           <Text style={sign}>Jared</Text>
           <Text style={footer}>This link is just for you. It works for 30 days.</Text>
+          <BrandFooter />
         </Container>
       </Body>
     </Html>
@@ -93,6 +98,7 @@ const ApprovedEmail = (p: ApprovedProps) => {
 }
 
 export const approvedTemplate = {
+  identity: 'support',
   component: ApprovedEmail,
   subject: (d: Record<string, any>) => `${first(d?.first_name)}, you're approved for JF Effect`,
   displayName: 'Membership approved (activation link)',
@@ -109,16 +115,19 @@ const CodeEmail = (p: CodeProps) => (
     <Preview>Your JF Effect code: {p.code || ''}</Preview>
     <Body style={main}>
       <Container style={container}>
+        <BrandHeader />
         <Heading style={h1}>Your code</Heading>
         <Text style={text}>Enter this to finish setting up your JF Effect account, {first(p.first_name)}.</Text>
         <Text style={codeStyle}>{p.code || '000000'}</Text>
         <Text style={footer}>It works for 15 minutes. Didn't ask for it? You can ignore this email.</Text>
+        <BrandFooter />
       </Container>
     </Body>
   </Html>
 )
 
 export const codeTemplate = {
+  identity: 'support',
   component: CodeEmail,
   subject: (d: Record<string, any>) => `${String(d?.code ?? '').trim() || 'Your'} is your JF Effect code`,
   displayName: 'Membership activation code',

@@ -11,6 +11,7 @@ import {
   Preview,
   Text,
 } from '@react-email/components'
+import { BrandFooter, BrandHeader } from './brand'
 import { LinkHeadsUp } from './link-heads-up'
 
 interface EmailChangeEmailProps {
@@ -36,6 +37,7 @@ export const EmailChangeEmail = ({
     <Preview>Confirm your email change for {siteName}</Preview>
     <Body style={main}>
       <Container style={container}>
+        <BrandHeader />
         <Heading style={h1}>Confirm your email change</Heading>
         <Text style={text}>
           You requested to change your email address for {siteName} from{' '}
@@ -59,6 +61,7 @@ export const EmailChangeEmail = ({
           If you didn't request this change, please secure your account
           immediately.
         </Text>
+        <BrandFooter />
       </Container>
     </Body>
   </Html>

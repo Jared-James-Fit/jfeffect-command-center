@@ -9,6 +9,7 @@ import {
   Preview,
   Text,
 } from '@react-email/components'
+import { BrandFooter, BrandHeader } from './brand'
 
 interface ReauthenticationEmailProps {
   token: string
@@ -20,6 +21,7 @@ export const ReauthenticationEmail = ({ token }: ReauthenticationEmailProps) => 
     <Preview>Your verification code</Preview>
     <Body style={main}>
       <Container style={container}>
+        <BrandHeader />
         <Heading style={h1}>Confirm reauthentication</Heading>
         <Text style={text}>Use the code below to confirm your identity:</Text>
         <Text style={codeStyle}>{token}</Text>
@@ -27,6 +29,7 @@ export const ReauthenticationEmail = ({ token }: ReauthenticationEmailProps) => 
           This code will expire shortly. If you didn't request this, you can
           safely ignore this email.
         </Text>
+        <BrandFooter />
       </Container>
     </Body>
   </Html>

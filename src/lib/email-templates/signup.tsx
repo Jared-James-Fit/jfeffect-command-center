@@ -11,6 +11,7 @@ import {
   Preview,
   Text,
 } from '@react-email/components'
+import { BrandFooter, BrandHeader } from './brand'
 import { LinkHeadsUp } from './link-heads-up'
 
 interface SignupEmailProps {
@@ -31,6 +32,7 @@ export const SignupEmail = ({
     <Preview>Confirm your email for {siteName}</Preview>
     <Body style={main}>
       <Container style={container}>
+        <BrandHeader />
         <Heading style={h1}>Confirm your email</Heading>
         <Text style={text}>
           Thanks for signing up for{' '}
@@ -53,6 +55,7 @@ export const SignupEmail = ({
         <Text style={footer}>
           If you didn't create an account, you can safely ignore this email.
         </Text>
+        <BrandFooter />
       </Container>
     </Body>
   </Html>

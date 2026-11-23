@@ -51,6 +51,12 @@ describe("the name a coach goes by in the agreement", () => {
     ).toBe("Jared McIntyre");
   });
 
+  it("still finds the owner after notices moved to the business inbox (2.4)", () => {
+    expect(legalNameOfCoach({ ...owner, email: "coaching@jfeffect.com" })).toBe("Jared McIntyre");
+    expect(legalNameOfCoach({ ...owner, email: "jaredjamesfit@gmail.com" })).toBe("Jared McIntyre");
+    expect(legalNameOfCoach({ ...staff, email: "" })).toBe("Sam Lee");
+  });
+
   it("uses first and last name for anyone else, then the full name", () => {
     expect(legalNameOfCoach(staff)).toBe("Sam Lee");
     expect(legalNameOfCoach({ id: "x", full_name: "  Alex   Rivera " })).toBe("Alex Rivera");

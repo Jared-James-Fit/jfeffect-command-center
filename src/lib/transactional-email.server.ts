@@ -10,10 +10,7 @@
 import * as React from "react";
 import { render } from "@react-email/components";
 import { TEMPLATES } from "@/lib/email-templates/registry";
-
-const SITE_NAME = "JF Effect";
-const SENDER_DOMAIN = "notify.jfeffect.com";
-const FROM_DOMAIN = "jfeffect.com";
+import { emailEnvelope } from "@/lib/email-identity";
 
 export type TemplateEmailResult =
   | { sent: true; messageId: string }
@@ -111,8 +108,7 @@ export async function sendTemplateEmail(
       payload: {
         message_id: messageId,
         to: recipient,
-        from: `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
-        sender_domain: SENDER_DOMAIN,
+        ...emailEnvelope(template.identity ?? "support"),
         subject,
         html,
         text,

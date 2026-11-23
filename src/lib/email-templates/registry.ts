@@ -1,10 +1,13 @@
 import type { ComponentType } from 'react'
+import type { EmailIdentityKey } from '@/lib/email-identity'
 import { template as membershipOnboarding } from './membership-onboarding'
 import { template as setupReminder } from './setup-reminder'
 import { template as agreementSigned } from './agreement-signed'
 import { template as agreementRequested } from './agreement-requested'
 import { approvedTemplate, codeTemplate, receivedTemplate } from './membership-emails'
 import { twoStepCodeTemplate } from './two-step-code'
+import { template as applicationReceived } from './application-received'
+import { template as paymentLink } from './payment-link'
 
 export interface TemplateEntry {
   component: ComponentType<any>
@@ -13,6 +16,8 @@ export interface TemplateEntry {
   previewData?: Record<string, any>
   /** Fixed recipient — overrides caller-provided recipientEmail when set. */
   to?: string
+  /** Which JF Effect department it comes from: sets the From name and Reply-To (default support). */
+  identity?: EmailIdentityKey
 }
 
 /**
@@ -32,4 +37,6 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   'membership-approved': approvedTemplate,
   'membership-code': codeTemplate,
   'two-step-code': twoStepCodeTemplate,
+  'application-received': applicationReceived,
+  'payment-link': paymentLink,
 }
