@@ -107,10 +107,12 @@ describe("numbering is derived, never stored", () => {
     expect((src.match(/position=\{rowIndex \+ 1\}/g) ?? []).length).toBe(1);
   });
 
-  it("the builder derives the badge from the row's index in the day", () => {
+  it("the builder derives the badge from the exercise's place in the day", () => {
     const src = read("src/route-pages/_authenticated/admin/program-library_.$templateId.tsx");
-    // a quiet neutral number; the family's colour is the row's stripe
-    expect(src).toMatch(/<ExerciseOrderBadge position=\{index \+ 1\} family=\{family\} tone="neutral"/);
+    // a quiet neutral number, counted by exercise (a top set and its back-offs are one);
+    // the family's colour is the row's stripe
+    expect(src).toMatch(/<ExerciseOrderBadge position=\{position \?\? \(index \?\? 0\) \+ 1\} family=\{family\} tone="neutral"/);
+    expect(src).toContain("position={ui + 1}");
     expect(src).not.toMatch(/sort_order\s*=\s*i\s*\+\s*1[^\n]*label/);
   });
 

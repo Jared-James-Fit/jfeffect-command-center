@@ -97,6 +97,9 @@ const ROW_FIELDS = [
   // Backoff…), its movement family and a rest set by hand. Left out, the
   // builder showed every row as "auto" and dropped the coach's change on save.
   "purpose_label","movement_family","rest_seconds_override",
+  // How a % of the top set rounds ("fine": 2.5 lb / 1 kg), set by the row's
+  // Round to; the logger reads it (backoffRoundStep).
+  "load_round",
 ] as const;
 
 function treeToPayload(tree: any) {
