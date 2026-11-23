@@ -1,16 +1,11 @@
 import { KeyboardShortcutsHost } from "@/components/keyboard-shortcuts";
 
 /**
- * Staff pages' global keyboard help (Nov 23 2026). The desktop strip that held
- * a keyboard icon and "View as client" above every admin page is gone: it cost
- * every page a row for two things already reachable without it.
- *
- *   - Keyboard shortcuts: "?" anywhere, or the command palette's "Keyboard
- *     shortcuts" (⌘K).
- *   - View as client: the command palette's "View as client…" (the same picker),
- *     the Clients list's Client view, a client's profile and their chat's ⋯.
- *
- * Search is the sidebar's "Search everything…" (⌘K), the one search on desktop.
+ * There is no strip above admin pages any more (Nov 23 2026): "View as client"
+ * lives on each client (Clients, a client's header and ⋯, ⌘⇧M, the palette),
+ * and the keyboard-shortcuts list opens with `?` or the ⌘K palette's Help row,
+ * so every admin page starts with its own content. This only hosts the `?`
+ * listener and the list.
  */
 export function AdminTopBar() {
   return <KeyboardShortcutsHost />;

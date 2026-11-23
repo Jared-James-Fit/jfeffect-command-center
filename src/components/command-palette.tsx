@@ -8,28 +8,16 @@ import {
 import { DialogTitle } from "@/components/ui/dialog";
 import {
   Users, UserCog, IdCard, BookOpen, Dumbbell, Library, ChefHat,
-  Megaphone, ShoppingBag, Clock, History, X, ArrowRight, Eye, Keyboard,
+  Megaphone, ShoppingBag, Clock, History, X, ArrowRight, Keyboard, Eye,
   type LucideIcon,
 } from "lucide-react";
-import { useAuth } from "@/lib/auth";
-import { OPEN_SHORTCUTS_EVENT } from "@/components/keyboard-shortcuts";
-
-/**
- * Things the palette does rather than pages it opens (Nov 23 2026): the
- * desktop header's "View as client" and keyboard icon live here now, so they
- * take no row on every page and are still one ⌘K away.
- */
-type PaletteCommand = { id: string; label: string; hint: string; keywords: string[]; icon: LucideIcon; event: string; clientPov?: boolean };
-const PALETTE_COMMANDS: PaletteCommand[] = [
-  { id: "client-pov", label: "View as client…", hint: "Their app as they see it", keywords: ["view as client", "client view", "pov", "preview", "impersonate"], icon: Eye, event: "open-client-pov-picker", clientPov: true },
-  { id: "shortcuts", label: "Keyboard shortcuts", hint: "Or press ?", keywords: ["keyboard", "shortcuts", "keys", "hotkeys", "help"], icon: Keyboard, event: OPEN_SHORTCUTS_EVENT },
-];
 import { globalSearchFn, type GlobalSearchHit } from "@/lib/global-search.functions";
 import {
   ADMIN_ROUTE_REGISTRY, getRegistryForRole,
   type AdminRouteEntry, type AdminRole,
 } from "@/lib/admin-route-registry";
 import { fuzzyMatch, highlightSegments } from "@/lib/fuzzy-match";
+import { openKeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import {
   getRecentPicks, pushRecentPick, getFrequentPicks,
   getRecentQueries, pushRecentQuery, clearRecentQueries,
@@ -75,36 +63,6 @@ export function CommandPalette({
   }, [open]);
 
   const registry = useMemo(() => getRegistryForRole(role), [role]);
-  const { viewOnly } = useAuth();
-  const canClientPov = (role === "admin" || role === "coach") && !viewOnly;
-  const commands = useMemo(() => {
-    const allowed = PALETTE_COMMANDS.filter((c) => !c.clientPov || canClientPov);
-    if (!debounced) return allowed;
-    return allowed.filter((c) => [c.label, ...c.keywords].some((h) => fuzzyMatch(h, debounced).score > 0));
-  }, [canClientPov, debounced]);
-  const runCommand = (c: PaletteCommand) => {
-    onOpenChange(false);
-    // after the palette has closed, so the next dialog takes focus cleanly
-    window.setTimeout(() => {
-      try { window.dispatchEvent(new CustomEvent(c.event)); } catch { /* nothing to open */ }
-    }, 0);
-  };
-  const commandsGroup = commands.length ? (
-    <CommandGroup heading="Commands">
-      {commands.map((c) => {
-        const Icon = c.icon;
-        return (
-          <CommandItem key={`cmd-${c.id}`} value={`cmd-${c.id}-${c.label} ${c.keywords.join(" ")}`} onSelect={() => runCommand(c)}>
-            <Icon className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">{c.label}</div>
-              <div className="truncate text-[11px] text-muted-foreground">{c.hint}</div>
-            </div>
-          </CommandItem>
-        );
-      })}
-    </CommandGroup>
-  ) : null;
 
   // Local fuzzy filter against route registry
   type ScoredEntry = AdminRouteEntry & {
@@ -204,7 +162,7 @@ export function CommandPalette({
   }, [serverHits]);
 
   const hasAnyResults =
-    filteredRegistry.length > 0 || serverHits.length > 0 || commands.length > 0;
+    filteredRegistry.length > 0 || serverHits.length > 0;
 
   return (
     // its own Cancel beside the field, not the dialogs' floating Back (which sat on top of the field)
@@ -279,13 +237,13 @@ export function CommandPalette({
                 ))}
               </CommandGroup>
             )}
-            {commandsGroup}
             {/* Quick actions always shown when empty */}
             <QuickActionsGroup
               role={role}
               limit={5}
               onPick={pickRoute}
             />
+            <HelpGroup role={role} onDone={() => onOpenChange(false)} />
             {recents.length === 0 && recentQueries.length === 0 && (
               <div className="px-4 py-6 text-center text-xs text-muted-foreground">
                 Start typing to find clients, programs, pages, settings — anything in the admin.
@@ -318,7 +276,6 @@ export function CommandPalette({
         {debounced && serverLoading && !hasAnyResults && (
           <CommandEmpty>Searching…</CommandEmpty>
         )}
-        {debounced && commandsGroup}
 
         {/* Server entity hits — render FIRST so people/records appear up top */}
         {debounced && (Array.from(groupedServer.entries())).map(([kind, rows]) => {
@@ -349,6 +306,8 @@ export function CommandPalette({
             </CommandGroup>
           );
         })}
+
+        {debounced && HELP_MATCH.test(debounced) && <HelpGroup role={role} onDone={() => onOpenChange(false)} />}
 
         {/* Local registry hits — pages, tools, settings, quick actions */}
         {debounced && groupedRegistry.map(([category, rows]) => (
@@ -417,6 +376,34 @@ function RecentItem({ r, onPick }: { r: RecentPick; onPick: (r: RecentPick) => v
       </div>
       <ArrowRight className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
     </CommandItem>
+  );
+}
+
+/** Words that bring the Help rows up while searching. */
+const HELP_MATCH = /^(sh|ke|he|vi|pr|cl|po)|short|keyboard|help|view as|preview|pov/i;
+
+/**
+ * What used to sit in the strip above every admin page: the keyboard
+ * shortcuts and "View as client". Both stay a keystroke away (`?`, ⌘⇧M) and
+ * here, without taking a row of every page.
+ */
+function HelpGroup({ role, onDone }: { role: AdminRole | null; onDone: () => void }) {
+  const canPov = role === "admin" || role === "coach";
+  return (
+    <CommandGroup heading="Help">
+      <CommandItem value="help-keyboard-shortcuts" onSelect={() => { onDone(); window.setTimeout(openKeyboardShortcuts, 0); }} data-palette-shortcuts>
+        <Keyboard className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="flex-1 text-sm">Keyboard shortcuts</span>
+        <kbd className="rounded border border-border bg-muted px-1.5 text-[11px] font-semibold text-muted-foreground">?</kbd>
+      </CommandItem>
+      {canPov && (
+        <CommandItem value="help-view-as-client" onSelect={() => { onDone(); window.setTimeout(() => { try { window.dispatchEvent(new CustomEvent("open-client-pov-picker")); } catch { /* no window */ } }, 0); }} data-palette-pov>
+          <Eye className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="flex-1 text-sm">View as a client…</span>
+          <kbd className="rounded border border-border bg-muted px-1.5 text-[11px] font-semibold text-muted-foreground">⌘⇧M</kbd>
+        </CommandItem>
+      )}
+    </CommandGroup>
   );
 }
 

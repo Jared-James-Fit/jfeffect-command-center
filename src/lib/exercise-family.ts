@@ -1,7 +1,12 @@
 /**
  * Movement family: the ONE place that decides an exercise card's colour.
  *
- *   squat     = yellow    bench = blue    deadlift = green    accessory = red
+ *   squat     = yellow    bench = blue    deadlift = green    accessory = grey
+ *
+ * Accessory is neutral (Nov 23 2026): colour is for what means something (the
+ * competition lifts and their variations), so a day of accessories reads calm
+ * instead of a column of red, which the design system keeps for errors and the
+ * screen's one main action.
  *
  * The family is the MOVEMENT, not the muscles it trains. Leg Curl is an
  * accessory even though it helps the deadlift; Pause Squat is a squat.
@@ -26,7 +31,7 @@ export const MOVEMENT_FAMILY_COLOR_NAME: Record<MovementFamily, string> = {
   squat: "Yellow",
   bench: "Blue",
   deadlift: "Green",
-  accessory: "Red",
+  accessory: "Grey",
 };
 
 type FamilyStyle = {
@@ -60,14 +65,11 @@ const STYLES: Record<MovementFamily, FamilyStyle> = {
     soft: "border-green-500/50 bg-green-500/10 text-green-700 dark:text-green-300",
     dot: "bg-green-500",
   },
-  // Accessories are most of every program, so they stay neutral (Nov 23 2026):
-  // red is the screen's one main action and errors, never "an accessory" on
-  // every other row. Only the three competition lifts carry a colour.
   accessory: {
     stripe: "bg-muted-foreground/35",
-    badge: "bg-muted text-muted-foreground border-border",
+    badge: "bg-muted text-foreground border-border",
     soft: "border-border bg-muted text-muted-foreground",
-    dot: "bg-muted-foreground/40",
+    dot: "bg-muted-foreground/45",
   },
 };
 

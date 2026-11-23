@@ -652,7 +652,6 @@ export function AppShell({
     <TooltipProvider delayDuration={250}>
     <div className="flex min-h-screen w-full overflow-x-hidden bg-background text-foreground" data-shell-root>
       <aside
-        data-shell-sidebar
         className={cn(
           // On an iPad home-screen app the status bar is over the page: the sidebar and the page start under it.
           "hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex md:pt-[env(safe-area-inset-top)] transition-[width] duration-200",

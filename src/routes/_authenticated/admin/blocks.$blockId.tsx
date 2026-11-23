@@ -3,10 +3,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, ArrowLeft, BarChart3, CalendarRange, Flame, Info, Maximize2, MessageSquare, Milestone, MoreHorizontal, Save, Settings2, User as UserIcon } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BarChart3, CalendarRange, Flame, Info, Layers3, MessageSquare, Milestone, MoreHorizontal, Save, Settings2, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { BuilderHeader, BuilderNotice, BuilderTitleInput, FocusModeButton } from "@/components/program-editor/builder-chrome";
+import { BuilderHeader, BuilderNotice, BuilderTitleInput } from "@/components/program-editor/builder-chrome";
 import { BlockSettingsSheet, type BlockSettingsTab } from "@/components/program-editor/block-settings-sheet";
 import { useIsMobileNow } from "@/hooks/use-mobile";
 import { useAutosave } from "@/hooks/use-autosave";
@@ -38,7 +38,6 @@ import { usePersistentUndoStack } from "@/lib/persistent-undo";
 import { useScrollRestoration } from "@/lib/scroll-restore";
 import { BlockSwitcher } from "@/components/block-switcher";
 import { CleoDock, CleoLauncher, useCleoDock } from "@/components/program-ai/cleo-dock";
-import { setBuilderFocus } from "@/lib/builder-focus";
 import { BlockTypeChip, BlockTypeSheet } from "@/components/program-editor/block-type-picker";
 import { inferBlockType, resolveBlockType, type BlockMeta } from "@/lib/block-types";
 import { setClientBlockType, useBlockTypeLibrary } from "@/lib/block-types-queries";
@@ -922,7 +921,6 @@ function BlockEditor() {
             >
               <Settings2 className="h-[18px] w-[18px]" />
             </Button>
-            {!phone && <FocusModeButton />}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="icon" variant="ghost" className="h-10 w-10" aria-label="Block options">
@@ -939,17 +937,15 @@ function BlockEditor() {
                 <DropdownMenuItem onSelect={() => openSettings("warmups")}>
                   <Flame className="mr-2 h-4 w-4" /> Warm-ups
                 </DropdownMenuItem>
-                {phone && (
-                  <DropdownMenuItem onSelect={() => setBuilderFocus((v) => !v)}>
-                    <Maximize2 className="mr-2 h-4 w-4" /> Focus Mode
-                  </DropdownMenuItem>
-                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <ClientNameLink clientId={clientId}><UserIcon className="mr-2 h-4 w-4" /> {clientName}'s profile</ClientNameLink>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <ClientNameLink clientId={clientId} tab="messages"><MessageSquare className="mr-2 h-4 w-4" /> Messages</ClientNameLink>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setTypeOpen(true)} data-block-type-menu>
+                  <Layers3 className="mr-2 h-4 w-4" /> Block type{resolvedType?.type ? `: ${resolvedType.type.name}` : ""}
                 </DropdownMenuItem>
                 {/* how this block is landing: volume against what's written, by week, muscle and day */}
                 <DropdownMenuItem asChild>
@@ -998,25 +994,6 @@ function BlockEditor() {
         </div>
       )}
 
-      <BlockSwitcher
-        clientId={clientId}
-        currentBlockId={blockId}
-        statusMap={blockStatusMap}
-        hasUnsavedChanges={dirty}
-        currentBlockName={blockLabel}
-        onBeforeNavigate={save}
-        onDiscardUnsaved={() => {
-          // Rehydrate from the last-loaded server snapshot so unsaved
-          // local edits are dropped without touching the database. The
-          // hydration effect will re-run for the new blockId on navigate.
-          if (originalTreeRef.current) {
-            setPayload(treeToPayload(originalTreeRef.current));
-            setName(originalTreeRef.current.block?.name ?? "");
-          }
-          setDirty(false);
-        }}
-      />
-
       <StructureCanvas
         type="block"
         payload={payload}
@@ -1044,6 +1021,27 @@ function BlockEditor() {
         onFixGap={fixGap}
         programOverview={overview}
         statusLeading={<BlockTypeChip resolved={resolvedType} onClick={() => setTypeOpen(true)} />}
+        navLeading={
+          <BlockSwitcher
+            variant="menu"
+            clientId={clientId}
+            currentBlockId={blockId}
+            statusMap={blockStatusMap}
+            hasUnsavedChanges={dirty}
+            currentBlockName={blockLabel}
+            onBeforeNavigate={save}
+            onDiscardUnsaved={() => {
+              // Rehydrate from the last-loaded server snapshot so unsaved
+              // local edits are dropped without touching the database. The
+              // hydration effect will re-run for the new blockId on navigate.
+              if (originalTreeRef.current) {
+                setPayload(treeToPayload(originalTreeRef.current));
+                setName(originalTreeRef.current.block?.name ?? "");
+              }
+              setDirty(false);
+            }}
+          />
+        }
       />
       {typeOpen && (
         <BlockTypeSheet

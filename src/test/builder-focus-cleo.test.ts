@@ -48,8 +48,7 @@ describe("Cleo docked in the builder", () => {
       expect(s).toMatch(/beforeSend/);
     }
     const css = src("styles.css");
-    expect(css).toMatch(/html\[data-builder-focus\]/);
-    expect(css).toMatch(/--cleo-dock-w/);
+    expect(css).toMatch(/html\[data-cleo-dock\] \[data-builder-page\]/);
   });
 });
 

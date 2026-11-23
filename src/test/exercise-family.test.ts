@@ -14,7 +14,7 @@ import { ExerciseOrderBadge } from "@/components/exercise-order-badge";
 import { displayExerciseName } from "@/lib/exercise-display-name";
 
 describe("movement family colour", () => {
-  it("maps the four families to yellow / blue / green / red", () => {
+  it("maps the four families to yellow / blue / green / neutral grey", () => {
     expect(movementFamilyStyle("squat").stripe).toBe("bg-yellow-500");
     expect(movementFamilyStyle("bench").stripe).toBe("bg-blue-500");
     expect(movementFamilyStyle("deadlift").stripe).toBe("bg-green-500");
