@@ -20,6 +20,7 @@ const visible = visibleOf(page);
 /** Every public marketing page a visitor can read. */
 const PUBLIC_PAGES = [
   "src/components/landing/landing-page.tsx",
+  "src/components/landing/price-reveal.tsx",
   "src/components/join/activate-page.tsx",
   "src/components/member/membership-pending-gate.tsx",
   "src/lib/free-signup.ts",

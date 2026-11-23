@@ -5,6 +5,8 @@ import { FUNNEL_EVENTS } from "@/lib/membership-apply";
 
 const read = (p: string) => readFileSync(p, "utf8");
 const MIGRATION = read("supabase/migrations/20270513090000_coaching_site_launch.sql");
+/** The newest word on which steps the database takes (the price reveal added one). */
+const STEPS_MIGRATION = read("supabase/migrations/20270515100000_price_reveal_funnel.sql");
 
 describe("the site's steps are counted anonymously (Nov 23 2026)", () => {
   it("keeps a step's detail short and plain", () => {
@@ -41,10 +43,11 @@ describe("the site's steps are counted anonymously (Nov 23 2026)", () => {
   });
 
   it("the database takes every step the site sends, and only those", () => {
-    for (const e of [...FUNNEL_EVENTS, ...SITE_EVENTS]) expect(MIGRATION).toContain(`'${e}'`);
+    for (const e of [...FUNNEL_EVENTS, ...SITE_EVENTS]) expect(STEPS_MIGRATION).toContain(`'${e}'`);
     expect(MIGRATION).toContain("device IN ('phone', 'tablet', 'desktop')");
     // the funnel is read only by the server after an admin check
     expect(MIGRATION).toContain("REVOKE ALL ON FUNCTION public.coaching_funnel(timestamptz) FROM PUBLIC, anon, authenticated;");
+    expect(STEPS_MIGRATION).toContain("REVOKE ALL ON FUNCTION public.coaching_funnel(timestamptz) FROM PUBLIC, anon, authenticated;");
     const fns = read("src/lib/site-funnel.functions.ts");
     expect(fns).toContain('rpc("has_role", { _user_id: ctx.userId, _role: "admin" })');
     expect(fns).toContain('onConflict: "visitor_id,event,step,day", ignoreDuplicates: true');
