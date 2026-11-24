@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
 import { AtSign, Camera, Check, ImageOff, SlidersHorizontal, Zap, ZapOff, Expand, Shrink, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Scissors, Send, Smartphone, Smile, Square, Star, Timer, Type, User, Users, Volume2, VolumeX, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -76,6 +76,12 @@ import { paintCard } from "@/components/community/card-paint";
  * a workout's) are the circles around the shutter.
  */
 export type ShareKind = "post" | "story";
+/**
+ * A draft newer than this comes back by itself when the studio opens (a crash,
+ * a failed post, iOS dropping the app mid-edit); an older one isn't dropped on
+ * someone opening the camera for something new.
+ */
+const DRAFT_RESTORE_MS = 2 * 60 * 60_000;
 /** How long the camera takes to slide back out to the feed. */
 const LEAVE_MS = 280;
 /** How long the camera takes to come in from the left (the + and Your story). */
@@ -196,6 +202,7 @@ export function ShareStudio({
   filter,
   onFilter,
   chip,
+  chipRoom = false,
   card,
   canShoot = true,
   allowNoPhoto = true,
@@ -225,6 +232,12 @@ export function ShareStudio({
   filter?: string | null;
   onFilter?: (key: string) => void;
   chip?: ReactNode;
+  /**
+   * Some filters in the row show a chip and some don't (a lock in's, a
+   * workout's): its room under the picture is kept while it's empty, so
+   * switching filters never resizes the picture.
+   */
+  chipRoom?: boolean;
   card: CameraCard | null;
   /** False while there's nothing to share yet (the chip says why). */
   canShoot?: boolean;
@@ -444,10 +457,16 @@ export function ShareStudio({
   }, [open, shareItem]);
   // The post it's for: start from what's already there (editing, not duplicating).
   // Not while posting: saving changes the post's key, and the caption must not blink.
+  // Not once they've set the words or who sees it themselves: the story camera hands
+  // over another post as the filter changes, and a filter never takes a choice back.
   const postingRef = useRef(false);
   postingRef.current = !!busy || posted;
+  const ownChoices = useRef(false);
   useEffect(() => {
-    if (!open || !post || postingRef.current) return;
+    if (open) ownChoices.current = false;
+  }, [open]);
+  useEffect(() => {
+    if (!open || !post || postingRef.current || ownChoices.current) return;
     setCaption(post.caption ?? "");
     setVisibility(pickerAudience(post.visibility));
     setHideLoads(!!post.hideLoads);
@@ -456,40 +475,47 @@ export function ShareStudio({
   }, [open, post?.key]);
 
   /* ---- the draft: never lose the post ------------------------------- */
-  // Kept on the phone while it's being made (photo, caption, audience, look).
-  // Opening the same post again (after a failed post, a crash, a reload, or
-  // iOS dropping the app while the camera was open) picks it up again.
+  // Kept on the phone while it's being made (photo, caption, audience, look),
+  // under the post the studio opened on: the story camera hands over another
+  // post as the filter changes, and it's still the one draft. Opening the
+  // studio again soon after (a failed post, a crash, a reload, or iOS dropping
+  // the app while the camera was open) puts it back quietly, as it was: no
+  // message, nothing to answer, never over a photo already being made and
+  // never on a filter switch. Discard throws it away.
   const draftOff = useRef(false);
-  const restoredFor = useRef<string | null>(null);
-  const photoBlob = useRef<{ shot: Shot; blob: Promise<Blob | null> } | null>(null);
+  const draftKey = useRef<string | null>(null);
   // nothing is saved over the draft until it's been read back
   const restoring = useRef(false);
+  // the work is underway: nothing read back lands on it
+  const startedRef = useRef(false);
+  startedRef.current = phase !== "shoot" || !!shot || items.length > 0 || tray.items.length > 0;
+  const captionRef = useRef(caption);
+  captionRef.current = caption;
   useEffect(() => {
-    if (!open || !post || reply || share || restoredFor.current === post.key) return;
-    restoredFor.current = post.key;
-    draftOff.current = false;
+    if (!open || !post || reply || share || draftKey.current) return;
     const key = post.key;
+    draftKey.current = key;
+    draftOff.current = false;
     restoring.current = true;
     void loadDraft(key).then((d) => {
       restoring.current = false;
-      if (!d || restoredFor.current !== key || postingRef.current) return;
-      if (d.caption) setCaption(d.caption);
-      if (d.visibility === "community" || d.visibility === "close_friends" || d.visibility === "coach" || d.visibility === "private") setVisibility(d.visibility);
-      if (d.look && cardRef.current?.looks.includes(d.look as ShareTemplate)) cardRef.current.onLook(d.look as ShareTemplate);
-      const startOver = () => {
-        void clearDraft(key);
-        retake();
-        setCaption(post.caption ?? "");
-      };
-      if (!d.photo) {
-        if (d.caption) toast.message("Your caption is back", { action: { label: "Clear", onClick: () => setCaption(post.caption ?? "") } });
-        return;
+      if (!d || draftKey.current !== key || postingRef.current || Date.now() - d.savedAt > DRAFT_RESTORE_MS) return;
+      // their words and who they picked come back (a caption already typed stays)
+      if (!ownChoices.current) {
+        if (d.visibility === "community" || d.visibility === "close_friends" || d.visibility === "coach" || d.visibility === "private") setVisibility(d.visibility);
+        if (d.caption && !captionRef.current.trim()) {
+          setCaption(d.caption);
+          ownChoices.current = true;
+        }
       }
+      if (!d.photo || startedRef.current) return;
+      if (d.look && cardRef.current?.looks.includes(d.look as ShareTemplate)) cardRef.current.onLook(d.look as ShareTemplate);
       const url = URL.createObjectURL(d.photo);
       const img = new Image();
       img.onload = () => {
+        // they've started something meanwhile: theirs wins
+        if (startedRef.current || draftKey.current !== key) return void URL.revokeObjectURL(url);
         freeze({ src: img, file: new File([d.photo!], "jf-photo.jpg", { type: d.photo!.type || "image/jpeg" }), live: d.live, at: new Date(d.at) });
-        toast.message("Picked up where you left off", { action: { label: "Start over", onClick: startOver } });
       };
       img.onerror = () => URL.revokeObjectURL(url);
       img.src = url;
@@ -497,24 +523,30 @@ export function ShareStudio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, post?.key]);
   useEffect(() => {
-    if (!open) restoredFor.current = null;
+    if (!open) draftKey.current = null;
   }, [open]);
+  /** Thrown away on purpose (Discard): it never comes back. */
+  const dropDraft = () => {
+    draftOff.current = true;
+    if (draftKey.current) void clearDraft(draftKey.current);
+  };
+  // the shot as a JPEG, encoded once per shot (the draft keeps it; a camera frame shows through it under no filter)
+  const photoBlob = useRef<{ shot: Shot; blob: Promise<Blob | null> } | null>(null);
+  const shotBlob = (s: Shot) => {
+    if (photoBlob.current?.shot !== s)
+      photoBlob.current = {
+        shot: s,
+        blob: s.file ? Promise.resolve(s.file) : s.src instanceof HTMLCanvasElement ? canvasToBlob(s.src, "image/jpeg", 0.9) : Promise.resolve(null),
+      };
+    return photoBlob.current.blob;
+  };
   // Save as it changes (a beat after the last change). The photo is encoded once per shot.
   useEffect(() => {
-    if (!open || !post || reply || share || posted || busy || draftOff.current || restoring.current) return;
-    const key = post.key;
+    const key = draftKey.current;
+    if (!open || !post || !key || reply || share || posted || busy || draftOff.current || restoring.current) return;
     const t = setTimeout(async () => {
-      let photo: Blob | null = null;
-      if (shot) {
-        if (photoBlob.current?.shot !== shot) {
-          photoBlob.current = {
-            shot,
-            blob: shot.file ? Promise.resolve(shot.file) : shot.src instanceof HTMLCanvasElement ? canvasToBlob(shot.src, "image/jpeg", 0.9) : Promise.resolve(null),
-          };
-        }
-        photo = await photoBlob.current.blob;
-      }
-      if (draftOff.current) return;
+      const photo = shot ? await shotBlob(shot) : null;
+      if (draftOff.current || draftKey.current !== key) return;
       const d = { key, caption, visibility, look: card?.look ?? null, photo, live: !!shot?.live, at: (shot?.at ?? new Date()).getTime() };
       if (draftWorthKeeping(d)) void saveDraft(d);
       else void clearDraft(key);
@@ -559,6 +591,12 @@ export function ShareStudio({
     return () => ro.disconnect();
   }, [barEl]);
   const fullScreen = phase === "shoot" && screenSize.w > 0 && barH > 0 && screenSize.h - screenSize.top - (screenSize.w * CARD_H) / CARD_W >= barH - 2;
+  // The chip's room (a lock in's, a workout's): once any filter in this open has one, it stays, empty or not, so
+  // switching filters never resizes the picture for it. Over the camera full screen nothing sits under it to move.
+  const chipLatch = useRef(false);
+  if (!open) chipLatch.current = false;
+  else if (chip || chipRoom) chipLatch.current = true;
+  const keepChipRoom = chipLatch.current && !(phase === "shoot" && fullScreen);
   // The editor's frame is what's posted: a story's 9:16; a post's card, 9:16
   // filling its screen in the Crew feed (or the feed's 4:5, picked with the
   // shape button: a card is drawn at those two only); any other post, the one
@@ -773,6 +811,21 @@ export function ShareStudio({
 
   /* ---- the card ----------------------------------------------------- */
   const showCard = !!card && !cardFailed && !adding;
+  // The card's canvas stays on the page whatever filter is on (mounting it fresh showed a blank frame each time a
+  // filter came on); it shows once this filter is painted on it, and until then the photo or camera under it does.
+  const [cardPainted, setCardPainted] = useState(false);
+  const cardPaintedRef = useRef(false);
+  const markPainted = () => {
+    if (cardPaintedRef.current) return;
+    cardPaintedRef.current = true;
+    setCardPainted(true);
+  };
+  useEffect(() => {
+    if (showCard) return;
+    cardPaintedRef.current = false;
+    setCardPainted(false);
+  }, [showCard]);
+  const cardVisible = showCard && cardPainted;
   // Editing a picture: the camera's own row of filters over its foot (chips, the ring, the name), so a
   // photo you took or picked is changed exactly the way the camera picks one. A story's photo walks the
   // whole row; otherwise a card's looks. Never on a clip, a reply's or a shared post's backdrop.
@@ -821,6 +874,7 @@ export function ShareStudio({
       try {
         // a post's card is 9:16 like a story's (its words clear of the feed's bars and buttons), or 4:5 in the middle of the camera
         paintCard(cardEl, c, media, cardFormat, lockedIn, logo, LIVE_SCALE);
+        markPainted();
       } catch {
         alive = false;
         setCardFailed(true);
@@ -888,21 +942,41 @@ export function ShareStudio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tray.items, filterDefaults, story]);
 
-  // Frozen: the card over the photo as it's framed, full res once a finger lifts.
-  useEffect(() => {
+  // The photo as it sits under the card at full size, kept while only the filter changes: a switch repaints just
+  // the filter over it, never the framed, graded photo again.
+  const mediaCache = useRef<{ key: unknown[]; canvas: HTMLCanvasElement } | null>(null);
+  const dropMediaCache = () => {
+    if (!mediaCache.current) return;
+    releaseCanvas(mediaCache.current.canvas);
+    mediaCache.current = null;
+  };
+  const fullMedia = (s: Shot) => {
+    const key = [s, framing, frameAspect, shotGrade, shotWhole, story];
+    const c = mediaCache.current;
+    if (c && c.key.length === key.length && c.key.every((k, i) => k === key[i])) return c.canvas;
+    dropMediaCache();
+    const canvas = shotMedia(s.src, frameAspect, 1080);
+    mediaCache.current = { key, canvas };
+    return canvas;
+  };
+  // Frozen: the card over the photo as it's framed, full res once a finger lifts. A new filter is painted before the
+  // screen shows the switch (in the same frame as the ring moving onto it); a finger moving repaints once a frame.
+  useLayoutEffect(() => {
     if (phase !== "edit" || !cardEl || !card || !logo) return;
-    let raf = 0;
-    raf = requestAnimationFrame(() => {
-      const quick = framingLive || gradeLive;
-      const media = shot ? shotMedia(quick && light ? light.src : shot.src, frameAspect, quick ? 540 : 1080) : null;
+    const quick = framingLive || gradeLive;
+    const paint = () => {
+      const media = shot ? (quick ? shotMedia(light ? light.src : shot.src, frameAspect, 540) : fullMedia(shot)) : null;
       try {
         paintCard(cardEl, card, media, cardFormat, frozenLockedIn(card.data), logo, quick ? 0.6 : 1);
+        markPainted();
       } catch {
         setCardFailed(true);
       } finally {
-        releaseCanvas(media);
+        if (quick) releaseCanvas(media);
       }
-    });
+    };
+    if (!quick) return void paint();
+    const raf = requestAnimationFrame(paint);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, cardEl, card?.look, card?.data, card?.paint, shot, logo, framing, framingLive, cardFormat, frameAspect, shotGrade, gradeLive, shotWhole]);
@@ -933,24 +1007,18 @@ export function ShareStudio({
     const t = setTimeout(() => setLookFlash(null), 900);
     return () => clearTimeout(t);
   }, [lookFlash]);
-  const [pinchHint, setPinchHint] = useState(false);
   // a story's photo walks the filters with one finger (so moving it is two), card or not
   const storySwipe = story && !!filters && filters.length > 1 && !!onFilter && !reply && !share;
-  const hasCard = !!card || storySwipe;
-  useEffect(() => {
-    if (phase !== "edit" || !shot || !hasCard || cardFailed) return setPinchHint(false);
-    setPinchHint(true);
-    const t = setTimeout(() => setPinchHint(false), 2600);
-    return () => clearTimeout(t);
-  }, [phase, shot, hasCard, cardFailed]);
-  // the hint goes the moment they do it
-  useEffect(() => {
-    if (framingLive) setPinchHint(false);
-  }, [framingLive]);
 
   /* ---- shoot -------------------------------------------------------- */
   // a camera frame is a full-size canvas: hand its memory back the moment it's replaced or done with
   const dropShot = (s: Shot | null) => {
+    dropMediaCache();
+    const u = shotUrlRef.current;
+    if (u && u.shot === s) {
+      if (u.blob) URL.revokeObjectURL(u.url);
+      shotUrlRef.current = null;
+    }
     if (s?.src instanceof HTMLCanvasElement) releaseCanvas(s.src);
     if (s?.src instanceof HTMLImageElement && s.src.src.startsWith("blob:")) URL.revokeObjectURL(s.src.src);
   };
@@ -1047,6 +1115,7 @@ export function ShareStudio({
     );
   };
   // Hold the shutter to film a clip (a plain post: looks and cards are painted on photos)
+  const canRecordClipsHere = useMemo(() => canRecordClips(), []);
   const recordable = useMemo(() => canRecordClips(), []) && !card && status === "live" && canShoot && count == null;
   const hints = useHintsSeen();
   const markHint = useMarkHintSeen();
@@ -1066,6 +1135,11 @@ export function ShareStudio({
       void tray.add([file]);
     },
   });
+  // how to film, the first time (until the first clip); its line is kept on a short screen, where the controls sit
+  // under the camera, so a filter coming on (no filming on a card) never moves the picture
+  const holdUnseen = !!hints.data && !hints.data.includes("hold_to_film");
+  const holdHint = recordable && !recorder.recording && holdUnseen;
+  const holdHintRoom = !fullScreen && canRecordClipsHere && status === "live" && holdUnseen;
   // the light goes off with the clip
   useEffect(() => {
     if (!recorder.recording && torchOn.current) void torch(false);
@@ -1274,7 +1348,7 @@ export function ShareStudio({
 
   // what the frame shows now, small (the strip's slide 1, the caption screen)
   const smallFrame = (extra?: (ctx: CanvasRenderingContext2D, w: number, h: number) => void) => {
-    if (cardEl) return captionThumb(cardEl, extra) ?? null;
+    if (cardEl && showCard && cardPaintedRef.current) return captionThumb(cardEl, extra) ?? null;
     if (!shot) return null;
     const c = shotMedia((light?.src ?? shot.src) as Drawable, frameAspect, 378);
     try {
@@ -1401,11 +1475,33 @@ export function ShareStudio({
   };
   const shareCaptionSrc = card?.data && (card.data.lift || card.data.workoutTitle) && card.look !== "plain" ? { workoutTitle: card.data.workoutTitle, lift: card.data.lift, isPr: card.data.isPr, hideLoads: !!(post?.showHideLoads && hideLoads) } : null;
 
-  // The frozen photo shown bare (no card on it): encoded once, not on every keystroke of the caption.
-  const shotUrl = useMemo(() => {
-    if (phase !== "edit" || showCard || !shot) return null;
-    return shot.src instanceof HTMLImageElement ? shot.src.src : (shot.src as HTMLCanvasElement).toDataURL("image/jpeg", 0.8);
-  }, [phase, showCard, shot]);
+  // The frozen photo shown bare (no filter on it): a photo's own address; a camera frame encoded once per shot, in the
+  // background while a filter's on it, so switching to Normal never stops to encode it (and it's decoded already).
+  const shotUrlRef = useRef<{ shot: Shot; url: string; blob: boolean } | null>(null);
+  const [, setShotUrlReady] = useState(0);
+  const shotUrlFor = (s: Shot, now: boolean): string | null => {
+    if (s.src instanceof HTMLImageElement) return s.src.src;
+    if (shotUrlRef.current?.shot === s) return shotUrlRef.current.url;
+    if (!now) return null;
+    // shown bare before the background copy's ready: straight away, as it always was
+    const url = (s.src as HTMLCanvasElement).toDataURL("image/jpeg", 0.8);
+    shotUrlRef.current = { shot: s, url, blob: false };
+    return url;
+  };
+  const shotUrl = phase === "edit" && shot ? shotUrlFor(shot, !cardVisible) : null;
+  useEffect(() => {
+    if (phase !== "edit" || !shot || !(shot.src instanceof HTMLCanvasElement) || shotUrlRef.current?.shot === shot) return;
+    let gone = false;
+    void shotBlob(shot).then((b) => {
+      if (gone || !b || shotRef.current !== shot || shotUrlRef.current?.shot === shot) return;
+      shotUrlRef.current = { shot, url: URL.createObjectURL(b), blob: true };
+      setShotUrlReady((n) => n + 1);
+    });
+    return () => {
+      gone = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, shot]);
   const { data: follows } = useFollowState();
   // a story goes to the crew or Close friends (a story only you or your coach could see would show nowhere)
   const audList = story ? AUDIENCE.filter((a) => STORY_AUDIENCE.includes(a.key)) : AUDIENCE;
@@ -1439,7 +1535,15 @@ export function ShareStudio({
   const requestLeave = () => {
     if (busy) return;
     if (!unsaved) return leave();
-    setDiscard({ title: story ? "Discard story?" : "Discard post?", body: "If you leave now, you'll lose your edits.", action: "Discard", run: leave });
+    setDiscard({
+      title: story ? "Discard story?" : "Discard post?",
+      body: "If you leave now, you'll lose your edits.",
+      action: "Discard",
+      run: () => {
+        dropDraft();
+        leave();
+      },
+    });
   };
   /** Back to the camera: a photo with words or stickers on it asks first (Retake is a tap from losing them). */
   const requestRetake = () => {
@@ -1518,7 +1622,7 @@ export function ShareStudio({
                   muted
                   autoPlay
                   // a post's 4:5 card sits in the middle: the camera shows (dimmed) around it
-                  className={cn("absolute inset-0 h-full w-full object-cover", status === "live" && (!showCard || !story) ? "opacity-100" : "opacity-0", facing === "user" && "-scale-x-100")}
+                  className={cn("absolute inset-0 h-full w-full object-cover", status === "live" && (!cardVisible || !story) ? "opacity-100" : "opacity-0", facing === "user" && "-scale-x-100")}
                 />
               )}
               {/* a post on the camera: what's outside the post's shape is dimmed (none at 9:16, where a post starts) */}
@@ -1542,27 +1646,30 @@ export function ShareStudio({
               ) : (
                 !story && !selItem && clip0?.preview && <img src={clip0.preview} alt="" className="absolute inset-0 h-full w-full object-cover" />
               )}
-              {showCard && (
+              {/* always on the page: a filter coming on shows here once it's painted, never a blank frame first */}
+              {!adding && (
                 <canvas
                   ref={setCardEl}
-                  className={cn("pointer-events-none absolute", selItem && "invisible")}
+                  className={cn("pointer-events-none absolute", (!cardVisible || selItem) && "invisible")}
                   style={phase === "shoot" ? { left: band.x, top: band.y, width: band.w, height: band.h } : { inset: 0, width: "100%", height: "100%" }}
                   aria-label={card ? `${TEMPLATE_LABEL[card.look]} look` : undefined}
                 />
               )}
               {/* the photo, framed: drag and pinch (a card on it: two fingers, one swipes the looks). Over the card, so its grid shows; the card paints the photo itself */}
               {/* a story's photo shown whole, over a blur of itself (no card on it: the card paints the same) */}
-              {phase === "edit" && shot && story && shotWhole && !showCard && !selItem && <WholePreview src={(gradeLive && light ? light.src : shot.src) as Drawable} grade={shotCompiled} quick={gradeLive} />}
+              {/* (kept under a filter, painted, so switching to Normal shows it at once) */}
+              {phase === "edit" && shot && story && shotWhole && !selItem && <WholePreview src={(gradeLive && light ? light.src : shot.src) as Drawable} grade={shotCompiled} quick={gradeLive} hidden={cardVisible} />}
               {phase === "edit" && shot && shotSize && !selItem && !(story && shotWhole) && (
                 <PhotoFramer
-                  grade={!showCard ? shotCompiled : null}
+                  grade={shotCompiled}
                   src={shotUrl}
                   size={shotSize}
                   frame={box}
                   framing={framing}
                   onFraming={setFraming}
                   oneFinger={!showCard && !storySwipe}
-                  showImage={!showCard}
+                  showImage={!cardVisible}
+                  keepImage
                   gridPreview={!story}
                   flash={shapeFlash}
                   onActive={setFramingLive}
@@ -1771,12 +1878,6 @@ export function ShareStudio({
                 </div>
               )}
               {flash && <div className="pointer-events-none absolute inset-0 bg-white/80" />}
-              {/* a card on a photo: one finger swipes the looks, so moving the photo is two fingers (said once per shot) */}
-              {pinchHint && !(story && shotWhole) && (
-                <div className="pointer-events-none absolute inset-x-0 top-16 flex justify-center" data-pinch-hint>
-                  <span className="animate-in fade-in rounded-full bg-black/55 px-3 py-1 text-[12px] font-bold backdrop-blur">Two fingers to move or zoom the photo</span>
-                </div>
-              )}
               {lookFlash && (
                 <div className="pointer-events-none absolute inset-0 grid place-items-center">
                   <span key={lookFlash} className="font-display animate-in fade-in zoom-in-95 rounded-2xl bg-black/35 px-5 py-2 text-[34px] uppercase leading-none backdrop-blur-sm">{lookFlash}</span>
@@ -1997,20 +2098,24 @@ export function ShareStudio({
               </span>
             </div>
           ) : (
-            // (hidden while filming: the clip's timer sits there)
-            chip && !recorder.recording && (
-              <div className="pointer-events-none mb-2 flex justify-center px-4">
-                {/* over the camera it needs a backing to read on any picture */}
-                <div className={cn("pointer-events-auto max-w-full rounded-full", phase === "shoot" && fullScreen && "bg-black/45 backdrop-blur-md")}>{chip}</div>
+            // (hidden while filming: the clip's timer sits there). Its room stays while it's empty, so the picture
+            // keeps its size as the filters switch (over the camera full screen, nothing sits under it to move).
+            ((chip && !recorder.recording) || keepChipRoom) && (
+              <div className={cn("pointer-events-none mb-2 flex justify-center px-4", keepChipRoom && "h-12 items-center")} data-chip-slot={chip ? "chip" : "empty"}>
+                {chip && !recorder.recording && (
+                  // over the camera it needs a backing to read on any picture
+                  <div className={cn("pointer-events-auto max-w-full rounded-full", phase === "shoot" && fullScreen && "bg-black/45 backdrop-blur-md")}>{chip}</div>
+                )}
               </div>
             )
           )}
           {phase === "shoot" ? (
             <>
               <div className="pointer-events-auto">
-                {/* first time on a plain post's camera: how to film, until the first clip */}
-                {recordable && !recorder.recording && hints.data && !hints.data.includes("hold_to_film") && (
-                  <div className="pointer-events-none mb-1 text-center text-[12px] font-bold text-white/80 [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]" data-hold-hint>
+                {/* first time on a plain post's camera: how to film, until the first clip (its line kept under the
+                    camera while a filter's on, so switching never moves the picture) */}
+                {(holdHint || holdHintRoom) && (
+                  <div className={cn("pointer-events-none mb-1 text-center text-[12px] font-bold text-white/80 [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]", !holdHint && "invisible")} data-hold-hint={holdHint ? "" : "room"} aria-hidden={!holdHint || undefined}>
                     Tap for a photo, hold for video
                   </div>
                 )}
@@ -2112,6 +2217,7 @@ export function ShareStudio({
                 <button
                   type="button"
                   onClick={() => {
+                    ownChoices.current = true;
                     setVisibility(audList[(audList.indexOf(audBase) + 1) % audList.length].key);
                     setPosted(false);
                   }}
@@ -2125,6 +2231,7 @@ export function ShareStudio({
                     type="button"
                     onClick={() => {
                       if (!hideLoads) toast.message("Weights hidden", { description: "Your post will be just the photo, no numbers." });
+                      ownChoices.current = true;
                       setHideLoads(!hideLoads);
                       setPosted(false);
                     }}
@@ -2186,6 +2293,7 @@ export function ShareStudio({
           <CaptionEditor
             value={caption}
             onChange={(v) => {
+              ownChoices.current = true;
               setCaption(v);
               setPosted(false);
             }}
@@ -2387,12 +2495,18 @@ function StudioEnhance({
 }
 
 /** A story's photo shown whole over a blur of itself (wholeStoryCanvas): exactly what's posted. */
-function WholePreview({ src, grade, quick }: { src: Drawable; grade: ReturnType<typeof compiledFor>; quick: boolean }) {
+function WholePreview({ src, grade, quick, hidden = false }: { src: Drawable; grade: ReturnType<typeof compiledFor>; quick: boolean; hidden?: boolean }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
-  useEffect(() => {
+  // under a filter (hidden) it stays painted, so Normal shows it at once; a finger on a slider repaints it only when it's shown
+  const painted = useRef<{ src: Drawable; grade: ReturnType<typeof compiledFor>; quick: boolean } | null>(null);
+  useLayoutEffect(() => {
     const out = ref.current;
     if (!out) return;
-    const raf = requestAnimationFrame(() => {
+    if (hidden && quick) return;
+    const p = painted.current;
+    if (p && p.src === src && p.grade === grade && p.quick === quick) return;
+    const paint = () => {
+      painted.current = { src, grade, quick };
       const c = wholeStoryCanvas(src, quick ? 540 : 1080, grade);
       try {
         out.width = c.width;
@@ -2401,10 +2515,13 @@ function WholePreview({ src, grade, quick }: { src: Drawable; grade: ReturnType<
       } finally {
         releaseCanvas(c);
       }
-    });
+    };
+    // painted before it's first shown (never a blank frame); a finger moving repaints once a frame
+    if (!quick) return void paint();
+    const raf = requestAnimationFrame(paint);
     return () => cancelAnimationFrame(raf);
-  }, [src, grade, quick]);
-  return <canvas ref={ref} className="pointer-events-none absolute inset-0 h-full w-full" data-story-whole />;
+  }, [src, grade, quick, hidden]);
+  return <canvas ref={ref} className={cn("pointer-events-none absolute inset-0 h-full w-full", hidden && "invisible")} data-story-whole />;
 }
 
 /**

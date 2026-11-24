@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { attentionHide, attentionShow, onScreenEnough } from "@/lib/post-attention";
 import { type CommunityAuthor, type CommunityPost } from "@/lib/community";
 import { cn } from "@/lib/utils";
+import { useOpenedOnce } from "@/hooks/use-opened-once";
 
 const db = supabase as any;
 
@@ -103,6 +104,7 @@ export function useViewOnOpen(post: Pick<CommunityPost, "id" | "is_mine"> | null
  */
 export function PostViewsRow({ post, onOpenAuthor, compact = false }: { post: CommunityPost; onOpenAuthor?: (a: CommunityAuthor) => void; compact?: boolean }) {
   const [open, setOpen] = useState(false);
+  const activityMounted = useOpenedOnce(open);
   const v = post.views;
   if (!v || v.count <= 0) return null;
   // `compact`: beside "Liked by …" on a post's screen, just 👁 and the number (the line is the likes')
@@ -145,7 +147,7 @@ export function PostViewsRow({ post, onOpenAuthor, compact = false }: { post: Co
         )}
         {label}
       </button>
-      <PostActivitySheet postId={open ? post.id : null} onClose={() => setOpen(false)} onOpenAuthor={onOpenAuthor} />
+      {activityMounted && <PostActivitySheet postId={open ? post.id : null} onClose={() => setOpen(false)} onOpenAuthor={onOpenAuthor} />}
     </>
   );
 }
