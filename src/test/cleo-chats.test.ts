@@ -373,7 +373,7 @@ describe("wiring", () => {
 
   it("archiving never deletes: the year-long retention job is retired", () => {
     expect(sql).toContain("perform cron.unschedule(jobid) from cron.job where jobname = 'cleo-chat-retention';");
-    expect(sql).toMatch(/create or replace function public\.prune_cleo_chats\(\)[\s\S]*?select 0/);
+    expect(sql).toMatch(/create or replace function public\.prune_cleo_chats\(\)[\s\S]*?return 0;/);
     expect(sql).not.toMatch(/delete from public\.summer_chats/);
   });
 

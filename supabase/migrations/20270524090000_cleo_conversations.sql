@@ -135,8 +135,8 @@ begin
 end;
 $$;
 
-drop trigger if exists summer_chat_touch on public.summer_messages;
-create trigger summer_chat_touch
+-- create or replace: no drop, so it never waits on an exclusive lock of a busy table
+create or replace trigger summer_chat_touch
   after insert or update of status on public.summer_messages
   for each row execute function public.summer_chat_touch();
 
@@ -147,11 +147,13 @@ create trigger summer_chat_touch
 
 create or replace function public.prune_cleo_chats()
 returns integer
-language sql
+language plpgsql
 security definer
 set search_path = public
 as $$
-  select 0
+begin
+  return 0;
+end;
 $$;
 revoke all on function public.prune_cleo_chats() from public, anon, authenticated;
 
