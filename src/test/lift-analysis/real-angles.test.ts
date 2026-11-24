@@ -28,6 +28,7 @@ function track(opts: { hide?: [number, number][]; reps?: number } = {}): TrackPo
 
 const read = (pts: TrackPoint[]): LiftAnalysis =>
   analyzeTrack(pts, {
+    plate: {mm:450,rel:0.01,confirmed:true},
     source: "auto",
     seed: { x: 140, y: 160, r: 40, t: 0 },
     frame: { w: 270, h: 480 },

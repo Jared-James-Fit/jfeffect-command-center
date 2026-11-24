@@ -28,7 +28,7 @@ export function liftHistoryFromRows(rows: readonly any[], name: string): LiftHis
         est_1rm: lb > 0 ? epley1RM(lb, reps) : 0,
         rpe: r.actual_rpe_num ?? r.actual_rpe ?? null,
         rir: r.actual_rir ?? null,
-        velocity_mps: r.mean_concentric_velocity_mps != null ? Number(r.mean_concentric_velocity_mps) : null,
+        velocity_mps: !r.velocity_excluded && r.mean_concentric_velocity_mps != null ? Number(r.mean_concentric_velocity_mps) : null,
         set_index: r.set_index ?? null,
         exercise_name: name,
       };

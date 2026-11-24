@@ -31,7 +31,7 @@ import { packTrack } from "@/lib/lift-analysis/raw-track";
 import type { TrackPoint } from "@/lib/lift-analysis/track";
 import { velocityVerdict, type VelocityVerdict } from "@/lib/lift-analysis/verdict";
 
-export const ENGINE_VERSION = "bar-path/5";
+export const ENGINE_VERSION = "bar-path/6";
 
 /**
  * The packed track is ~40 characters a frame once stored; past this many
@@ -190,7 +190,7 @@ export const VL_ESTIMATE_PTS = 7;
 
 export function analyzeTrack(points: TrackPoint[], opts: AnalyzeOptions): LiftAnalysis {
   const plate = opts.plate ?? { ...DEFAULT_PLATE, confirmed: false };
-  const first = readTrack(points, opts, plate, true);
+  const first = readTrack(points, opts, plate, plate.confirmed === true);
   const implausible =
     first.units === "mm" &&
     first.reps.some((r) => r.top - r.bottom > MAX_REP_ROM_MM || (r.peak.v ?? 0) > MAX_PEAK_M_S);

@@ -76,8 +76,15 @@ export function SetVideoResume() {
       c = window.setTimeout(() => whenIdle(catchUp), ms);
     };
     const onReturn = () => {
-      if (document.visibilityState === "visible") later(CATCH_UP_ON_RETURN_MS);
+      if (document.visibilityState === "visible") {
+        later(CATCH_UP_ON_RETURN_MS);
+        whenIdle(async () => { const m = await import("@/lib/lift-analysis/auto"); if (!cancelled) await m.resumeLiftAnalyses(uid); });
+      }
     };
+    const recover = window.setInterval(() => {
+      if (!cancelled && document.visibilityState === "visible" && navigator.onLine)
+        whenIdle(async () => { const m = await import("@/lib/lift-analysis/auto"); if (!cancelled) await m.resumeLiftAnalyses(uid); });
+    }, 30_000);
     const onAsk = () => later(1_000);
     document.addEventListener("visibilitychange", onReturn);
     window.addEventListener(FEED_COPY_CATCH_UP_EVENT, onAsk);
@@ -86,6 +93,7 @@ export function SetVideoResume() {
       window.clearTimeout(t);
       window.clearTimeout(lift);
       window.clearTimeout(c);
+      window.clearInterval(recover);
       document.removeEventListener("visibilitychange", onReturn);
       window.removeEventListener(FEED_COPY_CATCH_UP_EVENT, onAsk);
     };

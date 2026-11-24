@@ -26,7 +26,12 @@ export function analysableExercise(
   if (!s.trim()) return false;
   if (NOT_A_BAR.test(s)) return false;
   if (MACHINE.test(s) && !SMITH.test(s)) return false;
-  return true;
+  return /\b(barbell|smith|trap bar|ez bar|larsen|spoto|floor press|pin press)\b/i.test(s) || LIFT_FIRST.test(s) || LOWER_FIRST.test(s);
+}
+
+/** Explosive multi-phase lifts are not a squat/deadlift concentric. Keep them out of that model. */
+export function olympicExercise(name: string | null | undefined): boolean {
+  return /\b(clean|cleans|snatch|snatches|jerk|jerks)\b/i.test(name ?? "");
 }
 
 /** Which way a rep goes, from the exercise's name (null when the name doesn't say). */

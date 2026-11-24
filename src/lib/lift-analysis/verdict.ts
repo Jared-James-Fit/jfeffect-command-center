@@ -17,6 +17,7 @@
  * writes anything to the logger.
  */
 import type { LiftAnalysis } from "@/lib/lift-analysis/analyze";
+import { calibratedSetMean } from "./quality";
 
 export type VelocityReason =
   | "not_calibrated"
@@ -39,6 +40,8 @@ export type VelocityVerdict = {
   /** Each rep's MCV (m/s) when it had one. */
   perRep: (number | null)[];
   reasons: VelocityReason[];
+  tier?: "measured" | "estimated";
+  uncertainty?: number;
 };
 
 export const ACCEPT_RULES = {
@@ -115,16 +118,21 @@ export function velocityVerdict(a: LiftAnalysis): VelocityVerdict {
     if (roms.some((v) => Math.abs(v - mid) > ACCEPT_RULES.romSpread * mid))
       reasons.add("rom_inconsistent");
   }
-  const accepted = reasons.size === 0 && perRep.every((v) => v != null);
+  const usable = calibratedSetMean(a);
+  if (usable) {
+    return { accepted: true, value: usable.value, reps: reps.length, perRep, reasons: [], tier: usable.tier, uncertainty: usable.uncertainty };
+  }
+  if (!a.plate.confirmed) reasons.add("not_calibrated");
+  const accepted = reasons.size === 0 && perRep.every((v) => v != null) && a.plate.confirmed;
   const value = accepted
     ? Math.round((perRep.reduce<number>((s, v) => s + (v ?? 0), 0) / perRep.length) * 1000) / 1000
     : null;
   return { accepted, value, reps: reps.length, perRep, reasons: [...reasons] };
 }
 
-/** Full-size (450 mm) plates are what a load this heavy is made of: 20 kg / 45 lb plates or bigger on each side. */
-export function loadMeansFullPlates(totalKg: number | null | undefined): boolean {
-  return totalKg != null && Number.isFinite(totalKg) && totalKg >= 59.5;
+/** Legacy API retained for callers; load is never evidence of diameter. */
+export function loadMeansFullPlates(_totalKg: number | null | undefined): boolean {
+  return false;
 }
 
 /** The set the video is on, as far as logging its speed goes. */
@@ -179,15 +187,11 @@ export function loggedState(
       why: "reps",
       text: `${v.reps} ${v.reps === 1 ? "rep" : "reps"} in the video, ${set.actual_reps} logged. Fix the reps and it's logged.`,
     };
-  if (
-    !a.plate.confirmed &&
-    (set.is_bodyweight ||
-      !loadMeansFullPlates(set.actual_load_kg == null ? null : Number(set.actual_load_kg)))
-  )
+  if (!a.plate.confirmed)
     return {
       logged: false,
       why: "light",
-      text: "Under 60 kg the plates may be smaller than 450 mm. Set the plate size to log it.",
+      text: "Confirm the plate diameter to log speed. The load never proves its size.",
     };
   return { logged: false, why: "other", text: "Not on the set." };
 }

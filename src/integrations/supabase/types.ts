@@ -25360,8 +25360,12 @@ export type Database = {
           timer_completed_at: string | null
           timer_started_at: string | null
           updated_at: string
+          velocity_excluded: boolean
+          velocity_quality: string | null
+          velocity_selected_video_id: string | null
           velocity_set_video_id: string | null
           velocity_source: string | null
+          velocity_uncertainty: number | null
           video_url: string | null
         }
         Insert: {
@@ -25398,8 +25402,12 @@ export type Database = {
           timer_completed_at?: string | null
           timer_started_at?: string | null
           updated_at?: string
+          velocity_excluded?: boolean
+          velocity_quality?: string | null
+          velocity_selected_video_id?: string | null
           velocity_set_video_id?: string | null
           velocity_source?: string | null
+          velocity_uncertainty?: number | null
           video_url?: string | null
         }
         Update: {
@@ -25436,8 +25444,12 @@ export type Database = {
           timer_completed_at?: string | null
           timer_started_at?: string | null
           updated_at?: string
+          velocity_excluded?: boolean
+          velocity_quality?: string | null
+          velocity_selected_video_id?: string | null
           velocity_set_video_id?: string | null
           velocity_source?: string | null
+          velocity_uncertainty?: number | null
           video_url?: string | null
         }
         Relationships: [
@@ -25644,6 +25656,7 @@ export type Database = {
           created_at: string
           created_by: string
           engine: string
+          excluded: boolean
           exercise_id: string | null
           first_mcv: number | null
           fps: number | null
@@ -25653,6 +25666,7 @@ export type Database = {
           reps: number
           result: Json
           result_id: string | null
+          reviewed: boolean
           set_mcv: number | null
           set_video_id: string
           source: string
@@ -25669,6 +25683,7 @@ export type Database = {
           created_at?: string
           created_by: string
           engine: string
+          excluded?: boolean
           exercise_id?: string | null
           first_mcv?: number | null
           fps?: number | null
@@ -25678,6 +25693,7 @@ export type Database = {
           reps?: number
           result: Json
           result_id?: string | null
+          reviewed?: boolean
           set_mcv?: number | null
           set_video_id: string
           source: string
@@ -25694,6 +25710,7 @@ export type Database = {
           created_at?: string
           created_by?: string
           engine?: string
+          excluded?: boolean
           exercise_id?: string | null
           first_mcv?: number | null
           fps?: number | null
@@ -25703,6 +25720,7 @@ export type Database = {
           reps?: number
           result?: Json
           result_id?: string | null
+          reviewed?: boolean
           set_mcv?: number | null
           set_video_id?: string
           source?: string
@@ -30328,6 +30346,116 @@ export type Database = {
           },
         ]
       }
+      set_velocity_history: {
+        Row: {
+          actor_id: string | null
+          after_value: Json | null
+          before_value: Json | null
+          client_id: string
+          happened_at: string
+          id: string
+          operation: string
+          reason: string | null
+          subject_id: string
+          subject_kind: string
+        }
+        Insert: {
+          actor_id?: string | null
+          after_value?: Json | null
+          before_value?: Json | null
+          client_id: string
+          happened_at?: string
+          id?: string
+          operation: string
+          reason?: string | null
+          subject_id: string
+          subject_kind: string
+        }
+        Update: {
+          actor_id?: string | null
+          after_value?: Json | null
+          before_value?: Json | null
+          client_id?: string
+          happened_at?: string
+          id?: string
+          operation?: string
+          reason?: string | null
+          subject_id?: string
+          subject_kind?: string
+        }
+        Relationships: []
+      }
+      set_velocity_jobs: {
+        Row: {
+          analysis_base: string | null
+          attempts: number
+          available_at: string
+          claimed_by: string | null
+          client_id: string
+          compute_ms: number | null
+          created_at: string
+          enabled: boolean
+          error: string | null
+          exercise_id: string | null
+          exercise_name: string
+          finished_at: string | null
+          lease_id: string | null
+          lease_until: string | null
+          set_video_id: string
+          started_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          analysis_base?: string | null
+          attempts?: number
+          available_at?: string
+          claimed_by?: string | null
+          client_id: string
+          compute_ms?: number | null
+          created_at?: string
+          enabled?: boolean
+          error?: string | null
+          exercise_id?: string | null
+          exercise_name?: string
+          finished_at?: string | null
+          lease_id?: string | null
+          lease_until?: string | null
+          set_video_id: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          analysis_base?: string | null
+          attempts?: number
+          available_at?: string
+          claimed_by?: string | null
+          client_id?: string
+          compute_ms?: number | null
+          created_at?: string
+          enabled?: boolean
+          error?: string | null
+          exercise_id?: string | null
+          exercise_name?: string
+          finished_at?: string | null
+          lease_id?: string | null
+          lease_until?: string | null
+          set_video_id?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "set_velocity_jobs_set_video_id_fkey"
+            columns: ["set_video_id"]
+            isOneToOne: true
+            referencedRelation: "pl_set_videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       set_video_feed_jobs: {
         Row: {
           asset_id: string | null
@@ -33447,6 +33575,11 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _velocity_analysis_store: {
+        Args: { _result: Json; _set_video_id: string }
+        Returns: string
+      }
+      _velocity_enqueue: { Args: { _video: string }; Returns: undefined }
       accept_my_purchase: {
         Args: { p_purchase_id: string }
         Returns: {
@@ -37496,6 +37629,40 @@ export type Database = {
       validate_discount_codes: {
         Args: { _codes: string[]; _customer_id?: string; _product_id?: string }
         Returns: Json
+      }
+      velocity_analysis_commit: {
+        Args: {
+          _compute_ms?: number
+          _expected?: string
+          _lease?: string
+          _result: Json
+          _video: string
+        }
+        Returns: boolean
+      }
+      velocity_control: {
+        Args: {
+          _action: string
+          _history?: string
+          _reason?: string
+          _value?: number
+          _video: string
+        }
+        Returns: undefined
+      }
+      velocity_job_claim: { Args: { _video: string }; Returns: Json }
+      velocity_job_fail: {
+        Args: {
+          _lease: string
+          _reason: string
+          _retry: boolean
+          _video: string
+        }
+        Returns: undefined
+      }
+      velocity_job_retry: {
+        Args: { _enabled?: boolean; _video: string }
+        Returns: undefined
       }
       workout_can_act_for_client: {
         Args: { _client_id: string }

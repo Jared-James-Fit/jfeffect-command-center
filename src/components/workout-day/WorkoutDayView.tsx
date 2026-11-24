@@ -6138,6 +6138,7 @@ function SetRow({
   const serverVelocityRef = useRef(serverVelocityText);
   serverVelocityRef.current = serverVelocityText;
   const velocityFromVideo = (existing as any)?.velocity_source === "video";
+  const velocityEstimated = (existing as any)?.velocity_quality === "estimated";
   const [velocity, setVelocity] = useState(serverVelocityText);
   // what this set is expected to move at, from the athlete's own measured sets (velocity-model.ts):
   // shown only in the empty box, as "≈0.42", never as a value
@@ -7499,7 +7500,7 @@ function SetRow({
       {showVelocity && (
         <div className="relative min-w-0">
           <Input
-            value={velocity}
+            value={velocityFocusedRef.current ? velocity : velocity ? Number(velocity).toFixed(2) : ""}
             data-velocity-expected={expectedVelocity ? expectedVelocity.v.toFixed(2) : undefined}
             onChange={(e) => setVelocity(e.target.value.replace(/[^0-9.]/g, "").slice(0, 5))}
             onFocus={() => { velocityFocusedRef.current = true; }}
@@ -7518,12 +7519,12 @@ function SetRow({
             disabled={readonly}
             data-velocity-source={velocityFromVideo && !velocityChanged(velocity) ? "video" : undefined}
             className={cn(
-              "px-1.5 text-center tabular-nums",
+              "min-w-0 px-0.5 text-center tabular-nums",
               focusMode ? "h-12 text-base sm:h-10 sm:text-sm" : "h-11 text-sm sm:h-8 sm:text-xs",
             )}
           />
           {velocityFromVideo && !velocityChanged(velocity) && (
-            <Video aria-hidden className="pointer-events-none absolute right-1 top-1 h-2.5 w-2.5 text-muted-foreground" />
+            velocityEstimated ? <span aria-label="Estimated speed" className="pointer-events-none absolute left-0.5 top-0 text-[10px] text-muted-foreground">≈</span> : <Video aria-hidden className="pointer-events-none absolute right-1 top-0 h-2 w-2 text-muted-foreground" />
           )}
         </div>
       )}

@@ -29,6 +29,7 @@ function track(opts: { rom?: number; fps?: number } = {}): TrackPoint[] {
 
 const read = (opts?: { rom?: number; fps?: number }): LiftAnalysis =>
   analyzeTrack(track(opts), {
+    plate: {mm:450,rel:0.01,confirmed:true},
     source: "auto",
     seed: { x: 140, y: 160, r: 40, t: 0 },
     frame: { w: 270, h: 480 },
@@ -56,7 +57,7 @@ describe("the set's velocity", () => {
     expect(v.reasons).toContain("rep_incomplete");
   });
 
-  it("not below 24 fps, never with the camera moving, never an estimate", () => {
+  it("not below 24 fps or with camera movement; calibrated full-rep estimates may log", () => {
     expect(velocityVerdict(read({ fps: 15 })).reasons).toContain("low_fps");
     const a = read();
     expect(
@@ -69,7 +70,8 @@ describe("the set's velocity", () => {
       ...a,
       reps: a.reps.map((r) => ({ ...r, mcv: { ...r.mcv, tier: "estimated" as const } })),
     } as LiftAnalysis;
-    expect(velocityVerdict(est).reasons).toContain("rep_not_measured");
+    expect(velocityVerdict(est).accepted).toBe(true);
+    expect(velocityVerdict(est).tier).toBe("estimated");
   });
 
   it("says why in plain words", () => {
@@ -78,8 +80,8 @@ describe("the set's velocity", () => {
     );
   });
 
-  it("full-size plates from 60 kg on", () => {
-    expect(loadMeansFullPlates(60)).toBe(true);
+  it("a load never establishes plate diameter", () => {
+    expect(loadMeansFullPlates(60)).toBe(false);
     expect(loadMeansFullPlates(40)).toBe(false);
     expect(loadMeansFullPlates(null)).toBe(false);
   });
@@ -118,7 +120,7 @@ describe("is it on the set", () => {
     const reps = loggedState(a, { actual_reps: 3, actual_load_kg: 100 }, sv);
     expect(reps).toMatchObject({ logged: false, why: "reps" });
     expect(!reps.logged && reps.text).toContain("2 reps in the video, 3 logged");
-    expect(loggedState(a, { actual_reps: 2, actual_load_kg: 40 }, sv)).toMatchObject({
+    expect(loggedState({ ...a,plate:{...a.plate,confirmed:false} }, { actual_reps: 2, actual_load_kg: 40 }, sv)).toMatchObject({
       logged: false,
       why: "light",
     });

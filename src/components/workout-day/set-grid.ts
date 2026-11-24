@@ -26,7 +26,7 @@ export function setGridTemplate(c: SetGridColumns): string {
     c.showTimer ? "1fr" : null,
     c.showDistance ? "1fr" : null,
     c.showCalories ? "1fr" : null,
-    c.showVelocity ? "1fr" : null,
+    c.showVelocity ? "minmax(56px, 1fr)" : null,
     "1fr",
     !c.hideWeight ? "1.35fr" : null,
     c.videoColumn ? (c.focusMode ? "36px" : "30px") : null,

@@ -29,7 +29,7 @@ function run(
   opts?: Parameters<typeof runEngine>[1],
 ): { clip: Clip; res: EngineResult } {
   const clip = renderClip(scene);
-  return { clip, res: runEngine(clip.frames, opts) };
+  return { clip, res: runEngine(clip.frames, { plate: { mm:450, rel:0.01, confirmed:true }, ...opts }) };
 }
 
 function ok(res: EngineResult) {
@@ -313,8 +313,8 @@ describe("lift analysis engine (synthetic clips with a known answer)", () => {
     () => {
       const scene = base({ phases: squatSet({ reps: 2, rom: 550, down: 1.2, up: 1.0 }) });
       const clip = renderClip(scene);
-      const tapped = runEngine(clip.frames, { seed: { kind: "tap", t: 0.5, x: 150, y: 170 } });
-      const auto = runEngine(clip.frames);
+      const tapped = runEngine(clip.frames, { plate:{mm:450,rel:0.01,confirmed:true}, seed: { kind: "tap", t: 0.5, x: 150, y: 170 } });
+      const auto = runEngine(clip.frames, {plate:{mm:450,rel:0.01,confirmed:true}});
       const a = ok(tapped);
       const b = ok(auto);
       expect(a.plate.source).toBe("tap");

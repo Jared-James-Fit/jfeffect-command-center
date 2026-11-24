@@ -40,6 +40,11 @@ export function autoReadCheck(
   const why: string[] = [];
   if (confidence !== "high" && !a.velocity?.accepted)
     why.push("not sure of the plate and the read didn't prove it");
+  // A confidently found plate can retain pixel paths and rep timing while awaiting its diameter.
+  if (a.units !== "mm" && !a.plate.confirmed && confidence === "high") {
+    if (a.quality.tracked >= 0.8 && a.reps.length > 0 && a.reps.every(r => r.complete) &&
+        !(a.track?.lost ?? []).some(g => g.end - g.start > 1)) return { ok: true, why: [] };
+  }
   if (a.units !== "mm" || !a.calibration.ok) why.push("no scale from the plate's edge");
   else if (a.calibration.relErr > 0.04) why.push("the plate's edge was unclear");
   if (!(a.quality.tracked >= 0.8)) why.push("not followed through the clip");
