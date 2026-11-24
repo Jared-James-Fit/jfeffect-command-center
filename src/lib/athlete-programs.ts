@@ -214,6 +214,11 @@ export function useProgramActions() {
     mutationFn: async (id: string): Promise<string> => {
       const { data, error } = await rpc("athlete_program_copy", { _id: id });
       if (error) throw error;
+      // its first version says it was copied (best effort; the copy is made either way)
+      void rpc("athlete_program_version_tag", { _program_id: data, _source: "copy", _restored_from: null }).then(
+        () => undefined,
+        () => undefined,
+      );
       return data as string;
     },
     onSuccess: refresh,

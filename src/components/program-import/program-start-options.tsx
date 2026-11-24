@@ -1,17 +1,18 @@
 import { Link } from "@tanstack/react-router";
-import { BookOpen, ChevronRight, Hammer, Upload } from "lucide-react";
+import { BookOpen, ChevronRight, Hammer, Upload, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type StartWay = "follow" | "build" | "import";
+export type StartWay = "follow" | "build" | "import" | "crew";
 
 /** The three ways to get a program, in one set of words for every screen that offers them. */
 export const START_WAYS: Record<StartWay, { title: string; sub: string }> = {
   follow: { title: "Follow a program", sub: "A JF Effect plan written by our coaches. Pick one and start today." },
   build: { title: "Build my own", sub: "Choose the weeks and days, then fill them from the exercise library." },
   import: { title: "Import a program", sub: "From a spreadsheet, Word doc, PDF or photos. You check it before it's saved." },
+  crew: { title: "Copy one from the crew", sub: "Programs members built and shared. Save a copy and make it yours." },
 };
 
-const ICON = { follow: BookOpen, build: Hammer, import: Upload } as const;
+const ICON = { follow: BookOpen, build: Hammer, import: Upload, crew: Users } as const;
 
 /**
  * Follow a program · Build my own · Import a program, one tap each. Every way
@@ -55,8 +56,8 @@ export function ProgramStartOptions({
         return (
           <Link
             key={w}
-            to={w === "follow" ? "/portal/programs" : w === "build" ? "/portal/programs/new" : "/portal/programs/import"}
-            search={w === "follow" ? ({ tab: "jf" } as any) : undefined}
+            to={w === "follow" || w === "crew" ? "/portal/programs" : w === "build" ? "/portal/programs/new" : "/portal/programs/import"}
+            search={w === "follow" ? ({ tab: "jf" } as any) : w === "crew" ? ({ tab: "crew" } as any) : undefined}
             className={cls}
             data-start-way={w}
           >

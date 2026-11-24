@@ -4,11 +4,13 @@ import {
   ArrowLeft,
   Copy,
   CopyPlus,
-  Layers,
+  History,
   Loader2,
   MoreHorizontal,
   Plus,
   Redo2,
+  RotateCcw,
+  SlidersHorizontal,
   Trash2,
   Undo2,
 } from "lucide-react";
@@ -115,6 +117,18 @@ import {
   ProgressionSheet,
   SetGroupSheet,
 } from "./sheets";
+import { VersionsSheet } from "./versions-sheet";
+import { DraftStatusLine } from "./draft-status";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /** Dragging an exercise only ever moves it up or down. */
 const upAndDown: Modifier = ({ transform }) => ({ ...transform, x: 0 });
@@ -175,6 +189,8 @@ export type WorkbenchReviewApi = {
   resolve: (sourceName: string) => void;
   /** An edit, one Undo step. */
   edit: (fn: (plan: ProgramPlan) => ProgramPlan) => void;
+  /** Takes the last edit back. */
+  undo: () => void;
 };
 
 /**
@@ -190,10 +206,13 @@ export type WorkbenchReviewApi = {
 export function ProgramWorkbench({
   editor,
   review,
+  beforeSave,
 }: {
   editor: ProgramEditor;
   /** A panel above the day (an import's review), given ways to move around and fix things. */
   review?: (api: WorkbenchReviewApi) => ReactNode;
+  /** Asked before saving (an import's confirm step); false keeps the builder open. */
+  beforeSave?: () => Promise<boolean>;
 }) {
   const navigate = useNavigate();
   const desktop = !useIsMobileNow();
@@ -228,6 +247,9 @@ export function ProgramWorkbench({
   const [copy, setCopy] = useState<null | { day: string | null }>(null);
   const [picker, setPicker] = useState<Picker>(null);
   const [leave, setLeave] = useState(false);
+  const [versions, setVersions] = useState(false);
+  const [discardAsk, setDiscardAsk] = useState(false);
+  const [conflict, setConflict] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
 
   // on a phone the builder owns the screen: no app bar on top, no tab bar below
@@ -284,9 +306,14 @@ export function ProgramWorkbench({
     }, 60);
   };
 
-  const onSave = async () => {
-    const r = await editor.save();
+  const onSave = async (force = false) => {
+    if (!force && beforeSave && !(await beforeSave())) return;
+    const r = await editor.save({ force });
     if (r.ok) return;
+    if (r.conflict) {
+      setConflict(true);
+      return;
+    }
     if (r.at === "title") titleRef.current?.focus();
     else if (r.at && typeof r.at === "object") goCursor(r.at);
   };
@@ -504,10 +531,6 @@ export function ProgramWorkbench({
         >
           <Trash2 className="mr-2 h-4 w-4" /> Delete this week
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => setProgramSheet(true)} className="min-h-11">
-          <Layers className="mr-2 h-4 w-4" /> Length & blocks…
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -563,14 +586,19 @@ export function ProgramWorkbench({
                 className="block w-full min-w-0 truncate bg-transparent text-[17px] font-semibold leading-tight outline-none placeholder:text-muted-foreground"
                 data-program-title
               />
-              <button
-                type="button"
-                onClick={() => setProgramSheet(true)}
-                className="block max-w-full truncate text-left text-[12px] text-muted-foreground hover:text-foreground"
-                data-program-meta
-              >
-                {planMeta(plan, { days: false })} ›
-              </button>
+              <div className="flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
+                {/* on a phone the weeks along the bottom already say the length: the name keeps its status */}
+                <button
+                  type="button"
+                  onClick={() => setProgramSheet(true)}
+                  className="min-w-0 shrink truncate text-left hover:text-foreground max-md:hidden"
+                  data-program-meta
+                >
+                  {planMeta(plan, { days: false })}
+                </button>
+                <span aria-hidden className="shrink-0 max-md:hidden">·</span>
+                <DraftStatusLine status={editor.status} />
+              </div>
             </div>
             <button
               type="button"
@@ -593,16 +621,53 @@ export function ProgramWorkbench({
             >
               <Redo2 className="h-[18px] w-[18px]" />
             </button>
-            <Button
-              onClick={onSave}
-              disabled={editor.saving || (editor.editing && !editor.dirty)}
-              // the screen's one red button: Save once there's something to save, else Add exercises
-              variant={readyToSave ? "default" : "secondary"}
-              className="h-10 shrink-0 px-4 text-[15px]"
-              data-save
-            >
-              {editor.saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editor.editing && !editor.dirty ? "Saved" : "Save"}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Program options"
+                  className="grid h-10 w-9 shrink-0 place-items-center rounded-full hover:bg-secondary"
+                  data-builder-menu
+                >
+                  <MoreHorizontal className="h-[18px] w-[18px]" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuItem onSelect={() => setProgramSheet(true)} className="min-h-11">
+                  <SlidersHorizontal className="mr-2 h-4 w-4" /> Details, length & blocks
+                </DropdownMenuItem>
+                {editor.editing && d.id && (
+                  <DropdownMenuItem onSelect={() => setVersions(true)} className="min-h-11" data-open-versions>
+                    <History className="mr-2 h-4 w-4" /> Version history
+                  </DropdownMenuItem>
+                )}
+                {editor.dirty && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onSelect={() => setDiscardAsk(true)}
+                      className="min-h-11 text-destructive focus:text-destructive"
+                      data-discard-draft
+                    >
+                      <RotateCcw className="mr-2 h-4 w-4" /> {editor.editing ? "Discard unsaved changes" : "Discard this draft"}
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {/* nothing to save: the status line by the name already says so, no second "Saved" */}
+            {!(editor.editing && !editor.dirty) && (
+              <Button
+                onClick={() => void onSave()}
+                disabled={editor.saving}
+                // the screen's one red button: Save once there's something to save, else Add exercises
+                variant={readyToSave ? "default" : "secondary"}
+                className="h-10 shrink-0 px-4 text-[15px]"
+                data-save
+              >
+                {editor.saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+              </Button>
+            )}
           </div>
           <div className="pb-1">
             <DayTabs
@@ -635,6 +700,7 @@ export function ProgramWorkbench({
               goTo,
               resolve: (name) => setPicker({ mode: "resolve", name }),
               edit: (fn) => edit(fn),
+              undo: () => editor.undo(),
             })}
           </div>
         )}
@@ -912,6 +978,75 @@ export function ProgramWorkbench({
           undoable("Split into 4-week blocks");
         }}
       />
+
+      {d.id && (
+        <VersionsSheet
+          open={versions}
+          onOpenChange={setVersions}
+          programId={d.id}
+          current={d}
+          cursor={cur}
+          running
+          onRestore={(next, versionNo, what) => {
+            editor.replace(next);
+            editor.markRestore(versionNo);
+            toast(`Restored ${what}`, {
+              description: "Tap Save to keep it. Your later versions stay in history.",
+              duration: 8000,
+              action: { label: "Undo", onClick: () => editor.undo() },
+            });
+          }}
+        />
+      )}
+
+      <AlertDialog open={discardAsk} onOpenChange={setDiscardAsk}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{editor.editing ? "Discard unsaved changes?" : "Discard this draft?"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {editor.editing
+                ? "The program goes back to how it was last saved, here and on your other devices. Saved versions stay in history."
+                : "Everything you've built here is cleared, here and on your other devices."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                editor.discard();
+                setCursor({ b: 0, w: 0, d: 0 });
+                toast(editor.editing ? "Back to your last save" : "Draft discarded");
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={conflict} onOpenChange={setConflict}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Changed on another device</AlertDialogTitle>
+            <AlertDialogDescription>
+              This program was saved somewhere else after you opened it here. Saving now replaces that version with
+              yours. The other one stays in Version history either way.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Not now</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConflict(false);
+                void onSave(true);
+              }}
+            >
+              Save mine
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <LeaveSheet
         open={leave}

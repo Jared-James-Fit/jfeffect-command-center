@@ -40,7 +40,7 @@ import { useScrollRestoration } from "@/lib/scroll-restore";
 import { BlockSwitcher } from "@/components/block-switcher";
 import { CleoDock, CleoLauncher, useCleoDock } from "@/components/program-ai/cleo-dock";
 import { BlockTypeChip, BlockTypeSheet } from "@/components/program-editor/block-type-picker";
-import { inferBlockType, resolveBlockType, type BlockMeta } from "@/lib/block-types";
+import { blockEvidence, inferBlockType, resolveBlockType, type BlockMeta } from "@/lib/block-types";
 import { setClientBlockType, useBlockTypeLibrary } from "@/lib/block-types-queries";
 import { useBuilderAthlete } from "@/lib/builder-athlete";
 import { builderNav } from "@/lib/builder-nav";
@@ -839,7 +839,9 @@ function BlockEditor() {
 
   const blockLabel = name || tree.block.name || "Block";
   const blockType = typeLocal ?? { type: ((tree.block as any).block_type as string | null) ?? null, meta: ((tree.block as any).block_meta as BlockMeta | null) ?? null };
-  const resolvedType = resolveBlockType({ block_type: blockType.type, block_meta: blockType.meta, name: blockLabel, training_focus: tree.block.training_focus }, blockTypes);
+  // the block's own sets inform the suggestion, never its words alone (a "Peak" focus on 8–12 rep sets isn't a peak)
+  const typeEvidence = blockEvidence((tree.rows ?? []) as any[], (tree.weeks ?? []).length || 1);
+  const resolvedType = resolveBlockType({ block_type: blockType.type, block_meta: blockType.meta, name: blockLabel, training_focus: tree.block.training_focus, evidence: typeEvidence }, blockTypes);
   const openSettings = (t: BlockSettingsTab) => {
     setSettingsTab(t);
     setSettingsOpen(true);
@@ -1067,7 +1069,7 @@ function BlockEditor() {
           onOpenChange={setTypeOpen}
           title={`${blockLabel}: block type`}
           value={blockType}
-          inferredKey={inferBlockType({ name: blockLabel, training_focus: tree.block.training_focus })}
+          inferredKey={inferBlockType({ name: blockLabel, training_focus: tree.block.training_focus, evidence: typeEvidence })}
           onSave={async (type, meta) => {
             await setClientBlockType(blockId, type, meta);
             setTypeLocal({ type, meta });

@@ -13,9 +13,12 @@ const jwt = `${b64({alg:'HS256',typ:'JWT'})}.${b64({sub:USER_ID,role:'authentica
 const user = { id: USER_ID, aud:'authenticated', role:'authenticated', email:'demo.athlete@example.com', email_confirmed_at:'2026-01-01T00:00:00Z', created_at:'2025-06-01T00:00:00Z', app_metadata:{provider:'email'}, user_metadata:{ first_name:'Alex' } };
 const session = { access_token: jwt, refresh_token:'demo-refresh', token_type:'bearer', expires_in: 3600*24, expires_at: exp, user };
 
-module.exports.run = async function run({ initScript, serverFnMocks = {}, files = {}, path, fixtures = {}, rpc = {}, width = 390, height = 844, scale = 1, out, waitFor, before, theme = 'dark', log = true, afterLoad }) {
+module.exports.run = async function run({ initScript, serverFnMocks = {}, files = {}, path, fixtures = {}, rpc = {}, width = 390, height = 844, scale = 1, out, waitFor, before, theme = 'dark', log = true, afterLoad, desktop = false }) {
   const b = await chromium.launch();
-  const ctx = await b.newContext({ viewport: { width, height }, deviceScaleFactor: scale, isMobile: true, hasTouch: true, timezoneId: 'America/Winnipeg', colorScheme: theme, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' });
+  // a phone (touch, an iPhone's browser) unless the shot is of the app on a computer
+  const ctx = await b.newContext(desktop
+    ? { viewport: { width, height }, deviceScaleFactor: scale, timezoneId: 'America/Winnipeg', colorScheme: theme }
+    : { viewport: { width, height }, deviceScaleFactor: scale, isMobile: true, hasTouch: true, timezoneId: 'America/Winnipeg', colorScheme: theme, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' });
   await ctx.addInitScript(([key, s, extra]) => {
     try { localStorage.setItem(key, JSON.stringify(s)); for (const [k,v] of Object.entries(extra||{})) localStorage.setItem(k, v); } catch {}
   }, [`sb-${REF}-auth-token`, session, before || {}]);

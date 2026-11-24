@@ -92,6 +92,8 @@ import shotInsights from "@/assets/landing/app-insights.webp";
 import shotFood from "@/assets/landing/app-food.webp";
 import shotBuild from "@/assets/landing/app-build.webp";
 import shotImport from "@/assets/landing/app-import.webp";
+import shotBuildDesktop from "@/assets/landing/app-build-desktop.webp";
+import shotBuildDesktop1280 from "@/assets/landing/app-build-desktop-1280.webp";
 import shotChat from "@/assets/coaching/app-coach-chat.webp";
 import shotPlan from "@/assets/coaching/app-nutrition.webp";
 
@@ -185,14 +187,14 @@ const OWN: Array<{ title: string; body: string; note: string; src: string; alt: 
     body: "Pick how many weeks and days, add exercises from the library, and set the sets, reps, RPE and load. Change one week or every week at once.",
     note: "Save it, start it, and it lands on your calendar like any of mine.",
     src: shotBuild,
-    alt: "The program builder: a 12 week upper and lower program, day 1's exercises with their sets, reps, RPE and rest, and the weeks along the bottom",
+    alt: "The program builder on a phone: week 5 of a 12 week program, the Strength block's lower day with a back squat top set and its back-offs at 85%, and the weeks along the bottom grouped by block",
   },
   {
     title: "Upload one you already have",
     body: "A spreadsheet, a Word doc, a PDF or photos of it. It comes in with its weeks, days and numbers, matched to the exercise library, and you check every line before it's saved.",
     note: "Most files come in within seconds. PDFs and photos take a little longer. What you upload stays private to you.",
     src: shotImport,
-    alt: "An imported program being checked: read from a spreadsheet, 8 weeks, 4 days a week, one exercise left to pick from the library",
+    alt: "An imported spreadsheet ready to save: 8 weeks, 4 days a week, 12 exercises, nothing that needs review, and shorthand like SSB Squat matched to the library",
   },
 ];
 
@@ -596,6 +598,24 @@ export function LandingPage({ packages, programs }: { packages?: PackagesIn; pro
             title="Build one, or bring the one you have."
             sub="Either way it's tracked like my programs: every set, PR and week."
           />
+          {/* the same builder on a computer: every week a tap away, the block you're in by its colour */}
+          <figure className="mx-auto mb-14 max-w-4xl" data-landing-build-desktop>
+            <img
+              src={shotBuildDesktop}
+              srcSet={`${shotBuildDesktop1280} 1280w, ${shotBuildDesktop} 2564w`}
+              sizes="(min-width: 896px) 896px, calc(100vw - 40px)"
+              width={1282}
+              height={838}
+              loading="lazy"
+              decoding="async"
+              alt="The program builder on a computer: a 12 week program in three blocks (Hypertrophy, Strength, Peak), the Strength block's lower day with sets, reps, RPE, load and rest in columns, and which weeks an edit changes"
+              className="h-auto w-full select-none"
+              draggable={false}
+            />
+            <figcaption className="mt-3 text-center text-[13px] text-muted-foreground">
+              On a computer too: the whole program in columns, and every edit says which weeks it changes.
+            </figcaption>
+          </figure>
           <div className="mx-auto grid max-w-4xl gap-12 md:grid-cols-2 md:gap-10" data-landing-own>
             {OWN.map((o) => (
               <div key={o.title} className="flex flex-col items-center text-center md:items-start md:text-left">

@@ -349,7 +349,8 @@ describe("session length of a top set + back-off day", () => {
     const top = { sets: 1, rest_seconds: 240, time_profile: "main_lift" as const };
     const back = { ...top, sets: 3, percentage_basis: "top_set" };
     expect(estimateRowSeconds(back)).toBe(3 * (60 + 240));
-    expect(estimateRowSeconds({ ...back, percentage_basis: "none" })).toBe(600 + 3 * (60 + 240) + 180);
+    // the rest after the last set is the change-over to the next exercise, counted once
+    expect(estimateRowSeconds({ ...back, percentage_basis: "none" })).toBe(600 + 180 + 3 * 60 + 2 * 240);
     // Elite Powerlifting's Friday SBD, week 1: three top singles with back-offs
     const elite = buildLibrary().find((t) => t.slug === "jf-elite-powerlifting")!;
     const friday = elite.payload.blocks_data[0].weeks_data[0].days[3];

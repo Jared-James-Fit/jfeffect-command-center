@@ -771,7 +771,7 @@ export function LeaveSheet({
       open={open}
       onOpenChange={onOpenChange}
       title="Save your changes?"
-      description="Not saved, they're kept on this phone and come back the next time you open the builder."
+      description="If you leave without saving, they're kept as a draft (here and on your other devices) and come back the next time you open the builder. Nothing changes in your program until you save."
     >
       <div className="space-y-2">
         <Button className="h-12 w-full text-[15px]" onClick={onSave} disabled={saving} data-leave-save>
