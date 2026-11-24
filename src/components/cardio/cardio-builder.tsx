@@ -19,7 +19,8 @@ import { cn } from "@/lib/utils";
 import { CleoLauncher, type CleoDockHandle } from "@/components/program-ai/cleo-dock";
 import { CardioSessionEditor } from "@/components/cardio/cardio-session-editor";
 import { CardioWeek } from "@/components/cardio/cardio-week";
-import { QualityScoreCard } from "@/components/plan-quality/quality-card";
+import { PlanIntelligence } from "@/components/plan-quality/plan-intelligence";
+import { useCleoAccess } from "@/hooks/use-cleo-access";
 import { CARDIO_TEMPLATES, scaleToWeekly } from "@/lib/cardio/overview";
 import { diffPlans, newSession, newSessionKey, planProblems, planTotals, type CardioPlan, type CardioSession } from "@/lib/cardio/plan";
 import { planOn, withoutPending } from "@/lib/cardio/publish";
@@ -83,6 +84,7 @@ export function CardioBuilder({
   const problems = useMemo(() => planProblems(plan, ctx), [plan, ctx]);
   const totals = useMemo(() => planTotals(plan, ctx, view.scoreCtx.bodyweightKg), [plan, ctx, view.scoreCtx.bodyweightKg]);
   const quality = useMemo(() => scoreCardioPlan(plan, view.scoreCtx), [plan, view.scoreCtx]);
+  const cleo = useCleoAccess();
   const effective = effectiveDate && effectiveDate > view.today ? effectiveDate : view.today;
   // what publishing would change: against the plan in force on that date (a waiting change taken back first)
   const base = useMemo(() => {
@@ -223,7 +225,15 @@ export function CardioBuilder({
         </Button>
       </div>
 
-      <QualityScoreCard title="Plan quality" quality={quality} onOptimize={(ask) => onAskCleo(ask)} />
+      <PlanIntelligence
+        domain="cardio"
+        clientKey={`${view.clientId}:draft`}
+        title="Draft quality"
+        quality={quality}
+        cleo={cleo}
+        onOptimize={(q) => dock.optimize({ domain: "cardio", what: "cardio draft", quality: q })}
+        onAskCleo={() => onAskCleo("")}
+      />
 
       {/* review and publish */}
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>

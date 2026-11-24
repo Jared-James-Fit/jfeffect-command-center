@@ -2,7 +2,7 @@
  * The Cardio tab's overview (Nov 23 2026), most important first: six numbers
  * (planned and done a week, completion, sessions, effort, volume change), the
  * plan in force and its week, the recovery and performance read with its one
- * recommendation, plan quality, the charts (planned vs done by week with every
+ * recommendation (plan quality is the strip above it), the charts (planned vs done by week with every
  * published change marked, by weekday, bodyweight beside it as its own chart),
  * then the history folded: logged sessions and every published plan with how
  * it went. Measured, reported and estimated values are labelled as such; a
@@ -16,11 +16,9 @@ import { Accordion } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 import { CardHeader, Section, StatusChip } from "@/components/nutrition/nutrition-ui";
 import { CardioWeek } from "@/components/cardio/cardio-week";
-import { QualityScoreCard } from "@/components/plan-quality/quality-card";
 import { CleoMark } from "@/components/summer/cleo-mark";
 import { cardioKpis, weekdayDistribution, weeklySeries } from "@/lib/cardio/overview";
 import { daysWords, progressionWords, sessionLine, TIMING_SHORT } from "@/lib/cardio/plan";
-import { scoreCardioPlan } from "@/lib/cardio/quality";
 import { REC_LABEL, type CardioRecommendation, type Signal } from "@/lib/cardio/insights";
 import { summarizeCardio } from "@/lib/analytics/cardio-adherence";
 import type { CardioWorkspaceView } from "@/lib/cardio/types";
@@ -85,7 +83,6 @@ export function CardioOverview({
   const kpi = useMemo(() => cardioKpis({ today: view.today, rows: view.rows as any, completions: view.completions as any, live: view.live, ctx: view.ctx }), [view]);
   const weeks = useMemo(() => weeklySeries({ today: view.today, rows: view.rows as any, completions: view.completions as any, weighIns: view.weighIns, weeks: 12 }), [view]);
   const weekday = useMemo(() => weekdayDistribution({ today: view.today, live: view.live, ctx: view.ctx, completions: view.completions as any }), [view]);
-  const quality = useMemo(() => scoreCardioPlan(view.live, view.scoreCtx), [view]);
   const summary = useMemo(() => summarizeCardio({ targets: view.rows as any, completions: view.completions as any, start: view.completions[0]?.completed_date ?? view.today, end: view.today }), [view]);
   const unit = view.weightUnit;
   const bw = weeks.filter((w) => w.bodyweightKg != null).map((w) => ({ ...w, bw: Math.round(fromKg(w.bodyweightKg!, unit) * 10) / 10 }));
@@ -168,8 +165,6 @@ export function CardioOverview({
           </details>
         </section>
       </div>
-
-      <QualityScoreCard title="Plan quality" quality={quality} onOptimize={(ask) => onAsk(ask)} />
 
       {/* charts */}
       {(hasWeeks || bw.length >= 2) && (

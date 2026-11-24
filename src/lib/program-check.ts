@@ -242,7 +242,7 @@ function dedupeGaps(gs: CompletenessGap[]): CompletenessGap[] {
 }
 
 /** Main lifts (labelled Primary / Secondary / top set, or a competition lift, or a day's first exercise) that never change across a block's weeks. */
-function mainLiftProgression(input: CheckInput): { total: number; missing: Array<{ name: string; block: string; at: Loc }> } {
+export function mainLiftProgression(input: CheckInput): { total: number; missing: Array<{ name: string; block: string; at: Loc }> } {
   const ex = input.exercises;
   let total = 0;
   const missing: Array<{ name: string; block: string; at: Loc }> = [];

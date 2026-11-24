@@ -181,3 +181,49 @@ export async function clientIntelText(sb: any, x: ClientIntelInput, focus: Intel
 
   return out.join("\n\n");
 }
+
+/**
+ * The client's other plans for Cleo's training work (Nov 24 2026): the training
+ * AI already reads their full training history (Program Intelligence's brief)
+ * and the nutrition plan's one line; this adds what it couldn't see: the cardio
+ * in force and the cardio read (cardio against lifting recovery), the nutrition
+ * plan's days, the weight-management read, and the other two plans' quality
+ * reads. Context, never instructions: the program is the coach's. Best effort:
+ * anything that can't be read is left out. Server only.
+ */
+export async function otherPlansForTraining(sb: any, clientId: string): Promise<string | null> {
+  try {
+    const { loadWeightManagement } = await import("@/lib/weight-management/load.server");
+    const { loadCardioWorkspace } = await import("@/lib/cardio/workspace.server");
+    const { scoreCardioPlan } = await import("@/lib/cardio/quality");
+    const loaded = await loadWeightManagement(sb, clientId);
+    const view = await loadCardioWorkspace(sb, clientId, { loaded }).catch(() => null);
+    const out: string[] = [];
+    if (view) {
+      const c = view.live;
+      out.push(
+        `Cardio in force: ${
+          c.sessions.length ? c.sessions.map((s) => `${sessionLine(s, view.speedUnit)} · ${daysWords(s, view.ctx)} · ${TIMING_SHORT[s.timing]}${s.enabled ? "" : " (paused)"}`).join("; ") : "none"
+        }`,
+      );
+      const r = view.read;
+      out.push(`Cardio read: ${r.primary.title}. ${r.primary.observation}${r.primary.relation === "pattern" ? " (a pattern, not a confirmed cause)" : ""}`);
+      const cq = scoreCardioPlan(c, view.scoreCtx);
+      if (cq.verdict.kind !== "insufficient") out.push(`Cardio plan quality: ${cq.score ?? "not scored"}${cq.score != null ? "/100" : ""}. ${cq.verdict.headline}`);
+    }
+    try {
+      const { nutritionQualityFor } = await import("@/lib/nutrition-targets/plan-quality.server");
+      const n = await nutritionQualityFor(sb, clientId);
+      if (n.quality && n.quality.verdict.kind !== "insufficient") out.push(`Nutrition plan quality: ${n.quality.score ?? "not scored"}${n.quality.score != null ? "/100" : ""}. ${n.quality.verdict.headline}`);
+    } catch {
+      /* optional */
+    }
+    const a = loaded.assessment;
+    out.push(`Weight management: ${a.recommendation.headline}${a.checkins.poorSleep >= 2 ? " · sleep flagged on recent check-ins" : ""}${a.checkins.lowEnergy >= 2 ? " · energy flagged on recent check-ins" : ""}`);
+    if (loaded.input.performance.lower) out.push(`Lower-body strength lately: ${loaded.input.performance.lower}${loaded.input.performance.detail ? ` (${clip(loaded.input.performance.detail, 160)})` : ""}`);
+    return out.length ? out.join("\n") : null;
+  } catch (e: any) {
+    console.warn("[client-intel] other plans unavailable", e?.message);
+    return null;
+  }
+}

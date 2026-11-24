@@ -13,6 +13,11 @@
  *
  * Reads the same canonical schedule as the client's own calendar
  * (useClientTrainingSchedule), so a finished block never shows as running.
+ *
+ * Plan quality sits first (the same strip as Nutrition and Cardio: the program's
+ * design score, how it's followed, Optimize with Cleo), and Cleo docks beside the
+ * tab (Adjust program's engine: proposals with a tick per change, nothing applied
+ * until the coach applies it), so the coach never leaves the tab to change it.
  */
 import { EquipmentManager, equipmentSummaryLine } from "@/components/equipment/equipment-manager";
 import { useAthleteEquipment } from "@/lib/equipment/equipment-queries";
@@ -47,7 +52,11 @@ import { gapParts } from "@/lib/program-gaps";
 import { useProgramGaps } from "@/components/program-gaps/use-program-gaps";
 import { WEEK_DAYS, SHORT_DAY, type WeekDay } from "@/lib/training-schedule";
 import { TrainingReportSheet } from "@/components/workouts/training-report-sheet";
-import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
+import { CleoDock, useCleoDock, type CleoDockHandle } from "@/components/program-ai/cleo-dock";
+import { PlanIntelligence } from "@/components/plan-quality/plan-intelligence";
+import { CleoMark } from "@/components/summer/cleo-mark";
+import { useCleoAccess } from "@/hooks/use-cleo-access";
+import { getProgramQualityFn } from "@/lib/program-quality.functions";
 import { AssignProgramDialog } from "@/components/clients/assign-program-dialog";
 import { WorkoutArchiveDialog } from "@/components/clients/workout-archive-dialog";
 import { DeleteProgramDialog } from "@/components/clients/delete-program-dialog";
@@ -95,10 +104,21 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
     }, 400);
     return () => window.clearTimeout(t);
   }, [hash]);
+  const dock = useCleoDock();
+  const qc = useQueryClient();
+  // the block Adjust program centres on: the one the program card shows (running, else next)
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const afterApply = () => {
+    qc.invalidateQueries({ queryKey: programQualityKey(clientId) });
+    qc.invalidateQueries({ queryKey: clientTrainingScheduleKey(clientId) });
+    qc.invalidateQueries({ queryKey: ["client-schedule", clientId] });
+    qc.invalidateQueries({ queryKey: ["pl-blocks", clientId] });
+  };
   return (
-    <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:col-span-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5">
+    <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:col-span-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5" data-builder-page>
+      <ProgramQualityStrip clientId={clientId} dock={dock} className="lg:col-span-2" />
       <div className="min-w-0 space-y-4 lg:space-y-5">
-        <ProgramCard clientId={clientId} clientName={name} trainingDays={client?.committed_training_days ?? null} />
+        <ProgramCard clientId={clientId} clientName={name} trainingDays={client?.committed_training_days ?? null} dock={dock} onFocus={setFocusId} />
         <section id={TRAINING_SCHEDULE_ANCHOR} aria-label="Schedule" className="min-w-0 scroll-mt-24">
           <Suspense fallback={<Card className="p-6 text-sm text-muted-foreground">Loading schedule…</Card>}>
             <ScheduleManagerShell clientId={clientId} mode="coach" />
@@ -109,13 +129,44 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
         <AthleteSetupCard clientId={clientId} client={client} />
         <ClientNotesCard clientId={clientId} name={name} />
       </div>
+      {/* Cleo, docked beside the tab: Adjust program's engine on their whole program */}
+      <CleoDock dock={dock} target={{ kind: "client", clientId, focusBlockId: focusId }} title={name ?? "Their program"} onApplied={afterApply} scopes={["program"]} />
     </div>
+  );
+}
+
+/* ─────────────────────────── Plan quality ─────────────────────────── */
+
+export const programQualityKey = (clientId: string) => ["program-quality", clientId] as const;
+
+/** The program's design score and verdict, with Optimize and Ask opening Cleo docked beside the tab. */
+function ProgramQualityStrip({ clientId, dock, className }: { clientId: string; dock: CleoDockHandle; className?: string }) {
+  const read = useServerFn(getProgramQualityFn);
+  const cleo = useCleoAccess();
+  const q = useQuery({ queryKey: programQualityKey(clientId), queryFn: () => read({ data: { clientId } }), staleTime: 60_000 });
+  const quality = q.data?.quality ?? null;
+  const live = quality != null && quality.verdict.kind !== "none";
+  return (
+    <PlanIntelligence
+      domain="training"
+      clientKey={clientId}
+      title="Program quality"
+      quality={quality}
+      loading={q.isLoading}
+      error={q.error ? String((q.error as any)?.message ?? q.error) : null}
+      onRetry={() => void q.refetch()}
+      cleo={cleo}
+      className={className}
+      onOptimize={live ? (x) => dock.optimize({ domain: "training", what: "training program", quality: x }) : undefined}
+      onAskCleo={live ? () => dock.ask() : undefined}
+    />
   );
 }
 
 /* ───────────────────────────── Program ───────────────────────────── */
 
-function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string; clientName: string | null; trainingDays: string[] | null }) {
+function ProgramCard({ clientId, clientName, trainingDays, dock, onFocus }: { clientId: string; clientName: string | null; trainingDays: string[] | null; dock: CleoDockHandle; onFocus?: (blockId: string | null) => void }) {
+  const cleo = useCleoAccess();
   const qc = useQueryClient();
   const placeWorkouts = useServerFn(rescheduleFromCommittedDays);
   const [placing, setPlacing] = useState(false);
@@ -160,6 +211,7 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
   const next = data?.nextWorkout ?? null;
 
   const refresh = () => {
+    qc.invalidateQueries({ queryKey: programQualityKey(clientId) });
     qc.invalidateQueries({ queryKey: clientTrainingScheduleKey(clientId) });
     qc.invalidateQueries({ queryKey: ["client-schedule", clientId] });
     qc.invalidateQueries({ queryKey: ["assigned-blocks", clientId] });
@@ -210,6 +262,9 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
 
   const parts = blockNameParts(focus?.name);
   const empty = !isLoading && !focus;
+  useEffect(() => {
+    onFocus?.(focus?.id ?? null);
+  }, [focus?.id, onFocus]);
 
   return (
     <Card className="min-w-0 overflow-hidden border-border bg-card" aria-label="Training program" data-training-program>
@@ -338,11 +393,11 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
         )}
 
         {empty ? (
-          <div className="mt-3 space-y-3">
+          <div className="@container mt-3 space-y-3">
             <p className="text-sm text-muted-foreground">
               Give {clientName?.split(" ")[0] ?? "them"} a program from your library, have one written from their Goals & Setup and your notes, or build one from scratch.
             </p>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 @md:grid-cols-2">
               <Button className="min-h-[48px]" onClick={() => setAssignOpen(true)}>
                 <BookOpen className="mr-2 h-4 w-4" /> Assign from library
               </Button>
@@ -366,12 +421,19 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
             <Button variant="outline" className="min-h-[48px] px-4" onClick={() => setAddOpen(true)}>
               <Plus className="mr-1 h-4 w-4" /> Add
             </Button>
-            <EditWithAiButton
-              target={{ kind: "client", clientId, focusBlockId: focus.id }}
-              title={clientName ?? "Their program"}
-              onApplied={refresh}
-              className="col-span-2 min-h-[48px]"
-            />
+            <Button
+              type="button"
+              variant="outline"
+              className="col-span-2 min-h-[48px] gap-1.5"
+              onClick={dock.toggle}
+              aria-pressed={dock.open}
+              data-testid="edit-with-ai"
+              data-training-cleo
+            >
+              {cleo ? <CleoMark size={16} /> : <SlidersHorizontal className="h-4 w-4" aria-hidden />}
+              {cleo ? "Adjust with Cleo" : "Adjust program"}
+            </Button>
+
           </div>
         ) : null}
       </div>
