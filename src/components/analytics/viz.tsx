@@ -6,6 +6,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { InfoTip } from "@/components/analytics/info-tip";
 
 const useIso = typeof window === "undefined" ? useEffect : useLayoutEffect;
 export const LB_PER_KG = 2.2046226;
@@ -67,7 +68,7 @@ export function Segmented<T extends string>({
           onClick={() => onChange(o.key)}
           className={cn(
             "min-w-0 truncate rounded-md px-1.5 font-medium transition",
-            size === "sm" ? "h-8 text-[12px]" : "h-9 text-[13px]",
+            size === "sm" ? "h-9 text-[13px]" : "h-10 text-[14px]",
             value === o.key
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground",
@@ -219,22 +220,38 @@ export function Weight({
   );
 }
 
-/** A section's title on its own line, with an optional control on the right. */
+/**
+ * A section's title on its own line: what it is in plain words, one line of
+ * what it shows (`sub`), an optional ⓘ for how it's worked out (`info`: a
+ * popover on a computer, a bottom sheet on a phone) and an optional control
+ * on the right.
+ */
 export function SectionTitle({
   title,
   sub,
   right,
   id,
+  info,
+  infoTitle,
 }: {
   title: string;
   sub?: ReactNode;
   right?: ReactNode;
   id?: string;
+  info?: ReactNode;
+  infoTitle?: string;
 }) {
   return (
     <div className="mb-2.5 flex items-end justify-between gap-3" id={id}>
       <div className="min-w-0">
-        <h2 className="text-[16px] font-semibold tracking-tight text-foreground">{title}</h2>
+        <h2 className="flex items-center gap-1.5 text-[16px] font-semibold tracking-tight text-foreground">
+          <span className="min-w-0">{title}</span>
+          {info && (
+            <InfoTip label={`About ${title.toLowerCase()}`} title={infoTitle ?? title}>
+              {info}
+            </InfoTip>
+          )}
+        </h2>
         {sub && <div className="mt-0.5 text-[12px] leading-snug text-muted-foreground">{sub}</div>}
       </div>
       {right && <div className="shrink-0">{right}</div>}

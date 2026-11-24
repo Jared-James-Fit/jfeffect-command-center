@@ -209,8 +209,8 @@ export function AnalyticsPeriodControl({
           <div className="mx-auto max-w-lg px-4 pb-6 pt-3">
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/30" aria-hidden />
             <SheetHeader className="text-left">
-              <SheetTitle className="text-lg">Period</SheetTitle>
-              <SheetDescription className="sr-only">What every chart and number on this page covers</SheetDescription>
+              <SheetTitle className="text-lg">Show training from</SheetTitle>
+              <SheetDescription className="text-[13px] text-muted-foreground">Every chart and number on this page covers this period.</SheetDescription>
             </SheetHeader>
             <ul className="mt-2 divide-y divide-border/60" role="listbox" aria-label="Periods">
               {options.map((o) => {
@@ -279,8 +279,8 @@ export function AnalyticsPeriodControl({
                   >
                     <Layers className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[15px] font-medium text-foreground">A block…</span>
-                      <span className="block text-[12px] text-muted-foreground">{blocks.length} on file</span>
+                      <span className="block text-[15px] font-medium text-foreground">A training block…</span>
+                      <span className="block text-[12px] text-muted-foreground">Pick one of your {blocks.length} blocks</span>
                     </span>
                     {value.preset === "exact_block" && <Check className="h-4 w-4 shrink-0 text-foreground" aria-hidden />}
                   </button>

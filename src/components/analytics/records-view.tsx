@@ -67,7 +67,9 @@ export function RecordsView({
       <section aria-label="Lifetime">
         <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4" data-lifetime>
           <div className="col-span-2 sm:col-span-2">
-            <div className="text-[12px] text-muted-foreground">Weight lifted, lifetime</div>
+            <div className="text-[12px] text-muted-foreground">
+              Total weight lifted, all time
+            </div>
             <div className="text-[38px] font-semibold leading-none tabular-nums tracking-tight text-foreground">
               {compact(lifted)}
               <span className="ml-1 text-[15px] font-medium text-muted-foreground">{unit}</span>
@@ -76,7 +78,8 @@ export function RecordsView({
               {unit === "kg"
                 ? `${compact(lifetime.liftedLb)} lb`
                 : `${compact(lifetime.liftedKg)} kg`}
-              {lifetime.firstDay ? ` · since ${fmt(lifetime.firstDay, "MMM yyyy")}` : ""}
+              {lifetime.firstDay ? ` · since ${fmt(lifetime.firstDay, "MMM yyyy")}` : ""} · every
+              set's weight × reps, added up
             </div>
             <div
               className="mt-2 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-muted"
@@ -92,7 +95,7 @@ export function RecordsView({
               />
             </div>
             <div className="mt-1 text-[11px] text-muted-foreground">
-              Next: {compact(next)} {unit}
+              Next milestone: {compact(next)} {unit}
             </div>
           </div>
           <Counter
@@ -105,8 +108,8 @@ export function RecordsView({
             value={lifetime.records.toLocaleString()}
             sub={
               lifetime.bestStreakWeeks >= 2
-                ? `Best run ${lifetime.bestStreakWeeks} weeks`
-                : `${lifetime.exercises} exercises`
+                ? `longest streak ${lifetime.bestStreakWeeks} weeks`
+                : `across ${lifetime.exercises} exercises`
             }
           />
         </div>
@@ -114,7 +117,17 @@ export function RecordsView({
 
       {recent.length > 0 && (
         <section aria-label="Latest records">
-          <SectionTitle title="Latest records" sub="The last two months" />
+          <SectionTitle
+            title="Latest records"
+            sub="Your new bests from the last two months"
+            info={
+              <p>
+                A record is beating your own best on an exercise: the heaviest weight you've lifted,
+                or your best estimated max (the most you could likely lift once, worked out from a
+                set). The first time you do an exercise sets the starting point.
+              </p>
+            }
+          />
           <div className="grid gap-2 sm:grid-cols-2" data-recent-records>
             {recent.map((r) => (
               <div
@@ -131,22 +144,22 @@ export function RecordsView({
                   </div>
                   <div className="text-[12px] text-muted-foreground">
                     {fmt(r.day)} ·{" "}
-                    {r.kinds.includes("weight") ? "heaviest ever" : "best estimated max"}
+                    {r.kinds.includes("weight") ? "heaviest ever" : "best estimated max yet"}
                   </div>
                 </div>
                 <div className="shrink-0 text-right tabular-nums">
                   <div className="text-[15px] font-semibold text-foreground">
                     {w(r.load)} {unit} × {r.reps}
                   </div>
-                  <div className="text-[12px] text-success">+{r.gainPct}%</div>
+                  <div className="text-[12px] text-success">up {r.gainPct}%</div>
                 </div>
               </div>
             ))}
           </div>
           {lifetime.bestWeek && (
             <p className="mt-2 text-[12px] text-muted-foreground">
-              Strongest week: {fmt(lifetime.bestWeek.monday)} with {lifetime.bestWeek.records}{" "}
-              records.
+              Your best week for records: the week of {fmt(lifetime.bestWeek.monday)}, with{" "}
+              {lifetime.bestWeek.records}.
             </p>
           )}
         </section>
@@ -214,8 +227,8 @@ function MeetTimeline({ meets, unit }: { meets: MeetResult[]; unit: "lb" | "kg" 
                       diff > 0 ? "text-success" : "text-muted-foreground",
                     )}
                   >
-                    {diff > 0 ? "+" : "−"}
-                    {Math.abs(Math.round(diff))} vs the meet before
+                    {diff > 0 ? "up" : "down"} {Math.abs(Math.round(diff))} {unit} from the meet
+                    before
                   </span>
                 )}
               </div>
@@ -230,7 +243,7 @@ function MeetTimeline({ meets, unit }: { meets: MeetResult[]; unit: "lb" | "kg" 
                     {COMP_LIFT_LABEL[l]} {w(m.lifts[l])}
                   </span>
                 ))}
-                {m.bodyweightLb ? <span>BW {w(m.bodyweightLb)}</span> : null}
+                {m.bodyweightLb ? <span>Bodyweight {w(m.bodyweightLb)}</span> : null}
               </div>
             </li>
           );
@@ -272,7 +285,7 @@ function ExerciseRecordList({ rows, unit }: { rows: ExerciseRecords[]; unit: "lb
     <section aria-label="Records by exercise">
       <SectionTitle
         title="Records by exercise"
-        sub={`${rows.length} exercise${rows.length === 1 ? "" : "s"} · most recent first`}
+        sub={`${rows.length} exercise${rows.length === 1 ? "" : "s"}, most recent first. Tap one to see each record.`}
       />
       {rows.length > 8 && (
         <div className="relative mb-2">
@@ -333,8 +346,8 @@ function ExerciseRecordList({ rows, unit }: { rows: ExerciseRecords[]; unit: "lb
                       <span className="text-muted-foreground">{fmt(p.day)}</span>
                       <span className="text-foreground">
                         {w(p.load)} {unit} × {p.reps}
-                        {p.rpe ? <span className="text-muted-foreground"> @{p.rpe}</span> : null}
-                        <span className="ml-2 text-success">+{p.gainPct}%</span>
+                        {p.rpe ? <span className="text-muted-foreground"> at RPE {p.rpe}</span> : null}
+                        <span className="ml-2 text-success">up {p.gainPct}%</span>
                       </span>
                     </li>
                   ))}

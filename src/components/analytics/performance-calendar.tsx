@@ -7,7 +7,7 @@
  */
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
-import { ChevronRight, Trophy } from "lucide-react";
+import { ChevronRight, Trophy, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseLocalDate } from "@/lib/today";
 import {
@@ -38,10 +38,18 @@ export function levelColor(metric: CalendarMetric, level: number): string {
 
 const LEGEND: Record<CalendarMetric, [string, string]> = {
   activity: ["Fewer sets", "More sets"],
-  strength: ["Below best", "New best"],
-  volume: ["Less weight moved", "More"],
-  intensity: ["Easier", "Harder (RPE)"],
-  prs: ["1 record", "3+"],
+  strength: ["Below your best", "New best"],
+  volume: ["Less weight", "More weight"],
+  intensity: ["Easier", "Harder"],
+  prs: ["1 record", "3 or more"],
+};
+/** What the shading means, in a sentence, for each metric. */
+const MEANS: Record<CalendarMetric, string> = {
+  activity: "Darker days had more sets.",
+  strength: "Darker days came closer to your best estimated max on a main lift.",
+  volume: "Darker days had more total weight lifted (weight × reps, added up).",
+  intensity: "Darker days felt harder on average (RPE: how hard a set felt, out of 10).",
+  prs: "Days you set a new record, and how many.",
 };
 
 export type DayMeta = { title: string | null; block: string | null; week: number | null };
@@ -304,9 +312,9 @@ export function PerformanceCalendar({
   const summary = [
     `${totals.trained} workout${totals.trained === 1 ? "" : "s"}`,
     totals.planned
-      ? `${Math.round((totals.plannedDone / totals.planned) * 100)}% of planned`
+      ? `${Math.round((totals.plannedDone / totals.planned) * 100)}% of planned done`
       : null,
-    totals.bestStreak >= 2 ? `best run ${totals.bestStreak} weeks` : null,
+    totals.bestStreak >= 2 ? `longest streak ${totals.bestStreak} weeks` : null,
     totals.prs ? `${totals.prs} record${totals.prs === 1 ? "" : "s"}` : null,
   ].filter(Boolean);
 
@@ -321,9 +329,12 @@ export function PerformanceCalendar({
         value={metric}
         options={CALENDAR_METRICS}
         onChange={(m) => onMetric(m)}
-        label="Calendar metric"
-        className="mb-3"
+        label="What the shading shows"
+        className="mb-2"
       />
+      <p className="mb-3 text-[12px] leading-snug text-muted-foreground" data-cal-means>
+        {MEANS[metric]}
+      </p>
       <div ref={wrapRef} className="w-full">
         {grid}
       </div>
@@ -424,10 +435,10 @@ function DayDetail({
         <button
           type="button"
           onClick={onClose}
-          className="-mr-1 -mt-1 h-8 shrink-0 rounded-md px-2 text-[12px] text-muted-foreground hover:text-foreground"
+          className="-mr-2 -mt-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
           aria-label="Close day details"
         >
-          Close
+          <X className="h-4 w-4" aria-hidden />
         </button>
       </div>
       {d.sets > 0 && (
@@ -443,13 +454,13 @@ function DayDetail({
               </span>
             </span>
             <span>
-              <span className="block text-[11px] text-muted-foreground">Moved</span>
+              <span className="block text-[11px] text-muted-foreground">Weight lifted</span>
               <span className="font-semibold text-foreground">
                 {Math.round(conv(d.tonnageLb)).toLocaleString()} {unit}
               </span>
             </span>
             <span>
-              <span className="block text-[11px] text-muted-foreground">Avg RPE</span>
+              <span className="block text-[11px] text-muted-foreground">Effort (RPE)</span>
               <span className="font-semibold text-foreground">{d.avgRpe ?? "—"}</span>
             </span>
           </div>
@@ -460,7 +471,7 @@ function DayDetail({
                   <span className="truncate text-muted-foreground">{t.exercise}</span>
                   <span className="shrink-0 tabular-nums text-foreground">
                     {w(t.load)} {unit} × {t.reps}
-                    {t.rpe ? <span className="text-muted-foreground"> @{t.rpe}</span> : null}
+                    {t.rpe ? <span className="text-muted-foreground"> at RPE {t.rpe}</span> : null}
                   </span>
                 </li>
               ))}
@@ -470,7 +481,7 @@ function DayDetail({
             <div className="mt-2 space-y-0.5 text-[12px]">
               {d.prs.map((p) => (
                 <div key={p.exercise} className="flex items-center gap-1.5 text-foreground">
-                  <Trophy className="h-3.5 w-3.5 shrink-0 text-warning" aria-hidden /> Record:{" "}
+                  <Trophy className="h-3.5 w-3.5 shrink-0 text-warning" aria-hidden /> New record:{" "}
                   {p.exercise} {w(p.load)} {unit} × {p.reps}
                 </div>
               ))}
@@ -478,8 +489,7 @@ function DayDetail({
                 d.strength.pct > 0 &&
                 !d.prs.some((p) => p.exercise === d.strength!.exercise) && (
                   <div className="text-success">
-                    {d.strength.exercise}: estimate {d.strength.pct > 0 ? "+" : ""}
-                    {d.strength.pct}% on its recent best
+                    {d.strength.exercise}: estimated max up {d.strength.pct}% on its recent best
                   </div>
                 )}
             </div>

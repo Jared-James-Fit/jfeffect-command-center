@@ -95,18 +95,18 @@ export function recoveryPatterns(input: {
       const gap = avg(long.map((x) => x.v)) - avg(short.map((x) => x.v));
       const big = useIdx ? Math.abs(gap) >= 2 : Math.abs(gap) >= 0.5;
       if (long.length >= MIN_EACH && short.length >= MIN_EACH && big) {
-        const unit = useIdx ? "% of estimated max" : "session rating /5";
+        const unit = useIdx ? "Top set as a % of your estimated max" : "Workout rating out of 5";
         out.push({
           id: "sleep",
           title: gap > 0 ? "Better sessions after more sleep" : "Sleep and sessions don't line up",
           words:
             gap > 0
-              ? `After ${cut}h+ of sleep your ${useIdx ? "top sets ran stronger" : "sessions rated higher"} than after less (${long.length} and ${short.length} sessions). A pattern in your logs, not proof.`
-              : `Your ${useIdx ? "top sets" : "sessions"} weren't better after longer sleep in these logs (${long.length} and ${short.length} sessions).`,
+              ? `After ${cut} hours of sleep or more, your ${useIdx ? "top sets were stronger" : "workouts rated higher"} than after less (${long.length} and ${short.length} workouts). A pattern in your logs, not proof.`
+              : `Your ${useIdx ? "top sets" : "workouts"} weren't better after longer sleep in these logs (${long.length} and ${short.length} workouts).`,
           compare: {
             unit,
-            a: { label: `${cut}h+ sleep`, value: r1(avg(long.map((x) => x.v))), n: long.length },
-            b: { label: `Under ${cut}h`, value: r1(avg(short.map((x) => x.v))), n: short.length },
+            a: { label: `${cut}+ hours' sleep`, value: r1(avg(long.map((x) => x.v))), n: long.length },
+            b: { label: `Under ${cut} hours`, value: r1(avg(short.map((x) => x.v))), n: short.length },
           },
           tone: gap > 0 ? "info" : "info",
         });
@@ -141,12 +141,12 @@ export function recoveryPatterns(input: {
         title: dl
           ? "Heavier deadlift days, slower recovery"
           : "Your biggest days take longer to recover from",
-        words: `At the check-out after your ${dl ? "heaviest deadlift" : "most demanding"} sessions you felt about ${r1(avg(hard))}/5 recovered, against ${r1(avg(rest))}/5 after the rest. Normal after hard work; worth knowing when you plan the day after.`,
+        words: `After your ${dl ? "heaviest deadlift days" : "hardest workouts"} you felt about ${r1(avg(hard))} out of 5 recovered next time, against ${r1(avg(rest))} after other days. That's normal after hard work, and worth knowing when you plan the next day.`,
         compare: {
-          unit: "felt recovered /5",
-          a: { label: "After the rest", value: r1(avg(rest)), n: rest.length },
+          unit: "How recovered you felt, out of 5",
+          a: { label: "After other days", value: r1(avg(rest)), n: rest.length },
           b: {
-            label: dl ? "After heavy deadlifts" : "After demanding days",
+            label: dl ? "After heavy deadlifts" : "After hard days",
             value: r1(avg(hard)),
             n: hard.length,
           },
@@ -189,8 +189,8 @@ export function recoveryPatterns(input: {
           ? `Same ${COMP_LIFT_LABEL[worst.lift].toLowerCase()} loads feel harder`
           : `Same ${COMP_LIFT_LABEL[worst.lift].toLowerCase()} loads feel easier`,
         words: harder
-          ? `At the same weights and reps, your ${COMP_LIFT_LABEL[worst.lift].toLowerCase()} RPE is about ${worst.diff} higher than 3–6 weeks ago (${worst.n} sets). Often fatigue building; worth watching with sleep and recovery.`
-          : `At the same weights and reps, your ${COMP_LIFT_LABEL[worst.lift].toLowerCase()} RPE is about ${Math.abs(worst.diff)} lower than 3–6 weeks ago (${worst.n} sets). A sign the work is being absorbed.`,
+          ? `The same ${COMP_LIFT_LABEL[worst.lift].toLowerCase()} weights and reps feel about ${worst.diff} points harder than 3 to 6 weeks ago (RPE, how hard a set feels out of 10; ${worst.n} sets). Often tiredness building up, so keep an eye on sleep and recovery.`
+          : `The same ${COMP_LIFT_LABEL[worst.lift].toLowerCase()} weights and reps feel about ${Math.abs(worst.diff)} points easier than 3 to 6 weeks ago (RPE, how hard a set feels out of 10; ${worst.n} sets). A sign your body is adapting to the training.`,
         compare: null,
         tone: harder ? "watch" : "good",
       });
@@ -230,9 +230,9 @@ export function recoveryPatterns(input: {
         out.push({
           id: "lighter",
           title: "Stronger after lighter weeks",
-          words: `The week after a lighter week (30%+ fewer sets) your top sets ran ${r1(gap)} points of your estimated max higher than other weeks (${afterCut.length} times). Lighter weeks seem to let your strength show.`,
+          words: `In the week after a lighter week (30% fewer sets or more), your top sets were ${r1(gap)} points closer to your estimated max than in other weeks (${afterCut.length} times). Lighter weeks seem to help your strength show.`,
           compare: {
-            unit: "% of estimated max",
+            unit: "Top set as a % of your estimated max",
             a: { label: "After a lighter week", value: r1(avg(afterCut)), n: afterCut.length },
             b: { label: "Other weeks", value: r1(avg(normal)), n: normal.length },
           },

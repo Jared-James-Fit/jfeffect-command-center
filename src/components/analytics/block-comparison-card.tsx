@@ -150,11 +150,11 @@ export function BlockComparisonCard({
                       <span className="w-20 shrink-0 text-right text-[12px] tabular-nums text-foreground">
                         {metric === "volume"
                           ? r.setsPerWeek != null
-                            ? `${r.setsPerWeek} sets/wk`
+                            ? `${r.setsPerWeek} sets a week`
                             : "—"
                           : metric === "intensity"
                             ? r.avgRpe != null
-                              ? `RPE ${r.avgRpe}`
+                              ? `RPE ${r.avgRpe} / 10`
                               : "—"
                             : r.adherence != null
                               ? `${r.adherence}%`
@@ -164,7 +164,7 @@ export function BlockComparisonCard({
                   )}
                   {r.light && (
                     <div className="mt-1 text-[11px] text-muted-foreground">
-                      {r.typeName}: lower workload is planned
+                      {r.typeName}: doing less here is planned
                     </div>
                   )}
                 </div>
@@ -183,7 +183,7 @@ export function BlockComparisonCard({
                     <span className="font-medium text-foreground">{r.setsPerWeek ?? "—"}</span>
                   </span>
                   <span>
-                    <span className="block text-[11px] text-muted-foreground">Followed</span>
+                    <span className="block text-[11px] text-muted-foreground">Workouts done</span>
                     <span className="font-medium text-foreground">
                       {r.adherence != null ? `${r.adherence}%` : "—"}
                     </span>
@@ -200,12 +200,12 @@ export function BlockComparisonCard({
       </ul>
       <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
         {metric === "strength"
-          ? "Each lift's estimated strength from the block's start to its end. Compare blocks of the same kind: a taper or deload trains less on purpose."
+          ? "How much each lift's estimated max changed from the start of the block to its end. Compare blocks of the same kind: a taper or deload is lighter on purpose."
           : metric === "volume"
-            ? "Working sets a week over each block's finished weeks."
+            ? "Sets a week in each block, counting only weeks that are over."
             : metric === "intensity"
-              ? "Average RPE of rated sets on the squat, bench and deadlift and their variations."
-              : "Planned workouts done in each block's finished weeks."}
+              ? "How hard your squat, bench and deadlift sets felt on average (RPE, out of 10)."
+              : "Planned workouts done in each block, counting only weeks that are over."}
       </p>
     </div>
   );
